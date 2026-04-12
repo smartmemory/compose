@@ -1,6 +1,8 @@
-import { describe, it } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { FixChainDetector, AttemptCounter, TraceValidator } from '../lib/debug-discipline.js';
+import { join } from 'node:path';
+import { mkdirSync, rmSync, readFileSync } from 'node:fs';
+import { FixChainDetector, AttemptCounter, TraceValidator, DebugLedger } from '../lib/debug-discipline.js';
 
 describe('FixChainDetector', () => {
   it('starts with no chains', () => {
@@ -223,5 +225,38 @@ describe('TraceValidator', () => {
       root_cause: 'type mismatch',
     });
     assert.equal(r.valid, true);
+  });
+});
+
+describe('DebugLedger', () => {
+  const TMP = join(import.meta.dirname, '.tmp-ledger-test');
+
+  beforeEach(() => { mkdirSync(TMP, { recursive: true }); });
+  afterEach(() => { rmSync(TMP, { recursive: true, force: true }); });
+
+  it('creates ledger file on first write', () => {
+    const ledger = new DebugLedger(TMP);
+    ledger.record({ type: 'fix_chain_detected', file: 'a.js', iterations: 2 });
+    const content = readFileSync(join(TMP, 'debug-ledger.jsonl'), 'utf-8');
+    assert.ok(content.includes('fix_chain_detected'));
+  });
+
+  it('appends entries as JSONL', () => {
+    const ledger = new DebugLedger(TMP);
+    ledger.record({ type: 'a' });
+    ledger.record({ type: 'b' });
+    const lines = readFileSync(join(TMP, 'debug-ledger.jsonl'), 'utf-8').trim().split('\n');
+    assert.equal(lines.length, 2);
+    assert.equal(JSON.parse(lines[0]).type, 'a');
+    assert.equal(JSON.parse(lines[1]).type, 'b');
+  });
+
+  it('adds timestamp to each entry', () => {
+    const ledger = new DebugLedger(TMP);
+    ledger.record({ type: 'test' });
+    const line = readFileSync(join(TMP, 'debug-ledger.jsonl'), 'utf-8').trim();
+    const entry = JSON.parse(line);
+    assert.ok(entry.ts, 'should have timestamp');
+    assert.ok(entry.ts.startsWith('20'), 'timestamp should be ISO date');
   });
 });
