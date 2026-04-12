@@ -33,9 +33,10 @@ version: "0.1"
 
 contracts:
   BugFixResult:
-    phase:    {type: string}
-    summary:  {type: string}
-    outcome:  {type: string, values: [complete, failed]}
+    phase:                {type: string}
+    summary:              {type: string}
+    outcome:              {type: string, values: [complete, failed]}
+    references_addressed: {type: string}  # stringified int
 
   TestResult:
     passing:  {type: boolean}
@@ -52,12 +53,14 @@ contracts:
     affected_layers: {type: array}
     trace_evidence:  {type: array, items: TraceEvidence}
     summary:         {type: string}
+    scope_hint:      {type: string}  # single | cross-layer | unknown
 
   ScopeResult:
     scope:                {type: string, values: [single, cross_layer]}
     references_found:     {type: array}
     repos_scanned:        {type: number}
     summary:              {type: string}
+    references_count:     {type: string}  # stringified int for Stratum compat
 
   RetroCheckResult:
     fix_chains:       {type: array}
@@ -91,8 +94,9 @@ functions:
     output: DiagnoseResult
     ensure:
       - "result.trace_evidence != null"
-      - "result.trace_evidence.length > 0"
+      - "result.trace_evidence.length >= 2"
       - "result.root_cause != null"
+      - "result.scope_hint in ('single', 'cross-layer', 'unknown')"
     retries: 2
 
   scope_check:
