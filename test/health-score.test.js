@@ -12,6 +12,7 @@ import {
   scoreRuntimeErrors,
   scoreDocFreshness,
   scorePlanCompletion,
+  scoreDebugDiscipline,
   DIMENSIONS,
 } from '../lib/health-score.js';
 
@@ -226,7 +227,7 @@ describe('computeCompositeScore', () => {
   it('returns 50 with no signals', () => {
     const { score, missing } = computeCompositeScore({});
     assert.equal(score, 50);
-    assert.equal(missing.length, 6);
+    assert.equal(missing.length, 7);
   });
 
   it('computes weighted average with all dimensions', () => {
@@ -237,6 +238,7 @@ describe('computeCompositeScore', () => {
       runtime_errors: [],                                    // 100
       doc_freshness: [],                                     // 100
       plan_completion: { planCompletionPct: 100 },           // 100
+      debug_discipline: { fix_chain_count: 0, untraced_fixes: 0, escalation_count: 0 }, // 100
     };
     const { score, breakdown, missing } = computeCompositeScore(signals);
     assert.equal(score, 100);
@@ -245,13 +247,13 @@ describe('computeCompositeScore', () => {
   });
 
   it('re-normalizes weights when dimensions are missing (no penalty)', () => {
-    // Only test_coverage provided (weight 0.25), no others
-    // Result should be 100, not 100*0.25 + 50*0.75
+    // Only test_coverage provided (weight 0.225), no others
+    // Result should be 100, not 100*0.225 + 50*0.775
     const { score, missing } = computeCompositeScore({
       test_coverage: { passing: true, failures: [] },
     });
     assert.equal(score, 100);
-    assert.equal(missing.length, 5);
+    assert.equal(missing.length, 6);
   });
 
   it('returns partial score when some dimensions fail', () => {
@@ -295,5 +297,48 @@ describe('computeCompositeScore', () => {
     });
     assert.ok('test_coverage' in breakdown);
     assert.ok(!('review_findings' in breakdown));
+  });
+
+  it('computeCompositeScore includes debug_discipline when signal present', () => {
+    const result = computeCompositeScore({
+      debug_discipline: { fix_chain_count: 0, untraced_fixes: 0, escalation_count: 0 },
+    });
+    assert.ok('debug_discipline' in result.breakdown);
+    assert.equal(result.breakdown.debug_discipline, 100);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// scoreDebugDiscipline
+// ---------------------------------------------------------------------------
+describe('scoreDebugDiscipline', () => {
+  it('returns 100 with no issues', () => {
+    const score = scoreDebugDiscipline({ fix_chain_count: 0, untraced_fixes: 0, escalation_count: 0 });
+    assert.equal(score, 100);
+  });
+
+  it('penalizes fix chains', () => {
+    const score = scoreDebugDiscipline({ fix_chain_count: 2, untraced_fixes: 0, escalation_count: 0 });
+    assert.equal(score, 70); // 100 - 2*15
+  });
+
+  it('penalizes untraced fixes', () => {
+    const score = scoreDebugDiscipline({ fix_chain_count: 0, untraced_fixes: 1, escalation_count: 0 });
+    assert.equal(score, 80); // 100 - 1*20
+  });
+
+  it('penalizes escalations', () => {
+    const score = scoreDebugDiscipline({ fix_chain_count: 0, untraced_fixes: 0, escalation_count: 1 });
+    assert.equal(score, 90); // 100 - 1*10
+  });
+
+  it('returns 50 for null input', () => {
+    const score = scoreDebugDiscipline(null);
+    assert.equal(score, 50);
+  });
+
+  it('floors at 0', () => {
+    const score = scoreDebugDiscipline({ fix_chain_count: 5, untraced_fixes: 3, escalation_count: 2 });
+    assert.equal(score, 0); // 100 - 75 - 60 - 20 = clamped to 0
   });
 });

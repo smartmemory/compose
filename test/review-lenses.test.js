@@ -5,6 +5,7 @@ import {
   classifyDiffSize,
   shouldRunCrossModel,
   LENS_DEFINITIONS,
+  BASELINE_LENSES,
 } from '../lib/review-lenses.js';
 
 const REQUIRED_FIELDS = ['id', 'lens_name', 'lens_focus', 'confidence_gate', 'exclusions'];
@@ -97,12 +98,13 @@ describe('triageLenses', () => {
     assert.ok(ids.includes('framework'), 'missing framework lens for Next.js config');
   });
 
-  it('returns all 4 lenses when both triggers present', () => {
+  it('returns all 5 lenses when both triggers present', () => {
     const tasks = triageLenses(['src/auth/login.jsx']);
     const ids = tasks.map(t => t.id);
-    assert.equal(ids.length, 4, `expected 4 lenses, got ${ids.length}: ${ids}`);
+    assert.equal(ids.length, 5, `expected 5 lenses, got ${ids.length}: ${ids}`);
     assert.ok(ids.includes('diff-quality'));
     assert.ok(ids.includes('contract-compliance'));
+    assert.ok(ids.includes('debug-discipline'));
     assert.ok(ids.includes('security'));
     assert.ok(ids.includes('framework'));
   });
@@ -187,5 +189,28 @@ describe('lens reasoning_template', () => {
     for (const task of tasks) {
       assert.ok(task.reasoning_template, `triage task ${task.id} missing reasoning_template`);
     }
+  });
+});
+
+describe('debug-discipline lens', () => {
+  it('debug-discipline lens exists in LENS_DEFINITIONS', () => {
+    assert.ok(LENS_DEFINITIONS['debug-discipline'], 'missing debug-discipline lens');
+  });
+
+  it('debug-discipline is a baseline lens', () => {
+    assert.ok(BASELINE_LENSES.includes('debug-discipline'), 'debug-discipline should be baseline');
+  });
+
+  it('debug-discipline lens has reasoning_template', () => {
+    const lens = LENS_DEFINITIONS['debug-discipline'];
+    assert.ok(lens.reasoning_template);
+    assert.equal(lens.reasoning_template.require_citations, true);
+    assert.equal(lens.reasoning_template.sections.length, 3);
+  });
+
+  it('triageLenses always includes debug-discipline', () => {
+    const tasks = triageLenses(['README.md']);
+    const ids = tasks.map(t => t.id);
+    assert.ok(ids.includes('debug-discipline'), 'should always include debug-discipline');
   });
 });
