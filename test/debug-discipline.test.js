@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { FixChainDetector, AttemptCounter } from '../lib/debug-discipline.js';
+import { FixChainDetector, AttemptCounter, TraceValidator } from '../lib/debug-discipline.js';
 
 describe('FixChainDetector', () => {
   it('starts with no chains', () => {
@@ -143,5 +143,85 @@ describe('AttemptCounter', () => {
     const c2 = AttemptCounter.fromJSON(c1.toJSON());
     assert.equal(c2.count, 2);
     assert.equal(c2.getIntervention(), 'escalate');
+  });
+});
+
+describe('TraceValidator', () => {
+  it('rejects null trace_evidence', () => {
+    const r = TraceValidator.validate({ trace_evidence: null });
+    assert.equal(r.valid, false);
+    assert.ok(r.reason.includes('missing'));
+  });
+
+  it('rejects empty trace_evidence', () => {
+    const r = TraceValidator.validate({ trace_evidence: [] });
+    assert.equal(r.valid, false);
+    assert.ok(r.reason.includes('minimum 2'));
+  });
+
+  it('rejects single evidence item', () => {
+    const r = TraceValidator.validate({
+      trace_evidence: [{ command: 'echo test', actual_output: 'test output here' }],
+      root_cause: 'something',
+    });
+    assert.equal(r.valid, false);
+    assert.ok(r.reason.includes('minimum 2'));
+  });
+
+  it('rejects evidence without command', () => {
+    const r = TraceValidator.validate({
+      trace_evidence: [
+        { command: 'cmd1', actual_output: 'output longer than five' },
+        { actual_output: 'output longer than five' },
+      ],
+      root_cause: 'something',
+    });
+    assert.equal(r.valid, false);
+    assert.ok(r.reason.includes('command'));
+  });
+
+  it('rejects evidence with too-short output', () => {
+    const r = TraceValidator.validate({
+      trace_evidence: [
+        { command: 'cmd1', actual_output: 'ok' },
+        { command: 'cmd2', actual_output: 'no' },
+      ],
+      root_cause: 'something',
+    });
+    assert.equal(r.valid, false);
+    assert.ok(r.reason.includes('output'));
+  });
+
+  it('rejects missing root_cause', () => {
+    const r = TraceValidator.validate({
+      trace_evidence: [
+        { command: 'cmd1', actual_output: 'output longer than five' },
+        { command: 'cmd2', actual_output: 'another output here' },
+      ],
+    });
+    assert.equal(r.valid, false);
+    assert.ok(r.reason.includes('root_cause'));
+  });
+
+  it('accepts valid trace with 2+ items and root_cause', () => {
+    const r = TraceValidator.validate({
+      trace_evidence: [
+        { command: 'type(x)', actual_output: 'MemoryItem' },
+        { command: 'curl localhost:9001/api', actual_output: '{"status": "ok", "items": []}' },
+      ],
+      root_cause: 'callers expect dict but get MemoryItem',
+    });
+    assert.equal(r.valid, true);
+  });
+
+  it('accepts short but valid output (> 5 chars)', () => {
+    const r = TraceValidator.validate({
+      trace_evidence: [
+        { command: 'type(x)', actual_output: 'MemoryItem' },
+        { command: 'len(x)', actual_output: '42 items' },
+      ],
+      root_cause: 'type mismatch',
+    });
+    assert.equal(r.valid, true);
   });
 });
