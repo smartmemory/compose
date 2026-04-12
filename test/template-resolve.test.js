@@ -22,7 +22,7 @@ describe('resolveTemplatePath', () => {
   });
 
   it('falls back to bundled presets/ when not in project pipelines/', () => {
-    writeFileSync(join(TMP, '..', '..', 'presets', 'team-review.stratum.yaml'), 'version: "0.3"');
+    // Don't write to real presets/ — team-review already exists as a bundled preset
     const result = resolveTemplatePath('team-review', TMP);
     assert.ok(result.includes('presets'), 'should resolve to presets dir');
   });
