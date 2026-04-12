@@ -128,10 +128,10 @@ ensure:
   - "result.trace_evidence.length >= 2"
   - "all(e.command != null and e.actual_output != null for e in result.trace_evidence)"
   - "result.root_cause != null"
-  - "any(e.actual_output.length > 20 for e in result.trace_evidence)"
+  - "any(e.actual_output.length > 5 for e in result.trace_evidence)"
 ```
 
-The minimum of 2 evidence items prevents trivial satisfaction. The `actual_output.length > 20` check catches empty or stub outputs — real command output is almost always longer than 20 chars. The `root_cause` field forces the agent to connect the evidence to a conclusion.
+The minimum of 2 evidence items prevents trivial satisfaction. The `actual_output.length > 5` check catches empty or stub outputs while allowing short but valid results like type names (`MemoryItem`, `dict`, `None`). The `root_cause` field forces the agent to connect the evidence to a conclusion.
 
 **What counts as trace evidence:**
 - `docker exec ... python3 -c "print(type(x))"` → actual type
@@ -147,11 +147,17 @@ The minimum of 2 evidence items prevents trivial satisfaction. The `actual_outpu
 
 **What it does:** When the diagnose step identifies a change that crosses layer boundaries (provider switch, field rename, config key change), automatically runs a grep audit across all configured repos and presents the full reference list before the fix step begins.
 
-**Trigger detection:** The engine scans the diagnose output for keywords indicating a cross-layer change:
-- Provider names: `openai`, `groq`, `anthropic`, `gpt-4`, `llama`
-- Config patterns: `config.json`, `env`, `.env`, `VITE_`
-- Field renames: "rename", "was previously", "changed from"
-- Routing changes: `Caddy`, `proxy`, `nginx`, `route`
+**Trigger detection:** Two-tier detection — structured fields first, keyword fallback second.
+
+1. **Structured (primary):** The `DiagnoseResult` contract includes a `scope_hint` field (`single` | `cross-layer` | `unknown`). The agent is instructed to set this based on whether the root cause spans multiple repos/layers. When `scope_hint == 'cross-layer'`, the audit always runs.
+
+2. **Keyword fallback:** If `scope_hint` is `unknown` or absent, the engine scans the diagnose output for keywords:
+   - Provider names: `openai`, `groq`, `anthropic`, `gpt-4`, `llama`
+   - Config patterns: `config.json`, `env`, `.env`, `VITE_`
+   - Field renames: "rename", "was previously", "changed from"
+   - Routing changes: `Caddy`, `proxy`, `nginx`, `route`
+
+The structured field is the reliable path; keywords catch cases where the agent forgets to set the hint.
 
 **Intervention:** When triggered, inject a `scope_expansion` step between diagnose and fix:
 1. Grep all configured repos for the affected term
@@ -193,16 +199,21 @@ Default `cross_layer_extensions` is `["*.py", "*.json", "*.ts", "*.tsx", "*.jsx"
 
 **New dimension in `health-score.js`:**
 
-`computeCompositeScore()` currently has 6 hardcoded scorer entries. Adding `debug_discipline` requires:
-1. Register the scorer in the `SCORERS` map (same pattern as existing dimensions)
-2. Add the weight to `DIMENSION_WEIGHTS`
-3. Re-normalize existing weights to sum to 1.0 (subtract 0.10 proportionally from existing dimensions)
+`computeCompositeScore()` uses a `DIMENSIONS` export (object with `weight` + `name`) and a local `scorers` object inside the function. Adding `debug_discipline` requires:
+1. Add entry to `DIMENSIONS` export: `debug_discipline: { weight: 0.10, name: 'Debug Discipline' }`
+2. Add scorer to the local `scorers` object inside `computeCompositeScore()`
+3. Re-normalize existing weights to sum to 1.0 (subtract 0.10 proportionally from existing 6 dimensions)
+
+The scorer is only called when `signals.debug_discipline` is present — absent dimensions are skipped and scored neutral (see `computeCompositeScore` line 179-183).
 
 ```js
-// New scorer registration in health-score.js
-SCORERS.set('debug_discipline', scoreDebugDiscipline);
-DIMENSION_WEIGHTS.set('debug_discipline', 0.10);
+// In DIMENSIONS export
+debug_discipline: { weight: 0.10, name: 'Debug Discipline' },
 
+// In computeCompositeScore scorers object
+debug_discipline: () => scoreDebugDiscipline(signals.debug_discipline),
+
+// New scorer function
 function scoreDebugDiscipline(signals) {
   if (signals == null) return 50;
   let score = 100;
@@ -260,7 +271,7 @@ functions:
       - "result.trace_evidence != null"
       - "result.trace_evidence.length >= 2"
       - "all(e.command != null and e.actual_output != null for e in result.trace_evidence)"
-      - "any(e.actual_output.length > 20 for e in result.trace_evidence)"
+      - "any(e.actual_output.length > 5 for e in result.trace_evidence)"
       - "result.root_cause != null"
     retries: 2
 
@@ -289,11 +300,13 @@ functions:
       Change only what is necessary.
     input:
       task: {type: string}
-      scope: {type: object}
-    output: BugFixResult
+      scope: {type: object}  # ScopeResult with references_found
+    output: BugFixResult  # must include references_addressed: int
     ensure:
-      - "result.references_addressed >= result.references_found if result.references_found > 0 else True"
+      - "result.references_addressed >= scope.references_found if scope.references_found > 0 else True"
     retries: 2
+
+**Contract note:** `references_found` is owned by `ScopeResult` (output of `scope_check`). `references_addressed` is owned by `BugFixResult` (output of `fix`). The fix step's ensure cross-references both — the scope result is available via `scope` input.
 
   # ... test, verify, ship unchanged ...
 ```
@@ -302,8 +315,8 @@ functions:
 
 | Retro Finding | Detection | Intervention | Postcondition |
 |---------------|-----------|-------------|---------------|
-| 7-commit list_memories chain | Fix-chain detector (2+ commits same file) | Trace gate blocks fix until evidence | `trace_evidence.length > 0` |
-| 10-commit Groq migration | Cross-layer audit triggered by provider keywords | Scope expansion: grep all repos | `scope.references_addressed == scope.references_found` |
+| 7-commit list_memories chain | Fix-chain detector (2+ iterations same file) | Trace gate blocks fix until evidence | `trace_evidence.length >= 2` |
+| 10-commit Groq migration | Cross-layer audit triggered by structured diagnose fields + keyword fallback | Scope expansion: grep all configured repos | `fix.references_addressed >= scope.references_found` |
 | 8-commit graph layout | Attempt counter + visual bug detection | Hard stop at attempt 2 (visual), cross-agent escalation | `attempt_count <= threshold` (see canonical threshold table) |
 | dict vs MemoryItem mismatch | isinstance smell in review lens | Trace enforcer requires type() output | `trace_evidence contains type check` |
 
