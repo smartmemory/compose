@@ -2,7 +2,7 @@
 
 **Status:** PLANNED
 **Phase:** 7 (Trusted Pipeline Harness)
-**Depends on:** COMP-HARNESS-1 (pipeline runner), COMP-HARNESS-9 (iteration ledger)
+**Depends on:** None (COMP-HARNESS-1 and COMP-HARNESS-9 are nice-to-haves, not blockers — runBuild() and file-based counters suffice for v1)
 **Blocks:** None (enhances existing pipelines)
 
 ## Related Documents
@@ -72,31 +72,46 @@ A **Debug Discipline Engine** — a set of detectors, enforcers, and interventio
 
 ### Component 1: Fix-Chain Detector
 
-**What it does:** Analyzes git history to detect when multiple recent commits touch the same function, file, or endpoint. This is the signal that the agent is patching symptoms instead of tracing to root cause.
+**What it does:** Tracks which files/functions the agent modifies across iterations within the fix loop. When the same file is touched in multiple iterations, that's a fix chain — the signal that the agent is patching symptoms instead of tracing to root cause.
 
-**Inputs:** Git log for the current branch/session.
+**Timing problem (resolved):** Git commits only happen at `ship` (end of pipeline), so there's no commit history to analyze during the fix loop. Instead, the detector uses two complementary signals:
+
+1. **In-loop tracking** — `build.js` already tracks `step_done` results per iteration. The fix-chain detector maintains an in-memory map of `file → iteration_count` across fix/test retry cycles. This runs inside the fix loop, before any commits exist.
+2. **Cross-session git analysis** — After `ship`, analyze the branch's commit history for patterns across prior bug-fix sessions. This is the retro signal, not the live signal.
+
+**Inputs:** Iteration-level file change lists from `step_done` results (in-loop), git log (cross-session).
 **Detection rules:**
-- 2+ commits in the same session modifying the same file = `fix_chain_warning`
-- 3+ commits modifying the same function = `fix_chain_critical`
-- Any commit whose message contains a function/endpoint name that appeared in a prior fix commit = `fix_chain_critical`
+- Same file modified in 2+ fix iterations = `fix_chain_warning`
+- Same file modified in 3+ fix iterations = `fix_chain_critical`
+- Same function signature changed across iterations (via diff analysis) = `fix_chain_critical`
 
-**Intervention:** On `fix_chain_warning`, inject a trace reminder into the agent's next prompt. On `fix_chain_critical`, halt the fix step and require a trace evidence artifact before proceeding.
+**Intervention:** On `fix_chain_warning`, inject a trace reminder into the agent's next prompt. On `fix_chain_critical`, halt the fix step and require a fresh trace evidence artifact before proceeding.
 
-**Implementation:** Pure git analysis — `git log --diff-filter=M --name-only` scoped to session commits, deduplicated by file, with function-level granularity via `git log -p` + regex for `def/function/class` changes.
+**Implementation:** In-memory `Map<file, iterationCount>` maintained by `lib/debug-discipline.js`, called from `build.js` after each fix iteration's `step_done`. Persisted to `.compose/debug-state.json` for crash recovery.
 
 ```js
 // lib/debug-discipline.js (sketch)
-export async function detectFixChains(sessionCommits) {
-  const fileHits = new Map(); // file → commit count
-  for (const commit of sessionCommits) {
-    for (const file of commit.filesChanged) {
-      fileHits.set(file, (fileHits.get(file) ?? 0) + 1);
+export class FixChainDetector {
+  constructor() {
+    this.fileHits = new Map(); // file → iteration count
+    this.iteration = 0;
+  }
+
+  recordIteration(filesChanged) {
+    this.iteration++;
+    for (const file of filesChanged) {
+      this.fileHits.set(file, (this.fileHits.get(file) ?? 0) + 1);
     }
   }
-  const chains = [...fileHits.entries()]
-    .filter(([, count]) => count >= 2)
-    .map(([file, count]) => ({ file, commits: count, level: count >= 3 ? 'critical' : 'warning' }));
-  return chains;
+
+  detect() {
+    return [...this.fileHits.entries()]
+      .filter(([, count]) => count >= 2)
+      .map(([file, count]) => ({
+        file, iterations: count,
+        level: count >= 3 ? 'critical' : 'warning',
+      }));
+  }
 }
 ```
 
@@ -110,10 +125,13 @@ export async function detectFixChains(sessionCommits) {
 ```yaml
 ensure:
   - "result.trace_evidence != null"
-  - "result.trace_evidence.length > 0"
-  - "result.trace_evidence[0].command != null"
-  - "result.trace_evidence[0].actual_output != null"
+  - "result.trace_evidence.length >= 2"
+  - "all(e.command != null and e.actual_output != null for e in result.trace_evidence)"
+  - "result.root_cause != null"
+  - "any(e.actual_output.length > 20 for e in result.trace_evidence)"
 ```
+
+The minimum of 2 evidence items prevents trivial satisfaction. The `actual_output.length > 20` check catches empty or stub outputs — real command output is almost always longer than 20 chars. The `root_cause` field forces the agent to connect the evidence to a conclusion.
 
 **What counts as trace evidence:**
 - `docker exec ... python3 -c "print(type(x))"` → actual type
@@ -141,30 +159,30 @@ ensure:
 3. Present the full list to the agent
 4. Require the fix step to address ALL references, not just the first one found
 
-**Config:**
+**Config:** Cross-layer repos are configured per-project in `.compose/compose.json`, not hardcoded. If no repos are configured, the audit scans only the current project directory.
+
 ```json
+// .compose/compose.json
 {
-  "cross_layer_repos": [
-    "../smart-memory-core",
-    "../smart-memory-service",
-    "../smart-memory-common",
-    "../smart-memory-studio",
-    "../smart-memory-web"
-  ],
-  "cross_layer_extensions": ["*.py", "*.json", "*.ts", "*.jsx", "*.yaml"]
+  "debug_discipline": {
+    "cross_layer_repos": ["../other-repo", "../shared-lib"],
+    "cross_layer_extensions": ["*.py", "*.json", "*.ts", "*.jsx", "*.yaml"]
+  }
 }
 ```
+
+Default `cross_layer_extensions` is `["*.py", "*.json", "*.ts", "*.tsx", "*.jsx", "*.yaml"]`. Default `cross_layer_repos` is `[]` (current project only). The engine reads this config at startup — no hardcoded repo paths.
 
 ### Component 4: Attempt Counter
 
 **What it does:** Tracks how many fix iterations target the same bug/file/endpoint. Enforces hard stops and escalation based on attempt count.
 
-**Thresholds:**
+**Thresholds (canonical — all other references defer to this table):**
 | Attempt | Action |
 |---------|--------|
 | 1 | Normal fix |
-| 2 | Inject trace reminder; for visual bugs, flag for escalation |
-| 3 | Visual bugs: hard stop, escalate to cross-agent review. All others: require trace evidence refresh |
+| 2 | Inject trace reminder. Visual bugs: hard stop, escalate to cross-agent review. |
+| 3 | All bugs: require fresh trace evidence before next fix attempt |
 | 5 | All bugs: hard stop, escalate to cross-agent review |
 
 **Visual bug detection:** File extensions `.css`, `.scss`, `.jsx`, `.tsx` with keywords: `layout`, `position`, `display`, `animation`, `fit`, `resize`, `scroll`, `hidden`, `visible`, `z-index`.
@@ -175,13 +193,17 @@ ensure:
 
 **New dimension in `health-score.js`:**
 
-```js
-export const DIMENSIONS = {
-  // ... existing dimensions ...
-  debug_discipline: { weight: 0.10, name: 'Debug Discipline' },
-};
+`computeCompositeScore()` currently has 6 hardcoded scorer entries. Adding `debug_discipline` requires:
+1. Register the scorer in the `SCORERS` map (same pattern as existing dimensions)
+2. Add the weight to `DIMENSION_WEIGHTS`
+3. Re-normalize existing weights to sum to 1.0 (subtract 0.10 proportionally from existing dimensions)
 
-export function scoreDebugDiscipline(signals) {
+```js
+// New scorer registration in health-score.js
+SCORERS.set('debug_discipline', scoreDebugDiscipline);
+DIMENSION_WEIGHTS.set('debug_discipline', 0.10);
+
+function scoreDebugDiscipline(signals) {
   if (signals == null) return 50;
   let score = 100;
   // Fix chains: -15 per chain detected
@@ -193,6 +215,8 @@ export function scoreDebugDiscipline(signals) {
   return Math.max(0, score);
 }
 ```
+
+If `signals.debug_discipline` is absent (e.g., non-bug-fix builds), the scorer returns 50 (neutral) — it doesn't penalize builds that don't use the debug pipeline.
 
 ### Component 6: Review Lens
 
@@ -211,7 +235,7 @@ export function scoreDebugDiscipline(signals) {
 }
 ```
 
-**Trigger:** Activates when the diff touches files that were already modified in the current session, or when the commit message contains "fix" on a file that already has a "fix" commit.
+**Trigger:** Always active — runs on every review pass like the baseline lenses. The lens itself inspects fix-chain signals (from `.compose/debug-state.json` if present) and diff patterns (multiple hunks in the same function, `isinstance` checks, provider-name changes) to decide what to flag. Unlike conditional lenses (security, framework), this lens doesn't need file-pattern triggers because its signals come from iteration state, not file types.
 
 ## Enhanced Bug-Fix Pipeline
 
@@ -234,7 +258,9 @@ functions:
     output: DiagnoseResult
     ensure:
       - "result.trace_evidence != null"
-      - "result.trace_evidence.length > 0"
+      - "result.trace_evidence.length >= 2"
+      - "all(e.command != null and e.actual_output != null for e in result.trace_evidence)"
+      - "any(e.actual_output.length > 20 for e in result.trace_evidence)"
       - "result.root_cause != null"
     retries: 2
 
@@ -243,23 +269,30 @@ functions:
     intent: >
       If the diagnosed root cause involves a provider switch, field rename,
       config change, or anything that might span multiple repos/layers,
-      grep ALL configured repos for every reference. Return the full list.
-      If the change is single-layer, return scope: 'single' and skip.
+      grep ALL configured repos for every reference. Return the full list
+      with references_found count. If the change is single-layer,
+      return scope: 'single', references_found: 0, and skip.
     input:
       task: {type: string}
       diagnosis: {type: object}
     output: ScopeResult
+    ensure:
+      - "result.scope != null"
+      - "result.references_found is not None"
     retries: 1
 
   fix:
     mode: compute
     intent: >
       Implement the minimal correct fix. If scope_check found cross-layer
-      references, address ALL of them. Change only what is necessary.
+      references, address ALL of them — report references_addressed count.
+      Change only what is necessary.
     input:
       task: {type: string}
       scope: {type: object}
     output: BugFixResult
+    ensure:
+      - "result.references_addressed >= result.references_found if result.references_found > 0 else True"
     retries: 2
 
   # ... test, verify, ship unchanged ...
@@ -271,12 +304,12 @@ functions:
 |---------------|-----------|-------------|---------------|
 | 7-commit list_memories chain | Fix-chain detector (2+ commits same file) | Trace gate blocks fix until evidence | `trace_evidence.length > 0` |
 | 10-commit Groq migration | Cross-layer audit triggered by provider keywords | Scope expansion: grep all repos | `scope.references_addressed == scope.references_found` |
-| 8-commit graph layout | Attempt counter + visual bug detection | Hard stop at attempt 2, cross-agent escalation | `attempt_count <= threshold` |
+| 8-commit graph layout | Attempt counter + visual bug detection | Hard stop at attempt 2 (visual), cross-agent escalation | `attempt_count <= threshold` (see canonical threshold table) |
 | dict vs MemoryItem mismatch | isinstance smell in review lens | Trace enforcer requires type() output | `trace_evidence contains type check` |
 
-## Iteration Ledger Integration (COMP-HARNESS-9)
+## Iteration Ledger (v1: file-based, upgrades to COMP-HARNESS-9 later)
 
-Every debug discipline intervention writes to the iteration ledger:
+v1 uses a file-based ledger at `.compose/debug-ledger.jsonl` — append-only JSONL written by `lib/debug-discipline.js`. When COMP-HARNESS-9 ships, this migrates to its structured format. Every debug discipline intervention writes to the ledger:
 
 ```jsonl
 {"ts": "2026-04-12T10:30:00Z", "type": "fix_chain_detected", "file": "list_memories.py", "commits": 3, "intervention": "trace_gate"}
