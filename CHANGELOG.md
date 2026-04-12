@@ -2,6 +2,21 @@
 
 ## 2026-04-12
 
+### Test suite fixes (34 failures across 15 suites)
+
+**Root causes fixed:**
+- Pipeline YAML specs: removed `metadata` top-level key rejected by stratum-mcp 0.1.0; removed `retries` on flow steps (not allowed per stratum schema)
+- Pipeline spec: fixed `$.steps.execute.output.files_changed` reference (parallel_dispatch output uses `tasks` key)
+- `visionMessageHandler`: test mocks missing new setters (`setSpawnedAgents`, `setAgentRelays`, `setIterationStates`, `setFeatureTimeline`, etc.) added in recent features
+- `settings-store`: tests updated for `defaultView` change from `'attention'` to `'graph'`
+- `selective-rerun`: tests updated to include `debug-discipline` in BASELINE_LENSES (added by COMP-DEBUG-1)
+- `parallel-dispatch`: tests searched inline branch but code was refactored to `executeParallelDispatch()` function
+- `project-config`: test imported removed `TARGET_ROOT` export, updated to `getTargetRoot()`
+- `build-dag`: deduplicate entries by code to handle ROADMAP.md summary tables that repeat feature codes
+- `vision-store`: gate labels updated to match `GATE_STEP_LABELS` constants (`'Review Design'` not `'design gate'`)
+- `init`: test expected `stratum` skill but source only ships `compose` skill
+- `proof-run`: mock connector updated for new pipeline steps (triage, merge, lens tasks, ship plan_items)
+
 ### COMP-DEBUG-1: Debug Discipline Engine (design)
 
 **Feature design and pipeline enhancement for disciplined bug resolution.**

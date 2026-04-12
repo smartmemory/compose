@@ -1,10 +1,10 @@
-metadata:
-  id: content
-  label: "Content"
-  description: "Write documentation or content — research, draft, review, publish"
-  category: documentation
-  steps: 4
-  estimated_minutes: 20
+# metadata:
+#   id: content
+#   label: "Content"
+#   description: "Write documentation or content — research, draft, review, publish"
+#   category: documentation
+#   steps: 4
+#   estimated_minutes: 20
 
 version: "0.1"
 

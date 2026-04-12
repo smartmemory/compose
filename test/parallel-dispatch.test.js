@@ -61,23 +61,23 @@ describe('build.js — parallel_dispatch branch (T8)', () => {
 
   test('parallel_dispatch branch streams build_step_start events', () => {
     const src = readFileSync(join(LIB_DIR, 'build.js'), 'utf-8');
-    // The branch must emit step start events
-    const parallelIdx  = src.indexOf("response.status === 'parallel_dispatch'");
-    const nextBranchIdx = src.indexOf("} else {", parallelIdx);
-    const branchSrc    = src.slice(parallelIdx, nextBranchIdx);
+    // The implementation is in executeParallelDispatch — search that function
+    const fnIdx = src.indexOf('async function executeParallelDispatch(');
+    assert.ok(fnIdx !== -1, 'executeParallelDispatch function must exist');
+    const fnSrc = src.slice(fnIdx);
     assert.ok(
-      branchSrc.includes('build_step_start'),
+      fnSrc.includes('build_step_start'),
       'parallel_dispatch branch must write build_step_start stream events'
     );
   });
 
   test('parallel_dispatch branch streams build_step_done events', () => {
     const src = readFileSync(join(LIB_DIR, 'build.js'), 'utf-8');
-    const parallelIdx  = src.indexOf("response.status === 'parallel_dispatch'");
-    const nextBranchIdx = src.indexOf("} else {", parallelIdx);
-    const branchSrc    = src.slice(parallelIdx, nextBranchIdx);
+    const fnIdx = src.indexOf('async function executeParallelDispatch(');
+    assert.ok(fnIdx !== -1, 'executeParallelDispatch function must exist');
+    const fnSrc = src.slice(fnIdx);
     assert.ok(
-      branchSrc.includes('build_step_done'),
+      fnSrc.includes('build_step_done'),
       'parallel_dispatch branch must write build_step_done stream events'
     );
   });
@@ -131,13 +131,13 @@ describe('parallel_dispatch functional dispatch (T8b)', async () => {
   test('task intent template interpolation handles missing fields gracefully', () => {
     // Verify replace calls use nullish coalescing or default values
     const src = readFileSync(join(LIB_DIR, 'build.js'), 'utf-8');
-    const parallelIdx = src.indexOf("response.status === 'parallel_dispatch'");
-    const nextBranchIdx = src.indexOf("} else {", parallelIdx);
-    const branchSrc = src.slice(parallelIdx, nextBranchIdx);
+    const fnIdx = src.indexOf('async function executeParallelDispatch(');
+    assert.ok(fnIdx !== -1, 'executeParallelDispatch function must exist');
+    const fnSrc = src.slice(fnIdx);
 
     // Should have some form of fallback for missing fields
     assert.ok(
-      branchSrc.includes('?? ') || branchSrc.includes("|| ''") || branchSrc.includes('|| []'),
+      fnSrc.includes('?? ') || fnSrc.includes("|| ''") || fnSrc.includes('|| []'),
       'intent template interpolation must handle missing task fields with fallbacks'
     );
   });
@@ -148,118 +148,90 @@ describe('parallel_dispatch functional dispatch (T8b)', async () => {
 // ---------------------------------------------------------------------------
 
 describe('parallel_dispatch worktree isolation (STRAT-PAR-4)', () => {
-  test('parallel_dispatch branch creates git worktrees', () => {
+  // Helper: extract executeParallelDispatch function source
+  function getParallelFnSrc() {
     const src = readFileSync(join(LIB_DIR, 'build.js'), 'utf-8');
-    const parallelIdx   = src.indexOf("response.status === 'parallel_dispatch'");
-    const nextBranchIdx = src.indexOf("} else {", parallelIdx);
-    const branchSrc     = src.slice(parallelIdx, nextBranchIdx);
+    const fnIdx = src.indexOf('async function executeParallelDispatch(');
+    assert.ok(fnIdx !== -1, 'executeParallelDispatch function must exist');
+    return src.slice(fnIdx);
+  }
 
+  test('parallel_dispatch branch creates git worktrees', () => {
+    const fnSrc = getParallelFnSrc();
     assert.ok(
-      branchSrc.includes('git worktree add'),
+      fnSrc.includes('git worktree add'),
       'parallel_dispatch must create git worktrees for task isolation'
     );
   });
 
   test('parallel_dispatch branch removes worktrees on cleanup', () => {
-    const src = readFileSync(join(LIB_DIR, 'build.js'), 'utf-8');
-    const parallelIdx   = src.indexOf("response.status === 'parallel_dispatch'");
-    const nextBranchIdx = src.indexOf("} else {", parallelIdx);
-    const branchSrc     = src.slice(parallelIdx, nextBranchIdx);
-
+    const fnSrc = getParallelFnSrc();
     assert.ok(
-      branchSrc.includes('git worktree remove'),
+      fnSrc.includes('git worktree remove'),
       'parallel_dispatch must clean up worktrees after task completion'
     );
   });
 
   test('parallel_dispatch branch collects diffs from worktrees', () => {
-    const src = readFileSync(join(LIB_DIR, 'build.js'), 'utf-8');
-    const parallelIdx   = src.indexOf("response.status === 'parallel_dispatch'");
-    const nextBranchIdx = src.indexOf("} else {", parallelIdx);
-    const branchSrc     = src.slice(parallelIdx, nextBranchIdx);
-
+    const fnSrc = getParallelFnSrc();
     assert.ok(
-      branchSrc.includes('git diff --cached HEAD') || branchSrc.includes('git diff HEAD'),
+      fnSrc.includes('git diff --cached HEAD') || fnSrc.includes('git diff HEAD'),
       'parallel_dispatch must collect diffs from worktrees'
     );
   });
 
   test('parallel_dispatch branch applies diffs with conflict detection', () => {
-    const src = readFileSync(join(LIB_DIR, 'build.js'), 'utf-8');
-    const parallelIdx   = src.indexOf("response.status === 'parallel_dispatch'");
-    const nextBranchIdx = src.indexOf("} else {", parallelIdx);
-    const branchSrc     = src.slice(parallelIdx, nextBranchIdx);
-
+    const fnSrc = getParallelFnSrc();
     assert.ok(
-      branchSrc.includes('git apply --check'),
+      fnSrc.includes('git apply --check'),
       'parallel_dispatch must dry-run check diffs before applying'
     );
     assert.ok(
-      branchSrc.includes('git apply'),
+      fnSrc.includes('git apply'),
       'parallel_dispatch must apply diffs to main worktree'
     );
   });
 
   test('parallel_dispatch branch detects merge conflicts', () => {
-    const src = readFileSync(join(LIB_DIR, 'build.js'), 'utf-8');
-    const parallelIdx   = src.indexOf("response.status === 'parallel_dispatch'");
-    const nextBranchIdx = src.indexOf("} else {", parallelIdx);
-    const branchSrc     = src.slice(parallelIdx, nextBranchIdx);
-
+    const fnSrc = getParallelFnSrc();
     assert.ok(
-      branchSrc.includes("mergeStatus = 'conflict'"),
+      fnSrc.includes("mergeStatus = 'conflict'"),
       'parallel_dispatch must set mergeStatus to conflict on apply failure'
     );
   });
 
   test('parallel_dispatch rolls back applied patches on conflict', () => {
-    const src = readFileSync(join(LIB_DIR, 'build.js'), 'utf-8');
-    const parallelIdx   = src.indexOf("response.status === 'parallel_dispatch'");
-    const nextBranchIdx = src.indexOf("} else {", parallelIdx);
-    const branchSrc     = src.slice(parallelIdx, nextBranchIdx);
-
+    const fnSrc = getParallelFnSrc();
     assert.ok(
-      branchSrc.includes('git checkout -- .'),
+      fnSrc.includes('git checkout -- .'),
       'parallel_dispatch must rollback applied patches on conflict via git checkout'
     );
     assert.ok(
-      branchSrc.includes('git stash push'),
+      fnSrc.includes('git stash push'),
       'parallel_dispatch must stash pre-merge state for rollback'
     );
   });
 
   test('parallel_dispatch uses .compose/par/ directory for worktrees', () => {
-    const src = readFileSync(join(LIB_DIR, 'build.js'), 'utf-8');
-    const parallelIdx   = src.indexOf("response.status === 'parallel_dispatch'");
-    const nextBranchIdx = src.indexOf("} else {", parallelIdx);
-    const branchSrc     = src.slice(parallelIdx, nextBranchIdx);
-
+    const fnSrc = getParallelFnSrc();
     assert.ok(
-      branchSrc.includes('.compose') && branchSrc.includes('par'),
+      fnSrc.includes('.compose') && fnSrc.includes('par'),
       'parallel_dispatch must use .compose/par/ for worktree paths'
     );
   });
 
   test('parallel_dispatch falls back gracefully when not in git repo', () => {
-    const src = readFileSync(join(LIB_DIR, 'build.js'), 'utf-8');
-    const parallelIdx   = src.indexOf("response.status === 'parallel_dispatch'");
-    const nextBranchIdx = src.indexOf("} else {", parallelIdx);
-    const branchSrc     = src.slice(parallelIdx, nextBranchIdx);
-
+    const fnSrc = getParallelFnSrc();
     assert.ok(
-      branchSrc.includes('isGitRepo') || branchSrc.includes('worktreeIsolation'),
+      fnSrc.includes('isGitRepo') || fnSrc.includes('worktreeIsolation'),
       'parallel_dispatch must check for git repo and fall back to shared cwd'
     );
   });
 
   test('parallel_dispatch applies diffs in topo order', () => {
-    const src = readFileSync(join(LIB_DIR, 'build.js'), 'utf-8');
-    const parallelIdx   = src.indexOf("response.status === 'parallel_dispatch'");
-    const nextBranchIdx = src.indexOf("} else {", parallelIdx);
-    const branchSrc     = src.slice(parallelIdx, nextBranchIdx);
-
+    const fnSrc = getParallelFnSrc();
     assert.ok(
-      branchSrc.includes('topoOrder') || branchSrc.includes('topo_order'),
+      fnSrc.includes('topoOrder') || fnSrc.includes('topo_order'),
       'parallel_dispatch must apply diffs in topological dependency order'
     );
   });

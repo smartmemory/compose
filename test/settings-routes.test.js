@@ -120,7 +120,7 @@ describe('GET /api/settings', () => {
     assert.equal(body.policies.prd, 'skip');
     assert.equal(body.policies.blueprint, 'gate');
     assert.equal(body.ui.theme, 'system');
-    assert.equal(body.ui.defaultView, 'attention');
+    assert.equal(body.ui.defaultView, 'graph');
   });
 });
 

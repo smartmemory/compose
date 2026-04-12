@@ -52,6 +52,9 @@ function createMockSetters() {
   function getDefault(name) {
     if (name === 'setItems' || name === 'setConnections' || name === 'setGates') return [];
     if (name === 'setAgentActivity' || name === 'setAgentErrors') return [];
+    if (name === 'setSpawnedAgents' || name === 'setAgentRelays') return [];
+    if (name === 'setFeatureTimeline') return [];
+    if (name === 'setIterationStates') return new Map();
     if (name === 'setSessionState') return null;
     return null;
   }
@@ -70,6 +73,14 @@ function createMockSetters() {
       setAgentActivity: makeSetter('setAgentActivity'),
       setAgentErrors: makeSetter('setAgentErrors'),
       setSessionState: makeSetter('setSessionState'),
+      setSpawnedAgents: makeSetter('setSpawnedAgents'),
+      setAgentRelays: makeSetter('setAgentRelays'),
+      setSettings: makeSetter('setSettings'),
+      setPipelineDraft: makeSetter('setPipelineDraft'),
+      setActiveBuild: makeSetter('setActiveBuild'),
+      setSessions: makeSetter('setSessions'),
+      setIterationStates: makeSetter('setIterationStates'),
+      setFeatureTimeline: makeSetter('setFeatureTimeline'),
       EMPTY_CHANGES,
     },
   };

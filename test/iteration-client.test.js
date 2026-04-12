@@ -15,6 +15,7 @@ function makeTestHarness() {
     agentActivity: [],
     agentErrors: [],
     sessionState: { active: true, errorCount: 0 },
+    iterationStates: new Map(),
   };
 
   const refs = {
@@ -35,6 +36,14 @@ function makeTestHarness() {
     setAgentActivity: (fn) => { state.agentActivity = fn(state.agentActivity); },
     setAgentErrors: (fn) => { state.agentErrors = fn(state.agentErrors); },
     setSessionState: (fn) => { state.sessionState = fn(state.sessionState); },
+    setSpawnedAgents: () => {},
+    setAgentRelays: () => {},
+    setSettings: () => {},
+    setPipelineDraft: () => {},
+    setActiveBuild: () => {},
+    setSessions: () => {},
+    setIterationStates: (fn) => { state.iterationStates = fn(state.iterationStates); },
+    setFeatureTimeline: () => {},
     EMPTY_CHANGES: { added: [], updated: [], removed: [] },
   };
 

@@ -199,12 +199,12 @@ describe('loadProjectConfig (via fresh subprocess)', () => {
     }));
 
     const script = `
-      import { resolveProjectPath, TARGET_ROOT } from './server/project-root.js';
+      import { resolveProjectPath, getTargetRoot } from './server/project-root.js';
       console.log(JSON.stringify({
         features: resolveProjectPath('features'),
         docs: resolveProjectPath('docs'),
         journal: resolveProjectPath('journal'),
-        target: TARGET_ROOT,
+        target: getTargetRoot(),
       }));
     `;
     const result = execFileSync('node', ['--input-type=module', '-e', script], {

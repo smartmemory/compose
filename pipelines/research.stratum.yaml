@@ -1,10 +1,10 @@
-metadata:
-  id: research
-  label: "Research"
-  description: "Explore a topic — gather sources, analyze findings, produce a summary report"
-  category: exploration
-  steps: 3
-  estimated_minutes: 15
+# metadata:
+#   id: research
+#   label: "Research"
+#   description: "Explore a topic — gather sources, analyze findings, produce a summary report"
+#   category: exploration
+#   steps: 3
+#   estimated_minutes: 15
 
 version: "0.1"
 

@@ -74,7 +74,7 @@ describe('defaults', () => {
     const store = makeStore();
     const settings = store.get();
     assert.equal(settings.ui.theme, 'system');
-    assert.equal(settings.ui.defaultView, 'attention');
+    assert.equal(settings.ui.defaultView, 'graph');
   });
 });
 

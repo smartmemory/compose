@@ -1,10 +1,10 @@
-metadata:
-  id: refactor
-  label: "Refactor"
-  description: "Safe refactoring — snapshot tests, plan changes, execute, verify behavior preserved"
-  category: maintenance
-  steps: 7
-  estimated_minutes: 45
+# metadata:
+#   id: refactor
+#   label: "Refactor"
+#   description: "Safe refactoring — snapshot tests, plan changes, execute, verify behavior preserved"
+#   category: maintenance
+#   steps: 7
+#   estimated_minutes: 45
 
 version: "0.1"
 

@@ -1,10 +1,10 @@
-metadata:
-  id: build
-  label: "Feature Build"
-  description: "Execute a feature through the full Compose lifecycle — design, plan, implement, review, test, ship"
-  category: development
-  steps: 16
-  estimated_minutes: 120
+# metadata:
+#   id: build
+#   label: "Feature Build"
+#   description: "Execute a feature through the full Compose lifecycle — design, plan, implement, review, test, ship"
+#   category: development
+#   steps: 16
+#   estimated_minutes: 120
 
 version: "0.3"
 
@@ -376,10 +376,9 @@ flows:
         inputs:
           task: "$.steps.execute.output.outcome"
           blueprint: "$.steps.blueprint.output.artifact"
-          diff: "$.steps.execute.output.files_changed"
+          diff: "$.steps.execute.output.tasks"
         ensure:
           - "result.clean == True"
-        retries: 5
         depends_on: [execute]
 
       # Sub-flow: Codex review (independent cross-model pass after Claude lenses + fixes)
@@ -390,7 +389,6 @@ flows:
           blueprint: "$.steps.blueprint.output.artifact"
         ensure:
           - "result.clean == True"
-        retries: 3
         depends_on: [review]
 
       # Sub-flow: Coverage (claude runs tests; build.js dispatches fix on ensure_failed)

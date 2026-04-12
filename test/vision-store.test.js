@@ -90,7 +90,7 @@ describe('deriveEntries — gates', () => {
     });
     const gate = entries.find(e => e.type === 'gate');
     assert.ok(gate);
-    assert.ok(gate.label.includes('design gate'));
+    assert.ok(gate.label.includes('Review Design'));
     assert.ok(!gate.label.includes('gate gate')); // no duplication
   });
 
@@ -101,7 +101,7 @@ describe('deriveEntries — gates', () => {
       recentErrors: [],
     });
     const gate = entries.find(e => e.type === 'gate');
-    assert.equal(gate.label, 'plan gate');
+    assert.equal(gate.label, 'Review Plan');
   });
 
   it('skips resolved gates', () => {

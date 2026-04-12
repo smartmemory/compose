@@ -73,7 +73,7 @@ describe('compose init', () => {
     assert.equal(config.paths.journal, 'docs/journal');
   });
 
-  test('detects claude when ~/.claude/ exists and installs stratum skill', () => {
+  test('detects claude when ~/.claude/ exists and installs compose skill', () => {
     const cwd = tmpDir();
     const home = tmpDir();
     // Create ~/.claude/ to simulate Claude Code being installed
@@ -85,8 +85,8 @@ describe('compose init', () => {
     assert.equal(config.agents.claude.skillInstalled, true);
 
     // Verify skill was actually copied
-    const skillPath = join(home, '.claude', 'skills', 'stratum', 'SKILL.md');
-    assert.ok(existsSync(skillPath), 'stratum skill should be installed to ~/.claude/skills/stratum/');
+    const skillPath = join(home, '.claude', 'skills', 'compose', 'SKILL.md');
+    assert.ok(existsSync(skillPath), 'compose skill should be installed to ~/.claude/skills/compose/');
   });
 
   test('creates .compose/data/ directory', () => {

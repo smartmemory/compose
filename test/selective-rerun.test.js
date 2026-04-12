@@ -235,19 +235,19 @@ describe('STRAT-REV-5: prior_dirty_lenses sidecar', () => {
   // T6-12: retry with contract-only findings re-runs baseline lenses only
   it('T6-12: retry selectivity keeps retry scoped to baseline lenses when only contract lens was dirty', () => {
     const retried = selectRetryLenses(['contract-compliance']).map(task => task.id);
-    assert.deepEqual(retried, ['diff-quality', 'contract-compliance']);
+    assert.deepEqual(retried, ['diff-quality', 'contract-compliance', 'debug-discipline']);
   });
 
   // T6-13: retry preserves previously dirty non-baseline lenses alongside baselines
   it('T6-13: retry selectivity re-runs dirty optional lenses plus the baselines', () => {
     const retried = selectRetryLenses(['security']).map(task => task.id);
-    assert.deepEqual(retried, ['diff-quality', 'contract-compliance', 'security']);
+    assert.deepEqual(retried, ['diff-quality', 'contract-compliance', 'debug-discipline', 'security']);
   });
 
   // T6-14: first-run still uses file-based triage when sidecar is absent
   it('T6-14: first-run path still activates broader lens set from file triggers', () => {
     const firstRun = triageLenses(['src/auth/login.jsx']).map(task => task.id);
-    assert.deepEqual(firstRun, ['diff-quality', 'contract-compliance', 'security', 'framework']);
+    assert.deepEqual(firstRun, ['diff-quality', 'contract-compliance', 'debug-discipline', 'security', 'framework']);
   });
 
 });

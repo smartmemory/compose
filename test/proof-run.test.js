@@ -127,10 +127,39 @@ function getStepResult(stepId, featureDir) {
     ],
   };
 
+  // Triage result for parallel_review sub-flow
+  const triageResult = {
+    tasks: [
+      { id: 'diff-quality', lens_name: 'diff-quality', lens_focus: 'diff quality', confidence_gate: 0.7, exclusions: '' },
+      { id: 'contract-compliance', lens_name: 'contract-compliance', lens_focus: 'contract', confidence_gate: 0.7, exclusions: '' },
+    ],
+  };
+  // Lens finding result (clean)
+  const lensResult = { clean: true, findings: [] };
+  // Merged review result
+  const mergedReviewResult = { clean: true, summary: 'No issues found', findings: [], must_fix_count: 0 };
+
   switch (stepId) {
     case 'decompose': return taskGraph;
     case 'review': return reviewResult;
+    case 'triage': return triageResult;
+    case 'review_lenses': return lensResult;
+    case 'diff-quality': return lensResult;
+    case 'contract-compliance': return lensResult;
+    case 'debug-discipline': return lensResult;
+    case 'security': return lensResult;
+    case 'framework': return lensResult;
+    case 'merge': return mergedReviewResult;
+    case 'merge_review': return mergedReviewResult;
+    case 'review_check': return reviewResult;
     case 'run_tests': return testResult;
+    case 'coverage_check': return testResult;
+    case 'task-1': return phaseResult; // parallel_dispatch task from decompose
+    case 'ship': return {
+      ...phaseResult,
+      plan_items: [{ text: 'test item', file: 'src/main.js', critical: false }],
+      files_changed: ['src/main.js'],
+    };
     default: return phaseResult;
   }
 }
@@ -388,9 +417,9 @@ describe('proof run: cross-agent recovery', { skip: !stratumAvailable && 'stratu
     assert.ok(testDispatches.length >= 3,
       `Should have at least 3 run_tests dispatches (fail + fix + retest), got ${testDispatches.length}`);
 
-    // All should be claude (same-agent)
+    // All should be claude-family (same-agent recovery)
     for (const d of testDispatches) {
-      assert.equal(d.agentType, 'claude', `run_tests dispatch should be claude, got ${d.agentType}`);
+      assert.ok(d.agentType.startsWith('claude'), `run_tests dispatch should be claude-family, got ${d.agentType}`);
     }
 
     // The sequence should be: run_tests (fail) → fix → run_tests (pass)
