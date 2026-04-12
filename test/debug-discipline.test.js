@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { FixChainDetector } from '../lib/debug-discipline.js';
+import { FixChainDetector, AttemptCounter } from '../lib/debug-discipline.js';
 
 describe('FixChainDetector', () => {
   it('starts with no chains', () => {
@@ -73,5 +73,75 @@ describe('FixChainDetector', () => {
     const chains = d2.detect();
     assert.equal(chains.length, 1);
     assert.equal(chains[0].file, 'src/a.js');
+  });
+});
+
+describe('AttemptCounter', () => {
+  it('starts at attempt 0', () => {
+    const c = new AttemptCounter();
+    assert.equal(c.count, 0);
+  });
+
+  it('increments on record', () => {
+    const c = new AttemptCounter();
+    c.record({ filesChanged: ['a.css'] });
+    assert.equal(c.count, 1);
+  });
+
+  it('returns no intervention at attempt 1', () => {
+    const c = new AttemptCounter();
+    c.record({ filesChanged: ['a.js'] });
+    assert.equal(c.getIntervention(), null);
+  });
+
+  it('returns trace_reminder at attempt 2 for non-visual', () => {
+    const c = new AttemptCounter();
+    c.record({ filesChanged: ['a.js'] });
+    c.record({ filesChanged: ['a.js'] });
+    assert.equal(c.getIntervention(), 'trace_reminder');
+  });
+
+  it('returns escalate at attempt 2 for visual bugs', () => {
+    const c = new AttemptCounter();
+    c.record({ filesChanged: ['layout.css'], isVisual: true });
+    c.record({ filesChanged: ['layout.css'], isVisual: true });
+    assert.equal(c.getIntervention(), 'escalate');
+  });
+
+  it('returns trace_refresh at attempt 3 for non-visual', () => {
+    const c = new AttemptCounter();
+    for (let i = 0; i < 3; i++) c.record({ filesChanged: ['a.js'] });
+    assert.equal(c.getIntervention(), 'trace_refresh');
+  });
+
+  it('returns escalate at attempt 5 for all bugs', () => {
+    const c = new AttemptCounter();
+    for (let i = 0; i < 5; i++) c.record({ filesChanged: ['a.js'] });
+    assert.equal(c.getIntervention(), 'escalate');
+  });
+
+  it('detects visual bugs from CSS file extensions', () => {
+    assert.equal(AttemptCounter.isVisualFile('style.css'), true);
+    assert.equal(AttemptCounter.isVisualFile('style.scss'), true);
+    assert.equal(AttemptCounter.isVisualFile('App.jsx'), true);
+    assert.equal(AttemptCounter.isVisualFile('App.tsx'), true);
+    assert.equal(AttemptCounter.isVisualFile('server.js'), false);
+  });
+
+  it('serializes to JSON', () => {
+    const c = new AttemptCounter();
+    c.record({ filesChanged: ['a.css'], isVisual: true });
+    const json = c.toJSON();
+    assert.equal(json.count, 1);
+    assert.equal(json.isVisual, true);
+  });
+
+  it('restores from JSON', () => {
+    const c1 = new AttemptCounter();
+    c1.record({ filesChanged: ['a.css'], isVisual: true });
+    c1.record({ filesChanged: ['a.css'], isVisual: true });
+    const c2 = AttemptCounter.fromJSON(c1.toJSON());
+    assert.equal(c2.count, 2);
+    assert.equal(c2.getIntervention(), 'escalate');
   });
 });
