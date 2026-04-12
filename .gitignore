@@ -13,3 +13,5 @@ package-lock.json
 .superpowers/
 /compose/
 .claude/worktrees/
+__pycache__/
+*.pyc
