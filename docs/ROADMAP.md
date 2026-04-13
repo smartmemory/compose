@@ -61,7 +61,7 @@ Phase 6.5/6.8/7 which are on the critical path.
 | Code | Item | Status |
 |------|------|--------|
 | COMP-GIT-1 | Git/file connector — link work items to code changes, diff awareness | PARKED |
-| COMP-GIT-2 | File checkpoint/rewind — snapshot affected files before agent changes; rewind surface in UI *(inspired by Damocles)* | PARKED |
+| COMP-GIT-2 | File checkpoint/rewind — snapshot affected files before agent changes; rewind surface in UI | PARKED |
 | COMP-UI-7 | Tab popout — dockable/undockable tabs to separate monitors *(UI extension)* | PARKED |
 | COMP-VIS-1 | Live agent communication graph — animated packet flow on GraphView edges when agents message each other in real time; topology overlay showing active relays, message direction, and throughput *(inspired by Meridian)* | COMPLETE |
 | COMP-UX-2 | Cockpit refocus — make existing views fully functional for compose users | COMPLETE |
@@ -136,7 +136,7 @@ orchestration. See: [Lifecycle Engine Roadmap](plans/2026-02-15-lifecycle-engine
 | 23 | Policy enforcement runtime — gate/flag/skip dials as structural enforcement, not prose | COMPLETE — evaluatePolicy + build.js integration, settings-driven per-phase modes |
 | 24 | Gate UI — interactive approve/revise/kill in Vision Surface, gate queue, trade-offs display | COMPLETE — GateView with policyMode badges, full history, revision feedback, multi-channel (bar/toast/ops/palette) |
 | 25 | Session-lifecycle binding — sessions tagged to features and phases, contextualized activity | COMPLETE |
-| 25a | Subagent activity nesting — hierarchical view of parallel compose agents in Vision Surface; each compose-explorer/architect instance visible as a child of the parent phase *(inspired by Damocles)* | COMPLETE — AgentRegistry + AgentPanel subagents section, persistent tracking, WebSocket events |
+| 25a | Subagent activity nesting — hierarchical view of parallel compose agents in Vision Surface; each compose-explorer/architect instance visible as a child of the parent phase | COMPLETE — AgentRegistry + AgentPanel subagents section, persistent tracking, WebSocket events |
 | 26 | Iteration orchestration — ralph loops as Compose primitive, completion promise monitoring, exit criteria enforcement | COMPLETE — 3 MCP tools, server-side exit criteria evaluation, max iteration enforcement, WS broadcasts |
 
 ---
@@ -170,7 +170,7 @@ background.
 cleanly: `episodic` → session summaries, `decision` → architecture choices, `semantic` → discovered
 patterns, `code` → indexed entities from blueprint research.
 
-**The key idea from Damocles:** pull-first catalog. Rather than injecting all memories into every
+**Key idea:** pull-first catalog. Rather than injecting all memories into every
 prompt, the agent receives a compact ranked catalog at feature start and retrieves full details on
 demand. This keeps context bounded regardless of conversation history length.
 
