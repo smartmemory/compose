@@ -295,13 +295,14 @@ async function runInit(flags) {
     command: 'node',
     args: [join(PACKAGE_ROOT, 'server', 'compose-mcp.js')],
   }
-  // Register agents MCP server (provides agent_run for codex reviews)
-  if (!mcpConfig.mcpServers.agents) {
-    mcpConfig.mcpServers.agents = {
-      command: 'node',
-      args: [join(PACKAGE_ROOT, 'server', 'agent-mcp.js')],
-    }
-    console.log('Registered agents MCP server in .mcp.json')
+  // T2-F5 retirement: remove legacy 'agents' entry. The file it points to is
+  // now a retirement shim that exits non-zero with a migration message;
+  // removing the entry prevents Claude Code from spawning the shim on session start.
+  // The agent_run capability lives on stratum-mcp as stratum_agent_run.
+  if (mcpConfig.mcpServers.agents) {
+    delete mcpConfig.mcpServers.agents
+    console.log('Removed retired agents MCP server from .mcp.json (T2-F5). '
+      + 'Use stratum_agent_run on the stratum MCP server instead.')
   }
   if (hasStratum && !mcpConfig.mcpServers.stratum) {
     // Use absolute path — miniconda/pip binaries may not be on Claude Code's PATH
@@ -312,7 +313,7 @@ async function runInit(flags) {
     console.log('Registered stratum-mcp in .mcp.json')
   }
   writeFileSync(mcpPath, JSON.stringify(mcpConfig, null, 2))
-  console.log(`Registered compose-mcp + agents in ${mcpPath}`)
+  console.log(`Registered compose-mcp in ${mcpPath}`)
 
   // 6b. Run stratum-mcp install to register hooks + CLAUDE.md in this project
   if (hasStratum) {

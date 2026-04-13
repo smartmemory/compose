@@ -3,12 +3,6 @@
     "stratum": {
       "command": "/Users/ruze/miniconda3/bin/stratum-mcp"
     },
-    "agents": {
-      "command": "node",
-      "args": [
-        "./server/agent-mcp.js"
-      ]
-    },
     "compose": {
       "command": "node",
       "args": [
