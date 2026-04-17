@@ -27,6 +27,7 @@ import { DesignSessionManager } from './design-session.js';
 import { ClaudeSDKConnector } from './connectors/claude-sdk-connector.js';
 import { attachPipelineRoutes } from './pipeline-routes.js';
 import { attachIdeaboxRoutes } from './ideabox-routes.js';
+import { CoalescingBuffer } from './coalescing-buffer.js';
 /** Settings defaults (previously derived from contracts/lifecycle.json). */
 const SETTINGS_DEFAULTS = {
   phases: [
@@ -57,7 +58,12 @@ export class VisionServer {
     this._config = config || { capabilities: { stratum: true } };
     this.clients = new Set();
     this.wss = null;
-    this._broadcastTimer = null;
+    this._coalescingBuffer = new CoalescingBuffer((flushed) => {
+      if (flushed.visionState) {
+        this.broadcastMessage(Object.assign({ type: 'visionState' }, flushed.visionState));
+      }
+    }, { intervalMs: 16 });
+    this._coalescingBuffer.register('visionState', 'latest-wins');
     this._pendingSnapshots = new Map();
     this._stratumSync = null;
   }
@@ -289,13 +295,9 @@ export class VisionServer {
     console.log('Vision server attached (REST + WebSocket at /ws/vision)');
   }
 
-  /** Schedule a debounced broadcast (100ms) to coalesce rapid mutations */
+  /** Schedule a coalesced broadcast via CoalescingBuffer (16ms interval, latest-wins) */
   scheduleBroadcast() {
-    if (this._broadcastTimer) clearTimeout(this._broadcastTimer);
-    this._broadcastTimer = setTimeout(() => {
-      this._broadcastTimer = null;
-      this.broadcastState();
-    }, 100);
+    this._coalescingBuffer.put('visionState', this.store.getState());
   }
 
   /** Broadcast full state to all connected clients */
@@ -318,6 +320,7 @@ export class VisionServer {
   }
 
   close() {
+    this._coalescingBuffer?.stop();
     if (this._stratumSync) this._stratumSync.stop();
     if (this._healthMonitor) this._healthMonitor.destroy();
     if (this._worktreeGC) this._worktreeGC.stop();
