@@ -45,6 +45,9 @@ const DEFAULT_PROVIDER_ID = 'openai';
 // ---------------------------------------------------------------------------
 
 export class CodexConnector extends OpencodeConnector {
+  // ── Discovery ──────────────────────────────────────────────────────────────
+  // No overrides — inherits stubs from AgentConnector. See agent-connector.js.
+
   /**
    * @param {object} [opts]
    * @param {string} [opts.modelID] — Codex model ID; must be in CODEX_MODEL_IDS
@@ -60,6 +63,8 @@ export class CodexConnector extends OpencodeConnector {
       agentName: 'codex',
     });
   }
+
+  // ── Runtime ────────────────────────────────────────────────────────────────
 
   async *run(prompt, opts = {}) {
     const resolvedModel = opts.modelID ?? this._defaultModelID;

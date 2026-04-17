@@ -1,5 +1,8 @@
 /**
- * AgentConnector — base interface for all agent connectors.
+ * AgentConnector — base class for all agent connectors.
+ *
+ * @implements {ConnectorDiscovery} — see connector-discovery.js
+ * @implements {ConnectorRuntime}  — see connector-runtime.js
  *
  * Subclasses implement run(), interrupt(), and isRunning.
  * Duck typing — no enforcement at runtime beyond the throw in run().
@@ -17,6 +20,19 @@
  */
 
 export class AgentConnector {
+  // ── Discovery ──────────────────────────────────────────────────────────────
+
+  /** @returns {string[]} */
+  listModels() { return []; }
+
+  /** @param {string} _modelId @returns {boolean} */
+  supportsModel(_modelId) { return false; }
+
+  /** @param {string} _sessionId @returns {Promise<object[]>} */
+  async loadHistory(_sessionId) { return []; }
+
+  // ── Runtime ────────────────────────────────────────────────────────────────
+
   /**
    * Run a prompt against the agent.
    *

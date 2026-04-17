@@ -11,6 +11,9 @@ import { AgentConnector, injectSchema } from './agent-connector.js';
 const DEFAULT_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
 
 export class ClaudeSDKConnector extends AgentConnector {
+  // ── Discovery ──────────────────────────────────────────────────────────────
+  // No overrides — inherits stubs from AgentConnector. See agent-connector.js.
+
   #model;
   #cwd;
   #query = null;
@@ -32,6 +35,8 @@ export class ClaudeSDKConnector extends AgentConnector {
     this.#allowedTools = allowedTools ?? null;
     this.#disallowedTools = disallowedTools ?? null;
   }
+
+  // ── Runtime ────────────────────────────────────────────────────────────────
 
   async *run(prompt, { schema, modelID, cwd } = {}) {
     if (this.#query) {

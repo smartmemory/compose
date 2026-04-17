@@ -19,6 +19,9 @@ import { AgentConnector, injectSchema } from './agent-connector.js';
 // ---------------------------------------------------------------------------
 
 export class OpencodeConnector extends AgentConnector {
+  // ── Discovery ──────────────────────────────────────────────────────────────
+  // No overrides — inherits stubs from AgentConnector. See agent-connector.js.
+
   _defaultProviderID;
   _defaultModelID;
   _cwd;
@@ -39,6 +42,8 @@ export class OpencodeConnector extends AgentConnector {
     this._cwd = cwd;
     this._agentName = agentName;
   }
+
+  // ── Runtime ────────────────────────────────────────────────────────────────
 
   async *run(prompt, { schema, modelID, providerID, cwd } = {}) {
     if (this.#proc) {
