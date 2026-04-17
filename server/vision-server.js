@@ -303,9 +303,13 @@ export class VisionServer {
   /** Send a hydrate snapshot to a single newly-connected WebSocket client */
   getVisionSnapshot(ws) {
     try {
+      const state = this.store.getState();
+      if ('type' in state) {
+        throw new Error('store.getState() must not include a `type` field — would collide with hydrate envelope');
+      }
       const snapshot = Object.assign(
         { type: 'hydrate' },
-        this.store.getState(),
+        state,
         { sessions: this.sessionManager?.getRecentSessions?.() || [] }
       );
       ws.send(JSON.stringify(snapshot));

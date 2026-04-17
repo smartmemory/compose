@@ -145,9 +145,7 @@ Every message is tracked by calling `_trackMessage(msg)` **inside the flush adap
 
 **`_agentBuffer` lifecycle:** `_agentBuffer` is a module-level singleton. Its interval runs for the full process lifetime — `buf.stop()` is only called in the process `shutdown()` handler, not per session. Only the ring buffer is cleared per session.
 
-**Ring buffer clear points:** `_recentMessages.length = 0` is called in two places:
-1. The `finally` block of `_consumeStream` — natural session end.
-2. `_killCurrentSession()` — **only in the force-interrupt path** (interrupt button, `DELETE /api/agent/session`). `_killCurrentSession` is also called at the top of `POST /api/agent/session` to clear any stale prior session; in this call path the ring buffer clear is intentional — a client connecting during the new-session startup window receives an empty hydrate, which is correct (old session history is stale). This window is typically <50ms and is accepted as a known trade-off.
+**Ring buffer clear points:** `_recentMessages.length = 0` is called **only in `_killCurrentSession()`** — which fires on force-interrupt (`DELETE /api/agent/session`) and at the top of `POST /api/agent/session` to clear stale prior-session context before a new session begins. The ring is **not** cleared on natural session end, so a client reloading the tab after a turn completes can still hydrate with recent message history.
 
 **SSE connect ordering:**
 

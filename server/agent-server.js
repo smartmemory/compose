@@ -239,7 +239,9 @@ async function _consumeStream(q) {
     if (_session.queryIter === q) {
       _session.queryIter = null;
     }
-    _recentMessages.length = 0;
+    // Keep _recentMessages populated after natural session end so clients
+    // reloading the tab post-turn can still hydrate recent history.
+    // Ring is cleared only on force-kill / new-session start in _killCurrentSession.
   }
 }
 
