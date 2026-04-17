@@ -126,6 +126,10 @@ describe('executeParallelDispatchServer — merge conflict aborts build', () => 
       assert.ok(streamWriter.events.some(
         e => e.type === 'build_error' && /CLIENT-SIDE MERGE CONFLICT/.test(e.message),
       ));
+      // Downstream event consumers expect start/done pairs per step — emit before throw.
+      const done = streamWriter.events.find(e => e.type === 'build_step_done');
+      assert.ok(done, 'build_step_done must be emitted before conflict throw');
+      assert.equal(done.summary?.merge_status, 'conflict');
     } finally {
       delete process.env.COMPOSE_SERVER_DISPATCH_POLL_MS;
       rmSync(repo, { recursive: true, force: true });
