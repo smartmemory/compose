@@ -70,7 +70,7 @@ compose build FEAT-1
 
 - Node.js 18+
 - `stratum-mcp` on PATH (`pip install stratum`)
-- For Codex steps: `opencode` CLI (`brew install opencode`) with OpenAI credentials configured (`opencode auth login` or set `OPENAI_API_KEY`)
+- For Codex steps: the official OpenAI `codex` CLI (`npm i -g @openai/codex` or `brew install codex`), authenticated via `codex login` (ChatGPT OAuth) or `OPENAI_API_KEY`. Optional: install the Claude Code plugin for interactive slash commands: `/plugin marketplace add openai/codex-plugin-cc` then `/plugin install codex@openai-codex`.
 
 ### Install Compose
 
@@ -433,7 +433,7 @@ Key behaviors:
 
 ### CodexConnector
 
-Extends `OpencodeConnector`, locked to OpenAI Codex models. Requires the `opencode` CLI (`brew install opencode`). Auth via `OPENAI_API_KEY` env var or `opencode auth login` for OAuth.
+Spawns the official OpenAI `codex` CLI (`codex exec --json --skip-git-repo-check --sandbox read-only`), locked to OpenAI Codex models. Install via `npm i -g @openai/codex` (or `brew install codex`). Auth via `codex login` (ChatGPT OAuth) or `OPENAI_API_KEY` env var. Reasoning effort is passed via `-c model_reasoning_effort=<effort>` when the model ID carries a `/low|medium|high|xhigh` suffix.
 
 Supported models: `gpt-5.4`, `gpt-5.2-codex`, `gpt-5.1-codex-max`, `gpt-5.1-codex`, `gpt-5.1-codex-mini` (with `/low`, `/medium`, `/high`, `/xhigh` effort suffixes). Default: `gpt-5.4` (override via `CODEX_MODEL` env var).
 
@@ -1010,5 +1010,5 @@ Output:
 | `CODEX_MODEL` | `gpt-5.4` | Default model for CodexConnector |
 | `COMPOSE_DEBUG` | (unset) | Enable verbose event logging to stderr |
 | `COMPOSE_TARGET` | (unset) | Override project root for `compose start` |
-| `COMPOSE_SERVER_DISPATCH` | unset | Set to `1` to route `parallel_dispatch` steps with `isolation: "none"` (e.g., `parallel_review`) through Stratum's server-side executor. Code-writing steps (`isolation: "worktree"`) remain on consumer-dispatch. |
+| `COMPOSE_SERVER_DISPATCH` | unset | Set to `1` to route `parallel_dispatch` steps through Stratum's server-side executor. Covers `isolation: "none"` unconditionally, and `isolation: "worktree"` steps that declare `capture_diff: true` (Compose consumes diffs from poll response and merges them client-side). Other worktree steps remain on consumer-dispatch. |
 | `COMPOSE_SERVER_DISPATCH_POLL_MS` | `500` | Poll interval (ms) against `stratum_parallel_poll`. Lower = faster task-transition event propagation; higher = less MCP load. |

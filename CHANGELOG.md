@@ -2,6 +2,29 @@
 
 ## 2026-04-17
 
+### CodexConnector: swap opencode backend for the official `codex` CLI
+
+**Why:** Codex review was broken for everyone — the opencode-backed path hit persistent auth/model-access issues. The official OpenAI `codex` CLI (`@openai/codex`) is the same primitive used by the `openai/codex-plugin-cc` Claude Code plugin and is the supported path going forward.
+
+**Changes:**
+- `server/connectors/codex-connector.js`: full rewrite. No longer extends `OpencodeConnector`; now spawns `codex exec --json --skip-git-repo-check --sandbox read-only -m <model> -C <cwd>` and translates its JSONL event stream (`item.completed` / `turn.completed`) into the shared connector envelope. `<model>/<effort>` suffix parses into `-c model_reasoning_effort=<effort>`.
+- Supported model IDs unchanged (`CODEX_MODEL_IDS`). Auth via `codex login` (ChatGPT OAuth) or `OPENAI_API_KEY`.
+- `OpencodeConnector` retained for non-Codex providers — only the Codex subclass was rewired.
+
+**Setup:** `npm i -g @openai/codex` (or `brew install codex`), then `codex login`. See README.
+
+**Tests:** Existing `test/codex-connector.test.js` (5 cases) passes. Live smoke test against `codex` returns assistant/usage/result events correctly.
+
+### T2-F5-COMPOSE-MIGRATE-WORKTREE: Worktree Diff Consumption in Server-Side Dispatch
+
+**Feature:** Extended T2-F5-COMPOSE-MIGRATE to accept `isolation: "worktree"` + `capture_diff: true` on server-dispatch. New `applyServerDispatchDiffs()` wrapper reads `ts.diff` from poll response and delegates to shared `applyTaskDiffsToBaseCwd` helper (extracted from consumer-dispatch). Both dispatch paths now merge through the same code. Client-side merge conflicts emit `build_error` and throw to halt CLI. Known trade-off: merge_status visibility gap until T2-F5-CONSUMER-MERGE-STATUS lands Stratum-side defer-advance (flow state stays advanced server-side; manual resume required).
+
+**Changes:**
+- `lib/build.js`: New `applyServerDispatchDiffs()` wrapper + extracted shared `applyTaskDiffsToBaseCwd()` helper from consumer-dispatch. Merge conflicts throw to halt CLI.
+- `test/build.test.js`: 10 new tests (6 routing, 4 integration): worktree routing with `capture_diff`, diff application, conflict handling, merge failures
+
+**Tests:** All new tests passing. Full suite: 1397 passing (10 new).
+
 ### T2-F5-COMPOSE-MIGRATE: Server-Side Parallel Dispatch for Read-Only Steps
 
 **Feature:** Compose's `parallel_dispatch` branch now routes through Stratum's server-side `stratum_parallel_start` + `stratum_parallel_poll` when `COMPOSE_SERVER_DISPATCH=1` AND `isolation: "none"`. Code-writing paths (`isolation: "worktree"`) remain on consumer-dispatch pending T2-F5-DIFF-EXPORT. Poll loop correctly breaks on `outcome != null`, not `can_advance`, so failure-path `ensure_failed` / retry dispatches propagate correctly.

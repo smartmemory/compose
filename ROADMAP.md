@@ -366,7 +366,7 @@ See `docs/features/STRAT-REV/design.md` for the full design.
 
 ---
 
-## T2-F5-COMPOSE-MIGRATE: Server-Side Dispatch for Read-Only Parallel Steps — COMPLETE
+## T2-F5-COMPOSE-MIGRATE: Server-Side Dispatch for All Parallel Steps — COMPLETE
 
 Compose's `parallel_dispatch` branch now routes through Stratum's server-side `stratum_parallel_start` + `stratum_parallel_poll` when `COMPOSE_SERVER_DISPATCH=1` AND `isolation: "none"`. Code-writing paths (`isolation: "worktree"`) remain on consumer-dispatch pending T2-F5-DIFF-EXPORT. Poll loop correctly breaks on `outcome != null`, not `can_advance`, so failure-path `ensure_failed` / retry dispatches propagate correctly.
 
@@ -376,6 +376,7 @@ Compose's `parallel_dispatch` branch now routes through Stratum's server-side `s
 | 87 | T2-F5-COMPOSE-MIGRATE-2 | **Server executor:** New `executeParallelDispatchServer()` function in `build.js`. Uses non-module-scoped emitted-states map to track per-task progress. Calls `parallelStart()`, then polls with `parallelPoll()` in a loop that exits on `outcome != null`. Emits per-task progress events via `emitPerTaskProgress()` helper. 7 tests. | COMPLETE |
 | 88 | T2-F5-COMPOSE-MIGRATE-3 | **Routing check:** One-line flag + isolation check at top of `executeParallelDispatch()`. If `COMPOSE_SERVER_DISPATCH=1` AND `isolation: "none"`, routes to server executor; else routes to existing consumer executor. Routing logic validated in 6 tests covering flag states, isolation modes, and default behavior. | COMPLETE |
 | 89 | T2-F5-COMPOSE-MIGRATE-4 | **Environment variables:** Documented `COMPOSE_SERVER_DISPATCH` (off by default) and `COMPOSE_SERVER_DISPATCH_POLL_MS` (500ms default) in README. Configurable poll interval allows tuning event propagation vs. MCP load. | COMPLETE |
+| 90 | T2-F5-COMPOSE-MIGRATE-WORKTREE | **Worktree diff consumption:** extended routing to accept `isolation: "worktree"` + `capture_diff: true`. New `applyServerDispatchDiffs` reads `ts.diff` from poll response, delegates to shared `applyTaskDiffsToBaseCwd` helper (extracted from consumer-dispatch). Conflicts throw to halt CLI; trade-off documented. 10 new tests. | COMPLETE |
 
 **Dependencies:** STRAT-PAR (parallel dispatch infrastructure)
 
