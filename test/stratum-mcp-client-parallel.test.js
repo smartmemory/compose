@@ -5,6 +5,9 @@
  * a live stratum-mcp subprocess.
  */
 
+// Enable the _testClient injection hook (gated on NODE_ENV=test).
+process.env.NODE_ENV = 'test';
+
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';

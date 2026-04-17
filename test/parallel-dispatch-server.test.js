@@ -189,8 +189,8 @@ describe('executeParallelDispatchServer — per-task progress streaming', () => 
     await executeParallelDispatchServer(BASE_DISPATCH, stratum, {}, null, sw);
     const startEvents = sw.events.filter(e => e.subtype === 'build_task_start');
     const doneEvents = sw.events.filter(e => e.subtype === 'build_task_done');
-    const stepStart = sw.events.filter(e => e.subtype === 'build_step_start');
-    const stepDone = sw.events.filter(e => e.subtype === 'build_step_done');
+    const stepStart = sw.events.filter(e => e.type === 'build_step_start');
+    const stepDone = sw.events.filter(e => e.type === 'build_step_done');
     assert.equal(startEvents.length, 3);
     assert.equal(doneEvents.length, 3);
     assert.equal(stepStart.length, 1);
