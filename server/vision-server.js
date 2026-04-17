@@ -259,7 +259,7 @@ export class VisionServer {
       console.log(`[vision] Client connected (${this.clients.size} total)`);
 
       try {
-        ws.send(JSON.stringify({ type: 'visionState', ...this.store.getState(), sessions: this.sessionManager?.getRecentSessions?.() || [] }));
+        this.getVisionSnapshot(ws);
         ws.send(JSON.stringify({ type: 'settingsState', settings: this.settingsStore.get() }));
       } catch (err) {
         console.error('[vision] Error sending initial state:', err.message);
@@ -298,6 +298,20 @@ export class VisionServer {
   /** Schedule a coalesced broadcast via CoalescingBuffer (16ms interval, latest-wins) */
   scheduleBroadcast() {
     this._coalescingBuffer.put('visionState', this.store.getState());
+  }
+
+  /** Send a hydrate snapshot to a single newly-connected WebSocket client */
+  getVisionSnapshot(ws) {
+    try {
+      const snapshot = Object.assign(
+        { type: 'hydrate' },
+        this.store.getState(),
+        { sessions: this.sessionManager?.getRecentSessions?.() || [] }
+      );
+      ws.send(JSON.stringify(snapshot));
+    } catch (err) {
+      console.error('[vision] Hydrate error:', err.message);
+    }
   }
 
   /** Broadcast full state to all connected clients */
