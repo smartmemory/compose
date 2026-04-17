@@ -20,6 +20,16 @@ import { requireSensitiveToken } from './security.js';
 import { HOOK_OPTIONS } from './agent-hooks.js';
 import { getTargetRoot, getDataDir } from './project-root.js';
 import { BuildStreamBridge } from './build-stream-bridge.js';
+import { CoalescingBuffer } from './coalescing-buffer.js';
+
+const _agentBuffer = new CoalescingBuffer((flushed) => {
+  if (flushed.agentMessage) {
+    for (const msg of flushed.agentMessage) {
+      broadcast(msg);
+    }
+  }
+}, { intervalMs: 16 });
+_agentBuffer.register('agentMessage', 'append');
 
 const PORT = process.env.AGENT_PORT || 4002;
 const SETTINGS_FILE = path.join(getDataDir(), 'settings.json');
@@ -199,7 +209,7 @@ async function _consumeStream(q) {
       if (msg.type === 'system' && msg.subtype === 'init') {
         _session.id = msg.session_id;
       }
-      broadcast(msg);
+      _agentBuffer.put('agentMessage', msg);
     }
   } catch (err) {
     if (err?.name !== 'AbortError') {
@@ -234,6 +244,7 @@ server.listen(PORT, '127.0.0.1', () => {
 
 function shutdown(sig) {
   console.log(`[agent-server] ${sig}, shutting down`);
+  _agentBuffer.stop();
   _bridge.stop();
   _killCurrentSession();
   server.close();
