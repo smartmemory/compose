@@ -39,3 +39,38 @@ describe('shouldUseServerDispatch routing', () => {
     assert.equal(shouldUseServerDispatch({ isolation: 'none' }), false);
   });
 });
+
+describe('shouldUseServerDispatch — worktree + capture_diff', () => {
+  beforeEach(() => { delete process.env.COMPOSE_SERVER_DISPATCH; });
+  afterEach(()  => { delete process.env.COMPOSE_SERVER_DISPATCH; });
+
+  it('returns true for flag=1 + isolation=worktree + capture_diff=true', () => {
+    process.env.COMPOSE_SERVER_DISPATCH = '1';
+    assert.equal(shouldUseServerDispatch({ isolation: 'worktree', capture_diff: true }), true);
+  });
+
+  it('returns false for flag=1 + isolation=worktree + capture_diff=false', () => {
+    process.env.COMPOSE_SERVER_DISPATCH = '1';
+    assert.equal(shouldUseServerDispatch({ isolation: 'worktree', capture_diff: false }), false);
+  });
+
+  it('returns false for flag=1 + isolation=worktree + capture_diff absent', () => {
+    process.env.COMPOSE_SERVER_DISPATCH = '1';
+    assert.equal(shouldUseServerDispatch({ isolation: 'worktree' }), false);
+  });
+
+  it('returns false for flag=1 + isolation=worktree + capture_diff="true" (string, strict bool check)', () => {
+    process.env.COMPOSE_SERVER_DISPATCH = '1';
+    assert.equal(shouldUseServerDispatch({ isolation: 'worktree', capture_diff: 'true' }), false);
+  });
+
+  it('returns false for flag=0 + isolation=worktree + capture_diff=true (flag gate wins)', () => {
+    // flag unset
+    assert.equal(shouldUseServerDispatch({ isolation: 'worktree', capture_diff: true }), false);
+  });
+
+  it('still returns true for flag=1 + isolation=none + capture_diff=true (v1 unchanged)', () => {
+    process.env.COMPOSE_SERVER_DISPATCH = '1';
+    assert.equal(shouldUseServerDispatch({ isolation: 'none', capture_diff: true }), true);
+  });
+});
