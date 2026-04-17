@@ -100,6 +100,11 @@ app.get('/api/agent/stream', (req, res) => {
 
   _sseClients.add(res);
 
+  const snapshot = getAgentSnapshot();
+  if (snapshot) {
+    res.write(`event: hydrate\ndata: ${JSON.stringify(snapshot)}\n\n`);
+  }
+
   // Immediately tell the new client whether a session exists
   if (_session.id) {
     res.write(`data: ${JSON.stringify({
