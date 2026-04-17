@@ -308,15 +308,15 @@ Product design conversation with the LLM before the roadmap exists. The LLM asks
 
 ---
 
-## COMP-RT: Real-Time Resilience — PLANNED
+## COMP-RT: Real-Time Resilience — PARTIAL (RT-1/2/3 complete, RT-4 deferred)
 
 Harden the streaming and connector layer for production-quality performance, late-joining clients, and multi-vendor extensibility.
 
 | # | Feature | Item | Status |
 |---|---------|------|--------|
-| 58 | COMP-RT-1 | **Event coalescing for WebSocket broadcasts:** accumulate agent activity and state-change events into a sparse buffer, flush to clients at a fixed interval (~60 fps). Prevents UI thrash from fine-grained tool-use deltas during heavy agent runs. | PLANNED |
-| 59 | COMP-RT-2 | **Client hydration on connect:** when a new browser tab or reconnecting client joins via WebSocket, send a single state snapshot (active build, vision state, in-flight agent stream) so it starts current instead of empty. Eliminates the "blank panel until next event" problem. | PLANNED |
-| 60 | COMP-RT-3 | **Connector trait split — discovery vs runtime:** refactor AgentConnector into two interfaces: a stateless `AgentRegistry` (enumerate installed agents, load session history, validate model IDs) and a stateful `AgentRuntime` (stream execution, interrupt, schema injection). Enables adding new vendors without touching the execution path. | PLANNED |
+| 58 | COMP-RT-1 | **Event coalescing for WebSocket broadcasts:** 16ms `CoalescingBuffer` with `latest-wins` and `append` modes. Replaces 100ms debounce in `VisionServer`; buffers agent SSE messages in `agent-server.js`. 6 unit tests + flush-rate guarantee. | COMPLETE |
+| 59 | COMP-RT-2 | **Client hydration on connect:** `getVisionSnapshot(ws)` sends `type: 'hydrate'` on WS connect (preserves `settingsState` co-send); SSE emits `event: hydrate` with last 50 messages via `_recentMessages` ring buffer before `system/connected`. Frontend handles both in `visionMessageHandler.js` and `AgentStream.jsx` (named event via `addEventListener`). 5 hydration tests. | COMPLETE |
+| 60 | COMP-RT-3 | **Connector trait split — discovery vs runtime:** new `ConnectorDiscovery` and `ConnectorRuntime` reference interfaces (JSDoc contracts, not base classes — avoids collision with existing `AgentRegistry` subagent tracker). Discovery stubs (`listModels`, `supportsModel`, `loadHistory`) added to `AgentConnector` base; three concrete connectors annotated with `// ── Discovery ──` / `// ── Runtime ──` section comments. 18-test shape compliance suite. | COMPLETE |
 | 61 | COMP-RT-4 | **Session branching:** fork an in-progress agent session at any turn, creating an independent branch that shares history up to the fork point but diverges from there. Persist both branches with shared-prefix-aware storage. Web UI shows branch points and lets the user open divergent paths side-by-side for comparison. | PLANNED |
 
 **Exit:** WebSocket clients never miss state. Streaming is smooth under load. New agent vendors plug in without modifying the runtime. Agent sessions can be branched mid-conversation for exploratory work.
