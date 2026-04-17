@@ -25,11 +25,24 @@ import { CoalescingBuffer } from './coalescing-buffer.js';
 const _agentBuffer = new CoalescingBuffer((flushed) => {
   if (flushed.agentMessage) {
     for (const msg of flushed.agentMessage) {
+      _trackMessage(msg);
       broadcast(msg);
     }
   }
 }, { intervalMs: 16 });
 _agentBuffer.register('agentMessage', 'append');
+
+const _recentMessages = [];
+const HYDRATE_LIMIT = 50;
+
+function _trackMessage(msg) {
+  _recentMessages.push(msg);
+  if (_recentMessages.length > HYDRATE_LIMIT) _recentMessages.shift();
+}
+
+export function getAgentSnapshot() {
+  return _recentMessages.length > 0 ? [..._recentMessages] : null;
+}
 
 const PORT = process.env.AGENT_PORT || 4002;
 const SETTINGS_FILE = path.join(getDataDir(), 'settings.json');
@@ -200,6 +213,7 @@ function _killCurrentSession() {
     try { _session.queryIter.return(); } catch { /* ignore */ }
   }
   _session = { id: null, queryIter: null };
+  _recentMessages.length = 0;
 }
 
 async function _consumeStream(q) {
@@ -220,6 +234,7 @@ async function _consumeStream(q) {
     if (_session.queryIter === q) {
       _session.queryIter = null;
     }
+    _recentMessages.length = 0;
   }
 }
 
