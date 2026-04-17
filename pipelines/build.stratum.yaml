@@ -355,6 +355,8 @@ flows:
         agent: claude
         max_concurrent: 3
         isolation: worktree
+        capture_diff: true
+        defer_advance: true
         require: all
         merge: sequential_apply
         intent_template: >

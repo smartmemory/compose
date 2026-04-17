@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-04-18
+
+### T2-F5-CONSUMER-MERGE-STATUS-COMPOSE — close the T2-F5 arc
+
+**Why:** T2-F5-COMPOSE-MIGRATE-WORKTREE landed with a known trade-off (W1): client-side merge conflicts halted the CLI via a throw, but the stream-writer closed with `buildStatus='complete'` because the throw bypassed the terminal `buildStatus='failed'` branch. The flow state also reported `merge_status='clean'` server-side — Stratum auto-advanced before Compose could report the real status. T2-F5-DEFER-ADVANCE (stratum-side) added the back-channel; this feature wires Compose up to it.
+
+**Changes:**
+
+- `lib/stratum-mcp-client.js`: new `parallelAdvance(flowId, stepId, mergeStatus)` method.
+- `lib/build.js`: split `applyServerDispatchDiffs` into a pure `applyServerDispatchDiffsCore` (returns `{mergeStatus, conflictedTaskId, conflictError, appliedFiles}`) + a thin throwing wrapper preserving the legacy non-deferred contract. Specs that haven't opted into `defer_advance: true` keep the old throw-on-conflict semantics.
+- `lib/build.js:executeParallelDispatchServer`: now branches on `pollResult.outcome?.status === 'awaiting_consumer_advance'`. Defer path calls Core + `parallelAdvance(mergeStatus)`, replaces the sentinel with the real advance result (flow advances with truth). Legacy path uses the throwing wrapper. Defensive "spec mispairing" branch: if sentinel arrives without `capture_diff: true`, call `parallelAdvance('clean')` to unblock the flow and emit an actionable `build_error`.
+- `lib/build.js`: new exported `resolveBuildStatusForCompleteResponse(response)` helper. In the main loop's complete branch, `buildStatus` is now derived via this helper — returns `'failed'` when `response.output.merge_status === 'conflict'`, else `'complete'`. Narrow check (not `output.outcome === 'failed'`) to avoid flipping on unrelated failure-flavored completions.
+- `pipelines/build.stratum.yaml`: `execute` step opts in with both `capture_diff: true` and `defer_advance: true`. Under `COMPOSE_SERVER_DISPATCH=1` this activates the new path; otherwise the spec flags are inert (consumer-dispatch runs the agents itself).
+
+**Tests:** 10 new (1 client + 4 integration with real temp git repos + 5 buildStatus unit). **1407 total passing**, 0 fail.
+
+**T2-F5 arc status:** CLOSED end-to-end. Server-side enforcement, Python connectors, Compose routing for both isolation modes, diff export, defer-advance, and consumer merge status all shipped. Remaining T2-F5 tickets (BRANCH, DEPENDS-ON, STREAM, OPENCODE-DISPATCH, CLAUDE-CANCEL, RESUME, LEGACY-REMOVAL) are quality-of-life enhancements, not correctness gaps.
+
 ## 2026-04-17
 
 ### CodexConnector: swap opencode backend for the official `codex` CLI
