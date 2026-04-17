@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-04-17
+
+### T2-F5-COMPOSE-MIGRATE: Server-Side Parallel Dispatch for Read-Only Steps
+
+**Feature:** Compose's `parallel_dispatch` branch now routes through Stratum's server-side `stratum_parallel_start` + `stratum_parallel_poll` when `COMPOSE_SERVER_DISPATCH=1` AND `isolation: "none"`. Code-writing paths (`isolation: "worktree"`) remain on consumer-dispatch pending T2-F5-DIFF-EXPORT. Poll loop correctly breaks on `outcome != null`, not `can_advance`, so failure-path `ensure_failed` / retry dispatches propagate correctly.
+
+**Changes:**
+- `lib/stratum-mcp-client.js`: Added `parallelStart()` and `parallelPoll()` client methods for server-side dispatch
+- `lib/build.js`: Added `executeParallelDispatchServer()` executor function with routing check at top of `executeParallelDispatch()`
+- `README.md`: Documented `COMPOSE_SERVER_DISPATCH` and `COMPOSE_SERVER_DISPATCH_POLL_MS` environment variables
+- Test coverage: 15 new tests (2 client + 7 server + 6 routing), 1387 total passing
+
+**Tests:** All new routing + server dispatch tests passing. Full suite clean.
+
 ## 2026-04-12
 
 ### Test suite fixes (34 failures across 15 suites)

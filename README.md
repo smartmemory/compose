@@ -1010,3 +1010,5 @@ Output:
 | `CODEX_MODEL` | `gpt-5.4` | Default model for CodexConnector |
 | `COMPOSE_DEBUG` | (unset) | Enable verbose event logging to stderr |
 | `COMPOSE_TARGET` | (unset) | Override project root for `compose start` |
+| `COMPOSE_SERVER_DISPATCH` | unset | Set to `1` to route `parallel_dispatch` steps with `isolation: "none"` (e.g., `parallel_review`) through Stratum's server-side executor. Code-writing steps (`isolation: "worktree"`) remain on consumer-dispatch. |
+| `COMPOSE_SERVER_DISPATCH_POLL_MS` | `500` | Poll interval (ms) against `stratum_parallel_poll`. Lower = faster task-transition event propagation; higher = less MCP load. |

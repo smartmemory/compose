@@ -366,6 +366,23 @@ See `docs/features/STRAT-REV/design.md` for the full design.
 
 ---
 
+## T2-F5-COMPOSE-MIGRATE: Server-Side Dispatch for Read-Only Parallel Steps — COMPLETE
+
+Compose's `parallel_dispatch` branch now routes through Stratum's server-side `stratum_parallel_start` + `stratum_parallel_poll` when `COMPOSE_SERVER_DISPATCH=1` AND `isolation: "none"`. Code-writing paths (`isolation: "worktree"`) remain on consumer-dispatch pending T2-F5-DIFF-EXPORT. Poll loop correctly breaks on `outcome != null`, not `can_advance`, so failure-path `ensure_failed` / retry dispatches propagate correctly.
+
+| # | Feature | Item | Status |
+|---|---------|------|--------|
+| 86 | T2-F5-COMPOSE-MIGRATE-1 | **Client methods:** Added `parallelStart()` and `parallelPoll()` to `StratumMcpClient` for server-side dispatch. Methods convert camelCase args to snake_case, call stratum MCP tools, parse JSON responses. Reuse existing `parallelDone()` pattern. 2 new tests. | COMPLETE |
+| 87 | T2-F5-COMPOSE-MIGRATE-2 | **Server executor:** New `executeParallelDispatchServer()` function in `build.js`. Uses non-module-scoped emitted-states map to track per-task progress. Calls `parallelStart()`, then polls with `parallelPoll()` in a loop that exits on `outcome != null`. Emits per-task progress events via `emitPerTaskProgress()` helper. 7 tests. | COMPLETE |
+| 88 | T2-F5-COMPOSE-MIGRATE-3 | **Routing check:** One-line flag + isolation check at top of `executeParallelDispatch()`. If `COMPOSE_SERVER_DISPATCH=1` AND `isolation: "none"`, routes to server executor; else routes to existing consumer executor. Routing logic validated in 6 tests covering flag states, isolation modes, and default behavior. | COMPLETE |
+| 89 | T2-F5-COMPOSE-MIGRATE-4 | **Environment variables:** Documented `COMPOSE_SERVER_DISPATCH` (off by default) and `COMPOSE_SERVER_DISPATCH_POLL_MS` (500ms default) in README. Configurable poll interval allows tuning event propagation vs. MCP load. | COMPLETE |
+
+**Dependencies:** STRAT-PAR (parallel dispatch infrastructure)
+
+**Exit:** Read-only parallel steps (e.g., `parallel_review`) can offload dispatch to Stratum server via flag. Worktree-based code generation remains on consumer dispatch. Poll loop stability improves with explicit `outcome != null` breakpoint. Full test coverage + 1387 passing tests (15 new).
+
+---
+
 ## STRAT-CERT-PAR: Server-Side Cert Validation for Parallel Dispatch — PLANNED
 
 Server-side certificate validation for `parallel_dispatch` task results. Extends `validate_certificate` to run per-task inside the `parallel_done` handler. Currently STRAT-REV lens cert injection is prompt-shaping only — this would add enforcement with retries.
