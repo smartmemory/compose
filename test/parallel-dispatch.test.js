@@ -148,12 +148,17 @@ describe('parallel_dispatch functional dispatch (T8b)', async () => {
 // ---------------------------------------------------------------------------
 
 describe('parallel_dispatch worktree isolation (STRAT-PAR-4)', () => {
-  // Helper: extract executeParallelDispatch function source
+  // Helper: extract executeParallelDispatch and its shared helper applyTaskDiffsToBaseCwd
+  // source. The merge logic was extracted into applyTaskDiffsToBaseCwd which is defined
+  // immediately before executeParallelDispatch, so we include both in the search window.
   function getParallelFnSrc() {
     const src = readFileSync(join(LIB_DIR, 'build.js'), 'utf-8');
     const fnIdx = src.indexOf('async function executeParallelDispatch(');
     assert.ok(fnIdx !== -1, 'executeParallelDispatch function must exist');
-    return src.slice(fnIdx);
+    const helperIdx = src.indexOf('function applyTaskDiffsToBaseCwd(');
+    // Start from whichever comes first so merge-logic strings are in scope
+    const startIdx = helperIdx !== -1 && helperIdx < fnIdx ? helperIdx : fnIdx;
+    return src.slice(startIdx);
   }
 
   test('parallel_dispatch branch creates git worktrees', () => {
