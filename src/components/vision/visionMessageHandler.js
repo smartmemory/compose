@@ -29,7 +29,7 @@ export function handleVisionMessage(msg, refs, setters) {
     });
   } : null;
 
-  if (msg.type === 'visionState') {
+  if (msg.type === 'visionState' || msg.type === 'hydrate') {
     const incoming = msg.items || [];
 
     // Diff for animations (skip initial load)

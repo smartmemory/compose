@@ -280,6 +280,17 @@ function connect() {
     }
   };
 
+  es.addEventListener('hydrate', (event) => {
+    try {
+      const messages = JSON.parse(event.data);
+      if (Array.isArray(messages)) {
+        for (const msg of messages) processMessage(msg);
+      }
+    } catch {
+      // ignore parse errors
+    }
+  });
+
   es.onerror = () => {
     _state.connecting = false;
     _state.connected = false;
