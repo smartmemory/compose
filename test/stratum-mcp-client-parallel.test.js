@@ -65,3 +65,21 @@ describe('StratumMcpClient.parallelPoll', () => {
     assert.equal(result.outcome.status, 'execute_step');
   });
 });
+
+describe('StratumMcpClient.parallelAdvance', () => {
+  it('calls stratum_parallel_advance with snake_case args and returns parsed JSON', async () => {
+    const { calls, mock } = makeMockClient([{
+      status: 'complete',
+      output: { outcome: 'failed', merge_status: 'conflict' },
+    }]);
+    const client = new StratumMcpClient();
+    Object.defineProperty(client, '_testClient', { value: mock, writable: true });
+
+    const result = await client.parallelAdvance('flow-xyz', 'step-abc', 'conflict');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].name, 'stratum_parallel_advance');
+    assert.deepEqual(calls[0].args, { flow_id: 'flow-xyz', step_id: 'step-abc', merge_status: 'conflict' });
+    assert.equal(result.status, 'complete');
+    assert.equal(result.output.merge_status, 'conflict');
+  });
+});
