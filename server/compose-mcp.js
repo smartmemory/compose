@@ -40,7 +40,6 @@ import {
   toolApproveGate,
   toolGetPendingGates,
   toolBindSession,
-  toolAgentRun,
   toolIterationStart,
   toolIterationReport,
   toolIterationAbort,
@@ -257,46 +256,10 @@ const TOOLS = [
       },
     },
   },
-  {
-    name: 'agent_run',
-    description:
-      'Run a prompt against an AI agent (claude or codex). ' +
-      'Project context (CLAUDE.md, feature artifacts) is automatically injected. ' +
-      'Returns the full response text. ' +
-      'If schema is provided, the agent is instructed to return JSON matching the schema ' +
-      'and the parsed result is included in the response.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        type: {
-          type: 'string',
-          enum: ['claude', 'codex'],
-          description: 'Which agent to use. "claude" uses the Claude Agent SDK (default). "codex" uses OpenAI Codex via opencode.',
-        },
-        prompt: {
-          type: 'string',
-          description: 'The prompt to send to the agent.',
-        },
-        featureCode: {
-          type: 'string',
-          description: 'Feature code (e.g. "AUTH-2") to include feature artifacts in context. Auto-detected from prompt if omitted.',
-        },
-        schema: {
-          type: 'object',
-          description: 'JSON Schema for structured output. When provided, the agent responds with JSON only.',
-        },
-        modelID: {
-          type: 'string',
-          description: 'Override the model ID.',
-        },
-        cwd: {
-          type: 'string',
-          description: 'Working directory for the agent. Defaults to project root.',
-        },
-      },
-      required: ['prompt'],
-    },
-  },
+  // Note: `agent_run` tool removed 2026-04-18 (STRAT-DEDUP-AGENTRUN v1).
+  // LLM-facing agent dispatch now goes through `mcp__stratum__stratum_agent_run`.
+  // `toolAgentRun` (and the Node connectors it uses) remain exported for Compose's
+  // internal callers (build.js, vision-server, pipelines).
 ];
 
 // ---------------------------------------------------------------------------
@@ -334,7 +297,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'scaffold_feature':         result = toolScaffoldFeature(args); break;
       case 'approve_gate':             result = await toolApproveGate(args); break;
       case 'get_pending_gates':        result = toolGetPendingGates(args); break;
-      case 'agent_run':               result = await toolAgentRun(args); break;
+      // agent_run removed — STRAT-DEDUP-AGENTRUN v1. Use mcp__stratum__stratum_agent_run.
       default:
         return {
           content: [{ type: 'text', text: `Unknown tool: ${name}` }],

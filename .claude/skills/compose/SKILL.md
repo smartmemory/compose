@@ -75,14 +75,14 @@ At every gate, always propose whether to proceed, skip, or revise. The differenc
 Any gate can include a Codex review pass. This is not limited to implementation — use it for design docs, PRDs, blueprints, plans, or code.
 
 ```
-Call mcp__compose__agent_run with:
+Call mcp__stratum__stratum_agent_run with:
   type: "codex"
   prompt: "Review <artifact>. Output REVIEW CLEAN if no actionable findings remain."
 ```
 
 Fix all issues Codex flags. Re-run until REVIEW CLEAN. Max 5 iterations — if max hit, the problem is in the spec, surface to human.
 
-If `mcp__compose__agent_run` is unavailable, fall back to `compose-reviewer` agent.
+If `mcp__stratum__stratum_agent_run` is unavailable, fall back to `compose-reviewer` agent.
 
 ## Lifecycle
 
@@ -444,7 +444,7 @@ When `/compose` is invoked, always scan first:
 |---|---|
 | `compose-explorer` | Phase 1 (2-3 parallel), Phase 4 (targeted) |
 | `compose-architect` | Phase 3 (2-3 competing mandates) |
-| `mcp__compose__agent_run(type="codex")` | Any gate — Codex review pass (see Gate Protocol) |
+| `mcp__stratum__stratum_agent_run(type="codex")` | Any gate — Codex review pass (see Gate Protocol) |
 | `compose-reviewer` | Fallback when `agent_run` unavailable |
 | `superpowers:test-driven-development` | Phase 7 step 1 |
 | `superpowers:verification-before-completion` | Before any task/phase done |
