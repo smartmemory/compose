@@ -15,14 +15,20 @@ const { MODEL_PRICING, calculateCost } = await import(`${REPO_ROOT}/lib/model-pr
 // ---------------------------------------------------------------------------
 
 test('MODEL_PRICING contains expected models', () => {
+  assert.ok(MODEL_PRICING['claude-opus-4-7'], 'opus-4-7 should be present');
   assert.ok(MODEL_PRICING['claude-opus-4-6'], 'opus-4-6 should be present');
   assert.ok(MODEL_PRICING['claude-sonnet-4-6'], 'sonnet-4-6 should be present');
   assert.ok(MODEL_PRICING['claude-haiku-4-5'], 'haiku-4-5 should be present');
 });
 
-test('MODEL_PRICING has correct opus rates', () => {
-  assert.equal(MODEL_PRICING['claude-opus-4-6'].inputPerMTok, 15);
-  assert.equal(MODEL_PRICING['claude-opus-4-6'].outputPerMTok, 75);
+test('MODEL_PRICING has correct opus-4-7 rates', () => {
+  assert.equal(MODEL_PRICING['claude-opus-4-7'].inputPerMTok, 5);
+  assert.equal(MODEL_PRICING['claude-opus-4-7'].outputPerMTok, 25);
+});
+
+test('MODEL_PRICING has correct opus-4-6 rates', () => {
+  assert.equal(MODEL_PRICING['claude-opus-4-6'].inputPerMTok, 5);
+  assert.equal(MODEL_PRICING['claude-opus-4-6'].outputPerMTok, 25);
 });
 
 test('MODEL_PRICING has correct sonnet rates', () => {
@@ -46,9 +52,15 @@ test('calculateCost sonnet: 1M input + 1M output', () => {
 });
 
 test('calculateCost opus: 1M input + 1M output', () => {
-  // 1M × $15 + 1M × $75 = $90
+  // 1M × $5 + 1M × $25 = $30
   const cost = calculateCost('claude-opus-4-6', 1_000_000, 1_000_000);
-  assert.equal(cost, 90);
+  assert.equal(cost, 30);
+});
+
+test('calculateCost opus-4-7: 1M input + 1M output', () => {
+  // 1M × $5 + 1M × $25 = $30
+  const cost = calculateCost('claude-opus-4-7', 1_000_000, 1_000_000);
+  assert.equal(cost, 30);
 });
 
 test('calculateCost haiku: 1M input + 1M output', () => {

@@ -6,7 +6,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { MODEL_TIERS, resolveTierModel } from '../server/model-tiers.js';
+import { MODEL_TIERS, resolveTierModel, TIER_THINKING, resolveTierThinking } from '../server/model-tiers.js';
 import { parseAgentString, resolveAgentConfig } from '../lib/agent-string.js';
 
 // ---------------------------------------------------------------------------
@@ -15,7 +15,7 @@ import { parseAgentString, resolveAgentConfig } from '../lib/agent-string.js';
 
 describe('resolveTierModel', () => {
   test('critical resolves to Opus', () => {
-    assert.strictEqual(resolveTierModel('critical'), 'claude-opus-4-6');
+    assert.strictEqual(resolveTierModel('critical'), 'claude-opus-4-7');
   });
 
   test('standard resolves to Sonnet', () => {
@@ -48,6 +48,36 @@ describe('MODEL_TIERS', () => {
     assert.ok('critical' in MODEL_TIERS);
     assert.ok('standard' in MODEL_TIERS);
     assert.ok('fast' in MODEL_TIERS);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveTierThinking
+// ---------------------------------------------------------------------------
+
+describe('resolveTierThinking', () => {
+  test('critical → adaptive + xhigh', () => {
+    assert.deepStrictEqual(resolveTierThinking('critical'), { mode: 'adaptive', effort: 'xhigh' });
+  });
+  test('standard → adaptive + high', () => {
+    assert.deepStrictEqual(resolveTierThinking('standard'), { mode: 'adaptive', effort: 'high' });
+  });
+  test('fast → off + null (Haiku does not accept effort)', () => {
+    assert.deepStrictEqual(resolveTierThinking('fast'), { mode: 'off', effort: null });
+  });
+  test('unknown tier returns null', () => {
+    assert.strictEqual(resolveTierThinking('unknown'), null);
+  });
+  test('null returns null', () => {
+    assert.strictEqual(resolveTierThinking(null), null);
+  });
+});
+
+describe('TIER_THINKING', () => {
+  test('exports config for all three tiers', () => {
+    assert.ok('critical' in TIER_THINKING);
+    assert.ok('standard' in TIER_THINKING);
+    assert.ok('fast' in TIER_THINKING);
   });
 });
 
@@ -115,7 +145,7 @@ describe('resolveAgentConfig — modelID', () => {
   test('"claude::critical" returns Opus modelID', () => {
     const cfg = resolveAgentConfig('claude::critical');
     assert.strictEqual(cfg.tier, 'critical');
-    assert.strictEqual(cfg.modelID, 'claude-opus-4-6');
+    assert.strictEqual(cfg.modelID, 'claude-opus-4-7');
   });
 
   test('"claude" → modelID=null (no tier, uses connector default)', () => {
@@ -135,8 +165,26 @@ describe('resolveAgentConfig — modelID', () => {
     assert.strictEqual(cfg.provider, 'claude');
     assert.strictEqual(cfg.template, 'read-only-reviewer');
     assert.strictEqual(cfg.tier, 'critical');
-    assert.strictEqual(cfg.modelID, 'claude-opus-4-6');
+    assert.strictEqual(cfg.modelID, 'claude-opus-4-7');
     assert.deepStrictEqual(cfg.allowedTools, ['Read', 'Grep', 'Glob', 'Agent']);
     assert.deepStrictEqual(cfg.disallowedTools, ['Edit', 'Write', 'Bash']);
+  });
+
+  test('"claude::critical" → thinking=adaptive + effort=xhigh', () => {
+    const cfg = resolveAgentConfig('claude::critical');
+    assert.deepStrictEqual(cfg.thinking, { type: 'adaptive' });
+    assert.strictEqual(cfg.effort, 'xhigh');
+  });
+
+  test('"claude::fast" → thinking=disabled + effort=null', () => {
+    const cfg = resolveAgentConfig('claude::fast');
+    assert.deepStrictEqual(cfg.thinking, { type: 'disabled' });
+    assert.strictEqual(cfg.effort, null);
+  });
+
+  test('"claude" (no tier) → thinking=null + effort=null', () => {
+    const cfg = resolveAgentConfig('claude');
+    assert.strictEqual(cfg.thinking, null);
+    assert.strictEqual(cfg.effort, null);
   });
 });

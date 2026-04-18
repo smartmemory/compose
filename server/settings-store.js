@@ -10,6 +10,8 @@ import { getDataDir as getDefaultDataDir } from './project-root.js';
 
 const VALID_VIEWS = ['graph', 'tree', 'pipeline', 'gates', 'docs', 'design', 'sessions', 'settings'];
 const VALID_THEMES = ['light', 'dark', 'system'];
+const VALID_THINKING_MODES = ['adaptive', 'off'];
+const VALID_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 export class SettingsStore {
   constructor(dataDir, contract) {
@@ -61,6 +63,13 @@ export class SettingsStore {
         gate_threshold: null, // null = off, number = min_score required
         weights: {},          // dimension weight overrides (must sum to 1.0 ± 0.01)
       },
+      // Claude thinking/effort controls. mode='tier' inherits the tier default
+      // (critical → adaptive+xhigh, standard → adaptive+high, fast → off).
+      // effort=null likewise inherits the tier default.
+      thinking: {
+        mode: 'tier',    // 'tier' | 'adaptive' | 'off'
+        effort: null,    // null (tier default) | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+      },
     };
   }
 
@@ -83,6 +92,7 @@ export class SettingsStore {
         ...user.health,
         weights: { ...defaults.health.weights, ...user.health?.weights },
       },
+      thinking: { ...defaults.thinking, ...user.thinking },
     };
   }
 
@@ -90,7 +100,7 @@ export class SettingsStore {
   update(patch) {
     this._validate(patch);
     // Deep merge into user settings
-    for (const section of ['policies', 'iterations', 'models', 'ui', 'capabilities', 'health']) {
+    for (const section of ['policies', 'iterations', 'models', 'ui', 'capabilities', 'health', 'thinking']) {
       if (patch[section]) {
         if (!this._userSettings[section]) this._userSettings[section] = {};
         if (section === 'iterations') {
@@ -122,7 +132,7 @@ export class SettingsStore {
 
     // Reject unknown top-level keys
     for (const key of Object.keys(patch)) {
-      if (!['policies', 'iterations', 'models', 'ui', 'capabilities', 'health'].includes(key)) {
+      if (!['policies', 'iterations', 'models', 'ui', 'capabilities', 'health', 'thinking'].includes(key)) {
         throw new Error(`Unknown settings section: ${key}`);
       }
     }
@@ -180,6 +190,20 @@ export class SettingsStore {
         const VALID_ENFORCEMENT = ['log', 'block'];
         if (!VALID_ENFORCEMENT.includes(patch.capabilities.enforcement)) {
           throw new Error(`Invalid enforcement: ${patch.capabilities.enforcement} (must be ${VALID_ENFORCEMENT.join(', ')})`);
+        }
+      }
+    }
+
+    if (patch.thinking) {
+      if (patch.thinking.mode !== undefined) {
+        const m = patch.thinking.mode;
+        if (m !== 'tier' && !VALID_THINKING_MODES.includes(m)) {
+          throw new Error(`Invalid thinking.mode: ${m} (must be tier, ${VALID_THINKING_MODES.join(', ')})`);
+        }
+      }
+      if (patch.thinking.effort !== undefined && patch.thinking.effort !== null) {
+        if (!VALID_EFFORT_LEVELS.includes(patch.thinking.effort)) {
+          throw new Error(`Invalid thinking.effort: ${patch.thinking.effort} (must be null or ${VALID_EFFORT_LEVELS.join(', ')})`);
         }
       }
     }

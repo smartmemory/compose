@@ -221,3 +221,21 @@
 2026-04-10T13:10:06+08:00 | COMP-OBS-GATES: wiring gate-tiers into build.js (tier classification, gate_tier_failed, gate_tier_summary, gate-savings.json)
 2026-04-10T13:10:47+08:00 | COMP-OBS-GATES: adding writeGateTier to BuildStreamWriter and gate_tier_result/gate_tier_summary/gate_tier_failed cases to BuildStreamBridge
 2026-04-10T13:11:10+08:00 | COMP-OBS-GATES: adding tier pipeline visualization to ContextStepDetail.jsx
+2026-04-17T16:41:26+08:00 | replace scheduleBroadcast debounce with CoalescingBuffer in VisionServer
+2026-04-17T16:55:10+08:00 | RT-1 SSE: wire CoalescingBuffer singleton into agent-server.js to buffer _consumeStream broadcast calls
+2026-04-17T16:57:48+08:00 | feat(comp-rt): extract getVisionSnapshot method and send hydrate on WS connect (RT-2)
+2026-04-17T17:00:32+08:00 | add _recentMessages ring buffer + getAgentSnapshot to agent-server.js (COMP-RT Task 6)
+2026-04-17T17:03:45+08:00 | RT-2 SSE: emit event:hydrate on connect before system/connected
+2026-04-17T17:06:48+08:00 | RT-2 frontend: handle hydrate events in visionMessageHandler and AgentStream SSE listener
+2026-04-17T17:12:13+08:00 | RT-3: create ConnectorDiscovery/ConnectorRuntime interfaces, add discovery stubs to AgentConnector, add section comments to concrete connectors
+2026-04-17T17:17:34+08:00 | adding connector-shape.test.js — shape compliance for ClaudeSDKConnector, OpencodeConnector, CodexConnector (RT-3)
+2026-04-17T20:49:25+08:00 | T2-F5-COMPOSE-MIGRATE tasks 1+2: add _testClient hook and parallelStart/parallelPoll methods
+2026-04-17T20:55:05+08:00 | T2-F5-COMPOSE-MIGRATE tasks 3+4: add executeParallelDispatchServer, emitPerTaskProgress, SERVER_DISPATCH_POLL_MS to build.js
+2026-04-17T21:00:35+08:00 | T2-F5-COMPOSE-MIGRATE tasks 5+6: add shouldUseServerDispatch helper and wire routing in parallel_dispatch branch
+2026-04-18T00:59:26+08:00 | T2-F5-COMPOSE-MIGRATE-WORKTREE Task 1: extract applyTaskDiffsToBaseCwd from executeParallelDispatch
+2026-04-18T01:10:36+08:00 | T2-F5-Task3: wire applyServerDispatchDiffs into executeParallelDispatchServer
+2026-04-18T02:33:42+08:00 | T2-F5-CONSUMER-MERGE-STATUS-COMPOSE tasks 1+2: add parallelAdvance + split applyServerDispatchDiffs
+2026-04-18T02:39:41+08:00 | T2-F5-CONSUMER-MERGE-STATUS-COMPOSE tasks 3+4: branch executeParallelDispatchServer on awaiting_consumer_advance sentinel
+2026-04-18T02:45:25+08:00 | T2-F5-CONSUMER-MERGE-STATUS-COMPOSE task 5: add resolveBuildStatusForCompleteResponse helper + wire into main loop
+2026-04-18T09:50:39+08:00 | Migrate critical tier to Opus 4.7 — update tiers, pricing, tests
+2026-04-18T10:00:33+08:00 | Add thinking+effort config: settings, tier defaults, connector plumbing, stratum @infer params

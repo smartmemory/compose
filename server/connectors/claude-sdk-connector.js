@@ -20,6 +20,8 @@ export class ClaudeSDKConnector extends AgentConnector {
 
   #allowedTools;
   #disallowedTools;
+  #thinking;
+  #effort;
 
   /**
    * @param {object} [opts]
@@ -27,18 +29,22 @@ export class ClaudeSDKConnector extends AgentConnector {
    * @param {string}   [opts.cwd]              — default working directory
    * @param {string[]} [opts.allowedTools]     — restrict to these tools (overrides preset)
    * @param {string[]} [opts.disallowedTools]  — deny these tools (used alongside allowedTools or preset)
+   * @param {object|null} [opts.thinking]      — Claude thinking config, e.g. { type: 'adaptive' } or { type: 'disabled' }
+   * @param {string|null} [opts.effort]        — effort level: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
    */
-  constructor({ model = DEFAULT_MODEL, cwd = process.cwd(), allowedTools, disallowedTools } = {}) {
+  constructor({ model = DEFAULT_MODEL, cwd = process.cwd(), allowedTools, disallowedTools, thinking, effort } = {}) {
     super();
     this.#model = model;
     this.#cwd = cwd;
     this.#allowedTools = allowedTools ?? null;
     this.#disallowedTools = disallowedTools ?? null;
+    this.#thinking = thinking ?? null;
+    this.#effort = effort ?? null;
   }
 
   // ── Runtime ────────────────────────────────────────────────────────────────
 
-  async *run(prompt, { schema, modelID, cwd } = {}) {
+  async *run(prompt, { schema, modelID, cwd, thinking, effort } = {}) {
     if (this.#query) {
       throw new Error('ClaudeSDKConnector: run() already active. Call interrupt() first.');
     }
@@ -63,15 +69,27 @@ export class ClaudeSDKConnector extends AgentConnector {
       toolsConfig = { type: 'preset', preset: 'claude_code' };
     }
 
+    // Resolve thinking/effort: per-run override beats constructor default.
+    const resolvedThinking = thinking !== undefined ? thinking : this.#thinking;
+    const resolvedEffort   = effort   !== undefined ? effort   : this.#effort;
+
+    const sdkOptions = {
+      cwd: cwd ?? this.#cwd,
+      model: modelID ?? this.#model,
+      permissionMode: 'acceptEdits',
+      tools: toolsConfig,
+      env: cleanEnv,
+    };
+    if (resolvedThinking !== null && resolvedThinking !== undefined) {
+      sdkOptions.thinking = resolvedThinking;
+    }
+    if (resolvedEffort !== null && resolvedEffort !== undefined) {
+      sdkOptions.effort = resolvedEffort;
+    }
+
     const q = query({
       prompt: actualPrompt,
-      options: {
-        cwd: cwd ?? this.#cwd,
-        model: modelID ?? this.#model,
-        permissionMode: 'acceptEdits',
-        tools: toolsConfig,
-        env: cleanEnv,
-      },
+      options: sdkOptions,
     });
     this.#query = q;
 
