@@ -2,6 +2,22 @@
 
 ## 2026-04-18
 
+### COMP-REACT19 — React 18.3.1 → 19.2.5
+
+**Why:** Unblocks COMP-TUI-COCKPIT (ink 7.x requires React ≥19.2.0); also picks up `use()`, form actions, and ref-as-prop ergonomics for the app.
+
+**Changes:**
+- `package.json`: `react` `^18.3.1` → `^19.2.5`; `react-dom` `^18.2.0` → `^19.2.5` (aligned).
+
+**Verified safe:**
+- No `ReactDOM.render`/`hydrate`, no `propTypes`/`defaultProps` on function components, no string refs, no legacy context usage.
+- Zero block-bodied `useMemo`/`useCallback` with implicit-undefined returns (breaking change #6 is a no-op here).
+- `src/main.jsx` already uses `createRoot`; app is not wrapped in `<StrictMode>` (no double-invoke surfacing).
+- `React.forwardRef` (61 call sites across 13 UI files) retained — still supported in React 19; ref-as-prop codemod deferred to a future cleanup.
+- All React-consuming deps (`@radix-ui/*`, `@hello-pangea/dnd`, `@tanstack/react-virtual`, `react-markdown`, `lucide-react`, `ink`, `zustand`) compatible with React 19 at current pins.
+
+**Tests:** 1420 tests pass (baseline unchanged); 10 integration tests pass; `npm run build` succeeds in 5.07s.
+
 ### T2-F5-CONSUMER-MERGE-STATUS-COMPOSE — close the T2-F5 arc
 
 **Why:** T2-F5-COMPOSE-MIGRATE-WORKTREE landed with a known trade-off (W1): client-side merge conflicts halted the CLI via a throw, but the stream-writer closed with `buildStatus='complete'` because the throw bypassed the terminal `buildStatus='failed'` branch. The flow state also reported `merge_status='clean'` server-side — Stratum auto-advanced before Compose could report the real status. T2-F5-DEFER-ADVANCE (stratum-side) added the back-channel; this feature wires Compose up to it.

@@ -239,3 +239,4 @@
 2026-04-18T02:45:25+08:00 | T2-F5-CONSUMER-MERGE-STATUS-COMPOSE task 5: add resolveBuildStatusForCompleteResponse helper + wire into main loop
 2026-04-18T09:50:39+08:00 | Migrate critical tier to Opus 4.7 — update tiers, pricing, tests
 2026-04-18T10:00:33+08:00 | Add thinking+effort config: settings, tier defaults, connector plumbing, stratum @infer params
+2026-04-18T11:53:40+08:00 | COMP-REACT19: bumping react+react-dom to 19.2.5 and running codemod
