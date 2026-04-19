@@ -1,7 +1,8 @@
 {
-  "name": "compose-app",
-  "private": true,
+  "name": "@smartmemory/compose",
   "version": "0.1.0",
+  "description": "Structured AI dev pipeline — goal-to-product orchestration with gates, iteration loops, and feature lifecycle management.",
+  "author": "SmartMemory",
   "license": "MIT",
   "type": "module",
   "bin": {
@@ -14,8 +15,48 @@
     "dev:client": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "prepublishOnly": "npm run build"
   },
+  "keywords": [
+    "compose",
+    "smartmemory",
+    "ai",
+    "orchestration",
+    "agent",
+    "pipeline",
+    "stratum",
+    "claude",
+    "codex",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smartmemory/compose.git"
+  },
+  "bugs": {
+    "url": "https://github.com/smartmemory/compose/issues"
+  },
+  "homepage": "https://github.com/smartmemory/compose#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "bin/**",
+    "server/**",
+    "lib/**",
+    "dist/**",
+    "templates/**",
+    "presets/**",
+    "pipelines/**",
+    "contracts/**",
+    "scripts/**",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.47",
     "@dagrejs/dagre": "^2.0.4",
