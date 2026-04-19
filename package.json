@@ -16,6 +16,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test test/*.test.js",
+    "test:integration": "node --test test/integration/*.test.js",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
