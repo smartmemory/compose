@@ -371,8 +371,13 @@ async function runInit(flags) {
 // ---------------------------------------------------------------------------
 
 function runSetup() {
-  // 1. Sync all compose-owned skills to detected agents
-  const agents = detectAgents()
+  // 1. Sync all compose-owned skills to detected agents.
+  //    If none detected, fall back to Claude — setup is unconditional
+  //    "install global skill" per its help text.
+  let agents = detectAgents()
+  if (agents.length === 0) {
+    agents = [{ name: 'claude', skillDir: join(homedir(), '.claude', 'skills', 'stratum') }]
+  }
   syncSkills(agents)
 
   // 2. Register stratum-mcp if available
