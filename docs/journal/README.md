@@ -10,6 +10,7 @@ Each entry is a dated session log capturing what we tried, what broke, what we l
 
 | Date | Entry | Summary |
 |------|-------|---------|
+| 2026-04-20 | [Session 24: COMP-OBS-BRANCH — First Ship of Wave 6](2026-04-20-session-24-comp-obs-branch.md) | CC JSONL reader + BranchLineage lifecycle_ext + compare panel. 11 tasks across 4 tracks, 110 new tests, 1515/1515 suite pass. Wave 6 structural validator lands. |
 | 2026-02-11 | [Session 0: The Planning Marathon](2026-02-11-session-0-planning.md) | Product concept through architecture decision, all in one session |
 | 2026-02-11 | [Session 1: First Boot](2026-02-11-session-1-first-boot.md) | First real run, crash, diagnosis, self-healing infrastructure |
 | 2026-02-11 | [Session 2: The WebSocket Bug Hunt](2026-02-11-session-2-websocket-bugs.md) | Permissions, restart loop, frame corruption, three-layer resilience |

@@ -18,6 +18,8 @@ import { AgentRegistry } from './agent-registry.js';
 import { HealthMonitor } from './agent-health.js';
 import { WorktreeGC } from './worktree-gc.js';
 import { attachVisionRoutes } from './vision-routes.js';
+import { CCSessionWatcher } from './cc-session-watcher.js';
+import { SchemaValidator } from './schema-validator.js';
 import { attachSessionRoutes } from './session-routes.js';
 import { attachActivityRoutes } from './activity-routes.js';
 import { SettingsStore } from './settings-store.js';
@@ -242,6 +244,75 @@ export class VisionServer {
       app.use('/api/stratum', (_req, res) => {
         res.status(503).json({ error: 'Stratum not enabled', hint: 'pip install stratum && compose init' });
       });
+    }
+
+    // ── COMP-OBS-BRANCH: CC-session watcher (opt-in) ──────────────────────
+    // Default OFF. Enable by setting `capabilities.cc_session_watcher: true` in compose.json
+    // or by setting the `CC_SESSION_WATCHER=1` env var. When enabled, Forge reads
+    // `~/.claude/projects/**/*.jsonl` and emits BranchLineage + DecisionEvents tied to the
+    // current feature via sessions.json's transcriptPath basename.
+    const ccWatcherEnabled =
+      this._config.capabilities?.cc_session_watcher === true ||
+      process.env.CC_SESSION_WATCHER === '1';
+    if (ccWatcherEnabled) {
+      try {
+        const projectsRoot = process.env.CC_PROJECTS_ROOT ||
+          path.join(process.env.HOME || process.env.USERPROFILE || '', '.claude', 'projects');
+        const sessionsFile = this.sessionManager?.sessionsFile || path.join(getDataDir(), 'sessions.json');
+        const featureRoot = path.join(getTargetRoot(), 'docs', 'features');
+
+        const findItemIdByFeatureCode = (fc) => {
+          for (const it of this.store.items.values()) {
+            if (it.lifecycle?.featureCode === fc) return it.id;
+          }
+          return null;
+        };
+
+        const schemaValidator = new SchemaValidator();
+        const postBranchLineage = async (itemId, lineage) => {
+          // Validate at the producer boundary — the watcher path bypasses the HTTP
+          // route, so we must re-check here to guarantee contract conformance.
+          const { valid, errors } = schemaValidator.validate('BranchLineage', lineage);
+          if (!valid) {
+            throw new Error(`Invalid BranchLineage payload: ${JSON.stringify(errors)}`);
+          }
+          const item = this.store.items.get(itemId);
+          const itemFC = item?.lifecycle?.featureCode;
+          if (!itemFC || itemFC !== lineage.feature_code) {
+            throw new Error(
+              `feature_code mismatch: lineage=${lineage.feature_code} item=${itemFC || '<none>'}`
+            );
+          }
+          this.store.updateLifecycleExt(itemId, 'branch_lineage', lineage);
+          this.scheduleBroadcast();
+          this.broadcastMessage({ type: 'branchLineageUpdate', itemId, ...lineage });
+        };
+
+        this._ccWatcher = new CCSessionWatcher({
+          projectsRoot,
+          sessionsFile,
+          featureRoot,
+          findItemIdByFeatureCode,
+          postBranchLineage,
+          broadcastMessage: (msg) => this.broadcastMessage(msg),
+        });
+
+        // Seed emitted_event_ids from any existing lineage so startup doesn't replay.
+        for (const it of this.store.items.values()) {
+          const l = it.lifecycle?.lifecycle_ext?.branch_lineage;
+          if (l?.feature_code && Array.isArray(l.emitted_event_ids)) {
+            this._ccWatcher.seedEmittedEventIds(l.feature_code, l.emitted_event_ids);
+          }
+        }
+
+        this._ccWatcher.fullScan().catch(err => {
+          console.warn('[vision] cc-session-watcher initial scan failed:', err.message);
+        });
+        this._ccWatcher.start();
+        console.log(`[vision] cc-session-watcher enabled (projectsRoot=${projectsRoot})`);
+      } catch (err) {
+        console.warn('[vision] cc-session-watcher failed to start:', err.message);
+      }
     }
 
     // ── Haiku summary broadcast ─────────────────────────────────────────────

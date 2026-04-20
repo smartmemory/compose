@@ -1,5 +1,51 @@
 # Changelog
 
+## 2026-04-20
+
+### COMP-OBS-BRANCH — Session branching reader + compare panel
+
+**Why:** First shipping feature of Wave 6 (Situational Awareness). Forge reads Claude Code's existing parent-pointer branch tree at `~/.claude/projects/**/*.jsonl` — no new fork mechanism, no new storage. Ships first because it's the structural validator that the CC JSONL assumption holds; failures here invalidate the branch-outcome shape the rest of the Wave 6 batch depends on.
+
+**Producer (backend):**
+- `server/schema-validator.js` *(new)* — ajv wrapper over `docs/features/COMP-OBS-CONTRACT/schema.json` v0.2.2. Used at the lineage-POST boundary and in tests.
+- `server/cc-session-reader.js` *(new)* — parses a single CC session JSONL, builds a parent-pointer tree over non-sidechain records, classifies each leaf's state (`running` / `complete` / `failed` / `unknown`), derives BranchOutcome metrics per blueprint §6.5. Truncated files tolerated.
+- `server/cc-session-feature-resolver.js` *(new)* — joins `cc_session_id` → `feature_code` via (1) `basename(transcriptPath)` match in `.compose/data/sessions.json`; (2) fallback probe of `docs/features/<CODE>/sessions/<cc_session_id>.*`; (3) unbound → null (counted in `stats.unbound_count`, never emitted per the contract's required `feature_code` rule).
+- `server/decision-event-id.js` *(new)* — deterministic `uuidv5` event id keyed on `(feature_code, branch_id)` + pure `shouldEmit` dedupe helper. Prevents full-rescan replay on restart.
+- `server/cc-session-watcher.js` *(new)* — orchestrator. Per-feature × per-session accumulator (so a feature with multiple CC sessions never has branches clobbered on POST), aggregated lineage POST, debounced `fs.watch` with polling fallback, persisted `emitted_event_ids` round-trip across restart.
+- `server/vision-store.js` — `updateLifecycle` now preserves prior `lifecycle_ext` across partial-update callers (the 31 existing callsites, notably `feature-scan.js`, safely write non-extension fields without clobbering Wave 6 additions). New `updateLifecycleExt(id, key, value)` is the single public method Wave 6 features use to write extensions.
+- `server/vision-routes.js` — new `POST /api/vision/items/:id/lifecycle/branch-lineage`, schema-validated at the boundary; emits `branchLineageUpdate` WebSocket event. Idempotent.
+- `server/vision-server.js` — opt-in `CCSessionWatcher` wire-up. **Default OFF.** Enable via `capabilities.cc_session_watcher: true` in `compose.json` or `CC_SESSION_WATCHER=1` env var. When on, seeds emitted event ids from persisted lineage on startup (no replay), runs a full scan, then watches.
+
+**Consumer (frontend):**
+- `src/components/vision/BranchComparePanel.jsx` *(new)* — collapsed 1-liner (`N branches · last fork Xh ago · [Compare]`); expanded 2-column metric grid with inline `ArtifactDiff` below. Compare button disabled when <2 `state: complete` branches; mid-progress shows `X of N branches ready`. Metric rows pluggable via `extraMetricsForBranch` prop (future COMP-OBS-DRIFT injection point).
+- `src/components/vision/branchComparePanelLogic.js` *(new)* — pure helpers (summary/age/number formatters + `pickInitialPair`) extracted for unit testing without a DOM.
+- `src/components/vision/useVisionStore.js` — Zustand `selectedBranches: { [featureCode]: [branchIdA, branchIdB] }` slice + `setSelectedBranches` action. Session-local, not persisted.
+- `src/components/vision/ItemDetailPanel.jsx` — mounts `<BranchComparePanel>` as the first child of the scroll body when `item.lifecycle.featureCode` is set.
+
+**Dependencies:** `ajv` `^8.18.0`, `ajv-formats` `^3.0.1` — JSON Schema draft-07 + date-time/uuid formats, used at all contract boundaries.
+
+**Tests:**
+- `test/fixtures/cc-sessions/` *(new)* — 6 synthesized+scrubbed JSONL fixtures + multi-session dir + byte-deterministic `capture.js`. Covers linear, two-branch fork, three-branch fork, mid-progress, failed-branch (via `tool_result.is_error:true`), truncated.
+- 9 new test files under `test/comp-obs-branch/` + `test/vision-store-server.test.js` + `test/wave-6-integration.test.js`. Coverage: schema boundaries (12), reader (24), resolver (9), event id (8), watcher (6), route (7), logic (27), store (11), integration (6) = 110 new tests.
+- Integration test runs entirely on tmp dirs — never touches `~/.claude/projects/` or `$HOME`.
+
+**Verified:**
+- Full suite `node --test test/*.test.js test/comp-obs-branch/*.test.js`: **1522/1522 pass** (1515 pre-review + 7 added in response to Codex findings), zero regressions across the 31 existing `updateLifecycle` callsites.
+- `npm run build` succeeds in ~8.5s.
+- UI not manually verified in a browser (dev server was not started to avoid disrupting the active developer session). Vite dev server smoke via curl: `BranchComparePanel.jsx`, `ItemDetailPanel.jsx`, `branchComparePanelLogic.js`, `useVisionStore.js` all serve HTTP 200 with compiled JSX — import graph resolves cleanly.
+
+**Codex review pass (2026-04-20):** six findings, five accepted + fixed, one deferred with rationale:
+1. ✅ **Bug** — `parseJsonlSafe` silently dropped mid-line parse failures. Fixed: any unparseable line now flags `truncated=true`, and `running` leaves under a truncated session are downgraded to `unknown` (positive identifications on the leaf itself — `is_error`, `stop_reason: end_turn` — remain trustworthy).
+2. 📎 **Deferred** — Codex flagged that `failed` branches get completion-only metrics (`turn_count`, `files_touched`, etc.) populated, citing per-field "Populated when state=complete" descriptions. The plan (T1 acceptance criteria) and the schema's `ended_at` description ("Populated when state is terminal (complete / failed). Null while running.") both codify "terminal = complete OR failed" for completion-only fields. Keeping implementation aligned with the plan. If COMP-OBS-CONTRACT wants stricter semantics, it needs a schema bump that unambiguously says "complete only" across all completion-only fields.
+3. ✅ **Contract** — `final_artifact.path` was chosen at the reader before `feature_code` resolution, so a session touching multiple feature folders could attach another feature's artifact. Fixed: watcher re-filters `final_artifact` against `docs/features/<resolved feature_code>/` and nulls it when out-of-scope.
+4. ✅ **Contract** — Branch-lineage route didn't verify `body.feature_code === item.lifecycle.featureCode`. Fixed: route rejects with 400 when the item has no `lifecycle.featureCode` or when `feature_code` mismatches.
+5. ✅ **Race** — `_flush()` broadcast DecisionEvents before persisting the updated `emitted_event_ids`, so a crash between broadcast and POST could replay. Fixed: `_flush()` now stages ids in the lineage payload, POSTs first, and only commits ids to the in-memory dedupe set + broadcasts on POST success. On POST failure, the set is untouched and the next scan retries.
+6. ✅ **Schema** — Production watcher path bypassed schema validation (direct `updateLifecycleExt`). Fixed: `vision-server.js`'s `postBranchLineage` callback now validates against `BranchLineage` and verifies the `feature_code`/`featureCode` match before persisting.
+
+**Not in v1** (per feature.json): no new fork mechanism (users still fork via CC `Esc Esc` / rewind); no transcript-level side-by-side diff; no tool-call timeline; no cross-session ancestry; no mid-session fork UI in Forge. Read-only visualizer over CC's native state.
+
+**Heuristic-in-v1 metrics:** `tests.passed/failed/skipped` parsed from `tool_result` stdout via a pytest/jest/vitest/mocha regex — exact where matchable, else `0`. `cost.usd` is `0` unless `CC_USD_PER_1K_INPUT` / `CC_USD_PER_1K_OUTPUT` env vars are set. `final_artifact.snapshot` is `null` (lazy-load via `path` deferred to v2).
+
 ## 2026-04-18
 
 ### COMP-REACT19 — React 18.3.1 → 19.2.5

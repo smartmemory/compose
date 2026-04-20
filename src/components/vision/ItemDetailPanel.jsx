@@ -8,6 +8,8 @@ import { ScrollArea } from '@/components/ui/scroll-area.jsx';
 import { TYPE_COLORS, STATUS_COLORS, PHASES, PHASE_LABELS, STATUSES, CONFIDENCE_LABELS, LIFECYCLE_PHASE_LABELS, LIFECYCLE_PHASE_ARTIFACTS, GATE_STEP_LABELS } from './constants.js';
 import ConnectionGraph from './ConnectionGraph.jsx';
 import ConfidenceBar from './shared/ConfidenceBar.jsx';
+import BranchComparePanel from './BranchComparePanel.jsx';
+import { useVisionStore } from './useVisionStore.js';
 
 function ConfidenceControl({ level, onChange }) {
   const colors = ['hsl(var(--muted-foreground))', 'hsl(var(--destructive))', 'hsl(var(--accent))', 'hsl(var(--success))', 'hsl(var(--success))'];
@@ -114,6 +116,19 @@ function formatTimestamp(dateStr) {
   const d = new Date(dateStr);
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
     d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+
+function BranchComparePanelMount({ featureCode, lineage }) {
+  const selectedBranches = useVisionStore(s => s.selectedBranches);
+  const setSelectedBranches = useVisionStore(s => s.setSelectedBranches);
+  return (
+    <BranchComparePanel
+      lineage={lineage}
+      selectedPair={selectedBranches?.[featureCode] || []}
+      onSelectPair={(pair) => setSelectedBranches(featureCode, pair)}
+    />
+  );
 }
 
 
@@ -401,6 +416,11 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
       {/* Scrollable body */}
       <ScrollArea className="flex-1">
         <div className="p-3 space-y-4">
+          {/* COMP-OBS-BRANCH: per-feature branch compare panel (region ⑤) */}
+          {item.lifecycle?.featureCode && (
+            <BranchComparePanelMount featureCode={item.lifecycle.featureCode} lineage={item.lifecycle.lifecycle_ext?.branch_lineage} />
+          )}
+
           {/* Status + Confidence row */}
           <div className="flex items-center gap-2 flex-wrap">
             <select

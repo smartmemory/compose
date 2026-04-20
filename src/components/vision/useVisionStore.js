@@ -259,9 +259,16 @@ export const useVisionStore = create((set, get) => {
     selectedPhase: (() => {
       try { return localStorage.getItem('compose:selectedPhase') || null; } catch { return null; }
     })(),
+    // COMP-OBS-BRANCH: per-feature [branchIdA, branchIdB] selection for the compare panel.
+    // Session-local; never persisted.
+    selectedBranches: {},
 
     // Actions
     clearUICommand: () => set({ uiCommand: null }),
+
+    setSelectedBranches: (featureCode, pair) => set(s => ({
+      selectedBranches: { ...s.selectedBranches, [featureCode]: pair },
+    })),
 
     registerSnapshotProvider: (provider) => { refs.snapshotProvider = provider; },
 

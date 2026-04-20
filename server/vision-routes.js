@@ -32,6 +32,13 @@ import { fileURLToPath } from 'node:url';
 import { extractFilePaths } from './vision-utils.js';
 import { ArtifactManager } from './artifact-manager.js';
 import { recordIteration, checkCumulativeBudget } from '../lib/budget-ledger.js';
+import { SchemaValidator } from './schema-validator.js';
+
+let _schemaValidator = null;
+function getSchemaValidator() {
+  if (!_schemaValidator) _schemaValidator = new SchemaValidator();
+  return _schemaValidator;
+}
 
 import { getTargetRoot, resolveProjectPath, loadProjectConfig } from './project-root.js';
 
@@ -175,6 +182,38 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleStarted', itemId: req.params.id, phase: 'explore_design', featureCode, timestamp: now });
       res.json(lifecycle);
+    } catch (err) {
+      const status = err.message.includes('not found') ? 404 : 400;
+      res.status(status).json({ error: err.message });
+    }
+  });
+
+  // COMP-OBS-BRANCH: accept BranchLineage payloads from the CC-session watcher.
+  app.post('/api/vision/items/:id/lifecycle/branch-lineage', (req, res) => {
+    try {
+      const item = store.items.get(req.params.id);
+      if (!item) return res.status(404).json({ error: `Item not found: ${req.params.id}` });
+
+      const body = req.body || {};
+      const { valid, errors } = getSchemaValidator().validate('BranchLineage', body);
+      if (!valid) {
+        return res.status(400).json({ error: 'Invalid BranchLineage payload', details: errors });
+      }
+
+      const itemFC = item.lifecycle?.featureCode;
+      if (!itemFC) {
+        return res.status(400).json({ error: 'Item has no lifecycle.featureCode; cannot attach branch lineage.' });
+      }
+      if (body.feature_code !== itemFC) {
+        return res.status(400).json({
+          error: `Lineage feature_code (${body.feature_code}) does not match item featureCode (${itemFC}).`,
+        });
+      }
+
+      store.updateLifecycleExt(req.params.id, 'branch_lineage', body);
+      scheduleBroadcast();
+      broadcastMessage({ type: 'branchLineageUpdate', itemId: req.params.id, ...body });
+      res.json({ ok: true, branch_lineage: body });
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
       res.status(status).json({ error: err.message });

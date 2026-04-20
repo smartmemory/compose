@@ -217,11 +217,32 @@ export class VisionStore {
   updateLifecycle(id, lifecycle) {
     const item = this.items.get(id);
     if (!item) throw new Error(`Item not found: ${id}`);
+    const priorExt = item.lifecycle?.lifecycle_ext;
     item.lifecycle = lifecycle;
+    // Preserve lifecycle_ext across partial-update callers (Wave 6 additive slot).
+    // A caller that truly wants to clear it passes `lifecycle_ext: {}` or `null` explicitly.
+    if (priorExt && lifecycle && !('lifecycle_ext' in lifecycle)) {
+      item.lifecycle.lifecycle_ext = priorExt;
+    }
     // Re-derive group when lifecycle gains a featureCode
     if (lifecycle?.featureCode && !item.group) {
       item.group = deriveGroup(item.title, lifecycle.featureCode);
     }
+    item.updatedAt = new Date().toISOString();
+    this.items.set(id, item);
+    this._save();
+    return item;
+  }
+
+  /** Merge a single lifecycle_ext.<key> = value slot without touching other extension keys.
+   *  Wave 6 callers (BRANCH, OPEN-LOOPS, DRIFT, STATUS) use this rather than reaching into
+   *  item.lifecycle.lifecycle_ext directly. */
+  updateLifecycleExt(id, key, value) {
+    const item = this.items.get(id);
+    if (!item) throw new Error(`Item not found: ${id}`);
+    if (!item.lifecycle) item.lifecycle = {};
+    if (!item.lifecycle.lifecycle_ext) item.lifecycle.lifecycle_ext = {};
+    item.lifecycle.lifecycle_ext[key] = value;
     item.updatedAt = new Date().toISOString();
     this.items.set(id, item);
     this._save();
