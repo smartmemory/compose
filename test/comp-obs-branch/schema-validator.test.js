@@ -121,4 +121,38 @@ describe('SchemaValidator', () => {
   it('throws on unknown definition name', () => {
     assert.throws(() => v.validate('NopeDoesNotExist', {}), /unknown/i);
   });
+
+  it('validates DriftAxis (producer side for later COMP-OBS-DRIFT)', () => {
+    const r = v.validate('DriftAxis', {
+      axis_id: 'path_drift',
+      numerator: 3, denominator: 10, ratio: 0.3,
+      computed_at: '2026-04-20T00:00:00Z',
+    });
+    assert.equal(r.valid, true, JSON.stringify(r.errors));
+  });
+
+  it('validates StatusSnapshot (for COMP-OBS-STATUS)', () => {
+    const r = v.validate('StatusSnapshot', {
+      sentence: 'Everything fine.',
+      computed_at: '2026-04-20T00:00:00Z',
+    });
+    assert.equal(r.valid, true, JSON.stringify(r.errors));
+  });
+
+  it('validates GateLogEntry (for COMP-OBS-GATELOG)', () => {
+    const r = v.validate('GateLogEntry', {
+      id: '00000000-0000-0000-0000-000000000005',
+      gate_id: 'gate-review',
+      decision: 'approve',
+      timestamp: '2026-04-20T00:00:00Z',
+    });
+    assert.equal(r.valid, true, JSON.stringify(r.errors));
+  });
+
+  it('caches validators across multiple calls (no re-compile)', () => {
+    const v2 = new SchemaValidator();
+    const a = v2._getValidator('BranchOutcome');
+    const b = v2._getValidator('BranchOutcome');
+    assert.strictEqual(a, b);
+  });
 });

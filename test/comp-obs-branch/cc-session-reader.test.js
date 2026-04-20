@@ -142,6 +142,114 @@ describe('readCCSession — truncated session', () => {
   });
 });
 
+describe('readCCSession — sidechain + non-tracked record robustness', () => {
+  async function writeJsonl(lines) {
+    const { mkdtempSync, writeFileSync } = await import('node:fs');
+    const os = await import('node:os');
+    const p = await import('node:path');
+    const tmp = mkdtempSync(p.join(os.tmpdir(), 'reader-edge-'));
+    const file = p.join(tmp, `${'fedcba98-7654-4321-8abc-def012345678'}.jsonl`);
+    writeFileSync(file, lines.map(r => JSON.stringify(r)).join('\n') + '\n');
+    return { tmp, file };
+  }
+
+  it('ignores isSidechain: true records for tree building and fork detection', async () => {
+    const { rmSync } = await import('node:fs');
+    const sessionId = 'fedcba98-7654-4321-8abc-def012345678';
+    const records = [
+      { uuid: 'r', parentUuid: null, type: 'system', isSidechain: false, timestamp: '2026-04-20T10:00:00Z' },
+      { uuid: 'u1', parentUuid: 'r', type: 'user', isSidechain: false, message: { role: 'user', content: '[x]' }, timestamp: '2026-04-20T10:00:01Z' },
+      // This sibling would create a FAKE fork if sidechain records were counted:
+      { uuid: 'u1-sc', parentUuid: 'r', type: 'user', isSidechain: true, message: { role: 'user', content: '[sc]' }, timestamp: '2026-04-20T10:00:02Z' },
+      { uuid: 'a1', parentUuid: 'u1', type: 'assistant', isSidechain: false, timestamp: '2026-04-20T10:00:03Z',
+        message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'done' }], usage: { input_tokens: 1, output_tokens: 1 } } },
+    ];
+    const { tmp, file } = await writeJsonl(records);
+    try {
+      const out = await readCCSession(file);
+      assert.equal(out.branches.length, 1, 'sidechain sibling must NOT create a fork');
+      assert.equal(out.fork_points.length, 0);
+      assert.equal(out.branches[0].state, 'complete');
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('skips non-tracked top-level record types without a uuid', async () => {
+    const { rmSync } = await import('node:fs');
+    const records = [
+      { uuid: 'r', parentUuid: null, type: 'system', isSidechain: false, timestamp: '2026-04-20T10:00:00Z' },
+      // Non-tracked record without uuid — T10 agent flagged these exist in real sessions
+      { type: 'file-history-snapshot', data: { path: 'x.md' } },
+      { type: 'queue-operation', op: 'enqueue' },
+      { uuid: 'u1', parentUuid: 'r', type: 'user', isSidechain: false, message: { role: 'user', content: '[x]' }, timestamp: '2026-04-20T10:00:01Z' },
+      { uuid: 'a1', parentUuid: 'u1', type: 'assistant', isSidechain: false, timestamp: '2026-04-20T10:00:02Z',
+        message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'ok' }], usage: { input_tokens: 1, output_tokens: 1 } } },
+    ];
+    const { tmp, file } = await writeJsonl(records);
+    try {
+      const out = await readCCSession(file);
+      assert.equal(out.truncated, false, 'non-tracked records must not flip truncated');
+      assert.equal(out.branches.length, 1);
+      assert.equal(out.branches[0].state, 'complete');
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('empty JSONL file yields zero branches and zero fork points without throwing', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const os = await import('node:os');
+    const p = await import('node:path');
+    const tmp = mkdtempSync(p.join(os.tmpdir(), 'reader-empty-'));
+    const file = p.join(tmp, 'empty-1234.jsonl');
+    writeFileSync(file, '');
+    try {
+      const out = await readCCSession(file);
+      assert.equal(out.branches.length, 0);
+      assert.equal(out.fork_points.length, 0);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('readCCSession — cost.usd env-var opt-in', () => {
+  const origIn = process.env.CC_USD_PER_1K_INPUT;
+  const origOut = process.env.CC_USD_PER_1K_OUTPUT;
+
+  before(() => {
+    process.env.CC_USD_PER_1K_INPUT = '0.003';
+    process.env.CC_USD_PER_1K_OUTPUT = '0.015';
+  });
+  // Restore after the describe block
+  // (node:test's `after` hook is inside the suite)
+  it('applies per-1K rates when CC_USD_PER_1K_INPUT/OUTPUT are set', async () => {
+    const out = await readCCSession(fx('linear-session.jsonl'));
+    const cost = out.branches[0].cost;
+    assert.ok(cost.usd > 0, 'cost.usd should be populated when env vars are set');
+    const expected = (cost.tokens_in / 1000) * 0.003 + (cost.tokens_out / 1000) * 0.015;
+    assert.ok(Math.abs(cost.usd - expected) < 1e-9,
+      `expected ${expected}, got ${cost.usd}`);
+  });
+
+  it('cost.usd is 0 when env vars are unset', async () => {
+    delete process.env.CC_USD_PER_1K_INPUT;
+    delete process.env.CC_USD_PER_1K_OUTPUT;
+    const out = await readCCSession(fx('linear-session.jsonl'));
+    assert.equal(out.branches[0].cost.usd, 0);
+  });
+
+  // Restore originals
+  it('(cleanup) restores env', () => {
+    if (origIn !== undefined) process.env.CC_USD_PER_1K_INPUT = origIn;
+    else delete process.env.CC_USD_PER_1K_INPUT;
+    if (origOut !== undefined) process.env.CC_USD_PER_1K_OUTPUT = origOut;
+    else delete process.env.CC_USD_PER_1K_OUTPUT;
+    assert.ok(true);
+  });
+});
+
 describe('readCCSession — mid-line corruption', () => {
   it('corrupt non-trailing line flips truncated=true and downgrades running → unknown', async () => {
     const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');

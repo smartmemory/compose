@@ -99,6 +99,28 @@ describe('CCSessionFeatureResolver', () => {
     assert.equal(r.stats.unbound_count, 1);
   });
 
+  it('first matching sessions.json record wins (duplicate cc_session_id scenario)', () => {
+    writeSessions([
+      { featureCode: 'FEAT-FIRST', transcriptPath: '/cc/dup.jsonl' },
+      { featureCode: 'FEAT-SECOND', transcriptPath: '/cc/dup.jsonl' },
+    ]);
+    const r = new CCSessionFeatureResolver({ sessionsFile, featureRoot });
+    assert.equal(r.resolve('dup'), 'FEAT-FIRST');
+  });
+
+  it('handles malformed sessions.json gracefully (empty index, all unbound)', () => {
+    fs.writeFileSync(sessionsFile, '{not valid JSON');
+    const r = new CCSessionFeatureResolver({ sessionsFile, featureRoot });
+    assert.equal(r.resolve('anything'), null);
+  });
+
+  it('tolerates missing featureRoot directory', () => {
+    writeSessions([]);
+    fs.rmSync(featureRoot, { recursive: true, force: true });
+    const r = new CCSessionFeatureResolver({ sessionsFile, featureRoot });
+    assert.equal(r.resolve('anything'), null);
+  });
+
   it('returns null on empty/undefined input', () => {
     writeSessions([]);
     const r = new CCSessionFeatureResolver({ sessionsFile, featureRoot });
