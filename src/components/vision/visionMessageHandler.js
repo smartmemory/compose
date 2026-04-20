@@ -357,6 +357,24 @@ export function handleVisionMessage(msg, refs, setters) {
       meta: { itemId: msg.itemId, from: msg.from, to: msg.to, outcome: msg.outcome },
     });
 
+  } else if (msg.type === 'branchLineageUpdate') {
+    // COMP-OBS-BRANCH: targeted patch so the compare panel re-renders without
+    // waiting for the next full visionState broadcast. Payload is
+    // `{type, itemId, feature_code, branches, in_progress_siblings,
+    //  emitted_event_ids, last_scan_at}` (a BranchLineage plus itemId).
+    if (setItems && msg.itemId) {
+      const { type, itemId, ...lineage } = msg;
+      setItems(prev => prev.map(it => {
+        if (it.id !== itemId) return it;
+        const lifecycle = it.lifecycle ? { ...it.lifecycle } : {};
+        lifecycle.lifecycle_ext = {
+          ...(lifecycle.lifecycle_ext || {}),
+          branch_lineage: lineage,
+        };
+        return { ...it, lifecycle };
+      }));
+    }
+
   } else if (msg.type === 'settingsState' || msg.type === 'settingsUpdated') {
     if (setSettings) setSettings(msg.settings || null);
 

@@ -160,6 +160,63 @@ describe('handleVisionMessage — gateResolved itemId fallback', () => {
     assert.equal(calls.setGateEvent[0].itemId, 'g1'); // gateId fallback, never null
   });
 
+  it('branchLineageUpdate: patches the matching item\'s lifecycle.lifecycle_ext.branch_lineage', () => {
+    const items = [
+      { id: 'item-1', title: 'x', lifecycle: { featureCode: 'COMP-OBS-BRANCH' } },
+      { id: 'item-2', title: 'y', lifecycle: { featureCode: 'OTHER' } },
+    ];
+    let current = items;
+    const setters2 = { ...setters, setItems: (fn) => { current = typeof fn === 'function' ? fn(current) : fn; } };
+
+    handleVisionMessage(
+      {
+        type: 'branchLineageUpdate',
+        itemId: 'item-1',
+        feature_code: 'COMP-OBS-BRANCH',
+        branches: [],
+        in_progress_siblings: [],
+        emitted_event_ids: [],
+        last_scan_at: '2026-04-20T12:00:00Z',
+      },
+      refs, setters2,
+    );
+
+    assert.equal(current[0].lifecycle.lifecycle_ext.branch_lineage.feature_code, 'COMP-OBS-BRANCH');
+    assert.equal(current[1].lifecycle.lifecycle_ext, undefined, 'unaffected items untouched');
+  });
+
+  it('branchLineageUpdate: preserves other lifecycle_ext keys on patched item', () => {
+    const items = [
+      {
+        id: 'item-1',
+        title: 'x',
+        lifecycle: {
+          featureCode: 'COMP-OBS-BRANCH',
+          lifecycle_ext: { open_loops: [{ id: 'loop-1' }] },
+        },
+      },
+    ];
+    let current = items;
+    const setters2 = { ...setters, setItems: (fn) => { current = typeof fn === 'function' ? fn(current) : fn; } };
+
+    handleVisionMessage(
+      {
+        type: 'branchLineageUpdate',
+        itemId: 'item-1',
+        feature_code: 'COMP-OBS-BRANCH',
+        branches: [],
+        in_progress_siblings: [],
+        emitted_event_ids: [],
+        last_scan_at: '2026-04-20T12:00:00Z',
+      },
+      refs, setters2,
+    );
+
+    const ext = current[0].lifecycle.lifecycle_ext;
+    assert.deepEqual(ext.open_loops, [{ id: 'loop-1' }], 'existing ext key must be preserved');
+    assert.ok(ext.branch_lineage);
+  });
+
   it('uses msg.itemId when available', () => {
     refs.gatesRef.current = [];
     handleVisionMessage(
