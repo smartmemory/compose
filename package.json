@@ -18,6 +18,7 @@
     "test": "node --test test/*.test.js test/comp-obs-branch/*.test.js && npm run test:ui",
     "test:ui": "vitest run",
     "test:integration": "node --test test/integration/*.test.js",
+    "test:wave-6": "node --test test/wave-6-integration.test.js test/wave-6-contract-compliance.test.js",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

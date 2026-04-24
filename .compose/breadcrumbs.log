@@ -243,3 +243,6 @@
 2026-04-18T12:22:44+08:00 | STRAT-DEDUP-AGENTRUN v1: remove mcp__compose__agent_run tool, delegate to stratum
 2026-04-20T08:04:11+08:00 | COMP-OBS-BRANCH: executing plan.md (T0-T11) — CC JSONL reader + BranchLineage lifecycle_ext + per-feature compare panel
 2026-04-20T08:48:45+08:00 | COMP-OBS-BRANCH: full suite 1515/1515 green; Vite dev server smoke via curl — modules serve HTTP 200; CHANGELOG + journal entry written; awaiting Codex review
+2026-04-24T17:55:13+08:00 | COMP-OBS-CONTRACT: audit + fix SURFACE-split drift in schema/layout/integration-test; add design.md index
+2026-04-24T18:15:04+08:00 | COMP-OBS-CONTRACT: implement wave-6-contract-compliance.test.js + npm test:wave-6 script
+2026-04-24T18:59:44+08:00 | COMP-OBS-CONTRACT: ship — CHANGELOG+ROADMAP+feature.json updated, all docs in Phase 9 complete

@@ -1,8 +1,32 @@
 # Changelog
 
-## 2026-04-20
+## 2026-04-24
 
-### COMP-OBS-BRANCH — Session branching reader + compare panel
+### COMP-OBS-CONTRACT — Wave 6 shared contract, locked
+
+**Why:** Gates the rest of Wave 6 (Situational Awareness). Six sibling features (COMP-OBS-STATUS, TIMELINE, STEPDETAIL, LOOPS, GATELOG, DRIFT) now build against a single frozen schema + layout + integration-smoke spec, so cross-feature drift (the failure class that motivated `feedback_integration_review`) can't land silently.
+
+**Schema (`docs/features/COMP-OBS-CONTRACT/schema.json` → v0.2.3):**
+- Propagates the 2026-04-23 SURFACE → TIMELINE+STEPDETAIL split through `_consumers`. Emitter ownership restated: BRANCH→kind=branch, GATELOG→kind=gate, TIMELINE→kind=phase_transition + kind=iteration, DRIFT→kind=drift_threshold.
+- `StatusSnapshot.drift_alerts[]` now a closed subschema that mandates `breached: true` (STATUS can no longer emit non-alert axes through the alerts field).
+- Gate `DecisionEvent.metadata.gate_log_entry_id` promoted to required. Canonical join is the forward edge; `GateLogEntry.decision_event_id` remains nullable only as an emission-failure escape hatch, with reconciliation rule documented (gate_id + timestamp ±5s).
+
+**Spec artifacts:**
+- `design.md` *(new)* — unifying index, read order, versioning discipline, in-/out-of-scope for v1.
+- `layout.md` — region ⑤ rewritten to describe the shipped `BranchComparePanelMount` at `ItemDetailPanel.jsx:419-422`; region ⑥ (DRIFT ribbon) re-anchored above BRANCH mount (the former "above chat input" anchor didn't exist in code); mobile-stacking and 50-branch-pagination claims relaxed to match shipped BranchComparePanel (no responsive breakpoint, no branch-picker UI in v1).
+- `integration-test.md` — two-file ownership documented (BRANCH-slice integration + new contract-compliance); golden flow extended with `kind=drift_threshold` so Timeline exercises all five DecisionEvent kinds.
+- `blueprint.md` *(new)* — file:line-verified plan with corrections table (wave-6-integration.test.js already existed; Playwright deferred; real-CC-in-tests a non-goal).
+- `plan.md` *(new)* — ordered T1–T10 acceptance-gate plan.
+
+**Code:**
+- `compose/test/wave-6-contract-compliance.test.js` *(new)* — 30 tests, 5 intentional `test.skip()` placeholders (one per unshipped sibling, named after its feature code so `grep COMP-OBS-<CODE>` finds the un-skip line on landing). Covers: schema-load, dataset gate, per-fixture BranchOutcome round-trip (6 fixtures including `failed-branch` and `truncated` so state=failed is exercised), BranchLineage positive + unbound-branches negative, state=unknown shape, DecisionEvent all five kinds + gate-without-`gate_log_entry_id` negative + per-kind metadata `additionalProperties` closure negative, OpenLoop positive/resolved/non-UUID, 4 error-harness rows, 50-branch lineage + `pickInitialPair`.
+- `compose/package.json` — new `test:wave-6` script runs both Wave 6 files as one suite.
+
+**Tests:** 25 new tests (30 defined, 5 skipped). Full suite: 1558 pass, 0 fail, 5 intentional skips.
+
+**Reviewed:** 3 Codex review rounds against the spec artifacts (6 findings → 3 follow-ups → REVIEW CLEAN), 2 Codex review rounds against the implementation (2 findings → 1 follow-up → implicit clean after state=unknown coverage added).
+
+
 
 **Why:** First shipping feature of Wave 6 (Situational Awareness). Forge reads Claude Code's existing parent-pointer branch tree at `~/.claude/projects/**/*.jsonl` — no new fork mechanism, no new storage. Ships first because it's the structural validator that the CC JSONL assumption holds; failures here invalidate the branch-outcome shape the rest of the Wave 6 batch depends on.
 
