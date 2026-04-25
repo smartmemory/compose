@@ -2,6 +2,10 @@
 
 ## 2026-04-25
 
+### Wave 6 close — integration review signed off
+
+All seven Situational Awareness features shipped against the v0.2.4 contract. Sign-off note authored at `docs/features/COMP-OBS-CONTRACT/integration-review.md`. Wave-6 batch test suite (`npm run test:wave-6`) is 59-pass, 0-fail, 0-skip; full compose suite is **1897 pass, 0 fail, 0 skips**. Stale `COMP-OBS-BRANCH/feature.json` corrected (status was still `PLANNED` from before the 2026-04-20 ship; now `COMPLETE` with `completed: 2026-04-20` and `ship_commit: 644587d`). ROADMAP.md `## Wave 6` heading marked `COMPLETE (2026-04-25)`.
+
 ### COMP-OBS-STEPDETAIL — Step Detail surface + budget pill (Wave 6 complete)
 
 Final Wave 6 feature. UI-extension only — no schema bump. Three new sections in `ContextStepDetail` (retries summary, postcondition violations, live iteration counters), a compact budget pill on the ops strip, and a read-only `GET /api/lifecycle/budget` endpoint backed by the existing budget ledger.

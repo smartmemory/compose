@@ -265,3 +265,5 @@
 2026-04-25T16:58:30+08:00 | STEPDETAIL: dispatch — final Wave 6 feature; UI-extension only, no schema change
 2026-04-25T16:59:57+08:00 | COMP-OBS-STEPDETAIL: adding readBudget to budget-ledger.js + GET /api/lifecycle/budget route
 2026-04-25T17:12:47+08:00 | STEPDETAIL: ship — Wave 6 COMPLETE; 1897 pass 0 fail 0 skip
+2026-04-25T20:31:15+08:00 | Wave 6 integration close: 59 wave-6 tests pass, 0 fail, 0 skip; contract-compliance suite has 0 placeholders remaining
+2026-04-25T20:31:33+08:00 | Wave 6 integration close: 59 wave-6 tests pass, 0 fail, 0 skip
