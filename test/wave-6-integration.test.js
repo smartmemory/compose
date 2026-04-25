@@ -25,6 +25,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const { VisionStore } = await import(`${REPO_ROOT}/server/vision-store.js`);
 const { attachVisionRoutes } = await import(`${REPO_ROOT}/server/vision-routes.js`);
 const { CCSessionWatcher } = await import(`${REPO_ROOT}/server/cc-session-watcher.js`);
+const { recordIteration } = await import(`${REPO_ROOT}/lib/budget-ledger.js`);
 
 const FIXTURE_DIR = path.resolve(REPO_ROOT, 'test/fixtures/cc-sessions');
 
@@ -1023,5 +1024,174 @@ describe('Wave 6 integration — COMP-OBS-DRIFT', () => {
       ?.find(a => a.breached)?.breach_event_id;
     assert.equal(secondBreachEventId, firstBreachEventId,
       'breach_event_id must be preserved across steady breach');
+  });
+});
+
+// ── COMP-OBS-STEPDETAIL integration ──────────────────────────────────────────
+// Tests the GET /api/lifecycle/budget endpoint end-to-end:
+//   - Returns zeroed feature_total for a feature with no ledger entry
+//   - Returns updated usage after iterations are recorded via POST iteration/report
+//   - 400 on missing featureCode
+//   - per_loop_type reflects settings maxTotal
+
+const { attachVisionRoutes: attachRoutesForBudget } = await import(`${REPO_ROOT}/server/vision-routes.js`);
+const { VisionStore: VisionStoreForBudget } = await import(`${REPO_ROOT}/server/vision-store.js`);
+const { SettingsStore: SettingsStoreForBudget } = await import(`${REPO_ROOT}/server/settings-store.js`);
+
+function setupBudget(settingsContract) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wave6-budget-'));
+  const dataDir = path.join(tmp, '.compose', 'data');
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.mkdirSync(path.join(tmp, 'docs', 'features', 'STEP-1'), { recursive: true });
+
+  const store = new VisionStoreForBudget(dataDir);
+
+  const contract = settingsContract ?? {
+    phases: [{ id: 'execute', defaultPolicy: null }],
+    iterationDefaults: {
+      review:   { maxIterations: 5, timeout: 15, maxTotal: 20 },
+      coverage: { maxIterations: 10, timeout: 30, maxTotal: 50 },
+    },
+    policyModes: ['gate', 'flag', 'skip'],
+  };
+  const settingsStore = new SettingsStoreForBudget(dataDir, contract);
+
+  const broadcasts = [];
+  const app = express();
+  app.use(express.json());
+  attachRoutesForBudget(app, {
+    store,
+    scheduleBroadcast: () => {},
+    broadcastMessage: (msg) => broadcasts.push(msg),
+    projectRoot: tmp,
+    settingsStore,
+  });
+
+  return new Promise((resolve) => {
+    const server = app.listen(0, () => {
+      const port = server.address().port;
+      const composeDir = path.join(tmp, '.compose');
+      resolve({ tmp, store, server, port, broadcasts, composeDir });
+    });
+  });
+}
+
+function teardownBudget(ctx) {
+  ctx.server.close();
+  try { fs.rmSync(ctx.tmp, { recursive: true, force: true }); } catch {}
+}
+
+function bdGet(port, urlPath) {
+  return new Promise((resolve, reject) => {
+    http.get({ hostname: '127.0.0.1', port, path: urlPath }, (res) => {
+      let buf = '';
+      res.on('data', c => buf += c);
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(buf) }); }
+        catch { resolve({ status: res.statusCode, body: buf }); }
+      });
+    }).on('error', reject);
+  });
+}
+
+function bdPost(port, urlPath, body) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const req = http.request(
+      { hostname: '127.0.0.1', port, path: urlPath, method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } },
+      (res) => {
+        let buf = '';
+        res.on('data', c => buf += c);
+        res.on('end', () => {
+          try { resolve({ status: res.statusCode, body: JSON.parse(buf) }); }
+          catch { resolve({ status: res.statusCode, body: buf }); }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.end(data);
+  });
+}
+
+describe('Wave 6 integration — COMP-OBS-STEPDETAIL budget endpoint', () => {
+  let ctx;
+  beforeEach(async () => { ctx = await setupBudget(); });
+  afterEach(() => teardownBudget(ctx));
+
+  test('GET /api/lifecycle/budget returns 400 when featureCode is missing', async () => {
+    const res = await bdGet(ctx.port, '/api/lifecycle/budget');
+    assert.equal(res.status, 400, `expected 400, got ${res.status}`);
+    assert.ok(res.body.error, 'should include error field');
+  });
+
+  test('returns zeroed feature_total for unknown feature (no ledger entry)', async () => {
+    const res = await bdGet(ctx.port, '/api/lifecycle/budget?featureCode=STEP-UNKNOWN');
+    assert.equal(res.status, 200);
+    const { featureCode, feature_total, per_loop_type, computed_at } = res.body;
+    assert.equal(featureCode, 'STEP-UNKNOWN');
+    assert.equal(feature_total.usedIterations, 0);
+    assert.equal(feature_total.usedActions, 0);
+    assert.equal(feature_total.totalTimeMs, 0);
+    assert.ok(Date.parse(computed_at), 'computed_at should be a valid ISO timestamp');
+    assert.ok(per_loop_type.review, 'review loopType missing');
+    assert.ok(per_loop_type.coverage, 'coverage loopType missing');
+  });
+
+  test('returns updated budget after iterations recorded via direct ledger write', async () => {
+    // Pre-seed ledger directly (simulating completed iteration loops)
+    recordIteration(ctx.composeDir, 'STEP-1', { iterations: 3, actions: 15, timeMs: 6000 });
+    recordIteration(ctx.composeDir, 'STEP-1', { iterations: 2, actions: 8, timeMs: 3000 });
+
+    const res = await bdGet(ctx.port, '/api/lifecycle/budget?featureCode=STEP-1');
+    assert.equal(res.status, 200);
+    const { feature_total } = res.body;
+    assert.equal(feature_total.usedIterations, 5, `expected 5, got ${feature_total.usedIterations}`);
+    assert.equal(feature_total.usedActions, 23, `expected 23, got ${feature_total.usedActions}`);
+    assert.equal(feature_total.totalTimeMs, 9000);
+  });
+
+  test('per_loop_type carries maxTotal from settings and computes remaining', async () => {
+    recordIteration(ctx.composeDir, 'STEP-1', { iterations: 4, actions: 0, timeMs: 0 });
+
+    const res = await bdGet(ctx.port, '/api/lifecycle/budget?featureCode=STEP-1');
+    assert.equal(res.status, 200);
+    const { per_loop_type } = res.body;
+
+    assert.equal(per_loop_type.review.maxTotal, 20, 'review.maxTotal should be 20 from settings');
+    assert.equal(per_loop_type.review.usedIterations, 4);
+    assert.equal(per_loop_type.review.remaining, 16, `expected 16 remaining, got ${per_loop_type.review.remaining}`);
+
+    assert.equal(per_loop_type.coverage.maxTotal, 50, 'coverage.maxTotal should be 50 from settings');
+    assert.equal(per_loop_type.coverage.remaining, 46);
+  });
+
+  test('budget reflects real iteration completions via route round-trip', async () => {
+    // Create item + lifecycle → start + complete one iteration → check budget
+    const item = ctx.store.createItem({ type: 'feature', title: 'Budget round-trip' });
+    ctx.store.updateLifecycle(item.id, {
+      featureCode: 'STEP-1',
+      currentPhase: 'execute',
+      startedAt: new Date().toISOString(),
+    });
+
+    // Start iteration
+    const startRes = await bdPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/iteration/start`, {
+      loopType: 'review', maxIterations: 5,
+    });
+    assert.equal(startRes.status, 200, `iteration start failed: ${JSON.stringify(startRes.body)}`);
+
+    // Complete iteration (clean = true → loop finishes)
+    const reportRes = await bdPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/iteration/report`, {
+      result: { clean: true },
+    });
+    assert.equal(reportRes.status, 200, `report failed: ${JSON.stringify(reportRes.body)}`);
+
+    // Budget endpoint should now reflect 1 used iteration
+    const budgetRes = await bdGet(ctx.port, '/api/lifecycle/budget?featureCode=STEP-1');
+    assert.equal(budgetRes.status, 200);
+    const { feature_total } = budgetRes.body;
+    assert.ok(feature_total.usedIterations >= 1,
+      `expected usedIterations >= 1 after completion, got ${feature_total.usedIterations}`);
   });
 });

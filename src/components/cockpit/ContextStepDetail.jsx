@@ -1,19 +1,34 @@
 /**
  * ContextStepDetail — shows build step detail inside the cockpit ContextPanel.
  *
- * Fetches from /api/build/state and displays info for the given step ID.
- * Also shows all steps with per-step token/cost breakdown when showing
- * the full build summary (COMP-OBS-COST).
+ * Data source: subscribes to useVisionStore for activeBuild + iterationStates
+ * (replaces the prior one-shot self-fetch on stepId change).
+ * The existing 5s build-state poller in useVisionStore drives updates.
  *
- * COMP-OBS-GATES: also renders a tier pipeline visualization when tier data
+ * Also shows all steps with per-step token/cost breakdown (COMP-OBS-COST).
+ *
+ * COMP-OBS-GATES: renders a tier pipeline visualization when tier data
  * is available from build-stream events.
+ *
+ * COMP-OBS-STEPDETAIL: adds three new sections:
+ *   - Retries summary (step.retries)
+ *   - Postcondition violations (step.violations — lifted + labeled)
+ *   - Live counters (iterationStates × budget snapshot)
  *
  * Props:
  *   stepId      {string}   the build step ID to display
  *   tierEvents  {Array}    optional array of gate_tier_result/gate_tier_summary events
- *                          from the parent build stream consumer
+ *   healthEvents {Array}   optional array of health_score events
  */
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useVisionStore } from '../vision/useVisionStore.js';
+import { useShallow } from 'zustand/react/shallow';
+import {
+  selectRetriesSummary,
+  selectViolations,
+  findLoopForStep,
+  selectLiveCounters,
+} from './stepDetailLogic.js';
 
 /**
  * Format USD cost for display.
@@ -39,12 +54,9 @@ const ALL_TIERS = [
 
 /**
  * TierPipeline — renders a horizontal dot-chain showing tier pass/fail/skipped status.
- * Green dot = passed, red dot = failed, gray dot = skipped/not run.
- * Clicking a dot expands inline details for that tier.
  */
 function TierPipeline({ tierMap, tierSummary }) {
   const [expanded, setExpanded] = useState(null);
-
   const toggle = (tierId) => setExpanded(prev => prev === tierId ? null : tierId);
 
   return (
@@ -94,7 +106,6 @@ function TierPipeline({ tierMap, tierSummary }) {
           </span>
         )}
       </div>
-      {/* Expanded tier detail */}
       {expanded && (
         <div className="mt-1.5 px-2 py-1 rounded bg-muted/20 text-[9px] text-muted-foreground">
           {(() => {
@@ -116,23 +127,16 @@ function TierPipeline({ tierMap, tierSummary }) {
 // COMP-HEALTH: Health score color helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Return a Tailwind color class for a health score.
- * Green >= 80, Yellow 60-79, Red < 60.
- */
 function healthScoreColor(score) {
   if (score >= 80) return 'text-success';
   if (score >= 60) return 'text-amber-400';
   return 'text-destructive';
 }
 
-/**
- * Trend direction indicator arrow.
- */
 function trendArrow(direction) {
-  if (direction === 'improving') return '\u2191'; // up arrow
-  if (direction === 'declining') return '\u2193'; // down arrow
-  return '\u2192'; // right arrow (stable)
+  if (direction === 'improving') return '↑';
+  if (direction === 'declining') return '↓';
+  return '→';
 }
 
 const DIMENSION_LABELS = {
@@ -144,22 +148,114 @@ const DIMENSION_LABELS = {
   plan_completion:     'Plan',
 };
 
+// ---------------------------------------------------------------------------
+// COMP-OBS-STEPDETAIL: LiveCounters section
+// ---------------------------------------------------------------------------
+
+/**
+ * Format elapsed ms compactly: "1:23" (m:ss) or "45s" for under a minute.
+ */
+function formatElapsedMs(ms) {
+  if (ms == null) return '—';
+  const totalSec = Math.floor(ms / 1000);
+  if (totalSec < 60) return `${totalSec}s`;
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/**
+ * LiveCounters — renders "attempt N/M · elapsed / timeout · cumulative used/max"
+ * per-second tick mounted while the loop is running.
+ */
+function LiveCounters({ loopState, budget }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!loopState || loopState.status !== 'running') return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [loopState]);
+
+  const counters = selectLiveCounters(loopState, budget, now);
+  if (!counters) return null;
+
+  return (
+    <div>
+      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
+        Live Counters
+      </p>
+      <div className="space-y-0.5 text-[10px]">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-foreground font-mono font-medium">
+            attempt {counters.count}/{counters.maxIterations ?? '?'}
+          </span>
+          <span className="text-muted-foreground">·</span>
+          <span className="text-foreground font-mono">
+            {formatElapsedMs(counters.elapsedMs)}
+            {counters.timeoutMs != null && (
+              <span className="text-muted-foreground"> / {formatElapsedMs(counters.timeoutMs)}</span>
+            )}
+          </span>
+          {counters.usedIterations != null && counters.maxTotal != null && (
+            <>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-foreground font-mono">
+                cumulative {counters.usedIterations}/{counters.maxTotal}
+              </span>
+            </>
+          )}
+        </div>
+        <div className="text-muted-foreground/70 text-[9px]">
+          loop: {counters.loopType}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main export
+// ---------------------------------------------------------------------------
+
 export default function ContextStepDetail({ stepId, tierEvents = [], healthEvents = [] }) {
-  const [step, setStep] = useState(null);
-  const [allSteps, setAllSteps] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // COMP-OBS-STEPDETAIL: subscribe to store for activeBuild + iterationStates
+  // (replaces prior self-fetch — the 5s poller in useVisionStore drives updates)
+  const { activeBuild, iterationStates } = useVisionStore(
+    useShallow(s => ({ activeBuild: s.activeBuild, iterationStates: s.iterationStates }))
+  );
+
   const [costSortAsc, setCostSortAsc] = useState(false);
+
+  // COMP-OBS-STEPDETAIL: budget state — fetched once on featureCode change
+  const [budget, setBudget] = useState(null);
+  const featureCode = activeBuild?.featureCode ?? null;
+  const prevFeatureCodeRef = useRef(null);
+
+  useEffect(() => {
+    if (!featureCode) { setBudget(null); return; }
+    if (featureCode === prevFeatureCodeRef.current) return;
+    prevFeatureCodeRef.current = featureCode;
+
+    fetch(`/api/lifecycle/budget?featureCode=${encodeURIComponent(featureCode)}`)
+      .then(r => r.json())
+      .then(data => setBudget(data))
+      .catch(() => {}); // budget is best-effort
+  }, [featureCode]);
+
+  // Derive step from activeBuild
+  const { step, allSteps } = useMemo(() => {
+    if (!activeBuild?.steps) return { step: null, allSteps: [] };
+    const found = activeBuild.steps.find(s => s.id === stepId || s.step_id === stepId);
+    return { step: found || null, allSteps: activeBuild.steps };
+  }, [activeBuild, stepId]);
 
   // COMP-HEALTH: derive latest health score from stream events
   const healthScore = useMemo(() => {
     if (!healthEvents || healthEvents.length === 0) return null;
-    // Last health_score event wins
     for (let i = healthEvents.length - 1; i >= 0; i--) {
       const ev = healthEvents[i];
-      if (ev.subtype === 'health_score' && typeof ev.score === 'number') {
-        return ev;
-      }
+      if (ev.subtype === 'health_score' && typeof ev.score === 'number') return ev;
     }
     return null;
   }, [healthEvents]);
@@ -170,46 +266,13 @@ export default function ContextStepDetail({ stepId, tierEvents = [], healthEvent
     const map = {};
     let summary = null;
     for (const ev of tierEvents) {
-      if (ev.subtype === 'gate_tier_result') {
-        map[ev.tierId] = ev.passed;
-      } else if (ev.subtype === 'gate_tier_summary') {
-        summary = ev;
-      }
+      if (ev.subtype === 'gate_tier_result') map[ev.tierId] = ev.passed;
+      else if (ev.subtype === 'gate_tier_summary') summary = ev;
     }
     return { tierMap: map, tierSummary: summary };
   }, [tierEvents]);
 
   const hasTierData = Object.keys(tierMap).length > 0 || tierSummary !== null;
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-
-    fetch('/api/build/state', { signal: controller.signal })
-      .then(r => r.json())
-      .then(data => {
-        if (controller.signal.aborted) return;
-        const build = data.state;
-        if (!build || !build.steps) {
-          setStep(null);
-          setAllSteps([]);
-          setLoading(false);
-          return;
-        }
-        const found = build.steps.find(s => s.id === stepId || s.step_id === stepId);
-        setStep(found || null);
-        setAllSteps(build.steps || []);
-        setLoading(false);
-      })
-      .catch(err => {
-        if (controller.signal.aborted) return;
-        setError(err.message);
-        setLoading(false);
-      });
-
-    return () => controller.abort();
-  }, [stepId]);
 
   // COMP-OBS-COST: compute sorted step cost table
   const stepsWithCost = useMemo(() => {
@@ -222,21 +285,12 @@ export default function ContextStepDetail({ stepId, tierEvents = [], healthEvent
 
   const mostExpensiveStepId = stepsWithCost.length > 0 ? stepsWithCost[0].id : null;
 
-  if (loading) {
-    return (
-      <div className="p-3 text-[11px] text-muted-foreground italic">
-        Loading step...
-      </div>
-    );
-  }
+  // COMP-OBS-STEPDETAIL: derive new section data
+  const retriesSummary = useMemo(() => selectRetriesSummary(step), [step]);
+  const violations = useMemo(() => selectViolations(step), [step]);
+  const loopState = useMemo(() => findLoopForStep(iterationStates, stepId), [iterationStates, stepId]);
 
-  if (error) {
-    return (
-      <div className="p-3 text-[11px] text-destructive">
-        Error: {error}
-      </div>
-    );
-  }
+  // ── Render ────────────────────────────────────────────────────────────────
 
   if (!step) {
     return (
@@ -274,11 +328,24 @@ export default function ContextStepDetail({ stepId, tierEvents = [], healthEvent
         </span>
       </div>
 
-      {/* Retries */}
-      {(step.retries != null && step.retries > 0) && (
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground">Retries:</span>
-          <span className="text-xs text-amber-400">{step.retries}</span>
+      {/* COMP-OBS-STEPDETAIL: Retries section — hidden when zero/absent */}
+      {retriesSummary && (
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-wider text-amber-400/80 mb-1">
+            Retries
+          </p>
+          <p className="text-xs text-amber-400">
+            Retried {retriesSummary.count} {retriesSummary.count === 1 ? 'time' : 'times'}
+          </p>
+          {retriesSummary.isArray && retriesSummary.items.length > 0 && (
+            <div className="mt-1 space-y-0.5">
+              {retriesSummary.items.map((attempt, i) => (
+                <div key={i} className="text-[10px] text-muted-foreground pl-2">
+                  #{i + 1}{attempt.reason ? `: ${attempt.reason}` : ''}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -354,21 +421,28 @@ export default function ContextStepDetail({ stepId, tierEvents = [], healthEvent
         </div>
       )}
 
-      {/* Violations */}
-      {step.violations && step.violations.length > 0 && (
+      {/* COMP-OBS-STEPDETAIL: Postcondition violations — lifted into labeled section */}
+      {violations.length > 0 && (
         <div>
           <p className="text-[10px] font-medium uppercase tracking-wider text-destructive mb-1">
-            Violations
+            Postcondition Violations
           </p>
           <div className="space-y-0.5">
-            {step.violations.map((v, i) => (
+            {violations.map((v, i) => (
               <div key={i} className="flex items-start gap-2 px-2 py-1 rounded bg-destructive/10">
                 <div className="w-1.5 h-1.5 rounded-full shrink-0 mt-1" style={{ background: 'hsl(var(--destructive))' }} />
-                <span className="text-[10px] text-destructive leading-relaxed">{typeof v === 'string' ? v : v.message || JSON.stringify(v)}</span>
+                <span className="text-[10px] text-destructive leading-relaxed">
+                  {typeof v === 'string' ? v : v.message || JSON.stringify(v)}
+                </span>
               </div>
             ))}
           </div>
         </div>
+      )}
+
+      {/* COMP-OBS-STEPDETAIL: Live counters — gated on running iteration for this step */}
+      {loopState?.status === 'running' && (
+        <LiveCounters loopState={loopState} budget={budget} />
       )}
 
       {/* COMP-HEALTH: Build health score panel */}

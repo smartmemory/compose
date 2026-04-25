@@ -2,6 +2,26 @@
 
 ## 2026-04-25
 
+### COMP-OBS-STEPDETAIL — Step Detail surface + budget pill (Wave 6 complete)
+
+Final Wave 6 feature. UI-extension only — no schema bump. Three new sections in `ContextStepDetail` (retries summary, postcondition violations, live iteration counters), a compact budget pill on the ops strip, and a read-only `GET /api/lifecycle/budget` endpoint backed by the existing budget ledger.
+
+**Server:**
+- `lib/budget-ledger.js` extended with `readBudget(composeDir, featureCode, settings)` returning `{feature_total, per_loop_type: {review, coverage}, computed_at}`. The ledger does not currently break out per-loopType usage; v1 reports `feature_total.usedIterations` against each loopType's `maxTotal` (documented limitation; ledger refinement is a follow-up).
+- `server/vision-routes.js` adds `GET /api/lifecycle/budget?featureCode=<FC>` with 400 on missing featureCode.
+
+**Client:**
+- `src/components/cockpit/stepDetailLogic.js` *(new)* — pure helpers `selectRetriesSummary`, `selectViolations`, `findLoopForStep`, `selectLiveCounters`, `formatBudgetCompact`.
+- `src/components/cockpit/ContextStepDetail.jsx` rewritten: replaced the self-fetch path (was at :184-212, fired once per `stepId` change) with `useVisionStore` subscription on `activeBuild` + `iterationStates`, so the existing 5s store poller drives updates instead of a one-shot. Promoted the existing `step.retries` and `step.violations` render blocks into clearly-labeled "Retries" and "Postcondition violations" sections (earlier draft inverted the field name — the shipped data is `violations`, not `postconditions`). Added a "Live counters" section gated on `findLoopForStep` returning a running loop, with per-second tick. Net line count dropped from 478 → 350 because the deleted self-fetch effect was larger than the three new sections.
+- `src/components/cockpit/OpsStrip.jsx` gains a compact budget pill (`r 5/15 · c 8/15`) when the active feature has any non-null `maxTotal`. Fetched once per featureCode change, refetched when the iteration-count sum changes (proxy for "an iteration completed" without coupling to a specific WS message type).
+
+**Notes:**
+- Per-attempt retry timeline is **out of scope for v1** — shipped `iterationStates` is a latest-snapshot `Map` (no per-attempt history). Retries section therefore renders the scalar `step.retries` count from build state.
+- Step → loop join walks `iterationStates.values()` and matches on `iter.stepId === stepId`. If iteration entries lack `stepId`, the live-counters section degrades gracefully without a per-step lookup.
+- No schema change. STEPDETAIL is UI-extension only.
+
+**Tests:** 39 new (7 budget-route + 27 step-detail-logic + 17 context-step-detail UI + 5 ops-strip-budget UI + 5 wave-6 integration STEPDETAIL slices). Full suite: **1897 pass, 0 fail, 0 skips**.
+
 ### COMP-OBS-DRIFT — Mechanical drift axes + ribbon (Wave 6 data plane closed)
 
 Final Wave 6 data-plane feature. Three deterministic ratios per feature recompute on every state-changing event; rising-edge breaches emit `kind=drift_threshold` DecisionEvents that survive WS reconnect via persisted breach-edge metadata.

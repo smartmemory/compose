@@ -262,3 +262,6 @@
 2026-04-25T16:18:57+08:00 | DRIFT: dispatch implementation; schema bump 0.2.3→0.2.4 with optional breach edge fields
 2026-04-25T16:20:43+08:00 | COMP-OBS-DRIFT implementation — schema bump + server pipeline + UI + tests
 2026-04-25T16:49:02+08:00 | DRIFT: ship — schema 0.2.4, full suite 1858 pass 0 skip; wave 6 data plane closed
+2026-04-25T16:58:30+08:00 | STEPDETAIL: dispatch — final Wave 6 feature; UI-extension only, no schema change
+2026-04-25T16:59:57+08:00 | COMP-OBS-STEPDETAIL: adding readBudget to budget-ledger.js + GET /api/lifecycle/budget route
+2026-04-25T17:12:47+08:00 | STEPDETAIL: ship — Wave 6 COMPLETE; 1897 pass 0 fail 0 skip

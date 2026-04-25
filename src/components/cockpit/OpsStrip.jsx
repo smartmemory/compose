@@ -3,6 +3,7 @@ import { useVisionStore } from '../vision/useVisionStore.js';
 import { useShallow } from 'zustand/react/shallow';
 import OpsStripEntry from './OpsStripEntry.jsx';
 import { deriveEntries } from './opsStripLogic.js';
+import { formatBudgetCompact } from './stepDetailLogic.js';
 
 /**
  * OpsStrip — Persistent 36px bar surfacing active builds, pending gates, and recent errors.
@@ -21,6 +22,35 @@ export default function OpsStrip({ activeView, onSelectFeature }) {
   const prevEntriesRef = useRef([]);
   const dismissedRef = useRef(new Set());
   const completedRef = useRef(new Set());
+
+  // COMP-OBS-STEPDETAIL: budget snapshot for the active feature (compact pill)
+  const [budget, setBudget] = useState(null);
+  const budgetFeatureRef = useRef(null);
+  const activeFeatureCode = activeBuild?.featureCode ?? null;
+
+  useEffect(() => {
+    if (!activeFeatureCode) { setBudget(null); budgetFeatureRef.current = null; return; }
+    if (activeFeatureCode === budgetFeatureRef.current) return;
+    budgetFeatureRef.current = activeFeatureCode;
+    fetch(`/api/lifecycle/budget?featureCode=${encodeURIComponent(activeFeatureCode)}`)
+      .then(r => r.json())
+      .then(data => setBudget(data))
+      .catch(() => {});
+  }, [activeFeatureCode]);
+
+  // Refetch budget when an iteration completes (iterationStates changes)
+  const iterCountRef = useRef(0);
+  useEffect(() => {
+    if (!activeFeatureCode) return;
+    const currentCount = iterationStates ? [...iterationStates.values()].reduce((n, i) => n + (i.count ?? 0), 0) : 0;
+    if (currentCount !== iterCountRef.current) {
+      iterCountRef.current = currentCount;
+      fetch(`/api/lifecycle/budget?featureCode=${encodeURIComponent(activeFeatureCode)}`)
+        .then(r => r.json())
+        .then(data => setBudget(data))
+        .catch(() => {});
+    }
+  }, [iterationStates, activeFeatureCode]);
 
   // COMP-STATE-3: Keep last completed build in memory for flash animation.
   // When activeBuild transitions from non-null to null (poll clears it),
@@ -148,6 +178,9 @@ export default function OpsStrip({ activeView, onSelectFeature }) {
     return null;
   }
 
+  // COMP-OBS-STEPDETAIL: compact budget pill
+  const budgetPill = formatBudgetCompact(budget);
+
   return (
     <div
       className="ops-strip"
@@ -176,6 +209,14 @@ export default function OpsStrip({ activeView, onSelectFeature }) {
           onDismiss={entry.type === 'error' ? () => handleDismiss(entry.key) : undefined}
         />
       ))}
+      {budgetPill && (
+        <span
+          className="ml-auto text-[9px] text-muted-foreground font-mono shrink-0 opacity-70"
+          title="Cumulative budget usage: review / coverage"
+        >
+          {budgetPill}
+        </span>
+      )}
     </div>
   );
 }

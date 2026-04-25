@@ -31,7 +31,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extractFilePaths } from './vision-utils.js';
 import { ArtifactManager } from './artifact-manager.js';
-import { recordIteration, checkCumulativeBudget } from '../lib/budget-ledger.js';
+import { recordIteration, checkCumulativeBudget, readBudget } from '../lib/budget-ledger.js';
 import { SchemaValidator } from './schema-validator.js';
 import { appendPhaseHistory } from './lifecycle-phase-history.js';
 import { emitDecisionEvent, buildPhaseTransitionEvent, buildIterationEvent, buildGateEvent } from './decision-event-emit.js';
@@ -947,6 +947,20 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
   app.post('/api/vision/ui', (req, res) => {
     broadcastMessage({ type: 'visionUI', ...req.body });
     res.json({ ok: true });
+  });
+
+  // GET /api/lifecycle/budget?featureCode=<FC> — COMP-OBS-STEPDETAIL
+  // Returns per-loop-type budget breakdown from ledger + settings.
+  // v1 limitation: usedIterations is feature-wide (ledger doesn't split by loopType).
+  app.get('/api/lifecycle/budget', (req, res) => {
+    const { featureCode } = req.query;
+    if (!featureCode) {
+      return res.status(400).json({ error: 'featureCode query param is required' });
+    }
+    const composeDir = path.join(projectRoot, '.compose');
+    const settings = settingsStore?.get();
+    const budget = readBudget(composeDir, featureCode, settings);
+    res.json(budget);
   });
 
   // POST /api/plan/parse — extract file paths from plan/spec markdown
