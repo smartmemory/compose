@@ -212,3 +212,152 @@ describe('Wave 6 integration — COMP-OBS-BRANCH', () => {
     assert.ok(offenders.length >= 1);
   });
 });
+
+// ── COMP-OBS-TIMELINE integration ────────────────────────────────────────────
+
+const { attachVisionRoutes: attachRoutesForTimeline } = await import(`${REPO_ROOT}/server/vision-routes.js`);
+const { VisionStore: VisionStoreForTimeline } = await import(`${REPO_ROOT}/server/vision-store.js`);
+
+function setupTimeline() {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wave6-timeline-'));
+  const dataDir = path.join(tmp, 'data');
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.mkdirSync(path.join(tmp, 'docs', 'features', 'COMP-OBS-BRANCH'), { recursive: true });
+
+  const store = new VisionStoreForTimeline(dataDir);
+  const broadcasts = [];
+
+  const app = express();
+  app.use(express.json());
+  attachRoutesForTimeline(app, {
+    store,
+    scheduleBroadcast: () => {},
+    broadcastMessage: (msg) => broadcasts.push(msg),
+    projectRoot: tmp,
+  });
+
+  return new Promise((resolve) => {
+    const server = app.listen(0, () => {
+      const port = server.address().port;
+      resolve({ tmp, store, server, port, broadcasts });
+    });
+  });
+}
+
+function teardownTimeline(ctx) {
+  ctx.server.close();
+  try { fs.rmSync(ctx.tmp, { recursive: true, force: true }); } catch {}
+}
+
+function tlPost(port, urlPath, body) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const req = http.request(
+      { hostname: '127.0.0.1', port, path: urlPath, method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } },
+      (res) => {
+        let buf = '';
+        res.on('data', c => buf += c);
+        res.on('end', () => {
+          try { resolve({ status: res.statusCode, body: JSON.parse(buf) }); }
+          catch { resolve({ status: res.statusCode, body: buf }); }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.end(data);
+  });
+}
+
+describe('Wave 6 integration — COMP-OBS-TIMELINE', () => {
+  let ctx;
+  beforeEach(async () => { ctx = await setupTimeline(); });
+  afterEach(() => teardownTimeline(ctx));
+
+  test('advance + iteration loop → all three DecisionEvent kinds appear in broadcast log', async () => {
+    // 1. Create item + start lifecycle (emits kind=phase_transition)
+    const item = ctx.store.createItem({ type: 'feature', title: 'Timeline integration' });
+    const startR = await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: 'COMP-OBS-BRANCH' });
+    assert.equal(startR.status, 200);
+
+    // 2. Advance phase (emits another kind=phase_transition)
+    const advR = await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/advance`, { targetPhase: 'prd' });
+    assert.equal(advR.status, 200, JSON.stringify(advR.body));
+
+    // 3. Start iteration loop (emits kind=iteration, stage=start)
+    const iterStartR = await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/iteration/start`, {
+      loopType: 'review', maxIterations: 3,
+    });
+    assert.equal(iterStartR.status, 200);
+
+    // 4. Complete iteration loop (emits kind=iteration, stage=complete)
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/iteration/report`, {
+      result: { clean: true },
+    });
+
+    // 5. Verify kind=phase_transition DecisionEvents present (lifecycle start + advance = 2)
+    const ptEvents = ctx.broadcasts.filter(b => b.type === 'decisionEvent' && b.event?.kind === 'phase_transition');
+    assert.ok(ptEvents.length >= 2, `expected >=2 phase_transition DEs, got ${ptEvents.length}`);
+
+    // 6. Verify kind=iteration DecisionEvents present (start + complete = 2)
+    const iterEvents = ctx.broadcasts.filter(b => b.type === 'decisionEvent' && b.event?.kind === 'iteration');
+    assert.equal(iterEvents.length, 2, `expected 2 iteration DEs (start+complete), got ${iterEvents.length}`);
+
+    // 7. Now wire in the branch watcher to get kind=branch
+    const w = new CCSessionWatcher({
+      projectsRoot: ctx.tmp,
+      sessionsFile: path.join(ctx.tmp, 'sessions.json'),
+      featureRoot: path.join(ctx.tmp, 'docs', 'features'),
+      findItemIdByFeatureCode: (fc) => fc === 'COMP-OBS-BRANCH' ? item.id : null,
+      postBranchLineage: async (itemId, lineage) => {
+        const res = await tlPost(ctx.port, `/api/vision/items/${itemId}/lifecycle/branch-lineage`, lineage);
+        if (res.status !== 200) throw new Error(`lineage POST ${res.status}: ${JSON.stringify(res.body)}`);
+      },
+      broadcastMessage: (msg) => ctx.broadcasts.push(msg),
+      now: () => '2026-04-24T12:00:00Z',
+    });
+    const forkedFixture = path.join(REPO_ROOT, 'test/fixtures/cc-sessions/forked-session-two-branches.jsonl');
+    const dest = path.join(ctx.tmp, 'sess-fork.jsonl');
+    fs.copyFileSync(forkedFixture, dest);
+    fs.writeFileSync(path.join(ctx.tmp, 'sessions.json'), JSON.stringify([
+      { featureCode: 'COMP-OBS-BRANCH', transcriptPath: '/cc/sess-fork.jsonl' },
+    ]));
+    await w.fullScan();
+
+    // 8. All three kinds present
+    const branchEvents = ctx.broadcasts.filter(b => b.type === 'decisionEvent' && b.event?.kind === 'branch');
+    assert.ok(branchEvents.length >= 1, `expected >=1 branch DEs, got ${branchEvents.length}`);
+
+    const allKinds = new Set(ctx.broadcasts.filter(b => b.type === 'decisionEvent').map(b => b.event?.kind));
+    assert.ok(allKinds.has('phase_transition'), 'phase_transition kind missing');
+    assert.ok(allKinds.has('iteration'), 'iteration kind missing');
+    assert.ok(allKinds.has('branch'), 'branch kind missing');
+  });
+
+  test('phaseHistory populated by lifecycle start + advance', async () => {
+    const item = ctx.store.createItem({ type: 'feature', title: 'PhaseHistory test' });
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: 'COMP-OBS-BRANCH' });
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/advance`, { targetPhase: 'prd' });
+
+    const stored = ctx.store.items.get(item.id);
+    assert.ok(Array.isArray(stored.lifecycle.phaseHistory), 'phaseHistory must be array');
+    assert.ok(stored.lifecycle.phaseHistory.length >= 2, 'must have start + advance entries');
+  });
+
+  test('per-attempt iterationUpdate does NOT emit DecisionEvent', async () => {
+    const item = ctx.store.createItem({ type: 'feature', title: 'No DE on update' });
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: 'COMP-OBS-BRANCH' });
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/iteration/start`, {
+      loopType: 'coverage', maxIterations: 5,
+    });
+
+    // per-attempt report (not clean yet)
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/iteration/report`, {
+      result: { passing: false },
+    });
+
+    // Count DEs after one per-attempt report: should be exactly 1 (the start DE, not update)
+    const iterDEs = ctx.broadcasts.filter(b => b.type === 'decisionEvent' && b.event?.kind === 'iteration');
+    assert.equal(iterDEs.length, 1, 'only the start DE; per-attempt update must not emit');
+  });
+});

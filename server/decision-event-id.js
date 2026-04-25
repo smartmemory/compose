@@ -13,3 +13,22 @@ export function shouldEmit(eventId, emittedSet) {
   if (Array.isArray(emittedSet)) return !emittedSet.includes(eventId);
   return true;
 }
+
+/**
+ * Deterministic id for a phase_transition DecisionEvent.
+ * Unique per (featureCode, fromPhase, toPhase, timestamp).
+ */
+export function phaseTransitionDecisionEventId(featureCode, fromPhase, toPhase, timestamp) {
+  const featureNs = uuidv5(String(featureCode), ROOT_NAMESPACE);
+  const from = fromPhase == null ? 'null' : String(fromPhase);
+  return uuidv5(`phase_transition:${from}:${toPhase}:${timestamp}`, featureNs);
+}
+
+/**
+ * Deterministic id for an iteration DecisionEvent.
+ * stage ∈ 'start' | 'complete'
+ */
+export function iterationDecisionEventId(featureCode, loopId, stage) {
+  const featureNs = uuidv5(String(featureCode), ROOT_NAMESPACE);
+  return uuidv5(`iteration:${loopId}:${stage}`, featureNs);
+}

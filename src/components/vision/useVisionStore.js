@@ -175,6 +175,13 @@ export const useVisionStore = create((set, get) => {
           setSessions: (updater) => set(s => ({ sessions: typeof updater === 'function' ? updater(s.sessions) : updater })),
           setFeatureTimeline: (updater) => set(s => ({ featureTimeline: typeof updater === 'function' ? updater(s.featureTimeline) : updater })),
           setIterationStates: (updater) => set(s => ({ iterationStates: typeof updater === 'function' ? updater(s.iterationStates) : updater })),
+          // COMP-OBS-TIMELINE: decision event store setters
+          appendDecisionEvent: (ev) => set(s => {
+            if (!ev?.id) return s;
+            if (s.decisionEvents.some(e => e.id === ev.id)) return s;
+            return { decisionEvents: [...s.decisionEvents, ev] };
+          }),
+          setDecisionEventsSnapshot: (arr) => set({ decisionEvents: Array.isArray(arr) ? arr : [] }),
           EMPTY_CHANGES,
         });
       } catch {
@@ -263,12 +270,25 @@ export const useVisionStore = create((set, get) => {
     // Session-local; never persisted.
     selectedBranches: {},
 
+    // COMP-OBS-TIMELINE: decision events store slice (in-memory only, re-seeded on reconnect).
+    decisionEvents: [],
+
     // Actions
     clearUICommand: () => set({ uiCommand: null }),
 
     setSelectedBranches: (featureCode, pair) => set(s => ({
       selectedBranches: { ...s.selectedBranches, [featureCode]: pair },
     })),
+
+    // COMP-OBS-TIMELINE: replace full decisionEvents slice from snapshot (on reconnect/hydrate)
+    setDecisionEventsSnapshot: (arr) => set({ decisionEvents: Array.isArray(arr) ? arr : [] }),
+
+    // COMP-OBS-TIMELINE: append single event, deduplicating by id (set-style merge)
+    appendDecisionEvent: (ev) => set(s => {
+      if (!ev?.id) return s;
+      if (s.decisionEvents.some(e => e.id === ev.id)) return s;
+      return { decisionEvents: [...s.decisionEvents, ev] };
+    }),
 
     registerSnapshotProvider: (provider) => { refs.snapshotProvider = provider; },
 

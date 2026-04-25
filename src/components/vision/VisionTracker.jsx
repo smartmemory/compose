@@ -21,6 +21,7 @@ import CommandPalette      from './shared/CommandPalette.jsx';
 import ItemFormDialog      from './shared/ItemFormDialog.jsx';
 import SettingsModal       from './shared/SettingsModal.jsx';
 import GateNotificationBar from './shared/GateNotificationBar.jsx';
+import DecisionTimelineStrip from './DecisionTimelineStrip.jsx';
 
 export default function VisionTracker({ onContextSelect, sidebarOpen = true, onToggleSidebar }) {
   const {
@@ -35,6 +36,8 @@ export default function VisionTracker({ onContextSelect, sidebarOpen = true, onT
     sessions,
     // Global phase filter (managed by the store — affects all views)
     selectedPhase, setSelectedPhase,
+    // COMP-OBS-TIMELINE
+    decisionEvents,
   } = useVisionStore();
 
   const [selectedItemId, setSelectedItemId] = useState(() => sessionStorage.getItem('vision-selectedItemId') || null);
@@ -200,9 +203,24 @@ export default function VisionTracker({ onContextSelect, sidebarOpen = true, onT
     }
   }, [onContextSelect]);
 
+  // Derive currentFeatureCode from the selected item's lifecycle, if any
+  const currentFeatureCode = useMemo(() => {
+    if (!selectedItemId) return null;
+    const item = items.find(i => i.id === selectedItemId);
+    return item?.lifecycle?.featureCode || null;
+  }, [selectedItemId, items]);
+
   return (
     <VisionChangesContext.Provider value={recentChanges}>
-    <div className="h-full flex bg-background" data-snapshot-root>
+    <div className="h-full flex flex-col bg-background" data-snapshot-root>
+      {/* COMP-OBS-TIMELINE: Decision timeline strip — sticky top, 72px, full-width */}
+      {currentFeatureCode && (
+        <DecisionTimelineStrip
+          events={decisionEvents}
+          currentFeatureCode={currentFeatureCode}
+        />
+      )}
+      <div className="flex-1 flex min-h-0">
       {/* Sidebar — cockpit-controlled toggle + attention-queue content (COMP-UI-2) */}
       <div className="flex h-full shrink-0" style={{ borderRight: '1px solid hsl(var(--border))' }}>
         {/* Toggle tab — always visible */}
@@ -343,6 +361,7 @@ export default function VisionTracker({ onContextSelect, sidebarOpen = true, onT
         settings={settings}
         onSettingsChange={updateSettings}
       />
+      </div>{/* end flex-1 inner wrapper */}
     </div>
     </VisionChangesContext.Provider>
   );

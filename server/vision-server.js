@@ -18,6 +18,7 @@ import { AgentRegistry } from './agent-registry.js';
 import { HealthMonitor } from './agent-health.js';
 import { WorktreeGC } from './worktree-gc.js';
 import { attachVisionRoutes } from './vision-routes.js';
+import { deriveDecisionEvents } from './decision-events-snapshot.js';
 import { CCSessionWatcher } from './cc-session-watcher.js';
 import { SchemaValidator } from './schema-validator.js';
 import { attachSessionRoutes } from './session-routes.js';
@@ -378,10 +379,33 @@ export class VisionServer {
       if ('type' in state) {
         throw new Error('store.getState() must not include a `type` field — would collide with hydrate envelope');
       }
+
+      // COMP-OBS-TIMELINE: derive DecisionEvents for the active feature
+      // (derive from all features present in state — client filters by featureCode)
+      let decisionEventsSnapshot = [];
+      try {
+        const internalState = this.store;
+        // Use internal items Map for deriveDecisionEvents (avoids serialization round-trip)
+        const featureCodes = new Set();
+        for (const item of (internalState.items?.values?.() || [])) {
+          if (item?.lifecycle?.featureCode) featureCodes.add(item.lifecycle.featureCode);
+        }
+        for (const fc of featureCodes) {
+          decisionEventsSnapshot = decisionEventsSnapshot.concat(
+            deriveDecisionEvents(internalState, fc)
+          );
+        }
+      } catch (snapshotErr) {
+        console.error('[vision] decisionEventsSnapshot derivation error:', snapshotErr.message);
+      }
+
       const snapshot = Object.assign(
         { type: 'hydrate' },
         state,
-        { sessions: this.sessionManager?.getRecentSessions?.() || [] }
+        {
+          sessions: this.sessionManager?.getRecentSessions?.() || [],
+          decisionEventsSnapshot,
+        }
       );
       ws.send(JSON.stringify(snapshot));
     } catch (err) {

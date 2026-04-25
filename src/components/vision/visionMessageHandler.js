@@ -18,6 +18,7 @@ export function handleVisionMessage(msg, refs, setters) {
     setItems, setConnections, setGates, setGateEvent,
     setRecentChanges, setUICommand, setAgentActivity,
     setAgentErrors, setSessionState, setSpawnedAgents, setAgentRelays, setSettings, setPipelineDraft, setActiveBuild, setSessions, setIterationStates, setFeatureTimeline, EMPTY_CHANGES,
+    appendDecisionEvent, setDecisionEventsSnapshot,
   } = setters;
 
   // COMP-UX-11: Helper to push a timeline event
@@ -57,6 +58,22 @@ export function handleVisionMessage(msg, refs, setters) {
     setConnections(msg.connections || []);
     setGates(msg.gates || []);
     if (setSessions) setSessions(msg.sessions || []);
+    // COMP-OBS-TIMELINE: seed decision events from hydrate snapshot
+    if (setDecisionEventsSnapshot && Array.isArray(msg.decisionEventsSnapshot)) {
+      setDecisionEventsSnapshot(msg.decisionEventsSnapshot);
+    }
+
+  } else if (msg.type === 'decisionEvent') {
+    // COMP-OBS-TIMELINE: single live event → append (dedup by id in store)
+    if (appendDecisionEvent && msg.event) {
+      appendDecisionEvent(msg.event);
+    }
+
+  } else if (msg.type === 'decisionEventsSnapshot') {
+    // COMP-OBS-TIMELINE: full snapshot replace (used on reconnect if server sends standalone)
+    if (setDecisionEventsSnapshot && Array.isArray(msg.events)) {
+      setDecisionEventsSnapshot(msg.events);
+    }
 
   } else if (msg.type === 'visionUI') {
     setUICommand(msg);

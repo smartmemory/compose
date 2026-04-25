@@ -33,6 +33,8 @@ import { extractFilePaths } from './vision-utils.js';
 import { ArtifactManager } from './artifact-manager.js';
 import { recordIteration, checkCumulativeBudget } from '../lib/budget-ledger.js';
 import { SchemaValidator } from './schema-validator.js';
+import { appendPhaseHistory } from './lifecycle-phase-history.js';
+import { emitDecisionEvent, buildPhaseTransitionEvent, buildIterationEvent } from './decision-event-emit.js';
 
 let _schemaValidator = null;
 function getSchemaValidator() {
@@ -178,9 +180,12 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
         killedAt: null,
         killReason: null,
       };
+      // COMP-OBS-TIMELINE: populate phaseHistory before storing
+      appendPhaseHistory({ lifecycle }, { from: null, to: 'explore_design', outcome: null, timestamp: now });
       store.updateLifecycle(req.params.id, lifecycle);
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleStarted', itemId: req.params.id, phase: 'explore_design', featureCode, timestamp: now });
+      emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode, from: null, to: 'explore_design', outcome: null, timestamp: now }));
       res.json(lifecycle);
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
@@ -231,10 +236,13 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (!valid?.includes(targetPhase)) return res.status(400).json({ error: `Invalid transition: ${from} → ${targetPhase}` });
 
       item.lifecycle.currentPhase = targetPhase;
-      store.updateLifecycle(req.params.id, item.lifecycle);
+      // COMP-OBS-TIMELINE: populate phaseHistory + emit phase_transition DecisionEvent
       const now = new Date().toISOString();
+      appendPhaseHistory(item, { from, to: targetPhase, outcome: outcome ?? null, timestamp: now });
+      store.updateLifecycle(req.params.id, item.lifecycle);
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: targetPhase, outcome, timestamp: now });
+      emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, outcome, timestamp: now }));
       res.json({ from, to: targetPhase, outcome });
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
@@ -254,10 +262,13 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (!valid?.includes(targetPhase)) return res.status(400).json({ error: `Invalid transition: ${from} → ${targetPhase}` });
 
       item.lifecycle.currentPhase = targetPhase;
-      store.updateLifecycle(req.params.id, item.lifecycle);
+      // COMP-OBS-TIMELINE: populate phaseHistory + emit phase_transition DecisionEvent
       const now = new Date().toISOString();
+      appendPhaseHistory(item, { from, to: targetPhase, outcome: 'skipped', timestamp: now });
+      store.updateLifecycle(req.params.id, item.lifecycle);
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: targetPhase, outcome: 'skipped', timestamp: now });
+      emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, outcome: 'skipped', timestamp: now }));
       res.json({ from, to: targetPhase, outcome: 'skipped', reason });
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
@@ -277,10 +288,13 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       item.lifecycle.currentPhase = 'killed';
       item.lifecycle.killedAt = now;
       item.lifecycle.killReason = reason;
+      // COMP-OBS-TIMELINE: populate phaseHistory + emit phase_transition DecisionEvent
+      appendPhaseHistory(item, { from, to: 'killed', outcome: 'killed', timestamp: now });
       store.updateLifecycle(req.params.id, item.lifecycle);
       store.updateItem(req.params.id, { status: 'killed' });
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: 'killed', outcome: 'killed', timestamp: now });
+      emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: 'killed', outcome: 'killed', timestamp: now }));
       res.json({ phase: from, reason });
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
@@ -299,10 +313,13 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       const now = new Date().toISOString();
       item.lifecycle.currentPhase = 'complete';
       item.lifecycle.completedAt = now;
+      // COMP-OBS-TIMELINE: populate phaseHistory + emit phase_transition DecisionEvent
+      appendPhaseHistory(item, { from: 'ship', to: 'complete', outcome: 'approved', timestamp: now });
       store.updateLifecycle(req.params.id, item.lifecycle);
       store.updateItem(req.params.id, { status: 'complete' });
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from: 'ship', to: 'complete', outcome: 'approved', timestamp: now });
+      emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from: 'ship', to: 'complete', outcome: 'approved', timestamp: now }));
       res.json({ completedAt: now });
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
@@ -355,6 +372,18 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       store.updateLifecycle(req.params.id, item.lifecycle);
       scheduleBroadcast();
       broadcastMessage({ type: 'iterationStarted', itemId: req.params.id, loopId: item.lifecycle.iterationState.loopId, loopType, maxIterations: max, timestamp: now, startedAt: now, wallClockTimeout: timeoutMinutes, maxActions: maxActions ?? null });
+      // COMP-OBS-TIMELINE: emit iteration DecisionEvent at loop start
+      if (item.lifecycle.featureCode) {
+        emitDecisionEvent(broadcastMessage, buildIterationEvent({
+          featureCode: item.lifecycle.featureCode,
+          loopId: item.lifecycle.iterationState.loopId,
+          loopType,
+          stage: 'start',
+          attempt: null,
+          outcome: 'retry',
+          timestamp: now,
+        }));
+      }
       res.json(item.lifecycle.iterationState);
     } catch (err) {
       res.status(400).json({ error: err.message });
@@ -414,7 +443,20 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
         const completeMsg = { type: 'iterationComplete', itemId: req.params.id, loopId: iter.loopId, loopType: iter.loopType, outcome: iter.outcome, finalCount: iter.count, timestamp: now };
         if (iter.elapsedMinutes != null) completeMsg.elapsedMinutes = iter.elapsedMinutes;
         broadcastMessage(completeMsg);
+        // COMP-OBS-TIMELINE: emit iteration DecisionEvent at loop complete (not per-attempt)
+        if (item.lifecycle.featureCode) {
+          emitDecisionEvent(broadcastMessage, buildIterationEvent({
+            featureCode: item.lifecycle.featureCode,
+            loopId: iter.loopId,
+            loopType: iter.loopType,
+            stage: 'complete',
+            attempt: iter.count,
+            outcome: iter.outcome,
+            timestamp: now,
+          }));
+        }
       } else {
+        // per-attempt update: NO DecisionEvent (Decision 2 — would flood strip)
         broadcastMessage({ type: 'iterationUpdate', itemId: req.params.id, loopId: iter.loopId, loopType: iter.loopType, count: iter.count, maxIterations: iter.maxIterations, exitCriteriaMet: false, findingsCount: result.findings?.length ?? 0, timestamp: now });
       }
       res.json({ continue: shouldContinue, count: iter.count, maxIterations: iter.maxIterations, outcome: iter.outcome });
@@ -444,6 +486,18 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       store.updateLifecycle(req.params.id, item.lifecycle);
       scheduleBroadcast();
       broadcastMessage({ type: 'iterationComplete', itemId: req.params.id, loopId: iter.loopId, loopType: iter.loopType, outcome: 'aborted', finalCount: iter.count, timestamp: now });
+      // COMP-OBS-TIMELINE: emit iteration DecisionEvent on abort (outcome maps to 'fail')
+      if (item.lifecycle.featureCode) {
+        emitDecisionEvent(broadcastMessage, buildIterationEvent({
+          featureCode: item.lifecycle.featureCode,
+          loopId: iter.loopId,
+          loopType: iter.loopType,
+          stage: 'complete',
+          attempt: iter.count,
+          outcome: 'aborted',
+          timestamp: now,
+        }));
+      }
       res.json({ aborted: true });
     } catch (err) {
       res.status(400).json({ error: err.message });

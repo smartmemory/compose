@@ -199,21 +199,23 @@ describe('lifecycle REST endpoints', () => {
       `/api/vision/items/${ctx.item.id}/lifecycle/start`,
       { featureCode: 'TEST-1' });
 
-    assert.equal(ctx.broadcasts.length, 1);
-    assert.equal(ctx.broadcasts[0].type, 'lifecycleStarted');
-    assert.equal(ctx.broadcasts[0].itemId, ctx.item.id);
-    assert.equal(ctx.broadcasts[0].phase, 'explore_design');
-    assert.ok(ctx.broadcasts[0].timestamp);
+    // COMP-OBS-TIMELINE: lifecycle/start now emits lifecycleStarted + decisionEvent (dual-emission)
+    const startedMsg = ctx.broadcasts.find(b => b.type === 'lifecycleStarted');
+    assert.ok(startedMsg, 'lifecycleStarted must be present');
+    assert.equal(startedMsg.itemId, ctx.item.id);
+    assert.equal(startedMsg.phase, 'explore_design');
+    assert.ok(startedMsg.timestamp);
 
     await request(ctx.port, 'POST',
       `/api/vision/items/${ctx.item.id}/lifecycle/advance`,
       { targetPhase: 'blueprint', outcome: 'approved' });
 
-    assert.equal(ctx.broadcasts.length, 2);
-    assert.equal(ctx.broadcasts[1].type, 'lifecycleTransition');
-    assert.equal(ctx.broadcasts[1].from, 'explore_design');
-    assert.equal(ctx.broadcasts[1].to, 'blueprint');
-    assert.equal(ctx.broadcasts[1].outcome, 'approved');
+    // COMP-OBS-TIMELINE: lifecycle/advance also emits a decisionEvent alongside lifecycleTransition
+    const transitionMsg = ctx.broadcasts.find(b => b.type === 'lifecycleTransition');
+    assert.ok(transitionMsg, 'lifecycleTransition must be present');
+    assert.equal(transitionMsg.from, 'explore_design');
+    assert.equal(transitionMsg.to, 'blueprint');
+    assert.equal(transitionMsg.outcome, 'approved');
   });
 });
 

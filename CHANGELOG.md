@@ -1,6 +1,33 @@
 # Changelog
 
-## 2026-04-24
+## 2026-04-25
+
+### COMP-OBS-TIMELINE — Decision timeline strip + dual-emit pipeline
+
+**Why:** Wave 6 region ② per CONTRACT layout. Closes the orphaned `decisionEvent` broadcast that COMP-OBS-BRANCH has been emitting into the void since 2026-04-20, and adds two new event kinds (`phase_transition`, `iteration`) so the strip is populated immediately on first lifecycle interaction. Strip already renders `gate` and `drift_threshold` cards via the same `DecisionCard` component — zero code change here when GATELOG and DRIFT ship their emitters.
+
+**Server (single emit choke point + dual-emit at every existing broadcast site):**
+- `server/decision-event-emit.js` *(new)* — `emitDecisionEvent(broadcastMessage, event)` + per-kind builders (`buildPhaseTransitionEvent`, `buildIterationEvent`). Builder output byte-matches BRANCH's existing emit envelope (`cc-session-watcher.js:146-167`).
+- `server/decision-event-id.js` — extended with `phaseTransitionDecisionEventId(featureCode, fromPhase, toPhase, timestamp)` and `iterationDecisionEventId(featureCode, loopId, stage)`. Same uuidv5/per-feature-namespace pattern as existing `branchDecisionEventId`. Deterministic — re-derive == identity.
+- `server/lifecycle-phase-history.js` *(new)* — sole writer for `lifecycle.phaseHistory[]`, plugging `project_lifecycle_phasehistory_gap` (memory note). Entries carry BOTH the legacy shape (`phase`, `step`, `enteredAt`, `exitedAt`, `outcome`) consumed by `ItemDetailPanel.jsx`, `ContextPipelineDots.jsx`, and `session-routes.js`, AND the new shape (`from`, `to`, `outcome`, `timestamp`) consumed by snapshot derivation. Appending a successor closes out the prior entry's `exitedAt`.
+- `server/decision-events-snapshot.js` *(new)* — `deriveDecisionEvents(state, featureCode)` walks `phaseHistory[]` + `iterationState` + `lifecycle.lifecycle_ext.branch_lineage.branches[]` to seed the strip on WS connect. Computes `sibling_branch_ids` per fork_uuid grouping (matches BRANCH live-emitter semantics — including self).
+- `server/vision-routes.js` — dual-emit at 8 broadcast sites (lines 183, 237, 260, 283, 305 for phase transitions; 357, 414, 446 for iteration start/complete/abort; line 418 deliberately untouched — per-attempt `iterationUpdate` does not flood the strip).
+- `server/vision-server.js` — `getVisionSnapshot` now attaches `decisionEventsSnapshot` to the hydrate envelope.
+
+**Client (region ② render + store wiring):**
+- `src/components/vision/DecisionTimelineStrip.jsx` *(new)* — 72px sticky band, full-width, horizontally scrollable, newest-right ordering. Filtered to current feature.
+- `src/components/vision/DecisionCard.jsx` *(new)* — 160px card per CONTRACT layout.md §②: timestamp top-right, title, role chips (`IMPLEMENTER` / `REVIEWER` / `PRODUCER`), linked-run status dot.
+- `src/components/vision/decisionTimelineLogic.js` *(new)* — pure helpers (`formatRelativeTime`, `kindIcon`, `kindColor`, `roleChipClass`, `sortAndFilterEvents`).
+- `src/components/vision/useVisionStore.js` — `decisionEvents: []` slice + `setDecisionEventsSnapshot(arr)` and `appendDecisionEvent(ev)` (dedupe by id).
+- `src/components/vision/visionMessageHandler.js` — handlers for `decisionEvent`, `decisionEventsSnapshot`, plus seeding from `hydrate.decisionEventsSnapshot`.
+- `src/components/vision/VisionTracker.jsx` — strip mounted at top-of-tree.
+- `src/components/vision/constants.js` — `DECISION_KINDS` map for color/icon/label.
+
+**Reviews:** 2 Codex review rounds against the implementation. Round 1 surfaced three real bugs that tests had passed over: (a) `phaseHistory` writer used the new `{from, to, outcome, timestamp}` shape only — silently broke `ItemDetailPanel`, `ContextPipelineDots`, and `session-routes` legacy readers; (b) snapshot derivation read `item.lifecycle_ext` (top-level) instead of the production-real `item.lifecycle.lifecycle_ext`, so cold reconnect would have dropped all branch cards; (c) snapshot rebuilt branch events with hardcoded `sibling_branch_ids: []`, dropping fork context after refresh. All three fixed; round 2 added an executable assertion for sibling rehydration. REVIEW CLEAN at round 2 close.
+
+**Tests:** 121 new tests (117 node:test + 10 vitest, plus regression tests for the three Codex fixes). Full suite: **1677 pass, 0 fail, 4 intentional skips** (siblings STATUS / GATELOG / LOOPS / DRIFT awaiting ship). Wave 6 contract-compliance suite un-skipped TIMELINE placeholder.
+
+
 
 ### COMP-OBS-CONTRACT — Wave 6 shared contract, locked
 

@@ -250,3 +250,19 @@ export const AGENT_CATEGORY_COLORS = {
   delegating: 'var(--color-category-delegating)',
   thinking: 'hsl(var(--muted-foreground))',
 };
+
+// ── COMP-OBS-TIMELINE ─────────────────────────────────────────────────────────
+
+/**
+ * Decision event kind → display metadata.
+ * icon: unicode char for the kind indicator.
+ * color: Tailwind text class.
+ * label: short human-readable name.
+ */
+export const DECISION_KINDS = {
+  branch:           { label: 'Branch',           icon: '⑂', color: 'text-purple-400' },
+  phase_transition: { label: 'Phase',            icon: '→', color: 'text-blue-400'   },
+  iteration:        { label: 'Iteration',        icon: '↻', color: 'text-cyan-400'   },
+  gate:             { label: 'Gate',             icon: '◈', color: 'text-amber-400'  },
+  drift_threshold:  { label: 'Drift',            icon: '⚠', color: 'text-rose-400'   },
+};
