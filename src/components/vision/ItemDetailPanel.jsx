@@ -9,6 +9,7 @@ import { TYPE_COLORS, STATUS_COLORS, PHASES, PHASE_LABELS, STATUSES, CONFIDENCE_
 import ConnectionGraph from './ConnectionGraph.jsx';
 import ConfidenceBar from './shared/ConfidenceBar.jsx';
 import BranchComparePanel from './BranchComparePanel.jsx';
+import DriftRibbon from './DriftRibbon.jsx';
 import { useVisionStore } from './useVisionStore.js';
 
 function ConfidenceControl({ level, onChange }) {
@@ -416,6 +417,9 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
       {/* Scrollable body */}
       <ScrollArea className="flex-1">
         <div className="p-3 space-y-4">
+          {/* COMP-OBS-DRIFT: per-feature drift alert ribbon (region ⑥) — FIRST child */}
+          <DriftRibbon item={item} />
+
           {/* COMP-OBS-BRANCH: per-feature branch compare panel (region ⑤) */}
           {item.lifecycle?.featureCode && (
             <BranchComparePanelMount featureCode={item.lifecycle.featureCode} lineage={item.lifecycle.lifecycle_ext?.branch_lineage} />

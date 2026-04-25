@@ -21,6 +21,7 @@ import { attachVisionRoutes } from './vision-routes.js';
 import { deriveDecisionEvents } from './decision-events-snapshot.js';
 import { CCSessionWatcher } from './cc-session-watcher.js';
 import { emitStatusSnapshot } from './status-emit.js';
+import { emitDriftAxes } from './drift-emit.js';
 import { SchemaValidator } from './schema-validator.js';
 import { attachSessionRoutes } from './session-routes.js';
 import { attachActivityRoutes } from './activity-routes.js';
@@ -300,6 +301,9 @@ export class VisionServer {
           // COMP-OBS-STATUS: inject emitStatusSnapshot for post-lineage status broadcast
           emitStatusSnapshot,
           getState: () => this.store,
+          // COMP-OBS-DRIFT: inject emitDriftAxes for post-lineage drift broadcast
+          emitDriftAxes,
+          projectRoot: getTargetRoot(),
         });
 
         // Seed emitted_event_ids from any existing lineage so startup doesn't replay.

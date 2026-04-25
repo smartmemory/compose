@@ -65,6 +65,9 @@ export class CCSessionWatcher {
     // COMP-OBS-STATUS: optional deps for post-lineage status broadcast
     emitStatusSnapshot = null,
     getState = null,
+    // COMP-OBS-DRIFT: optional deps for post-lineage drift broadcast
+    emitDriftAxes = null,
+    projectRoot = null,
   }) {
     if (!projectsRoot) throw new Error('projectsRoot required');
     if (!sessionsFile) throw new Error('sessionsFile required');
@@ -81,6 +84,9 @@ export class CCSessionWatcher {
     // COMP-OBS-STATUS: optional snapshot emitter (defaults to no-op if not injected)
     this._emitStatusSnapshot = emitStatusSnapshot;
     this._getState = getState;
+    // COMP-OBS-DRIFT: optional drift emitter
+    this._emitDriftAxes = emitDriftAxes;
+    this._projectRoot = projectRoot;
 
     // featureCode → (cc_session_id → BranchOutcome[])
     this._accum = new Map();
@@ -228,6 +234,17 @@ export class CCSessionWatcher {
         this.broadcastMessage(message);
       }
 
+      // COMP-OBS-DRIFT: emit drift axes before STATUS so STATUS reads fresh drift_axes
+      if (this._emitDriftAxes && this._getState && this._projectRoot) {
+        try {
+          const state = this._getState();
+          const itemId = this.findItemIdByFeatureCode(fc);
+          const it = itemId && state.items?.get ? state.items.get(itemId) : null;
+          if (it) this._emitDriftAxes(this.broadcastMessage, state, it, this._projectRoot, this.now());
+        } catch (err) {
+          console.warn(`[cc-watcher] emitDriftAxes failed for ${fc}: ${err.message}`);
+        }
+      }
       // COMP-OBS-STATUS: emit status snapshot after branch lineage update
       if (this._emitStatusSnapshot && this._getState) {
         try {

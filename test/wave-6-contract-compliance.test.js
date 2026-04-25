@@ -417,7 +417,88 @@ describe('Wave 6 contract — pending siblings (skip-until-landed)', () => {
     // 6. computed_at is a valid ISO date
     assert.ok(!isNaN(Date.parse(snap.computed_at)), `computed_at not valid ISO: ${snap.computed_at}`);
   });
-  test.skip('DriftAxis emission + threshold crossing — COMP-OBS-DRIFT', () => {});
+  test('DriftAxis emission + threshold crossing — COMP-OBS-DRIFT', async () => {
+    const sv = new SchemaValidator();
+    const NOW = '2026-04-25T12:00:00.000Z';
+
+    // 1. Well-formed DriftAxis (unbreached) round-trips schema v0.2.4
+    const axis = {
+      axis_id: 'path_drift',
+      name: 'Path drift',
+      numerator: 1,
+      denominator: 5,
+      ratio: 0.2,
+      threshold: 0.30,
+      breached: false,
+      computed_at: NOW,
+      explanation: 'Files touched outside declared plan paths.',
+      // v0.2.4 new optional fields — always populated for consistency
+      breach_started_at: null,
+      breach_event_id: null,
+    };
+    const { valid: av, errors: ae } = sv.validate('DriftAxis', axis);
+    assert.equal(av, true, `DriftAxis invalid: ${JSON.stringify(ae)}`);
+
+    // 2. Breached DriftAxis with v0.2.4 fields
+    const breachedAxis = {
+      ...axis,
+      ratio: 0.45,
+      breached: true,
+      breach_started_at: NOW,
+      breach_event_id: randomUUID(),
+    };
+    const { valid: bv, errors: be } = sv.validate('DriftAxis', breachedAxis);
+    assert.equal(bv, true, `Breached DriftAxis invalid: ${JSON.stringify(be)}`);
+
+    // 3. StatusSnapshot.drift_alerts breached:true closure regression:
+    //    A non-breached axis in drift_alerts MUST fail schema validation.
+    const nonBreachedInAlerts = {
+      axis_id: 'path_drift',
+      name: 'Path drift',
+      numerator: 1,
+      denominator: 5,
+      ratio: 0.2,
+      threshold: 0.3,
+      breached: false,   // NOT breached — schema closure should reject this
+      computed_at: NOW,
+      breach_started_at: null,
+      breach_event_id: null,
+    };
+    // Build a StatusSnapshot with drift_alerts containing a non-breached axis
+    const snap = {
+      sentence: 'Test sentence',
+      computed_at: NOW,
+      drift_alerts: [nonBreachedInAlerts],
+    };
+    const { valid: sv2 } = sv.validate('StatusSnapshot', snap);
+    assert.equal(sv2, false, 'non-breached axis in StatusSnapshot.drift_alerts must fail schema (breached:true closure)');
+
+    // 4. drift_threshold DecisionEvent validates
+    const driftEvent = {
+      id: randomUUID(),
+      feature_code: 'COMP-OBS-DRIFT-TEST',
+      timestamp: NOW,
+      kind: 'drift_threshold',
+      title: 'Drift threshold crossed: path_drift (45% ≥ 30%)',
+      metadata: {
+        axis_id: 'path_drift',
+        ratio: 0.45,
+        threshold: 0.30,
+      },
+    };
+    const { valid: dev, errors: dee } = sv.validate('DecisionEvent', driftEvent);
+    assert.equal(dev, true, `drift_threshold DecisionEvent invalid: ${JSON.stringify(dee)}`);
+
+    // 5. Snapshot rehydration identity: driftThresholdDecisionEventId is deterministic
+    const { driftThresholdDecisionEventId } = await import(`${REPO_ROOT}/server/decision-event-id.js`);
+    const id1 = driftThresholdDecisionEventId('COMP-OBS-DRIFT-TEST', 'path_drift', NOW);
+    const id2 = driftThresholdDecisionEventId('COMP-OBS-DRIFT-TEST', 'path_drift', NOW);
+    assert.equal(id1, id2, 'driftThresholdDecisionEventId must be deterministic');
+
+    // 6. Schema version bumped to 0.2.4
+    const { SCHEMA_VERSION } = await import(`${REPO_ROOT}/server/schema-validator.js`);
+    assert.equal(SCHEMA_VERSION, '0.2.4', 'schema must be at v0.2.4 for COMP-OBS-DRIFT');
+  });
 
   test('GateLogEntry + gate DecisionEvent join round-trip — COMP-OBS-GATELOG', async () => {
     const sv = new SchemaValidator();

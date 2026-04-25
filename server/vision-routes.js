@@ -37,6 +37,7 @@ import { appendPhaseHistory } from './lifecycle-phase-history.js';
 import { emitDecisionEvent, buildPhaseTransitionEvent, buildIterationEvent, buildGateEvent } from './decision-event-emit.js';
 import { emitStatusSnapshot } from './status-emit.js';
 import { computeStatusSnapshot } from './status-snapshot.js';
+import { emitDriftAxes } from './drift-emit.js';
 
 let _schemaValidator = null;
 function getSchemaValidator() {
@@ -204,6 +205,9 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleStarted', itemId: req.params.id, phase: 'explore_design', featureCode, timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode, from: null, to: 'explore_design', outcome: null, timestamp: now }));
+      // COMP-OBS-DRIFT: emit drift axes before status so STATUS reads fresh drift_axes
+      const startedItem = store.items.get(req.params.id);
+      if (startedItem) emitDriftAxes(broadcastMessage, store, startedItem, projectRoot, now);
       // COMP-OBS-STATUS: emit status snapshot after lifecycle started
       emitStatusSnapshot(broadcastMessage, store, featureCode, now);
       res.json(lifecycle);
@@ -263,6 +267,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: targetPhase, outcome, timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, outcome, timestamp: now }));
+      // COMP-OBS-DRIFT: emit drift axes before status so STATUS reads fresh drift_axes
+      emitDriftAxes(broadcastMessage, store, item, projectRoot, now);
       // COMP-OBS-STATUS: emit status snapshot after lifecycle transition (advance)
       emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
       res.json({ from, to: targetPhase, outcome });
@@ -291,6 +297,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: targetPhase, outcome: 'skipped', timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, outcome: 'skipped', timestamp: now }));
+      // COMP-OBS-DRIFT: emit drift axes before status so STATUS reads fresh drift_axes
+      emitDriftAxes(broadcastMessage, store, item, projectRoot, now);
       // COMP-OBS-STATUS: emit status snapshot after lifecycle transition (skip)
       emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
       res.json({ from, to: targetPhase, outcome: 'skipped', reason });
@@ -319,6 +327,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: 'killed', outcome: 'killed', timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: 'killed', outcome: 'killed', timestamp: now }));
+      // COMP-OBS-DRIFT: emit drift axes before status so STATUS reads fresh drift_axes
+      emitDriftAxes(broadcastMessage, store, item, projectRoot, now);
       // COMP-OBS-STATUS: emit status snapshot after lifecycle transition (kill)
       emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
       res.json({ phase: from, reason });
@@ -346,6 +356,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from: 'ship', to: 'complete', outcome: 'approved', timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from: 'ship', to: 'complete', outcome: 'approved', timestamp: now }));
+      // COMP-OBS-DRIFT: emit drift axes before status so STATUS reads fresh drift_axes
+      emitDriftAxes(broadcastMessage, store, item, projectRoot, now);
       // COMP-OBS-STATUS: emit status snapshot after lifecycle transition (complete)
       emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
       res.json({ completedAt: now });
@@ -411,6 +423,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
           outcome: 'retry',
           timestamp: now,
         }));
+        // COMP-OBS-DRIFT: emit drift axes before status so STATUS reads fresh drift_axes
+        emitDriftAxes(broadcastMessage, store, item, projectRoot, now);
         // COMP-OBS-STATUS: emit status snapshot after iteration started
         emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
       }
@@ -484,6 +498,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
             outcome: iter.outcome,
             timestamp: now,
           }));
+          // COMP-OBS-DRIFT: emit drift axes before status so STATUS reads fresh drift_axes
+          emitDriftAxes(broadcastMessage, store, item, projectRoot, now);
           // COMP-OBS-STATUS: emit status snapshot after iteration complete
           emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
         }
@@ -492,6 +508,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
         broadcastMessage({ type: 'iterationUpdate', itemId: req.params.id, loopId: iter.loopId, loopType: iter.loopType, count: iter.count, maxIterations: iter.maxIterations, exitCriteriaMet: false, findingsCount: result.findings?.length ?? 0, timestamp: now });
         // COMP-OBS-STATUS: STATUS broadcasts on iterationUpdate per Decision 4 (TIMELINE does not)
         if (item.lifecycle.featureCode) {
+          // COMP-OBS-DRIFT: emit drift axes before status so STATUS reads fresh drift_axes
+          emitDriftAxes(broadcastMessage, store, item, projectRoot, now);
           emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
         }
       }
@@ -533,6 +551,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
           outcome: 'aborted',
           timestamp: now,
         }));
+        // COMP-OBS-DRIFT: emit drift axes before status so STATUS reads fresh drift_axes
+        emitDriftAxes(broadcastMessage, store, item, projectRoot, now);
         // COMP-OBS-STATUS: emit status snapshot after iteration abort
         emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
       }
@@ -646,6 +666,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (itemId) {
         const gateItem = store.items.get(itemId);
         if (gateItem?.lifecycle?.featureCode) {
+          // COMP-OBS-DRIFT: emit drift axes before status so STATUS reads fresh drift_axes
+          emitDriftAxes(broadcastMessage, store, gateItem, projectRoot, gate.createdAt);
           emitStatusSnapshot(broadcastMessage, store, gateItem.lifecycle.featureCode, gate.createdAt);
         }
       }
@@ -751,6 +773,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (gate.itemId) {
         const resolvedItem = store.items.get(gate.itemId);
         if (resolvedItem?.lifecycle?.featureCode) {
+          // COMP-OBS-DRIFT: emit drift axes before status so STATUS reads fresh drift_axes
+          emitDriftAxes(broadcastMessage, store, resolvedItem, projectRoot, resolvedAt);
           emitStatusSnapshot(broadcastMessage, store, resolvedItem.lifecycle.featureCode, resolvedAt);
         }
       }
@@ -808,6 +832,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       broadcastMessage({ type: 'openLoopsUpdate', itemId: item.id, loops: nextLoops });
       const featureCode = updatedItem.lifecycle.featureCode;
       const now = new Date().toISOString();
+      // COMP-OBS-DRIFT: emit drift axes before status so STATUS reads fresh drift_axes
+      emitDriftAxes(broadcastMessage, store, updatedItem, projectRoot, now);
       emitStatusSnapshot(broadcastMessage, store, featureCode, now);
 
       res.status(201).json({ loop });
@@ -834,6 +860,9 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       const featureCode = item.lifecycle?.featureCode;
       if (featureCode) {
         const now = new Date().toISOString();
+        // COMP-OBS-DRIFT: emit drift axes before status so STATUS reads fresh drift_axes
+        const resolvedLoopItem = store.items.get(item.id);
+        if (resolvedLoopItem) emitDriftAxes(broadcastMessage, store, resolvedLoopItem, projectRoot, now);
         emitStatusSnapshot(broadcastMessage, store, featureCode, now);
       }
 

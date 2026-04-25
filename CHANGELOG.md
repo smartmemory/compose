@@ -2,6 +2,39 @@
 
 ## 2026-04-25
 
+### COMP-OBS-DRIFT — Mechanical drift axes + ribbon (Wave 6 data plane closed)
+
+Final Wave 6 data-plane feature. Three deterministic ratios per feature recompute on every state-changing event; rising-edge breaches emit `kind=drift_threshold` DecisionEvents that survive WS reconnect via persisted breach-edge metadata.
+
+**Schema bump (v0.2.4):**
+- `DriftAxis` gains optional `breach_started_at` (date-time, nullable) and `breach_event_id` (uuid, nullable). Required to make rehydration produce the same DecisionEvent id as the live emit; without these the recomputed event id would drift on every reconnect.
+
+**Axes (Decision 1):**
+- `path_drift` — files touched since last `phaseHistory.to === 'plan'` entry that are NOT in the plan's declared paths, divided by total touched. Sources unioned: committed-since-anchor + uncommitted worktree changes + untracked files (mirrors `compose/lib/build.js`'s pattern). Anchor uses the MOST RECENT plan entry to handle replans correctly.
+- `contract_drift` — JSON-schema fields added/removed/retyped between anchor commit and HEAD; recursive walk on fully-qualified paths so nested retypes are caught.
+- `review_debt_drift` — STRAT-REV JSON `findings[]` entries with `status` ∉ `{resolved, closed, fixed}`, divided by total findings. Missing review files → `threshold: null` (axis disabled), not `ratio: 0`.
+- All axes return `threshold: null` rather than false-clean ratio=0 when their source is missing or unparseable.
+
+**Defaults (Decision 2):** `path_drift: 0.30`, `contract_drift: 0.20`, `review_debt_drift: 0.40`.
+
+**Server pipeline:**
+- `server/drift-axes.js` *(new)* — pure `computeDriftAxes(item, projectRoot, now)`.
+- `server/contract-diff.js` *(new)* — `diffContracts(anchorRef, headPaths, projectRoot)` with recursive `walkSchema` + `collectFieldTypes`.
+- `server/drift-emit.js` *(new)* — recompute → preserve breach metadata for axes still breached / assign fresh ids on rising edge / clear on falling edge → `updateLifecycleExt` → broadcast `driftAxesUpdate` → emit `DecisionEvent[kind=drift_threshold]` for newly-breached axes.
+- `server/decision-event-id.js` + `decision-event-emit.js` — `driftThresholdDecisionEventId(featureCode, axisId, breachStartedAtIso)` + `buildDriftThresholdEvent(...)`.
+- `server/decision-events-snapshot.js` — 5th rehydration source reads persisted `breach_event_id` + `breach_started_at` directly (no recompute).
+- `server/vision-routes.js` — DRIFT emit BEFORE STATUS at every state-changing site (12 sites: 5 lifecycle + 4 iteration + 2 gate + 3 loop) so STATUS reads freshly persisted axes.
+- `server/cc-session-watcher.js` + `vision-server.js` — DRIFT emit wired post-lineage.
+
+**Client:**
+- `src/components/vision/DriftRibbon.jsx` *(new)* — 28px ribbon, region ⑥, mounted as first child of `ItemDetailPanel`'s ScrollArea body. Hidden when no axis breached. Click expands axis table.
+- `src/components/vision/driftRibbonLogic.js` *(new)* — pure helpers.
+- `src/components/vision/visionMessageHandler.js` — `driftAxesUpdate` patches the affected item's `lifecycle.lifecycle_ext.drift_axes`.
+
+**Reviews:** 6 Codex spec rounds reaching REVIEW CLEAN (initial findings: snapshot rehydrate identity, plan-anchor outcome assumption, STATUS already-correct, missing git-utils.js, file-source semantics for review_debt, working-tree git diff vs commit-only). 1 implementation review caught two more bugs: nested retypes silently undercounted in contract-diff, and plan-anchor used FIRST not LAST plan entry (broke replan semantics). Both fixed with regression tests pinned. REVIEW CLEAN at round 2.
+
+**Tests:** 57 new (14 drift-axes + 13 drift-emit + 7 contract-diff incl. nested-retype regression + 22 ui/drift-ribbon + integration). Full suite: **1858 pass, 0 fail, 0 skips**. Wave 6 data plane closed — DRIFT was the final unshipped sibling on the contract-compliance suite.
+
 ### COMP-OBS-GATELOG + COMP-OBS-LOOPS — Gate audit log + Open Loops panel
 
 Combined commit because both touch `status-snapshot.js` (gate_load_24h rollup + open_loops_count semantic fix + isStaleLoop extraction).

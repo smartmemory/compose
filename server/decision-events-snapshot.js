@@ -10,6 +10,7 @@
  *   - kind=iteration         → lifecycle.iterationState  (start + complete pairs)
  *   - kind=branch            → lifecycle.lifecycle_ext.branch_lineage.branches[]
  *   - kind=gate              → gate-log.jsonl (populated by COMP-OBS-GATELOG)
+ *   - kind=drift_threshold   → lifecycle.lifecycle_ext.drift_axes[] (COMP-OBS-DRIFT)
  *
  * Deterministic ids: re-derive == identity with the live emitters because both
  * use the same id helpers from decision-event-id.js.
@@ -20,7 +21,7 @@ import {
   iterationDecisionEventId,
   branchDecisionEventId,
 } from './decision-event-id.js';
-import { buildPhaseTransitionEvent, buildIterationEvent, buildGateEvent } from './decision-event-emit.js';
+import { buildPhaseTransitionEvent, buildIterationEvent, buildGateEvent, buildDriftThresholdEvent } from './decision-event-emit.js';
 import { readGateLog } from './gate-log-store.js';
 
 /**
@@ -113,6 +114,25 @@ export function deriveDecisionEvents(state, featureCode) {
           },
           roles: [],
         });
+      }
+    }
+
+    // ── drift_threshold events (kind=drift_threshold) — COMP-OBS-DRIFT ────────
+    // Rehydrate from persisted DriftAxis.breach_event_id + breach_started_at.
+    // Using persisted fields guarantees byte-for-byte identity with the live emit
+    // — we do NOT recompute from current computed_at, which would produce a
+    // different id on every reconnect.
+    const driftAxes = lc.lifecycle_ext?.drift_axes ?? [];
+    for (const axis of driftAxes) {
+      if (axis.breached === true && axis.breach_event_id && axis.breach_started_at) {
+        events.push(buildDriftThresholdEvent({
+          featureCode,
+          axisId: axis.axis_id,
+          ratio: axis.ratio,
+          threshold: axis.threshold,
+          breachStartedAt: axis.breach_started_at,
+          breachEventId: axis.breach_event_id,
+        }));
       }
     }
   }

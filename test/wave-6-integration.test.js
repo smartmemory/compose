@@ -793,3 +793,235 @@ describe('Wave 6 integration — COMP-OBS-LOOPS', () => {
     assert.ok(allR.body.loops[0].resolution, 'resolution must be set');
   });
 });
+
+// ── COMP-OBS-DRIFT integration ────────────────────────────────────────────────
+
+import { execSync as driftExecSync } from 'node:child_process';
+
+const { attachVisionRoutes: attachRoutesForDrift } = await import(`${REPO_ROOT}/server/vision-routes.js`);
+const { VisionStore: VisionStoreForDrift } = await import(`${REPO_ROOT}/server/vision-store.js`);
+const { SchemaValidator: DriftSchemaValidator } = await import(`${REPO_ROOT}/server/schema-validator.js`);
+
+function setupDrift() {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wave6-drift-'));
+  const dataDir = path.join(tmp, 'data');
+  fs.mkdirSync(dataDir, { recursive: true });
+
+  // Set up a minimal git repo so path_drift and contract_drift can anchor to commits
+  const git = (cmd) => {
+    try {
+      return driftExecSync(cmd, { cwd: tmp, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+    } catch { return ''; }
+  };
+  git('git init');
+  git('git config user.email "test@example.com"');
+  git('git config user.name "Test"');
+  fs.writeFileSync(path.join(tmp, '.gitkeep'), '');
+  git('git add .gitkeep');
+  git('git commit -m "init"');
+
+  const FC = 'COMP-OBS-DRIFT-INT';
+  const featurePath = path.join(tmp, 'docs', 'features', FC);
+  fs.mkdirSync(featurePath, { recursive: true });
+
+  const store = new VisionStoreForDrift(dataDir);
+  const broadcasts = [];
+  const app = express();
+  app.use(express.json());
+  attachRoutesForDrift(app, {
+    store,
+    scheduleBroadcast: () => {},
+    broadcastMessage: (msg) => broadcasts.push(msg),
+    projectRoot: tmp,
+  });
+
+  return new Promise((resolve) => {
+    const server = app.listen(0, () => {
+      const port = server.address().port;
+      resolve({ tmp, dataDir, store, broadcasts, server, port, featurePath, FC, git });
+    });
+  });
+}
+
+function teardownDrift(ctx) {
+  ctx.server.close();
+  try { fs.rmSync(ctx.tmp, { recursive: true, force: true }); } catch {}
+}
+
+function dPost(port, urlPath, body) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const req = http.request(
+      { hostname: '127.0.0.1', port, path: urlPath, method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } },
+      (res) => {
+        let buf = '';
+        res.on('data', c => buf += c);
+        res.on('end', () => {
+          try { resolve({ status: res.statusCode, body: JSON.parse(buf) }); }
+          catch { resolve({ status: res.statusCode, body: buf }); }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.end(data);
+  });
+}
+
+describe('Wave 6 integration — COMP-OBS-DRIFT', () => {
+  let ctx;
+  beforeEach(async () => { ctx = await setupDrift(); });
+  afterEach(() => teardownDrift(ctx));
+
+  test('driftAxesUpdate broadcast on lifecycle start; drift_axes persisted', async () => {
+    const item = ctx.store.createItem({ type: 'feature', title: 'Drift integration' });
+    const r = await dPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, {
+      featureCode: ctx.FC,
+    });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+
+    // driftAxesUpdate must be broadcast
+    const driftBroadcast = ctx.broadcasts.find(b => b.type === 'driftAxesUpdate');
+    assert.ok(driftBroadcast, 'driftAxesUpdate must be broadcast on lifecycleStart');
+    assert.equal(driftBroadcast.itemId, item.id);
+    assert.ok(Array.isArray(driftBroadcast.drift_axes), 'drift_axes must be array');
+    assert.equal(driftBroadcast.drift_axes.length, 3, 'must broadcast all 3 axes');
+
+    // drift_axes must be persisted on the item
+    const stored = ctx.store.items.get(item.id);
+    const persisted = stored.lifecycle.lifecycle_ext?.drift_axes;
+    assert.ok(Array.isArray(persisted), 'drift_axes must be persisted');
+    assert.equal(persisted.length, 3, 'must persist all 3 axes');
+  });
+
+  test('drift_axes validate against DriftAxis schema', async () => {
+    const sv = new DriftSchemaValidator();
+    const item = ctx.store.createItem({ type: 'feature', title: 'Schema validation test' });
+    await dPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: ctx.FC });
+
+    const stored = ctx.store.items.get(item.id);
+    const axes = stored.lifecycle.lifecycle_ext?.drift_axes ?? [];
+    for (const axis of axes) {
+      const { valid, errors } = sv.validate('DriftAxis', axis);
+      assert.equal(valid, true, `${axis.axis_id} schema invalid: ${JSON.stringify(errors)}`);
+    }
+  });
+
+  test('threshold-crossing DecisionEvent emitted and STATUS drift_alerts reflects breach', async () => {
+    const sv = new DriftSchemaValidator();
+    const { computeStatusSnapshot } = await import(`${REPO_ROOT}/server/status-snapshot.js`);
+
+    // Write a review file that will force review_debt_drift breach (1/1 = 100% > 40% threshold)
+    const reviewPath = path.join(ctx.featurePath, 'review.json');
+    fs.writeFileSync(reviewPath, JSON.stringify({
+      findings: [{ id: 'f1', status: 'open' }],
+    }));
+
+    const item = ctx.store.createItem({ type: 'feature', title: 'Breach test' });
+    await dPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: ctx.FC });
+
+    // Check for drift_threshold DecisionEvent
+    const driftEvents = ctx.broadcasts.filter(
+      b => b.type === 'decisionEvent' && b.event?.kind === 'drift_threshold'
+    );
+    assert.ok(driftEvents.length >= 1,
+      `expected >= 1 drift_threshold DecisionEvent, got ${driftEvents.length}`);
+
+    const evt = driftEvents[0].event;
+    assert.equal(evt.feature_code, ctx.FC);
+    assert.equal(evt.metadata.axis_id, 'review_debt_drift');
+    assert.ok(evt.metadata.ratio >= 0.40, `ratio ${evt.metadata.ratio} should be >= 0.40`);
+
+    // Validate the DecisionEvent shape
+    const { valid: dev, errors: dee } = sv.validate('DecisionEvent', evt);
+    assert.equal(dev, true, `drift_threshold DecisionEvent invalid: ${JSON.stringify(dee)}`);
+
+    // STATUS drift_alerts should have the breached axis
+    const NOW = new Date().toISOString();
+    const snap = computeStatusSnapshot(ctx.store, ctx.FC, NOW);
+    assert.ok(snap.drift_alerts.length >= 1,
+      `expected drift_alerts.length >= 1, got ${snap.drift_alerts.length}`);
+    assert.ok(snap.drift_alerts.every(a => a.breached === true),
+      'all drift_alerts must have breached: true');
+
+    // STATUS sentence should reference drift (Branch 5)
+    assert.ok(snap.sentence.length > 0, 'sentence must be non-empty');
+
+    // Validate StatusSnapshot schema
+    const { valid: sv2, errors: se } = sv.validate('StatusSnapshot', snap);
+    assert.equal(sv2, true, `StatusSnapshot invalid: ${JSON.stringify(se)}`);
+  });
+
+  test('snapshot rehydration produces same DecisionEvent id as live emit', async () => {
+    const { deriveDecisionEvents } = await import(`${REPO_ROOT}/server/decision-events-snapshot.js`);
+    const { driftThresholdDecisionEventId } = await import(`${REPO_ROOT}/server/decision-event-id.js`);
+
+    // Write review file to force breach
+    fs.writeFileSync(path.join(ctx.featurePath, 'review.json'), JSON.stringify({
+      findings: [{ id: 'f1', status: 'open' }],
+    }));
+
+    const item = ctx.store.createItem({ type: 'feature', title: 'Rehydration test' });
+    await dPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: ctx.FC });
+
+    // Get the live-emit event id
+    const liveEvent = ctx.broadcasts
+      .filter(b => b.type === 'decisionEvent' && b.event?.kind === 'drift_threshold')
+      .map(b => b.event)[0];
+    assert.ok(liveEvent, 'expected a live drift_threshold event');
+
+    // Get the persisted breach metadata
+    const stored = ctx.store.items.get(item.id);
+    const breachedAxis = stored.lifecycle.lifecycle_ext?.drift_axes?.find(a => a.breached === true);
+    assert.ok(breachedAxis, 'expected a breached axis in persisted state');
+    assert.ok(breachedAxis.breach_event_id, 'persisted axis must have breach_event_id');
+    assert.equal(breachedAxis.breach_event_id, liveEvent.id,
+      'persisted breach_event_id must match live DecisionEvent id');
+
+    // Simulate rehydration via deriveDecisionEvents
+    const rehydrated = deriveDecisionEvents(ctx.store, ctx.FC);
+    const rehydratedDrift = rehydrated.filter(e => e.kind === 'drift_threshold');
+    assert.ok(rehydratedDrift.length >= 1, 'rehydrated events must include drift_threshold');
+    const rehydratedEvent = rehydratedDrift.find(e => e.id === liveEvent.id);
+    assert.ok(rehydratedEvent, 'rehydrated event must have same id as live-emit event');
+    assert.equal(rehydratedEvent.timestamp, liveEvent.timestamp,
+      'rehydrated timestamp must match live-emit timestamp');
+  });
+
+  test('steady-state breach: second emit preserves breach_event_id; no new DecisionEvent', async () => {
+    // Write review file to force breach
+    fs.writeFileSync(path.join(ctx.featurePath, 'review.json'), JSON.stringify({
+      findings: [{ id: 'f1', status: 'open' }],
+    }));
+
+    const item = ctx.store.createItem({ type: 'feature', title: 'Steady breach test' });
+    // First emit (rising edge)
+    await dPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: ctx.FC });
+
+    const firstDriftEvents = ctx.broadcasts.filter(
+      b => b.type === 'decisionEvent' && b.event?.kind === 'drift_threshold'
+    );
+    assert.ok(firstDriftEvents.length >= 1, 'rising edge must emit DecisionEvent');
+    const firstId = firstDriftEvents[0].event.id;
+    const stored1 = ctx.store.items.get(item.id);
+    const firstBreachEventId = stored1.lifecycle.lifecycle_ext?.drift_axes
+      ?.find(a => a.breached)?.breach_event_id;
+
+    // Second emit (advance phase — DRIFT also fires here; steady breach)
+    await dPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/advance`, { targetPhase: 'prd' });
+
+    const allDriftEvents = ctx.broadcasts.filter(
+      b => b.type === 'decisionEvent' && b.event?.kind === 'drift_threshold'
+    );
+    // Should still be only 1 (the rising edge); advance is steady breach
+    assert.equal(allDriftEvents.length, firstDriftEvents.length,
+      'steady-state breach must NOT emit a new DecisionEvent');
+
+    // Persisted breach_event_id must be unchanged
+    const stored2 = ctx.store.items.get(item.id);
+    const secondBreachEventId = stored2.lifecycle.lifecycle_ext?.drift_axes
+      ?.find(a => a.breached)?.breach_event_id;
+    assert.equal(secondBreachEventId, firstBreachEventId,
+      'breach_event_id must be preserved across steady breach');
+  });
+});

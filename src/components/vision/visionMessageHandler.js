@@ -398,6 +398,22 @@ export function handleVisionMessage(msg, refs, setters) {
       }));
     }
 
+  } else if (msg.type === 'driftAxesUpdate') {
+    // COMP-OBS-DRIFT: targeted patch for the affected item's drift_axes
+    // Mirrors openLoopsUpdate pattern — patches in place without waiting for
+    // the next full visionState broadcast so DriftRibbon re-renders immediately.
+    if (setItems && msg.itemId && Array.isArray(msg.drift_axes)) {
+      setItems(prev => prev.map(it => {
+        if (it.id !== msg.itemId) return it;
+        const lifecycle = it.lifecycle ? { ...it.lifecycle } : {};
+        lifecycle.lifecycle_ext = {
+          ...(lifecycle.lifecycle_ext || {}),
+          drift_axes: msg.drift_axes,
+        };
+        return { ...it, lifecycle };
+      }));
+    }
+
   } else if (msg.type === 'branchLineageUpdate') {
     // COMP-OBS-BRANCH: targeted patch so the compare panel re-renders without
     // waiting for the next full visionState broadcast. Payload is

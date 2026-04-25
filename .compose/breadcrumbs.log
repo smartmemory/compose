@@ -259,3 +259,6 @@
 2026-04-25T14:31:39+08:00 | GATELOG + LOOPS: dispatch combined implementation to task-executor
 2026-04-25T14:34:19+08:00 | COMP-OBS-GATELOG + COMP-OBS-LOOPS: implement both Wave 6 features in combined commit
 2026-04-25T15:24:59+08:00 | GATELOG + LOOPS: ship — combined commit; 1823 pass, 1 skip (DRIFT-only)
+2026-04-25T16:18:57+08:00 | DRIFT: dispatch implementation; schema bump 0.2.3→0.2.4 with optional breach edge fields
+2026-04-25T16:20:43+08:00 | COMP-OBS-DRIFT implementation — schema bump + server pipeline + UI + tests
+2026-04-25T16:49:02+08:00 | DRIFT: ship — schema 0.2.4, full suite 1858 pass 0 skip; wave 6 data plane closed

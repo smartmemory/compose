@@ -20,6 +20,7 @@ import {
   phaseTransitionDecisionEventId,
   iterationDecisionEventId,
   gateDecisionEventId,
+  driftThresholdDecisionEventId,
 } from './decision-event-id.js';
 import { mapResolveOutcomeToSchema } from './gate-log-store.js';
 
@@ -113,6 +114,34 @@ export function buildIterationEvent({ featureCode, loopId, loopType, stage, atte
     title,
     metadata,
     roles,
+  };
+}
+
+/**
+ * Build a kind=drift_threshold DecisionEvent.
+ *
+ * Called by emitDriftAxes on the rising edge (breached false → true).
+ * id and timestamp are taken from the persisted breach_event_id and
+ * breach_started_at — NOT recomputed — so live-emit and snapshot rehydration
+ * produce byte-for-byte identical events.
+ *
+ * @param {{ featureCode, axisId, ratio, threshold, breachStartedAt, breachEventId }} params
+ */
+export function buildDriftThresholdEvent({ featureCode, axisId, ratio, threshold, breachStartedAt, breachEventId }) {
+  // If caller omits breachEventId, derive it deterministically (fallback safety).
+  const id = breachEventId || driftThresholdDecisionEventId(featureCode, axisId, breachStartedAt);
+  return {
+    id,
+    feature_code: featureCode,
+    timestamp: breachStartedAt,
+    kind: 'drift_threshold',
+    title: `Drift threshold crossed: ${axisId} (${Math.round(ratio * 100)}% ≥ ${Math.round(threshold * 100)}%)`,
+    metadata: {
+      axis_id: axisId,
+      ratio,
+      threshold,
+    },
+    roles: [],
   };
 }
 

@@ -46,3 +46,19 @@ export function gateDecisionEventId(featureCode, gateLogEntryId) {
   const featureNs = uuidv5(String(featureCode), ROOT_NAMESPACE);
   return uuidv5(`gate:${gateLogEntryId}`, featureNs);
 }
+
+/**
+ * Deterministic id for a drift_threshold DecisionEvent.
+ * Unique per (featureCode, axisId, breachStartedAt).
+ * Persisted on the DriftAxis as breach_event_id so rehydration produces the
+ * same id as the live emit without recomputing from current computed_at.
+ *
+ * @param {string} featureCode
+ * @param {string} axisId — 'path_drift' | 'contract_drift' | 'review_debt_drift'
+ * @param {string} breachStartedAtIso — ISO timestamp of the rising-edge breach
+ * @returns {string} UUID v5
+ */
+export function driftThresholdDecisionEventId(featureCode, axisId, breachStartedAtIso) {
+  const featureNs = uuidv5(String(featureCode), ROOT_NAMESPACE);
+  return uuidv5(`drift_threshold:${axisId}:${breachStartedAtIso}`, featureNs);
+}
