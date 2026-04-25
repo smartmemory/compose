@@ -55,6 +55,7 @@ import DashboardView from './components/vision/DashboardView.jsx';
 import IdeaboxView from './components/vision/IdeaboxView.jsx';
 import DesignView from './components/vision/DesignView.jsx';
 import DesignSidebar from './components/vision/DesignSidebar.jsx';
+import OpenLoopsPanel from './components/vision/OpenLoopsPanel.jsx';
 import { useDesignStore } from './components/vision/useDesignStore.js';
 import CommandPalette from './components/vision/shared/CommandPalette.jsx';
 import ItemFormDialog from './components/vision/shared/ItemFormDialog.jsx';
@@ -732,6 +733,33 @@ function AppInner() {
     return () => window.removeEventListener('compose:select-feature', handler);
   }, [handleOpsSelectFeature]);
 
+  // COMP-OBS-LOOPS — REST callbacks for the right panel.
+  // The panel calls these; server broadcasts `openLoopsUpdate` which the WS
+  // handler patches into the items slice, so no local optimistic update needed.
+  const findItemByFeature = useCallback((featureCode) => {
+    return items.find(i => i.lifecycle?.featureCode === featureCode) || null;
+  }, [items]);
+  const handleAddLoop = useCallback(async (featureCode, fields) => {
+    const item = findItemByFeature(featureCode);
+    if (!item) throw new Error(`No item found for feature ${featureCode}`);
+    const r = await fetch(`/api/vision/items/${item.id}/loops`, {
+      method: 'POST',
+      headers: withComposeToken({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(fields),
+    });
+    if (!r.ok) throw new Error(`Add loop failed: ${r.status}`);
+  }, [findItemByFeature]);
+  const handleResolveLoop = useCallback(async (featureCode, loopId, { note }) => {
+    const item = findItemByFeature(featureCode);
+    if (!item) throw new Error(`No item found for feature ${featureCode}`);
+    const r = await fetch(`/api/vision/items/${item.id}/loops/${loopId}/resolve`, {
+      method: 'POST',
+      headers: withComposeToken({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ note }),
+    });
+    if (!r.ok) throw new Error(`Resolve loop failed: ${r.status}`);
+  }, [findItemByFeature]);
+
   // ── Snapshot provider ───────────────────────────────────────────────────
   useEffect(() => {
     registerSnapshotProvider(() => ({
@@ -1213,6 +1241,18 @@ function AppInner() {
                       <DesignDocPanel />
                     )}
                   </ContextPanel>
+                </PanelErrorBoundary>
+              )}
+
+              {/* Open Loops Panel — COMP-OBS-LOOPS region ④ */}
+              {activeFeatureCode && activeView !== 'docs' && (
+                <PanelErrorBoundary zone="open loops panel">
+                  <OpenLoopsPanel
+                    featureCode={activeFeatureCode}
+                    items={items}
+                    onAddLoop={handleAddLoop}
+                    onResolveLoop={handleResolveLoop}
+                  />
                 </PanelErrorBoundary>
               )}
             </div>

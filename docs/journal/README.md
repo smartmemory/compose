@@ -10,6 +10,7 @@ Each entry is a dated session log capturing what we tried, what broke, what we l
 
 | Date | Entry | Summary |
 |------|-------|---------|
+| 2026-04-25 | [Session 26: COMP-OBS-GATELOG + COMP-OBS-LOOPS](2026-04-25-session-26-comp-obs-gatelog-loops.md) | Gate audit log (JSONL, emit-first), gates report CLI, OpenLoopsPanel (320px collapsible), open_loops_count semantic fix, isStaleLoop extraction. 77 new tests, 1823/1824 suite pass, 1 skip (DRIFT only). |
 | 2026-04-25 | [Session 25: COMP-OBS-STATUS — Status Band Ships](2026-04-25-session-25-comp-obs-status.md) | Pure producer (8-branch sentence template), emit dispatcher, 11 broadcast sites, 32px sticky StatusBand, store slice, WS handler, VisionTracker mount. 70 new tests, 1747/1747 suite pass. STATUS skip activated. |
 | 2026-04-20 | [Session 24: COMP-OBS-BRANCH — First Ship of Wave 6](2026-04-20-session-24-comp-obs-branch.md) | CC JSONL reader + BranchLineage lifecycle_ext + compare panel. 11 tasks across 4 tracks, 110 new tests, 1515/1515 suite pass. Wave 6 structural validator lands. |
 | 2026-02-11 | [Session 0: The Planning Marathon](2026-02-11-session-0-planning.md) | Product concept through architecture decision, all in one session |

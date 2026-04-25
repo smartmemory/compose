@@ -19,7 +19,9 @@
 import {
   phaseTransitionDecisionEventId,
   iterationDecisionEventId,
+  gateDecisionEventId,
 } from './decision-event-id.js';
+import { mapResolveOutcomeToSchema } from './gate-log-store.js';
 
 // Map server-side iteration outcome strings to the schema enum {pass|fail|retry}
 function mapIterationOutcome(outcome) {
@@ -111,5 +113,34 @@ export function buildIterationEvent({ featureCode, loopId, loopType, stage, atte
     title,
     metadata,
     roles,
+  };
+}
+
+/**
+ * Build a kind=gate DecisionEvent.
+ *
+ * @param {{ featureCode, gateLogEntryId, gateId, decision, timestamp }} params
+ *   - decision: route outcome string (approve|revise|kill) — translated to schema enum internally
+ */
+export function buildGateEvent({ featureCode, gateLogEntryId, gateId, decision, timestamp }) {
+  const now = timestamp || new Date().toISOString();
+  const id = gateDecisionEventId(featureCode, gateLogEntryId);
+  const schemaDecision = mapResolveOutcomeToSchema(decision);
+
+  const outcomeLabels = { approve: 'approved', interrupt: 'interrupted', deny: 'denied' };
+  const label = outcomeLabels[schemaDecision] || schemaDecision;
+
+  return {
+    id,
+    feature_code: featureCode,
+    timestamp: now,
+    kind: 'gate',
+    title: `Gate ${label}: ${gateId}`,
+    metadata: {
+      gate_id: gateId,
+      decision: schemaDecision,
+      gate_log_entry_id: gateLogEntryId,
+    },
+    roles: [],
   };
 }

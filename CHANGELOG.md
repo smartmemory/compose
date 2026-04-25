@@ -2,6 +2,33 @@
 
 ## 2026-04-25
 
+### COMP-OBS-GATELOG + COMP-OBS-LOOPS — Gate audit log + Open Loops panel
+
+Combined commit because both touch `status-snapshot.js` (gate_load_24h rollup + open_loops_count semantic fix + isStaleLoop extraction).
+
+**COMP-OBS-GATELOG — Gate decision audit + report CLI:**
+- `server/gate-log-store.js` *(new)* — `appendGateLogEntry` (idempotent on id), `readGateLog({since, featureCode})`, `mapResolveOutcomeToSchema` (`approve→approve`, `revise→interrupt`, `kill→deny`). Storage: project-scoped JSONL at `<dataDir>/gate-log.jsonl` (NOT app-global — gate decisions belong to the project they were made in).
+- `server/decision-event-id.js` extended with `gateDecisionEventId(featureCode, gateLogEntryId)` (uuidv5).
+- `server/decision-event-emit.js` extended with `buildGateEvent(...)` returning a `DecisionEvent[kind=gate]` with `metadata.gate_log_entry_id` populated and `decision` mapped to schema vocab.
+- `server/vision-routes.js` `gateResolved` route: new outcome whitelist (`approve|revise|kill` only); lazy-expiry guard parity with GET (returns 409 for expired pending gates); per Decision 3 emit-first-then-append — emit DecisionEvent first, then `appendGateLogEntry` with `decision_event_id` set on success or `null` on emit-throw. Featureless gates (no `lifecycle.featureCode`) skip both writes per Decision 1b. Expired gates skip per Decision 1c (no schema enum value).
+- `server/decision-events-snapshot.js` — gate events now rehydrate from `gate-log.jsonl` on WS connect, so live gate cards persist across reconnect.
+- `server/status-snapshot.js` — `gate_load_24h` reads from `readGateLog({since: now - 86400000}).length`.
+- `bin/compose.js` — new `compose gates report [--since 24h] [--feature FC] [--format text|json] [--rubber-stamp-ms N]` subcommand.
+
+**COMP-OBS-LOOPS — Open Loops panel + CLI + STATUS rollup fix:**
+- `server/open-loops-store.js` *(new)* — `addOpenLoop`/`resolveOpenLoop`/`listOpenLoops`/`isStaleLoop`. Server fills `id` (UUID v4), `created_at`, `parent_feature` (from item lifecycle); rejects when item lacks `featureCode`. Append-only: resolution mutates in-place, never deletes.
+- `server/vision-routes.js` — 3 new REST endpoints (`GET/POST .../loops`, `POST .../loops/:loopId/resolve`). Schema-aligned validation: `kind ∈ {deferred, blocked, open_question}`, `summary` 1–280 chars, `ttl_days` non-negative integer. Each route broadcasts `openLoopsUpdate` + recomputes status snapshot.
+- `server/status-snapshot.js` — `open_loops_count` is now `filter(l => l.resolution == null).length` (was `.length` — counted resolved entries forever); inline TTL math replaced by `isStaleLoop` import so panel/CLI/STATUS agree exactly.
+- `src/components/vision/OpenLoopsPanel.jsx` *(new)* — 320px sticky right panel collapsible to 40px (per CONTRACT layout.md §④); per-feature scope; oldest-first sort; inline resolve; add modal; `localStorage` collapse persisted as `compose:<feature-code>:openLoopsCollapsed`.
+- `src/components/vision/openLoopsPanelLogic.js` *(new)* — pure helpers mirroring server predicates.
+- `src/components/vision/visionMessageHandler.js` — `openLoopsUpdate` handler patches the affected item's `lifecycle.lifecycle_ext.open_loops` in-place.
+- `src/App.jsx` — mounts `<OpenLoopsPanel>` adjacent to ContextPanel; `handleAddLoop`/`handleResolveLoop` REST callbacks wire the panel to the new endpoints.
+- `bin/compose.js` — new `compose loops add|list|resolve --feature <FC> ...` subcommand. `--feature` is required on every action (cross-feature aggregate listing is explicitly out of scope for v1).
+
+**Reviews:** 4 Codex spec rounds across both designs (8+ findings → 4 → 2 → 1 → 0, REVIEW CLEAN); 2 Codex implementation rounds. Round 1 caught six bugs that tests had passed: (1) outcome whitelist missing on resolve (any string passed through), (2) lazy-expiry guard missing on resolve (parity with GET), (3) gate events absent from hydrate snapshot (live cards disappeared on reconnect), (4) `OpenLoopsPanel` mounted in App.jsx without `onAddLoop`/`onResolveLoop` callbacks (UI was non-functional), (5) gate-log was COMPOSE_HOME-scoped (would bleed across repos), (6) OpenLoop request body bypassed schema constraints. All six fixed; round 2 REVIEW CLEAN.
+
+**Tests:** 90 new tests (15+6+6 GATELOG node:test + 22+11+9+14 LOOPS node:test/vitest + 7 wave-6 integration/compliance). Full suite: **1823 pass, 0 fail, 1 intentional skip** (DRIFT only — the last unshipped Wave 6 sibling). Wave 6 contract-compliance suite un-skipped both placeholders.
+
 ### COMP-OBS-STATUS — Situational status band + main-cockpit mount fix
 
 **Why:** Wave 6 region ① per CONTRACT layout — the one-sentence "where are we, what's next" projection. Server rolls per-feature state (active phase, pending gates, drift breaches, stale open loops, iteration in flight) into a `StatusSnapshot` and broadcasts on every state-changing event. Click expands a 200px detail panel showing `pending_gates`, `drift_alerts`, `open_loops_count`, `gate_load_24h` verbatim. Also fixes a previously-shipped TIMELINE bug — both region ① and region ② were only mounted in the popout `VisionTracker`, not in the main cockpit (`App.jsx → CockpitView`). They are now mounted at the top of `<main>` so the status surface is visible in the primary UI.

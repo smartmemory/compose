@@ -521,3 +521,275 @@ describe('Wave 6 integration — COMP-OBS-STATUS', () => {
     assert.equal(body.snapshot.active_phase, 'explore_design');
   });
 });
+
+// ── COMP-OBS-GATELOG integration ──────────────────────────────────────────────
+
+import { randomUUID } from 'node:crypto';
+import { readGateLog } from '../server/gate-log-store.js';
+
+function setupGatelog() {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wave6-gatelog-'));
+  const dataDir = path.join(tmp, 'data');
+  fs.mkdirSync(dataDir, { recursive: true });
+
+  const gateLogPath = path.join(dataDir, 'gate-log.jsonl');
+  process.env.COMPOSE_GATE_LOG = gateLogPath;
+
+  const store = new VisionStore(dataDir);
+  const broadcasts = [];
+  const app = express();
+  app.use(express.json());
+  attachVisionRoutes(app, {
+    store,
+    scheduleBroadcast: () => {},
+    broadcastMessage: (msg) => broadcasts.push(msg),
+    projectRoot: tmp,
+  });
+
+  return new Promise((resolve) => {
+    const server = app.listen(0, () => {
+      const port = server.address().port;
+      resolve({ tmp, dataDir, gateLogPath, store, broadcasts, server, port });
+    });
+  });
+}
+
+function teardownGatelog(ctx) {
+  ctx.server.close();
+  delete process.env.COMPOSE_GATE_LOG;
+  try { fs.rmSync(ctx.tmp, { recursive: true, force: true }); } catch {}
+}
+
+function glPost(port, urlPath, body) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const req = http.request(
+      { hostname: '127.0.0.1', port, path: urlPath, method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } },
+      (res) => {
+        let buf = '';
+        res.on('data', c => { buf += c; });
+        res.on('end', () => {
+          try { resolve({ status: res.statusCode, body: JSON.parse(buf) }); }
+          catch { resolve({ status: res.statusCode, body: buf }); }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.end(data);
+  });
+}
+
+describe('Wave 6 integration — COMP-OBS-GATELOG', () => {
+  let ctx;
+  beforeEach(async () => { ctx = await setupGatelog(); });
+  afterEach(() => teardownGatelog(ctx));
+
+  test('gate create + resolve → log entry persisted + gate DecisionEvent emitted with join key', async () => {
+    // 1. Feature item + lifecycle
+    const item = ctx.store.createItem({ type: 'feature', title: 'GATELOG integration' });
+    await glPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: 'COMP-OBS-GATELOG-INT' });
+
+    // 2. Create gate
+    const gateR = await glPost(ctx.port, '/api/vision/gates', {
+      flowId: 'flow-1', stepId: 'design_gate', round: 1,
+      itemId: item.id, fromPhase: 'blueprint', toPhase: 'plan',
+    });
+    assert.equal(gateR.status, 201, `gate create: ${JSON.stringify(gateR.body)}`);
+    const gateId = gateR.body.id;
+
+    ctx.broadcasts.length = 0;
+
+    // 3. Resolve gate
+    const resolveR = await glPost(ctx.port, `/api/vision/gates/${gateId}/resolve`, { outcome: 'approve' });
+    assert.equal(resolveR.status, 200, `gate resolve: ${JSON.stringify(resolveR.body)}`);
+
+    // 4. Assert log entry persisted
+    const entries = readGateLog({ logPath: ctx.gateLogPath });
+    assert.equal(entries.length, 1, 'expected 1 log entry');
+    const entry = entries[0];
+    assert.equal(entry.decision, 'approve');
+    assert.equal(entry.feature_code, 'COMP-OBS-GATELOG-INT');
+    assert.equal(entry.gate_id, gateId);
+
+    // 5. Assert gate DecisionEvent emitted with join key
+    const gateEvents = ctx.broadcasts.filter(b => b.type === 'decisionEvent' && b.event?.kind === 'gate');
+    assert.equal(gateEvents.length, 1, 'expected 1 gate DecisionEvent');
+    const event = gateEvents[0].event;
+    assert.equal(event.metadata.gate_log_entry_id, entry.id, 'join key must match entry.id');
+    assert.equal(entry.decision_event_id, event.id, 'back-pointer must match event.id');
+
+    // 6. gate_load_24h in STATUS snapshot reflects the log entry
+    const snapshots = ctx.broadcasts.filter(b => b.type === 'statusSnapshot' && b.featureCode === 'COMP-OBS-GATELOG-INT');
+    assert.ok(snapshots.length >= 1, 'statusSnapshot must have been emitted');
+    const snap = snapshots[snapshots.length - 1].snapshot;
+    assert.equal(snap.gate_load_24h, 1, `gate_load_24h should be 1: ${snap.gate_load_24h}`);
+  });
+
+  test('resolve with revise → decision=interrupt in log', async () => {
+    const item = ctx.store.createItem({ type: 'feature', title: 'Revise test' });
+    await glPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: 'COMP-OBS-GL-REVISE' });
+    const gateR = await glPost(ctx.port, '/api/vision/gates', {
+      flowId: 'flow-2', stepId: 'plan_gate', round: 1, itemId: item.id,
+    });
+    await glPost(ctx.port, `/api/vision/gates/${gateR.body.id}/resolve`, { outcome: 'revise' });
+    const entries = readGateLog({ logPath: ctx.gateLogPath });
+    assert.equal(entries[0].decision, 'interrupt', 'revise must be stored as interrupt');
+  });
+});
+
+// ── COMP-OBS-LOOPS integration ────────────────────────────────────────────────
+
+function setupLoops() {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wave6-loops-'));
+  const dataDir = path.join(tmp, 'data');
+  fs.mkdirSync(dataDir, { recursive: true });
+  const store = new VisionStore(dataDir);
+  const broadcasts = [];
+  const app = express();
+  app.use(express.json());
+  attachVisionRoutes(app, {
+    store,
+    scheduleBroadcast: () => {},
+    broadcastMessage: (msg) => broadcasts.push(msg),
+    projectRoot: tmp,
+  });
+  return new Promise((resolve) => {
+    const server = app.listen(0, () => {
+      const port = server.address().port;
+      resolve({ tmp, dataDir, store, broadcasts, server, port });
+    });
+  });
+}
+
+function teardownLoops(ctx) {
+  ctx.server.close();
+  try { fs.rmSync(ctx.tmp, { recursive: true, force: true }); } catch {}
+}
+
+function loPost(port, urlPath, body) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const req = http.request(
+      { hostname: '127.0.0.1', port, path: urlPath, method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } },
+      (res) => {
+        let buf = '';
+        res.on('data', c => { buf += c; });
+        res.on('end', () => {
+          try { resolve({ status: res.statusCode, body: JSON.parse(buf) }); }
+          catch { resolve({ status: res.statusCode, body: buf }); }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.end(data);
+  });
+}
+
+function loGet(port, urlPath) {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      { hostname: '127.0.0.1', port, path: urlPath, method: 'GET' },
+      (res) => {
+        let buf = '';
+        res.on('data', c => { buf += c; });
+        res.on('end', () => {
+          try { resolve({ status: res.statusCode, body: JSON.parse(buf) }); }
+          catch { resolve({ status: res.statusCode, body: buf }); }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+describe('Wave 6 integration — COMP-OBS-LOOPS', () => {
+  let ctx;
+  const sv = new SchemaValidator();
+  beforeEach(async () => { ctx = await setupLoops(); });
+  afterEach(() => teardownLoops(ctx));
+
+  test('add → list → resolve → STATUS open_loops_count updates', async () => {
+    // 1. Feature item + lifecycle
+    const item = ctx.store.createItem({ type: 'feature', title: 'LOOPS integration' });
+    await loPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: 'COMP-OBS-LOOPS-INT' });
+
+    ctx.broadcasts.length = 0;
+
+    // 2. Add two open loops
+    const add1R = await loPost(ctx.port, `/api/vision/items/${item.id}/loops`, {
+      kind: 'deferred', summary: 'verify X before merge',
+    });
+    assert.equal(add1R.status, 201, `add1: ${JSON.stringify(add1R.body)}`);
+    const loop1Id = add1R.body.loop.id;
+
+    const add2R = await loPost(ctx.port, `/api/vision/items/${item.id}/loops`, {
+      kind: 'blocked', summary: 'dep on external service',
+    });
+    assert.equal(add2R.status, 201, `add2: ${JSON.stringify(add2R.body)}`);
+
+    // 3. Schema validate both loops
+    const { valid: v1 } = sv.validate('OpenLoop', add1R.body.loop);
+    assert.equal(v1, true, 'loop1 schema invalid');
+    const { valid: v2 } = sv.validate('OpenLoop', add2R.body.loop);
+    assert.equal(v2, true, 'loop2 schema invalid');
+
+    // 4. List: 2 open loops
+    const listR = await loGet(ctx.port, `/api/vision/items/${item.id}/loops`);
+    assert.equal(listR.status, 200);
+    assert.equal(listR.body.loops.length, 2, 'expected 2 open loops');
+
+    // 5. STATUS snapshot: open_loops_count=2
+    const snaps = ctx.broadcasts.filter(b => b.type === 'statusSnapshot' && b.featureCode === 'COMP-OBS-LOOPS-INT');
+    const afterAdd = snaps[snaps.length - 1]?.snapshot;
+    assert.ok(afterAdd, 'statusSnapshot must have been emitted after add');
+    assert.equal(afterAdd.open_loops_count, 2, `expected 2 open loops in snapshot: ${afterAdd.open_loops_count}`);
+
+    // 6. Resolve loop1
+    const resolveR = await loPost(ctx.port, `/api/vision/items/${item.id}/loops/${loop1Id}/resolve`, {
+      note: 'verified', resolved_by: 'test',
+    });
+    assert.equal(resolveR.status, 200, `resolve: ${JSON.stringify(resolveR.body)}`);
+    assert.ok(resolveR.body.loop.resolution, 'resolution must be set');
+
+    // 7. LIST after resolve: only 1 open loop
+    const listAfter = await loGet(ctx.port, `/api/vision/items/${item.id}/loops`);
+    assert.equal(listAfter.body.loops.length, 1, 'only 1 unresolved loop after resolve');
+
+    // 8. STATUS after resolve: open_loops_count=1
+    const snaps2 = ctx.broadcasts.filter(b => b.type === 'statusSnapshot' && b.featureCode === 'COMP-OBS-LOOPS-INT');
+    const afterResolve = snaps2[snaps2.length - 1]?.snapshot;
+    assert.ok(afterResolve, 'statusSnapshot must be emitted after resolve');
+    assert.equal(afterResolve.open_loops_count, 1, `expected 1 open loop after resolve: ${afterResolve.open_loops_count}`);
+
+    // 9. openLoopsUpdate broadcasts
+    const loopBroadcasts = ctx.broadcasts.filter(b => b.type === 'openLoopsUpdate');
+    assert.ok(loopBroadcasts.length >= 2, 'openLoopsUpdate must be broadcast on add+resolve');
+  });
+
+  test('featureless item → 400 on loop add', async () => {
+    const item = ctx.store.createItem({ type: 'feature', title: 'No FC item' });
+    const r = await loPost(ctx.port, `/api/vision/items/${item.id}/loops`, { kind: 'deferred', summary: 'x' });
+    assert.equal(r.status, 400);
+  });
+
+  test('append-only invariant: resolved loops remain in includeResolved list', async () => {
+    const item = ctx.store.createItem({ type: 'feature', title: 'Append-only test' });
+    await loPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: 'COMP-OBS-LOOPS-AO' });
+
+    const addR = await loPost(ctx.port, `/api/vision/items/${item.id}/loops`, { kind: 'deferred', summary: 'x' });
+    const loopId = addR.body.loop.id;
+    await loPost(ctx.port, `/api/vision/items/${item.id}/loops/${loopId}/resolve`, { note: '' });
+
+    // Default list: empty (resolved excluded)
+    const defaultR = await loGet(ctx.port, `/api/vision/items/${item.id}/loops`);
+    assert.equal(defaultR.body.loops.length, 0, 'resolved loop not in default list');
+
+    // includeResolved: 1 entry with resolution set
+    const allR = await loGet(ctx.port, `/api/vision/items/${item.id}/loops?includeResolved=true`);
+    assert.equal(allR.body.loops.length, 1, 'resolved loop present when includeResolved=true');
+    assert.ok(allR.body.loops[0].resolution, 'resolution must be set');
+  });
+});

@@ -9,6 +9,7 @@
  *   - kind=phase_transition  → lifecycle.phaseHistory[]  (populated by lifecycle-phase-history.js)
  *   - kind=iteration         → lifecycle.iterationState  (start + complete pairs)
  *   - kind=branch            → lifecycle.lifecycle_ext.branch_lineage.branches[]
+ *   - kind=gate              → gate-log.jsonl (populated by COMP-OBS-GATELOG)
  *
  * Deterministic ids: re-derive == identity with the live emitters because both
  * use the same id helpers from decision-event-id.js.
@@ -19,7 +20,8 @@ import {
   iterationDecisionEventId,
   branchDecisionEventId,
 } from './decision-event-id.js';
-import { buildPhaseTransitionEvent, buildIterationEvent } from './decision-event-emit.js';
+import { buildPhaseTransitionEvent, buildIterationEvent, buildGateEvent } from './decision-event-emit.js';
+import { readGateLog } from './gate-log-store.js';
 
 /**
  * Derive all DecisionEvents for a given featureCode from persisted lifecycle state.
@@ -113,6 +115,29 @@ export function deriveDecisionEvents(state, featureCode) {
         });
       }
     }
+  }
+
+  // ── gate events (kind=gate) — rehydrate from project gate-log.jsonl ──────
+  // Without this, live gate cards on the timeline disappear after WS reconnect.
+  // The gate log is project-scoped (NOT app-global), so cross-feature filter is safe.
+  try {
+    const entries = readGateLog({ featureCode });
+    for (const entry of entries) {
+      // Translate route-vocab decision (approve/revise/kill) into schema vocab
+      // before composing the event. Entry already stores schema vocab, but
+      // buildGateEvent re-maps for safety.
+      const event = buildGateEvent({
+        featureCode,
+        gateLogEntryId: entry.id,
+        gateId: entry.gate_id,
+        decision: entry.decision, // already schema vocab — buildGateEvent passes through
+        timestamp: entry.timestamp,
+      });
+      events.push(event);
+    }
+  } catch (err) {
+    // Gate log read is best-effort; missing/unreadable files yield no gate events.
+    // Existing rehydration of phase/iteration/branch events still proceeds.
   }
 
   // Sort by timestamp ascending (oldest first — strip renders newest-right)

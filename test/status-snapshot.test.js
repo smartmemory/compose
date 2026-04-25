@@ -425,7 +425,8 @@ describe('Branch 8 — idle baseline', () => {
     assertSchemaValid(snap);
   });
 
-  test('open_loops_count reflects lifecycle_ext.open_loops length', () => {
+  test('open_loops_count counts only unresolved loops (COMP-OBS-LOOPS semantic fix)', () => {
+    // After COMP-OBS-LOOPS ships: open_loops_count = filter(l => l.resolution == null).length
     const state = makeState({
       lifecycle: {
         currentPhase: 'plan',
@@ -433,12 +434,14 @@ describe('Branch 8 — idle baseline', () => {
           open_loops: [
             { id: 'l1', kind: 'deferred', summary: 'a', created_at: NOW, parent_feature: 'FC', resolution: null },
             { id: 'l2', kind: 'deferred', summary: 'b', created_at: NOW, parent_feature: 'FC', resolution: null },
+            { id: 'l3', kind: 'deferred', summary: 'c', created_at: NOW, parent_feature: 'FC',
+              resolution: { resolved_at: NOW, resolved_by: 'ruze', note: 'done' } }, // resolved — must NOT count
           ],
         },
       },
     });
     const snap = computeStatusSnapshot(state, 'COMP-OBS-STATUS', NOW);
-    assert.equal(snap.open_loops_count, 2);
+    assert.equal(snap.open_loops_count, 2, 'resolved loops must not be counted');
     assert.ok(snap.sentence.includes('Open loops: 2'), `got: ${snap.sentence}`);
   });
 });
@@ -494,10 +497,14 @@ describe('Schema compliance', () => {
     assert.equal(snap.cta, null);
   });
 
-  test('gate_load_24h is always 0 (TODO stub)', () => {
+  test('gate_load_24h is a non-negative integer (COMP-OBS-GATELOG live)', () => {
+    // GATELOG shipped: gate_load_24h now reads from the gate log file.
+    // The value depends on runtime state, so we assert type/range not exact value.
     const state = makeState({ lifecycle: { currentPhase: 'execute' } });
     const snap = computeStatusSnapshot(state, 'COMP-OBS-STATUS', NOW);
-    assert.equal(snap.gate_load_24h, 0);
+    assert.ok(typeof snap.gate_load_24h === 'number', 'gate_load_24h must be a number');
+    assert.ok(snap.gate_load_24h >= 0, 'gate_load_24h must be non-negative');
+    assert.equal(Math.floor(snap.gate_load_24h), snap.gate_load_24h, 'gate_load_24h must be integer');
   });
 
   test('pending_gates is array of string ids', () => {

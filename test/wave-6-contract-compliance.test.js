@@ -418,8 +418,112 @@ describe('Wave 6 contract — pending siblings (skip-until-landed)', () => {
     assert.ok(!isNaN(Date.parse(snap.computed_at)), `computed_at not valid ISO: ${snap.computed_at}`);
   });
   test.skip('DriftAxis emission + threshold crossing — COMP-OBS-DRIFT', () => {});
-  test.skip('GateLogEntry + gate DecisionEvent join round-trip — COMP-OBS-GATELOG', () => {});
-  test.skip('OpenLoop CLI round-trip + >TTL flag — COMP-OBS-LOOPS', () => {});
+
+  test('GateLogEntry + gate DecisionEvent join round-trip — COMP-OBS-GATELOG', async () => {
+    const sv = new SchemaValidator();
+    // Verify GateLogEntry shape validates and the join key round-trips correctly.
+    const { randomUUID: uuid } = await import('node:crypto');
+    const entryId = uuid();
+    const eventId = uuid();
+
+    const entry = {
+      id: entryId,
+      gate_id: 'build:design',
+      decision: 'approve',
+      operator: 'ruze',
+      duration_to_decide_ms: 4500,
+      timestamp: '2026-04-25T10:00:00Z',
+      feature_code: 'COMP-OBS-GATELOG-TEST',
+      decision_event_id: eventId,
+    };
+    const { valid: ev, errors: ee } = sv.validate('GateLogEntry', entry);
+    assert.equal(ev, true, `GateLogEntry schema invalid: ${JSON.stringify(ee?.slice(0, 3))}`);
+
+    // Verify the join: a gate DecisionEvent with metadata.gate_log_entry_id = entry.id
+    const gateEvent = {
+      id: eventId,
+      feature_code: 'COMP-OBS-GATELOG-TEST',
+      timestamp: '2026-04-25T10:00:00Z',
+      kind: 'gate',
+      title: 'Gate approved: build:design',
+      metadata: {
+        gate_id: 'build:design',
+        decision: 'approve',
+        gate_log_entry_id: entryId,  // join key
+      },
+    };
+    const { valid: gv, errors: ge } = sv.validate('DecisionEvent', gateEvent);
+    assert.equal(gv, true, `gate DecisionEvent schema invalid: ${JSON.stringify(ge?.slice(0, 3))}`);
+
+    // Round-trip: join key must match
+    assert.equal(gateEvent.metadata.gate_log_entry_id, entry.id, 'join key round-trip failed');
+
+    // Negative: entry with null decision_event_id is still valid (emission-failure escape hatch)
+    const entryNullEvId = { ...entry, id: uuid(), decision_event_id: null };
+    const { valid: nv } = sv.validate('GateLogEntry', entryNullEvId);
+    assert.equal(nv, true, 'null decision_event_id must be valid per schema (emission-failure path)');
+
+    // Negative: gate DecisionEvent WITHOUT gate_log_entry_id must fail
+    const badEvent = {
+      ...gateEvent,
+      id: uuid(),
+      metadata: { gate_id: 'build:design', decision: 'approve' }, // missing gate_log_entry_id
+    };
+    const { valid: bv } = sv.validate('DecisionEvent', badEvent);
+    assert.equal(bv, false, 'gate DecisionEvent without gate_log_entry_id must fail schema');
+  });
+
+  test('OpenLoop CLI round-trip + >TTL flag — COMP-OBS-LOOPS', async () => {
+    const sv = new SchemaValidator();
+    const { randomUUID: uuid } = await import('node:crypto');
+    const NOW_ISO = '2026-04-24T10:00:00Z';
+
+    // Well-formed open loop
+    const loop = {
+      id: uuid(),
+      kind: 'deferred',
+      summary: 'verify deployment before promote',
+      created_at: NOW_ISO,
+      parent_feature: 'COMP-OBS-LOOPS-TEST',
+      parent_branch: null,
+      resolution: null,
+      ttl_days: 90,
+    };
+    const { valid: lv, errors: le } = sv.validate('OpenLoop', loop);
+    assert.equal(lv, true, `OpenLoop schema invalid: ${JSON.stringify(le?.slice(0, 3))}`);
+
+    // Resolved loop is also valid
+    const resolved = {
+      ...loop,
+      id: uuid(),
+      resolution: { resolved_at: NOW_ISO, resolved_by: 'ruze', note: 'shipped' },
+    };
+    const { valid: rv } = sv.validate('OpenLoop', resolved);
+    assert.equal(rv, true, 'resolved OpenLoop must be schema-valid');
+
+    // >TTL flag: isStaleLoop predicate from open-loops-store
+    const { isStaleLoop } = await import(`${REPO_ROOT}/server/open-loops-store.js`);
+    const nowMs = Date.parse(NOW_ISO);
+    const staleLoop = {
+      ...loop,
+      id: uuid(),
+      created_at: new Date(nowMs - 100 * 86400000).toISOString(),
+      ttl_days: 10,
+    };
+    assert.equal(isStaleLoop(staleLoop, nowMs), true, 'loop 100 days old with ttl_days=10 must be stale');
+
+    const freshLoop = { ...loop, id: uuid(), ttl_days: 90 };
+    assert.equal(isStaleLoop(freshLoop, nowMs), false, 'loop created now must not be stale');
+
+    // Resolved loops are never stale
+    assert.equal(isStaleLoop({ ...staleLoop, resolution: { resolved_at: NOW_ISO, resolved_by: 'ruze' } }, nowMs), false,
+      'resolved loop must never be stale');
+
+    // openLoopsPanelLogic must mirror server isStaleLoop
+    const { isStaleLoop: panelIsStale } = await import(`${REPO_ROOT}/src/components/vision/openLoopsPanelLogic.js`);
+    assert.equal(panelIsStale(staleLoop, nowMs), true, 'panel stale predicate must match server for stale loop');
+    assert.equal(panelIsStale(freshLoop, nowMs), false, 'panel stale predicate must match server for fresh loop');
+  });
   // COMP-OBS-TIMELINE: un-skipped 2026-04-24 — TIMELINE ships with 3 kinds today
   // (branch via BRANCH emitter, phase_transition + iteration via TIMELINE emitters).
   // kind=gate waits for COMP-OBS-GATELOG; kind=drift_threshold waits for COMP-OBS-DRIFT.

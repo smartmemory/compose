@@ -384,6 +384,20 @@ export function handleVisionMessage(msg, refs, setters) {
       meta: { itemId: msg.itemId, from: msg.from, to: msg.to, outcome: msg.outcome },
     });
 
+  } else if (msg.type === 'openLoopsUpdate') {
+    // COMP-OBS-LOOPS: targeted patch for the affected item's open_loops
+    if (setItems && msg.itemId && Array.isArray(msg.loops)) {
+      setItems(prev => prev.map(it => {
+        if (it.id !== msg.itemId) return it;
+        const lifecycle = it.lifecycle ? { ...it.lifecycle } : {};
+        lifecycle.lifecycle_ext = {
+          ...(lifecycle.lifecycle_ext || {}),
+          open_loops: msg.loops,
+        };
+        return { ...it, lifecycle };
+      }));
+    }
+
   } else if (msg.type === 'branchLineageUpdate') {
     // COMP-OBS-BRANCH: targeted patch so the compare panel re-renders without
     // waiting for the next full visionState broadcast. Payload is

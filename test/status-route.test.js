@@ -133,9 +133,10 @@ describe('GET /api/lifecycle/status', () => {
     assert.equal(body.snapshot.cta, null);
   });
 
-  test('gate_load_24h is 0 (TODO stub)', async () => {
+  test('gate_load_24h is a non-negative integer (COMP-OBS-GATELOG live)', async () => {
     const { body } = await httpGet(ctx.port, '/api/lifecycle/status?featureCode=COMP-OBS-STATUS-ROUTE-TEST');
-    assert.equal(body.snapshot.gate_load_24h, 0);
+    assert.ok(typeof body.snapshot.gate_load_24h === 'number', 'gate_load_24h must be number');
+    assert.ok(body.snapshot.gate_load_24h >= 0, 'gate_load_24h must be non-negative');
   });
 
   test('pending_gates is an array', async () => {

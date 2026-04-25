@@ -19,6 +19,9 @@
  *   Both short-circuit branches 4–7.
  */
 
+import { readGateLog } from './gate-log-store.js';
+import { isStaleLoop } from './open-loops-store.js';
+
 // Known lifecycle phases — must match LIFECYCLE_PHASE_LABELS in constants.js
 const KNOWN_PHASES = new Set([
   'explore_design', 'prd', 'architecture', 'blueprint',
@@ -175,18 +178,13 @@ export function computeStatusSnapshot(state, featureCode, now) {
   const driftAxes = ext.drift_axes ?? [];
   const driftAlerts = driftAxes.filter(a => a.breached === true);
 
-  // Open loops
+  // Open loops — only unresolved entries count (COMP-OBS-LOOPS semantic fix)
   const openLoops = ext.open_loops ?? [];
-  const openLoopsCount = openLoops.length;
+  const openLoopsCount = openLoops.filter(l => l.resolution == null).length;
 
-  // Stale open loops: unresolved and past TTL relative to now
+  // Stale open loops: unresolved and past TTL — use shared isStaleLoop helper
   const nowMs = Date.parse(nowStr);
-  const staleLoops = openLoops.filter(loop => {
-    if (loop.resolution) return false; // resolved — not stale
-    const ttl = loop.ttl_days ?? 90;
-    const ageMs = nowMs - Date.parse(loop.created_at);
-    return ageMs > ttl * 24 * 60 * 60 * 1000;
-  });
+  const staleLoops = openLoops.filter(loop => isStaleLoop(loop, nowMs));
   const staleLoopCount = staleLoops.length;
 
   const iterationState = lc?.iterationState ?? null;
@@ -213,7 +211,7 @@ export function computeStatusSnapshot(state, featureCode, now) {
     pending_gates: pendingGateIds,
     drift_alerts: driftAlerts,
     open_loops_count: openLoopsCount,
-    gate_load_24h: 0, // TODO: real value when COMP-OBS-GATELOG ships
+    gate_load_24h: readGateLog({ since: nowMs - 86400000 }).length,
     cta: null,
     computed_at: nowStr,
   };

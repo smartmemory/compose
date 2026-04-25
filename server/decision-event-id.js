@@ -32,3 +32,17 @@ export function iterationDecisionEventId(featureCode, loopId, stage) {
   const featureNs = uuidv5(String(featureCode), ROOT_NAMESPACE);
   return uuidv5(`iteration:${loopId}:${stage}`, featureNs);
 }
+
+/**
+ * Deterministic id for a gate DecisionEvent (kind='gate').
+ * Unique per (featureCode, gateLogEntryId).
+ * Once entry.id is fixed, the event id is fixed — enabling reconciliation.
+ *
+ * @param {string} featureCode
+ * @param {string} gateLogEntryId — UUID v4 of the GateLogEntry
+ * @returns {string} UUID v5
+ */
+export function gateDecisionEventId(featureCode, gateLogEntryId) {
+  const featureNs = uuidv5(String(featureCode), ROOT_NAMESPACE);
+  return uuidv5(`gate:${gateLogEntryId}`, featureNs);
+}

@@ -1509,7 +1509,323 @@ if (cmd === 'build') {
     process.exit(1)
   })
 
+} else if (cmd === 'gates') {
+  // ---------------------------------------------------------------------------
+  // compose gates report [--since 24h|7d|1h|<ISO>] [--feature <FC>]
+  //                       [--format text|json] [--rubber-stamp-ms <N>]
+  // COMP-OBS-GATELOG: audit gate log report (Decision 5)
+  // ---------------------------------------------------------------------------
+  const gatesSubcmd = args[0]
+
+  if (gatesSubcmd === 'report') {
+    const { readGateLog } = await import('../server/gate-log-store.js')
+    const flagIdx = (flag) => args.indexOf(flag)
+    const flagVal = (flag) => {
+      const i = flagIdx(flag)
+      return i !== -1 && args[i + 1] ? args[i + 1] : null
+    }
+
+    // Parse --since: shorthand (24h, 7d, 1h) or ISO date string
+    const sinceStr = flagVal('--since')
+    let sinceMs = null
+    if (sinceStr) {
+      const shorthand = sinceStr.match(/^(\d+)(h|d)$/)
+      if (shorthand) {
+        const n = parseInt(shorthand[1], 10)
+        const mult = shorthand[2] === 'h' ? 3600000 : 86400000
+        sinceMs = Date.now() - n * mult
+      } else {
+        const parsed = Date.parse(sinceStr)
+        if (!isNaN(parsed)) sinceMs = parsed
+        else {
+          console.error(`--since: cannot parse "${sinceStr}" (use e.g. 24h, 7d, or ISO date)`)
+          process.exit(1)
+        }
+      }
+    } else {
+      // Default: last 24h
+      sinceMs = Date.now() - 86400000
+    }
+
+    const featureFilter = flagVal('--feature')
+    const format = flagVal('--format') || 'text'
+    const rubberStampMs = parseInt(flagVal('--rubber-stamp-ms') || '3000', 10)
+
+    const entries = readGateLog({ since: sinceMs, featureCode: featureFilter || undefined })
+
+    if (format === 'json') {
+      // Per-gate_id stats as JSON
+      const stats = buildGateStats(entries, rubberStampMs)
+      console.log(JSON.stringify(stats, null, 2))
+      process.exit(0)
+    }
+
+    // Text table
+    const stats = buildGateStats(entries, rubberStampMs)
+    if (stats.length === 0) {
+      console.log('No gate log entries found for the specified window.')
+      process.exit(0)
+    }
+
+    const col = (s, w) => String(s ?? '').padEnd(w)
+    const hdr = col('gate_id', 28) + col('logged', 8) + col('approve%', 10) + col('deny%', 7) + col('interrupt%', 12) + col('median_ms', 11) + 'rubber_stamp%'
+    const sep = '-'.repeat(hdr.length)
+    console.log(hdr)
+    console.log(sep)
+    for (const row of stats) {
+      const flag = row.rubber_stamp_pct > 50 ? '  <- rubber-stamp candidate' : ''
+      console.log(
+        col(row.gate_id, 28) +
+        col(row.logged_decisions, 8) +
+        col(row.approve_pct.toFixed(1), 10) +
+        col(row.deny_pct.toFixed(1), 7) +
+        col(row.interrupt_pct.toFixed(1), 12) +
+        col(row.median_ms !== null ? row.median_ms : 'N/A', 11) +
+        row.rubber_stamp_pct.toFixed(1) + flag
+      )
+    }
+    process.exit(0)
+  }
+
+  console.error(`Unknown gates subcommand: ${gatesSubcmd}`)
+  console.error('Usage: compose gates report [--since 24h] [--feature FC] [--format text|json] [--rubber-stamp-ms N]')
+  process.exit(1)
+
+} else if (cmd === 'loops') {
+  // ---------------------------------------------------------------------------
+  // compose loops add --feature <FC> --kind <kind> --summary "<text>" [--ttl-days N] [--parent-branch <bid>]
+  // compose loops list --feature <FC> [--include-resolved] [--format json]
+  // compose loops resolve <loopId> --feature <FC> --note "<text>"
+  // COMP-OBS-LOOPS (Decision 4)
+  // ---------------------------------------------------------------------------
+  const loopsSubcmd = args[0]
+
+  const flagVal = (flag) => {
+    const i = args.indexOf(flag)
+    return i !== -1 && args[i + 1] ? args[i + 1] : null
+  }
+  const hasFlag = (flag) => args.includes(flag)
+
+  const featureCode = flagVal('--feature')
+
+  // --feature is required on every subcommand
+  if (!featureCode) {
+    console.error('compose loops: --feature <FC> is required on every subcommand')
+    console.error('  compose loops add --feature <FC> --kind <kind> --summary "<text>"')
+    console.error('  compose loops list --feature <FC>')
+    console.error('  compose loops resolve <loopId> --feature <FC> --note "<text>"')
+    process.exit(1)
+  }
+
+  // Resolve compose server URL (default http://localhost:3000)
+  const baseUrl = process.env.COMPOSE_URL || 'http://localhost:3000'
+
+  async function httpGet(url) {
+    const { default: http } = await import(url.startsWith('https') ? 'https' : 'http')
+    return new Promise((resolve, reject) => {
+      http.get(url, (res) => {
+        let buf = ''
+        res.on('data', c => { buf += c })
+        res.on('end', () => {
+          try { resolve({ status: res.statusCode, body: JSON.parse(buf) }) }
+          catch { resolve({ status: res.statusCode, body: buf }) }
+        })
+      }).on('error', reject)
+    })
+  }
+
+  async function httpPost(urlStr, body) {
+    const { default: http } = await import(urlStr.startsWith('https') ? 'https' : 'http')
+    return new Promise((resolve, reject) => {
+      const data = JSON.stringify(body)
+      const url = new URL(urlStr)
+      const options = {
+        hostname: url.hostname,
+        port: url.port || (urlStr.startsWith('https') ? 443 : 80),
+        path: url.pathname + url.search,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+      }
+      const req = http.request(options, (res) => {
+        let buf = ''
+        res.on('data', c => { buf += c })
+        res.on('end', () => {
+          try { resolve({ status: res.statusCode, body: JSON.parse(buf) }) }
+          catch { resolve({ status: res.statusCode, body: buf }) }
+        })
+      })
+      req.on('error', reject)
+      req.end(data)
+    })
+  }
+
+  // Resolve item id from feature code
+  async function getItemByFeatureCode(fc) {
+    const r = await httpGet(`${baseUrl}/api/vision/items`)
+    if (r.status !== 200) throw new Error(`Failed to list items: ${JSON.stringify(r.body)}`)
+    const items = r.body.items || r.body
+    const item = items.find(i => i.lifecycle?.featureCode === fc)
+    if (!item) throw new Error(`No item found with featureCode=${fc}`)
+    return item
+  }
+
+  if (loopsSubcmd === 'add') {
+    const kind = flagVal('--kind')
+    const summary = flagVal('--summary')
+    const ttlDays = flagVal('--ttl-days') ? parseInt(flagVal('--ttl-days'), 10) : undefined
+    const parentBranch = flagVal('--parent-branch') || undefined
+
+    if (!kind) { console.error('--kind is required'); process.exit(1) }
+    if (!summary) { console.error('--summary is required'); process.exit(1) }
+
+    try {
+      const item = await getItemByFeatureCode(featureCode)
+      const r = await httpPost(`${baseUrl}/api/vision/items/${item.id}/loops`, { kind, summary, ttl_days: ttlDays, parent_branch: parentBranch })
+      if (r.status !== 201) {
+        console.error(`Error: ${JSON.stringify(r.body)}`)
+        process.exit(1)
+      }
+      const format = flagVal('--format')
+      if (format === 'json') {
+        console.log(JSON.stringify(r.body.loop, null, 2))
+      } else {
+        console.log(`Created loop: ${r.body.loop.id}`)
+        console.log(`  kind:    ${r.body.loop.kind}`)
+        console.log(`  summary: ${r.body.loop.summary}`)
+      }
+      process.exit(0)
+    } catch (err) {
+      console.error(`loops add failed: ${err.message}`)
+      process.exit(1)
+    }
+
+  } else if (loopsSubcmd === 'list') {
+    const includeResolved = hasFlag('--include-resolved')
+    const format = flagVal('--format')
+    const nowMs = Date.now()
+
+    try {
+      const item = await getItemByFeatureCode(featureCode)
+      const r = await httpGet(`${baseUrl}/api/vision/items/${item.id}/loops${includeResolved ? '?includeResolved=true' : ''}`)
+      if (r.status !== 200) {
+        console.error(`Error: ${JSON.stringify(r.body)}`)
+        process.exit(1)
+      }
+      const loops = r.body.loops
+
+      if (format === 'json') {
+        console.log(JSON.stringify(loops, null, 2))
+        process.exit(0)
+      }
+
+      if (loops.length === 0) {
+        console.log(`No open loops for ${featureCode}`)
+        process.exit(0)
+      }
+
+      // Sort oldest first
+      const sorted = [...loops].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))
+      // ANSI red for stale
+      const RED = '\x1b[31m'
+      const RESET = '\x1b[0m'
+
+      for (const loop of sorted) {
+        const { isStaleLoop } = await import('../server/open-loops-store.js')
+        const stale = isStaleLoop(loop, nowMs)
+        const prefix = stale ? `${RED}>TTL ` : '     '
+        const suffix = stale ? RESET : ''
+        const status = loop.resolution ? '[resolved]' : '[open]'
+        console.log(`${prefix}${loop.id.slice(0, 8)}  ${status}  [${loop.kind}]  ${loop.summary}${suffix}`)
+      }
+      process.exit(0)
+    } catch (err) {
+      console.error(`loops list failed: ${err.message}`)
+      process.exit(1)
+    }
+
+  } else if (loopsSubcmd === 'resolve') {
+    const loopId = args[1]
+    const note = flagVal('--note') || ''
+
+    if (!loopId || loopId.startsWith('-')) {
+      console.error('Usage: compose loops resolve <loopId> --feature <FC> [--note "<text>"]')
+      process.exit(1)
+    }
+
+    try {
+      const item = await getItemByFeatureCode(featureCode)
+      const r = await httpPost(`${baseUrl}/api/vision/items/${item.id}/loops/${loopId}/resolve`, {
+        note,
+        resolved_by: process.env.USER || 'unknown',
+      })
+      if (r.status !== 200) {
+        console.error(`Error: ${JSON.stringify(r.body)}`)
+        process.exit(1)
+      }
+      const format = flagVal('--format')
+      if (format === 'json') {
+        console.log(JSON.stringify(r.body.loop, null, 2))
+      } else {
+        console.log(`Resolved loop: ${r.body.loop.id}`)
+        if (note) console.log(`  note: ${note}`)
+      }
+      process.exit(0)
+    } catch (err) {
+      console.error(`loops resolve failed: ${err.message}`)
+      process.exit(1)
+    }
+
+  } else {
+    console.error(`Unknown loops subcommand: ${loopsSubcmd}`)
+    console.error('  compose loops add --feature <FC> --kind <kind> --summary "<text>"')
+    console.error('  compose loops list --feature <FC>')
+    console.error('  compose loops resolve <loopId> --feature <FC> --note "<text>"')
+    process.exit(1)
+  }
+
 } else {
   console.error(`Unknown command: ${cmd}`)
   process.exit(1)
+}
+
+// ---------------------------------------------------------------------------
+// Helper: build per-gate stats for `compose gates report`
+// ---------------------------------------------------------------------------
+function buildGateStats(entries, rubberStampMs = 3000) {
+  const byGate = new Map()
+
+  for (const e of entries) {
+    const gid = e.gate_id
+    if (!byGate.has(gid)) byGate.set(gid, [])
+    byGate.get(gid).push(e)
+  }
+
+  const rows = []
+  for (const [gate_id, gEntries] of byGate) {
+    const n = gEntries.length
+    const approve = gEntries.filter(e => e.decision === 'approve').length
+    const deny = gEntries.filter(e => e.decision === 'deny').length
+    const interrupt = gEntries.filter(e => e.decision === 'interrupt').length
+    const durations = gEntries
+      .map(e => e.duration_to_decide_ms)
+      .filter(d => typeof d === 'number')
+      .sort((a, b) => a - b)
+    const median_ms = durations.length > 0
+      ? durations[Math.floor(durations.length / 2)]
+      : null
+    const rubber_stamp_count = durations.filter(d => d < rubberStampMs).length
+    const rubber_stamp_pct = n > 0 ? (rubber_stamp_count / n) * 100 : 0
+
+    rows.push({
+      gate_id,
+      logged_decisions: n,
+      approve_pct: n > 0 ? (approve / n) * 100 : 0,
+      deny_pct:    n > 0 ? (deny    / n) * 100 : 0,
+      interrupt_pct: n > 0 ? (interrupt / n) * 100 : 0,
+      median_ms,
+      rubber_stamp_pct,
+    })
+  }
+
+  return rows.sort((a, b) => a.gate_id.localeCompare(b.gate_id))
 }

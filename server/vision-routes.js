@@ -34,7 +34,7 @@ import { ArtifactManager } from './artifact-manager.js';
 import { recordIteration, checkCumulativeBudget } from '../lib/budget-ledger.js';
 import { SchemaValidator } from './schema-validator.js';
 import { appendPhaseHistory } from './lifecycle-phase-history.js';
-import { emitDecisionEvent, buildPhaseTransitionEvent, buildIterationEvent } from './decision-event-emit.js';
+import { emitDecisionEvent, buildPhaseTransitionEvent, buildIterationEvent, buildGateEvent } from './decision-event-emit.js';
 import { emitStatusSnapshot } from './status-emit.js';
 import { computeStatusSnapshot } from './status-snapshot.js';
 
@@ -44,7 +44,10 @@ function getSchemaValidator() {
   return _schemaValidator;
 }
 
+import { randomUUID } from 'node:crypto';
 import { getTargetRoot, resolveProjectPath, loadProjectConfig } from './project-root.js';
+import { appendGateLogEntry, readGateLog, mapResolveOutcomeToSchema } from './gate-log-store.js';
+import { addOpenLoop, resolveOpenLoop, listOpenLoops } from './open-loops-store.js';
 
 const PROJECT_ROOT = getTargetRoot();
 
@@ -675,8 +678,21 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       // Normalize legacy outcome values
       const outcomeMap = { approved: 'approve', killed: 'kill', revised: 'revise' };
       const outcome = outcomeMap[rawOutcome] || rawOutcome;
+      // Whitelist — anything outside the route vocabulary is rejected so we
+      // can't persist contract-invalid GateLogEntry.decision values.
+      const VALID_RESOLVE_OUTCOMES = new Set(['approve', 'revise', 'kill']);
+      if (!VALID_RESOLVE_OUTCOMES.has(outcome)) {
+        return res.status(400).json({ error: `outcome must be one of: approve, revise, kill (got '${rawOutcome}')` });
+      }
       const gate = store.gates.get(req.params.id);
       if (!gate) return res.status(404).json({ error: `Gate not found: ${req.params.id}` });
+      // Lazy expiry parity with GET — expired gates can't be resolved or audited.
+      const gateTimeout = Number(process.env.COMPOSE_GATE_TIMEOUT) || 30 * 60 * 1000;
+      if (gate.status === 'pending' && (Date.now() - new Date(gate.createdAt).getTime()) > gateTimeout) {
+        gate.status = 'expired';
+        store._save();
+        return res.status(409).json({ error: `Gate ${req.params.id} has expired and cannot be resolved` });
+      }
       // Idempotent: already-resolved gates return 200
       if (gate.status !== 'pending') {
         return res.status(200).json({ gateId: req.params.id, gateOutcome: gate.outcome });
@@ -688,6 +704,49 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       scheduleBroadcast();
       const resolvedAt = new Date().toISOString();
       broadcastMessage({ type: 'gateResolved', gateId: req.params.id, itemId: gate.itemId, outcome, timestamp: resolvedAt });
+
+      // COMP-OBS-GATELOG: persist audit entry + emit gate DecisionEvent (Decision 3 — emit-first-then-append).
+      // Skip when gate has no resolvable feature_code (Decision 1b).
+      const gateLogItem = gate.itemId ? store.items.get(gate.itemId) : null;
+      const gateFeatureCode = gateLogItem?.lifecycle?.featureCode ?? null;
+      if (gateFeatureCode) {
+        const entryId = randomUUID();
+        const schemaDecision = mapResolveOutcomeToSchema(outcome);
+        const createdAtMs = gate.createdAt ? Date.parse(gate.createdAt) : Date.parse(resolvedAt);
+        const durationMs = Date.parse(resolvedAt) - createdAtMs;
+
+        const gateEvent = buildGateEvent({
+          featureCode: gateFeatureCode,
+          gateLogEntryId: entryId,
+          gateId: req.params.id,
+          decision: outcome,
+          timestamp: resolvedAt,
+        });
+
+        // Emit first — if it throws, we still write but with decision_event_id: null
+        let emittedEventId = null;
+        try {
+          emitDecisionEvent(broadcastMessage, gateEvent);
+          emittedEventId = gateEvent.id;
+        } catch (emitErr) {
+          console.warn('[vision-routes] gate DecisionEvent emit failed:', emitErr.message);
+        }
+
+        /** @type {import('./gate-log-store.js').GateLogEntry} */
+        const entry = {
+          id: entryId,
+          gate_id: req.params.id,
+          decision: schemaDecision,
+          operator: gate.resolvedBy ?? null,
+          duration_to_decide_ms: durationMs >= 0 ? durationMs : null,
+          timestamp: resolvedAt,
+          feature_code: gateFeatureCode,
+          decision_event_id: emittedEventId,
+        };
+        appendGateLogEntry(entry);
+      }
+      // else: featureless gate — skip both writes (Decision 1b)
+
       // COMP-OBS-STATUS: emit status snapshot after gate resolved
       if (gate.itemId) {
         const resolvedItem = store.items.get(gate.itemId);
@@ -698,6 +757,89 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       res.json({ gateId: req.params.id, gateOutcome: outcome });
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
+      res.status(status).json({ error: err.message });
+    }
+  });
+
+  // ── COMP-OBS-LOOPS routes ─────────────────────────────────────────────────
+
+  // GET /api/vision/items/:id/loops — list open loops for an item
+  app.get('/api/vision/items/:id/loops', (req, res) => {
+    try {
+      const item = store.items.get(req.params.id);
+      if (!item) return res.status(404).json({ error: `Item not found: ${req.params.id}` });
+      const includeResolved = req.query.includeResolved === 'true';
+      const loops = listOpenLoops(item, { includeResolved });
+      res.json({ loops });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/vision/items/:id/loops — add a new open loop
+  app.post('/api/vision/items/:id/loops', (req, res) => {
+    try {
+      const item = store.items.get(req.params.id);
+      if (!item) return res.status(404).json({ error: `Item not found: ${req.params.id}` });
+      if (!item.lifecycle?.featureCode) {
+        return res.status(400).json({ error: 'item has no lifecycle.featureCode — cannot create feature-scoped open loop' });
+      }
+      const { kind, summary, parent_branch, ttl_days } = req.body;
+      // Schema-aligned validation (CONTRACT v0.2.3 OpenLoop)
+      const VALID_KINDS = new Set(['deferred', 'blocked', 'open_question']);
+      if (!kind) return res.status(400).json({ error: 'kind is required' });
+      if (!VALID_KINDS.has(kind)) {
+        return res.status(400).json({ error: `kind must be one of: deferred, blocked, open_question (got '${kind}')` });
+      }
+      if (typeof summary !== 'string' || summary.length === 0) {
+        return res.status(400).json({ error: 'summary is required (non-empty string)' });
+      }
+      if (summary.length > 280) {
+        return res.status(400).json({ error: 'summary exceeds 280-char schema limit' });
+      }
+      if (ttl_days !== undefined && (!Number.isInteger(ttl_days) || ttl_days < 0)) {
+        return res.status(400).json({ error: 'ttl_days must be a non-negative integer' });
+      }
+
+      const { loop, nextLoops } = addOpenLoop(item, { kind, summary, parent_branch, ttl_days });
+      store.updateLifecycleExt(item.id, 'open_loops', nextLoops);
+
+      const updatedItem = store.items.get(item.id);
+      broadcastMessage({ type: 'openLoopsUpdate', itemId: item.id, loops: nextLoops });
+      const featureCode = updatedItem.lifecycle.featureCode;
+      const now = new Date().toISOString();
+      emitStatusSnapshot(broadcastMessage, store, featureCode, now);
+
+      res.status(201).json({ loop });
+    } catch (err) {
+      const status = err.status || (err.message.includes('not found') ? 404 : 400);
+      res.status(status).json({ error: err.message });
+    }
+  });
+
+  // POST /api/vision/items/:id/loops/:loopId/resolve — resolve a loop
+  app.post('/api/vision/items/:id/loops/:loopId/resolve', (req, res) => {
+    try {
+      const item = store.items.get(req.params.id);
+      if (!item) return res.status(404).json({ error: `Item not found: ${req.params.id}` });
+      const { note, resolved_by } = req.body;
+
+      const { loop, nextLoops } = resolveOpenLoop(item, req.params.loopId, {
+        note,
+        resolved_by: resolved_by || process.env.USER || 'unknown',
+      });
+      store.updateLifecycleExt(item.id, 'open_loops', nextLoops);
+
+      broadcastMessage({ type: 'openLoopsUpdate', itemId: item.id, loops: nextLoops });
+      const featureCode = item.lifecycle?.featureCode;
+      if (featureCode) {
+        const now = new Date().toISOString();
+        emitStatusSnapshot(broadcastMessage, store, featureCode, now);
+      }
+
+      res.json({ loop });
+    } catch (err) {
+      const status = err.status || (err.message.includes('not found') ? 404 : 400);
       res.status(status).json({ error: err.message });
     }
   });
