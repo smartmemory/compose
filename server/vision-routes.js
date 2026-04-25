@@ -35,6 +35,8 @@ import { recordIteration, checkCumulativeBudget } from '../lib/budget-ledger.js'
 import { SchemaValidator } from './schema-validator.js';
 import { appendPhaseHistory } from './lifecycle-phase-history.js';
 import { emitDecisionEvent, buildPhaseTransitionEvent, buildIterationEvent } from './decision-event-emit.js';
+import { emitStatusSnapshot } from './status-emit.js';
+import { computeStatusSnapshot } from './status-snapshot.js';
 
 let _schemaValidator = null;
 function getSchemaValidator() {
@@ -163,6 +165,19 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
     }
   });
 
+  // COMP-OBS-STATUS: GET /api/lifecycle/status?featureCode=<FC>
+  // Returns the latest StatusSnapshot for the given featureCode.
+  // Missing or unknown featureCode returns the no-feature snapshot (not 400/404).
+  app.get('/api/lifecycle/status', (req, res) => {
+    try {
+      const fc = req.query.featureCode || null;
+      const snapshot = computeStatusSnapshot(store, fc, new Date().toISOString());
+      res.json({ snapshot });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post('/api/vision/items/:id/lifecycle/start', (req, res) => {
     try {
       const { featureCode } = req.body;
@@ -186,6 +201,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleStarted', itemId: req.params.id, phase: 'explore_design', featureCode, timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode, from: null, to: 'explore_design', outcome: null, timestamp: now }));
+      // COMP-OBS-STATUS: emit status snapshot after lifecycle started
+      emitStatusSnapshot(broadcastMessage, store, featureCode, now);
       res.json(lifecycle);
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
@@ -243,6 +260,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: targetPhase, outcome, timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, outcome, timestamp: now }));
+      // COMP-OBS-STATUS: emit status snapshot after lifecycle transition (advance)
+      emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
       res.json({ from, to: targetPhase, outcome });
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
@@ -269,6 +288,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: targetPhase, outcome: 'skipped', timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, outcome: 'skipped', timestamp: now }));
+      // COMP-OBS-STATUS: emit status snapshot after lifecycle transition (skip)
+      emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
       res.json({ from, to: targetPhase, outcome: 'skipped', reason });
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
@@ -295,6 +316,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: 'killed', outcome: 'killed', timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: 'killed', outcome: 'killed', timestamp: now }));
+      // COMP-OBS-STATUS: emit status snapshot after lifecycle transition (kill)
+      emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
       res.json({ phase: from, reason });
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
@@ -320,6 +343,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from: 'ship', to: 'complete', outcome: 'approved', timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from: 'ship', to: 'complete', outcome: 'approved', timestamp: now }));
+      // COMP-OBS-STATUS: emit status snapshot after lifecycle transition (complete)
+      emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
       res.json({ completedAt: now });
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
@@ -383,6 +408,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
           outcome: 'retry',
           timestamp: now,
         }));
+        // COMP-OBS-STATUS: emit status snapshot after iteration started
+        emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
       }
       res.json(item.lifecycle.iterationState);
     } catch (err) {
@@ -454,10 +481,16 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
             outcome: iter.outcome,
             timestamp: now,
           }));
+          // COMP-OBS-STATUS: emit status snapshot after iteration complete
+          emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
         }
       } else {
         // per-attempt update: NO DecisionEvent (Decision 2 — would flood strip)
         broadcastMessage({ type: 'iterationUpdate', itemId: req.params.id, loopId: iter.loopId, loopType: iter.loopType, count: iter.count, maxIterations: iter.maxIterations, exitCriteriaMet: false, findingsCount: result.findings?.length ?? 0, timestamp: now });
+        // COMP-OBS-STATUS: STATUS broadcasts on iterationUpdate per Decision 4 (TIMELINE does not)
+        if (item.lifecycle.featureCode) {
+          emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
+        }
       }
       res.json({ continue: shouldContinue, count: iter.count, maxIterations: iter.maxIterations, outcome: iter.outcome });
     } catch (err) {
@@ -497,6 +530,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
           outcome: 'aborted',
           timestamp: now,
         }));
+        // COMP-OBS-STATUS: emit status snapshot after iteration abort
+        emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
       }
       res.json({ aborted: true });
     } catch (err) {
@@ -604,6 +639,13 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       store.createGate(gate);
       scheduleBroadcast();
       broadcastMessage({ type: 'gateCreated', gateId: id, itemId: itemId || null, timestamp: gate.createdAt });
+      // COMP-OBS-STATUS: emit status snapshot after gate created
+      if (itemId) {
+        const gateItem = store.items.get(itemId);
+        if (gateItem?.lifecycle?.featureCode) {
+          emitStatusSnapshot(broadcastMessage, store, gateItem.lifecycle.featureCode, gate.createdAt);
+        }
+      }
       res.status(201).json(gate);
     } catch (err) {
       res.status(400).json({ error: err.message });
@@ -644,7 +686,15 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       store.resolveGate(req.params.id, { outcome, comment, resolvedBy });
 
       scheduleBroadcast();
-      broadcastMessage({ type: 'gateResolved', gateId: req.params.id, itemId: gate.itemId, outcome, timestamp: new Date().toISOString() });
+      const resolvedAt = new Date().toISOString();
+      broadcastMessage({ type: 'gateResolved', gateId: req.params.id, itemId: gate.itemId, outcome, timestamp: resolvedAt });
+      // COMP-OBS-STATUS: emit status snapshot after gate resolved
+      if (gate.itemId) {
+        const resolvedItem = store.items.get(gate.itemId);
+        if (resolvedItem?.lifecycle?.featureCode) {
+          emitStatusSnapshot(broadcastMessage, store, resolvedItem.lifecycle.featureCode, resolvedAt);
+        }
+      }
       res.json({ gateId: req.params.id, gateOutcome: outcome });
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;

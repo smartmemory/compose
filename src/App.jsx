@@ -40,6 +40,8 @@ import { VisionChangesContext } from './components/vision/VisionChangesContext.j
 import { useVisionStore } from './components/vision/useVisionStore.js';
 import { useShallow } from 'zustand/react/shallow';
 import AttentionQueueSidebar from './components/vision/AttentionQueueSidebar.jsx';
+import StatusBand from './components/vision/StatusBand.jsx';
+import DecisionTimelineStrip from './components/vision/DecisionTimelineStrip.jsx';
 import TreeView from './components/vision/TreeView.jsx';
 import GraphView from './components/vision/GraphView.jsx';
 import DocsView from './components/vision/DocsView.jsx';
@@ -400,6 +402,7 @@ function AppInner() {
     activeBuild, setActiveBuild, pipelineDraft,
     sessions, iterationStates,
     selectedPhase, setSelectedPhase,
+    statusSnapshots, setStatusSnapshot,
   } = useVisionStore(useShallow(s => ({
     items: s.items, connections: s.connections, connected: s.connected,
     uiCommand: s.uiCommand, clearUICommand: s.clearUICommand, recentChanges: s.recentChanges,
@@ -412,10 +415,26 @@ function AppInner() {
     activeBuild: s.activeBuild, setActiveBuild: s.setActiveBuild, pipelineDraft: s.pipelineDraft,
     sessions: s.sessions, iterationStates: s.iterationStates,
     selectedPhase: s.selectedPhase, setSelectedPhase: s.setSelectedPhase,
+    statusSnapshots: s.statusSnapshots, setStatusSnapshot: s.setStatusSnapshot,
   })));
 
   // COMP-UX-2a: Derive active feature code from session state
   const activeFeatureCode = sessionState?.featureCode || null;
+
+  // COMP-OBS-STATUS: hydrate status snapshot on feature selection change.
+  // Fetches once per featureCode unless invalidated (clearStatusSnapshots on hydrate).
+  useEffect(() => {
+    if (!activeFeatureCode) return;
+    if (statusSnapshots && statusSnapshots[activeFeatureCode]) return;
+    fetch(`/api/lifecycle/status?featureCode=${encodeURIComponent(activeFeatureCode)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data?.snapshot && setStatusSnapshot) {
+          setStatusSnapshot(activeFeatureCode, data.snapshot);
+        }
+      })
+      .catch(() => {}); // non-fatal — WS push will fill in shortly
+  }, [activeFeatureCode, statusSnapshots, setStatusSnapshot]);
 
   // ── Local vision state (absorbed from VisionTracker) ────────────────────
   const [selectedItemId, setSelectedItemId] = useState(null);
@@ -1100,6 +1119,15 @@ function AppInner() {
 
               {/* Main content area */}
               <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+                {/* Wave 6 region ① — Status Band (32px sticky) */}
+                <StatusBand
+                  featureCode={activeFeatureCode}
+                  snapshot={activeFeatureCode ? (statusSnapshots?.[activeFeatureCode] ?? null) : null}
+                />
+                {/* Wave 6 region ② — Decision Timeline strip (72px sticky, top: 32px) */}
+                {activeFeatureCode && (
+                  <DecisionTimelineStrip currentFeatureCode={activeFeatureCode} />
+                )}
                 <div className="flex-1 min-h-0 flex flex-col">
                   <PanelErrorBoundary>
                     <CockpitView

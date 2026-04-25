@@ -361,3 +361,163 @@ describe('Wave 6 integration — COMP-OBS-TIMELINE', () => {
     assert.equal(iterDEs.length, 1, 'only the start DE; per-attempt update must not emit');
   });
 });
+
+// ── COMP-OBS-STATUS integration ───────────────────────────────────────────────
+
+const { attachVisionRoutes: attachRoutesForStatus } = await import(`${REPO_ROOT}/server/vision-routes.js`);
+const { VisionStore: VisionStoreForStatus } = await import(`${REPO_ROOT}/server/vision-store.js`);
+const { SchemaValidator } = await import(`${REPO_ROOT}/server/schema-validator.js`);
+
+function setupStatus() {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wave6-status-'));
+  const dataDir = path.join(tmp, 'data');
+  fs.mkdirSync(dataDir, { recursive: true });
+
+  const store = new VisionStoreForStatus(dataDir);
+  const broadcasts = [];
+
+  const app = express();
+  app.use(express.json());
+  attachRoutesForStatus(app, {
+    store,
+    scheduleBroadcast: () => {},
+    broadcastMessage: (msg) => broadcasts.push(msg),
+    projectRoot: tmp,
+  });
+
+  return new Promise((resolve) => {
+    const server = app.listen(0, () => {
+      const port = server.address().port;
+      resolve({ tmp, store, server, port, broadcasts });
+    });
+  });
+}
+
+function teardownStatus(ctx) {
+  ctx.server.close();
+  try { fs.rmSync(ctx.tmp, { recursive: true, force: true }); } catch {}
+}
+
+describe('Wave 6 integration — COMP-OBS-STATUS', () => {
+  let ctx;
+  const sv = new SchemaValidator();
+  beforeEach(async () => { ctx = await setupStatus(); });
+  afterEach(() => teardownStatus(ctx));
+
+  test('lifecycle advance emits statusSnapshot broadcast', async () => {
+    const item = ctx.store.createItem({ type: 'feature', title: 'STATUS advance test' });
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: 'COMP-OBS-STATUS-INT' });
+    const countBefore = ctx.broadcasts.filter(b => b.type === 'statusSnapshot').length;
+
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/advance`, { targetPhase: 'prd' });
+
+    const snapshots = ctx.broadcasts.filter(b => b.type === 'statusSnapshot');
+    assert.ok(snapshots.length > countBefore, 'advance must emit at least one statusSnapshot');
+    const last = snapshots[snapshots.length - 1];
+    assert.equal(last.featureCode, 'COMP-OBS-STATUS-INT');
+    assert.ok(typeof last.snapshot === 'object');
+    assert.equal(last.snapshot.active_phase, 'prd', `expected prd, got ${last.snapshot.active_phase}`);
+
+    const { valid, errors } = sv.validate('StatusSnapshot', last.snapshot);
+    assert.equal(valid, true, `schema invalid: ${JSON.stringify(errors?.slice(0, 3))}`);
+  });
+
+  test('gate create emits statusSnapshot with pending gate in sentence', async () => {
+    const item = ctx.store.createItem({ type: 'feature', title: 'STATUS gate test' });
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: 'COMP-OBS-STATUS-INT' });
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/advance`, { targetPhase: 'blueprint' });
+    ctx.broadcasts.length = 0;
+
+    await tlPost(ctx.port, '/api/vision/gates', {
+      flowId: 'flow-1', stepId: 'design_gate', round: 1,
+      itemId: item.id, fromPhase: 'blueprint', toPhase: 'plan',
+    });
+
+    const snapshots = ctx.broadcasts.filter(b => b.type === 'statusSnapshot');
+    assert.ok(snapshots.length >= 1, 'gate create must emit statusSnapshot');
+    const last = snapshots[snapshots.length - 1];
+    // Sentence should indicate pending gate
+    assert.ok(last.snapshot.sentence.includes('Holding'), `expected "Holding…" sentence, got: ${last.snapshot.sentence}`);
+
+    const { valid, errors } = sv.validate('StatusSnapshot', last.snapshot);
+    assert.equal(valid, true, `schema invalid: ${JSON.stringify(errors?.slice(0, 3))}`);
+  });
+
+  test('sentence transitions: explore_design → advance → pending gate → resolve gate', async () => {
+    const item = ctx.store.createItem({ type: 'feature', title: 'STATUS transition test' });
+
+    // Start lifecycle
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: 'COMP-OBS-STATUS-INT2' });
+    const startSnaps = ctx.broadcasts.filter(b => b.type === 'statusSnapshot' && b.featureCode === 'COMP-OBS-STATUS-INT2');
+    assert.ok(startSnaps.length >= 1, 'lifecycle start must emit statusSnapshot');
+    assert.ok(startSnaps[startSnaps.length - 1].snapshot.sentence.includes('explore_design'), `start: ${startSnaps[startSnaps.length - 1].snapshot.sentence}`);
+
+    // Advance to blueprint
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/advance`, { targetPhase: 'prd' });
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/skip`, { targetPhase: 'blueprint' });
+
+    // Create a gate
+    const gateR = await tlPost(ctx.port, '/api/vision/gates', {
+      flowId: 'flow-1', stepId: 'blueprint_gate', round: 1,
+      itemId: item.id, fromPhase: 'blueprint',
+    });
+    assert.equal(gateR.status, 201, `gate create failed: ${JSON.stringify(gateR.body)}`);
+
+    const gateSnaps = ctx.broadcasts.filter(b => b.type === 'statusSnapshot' && b.featureCode === 'COMP-OBS-STATUS-INT2');
+    const gateSnap = gateSnaps[gateSnaps.length - 1];
+    assert.ok(gateSnap.snapshot.sentence.includes('Holding'), `expected gate sentence, got: ${gateSnap.snapshot.sentence}`);
+
+    // Resolve the gate
+    const gateId = gateR.body.id;
+    await tlPost(ctx.port, `/api/vision/gates/${gateId}/resolve`, { outcome: 'approve' });
+
+    const resolveSnaps = ctx.broadcasts.filter(b => b.type === 'statusSnapshot' && b.featureCode === 'COMP-OBS-STATUS-INT2');
+    const resolveSnap = resolveSnaps[resolveSnaps.length - 1];
+    // After gate resolved, no more pending gate — should be back to idle
+    assert.ok(!resolveSnap.snapshot.sentence.includes('Holding'), `after resolve, should not show Holding: ${resolveSnap.snapshot.sentence}`);
+  });
+
+  test('iterationUpdate emits statusSnapshot (Decision 4 — unlike TIMELINE)', async () => {
+    const item = ctx.store.createItem({ type: 'feature', title: 'STATUS iter update test' });
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: 'COMP-OBS-STATUS-INT3' });
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/iteration/start`, {
+      loopType: 'review', maxIterations: 5,
+    });
+    ctx.broadcasts.length = 0;
+
+    // per-attempt report (not clean — stays in running state)
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/iteration/report`, {
+      result: { clean: false },
+    });
+
+    const snapshots = ctx.broadcasts.filter(b => b.type === 'statusSnapshot');
+    assert.ok(snapshots.length >= 1, 'iterationUpdate must emit statusSnapshot (Decision 4)');
+    // DecisionEvent should NOT be emitted for per-attempt
+    const des = ctx.broadcasts.filter(b => b.type === 'decisionEvent' && b.event?.kind === 'iteration');
+    assert.equal(des.length, 0, 'iterationUpdate must NOT emit DecisionEvent');
+  });
+
+  test('GET /api/lifecycle/status returns valid snapshot', async () => {
+    const item = ctx.store.createItem({ type: 'feature', title: 'STATUS route test' });
+    await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: 'COMP-OBS-STATUS-INT4' });
+
+    // Use tlPost pattern but for GET — need a helper
+    const body = await new Promise((resolve, reject) => {
+      const req = http.request(
+        { hostname: '127.0.0.1', port: ctx.port, path: '/api/lifecycle/status?featureCode=COMP-OBS-STATUS-INT4', method: 'GET' },
+        (res) => {
+          let buf = '';
+          res.on('data', c => buf += c);
+          res.on('end', () => { try { resolve(JSON.parse(buf)); } catch { resolve(buf); } });
+        },
+      );
+      req.on('error', reject);
+      req.end();
+    });
+
+    assert.ok(body.snapshot, 'must have snapshot field');
+    const { valid, errors } = sv.validate('StatusSnapshot', body.snapshot);
+    assert.equal(valid, true, `schema invalid: ${JSON.stringify(errors?.slice(0, 3))}`);
+    assert.equal(body.snapshot.active_phase, 'explore_design');
+  });
+});

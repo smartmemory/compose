@@ -354,7 +354,69 @@ describe('Wave 6 contract — error harness (testable-today rows)', () => {
 // -----------------------------------------------------------------------------
 
 describe('Wave 6 contract — pending siblings (skip-until-landed)', () => {
-  test.skip('StatusSnapshot round-trip — COMP-OBS-STATUS', () => {});
+  test('StatusSnapshot round-trip — COMP-OBS-STATUS', async () => {
+    const { computeStatusSnapshot } = await import(`${REPO_ROOT}/server/status-snapshot.js`);
+    const sv = new SchemaValidator();
+    const NOW = '2026-04-25T12:00:00.000Z';
+
+    // Minimal state: one feature item with a known phase
+    const item = {
+      id: 'item-status',
+      title: 'Status Test Feature',
+      lifecycle: {
+        featureCode: 'COMP-OBS-STATUS-ROUNDTRIP',
+        currentPhase: 'execute',
+        iterationState: null,
+        lifecycle_ext: {},
+      },
+    };
+    const state = {
+      items: new Map([['item-status', item]]),
+      getItemByFeatureCode(fc) {
+        for (const it of this.items.values()) {
+          if (it.lifecycle?.featureCode === fc) return it;
+        }
+        return null;
+      },
+      getPendingGates() { return []; },
+    };
+
+    // 1. Basic snapshot validates
+    const snap = computeStatusSnapshot(state, 'COMP-OBS-STATUS-ROUNDTRIP', NOW);
+    const { valid, errors } = sv.validate('StatusSnapshot', snap);
+    assert.equal(valid, true, `basic snapshot invalid: ${JSON.stringify(errors?.slice(0, 3))}`);
+
+    // 2. drift_alerts must be empty array (not undefined, not null)
+    assert.ok(Array.isArray(snap.drift_alerts), 'drift_alerts must be array');
+    assert.equal(snap.drift_alerts.length, 0);
+
+    // 3. cta is null in v1
+    assert.equal(snap.cta, null, 'cta must be null in v1');
+
+    // 4. drift_alerts breached:true closure regression:
+    //    Injecting a non-breached axis into drift_alerts must fail schema validation.
+    const badSnap = {
+      ...snap,
+      drift_alerts: [{
+        axis_id: 'path_drift',
+        name: 'path drift',
+        numerator: 1,
+        denominator: 5,
+        ratio: 0.2,
+        threshold: 0.5,
+        breached: false,  // NOT breached — schema closure should reject this
+        computed_at: NOW,
+      }],
+    };
+    const { valid: badValid } = sv.validate('StatusSnapshot', badSnap);
+    assert.equal(badValid, false, 'non-breached axis in drift_alerts must fail schema (breached:true closure)');
+
+    // 5. sentence ≤280 chars
+    assert.ok(snap.sentence.length <= 280, `sentence too long: ${snap.sentence.length}`);
+
+    // 6. computed_at is a valid ISO date
+    assert.ok(!isNaN(Date.parse(snap.computed_at)), `computed_at not valid ISO: ${snap.computed_at}`);
+  });
   test.skip('DriftAxis emission + threshold crossing — COMP-OBS-DRIFT', () => {});
   test.skip('GateLogEntry + gate DecisionEvent join round-trip — COMP-OBS-GATELOG', () => {});
   test.skip('OpenLoop CLI round-trip + >TTL flag — COMP-OBS-LOOPS', () => {});

@@ -22,6 +22,7 @@ import ItemFormDialog      from './shared/ItemFormDialog.jsx';
 import SettingsModal       from './shared/SettingsModal.jsx';
 import GateNotificationBar from './shared/GateNotificationBar.jsx';
 import DecisionTimelineStrip from './DecisionTimelineStrip.jsx';
+import StatusBand from './StatusBand.jsx';
 
 export default function VisionTracker({ onContextSelect, sidebarOpen = true, onToggleSidebar }) {
   const {
@@ -38,6 +39,8 @@ export default function VisionTracker({ onContextSelect, sidebarOpen = true, onT
     selectedPhase, setSelectedPhase,
     // COMP-OBS-TIMELINE
     decisionEvents,
+    // COMP-OBS-STATUS
+    statusSnapshots, setStatusSnapshot,
   } = useVisionStore();
 
   const [selectedItemId, setSelectedItemId] = useState(() => sessionStorage.getItem('vision-selectedItemId') || null);
@@ -210,10 +213,30 @@ export default function VisionTracker({ onContextSelect, sidebarOpen = true, onT
     return item?.lifecycle?.featureCode || null;
   }, [selectedItemId, items]);
 
+  // COMP-OBS-STATUS: hydrate status snapshot on feature selection change
+  // Only fetches if the snapshot is absent for this featureCode.
+  useEffect(() => {
+    if (!currentFeatureCode) return;
+    if (statusSnapshots && statusSnapshots[currentFeatureCode]) return;
+    fetch(`/api/lifecycle/status?featureCode=${encodeURIComponent(currentFeatureCode)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.snapshot && setStatusSnapshot) {
+          setStatusSnapshot(currentFeatureCode, data.snapshot);
+        }
+      })
+      .catch(() => {}); // non-fatal — WS push will fill in shortly
+  }, [currentFeatureCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <VisionChangesContext.Provider value={recentChanges}>
     <div className="h-full flex flex-col bg-background" data-snapshot-root>
-      {/* COMP-OBS-TIMELINE: Decision timeline strip — sticky top, 72px, full-width */}
+      {/* COMP-OBS-STATUS: Status band — sticky top: 0, 32px, full-width (region ①) */}
+      <StatusBand
+        featureCode={currentFeatureCode}
+        snapshot={currentFeatureCode ? (statusSnapshots?.[currentFeatureCode] ?? null) : null}
+      />
+      {/* COMP-OBS-TIMELINE: Decision timeline strip — sticky top: 32px, 72px, full-width (region ②) */}
       {currentFeatureCode && (
         <DecisionTimelineStrip
           events={decisionEvents}

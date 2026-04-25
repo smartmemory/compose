@@ -19,6 +19,7 @@ export function handleVisionMessage(msg, refs, setters) {
     setRecentChanges, setUICommand, setAgentActivity,
     setAgentErrors, setSessionState, setSpawnedAgents, setAgentRelays, setSettings, setPipelineDraft, setActiveBuild, setSessions, setIterationStates, setFeatureTimeline, EMPTY_CHANGES,
     appendDecisionEvent, setDecisionEventsSnapshot,
+    setStatusSnapshot, clearStatusSnapshots,
   } = setters;
 
   // COMP-UX-11: Helper to push a timeline event
@@ -62,6 +63,9 @@ export function handleVisionMessage(msg, refs, setters) {
     if (setDecisionEventsSnapshot && Array.isArray(msg.decisionEventsSnapshot)) {
       setDecisionEventsSnapshot(msg.decisionEventsSnapshot);
     }
+    // COMP-OBS-STATUS: drop cached statusSnapshots on hydrate (incl. WS reconnect)
+    // so the App-level selection effect refetches against current server state.
+    if (clearStatusSnapshots) clearStatusSnapshots();
 
   } else if (msg.type === 'decisionEvent') {
     // COMP-OBS-TIMELINE: single live event → append (dedup by id in store)
@@ -73,6 +77,12 @@ export function handleVisionMessage(msg, refs, setters) {
     // COMP-OBS-TIMELINE: full snapshot replace (used on reconnect if server sends standalone)
     if (setDecisionEventsSnapshot && Array.isArray(msg.events)) {
       setDecisionEventsSnapshot(msg.events);
+    }
+
+  } else if (msg.type === 'statusSnapshot') {
+    // COMP-OBS-STATUS: per-feature status snapshot update
+    if (setStatusSnapshot && msg.featureCode && msg.snapshot) {
+      setStatusSnapshot(msg.featureCode, msg.snapshot);
     }
 
   } else if (msg.type === 'visionUI') {

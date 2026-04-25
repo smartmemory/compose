@@ -2,6 +2,30 @@
 
 ## 2026-04-25
 
+### COMP-OBS-STATUS — Situational status band + main-cockpit mount fix
+
+**Why:** Wave 6 region ① per CONTRACT layout — the one-sentence "where are we, what's next" projection. Server rolls per-feature state (active phase, pending gates, drift breaches, stale open loops, iteration in flight) into a `StatusSnapshot` and broadcasts on every state-changing event. Click expands a 200px detail panel showing `pending_gates`, `drift_alerts`, `open_loops_count`, `gate_load_24h` verbatim. Also fixes a previously-shipped TIMELINE bug — both region ① and region ② were only mounted in the popout `VisionTracker`, not in the main cockpit (`App.jsx → CockpitView`). They are now mounted at the top of `<main>` so the status surface is visible in the primary UI.
+
+**Server (snapshot producer + 11-site dual-emit + REST):**
+- `server/status-snapshot.js` *(new)* — pure `computeStatusSnapshot(state, featureCode, now)` returning a contract-valid `StatusSnapshot`. Internal `buildStatusSentence(...)` implements 8 deterministic rule branches (no-feature → killed → complete → pending gate → drift breach → stale open loops → iteration in flight → idle baseline) with explicit null/unknown-phase fallbacks. Sentence ≤280 chars; gate id truncated with ellipsis when needed.
+- `server/status-emit.js` *(new)* — `emitStatusSnapshot(broadcastMessage, state, featureCode, now)` recomputes + broadcasts `{type: 'statusSnapshot', featureCode, snapshot}`. Single choke point.
+- `server/vision-routes.js` — emit at every state-changing site: lifecycleStarted, lifecycleTransition (advance/skip/kill/complete), iterationStarted, **iterationUpdate (per-attempt — STATUS-only, TIMELINE intentionally skips)**, iterationComplete (report + abort), gateCreated, gateResolved. New `GET /api/lifecycle/status?featureCode=<FC>` returns `{snapshot}`.
+- `server/cc-session-watcher.js` — optional `emitStatusSnapshot` + `getState` deps; emit after lineage broadcast.
+- `server/vision-server.js` — wires the deps into `CCSessionWatcher` construction.
+
+**Client (32px sticky band + main-cockpit + popout mount + reconnect invalidation):**
+- `src/components/vision/StatusBand.jsx` *(new)* — 32px sticky region ①, renders the sentence only (v1: `cta` is always `null`; no CTA element). Click toggles a 200px expansion panel showing snapshot fields.
+- `src/components/vision/statusBandLogic.js` *(new)* — pure helpers (`truncateForSentence`, `formatExpansionPanel`).
+- `src/components/vision/DecisionTimelineStrip.jsx` — sticky `top: 0 → 32px`, `z-index: 10 → 20` so it stacks below STATUS.
+- `src/components/vision/useVisionStore.js` — `statusSnapshots: {}` slice (map keyed by featureCode) + `setStatusSnapshot(featureCode, snap)` + new `clearStatusSnapshots()` action (called on hydrate; ensures WS reconnect refetches against current server state).
+- `src/components/vision/visionMessageHandler.js` — `statusSnapshot` WS handler; `clearStatusSnapshots()` on hydrate.
+- `src/App.jsx` — imports `StatusBand` + `DecisionTimelineStrip`; mounts both at the top of `<main>` so they render in the cockpit (not just popout); adds a `useEffect` that fetches `/api/lifecycle/status` on `activeFeatureCode` change. **This also fixes TIMELINE's invisible-in-main-cockpit bug** (it had the same VisionTracker-only mount).
+- `src/components/vision/VisionTracker.jsx` (popout) — retains its own band + strip mount + hydration effect; both surfaces now keep parity.
+
+**Reviews:** 4 Codex review rounds against the design (5 → 4 → 1 → 0 actionable findings, REVIEW CLEAN), 2 rounds against the implementation. Round 1 caught two real bugs: (a) HIGH — the band was only mounted in the popout `VisionTracker`, never in the main cockpit (TIMELINE had the same bug, fixed in this commit); (b) MEDIUM — `statusSnapshots` would go stale indefinitely on WS reconnect because there was no invalidation path. Both fixed: dual-mount in `App.jsx` + popout, plus `clearStatusSnapshots` called from the hydrate handler. Refactor pass also removed a leaky `_openLoopsCount` field injected onto `iterationState` — replaced with an explicit `openLoopsCount` parameter on `buildStatusSentence`. REVIEW CLEAN at round 2.
+
+**Tests:** 70 new tests (36 snapshot-branch + 6 emit + 10 route + 12 band-logic + 11 ui + 5 integration + 1 compliance activated). Full suite: **1747 pass, 0 fail, 3 intentional skips** (siblings DRIFT / GATELOG / LOOPS still pending). Wave 6 contract-compliance suite un-skipped STATUS placeholder.
+
 ### COMP-OBS-TIMELINE — Decision timeline strip + dual-emit pipeline
 
 **Why:** Wave 6 region ② per CONTRACT layout. Closes the orphaned `decisionEvent` broadcast that COMP-OBS-BRANCH has been emitting into the void since 2026-04-20, and adds two new event kinds (`phase_transition`, `iteration`) so the strip is populated immediately on first lifecycle interaction. Strip already renders `gate` and `drift_threshold` cards via the same `DecisionCard` component — zero code change here when GATELOG and DRIFT ship their emitters.

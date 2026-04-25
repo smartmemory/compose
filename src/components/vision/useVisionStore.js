@@ -182,6 +182,13 @@ export const useVisionStore = create((set, get) => {
             return { decisionEvents: [...s.decisionEvents, ev] };
           }),
           setDecisionEventsSnapshot: (arr) => set({ decisionEvents: Array.isArray(arr) ? arr : [] }),
+          // COMP-OBS-STATUS: status snapshot setter for WS handler
+          setStatusSnapshot: (fc, snap) => set(s => ({
+            statusSnapshots: { ...s.statusSnapshots, [fc]: snap },
+          })),
+          // COMP-OBS-STATUS: drop cached snapshots on hydrate so the selection-change
+          // effect refetches against current server state after reconnect.
+          clearStatusSnapshots: () => set({ statusSnapshots: {} }),
           EMPTY_CHANGES,
         });
       } catch {
@@ -273,12 +280,25 @@ export const useVisionStore = create((set, get) => {
     // COMP-OBS-TIMELINE: decision events store slice (in-memory only, re-seeded on reconnect).
     decisionEvents: [],
 
+    // COMP-OBS-STATUS: per-feature status snapshot map { [featureCode]: StatusSnapshot }
+    // In-memory, populated by WS push + single GET on feature selection.
+    statusSnapshots: {},
+
     // Actions
     clearUICommand: () => set({ uiCommand: null }),
 
     setSelectedBranches: (featureCode, pair) => set(s => ({
       selectedBranches: { ...s.selectedBranches, [featureCode]: pair },
     })),
+
+    // COMP-OBS-STATUS: store snapshot for a featureCode (map-style merge)
+    setStatusSnapshot: (featureCode, snap) => set(s => ({
+      statusSnapshots: { ...s.statusSnapshots, [featureCode]: snap },
+    })),
+
+    // COMP-OBS-STATUS: clear all snapshots — called on WS reconnect so the
+    // selection-change effect refetches against current server state.
+    clearStatusSnapshots: () => set({ statusSnapshots: {} }),
 
     // COMP-OBS-TIMELINE: replace full decisionEvents slice from snapshot (on reconnect/hydrate)
     setDecisionEventsSnapshot: (arr) => set({ decisionEvents: Array.isArray(arr) ? arr : [] }),

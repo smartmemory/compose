@@ -62,6 +62,9 @@ export class CCSessionWatcher {
     postBranchLineage,
     broadcastMessage = () => {},
     now = () => new Date().toISOString(),
+    // COMP-OBS-STATUS: optional deps for post-lineage status broadcast
+    emitStatusSnapshot = null,
+    getState = null,
   }) {
     if (!projectsRoot) throw new Error('projectsRoot required');
     if (!sessionsFile) throw new Error('sessionsFile required');
@@ -75,6 +78,9 @@ export class CCSessionWatcher {
     this.postBranchLineage = postBranchLineage;
     this.broadcastMessage = broadcastMessage;
     this.now = now;
+    // COMP-OBS-STATUS: optional snapshot emitter (defaults to no-op if not injected)
+    this._emitStatusSnapshot = emitStatusSnapshot;
+    this._getState = getState;
 
     // featureCode → (cc_session_id → BranchOutcome[])
     this._accum = new Map();
@@ -220,6 +226,15 @@ export class CCSessionWatcher {
       for (const { eventId, message } of newEvents) {
         emitted.add(eventId);
         this.broadcastMessage(message);
+      }
+
+      // COMP-OBS-STATUS: emit status snapshot after branch lineage update
+      if (this._emitStatusSnapshot && this._getState) {
+        try {
+          this._emitStatusSnapshot(this.broadcastMessage, this._getState(), fc, this.now());
+        } catch (err) {
+          console.warn(`[cc-watcher] emitStatusSnapshot failed for ${fc}: ${err.message}`);
+        }
       }
     }
   }

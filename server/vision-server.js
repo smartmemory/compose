@@ -20,6 +20,7 @@ import { WorktreeGC } from './worktree-gc.js';
 import { attachVisionRoutes } from './vision-routes.js';
 import { deriveDecisionEvents } from './decision-events-snapshot.js';
 import { CCSessionWatcher } from './cc-session-watcher.js';
+import { emitStatusSnapshot } from './status-emit.js';
 import { SchemaValidator } from './schema-validator.js';
 import { attachSessionRoutes } from './session-routes.js';
 import { attachActivityRoutes } from './activity-routes.js';
@@ -296,6 +297,9 @@ export class VisionServer {
           findItemIdByFeatureCode,
           postBranchLineage,
           broadcastMessage: (msg) => this.broadcastMessage(msg),
+          // COMP-OBS-STATUS: inject emitStatusSnapshot for post-lineage status broadcast
+          emitStatusSnapshot,
+          getState: () => this.store,
         });
 
         // Seed emitted_event_ids from any existing lineage so startup doesn't replay.

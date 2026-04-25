@@ -24,7 +24,7 @@ export default function DecisionTimelineStrip({ events = [], currentFeatureCode,
   return (
     <div
       className="w-full overflow-x-auto whitespace-nowrap border-b border-border/30 bg-background/95 backdrop-blur-sm"
-      style={{ height: 72, minHeight: 72, maxHeight: 72, position: 'sticky', top: 0, zIndex: 10 }}
+      style={{ height: 72, minHeight: 72, maxHeight: 72, position: 'sticky', top: 32, zIndex: 20 }}
       data-decision-timeline-strip
     >
       <div className="flex items-center gap-2 px-3 h-full">
