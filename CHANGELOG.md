@@ -2,6 +2,22 @@
 
 ## 2026-04-27
 
+### STRAT-XMODEL-PARITY — Route runCrossModelReview synthesis through canonical normalizer
+
+`runCrossModelReview` in `build.js` previously used a hand-rolled `text.match(/\{[\s\S]*\}/)` + `JSON.parse` block to parse synthesis output, producing a `{consensus, claude_only, codex_only}` shape outside the canonical `ReviewResult` contract. Synthesis output now routes through a new `normalizeCrossModelResult` normalizer that applies the same parse + repair-retry + text-mode fallback + `applied_gate` stamping + `clean` derivation machinery as `normalizeReviewResult`.
+
+A concrete correctness bug was caught and fixed during review: the `codexAsFallback` object used `confidence: 6, applied_gate: 7` — sub-gate, causing all fallback Codex findings to be silently dropped by the normalizer, incorrectly returning `clean: true` on synthesis failure. Fixed by raising fallback confidence to 7 (at-gate).
+
+**New files:**
+- `contracts/cross-model-review-result.json` — JSON Schema draft-07 for `CrossModelReviewResult`: extends `ReviewResult` with `consensus`, `claude_only`, `codex_only` arrays of canonical finding items. Sets `_source`/`_roadmap` provenance fields per convention.
+- `lib/review-normalize.js` — `normalizeCrossModelResult(rawText, opts)` + `buildCrossModelRepairPrompt` helper added. Normalizes all three partitioned arrays: severity vocab, applied_gate stamping, confidence gate filtering. Falls back to `claudeFindingsFallback`/`codexFindingsFallback` arrays on parse failure.
+
+**Modified:**
+- `lib/build.js` — `normalizeCrossModelResult` imported and wired at the synthesis parse site. `codexAsFallback` confidence raised to 7. Synthesis prompt updated to instruct emission of `CrossModelReviewResult` schema with canonical severity/confidence. JSDoc updated.
+- `test/cross-model-review.test.js` — replaced "intentionally outside canonical" documentation test with proper `CrossModelReviewResult` schema assertions. Added `normalizeCrossModelResult` test suite: canonical shape, severity normalization, confidence gate filtering, applied_gate stamping, clean derivation, fallback behavior on parse failure.
+
+**Tests:** 1911 node + 87 UI tests, 0 failures. 2 Codex review iterations; prior iteration surfaced the confidence gate bug; second iteration returned REVIEW CLEAN.
+
 ### STRAT-CLAUDE-EFFORT-PARITY — Unify Claude/Codex review output contract
 
 Both review paths in compose's build pipeline (`review_check` Codex single-pass and `parallel_review` Claude+lens multi-pass) now produce a single canonical `ReviewResult` schema. Severity vocabulary unified (`must-fix`/`should-fix`/`nit`), confidence scale standardized (1–10), `clean` derivation moved out of the model into a deterministic post-hoc reducer. Downstream consumers — `vision-routes.js:452 result.clean === true` gate, `selective-rerun.test.js`, `lib/health-score.js`, the `.compose/prior_dirty_lenses.json` sidecar — work unchanged.

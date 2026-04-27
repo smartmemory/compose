@@ -8,15 +8,15 @@
  * 1. shouldRunCrossModel from review-lenses (diff-size gate)
  * 2. A synthetic harness that exercises the opt-out and dispatch paths
  *
- * Also validates canonical ReviewResult schema compatibility (STRAT-CLAUDE-EFFORT-PARITY):
- * the `mergedResult` input shape must have `clean`, `findings`, `meta`.
- * The synthesis output shape ({consensus, claude_only, codex_only}) is intentionally
- * outside the canonical contract — tracked as STRAT-XMODEL-PARITY.
+ * Also validates canonical CrossModelReviewResult schema (STRAT-XMODEL-PARITY):
+ * synthesis output routes through normalizeCrossModelResult — consensus/claude_only/codex_only
+ * arrays contain canonical finding items with severity, confidence 1-10, applied_gate, lens.
  */
 
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { shouldRunCrossModel } from '../lib/review-lenses.js';
+import { normalizeCrossModelResult } from '../lib/review-normalize.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -294,19 +294,145 @@ describe('cross-model review: canonical ReviewResult shape compatibility', () =>
     assert.ok(Array.isArray(result.result.lenses_run), 'lenses_run preserved');
   });
 
-  it('synthesis output shape is {consensus, claude_only, codex_only} — intentionally outside canonical', () => {
-    // This is a documentation test — the synthesis output is NOT a ReviewResult.
-    // Full canonicalization is tracked as STRAT-XMODEL-PARITY follow-up.
-    const exampleSynthesis = {
-      consensus: [],
+  it('synthesis output shape is CrossModelReviewResult — canonical ReviewResult + consensus/claude_only/codex_only', async () => {
+    // STRAT-XMODEL-PARITY: synthesis output is now a canonical CrossModelReviewResult
+    const rawSynthesis = JSON.stringify({
+      summary: '2 consensus findings, 1 Claude-only.',
+      consensus: [
+        { lens: 'security', file: 'auth.js', line: 42, severity: 'must-fix', finding: 'SQL injection', confidence: 9, applied_gate: 7 },
+      ],
+      claude_only: [
+        { lens: 'diff-quality', file: 'api.js', line: 10, severity: 'should-fix', finding: 'missing null check', confidence: 8, applied_gate: 7 },
+      ],
+      codex_only: [
+        { lens: 'general', file: null, line: null, severity: 'should-fix', finding: 'unhandled promise rejection', confidence: 8, applied_gate: 7 },
+      ],
+    });
+
+    const result = await normalizeCrossModelResult(rawSynthesis, { confidenceGate: 7 });
+
+    // Must be a ReviewResult (canonical base)
+    assert.ok('clean'    in result, 'must have clean field');
+    assert.ok('summary'  in result, 'must have summary field');
+    assert.ok('findings' in result, 'must have findings field');
+    assert.ok('meta'     in result, 'must have meta field');
+    assert.equal(result.meta.agent_type, 'claude');
+
+    // Must have CrossModelReviewResult extension fields
+    assert.ok('consensus'   in result, 'must have consensus array');
+    assert.ok('claude_only' in result, 'must have claude_only array');
+    assert.ok('codex_only'  in result, 'must have codex_only array');
+    assert.ok(Array.isArray(result.consensus));
+    assert.ok(Array.isArray(result.claude_only));
+    assert.ok(Array.isArray(result.codex_only));
+
+    // clean is false because there are must-fix findings
+    assert.equal(result.clean, false);
+
+    // findings is the union of all three arrays
+    assert.equal(result.findings.length, 3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// normalizeCrossModelResult: canonical finding shape enforcement (STRAT-XMODEL-PARITY)
+// ---------------------------------------------------------------------------
+
+describe('normalizeCrossModelResult: canonical finding shape', () => {
+  it('each finding in consensus/claude_only/codex_only has canonical severity, confidence 1-10, applied_gate, lens', async () => {
+    const rawSynthesis = JSON.stringify({
+      consensus: [
+        { lens: 'security', file: 'auth.js', line: null, severity: 'MUST_FIX', finding: 'injection risk', confidence: 9, applied_gate: 7 },
+      ],
+      claude_only: [
+        { lens: 'diff-quality', file: null, line: null, severity: 'warning', finding: 'missing check', confidence: 8, applied_gate: 7 },
+      ],
+      codex_only: [
+        { lens: 'general', file: null, line: null, severity: 'nit', finding: 'style issue', confidence: 7, applied_gate: 7 },
+      ],
+    });
+
+    const result = await normalizeCrossModelResult(rawSynthesis, { confidenceGate: 7 });
+
+    // Check consensus
+    assert.equal(result.consensus.length, 1);
+    assert.equal(result.consensus[0].severity, 'must-fix', 'MUST_FIX normalized to must-fix');
+    assert.ok(result.consensus[0].confidence >= 1 && result.consensus[0].confidence <= 10);
+    assert.ok(typeof result.consensus[0].applied_gate === 'number');
+    assert.ok(typeof result.consensus[0].lens === 'string');
+
+    // Check claude_only
+    assert.equal(result.claude_only.length, 1);
+    assert.equal(result.claude_only[0].severity, 'should-fix', 'warning normalized to should-fix');
+
+    // Check codex_only
+    assert.equal(result.codex_only.length, 1);
+    assert.equal(result.codex_only[0].severity, 'nit');
+  });
+
+  it('filters findings below confidence gate', async () => {
+    const rawSynthesis = JSON.stringify({
+      consensus: [
+        { lens: 'security', file: null, line: null, severity: 'must-fix', finding: 'high confidence', confidence: 9, applied_gate: 7 },
+        { lens: 'security', file: null, line: null, severity: 'must-fix', finding: 'low confidence', confidence: 3, applied_gate: 7 },
+      ],
       claude_only: [],
       codex_only: [],
-    };
-    assert.ok('consensus'   in exampleSynthesis);
-    assert.ok('claude_only' in exampleSynthesis);
-    assert.ok('codex_only'  in exampleSynthesis);
-    // No `clean` or `meta` fields — outside canonical contract
-    assert.ok(!('clean' in exampleSynthesis));
-    assert.ok(!('meta'  in exampleSynthesis));
+    });
+
+    const result = await normalizeCrossModelResult(rawSynthesis, { confidenceGate: 7 });
+
+    // Only the high-confidence finding should pass the gate
+    assert.equal(result.consensus.length, 1);
+    assert.equal(result.consensus[0].finding, 'high confidence');
+  });
+
+  it('stamps applied_gate on findings missing it', async () => {
+    const rawSynthesis = JSON.stringify({
+      consensus: [],
+      claude_only: [
+        { lens: 'general', file: null, line: null, severity: 'should-fix', finding: 'no gate field', confidence: 8 },
+      ],
+      codex_only: [],
+    });
+
+    const result = await normalizeCrossModelResult(rawSynthesis, { confidenceGate: 5 });
+
+    assert.equal(result.claude_only.length, 1);
+    assert.equal(result.claude_only[0].applied_gate, 5, 'applied_gate stamped from opts.confidenceGate');
+  });
+
+  it('clean=true when no must-fix or should-fix findings across all three arrays', async () => {
+    const rawSynthesis = JSON.stringify({
+      consensus: [
+        { lens: 'general', file: null, line: null, severity: 'nit', finding: 'style nit', confidence: 8, applied_gate: 7 },
+      ],
+      claude_only: [],
+      codex_only: [],
+    });
+
+    const result = await normalizeCrossModelResult(rawSynthesis, { confidenceGate: 7 });
+
+    assert.equal(result.clean, true, 'clean=true when only nit findings remain');
+  });
+
+  it('falls back to claudeFindingsFallback and codexFindingsFallback on parse failure', async () => {
+    const claudeFallback = [
+      { lens: 'security', file: 'f.js', line: 1, severity: 'must-fix', finding: 'claude fallback', confidence: 9, applied_gate: 7 },
+    ];
+    const codexFallback = [
+      { lens: 'general', file: null, line: null, severity: 'should-fix', finding: 'codex fallback', confidence: 7, applied_gate: 7 },
+    ];
+
+    const result = await normalizeCrossModelResult('not valid json at all %%%()', {
+      confidenceGate: 7,
+      claudeFindingsFallback: claudeFallback,
+      codexFindingsFallback: codexFallback,
+    });
+
+    assert.equal(result.consensus.length, 0, 'no consensus on parse failure');
+    assert.equal(result.claude_only.length, 1, 'claude fallback preserved');
+    assert.equal(result.codex_only.length, 1, 'codex fallback preserved');
+    assert.equal(result.clean, false, 'not clean when blocking findings exist');
   });
 });

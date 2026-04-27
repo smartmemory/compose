@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "cross-model-review-result.json",
+  "_source": "docs/features/STRAT-XMODEL-PARITY/design.md",
+  "_roadmap": "STRAT-XMODEL-PARITY",
+  "title": "CrossModelReviewResult",
+  "description": "Extended canonical review output schema for cross-model synthesis. Extends ReviewResult with three arrays of canonical finding items partitioned by model agreement. Produced by normalizeCrossModelResult in review-normalize.js. Convention: _source = design doc origin, _roadmap = feature code.",
+  "allOf": [
+    { "$ref": "review-result.json" },
+    {
+      "type": "object",
+      "required": ["consensus", "claude_only", "codex_only"],
+      "properties": {
+        "consensus": {
+          "type": "array",
+          "description": "Findings flagged by both Claude and Codex for the same issue. Each item is a canonical finding shape from ReviewResult.",
+          "items": { "$ref": "#/definitions/findingItem" }
+        },
+        "claude_only": {
+          "type": "array",
+          "description": "Findings flagged only by Claude (not corroborated by Codex).",
+          "items": { "$ref": "#/definitions/findingItem" }
+        },
+        "codex_only": {
+          "type": "array",
+          "description": "Findings flagged only by Codex. Normalized to canonical finding shape by normalizeCrossModelResult.",
+          "items": { "$ref": "#/definitions/findingItem" }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "findingItem": {
+      "type": "object",
+      "required": ["lens", "severity", "finding", "confidence", "applied_gate"],
+      "properties": {
+        "lens": {
+          "type": "string",
+          "description": "Lens name (e.g. 'diff-quality', 'security') or 'general' for Codex single-pass."
+        },
+        "file": {
+          "type": ["string", "null"],
+          "description": "File path relative to working directory, or null if not file-specific."
+        },
+        "line": {
+          "type": ["integer", "null"],
+          "description": "Line number within file, or null."
+        },
+        "severity": {
+          "enum": ["must-fix", "should-fix", "nit"],
+          "description": "must-fix: blocks ship. should-fix: next iteration. nit: logged only."
+        },
+        "finding": {
+          "type": "string",
+          "description": "Human-readable description of the finding."
+        },
+        "confidence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Model's self-assessed confidence 1-10."
+        },
+        "applied_gate": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "The confidence gate that was applied when this finding was emitted. Stamped by normalizer if missing."
+        },
+        "rationale": {
+          "type": ["string", "null"],
+          "description": "Optional STRAT-CERT structured reasoning trace."
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
