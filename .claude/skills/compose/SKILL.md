@@ -82,7 +82,7 @@ Call mcp__stratum__stratum_agent_run with:
 
 Fix all issues Codex flags. Re-run until REVIEW CLEAN. Max 5 iterations — if max hit, the problem is in the spec, surface to human.
 
-If `mcp__stratum__stratum_agent_run` is unavailable, fall back to `compose-reviewer` agent.
+If `mcp__stratum__stratum_agent_run` is unavailable (or returns a stream-chunk-size error), fall back to a `general-purpose` Agent dispatch with an explicit reviewer prompt — the canonical `ReviewResult` schema (severity `must-fix`/`should-fix`/`nit`, confidence 1–10, gate `>= 7`) defined at `compose/contracts/review-result.json` is the contract for both paths.
 
 ## Lifecycle
 
@@ -445,7 +445,7 @@ When `/compose` is invoked, always scan first:
 | `compose-explorer` | Phase 1 (2-3 parallel), Phase 4 (targeted) |
 | `compose-architect` | Phase 3 (2-3 competing mandates) |
 | `mcp__stratum__stratum_agent_run(type="codex")` | Any gate — Codex review pass (see Gate Protocol) |
-| `compose-reviewer` | Fallback when `agent_run` unavailable |
+| `general-purpose` Agent | Reviewer fallback when `stratum_agent_run` unavailable; prompt with canonical `ReviewResult` schema |
 | `superpowers:test-driven-development` | Phase 7 step 1 |
 | `superpowers:verification-before-completion` | Before any task/phase done |
 | `superpowers:systematic-debugging` | Any unexpected failure |
