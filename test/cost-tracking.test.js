@@ -21,12 +21,52 @@ const { BuildStreamWriter } = await import(`${REPO_ROOT}/lib/build-stream-writer
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Create a mock connector from an array of events. */
-function mockConnector(events) {
-  async function* gen(_prompt, _opts) {
-    for (const event of events) yield event;
-  }
-  return { run: gen };
+/**
+ * Create a fake stratum client that emits BuildStreamEvents during agentRun.
+ * Translates legacy connector-style events into v0.2.5 envelopes.
+ */
+function fakeStratum(events) {
+  const subs = new Map();
+  return {
+    onEvent(flowId, stepId, handler) {
+      const key = `${flowId}::${stepId}`;
+      let set = subs.get(key);
+      if (!set) { set = new Set(); subs.set(key, set); }
+      set.add(handler);
+      return () => set.delete(handler);
+    },
+    async agentRun(_agentType, _prompt, opts) {
+      const correlationId = opts?.correlationId;
+      const set = subs.get(`${correlationId}::_agent_run`) ?? new Set();
+      const parts = [];
+      let seq = 0;
+      const dispatch = (kind, metadata) => {
+        const env = {
+          schema_version: '0.2.5',
+          flow_id: correlationId, step_id: '_agent_run', task_id: null,
+          seq: seq++, ts: '', kind, metadata,
+        };
+        for (const h of set) h(env);
+      };
+      for (const ev of events) {
+        if (ev.type === 'assistant' && ev.content) {
+          parts.push(ev.content);
+          dispatch('agent_relay', { role: 'assistant', text: ev.content });
+        } else if (ev.type === 'usage') {
+          dispatch('step_usage', {
+            input_tokens: ev.input_tokens ?? 0,
+            output_tokens: ev.output_tokens ?? 0,
+            cache_creation_input_tokens: ev.cache_creation_input_tokens ?? 0,
+            cache_read_input_tokens: ev.cache_read_input_tokens ?? 0,
+            cost_usd: ev.cost_usd,
+            model: ev.model ?? null,
+          });
+        }
+      }
+      return { text: parts.join(''), correlation_id: correlationId };
+    },
+    async cancelAgentRun(correlationId) { return { status: 'cancelled', correlation_id: correlationId }; },
+  };
 }
 
 /** Create a temporary directory for test stream files. */
@@ -52,8 +92,8 @@ test('runAndNormalize: returns usage totals when connector emits usage events', 
       model: 'claude-sonnet-4-6',
     },
   ];
-  const connector = mockConnector(events);
-  const { text, usage } = await runAndNormalize(connector, 'prompt', {});
+  const stratum = fakeStratum(events);
+  const { text, usage } = await runAndNormalize(null, 'prompt', { step_id: 's', output_fields: {} }, { stratum });
 
   assert.equal(text, 'Hello');
   assert.ok(usage, 'usage should be returned');
@@ -86,8 +126,8 @@ test('runAndNormalize: accumulates multiple usage events', async () => {
       model: 'claude-sonnet-4-6',
     },
   ];
-  const connector = mockConnector(events);
-  const { usage } = await runAndNormalize(connector, 'prompt', {});
+  const stratum = fakeStratum(events);
+  const { usage } = await runAndNormalize(null, 'prompt', { step_id: 's', output_fields: {} }, { stratum });
 
   assert.equal(usage.input_tokens, 800);
   assert.equal(usage.output_tokens, 300);
@@ -95,8 +135,8 @@ test('runAndNormalize: accumulates multiple usage events', async () => {
 
 test('runAndNormalize: returns zero usage when no usage events', async () => {
   const events = [{ type: 'assistant', content: 'response' }];
-  const connector = mockConnector(events);
-  const { usage } = await runAndNormalize(connector, 'prompt', {});
+  const stratum = fakeStratum(events);
+  const { usage } = await runAndNormalize(null, 'prompt', { step_id: 's', output_fields: {} }, { stratum });
 
   assert.ok(usage, 'usage should always be returned');
   assert.equal(usage.input_tokens, 0);
@@ -116,8 +156,8 @@ test('runAndNormalize: uses connector-provided cost_usd when present', async () 
       model: 'openai/codex',
     },
   ];
-  const connector = mockConnector(events);
-  const { usage } = await runAndNormalize(connector, 'prompt', {});
+  const stratum = fakeStratum(events);
+  const { usage } = await runAndNormalize(null, 'prompt', { step_id: 's', output_fields: {} }, { stratum });
 
   assert.ok(Math.abs(usage.cost_usd - 0.1234) < 0.0001, `expected 0.1234 got ${usage.cost_usd}`);
 });

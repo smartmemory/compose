@@ -12,7 +12,34 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { parseDecisionBlocks } from '../src/components/vision/designSessionState.js';
+import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
+
+// Lazy singleton — design conversations share one stratum-mcp connection
+// across the server process lifetime. Concurrent runs are correlation-id scoped.
+let _stratumClient = null;
+let _stratumConnectPromise = null;
+async function _getStratum() {
+  if (_stratumClient) return _stratumClient;
+  if (!_stratumConnectPromise) {
+    const c = new StratumMcpClient();
+    _stratumConnectPromise = c.connect()
+      .then(() => { _stratumClient = c; return c; })
+      .catch((err) => { _stratumConnectPromise = null; throw err; });
+  }
+  return _stratumConnectPromise;
+}
+
+/** Tear down the cached stratum-mcp connection. Tests should call this in after(). */
+export async function closeDesignStratum() {
+  const c = _stratumClient;
+  _stratumClient = null;
+  _stratumConnectPromise = null;
+  if (c) {
+    try { await c.close(); } catch { /* ignore */ }
+  }
+}
 
 /** @type {Map<string, Set<import('node:http').ServerResponse>>} — key is `${scope}:${featureCode || ''}` */
 export const designListeners = new Map();
@@ -64,6 +91,9 @@ export function broadcastDesignEvent(key, type, data) {
 async function dispatchDesignAgent(sessionManager, projectRoot, scope, featureCode) {
   const key = sessionKey(scope, featureCode, projectRoot);
   if (_inFlight.has(key)) return; // already running
+  // Tests assert on the HTTP response only — skip the LLM round-trip to avoid
+  // keeping a stratum-mcp subprocess alive past the test lifetime.
+  if (process.env.NODE_ENV === 'test' || process.env.COMPOSE_DESIGN_DISPATCH === '0') return;
   _inFlight.add(key);
   // Snapshot message count so we can detect new messages arriving during the run
   let promptMessageCount = 0;
@@ -107,44 +137,60 @@ Conversation history:
 ${formattedMessages}`;
 
     let fullContent = '';
-    let lastToolName = null;
     let toolUseCounter = 0;
-    let lastToolUseId = null;
 
-    const { ClaudeSDKConnector } = await import('./connectors/claude-sdk-connector.js');
-    const connector = new ClaudeSDKConnector({ cwd: projectRoot });
+    const stratum = await _getStratum();
+    const correlationId = randomUUID();
+    const subStepId = '_agent_run';
 
-    for await (const event of connector.run(systemPrompt)) {
-      if (event.type === 'assistant' && event.content) {
-        fullContent += event.content;
-        broadcastDesignEvent(key, 'text', { content: event.content });
-      } else if (event.type === 'result' && event.content) {
-        // Final aggregated text — use it if we haven't accumulated anything
-        if (!fullContent) {
-          fullContent = event.content;
-          broadcastDesignEvent(key, 'text', { content: event.content });
+    const unsub = stratum.onEvent(correlationId, subStepId, (env) => {
+      if (!env || env.schema_version !== '0.2.5') return;
+      const m = env.metadata ?? {};
+      switch (env.kind) {
+        case 'agent_relay':
+          if (m.role === 'assistant' && typeof m.text === 'string' && m.text.length > 0) {
+            fullContent += m.text;
+            broadcastDesignEvent(key, 'text', { content: m.text });
+          }
+          break;
+        case 'tool_use_summary': {
+          const toolUseId = `tu-${++toolUseCounter}`;
+          if (m.tool) {
+            broadcastDesignEvent(key, 'research', {
+              id: toolUseId,
+              tool: m.tool,
+              input: m.input ?? {},
+              timestamp: new Date().toISOString(),
+            });
+          }
+          if (m.summary) {
+            broadcastDesignEvent(key, 'research_result', {
+              id: toolUseId,
+              tool: m.tool ?? null,
+              summary: String(m.summary).slice(0, 200),
+              timestamp: new Date().toISOString(),
+            });
+          }
+          break;
         }
-      } else if (event.type === 'error') {
-        broadcastDesignEvent(key, 'error', { message: event.message });
-        return;
-      } else if (event.type === 'tool_use') {
-        lastToolName = event.tool;
-        lastToolUseId = `tu-${++toolUseCounter}`;
-        broadcastDesignEvent(key, 'research', {
-          id: lastToolUseId,
-          tool: event.tool,
-          input: event.input,
-          timestamp: new Date().toISOString(),
-        });
-      } else if (event.type === 'tool_use_summary') {
-        broadcastDesignEvent(key, 'research_result', {
-          id: lastToolUseId,
-          tool: lastToolName,
-          summary: (event.summary || '').slice(0, 200),
-          timestamp: new Date().toISOString(),
-        });
+        default:
+          break;
       }
-      // Ignore other system init/complete events
+    });
+
+    let runResult;
+    try {
+      runResult = await stratum.agentRun('claude', systemPrompt, {
+        cwd: projectRoot,
+        correlationId,
+      });
+    } finally {
+      unsub();
+    }
+    // Fall back to result.text if no agent_relay events arrived (older producers).
+    if (!fullContent && runResult?.text) {
+      fullContent = runResult.text;
+      broadcastDesignEvent(key, 'text', { content: fullContent });
     }
 
     // Parse for decision blocks and broadcast them
@@ -190,9 +236,9 @@ ${formattedMessages}`;
  * surviving project switches via /api/project/switch.
  *
  * @param {object} app — Express app
- * @param {{ getSessionManager: () => import('./design-session.js').DesignSessionManager, getConnector: () => import('./connectors/claude-sdk-connector.js').ClaudeSDKConnector|null, getProjectRoot: () => string }} deps
+ * @param {{ getSessionManager: () => import('./design-session.js').DesignSessionManager, getProjectRoot: () => string }} deps
  */
-export function attachDesignRoutes(app, { getSessionManager, getConnector, getProjectRoot }) {
+export function attachDesignRoutes(app, { getSessionManager, getProjectRoot }) {
   // POST /api/design/start
   app.post('/api/design/start', (req, res) => {
     const { scope, featureCode } = req.body || {};
@@ -328,8 +374,10 @@ export function attachDesignRoutes(app, { getSessionManager, getConnector, getPr
         return res.status(404).json({ error: `No session found for ${scope}${featureCode ? `:${featureCode}` : ''}` });
       }
 
-      // If no connector available or no projectRoot, mark complete and skip doc generation
-      if (!getConnector() || !projectRoot) {
+      // No projectRoot, or test/dispatch-disabled mode → mark complete and skip doc generation.
+      const dispatchDisabled =
+        process.env.NODE_ENV === 'test' || process.env.COMPOSE_DESIGN_DISPATCH === '0';
+      if (!projectRoot || dispatchDisabled) {
         const completedSession = sessionManager.completeSession(scope, featureCode);
         res.json({ session: completedSession });
         return;
@@ -379,18 +427,13 @@ Write the design document in Markdown format. Include:
 
 Output ONLY the Markdown content, no code fences.`;
 
-      // Generate the design doc via a fresh connector
-      const { ClaudeSDKConnector } = await import('./connectors/claude-sdk-connector.js');
-      const connector = new ClaudeSDKConnector({ cwd: projectRoot });
+      // Generate the design doc via the persistent stratum-mcp client.
+      // No streaming needed for the one-shot doc generation.
       let docContent = '';
       try {
-        for await (const event of connector.run(docPrompt)) {
-          if (event.type === 'assistant' && event.content) {
-            docContent += event.content;
-          } else if (event.type === 'result' && event.content && !docContent) {
-            docContent = event.content;
-          }
-        }
+        const stratum = await _getStratum();
+        const result = await stratum.runAgentText('claude', docPrompt, { cwd: projectRoot });
+        docContent = result || '';
       } catch (err) {
         // If generation fails, don't complete — let user retry
         console.error('[design] Doc generation failed:', err.message);

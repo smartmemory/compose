@@ -2,7 +2,6 @@
  * Tests for COMP-AGENT-CAPS:
  *   - server/agent-templates.js: AGENT_TEMPLATES, resolveTemplate, validateCapabilities
  *   - lib/agent-string.js: parseAgentString, resolveAgentConfig
- *   - server/connectors/claude-sdk-connector.js: tool restriction opts
  */
 import { test, it, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -214,37 +213,3 @@ describe('resolveAgentConfig', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// ClaudeSDKConnector constructor options (structural, no SDK call needed)
-// ---------------------------------------------------------------------------
-
-describe('ClaudeSDKConnector tool restriction opts', () => {
-  test('connector accepts allowedTools and disallowedTools without throwing', async () => {
-    // Dynamic import to avoid top-level SDK side effects in test suite
-    const { ClaudeSDKConnector } = await import('../server/connectors/claude-sdk-connector.js');
-
-    // Constructor should not throw when given tool restriction opts
-    assert.doesNotThrow(() => {
-      new ClaudeSDKConnector({
-        allowedTools: ['Read', 'Grep'],
-        disallowedTools: ['Edit', 'Write'],
-      });
-    });
-  });
-
-  test('connector accepts no tool opts (backward compat — preset mode)', async () => {
-    const { ClaudeSDKConnector } = await import('../server/connectors/claude-sdk-connector.js');
-
-    assert.doesNotThrow(() => {
-      new ClaudeSDKConnector({});
-    });
-  });
-
-  test('connector accepts only disallowedTools', async () => {
-    const { ClaudeSDKConnector } = await import('../server/connectors/claude-sdk-connector.js');
-
-    assert.doesNotThrow(() => {
-      new ClaudeSDKConnector({ disallowedTools: ['Edit'] });
-    });
-  });
-});

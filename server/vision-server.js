@@ -29,7 +29,6 @@ import { SettingsStore } from './settings-store.js';
 import { attachSettingsRoutes } from './settings-routes.js';
 import { attachDesignRoutes } from './design-routes.js';
 import { DesignSessionManager } from './design-session.js';
-import { ClaudeSDKConnector } from './connectors/claude-sdk-connector.js';
 import { attachPipelineRoutes } from './pipeline-routes.js';
 import { attachIdeaboxRoutes } from './ideabox-routes.js';
 import { CoalescingBuffer } from './coalescing-buffer.js';
@@ -131,8 +130,6 @@ export class VisionServer {
     // Re-resolve on every call so project switches get fresh instances.
     let _designSessionManager = null;
     let _designDataDir = null;
-    let _designConnector = null;
-    let _designCwd = null;
 
     attachDesignRoutes(app, {
       getSessionManager: () => {
@@ -143,14 +140,6 @@ export class VisionServer {
           _designDataDir = dataDir;
         }
         return _designSessionManager;
-      },
-      getConnector: () => {
-        const cwd = getTargetRoot();
-        if (cwd !== _designCwd) {
-          _designConnector = new ClaudeSDKConnector({ cwd });
-          _designCwd = cwd;
-        }
-        return _designConnector;
       },
       getProjectRoot: () => getTargetRoot(),
     });

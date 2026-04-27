@@ -88,6 +88,56 @@ describe('BuildStreamBridge', () => {
     assert.equal(broadcasts[6].status, 'complete');
   });
 
+  it('passes through STRAT-PAR-STREAM build_stream_event envelopes as buildStreamEvent', async () => {
+    const broadcasts = [];
+    const bridge = new BuildStreamBridge(composeDir, (msg) => broadcasts.push(msg));
+
+    bridge.start();
+    await sleep(100);
+
+    const inner = {
+      schema_version: '0.2.5',
+      flow_id: 'f1',
+      step_id: 'execute',
+      task_id: 'task-001',
+      seq: 0,
+      ts: '2026-04-26T00:00:00Z',
+      kind: 'agent_relay',
+      metadata: { text: 'hi', role: 'assistant' },
+    };
+
+    writeLine(filePath, { type: 'build_start', featureCode: 'T-1', flowId: 'f1' }, 0);
+    writeLine(filePath, { type: 'build_stream_event', event: inner }, 1);
+
+    await sleep(200);
+    bridge.stop();
+
+    assert.equal(broadcasts.length, 2);
+    assert.equal(broadcasts[1].type, 'buildStreamEvent');
+    assert.equal(broadcasts[1].event.kind, 'agent_relay');
+    assert.equal(broadcasts[1].event.metadata.text, 'hi');
+    assert.equal(broadcasts[1]._source, 'build');
+  });
+
+  it('drops malformed build_stream_event envelopes (missing inner kind)', async () => {
+    const broadcasts = [];
+    const bridge = new BuildStreamBridge(composeDir, (msg) => broadcasts.push(msg));
+
+    bridge.start();
+    await sleep(100);
+
+    writeLine(filePath, { type: 'build_start', featureCode: 'T-1', flowId: 'f1' }, 0);
+    writeLine(filePath, { type: 'build_stream_event', event: { foo: 'bar' } }, 1);
+    writeLine(filePath, { type: 'build_stream_event' }, 2); // missing event entirely
+
+    await sleep(200);
+    bridge.stop();
+
+    // build_start passes; the two malformed envelopes are dropped.
+    assert.equal(broadcasts.length, 1);
+    assert.equal(broadcasts[0].subtype, 'build_start');
+  });
+
   it('deduplicates events with same _seq', async () => {
     const broadcasts = [];
     const bridge = new BuildStreamBridge(composeDir, (msg) => broadcasts.push(msg));

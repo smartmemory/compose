@@ -455,6 +455,22 @@ export class BuildStreamBridge {
           _source: 'build',
         };
 
+      // STRAT-PAR-STREAM: typed BuildStreamEvent envelope (schema v0.2.5+) wrapped
+      // by build.js as { type: 'build_stream_event', event: {...} }. Pass the
+      // inner envelope through to the cockpit unchanged so renderers can
+      // discriminate by `kind`.
+      case 'build_stream_event': {
+        const inner = event.event;
+        if (!inner || typeof inner !== 'object' || typeof inner.kind !== 'string') {
+          return null;
+        }
+        return {
+          type: 'buildStreamEvent',
+          event: inner,
+          _source: 'build',
+        };
+      }
+
       // COMP-HEALTH item 118: health score after build completion
       case 'health_score':
         return {

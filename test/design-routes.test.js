@@ -13,6 +13,10 @@ import { tmpdir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Disable real LLM dispatch — design-routes fire-and-forget would otherwise
+// spawn a stratum-mcp subprocess that pins the test event loop open.
+process.env.NODE_ENV = 'test';
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const express = (await import('express')).default;
@@ -39,7 +43,6 @@ before(() => new Promise(res => {
 
   attachDesignRoutes(app, {
     getSessionManager: () => sessionManager,
-    getConnector: () => null,
     getProjectRoot: () => freshDir(),
   });
 

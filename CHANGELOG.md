@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-04-26
+
+### STRAT-DEDUP-AGENTRUN-V3 — Retire Compose's Node connector tree
+
+Removed all 6 JS connector files (`server/connectors/{agent,claude-sdk,codex,opencode,connector-discovery,connector-runtime}-connector.js`) and the `connectors/` directory. All internal agent dispatch now flows through `mcp__stratum__stratum_agent_run` over the persistent stdio MCP session. `stratum_agent_run` extended to emit typed `BuildStreamEvent`s via `ctx.report_progress` — preserves cockpit visibility for one-off agent calls (gates, single steps, child flows, retries) that previously went through the JS tree.
+
+**Producer:** Python `ClaudeConnector`/`CodexConnector` `stream_events()` extended to yield `step_usage` ConnectorEvents (post-Codex-review fix — was silently zero before). New `stratum_cancel_agent_run(correlation_id)` MCP tool. `make_agent_connector` accepts tier primitives (`allowed_tools`/`disallowed_tools`/`thinking`/`effort`).
+
+**Consumer:** `lib/stratum-mcp-client.js` gains `agentRun()` / `runAgentText()` / `cancelAgentRun()`. `lib/result-normalizer.js#runAndNormalize` reimplemented on top of `agentRun()` + `onEvent()` — public `(connector, prompt, dispatch, opts) → {text, result, usage}` shape preserved (first arg ignored). 18 call-sites migrated across `build.js`, `new.js`, `import.js`, `step-validator.js`. Server surfaces (`vision-server.js`, `compose-mcp-tools.js`, `design-routes.js`) migrated; `design-routes.js` uses lazy `StratumMcpClient` singleton + SSE bridging from typed envelopes.
+
+**Codex review (Phase 7) caught two blockers — both fixed before ship:** schema double-injection (client + server both injected) and missing `step_usage` envelope emission (cost telemetry silently zero on streaming path).
+
+**Retired:** `stratum/stratum-mcp/tests/test_codex_connector_sync.py` (interim drift guard — failure class is now structurally impossible). 3 connector-specific test files deleted.
+
+**Tests:** stratum-mcp 889 + 8 new = 889 pass; compose 1871 unit + 87 UI + 32 integration = 1990 pass. **Aggregate: 2,879 passing, 0 regressions.** Live E2E confirms typed envelope wire (`agent_started` + `agent_relay` + `step_usage` with contiguous per-scope seq, correct flow_id/step_id, task_id absent).
+
+**Diff totals:** stratum +596 / -127; compose +1,131 / -1,693. Net **-1,093 lines** across both repos.
+
+**Why:** Eliminates the two-trees drift class structurally. The 2026-04-19 codex hang (Python on opencode while JS on direct codex) is exactly what this prevents. Closes the `STRAT-DEDUP-AGENTRUN` umbrella.
+
+**Known follow-ups:** `STRAT-CLAUDE-EFFORT-PARITY` (Claude SDK has no `effort` param — accepted but no-op, matches prior JS behavior); `connector-factory-shim.js` retained for ~6 legacy tests using `connectorFactory:` injection (debt; tests should migrate to `opts.stratum`).
+
+### STRAT-PAR-STREAM — Typed event streaming for parallel_dispatch
+
+Added server-push event channel from stratum-mcp to Compose during `parallel_dispatch`. Producer-side: `ClaudeConnector` and `CodexConnector` gain `stream_events()` async iterators yielding connector-local `ConnectorEvent`s; `parallel_exec._run_one` mints `BuildStreamEvent` envelopes (per-`(flow_id, step_id, task_id)` `seq`) and forwards via `ctx.report_progress(message=json)`. Consumer-side: `lib/stratum-mcp-client.js` gains `onEvent(flowId, stepId, handler)`; `executeParallelDispatchServer` subscribes before the polling loop (subscription cleanup wrapped in `try/finally`), forwards valid v0.2.5 envelopes to `BuildStreamWriter`; `build-stream-bridge` maps to SSE `{type: 'buildStreamEvent', event}`.
+
+**Schema bump:** CONTRACT v0.2.4 → v0.2.5 (additive). New `BuildStreamEvent` 12-kind discriminated union: 3 live (`agent_started`, `tool_use_summary`, `agent_relay`) + 3 reserved (`iteration_update`, `tier_result`, `health_event`) + 6 legacy imports from `BuildStreamWriter` with open metadata.
+
+**Tests:** stratum-mcp 892 pass (883 existing + 9 new); compose 1902 unit + 87 UI + 28 integration pass; 0 regressions. **Aggregate: 2,909 tests passing.**
+
+**Why:** Gates `STRAT-DEDUP-AGENTRUN-V3`. Without typed streaming, retiring the Node connector tree would silently downgrade cockpit visibility to coarse polling-only updates. v3 effort drops from ~2 weeks to 4–6 days now that the streaming path is settled.
+
+**Out of scope (follow-ups):** `STRAT-PAR-STREAM-LEGACY-CLOSE` (tighten 6 legacy kinds to closed metadata, schema v0.2.6); `STRAT-PAR-STREAM-CONSUMER-VALIDATE` (consumer-side schema validation of received envelopes); cockpit UI renderer for the new typed events; PII redaction policy. End-to-end smoke test of the live Python↔Node↔SSE↔UI loop is an open thread.
+
 ## 2026-04-25
 
 ### Wave 6 close — integration review signed off

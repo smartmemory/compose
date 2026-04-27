@@ -495,9 +495,12 @@ describe('Wave 6 contract — pending siblings (skip-until-landed)', () => {
     const id2 = driftThresholdDecisionEventId('COMP-OBS-DRIFT-TEST', 'path_drift', NOW);
     assert.equal(id1, id2, 'driftThresholdDecisionEventId must be deterministic');
 
-    // 6. Schema version bumped to 0.2.4
+    // 6. Schema version bumped to >=0.2.4 (current: 0.2.5 — STRAT-PAR-STREAM)
     const { SCHEMA_VERSION } = await import(`${REPO_ROOT}/server/schema-validator.js`);
-    assert.equal(SCHEMA_VERSION, '0.2.4', 'schema must be at v0.2.4 for COMP-OBS-DRIFT');
+    assert.ok(
+      SCHEMA_VERSION >= '0.2.4',
+      `schema must be at v0.2.4 or later for COMP-OBS-DRIFT (got ${SCHEMA_VERSION})`,
+    );
   });
 
   test('GateLogEntry + gate DecisionEvent join round-trip — COMP-OBS-GATELOG', async () => {

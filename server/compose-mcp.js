@@ -256,10 +256,8 @@ const TOOLS = [
       },
     },
   },
-  // Note: `agent_run` tool removed 2026-04-18 (STRAT-DEDUP-AGENTRUN v1).
-  // LLM-facing agent dispatch now goes through `mcp__stratum__stratum_agent_run`.
-  // `toolAgentRun` (and the Node connectors it uses) remain exported for Compose's
-  // internal callers (build.js, vision-server, pipelines).
+  // `agent_run` tool removed 2026-04-18 (STRAT-DEDUP-AGENTRUN v1); LLM-facing
+  // dispatch goes through `mcp__stratum__stratum_agent_run`.
 ];
 
 // ---------------------------------------------------------------------------
