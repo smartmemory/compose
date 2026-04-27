@@ -17,10 +17,15 @@ contracts:
       type: array
       values: [{type: object}]
     diff: {type: string}
-  MergedReviewResult:
-    findings: {type: string}
-    has_critical: {type: string}
-    summary: {type: string}
+  # Canonical schema — STRAT-CLAUDE-EFFORT-PARITY. Local MergedReviewResult removed.
+  ReviewResult:
+    clean:      {type: boolean}
+    summary:    {type: string}
+    findings:   {type: array}
+    meta:       {type: object}
+    lenses_run: {type: array}
+    auto_fixes: {type: array}
+    asks:       {type: array}
 
 workflow:
   name: team-review
@@ -38,7 +43,7 @@ flows:
     input:
       featureCode: {type: string}
       description: {type: string}
-    output: MergedReviewResult
+    output: ReviewResult
     steps:
       - id: triage
         agent: "claude:orchestrator"
@@ -76,9 +81,9 @@ flows:
           Confidence gate: only report findings with confidence >= {confidence_gate}/10.
           Exclusions: do NOT flag {exclusions}.
 
-          Return JSON: { "clean": boolean, "findings": LensFinding[] }
+          Return JSON: { "clean": boolean, "findings": <ReviewResult finding items> }
           where each finding has: lens, file, line, severity (must-fix|should-fix|nit),
-          finding (description), confidence (1-10).
+          finding (description), confidence (1-10), applied_gate (integer).
 
           If no issues found, return { "clean": true, "findings": [] }.
         output_fields:
@@ -99,7 +104,8 @@ flows:
           "false" otherwise. Write a one-sentence summary.
         inputs:
           review_results: "$.steps.review_lenses.output"
-        output_contract: MergedReviewResult
+          reduce_mode: "true"
+        output_contract: ReviewResult
         ensure:
           - "result.has_critical == 'false'"
           - "result.summary != ''"

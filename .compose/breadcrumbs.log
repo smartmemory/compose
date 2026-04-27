@@ -267,3 +267,23 @@
 2026-04-25T17:12:47+08:00 | STEPDETAIL: ship — Wave 6 COMPLETE; 1897 pass 0 fail 0 skip
 2026-04-25T20:31:15+08:00 | Wave 6 integration close: 59 wave-6 tests pass, 0 fail, 0 skip; contract-compliance suite has 0 placeholders remaining
 2026-04-25T20:31:33+08:00 | Wave 6 integration close: 59 wave-6 tests pass, 0 fail, 0 skip
+2026-04-26T13:43:39+08:00 | STRAT-PAR-STREAM: typed event streaming, schema bump v0.2.5, persistent stdio MCP session
+2026-04-26T13:48:21+08:00 | STRAT-PAR-STREAM consumer: onEvent API on StratumMcpClient, build.js subscription, bridge typed-event passthrough
+2026-04-26T14:04:35+08:00 | STRAT-PAR-STREAM shipped — schema v0.2.5, producer+consumer wired, 2909 tests passing, CHANGELOG+ROADMAP updated
+2026-04-26T18:43:01+08:00 | STRAT-PAR-STREAM live agent E2E confirmed — fixed ctx-lifetime + duplicate-agent_started bugs caught only by real subprocess
+2026-04-26T22:23:14+08:00 | STRAT-DEDUP-AGENTRUN-V3 execute — producer streaming for stratum_agent_run + retire JS connector tree
+2026-04-26T22:24:52+08:00 | STRAT-DEDUP-AGENTRUN-V3 consumer-side: agentRun client + runAndNormalize rewrite + connector deletion
+2026-04-26T22:53:22+08:00 | Migrating 3 server files off connectors and sweeping connector tree
+2026-04-26T23:30:44+08:00 | STRAT-DEDUP-AGENTRUN-V3 shipped — JS connector tree retired (-1093 lines), 2879 tests passing, STRAT-DEDUP-AGENTRUN umbrella closed
+2026-04-27T06:51:10+08:00 | STRAT-CLAUDE-EFFORT-PARITY: executing T1-T10 from plan.md
+2026-04-27T06:52:55+08:00 | STRAT-CLAUDE-EFFORT-PARITY T1+T2+T6: canonical ReviewResult contract, review-prompt scaffold, rename LensFinding in review-lenses.js
+2026-04-27T06:54:48+08:00 | STRAT-CLAUDE-EFFORT-PARITY T3: build review-normalize.js — parse, repair-retry, clean derivation
+2026-04-27T06:55:48+08:00 | STRAT-CLAUDE-EFFORT-PARITY T4: hook review-normalize into result-normalizer.js before !hasSchema early-return
+2026-04-27T06:56:23+08:00 | STRAT-CLAUDE-EFFORT-PARITY T5: forward reviewMode/confidenceGate/lens opts in build.js at lines 2642, 689, 1217
+2026-04-27T06:57:07+08:00 | STRAT-CLAUDE-EFFORT-PARITY T7: rewrite build.stratum.yaml — remove LensFinding/LensResult/MergedReviewResult, add ReviewResult, update review steps
+2026-04-27T06:58:14+08:00 | STRAT-CLAUDE-EFFORT-PARITY T8: update runCrossModelReview synthesis prompt — rename LensFinding to ReviewResult finding items, update JSDoc
+2026-04-27T06:58:57+08:00 | STRAT-CLAUDE-EFFORT-PARITY T9: health-score JSDoc + dead branch, review-fix >= 80 → >= 7, team-review.stratum.yaml MergedReviewResult → ReviewResult
+2026-04-27T07:00:21+08:00 | STRAT-CLAUDE-EFFORT-PARITY T10: write review-parity.test.js (new), update cross-model-review.test.js, verify selective-rerun + review-lenses pass
+2026-04-27T07:07:14+08:00 | STRAT-CLAUDE-EFFORT-PARITY T10 complete: 1898/1898 tests pass. All tasks T1-T10 complete.
+2026-04-27T07:13:43+08:00 | MF-1/SF-4/SF-5/SF-6: wire buildReviewPrompt at build.js call sites, fix review-prompt.js cert hack, fix vacuous test assertion
+2026-04-27T07:22:09+08:00 | SF-NEW-1/2/3: fix merge-step scaffold framing, YAML intent duplication, and parallel-lens cert double-inject

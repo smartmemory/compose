@@ -1,0 +1,126 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "review-result.json",
+  "_source": "docs/features/STRAT-CLAUDE-EFFORT-PARITY/design.md",
+  "_roadmap": "STRAT-CLAUDE-EFFORT-PARITY",
+  "title": "ReviewResult",
+  "description": "Canonical review output schema produced by both Claude (parallel_review) and Codex (review_check) paths. Convention: _source = design doc origin, _roadmap = feature code.",
+  "type": "object",
+  "required": ["clean", "summary", "findings", "meta"],
+  "properties": {
+    "clean": {
+      "type": "boolean",
+      "description": "Derived by normalizer — true iff zero must-fix and zero should-fix findings remain after confidence gate filtering. NOT model-reported."
+    },
+    "summary": {
+      "type": "string",
+      "description": "1-3 sentence narrative summary of findings."
+    },
+    "findings": {
+      "type": "array",
+      "description": "All findings from this review pass.",
+      "items": {
+        "type": "object",
+        "required": ["lens", "severity", "finding", "confidence", "applied_gate"],
+        "properties": {
+          "lens": {
+            "type": "string",
+            "description": "Lens name (e.g. 'diff-quality', 'security') or 'general' for Codex single-pass."
+          },
+          "file": {
+            "type": ["string", "null"],
+            "description": "File path relative to working directory, or null if not file-specific."
+          },
+          "line": {
+            "type": ["integer", "null"],
+            "description": "Line number within file, or null."
+          },
+          "severity": {
+            "enum": ["must-fix", "should-fix", "nit"],
+            "description": "must-fix: blocks ship. should-fix: next iteration. nit: logged only."
+          },
+          "finding": {
+            "type": "string",
+            "description": "Human-readable description of the finding."
+          },
+          "confidence": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Model's self-assessed confidence 1-10."
+          },
+          "applied_gate": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "The confidence gate that was applied when this finding was emitted. Stamped by normalizer if missing."
+          },
+          "rationale": {
+            "type": ["string", "null"],
+            "description": "Optional STRAT-CERT structured reasoning trace."
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "meta": {
+      "type": "object",
+      "required": ["agent_type", "model_id"],
+      "properties": {
+        "agent_type": {
+          "enum": ["claude", "codex"],
+          "description": "Which model type produced this result."
+        },
+        "model_id": {
+          "type": ["string", "null"],
+          "description": "Model identifier (e.g. 'claude-sonnet-4-5'). Null if not available."
+        }
+      },
+      "additionalProperties": true
+    },
+    "lenses_run": {
+      "type": "array",
+      "description": "IDs of lenses that produced any must-fix or should-fix finding. Populated by merge step in parallel_review; empty array for single-pass Codex review.",
+      "items": { "type": "string" }
+    },
+    "auto_fixes": {
+      "type": "array",
+      "description": "Mechanical findings (formatting, typos, simple tests) that can be auto-applied. Populated by merge step.",
+      "items": {
+        "type": "object",
+        "required": ["lens", "severity", "finding", "confidence", "applied_gate"],
+        "properties": {
+          "lens":         { "type": "string" },
+          "file":         { "type": ["string", "null"] },
+          "line":         { "type": ["integer", "null"] },
+          "severity":     { "enum": ["must-fix", "should-fix", "nit"] },
+          "finding":      { "type": "string" },
+          "confidence":   { "type": "integer", "minimum": 1, "maximum": 10 },
+          "applied_gate": { "type": "integer", "minimum": 1, "maximum": 10 },
+          "rationale":    { "type": ["string", "null"] }
+        },
+        "additionalProperties": true
+      }
+    },
+    "asks": {
+      "type": "array",
+      "description": "Findings requiring human judgment. Populated by merge step.",
+      "items": {
+        "type": "object",
+        "required": ["lens", "severity", "finding", "confidence", "applied_gate"],
+        "properties": {
+          "lens":         { "type": "string" },
+          "file":         { "type": ["string", "null"] },
+          "line":         { "type": ["integer", "null"] },
+          "severity":     { "enum": ["must-fix", "should-fix", "nit"] },
+          "finding":      { "type": "string" },
+          "confidence":   { "type": "integer", "minimum": 1, "maximum": 10 },
+          "applied_gate": { "type": "integer", "minimum": 1, "maximum": 10 },
+          "rationale":    { "type": ["string", "null"] }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

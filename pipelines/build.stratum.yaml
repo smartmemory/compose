@@ -26,10 +26,16 @@ contracts:
     outcome:  {type: string, values: [complete, skipped, failed]}
     summary:  {type: string}
 
+  # Canonical review output — produced by both review_check (Codex) and parallel_review (Claude).
+  # Schema source: compose/contracts/review-result.json  (_roadmap: STRAT-CLAUDE-EFFORT-PARITY)
   ReviewResult:
-    clean:    {type: boolean}
-    summary:  {type: string}
-    findings: {type: array}
+    clean:      {type: boolean}
+    summary:    {type: string}
+    findings:   {type: array}
+    meta:       {type: object}
+    lenses_run: {type: array}
+    auto_fixes: {type: array}
+    asks:       {type: array}
 
   TestResult:
     passing:  {type: boolean}
@@ -38,14 +44,6 @@ contracts:
 
   TaskGraph:
     tasks: {type: array}
-
-  LensFinding:
-    lens:       {type: string}
-    file:       {type: string}
-    line:       {type: number}
-    severity:   {type: string, values: [must-fix, should-fix, nit]}
-    finding:    {type: string}
-    confidence: {type: number}
 
   LensTask:
     id:              {type: string}
@@ -56,18 +54,6 @@ contracts:
 
   TriageResult:
     tasks:    {type: array}
-
-  LensResult:
-    clean:    {type: boolean}
-    findings: {type: array, items: LensFinding}
-
-  MergedReviewResult:
-    clean:      {type: boolean}
-    summary:    {type: string}
-    findings:   {type: array, items: LensFinding}
-    lenses_run: {type: array}
-    auto_fixes: {type: array, items: LensFinding}
-    asks:       {type: array, items: LensFinding}
 
 functions:
   design_gate:
@@ -96,12 +82,12 @@ flows:
       - id: review
         agent: codex
         intent: >
-          Review the implementation against the blueprint. Return structured JSON:
-          { "clean": boolean, "summary": string, "findings": string[] }.
-          Set clean=true only if no actionable findings with confidence >= 80 remain.
+          Review the implementation against the blueprint and task.
         inputs:
           task: "$.input.task"
           blueprint: "$.input.blueprint"
+          review_mode: "true"
+          confidence_gate: "7"
         output_contract: ReviewResult
         ensure:
           - "result.clean == True"
@@ -117,7 +103,7 @@ flows:
       blueprint:          {type: string}
       diff:               {type: string}
       prior_dirty_lenses: {type: array, optional: true}
-    output: MergedReviewResult
+    output: ReviewResult
     steps:
       - id: triage
         agent: "claude:orchestrator"
@@ -150,34 +136,31 @@ flows:
         source: "$.steps.triage.output.tasks"
         max_concurrent: 4
         isolation: none
+        output_contract: ReviewResult
         intent_template: >
-          You are a {lens_name} reviewer. Review ONLY through the {lens_name} lens.
-          Focus: {lens_focus}
-          Confidence gate: only report findings with confidence >= {confidence_gate}.
-          False-positive exclusions: {exclusions}
-          Return JSON: { "clean": boolean, "findings": LensFinding[] }
-          where each finding has: lens, file, line, severity (must-fix|should-fix|nit),
-          finding (description), confidence (1-10).
+          Lens: {lens_name}. Focus: {lens_focus}.
         require: all
 
       - id: merge
         agent: "claude:orchestrator"
         intent: >
-          Merge findings from all review lenses. The input contains the parallel
-          dispatch aggregate with tasks[].result for each lens.
-          1. Collect all findings arrays from completed task results.
-          2. Deduplicate: same file + same issue = one finding, keep highest confidence.
-          3. Assign severity: must-fix (blocks ship), should-fix (next iteration), nit (logged).
-          4. Classify: auto_fixes (mechanical: formatting, simple tests, obvious typos)
-             vs asks (requires judgment).
-          5. lenses_run = IDs of lenses that produced must-fix or should-fix findings.
-          Return JSON: MergedReviewResult with clean, summary, findings, lenses_run,
-          auto_fixes, asks. Set clean=true only if zero must-fix and zero should-fix findings.
+          Merge ReviewResult arrays from all lens runs into a single canonical ReviewResult.
+          The input contains the parallel dispatch aggregate with tasks[].result for each lens.
+          1. Concatenate all findings arrays from completed task results.
+             Deduplicate by file+line+lens: keep finding with highest confidence;
+             carry over its applied_gate.
+          2. Recompute clean: zero must-fix AND zero should-fix findings (post-dedupe, post-gate).
+          3. lenses_run = IDs of lenses that produced any must-fix or should-fix finding.
+          4. auto_fixes = mechanical fixes (formatting, typos, simple tests).
+          5. asks = findings requiring human judgment.
+          Return canonical ReviewResult with clean, summary, findings, lenses_run,
+          auto_fixes, asks, meta.
         inputs:
           results: "$.steps.review_lenses.output"
           task: "$.input.task"
           blueprint: "$.input.blueprint"
-        output_contract: MergedReviewResult
+          reduce_mode: "true"
+        output_contract: ReviewResult
         depends_on: [review_lenses]
 
   # --- Sub-flow: coverage ---

@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-04-27
+
+### STRAT-CLAUDE-EFFORT-PARITY — Unify Claude/Codex review output contract
+
+Both review paths in compose's build pipeline (`review_check` Codex single-pass and `parallel_review` Claude+lens multi-pass) now produce a single canonical `ReviewResult` schema. Severity vocabulary unified (`must-fix`/`should-fix`/`nit`), confidence scale standardized (1–10), `clean` derivation moved out of the model into a deterministic post-hoc reducer. Downstream consumers — `vision-routes.js:452 result.clean === true` gate, `selective-rerun.test.js`, `lib/health-score.js`, the `.compose/prior_dirty_lenses.json` sidecar — work unchanged.
+
+**New files:**
+- `contracts/review-result.json` — canonical JSON Schema (first contract in this dir; sets `_source`/`_roadmap` provenance convention).
+- `lib/review-prompt.js` — shared prompt scaffold builder (severity vocab, confidence scale, output format, per-model nudge).
+- `lib/review-normalize.js` — parse + one-shot repair retry + text-mode regex fallback + `applied_gate` stamping + deterministic `clean` derivation + summary synthesis.
+
+**Modified:**
+- `lib/build.js` — `buildReviewPrompt` wired at all 3 call sites (main 685, retry 1247, parallel-task 2655). `reduce_mode: "true"` flag gates scaffold prepend on the merge step (reducer gets normalization, not reviewer framing). Symmetric retry-path gating. `runCrossModelReview` JSDoc + synthesis prompt strings updated (parser unchanged).
+- `lib/review-lenses.js` — 5 occurrences of `LensFinding` in description strings renamed to "ReviewResult finding". `reasoning_template` field preserved.
+- `lib/health-score.js` — JSDoc renames; removed dead `?? mergedResult.all_findings` fallback.
+- `pipelines/build.stratum.yaml` — dropped `LensFinding`/`LensResult`/`MergedReviewResult` contracts; added canonical `ReviewResult`. Rewrote `review_check`, `review_lenses`, `merge` step bodies. `>= 80` → `>= 7`. `reduce_mode: "true"` on merge step.
+- `pipelines/review-fix.stratum.yaml` — `>= 80` → `>= 7`.
+- `presets/team-review.stratum.yaml` — drop local `MergedReviewResult`; reference canonical; rename `LensFinding[]`; `reduce_mode` on merge.
+
+The `review_mode` hook scaffold in `lib/result-normalizer.js` shipped with the prior commit (STRAT-DEDUP-AGENTRUN-V3); this commit activates it.
+
+**Tests:** `test/review-parity.test.js` (new, 32 tests) covers parity assertions across Claude/Codex paths, schema validation, applied_gate stamping, repair-retry, scaffold-injection, reduce_mode gating, single-cert-block. `test/cross-model-review.test.js` extended with 3 canonical-schema tests. `test/selective-rerun.test.js` (14/14) and `test/review-lenses.test.js` (32/32) pass without modification. **Full suite: 1906 node + 87 UI tests, 0 failures.**
+
+**Process:** 3 review iterations on the blueprint (5 must-fix, 7 should-fix, 5 nits surfaced and resolved before code) and 3 review iterations on the implementation (caught a critical unwired-deliverable: `buildReviewPrompt` shipped as dead code on first pass — runtime parity didn't exist until iteration 2 fix).
+
+**Why:** Closes the parity gap flagged as a follow-up in `STRAT-DEDUP-AGENTRUN-V3` (2026-04-26). Two paths feeding the same `result.clean === true` gate must emit the same shape.
+
+**Out of scope (follow-ups):** `STRAT-XMODEL-PARITY` (`runCrossModelReview` synthesis output canonicalization); `STRAT-CALIBRATION` (confidence-scale calibration spike); compose-reviewer fallback agent migration (still on 0–100 scale).
+
 ## 2026-04-26
 
 ### STRAT-DEDUP-AGENTRUN-V3 — Retire Compose's Node connector tree

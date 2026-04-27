@@ -73,7 +73,7 @@ functions:
           - the task description
           - the execute_summary (what was implemented)
           - the blueprint content
-          - instruction: "List actionable findings with confidence >= 80.
+          - instruction: "List actionable findings with confidence >= 7.
             Set clean=true only if no actionable findings remain."
         Pass the schema to agent_run so it returns structured JSON.
 

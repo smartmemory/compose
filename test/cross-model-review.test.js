@@ -7,6 +7,11 @@
  * Because runCrossModelReview is not exported, we test it via:
  * 1. shouldRunCrossModel from review-lenses (diff-size gate)
  * 2. A synthetic harness that exercises the opt-out and dispatch paths
+ *
+ * Also validates canonical ReviewResult schema compatibility (STRAT-CLAUDE-EFFORT-PARITY):
+ * the `mergedResult` input shape must have `clean`, `findings`, `meta`.
+ * The synthesis output shape ({consensus, claude_only, codex_only}) is intentionally
+ * outside the canonical contract — tracked as STRAT-XMODEL-PARITY.
  */
 
 import { describe, it, before } from 'node:test';
@@ -220,5 +225,88 @@ describe('cross-model review: stream events', () => {
     assert.ok('consensus'  in complete, 'complete event should have consensus count');
     assert.ok('claudeOnly' in complete, 'complete event should have claudeOnly count');
     assert.ok('codexOnly'  in complete, 'complete event should have codexOnly count');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Canonical ReviewResult schema compatibility (STRAT-CLAUDE-EFFORT-PARITY)
+// ---------------------------------------------------------------------------
+
+describe('cross-model review: canonical ReviewResult shape compatibility', () => {
+  it('accepts canonical ReviewResult as mergedResult input', async () => {
+    // Canonical ReviewResult (as produced by normalizeReviewResult)
+    const canonicalResult = {
+      clean: false,
+      summary: '1 findings (1 must-fix, 0 should-fix, 0 nit).',
+      findings: [
+        {
+          lens: 'security',
+          file: 'auth.js',
+          line: 42,
+          severity: 'must-fix',
+          finding: 'SQL injection risk',
+          confidence: 9,
+          applied_gate: 7,
+          rationale: null,
+        },
+      ],
+      meta: { agent_type: 'claude', model_id: 'claude-test' },
+      lenses_run: ['security'],
+      auto_fixes: [],
+      asks: [],
+    };
+
+    const sw = makeStreamWriter();
+    const result = await crossModelEntryPoint(
+      canonicalResult,
+      Array.from({ length: 9 }, (_, i) => `f${i}.js`),
+      {},
+      sw,
+      () => makeConnector('[]')
+    );
+
+    // The entry point should not corrupt the canonical result
+    assert.equal(result.result.clean, canonicalResult.clean);
+    assert.ok(Array.isArray(result.result.findings), 'findings must remain array');
+  });
+
+  it('preserves clean=true from canonical ReviewResult through opt-out path', async () => {
+    const canonicalResult = {
+      clean: true,
+      summary: '0 findings (0 must-fix, 0 should-fix, 0 nit).',
+      findings: [],
+      meta: { agent_type: 'claude', model_id: null },
+      lenses_run: [],
+      auto_fixes: [],
+      asks: [],
+    };
+
+    const sw = makeStreamWriter();
+    const result = await crossModelEntryPoint(
+      canonicalResult,
+      ['a.js', 'b.js'], // small diff — silent skip
+      {},
+      sw
+    );
+
+    assert.equal(result.skipped, true);
+    assert.equal(result.result.clean, true);
+    assert.ok(Array.isArray(result.result.lenses_run), 'lenses_run preserved');
+  });
+
+  it('synthesis output shape is {consensus, claude_only, codex_only} — intentionally outside canonical', () => {
+    // This is a documentation test — the synthesis output is NOT a ReviewResult.
+    // Full canonicalization is tracked as STRAT-XMODEL-PARITY follow-up.
+    const exampleSynthesis = {
+      consensus: [],
+      claude_only: [],
+      codex_only: [],
+    };
+    assert.ok('consensus'   in exampleSynthesis);
+    assert.ok('claude_only' in exampleSynthesis);
+    assert.ok('codex_only'  in exampleSynthesis);
+    // No `clean` or `meta` fields — outside canonical contract
+    assert.ok(!('clean' in exampleSynthesis));
+    assert.ok(!('meta'  in exampleSynthesis));
   });
 });
