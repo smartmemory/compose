@@ -481,6 +481,18 @@ export class BuildStreamBridge {
           _source: 'build',
         };
 
+      // COMP-AGENT-CAPS-5: capability violation audit events
+      case 'capability_violation':
+        return {
+          type: 'system', subtype: 'capability_violation',
+          stepId: event.stepId,
+          agent: event.agent,
+          template: event.template,
+          detail: event.detail,
+          severity: event.severity ?? 'violation',
+          _source: 'build',
+        };
+
       default:
         return null; // unknown event type — skip
     }

@@ -1235,6 +1235,7 @@ function AppInner() {
                         stepId={contextSelection.id}
                         tierEvents={activeBuild?.tierEvents}
                         healthEvents={activeBuild?.health_score != null ? [{ score: activeBuild.health_score, breakdown: activeBuild.health_breakdown, missing: activeBuild.health_missing }] : undefined}
+                        capabilityEvents={activeBuild?.capabilityEvents}
                       />
                     )}
                     {contextSelection?.type === 'design-doc' && (

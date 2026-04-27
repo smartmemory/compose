@@ -218,7 +218,7 @@ function LiveCounters({ loopState, budget }) {
 // Main export
 // ---------------------------------------------------------------------------
 
-export default function ContextStepDetail({ stepId, tierEvents = [], healthEvents = [] }) {
+export default function ContextStepDetail({ stepId, tierEvents = [], healthEvents = [], capabilityEvents = [] }) {
   // COMP-OBS-STEPDETAIL: subscribe to store for activeBuild + iterationStates
   // (replaces prior self-fetch — the 5s poller in useVisionStore drives updates)
   const { activeBuild, iterationStates } = useVisionStore(
@@ -289,6 +289,16 @@ export default function ContextStepDetail({ stepId, tierEvents = [], healthEvent
   const retriesSummary = useMemo(() => selectRetriesSummary(step), [step]);
   const violations = useMemo(() => selectViolations(step), [step]);
   const loopState = useMemo(() => findLoopForStep(iterationStates, stepId), [iterationStates, stepId]);
+
+  // COMP-AGENT-CAPS-5: bucket capability findings for this step by severity
+  const capabilityBuckets = useMemo(() => {
+    if (!capabilityEvents || capabilityEvents.length === 0) return null;
+    const forStep = capabilityEvents.filter(e => e.stepId === stepId);
+    if (forStep.length === 0) return null;
+    const hardViolations = forStep.filter(e => e.severity === 'violation').length;
+    const warnings = forStep.filter(e => e.severity === 'warning').length;
+    return { total: forStep.length, hardViolations, warnings };
+  }, [capabilityEvents, stepId]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -437,6 +447,20 @@ export default function ContextStepDetail({ stepId, tierEvents = [], healthEvent
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* COMP-AGENT-CAPS-5: Capability findings — bucketed by severity */}
+      {capabilityBuckets && (
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-wider text-amber-400/80 mb-1">
+            Capability Findings
+          </p>
+          <p className="text-xs text-amber-400">
+            {capabilityBuckets.total} {capabilityBuckets.total === 1 ? 'finding' : 'findings'}
+            {' '}({capabilityBuckets.hardViolations} {capabilityBuckets.hardViolations === 1 ? 'violation' : 'violations'},{' '}
+            {capabilityBuckets.warnings} {capabilityBuckets.warnings === 1 ? 'warning' : 'warnings'})
+          </p>
         </div>
       )}
 

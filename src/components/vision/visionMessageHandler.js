@@ -436,8 +436,24 @@ export function handleVisionMessage(msg, refs, setters) {
     if (setSettings) setSettings(msg.settings || null);
 
   } else if (msg.type === 'buildState') {
-    // Per STRAT-COMP-4: flat payload — the message itself IS the state object
-    if (setActiveBuild) setActiveBuild(msg);
+    // Per STRAT-COMP-4: flat payload — the message itself IS the state object.
+    // Preserve transient client-side arrays (tierEvents, capabilityEvents, health)
+    // that are accumulated from stream events and not persisted in active-build.json.
+    // Reset transients when a new build starts (different flowId) to avoid leaking
+    // stale findings from a prior build into a freshly-started one.
+    if (setActiveBuild) setActiveBuild(prev => {
+      const isSameBuild = prev?.flowId && msg.flowId && prev.flowId === msg.flowId;
+      return {
+        ...msg,
+        tierEvents: isSameBuild ? (prev.tierEvents ?? []) : [],
+        capabilityEvents: isSameBuild ? (prev.capabilityEvents ?? []) : [],
+        ...(isSameBuild && prev?.health_score != null ? {
+          health_score: prev.health_score,
+          health_breakdown: prev.health_breakdown,
+          health_missing: prev.health_missing,
+        } : {}),
+      };
+    });
 
   } else if (msg.type === 'pipelineDraft') {
     // COMP-PIPE-1-3: Pipeline draft created — set draft state
@@ -461,6 +477,15 @@ export function handleVisionMessage(msg, refs, setters) {
     if (setActiveBuild) {
       setActiveBuild(prev => prev
         ? { ...prev, tierEvents: [...(prev.tierEvents || []), msg].slice(-50) }
+        : prev
+      );
+    }
+
+  } else if (msg.type === 'system' && msg.subtype === 'capability_violation') {
+    // COMP-AGENT-CAPS-5: accumulate capability violation events in activeBuild
+    if (setActiveBuild) {
+      setActiveBuild(prev => prev
+        ? { ...prev, capabilityEvents: [...(prev.capabilityEvents || []), msg].slice(-200) }
         : prev
       );
     }

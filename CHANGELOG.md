@@ -2,6 +2,21 @@
 
 ## 2026-04-27
 
+### COMP-AGENT-CAPS-5 — Capability enforcement: integration test, settings UI, severity bucketing
+
+Three polish items completing COMP-AGENT-CAPS-4 (commit `03ebfff`):
+
+**D1 — Integration test for enforcement block/log modes** (`test/capability-enforcement-block.test.js`, new, 9 tests):
+Inline reimplementation of the post-step enforcement block from `build.js:763-794` driven by synthetic tool observations. Test 1: `enforcement: 'block'` + disallowed tool throws `StratumError('CAPABILITY_VIOLATION')` with the offending tool names in the message. Test 2: `enforcement: 'log'` (default) — same input, no throw, `capability_violation` event emitted with correct severity. Also covers: absent `settings.json` defaults to `log`; multiple violations reported together in block mode; `violation` vs `warning` severity bucketing in log mode.
+
+**D2 — Settings UI** (`src/components/vision/SettingsPanel.jsx`, modified):
+Added "Capability Enforcement" section with a `log` / `block` radio group. Uses the existing `onSettingsChange({ capabilities: { enforcement: value } })` pattern — no new state manager or mutation layer. The `capabilities` section is already a supported top-level key in `settings-store.js` and the PATCH `/api/settings` route. Helper text: "Block stops the build on disallowed tool use; Log records but continues."
+
+**D3 — Build summary bucketing** (`lib/build-stream-writer.js`, `lib/build.js`, `server/build-stream-bridge.js`, `src/components/vision/visionMessageHandler.js`, `src/components/cockpit/ContextStepDetail.jsx`, `src/App.jsx`, modified):
+`writeViolation` previously omitted the `severity` field (`'violation'|'warning'`). Added it as an optional param (default `'violation'`). `build.js` now passes `check.severity`. The bridge lacked a `capability_violation` case — events fell to `default: return null` and never reached the UI. Added the bridge case forwarding all fields including `severity`. `visionMessageHandler.js` now accumulates `capability_violation` events into `activeBuild.capabilityEvents`. `ContextStepDetail` accepts a `capabilityEvents` prop and renders a bucketed count: `N findings (X violations, Y warnings)`. `App.jsx` passes `activeBuild?.capabilityEvents`.
+
+**Tests:** 1920 node + 87 UI, 0 failures.
+
 ### STRAT-XMODEL-PARITY — Route runCrossModelReview synthesis through canonical normalizer
 
 `runCrossModelReview` in `build.js` previously used a hand-rolled `text.match(/\{[\s\S]*\}/)` + `JSON.parse` block to parse synthesis output, producing a `{consensus, claude_only, codex_only}` shape outside the canonical `ReviewResult` contract. Synthesis output now routes through a new `normalizeCrossModelResult` normalizer that applies the same parse + repair-retry + text-mode fallback + `applied_gate` stamping + `clean` derivation machinery as `normalizeReviewResult`.

@@ -244,3 +244,60 @@ describe('<ContextStepDetail> — Live counters section', () => {
     expect(container.textContent).not.toMatch(/live counters/i);
   });
 });
+
+// ── COMP-AGENT-CAPS-5: Capability findings section ───────────────────────────
+
+describe('<ContextStepDetail> — Capability findings section', () => {
+  beforeEach(() => { resetStore(); mockFetchBudget(); });
+
+  it('hides capability findings section when capabilityEvents is empty', () => {
+    setStore({ activeBuild: makeActiveBuild([makeStep({ id: 'step-1' })]) });
+    const { container } = render(<ContextStepDetail stepId="step-1" capabilityEvents={[]} />);
+    expect(container.textContent).not.toMatch(/capability findings/i);
+  });
+
+  it('hides capability findings section when no events match the current stepId', () => {
+    const events = [
+      { type: 'system', subtype: 'capability_violation', stepId: 'other-step', severity: 'violation', detail: 'x' },
+    ];
+    setStore({ activeBuild: makeActiveBuild([makeStep({ id: 'step-1' })]) });
+    const { container } = render(<ContextStepDetail stepId="step-1" capabilityEvents={events} />);
+    expect(container.textContent).not.toMatch(/capability findings/i);
+  });
+
+  it('renders bucketed count: "2 findings (1 violations, 1 warnings)"', () => {
+    const events = [
+      { type: 'system', subtype: 'capability_violation', stepId: 'step-1', severity: 'violation', detail: 'Edit disallowed' },
+      { type: 'system', subtype: 'capability_violation', stepId: 'step-1', severity: 'warning', detail: 'TodoWrite not in allowedTools' },
+    ];
+    setStore({ activeBuild: makeActiveBuild([makeStep({ id: 'step-1' })]) });
+    render(<ContextStepDetail stepId="step-1" capabilityEvents={events} />);
+    expect(screen.getByText(/capability findings/i)).toBeTruthy();
+    expect(screen.getByText(/2 findings/i)).toBeTruthy();
+    expect(screen.getByText(/1 violation/i)).toBeTruthy();
+    expect(screen.getByText(/1 warning/i)).toBeTruthy();
+  });
+
+  it('renders "1 finding (1 violations, 0 warnings)" for a single hard violation', () => {
+    const events = [
+      { type: 'system', subtype: 'capability_violation', stepId: 'step-1', severity: 'violation', detail: 'Write disallowed' },
+    ];
+    setStore({ activeBuild: makeActiveBuild([makeStep({ id: 'step-1' })]) });
+    render(<ContextStepDetail stepId="step-1" capabilityEvents={events} />);
+    expect(screen.getByText(/1 finding/i)).toBeTruthy();
+    expect(screen.getByText(/1 violation/i)).toBeTruthy();
+    expect(screen.getByText(/0 warning/i)).toBeTruthy();
+  });
+
+  it('only counts events for the current stepId (filters out other steps)', () => {
+    const events = [
+      { type: 'system', subtype: 'capability_violation', stepId: 'step-1', severity: 'violation', detail: 'Edit' },
+      { type: 'system', subtype: 'capability_violation', stepId: 'step-2', severity: 'violation', detail: 'Write' },
+      { type: 'system', subtype: 'capability_violation', stepId: 'step-2', severity: 'warning',   detail: 'TodoWrite' },
+    ];
+    setStore({ activeBuild: makeActiveBuild([makeStep({ id: 'step-1' })]) });
+    render(<ContextStepDetail stepId="step-1" capabilityEvents={events} />);
+    // Only the step-1 event counts — total should be 1, not 3
+    expect(screen.getByText(/1 finding/i)).toBeTruthy();
+  });
+});

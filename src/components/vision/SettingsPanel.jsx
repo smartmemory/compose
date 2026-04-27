@@ -81,6 +81,10 @@ export default function SettingsPanel({ settings, onSettingsChange, onReset }) {
     onSettingsChange({ ui: { defaultView: value } });
   }, [onSettingsChange]);
 
+  const handleEnforcement = useCallback((value) => {
+    onSettingsChange({ capabilities: { enforcement: value } });
+  }, [onSettingsChange]);
+
   const handleReset = useCallback(() => {
     if (window.confirm('Reset all settings to defaults?')) {
       onReset();
@@ -162,6 +166,30 @@ export default function SettingsPanel({ settings, onSettingsChange, onReset }) {
             {VIEWS.map(v => <option key={v} value={v}>{v}</option>)}
           </select>
         </FieldRow>
+      </Section>
+
+      <Section title="Capability Enforcement">
+        <div className="space-y-2 px-1">
+          {[
+            { value: 'log',   label: 'Log (default)' },
+            { value: 'block', label: 'Block' },
+          ].map(({ value, label }) => (
+            <label key={value} className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="enforcement"
+                value={value}
+                checked={(settings.capabilities?.enforcement ?? 'log') === value}
+                onChange={() => handleEnforcement(value)}
+                className="accent-accent"
+              />
+              <span className="text-sm text-foreground">{label}</span>
+            </label>
+          ))}
+          <p className="text-[11px] text-muted-foreground pt-1">
+            Block stops the build on disallowed tool use; Log records but continues.
+          </p>
+        </div>
       </Section>
 
       <button
