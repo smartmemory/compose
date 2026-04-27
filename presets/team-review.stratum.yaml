@@ -97,16 +97,17 @@ flows:
         agent: "claude:orchestrator"
         depends_on: [review_lenses]
         intent: >
-          Consolidate findings from all review lenses. Deduplicate findings
-          that appear in multiple passes (same file:line, same issue). Rank
-          by severity (must-fix first, then should-fix, then nit).
-          Set has_critical to "true" if any finding has severity "must-fix",
-          "false" otherwise. Write a one-sentence summary.
+          Consolidate ReviewResult arrays from all review lenses into a single
+          canonical ReviewResult. Deduplicate findings (same file:line+lens,
+          keep highest confidence; carry over its applied_gate). Rank by
+          severity (must-fix first, then should-fix, then nit). Set clean=true
+          only if zero must-fix AND zero should-fix findings remain. Write a
+          one-sentence summary.
         inputs:
           review_results: "$.steps.review_lenses.output"
           reduce_mode: "true"
         output_contract: ReviewResult
         ensure:
-          - "result.has_critical == 'false'"
+          - "result.clean == True"
           - "result.summary != ''"
         retries: 2
