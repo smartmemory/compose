@@ -82,7 +82,10 @@ Call mcp__stratum__stratum_agent_run with:
 
 Fix all issues Codex flags. Re-run until REVIEW CLEAN. Max 5 iterations — if max hit, the problem is in the spec, surface to human.
 
-If `mcp__stratum__stratum_agent_run` is unavailable (or returns a stream-chunk-size error), fall back to a `general-purpose` Agent dispatch with an explicit reviewer prompt — the canonical `ReviewResult` schema (severity `must-fix`/`should-fix`/`nit`, confidence 1–10, gate `>= 7`) defined at `compose/contracts/review-result.json` is the contract for both paths.
+If `mcp__stratum__stratum_agent_run` is unavailable (or returns a stream-chunk-size error — tracked as `STRAT-MCP-CHUNK-SIZE`), fall back options:
+
+- **Programmatic / pipeline path:** dispatch a `general-purpose` Agent with an explicit reviewer prompt — the canonical `ReviewResult` schema (severity `must-fix`/`should-fix`/`nit`, confidence 1–10, gate `>= 7`) defined at `compose/contracts/review-result.json` is the contract for both paths.
+- **Human-driven path:** invoke the OpenAI codex plugin's `/codex:review` (review-only) or `/codex:adversarial-review` (challenges design assumptions). These return Codex stdout verbatim and are not a drop-in for the canonical-JSON pipeline path, but they are the right tool when a human is in the loop.
 
 ## Lifecycle
 
