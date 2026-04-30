@@ -289,3 +289,4 @@
 2026-04-27T07:22:09+08:00 | SF-NEW-1/2/3: fix merge-step scaffold framing, YAML intent duplication, and parallel-lens cert double-inject
 2026-04-27T10:00:08+08:00 | STRAT-XMODEL-PARITY: add CrossModelReviewResult schema + normalizeCrossModelResult + wire into build.js synthesis path
 2026-04-27T19:54:37+08:00 | COMP-AGENT-CAPS-5: D1 capability-enforcement-block.test.js + D2 SettingsPanel enforcement radio + D3 writeViolation severity + UI bucketing
+2026-04-30T18:43:33+08:00 | STRAT-PAR-STREAM-LEGACY-CLOSE + CONSUMER-VALIDATE + COMP-AGENT-CAPS-6 batch — audit emit sites, close 6 metadata blocks, add consumer validation, fix child-flow enforcement

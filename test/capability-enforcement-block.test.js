@@ -336,3 +336,127 @@ describe('child-flow writeViolation severity propagation', () => {
     assert.equal(lines[0].severity, 'violation', 'default severity is violation when omitted');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Test 5: COMP-AGENT-CAPS-6 — child-flow block mode enforcement
+// Mirrors the inline runEnforcementBlock pattern to test the child-flow path.
+// The actual fix is in build.js:executeChildFlow; this test drives the same
+// logic pattern to confirm child-flow block throws and log-mode does not.
+// ---------------------------------------------------------------------------
+
+/**
+ * Child-flow enforcement block — extracted from build.js:executeChildFlow
+ * (post-CAPS-6 fix). Same logic as runEnforcementBlock above but named
+ * distinctly to document the child-flow code path.
+ */
+async function runChildFlowEnforcementBlock({ observedTools, agentType, stepId, settingsPath, streamWriter }) {
+  const childTemplate = agentType?.split(':')[1] ?? 'unknown';
+
+  const childCapViolations = [];
+  for (const { tool } of observedTools) {
+    const check = checkCapabilityViolation(tool, agentType);
+    if (check.violation) {
+      childCapViolations.push({ tool, severity: check.severity, reason: check.reason });
+      if (streamWriter) {
+        streamWriter.writeViolation(stepId, agentType, childTemplate, `${tool}: ${check.reason}`, check.severity);
+      }
+    }
+  }
+
+  const childEnforcement = (() => {
+    try {
+      if (existsSync(settingsPath)) {
+        const s = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+        return s?.capabilities?.enforcement ?? 'log';
+      }
+    } catch { /* degraded — default to log */ }
+    return 'log';
+  })();
+
+  if (childEnforcement === 'block' && childCapViolations.length > 0) {
+    const tools = childCapViolations.map(v => v.tool).join(', ');
+    throw new StratumError('CAPABILITY_VIOLATION',
+      `Child step "${stepId}" used disallowed tools: ${tools}`, stepId);
+  }
+
+  return { childCapViolations, childEnforcement };
+}
+
+describe('COMP-AGENT-CAPS-6: child-flow block mode enforcement', () => {
+  it('throws StratumError(CAPABILITY_VIOLATION) in block mode for child-flow disallowed tool', async () => {
+    writeFileSync(settingsPath, JSON.stringify({ capabilities: { enforcement: 'block' } }), 'utf-8');
+
+    const sw = makeStreamWriter();
+
+    await assert.rejects(
+      () => runChildFlowEnforcementBlock({
+        observedTools: [{ tool: 'Edit' }],
+        agentType: 'claude:read-only-reviewer',
+        stepId: 'review',
+        settingsPath,
+        streamWriter: sw,
+      }),
+      (err) => {
+        assert.ok(err instanceof StratumError, 'must be StratumError');
+        assert.equal(err.code, 'CAPABILITY_VIOLATION');
+        assert.match(err.message, /Child step/, 'error must identify child-flow path');
+        assert.match(err.message, /Edit/);
+        return true;
+      }
+    );
+  });
+
+  it('does NOT throw in log mode for child-flow disallowed tool (pre-CAPS-6 behavior preserved)', async () => {
+    writeFileSync(settingsPath, JSON.stringify({ capabilities: { enforcement: 'log' } }), 'utf-8');
+
+    const sw = makeStreamWriter();
+
+    const result = await runChildFlowEnforcementBlock({
+      observedTools: [{ tool: 'Edit' }],
+      agentType: 'claude:read-only-reviewer',
+      stepId: 'review',
+      settingsPath,
+      streamWriter: sw,
+    });
+
+    assert.equal(result.childEnforcement, 'log');
+    assert.equal(result.childCapViolations.length, 1, 'violation still recorded');
+    assert.equal(sw.getEventsOfType('capability_violation').length, 1, 'violation event emitted');
+  });
+
+  it('emits violation event to stream before throwing in child-flow block mode', async () => {
+    writeFileSync(settingsPath, JSON.stringify({ capabilities: { enforcement: 'block' } }), 'utf-8');
+
+    const sw = makeStreamWriter();
+
+    await assert.rejects(
+      () => runChildFlowEnforcementBlock({
+        observedTools: [{ tool: 'Write' }],
+        agentType: 'claude:read-only-reviewer',
+        stepId: 'review',
+        settingsPath,
+        streamWriter: sw,
+      })
+    );
+
+    const violations = sw.getEventsOfType('capability_violation');
+    assert.equal(violations.length, 1, 'stream event emitted before throw');
+    assert.equal(violations[0].stepId, 'review');
+  });
+
+  it('does not throw in child-flow block mode when no violations', async () => {
+    writeFileSync(settingsPath, JSON.stringify({ capabilities: { enforcement: 'block' } }), 'utf-8');
+
+    const sw = makeStreamWriter();
+
+    const result = await runChildFlowEnforcementBlock({
+      observedTools: [{ tool: 'Read' }],   // Read is allowed for read-only-reviewer
+      agentType: 'claude:read-only-reviewer',
+      stepId: 'review',
+      settingsPath,
+      streamWriter: sw,
+    });
+
+    assert.equal(result.childCapViolations.length, 0, 'no violations for allowed tool');
+  });
+});

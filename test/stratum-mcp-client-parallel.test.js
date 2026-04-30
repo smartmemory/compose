@@ -255,7 +255,8 @@ describe('StratumMcpClient.agentRun', () => {
             flow_id: correlationId, step_id: '_agent_run', task_id: null,
             seq: 1, ts: '2026-04-26T00:00:01Z',
             kind: 'step_usage',
-            metadata: { input_tokens: 5, output_tokens: 3, model: 'claude-sonnet-4-6' },
+            // STRAT-PAR-STREAM-CONSUMER-VALIDATE: metadata must match closed step_usage schema
+            metadata: { stepId: '_agent_run', input_tokens: 5, output_tokens: 3, cost_usd: 0, model: 'claude-sonnet-4-6' },
           }),
         });
         return { content: [{ type: 'text', text: JSON.stringify({ text: 'hello', correlation_id: correlationId }) }] };
