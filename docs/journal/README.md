@@ -10,6 +10,7 @@ Each entry is a dated session log capturing what we tried, what broke, what we l
 
 | Date | Entry | Summary |
 |------|-------|---------|
+| 2026-04-29 | [Session 29: STRAT-PAR-STREAM-LEGACY-CLOSE + CONSUMER-VALIDATE + COMP-AGENT-CAPS-6](2026-04-29-session-29-schema-close-consumer-validate-caps6.md) | Schema v0.2.5→v0.2.6 closes 6 legacy metadata blocks; consumer validates envelopes with AJV, drops invalid with warn; child-flow enforcement mirrors main-path block mode. 1951/1951 pass. Codex CLEAN in 2 iterations. |
 | 2026-04-27 | [Session 28: COMP-AGENT-CAPS-5 — Enforcement test, settings UI, severity bucketing](2026-04-27-session-28-comp-agent-caps-5.md) | Integration test for block/log enforcement modes (9 tests), SettingsPanel enforcement radio, writeViolation severity field, bridge case, capability event pipeline, bucketed ContextStepDetail display. 1920/1920 node + 87 UI pass. |
 | 2026-04-24 | [Session 27: COMP-OBS-STEPDETAIL — Wave 6 Final](2026-04-24-session-27-comp-obs-stepdetail.md) | Retries section, postcondition violations, live counters (store subscription + per-step loop join), GET /api/lifecycle/budget, OpsStrip budget pill. 39 new tests, 1897/1897 pass, 0 skip. Wave 6 complete. |
 | 2026-04-25 | [Session 26: COMP-OBS-GATELOG + COMP-OBS-LOOPS](2026-04-25-session-26-comp-obs-gatelog-loops.md) | Gate audit log (JSONL, emit-first), gates report CLI, OpenLoopsPanel (320px collapsible), open_loops_count semantic fix, isStaleLoop extraction. 77 new tests, 1823/1824 suite pass, 1 skip (DRIFT only). |
