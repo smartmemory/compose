@@ -242,7 +242,7 @@ describe('StratumMcpClient.agentRun', () => {
           progress: 1,
           message: JSON.stringify({
             schema_version: '0.2.5',
-            flow_id: correlationId, step_id: '_agent_run', task_id: null,
+            flow_id: correlationId, step_id: '_agent_run',
             seq: 0, ts: '2026-04-26T00:00:00Z',
             kind: 'agent_relay',
             metadata: { role: 'assistant', text: 'hello' },
@@ -252,7 +252,7 @@ describe('StratumMcpClient.agentRun', () => {
           progress: 2,
           message: JSON.stringify({
             schema_version: '0.2.5',
-            flow_id: correlationId, step_id: '_agent_run', task_id: null,
+            flow_id: correlationId, step_id: '_agent_run',
             seq: 1, ts: '2026-04-26T00:00:01Z',
             kind: 'step_usage',
             // STRAT-PAR-STREAM-CONSUMER-VALIDATE: metadata must match closed step_usage schema
@@ -284,7 +284,7 @@ describe('StratumMcpClient.agentRun', () => {
           progress: 1,
           message: JSON.stringify({
             schema_version: '0.2.5',
-            flow_id: correlationId, step_id: '_agent_run', task_id: null,
+            flow_id: correlationId, step_id: '_agent_run',
             seq: 0, ts: '2026-04-26T00:00:00Z',
             kind,
             metadata: { role: 'assistant', text },
@@ -347,5 +347,113 @@ describe('StratumMcpClient.cancelAgentRun', () => {
     assert.equal(calls[0].name, 'stratum_cancel_agent_run');
     assert.deepEqual(calls[0].args, { correlation_id: 'c1' });
     assert.equal(out.status, 'cancelled');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// STRAT-PAR-STREAM-CONSUMER-VALIDATE: wiring tests for dispatchEvent validation
+// Exercises the actual #makeProgressHandler → validateBuildStreamEvent → warn/drop/dispatch path.
+// ---------------------------------------------------------------------------
+
+describe('StratumMcpClient consumer validation wiring', () => {
+  it('drops invalid envelope (missing schema_version) and does not dispatch to onEvent subscriber', async () => {
+    const warnings = [];
+    const origWarn = console.warn;
+    console.warn = (...args) => warnings.push(args.join(' '));
+
+    const mock = {
+      callTool: async ({ arguments: args }, _s, opts) => {
+        const correlationId = args.correlation_id;
+        // Emit an invalid envelope: schema_version missing
+        opts.onprogress({
+          progress: 1,
+          message: JSON.stringify({
+            // schema_version intentionally omitted
+            flow_id: correlationId, step_id: '_agent_run',
+            seq: 0, ts: '2026-04-29T00:00:00Z',
+            kind: 'agent_relay',
+            metadata: { role: 'assistant', text: 'should not arrive' },
+          }),
+        });
+        return { content: [{ type: 'text', text: JSON.stringify({ text: 'ok', correlation_id: correlationId }) }] };
+      },
+    };
+
+    const client = new StratumMcpClient();
+    Object.defineProperty(client, '_testClient', { value: mock, writable: true });
+
+    const received = [];
+    client.onEvent('v-1', '_agent_run', (ev) => received.push(ev));
+    await client.agentRun('claude', 'p', { correlationId: 'v-1' });
+
+    console.warn = origWarn;
+
+    assert.equal(received.length, 0, 'invalid envelope must not be dispatched');
+    assert.ok(warnings.some(w => w.includes('dropping invalid')), `expected warn about dropping; got: ${warnings}`);
+  });
+
+  it('drops event with unknown schema_version and does not dispatch', async () => {
+    const warnings = [];
+    const origWarn = console.warn;
+    console.warn = (...args) => warnings.push(args.join(' '));
+
+    const mock = {
+      callTool: async ({ arguments: args }, _s, opts) => {
+        const correlationId = args.correlation_id;
+        opts.onprogress({
+          progress: 1,
+          message: JSON.stringify({
+            schema_version: '0.1.0',   // unknown version
+            flow_id: correlationId, step_id: '_agent_run',
+            seq: 0, ts: '2026-04-29T00:00:00Z',
+            kind: 'agent_relay',
+            metadata: { role: 'assistant', text: 'should not arrive' },
+          }),
+        });
+        return { content: [{ type: 'text', text: JSON.stringify({ text: 'ok', correlation_id: correlationId }) }] };
+      },
+    };
+
+    const client = new StratumMcpClient();
+    Object.defineProperty(client, '_testClient', { value: mock, writable: true });
+
+    const received = [];
+    client.onEvent('v-2', '_agent_run', (ev) => received.push(ev));
+    await client.agentRun('claude', 'p', { correlationId: 'v-2' });
+
+    console.warn = origWarn;
+
+    assert.equal(received.length, 0, 'unknown schema_version must be dropped');
+    assert.ok(warnings.some(w => w.includes('dropping invalid')), `expected warn; got: ${warnings}`);
+  });
+
+  it('forwards valid v0.2.6 envelope to onEvent subscriber', async () => {
+    const mock = {
+      callTool: async ({ arguments: args }, _s, opts) => {
+        const correlationId = args.correlation_id;
+        opts.onprogress({
+          progress: 1,
+          message: JSON.stringify({
+            schema_version: '0.2.6',
+            flow_id: correlationId, step_id: '_agent_run',
+            seq: 0, ts: '2026-04-29T00:00:00Z',
+            kind: 'agent_relay',
+            metadata: { role: 'assistant', text: 'valid event' },
+          }),
+        });
+        return { content: [{ type: 'text', text: JSON.stringify({ text: 'ok', correlation_id: correlationId }) }] };
+      },
+    };
+
+    const client = new StratumMcpClient();
+    Object.defineProperty(client, '_testClient', { value: mock, writable: true });
+
+    const received = [];
+    client.onEvent('v-3', '_agent_run', (ev) => received.push(ev));
+    await client.agentRun('claude', 'p', { correlationId: 'v-3' });
+
+    assert.equal(received.length, 1, 'valid envelope must be dispatched');
+    assert.equal(received[0].kind, 'agent_relay');
+    assert.equal(received[0].metadata.text, 'valid event');
   });
 });
