@@ -8,10 +8,10 @@ The 8-step `bug-fix.stratum.yaml` pipeline (shipped as part of COMP-FIX) handled
 
 **Added:**
 - `lib/bug-ledger.js` — JSONL hypothesis ledger at `docs/bugs/<code>/hypotheses.jsonl`. `appendHypothesisEntry` is idempotent on `(attempt, ts)`; `readHypotheses` tolerates malformed lines; `formatRejectedHypotheses` emits the markdown block injected into diagnose retry prompts.
-- `lib/bug-checkpoint.js` — emits `docs/bugs/<code>/checkpoint.md` on Compose-side retry-cap exhaustion. Captures current diff (capped at 5KB), last failure, ledger pointer, and a `compose fix <code> --resume` command for the operator.
+- `lib/bug-checkpoint.js` — emits `docs/bugs/<code>/checkpoint.md` on Compose-side retry-cap exhaustion. Captures current diff (truncated at `DIFF_CAP=5000` chars; `git diff` `maxBuffer` 2MB), last failure, ledger pointer, and a `compose fix <code> --resume` command for the operator.
 - `lib/bug-index-gen.js` — renders `docs/bugs/INDEX.md` from per-bug checkpoints. Atomic tmp+rename write. Same pattern as `roadmap-gen.js`.
 - `lib/bug-bisect.js` — `classifyRegression` heuristic (test in main + affected files touched in last 10 commits), `estimateBisectCost` with a 5-min sample timeout, `findKnownGoodBaseline` (v* tags → release-* → HEAD~50), `runBisect` driving `git bisect run` and capturing log to `docs/bugs/<code>/bisect.log`, always with `git bisect reset` in finally.
-- `lib/bug-escalation.js` — Tier 1 Codex second opinion (read-only via `stratum.runAgentText('codex', ...)`, parses to canonical `ReviewResult`, appends to ledger as `verdict: 'escalation_tier_1'`) and Tier 2 fresh agent in detached-HEAD worktree (gated by Jaccard token-overlap "materially new" check at 0.7 threshold; produces patch artifact at `docs/bugs/<code>/escalation-patch-N.md`; never commits).
+- `lib/bug-escalation.js` — Tier 1 Codex second opinion (read-only via `stratum.runAgentText('codex', ...)`, parses to canonical `ReviewResult`, appends to ledger as `verdict: 'escalation_tier_1'`) and Tier 2 fresh `claude` agent in detached-HEAD worktree (Tier 2 fires when Jaccard token-overlap < 0.7 vs every prior `rejected` ledger entry; ≥ 0.7 suppresses; produces patch artifact at `docs/bugs/<code>/escalation-patch-N.md`; never commits).
 - `pipelines/bug-fix.stratum.yaml` — new `bisect` step + `BisectResult` contract inserted between `diagnose` and `scope_check`. `scope_check.depends_on` retargeted.
 - `bin/compose.js` — `compose fix <code>` reads `docs/bugs/<code>/description.md`, scaffolds and exits if missing. New `--resume` flag refuses cross-mode resume.
 

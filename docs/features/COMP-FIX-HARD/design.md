@@ -119,7 +119,10 @@ When a bug closes (`ship` succeeds), its INDEX row is removed but its folder + c
 
 When `retro_check` triggers escalation (existing logic: 2+ commits on same file, OR attempt_count ≥ 2 for visual/CSS bugs, OR attempt_count ≥ 5 for any bug, OR cross-session chain detected), run **Tier 1 unconditionally**, **Tier 2 conditionally**:
 
-> **Reconciled 2026-05-01 (Phase 9):** the original draft said "≥ 3 for visual/CSS". Phase 4 blueprint review found that `lib/debug-discipline.js` already implements `AttemptCounter.getIntervention()` with battle-tested thresholds visual@2 / all@5. Adopted those verbatim instead of forcing the design's guessed threshold; this paragraph reflects what shipped.
+> **Reconciled 2026-05-01 (Phase 9):**
+> - **Thresholds:** the original draft said "≥ 3 for visual/CSS". Phase 4 blueprint review found that `lib/debug-discipline.js` already implements `AttemptCounter.getIntervention()` with battle-tested thresholds visual@2 / all@5. Adopted verbatim.
+> - **Tier 2 dispatch API:** the original draft below specifies `Agent(subagent_type="general-purpose", isolation="worktree")`. That API doesn't exist in Compose's Stratum-MCP client — `runAgentText` is the only dispatch surface at this layer. Tier 2 ships as `stratum.runAgentText('claude', prompt, { cwd: wtPath })` after a manual `git worktree add <path> --detach HEAD` and `git worktree remove --force` cleanup in `finally`. Same intent (fresh context, isolated worktree, never commits), different mechanism.
+> - **Materially-new gate:** Codex's hypothesis is treated as novel when Jaccard token-overlap < 0.7 vs **every** prior `verdict: 'rejected'` entry. Tier 2 fires only when novel; ≥ 0.7 against any prior rejected entry suppresses Tier 2 silently.
 
 **Tier 1 — Codex second opinion (read-only):**
 - Dispatch `mcp__stratum__stratum_agent_run(type=codex)` with structured prompt:
@@ -200,7 +203,7 @@ retro_check:
 | `compose/lib/bug-escalation.js` | New | Tier 1 / Tier 2 dispatch, patch artifact writer |
 | `compose/bin/compose.js` | Modify | `--resume` flag on `compose fix`; `compose bug show <code>` formatter |
 | `compose/.claude/skills/compose/SKILL.md` | Modify | Document hard-bug machinery in fix-mode section |
-| `compose/.claude/skills/bug-fix/SKILL.md` | Modify | Same — add hard-bug section under existing phases |
+| `compose/.claude/skills/bug-fix/SKILL.md` | (no change) | Skill is deprecated — redirects to `/compose fix`. The hard-bug section landed only in `compose/SKILL.md`. |
 | `compose/test/bug-ledger.test.js` | New | Unit tests for ledger ops |
 | `compose/test/bug-checkpoint.test.js` | New | Unit tests for checkpoint round-trip |
 | `compose/test/bug-fix-pipeline.integration.test.js` | New | E2E: simulate hard bug, verify ledger persists, escalation fires, resume works |

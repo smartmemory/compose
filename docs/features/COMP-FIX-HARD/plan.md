@@ -283,7 +283,7 @@ Use `superpowers:dispatching-parallel-agents` for batches A and C. Sequential fo
 
 - `CHANGELOG.md` — entry for COMP-FIX-HARD
 - `compose/.claude/skills/compose/SKILL.md` — document hard-bug machinery (hypothesis ledger, checkpoint, INDEX, bisect, escalation, --resume)
-- `compose/.claude/skills/bug-fix/SKILL.md` — same
+- `compose/.claude/skills/bug-fix/SKILL.md` — no change (skill is deprecated; hard-bug section landed only in compose/SKILL.md)
 - `ROADMAP.md` — COMP-FIX-HARD → COMPLETE; COMP-MAXITER-DRIFT and STRAT-RETRIES-ENFORCE filed as new entries
 - `design.md` (this folder) — update Decision 5 threshold reference (visual@2 not ≥3) so the historical record matches what shipped
 - `design.md` Decision 6 — replace `regression_class: boolean` field on `TriageResult` with a note that the bisect step performs the classification at runtime via `classifyRegression()` (no contract addition; per T7 acceptance criteria)
