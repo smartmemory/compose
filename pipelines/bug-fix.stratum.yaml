@@ -69,6 +69,13 @@ contracts:
     discipline_score: {type: number}
     summary:          {type: string}
 
+  BisectResult:
+    skipped:          {type: boolean}
+    bisect_commit:    {type: string}  # nullable; empty string when skipped
+    estimate_minutes: {type: number}
+    log_path:         {type: string}  # nullable; empty string when skipped
+    summary:          {type: string}
+
 functions:
   reproduce:
     mode: compute
@@ -98,6 +105,30 @@ functions:
       - "result.root_cause != null"
       - "result.scope_hint in ('single', 'cross-layer', 'unknown')"
     retries: 2
+
+  bisect:
+    mode: compute
+    intent: >
+      Decide whether the bug is a regression worth bisecting; if so,
+      classify → estimate cost → gate the human → run git bisect.
+      The runtime helper `lib/bug-bisect.js` does the work:
+        1. classifyRegression(): repro test exists in main AND files in
+           diagnosis.affected_layers were touched in the last 10 commits.
+        2. estimateBisectCost(): test_runs = ceil(log2(commits in range));
+           seconds_per_run sampled by running the test once.
+        3. Gate: "Looks like a regression. Run git bisect? Estimate:
+           <test_runs> runs × <seconds_per_run>s = ~<total_minutes> min.
+           approve / skip / kill"
+        4. On approve: runBisect() drives `git bisect start && bad HEAD
+           && good <baseline> && bisect run <testCmd>`, captures log to
+           docs/bugs/<bug-code>/bisect.log, always resets in finally.
+        5. On skip OR not-a-regression: return {skipped: true,
+           bisect_commit: null, estimate_minutes: 0} and continue.
+    input:
+      task: {type: string}
+      diagnosis: {type: object}
+    output: BisectResult
+    retries: 1
 
   scope_check:
     mode: compute
@@ -191,12 +222,19 @@ flows:
           task: "$.input.task"
         depends_on: [reproduce]
 
+      - id: bisect
+        function: bisect
+        inputs:
+          task: "$.input.task"
+          diagnosis: "$.steps.diagnose.output"
+        depends_on: [diagnose]
+
       - id: scope_check
         function: scope_check
         inputs:
           task: "$.input.task"
           diagnosis: "$.steps.diagnose.output"
-        depends_on: [diagnose]
+        depends_on: [bisect]
 
       - id: fix
         function: fix
