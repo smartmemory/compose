@@ -117,7 +117,9 @@ When a bug closes (`ship` succeeds), its INDEX row is removed but its folder + c
 
 ### Decision 5: Escalation — two-tier, both gated, neither writes code
 
-When `retro_check` triggers escalation (existing logic: 2+ commits on same file, OR attempt_count ≥ 3 for visual/CSS bugs, OR cross-session chain detected), run **Tier 1 unconditionally**, **Tier 2 conditionally**:
+When `retro_check` triggers escalation (existing logic: 2+ commits on same file, OR attempt_count ≥ 2 for visual/CSS bugs, OR attempt_count ≥ 5 for any bug, OR cross-session chain detected), run **Tier 1 unconditionally**, **Tier 2 conditionally**:
+
+> **Reconciled 2026-05-01 (Phase 9):** the original draft said "≥ 3 for visual/CSS". Phase 4 blueprint review found that `lib/debug-discipline.js` already implements `AttemptCounter.getIntervention()` with battle-tested thresholds visual@2 / all@5. Adopted those verbatim instead of forcing the design's guessed threshold; this paragraph reflects what shipped.
 
 **Tier 1 — Codex second opinion (read-only):**
 - Dispatch `mcp__stratum__stratum_agent_run(type=codex)` with structured prompt:
@@ -145,15 +147,19 @@ Both tiers gate before running. Human sees:
 
 ### Decision 6: IR additions to bug-fix.stratum.yaml
 
+> **Reconciled 2026-05-01 (Phase 9):** the original draft proposed adding `regression_class: boolean` to `TriageResult` and `reads`/`writes_append` annotations on the `diagnose` step. Phase 4 blueprint review found these were unnecessary — `regression_class` becomes a runtime check inside the `bisect` step's gate (`classifyRegression()` in `lib/bug-bisect.js`), and the ledger I/O happens inside `buildRetryPrompt`/`recordDiagnoseSuccessIfBugMode` without needing IR-level annotations. The actual YAML change that shipped is just the new `bisect` step + `BisectResult` contract (see below).
+
 New optional fields, all default-off so existing flows are unaffected:
 
 ```yaml
+# (Original draft — superseded; kept here for historical reference.)
 # In triage's output (computed inline today, becoming explicit)
 TriageResult:
   regression_class: {type: boolean, default: false}
   severity: {type: string}  # already implicit
   scope_hint: {type: string}  # already on DiagnoseResult
 
+# (Original draft — superseded.)
 # diagnose now reads the ledger
 diagnose:
   reads: ["docs/bugs/${bug_code}/hypotheses.jsonl"]

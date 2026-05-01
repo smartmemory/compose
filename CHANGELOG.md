@@ -2,6 +2,30 @@
 
 ## 2026-05-01
 
+### COMP-FIX-HARD — Hard-bug machinery on the bug-fix pipeline
+
+The 8-step `bug-fix.stratum.yaml` pipeline (shipped as part of COMP-FIX) handled easy and medium bugs but failed silently on hard ones: retries re-proposed disproven hypotheses, `test` exhaustion vanished into the failed-build handler with no recovery state, regression bugs got no `git bisect` help, fix-chain detection was session-scoped, and escalation flagged-but-didn't-act. COMP-FIX-HARD adds the persistent state, structured second opinions, and fresh-context retry path needed for genuinely hard bugs — without slowing the easy cases.
+
+**Added:**
+- `lib/bug-ledger.js` — JSONL hypothesis ledger at `docs/bugs/<code>/hypotheses.jsonl`. `appendHypothesisEntry` is idempotent on `(attempt, ts)`; `readHypotheses` tolerates malformed lines; `formatRejectedHypotheses` emits the markdown block injected into diagnose retry prompts.
+- `lib/bug-checkpoint.js` — emits `docs/bugs/<code>/checkpoint.md` on Compose-side retry-cap exhaustion. Captures current diff (capped at 5KB), last failure, ledger pointer, and a `compose fix <code> --resume` command for the operator.
+- `lib/bug-index-gen.js` — renders `docs/bugs/INDEX.md` from per-bug checkpoints. Atomic tmp+rename write. Same pattern as `roadmap-gen.js`.
+- `lib/bug-bisect.js` — `classifyRegression` heuristic (test in main + affected files touched in last 10 commits), `estimateBisectCost` with a 5-min sample timeout, `findKnownGoodBaseline` (v* tags → release-* → HEAD~50), `runBisect` driving `git bisect run` and capturing log to `docs/bugs/<code>/bisect.log`, always with `git bisect reset` in finally.
+- `lib/bug-escalation.js` — Tier 1 Codex second opinion (read-only via `stratum.runAgentText('codex', ...)`, parses to canonical `ReviewResult`, appends to ledger as `verdict: 'escalation_tier_1'`) and Tier 2 fresh agent in detached-HEAD worktree (gated by Jaccard token-overlap "materially new" check at 0.7 threshold; produces patch artifact at `docs/bugs/<code>/escalation-patch-N.md`; never commits).
+- `pipelines/bug-fix.stratum.yaml` — new `bisect` step + `BisectResult` contract inserted between `diagnose` and `scope_check`. `scope_check.depends_on` retargeted.
+- `bin/compose.js` — `compose fix <code>` reads `docs/bugs/<code>/description.md`, scaffolds and exits if missing. New `--resume` flag refuses cross-mode resume.
+
+**Changed:**
+- `lib/build.js` — `runBuild` accepts `opts.mode: 'feature' | 'bug'`. Single `resolveItemDir(code)` resolver routes `docs/features/` vs `docs/bugs/` at all three `featureDir` binding sites. `startFresh` dispatches `stratum.plan` with `{task: description}` in bug mode. `context.mode` and `context.bug_code` threaded throughout. Feature-JSON updates gated behind `!isBugMode`. Compose-side retry-cap enforcement: `parseRetriesCap(specYaml)` builds a per-step cap map; when `iterN > maxIter`, force-terminate and (in bug mode for `{test, fix, diagnose}` steps) emit a checkpoint. Active-build state now carries `mode` and `pid`; resume refuses cross-mode and refuses if another live process owns the build. `recordDiagnoseSuccessIfBugMode` helper called from both top-level and child-flow step-completion paths so retries see prior accepted hypotheses.
+- `lib/step-prompt.js` — `buildRetryPrompt` prepends `formatRejectedHypotheses` block when retrying `diagnose` in bug mode. Single injection point covers both `build.js:1244` and `build.js:2133` retry call sites.
+- `lib/debug-discipline.js` — `AttemptCounter` and `FixChainDetector` rewritten around per-bug `byBug` Map. Existing global API preserved via synthetic `__feature_mode__` slot. `fromJSON` now folds top-level legacy fields into `__feature_mode__` (was `__legacy__` — orphaned slot with no public reader).
+
+**Phase 7 review-loop fixes (3 rounds, 14 findings):** partial-migration data loss in `fromJSON`; `isMateriallyNew` substring containment too aggressive (rewritten to Jaccard ≥ 0.7) and zero-token edge case (treats un-tokenizable Codex summary as novel); Tier 2 worktree create wrapped in try/catch with `rm -rf` cleanup; `estimateBisectCost` 5-min sample timeout; `getCurrentDiff` `maxBuffer` set to 2MB (50MB OOM risk → over-corrected to 20KB → 2MB sweet spot); resume path live-pid check + mode persistence + cross-mode refusal at all three resume entry points; attempt numbering `max+1` not `length+1` to prevent collisions.
+
+**Tests:** 91 new test cases across 12 new test files. Suite at 2064 node + 92 vitest, zero failures.
+
+**Follow-up tickets filed:** COMP-MAXITER-DRIFT (cosmetic log fix), COMP-BUG-FORMATTER (`compose bug show <code>`), STRAT-RETRIES-ENFORCE (Stratum-side enforcement; the YAML's `retries:` field is currently declared-but-ignored in `stratum_mcp/executor.py` — Compose enforces in the consumer for now).
+
 ### COMP-DEPS-PACKAGE — External skill dependency manifest + `compose doctor`
 
 `compose setup` previously only synced compose-owned skills; the lifecycle's references to external skills/commands (`superpowers:*`, `interface-design:*`, `codex:review`, `refactor`, `update-docs`) had no install check, no warning when missing, and no documented degrade behavior. On a fresh-box install the lifecycle would die mid-phase the first time it invoked a missing dep.

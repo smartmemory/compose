@@ -478,7 +478,23 @@ flows:
 
 ```
 
-The bugfix flow lives in `compose/pipelines/bug-fix.stratum.yaml` (8 steps, ships with compose). The CLI entry `compose fix <bug-code>` (in `bin/compose.js`) delegates to `runBuild()` with `template: 'bug-fix'` — same machinery as `compose build`, different pipeline file.
+The bugfix flow lives in `compose/pipelines/bug-fix.stratum.yaml` (8 steps + bisect, ships with compose). The CLI entry `compose fix <bug-code>` (in `bin/compose.js`) reads `docs/bugs/<code>/description.md` (scaffolds and exits if missing) and dispatches `runBuild(code, { mode: 'bug', template: 'bug-fix', description })`.
+
+### Hard-bug machinery (COMP-FIX-HARD, 2026-05-01)
+
+For genuinely hard bugs the pipeline gains persistent state across attempts and sessions, structured second opinions, and a fresh-context retry path:
+
+- **Hypothesis ledger** at `docs/bugs/<code>/hypotheses.jsonl` (JSONL, idempotent on `(attempt, ts)`). `diagnose` retries see a "Previously Rejected" block prepended via `buildRetryPrompt` so they don't re-propose disproven theories. Every successful diagnose plus every Tier 1 escalation appends an entry.
+- **Compose-side retry-cap enforcement.** Stratum's `retries:` field is declared-but-not-enforced in `executor.py` (tracked as `STRAT-RETRIES-ENFORCE`). Compose parses the YAML at flow start, builds a per-step cap map, and force-terminates when `iterN > maxIter`. In bug mode for `{test, fix, diagnose}`, terminal-failure also emits `docs/bugs/<code>/checkpoint.md` (current diff, last failure, ledger pointer, `compose fix <code> --resume` command).
+- **`docs/bugs/INDEX.md`** rendered atomically from per-bug checkpoints (same pattern as `roadmap-gen.js`).
+- **`bisect` step** sits between `diagnose` and `scope_check`. `classifyRegression` heuristic (test in main + affected files touched in last 10 commits) decides whether to gate the human; cost estimator samples one test run with a 5-min timeout; `runBisect` always calls `git bisect reset` in finally.
+- **`compose fix --resume`** re-enters the failed step with full ledger context. Active-build state carries `mode` and `pid`; resume refuses if another live process owns the build or if the active mode mismatches.
+- **Two-tier escalation**, both gated, neither auto-commits:
+  - Tier 1: `stratum.runAgentText('codex', ...)` second opinion, parsed to canonical `ReviewResult`, appended to ledger as `verdict: 'escalation_tier_1'`.
+  - Tier 2: only fires when Codex's hypothesis is materially new (Jaccard token-overlap < 0.7 vs prior rejected entries). `git worktree add <path> --detach HEAD`, fresh `claude` agent dispatched with explicit DO-NOT-COMMIT prompt, produces `docs/bugs/<code>/escalation-patch-N.md`. `git worktree remove --force` in finally; `rm -rf` fallback. Detached HEAD is the defense-in-depth: even if the agent ignores the prompt, commits orphan and never reach a branch.
+- **`debug-discipline.js`** is per-bug-keyed. `AttemptCounter`/`FixChainDetector` use a `byBug` Map; legacy global API preserved via synthetic `__feature_mode__` key. Existing thresholds preserved verbatim: visual@2, all@5.
+
+The CLI scaffold for `description.md` is the bug-mode equivalent of feature-mode's `description.md`/`feature.json`. Fields the agent should fill in: symptom, repro steps, expected vs actual, environment.
 
 ### Result Dict Shapes
 
