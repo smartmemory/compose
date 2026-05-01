@@ -2,7 +2,7 @@
 
 AI-powered product lifecycle orchestrator. Compose takes a product idea from intent to shipped code through structured, agent-driven pipelines with human gates at every critical decision point.
 
-Compose coordinates multiple AI agents (Claude, Codex) through YAML-defined workflows powered by [Stratum](https://github.com/regression-io/stratum), enforcing postconditions, retrying on failure, and producing auditable execution traces.
+Compose coordinates multiple AI agents (Claude, Codex) through YAML-defined workflows powered by [Stratum](https://github.com/smartmemory/stratum), enforcing postconditions, retrying on failure, and producing auditable execution traces.
 
 ## Table of Contents
 
@@ -75,7 +75,7 @@ compose build FEAT-1
 ### Install Compose
 
 ```bash
-git clone https://github.com/regression-io/compose.git
+git clone https://github.com/smartmemory/compose.git
 cd compose
 npm install
 ```
