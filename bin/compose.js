@@ -7,6 +7,7 @@
  * compose install  — run init + setup (backwards-compat alias)
  * compose start    — start the compose app (supervisor.js)
  * compose build    — headless feature lifecycle runner
+ * compose fix      — headless bug-fix lifecycle runner (pipelines/bug-fix.stratum.yaml)
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, rmSync, readdirSync } from 'fs'
 import { resolve, join, basename, dirname } from 'path'
@@ -37,6 +38,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  import    Scan existing project and generate structured analysis')
   console.log('  feature   Add a single feature (folder, design seed, ROADMAP entry)')
   console.log('  build     Run a feature through the headless lifecycle')
+  console.log('  fix       Run a bug through the headless bug-fix lifecycle')
   console.log('  pipeline  View and edit the build pipeline')
   console.log('  roadmap            Show roadmap status and next buildable features')
   console.log('  roadmap generate   Regenerate ROADMAP.md from feature.json files')
@@ -1075,6 +1077,54 @@ if (cmd === 'build') {
       })
     })
   }
+} else if (cmd === 'fix') {
+  // compose fix <bug-code> — runs the bug-fix.stratum.yaml pipeline.
+  // Thin delegation to runBuild() with template='bug-fix'. The pipeline owns
+  // iteration (test step retries=5 + ensure passing==true; retro_check enforces
+  // hard-stop at attempt 2 for visual/CSS bugs and flags fix chains).
+  let agentWorkDir = null
+  const cwdIdx = args.indexOf('--cwd')
+  if (cwdIdx !== -1) {
+    const cwdValue = args[cwdIdx + 1]
+    if (!cwdValue || cwdValue.startsWith('-')) {
+      console.error('Error: --cwd requires a path argument')
+      process.exit(1)
+    }
+    agentWorkDir = resolve(cwdValue)
+  }
+  const filteredArgs = args.filter((a, i) => i !== cwdIdx && (cwdIdx === -1 || i !== cwdIdx + 1))
+  const bugCodes = filteredArgs.filter(a => !a.startsWith('-'))
+  const bugCode = bugCodes[0]
+  const abort = filteredArgs.includes('--abort')
+
+  if (!bugCode && !abort) {
+    console.error('Usage: compose fix <bug-code>')
+    console.error('')
+    console.error('Runs the bug-fix pipeline (reproduce → diagnose → scope → fix → test → verify → retro → ship).')
+    console.error('')
+    console.error('Options:')
+    console.error('  --abort        Abort the active fix run')
+    console.error('  --cwd <path>   Agent working directory (for cross-repo bugs)')
+    process.exit(1)
+  }
+
+  const fixCwd = process.cwd()
+  if (!existsSync(join(fixCwd, '.compose', 'compose.json')) || !existsSync(join(fixCwd, 'pipelines', 'bug-fix.stratum.yaml'))) {
+    console.log('Running compose init...\n')
+    await runInit(args.filter(a => a.startsWith('--')))
+    console.log('')
+  }
+
+  import('../lib/build.js').then(({ runBuild }) => {
+    const opts = { abort, template: 'bug-fix' }
+    if (agentWorkDir) opts.workingDirectory = agentWorkDir
+    runBuild(bugCode, opts).then(() => {
+      process.exit(0)
+    }).catch((err) => {
+      console.error(`Fix failed: ${err.message}`)
+      process.exit(1)
+    })
+  })
 } else if (cmd === 'triage') {
   const triageCode = args.find(a => !a.startsWith('-'))
   if (!triageCode) {

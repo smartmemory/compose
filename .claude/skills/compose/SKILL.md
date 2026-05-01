@@ -1,23 +1,31 @@
 ---
 name: compose
-description: Use when starting a non-trivial feature that will span multiple files or phases — orchestrates the full lifecycle from idea through design, spec, blueprint, and implementation using existing skills and agents at each stage.
+description: Use when starting a non-trivial feature OR fixing a non-trivial bug — orchestrates the full lifecycle (build mode: idea → design → blueprint → implement; fix mode: triage → reproduce → root-cause → fix → verify) using existing skills and agents at each stage.
 ---
 
 # Compose Lifecycle
 
 ## Overview
 
-Orchestrates the full feature development lifecycle by chaining granular skills together with review gates between phases. Each phase produces an artifact in the feature folder. Claude Code's native tools (plan mode, tasks, sessions) handle within-session execution; this skill handles the cross-session lifecycle.
+Orchestrates two lifecycles under one skill:
 
-Before any phase begins, read the project state via the `compose` MCP server (get_vision_items, get_phase_summary, get_blocked_items) to understand what's in flight, what's decided, and what's blocked. Every feature maps to a vision item — check it exists, create it if not.
+- **`/compose build <feature-ref>`** — feature lifecycle (idea → design → blueprint → implement → ship)
+- **`/compose fix <bug-ref>`** — bug-fix lifecycle (triage → reproduce → root-cause → fix → verify → ship)
 
-## When to Use
+Both modes share Phase 6 (plan), Phase 7 (TDD execute + E2E + review loop + coverage sweep), Phase 9 (docs), and Phase 10 (ship). They diverge in the upstream phases. Claude Code's native tools (plan mode, tasks, sessions) handle within-session execution; this skill handles the cross-session lifecycle.
 
-- New feature spanning 3+ files or 2+ phases
-- Feature touching multiple components (server + UI, MCP + client)
-- Any work that needs a design spec before implementation
+Before any phase begins, read project state via the `compose` MCP server (get_vision_items, get_phase_summary, get_blocked_items). Every feature OR bug maps to a vision item — check it exists, create it if not.
 
-**Skip this for:** single-file changes, bug fixes, hotfixes, refactors with obvious approach.
+## Mode Selection
+
+`/compose` with no verb defaults to `build` for back-compat. Explicit verbs:
+
+| Verb | Use | Folder |
+|---|---|---|
+| `/compose build <feature-ref>` | New feature, 3+ files, 2+ phases, needs design | `docs/features/<feature-code>/` |
+| `/compose fix <bug-ref>` | Non-trivial bug, test failure, regression, hotfix | `docs/bugs/<bug-code>/` |
+
+**Skip Compose entirely for:** typos, one-line obvious fixes, cosmetic changes — just fix those directly.
 
 ## Partial Execution: `--through <phase>`
 
@@ -87,7 +95,7 @@ If `mcp__stratum__stratum_agent_run` is unavailable (or returns a stream-chunk-s
 - **Programmatic / pipeline path:** dispatch a `general-purpose` Agent with an explicit reviewer prompt — the canonical `ReviewResult` schema (severity `must-fix`/`should-fix`/`nit`, confidence 1–10, gate `>= 7`) defined at `compose/contracts/review-result.json` is the contract for both paths.
 - **Human-driven path:** invoke the OpenAI codex plugin's `/codex:review` (review-only) or `/codex:adversarial-review` (challenges design assumptions). These return Codex stdout verbatim and are not a drop-in for the canonical-JSON pipeline path, but they are the right tool when a human is in the loop.
 
-## Lifecycle
+## Lifecycle (build mode)
 
 ```
 Phase 1:  Explore & Design ──── gate ──→
@@ -106,7 +114,19 @@ Phase 9:  Update Docs ──────── gate ──→
 Phase 10: Ship ─────────────────────────→ Done
 ```
 
-Phase 7 includes all four steps as exit criteria — you cannot exit without all completing.
+## Lifecycle (fix mode)
+
+```
+Phase F1: Triage ──────────────── gate ──→  (severity, scope, path: Quick/Standard/Hotfix)
+Phase F2: Reproduce ───────────── gate ──→  (failing test or reliable repro)
+Phase F3: Root Cause Investigate  gate ──→  (superpowers:systematic-debugging)
+Phase 6:  Plan (often trivial) ── gate ──→
+Phase 7:  Execute + E2E + Review + Sweep ──→  (same four steps as build)
+Phase 9:  Update Docs ────────── gate ──→
+Phase 10: Ship ────────────────────────────→ Done
+```
+
+Phase 7 includes all four steps as exit criteria — you cannot exit without all completing. Quick path (trivial bug, known root cause, single file) collapses F1–F3 into a single triage step and skips Phase 9 docs unless the bug had user-visible behavior.
 
 ## Phases
 
@@ -180,7 +200,59 @@ Produce a verification table, append to `blueprint.md`. If any stale/wrong, loop
 
 **Skip when:** Blueprint written in the same session immediately after reading all referenced files.
 
-### Phase 6: Write Implementation Plan
+## Fix Mode Phases (F1–F3)
+
+These replace Phases 1–5 when the entry verb is `/compose fix`. Phases 6, 7, 9, 10 are reused unchanged.
+
+### Phase F1: Triage
+
+Gather enough information to select a path. Determine from context or ask:
+
+1. **What broke?** — observed vs expected behavior
+2. **Reproduction** — steps or failing test
+3. **Severity** — Trivial (cosmetic) / Normal (broken w/ workaround) / Critical (prod down, data loss, security)
+4. **Scope** — single file / multi-file / unknown
+5. **Root cause hypothesis** — already known?
+
+**Path selection:**
+
+| Path | When | Phases |
+|---|---|---|
+| **Quick** | Known root cause + single file | F1 → Phase 7 step 1 (TDD fix) → ship |
+| **Standard** | Unknown root cause OR multi-file | F1 → F2 → F3 → 6 → 7 → 9 → 10 |
+| **Hotfix** | Severity = Critical | F1 → F2 → F3 (time-boxed) → 7 → 10 (+cleanup follow-up) |
+
+For Standard/Hotfix: create `docs/bugs/<bug-code>/` folder. Bug code matches vision item ID. Quick path skips the folder.
+
+**Gate:** Agent proposes path with rationale. Human approves or redirects.
+
+### Phase F2: Reproduce
+
+**Skill:** `superpowers:test-driven-development` (write the failing test first — it IS the spec for "fixed")
+
+1. Write a test that reproduces the bug deterministically
+2. Run it — confirm it fails for the right reason (not a setup error)
+3. Save artifacts to `docs/bugs/<bug-code>/repro.md` (steps, environment, test path)
+
+**Gate:** Failing test exists and fails as expected. Stratum `ensure: failing_test_exists`.
+
+**Skip when:** Quick path with obvious one-liner — but prefer not to skip; the test guards against regression.
+
+### Phase F3: Root Cause Investigate
+
+**Skill:** `superpowers:systematic-debugging`
+
+Follow the methodology: Reproduce → Hypothesize → Verify → Repeat. Apply `~/.claude/rules/correct-over-quick.md` (contract → spec → code → test, in that order) and `~/.claude/rules/test-architecture-first.md` (understand test intent before changing).
+
+Write findings to `docs/bugs/<bug-code>/diagnosis.md`: root cause, evidence, fix approach, files affected, risk level.
+
+**For Hotfix:** time-box. If root cause not found, fix the symptom with a `// HOTFIX:` comment and file a follow-up task for proper RCA. Note this in `diagnosis.md`.
+
+**Gate:** Root cause documented. Fix approach approved by human. Risk level called out.
+
+**Skip when:** Quick path — root cause was clear at triage.
+
+
 
 Uses `EnterPlanMode`. Plan writes to `docs/features/<feature-code>/plan.md`.
 
@@ -277,6 +349,8 @@ If Stratum unavailable, continue with flat prompt chain.
 
 ### Step → Phase Mapping
 
+**Build mode** uses flow `compose_feature`:
+
 | Step | Phases |
 |---|---|
 | `research` | Phase 1 exploration. No human gate. |
@@ -284,7 +358,20 @@ If Stratum unavailable, continue with flat prompt chain.
 | `write_blueprint` | Phase 4 + Phase 5 verification. Gate after Phase 5. |
 | `implement` | Phase 7 — TDD, E2E, review loop, coverage sweep. Gate after all four steps. |
 
-Phases 6, 8, 9, 10 are sub-activities within adjacent steps.
+**Fix mode** uses flow `bug_fix` from `compose/pipelines/bug-fix.stratum.yaml` (8 steps, all already implemented):
+
+| Step | Phase | Retries | Ensure | Iteration role |
+|---|---|---|---|---|
+| `reproduce` | F2 | 2 | — | failing test or repro confirmed |
+| `diagnose` | F3 | 2 | `trace_evidence ≥ 2`, `root_cause != null`, `scope_hint in {single,cross-layer,unknown}` | forces real command output, not assumptions |
+| `scope_check` | F3 | 1 | — | greps all configured project repos for cross-layer references |
+| `fix` | 7 step 1 | 2 | — | minimal correct fix across all affected layers |
+| `test` | 7 step 4 | **5** | `result.passing == true` | **inner fix-and-retest loop** — Stratum re-runs until all tests pass or cap hit |
+| `verify` | 7 | 1 | — | original repro now passes |
+| `retro_check` | — | 1 | — | scans git history for fix chains; **hard stop at attempt 2 for visual/CSS bugs**, triggers cross-agent escalation |
+| `ship` | 10 | 1 | — | commit + CHANGELOG |
+
+Triage is implicit on entry (severity, scope, path) — it gates which steps to run, not a Stratum step itself. Phases 6 (plan), 9 (docs) are folded into `fix` and `ship` respectively.
 
 ### Spec Template
 
@@ -388,7 +475,10 @@ flows:
           properties:
             files_changed: {type: array, items: {type: string}}
             tests_pass: {type: boolean}
+
 ```
+
+The bugfix flow lives in `compose/pipelines/bug-fix.stratum.yaml` (8 steps, ships with compose). The CLI entry `compose fix <bug-code>` (in `bin/compose.js`) delegates to `runBuild()` with `template: 'bug-fix'` — same machinery as `compose build`, different pipeline file.
 
 ### Result Dict Shapes
 
@@ -449,18 +539,59 @@ When `/compose` is invoked, always scan first:
 | `compose-architect` | Phase 3 (2-3 competing mandates) |
 | `mcp__stratum__stratum_agent_run(type="codex")` | Any gate — Codex review pass (see Gate Protocol) |
 | `general-purpose` Agent | Reviewer fallback when `stratum_agent_run` unavailable; prompt with canonical `ReviewResult` schema |
-| `superpowers:test-driven-development` | Phase 7 step 1 |
+| `superpowers:systematic-debugging` | Phase F3 (fix mode) and any unexpected failure (build mode) |
+| `superpowers:test-driven-development` | Phase F2 (fix mode), Phase 7 step 1 (both modes) |
 | `superpowers:verification-before-completion` | Before any task/phase done |
-| `superpowers:systematic-debugging` | Any unexpected failure |
+| `superpowers:requesting-code-review` | Phase 7 review step (fallback when Codex unavailable) |
 | `interface-design:init` | Phase 7 — new UI components |
 | `interface-design:critique` | Phase 7 — after building UI |
 | `interface-design:audit` | Phase 7 — check UI against design system |
 | `refactor` | Phase 7 — when review finds large files |
 | `update-docs` | Phase 9 |
 
+**Note on dependencies:** these skills are referenced by name and must be installed on the user's machine. See `## Dependencies` below for the install contract — `compose setup` only ships compose-owned skills today; external deps are documented but not auto-installed.
+
 ## Memory
 
-After completing a feature lifecycle, update project memory:
+After completing a feature OR bug-fix lifecycle, update project memory:
 - Architecture decisions made
-- Patterns discovered during blueprint
+- Patterns discovered during blueprint or diagnosis
 - Corrections that apply broadly
+- For bugfix: root-cause class (off-by-one, race, contract drift, etc.) — helps spot repeats
+
+## Dependencies
+
+`compose setup` (see `bin/compose.js` `syncSkills()`) installs compose-owned skills from `PACKAGE_ROOT/.claude/skills/` and `PACKAGE_ROOT/skills/` to `~/.claude/skills/` and tracks them in `~/.claude/skills/.compose-skills.json`.
+
+### Vendored (ship with compose)
+
+| Skill | Source | Why vendored |
+|---|---|---|
+| `compose` | `compose/.claude/skills/compose/` | Core lifecycle |
+| `stratum` | `compose/skills/stratum/` (if present) | Execution substrate |
+| `compose-explorer`, `compose-architect` | agents under `compose/.claude/agents/` | Required by Phases 1, 3, 4 |
+
+### External dependencies (NOT auto-installed)
+
+These are referenced by name in this SKILL.md but must be present on the user's machine independently. `compose setup` should warn if missing.
+
+| Skill | Required for | Install source |
+|---|---|---|
+| `superpowers:systematic-debugging` | Phase F3, fix mode | superpowers plugin |
+| `superpowers:test-driven-development` | Phase F2, Phase 7 step 1 | superpowers plugin |
+| `superpowers:verification-before-completion` | All phase exits | superpowers plugin |
+| `superpowers:requesting-code-review` | Phase 7 review fallback | superpowers plugin |
+| `superpowers:executing-plans`, `superpowers:dispatching-parallel-agents` | Phase 7 selection | superpowers plugin |
+| `interface-design:init/critique/audit` | Phase 7 UI work | interface-design plugin |
+| `refactor` | Phase 7 when review finds large files | user skill |
+| `update-docs` | Phase 9 | user skill |
+| `codex:*` / `mcp__stratum__stratum_agent_run` | Codex review gate | openai-codex plugin or stratum-mcp |
+
+### Gap (tracked as `COMP-DEPS-PACKAGE`)
+
+Today `compose setup` does not check for or install these external deps. Options:
+1. **Hard deps via plugin manifest** — declare required plugins in a Claude Code plugin manifest so install pulls them.
+2. **Soft check + actionable warning** — `compose setup` greps `~/.claude/skills/` and prints missing skills + install commands; lifecycle still runs in degraded mode (e.g. fall back to `general-purpose` Agent for review when `codex:*` missing).
+3. **Vendor minimal stubs** — ship compose-owned wrappers that delegate to external skills if present, otherwise inline the minimum behavior.
+
+Recommended: ship (2) now, file (1) for when the Claude Code plugin manifest format stabilizes.
