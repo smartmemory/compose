@@ -48,6 +48,8 @@
     "access": "public"
   },
   "files": [
+    ".compose-deps.json",
+    ".claude/skills/**",
     "bin/**",
     "server/**",
     "lib/**",
@@ -57,6 +59,7 @@
     "pipelines/**",
     "contracts/**",
     "scripts/**",
+    "skills/**",
     "README.md",
     "LICENSE"
   ],

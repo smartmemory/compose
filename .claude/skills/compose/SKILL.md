@@ -573,25 +573,16 @@ After completing a feature OR bug-fix lifecycle, update project memory:
 
 ### External dependencies (NOT auto-installed)
 
-These are referenced by name in this SKILL.md but must be present on the user's machine independently. `compose setup` should warn if missing.
+Authoritative list lives in `compose/.compose-deps.json`. Run `compose doctor` to see what's installed locally and `compose doctor --json` for machine-readable output. The manifest is the single source of truth for external dep IDs and per-dep `fallback` behavior — this SKILL.md never duplicates per-dep fallback strings.
 
-| Skill | Required for | Install source |
-|---|---|---|
-| `superpowers:systematic-debugging` | Phase F3, fix mode | superpowers plugin |
-| `superpowers:test-driven-development` | Phase F2, Phase 7 step 1 | superpowers plugin |
-| `superpowers:verification-before-completion` | All phase exits | superpowers plugin |
-| `superpowers:requesting-code-review` | Phase 7 review fallback | superpowers plugin |
-| `superpowers:executing-plans`, `superpowers:dispatching-parallel-agents` | Phase 7 selection | superpowers plugin |
-| `interface-design:init/critique/audit` | Phase 7 UI work | interface-design plugin |
-| `refactor` | Phase 7 when review finds large files | user skill |
-| `update-docs` | Phase 9 | user skill |
-| `codex:*` / `mcp__stratum__stratum_agent_run` | Codex review gate | openai-codex plugin or stratum-mcp |
+The manifest declares 12 external skills/commands across `superpowers:*`, `interface-design:*`, `codex:review`, `refactor`, and `update-docs`. Each entry carries `id`, `required_for`, `install`, `fallback` (or null), and `optional`.
 
-### Gap (tracked as `COMP-DEPS-PACKAGE`)
+### Degrade pattern
 
-Today `compose setup` does not check for or install these external deps. Options:
-1. **Hard deps via plugin manifest** — declare required plugins in a Claude Code plugin manifest so install pulls them.
-2. **Soft check + actionable warning** — `compose setup` greps `~/.claude/skills/` and prints missing skills + install commands; lifecycle still runs in degraded mode (e.g. fall back to `general-purpose` Agent for review when `codex:*` missing).
-3. **Vendor minimal stubs** — ship compose-owned wrappers that delegate to external skills if present, otherwise inline the minimum behavior.
+At lifecycle entry (Phase 1), run `compose doctor --json`. For each missing dep:
 
-Recommended: ship (2) now, file (1) for when the Claude Code plugin manifest format stabilizes.
+- If `optional: false` and `fallback` is non-null → use the `fallback` value, surface a warning to the user, continue.
+- If `optional: false` and `fallback` is null → block the lifecycle and surface the `install` command to the user.
+- If `optional: true` → skip the affected step and log a warning in the phase report.
+
+If the CLI is unavailable (PATH issue, sandbox), fall back to reading `~/.claude/skills/compose/.compose-deps.json` (copied alongside this SKILL.md by `compose setup`).

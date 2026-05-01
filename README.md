@@ -224,10 +224,21 @@ compose init --no-lifecycle
 
 ### `compose setup`
 
-Global skill and MCP registration. Installs the `/compose` skill and Stratum skill to all detected agents.
+Global skill and MCP registration. Installs the `/compose` skill and Stratum skill to all detected agents. At the end, runs an external-dependency check (see `compose doctor`) and prints actionable install hints for any missing external skills or commands.
 
 ```bash
 compose setup
+```
+
+### `compose doctor`
+
+Verifies that the external skills and commands the lifecycle relies on (e.g. `superpowers:*`, `interface-design:*`, `codex:review`, `refactor`, `update-docs`) are installed locally. The authoritative dep list lives in `.compose-deps.json` at the package root.
+
+```bash
+compose doctor              # human-readable report
+compose doctor --json       # machine-readable, full dep records (id, required_for, install, fallback, optional)
+compose doctor --strict     # exit 1 on any missing required dep (use in CI)
+compose doctor --verbose    # also list the filesystem paths scanned
 ```
 
 ### `compose start`

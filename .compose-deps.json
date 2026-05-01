@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "external_skills": [
+    {
+      "id": "superpowers:systematic-debugging",
+      "required_for": ["bug-fix Phase F3", "any unexpected failure"],
+      "install": "claude plugin install superpowers",
+      "fallback": "general-purpose Agent with debugging prompt",
+      "optional": false
+    },
+    {
+      "id": "superpowers:test-driven-development",
+      "required_for": ["bug-fix Phase F2", "build Phase 7 step 1"],
+      "install": "claude plugin install superpowers",
+      "fallback": "inline TDD instructions in SKILL.md",
+      "optional": false
+    },
+    {
+      "id": "superpowers:verification-before-completion",
+      "required_for": ["all phase exits"],
+      "install": "claude plugin install superpowers",
+      "fallback": "inline verification checklist in SKILL.md",
+      "optional": false
+    },
+    {
+      "id": "superpowers:requesting-code-review",
+      "required_for": ["Phase 7 review fallback"],
+      "install": "claude plugin install superpowers",
+      "fallback": "general-purpose Agent reviewer with canonical ReviewResult prompt",
+      "optional": true
+    },
+    {
+      "id": "superpowers:executing-plans",
+      "required_for": ["Phase 7 sequential execution"],
+      "install": "claude plugin install superpowers",
+      "fallback": "inline plan-execution instructions",
+      "optional": false
+    },
+    {
+      "id": "superpowers:dispatching-parallel-agents",
+      "required_for": ["Phase 7 parallel execution"],
+      "install": "claude plugin install superpowers",
+      "fallback": "sequential execution",
+      "optional": true
+    },
+    {
+      "id": "interface-design:init",
+      "required_for": ["Phase 7 — new UI components"],
+      "install": "claude plugin install interface-design",
+      "fallback": null,
+      "optional": true
+    },
+    {
+      "id": "interface-design:critique",
+      "required_for": ["Phase 7 — UI critique pass"],
+      "install": "claude plugin install interface-design",
+      "fallback": null,
+      "optional": true
+    },
+    {
+      "id": "interface-design:audit",
+      "required_for": ["Phase 7 — UI design-system audit"],
+      "install": "claude plugin install interface-design",
+      "fallback": null,
+      "optional": true
+    },
+    {
+      "id": "codex:review",
+      "required_for": ["Phase 7 review gate (human-driven)"],
+      "install": "claude plugin install openai-codex",
+      "fallback": "mcp__stratum__stratum_agent_run type=codex",
+      "optional": true
+    },
+    {
+      "id": "refactor",
+      "required_for": ["Phase 7 large-file split"],
+      "install": "user-installed skill at ~/.claude/skills/refactor/",
+      "fallback": null,
+      "optional": true
+    },
+    {
+      "id": "update-docs",
+      "required_for": ["Phase 9 docs sync"],
+      "install": "user-installed skill at ~/.claude/skills/update-docs/",
+      "fallback": "manual TODO surfaced in implementation report",
+      "optional": true
+    }
+  ]
+}

@@ -23,6 +23,7 @@ const PACKAGE_ROOT = resolve(__dirname, '..')
 // --team flag (COMP-TEAMS)
 // ---------------------------------------------------------------------------
 import { parseTeamFlag } from '../lib/team-flag.js';
+import { loadDeps, checkExternalSkills, printDepReport } from '../lib/deps.js';
 
 const [,, cmd, ...args] = process.argv
 
@@ -48,6 +49,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  qa-scope  Show affected routes from a feature\'s changed files')
   console.log('  init      Initialize Compose in the current project')
   console.log('  setup     Install global skill + register stratum-mcp')
+  console.log('  doctor    Check external skill dependencies')
   process.exit(0)
 }
 
@@ -150,6 +152,14 @@ function syncSkills(agents) {
       console.log(`  + ${agent.name}/${name}`)
     }
 
+    // Copy .compose-deps.json next to the compose SKILL.md so the lifecycle
+    // can read it as a fallback when `compose doctor` is unreachable.
+    const depsSrc = join(PACKAGE_ROOT, '.compose-deps.json')
+    const composeSkillDir = join(agentSkillsRoot, 'compose')
+    if (existsSync(depsSrc) && existsSync(composeSkillDir)) {
+      copyFileSync(depsSrc, join(composeSkillDir, '.compose-deps.json'))
+    }
+
     // Remove skills we previously installed that no longer exist in source
     const removed = previousSkills.filter(name => !sourceSkills.has(name))
     for (const name of removed) {
@@ -171,6 +181,34 @@ function syncSkills(agents) {
       console.log(`  - ${name} — not found`)
     }
   }
+
+  // External skill dep check — surface missing plugins / user skills with
+  // actionable install hints. Soft check: warnings only, exit code unaffected.
+  const deps = loadDeps(PACKAGE_ROOT)
+  if (deps) {
+    const result = checkExternalSkills(deps)
+    printDepReport(result)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// compose doctor — re-run the external dep check
+// ---------------------------------------------------------------------------
+
+function runDoctor(flags = []) {
+  const json = flags.includes('--json')
+  const strict = flags.includes('--strict')
+  const verbose = flags.includes('--verbose') || flags.includes('-v')
+
+  const deps = loadDeps(PACKAGE_ROOT)
+  if (!deps) {
+    console.error('Error: .compose-deps.json missing or invalid at package root')
+    process.exit(1)
+  }
+  const result = checkExternalSkills(deps)
+  const allRequiredPresent = printDepReport(result, { json, verbose })
+
+  if (strict && !allRequiredPresent) process.exit(1)
 }
 
 // ---------------------------------------------------------------------------
@@ -407,6 +445,11 @@ if (cmd === 'init') {
 
 if (cmd === 'setup') {
   runSetup()
+  process.exit(0)
+}
+
+if (cmd === 'doctor') {
+  runDoctor(args)
   process.exit(0)
 }
 

@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-05-01
+
+### COMP-DEPS-PACKAGE — External skill dependency manifest + `compose doctor`
+
+`compose setup` previously only synced compose-owned skills; the lifecycle's references to external skills/commands (`superpowers:*`, `interface-design:*`, `codex:review`, `refactor`, `update-docs`) had no install check, no warning when missing, and no documented degrade behavior. On a fresh-box install the lifecycle would die mid-phase the first time it invoked a missing dep.
+
+**Added:**
+- `compose/.compose-deps.json` — manifest of 12 external skill/command deps with `id`, `required_for`, `install`, `fallback`, `optional` fields. Single source of truth for dep IDs and per-dep degrade behavior.
+- `compose/lib/deps.js` — `loadDeps()`, `checkExternalSkills()`, `printDepReport()`. Scans five filesystem patterns (bare `~/.claude/skills/`, marketplace skills A/B, marketplace commands A'/B', versioned cache C). Bare-vs-namespaced match split prevents false positives.
+- `compose doctor` CLI subcommand. `--json` for machine-readable output (full dep records), `--strict` for non-zero exit on missing required deps, `--verbose` lists scanned paths.
+- `compose setup` now runs the dep check at the end and copies `.compose-deps.json` next to the installed compose SKILL.md so the lifecycle can read it as a fallback when the CLI is unreachable.
+- `compose/test/comp-deps-package.test.js` — 16 tests covering manifest schema, drift guard (every manifest ID appears in SKILL.md), bare-vs-namespaced false-positive guard, full-record JSON output, and live `compose doctor` subprocess.
+
+**Fixed:**
+- `package.json` `files` allowlist now includes `.compose-deps.json`, `.claude/skills/**`, and `skills/**`. Previous published installs printed `Warning: no skills found to install` because the skill source dirs weren't in the allowlist — silently broken since adoption.
+
+**Updated:**
+- `compose/.claude/skills/compose/SKILL.md` §Dependencies — replaced the per-dep external-deps table with a pointer to the manifest as source of truth, plus a "Degrade pattern" subsection describing how the lifecycle uses `compose doctor --json` at Phase 1 entry.
+
 ## 2026-04-27
 
 ### COMP-AGENT-CAPS-5 — Capability enforcement: integration test, settings UI, severity bucketing

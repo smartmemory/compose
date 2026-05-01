@@ -290,3 +290,7 @@
 2026-04-27T10:00:08+08:00 | STRAT-XMODEL-PARITY: add CrossModelReviewResult schema + normalizeCrossModelResult + wire into build.js synthesis path
 2026-04-27T19:54:37+08:00 | COMP-AGENT-CAPS-5: D1 capability-enforcement-block.test.js + D2 SettingsPanel enforcement radio + D3 writeViolation severity + UI bucketing
 2026-04-30T18:43:33+08:00 | STRAT-PAR-STREAM-LEGACY-CLOSE + CONSUMER-VALIDATE + COMP-AGENT-CAPS-6 batch — audit emit sites, close 6 metadata blocks, add consumer validation, fix child-flow enforcement
+2026-05-01T13:05:10+08:00 | COMP-DEPS-PACKAGE design pass — external skill dep checking in compose setup
+2026-05-01T13:11:59+08:00 | COMP-DEPS-PACKAGE blueprint pass
+2026-05-01T13:33:18+08:00 | COMP-DEPS-PACKAGE plan + execute pass
+2026-05-01T13:35:32+08:00 | COMP-DEPS-PACKAGE T1 — write manifest JSON
