@@ -62,8 +62,11 @@ describe('FixChainDetector', () => {
     d.recordIteration(['src/a.js']);
     const json = d.toJSON();
     assert.equal(typeof json, 'object');
-    assert.equal(json.iteration, 2);
-    assert.ok(json.fileHits['src/a.js']);
+    // Per-bug shape (COMP-FIX-HARD T9): global state is keyed under __feature_mode__.
+    const slot = json['__feature_mode__'];
+    assert.ok(slot);
+    assert.equal(slot.iteration, 2);
+    assert.ok(slot.fileHits['src/a.js']);
   });
 
   it('restores from JSON', () => {
@@ -134,8 +137,11 @@ describe('AttemptCounter', () => {
     const c = new AttemptCounter();
     c.record({ filesChanged: ['a.css'], isVisual: true });
     const json = c.toJSON();
-    assert.equal(json.count, 1);
-    assert.equal(json.isVisual, true);
+    // Per-bug shape (COMP-FIX-HARD T9): global state is keyed under __feature_mode__.
+    const slot = json['__feature_mode__'];
+    assert.ok(slot);
+    assert.equal(slot.count, 1);
+    assert.equal(slot.isVisual, true);
   });
 
   it('restores from JSON', () => {

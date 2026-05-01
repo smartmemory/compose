@@ -1139,6 +1139,7 @@ if (cmd === 'build') {
   const bugCodes = filteredArgs.filter(a => !a.startsWith('-'))
   const bugCode = bugCodes[0]
   const abort = filteredArgs.includes('--abort')
+  const resume = filteredArgs.includes('--resume')
 
   if (!bugCode && !abort) {
     console.error('Usage: compose fix <bug-code>')
@@ -1147,6 +1148,7 @@ if (cmd === 'build') {
     console.error('')
     console.error('Options:')
     console.error('  --abort        Abort the active fix run')
+    console.error('  --resume       Resume the active fix run for <bug-code>')
     console.error('  --cwd <path>   Agent working directory (for cross-repo bugs)')
     process.exit(1)
   }
@@ -1196,10 +1198,26 @@ if (cmd === 'build') {
     }
   }
 
+  // COMP-FIX-HARD T8: --resume requires a matching active build for this bug.
+  let resumeFlowId = null
+  if (resume && !abort && bugCode) {
+    const activeBuildPath = join(fixCwd, '.compose', 'data', 'active-build.json')
+    let active = null
+    if (existsSync(activeBuildPath)) {
+      try { active = JSON.parse(readFileSync(activeBuildPath, 'utf-8')) } catch { active = null }
+    }
+    if (!active || active.featureCode !== bugCode || !active.flowId) {
+      console.error(`No active build to resume for ${bugCode}`)
+      process.exit(1)
+    }
+    resumeFlowId = active.flowId
+  }
+
   import('../lib/build.js').then(({ runBuild }) => {
     const opts = { abort, template: 'bug-fix', mode: 'bug' }
     if (agentWorkDir) opts.workingDirectory = agentWorkDir
     if (bugDescription) opts.description = bugDescription
+    if (resumeFlowId) opts.resumeFlowId = resumeFlowId
     runBuild(bugCode, opts).then(() => {
       process.exit(0)
     }).catch((err) => {
