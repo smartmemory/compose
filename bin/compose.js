@@ -1158,9 +1158,48 @@ if (cmd === 'build') {
     console.log('')
   }
 
+  // COMP-FIX-HARD T4: bug description lives at docs/bugs/<bug-code>/description.md.
+  // If absent, scaffold a stub and exit 1 so the user can fill it before retrying.
+  let bugDescription = null
+  if (!abort && bugCode) {
+    const bugDir = join(fixCwd, 'docs', 'bugs', bugCode)
+    const descPath = join(bugDir, 'description.md')
+    if (!existsSync(descPath)) {
+      mkdirSync(bugDir, { recursive: true })
+      const scaffold = `# ${bugCode}: <symptom in one sentence>
+
+## Steps to reproduce
+
+1.
+2.
+3.
+
+## Expected behavior
+
+## Actual behavior
+
+## Environment / Notes
+`
+      writeFileSync(descPath, scaffold)
+      console.error(`No description found at docs/bugs/${bugCode}/description.md. Scaffold written. Edit it and re-run 'compose fix ${bugCode}'.`)
+      process.exit(1)
+    }
+    try {
+      bugDescription = readFileSync(descPath, 'utf-8').trim()
+    } catch (err) {
+      console.error(`Failed to read ${descPath}: ${err.message}`)
+      process.exit(1)
+    }
+    if (!bugDescription) {
+      console.error(`docs/bugs/${bugCode}/description.md is empty. Edit it and re-run 'compose fix ${bugCode}'.`)
+      process.exit(1)
+    }
+  }
+
   import('../lib/build.js').then(({ runBuild }) => {
-    const opts = { abort, template: 'bug-fix' }
+    const opts = { abort, template: 'bug-fix', mode: 'bug' }
     if (agentWorkDir) opts.workingDirectory = agentWorkDir
+    if (bugDescription) opts.description = bugDescription
     runBuild(bugCode, opts).then(() => {
       process.exit(0)
     }).catch((err) => {
