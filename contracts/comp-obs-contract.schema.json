@@ -1,0 +1,362 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://forge.local/contracts/comp-obs-contract.schema.json",
+  "title": "COMP-OBS-CONTRACT — Wave 6 shared data model",
+  "version": "0.2.5",
+  "_source": "docs/features/COMP-OBS-CONTRACT/schema.json",
+  "_roadmap": "Wave 6 — Situational Awareness",
+  "_changelog": {
+    "0.2.5": "STRAT-PAR-STREAM — added BuildStreamEvent typed discriminated union (12 kinds): 6 new agent-narration kinds (agent_started, tool_use_summary, agent_relay closed + live; iteration_update, tier_result, health_event closed + reserved) and 6 legacy build-level kinds imported from compose/lib/build-stream-writer.js (capability_profile, capability_violation, step_usage, gate_tier_result, health_score, build_end — open metadata, catalog only; STRAT-PAR-STREAM-LEGACY-CLOSE will tighten). Additive — v0.2.4 specs continue to validate.",
+    "0.2.4": "COMP-OBS-DRIFT — added optional breach_started_at + breach_event_id to DriftAxis for stable threshold-event identity across WS reconnect; live emit and snapshot rehydration both compose the event id from these persisted fields.",
+    "0.2.3": "Codex review (2026-04-24) — two joinable-data fixes + SURFACE-split propagation. (a) `StatusSnapshot.drift_alerts[]` now a locally-defined subschema that mandates `breached: true`, so STATUS cannot emit non-alert axes through the alerts field. (b) gate `DecisionEvent.metadata.gate_log_entry_id` promoted to required — every gate DecisionEvent MUST carry its GateLogEntry id. `GateLogEntry.decision_event_id` remains nullable (explicit emission-failure escape hatch, reader reconciliation documented in prose). (c) Propagate 2026-04-23 SURFACE split (ROADMAP): `COMP-OBS-SURFACE` → `COMP-OBS-TIMELINE` (region ②, DecisionEvent producer+reader) + `COMP-OBS-STEPDETAIL` (step-level surface, no direct contract consumption in v1). `_consumers` updated; no field-shape changes beyond (a)+(b). DecisionEvent emitter ownership restated: BRANCH emits kind=branch, GATELOG emits kind=gate, TIMELINE adds kind=phase_transition (on lifecycle.advance) + kind=iteration (wrapping existing iteration-loop events), DRIFT emits kind=drift_threshold on breach.",
+    "0.2.2": "COMP-OBS-BRANCH blueprint Codex review (2026-04-19): added `BranchLineage.emitted_event_ids[]` to persist DecisionEvent ids across restarts — solves the full-rescan replay hazard identified during blueprint review. Made `feature_code` a required field on BranchLineage so schema enforces the 'never emit unbound branches' rule (see BRANCH resolver in feature.json).",
+    "0.2.1": "Codex review pass 2 (2026-04-19): dropped `format: uuid` from `in_progress_siblings` items (branch_id is sha1 hex, not uuid — the constraint conflicted with BranchOutcome.branch_id definition). Added `additionalProperties: false` to every per-kind DecisionEvent.metadata subschema so new kind-specific keys can't slip through silently.",
+    "0.2.0": "Codex review pass 1 (2026-04-19): closed nested objects against drift (additionalProperties:false everywhere); LifecycleExt no longer accepts unknown keys; BranchOutcome gained `state` enum so mid-progress siblings are representable; BranchLineage grew `in_progress_siblings` pointer list; OpenLoop pinned to UUID ids + append-only semantics; DecisionEvent.metadata constrained per `kind` via allOf/if-then; final_artifact.snapshot type matches its prose (nullable); layout.md Open Loops collapse key namespaced per feature.",
+    "0.1.0": "Initial draft."
+  },
+  "_consumers": {
+    "branch_outcome": ["COMP-OBS-BRANCH (producer)", "COMP-OBS-DRIFT (reader)", "COMP-OBS-LOOPS (reader)", "COMP-OBS-TIMELINE (timeline event via BRANCH emitter)", "COMP-OBS-STATUS (rollup)"],
+    "lifecycle_ext.open_loops": ["COMP-OBS-LOOPS (producer+reader)", "COMP-OBS-STATUS (rollup count)"],
+    "lifecycle_ext.drift_axes": ["COMP-OBS-DRIFT (producer)", "COMP-OBS-STATUS (threshold crossings)", "COMP-OBS-BRANCH (per-branch panel)"],
+    "lifecycle_ext.branch_lineage": ["COMP-OBS-BRANCH (producer+reader)"],
+    "decision_event": ["COMP-OBS-TIMELINE (renderer + phase_transition/iteration emitter)", "COMP-OBS-BRANCH (branch emitter)", "COMP-OBS-GATELOG (gate emitter)", "COMP-OBS-DRIFT (drift_threshold emitter)"],
+    "status_snapshot": ["COMP-OBS-STATUS (producer)"],
+    "gate_log_entry": ["COMP-OBS-GATELOG (producer)", "COMP-OBS-TIMELINE (gate-event reader — primary join is `DecisionEvent[kind=gate].metadata.gate_log_entry_id` → `GateLogEntry.id`; `GateLogEntry.decision_event_id` is a nullable back-pointer, used only for reconciliation when emission transiently failed)"]
+  },
+
+  "definitions": {
+
+    "LifecycleExt": {
+      "description": "Additive extensions to the existing vision-item lifecycle object. Closed: adding a new `lifecycle_ext.<key>` requires a schema version bump and batch-wide re-approval. All fields optional (absence = that feature hasn't landed yet).",
+      "type": "object",
+      "properties": {
+        "open_loops":     { "type": "array", "items": { "$ref": "#/definitions/OpenLoop" }, "default": [] },
+        "drift_axes":     { "type": "array", "items": { "$ref": "#/definitions/DriftAxis" }, "default": [] },
+        "branch_lineage": { "$ref": "#/definitions/BranchLineage" },
+        "status_snapshot":{ "$ref": "#/definitions/StatusSnapshot" }
+      },
+      "additionalProperties": false
+    },
+
+    "BranchOutcome": {
+      "description": "One session branch (may be running, complete, or failed). The unit compared in COMP-OBS-BRANCH. Derived from CC's JSONL; no new storage. Completion-only fields (ended_at, tests, cost, final_artifact, etc.) are absent or null while state != 'complete'.",
+      "type": "object",
+      "required": ["branch_id", "cc_session_id", "fork_uuid", "leaf_uuid", "feature_code", "state", "started_at"],
+      "properties": {
+        "branch_id":        { "type": "string", "description": "Stable Forge-assigned id: sha1(cc_session_id + ':' + leaf_uuid). Stable across reads; one branch = one id." },
+        "cc_session_id":    { "type": "string", "description": "Claude Code session uuid (`~/.claude/projects/.../<id>.jsonl` basename)." },
+        "fork_uuid":        { "type": ["string", "null"], "description": "parentUuid shared with sibling branch(es); null when branch has no siblings in the tree." },
+        "leaf_uuid":        { "type": "string", "description": "uuid of the current terminal record on this branch (the tip)." },
+        "parent_branch_id": { "type": ["string", "null"], "description": "Sibling-relative pointer; null for root branches or when sibling wasn't recorded." },
+        "feature_code":     { "type": "string" },
+        "state":            { "type": "string", "enum": ["running", "complete", "failed", "unknown"], "description": "'running' = sibling branch detected but tip has no `result` record yet. 'complete' = branch reached `result`. 'failed' = terminal error record. 'unknown' = reader can't classify (e.g. truncated JSONL). Only 'complete' branches are eligible for compare view metrics." },
+        "started_at":       { "type": "string", "format": "date-time" },
+        "ended_at":         { "type": ["string", "null"], "format": "date-time", "description": "Populated when state is terminal (complete / failed). Null while running." },
+        "turn_count":       { "type": ["integer", "null"], "minimum": 0, "description": "Populated when state=complete. Null while running." },
+        "files_touched":    {
+          "type": ["array", "null"],
+          "description": "Populated when state=complete. Null while running.",
+          "items": {
+            "type": "object",
+            "required": ["path", "turns_modified"],
+            "properties": {
+              "path":           { "type": "string" },
+              "turns_modified": { "type": "integer", "minimum": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "tests": {
+          "type": ["object", "null"],
+          "description": "Populated when state=complete. Null while running.",
+          "properties": {
+            "passed":  { "type": "integer", "minimum": 0, "default": 0 },
+            "failed":  { "type": "integer", "minimum": 0, "default": 0 },
+            "skipped": { "type": "integer", "minimum": 0, "default": 0 },
+            "run_ids": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        },
+        "cost": {
+          "type": ["object", "null"],
+          "description": "Populated when state=complete. Null while running.",
+          "properties": {
+            "tokens_in":     { "type": "integer", "minimum": 0 },
+            "tokens_out":    { "type": "integer", "minimum": 0 },
+            "usd":           { "type": "number",  "minimum": 0 },
+            "wall_clock_ms": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "final_artifact": {
+          "description": "Pointer to the artifact the branch produced (design.md, plan.md, diff bundle, etc). Used for side-by-side diff via existing ArtifactDiff. Null while running; may remain null on complete when no artifact was produced.",
+          "type": ["object", "null"],
+          "properties": {
+            "path":     { "type": "string" },
+            "kind":     { "type": "string", "enum": ["design", "plan", "prd", "blueprint", "report", "diff", "other"] },
+            "snapshot": { "type": ["string", "null"], "description": "Inline content snapshot; null means lazy-load via `path`." }
+          },
+          "additionalProperties": false
+        },
+        "drift_axes_snapshot": {
+          "description": "Populated by COMP-OBS-DRIFT once it lands. Null until then — readers MUST tolerate absence.",
+          "type": ["array", "null"],
+          "items": { "$ref": "#/definitions/DriftAxis" }
+        },
+        "open_loops_produced": {
+          "description": "Ids of OpenLoop entries this branch created. Join key into lifecycle_ext.open_loops.",
+          "type": "array",
+          "items": { "type": "string", "format": "uuid" }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "BranchLineage": {
+      "description": "Per-feature index of known branches — populated incrementally by the COMP-OBS-BRANCH reader.",
+      "type": "object",
+      "required": ["feature_code"],
+      "properties": {
+        "feature_code":         { "type": "string" },
+        "branches":             { "type": "array", "items": { "$ref": "#/definitions/BranchOutcome" }, "description": "All detected branches, running + complete + failed. Compare view filters by state." },
+        "in_progress_siblings": { "type": "array", "items": { "type": "string" }, "description": "branch_ids (sha1 hex, NOT uuid — see BranchOutcome.branch_id) of currently-running siblings. Compare view uses this to render 'X of N branches ready' and disable compare button until at least two are complete." },
+        "emitted_event_ids":    { "type": "array", "items": { "type": "string", "format": "uuid" }, "description": "Ids of DecisionEvents already broadcast for this feature's forks. Persisted to survive restarts; consulted before each broadcast so full rescans don't replay history." },
+        "last_scan_at":         { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+
+    "OpenLoop": {
+      "description": "Structured deferred/blocked/open-question item with mechanical TTL. `open_loops[]` is append-only: a loop is closed by setting `resolution` in-place, never by deletion. Ids are UUID v4 so concurrent writers (BRANCH reader + manual CLI + future automation) cannot collide.",
+      "type": "object",
+      "required": ["id", "kind", "summary", "created_at", "parent_feature"],
+      "properties": {
+        "id":             { "type": "string", "format": "uuid", "description": "UUID v4 generated at creation time. Collision-free across concurrent writers." },
+        "kind":           { "type": "string", "enum": ["deferred", "blocked", "open_question"] },
+        "summary":        { "type": "string", "maxLength": 280 },
+        "created_at":     { "type": "string", "format": "date-time" },
+        "parent_feature": { "type": "string", "description": "feature code that owns this loop" },
+        "parent_branch":  { "type": ["string", "null"], "description": "branch_id if produced by a specific branch" },
+        "resolution": {
+          "description": "Null while open. Set (never replaced with null) when loop closes.",
+          "type": ["object", "null"],
+          "properties": {
+            "resolved_at": { "type": "string", "format": "date-time" },
+            "resolved_by": { "type": "string" },
+            "note":        { "type": "string" }
+          },
+          "required": ["resolved_at", "resolved_by"],
+          "additionalProperties": false
+        },
+        "ttl_days":       { "type": "integer", "default": 90, "description": "Flag for review/archive when (now - created_at) > ttl_days and resolution is null" }
+      },
+      "additionalProperties": false
+    },
+
+    "DriftAxis": {
+      "description": "One mechanical drift ratio. Server-computed, no LLM in v1.",
+      "type": "object",
+      "required": ["axis_id", "numerator", "denominator", "ratio", "computed_at"],
+      "properties": {
+        "axis_id":     { "type": "string", "enum": ["path_drift", "contract_drift", "review_debt_drift"] },
+        "name":        { "type": "string", "description": "Human-readable label" },
+        "numerator":   { "type": "number", "minimum": 0 },
+        "denominator": { "type": "number", "minimum": 0 },
+        "ratio":       { "type": "number", "minimum": 0, "description": "numerator / max(denominator, 1)" },
+        "threshold":   { "type": ["number", "null"], "description": "Warning threshold; null = no alert configured" },
+        "breached":    { "type": "boolean", "default": false },
+        "computed_at": { "type": "string", "format": "date-time" },
+        "explanation": { "type": "string", "description": "One sentence describing what numerator and denominator mean, surfaced on hover in status expansion" },
+        "breach_started_at": { "type": ["string", "null"], "format": "date-time", "description": "ISO timestamp of the rising-edge breach. Set when breached flips false→true; preserved while breached; cleared when breached flips true→false. Used to compose stable DecisionEvent ids on rehydrate." },
+        "breach_event_id": { "type": ["string", "null"], "format": "uuid", "description": "Persisted DecisionEvent id for the rising-edge breach. Equals driftThresholdDecisionEventId(featureCode, axis_id, breach_started_at). Reset to null when breached flips back to false." }
+      },
+      "additionalProperties": false
+    },
+
+    "StatusSnapshot": {
+      "description": "Input to the one-sentence status line. Server rolls this into prose at /lifecycle/status.",
+      "type": "object",
+      "required": ["sentence", "computed_at"],
+      "properties": {
+        "sentence":          { "type": "string", "maxLength": 280, "description": "The single rendered sentence" },
+        "active_goal":       { "type": ["string", "null"] },
+        "active_phase":      { "type": ["string", "null"] },
+        "pending_gates":     { "type": "array", "items": { "type": "string" } },
+        "drift_alerts":      {
+          "type": "array",
+          "description": "Breached axes only — schema enforces `breached: true` so STATUS cannot emit non-alert axes through this field.",
+          "items": {
+            "allOf": [
+              { "$ref": "#/definitions/DriftAxis" },
+              { "type": "object", "properties": { "breached": { "const": true } }, "required": ["breached"] }
+            ]
+          }
+        },
+        "open_loops_count":  { "type": "integer", "minimum": 0 },
+        "gate_load_24h":     { "type": "integer", "minimum": 0 },
+        "cta": {
+          "type": ["object", "null"],
+          "properties": {
+            "label":  { "type": "string" },
+            "action": { "type": "string", "description": "URL or command string" }
+          },
+          "required": ["label", "action"],
+          "additionalProperties": false
+        },
+        "computed_at":       { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+
+    "DecisionEvent": {
+      "description": "One entry on the feature-level decision timeline strip. Coarser than step events. `metadata` shape is constrained per `kind` — emitters must supply the minimum required payload below, consumers may rely on it.",
+      "type": "object",
+      "required": ["id", "feature_code", "timestamp", "kind", "title", "metadata"],
+      "properties": {
+        "id":           { "type": "string", "format": "uuid" },
+        "feature_code": { "type": "string" },
+        "timestamp":    { "type": "string", "format": "date-time" },
+        "kind":         { "type": "string", "enum": ["gate", "branch", "iteration", "phase_transition", "drift_threshold"] },
+        "title":        { "type": "string", "maxLength": 140 },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name":     { "type": "string", "enum": ["IMPLEMENTER", "REVIEWER", "PRODUCER"] },
+              "agent_id": { "type": ["string", "null"] }
+            },
+            "additionalProperties": false
+          }
+        },
+        "linked_runs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["run_id", "status"],
+            "properties": {
+              "run_id":      { "type": "string" },
+              "status":      { "type": "string", "enum": ["running", "complete", "failed", "skipped"] },
+              "duration_ms": { "type": ["integer", "null"] }
+            },
+            "additionalProperties": false
+          }
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Per-kind shape enforced via allOf below. Each kind's subschema is closed (`additionalProperties: false`); extending a kind requires adding the field to the subschema in a schema version bump, not emitting it ad-hoc."
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if":   { "properties": { "kind": { "const": "branch" } } },
+          "then": { "properties": { "metadata": { "type": "object", "required": ["branch_id"], "properties": { "branch_id": { "type": "string" }, "fork_uuid": { "type": ["string", "null"] }, "sibling_branch_ids": { "type": "array", "items": { "type": "string" } } }, "additionalProperties": false } } }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "gate" } } },
+          "then": { "properties": { "metadata": { "type": "object", "required": ["gate_id", "decision", "gate_log_entry_id"], "properties": { "gate_id": { "type": "string" }, "decision": { "type": "string", "enum": ["approve", "deny", "interrupt"] }, "gate_log_entry_id": { "type": "string", "format": "uuid", "description": "MUST match a GateLogEntry.id. The join is mandatory on the DecisionEvent side; GateLogEntry.decision_event_id stays nullable only to cover transient emission-failure (reader reconciles via gate_id + timestamp ±5s)." } }, "additionalProperties": false } } }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "iteration" } } },
+          "then": { "properties": { "metadata": { "type": "object", "required": ["iteration_id"], "properties": { "iteration_id": { "type": "string" }, "attempt": { "type": "integer", "minimum": 1 }, "outcome": { "type": "string", "enum": ["pass", "fail", "retry"] } }, "additionalProperties": false } } }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "phase_transition" } } },
+          "then": { "properties": { "metadata": { "type": "object", "required": ["from_phase", "to_phase"], "properties": { "from_phase": { "type": "string" }, "to_phase": { "type": "string" } }, "additionalProperties": false } } }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "drift_threshold" } } },
+          "then": { "properties": { "metadata": { "type": "object", "required": ["axis_id", "ratio", "threshold"], "properties": { "axis_id": { "type": "string", "enum": ["path_drift", "contract_drift", "review_debt_drift"] }, "ratio": { "type": "number" }, "threshold": { "type": "number" } }, "additionalProperties": false } } }
+        }
+      ]
+    },
+
+    "BuildStreamEvent": {
+      "description": "Typed event streamed from stratum-mcp producers (parallel_dispatch tasks, build orchestration) to consumers (compose cockpit). Discriminated by `kind` with per-kind metadata subschema. STRAT-PAR-STREAM v1 emits the first 3 kinds (agent_started, tool_use_summary, agent_relay) live from Python connectors; the next 3 (iteration_update, tier_result, health_event) are reserved schema-only; the last 6 (capability_*, step_usage, gate_tier_result, health_score, build_end) are imported from compose/lib/build-stream-writer.js with open metadata for catalog completeness — STRAT-PAR-STREAM-LEGACY-CLOSE will trace emit sites and tighten.",
+      "type": "object",
+      "required": ["schema_version", "flow_id", "step_id", "seq", "ts", "kind", "metadata"],
+      "properties": {
+        "schema_version": { "type": "string", "const": "0.2.5" },
+        "flow_id":        { "type": "string" },
+        "step_id":        { "type": "string" },
+        "task_id":        { "type": ["string", "null"], "description": "Present iff event originated inside a parallel_dispatch scope. seq is per-(flow_id, step_id, task_id) when set; per-(flow_id, step_id) when null." },
+        "seq":            { "type": "integer", "minimum": 0, "description": "Monotonic per scope (see task_id)." },
+        "ts":             { "type": "string", "format": "date-time" },
+        "kind":           { "type": "string", "enum": ["agent_started", "tool_use_summary", "agent_relay", "iteration_update", "tier_result", "health_event", "capability_profile", "capability_violation", "step_usage", "gate_tier_result", "health_score", "build_end"] },
+        "metadata":       { "type": "object" },
+        "_status":        { "type": "string", "enum": ["live", "reserved", "legacy_open"], "description": "Documentation tag — not enforced. live: v1 emitter exists. reserved: schema-only, no v1 emitter. legacy_open: imported from BuildStreamWriter, metadata not yet closed." }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if":   { "properties": { "kind": { "const": "agent_started" } } },
+          "then": { "properties": { "metadata": { "type": "object", "required": ["agent", "model"], "properties": { "agent": { "type": "string", "enum": ["claude", "codex"] }, "model": { "type": "string" }, "prompt_chars": { "type": "integer", "minimum": 0 } }, "additionalProperties": false } } }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "tool_use_summary" } } },
+          "then": { "properties": { "metadata": { "type": "object", "required": ["tool", "summary"], "properties": { "tool": { "type": "string" }, "summary": { "type": "string" }, "ok": { "type": "boolean" }, "duration_ms": { "type": "integer", "minimum": 0 } }, "additionalProperties": false } } }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "agent_relay" } } },
+          "then": { "properties": { "metadata": { "type": "object", "required": ["text"], "properties": { "text": { "type": "string" }, "role": { "type": "string", "enum": ["assistant", "system"] } }, "additionalProperties": false } } }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "iteration_update" } } },
+          "then": { "properties": { "metadata": { "type": "object", "required": ["iteration_id", "attempt"], "properties": { "iteration_id": { "type": "string" }, "attempt": { "type": "integer", "minimum": 1 }, "outcome": { "type": "string", "enum": ["pass", "fail", "retry"] } }, "additionalProperties": false } } }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "tier_result" } } },
+          "then": { "properties": { "metadata": { "type": "object", "required": ["gate_id", "tier", "decision"], "properties": { "gate_id": { "type": "string" }, "tier": { "type": "string" }, "score": { "type": "number" }, "decision": { "type": "string", "enum": ["approve", "deny", "interrupt"] } }, "additionalProperties": false } } }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "health_event" } } },
+          "then": { "properties": { "metadata": { "type": "object", "required": ["axis", "kind"], "properties": { "axis": { "type": "string" }, "score": { "type": "number" }, "kind": { "type": "string", "enum": ["score", "breach", "recovery"] } }, "additionalProperties": false } } }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "capability_profile" } } },
+          "then": { "properties": { "metadata": { "type": "object", "additionalProperties": true } } }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "capability_violation" } } },
+          "then": { "properties": { "metadata": { "type": "object", "additionalProperties": true } } }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "step_usage" } } },
+          "then": { "properties": { "metadata": { "type": "object", "additionalProperties": true } } }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "gate_tier_result" } } },
+          "then": { "properties": { "metadata": { "type": "object", "additionalProperties": true } } }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "health_score" } } },
+          "then": { "properties": { "metadata": { "type": "object", "additionalProperties": true } } }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "build_end" } } },
+          "then": { "properties": { "metadata": { "type": "object", "additionalProperties": true } } }
+        }
+      ]
+    },
+
+    "GateLogEntry": {
+      "description": "One gate invocation record. v1 exposed only via `compose gates report` CLI. Every entry SHOULD emit a matching DecisionEvent (kind='gate') whose metadata.gate_log_entry_id equals this entry's id.",
+      "type": "object",
+      "required": ["id", "gate_id", "decision", "timestamp"],
+      "properties": {
+        "id":                    { "type": "string", "format": "uuid" },
+        "gate_id":               { "type": "string" },
+        "decision":              { "type": "string", "enum": ["approve", "deny", "interrupt"] },
+        "operator":              { "type": ["string", "null"] },
+        "duration_to_decide_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "timestamp":             { "type": "string", "format": "date-time" },
+        "feature_code":          { "type": ["string", "null"] },
+        "decision_event_id":     { "type": ["string", "null"], "format": "uuid", "description": "Join key — id of the emitted DecisionEvent. Null ONLY if emission transiently failed; readers MUST reconcile via gate_id + timestamp (±5s window). The reverse edge (`DecisionEvent[kind=gate].metadata.gate_log_entry_id`) is schema-required, so every emitted gate event is trivially re-joinable." }
+      },
+      "additionalProperties": false
+    }
+
+  }
+}

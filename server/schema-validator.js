@@ -5,7 +5,7 @@ import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SCHEMA_PATH = resolve(__dirname, '../../docs/features/COMP-OBS-CONTRACT/schema.json');
+const SCHEMA_PATH = resolve(__dirname, '../contracts/comp-obs-contract.schema.json');
 
 let cached = null;
 
