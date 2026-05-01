@@ -56,15 +56,17 @@ describe('AttemptCounter — per-bug keying (COMP-FIX-HARD T9)', () => {
     assert.equal(c2.getCountForBug('BUG-2'), 1);
   });
 
-  it('legacy migration: flat-shape JSON wraps under __legacy__ key', () => {
+  it('legacy migration: flat-shape JSON folds into __feature_mode__ so global API keeps working', () => {
     const legacy = { count: 3, isVisual: true };
     const c = AttemptCounter.fromJSON(legacy);
-    assert.equal(c.getCountForBug('__legacy__'), 3);
-    // After a save it should serialize under per-bug shape
+    // Folded into __feature_mode__ so the legacy global getters surface it
+    // instead of orphaning the data in an unread __legacy__ slot.
+    assert.equal(c.count, 3);
+    assert.equal(c.isVisual, true);
     const json = c.toJSON();
-    assert.ok(json['__legacy__']);
-    assert.equal(json['__legacy__'].count, 3);
-    assert.equal(json['__legacy__'].isVisual, true);
+    assert.ok(json['__feature_mode__']);
+    assert.equal(json['__feature_mode__'].count, 3);
+    assert.equal(json['__feature_mode__'].isVisual, true);
   });
 
   it('global record() / getIntervention() delegate to __feature_mode__ key', () => {
@@ -133,10 +135,10 @@ describe('FixChainDetector — per-bug keying (COMP-FIX-HARD T9)', () => {
     assert.equal(d2.getIterationForBug('BUG-2'), 1);
   });
 
-  it('legacy migration: flat shape wraps under __legacy__', () => {
+  it('legacy migration: flat shape folds into __feature_mode__ so global API surfaces it', () => {
     const legacy = { iteration: 2, fileHits: { 'src/a.js': 2 } };
     const d = FixChainDetector.fromJSON(legacy);
-    const chains = d.detectForBug('__legacy__');
+    const chains = d.detect();
     assert.equal(chains.length, 1);
     assert.equal(chains[0].file, 'src/a.js');
     assert.equal(chains[0].iterations, 2);

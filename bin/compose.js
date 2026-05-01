@@ -1210,6 +1210,13 @@ if (cmd === 'build') {
       console.error(`No active build to resume for ${bugCode}`)
       process.exit(1)
     }
+    // Refuse to resume a feature build as a bug build. Mode is best-effort:
+    // legacy active-build.json files that predate the mode field have no
+    // active.mode, in which case we trust the runBuild-side mode check.
+    if (active.mode && active.mode !== 'bug') {
+      console.error(`Cannot --resume: active build for ${bugCode} is in ${active.mode} mode, not bug mode.`)
+      process.exit(1)
+    }
     resumeFlowId = active.flowId
   }
 
