@@ -2,6 +2,26 @@
 
 ## 2026-05-01
 
+### COMP-PLAN-SECTIONS — Per-section plan files with "What Was Built" trailers
+
+When a feature plan's task count exceeds `COMPOSE_PLAN_SECTIONS_THRESHOLD` (default 5, env-tunable, clamped to ≥1), Compose now emits per-task `docs/features/<code>/sections/section-NN-<slug>.md` files alongside the consolidated `plan.md` after the plan gate is approved. After the feature-final ship step records a commit, an append-only "What Was Built" trailer is written to each section file with `git diff --stat` filtered to that section's declared files (declared-but-unchanged files surfaced as deviations). Re-runs append `iteration N` blocks. v1 ships sections + trailers only; the Phase 8 report-path roll-up and "changed-but-undeclared" attribution are deferred to follow-up `COMP-PLAN-SECTIONS-REPORT`.
+
+**Added:**
+- `lib/sections.js` — `SECTIONS_DIR` consumer; `slugify`, `parseTaskBlocks`, `extractSectionFiles`, `shouldEmitSections`, `emitSections` (idempotent — never overwrites existing section files), `appendTrailers` (append-only, max-N iteration counting via regex over existing trailers), `computeFilteredDiffStat` (per-section filtered `git diff --stat` via `execFileSync` argv — shell-injection safe).
+- `lib/build.js` — `maybeEmitSectionsAfterPlanGate(stepId, featureDir, opts)` helper invoked from all three plan-gate approve branches (`policy.mode === 'skip'`, `'flag'`, and human gate with `outcome === 'approve'`). Post-ship trailer-append wrapped in try/catch — trailer failure emits a `build_error` stream event but never fails the ship. `executeShipStep` returns additive `commit` and `filesChanged` fields, each best-effort (failure leaves field empty, ship outcome stays `'complete'`); now exported for testing.
+- `lib/constants.js` — `SECTIONS_DIR = 'sections'` (separate top-level export, not a `GATE_ARTIFACTS` entry); `getSectionsThreshold()` reads `COMPOSE_PLAN_SECTIONS_THRESHOLD` (unparseable → 5; finite → `Math.max(1, raw)`).
+- `test/sections-constants.test.js`, `test/sections.test.js`, `test/build-ship-fields.test.js`, `test/integration/build-sections.test.js` — 45 new tests covering threshold gating, idempotent emission, append-only trailers, max-N iteration counting, three-branch wiring, best-effort metadata, and a shell-injection regression (`$(echo PWN).txt` declared file).
+
+**Hardened:**
+- `executeShipStep` `git add` and `git commit` calls switched from `execSync(shellString)` to `execFileSync('git', argv)` to close a latent shell-injection class on user-controlled inputs (filenames, feature description). Pre-existing risk in the same workflow we touched.
+
+**Knobs:**
+- `COMPOSE_PLAN_SECTIONS_THRESHOLD` — int; default 5; clamp ≥1. Set to a high value to disable section emission; set to 1 to emit sections for every multi-task plan.
+
+**Test results:** 2102 unit / 92 UI / 39 integration passed (2 pre-existing `STRAT-DEDUP-AGENTRUN-V3` integration failures unrelated to this feature).
+
+Design: `docs/features/COMP-PLAN-SECTIONS/design.md` · Blueprint: `docs/features/COMP-PLAN-SECTIONS/blueprint.md` · Plan: `docs/features/COMP-PLAN-SECTIONS/plan.md` · Report: `docs/features/COMP-PLAN-SECTIONS/report.md`.
+
 ### COMP-FIX-HARD — Hard-bug machinery on the bug-fix pipeline
 
 The 8-step `bug-fix.stratum.yaml` pipeline (shipped as part of COMP-FIX) handled easy and medium bugs but failed silently on hard ones: retries re-proposed disproven hypotheses, `test` exhaustion vanished into the failed-build handler with no recovery state, regression bugs got no `git bisect` help, fix-chain detection was session-scoped, and escalation flagged-but-didn't-act. COMP-FIX-HARD adds the persistent state, structured second opinions, and fresh-context retry path needed for genuinely hard bugs — without slowing the easy cases.

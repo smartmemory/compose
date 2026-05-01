@@ -294,3 +294,21 @@
 2026-05-01T13:11:59+08:00 | COMP-DEPS-PACKAGE blueprint pass
 2026-05-01T13:33:18+08:00 | COMP-DEPS-PACKAGE plan + execute pass
 2026-05-01T13:35:32+08:00 | COMP-DEPS-PACKAGE T1 — write manifest JSON
+2026-05-01T13:50:11+08:00 | T3: bug-index-gen.js + tests for COMP-FIX-HARD
+2026-05-01T13:50:11+08:00 | T3: bug-index-gen.js + tests for COMP-FIX-HARD
+2026-05-01T13:50:15+08:00 | T2 COMP-FIX-HARD: bug-checkpoint.js + test (TDD)
+intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
+2026-05-01T13:54:55+08:00
+2026-05-01T14:01:53+08:00 | T5: implement Compose-side retry-cap enforcement and bug-mode checkpoint emit
+2026-05-01T14:02:31+08:00 | T6: hypothesis ledger context in buildRetryPrompt + recordDiagnoseSuccessIfBugMode helper
+2026-05-01T14:02:59+08:00 | T8: add --resume flag to compose fix and runBuild
+2026-05-01T14:03:44+08:00 | T9: per-bug AttemptCounter and FixChainDetector keying
+2026-05-01T14:15:04+08:00 | T7: implement bisect step + lib/bug-bisect.js with TDD
+2026-05-01T14:15:50+08:00 | T10 implement bug-escalation tier1+tier2 with TDD
+2026-05-01T14:23:33+08:00 | T11 integration test for COMP-FIX-HARD bug-fix pipeline
+2026-05-01T14:25:52+08:00 | T11 — write bug-fix-pipeline integration test
+2026-05-01T15:44:18+08:00 | Phase 7 step 4 coverage sweep for COMP-FIX-HARD
+2026-05-01T19:13:40+08:00 | COMP-PLAN-SECTIONS blueprint
+2026-05-01T19:36:29+08:00 | COMP-PLAN-SECTIONS execute
+2026-05-01T19:37:25+08:00 | Implementing COMP-PLAN-SECTIONS T1-T8: per-section plan files + What Was Built trailers
+2026-05-01T19:48:02+08:00 | Applying Codex review fixes M1 + S1-S5 to COMP-PLAN-SECTIONS
