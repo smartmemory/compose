@@ -312,3 +312,6 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-01T19:36:29+08:00 | COMP-PLAN-SECTIONS execute
 2026-05-01T19:37:25+08:00 | Implementing COMP-PLAN-SECTIONS T1-T8: per-section plan files + What Was Built trailers
 2026-05-01T19:48:02+08:00 | Applying Codex review fixes M1 + S1-S5 to COMP-PLAN-SECTIONS
+2026-05-02T13:38:22+08:00 | extracting compose README into docs/ subpages and slimming attractor
+2026-05-02T13:38:22+08:00 | extracting compose README into docs/ subpages and slimming attractor
+2026-05-02T13:50:48+08:00 | COMP-PLAN-SECTIONS-REPORT design

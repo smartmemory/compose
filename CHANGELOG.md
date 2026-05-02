@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-05-02
+
+### COMP-DOCS-SLIM — Slim README into attractor + 9 topic subpages
+
+Reshaped `compose/README.md` from 1025 lines to a 75-line technical attractor (what-it-is paragraph, three-bullet pitch, 30-second example, quick install, documentation index). Detailed content moved verbatim into nine new topic-scoped subpages under `compose/docs/`: `install.md`, `cli.md`, `cockpit.md`, `pipelines.md`, `agents.md`, `lifecycle.md`, `configuration.md`, `mcp.md`, `examples.md`. Pure docs refactor — no code change. Pre-existing factual drift (missing CLI verbs, stale MCP tool list, retry counts, IR field name) deliberately preserved during the move and filed for follow-up as `COMP-DOCS-FACTS`.
+
+**Added:**
+- `compose/docs/{install,cli,cockpit,pipelines,agents,lifecycle,configuration,mcp,examples}.md` — topic-scoped reference pages; absorb every former README H2 section.
+
+**Changed:**
+- `compose/README.md` — rewritten as 75-line attractor with 5 blocks plus documentation index linking to all 9 new subpages and the existing top-level docs (PRD, ROADMAP, taxonomy, PRODUCT-SPEC, compose-one-pager).
+
+**Snapshot:**
+- `docs/features/COMP-DOCS-SLIM/README.original.md` — original 1025-line README preserved for diff/audit.
+
 ## 2026-05-01
 
 ### COMP-PLAN-SECTIONS — Per-section plan files with "What Was Built" trailers
