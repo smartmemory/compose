@@ -145,7 +145,7 @@ Fix these issues and try again.
 
 ### Retry Limits
 
-Each step has a `retries` count (set in the pipeline spec). The review sub-flow defaults to 10 retries; coverage defaults to 15. When retries are exhausted, `on_fail` routing kicks in (if configured), or the step fails.
+Each step has a `retries` count (set in the pipeline spec). The `review_check` sub-flow defaults to 5 retries; coverage defaults to 15. When retries are exhausted, `on_fail` routing kicks in (if configured), or the step fails.
 
 ### on_fail Routing
 

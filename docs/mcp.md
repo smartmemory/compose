@@ -19,7 +19,8 @@ Compose exposes project state as MCP tools via `server/compose-mcp.js` (stdio tr
 | `scaffold_feature` | Create feature folder with template stubs |
 | `approve_gate` | Resolve a pending gate (approved/revised/killed) |
 | `get_pending_gates` | List pending gates |
-| `agent_run` | Run a prompt against an AI agent (claude or codex) with optional JSON schema |
 | `start_iteration_loop` | Start an iteration loop on a feature |
-| `report_iteration_result` | Report iteration outcome (clean/dirty/max_reached) |
+| `report_iteration_result` | Report an iteration's result; the server decides whether to continue. Terminal outcomes are `clean`, `max_reached`, `action_limit`, or `timeout`; while the loop is still running, `outcome` is `null`. |
 | `abort_iteration_loop` | Abort an active iteration loop |
+
+> **Note:** an `agent_run` tool used to live here for LLM-facing dispatch. It was removed on 2026-04-18 (`STRAT-DEDUP-AGENTRUN`); use `mcp__stratum__stratum_agent_run` instead.

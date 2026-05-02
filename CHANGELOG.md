@@ -2,6 +2,18 @@
 
 ## 2026-05-02
 
+### COMP-DOCS-FACTS — Reconcile compose docs with current code
+
+Three rounds of Codex review against `bin/compose.js`, `server/compose-mcp.js`, and the shipped pipeline specs corrected pre-existing factual drift surfaced during the COMP-DOCS-SLIM review. No code changes; one finding (missing `pipelines/new.stratum.yaml`) is a packaging gap filed separately as `COMP-NEW-PIPELINE-MISSING`.
+
+**Changed:**
+- `docs/cli.md` — expanded from 9 to all 17 CLI verbs (added `roadmap`, `install`, `fix`, `triage`, `ideabox`, `qa-scope`, `gates`, `loops`); corrected `compose build` flag set (`--all`, `--dry-run` is batch-only, `--skip-triage`, `--cwd`, `--team`, `--template`, multi-code, prefix); fixed `compose import` consumer claim (only `compose new`); fixed `compose ideabox add` flag name (`--desc`); corrected `ideabox promote` and `ideabox list` descriptions; added `bisect` step to `compose fix` pipeline.
+- `docs/pipelines.md` — replaced "5 specs" inventory with shipped 7 plus the absent-but-expected `new.stratum.yaml`; fixed Stratum IR field name (`version: "0.3"`, not `ir_version`); corrected `review`/`codex_review` retry documentation (outer steps use defaults; inner `review_check` is 5); expanded `ReviewResult` to canonical shape (`meta`, `lenses_run`, `auto_fixes`, `asks`); added `bisect` step to bug-fix lifecycle row.
+- `docs/mcp.md` — removed `agent_run` row (tool removed 2026-04-18 per `STRAT-DEDUP-AGENTRUN`) and added a deprecation note pointing to `mcp__stratum__stratum_agent_run`; corrected `report_iteration_result` outcome enum to runtime values (`clean`, `max_reached`, `action_limit`, `timeout`, `null` while running).
+- `docs/lifecycle.md` — corrected `review_check` retry default from 10 to 5.
+
+## 2026-05-02
+
 ### COMP-DOCS-SLIM — Slim README into attractor + 9 topic subpages
 
 Reshaped `compose/README.md` from 1025 lines to a 75-line technical attractor (what-it-is paragraph, three-bullet pitch, 30-second example, quick install, documentation index). Detailed content moved verbatim into nine new topic-scoped subpages under `compose/docs/`: `install.md`, `cli.md`, `cockpit.md`, `pipelines.md`, `agents.md`, `lifecycle.md`, `configuration.md`, `mcp.md`, `examples.md`. Pure docs refactor — no code change. Pre-existing factual drift (missing CLI verbs, stale MCP tool list, retry counts, IR field name) deliberately preserved during the move and filed for follow-up as `COMP-DOCS-FACTS`.

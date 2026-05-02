@@ -6,6 +6,8 @@ The Kickoff and Build pipelines, plus pipeline spec format and Stratum IR v0.3 r
 
 Defined in `pipelines/new.stratum.yaml`. Orchestrates product creation from intent to scaffolded feature folders.
 
+> **Note:** `pipelines/new.stratum.yaml` is currently absent from the shipped package, even though `compose new` and `compose init` reference it. Tracked as `COMP-NEW-PIPELINE-MISSING` in `ROADMAP.md`.
+
 ### Steps
 
 | # | Step | Agent | What It Does |
@@ -46,8 +48,8 @@ Defined in `pipelines/build.stratum.yaml`. Executes a feature through the full d
 | 8 | `plan_gate` | human | Approve plan, revise (loop to plan), or kill |
 | 9 | `decompose` | claude | Decompose plan into independent subtasks with `files_owned`/`files_read` |
 | 10 | `execute` | claude | Parallel dispatch: TDD implementation in isolated git worktrees per subtask |
-| 11 | `review` | claude (sub-flow) | Parallel multi-lens review: triage → 2-4 specialized lenses → merge/dedup. Retries: 5 |
-| 12 | `codex_review` | codex (sub-flow) | Independent cross-model review after Claude lenses + fixes. Retries: 3 |
+| 11 | `review` | claude (sub-flow) | Parallel multi-lens review: triage → 2-4 specialized lenses → merge/dedup. Outer step uses default retries; inner sub-flow steps set their own. |
+| 12 | `codex_review` | codex (sub-flow) | Independent cross-model review after Claude lenses + fixes. Outer step uses default retries; inner `review_check` step has retries: 5. |
 | 13 | `coverage` | claude (sub-flow) | Run tests, fix failures, re-run. Retries: 15 |
 | 14 | `report` | claude | Post-implementation report. **Skipped by default** |
 | 15 | `docs` | claude | Update CHANGELOG, ROADMAP, README, CLAUDE.md, and public docs |
@@ -61,14 +63,14 @@ Defined in `pipelines/build.stratum.yaml`. Executes a feature through the full d
 2. **review_lenses** (parallel_dispatch, isolation: none) — fans out 2-4 lens agents concurrently. Each lens returns `LensFinding[]` with severity, file, line, confidence. Confidence gates and false-positive exclusion lists reduce noise.
 3. **merge** (claude) — deduplicates findings by file+issue, assigns severity (must-fix/should-fix/nit), classifies as auto-fix vs ask.
 
-**`review_check`** (fallback): Single-step codex review. Returns `{ clean, summary, findings }`. Retries until `clean == true` (max 5). Cross-agent fix: claude fixes, codex re-reviews. Used by `codex_review` step.
+**`review_check`** (fallback): Single-step codex review. Returns the full `ReviewResult` contract (`{ clean, summary, findings, meta, lenses_run, auto_fixes, asks }`). Retries until `clean == true` (max 5). Cross-agent fix: claude fixes, codex re-reviews. Used by `codex_review` step.
 
 **`coverage_check`**: Single-step test runner. Returns `{ passing, summary, failures }`. Retries until `passing == true` (max 15). Fix pass dispatched on failure.
 
 ### Contracts
 
 - `PhaseResult`: `{ phase, artifact, outcome, summary }` — `outcome` is one of `complete`, `skipped`, `failed`
-- `ReviewResult`: `{ clean, summary, findings }`
+- `ReviewResult`: `{ clean, summary, findings, meta, lenses_run, auto_fixes, asks }` — canonical shape produced by both `review_check` (Codex) and `parallel_review` (Claude); schema source: `compose/contracts/review-result.json`
 - `TestResult`: `{ passing, summary, failures }`
 - `LensFinding`: `{ lens, file, line, severity, finding, confidence }` — per-finding from a review lens
 - `LensTask`: `{ id, lens_name, lens_focus, confidence_gate, exclusions }` — triage output for lens dispatch
@@ -83,19 +85,22 @@ The `verification` step has `on_fail: blueprint` — when retries are exhausted 
 
 ## Pipeline Specs
 
-Compose ships with five pipeline specs in `pipelines/`:
+Compose ships seven pipeline specs in `pipelines/` (plus one expected-but-currently-absent kickoff spec):
 
 | Spec | Flow | Purpose |
 |------|------|---------|
-| `new.stratum.yaml` | `new` | Product kickoff: research, brainstorm, roadmap, scaffold |
 | `build.stratum.yaml` | `build` | Feature lifecycle: design through ship |
-| `review-fix.stratum.yaml` | `review_fix` | Two-phase loop: implement then review/fix until clean |
+| `bug-fix.stratum.yaml` | `bug_fix` | Bug-fix lifecycle (`compose fix`): reproduce → diagnose → bisect → scope_check → fix → test → verify → retro_check → ship |
+| `content.stratum.yaml` | `content` | Content production pipeline |
 | `coverage-sweep.stratum.yaml` | `coverage_sweep` | Test loop: run tests, fix failures until passing |
-| `compose_feature.stratum.yaml` | `compose_feature` | Legacy function-based lifecycle spec |
+| `refactor.stratum.yaml` | `refactor` | Refactor lifecycle |
+| `research.stratum.yaml` | `research` | Standalone research pipeline |
+| `review-fix.stratum.yaml` | `review_fix` | Two-phase loop: implement then review/fix until clean |
+| `new.stratum.yaml` | `new` | Product kickoff (research, brainstorm, roadmap, scaffold). **Currently absent from the shipped package** — see `COMP-NEW-PIPELINE-MISSING`. |
 
 ### Stratum IR v0.3
 
-Specs use Stratum IR v0.3 format (backward-compatible superset of v0.2). All existing v0.2 specs run unchanged. Specs that use v0.3 features declare `ir_version: "0.3"` at the top level.
+Specs use Stratum IR v0.3 format (backward-compatible superset of v0.2). All existing v0.2 specs run unchanged. Specs that use v0.3 features declare `version: "0.3"` at the top level.
 
 **v0.2 primitives (all retained):**
 - **contracts**: Output shape definitions with typed fields
