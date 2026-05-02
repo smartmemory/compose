@@ -2,6 +2,30 @@
 
 ## 2026-05-02
 
+### COMP-MCP-ARTIFACT-LINKER — typed MCP linker for artifacts + cross-feature relationships
+
+Sub-ticket #2 of `COMP-MCP-FEATURE-MGMT`. Two writer + two reader MCP tools that make non-canonical artifacts (snapshots, journals, findings) and typed cross-feature links first-class and queryable. Reuses the framework established by `COMP-MCP-ROADMAP-WRITER` (idempotency keys, best-effort audit log, no HTTP delegation).
+
+**New tools:**
+- `link_artifact` — register a non-canonical artifact on a feature. Canonical artifacts (`design.md`/`prd.md`/etc. inside the feature folder) are auto-discovered and rejected here. Storage: additive `artifacts[]` field on `feature.json`. Dedups on `(type, path)`; `force: true` overrides.
+- `link_features` — register a typed cross-feature relationship. Closed enum on `kind`: `surfaced_by`, `blocks`, `depends_on`, `follow_up`, `supersedes`, `related`. Self-links rejected. Target code need not exist (supports forward-references). Storage: additive `links[]` field on `feature.json`, source-only. Dedups on `(kind, to_code)`.
+- `get_feature_artifacts` — read both canonical (via `ArtifactManager.assess`) and linked artifacts for a feature in one call. Each linked entry carries a current existence stamp.
+- `get_feature_links` — read outgoing, incoming, or both directions; optional `kind` filter. Inverse query iterates `listFeatures` and filters.
+
+**Path hardening on `link_artifact`:** must be repo-relative (no leading `/` or `~`); must not contain `..` after normalization; must resolve under `cwd`; symlink targets must also live under `cwd`; must point at an existing file (not directory). Mirrors `server/artifact-manager.js`.
+
+**No bidirectional auto-mirroring** — a link from A → B lives on A only. Inverse queries via `direction: 'incoming'`. Intentional choice to avoid double-writes and reconciliation surface.
+
+**Added:**
+- `lib/feature-writer.js` — extended with `linkArtifact`, `linkFeatures`, `getFeatureArtifacts`, `getFeatureLinks`. `validateRepoPath` helper enforces the path-hardening rules.
+- `server/compose-mcp.js`, `server/compose-mcp-tools.js` — four new tools registered.
+- `test/feature-linker.test.js` (24 tests, unit), `test/feature-linker-mcp.test.js` (3 tests, end-to-end via spawned MCP child). Includes a self-skipping symlink-escape regression test.
+
+**Changed:**
+- `docs/mcp.md` — four new tool rows + an "Artifact + feature links" section documenting storage, path validation, link kinds, dedup semantics, and the no-mirroring choice.
+
+Codex review three iterations to clean. Findings caught: `get_feature_artifacts` initially missing the canonical assessment per design (now returns both); `link_artifact` accepting directories; `getFeatureLinks` silently returning empty on bad `direction`; `link_artifact` accepting symlinks pointing outside the repo (fixed via `realpathSync` post-existence check, mirroring `server/artifact-manager.js`). Full suite 2099/2099 green after this ticket lands alongside the same-day COMP-PLAN-SECTIONS-REPORT.
+
 ### COMP-PLAN-SECTIONS-REPORT — Section roll-up in `report.md`
 
 Closes the deferred Phase 8 roll-up acceptance criterion from COMP-PLAN-SECTIONS v1. After the post-ship trailer hook runs, compose now writes a mechanical, agent-free `## Section Roll-up` block to `<featureDir>/report.md`: section index with per-section change counts, "Unattributed files this commit" list (files in the ship commit not declared by any section), and a deviations summary. The roll-up regenerates in place on each ship; narrative content above the heading is preserved. The `build_sections_trailed` stream event payload gains an `unattributed: string[]` field. Failure isolation: roll-up write failure emits a separate `build_error` and never suppresses the trailer-success event.

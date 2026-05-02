@@ -216,6 +216,26 @@ export async function toolRoadmapDiff(args) {
   return roadmapDiff(getTargetRoot(), args);
 }
 
+export async function toolLinkArtifact(args) {
+  const { linkArtifact } = await import('../lib/feature-writer.js');
+  return linkArtifact(getTargetRoot(), args);
+}
+
+export async function toolLinkFeatures(args) {
+  const { linkFeatures } = await import('../lib/feature-writer.js');
+  return linkFeatures(getTargetRoot(), args);
+}
+
+export async function toolGetFeatureArtifacts(args) {
+  const { getFeatureArtifacts } = await import('../lib/feature-writer.js');
+  return getFeatureArtifacts(getTargetRoot(), args);
+}
+
+export async function toolGetFeatureLinks(args) {
+  const { getFeatureLinks } = await import('../lib/feature-writer.js');
+  return getFeatureLinks(getTargetRoot(), args);
+}
+
 export async function toolBindSession({ featureCode }) {
   const postData = JSON.stringify({ featureCode });
   return new Promise((resolve, reject) => {

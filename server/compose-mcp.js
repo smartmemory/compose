@@ -46,6 +46,10 @@ import {
   toolAddRoadmapEntry,
   toolSetFeatureStatus,
   toolRoadmapDiff,
+  toolLinkArtifact,
+  toolLinkFeatures,
+  toolGetFeatureArtifacts,
+  toolGetFeatureLinks,
 } from './compose-mcp-tools.js';
 
 // ---------------------------------------------------------------------------
@@ -312,6 +316,66 @@ const TOOLS = [
       },
     },
   },
+
+  // -------------------------------------------------------------------------
+  // Linker — COMP-MCP-ARTIFACT-LINKER
+  // -------------------------------------------------------------------------
+  {
+    name: 'link_artifact',
+    description: 'Register a non-canonical artifact (snapshot, journal entry, finding, etc.) on a feature. Canonical artifacts (design.md, plan.md, …) inside the feature folder are auto-discovered and rejected here. Stores in feature.json artifacts[]; dedups on (type, path); appends an audit event (best-effort).',
+    inputSchema: {
+      type: 'object',
+      required: ['feature_code', 'artifact_type', 'path'],
+      properties: {
+        feature_code: { type: 'string' },
+        artifact_type: { type: 'string', description: 'e.g. "journal", "snapshot", "finding", "report-supplement", "link", "external"' },
+        path: { type: 'string', description: 'Repo-relative path. Must exist; cannot contain ".." after normalization.' },
+        status: { type: 'string', enum: ['current', 'superseded', 'historical'] },
+        force: { type: 'boolean', description: 'Overwrite an existing entry with the same (type, path)' },
+        idempotency_key: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'link_features',
+    description: 'Register a typed cross-feature relationship. Stores on the source feature; query the inverse via get_feature_links(direction:"incoming"). Closed enum on kind; self-links rejected; dedups on (kind, to_code).',
+    inputSchema: {
+      type: 'object',
+      required: ['from_code', 'to_code', 'kind'],
+      properties: {
+        from_code: { type: 'string' },
+        to_code: { type: 'string', description: 'Target feature code. Need not exist yet (you can link to a code you are about to create).' },
+        kind: { type: 'string', enum: ['surfaced_by', 'blocks', 'depends_on', 'follow_up', 'supersedes', 'related'] },
+        note: { type: 'string' },
+        force: { type: 'boolean' },
+        idempotency_key: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'get_feature_artifacts',
+    description: 'Read both canonical (auto-discovered: design.md, plan.md, …) and linked (snapshots, journals, findings) artifacts for a feature in one call. Each linked entry includes a current existence check.',
+    inputSchema: {
+      type: 'object',
+      required: ['feature_code'],
+      properties: {
+        feature_code: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'get_feature_links',
+    description: 'Read outgoing and/or incoming feature links. Default returns both directions; filter by kind if needed.',
+    inputSchema: {
+      type: 'object',
+      required: ['feature_code'],
+      properties: {
+        feature_code: { type: 'string' },
+        direction: { type: 'string', enum: ['outgoing', 'incoming', 'both'] },
+        kind: { type: 'string' },
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -352,6 +416,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'add_roadmap_entry':        result = await toolAddRoadmapEntry(args); break;
       case 'set_feature_status':       result = await toolSetFeatureStatus(args); break;
       case 'roadmap_diff':             result = await toolRoadmapDiff(args); break;
+      case 'link_artifact':            result = await toolLinkArtifact(args); break;
+      case 'link_features':            result = await toolLinkFeatures(args); break;
+      case 'get_feature_artifacts':    result = await toolGetFeatureArtifacts(args); break;
+      case 'get_feature_links':        result = await toolGetFeatureLinks(args); break;
       // agent_run removed — STRAT-DEDUP-AGENTRUN v1. Use mcp__stratum__stratum_agent_run.
       default:
         return {
