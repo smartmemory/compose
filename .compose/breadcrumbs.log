@@ -316,3 +316,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-02T13:38:22+08:00 | extracting compose README into docs/ subpages and slimming attractor
 2026-05-02T13:50:48+08:00 | COMP-PLAN-SECTIONS-REPORT design
 2026-05-02T13:57:26+08:00 | fixing pre-existing factual drift in compose docs (COMP-DOCS-FACTS)
+2026-05-02T14:16:01+08:00 | restoring pipelines/new.stratum.yaml deleted in e597e89 (COMP-NEW-PIPELINE-MISSING)

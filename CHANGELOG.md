@@ -2,6 +2,24 @@
 
 ## 2026-05-02
 
+### COMP-NEW-PIPELINE-MISSING — Restore kickoff pipeline + fix two latent bugs
+
+`pipelines/new.stratum.yaml` was deleted on 2026-03-16 in commit `e597e89` (the COMP-UX-1 cockpit batch — apparently unintentionally) and never restored. `bin/compose.js` and `lib/new.js` still required it; `compose new` would error out with "Kickoff spec not found" against any project that didn't already have a copy. `compose init`'s silent existence check on the package source kept the failure invisible during setup.
+
+Restored verbatim from `e597e89^` (`git checkout e597e89^ -- pipelines/new.stratum.yaml`), then validated post-`validate`-strip against current Stratum (`stratum_validate` returned valid; `stratum_plan` resolved all 6 steps). Codex review of the restored file surfaced two pre-existing bugs that would still break `compose new --auto`; fixed inline:
+
+**Fixed:**
+- `pipelines/new.stratum.yaml` — restored from git history.
+- **brainstorm step**: rewrote the intent so `compose new` works whether or not research ran. The questionnaire can disable research (`bin/compose.js:573`); when skipped, `$.steps.research.output.summary` is `null` and `docs/discovery/research.md` doesn't exist. The intent now reads "If `docs/discovery/research.md` exists, read it first for prior-art context. Otherwise proceed from the product intent alone — research is an optional input."
+- **scaffold step**: replaced a misaimed `validate` block (it pointed at `ROADMAP.md` but the criterion was about feature folders, which the artifact-only validator can't enumerate) with `ensure: - "len(result.created) > 0"` against the `ScaffoldResult.created` array. The step now actually fails its postcondition if scaffold reports zero files created.
+
+**Doc updates:**
+- `docs/cli.md` — dropped the "currently absent" note from `compose new`.
+- `docs/pipelines.md` — dropped both "absent from the shipped package" notes (kickoff section + Pipeline Specs table).
+
+**Filed for follow-up:**
+- `COMP-NEW-QUESTIONNAIRE-MISMATCH` — the questionnaire's "Skip review" / "Codex review" options call `pipelineSet`/`pipelineDisable`, but those helpers only mutate `build.stratum.yaml`. They've been silently no-op'ing for kickoff. Code bug in `bin/compose.js`, not the pipeline file.
+
 ### COMP-DOCS-FACTS — Reconcile compose docs with current code
 
 Three rounds of Codex review against `bin/compose.js`, `server/compose-mcp.js`, and the shipped pipeline specs corrected pre-existing factual drift surfaced during the COMP-DOCS-SLIM review. No code changes; one finding (missing `pipelines/new.stratum.yaml`) is a packaging gap filed separately as `COMP-NEW-PIPELINE-MISSING`.

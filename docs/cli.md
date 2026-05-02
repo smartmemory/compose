@@ -31,7 +31,7 @@ compose new "..." --from-idea IDEA-42
 - `--ask` — re-run the questionnaire (uses previous answers as defaults)
 - `--from-idea <ID>` — pre-populate intent from a promoted ideabox entry
 
-Auto-initializes the project if `.compose/` doesn't exist. Reads existing context from `README.md`, `package.json`, `pyproject.toml`, `Cargo.toml`, and any prior `project-analysis.md` from `compose import`. Loads `pipelines/new.stratum.yaml` (currently absent — see `COMP-NEW-PIPELINE-MISSING`).
+Auto-initializes the project if `.compose/` doesn't exist. Reads existing context from `README.md`, `package.json`, `pyproject.toml`, `Cargo.toml`, and any prior `project-analysis.md` from `compose import`. Loads `pipelines/new.stratum.yaml` as the kickoff spec.
 
 ### `compose import`
 

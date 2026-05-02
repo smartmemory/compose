@@ -6,8 +6,6 @@ The Kickoff and Build pipelines, plus pipeline spec format and Stratum IR v0.3 r
 
 Defined in `pipelines/new.stratum.yaml`. Orchestrates product creation from intent to scaffolded feature folders.
 
-> **Note:** `pipelines/new.stratum.yaml` is currently absent from the shipped package, even though `compose new` and `compose init` reference it. Tracked as `COMP-NEW-PIPELINE-MISSING` in `ROADMAP.md`.
-
 ### Steps
 
 | # | Step | Agent | What It Does |
@@ -96,7 +94,7 @@ Compose ships seven pipeline specs in `pipelines/` (plus one expected-but-curren
 | `refactor.stratum.yaml` | `refactor` | Refactor lifecycle |
 | `research.stratum.yaml` | `research` | Standalone research pipeline |
 | `review-fix.stratum.yaml` | `review_fix` | Two-phase loop: implement then review/fix until clean |
-| `new.stratum.yaml` | `new` | Product kickoff (research, brainstorm, roadmap, scaffold). **Currently absent from the shipped package** — see `COMP-NEW-PIPELINE-MISSING`. |
+| `new.stratum.yaml` | `new` | Product kickoff: research, brainstorm, roadmap, scaffold (`compose new`) |
 
 ### Stratum IR v0.3
 
