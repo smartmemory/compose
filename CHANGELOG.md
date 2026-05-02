@@ -2,6 +2,22 @@
 
 ## 2026-05-02
 
+### COMP-PLAN-SECTIONS-REPORT — Section roll-up in `report.md`
+
+Closes the deferred Phase 8 roll-up acceptance criterion from COMP-PLAN-SECTIONS v1. After the post-ship trailer hook runs, compose now writes a mechanical, agent-free `## Section Roll-up` block to `<featureDir>/report.md`: section index with per-section change counts, "Unattributed files this commit" list (files in the ship commit not declared by any section), and a deviations summary. The roll-up regenerates in place on each ship; narrative content above the heading is preserved. The `build_sections_trailed` stream event payload gains an `unattributed: string[]` field. Failure isolation: roll-up write failure emits a separate `build_error` and never suppresses the trailer-success event.
+
+**Added:**
+- `lib/sections.js` — three new exports: `analyzeRollup({ sectionsDir, filesChanged })` (read-only analyzer; null when sections/ absent), `renderRollupBlock({ analysis, commit, date })` (pure renderer, no I/O), `writeRollup({ featureDir, analysis, commit, date })` (atomic same-directory temp+rename writer with cleanup-on-failure).
+- `lib/build.js` — post-ship hook reordered: `appendTrailers` → `analyzeRollup` (shared try with trailer event) → emit `build_sections_trailed` with `unattributed` → `writeRollup` in own nested try/catch (failure emits `build_error` with `'sections rollup write failed:'` prefix, never suppresses trailer event nor downgrades ship).
+- `test/sections-rollup.test.js` — 21 unit tests covering analyzer null/partition logic + H1 fallback, renderer format/short-SHA/date defaulting/None-list rendering, writer no-op/create/append/replace-in-place/atomic-tmp-cleanup.
+- 5 new integration tests in `test/integration/build-sections.test.js` covering ship→roll-up, re-ship regenerated in place, unattributed flow to both report and stream, failure isolation via `renameSync` stub, and a static-source guard on hook wiring.
+
+**Knobs:** none.
+
+**Test results:** 2182 unit / 92 UI / 44 integration passed (2 pre-existing `STRAT-DEDUP-AGENTRUN-V3` integration failures unrelated to this feature).
+
+Design: `docs/features/COMP-PLAN-SECTIONS-REPORT/design.md` · Blueprint: `docs/features/COMP-PLAN-SECTIONS-REPORT/blueprint.md` · Plan: `docs/features/COMP-PLAN-SECTIONS-REPORT/plan.md` · Report: `docs/features/COMP-PLAN-SECTIONS-REPORT/report.md`.
+
 ### COMP-MCP-ROADMAP-WRITER — typed MCP writers for roadmap mutations
 
 First sub-ticket of `COMP-MCP-FEATURE-MGMT`. Three new MCP tools — `add_roadmap_entry`, `set_feature_status`, `roadmap_diff` — route every roadmap mutation through a typed surface so feature.json + ROADMAP.md stay consistent and every change leaves an audit trail. The writers run as pure file IO inside `lib/`; no HTTP delegation (sidesteps the architectural-review layering finding). Idempotency keys protect against retries; mutations append to `.compose/data/feature-events.jsonl`. Lifecycle transition policy enforced (PLANNED → IN_PROGRESS → COMPLETE etc.; COMPLETE → SUPERSEDED requires `force: true`). Audit-log append is best-effort: a failed append warns but does not roll back the committed mutation.
