@@ -196,6 +196,26 @@ export async function toolGetCurrentSession({ featureCode } = {}) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Roadmap writers — COMP-MCP-ROADMAP-WRITER
+// Pure file-based mutations via lib/feature-writer.js. No HTTP delegation.
+// ---------------------------------------------------------------------------
+
+export async function toolAddRoadmapEntry(args) {
+  const { addRoadmapEntry } = await import('../lib/feature-writer.js');
+  return addRoadmapEntry(getTargetRoot(), args);
+}
+
+export async function toolSetFeatureStatus(args) {
+  const { setFeatureStatus } = await import('../lib/feature-writer.js');
+  return setFeatureStatus(getTargetRoot(), args);
+}
+
+export async function toolRoadmapDiff(args) {
+  const { roadmapDiff } = await import('../lib/feature-writer.js');
+  return roadmapDiff(getTargetRoot(), args);
+}
+
 export async function toolBindSession({ featureCode }) {
   const postData = JSON.stringify({ featureCode });
   return new Promise((resolve, reject) => {

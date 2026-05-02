@@ -43,6 +43,9 @@ import {
   toolIterationStart,
   toolIterationReport,
   toolIterationAbort,
+  toolAddRoadmapEntry,
+  toolSetFeatureStatus,
+  toolRoadmapDiff,
 } from './compose-mcp-tools.js';
 
 // ---------------------------------------------------------------------------
@@ -258,6 +261,57 @@ const TOOLS = [
   },
   // `agent_run` tool removed 2026-04-18 (STRAT-DEDUP-AGENTRUN v1); LLM-facing
   // dispatch goes through `mcp__stratum__stratum_agent_run`.
+
+  // -------------------------------------------------------------------------
+  // Roadmap writers — COMP-MCP-ROADMAP-WRITER
+  // -------------------------------------------------------------------------
+  {
+    name: 'add_roadmap_entry',
+    description: 'Register a new feature in the project. Writes feature.json and regenerates ROADMAP.md (audit-log append is best-effort). Use this instead of editing ROADMAP.md by hand.',
+    inputSchema: {
+      type: 'object',
+      required: ['code', 'description', 'phase'],
+      properties: {
+        code: { type: 'string', description: 'Unique feature code (e.g. "COMP-FOO-1"). Must be uppercase A-Z, digits, dashes; cannot start or end with a dash.' },
+        description: { type: 'string', description: 'One-line description for the ROADMAP cell' },
+        phase: { type: 'string', description: 'Phase heading (e.g. "Phase 6: MCP Writers"). Required.' },
+        complexity: { type: 'string', enum: ['S', 'M', 'L', 'XL'] },
+        status: { type: 'string', enum: ['PLANNED', 'IN_PROGRESS', 'PARTIAL', 'COMPLETE', 'BLOCKED', 'KILLED', 'PARKED', 'SUPERSEDED'], description: 'Initial status (default PLANNED)' },
+        position: { type: 'number', description: 'Sort order within phase' },
+        parent: { type: 'string', description: 'Parent feature code, for cross-references' },
+        tags: { type: 'array', items: { type: 'string' } },
+        idempotency_key: { type: 'string', description: 'Optional caller-provided key. Same key replays return the cached result without re-mutating.' },
+      },
+    },
+  },
+  {
+    name: 'set_feature_status',
+    description: 'Flip a feature status. Updates feature.json and regenerates ROADMAP.md. Enforces a transition policy (use force: true to bypass). Appends an audit event (best-effort).',
+    inputSchema: {
+      type: 'object',
+      required: ['code', 'status'],
+      properties: {
+        code: { type: 'string' },
+        status: { type: 'string', enum: ['PLANNED', 'IN_PROGRESS', 'PARTIAL', 'COMPLETE', 'BLOCKED', 'KILLED', 'PARKED', 'SUPERSEDED'] },
+        reason: { type: 'string', description: 'Free-form reason persisted in the audit event' },
+        commit_sha: { type: 'string', description: 'Optional commit binding' },
+        force: { type: 'boolean', description: 'Bypass the transition policy. Recorded in audit.' },
+        idempotency_key: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'roadmap_diff',
+    description: 'Read the feature-management audit log for a window. Returns events plus derived added[] and status_changed[] arrays.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        since: { type: 'string', description: 'Window: shorthand like "24h"/"7d"/"30m", or an ISO date. Default 24h.' },
+        feature_code: { type: 'string' },
+        tool: { type: 'string', description: 'Filter to one tool name, e.g. "set_feature_status"' },
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -295,6 +349,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'scaffold_feature':         result = toolScaffoldFeature(args); break;
       case 'approve_gate':             result = await toolApproveGate(args); break;
       case 'get_pending_gates':        result = toolGetPendingGates(args); break;
+      case 'add_roadmap_entry':        result = await toolAddRoadmapEntry(args); break;
+      case 'set_feature_status':       result = await toolSetFeatureStatus(args); break;
+      case 'roadmap_diff':             result = await toolRoadmapDiff(args); break;
       // agent_run removed — STRAT-DEDUP-AGENTRUN v1. Use mcp__stratum__stratum_agent_run.
       default:
         return {

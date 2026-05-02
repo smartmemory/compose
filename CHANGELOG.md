@@ -2,6 +2,21 @@
 
 ## 2026-05-02
 
+### COMP-MCP-ROADMAP-WRITER — typed MCP writers for roadmap mutations
+
+First sub-ticket of `COMP-MCP-FEATURE-MGMT`. Three new MCP tools — `add_roadmap_entry`, `set_feature_status`, `roadmap_diff` — route every roadmap mutation through a typed surface so feature.json + ROADMAP.md stay consistent and every change leaves an audit trail. The writers run as pure file IO inside `lib/`; no HTTP delegation (sidesteps the architectural-review layering finding). Idempotency keys protect against retries; mutations append to `.compose/data/feature-events.jsonl`. Lifecycle transition policy enforced (PLANNED → IN_PROGRESS → COMPLETE etc.; COMPLETE → SUPERSEDED requires `force: true`). Audit-log append is best-effort: a failed append warns but does not roll back the committed mutation.
+
+**Added:**
+- `lib/idempotency.js` — file-locked `checkOrInsert(cwd, key, computeFn)` primitive with mkdir-based advisory lock and stale-lock recovery. Cache file `.compose/data/idempotency-keys.jsonl`, capped at 1000 entries, FIFO eviction.
+- `lib/feature-events.js` — append-only audit log at `.compose/data/feature-events.jsonl`. `appendEvent(cwd, event)` stamps `ts` and `actor` (`process.env.COMPOSE_ACTOR` or `mcp:agent`); `readEvents(cwd, {since, code, tool})` filters with shorthand `since` (`24h`/`7d`/`30m` or ISO date).
+- `lib/feature-writer.js` — `addRoadmapEntry`, `setFeatureStatus`, `roadmapDiff`. Calls into existing `lib/feature-json.js` (`writeFeature`/`updateFeature`) and `lib/roadmap-gen.js` (`writeRoadmap`). New entries default `position` to max-in-phase + 1 when omitted (preserves the "numbered sequentially" convention).
+- `server/compose-mcp.js`, `server/compose-mcp-tools.js` — three new tools registered + thin handlers that pass `getTargetRoot()` to the lib functions.
+- `test/idempotency.test.js`, `test/feature-events.test.js`, `test/feature-writer.test.js`, `test/feature-writer-mcp.test.js` — 55 new tests including end-to-end smoke tests that spawn the MCP server as a child process and exercise the tools over stdio JSON-RPC. Full suite: 2044/2044 pass (was 1993; +51 new).
+
+**Changed:**
+- `lib/roadmap-parser.js` — `SKIP_STATUSES` extended to include `KILLED` and `BLOCKED`. Without this, features marked `KILLED` or `BLOCKED` by the new writers would still surface as buildable in `compose roadmap` and the build-selection path (`bin/compose.js:928`).
+- `docs/mcp.md` — documents the three new tools, the transition policy, the idempotency-key path, the audit log format, and the no-HTTP design choice.
+
 ### COMP-NEW-QUESTIONNAIRE-MISMATCH — pipeline-cli helpers now target any spec
 
 `bin/compose.js:577-584` applied questionnaire review-agent choices ("Codex (automated review)" / "Skip review") for the kickoff pipeline by calling `pipelineSet`/`pipelineDisable`, but those helpers in `lib/pipeline-cli.js` hardcoded both the spec path (`pipelines/build.stratum.yaml`) and the flow name (`spec.flows.build`). The questionnaire's kickoff customization has been a silent no-op since the helpers were written — the `try/catch` around the call swallowed the resulting "step not found" error.
