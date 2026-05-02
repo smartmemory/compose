@@ -576,13 +576,13 @@ if (cmd === 'new') {
     if (result.options.reviewAgent === 'Codex (automated review)') {
       const { pipelineSet } = await import('../lib/pipeline-cli.js')
       try {
-        pipelineSet(cwd, 'review_gate', ['--mode', 'review'])
-      } catch { /* gate may not exist in new.stratum.yaml */ }
+        pipelineSet(cwd, 'review_gate', ['--mode', 'review'], 'new.stratum.yaml')
+      } catch { /* kickoff spec missing or review_gate already absent */ }
     } else if (result.options.reviewAgent === 'Skip review') {
       const { pipelineDisable } = await import('../lib/pipeline-cli.js')
       try {
-        pipelineDisable(cwd, ['review_gate'])
-      } catch { /* ignore */ }
+        pipelineDisable(cwd, ['review_gate'], 'new.stratum.yaml')
+      } catch { /* kickoff spec missing or review_gate already absent */ }
     }
   } else if (hasAnswers && !autoMode) {
     // Load saved answers to enrich intent without prompting

@@ -2,6 +2,19 @@
 
 ## 2026-05-02
 
+### COMP-NEW-QUESTIONNAIRE-MISMATCH — pipeline-cli helpers now target any spec
+
+`bin/compose.js:577-584` applied questionnaire review-agent choices ("Codex (automated review)" / "Skip review") for the kickoff pipeline by calling `pipelineSet`/`pipelineDisable`, but those helpers in `lib/pipeline-cli.js` hardcoded both the spec path (`pipelines/build.stratum.yaml`) and the flow name (`spec.flows.build`). The questionnaire's kickoff customization has been a silent no-op since the helpers were written — the `try/catch` around the call swallowed the resulting "step not found" error.
+
+**Changed:**
+- `lib/pipeline-cli.js` — every public export (`pipelineShow`, `pipelineSet`, `pipelineAdd`, `pipelineRemove`, `pipelineEnable`, `pipelineDisable`) gained an optional trailing `specName` parameter defaulting to `'build.stratum.yaml'`. `loadSpec` now derives the flow name from the filename (`<name>.stratum.yaml` → `<name>`) and returns it; every `spec.flows?.build` reference is now `spec.flows?.[flowName]`. Internal mutation helpers (`convertToGate`, `convertToReview`, `convertToAgent`) operate on the resolved `mainFlow`, so they pick up the new target automatically.
+- `bin/compose.js:577-584` — questionnaire path passes `'new.stratum.yaml'` to both helpers and updates the catch comment to reflect the actual target.
+
+**User-facing `compose pipeline ...` CLI is unchanged** — it still operates on `build.stratum.yaml` only. Editing the kickoff pipeline interactively is out of scope (no `--spec` flag added).
+
+**Added:**
+- `test/pipeline-cli-spec-target.test.js` — 4 tests covering: default path unchanged; `pipelineDisable` targets `new.stratum.yaml` when `specName` is passed (and leaves the build spec untouched); `pipelineSet --mode review` against a kickoff `review_gate` produces a codex sub-flow; missing spec throws cleanly. Full suite green: 1993/1993.
+
 ### COMP-NEW-PIPELINE-MISSING — Restore kickoff pipeline + fix two latent bugs
 
 `pipelines/new.stratum.yaml` was deleted on 2026-03-16 in commit `e597e89` (the COMP-UX-1 cockpit batch — apparently unintentionally) and never restored. `bin/compose.js` and `lib/new.js` still required it; `compose new` would error out with "Kickoff spec not found" against any project that didn't already have a copy. `compose init`'s silent existence check on the package source kept the failure invisible during setup.
