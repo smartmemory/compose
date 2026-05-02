@@ -98,6 +98,24 @@ Three rounds of Codex review against `bin/compose.js`, `server/compose-mcp.js`, 
 - `docs/mcp.md` — removed `agent_run` row (tool removed 2026-04-18 per `STRAT-DEDUP-AGENTRUN`) and added a deprecation note pointing to `mcp__stratum__stratum_agent_run`; corrected `report_iteration_result` outcome enum to runtime values (`clean`, `max_reached`, `action_limit`, `timeout`, `null` while running).
 - `docs/lifecycle.md` — corrected `review_check` retry default from 10 to 5.
 
+### COMP-MCP-CHANGELOG-WRITER — typed MCP writer + reader for compose/CHANGELOG.md
+
+Sub-ticket #3 of `COMP-MCP-FEATURE-MGMT`. Two MCP tools — `add_changelog_entry` and `get_changelog_entries` — route every `compose/CHANGELOG.md` mutation and read through a typed surface. Reuses the framework established by `COMP-MCP-ROADMAP-WRITER` (idempotency keys, best-effort audit log, no HTTP delegation) and `COMP-MCP-ARTIFACT-LINKER` (atomic tmp+rename writer pattern). Format enforcement is structural, not lexical: the writer renders canonical Added → Changed → Fixed → Snapshot subsections from typed inputs; the parser is permissive of pre-existing prose variation (existing entries with non-canonical labels are preserved as-is).
+
+Two-layer dedup: storage-level (`(date_or_version, code)` lookup across **all** matching surfaces — the file legitimately has duplicate `## 2026-05-02` headings; first/topmost wins on insert) plus optional caller-supplied `idempotency_key` for retry safety. `force: true` replaces in place. Storage-level no-op skips the audit append per design Decision 2.
+
+Typed errors via `err.code`: `INVALID_INPUT` (bad code/date/sections key) and `CHANGELOG_FORMAT` (missing H1 on non-empty file). MCP wrapper extended to surface them as `Error [CODE]: message` so callers can branch deterministically.
+
+Codex review three iterations to clean. Findings caught: reader was discarding `unknownLabels` (e.g. `**Knobs:**`, `**Test results:**`); subsection regex couldn't parse digit-bearing labels like `**Phase 7 review-loop fixes:**`; `inserted_at` lookup was global, returning the wrong line when the same code appeared on multiple surfaces; idempotent no-ops were appending audit rows in violation of design; MCP wrapper was stripping `err.code`.
+
+**Added:**
+- `lib/changelog-writer.js` — `parseChangelog` (permissive single-pass parser), `renderEntry` (strict canonical renderer), `addChangelogEntry`, `getChangelogEntries`. Atomic tmp+rename mirroring `lib/sections.js:writeRollup`. Reuses `lib/idempotency.js` and `lib/feature-events.js` framework.
+- `server/compose-mcp.js`, `server/compose-mcp-tools.js` — two new tools registered. MCP error wrapper now serializes `err.code` as `Error [CODE]: message` envelope when present (cross-cutting; backward-compatible).
+- `test/changelog-writer.test.js` (38 tests) + `test/changelog-writer-mcp.test.js` (3 tests). Coverage includes: parser round-trip on real `CHANGELOG.md`; duplicate same-label surfaces; force replace targets first surface; same code on different dates returns correct line; idempotent no-op skips audit; typed error codes; reader surfaces `unknownLabels`; digit-bearing labels.
+
+**Changed:**
+- `docs/mcp.md` — two new tool rows + a "Changelog writer" section documenting two-layer dedup, format enforcement, audit semantics, typed error codes, and the no-HTTP design rationale.
+
 ## 2026-05-02
 
 ### COMP-DOCS-SLIM — Slim README into attractor + 9 topic subpages

@@ -236,6 +236,20 @@ export async function toolGetFeatureLinks(args) {
   return getFeatureLinks(getTargetRoot(), args);
 }
 
+// ---------------------------------------------------------------------------
+// Changelog writer — COMP-MCP-CHANGELOG-WRITER
+// ---------------------------------------------------------------------------
+
+export async function toolAddChangelogEntry(args) {
+  const { addChangelogEntry } = await import('../lib/changelog-writer.js');
+  return addChangelogEntry(getTargetRoot(), args);
+}
+
+export async function toolGetChangelogEntries(args) {
+  const { getChangelogEntries } = await import('../lib/changelog-writer.js');
+  return getChangelogEntries(getTargetRoot(), args);
+}
+
 export async function toolBindSession({ featureCode }) {
   const postData = JSON.stringify({ featureCode });
   return new Promise((resolve, reject) => {

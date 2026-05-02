@@ -26,6 +26,8 @@ Compose exposes project state as MCP tools via `server/compose-mcp.js` (stdio tr
 | `link_features` | Register a typed cross-feature relationship (`surfaced_by`, `blocks`, `depends_on`, `follow_up`, `supersedes`, `related`). Stored on the source; query inverse via `get_feature_links(direction:'incoming')`. |
 | `get_feature_artifacts` | Read both canonical (auto-discovered) and linked artifacts for a feature in one call. Each linked entry carries a current existence stamp. |
 | `get_feature_links` | Read outgoing/incoming/both links for a feature; optional `kind` filter. |
+| `add_changelog_entry` | Insert (or replace, with `force: true`) a typed entry in `compose/CHANGELOG.md`. Idempotent on `(date_or_version, code)`; renders canonical `Added`/`Changed`/`Fixed`/`Snapshot` subsections from typed inputs. Audit append best-effort. |
+| `get_changelog_entries` | Read parsed entries; filter by `code` (exact) and/or `since` (shorthand `24h`/`7d`/`30m` or ISO date — date surfaces only; version surfaces always pass through). |
 | `start_iteration_loop` | Start an iteration loop on a feature |
 | `report_iteration_result` | Report an iteration's result; the server decides whether to continue. Terminal outcomes are `clean`, `max_reached`, `action_limit`, or `timeout`; while the loop is still running, `outcome` is `null`. |
 | `abort_iteration_loop` | Abort an active iteration loop |
@@ -83,3 +85,49 @@ These fields are disjoint from the ROADMAP-WRITER set (`commit_sha`, `tags`, `pa
 **No bidirectional auto-mirroring.** A link from A → B is stored on A only. To find what links to A, use `get_feature_links(direction: 'incoming')`. This is intentional — bidirectional mirroring would double-write and create reconciliation surface.
 
 **Recommended `artifact_type` values:** `journal`, `snapshot`, `finding`, `report-supplement`, `link`, `external`. The field accepts any non-empty string; the recommended set is what existing features use.
+
+## Changelog writer (COMP-MCP-CHANGELOG-WRITER)
+
+`add_changelog_entry` and `get_changelog_entries` route every `compose/CHANGELOG.md` mutation and read through a typed surface. Same framework as the roadmap and linker writers: optional caller-supplied `idempotency_key`, best-effort audit log, no HTTP. Entries render from typed inputs into the canonical layout.
+
+**Tools:**
+- `add_changelog_entry({ date_or_version, code, summary, body?, sections?, force?, idempotency_key? })` → `{ inserted_at, idempotent, surface }`. `inserted_at` is the 1-based line number of the entry's `### CODE — summary` header in the post-write file.
+- `get_changelog_entries({ since?, code?, limit? })` → `{ entries, count }`.
+
+**Canonical entry layout (rendered):**
+
+```
+### <CODE> — <summary>
+
+<body paragraphs, if any>
+
+**Added:**
+- …
+
+**Changed:**
+- …
+
+**Fixed:**
+- …
+
+**Snapshot:**
+- …
+```
+
+Subsections emit only when non-empty, in the fixed order Added → Changed → Fixed → Snapshot.
+
+**Surfaces** are `## YYYY-MM-DD` (date) or `## vX.Y.Z` (version) headings. New surfaces insert at the top of the file (after the `# Changelog` H1). Within a surface, new entries append at the bottom (chronological landing order).
+
+**Dedup** is two-layered:
+1. **Storage-level** (always on): before writing, scan **all** surfaces matching `date_or_version` for an existing entry with the same `code`. If found and `force: false`, the call is a no-op and returns `{ idempotent: true }`. If `force: true`, the existing entry is replaced in place.
+2. **Caller-supplied `idempotency_key`** (optional): same key replays return the cached result via `.compose/data/idempotency-keys.jsonl` — opt-in retry safety, identical to the sibling writers.
+
+**Duplicate same-label surfaces** (e.g. two `## 2026-05-02` headings) are tolerated. The writer scans all matching surfaces for the dedup check; new entries land in the **first** (topmost) matching surface. Surfaces are never merged.
+
+**Format enforcement is structural, not lexical.** The writer renders canonical output from typed inputs; the parser is permissive of pre-existing prose variation. Pre-existing entries with non-canonical labels (`**Hardened:**`, `**Knobs:**`, `**Test results:**`, etc.) are preserved as-is on read; structured `sections` parsing is best-effort and unrecognized labels surface as `unknownLabels`. The writer does not rewrite pre-existing entries.
+
+**Audit log:** rows use `tool: 'add_changelog_entry'` (matches sibling-writer convention) plus `code`, `surface_label`, `surface_start_line`, and `idempotency_key` when supplied. Force-replace rows additionally carry `force: true`. Storage-level idempotent no-ops do **not** append an audit row (no file write, no event — design Decision 2). Caller-supplied `idempotency_key` replays are served from the idempotency cache and likewise do not re-append.
+
+**Typed error codes** on tool failures surface via the `Error [CODE]: message` envelope: `INVALID_INPUT` (validation failures: bad code, bad date_or_version, unknown sections key), `CHANGELOG_FORMAT` (pre-existing file lacks `# Changelog` H1).
+
+**Target file:** `compose/CHANGELOG.md` only. Top-level repo-root `CHANGELOG.md` is out of scope.

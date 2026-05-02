@@ -50,6 +50,8 @@ import {
   toolLinkFeatures,
   toolGetFeatureArtifacts,
   toolGetFeatureLinks,
+  toolAddChangelogEntry,
+  toolGetChangelogEntries,
 } from './compose-mcp-tools.js';
 
 // ---------------------------------------------------------------------------
@@ -376,6 +378,49 @@ const TOOLS = [
       },
     },
   },
+
+  // -------------------------------------------------------------------------
+  // Changelog writer — COMP-MCP-CHANGELOG-WRITER
+  // -------------------------------------------------------------------------
+  {
+    name: 'add_changelog_entry',
+    description: 'Insert (or replace, with force: true) a typed entry in compose/CHANGELOG.md. Idempotent on (date_or_version, code) at storage level; optional caller-supplied idempotency_key for retry safety. Audit-log append is best-effort. Use this instead of editing CHANGELOG.md by hand.',
+    inputSchema: {
+      type: 'object',
+      required: ['date_or_version', 'code', 'summary'],
+      properties: {
+        date_or_version: { type: 'string', description: 'ISO date "YYYY-MM-DD" or semver "vX.Y.Z"' },
+        code: { type: 'string', description: 'Feature code (e.g. "COMP-FOO-1"). Uppercase A-Z, digits, dashes; cannot start or end with a dash.' },
+        summary: { type: 'string', description: 'One-line summary; renders as the "— summary" tail of the entry header.' },
+        body: { type: 'string', description: 'Free paragraphs between header and labeled subsections.' },
+        sections: {
+          type: 'object',
+          description: 'Optional labeled subsections; emitted in fixed order Added → Changed → Fixed → Snapshot.',
+          properties: {
+            added:    { type: 'array', items: { type: 'string' } },
+            changed:  { type: 'array', items: { type: 'string' } },
+            fixed:    { type: 'array', items: { type: 'string' } },
+            snapshot: { type: 'array', items: { type: 'string' } },
+          },
+          additionalProperties: false,
+        },
+        force: { type: 'boolean', description: 'If true and an entry with the same (date_or_version, code) exists, replace it in place.' },
+        idempotency_key: { type: 'string', description: 'Optional caller-supplied key. Same key replays return the cached result without re-mutating.' },
+      },
+    },
+  },
+  {
+    name: 'get_changelog_entries',
+    description: 'Read parsed entries from compose/CHANGELOG.md. Filter by code (exact) or since (shorthand "24h"/"7d"/"30m" or ISO date — date-only; version surfaces always pass through).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        since: { type: 'string', description: 'Window: shorthand like "24h"/"7d"/"30m" or ISO date. Date-only filter; version surfaces are always returned.' },
+        code: { type: 'string' },
+        limit: { type: 'number', description: 'Default 50; capped at 500.' },
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -420,6 +465,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'link_features':            result = await toolLinkFeatures(args); break;
       case 'get_feature_artifacts':    result = await toolGetFeatureArtifacts(args); break;
       case 'get_feature_links':        result = await toolGetFeatureLinks(args); break;
+      case 'add_changelog_entry':      result = await toolAddChangelogEntry(args); break;
+      case 'get_changelog_entries':    result = await toolGetChangelogEntries(args); break;
       // agent_run removed — STRAT-DEDUP-AGENTRUN v1. Use mcp__stratum__stratum_agent_run.
       default:
         return {
@@ -431,8 +478,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
   } catch (err) {
+    // Surface typed error codes (e.g. INVALID_INPUT, CHANGELOG_FORMAT) when
+    // tools attach them, so MCP callers can branch deterministically. Plain
+    // errors fall back to the original "Error: <message>" shape.
+    const text = err && err.code
+      ? `Error [${err.code}]: ${err.message}`
+      : `Error: ${err.message}`;
     return {
-      content: [{ type: 'text', text: `Error: ${err.message}` }],
+      content: [{ type: 'text', text }],
       isError: true,
     };
   }

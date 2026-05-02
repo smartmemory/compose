@@ -323,3 +323,8 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-02T19:34:52+08:00 | building artifact + feature link MCP tools (COMP-MCP-ARTIFACT-LINKER)
 2026-05-02T20:23:47+08:00 | STRAT-SETUP-ATOMIC design
 2026-05-02T20:49:28+08:00 | STRAT-SETUP-ATOMIC execute
+2026-05-02T23:13:11+08:00 | COMP-MCP-CHANGELOG-WRITER design phase — write feature-level design building on parent + sibling-writer pattern
+2026-05-02T23:17:29+08:00 | COMP-MCP-CHANGELOG-WRITER blueprint phase — verify integration sites
+2026-05-02T23:52:33+08:00 | COMP-MCP-CHANGELOG-WRITER T1 — parser + renderer skeleton, TDD
+2026-05-02T23:56:54+08:00 | COMP-MCP-CHANGELOG-WRITER T4 — MCP wiring + e2e tests
+2026-05-03T00:10:25+08:00 | COMP-MCP-CHANGELOG-WRITER T6 — dogfood self-entry + ROADMAP flip
