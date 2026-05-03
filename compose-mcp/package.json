@@ -1,0 +1,24 @@
+{
+  "name": "@smartmemory/compose-mcp",
+  "version": "0.1.0",
+  "description": "MCP stdio server for @smartmemory/compose — typed feature management tools (roadmap, changelog, artifact linking, etc.). Requires a compose-initialized project.",
+  "type": "module",
+  "bin": {
+    "compose-mcp": "./bin/compose-mcp.js"
+  },
+  "dependencies": {
+    "@smartmemory/compose": "^0.1.4-beta"
+  },
+  "files": ["bin/**", "README.md", "LICENSE"],
+  "publishConfig": { "access": "public" },
+  "license": "MIT",
+  "engines": { "node": ">=18.0.0" },
+  "keywords": ["mcp", "modelcontextprotocol", "compose", "smartmemory", "claude", "claude-code", "feature-management"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smartmemory/compose.git",
+    "directory": "compose-mcp"
+  },
+  "homepage": "https://github.com/smartmemory/compose/tree/main/compose-mcp",
+  "bugs": "https://github.com/smartmemory/compose/issues"
+}

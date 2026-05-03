@@ -1,0 +1,19 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.smartmemory/compose-mcp",
+  "title": "Compose MCP",
+  "description": "Typed feature management for compose-initialized projects: roadmap, changelog, artifact linking, journal. Provides typed MCP tools that mutate canonical compose artifacts deterministically.",
+  "repository": {
+    "url": "https://github.com/smartmemory/compose",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@smartmemory/compose-mcp",
+      "version": "0.1.0",
+      "transport": { "type": "stdio" }
+    }
+  ]
+}

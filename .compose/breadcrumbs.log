@@ -328,3 +328,24 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-02T23:52:33+08:00 | COMP-MCP-CHANGELOG-WRITER T1 — parser + renderer skeleton, TDD
 2026-05-02T23:56:54+08:00 | COMP-MCP-CHANGELOG-WRITER T4 — MCP wiring + e2e tests
 2026-05-03T00:10:25+08:00 | COMP-MCP-CHANGELOG-WRITER T6 — dogfood self-entry + ROADMAP flip
+2026-05-03T10:41:01+08:00 | COMP-MCP-JOURNAL-WRITER design — 4th writer in MCP family, write_journal_entry + get_journal_entries
+2026-05-03T11:36:54+08:00 | T1 — journal-writer module skeleton + frontmatter/entry parser (TDD)
+2026-05-03T11:39:23+08:00 | journal-writer T1 — module skeleton + frontmatter/entry parser
+2026-05-03T11:41:38+08:00 | journal-writer T1+T2+T3+T4 — write test file
+2026-05-03T11:44:14+08:00 | journal-writer T5 — MCP tool registration
+2026-05-03T11:44:57+08:00 | journal-writer T6 — end-to-end MCP tests
+2026-05-03T11:51:38+08:00 | journal-writer review-fix-1 — frontmatter escape, lock-scope index_line, heading whitespace
+2026-05-03T11:56:27+08:00 | journal-writer review-fix-2 — partial-commit rollback
+2026-05-03T12:00:25+08:00 | journal-writer review-fix-3 — MCP wrapper propagates err.cause
+2026-05-03T12:04:16+08:00 | journal-writer review-fix-4 — real MCP boundary test for err.cause
+2026-05-03T12:19:32+08:00 | journal-writer T9-T10 — dogfood + docs + ship
+2026-05-03T20:08:57+08:00 | feature-writer retrofit — ROADMAP_PARTIAL_WRITE + err.cause
+2026-05-03T22:52:04+08:00 | COMP-MCP-COMPLETION T1-T9 — execute via task-executor
+2026-05-03T22:53:59+08:00 | completion-writer T1 — lib/completion-writer.js validators + new-record append (TDD)
+2026-05-03T22:57:37+08:00 | completion-writer T5 — MCP tool registration in compose-mcp-tools.js and compose-mcp.js
+2026-05-03T22:58:18+08:00 | completion-writer T6 — MCP e2e tests (completion-writer-mcp.test.js)
+2026-05-03T22:59:57+08:00 | completion-writer T7 — CLI record-completion subcommand in bin/compose.js
+2026-05-03T23:00:49+08:00 | completion-writer T8 — git-hooks/post-commit.template
+2026-05-03T23:01:08+08:00 | completion-writer T9 — CLI + hook tests (completion-writer-cli.test.js)
+2026-05-03T23:10:28+08:00 | completion-writer review-fix-1 — hook qualifier parsing, get prefix floor, feature_code normalization
+2026-05-03T23:35:50+08:00 | COMP-MCP-PUBLISH execute: slim wrapper package + CI publish workflow

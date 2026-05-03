@@ -1,0 +1,77 @@
+name: Publish compose-mcp
+
+on:
+  push:
+    tags: ['compose-mcp-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Validate version match (package.json, server.json top-level, server.json packages[0], tag)
+        working-directory: compose-mcp
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          SRV_VERSION=$(node -p "require('./server.json').version")
+          SRV_PKG_VERSION=$(node -p "require('./server.json').packages[0].version")
+          TAG_VERSION="${GITHUB_REF#refs/tags/compose-mcp-v}"
+          echo "package.json: $PKG_VERSION  server.json: $SRV_VERSION  server.json.packages[0]: $SRV_PKG_VERSION  tag: $TAG_VERSION"
+          test "$PKG_VERSION" = "$SRV_VERSION"
+          test "$PKG_VERSION" = "$SRV_PKG_VERSION"
+          test "$PKG_VERSION" = "$TAG_VERSION"
+
+      - name: Install dependencies (root, for tests)
+        run: npm install --ignore-scripts
+
+      - name: Run wrapper tests (gate publish)
+        run: |
+          node --test test/exports-map.test.js \
+                      test/compose-mcp-package.test.js \
+                      test/publish-compose-mcp-workflow.test.js
+
+      - name: npm pack --dry-run (verify wrapper file allowlist)
+        working-directory: compose-mcp
+        run: npm pack --dry-run
+
+      - name: Validate parent dep is published in declared range
+        working-directory: compose-mcp
+        run: |
+          DEP_RANGE=$(node -p "require('./package.json').dependencies['@smartmemory/compose']")
+          echo "Parent dependency range: $DEP_RANGE"
+          npm view "@smartmemory/compose@$DEP_RANGE" version
+
+      - name: Publish to npm
+        working-directory: compose-mcp
+        run: npm publish --access public --provenance --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Install mcp-publisher
+        run: |
+          # Pinned to a specific release for reproducibility. Bump deliberately.
+          curl -fsSL https://github.com/modelcontextprotocol/registry/releases/download/v1.2.6/mcp-publisher_1.2.6_linux_amd64.tar.gz \
+            | tar -xz -C /tmp
+          sudo install /tmp/mcp-publisher /usr/local/bin/mcp-publisher
+          mcp-publisher --version
+
+      - name: Publish to MCP registry (PAT-bypass)
+        working-directory: compose-mcp
+        env:
+          REGISTRY_AUTH_GITHUB_TOKEN: ${{ secrets.SMARTMEM_DEV_GITHUB_TOKEN }}
+        run: |
+          REG_JWT=$(curl -fsS -X POST "https://registry.modelcontextprotocol.io/v0/auth/github-at" \
+            -H "Content-Type: application/json" \
+            -d "{\"github_token\":\"$REGISTRY_AUTH_GITHUB_TOKEN\"}" \
+            | node -e "let s=''; process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).registry_token))")
+          printf '%s' "{\"method\":\"github\",\"registry\":\"https://registry.modelcontextprotocol.io\",\"token\":\"$REG_JWT\"}" > ~/.mcp_publisher_token
+          mcp-publisher publish

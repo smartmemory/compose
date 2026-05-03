@@ -2,6 +2,23 @@
 
 ## 2026-05-03
 
+### COMP-MCP-PUBLISH — Slim `@smartmemory/compose-mcp` wrapper + MCP registry publish
+
+Sub-ticket #6 of `COMP-MCP-FEATURE-MGMT`. Adds a slim wrapper package and tag-triggered CI workflow that publishes to npm and the official MCP registry under `io.github.smartmemory/compose-mcp`. The wrapper resolves and spawns the embedded server in `@smartmemory/compose` via `createRequire` + `require.resolve('@smartmemory/compose/mcp')` — single source of truth, registry discovery without code duplication.
+
+**This commit ships wrapper + workflow only.** Publish happens via `git tag compose-mcp-v0.1.0 && git push --tags`, which fires the workflow.
+
+**Added:**
+- `compose/compose-mcp/{package.json,server.json,README.md,LICENSE,bin/compose-mcp.js}` — slim package skeleton at `@smartmemory/compose-mcp 0.1.0`. Spawn-based stdio launcher (~30 lines), exit 127 on resolve failure with actionable message.
+- `compose/.github/workflows/publish-compose-mcp.yml` — triggers on `compose-mcp-v*` tags. Validates four version strings in lock-step (package.json, server.json top-level, server.json packages[0], tag). Installs deps + runs wrapper tests + `npm pack --dry-run` before `npm publish` (added per Codex review). `mcp-publisher` pinned to v1.2.6. PAT-bypass auth via `SMARTMEM_DEV_GITHUB_TOKEN` per `reference_mcp_registry_auth.md`.
+- 21 new tests across `test/exports-map.test.js`, `test/compose-mcp-package.test.js`, `test/publish-compose-mcp-workflow.test.js`. Positive resolution smoke uses an ephemeral `node_modules/@smartmemory/compose` symlink to mirror what npm install creates for real consumers.
+
+**Changed:**
+- `compose/package.json` — added `exports` map: `./mcp` → `./server/compose-mcp.js` and `./package.json` self-export. Deliberately no `.` root export (would execute the CLI on `require('@smartmemory/compose')`). Hard regression boundary: any future external consumer needing a deep import path must be added here.
+
+**Snapshot:**
+- 2421 unit + 92 UI + 44 integration tests pass; 21 new from this feature. Pre-existing STRAT-DEDUP-AGENTRUN-V3 integration failure unrelated. Two Codex review iterations — found two medium release-path gaps (no test gate before publish, missing nested `packages[0].version` validation) — both fixed and locked in with workflow ordering tests.
+
 ### COMP-MCP-JOURNAL-WRITER — Journal writer ships
 
 Sub-ticket #4 of `COMP-MCP-FEATURE-MGMT`. Two new MCP tools (`write_journal_entry`, `get_journal_entries`) route every `compose/docs/journal/` mutation and read through a typed surface. Cross-cutting MCP wrapper extension propagates `err.cause` for the whole writer family.

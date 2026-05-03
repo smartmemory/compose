@@ -8,6 +8,10 @@
   "bin": {
     "compose": "./bin/compose.js"
   },
+  "exports": {
+    "./mcp": "./server/compose-mcp.js",
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "dev": "node server/supervisor.js 2>&1 | tee /tmp/compose-server.log",
     "dev:server": "node server/supervisor.js",
