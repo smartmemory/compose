@@ -30,6 +30,8 @@ Compose exposes project state as MCP tools via `server/compose-mcp.js` (stdio tr
 | `get_changelog_entries` | Read parsed entries; filter by `code` (exact) and/or `since` (shorthand `24h`/`7d`/`30m` or ISO date — date surfaces only; version surfaces always pass through). |
 | `write_journal_entry` | Render and write a `compose/docs/journal/<date>-session-<N>-<slug>.md` entry with auto-numbered global session, plus insert a row at the top of the journal index. Idempotent on `(date, slug)`; `force: true` overwrites in place preserving the session number. Two-file write rolls back on partial failure. Audit append best-effort. |
 | `get_journal_entries` | Read parsed entries from `compose/docs/journal/`; filter by `feature_code` (exact), `session` (exact), `since` (shorthand or ISO date). Returns each entry's frontmatter-canonical `summary`/`feature_code`/`closing_line`, the four canonical sections, and an ordered `unknownSections` array. |
+| `record_completion` | Record a typed completion bound to a full 40-char commit SHA. Stores in `feature.json` `completions[]`; idempotent on `(feature_code, commit_sha)`. With `set_status: true` (default), also flips status to `COMPLETE` via `set_feature_status`. Status-flip failure rethrows as `STATUS_FLIP_AFTER_COMPLETION_RECORDED` with `err.cause`; the completion record is still persisted. Audit append best-effort. |
+| `get_completions` | Read completion records from `feature.json` files. Filter by `feature_code` (exact), `commit_sha` (≥4-char prefix or full), `since` (shorthand or ISO date). |
 | `start_iteration_loop` | Start an iteration loop on a feature |
 | `report_iteration_result` | Report an iteration's result; the server decides whether to continue. Terminal outcomes are `clean`, `max_reached`, `action_limit`, or `timeout`; while the loop is still running, `outcome` is `null`. |
 | `abort_iteration_loop` | Abort an active iteration loop |
@@ -201,3 +203,58 @@ The rethrown error carries `err.code = 'JOURNAL_PARTIAL_WRITE'` and `err.cause =
 **Typed error codes** on tool failures: `INVALID_INPUT` (bad date/slug/sections/summary), `JOURNAL_FORMAT` (entry-file frontmatter parse failure on the writer side), `JOURNAL_INDEX_FORMAT` (missing `## Entries`, malformed table header or separator), `JOURNAL_PARTIAL_WRITE` (entry succeeded, index failed; rollback was attempted — see `err.cause` for the original failure).
 
 **Target directory:** `compose/docs/journal/` only.
+
+## Completion writer (COMP-MCP-COMPLETION)
+
+`record_completion` and `get_completions` route every commit-bound completion through a typed surface. Same framework as the prior writers: optional caller-supplied `idempotency_key`, best-effort audit log, no HTTP. Records live as a `completions[]` array on `feature.json` (the canonical per-feature record).
+
+**Tools:**
+- `record_completion({ feature_code, commit_sha, tests_pass, files_changed, notes?, set_status?, force?, idempotency_key? })` → `{ feature_code, completion_id, commit_sha, commit_sha_short, status_changed: {from,to}|null, status_flip_partial, idempotent, recorded_at }`. `commit_sha` must be the **full 40-char hex SHA** — short prefixes are rejected on write.
+- `get_completions({ feature_code?, commit_sha?, since?, limit? })` → `{ completions, count }`. Read accepts `commit_sha` as a ≥4-char prefix or full SHA. Default `limit` 50, max 500.
+
+**Canonical record (rendered into `feature.json` `completions[]`):**
+
+```jsonc
+{
+  "completion_id": "<feature_code>:<full-sha>",
+  "feature_code": "...",
+  "commit_sha": "abd8349123abc456def7890123abc456def78901",
+  "commit_sha_short": "abd83491",
+  "tests_pass": true,
+  "files_changed": ["compose/lib/...", "..."],
+  "notes": "...",                 // optional
+  "recorded_at": "2026-05-03T...",
+  "recorded_by": "mcp:agent"      // env COMPOSE_ACTOR overrides
+}
+```
+
+`feature_code` is stamped on every record at write time; the reader returns it verbatim and never backfills. Records lacking `feature_code` (legacy/hand-edited) are returned with `feature_code: null` so the reader contract is uniform.
+
+**Identity is the full SHA.** Short prefixes collide; allowing them on write would silently collapse two distinct commits into one record. The 8-char `commit_sha_short` is presentation-only.
+
+**Status flip is opt-in, default on.** With `set_status: true` (default), `record_completion` calls `set_feature_status` internally to flip `feature.status` to `COMPLETE`. The transition policy is enforced by the underlying call; `KILLED` and `SUPERSEDED` reject. For non-terminal states (`PLANNED`, `IN_PROGRESS`, `PARTIAL`, `BLOCKED`, `PARKED`), the flip uses `force: true` so a feature can ship straight to `COMPLETE` without manually walking the policy. With `set_status: false`, the record lands without touching status — useful for partial-completion provenance.
+
+**Three failure subcases for the status flip** (all surface as thrown `STATUS_FLIP_AFTER_COMPLETION_RECORDED`; the completion record is **always persisted** before the flip is attempted):
+1. **Transition rejected** (KILLED → COMPLETE, etc.). `err.cause.message` contains `invalid transition`. Status NOT flipped.
+2. **`ROADMAP_PARTIAL_WRITE`** — `set_feature_status` flipped `feature.json` but `writeRoadmap` failed. Status WAS flipped on disk; ROADMAP.md is stale. `err.cause.code === 'ROADMAP_PARTIAL_WRITE'`. Recover with `compose roadmap generate`.
+3. **Other underlying error.** `err.cause` carries the original.
+
+In all three subcases, the completion record is on disk; only the status flip path failed. Caller can retry the flip via `set_feature_status` directly.
+
+**Per-feature lock.** `record_completion` acquires an advisory lock at `<cwd>/.compose/data/locks/feature-<feature_code>.lock` for the entire read-modify-write critical section, so two parallel calls on the same feature serialize cleanly. Sibling writers (`add_roadmap_entry`, `link_artifact`, etc.) do not yet take this lock — a parallel sibling-writer call can still race at the `updateFeature` layer (pre-existing limitation, deferred to a future cross-cutting follow-up).
+
+**Dedup** is two-layered:
+1. **Storage-level** (always on): same `(feature_code, commit_sha)` cannot produce two records unless `force: true`. Idempotent no-ops do **not** append audit events.
+2. **Caller `idempotency_key`** (optional): same key replays return the cached result via `.compose/data/idempotency-keys.jsonl`.
+
+**Audit log:** rows use `tool: 'record_completion'` plus `code`, `completion_id`, `commit_sha`, `tests_pass`, `set_status`, optionally `force`, `idempotency_key`.
+
+**Typed error codes:** `INVALID_INPUT`, `FEATURE_NOT_FOUND`, `STATUS_FLIP_AFTER_COMPLETION_RECORDED`. The MCP wrapper serializes both `err.code` and `err.cause` (`Caused by [...]: ...`).
+
+**Coordination with `complete_feature`.** The existing `complete_feature` MCP tool (a thin REST wrapper that drives the cockpit's lifecycle UI) updates the vision-store lifecycle and does not write to `feature.json`. `record_completion` writes to `feature.json` (and via `set_feature_status`, regenerates ROADMAP.md) but does not touch the vision-store lifecycle. Until `COMP-MCP-MIGRATION` reconciles the two stores, callers MUST pick one path:
+- **Headless ship flows** (post-commit hook, `/compose` Phase 10, scripts) → `record_completion`.
+- **Cockpit-driven completion** (operator hits the Complete button) → `complete_feature`.
+
+**Git post-commit hook (opt-in).** A shipped template at `compose/bin/git-hooks/post-commit.template` is materialized into `.git/hooks/post-commit` by `compose hooks install`, with `__COMPOSE_NODE__` and `__COMPOSE_BIN__` substituted to absolute paths. The runtime hook does not depend on `compose` or `node` being on PATH. The hook reads `Records-completion: <CODE>` trailers via `git interpret-trailers --parse`, computes the commit SHA, and calls `compose record-completion` for each trailer. Failures log to `.compose/data/post-commit.log` and the hook always exits 0. See `docs/cli.md` for the trailer format.
+
+**Target storage:** `compose/docs/features/<CODE>/feature.json` only. ROADMAP.md is regenerated from feature.json files via the existing `lib/roadmap-gen.js` path; completions themselves do not surface in ROADMAP.md.

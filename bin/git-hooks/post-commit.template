@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Compose post-commit hook — auto-records completions from `Records-completion:` trailers.
+# Installed by `compose hooks install`; placeholders below are substituted at install time.
+# Failures are logged and non-blocking.
+
+set -u
+COMPOSE_NODE="__COMPOSE_NODE__"
+COMPOSE_BIN="__COMPOSE_BIN__"
+LOG="${COMPOSE_HOOK_LOG:-.compose/data/post-commit.log}"
+mkdir -p "$(dirname "$LOG")"
+
+trailers=$(git log -1 --pretty=%B | git interpret-trailers --parse 2>/dev/null || true)
+if [[ -z "$trailers" ]]; then exit 0; fi
+
+sha=$(git rev-parse HEAD)
+files=$(git diff-tree --no-commit-id --name-only -r HEAD)
+subject=$(git log -1 --pretty=%s)
+
+echo "$trailers" | while IFS= read -r line; do
+  header=$(echo "$line" | awk -F': ' 'NR==1{print tolower($1)}')
+  if [[ "$header" != "records-completion" ]]; then continue; fi
+  value=$(echo "$line" | awk -F': ' '{ for (i=2; i<=NF; i++) printf "%s%s", $i, (i==NF?"":": ") }')
+  code=$(echo "$value" | awk '{print $1}')
+  rest=$(echo "$value" | awk '{$1=""; sub(/^ /, ""); print}')
+
+  tp="true"
+  notes="$subject"
+
+  # Extract notes="..." first (greedy quoted-string), then strip it from rest
+  # so its content can't pollute key=value token scanning.
+  if [[ "$rest" =~ notes=\"([^\"]*)\" ]]; then
+    notes="${BASH_REMATCH[1]}"
+    rest="${rest/notes=\"${BASH_REMATCH[1]}\"/}"
+  fi
+
+  # Tokenize remaining rest on whitespace; parse known key=value pairs.
+  for token in $rest; do
+    key="${token%%=*}"
+    val="${token#*=}"
+    case "$key" in
+      tests_pass)
+        if [[ "$val" == "true" ]];  then tp="true";  fi
+        if [[ "$val" == "false" ]]; then tp="false"; fi
+        ;;
+      "")
+        # empty token after stripping notes="...", skip silently
+        ;;
+      *)
+        echo "[$(date -Iseconds)] hook: unknown qualifier \"$token\" for $code" | tee -a "$LOG" >&2
+        ;;
+    esac
+  done
+
+  if ! echo "$files" | "$COMPOSE_NODE" "$COMPOSE_BIN" record-completion "$code" \
+    --commit-sha="$sha" --tests-pass="$tp" --notes="$notes" \
+    --files-changed-from-stdin >> "$LOG" 2>&1; then
+    echo "[$(date -Iseconds)] hook: record_completion failed for $code (sha=$sha) — see above" >> "$LOG"
+  fi
+done
+
+exit 0

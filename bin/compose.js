@@ -994,6 +994,285 @@ if (cmd === 'roadmap') {
   process.exit(0)
 }
 
+if (cmd === 'record-completion') {
+  // compose record-completion <feature_code> --commit-sha=<full-40-hex> [options]
+  //
+  // Flags:
+  //   --commit-sha=<sha>          required; full 40-char hex SHA (Decision 9)
+  //   --tests-pass=<bool>         default true
+  //   --notes=<string>            optional
+  //   --files-changed-from-stdin  read newline-separated paths from stdin
+  //   --no-status                 set_status: false (don't flip status to COMPLETE)
+  //   --force                     force-replace an existing same-(code,sha) record
+  //   --idempotency-key=<key>     caller-supplied idempotency key
+  //
+  // Positional: <feature_code> is the first non-flag argument.
+
+  // Tiny flag parser: handles --key=value, --key value, --no-key
+  function parseFlags(rawArgs) {
+    const flags = {}
+    const positionals = []
+    let i = 0
+    while (i < rawArgs.length) {
+      const a = rawArgs[i]
+      if (a.startsWith('--')) {
+        const stripped = a.slice(2)
+        if (stripped.startsWith('no-')) {
+          flags[stripped.slice(3)] = false
+          i++
+        } else if (stripped.includes('=')) {
+          const eq = stripped.indexOf('=')
+          flags[stripped.slice(0, eq)] = stripped.slice(eq + 1)
+          i++
+        } else if (i + 1 < rawArgs.length && !rawArgs[i + 1].startsWith('--')) {
+          flags[stripped] = rawArgs[i + 1]
+          i += 2
+        } else {
+          flags[stripped] = true
+          i++
+        }
+      } else {
+        positionals.push(a)
+        i++
+      }
+    }
+    return { flags, positionals }
+  }
+
+  if (args[0] === '--help' || args[0] === '-h') {
+    console.log('Usage: compose record-completion <feature_code> --commit-sha=<full-40-hex> [options]')
+    console.log('')
+    console.log('Options:')
+    console.log('  --commit-sha=<sha>          Full 40-char hex SHA (required)')
+    console.log('  --tests-pass=<bool>         Whether tests passed (default: true)')
+    console.log('  --notes=<string>            Optional provenance notes')
+    console.log('  --files-changed-from-stdin  Read newline-separated repo-relative paths from stdin')
+    console.log('  --no-status                 Do not flip feature status to COMPLETE')
+    console.log('  --force                     Replace existing record with same (feature_code, commit_sha)')
+    console.log('  --idempotency-key=<key>     Caller-supplied idempotency key')
+    process.exit(0)
+  }
+
+  const { flags, positionals } = parseFlags(args)
+  const featureCode = positionals[0]
+  if (!featureCode) {
+    console.error('Error: feature_code is required as the first positional argument')
+    console.error('Usage: compose record-completion <feature_code> --commit-sha=<sha>')
+    process.exit(1)
+  }
+
+  const commitSha = flags['commit-sha']
+  if (!commitSha) {
+    console.error('Error: --commit-sha is required (full 40-char hex SHA)')
+    process.exit(1)
+  }
+
+  // Parse tests-pass: default true
+  let testsPass = true
+  if (flags['tests-pass'] !== undefined) {
+    const tp = flags['tests-pass']
+    if (tp === 'false' || tp === false) testsPass = false
+    else if (tp === 'true' || tp === true) testsPass = true
+    else {
+      console.error(`Error: --tests-pass must be true or false, got "${tp}"`)
+      process.exit(1)
+    }
+  }
+
+  // Read files_changed from stdin if flag set
+  let filesChanged = []
+  if (flags['files-changed-from-stdin'] === true) {
+    const { createReadStream } = await import('fs')
+    const { createInterface } = await import('readline')
+    const rl = createInterface({ input: process.stdin, crlfDelay: Infinity })
+    for await (const line of rl) {
+      const trimmed = line.trim()
+      if (trimmed) filesChanged.push(trimmed)
+    }
+  }
+
+  const completionArgs = {
+    feature_code: featureCode,
+    commit_sha: commitSha,
+    tests_pass: testsPass,
+    files_changed: filesChanged,
+  }
+  if (flags['notes']) completionArgs.notes = flags['notes']
+  if (flags['status'] === false) completionArgs.set_status = false  // --no-status
+  if (flags['force'] === true) completionArgs.force = true
+  if (flags['idempotency-key']) completionArgs.idempotency_key = flags['idempotency-key']
+
+  const cwd = findProjectRoot(process.cwd())
+  const { recordCompletion } = await import('../lib/completion-writer.js')
+  try {
+    const result = await recordCompletion(cwd, completionArgs)
+    console.log(JSON.stringify({
+      completion_id:  result.completion_id,
+      idempotent:     result.idempotent,
+      status_changed: result.status_changed,
+    }, null, 2))
+    process.exit(0)
+  } catch (err) {
+    let msg = err && err.code ? `[${err.code}]: ${err.message}` : err.message
+    if (err && err.cause && typeof err.cause.message === 'string') {
+      msg += err.cause.code
+        ? `\n  Caused by [${err.cause.code}]: ${err.cause.message}`
+        : `\n  Caused by: ${err.cause.message}`
+    }
+    console.error(msg)
+    process.exit(1)
+  }
+}
+
+if (cmd === 'hooks') {
+  // compose hooks {install,uninstall,status}
+  const sub = args[0]
+
+  // Tiny flag parser reused here
+  function parseHookFlags(rawArgs) {
+    const flags = {}
+    let i = 0
+    while (i < rawArgs.length) {
+      const a = rawArgs[i]
+      if (a.startsWith('--')) {
+        const stripped = a.slice(2)
+        if (stripped.includes('=')) {
+          const eq = stripped.indexOf('=')
+          flags[stripped.slice(0, eq)] = stripped.slice(eq + 1)
+          i++
+        } else {
+          flags[stripped] = true
+          i++
+        }
+      }
+      i = i < rawArgs.length && !rawArgs[i].startsWith('--') ? i + 1 : i
+    }
+    return flags
+  }
+
+  // Fix: simpler flag parsing
+  const hookFlags = {}
+  for (let i = 1; i < args.length; i++) {
+    const a = args[i]
+    if (a === '--force') hookFlags.force = true
+    else if (a.startsWith('--')) {
+      const stripped = a.slice(2)
+      if (stripped.includes('=')) {
+        const eq = stripped.indexOf('=')
+        hookFlags[stripped.slice(0, eq)] = stripped.slice(eq + 1)
+      } else {
+        hookFlags[stripped] = true
+      }
+    }
+  }
+
+  const { readFileSync: rfSync, writeFileSync: wfSync, existsSync: exSync, chmodSync } = await import('fs')
+  const { join: pjoin, resolve: presolve } = await import('path')
+  const { fileURLToPath: futp } = await import('url')
+
+  const projectRoot = findProjectRoot(process.cwd())
+  const gitDir = pjoin(projectRoot, '.git')
+  if (!exSync(gitDir)) {
+    console.error('Error: not a git repository (no .git directory found)')
+    process.exit(1)
+  }
+
+  const hooksDir = pjoin(gitDir, 'hooks')
+  const { mkdirSync: mSync } = await import('fs')
+  mSync(hooksDir, { recursive: true })
+  const hookPath = pjoin(hooksDir, 'post-commit')
+
+  // Marker line used to identify our hooks
+  const HOOK_MARKER = '# Compose post-commit hook —'
+
+  // Resolve absolute paths for substitution
+  const composeBin = presolve(presolve(futp(import.meta.url), '..'), 'compose.js')
+  const composeNode = process.execPath
+
+  if (sub === 'install') {
+    // Read template
+    const templatePath = pjoin(presolve(futp(import.meta.url), '..'), 'git-hooks', 'post-commit.template')
+    let template
+    try {
+      template = rfSync(templatePath, 'utf-8')
+    } catch (err) {
+      console.error(`Error: could not read hook template: ${err.message}`)
+      process.exit(1)
+    }
+
+    // Check existing hook
+    if (exSync(hookPath)) {
+      const existing = rfSync(hookPath, 'utf-8')
+      const isOurs = existing.includes(HOOK_MARKER)
+      if (!isOurs && !hookFlags.force) {
+        console.error('Error: a foreign post-commit hook already exists at ' + hookPath)
+        console.error('')
+        console.error('To chain our hook after yours, add this to your existing hook:')
+        console.error('')
+        console.error(`  "${composeNode}" "${composeBin}" record-completion ...`)
+        console.error('')
+        console.error('Or run `compose hooks install --force` to overwrite.')
+        process.exit(1)
+      }
+    }
+
+    // Substitute placeholders
+    const substituted = template
+      .replace(/__COMPOSE_NODE__/g, composeNode)
+      .replace(/__COMPOSE_BIN__/g, composeBin)
+
+    wfSync(hookPath, substituted)
+    chmodSync(hookPath, 0o755)
+    console.log(`Installed post-commit hook at ${hookPath}`)
+    console.log(`  COMPOSE_NODE=${composeNode}`)
+    console.log(`  COMPOSE_BIN=${composeBin}`)
+    process.exit(0)
+  }
+
+  if (sub === 'uninstall') {
+    if (!exSync(hookPath)) {
+      console.log('No post-commit hook installed.')
+      process.exit(0)
+    }
+    const content = rfSync(hookPath, 'utf-8')
+    if (!content.includes(HOOK_MARKER)) {
+      console.warn('Warning: post-commit hook exists but does not appear to be a Compose hook (marker not found). Leaving alone.')
+      process.exit(0)
+    }
+    const { rmSync: rmS } = await import('fs')
+    rmS(hookPath)
+    console.log(`Removed post-commit hook at ${hookPath}`)
+    process.exit(0)
+  }
+
+  // status (default)
+  if (!sub || sub === 'status') {
+    if (!exSync(hookPath)) {
+      console.log('absent — no post-commit hook installed')
+      process.exit(0)
+    }
+    const content = rfSync(hookPath, 'utf-8')
+    if (!content.includes(HOOK_MARKER)) {
+      console.log('foreign — post-commit hook exists but is not a Compose hook')
+      process.exit(0)
+    }
+    // Check if paths match current
+    const nodeMatch   = content.includes(`COMPOSE_NODE="${composeNode}"`)
+    const binMatch    = content.includes(`COMPOSE_BIN="${composeBin}"`)
+    if (nodeMatch && binMatch) {
+      console.log('installed (current)')
+    } else {
+      console.log('installed (stale paths — re-run install)')
+      if (!nodeMatch) console.log(`  expected COMPOSE_NODE="${composeNode}"`)
+      if (!binMatch)  console.log(`  expected COMPOSE_BIN="${composeBin}"`)
+    }
+    process.exit(0)
+  }
+
+  console.error(`Unknown hooks subcommand: "${sub}". Use: install | uninstall | status`)
+  process.exit(1)
+}
+
 if (cmd === 'pipeline') {
   const { runPipelineCli } = await import('../lib/pipeline-cli.js')
   try {

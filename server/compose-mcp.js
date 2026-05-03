@@ -54,6 +54,8 @@ import {
   toolGetChangelogEntries,
   toolWriteJournalEntry,
   toolGetJournalEntries,
+  toolRecordCompletion,
+  toolGetCompletions,
 } from './compose-mcp-tools.js';
 
 // ---------------------------------------------------------------------------
@@ -468,6 +470,40 @@ const TOOLS = [
       },
     },
   },
+  // -------------------------------------------------------------------------
+  // Completion writer — COMP-MCP-COMPLETION
+  // -------------------------------------------------------------------------
+  {
+    name: 'record_completion',
+    description: 'Record a completion bound to a commit SHA. Stores in feature.json completions[]; idempotent on (feature_code, commit_sha); when set_status:true (default) also flips status to COMPLETE via set_feature_status. Audit append best-effort. Status-flip failure rethrows as STATUS_FLIP_AFTER_COMPLETION_RECORDED with err.cause; the completion record is still persisted.',
+    inputSchema: {
+      type: 'object',
+      required: ['feature_code', 'commit_sha', 'tests_pass', 'files_changed'],
+      properties: {
+        feature_code:    { type: 'string' },
+        commit_sha:      { type: 'string', description: 'Full 40-char hex SHA (Decision 9). Short prefixes are rejected on write. Stored verbatim; commit_sha_short is derived for display only.' },
+        tests_pass:      { type: 'boolean' },
+        files_changed:   { type: 'array', items: { type: 'string' } },
+        notes:           { type: 'string' },
+        set_status:      { type: 'boolean', description: 'Default true. When true, flips status to COMPLETE via set_feature_status.' },
+        force:           { type: 'boolean', description: 'If true and a record with the same (feature_code, commit_sha) exists, replace it in place.' },
+        idempotency_key: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'get_completions',
+    description: 'Read completion records from feature.json files. Filter by feature_code (exact), commit_sha (short or full prefix), or since (shorthand or ISO date).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        feature_code: { type: 'string' },
+        commit_sha:   { type: 'string' },
+        since:        { type: 'string' },
+        limit:        { type: 'number', description: 'Default 50; capped at 500.' },
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -516,6 +552,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_changelog_entries':    result = await toolGetChangelogEntries(args); break;
       case 'write_journal_entry':      result = await toolWriteJournalEntry(args); break;
       case 'get_journal_entries':      result = await toolGetJournalEntries(args); break;
+      case 'record_completion':        result = await toolRecordCompletion(args); break;
+      case 'get_completions':          result = await toolGetCompletions(args); break;
       // agent_run removed — STRAT-DEDUP-AGENTRUN v1. Use mcp__stratum__stratum_agent_run.
       default:
         return {

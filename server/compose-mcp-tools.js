@@ -264,6 +264,20 @@ export async function toolGetJournalEntries(args) {
   return getJournalEntries(getTargetRoot(), args);
 }
 
+// ---------------------------------------------------------------------------
+// Completion writer — COMP-MCP-COMPLETION
+// ---------------------------------------------------------------------------
+
+export async function toolRecordCompletion(args) {
+  const { recordCompletion } = await import('../lib/completion-writer.js');
+  return recordCompletion(getTargetRoot(), args);
+}
+
+export async function toolGetCompletions(args) {
+  const { getCompletions } = await import('../lib/completion-writer.js');
+  return getCompletions(getTargetRoot(), args);
+}
+
 export async function toolBindSession({ featureCode }) {
   const postData = JSON.stringify({ featureCode });
   return new Promise((resolve, reject) => {

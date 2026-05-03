@@ -7,6 +7,7 @@ The verbs group naturally:
 - **Pipeline editing:** `pipeline`
 - **Triage and QA:** `triage`, `qa-scope`
 - **Tracking:** `ideabox`, `gates`, `loops`
+- **Completion:** `record-completion`, `hooks`
 - **Setup:** `init`, `setup`, `install`, `doctor`
 - **Server:** `start`
 
@@ -211,6 +212,55 @@ compose loops resolve <loopId> --feature FEAT-1 --note "Picked Clerk"
 ```
 
 `--feature <code>` is required on every subcommand.
+
+## Completion
+
+### `compose record-completion`
+
+Record a typed completion against a commit SHA. Wraps `record_completion` (MCP) for shell use.
+
+```bash
+compose record-completion <FEATURE_CODE> --commit-sha=<full-40-hex> [--tests-pass=true|false] [--notes='...'] [--files-changed-from-stdin] [--no-status] [--force] [--idempotency-key=<key>]
+```
+
+**Arguments:**
+- `<FEATURE_CODE>` (positional, required)
+- `--commit-sha=<sha>` (required) — full 40-char hex SHA. Short prefixes are rejected on write (use `git rev-parse HEAD`).
+- `--tests-pass=true|false` — default `true`.
+- `--notes='...'` — single-line provenance text.
+- `--files-changed-from-stdin` — read newline-separated paths from stdin.
+- `--no-status` — record only; do not flip feature status to COMPLETE.
+- `--force` — replace an existing record on the same `(feature_code, commit_sha)` in place.
+- `--idempotency-key=<key>` — caller-supplied retry key.
+
+Writes the record to `feature.json` `completions[]` and (when `--no-status` is omitted) flips status to `COMPLETE` via `set_feature_status`. Stale state on partial-write failures surfaces typed via `STATUS_FLIP_AFTER_COMPLETION_RECORDED` with `Caused by [...]`.
+
+### `compose hooks install|uninstall|status`
+
+Manage the opt-in git post-commit hook that auto-records completions from `Records-completion: <CODE>` trailers.
+
+```bash
+compose hooks install [--force]
+compose hooks uninstall
+compose hooks status
+```
+
+**Behavior:**
+- `install` reads `bin/git-hooks/post-commit.template`, substitutes `__COMPOSE_NODE__` (current `node` binary, absolute) and `__COMPOSE_BIN__` (absolute path to `bin/compose.js`), and writes the result to `<repo>/.git/hooks/post-commit` with mode 0755. Refuses to overwrite a foreign post-commit without `--force`. Idempotent on re-run if the marker matches.
+- `uninstall` removes the file iff its content matches the compose marker.
+- `status` reports `installed (current) | installed (stale paths — re-run install) | foreign | absent`.
+
+**Trailer format** (case-insensitive header):
+
+```
+Records-completion: COMP-FOO-1
+Records-completion: COMP-FOO-1 tests_pass=false
+Records-completion: COMP-FOO-1 notes="partial — backfill deferred"
+```
+
+Multiple trailers fire multiple `record_completion` calls in order. Unknown qualifiers warn (logged to `.compose/data/post-commit.log`) but do not fail the hook. The hook always exits 0 — post-commit hooks must not influence the just-committed state.
+
+**Path independence:** the installed hook calls the absolute `node` and `bin/compose.js` paths baked in at install time. It does not require `compose` or `node` on PATH. Re-run `compose hooks install` after a compose upgrade to refresh the paths.
 
 ## Setup
 
