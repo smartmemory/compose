@@ -52,6 +52,8 @@ import {
   toolGetFeatureLinks,
   toolAddChangelogEntry,
   toolGetChangelogEntries,
+  toolWriteJournalEntry,
+  toolGetJournalEntries,
 } from './compose-mcp-tools.js';
 
 // ---------------------------------------------------------------------------
@@ -421,6 +423,51 @@ const TOOLS = [
       },
     },
   },
+
+  // -------------------------------------------------------------------------
+  // Journal writer — COMP-MCP-JOURNAL-WRITER
+  // -------------------------------------------------------------------------
+  {
+    name: 'write_journal_entry',
+    description: 'Write a typed entry to compose/docs/journal/ with auto-numbered global session and inserted index row. Idempotent on (date, slug) at storage level; optional caller idempotency_key for retry safety. Audit-log append is best-effort.',
+    inputSchema: {
+      type: 'object',
+      required: ['date', 'slug', 'sections', 'summary_for_index'],
+      properties: {
+        date: { type: 'string', description: 'ISO date "YYYY-MM-DD".' },
+        slug: { type: 'string', description: 'Kebab-case slug for the filename, e.g. "mcp-journal-writer".' },
+        sections: {
+          type: 'object',
+          required: ['what_happened', 'what_we_built', 'what_we_learned', 'open_threads'],
+          properties: {
+            what_happened:   { type: 'string' },
+            what_we_built:   { type: 'string' },
+            what_we_learned: { type: 'string' },
+            open_threads:    { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+        summary_for_index: { type: 'string', description: 'Single-line summary for the README index row. No newlines, no "|".' },
+        feature_code:      { type: 'string', description: 'Optional feature code stamped in entry frontmatter.' },
+        closing_line:      { type: 'string', description: 'Optional final italicized one-liner.' },
+        force:             { type: 'boolean', description: 'If true and an entry with the same (date, slug) exists, overwrite in place.' },
+        idempotency_key:   { type: 'string', description: 'Optional caller-supplied key. Same key replays return the cached result without re-mutating.' },
+      },
+    },
+  },
+  {
+    name: 'get_journal_entries',
+    description: 'Read parsed entries from compose/docs/journal/. Filter by feature_code (exact), session (exact), or since (shorthand "24h"/"7d"/"30m" or ISO date).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        since:        { type: 'string' },
+        feature_code: { type: 'string' },
+        session:      { type: 'number' },
+        limit:        { type: 'number', description: 'Default 50; capped at 500.' },
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -467,6 +514,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_feature_links':        result = await toolGetFeatureLinks(args); break;
       case 'add_changelog_entry':      result = await toolAddChangelogEntry(args); break;
       case 'get_changelog_entries':    result = await toolGetChangelogEntries(args); break;
+      case 'write_journal_entry':      result = await toolWriteJournalEntry(args); break;
+      case 'get_journal_entries':      result = await toolGetJournalEntries(args); break;
       // agent_run removed — STRAT-DEDUP-AGENTRUN v1. Use mcp__stratum__stratum_agent_run.
       default:
         return {
@@ -481,9 +530,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // Surface typed error codes (e.g. INVALID_INPUT, CHANGELOG_FORMAT) when
     // tools attach them, so MCP callers can branch deterministically. Plain
     // errors fall back to the original "Error: <message>" shape.
-    const text = err && err.code
+    // When err.cause is an Error-shaped object, append it so callers can
+    // distinguish partial-write sub-errors (e.g. rollback succeeded vs failed).
+    let text = err && err.code
       ? `Error [${err.code}]: ${err.message}`
       : `Error: ${err.message}`;
+    if (err && err.cause && typeof err.cause.message === 'string') {
+      text += err.cause.code
+        ? `\n  Caused by [${err.cause.code}]: ${err.cause.message}`
+        : `\n  Caused by: ${err.cause.message}`;
+    }
     return {
       content: [{ type: 'text', text }],
       isError: true,

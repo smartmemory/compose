@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-05-03
+
+### COMP-MCP-JOURNAL-WRITER — Journal writer ships
+
+Sub-ticket #4 of `COMP-MCP-FEATURE-MGMT`. Two new MCP tools (`write_journal_entry`, `get_journal_entries`) route every `compose/docs/journal/` mutation and read through a typed surface. Cross-cutting MCP wrapper extension propagates `err.cause` for the whole writer family.
+
+**Added:**
+- `compose/lib/journal-writer.js` — `parseJournalEntry`, `parseJournalIndex`, `renderJournalEntry`, `writeJournalEntry`, `getJournalEntries` (~640 lines). Hand-rolled YAML-ish frontmatter codec; advisory-locked global session counter; HR + italic closing-line delimiter; two-file rollback on partial-commit failure (`err.code = JOURNAL_PARTIAL_WRITE`, `err.cause = <original>`).
+- Two MCP tools: `write_journal_entry`, `get_journal_entries`.
+- Journal-writer section in `docs/mcp.md` documenting frontmatter contract, error codes, rollback semantics.
+
+**Changed:**
+- MCP error wrapper in `server/compose-mcp.js` now serializes `err.cause` as `Caused by [CODE]: message` after the existing `Error [CODE]: message` envelope. Backward-compatible — no sibling regressions.
+- `.claude/rules/journaling.md` — session numbering documented as global-monotonic (matches actual practice; supersedes the by-date claim).
+- `docs/features/COMP-MCP-FEATURE-MGMT/design.md` Journal section — points at `COMP-MCP-JOURNAL-WRITER/design.md` as the canonical contract.
+
+**Fixed:**
+- Journal index parser preserves `postamble` (everything after the table) — was an internal-only concept that drifted between design and blueprint until Codex round 3 caught it.
+
+**Snapshot:**
+- 70 unit tests + 6 MCP e2e tests + 1 child-process fixture (`test/fixtures/mcp-fail-index-write.mjs`); full suite 2321 node + 92 vitest, 0 fail. Self-applied via `write_journal_entry` (session 37). Five Codex passes total — three pre-code on design/blueprint/plan, two post-code on the implementation — caught 14 actionable issues before ship.
+
 ## 2026-05-02
 
 ### COMP-MCP-ARTIFACT-LINKER — typed MCP linker for artifacts + cross-feature relationships

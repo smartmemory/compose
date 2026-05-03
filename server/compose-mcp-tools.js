@@ -250,6 +250,20 @@ export async function toolGetChangelogEntries(args) {
   return getChangelogEntries(getTargetRoot(), args);
 }
 
+// ---------------------------------------------------------------------------
+// Journal writer — COMP-MCP-JOURNAL-WRITER
+// ---------------------------------------------------------------------------
+
+export async function toolWriteJournalEntry(args) {
+  const { writeJournalEntry } = await import('../lib/journal-writer.js');
+  return writeJournalEntry(getTargetRoot(), args);
+}
+
+export async function toolGetJournalEntries(args) {
+  const { getJournalEntries } = await import('../lib/journal-writer.js');
+  return getJournalEntries(getTargetRoot(), args);
+}
+
 export async function toolBindSession({ featureCode }) {
   const postData = JSON.stringify({ featureCode });
   return new Promise((resolve, reject) => {

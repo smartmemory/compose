@@ -28,6 +28,8 @@ Compose exposes project state as MCP tools via `server/compose-mcp.js` (stdio tr
 | `get_feature_links` | Read outgoing/incoming/both links for a feature; optional `kind` filter. |
 | `add_changelog_entry` | Insert (or replace, with `force: true`) a typed entry in `compose/CHANGELOG.md`. Idempotent on `(date_or_version, code)`; renders canonical `Added`/`Changed`/`Fixed`/`Snapshot` subsections from typed inputs. Audit append best-effort. |
 | `get_changelog_entries` | Read parsed entries; filter by `code` (exact) and/or `since` (shorthand `24h`/`7d`/`30m` or ISO date — date surfaces only; version surfaces always pass through). |
+| `write_journal_entry` | Render and write a `compose/docs/journal/<date>-session-<N>-<slug>.md` entry with auto-numbered global session, plus insert a row at the top of the journal index. Idempotent on `(date, slug)`; `force: true` overwrites in place preserving the session number. Two-file write rolls back on partial failure. Audit append best-effort. |
+| `get_journal_entries` | Read parsed entries from `compose/docs/journal/`; filter by `feature_code` (exact), `session` (exact), `since` (shorthand or ISO date). Returns each entry's frontmatter-canonical `summary`/`feature_code`/`closing_line`, the four canonical sections, and an ordered `unknownSections` array. |
 | `start_iteration_loop` | Start an iteration loop on a feature |
 | `report_iteration_result` | Report an iteration's result; the server decides whether to continue. Terminal outcomes are `clean`, `max_reached`, `action_limit`, or `timeout`; while the loop is still running, `outcome` is `null`. |
 | `abort_iteration_loop` | Abort an active iteration loop |
@@ -131,3 +133,71 @@ Subsections emit only when non-empty, in the fixed order Added → Changed → F
 **Typed error codes** on tool failures surface via the `Error [CODE]: message` envelope: `INVALID_INPUT` (validation failures: bad code, bad date_or_version, unknown sections key), `CHANGELOG_FORMAT` (pre-existing file lacks `# Changelog` H1).
 
 **Target file:** `compose/CHANGELOG.md` only. Top-level repo-root `CHANGELOG.md` is out of scope.
+
+## Journal writer (COMP-MCP-JOURNAL-WRITER)
+
+`write_journal_entry` and `get_journal_entries` route every `compose/docs/journal/` mutation and read through a typed surface. Same framework as the roadmap, linker, and changelog writers: optional caller-supplied `idempotency_key`, best-effort audit log, no HTTP. Entries render from typed inputs into the canonical four-section layout.
+
+**Tools:**
+- `write_journal_entry({ date, slug, sections: { what_happened, what_we_built, what_we_learned, open_threads }, summary_for_index, feature_code?, closing_line?, force?, idempotency_key? })` → `{ path, session_number, index_line, idempotent }`. `session_number` is global-monotonic (next = `max + 1`); `index_line` is the 1-based line of the row in `docs/journal/README.md`.
+- `get_journal_entries({ since?, feature_code?, session?, limit? })` → `{ entries, count }`. Each entry has all documented fields present; `summary`/`feature_code`/`closing_line` may be `null` for pre-frontmatter entries; `unknownSections` is always an ordered array.
+
+**Canonical entry layout (rendered):**
+
+```
+---
+date: <date>
+session_number: <N>
+slug: <slug>
+summary: <summary_for_index>
+feature_code: <feature_code>          ← omitted if not provided
+closing_line: <closing_line>          ← omitted if not provided
+---
+
+# Session <N> — <feature_code or short title>
+
+**Date:** <date>
+**Feature:** `<feature_code>`         ← omitted if not provided
+
+## What happened
+
+…
+
+## What we built
+
+…
+
+## What we learned
+
+…
+
+## Open threads
+
+…
+
+---
+
+*<closing_line>*                      ← only when closing_line was provided
+```
+
+The trailing `---` HR plus the italicized one-liner is the **explicit delimiter** for the closing line. Without it, a parser cannot distinguish "last paragraph of Open threads" from "closing line" — so the writer always emits this shape, and `parseJournalEntry` uses it. Frontmatter `closing_line` always wins over body parse for entries this writer produced.
+
+**Session numbering** is **global**, not per-date. Filenames are `YYYY-MM-DD-session-<N>-<slug>.md`; `N` increments across the entire journal, never resets per date. The writer scans `docs/journal/` under an advisory lock to compute `max + 1`. Gaps in the existing sequence are preserved — never auto-filled. The journaling rule (`compose/.claude/rules/journaling.md`) was updated to match.
+
+**Dedup** is two-layered, identical to sibling writers:
+1. **Storage-level** (always on): before writing, scan for `<date>-session-*-<slug>.md`. If found and `force: false`, the call is a no-op and returns `{ idempotent: true }` with the existing path/session/index_line. The `index_line` is **recomputed inside the lock** (a second read of `README.md`) so concurrent inserts never produce a stale value.
+2. **Caller-supplied `idempotency_key`** (optional): same key replays return the cached result via `.compose/data/idempotency-keys.jsonl`.
+
+**Two-file write with rollback.** The writer mutates two files: the entry file and the index. If the index write fails after the entry write succeeds:
+- **New-entry path** — the orphaned entry file is deleted (compensating action).
+- **Force-overwrite path** — the prior entry content (read into memory before the first write) is restored.
+
+The rethrown error carries `err.code = 'JOURNAL_PARTIAL_WRITE'` and `err.cause = <original index error>`. The MCP wrapper serializes both as `Error [JOURNAL_PARTIAL_WRITE]: …\n  Caused by [CODE]: …`. The audit log is appended only after both writes succeed — so a retry after a partial failure is also idempotent at the audit level.
+
+**Format enforcement is structural, not lexical.** Pre-existing entries (older sessions without frontmatter) are preserved as-is on read. The reader returns `summary: null`, `feature_code: null`, `closing_line: null` and any non-canonical headings as an ordered `unknownSections` array (preserving file order, tolerating duplicates like two `## Notes` blocks). Headings match canonical names case- and whitespace-insensitively (so `## What  Happened` is recognized as `what_happened`).
+
+**Audit log:** rows use `tool: 'write_journal_entry'` plus `date`, `slug`, `session_number`, optionally `feature_code`, `force`, `idempotency_key`. Storage-level idempotent no-ops do **not** append an audit row.
+
+**Typed error codes** on tool failures: `INVALID_INPUT` (bad date/slug/sections/summary), `JOURNAL_FORMAT` (entry-file frontmatter parse failure on the writer side), `JOURNAL_INDEX_FORMAT` (missing `## Entries`, malformed table header or separator), `JOURNAL_PARTIAL_WRITE` (entry succeeded, index failed; rollback was attempted — see `err.cause` for the original failure).
+
+**Target directory:** `compose/docs/journal/` only.

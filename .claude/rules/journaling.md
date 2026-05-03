@@ -27,7 +27,7 @@ Follow the established format (see existing entries for reference):
 
 ## Session numbering
 
-Sessions are numbered sequentially (0, 1, 2, 3...) within a date. If multiple entries happen on the same date, increment the session number. Check existing entries in `docs/journal/` before numbering.
+Sessions are numbered **globally and monotonically** across the entire journal — not per date. The next session number is `max(existing) + 1`. Numbers never reset and gaps are never refilled. The `write_journal_entry` MCP tool computes this for you under an advisory lock; do not hand-pick a number.
 
 ## Why this matters
 
