@@ -7,7 +7,7 @@
     "compose-mcp": "./bin/compose-mcp.js"
   },
   "dependencies": {
-    "@smartmemory/compose": "^0.1.4-beta"
+    "@smartmemory/compose": "^0.1.5-beta"
   },
   "files": ["bin/**", "README.md", "LICENSE"],
   "publishConfig": { "access": "public" },

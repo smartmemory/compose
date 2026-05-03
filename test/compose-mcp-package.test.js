@@ -24,7 +24,7 @@ test('compose-mcp package.json: identity, version, license', () => {
 
 test('compose-mcp package.json: bin and dependency', () => {
   assert.equal(wrapperPkg.bin['compose-mcp'], './bin/compose-mcp.js');
-  assert.equal(wrapperPkg.dependencies['@smartmemory/compose'], '^0.1.4-beta');
+  assert.equal(wrapperPkg.dependencies['@smartmemory/compose'], '^0.1.5-beta');
 });
 
 test('compose-mcp package.json: files allowlist', () => {
