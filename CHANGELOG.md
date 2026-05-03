@@ -22,6 +22,21 @@ Sub-ticket #4 of `COMP-MCP-FEATURE-MGMT`. Two new MCP tools (`write_journal_entr
 **Snapshot:**
 - 70 unit tests + 6 MCP e2e tests + 1 child-process fixture (`test/fixtures/mcp-fail-index-write.mjs`); full suite 2321 node + 92 vitest, 0 fail. Self-applied via `write_journal_entry` (session 37). Five Codex passes total — three pre-code on design/blueprint/plan, two post-code on the implementation — caught 14 actionable issues before ship.
 
+### COMP-MCP-COMPLETION — Completion writer ships
+
+Sub-ticket #5 of COMP-MCP-FEATURE-MGMT. Two new MCP tools (`record_completion`, `get_completions`) record completions bound to a full commit SHA, plus an opt-in PATH-independent post-commit hook that auto-records on `Records-completion: <CODE>` trailers.
+
+**Added:**
+- `compose/lib/completion-writer.js` — `recordCompletion`, `getCompletions`. Full-SHA identity (Decision 9), per-feature advisory lock (Decision 10), writer-stamped `feature_code` on every record (Decision 11). Reuses `lib/idempotency.js`, `lib/feature-events.js`, `lib/feature-writer.js#setFeatureStatus`.
+- `compose/bin/git-hooks/post-commit.template` — hook template with `__COMPOSE_NODE__` / `__COMPOSE_BIN__` placeholders substituted at install time. Runtime hook is PATH-independent.
+- `compose record-completion <CODE> --commit-sha=<full-sha> ...` CLI subcommand.
+- `compose hooks install|uninstall|status` CLI subcommand. Refuses to overwrite a foreign post-commit without `--force`.
+- Three new MCP tool error codes: `INVALID_INPUT`, `FEATURE_NOT_FOUND`, `STATUS_FLIP_AFTER_COMPLETION_RECORDED` (with three documented `err.cause` subcases including `ROADMAP_PARTIAL_WRITE`).
+- Completion writer section in `docs/mcp.md`; CLI subcommand docs in `docs/cli.md`.
+
+**Snapshot:**
+- 80 new tests (50 unit + 6 MCP e2e + 19 CLI/hook + 5 hook-parser unit). Full suite 2403 node + 92 vitest, 0 fail. Self-applied via `recordCompletion` against `0c8d120`. 7 Codex doc-review rounds + 2 implementation-review rounds caught 17 issues before ship.
+
 ## 2026-05-02
 
 ### COMP-MCP-ARTIFACT-LINKER — typed MCP linker for artifacts + cross-feature relationships
