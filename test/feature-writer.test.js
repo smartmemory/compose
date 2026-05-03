@@ -165,6 +165,30 @@ describe('addRoadmapEntry', () => {
     assert.ok(readFeature(cwd, 'AUDIT-1'), 'feature.json should still be written');
   });
 
+  test('writeRoadmap failure surfaces ROADMAP_PARTIAL_WRITE with err.cause', async () => {
+    const cwd = freshCwd();
+    // Sabotage writeRoadmap: make ROADMAP.md a directory so writeFileSync throws EISDIR.
+    mkdirSync(join(cwd, 'ROADMAP.md'));
+
+    await assert.rejects(
+      addRoadmapEntry(cwd, { code: 'PART-1', description: 'd', phase: 'P' }),
+      err => {
+        assert.equal(err.code, 'ROADMAP_PARTIAL_WRITE');
+        assert.match(err.message, /PART-1/);
+        assert.match(err.message, /compose roadmap generate/);
+        assert.ok(err.cause, 'err.cause should carry the underlying writeRoadmap error');
+        assert.ok(err.cause instanceof Error, 'err.cause should be an Error');
+        assert.match(err.cause.message, /EISDIR|directory/i);
+        return true;
+      },
+    );
+
+    // feature.json was committed before the failure — caller can recover.
+    const f = readFeature(cwd, 'PART-1');
+    assert.ok(f, 'feature.json should be committed despite the partial write');
+    assert.equal(f.code, 'PART-1');
+  });
+
   test('persists optional fields', async () => {
     const cwd = freshCwd();
     await addRoadmapEntry(cwd, {
@@ -289,6 +313,34 @@ describe('setFeatureStatus', () => {
     assert.deepEqual(r1, r2);
     const events = readEvents(cwd, { tool: 'set_feature_status', code: 'IDS-1' });
     assert.equal(events.length, 1);
+  });
+
+  test('writeRoadmap failure surfaces ROADMAP_PARTIAL_WRITE with err.cause', async () => {
+    const cwd = freshCwd();
+    seedFeature(cwd, { code: 'PART-2', description: 'x', phase: 'P', status: 'PLANNED' });
+    // Sabotage writeRoadmap mid-flight: ROADMAP.md becomes a directory.
+    mkdirSync(join(cwd, 'ROADMAP.md'));
+
+    await assert.rejects(
+      setFeatureStatus(cwd, { code: 'PART-2', status: 'IN_PROGRESS' }),
+      err => {
+        assert.equal(err.code, 'ROADMAP_PARTIAL_WRITE');
+        assert.match(err.message, /PART-2/);
+        assert.match(err.message, /PLANNED → IN_PROGRESS/);
+        assert.match(err.message, /compose roadmap generate/);
+        assert.ok(err.cause instanceof Error, 'err.cause should be an Error');
+        assert.match(err.cause.message, /EISDIR|directory/i);
+        return true;
+      },
+    );
+
+    // feature.json was updated before the failure — caller can recover.
+    const f = readFeature(cwd, 'PART-2');
+    assert.equal(f.status, 'IN_PROGRESS', 'status flip should be committed despite the partial write');
+
+    // Audit was NOT appended (event log writes happen after writeRoadmap succeeds).
+    const events = readEvents(cwd, { tool: 'set_feature_status', code: 'PART-2' });
+    assert.equal(events.length, 0, 'audit should not be appended on partial write');
   });
 });
 
