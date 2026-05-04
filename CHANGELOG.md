@@ -2,6 +2,18 @@
 
 ## 2026-05-04
 
+### COMP-MCP-MIGRATION-2-1 — Lossless regen prep (PARTIAL)
+
+Surfaced by `COMP-MCP-MIGRATION-2`. Originally scoped as a bulk backfill of `feature.json` for every legacy `compose/ROADMAP.md` row so typed writers could own regen. A trial run revealed the data-loss surface is too large to ship cleanly: anonymous-numbered tables in Phases 0–6 can't be parsed for codes, curated phase-status overrides (`PARKED (Claude Code dependency)`, `PARTIAL (1a–1d COMPLETE, 2 PLANNED)`) get flattened by `phaseStatus()` rollup, and top-level non-phase sections (`Roadmap Conventions`, `Dogfooding Milestones`, etc.) are stripped entirely. Reverted the trial; shipped two narrow infrastructure fixes that prepare for proper backfill once that larger work is designed.
+
+**Changed:**
+- `compose/lib/migrate-roadmap.js` — `migrateRoadmap()` defaults `featuresDir` to `loadFeaturesDir(cwd)` instead of the literal `'docs/features'`. Repos with `paths.features` overrides now backfill under the configured root.
+- `compose/lib/roadmap-gen.js` — `renderPhase()` emits feature descriptions verbatim instead of truncating at 80 chars + `'…'`. Typed-writer regens preserve full prose; markdown tables tolerate long cells fine.
+
+**Status:** PARTIAL. Bulk backfill of compose's 189 legacy features is deferred — needs parser updates for anonymous tables, a phase-status override mechanism, and preamble/footer preservation in regen output. Hand-edit `compose/ROADMAP.md` for curated phases until then.
+
+**Tests:** No new tests (both changes are mechanical; existing path-respect + regen tests cover them). Full suite: 2570 + 92 UI = 2662, all green.
+
 ### COMP-MCP-MIGRATION-1 — Audit-log correlated auto-rollback for `enforcement.mcpForFeatureMgmt`
 
 Surfaced by `COMP-MCP-MIGRATION`. Promoted the prompt-only enforcement flag to true block mode by adding per-build correlation IDs to `feature-events.jsonl` and a pre-stage scan in `executeShipStep` that rejects unauthorized `ROADMAP.md` / `CHANGELOG.md` / `feature.json` edits.
