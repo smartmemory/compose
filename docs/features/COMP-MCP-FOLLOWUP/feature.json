@@ -1,0 +1,11 @@
+{
+  "code": "COMP-MCP-FOLLOWUP",
+  "description": "**Follow-up filing (`propose_followup`).** Sub-ticket #8 of `COMP-MCP-FEATURE-MGMT`. Auto-numbers `<parent>-N`, adds ROADMAP row, links surfaced_by new → parent, scaffolds design.md with rationale block. Retry-safe inflight ledger + per-parent file lock.",
+  "status": "COMPLETE",
+  "phase": "Phase 7: MCP Writers",
+  "created": "2026-05-03",
+  "updated": "2026-05-04",
+  "complexity": "M",
+  "position": 8,
+  "parent": "COMP-MCP-FEATURE-MGMT"
+}

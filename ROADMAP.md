@@ -162,7 +162,7 @@ Sub-tickets of `COMP-MCP-FEATURE-MGMT` (umbrella). Move every free-text mutation
 | 5 | COMP-MCP-COMPLETION | **Completion writer (`record_completion`, `get_completions`).** Sub-ticket #5 of `COMP-MCP-FEATURE-MGMT`. Commit-bound completion records, opt-in post-commit hook, three status-flip failure subcases. | COMPLETE |
 | 6 | COMP-MCP-PUBLISH | **Slim `@smartmemory/compose-mcp` wrapper + MCP registry publish.** Sub-ticket #6 of `COMP-MCP-FEATURE-MGMT`. Spawn-based stdio launcher; tag-triggered CI publishes to npm + `io.github.smartmemory/compose-mcp` on the official MCP registry. | COMPLETE |
 | 7 | COMP-MCP-VALIDATE | **Cross-artifact validator (`validate_feature`, `validate_project`).** Sub-ticket #7 of `COMP-MCP-FEATURE-MGMT`. Cross-checks ROADMAP row, vision-state, feature.json, folder contents, linked artifacts, cross-references. Three JSON Schemas codify implicit shapes. Pre-push hook gates drift before it leaves the dev's machine. | COMPLETE |
-| 8 | COMP-MCP-FOLLOWUP | **Follow-up filing (`propose_followup`).** Sub-ticket #8 of `COMP-MCP-FEATURE-MGMT`. Auto-numbering + scaffold of the new feature folder. | PLANNED |
+| 8 | COMP-MCP-FOLLOWUP | **Follow-up filing (`propose_followup`).** Sub-ticket #8 of `COMP-MCP-FEATURE-MGMT`. Auto-numbers `<parent>-N`, adds ROADMAP row, links surfaced_by new → parent, scaffolds design.md with rationale block. Retry-safe inflight ledger + per-parent file lock. | COMPLETE |
 | 9 | COMP-MCP-MIGRATION | **Migrate Compose's own callers to the typed MCP tools.** Sub-ticket #9 of `COMP-MCP-FEATURE-MGMT`. Cockpit, build runner, /compose skill switch from Edit/Write to typed tools. | PLANNED |
 
 ---

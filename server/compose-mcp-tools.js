@@ -237,6 +237,15 @@ export async function toolGetFeatureLinks(args) {
 }
 
 // ---------------------------------------------------------------------------
+// Follow-up filing — COMP-MCP-FOLLOWUP
+// ---------------------------------------------------------------------------
+
+export async function toolProposeFollowup(args) {
+  const { proposeFollowup } = await import('../lib/followup-writer.js');
+  return proposeFollowup(getTargetRoot(), args);
+}
+
+// ---------------------------------------------------------------------------
 // Changelog writer — COMP-MCP-CHANGELOG-WRITER
 // ---------------------------------------------------------------------------
 

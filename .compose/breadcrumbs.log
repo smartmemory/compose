@@ -350,3 +350,6 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-03T23:10:28+08:00 | completion-writer review-fix-1 — hook qualifier parsing, get prefix floor, feature_code normalization
 2026-05-03T23:35:50+08:00 | COMP-MCP-PUBLISH execute: slim wrapper package + CI publish workflow
 2026-05-04T07:07:00+08:00 | COMP-MCP-VALIDATE T1: schemas + feature-code helper extract
+2026-05-04T08:15:13+08:00 | COMP-MCP-FOLLOWUP design — propose_followup orchestrator
+2026-05-04T08:40:12+08:00 | COMP-MCP-FOLLOWUP blueprint
+2026-05-04T08:44:40+08:00 | COMP-MCP-FOLLOWUP impl + tests

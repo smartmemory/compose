@@ -2,6 +2,27 @@
 
 ## 2026-05-04
 
+### COMP-MCP-FOLLOWUP — `propose_followup` MCP tool
+
+Sub-ticket #8 of `COMP-MCP-FEATURE-MGMT`. Files a numbered follow-up feature against a parent in one call: auto-numbers the next code in the parent's namespace (`<parent>-N`), adds the ROADMAP row, links `surfaced_by` from new → parent, scaffolds `design.md` with a `## Why` rationale block, and emits a composite audit event. Replaces the manual three-step sequence recent sessions did by hand.
+
+Retry-safe: an inflight ledger at `.compose/inflight-followups/<sha16(parent:key)>.json` persists per-stage progress; same-key replay resumes from the recorded stage. A per-parent file lock at `.compose/locks/followup-<sha16(parent)>.lock` (5 s timeout, throws `FOLLOWUP_BUSY` on miss) guards allocation + addRoadmapEntry so concurrent same-parent callers cannot duplicate codes. On full success, the durable cache via `checkOrInsert` is written before the inflight ledger is deleted — crashes in that window are harmless because the next replay hits the cache.
+
+Refuses to file against `KILLED` or `SUPERSEDED` parents (`PARENT_TERMINAL`); validates parent code, description, rationale, status, and complexity at the boundary (`INVALID_INPUT`); surfaces partial failures as `PARTIAL_FOLLOWUP` with `stage` ∈ `{roadmap_regen, link, scaffold}` so callers know which granular tool to use for manual recovery.
+
+**Added:**
+- `compose/lib/followup-writer.js` — `proposeFollowup(cwd, args)` orchestrator + helpers (sha16, fingerprint, ledger I/O, per-parent lock, scaffold-with-rationale + rollback).
+- `compose/test/followup-writer.test.js` — 26 unit tests.
+- `compose/test/followup-writer-mcp.test.js` — 2 MCP wrapper smoke tests.
+- `docs/features/COMP-MCP-FOLLOWUP/{design,blueprint,report}.md`.
+
+**Changed:**
+- `compose/server/compose-mcp-tools.js` — `toolProposeFollowup` thin wrapper.
+- `compose/server/compose-mcp.js` — `propose_followup` tool definition + dispatch case.
+- `compose/ROADMAP.md` — `COMP-MCP-FOLLOWUP` flipped to `COMPLETE`.
+
+**Tests:** 26 new unit + 2 new MCP-end-to-end. Full suite: 2524 + 92 UI, all green.
+
 ### COMP-MCP-VALIDATE — Cross-artifact feature validator (`validate_feature`, `validate_project`)
 
 Sub-ticket #7 of `COMP-MCP-FEATURE-MGMT`. Two new MCP tools cross-check ROADMAP row, vision-state item, feature.json, feature folder contents, linked artifacts, and cross-feature references. 27-kind drift catalog with `error`/`warning`/`info` severity. New `compose validate` CLI subcommand with configurable `--block-on` threshold. Pre-push hook template gates drift before push; default `compose hooks install` stays back-compat (post-commit only).

@@ -1,0 +1,11 @@
+{
+  "code": "COMP-MCP-MIGRATION",
+  "description": "**Migrate Compose's own callers to the typed MCP tools.** Sub-ticket #8 of `COMP-MCP-FEATURE-MGMT` (last in the family). Migrate cockpit, build runner, and `/compose` skill from free-text Edit/Write to the seven typed writer tools shipped in this family. Reconcile `complete_feature` (cockpit/lifecycle) with `record_completion` (commit-bound) — likely making `complete_feature` a thin wrapper that calls `record_completion` internally and also advances lifecycle. Optional `enforceMcpForFeatureMgmt: true` settings flag that blocks free-text edits to ROADMAP.md / CHANGELOG.md when set.",
+  "status": "PLANNED",
+  "phase": "Phase 7: MCP Writers",
+  "created": "2026-05-03",
+  "updated": "2026-05-04",
+  "complexity": "L",
+  "position": 9,
+  "parent": "COMP-MCP-FEATURE-MGMT"
+}

@@ -50,6 +50,7 @@ import {
   toolLinkFeatures,
   toolGetFeatureArtifacts,
   toolGetFeatureLinks,
+  toolProposeFollowup,
   toolAddChangelogEntry,
   toolGetChangelogEntries,
   toolWriteJournalEntry,
@@ -348,6 +349,23 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: 'propose_followup',
+    description: 'File a follow-up feature against a parent. Auto-numbers the next code in the parent\'s namespace (parent_code-N), adds the ROADMAP row, links surfaced_by from new → parent, and scaffolds design.md with a "## Why" rationale block. Idempotent on (parent_code, idempotency_key); resumes across partial failures via an inflight ledger.',
+    inputSchema: {
+      type: 'object',
+      required: ['parent_code', 'description', 'rationale'],
+      properties: {
+        parent_code: { type: 'string', description: 'Parent feature code (e.g. "COMP-MCP-MIGRATION"). Must exist; must not be KILLED/SUPERSEDED.' },
+        description: { type: 'string', description: 'One-line description for the ROADMAP cell.' },
+        rationale: { type: 'string', description: 'Why this follow-up exists. Persisted as a "## Why" block in the new design.md and in the audit event.' },
+        complexity: { type: 'string', enum: ['S', 'M', 'L', 'XL'] },
+        phase: { type: 'string', description: 'Phase heading. Defaults to the parent\'s phase if omitted.' },
+        status: { type: 'string', enum: ['PLANNED', 'IN_PROGRESS', 'PARTIAL', 'COMPLETE', 'BLOCKED', 'KILLED', 'PARKED', 'SUPERSEDED'] },
+        idempotency_key: { type: 'string', description: 'Optional retry-safety key. Without it, repeated calls allocate new codes.' },
+      },
+    },
+  },
 
   // -------------------------------------------------------------------------
   // Linker — COMP-MCP-ARTIFACT-LINKER
@@ -582,6 +600,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_completions':          result = await toolGetCompletions(args); break;
       case 'validate_feature':         result = await toolValidateFeature(args); break;
       case 'validate_project':         result = await toolValidateProject(args); break;
+      case 'propose_followup':         result = await toolProposeFollowup(args); break;
       // agent_run removed — STRAT-DEDUP-AGENTRUN v1. Use mcp__stratum__stratum_agent_run.
       default:
         return {
