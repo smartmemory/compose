@@ -356,3 +356,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-04T09:00:18+08:00 | COMP-MCP-MIGRATION design — typed-tool migration
 2026-05-04T09:10:46+08:00 | COMP-MCP-MIGRATION impl: lifecycle/complete reconcile + build runner record_completion + enforcement flag
 2026-05-04T09:27:44+08:00 | follow-ups MIGRATION-1 + MIGRATION-2 + Phase 7 backfill + roadmap-gen description guard
+2026-05-04T09:31:17+08:00 | COMP-MCP-MIGRATION-2 impl: thread paths.features through writers

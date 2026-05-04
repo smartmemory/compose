@@ -2,6 +2,26 @@
 
 ## 2026-05-04
 
+### COMP-MCP-MIGRATION-2 — Honor `paths.features` across all lib writers
+
+Surfaced by `COMP-MCP-MIGRATION`. Lib-side writers previously hardcoded `docs/features` even when `.compose/compose.json` set `"paths": { "features": "specs/features" }` (or any other override). Now every writer reads the override via a tiny shared helper and threads it through to `feature-json.js`, `ArtifactManager`, the build runner, triage, and ship.
+
+**Added:**
+- `compose/lib/project-paths.js` — `loadFeaturesDir(cwd)` (reads `.compose/compose.json`, falls back to `docs/features` on missing/malformed config).
+- `compose/test/project-paths.test.js` — 7 unit tests.
+- `compose/test/feature-writer-paths.test.js` — 6 integration tests verifying writers operate against the override (and that default repos are unaffected).
+
+**Changed:**
+- `compose/lib/feature-writer.js` — every public writer (`addRoadmapEntry`, `setFeatureStatus`, `linkArtifact`, `linkFeatures`, `getFeatureArtifacts`, `getFeatureLinks`) threads `featuresDir`; `rejectCanonicalArtifact` substring check uses the resolved root.
+- `compose/lib/followup-writer.js` — `nextNumberedCode`, all `readFeature` callsites, and `scaffoldDesignWithRationale`'s feature root all honor the override.
+- `compose/lib/completion-writer.js` — `recordCompletion` + `getCompletions` thread it through.
+- `compose/lib/roadmap-gen.js` — `generateRoadmap` defaults `opts.featuresDir` to `loadFeaturesDir(cwd)`.
+- `compose/lib/build.js` — `resolveItemDir`, triage cache reads, `runTriage` call, `isTriageStale` call, `checkStaleness` call (through `resolveItemDir` so bug mode stays correct), all status flips, and `executeShipStep`'s staging path honor the override.
+- `compose/lib/triage.js` — `runTriage` accepts `featuresDir` opt.
+- `compose/ROADMAP.md` — `COMP-MCP-MIGRATION-2` flipped to `COMPLETE`.
+
+**Tests:** 13 new (7 unit + 6 integration). Full suite: 2541 + 92 UI = 2633, all green.
+
 ### COMP-MCP-MIGRATION — Migrate Compose's own callers to typed MCP tools
 
 Sub-ticket #9 (last) of `COMP-MCP-FEATURE-MGMT`. Reconciles the cockpit lifecycle/complete endpoint, the build runner, and the `/compose` skill with the typed writer tools shipped earlier in the family. After this change, no Compose internal code path edits ROADMAP.md / CHANGELOG.md / feature.json by hand; status flips happen atomically through `record_completion` at ship time (post-commit), not piecemeal through free-text edits during docs.
