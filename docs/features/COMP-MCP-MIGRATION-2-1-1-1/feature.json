@@ -1,0 +1,17 @@
+{
+  "code": "COMP-MCP-MIGRATION-2-1-1-1",
+  "description": "**`/compose migrate-anon` interactive flow.** Surfaced by `COMP-MCP-MIGRATION-2-1-1`. Walk historical anonymous-numbered ROADMAP rows one at a time and prompt for a feature code (or 'leave anonymous'). For each promoted row, scaffold `feature.json`, attach to the appropriate phase + position, and on next regen the writer replaces the verbatim anonymous row with a typed-feature row. Optional, deferred — anonymous rows already round-trip cleanly via verbatim passthrough (see parent design Decision 3); this ticket exists for the case where a specific historical row earns promotion to a typed feature for queryability or status-flip mutability.",
+  "status": "PLANNED",
+  "phase": "Phase 7: MCP Writers",
+  "created": "2026-05-04",
+  "updated": "2026-05-04",
+  "complexity": "S",
+  "position": 14,
+  "parent": "COMP-MCP-MIGRATION-2-1-1",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-MCP-MIGRATION-2-1-1"
+    }
+  ]
+}

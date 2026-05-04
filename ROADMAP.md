@@ -123,11 +123,9 @@ UI installation is handled by `compose init` questionnaire.
 
 ---
 
-## Phase 6: Lifecycle Engine — PARTIAL
+## Phase 6: Lifecycle Engine — COMPLETE
 
-Compose's lifecycle layers (L0–L6) are built and working. The process primitives
-(gates, policy, skip, rounds) currently live in Compose. STRAT-1 moves them to Stratum
-and makes Compose a thin workflow layer.
+Compose's lifecycle layers (L0–L6) are built and working end-to-end. STRAT-1 (forge top-level) is also COMPLETE, so the post-Stratum exit criterion is met.
 
 ### Phase 6 Layers (Compose-internal, all COMPLETE)
 
@@ -167,7 +165,8 @@ Sub-tickets of `COMP-MCP-FEATURE-MGMT` (umbrella). Move every free-text mutation
 | 10 | COMP-MCP-MIGRATION-1 | **Audit-log correlated auto-rollback for `enforcement.mcpForFeatureMgmt`.** Surfaced by `COMP-MCP-MIGRATION`. `runBuild` generates a UUID `build_id` stamped onto every audit row via `COMPOSE_BUILD_ID` env. `executeShipStep` runs a pre-stage scan that rejects dirty `ROADMAP.md` / `CHANGELOG.md` / `feature.json` files without a matching typed-tool event in the current build (with code-level correlation for feature.json paths). Three modes: `false` (off), `true` (block), `'log'` (visibility, no block). | COMPLETE |
 | 11 | COMP-MCP-MIGRATION-2 | **Honor `paths.features` in `.compose/compose.json` across all writers.** Surfaced by `COMP-MCP-MIGRATION`. New `lib/project-paths.js#loadFeaturesDir(cwd)` helper threaded through every lib writer (`feature-writer`, `followup-writer`, `completion-writer`, `roadmap-gen`, `build`, `triage`). Repos with `paths.features` overrides now get correct typed-tool behavior end to end. | COMPLETE |
 | 12 | COMP-MCP-MIGRATION-2-1 | **Lossless-regen prep + scoped infrastructure fixes.** Surfaced by `COMP-MCP-MIGRATION-2`. Trial run of bulk migration revealed unmigrate-able anonymous-row layouts, lost phase-status overrides, and stripped non-phase sections. Shipped: `migrateRoadmap` honors `paths.features`; `roadmap-gen` no longer truncates descriptions at 80 chars. Bulk backfill deferred — needs parser + status-override + preamble-preservation work. | PARTIAL |
-| 13 | COMP-MCP-MIGRATION-2-1-1 | **Lossless ROADMAP.md round-trip.** Surfaced by `COMP-MCP-MIGRATION-2-1`. Three coordinated changes so typed-writer regen of `compose/ROADMAP.md` preserves curated content: (a) parser support for anonymous-numbered tables with a code-synthesis policy for legacy rows; (b) phase-status override mechanism so values like `PARKED (Claude Code dependency)` and `SUPERSEDED by STRAT-1` survive regen; (c) preserved-section anchors for non-phase content (`Roadmap Conventions`, `Dogfooding Milestones`, `Key Documents`). Unblocks the deferred mass backfill of compose's 189 historical features. | PLANNED |
+| 13 | COMP-MCP-MIGRATION-2-1-1 | **Lossless ROADMAP.md round-trip.** Surfaced by `COMP-MCP-MIGRATION-2-1`. Four design decisions captured in `docs/features/COMP-MCP-MIGRATION-2-1-1/design.md`: (1) switch `lib/` to unified/remark-parse/remark-stringify; (2) heading AST node is canonical for phase-status overrides, drift detected and warned; (3) anonymous rows preserved as raw `tableRow` nodes verbatim; (4) preserved sections wrapped in HTML comment-marker anchors. Unblocks the deferred mass backfill of compose's 189 historical features. | PLANNED |
+| 14 | COMP-MCP-MIGRATION-2-1-1-1 | **`/compose migrate-anon` interactive flow.** Surfaced by `COMP-MCP-MIGRATION-2-1-1`. Optional UX for promoting historical anonymous-numbered ROADMAP rows to typed features. Walks rows one at a time, prompts for a feature code, scaffolds `feature.json`. Deferred — anonymous rows already round-trip cleanly via verbatim passthrough; this ticket exists for the case where a specific historical row earns promotion. | PLANNED |
 
 ---
 
@@ -776,7 +775,7 @@ Inspired by [LaneKeep](https://github.com/algorismo-au/lanekeep)'s budget-as-enf
 |---|---------|------|--------|
 | 141 | COMP-BUDGET-1 | **Iteration ceilings:** Wall-clock timeout and action count ceiling checked at each `report_iteration_result`. Timeout and maxActions stored in iterationState. Exceeded → auto-abort with `timeout` or `action_limit` outcome. | COMPLETE |
 | 142 | COMP-BUDGET-2 | **Cumulative tracking:** `budget-ledger.js` persists per-feature iteration totals in `.compose/data/budget-ledger.json`. Recorded from both report and abort routes. `checkCumulativeBudget()` blocks start when exceeded (429). | COMPLETE |
-| 143 | COMP-BUDGET-3 | **Budget visibility:** Client handles `timeout` and `action_limit` outcomes with distinct messages. Ops strip display of elapsed/budget deferred to COMP-OBS-SURFACE. | PARTIAL |
+| 143 | COMP-BUDGET-3 | **Budget visibility:** Client handles `timeout` and `action_limit` outcomes with distinct messages. Ops strip displays live elapsed/timeout via `opsStripLogic.js` (formatElapsed/formatTimeout, reads `wallClockTimeout` + `startedAt` from iterationState) — shipped via COMP-OBS-SURFACE-4. | COMPLETE |
 | 144 | COMP-BUDGET-4 | **Policy integration:** Per-loop-type settings: `iterations.review.timeout` (15min), `iterations.coverage.timeout` (30min), `iterations.review.maxTotal` (20), `iterations.coverage.maxTotal` (50). Validated in settings-store. | COMPLETE |
 
 **Dependencies:** None — enhances existing iteration loop infrastructure.
@@ -785,7 +784,7 @@ Inspired by [LaneKeep](https://github.com/algorismo-au/lanekeep)'s budget-as-enf
 
 ---
 
-## COMP-OBS-SURFACE: Step Detail Surface — COMPLETE
+## COMP-OBS-SURFACE: Step Detail Surface — PARTIAL (SURFACE-4 complete; SURFACE-1/2/3 planned)
 
 Render existing but invisible data in the UI. Retry counts, postcondition results, and filtered SDK events already flow through build-stream events or audit traces — they just aren't displayed. Pure frontend work, no backend changes.
 
@@ -1093,6 +1092,32 @@ Inspired by [compound-engineering-plugin](https://github.com/EveryInc/compound-e
 **Dependencies:** STRAT-REV (parallel multi-lens review — PARTIAL), COMP-DESIGN (design conversation — PARTIAL)
 
 **Exit:** Review pipeline includes adversarial scenarios. Lenses activate conditionally based on codebase. Plans can be deepened without replanning. Document review personas validate specs before build. Review quality improves without proportional cost increase.
+
+---
+
+## COMP-BMAD: BMAD Method on Compose — PLANNED
+
+Layer the BMAD-METHOD agile AI development methodology on top of Compose's existing lifecycle. BMAD pairs (1) **Agentic Planning** — Analyst, PM, Architect personas collaborate on PRD + Architecture with human-in-the-loop refinement — with (2) **Context-Engineered Development** — a Scrum Master agent shards plans into hyper-detailed story files containing full implementation context, then Dev and QA agents execute one story at a time with no context loss between sessions. The BMAD insight Compose lacks: story files as a *contract format* between planning and execution that survive session boundaries.
+
+Inspired by [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) (BMad Code) — universal AI agent framework, agile flow, expansion packs.
+
+Compose already covers most of the lifecycle (design → PRD → architecture → blueprint → plan → execute) via phases and gates. This feature adds the missing **agile sharding layer**: story files as the unit of execution, with persona-tagged agent dispatch (`compose-analyst`, `compose-pm`, `compose-architect` already exists, plus new `compose-scrum-master`, `compose-dev`, `compose-qa`). Existing Compose primitives (Stratum specs, Codex review loops, vision items) remain the substrate; BMAD personas + story shards become a higher-level orchestration mode invoked by `/compose bmad <feature>`.
+
+| # | Feature | Item | Status |
+|---|---------|------|--------|
+| 178 | COMP-BMAD-1 | **Persona definitions + agent registry:** create persona files for `compose-analyst` (problem framing, market/codebase research), `compose-pm` (PRD authoring, scope guarding), `compose-scrum-master` (story sharding, context packing), `compose-dev` (story execution, TDD), `compose-qa` (acceptance verification, regression sweep). Each persona declares: prompt template, allowed tool set, gate authority, handoff format. Reuse existing `compose-architect` and `compose-explorer`. Stored under `.claude/agents/compose-*`. | PLANNED |
+| 179 | COMP-BMAD-2 | **Story file schema + sharder:** define `story.md` template — `goal`, `acceptance_criteria` (checkbox list), `relevant_files` (verified file:line refs from blueprint), `pattern_to_follow`, `test_plan`, `dependencies` (other story IDs), `dev_notes`, `qa_notes`. Implement `compose-scrum-master` agent: reads `plan.md`, shards into N story files at `docs/features/<id>/stories/<n>-<slug>.md`, each fully self-contained so any agent session can pick one up cold. Validation: every file:line ref in a story must verify (Phase 5 reuse). | PLANNED |
+| 180 | COMP-BMAD-3 | **Agile execution mode (`/compose bmad`):** new entry verb in the compose skill that runs the BMAD pipeline. Phases 1–5 reuse existing Compose phases (design, PRD, architecture, blueprint, verification). Phase 6 (plan) becomes "shard into stories" via `compose-scrum-master`. Phase 7 (execute) iterates one story at a time: `compose-dev` implements with TDD, `compose-qa` verifies acceptance + runs Codex review, gate per story (not per feature). Stories ship incrementally — each green story is a commit. | PLANNED |
+| 181 | COMP-BMAD-4 | **Story state tracking in vision surface:** stories surface as child items under their parent feature in `vision-state.json` — same `currentPhase` / `phaseHistory` machinery, scoped to story granularity. Sidebar shows story progress (`3/7 stories complete`). Stratum flow per story; parent feature flow aggregates. Reuses existing lifecycle contract — no new state machine. | PLANNED |
+| 182 | COMP-BMAD-5 | **Expansion packs (domain-specific persona bundles):** packaging mechanism for domain personas beyond software (BMAD ships expansion packs for game dev, creative writing, business strategy). Compose-flavored expansion: persona bundle = `analyst` + `pm` + `architect` + `scrum-master` + `dev` + `qa` variants for a specific domain (e.g. `compose-bmad-data`, `compose-bmad-infra`). Loaded via `.compose/compose.json#bmadPack`. Story sharder respects pack-specific story templates. | PLANNED |
+
+**Dependencies:** COMP-DESIGN (design conversation — PARTIAL), COMP-SPECFLOW (artifact schemas — PLANNED, story files extend the schema set), STRAT-REV (review loop, COMPLETE), Phase 6 lifecycle engine (COMPLETE).
+
+**Why on top of Compose, not as an alternative:** BMAD's value is the methodology (personas + story sharding + context packing), not the runtime. Compose already has the runtime — phases, gates, Stratum, Codex review, vision tracker. Implementing BMAD as a Compose mode means stories inherit gate enforcement, review loops, audit trails, and lifecycle binding for free. A standalone BMAD install would have to rebuild all of that.
+
+**Non-goals:** Replace `/compose build`. BMAD mode is opt-in via `/compose bmad` — the existing build flow stays for features that don't need agile sharding (small fixes, single-file changes). Re-implement BMAD's web UI flow (the upstream "web bundles" pattern) — Compose's Vision Surface is the UI.
+
+**Exit:** `/compose bmad <feature>` runs the full BMAD pipeline end to end on a real feature. Story files are valid, self-contained, and survive session restart. Per-story gates enforce acceptance before the next story starts. Vision surface shows story-level progress. At least one expansion pack ships beyond the default software-dev personas.
 
 ---
 

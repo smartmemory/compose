@@ -1,0 +1,23 @@
+{
+  "code": "COMP-BMAD",
+  "description": "**BMAD Method on Compose.** Layer the BMAD-METHOD agile AI development methodology on top of Compose's lifecycle. Adds persona-tagged agents (Analyst, PM, Scrum Master, Dev, QA — reusing existing Architect/Explorer) and story-file sharding as the unit of execution. The missing piece Compose lacks: story files as a contract format between planning and execution that survive session boundaries, with per-story gates, acceptance verification, and incremental shipping. Invoked as `/compose bmad <feature>` — opt-in alongside `/compose build`. Phases 1–5 reuse existing Compose phases; Phase 6 becomes shard-into-stories; Phase 7 iterates one story at a time with TDD + QA gate per story. Stories surface in Vision Surface as child items of the parent feature, reusing the existing lifecycle contract. Inspired by https://github.com/bmad-code-org/BMAD-METHOD.",
+  "status": "PLANNED",
+  "phase": "Backlog",
+  "created": "2026-05-04",
+  "updated": "2026-05-04",
+  "complexity": "L",
+  "links": [
+    {
+      "kind": "depends_on",
+      "to_code": "COMP-DESIGN"
+    },
+    {
+      "kind": "depends_on",
+      "to_code": "COMP-SPECFLOW"
+    },
+    {
+      "kind": "informs",
+      "to_code": "STRAT-REV"
+    }
+  ]
+}
