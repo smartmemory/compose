@@ -2,6 +2,36 @@
 
 ## 2026-05-04
 
+### COMP-MCP-MIGRATION — Migrate Compose's own callers to typed MCP tools
+
+Sub-ticket #9 (last) of `COMP-MCP-FEATURE-MGMT`. Reconciles the cockpit lifecycle/complete endpoint, the build runner, and the `/compose` skill with the typed writer tools shipped earlier in the family. After this change, no Compose internal code path edits ROADMAP.md / CHANGELOG.md / feature.json by hand; status flips happen atomically through `record_completion` at ship time (post-commit), not piecemeal through free-text edits during docs.
+
+**Cockpit reconciliation** (`POST /api/vision/items/:id/lifecycle/complete`): accepts optional `commit_sha`, `tests_pass`, `files_changed`, `notes` fields. When `commit_sha` is present and the item has a `featureCode`, the route handler calls `recordCompletion` (which atomically writes the completion record, flips status to COMPLETE, regenerates ROADMAP.md). Without `commit_sha`, it emits a `cockpit_completion_skipped` decision event with `reason: 'no_commit_sha'`. Typed-tool failures emit `cockpit_completion_failed` (or `_partial_status_flip`) decision events and surface `partial: true` in the response — the lifecycle transition itself never rolls back.
+
+**Build runner** (`lib/build.js` `executeShipStep`): after the commit succeeds, calls `recordCompletion` with the resolved 40-char SHA, `tests_pass: true`, and the `git show --name-only` file list. Completion failures degrade to a `completionWarning` field in the ship result; the commit itself is durable.
+
+**Enforcement flag** (`enforcement.mcpForFeatureMgmt` in `.compose/data/settings.json`): when `true`, `step-prompt.js` injects a hard instruction into every agent prompt directing the agent to use the typed MCP tools rather than Edit/Write for ROADMAP / CHANGELOG / feature.json. Prompt-only in v1; audit-log-correlated auto-rollback is filed as `COMP-MCP-ENFORCE-AUTO-ROLLBACK`. Default is `false`.
+
+**Skill files** (`~/.claude/skills/compose/steps/docs.md`, `steps/ship.md`): replaced free-text instructions with typed-tool recipes; documented that the runner records completion automatically (skill only invokes `record_completion` in the manual fallback path).
+
+**Added:**
+- `compose/test/migration-cockpit.test.js` — 4 integration tests for the cockpit reconciliation paths (happy with SHA, skip without SHA, invalid SHA partial, no-featureCode legacy).
+- `docs/features/COMP-MCP-MIGRATION/{design,blueprint,report}.md`.
+
+**Changed:**
+- `compose/server/compose-mcp.js` — `complete_feature` schema gains optional `commit_sha`/`tests_pass`/`files_changed`/`notes`.
+- `compose/server/compose-mcp-tools.js` — `toolCompleteFeature` forwards the new fields.
+- `compose/server/vision-routes.js` — lifecycle/complete handler does the typed-tool reconciliation.
+- `compose/lib/build.js` — post-commit `recordCompletion`; reads `enforceMcpForFeatureMgmt` setting into context.
+- `compose/lib/step-prompt.js` — Enforcement instruction block when the flag is set.
+- `compose/ROADMAP.md` — `COMP-MCP-MIGRATION` flipped to `COMPLETE`; umbrella `COMP-MCP-FEATURE-MGMT` flipped to `COMPLETE`.
+- `~/.claude/skills/compose/steps/docs.md` — typed-tool recipes; no early ROADMAP flip.
+- `~/.claude/skills/compose/steps/ship.md` — runner records completion; manual fallback documented.
+
+**Tests:** 4 new cockpit integration. Full suite: 2528 + 92 UI = 2620 tests, all green.
+
+**With this, the COMP-MCP-FEATURE-MGMT umbrella is COMPLETE — all 9 sub-tickets shipped.**
+
 ### COMP-MCP-FOLLOWUP — `propose_followup` MCP tool
 
 Sub-ticket #8 of `COMP-MCP-FEATURE-MGMT`. Files a numbered follow-up feature against a parent in one call: auto-numbers the next code in the parent's namespace (`<parent>-N`), adds the ROADMAP row, links `surfaced_by` from new → parent, scaffolds `design.md` with a `## Why` rationale block, and emits a composite audit event. Replaces the manual three-step sequence recent sessions did by hand.

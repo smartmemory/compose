@@ -176,11 +176,15 @@ const TOOLS = [
   },
   {
     name: 'complete_feature',
-    description: 'Mark a feature as complete. Only callable from the ship phase.',
+    description: 'Mark a feature as complete. Only callable from the ship phase. When commit_sha is provided, the lifecycle endpoint also writes a commit-bound completion record via record_completion (which atomically flips feature.status to COMPLETE and regenerates ROADMAP.md). Without commit_sha, the lifecycle transitions but no completion record is written; a `cockpit_completion_skipped` decision event explains the skip.',
     inputSchema: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Item ID' },
+        commit_sha: { type: 'string', description: 'Full 40-char commit SHA. Required to write a completion record.' },
+        tests_pass: { type: 'boolean', description: 'Defaults to true when commit_sha is provided.' },
+        files_changed: { type: 'array', items: { type: 'string' }, description: 'Repo-relative paths committed in the SHA.' },
+        notes: { type: 'string', description: 'One-line note for the completion record.' },
       },
       required: ['id'],
     },

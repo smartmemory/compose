@@ -338,7 +338,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
     }
   });
 
-  app.post('/api/vision/items/:id/lifecycle/complete', (req, res) => {
+  app.post('/api/vision/items/:id/lifecycle/complete', async (req, res) => {
     try {
       const item = store.items.get(req.params.id);
       if (!item?.lifecycle) return res.status(404).json({ error: 'No lifecycle on this item' });
@@ -360,7 +360,56 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       emitDriftAxes(broadcastMessage, store, item, projectRoot, now);
       // COMP-OBS-STATUS: emit status snapshot after lifecycle transition (complete)
       emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
-      res.json({ completedAt: now });
+
+      // COMP-MCP-MIGRATION: reconcile cockpit complete with record_completion
+      // (commit-bound completion writer). Best-effort: failures emit a decision
+      // event but never roll back the lifecycle transition.
+      const featureCode = item.lifecycle.featureCode;
+      const completionResult = { partial: false };
+      if (featureCode) {
+        const { commit_sha, tests_pass, files_changed, notes } = req.body || {};
+        if (commit_sha) {
+          try {
+            const { recordCompletion } = await import('../lib/completion-writer.js');
+            await recordCompletion(projectRoot, {
+              feature_code: featureCode,
+              commit_sha,
+              tests_pass: tests_pass ?? true,
+              files_changed: files_changed ?? [],
+              notes: notes ?? `cockpit lifecycle: ${featureCode} complete`,
+            });
+          } catch (err) {
+            completionResult.partial = true;
+            const eventType = err.code === 'STATUS_FLIP_AFTER_COMPLETION_RECORDED'
+              ? 'cockpit_completion_partial_status_flip'
+              : 'cockpit_completion_failed';
+            completionResult.completion_failed = err.code || 'UNKNOWN';
+            completionResult.message = err.message;
+            try {
+              emitDecisionEvent(broadcastMessage, {
+                type: eventType,
+                featureCode,
+                timestamp: now,
+                error: { code: err.code, message: err.message },
+              });
+            } catch { /* decision event emit best-effort */ }
+            // eslint-disable-next-line no-console
+            console.warn(`[lifecycle/complete] record_completion ${eventType} for ${featureCode}: ${err.message}`);
+          }
+        } else {
+          // No SHA — emit a skip event so validate_feature can flag drift later
+          try {
+            emitDecisionEvent(broadcastMessage, {
+              type: 'cockpit_completion_skipped',
+              featureCode,
+              timestamp: now,
+              reason: 'no_commit_sha',
+            });
+          } catch { /* decision event emit best-effort */ }
+        }
+      }
+
+      res.json({ completedAt: now, ...completionResult });
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
       res.status(status).json({ error: err.message });

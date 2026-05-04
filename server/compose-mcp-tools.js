@@ -406,8 +406,13 @@ export async function toolKillFeature({ id, reason }) {
   return _postLifecycle(id, 'kill', { reason });
 }
 
-export async function toolCompleteFeature({ id }) {
-  return _postLifecycle(id, 'complete', {});
+export async function toolCompleteFeature({ id, commit_sha, tests_pass, files_changed, notes }) {
+  const body = {};
+  if (commit_sha !== undefined) body.commit_sha = commit_sha;
+  if (tests_pass !== undefined) body.tests_pass = tests_pass;
+  if (files_changed !== undefined) body.files_changed = files_changed;
+  if (notes !== undefined) body.notes = notes;
+  return _postLifecycle(id, 'complete', body);
 }
 
 export async function toolIterationStart({ id, loopType, maxIterations }) {

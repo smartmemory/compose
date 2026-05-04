@@ -149,7 +149,7 @@ See `docs/plans/2026-02-15-lifecycle-engine-roadmap.md` for full layer detail.
 
 ---
 
-## Phase 7: MCP Writers — PARTIAL
+## Phase 7: MCP Writers — COMPLETE
 
 Sub-tickets of `COMP-MCP-FEATURE-MGMT` (umbrella). Move every free-text mutation that touches feature-management state behind a typed MCP tool. Single writer per artifact; events on every change; queryable history; schema enforcement at the call site.
 
@@ -163,7 +163,7 @@ Sub-tickets of `COMP-MCP-FEATURE-MGMT` (umbrella). Move every free-text mutation
 | 6 | COMP-MCP-PUBLISH | **Slim `@smartmemory/compose-mcp` wrapper + MCP registry publish.** Sub-ticket #6 of `COMP-MCP-FEATURE-MGMT`. Spawn-based stdio launcher; tag-triggered CI publishes to npm + `io.github.smartmemory/compose-mcp` on the official MCP registry. | COMPLETE |
 | 7 | COMP-MCP-VALIDATE | **Cross-artifact validator (`validate_feature`, `validate_project`).** Sub-ticket #7 of `COMP-MCP-FEATURE-MGMT`. Cross-checks ROADMAP row, vision-state, feature.json, folder contents, linked artifacts, cross-references. Three JSON Schemas codify implicit shapes. Pre-push hook gates drift before it leaves the dev's machine. | COMPLETE |
 | 8 | COMP-MCP-FOLLOWUP | **Follow-up filing (`propose_followup`).** Sub-ticket #8 of `COMP-MCP-FEATURE-MGMT`. Auto-numbers `<parent>-N`, adds ROADMAP row, links surfaced_by new → parent, scaffolds design.md with rationale block. Retry-safe inflight ledger + per-parent file lock. | COMPLETE |
-| 9 | COMP-MCP-MIGRATION | **Migrate Compose's own callers to the typed MCP tools.** Sub-ticket #9 of `COMP-MCP-FEATURE-MGMT`. Cockpit, build runner, /compose skill switch from Edit/Write to typed tools. | PLANNED |
+| 9 | COMP-MCP-MIGRATION | **Migrate Compose's own callers to the typed MCP tools.** Sub-ticket #9 of `COMP-MCP-FEATURE-MGMT`. Cockpit `lifecycle/complete` reconciles with `record_completion` (commit-bound, atomic status flip). Build runner calls `record_completion` post-commit. `/compose` skill `steps/docs.md` and `steps/ship.md` updated for the typed-tool boundary. Optional `enforcement.mcpForFeatureMgmt` flag injects a typed-tool instruction into agent prompts (prompt-only in v1; auto-rollback deferred to `COMP-MCP-ENFORCE-AUTO-ROLLBACK`). | COMPLETE |
 
 ---
 
