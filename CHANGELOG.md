@@ -2,6 +2,29 @@
 
 ## 2026-05-04
 
+### COMP-MCP-MIGRATION-1 — Audit-log correlated auto-rollback for `enforcement.mcpForFeatureMgmt`
+
+Surfaced by `COMP-MCP-MIGRATION`. Promoted the prompt-only enforcement flag to true block mode by adding per-build correlation IDs to `feature-events.jsonl` and a pre-stage scan in `executeShipStep` that rejects unauthorized `ROADMAP.md` / `CHANGELOG.md` / `feature.json` edits.
+
+`runBuild` generates a UUID `build_id`, sets `COMPOSE_BUILD_ID` env (so spawned agents and writers stamp it automatically), propagates it through the build context, and restores the prior value in `finally`. `feature-events.appendEvent` reads the env and stamps every audit row with `build_id` (or `null` when invoked outside a build). `executeShipStep` collects dirty files (including pre-staged ones via `git diff --cached`), and when `enforcement.mcpForFeatureMgmt` is `true` (block) or `'log'`, runs `scanGuarded` to verify each dirty `ROADMAP.md` / `CHANGELOG.md` / `feature.json` has a matching typed-tool event with the current `build_id`. For `feature.json` paths the match also requires `event.code === <feature_code from path>`, so an event for feature A cannot bless a manual edit to feature B. Block mode throws `MCP_ENFORCEMENT_VIOLATION`; log mode emits a `mcp_enforcement_violation` decision event and proceeds.
+
+Setting:
+- `enforcement.mcpForFeatureMgmt: false` — default, no scan, no prompt.
+- `enforcement.mcpForFeatureMgmt: true` — prompt + block-mode scan.
+- `enforcement.mcpForFeatureMgmt: 'log'` — prompt + log-mode scan (visibility, no block).
+
+**Added:**
+- `compose/lib/mcp-enforcement.js` — `readEnforcementMode`, `filterGuarded`, `isGuardedPath`, `expectedToolsForPath`, `featureCodeFromPath`, `scanGuarded`, `enforcementError`.
+- `compose/test/feature-events-build-id.test.js` — 4 unit tests on env-driven stamping.
+- `compose/test/mcp-enforcement.test.js` — 25 unit tests on mode parsing, guarded-path matching, `scanGuarded`, code-correlation, and `enforcementError`.
+
+**Changed:**
+- `compose/lib/feature-events.js` — `appendEvent` stamps `build_id`.
+- `compose/lib/build.js` — `runBuild` generates `build_id`, sets/restores env, propagates through context. `executeShipStep` includes pre-staged files in the dirty scan and runs the pre-stage MCP-enforcement scan. Warns loudly if `COMPOSE_BUILD_ID` is already set when entering `runBuild` (concurrent in-process builds are not supported).
+- `compose/ROADMAP.md` — `COMP-MCP-MIGRATION-1` flipped to `COMPLETE`.
+
+**Tests:** 29 new (4 stamping + 25 enforcement). Full suite: 2570 + 92 UI = 2662, all green.
+
 ### COMP-MCP-MIGRATION-2 — Honor `paths.features` across all lib writers
 
 Surfaced by `COMP-MCP-MIGRATION`. Lib-side writers previously hardcoded `docs/features` even when `.compose/compose.json` set `"paths": { "features": "specs/features" }` (or any other override). Now every writer reads the override via a tiny shared helper and threads it through to `feature-json.js`, `ArtifactManager`, the build runner, triage, and ship.
