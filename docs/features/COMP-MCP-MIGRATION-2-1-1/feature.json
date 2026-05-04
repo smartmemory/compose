@@ -1,0 +1,17 @@
+{
+  "code": "COMP-MCP-MIGRATION-2-1-1",
+  "description": "**Lossless ROADMAP.md round-trip — parser + override + preserved sections.** Three coordinated changes so typed-writer regen of compose/ROADMAP.md (and any project with the same shape) preserves curated content: (a) parser support for anonymous-numbered tables, with a code-synthesis policy for legacy rows; (b) phase-status override mechanism so curated values like PARKED (Claude Code dependency) and SUPERSEDED by STRAT-1 survive regen; (c) preserved-section anchors for non-phase content (Roadmap Conventions, Dogfooding Milestones, etc.) — comment markers or a sibling roadmap-extras.md that regen concatenates verbatim. After this ships, mass backfill of compose/ 189 historical features becomes possible without data loss, and ROADMAP_PARTIAL_WRITE stops firing during normal typed-writer flips.",
+  "status": "PLANNED",
+  "phase": "Phase 7: MCP Writers",
+  "created": "2026-05-04",
+  "updated": "2026-05-04",
+  "complexity": "L",
+  "position": 13,
+  "parent": "COMP-MCP-MIGRATION-2-1",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-MCP-MIGRATION-2-1"
+    }
+  ]
+}
