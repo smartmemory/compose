@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://compose.smartmemory.dev/contracts/vision-state.schema.json",
+  "title": "vision-state.json",
+  "description": "Per-project vision-state document at .compose/data/vision-state.json. Codifies the shape produced by VisionStore (server/vision-store.js).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items", "connections", "gates"],
+  "properties": {
+    "items": { "type": "array", "items": { "$ref": "#/definitions/Item" } },
+    "connections": { "type": "array" },
+    "gates": { "type": "array" },
+    "version": { "type": ["string", "number"] }
+  },
+  "definitions": {
+    "Item": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 4 },
+        "status": { "type": "string", "enum": ["planned", "in_progress", "complete", "blocked", "parked", "killed", "superseded"] },
+        "phase": { "type": ["string", "null"], "enum": ["vision", "requirements", "specification", "design", "planning", "implementation", "verification", "release", null] },
+        "parentId": { "type": ["string", "null"] },
+        "files": { "type": "array", "items": { "type": "string" } },
+        "priority": { "type": ["string", "number", "null"] },
+        "assignedTo": { "type": ["string", "null"] },
+        "governance": { "type": ["object", "null"] },
+        "featureCode": {
+          "type": ["string", "null"],
+          "description": "Top-level feature code. Current baseline for 41/42 items. lifecycle.featureCode is preferred where present; both are legal. Migration tracked as COMP-VISION-STATE-LIFECYCLE-MIGRATE."
+        },
+        "group": { "type": ["string", "null"] },
+        "slug": { "type": ["string", "null"] },
+        "position": {
+          "type": ["object", "null"],
+          "additionalProperties": true,
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" }
+          }
+        },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "summary": { "type": ["string", "null"] },
+        "stratumFlowId": { "type": ["string", "null"] },
+        "evidence": { "type": ["object", "array", "null"] },
+        "lifecycle": {
+          "type": ["object", "null"],
+          "additionalProperties": true,
+          "properties": {
+            "featureCode": { "type": ["string", "null"] },
+            "currentPhase": { "type": ["string", "null"] },
+            "lifecycle_ext": { "type": "object", "additionalProperties": true }
+          }
+        }
+      }
+    }
+  }
+}

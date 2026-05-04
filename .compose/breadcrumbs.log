@@ -349,3 +349,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-03T23:01:08+08:00 | completion-writer T9 — CLI + hook tests (completion-writer-cli.test.js)
 2026-05-03T23:10:28+08:00 | completion-writer review-fix-1 — hook qualifier parsing, get prefix floor, feature_code normalization
 2026-05-03T23:35:50+08:00 | COMP-MCP-PUBLISH execute: slim wrapper package + CI publish workflow
+2026-05-04T07:07:00+08:00 | COMP-MCP-VALIDATE T1: schemas + feature-code helper extract

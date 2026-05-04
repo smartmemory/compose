@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://compose.smartmemory.dev/contracts/roadmap-row.schema.json",
+  "title": "Roadmap Row",
+  "description": "Single parsed ROADMAP.md row, mirroring lib/roadmap-parser.js FeatureEntry typedef. Validator filters out _anon_* sentinel codes (parser emits these for unrecognized rows) before applying this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "description", "status", "phaseId", "position"],
+  "properties": {
+    "code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9-]*[A-Z0-9]$",
+      "description": "Strict feature code. Anonymous _anon_<n> sentinel codes from the parser are filtered before this schema runs."
+    },
+    "description": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["PLANNED", "IN_PROGRESS", "PARTIAL", "COMPLETE", "SUPERSEDED", "PARKED", "BLOCKED", "KILLED"]
+    },
+    "phaseId": { "type": "string" },
+    "position": { "type": "integer", "minimum": 1 }
+  }
+}

@@ -56,6 +56,8 @@ import {
   toolGetJournalEntries,
   toolRecordCompletion,
   toolGetCompletions,
+  toolValidateFeature,
+  toolValidateProject,
 } from './compose-mcp-tools.js';
 
 // ---------------------------------------------------------------------------
@@ -322,6 +324,30 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: 'validate_feature',
+    description: 'Cross-check a single feature against ROADMAP, vision-state, feature.json, folder contents, linked artifacts, and cross-references. Returns structured findings with severity (error/warning/info). FEATURE_NOT_FOUND emitted as a finding (not thrown) when the code matches strict regex but exists in no source.',
+    inputSchema: {
+      type: 'object',
+      required: ['feature_code'],
+      properties: {
+        feature_code: { type: 'string', description: 'Strict feature code, e.g. "COMP-MCP-VALIDATE"' },
+        external_prefixes: { type: 'array', items: { type: 'string' }, description: 'Code prefixes (e.g. ["STRAT-"]) treated as external; downgrades ORPHAN_FOLDER to info' },
+        feature_json_mode: { type: 'boolean', description: 'Default true. Set false to skip feature.json comparisons in legacy projects.' },
+      },
+    },
+  },
+  {
+    name: 'validate_project',
+    description: 'Run validate_feature for every code in vision-state, ROADMAP, and folders, plus cross-cutting checks (orphan folders, dangling cross-refs, CHANGELOG references, journal index drift). Returns the union of all findings.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        external_prefixes: { type: 'array', items: { type: 'string' } },
+        feature_json_mode: { type: 'boolean' },
+      },
+    },
+  },
 
   // -------------------------------------------------------------------------
   // Linker — COMP-MCP-ARTIFACT-LINKER
@@ -554,6 +580,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_journal_entries':      result = await toolGetJournalEntries(args); break;
       case 'record_completion':        result = await toolRecordCompletion(args); break;
       case 'get_completions':          result = await toolGetCompletions(args); break;
+      case 'validate_feature':         result = await toolValidateFeature(args); break;
+      case 'validate_project':         result = await toolValidateProject(args); break;
       // agent_run removed — STRAT-DEDUP-AGENTRUN v1. Use mcp__stratum__stratum_agent_run.
       default:
         return {

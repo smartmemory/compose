@@ -1180,97 +1180,228 @@ if (cmd === 'hooks') {
   const hooksDir = pjoin(gitDir, 'hooks')
   const { mkdirSync: mSync } = await import('fs')
   mSync(hooksDir, { recursive: true })
-  const hookPath = pjoin(hooksDir, 'post-commit')
-
-  // Marker line used to identify our hooks
-  const HOOK_MARKER = '# Compose post-commit hook —'
 
   // Resolve absolute paths for substitution
   const composeBin = presolve(presolve(futp(import.meta.url), '..'), 'compose.js')
   const composeNode = process.execPath
 
-  if (sub === 'install') {
-    // Read template
-    const templatePath = pjoin(presolve(futp(import.meta.url), '..'), 'git-hooks', 'post-commit.template')
+  // Hook-type table. Each entry knows its template, marker, and destination.
+  const HOOK_TYPES = {
+    'post-commit': {
+      template: pjoin(presolve(futp(import.meta.url), '..'), 'git-hooks', 'post-commit.template'),
+      marker:   '# Compose post-commit hook —',
+      dest:     pjoin(hooksDir, 'post-commit'),
+    },
+    'pre-push': {
+      template: pjoin(presolve(futp(import.meta.url), '..'), 'git-hooks', 'pre-push.template'),
+      marker:   '# Compose pre-push hook —',
+      dest:     pjoin(hooksDir, 'pre-push'),
+    },
+  }
+
+  // Determine which hook types this invocation operates on.
+  // Flags: --pre-push, --post-commit, or none (default = post-commit, back-compat).
+  const selectedTypes = []
+  if (hookFlags['pre-push']) selectedTypes.push('pre-push')
+  if (hookFlags['post-commit']) selectedTypes.push('post-commit')
+  if (selectedTypes.length === 0) selectedTypes.push('post-commit') // default = back-compat
+
+  function installOne(type) {
+    const { template: tplPath, marker, dest } = HOOK_TYPES[type]
     let template
     try {
-      template = rfSync(templatePath, 'utf-8')
+      template = rfSync(tplPath, 'utf-8')
     } catch (err) {
-      console.error(`Error: could not read hook template: ${err.message}`)
-      process.exit(1)
+      console.error(`Error: could not read ${type} template: ${err.message}`)
+      return 1
     }
-
-    // Check existing hook
-    if (exSync(hookPath)) {
-      const existing = rfSync(hookPath, 'utf-8')
-      const isOurs = existing.includes(HOOK_MARKER)
+    if (exSync(dest)) {
+      const existing = rfSync(dest, 'utf-8')
+      const isOurs = existing.includes(marker)
       if (!isOurs && !hookFlags.force) {
-        console.error('Error: a foreign post-commit hook already exists at ' + hookPath)
+        console.error(`Error: a foreign ${type} hook already exists at ${dest}`)
         console.error('')
-        console.error('To chain our hook after yours, add this to your existing hook:')
-        console.error('')
-        console.error(`  "${composeNode}" "${composeBin}" record-completion ...`)
-        console.error('')
-        console.error('Or run `compose hooks install --force` to overwrite.')
-        process.exit(1)
+        console.error(`Run \`compose hooks install --${type} --force\` to overwrite.`)
+        return 1
       }
     }
-
-    // Substitute placeholders
     const substituted = template
       .replace(/__COMPOSE_NODE__/g, composeNode)
       .replace(/__COMPOSE_BIN__/g, composeBin)
-
-    wfSync(hookPath, substituted)
-    chmodSync(hookPath, 0o755)
-    console.log(`Installed post-commit hook at ${hookPath}`)
+    wfSync(dest, substituted)
+    chmodSync(dest, 0o755)
+    console.log(`Installed ${type} hook at ${dest}`)
     console.log(`  COMPOSE_NODE=${composeNode}`)
     console.log(`  COMPOSE_BIN=${composeBin}`)
-    process.exit(0)
+    return 0
+  }
+
+  function uninstallOne(type) {
+    const { marker, dest } = HOOK_TYPES[type]
+    if (!exSync(dest)) {
+      console.log(`No ${type} hook installed.`)
+      return 0
+    }
+    const content = rfSync(dest, 'utf-8')
+    if (!content.includes(marker)) {
+      console.warn(`Warning: ${type} hook exists but does not appear to be a Compose hook (marker not found). Leaving alone.`)
+      return 0
+    }
+    const { rmSync: rmS } = require('fs')
+    rmS(dest)
+    console.log(`Removed ${type} hook at ${dest}`)
+    return 0
+  }
+
+  function statusOne(type) {
+    const { marker, dest } = HOOK_TYPES[type]
+    if (!exSync(dest)) {
+      console.log(`${type}: absent — no hook installed`)
+      return
+    }
+    const content = rfSync(dest, 'utf-8')
+    if (!content.includes(marker)) {
+      console.log(`${type}: foreign — hook exists but is not a Compose hook`)
+      return
+    }
+    const nodeMatch = content.includes(`COMPOSE_NODE="${composeNode}"`)
+    const binMatch  = content.includes(`COMPOSE_BIN="${composeBin}"`)
+    if (nodeMatch && binMatch) {
+      console.log(`${type}: installed (current)`)
+    } else {
+      console.log(`${type}: installed (stale paths — re-run install)`)
+      if (!nodeMatch) console.log(`  expected COMPOSE_NODE="${composeNode}"`)
+      if (!binMatch)  console.log(`  expected COMPOSE_BIN="${composeBin}"`)
+    }
+  }
+
+  if (sub === 'install') {
+    let exitCode = 0
+    for (const t of selectedTypes) exitCode = installOne(t) || exitCode
+    process.exit(exitCode)
   }
 
   if (sub === 'uninstall') {
-    if (!exSync(hookPath)) {
-      console.log('No post-commit hook installed.')
-      process.exit(0)
+    const { rmSync: _rmS } = await import('fs') // ensure fs.rmSync is available
+    // uninstallOne calls require('fs') but we're ESM — replace with import-based deletion
+    for (const t of selectedTypes) {
+      const { marker, dest } = HOOK_TYPES[t]
+      if (!exSync(dest)) { console.log(`No ${t} hook installed.`); continue }
+      const content = rfSync(dest, 'utf-8')
+      if (!content.includes(marker)) {
+        console.warn(`Warning: ${t} hook exists but does not appear to be a Compose hook (marker not found). Leaving alone.`)
+        continue
+      }
+      _rmS(dest)
+      console.log(`Removed ${t} hook at ${dest}`)
     }
-    const content = rfSync(hookPath, 'utf-8')
-    if (!content.includes(HOOK_MARKER)) {
-      console.warn('Warning: post-commit hook exists but does not appear to be a Compose hook (marker not found). Leaving alone.')
-      process.exit(0)
-    }
-    const { rmSync: rmS } = await import('fs')
-    rmS(hookPath)
-    console.log(`Removed post-commit hook at ${hookPath}`)
     process.exit(0)
   }
 
   // status (default)
   if (!sub || sub === 'status') {
-    if (!exSync(hookPath)) {
-      console.log('absent — no post-commit hook installed')
-      process.exit(0)
-    }
-    const content = rfSync(hookPath, 'utf-8')
-    if (!content.includes(HOOK_MARKER)) {
-      console.log('foreign — post-commit hook exists but is not a Compose hook')
-      process.exit(0)
-    }
-    // Check if paths match current
-    const nodeMatch   = content.includes(`COMPOSE_NODE="${composeNode}"`)
-    const binMatch    = content.includes(`COMPOSE_BIN="${composeBin}"`)
-    if (nodeMatch && binMatch) {
-      console.log('installed (current)')
-    } else {
-      console.log('installed (stale paths — re-run install)')
-      if (!nodeMatch) console.log(`  expected COMPOSE_NODE="${composeNode}"`)
-      if (!binMatch)  console.log(`  expected COMPOSE_BIN="${composeBin}"`)
-    }
+    // Status reports on ALL known hook types (selection flags ignored), so users
+    // see the full picture. Selection only affects install/uninstall.
+    for (const t of Object.keys(HOOK_TYPES)) statusOne(t)
     process.exit(0)
   }
 
   console.error(`Unknown hooks subcommand: "${sub}". Use: install | uninstall | status`)
   process.exit(1)
+}
+
+if (cmd === 'validate') {
+  // compose validate [--scope=feature|project] [--code=CODE] [--block-on=error|warning|info] [--json]
+  let scope = 'project'
+  let code = null
+  let blockOn = 'error'
+  let asJson = false
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]
+    if (a === '--help' || a === '-h') {
+      console.log(`Usage: compose validate [options]
+
+Options:
+  --scope=feature|project     Scope (default: project)
+  --code=CODE                 Feature code (required when scope=feature)
+  --block-on=LEVEL            Exit non-zero if any finding >= LEVEL (default: error)
+                              LEVEL: error | warning | info
+  --json                      Emit findings as JSON (default: human-readable)
+
+Exit codes:
+  0   no findings >= block-on threshold
+  1   findings >= block-on threshold present
+  2   usage error`)
+      process.exit(0)
+    }
+    if (a === '--json') { asJson = true; continue }
+    if (a.startsWith('--scope=')) scope = a.slice('--scope='.length)
+    else if (a === '--scope') scope = args[++i]
+    else if (a.startsWith('--code=')) code = a.slice('--code='.length)
+    else if (a === '--code') code = args[++i]
+    else if (a.startsWith('--block-on=')) blockOn = a.slice('--block-on='.length)
+    else if (a === '--block-on') blockOn = args[++i]
+    else if (a.startsWith('--')) {
+      console.error(`Unknown flag: ${a}`)
+      process.exit(2)
+    }
+  }
+  if (!['feature', 'project'].includes(scope)) {
+    console.error(`Invalid --scope=${scope}; expected feature or project`)
+    process.exit(2)
+  }
+  if (scope === 'feature' && !code) {
+    console.error(`--scope=feature requires --code=<CODE>`)
+    process.exit(2)
+  }
+  if (!['error', 'warning', 'info'].includes(blockOn)) {
+    console.error(`Invalid --block-on=${blockOn}; expected error, warning, or info`)
+    process.exit(2)
+  }
+
+  const { validateFeature, validateProject } = await import('../lib/feature-validator.js')
+  let result
+  try {
+    result = scope === 'feature'
+      ? await validateFeature(process.cwd(), code)
+      : await validateProject(process.cwd())
+  } catch (err) {
+    if (err.code === 'INVALID_INPUT') {
+      console.error(`Error [INVALID_INPUT]: ${err.message}`)
+      process.exit(2)
+    }
+    console.error(`Error: ${err.message}`)
+    process.exit(2)
+  }
+
+  // Threshold: findings at or above this severity block the exit code
+  const SEV_RANK = { error: 3, warning: 2, info: 1 }
+  const threshold = SEV_RANK[blockOn]
+  const blocking = result.findings.filter((f) => SEV_RANK[f.severity] >= threshold)
+
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2))
+  } else {
+    const byKind = {}
+    for (const f of result.findings) {
+      const sev = f.severity.toUpperCase()
+      const tag = `[${sev}] ${f.kind}${f.feature_code ? ' ' + f.feature_code : ''}`
+      if (!byKind[tag]) byKind[tag] = []
+      byKind[tag].push(f.detail)
+    }
+    if (result.findings.length === 0) {
+      console.log(`compose validate: no findings (scope=${scope}${code ? ' code=' + code : ''})`)
+    } else {
+      console.log(`compose validate findings (scope=${scope}${code ? ' code=' + code : ''}):`)
+      for (const tag of Object.keys(byKind).sort()) {
+        console.log(`  ${tag}`)
+        for (const detail of byKind[tag]) console.log(`    - ${detail}`)
+      }
+      console.log(`\n${result.findings.length} finding(s); ${blocking.length} at or above --block-on=${blockOn}`)
+    }
+  }
+
+  process.exit(blocking.length > 0 ? 1 : 0)
 }
 
 if (cmd === 'pipeline') {

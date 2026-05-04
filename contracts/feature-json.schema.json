@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://compose.smartmemory.dev/contracts/feature-json.schema.json",
+  "title": "feature.json",
+  "description": "Per-feature state record at docs/features/<CODE>/feature.json. Codifies the de facto union of fields produced today by typed writers and runtime code. Intentionally permissive (additionalProperties: true) until COMP-MCP-VALIDATE-SCHEMA-TIGHTEN follow-up.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["code"],
+  "properties": {
+    "code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9-]*[A-Z0-9]$",
+      "description": "Strict feature code. Matches FEATURE_CODE_RE_STRICT."
+    },
+    "description": { "type": "string" },
+    "name": {
+      "type": "string",
+      "description": "Legacy alternative to description (de facto). Prefer description on new files."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["PLANNED", "IN_PROGRESS", "PARTIAL", "COMPLETE", "SUPERSEDED", "PARKED", "BLOCKED", "KILLED"]
+    },
+    "phase": { "type": ["string", "null"] },
+    "complexity": {
+      "oneOf": [
+        { "type": "string", "enum": ["S", "M", "L", "XL"] },
+        { "type": "number" }
+      ],
+      "description": "S/M/L/XL on new files; numeric on legacy files (e.g. COMP-DEBUG-1). Convergence deferred to COMP-MCP-VALIDATE-SCHEMA-TIGHTEN."
+    },
+    "position": { "type": ["integer", "string"] },
+    "parent": { "type": "string" },
+    "depends_on": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "De facto field on legacy files. Cross-feature dependency codes."
+    },
+    "source": {
+      "type": "string",
+      "description": "De facto field on legacy files."
+    },
+    "profile": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "object", "additionalProperties": true }
+      ],
+      "description": "Either a string identifier or an inline profile object (de facto on COMP-DEBUG-1 etc.)."
+    },
+    "created": { "type": "string", "format": "date" },
+    "updated": { "type": "string", "format": "date" },
+    "commit_sha": { "type": "string" },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "artifacts": {
+      "type": "array",
+      "description": "Linked non-canonical artifacts (journal/snapshot pointers, external docs). Canonical artifacts (design.md, plan.md, etc.) under the feature folder are auto-discovered and explicitly NOT registered here.",
+      "items": {
+        "type": "object",
+        "required": ["type", "path"],
+        "properties": {
+          "type": { "type": "string", "enum": ["design", "prd", "architecture", "blueprint", "plan", "report", "journal", "snapshot"] },
+          "path": { "type": "string" },
+          "status": { "type": "string" }
+        }
+      }
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "to_code"],
+        "properties": {
+          "kind": { "type": "string", "enum": ["surfaced_by", "blocks", "depends_on", "follow_up", "supersedes", "related"] },
+          "to_code": { "type": "string", "pattern": "^[A-Z][A-Z0-9-]*[A-Z0-9]$" },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "completions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["completion_id", "feature_code", "commit_sha"],
+        "properties": {
+          "completion_id": { "type": "string" },
+          "feature_code": { "type": "string", "pattern": "^[A-Z][A-Z0-9-]*[A-Z0-9]$" },
+          "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+          "commit_sha_short": { "type": "string" },
+          "tests_pass": { "type": "boolean" },
+          "files_changed": { "type": "array", "items": { "type": "string" } },
+          "recorded_at": { "type": "string" },
+          "recorded_by": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "currentPhase": { "type": "string" },
+        "phaseHistory": { "type": "array" }
+      }
+    },
+    "phaseHistory": {
+      "type": "array",
+      "description": "Empty array on every existing file today. Validator does not flag empty."
+    },
+    "filesChanged": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Written by runBuild() on completion. De facto field; not tightened in v1."
+    }
+  }
+}

@@ -149,6 +149,24 @@ See `docs/plans/2026-02-15-lifecycle-engine-roadmap.md` for full layer detail.
 
 ---
 
+## Phase 7: MCP Writers — PARTIAL
+
+Sub-tickets of `COMP-MCP-FEATURE-MGMT` (umbrella). Move every free-text mutation that touches feature-management state behind a typed MCP tool. Single writer per artifact; events on every change; queryable history; schema enforcement at the call site.
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 1 | COMP-MCP-ROADMAP-WRITER | **Roadmap writer (`add_roadmap_entry`, `set_feature_status`, `roadmap_diff`).** Sub-ticket #1 of `COMP-MCP-FEATURE-MGMT`. Atomic ROADMAP.md + feature.json + vision-state.json updates. Lifecycle transition policy enforced. | COMPLETE |
+| 2 | COMP-MCP-CHANGELOG-WRITER | **Changelog writer (`add_changelog_entry`, `get_changelog_entries`).** Sub-ticket #2 of `COMP-MCP-FEATURE-MGMT`. Date-heading inserts, section structure validation, cross-link to ROADMAP code. | COMPLETE |
+| 3 | COMP-MCP-ARTIFACT-LINKER | **Artifact linker (`link_artifact`, `link_features`, `get_feature_artifacts`, `get_feature_links`).** Sub-ticket #3 of `COMP-MCP-FEATURE-MGMT`. Typed artifact registration + cross-feature relations. | COMPLETE |
+| 4 | COMP-MCP-JOURNAL-WRITER | **Journal writer (`write_journal_entry`, `get_journal_entries`).** Sub-ticket #4 of `COMP-MCP-FEATURE-MGMT`. Global session counter, four-section structure, two-file rollback on partial write. | COMPLETE |
+| 5 | COMP-MCP-COMPLETION | **Completion writer (`record_completion`, `get_completions`).** Sub-ticket #5 of `COMP-MCP-FEATURE-MGMT`. Commit-bound completion records, opt-in post-commit hook, three status-flip failure subcases. | COMPLETE |
+| 6 | COMP-MCP-PUBLISH | **Slim `@smartmemory/compose-mcp` wrapper + MCP registry publish.** Sub-ticket #6 of `COMP-MCP-FEATURE-MGMT`. Spawn-based stdio launcher; tag-triggered CI publishes to npm + `io.github.smartmemory/compose-mcp` on the official MCP registry. | COMPLETE |
+| 7 | COMP-MCP-VALIDATE | **Cross-artifact validator (`validate_feature`, `validate_project`).** Sub-ticket #7 of `COMP-MCP-FEATURE-MGMT`. Cross-checks ROADMAP row, vision-state, feature.json, folder contents, linked artifacts, cross-references. Three JSON Schemas codify implicit shapes. Pre-push hook gates drift before it leaves the dev's machine. | COMPLETE |
+| 8 | COMP-MCP-FOLLOWUP | **Follow-up filing (`propose_followup`).** Sub-ticket #8 of `COMP-MCP-FEATURE-MGMT`. Auto-numbering + scaffold of the new feature folder. | PLANNED |
+| 9 | COMP-MCP-MIGRATION | **Migrate Compose's own callers to the typed MCP tools.** Sub-ticket #9 of `COMP-MCP-FEATURE-MGMT`. Cockpit, build runner, /compose skill switch from Edit/Write to typed tools. | PLANNED |
+
+---
+
 ## INIT-1: Project Bootstrap — COMPLETE
 
 Make Compose portable across any project, not just its own repo.

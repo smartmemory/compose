@@ -278,6 +278,24 @@ export async function toolGetCompletions(args) {
   return getCompletions(getTargetRoot(), args);
 }
 
+export async function toolValidateFeature(args = {}) {
+  const { validateFeature } = await import('../lib/feature-validator.js');
+  const { feature_code, external_prefixes, feature_json_mode } = args;
+  return validateFeature(getTargetRoot(), feature_code, {
+    externalPrefixes: external_prefixes,
+    featureJsonMode: feature_json_mode,
+  });
+}
+
+export async function toolValidateProject(args = {}) {
+  const { validateProject } = await import('../lib/feature-validator.js');
+  const { external_prefixes, feature_json_mode } = args;
+  return validateProject(getTargetRoot(), {
+    externalPrefixes: external_prefixes,
+    featureJsonMode: feature_json_mode,
+  });
+}
+
 export async function toolBindSession({ featureCode }) {
   const postData = JSON.stringify({ featureCode });
   return new Promise((resolve, reject) => {

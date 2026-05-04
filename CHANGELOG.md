@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-05-04
+
+### COMP-MCP-VALIDATE — Cross-artifact feature validator (`validate_feature`, `validate_project`)
+
+Sub-ticket #7 of `COMP-MCP-FEATURE-MGMT`. Two new MCP tools cross-check ROADMAP row, vision-state item, feature.json, feature folder contents, linked artifacts, and cross-feature references. 27-kind drift catalog with `error`/`warning`/`info` severity. New `compose validate` CLI subcommand with configurable `--block-on` threshold. Pre-push hook template gates drift before push; default `compose hooks install` stays back-compat (post-commit only).
+
+**Phase 0 (ROADMAP consolidation):** Six COMP-MCP-* sub-ticket rows moved from `forge/ROADMAP.md` to `compose/ROADMAP.md` Phase 7. Forge-top now hosts cross-product strategic items only. Standing rule: a feature's ROADMAP row lives in the project that owns the feature.
+
+**Added:**
+- `compose/lib/feature-validator.js` — `validateFeature(cwd, code, options?)` and `validateProject(cwd, options?)` (~600 lines). Composes ROADMAP scanner, vision-state loader, ArtifactManager.assess, and SchemaValidator. Path normalization for boundary-aware artifact-folder checks.
+- `compose/contracts/{feature-json,vision-state,roadmap-row}.schema.json` — three new JSON Schemas. feature-json is permissive (`additionalProperties: true`) initially; tightening tracked as `COMP-MCP-VALIDATE-SCHEMA-TIGHTEN`.
+- `compose/lib/feature-code.js` — extracted `FEATURE_CODE_RE_STRICT` + `validateCode()` from 3 writer sites (feature-writer, completion-writer, journal-writer). roadmap-parser keeps its own deliberately looser regex.
+- `compose/server/compose-mcp.js` + `compose-mcp-tools.js` — `validate_feature` + `validate_project` tool registration and thin wrappers.
+- `compose/bin/compose.js` — `compose validate [--scope] [--code] [--block-on] [--json] [--help]` subcommand. Refactored hooks installer to handle both post-commit and pre-push via type table; back-compat preserved.
+- `compose/bin/git-hooks/pre-push.template` — runs `compose validate --scope=project --block-on=error`; non-zero exit blocks the push.
+- 76 new tests across 7 files.
+
+**Changed:**
+- `compose/server/schema-validator.js` — generalized: optional `schemaPath` constructor arg (default still comp-obs), per-path cache, new `validateRoot()` method for top-level schemas, `loadSchema(path)` named export. 13 zero-arg test callers untouched.
+- `compose/contracts/feature-json.schema.json` — `profile` widened from string-only to `oneOf: [string, object]` to match `COMP-DEBUG-1` legacy shape.
+- `compose/.compose/data/vision-state.json` — T7 baseline fixes: `STRAT-COMP-8` complete→superseded, `COMP-UI-3` in_progress→complete (matched ROADMAP).
+- `compose/docs/journal/README.md` — index entry added for pre-numbering-rule duplicate `2026-02-11-session-2-resumption.md` (T7 fix for journal-index drift).
+- `compose/ROADMAP.md` — new Phase 7 with 9 COMP-MCP-* rows (6 COMPLETE, 1 IN_PROGRESS, 2 PLANNED).
+
+**Snapshot:**
+- 2498 unit + 92 UI + 44 integration tests pass. Pre-existing STRAT-DEDUP-AGENTRUN-V3 integration failure unrelated.
+- Self-validation against compose's repo: 1 error (architectural folder-location baseline; resolves on ship), 491 warnings, 39 info.
+- Six Codex review iterations total: three on design+blueprint+plan (max-5 reached on count + FEATURE_NOT_FOUND shape, both resolved by human), three on implementation (5+1+0 findings, ending REVIEW CLEAN).
+
 ## 2026-05-03
 
 ### COMP-MCP-PUBLISH — Slim `@smartmemory/compose-mcp` wrapper + MCP registry publish

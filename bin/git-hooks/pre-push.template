@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Compose pre-push hook — runs `compose validate` and blocks the push on
+# any error-severity drift finding. Installed by `compose hooks install --pre-push`;
+# placeholders below are substituted at install time.
+
+set -u
+COMPOSE_NODE="__COMPOSE_NODE__"
+COMPOSE_BIN="__COMPOSE_BIN__"
+LOG="${COMPOSE_HOOK_LOG:-.compose/data/pre-push.log}"
+mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
+
+OUTPUT=$("$COMPOSE_NODE" "$COMPOSE_BIN" validate --scope=project --block-on=error 2>&1)
+EXIT_CODE=$?
+
+if [ "$EXIT_CODE" -ne 0 ]; then
+  echo "$OUTPUT" | tee -a "$LOG" >&2
+  echo "" >&2
+  echo "compose validate found error-severity drift. Push aborted." >&2
+  echo "Run \`compose validate\` to see findings, then fix and retry." >&2
+  echo "Bypass at your own risk: git push --no-verify" >&2
+  exit "$EXIT_CODE"
+fi
+
+# Below-threshold findings (warnings/info) are still printed for visibility.
+echo "$OUTPUT"
+exit 0
