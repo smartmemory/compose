@@ -1,0 +1,17 @@
+{
+  "code": "COMP-MCP-MIGRATION-2-1",
+  "description": "**Backfill feature.json for legacy ROADMAP phases.** Most of compose/ROADMAP.md (Phase 0-6, INIT-1, STRAT-1, COMP-* historical features) has no backing feature.json files, so any typed writer that calls writeRoadmap() wipes the curated content. Generate feature.json for every legacy ROADMAP row so the typed writers fully own roadmap regen and ROADMAP_PARTIAL_WRITE stops firing during normal flips.",
+  "status": "PLANNED",
+  "phase": "Phase 7: MCP Writers",
+  "created": "2026-05-04",
+  "updated": "2026-05-04",
+  "complexity": "L",
+  "position": 12,
+  "parent": "COMP-MCP-MIGRATION-2",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-MCP-MIGRATION-2"
+    }
+  ]
+}
