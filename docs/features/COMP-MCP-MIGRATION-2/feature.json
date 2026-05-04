@@ -1,0 +1,17 @@
+{
+  "code": "COMP-MCP-MIGRATION-2",
+  "description": "**Honor paths.features in .compose/compose.json across all writers.** feature-writer.js (addRoadmapEntry/setFeatureStatus/linkFeatures), feature-json.js (readFeature/writeFeature/listFeatures), and ArtifactManager all default to docs/features and ignore the configured override. Threading the override through every writer + ArtifactManager constructor unblocks repos that need a non-default feature root.",
+  "status": "PLANNED",
+  "phase": "Phase 7: MCP Writers",
+  "created": "2026-05-04",
+  "updated": "2026-05-04",
+  "complexity": "M",
+  "position": 11,
+  "parent": "COMP-MCP-MIGRATION",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-MCP-MIGRATION"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "code": "COMP-MCP-CHANGELOG-WRITER",
+  "description": "**Changelog writer (`add_changelog_entry`, `get_changelog_entries`).** Sub-ticket #2 of `COMP-MCP-FEATURE-MGMT`. Date-heading inserts, section structure validation, cross-link to ROADMAP code.",
+  "status": "COMPLETE",
+  "phase": "Phase 7: MCP Writers",
+  "position": 2,
+  "parent": "COMP-MCP-FEATURE-MGMT",
+  "created": "2026-05-04",
+  "updated": "2026-05-04"
+}

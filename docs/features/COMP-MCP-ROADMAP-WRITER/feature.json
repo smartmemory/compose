@@ -1,0 +1,10 @@
+{
+  "code": "COMP-MCP-ROADMAP-WRITER",
+  "description": "**Roadmap writer (`add_roadmap_entry`, `set_feature_status`, `roadmap_diff`).** Sub-ticket #1 of `COMP-MCP-FEATURE-MGMT`. Atomic ROADMAP.md + feature.json + vision-state.json updates. Lifecycle transition policy enforced.",
+  "status": "COMPLETE",
+  "phase": "Phase 7: MCP Writers",
+  "position": 1,
+  "parent": "COMP-MCP-FEATURE-MGMT",
+  "created": "2026-05-04",
+  "updated": "2026-05-04"
+}

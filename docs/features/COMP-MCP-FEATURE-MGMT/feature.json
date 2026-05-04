@@ -1,0 +1,9 @@
+{
+  "code": "COMP-MCP-FEATURE-MGMT",
+  "description": "**Umbrella: typed MCP writers for feature-management state.** Move every free-text mutation that touches feature-management state behind a typed MCP tool. Single writer per artifact; events on every change; queryable history; schema enforcement at the call site.",
+  "status": "COMPLETE",
+  "phase": "Phase 7: MCP Writers",
+  "position": 0,
+  "created": "2026-05-04",
+  "updated": "2026-05-04"
+}

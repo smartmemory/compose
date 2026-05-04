@@ -1,0 +1,10 @@
+{
+  "code": "COMP-MCP-VALIDATE",
+  "description": "**Cross-artifact validator (`validate_feature`, `validate_project`).** Sub-ticket #7 of `COMP-MCP-FEATURE-MGMT`. Cross-checks ROADMAP row, vision-state, feature.json, folder contents, linked artifacts, cross-references. Three JSON Schemas codify implicit shapes. Pre-push hook gates drift before it leaves the dev's machine.",
+  "status": "COMPLETE",
+  "phase": "Phase 7: MCP Writers",
+  "position": 7,
+  "parent": "COMP-MCP-FEATURE-MGMT",
+  "created": "2026-05-04",
+  "updated": "2026-05-04"
+}

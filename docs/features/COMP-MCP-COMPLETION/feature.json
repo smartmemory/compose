@@ -1,0 +1,10 @@
+{
+  "code": "COMP-MCP-COMPLETION",
+  "description": "**Completion writer (`record_completion`, `get_completions`).** Sub-ticket #5 of `COMP-MCP-FEATURE-MGMT`. Commit-bound completion records, opt-in post-commit hook, three status-flip failure subcases.",
+  "status": "COMPLETE",
+  "phase": "Phase 7: MCP Writers",
+  "position": 5,
+  "parent": "COMP-MCP-FEATURE-MGMT",
+  "created": "2026-05-04",
+  "updated": "2026-05-04"
+}

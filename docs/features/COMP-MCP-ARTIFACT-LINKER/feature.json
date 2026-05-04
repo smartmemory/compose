@@ -1,0 +1,10 @@
+{
+  "code": "COMP-MCP-ARTIFACT-LINKER",
+  "description": "**Artifact linker (`link_artifact`, `link_features`, `get_feature_artifacts`, `get_feature_links`).** Sub-ticket #3 of `COMP-MCP-FEATURE-MGMT`. Typed artifact registration + cross-feature relations.",
+  "status": "COMPLETE",
+  "phase": "Phase 7: MCP Writers",
+  "position": 3,
+  "parent": "COMP-MCP-FEATURE-MGMT",
+  "created": "2026-05-04",
+  "updated": "2026-05-04"
+}

@@ -10,7 +10,17 @@
     "needs_verification": true,
     "needs_report": true
   },
-  "depends_on": ["COMP-HARNESS-1", "COMP-HARNESS-9"],
-  "tags": ["debug", "discipline", "harness", "quality"],
-  "source": "SmartMemory weekly retro 2026-04-12"
+  "depends_on": [
+    "COMP-HARNESS-1",
+    "COMP-HARNESS-9"
+  ],
+  "tags": [
+    "debug",
+    "discipline",
+    "harness",
+    "quality"
+  ],
+  "source": "SmartMemory weekly retro 2026-04-12",
+  "description": "**Debug discipline: agent capability profiles + enforcement.** Limits each agent type to a tool subset; emits capability_violation events; opt-in block mode rejects calls outside the profile.",
+  "updated": "2026-05-04"
 }

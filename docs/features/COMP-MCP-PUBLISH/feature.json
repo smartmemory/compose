@@ -1,0 +1,10 @@
+{
+  "code": "COMP-MCP-PUBLISH",
+  "description": "**Slim `@smartmemory/compose-mcp` wrapper + MCP registry publish.** Sub-ticket #6 of `COMP-MCP-FEATURE-MGMT`. Spawn-based stdio launcher; tag-triggered CI publishes to npm + `io.github.smartmemory/compose-mcp` on the official MCP registry.",
+  "status": "COMPLETE",
+  "phase": "Phase 7: MCP Writers",
+  "position": 6,
+  "parent": "COMP-MCP-FEATURE-MGMT",
+  "created": "2026-05-04",
+  "updated": "2026-05-04"
+}

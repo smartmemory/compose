@@ -1,0 +1,10 @@
+{
+  "code": "COMP-MCP-JOURNAL-WRITER",
+  "description": "**Journal writer (`write_journal_entry`, `get_journal_entries`).** Sub-ticket #4 of `COMP-MCP-FEATURE-MGMT`. Global session counter, four-section structure, two-file rollback on partial write.",
+  "status": "COMPLETE",
+  "phase": "Phase 7: MCP Writers",
+  "position": 4,
+  "parent": "COMP-MCP-FEATURE-MGMT",
+  "created": "2026-05-04",
+  "updated": "2026-05-04"
+}

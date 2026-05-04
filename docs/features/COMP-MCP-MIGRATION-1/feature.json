@@ -1,0 +1,17 @@
+{
+  "code": "COMP-MCP-MIGRATION-1",
+  "description": "**Audit-log correlated auto-rollback for enforcement.mcpForFeatureMgmt.** Add per-build correlation IDs to feature-events.jsonl rows so the build runner can pre-stage scan dirty ROADMAP/CHANGELOG/feature.json files and reject those without a matching typed-tool event in the same build window. Promotes v1 prompt-only enforcement to true block mode.",
+  "status": "PLANNED",
+  "phase": "Phase 7: MCP Writers",
+  "created": "2026-05-04",
+  "updated": "2026-05-04",
+  "complexity": "M",
+  "position": 10,
+  "parent": "COMP-MCP-MIGRATION",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-MCP-MIGRATION"
+    }
+  ]
+}
