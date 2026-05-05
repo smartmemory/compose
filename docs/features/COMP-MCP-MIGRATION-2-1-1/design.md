@@ -35,15 +35,30 @@ Make `lib/roadmap-parser.js` + `lib/roadmap-gen.js` round-trip lossless for the 
 
 ---
 
-## Decision 1: Parser strategy — switch to remark/unified
+## Decision 1: Parser strategy — hand-rolled augmentation (REVISED 2026-05-06)
 
-**Picked:** Switch `lib/roadmap-parser.js` and `lib/roadmap-gen.js` from hand-rolled regex to `unified` + `remark-parse` + `remark-stringify` + `remark-gfm`.
+**History:** Originally picked Option B (switch to `unified` + `remark-parse` + `remark-stringify` + `remark-gfm`). Phase 4/5 blueprint went through 7 rounds of Codex review (22 actionable findings absorbed). T2 POC spike during Phase 7 surfaced an unavoidable cosmetic regression: `mdast-util-gfm-table` re-pads all columns of a table to consistent widths. Every typed-writer regen would produce hundreds of lines of column-padding diff against the current single-spaced format. The POC technically demonstrated source-slice splice works for non-table preserved subtrees, but the GFM table re-padding is intrinsic to the renderer and can't be disabled without abandoning `mdast-util-gfm-table` entirely.
 
-**Rationale:** `remark-gfm` is already in `package.json` for react-markdown. Adopting it in `lib/` gives us proper AST + position tracking + lossless round-trip semantics that the ecosystem maintains. The three downstream decisions in this ticket assume an AST is available. Hand-rolled augmentation was the cheaper path (smaller diff) but doesn't fix lack of source-position tracking, so we'd be solving the same problem again the next time round-trip fidelity matters.
+**User stepped back and asked the right question — what's the point of this feature?** Answer: stop typed writers from destroying curated content during regen. The remark switch was a refactor masquerading as a feature. The actual goal is achievable with three targeted patches to the existing string-based parser/writer.
 
-**Cost:** Refactor every importer of `lib/roadmap-parser.js` and `lib/roadmap-gen.js`. Estimated 5–8 files in `compose/lib/`, 2–3 server routes, 1 test file replaced + new tests written. Larger diff, one-time investment. Same parser plumbing then becomes available for future markdown round-trip needs (CHANGELOG, journal) without further work.
+**Picked:** Hand-rolled augmentation. Three small additions to `lib/roadmap-parser.js` + `lib/roadmap-gen.js`:
 
-**Rejected:** Hand-rolled augmentation with three targeted patches. Dismissed because each of the three downstream decisions becomes substantially harder without a real AST (especially Decision 4's comment-marker handling).
+1. **Heading-canonical override capture and replay.** Parser stores override text on each phase entry. Writer reads original ROADMAP.md before regen, captures override text per phase, emits it back unchanged. Drift detection compares rollup-status against captured override.
+2. **Anonymous-row passthrough.** Writer reads original ROADMAP.md before regen, captures every `tableRow` whose `#` cell is `—` or whose Feature column doesn't match a feature code, splices them back into the regenerated tables at their parsed-position.
+3. **Preserved-section passthrough via comment markers.** One-time markup wrap of 4 sections. Writer scans for `<!-- preserved-section: <id> -->` ... `<!-- /preserved-section -->` pairs in the original file, splices the rawSource between markers verbatim into the output at the corresponding position.
+
+The parser keeps emitting `_anon_<n>` codes — no API change. No consumer migration needed (`buildDag`, `filterBuildable`, `build-all`, `bin/compose.js` all unchanged). No `FEATURE_CODE_RE_STRICT` switch (validator continues using its own scanner; the latent regex bug is filed separately).
+
+**Cost:** ~200 lines added across `lib/roadmap-parser.js` + `lib/roadmap-gen.js` + new `lib/roadmap-preservers.js` helper. No new dependencies. No column-padding regression (current single-spaced format preserved). Estimated 2–3 hours of focused work vs. 8–13 hours for the remark switch.
+
+**Trade-offs vs Option B:**
+- ✗ Doesn't fix the latent `FEATURE_CODE_RE` bug (`COMP-MCP-PUBLISH` etc. still misclassified as anonymous). File as separate hygiene ticket.
+- ✗ Codebase keeps a hand-rolled markdown parser that future markdown round-trip needs (CHANGELOG, journal) won't get for free.
+- ✓ No cosmetic-padding regression; typed-writer regens produce minimal diffs.
+- ✓ No 11-site consumer migration. No risk of changed `buildDag` semantics.
+- ✓ Smaller diff, easier review, less risk of subtle break in unrelated paths.
+
+**The remark switch may earn its keep someday** — when CHANGELOG round-trip, journal round-trip, or richer markdown manipulation matters across multiple surfaces. File as `COMP-MARKDOWN-AST` (separate initiative).
 
 ---
 
