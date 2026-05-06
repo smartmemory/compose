@@ -5,12 +5,15 @@
 
 ---
 
+<!-- preserved-section: roadmap-conventions -->
 ## Roadmap Conventions
 
 - **Status:** `PLANNED` | `IN_PROGRESS` | `PARTIAL` | `COMPLETE` | `SUPERSEDED` | `PARKED`
 - **Phases** are sequential. **Half-phases** (e.g. 1.5) are parallel tracks that surface between sequential phases.
 - Items are numbered sequentially across all phases — never reuse a number.
 - Cross-reference stable IDs (e.g. `FEAT-1`, `Phase 2`) not section headings.
+
+<!-- /preserved-section -->
 
 ---
 
@@ -37,6 +40,7 @@ Bootstrap: establish the core structure and first working milestone.
 
 ---
 
+<!-- preserved-section: dogfooding-milestones -->
 ## Dogfooding Milestones
 
 | Milestone | Description | Status |
@@ -44,3 +48,5 @@ Bootstrap: establish the core structure and first working milestone.
 | D0: Bootstrap | Manual, out-of-band. | PLANNED |
 | D1: [First self-use milestone] | [Description] | PLANNED |
 | D2: [Second self-use milestone] | [Description] | PLANNED |
+
+<!-- /preserved-section -->
