@@ -8,12 +8,15 @@ iterations that loop across agents, artifacts that are tracked.
 
 ---
 
+<!-- preserved-section: roadmap-conventions -->
 ## Roadmap Conventions
 
 - **Status:** `PLANNED` | `IN_PROGRESS` | `PARTIAL` | `COMPLETE` | `SUPERSEDED` | `PARKED`
 - **Phases** are sequential. **Half-phases** (e.g. 4.5) are parallel tracks that surface between sequential phases.
 - Items are numbered sequentially across all phases — never reuse a number.
 - Cross-reference stable IDs (e.g. `Phase 3`, item 18) not section headings.
+
+<!-- /preserved-section -->
 
 ---
 
@@ -857,6 +860,7 @@ Inspired by [LaneKeep](https://github.com/algorismo-au/lanekeep)'s 7-9 tier eval
 
 ---
 
+<!-- preserved-section: dogfooding-milestones -->
 ## Dogfooding Milestones
 
 | Milestone | Description | Status |
@@ -867,8 +871,11 @@ Inspired by [LaneKeep](https://github.com/algorismo-au/lanekeep)'s 7-9 tier eval
 | D3: Enforced | Phase transitions on Compose features are gated through Compose's own policy runtime. | PARTIAL |
 | D4: Multi-agent | A feature is built end-to-end using multiple agents dispatched by Compose via Stratum. | PLANNED |
 
+<!-- /preserved-section -->
+
 ---
 
+<!-- preserved-section: execution-sequencing -->
 ## Execution Sequencing
 
 Proposed wave order for all PLANNED and PARTIAL features. Dependencies flow forward — each wave
@@ -978,8 +985,11 @@ Parallel: Wave 3 items are independent of each other
 Parallel: Wave 1 items are independent of each other
 ```
 
+<!-- /preserved-section -->
+
 ---
 
+<!-- preserved-section: key-documents -->
 ## Key Documents
 
 | Document | What it is |
@@ -998,6 +1008,8 @@ Parallel: Wave 1 items are independent of each other
 | [Hub3r7/claude-code-orchestration-template](https://github.com/Hub3r7/claude-code-orchestration-template) | Reference: tiered task escalation, PASS/FAIL loop-back, read-only agent enforcement, agent notes persistence |
 | [srf6413/cstack](https://github.com/srf6413/cstack) | Reference: zero-config agent orchestration, markdown-as-state, heartbeat meta-agent, conversational setup |
 | [algorismo-au/lanekeep](https://github.com/algorismo-au/lanekeep) | Reference: local-first governance sidecar, tiered evaluation pipeline, self-protection rules, budget-as-enforcement, append-only audit |
+
+<!-- /preserved-section -->
 
 ---
 
@@ -1149,3 +1161,21 @@ Built-in product ideabox for any Compose-managed project. `compose init` scaffol
 **Dependencies:** COMP-UX-1 (context panel — COMPLETE), COMP-DESIGN (design conversation — PARTIAL for auto-capture in item 7)
 
 **Exit:** Any Compose project gets an ideabox out of the box via `compose init`. CLI and web UI for full lifecycle: capture (with auto-clustering and dedup), triage (with persona lenses and impact/effort matrix), discuss (threaded conversations), promote (single or cluster-merge, wizard flow), kill (with graveyard and resurrect). Ideas visible as ghost layer in roadmap graph. Source analytics show where ideas come from and what converts. Multi-project aggregation for workspaces. External import from GitHub/Linear. Staleness nudges keep the backlog healthy.
+
+---
+
+## COMP-UPDATE: One-Step Manual Upgrade — COMPLETE
+
+Compose has no upgrade path. The README tells users to `npx compose init`, but compose isn't on npm — `npx compose` errors with `could not determine executable to run`. Existing users have no documented way to pull the latest compose without manually running `git pull && npm install && compose setup` and remembering to re-run hooks. Ship a single command — `compose update` — that does it all, plus an npm package so `npx compose@latest` works for fresh installs.
+
+**Scope:** manual only. No background auto-update, no nag prompts on every invocation. A future `auto_update` opt-in is out of scope.
+
+| # | Feature | Item | Status |
+|---|---------|------|--------|
+| 192 | COMP-UPDATE-1 | **`compose update` subcommand:** Auto-detects npm install (PACKAGE_ROOT under `node_modules/`) vs git clone (`.git` at PACKAGE_ROOT). For npm: runs `npm install [-g] @smartmemory/compose@latest`. For git: refuses on dirty tree unless `--force`, runs `git fetch && git pull --ff-only`, prints before/after SHAs, runs `npm install`. Either path then re-runs `compose setup` and (if invoked inside `.compose/`) `compose init`. Aliased as `compose upgrade`. | COMPLETE |
+| 193 | COMP-UPDATE-2 | **npm package publish:** Already shipped before COMP-UPDATE was filed. `package.json` has `bin`, `files`, `publishConfig: public`, `prepublishOnly`. `.github/workflows/publish.yml` publishes on `v*` tags with provenance; `beta.yml` publishes betas; `publish-compose-mcp.yml` ships the MCP server. `npm view @smartmemory/compose dist-tags`: `latest: 0.1.0`, `beta: 0.1.7-beta`. | COMPLETE |
+| 194 | COMP-UPDATE-3 | **Doctor + version surfacing:** `compose --version` / `compose version` / `compose -V` prints package version + git SHA + resolved root. `compose doctor` gained a Version section that fetches the latest from `registry.npmjs.org/@smartmemory/compose`, compares to installed (semver-ish, prerelease-aware), and prints `✓ up to date` or `⚠ behind — run: compose update`. 24h cache at `~/.compose/version-cache.json`, 3s timeout, never fails the doctor run. `--refresh-versions` bypasses cache. README and `docs/install.md` got "Upgrading" sections. | COMPLETE |
+
+**Dependencies:** none — `compose setup`, `compose init`, and `compose hooks install` already exist and are idempotent.
+
+**Exit:** A user with an old compose checkout runs `compose update` and gets the latest code, refreshed global skill, refreshed project hooks, and a printed diff of what changed — in one command. A new user runs `npx compose@latest init` and it works without cloning the repo. `compose --version` shows what's installed. `compose doctor` flags drift against the published npm version.

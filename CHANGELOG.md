@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-05-06
+
+### COMP-UPDATE-1, COMP-UPDATE-3 — One-step `compose update`, `--version`, doctor version drift
+
+Compose was published to npm as `@smartmemory/compose` but the README still told users to run `npx compose init`, which fails with `could not determine executable to run`. Existing users also had no documented upgrade path — they had to remember `git pull && npm install && compose setup`. Both gaps closed in one feature.
+
+**Added:**
+- `compose update` (alias `compose upgrade`) — auto-detects whether compose was installed via npm (PACKAGE_ROOT under `node_modules/`) or git clone (`.git` at PACKAGE_ROOT). For npm installs runs `npm install [-g] @smartmemory/compose@latest`. For git clones runs `git fetch && git pull --ff-only && npm install`, refusing to proceed if the working tree is dirty unless `--force` is passed. Either way, then re-runs `compose setup` and (if invoked inside a `.compose/` project) re-runs `compose init` so `.mcp.json` and pipeline templates stay in sync.
+- `compose --version` / `compose version` / `compose -V` — prints package version, git SHA (if running from a clone), and the resolved package root.
+- `compose doctor` Version section — fetches the latest version from `registry.npmjs.org/@smartmemory/compose`, compares against the locally-installed version, and prints `✓ up to date` or `⚠ behind — run: compose update`. 24h on-disk cache at `~/.compose/version-cache.json` (3-second timeout, never throws — registry failures degrade silently to `latest: unavailable`). `compose doctor --refresh-versions` bypasses the cache. JSON output mode emits a `version` object alongside the existing dep report.
+- `lib/version-check.js` — `checkLatestVersion(currentVersion, { force })` and `compareVersions(a, b)` (semver-ish, prerelease-aware: `0.1.7-beta` < `0.1.7`).
+
+**Changed:**
+- `README.md` — split Quick install into npm vs git-clone options; added Upgrading section.
+- `docs/install.md` — same split; added Upgrading section; corrected `npx compose` invocations to use the fully-qualified package name when needed.
+- `bin/compose.js` — new `runUpdate()`, new `detectInstallStyle()`, version dispatch ahead of help, `runDoctor` is now async and prints version drift.
+
+**Not done in this feature:**
+- COMP-UPDATE-2 (npm publish infra) — already shipped before this feature was filed. `package.json` has `bin`, `files`, `publishConfig: public`, `prepublishOnly`, and `.github/workflows/publish.yml` publishes on `v*` tags with provenance. Confirmed via `npm view @smartmemory/compose dist-tags`: `latest: 0.1.0`, `beta: 0.1.7-beta`. Roadmap entry updated to COMPLETE.
+
 ## 2026-05-04
 
 ### COMP-MCP-MIGRATION-2-1 — Lossless regen prep (PARTIAL)

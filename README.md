@@ -34,9 +34,20 @@ compose build TODO-1
 
 Prerequisites: Node.js 18+ and `stratum-mcp` on PATH (`pip install stratum`). Codex steps additionally need the OpenAI `codex` CLI. Full prereqs in [docs/install.md](docs/install.md).
 
+The package is published to npm as `@smartmemory/compose`. Pick one install style:
+
+**Option A — npm (recommended for users):**
+
+```bash
+npm install -g @smartmemory/compose
+compose setup                # global skill + stratum-mcp registration
+```
+
+**Option B — git clone (for development):**
+
 ```bash
 git clone https://github.com/smartmemory/compose.git && cd compose && npm install
-npx compose setup            # global skill + stratum-mcp registration
+npx @smartmemory/compose setup   # or: node bin/compose.js setup
 ln -s "$(pwd)/bin/compose.js" ~/bin/compose && chmod +x ~/bin/compose   # optional: bare `compose` command
 ```
 
@@ -44,15 +55,31 @@ Then in your project:
 
 ```bash
 cd /path/to/your/project
-npx compose init             # writes .compose/, registers MCP, scaffolds ROADMAP and pipeline specs
-npx compose new "what you want to build"
+compose init                 # writes .compose/, registers MCP, scaffolds ROADMAP and pipeline specs
+compose new "what you want to build"
 ```
 
 Add an isolated feature to an existing project:
 
 ```bash
-npx compose feature AUTH-1 "JWT middleware with refresh tokens"
-npx compose build AUTH-1
+compose feature AUTH-1 "JWT middleware with refresh tokens"
+compose build AUTH-1
+```
+
+## Upgrading
+
+One command — auto-detects whether compose was installed via npm or git clone:
+
+```bash
+compose update
+```
+
+For npm installs, this runs `npm install -g @smartmemory/compose@latest`. For git clones, it runs `git pull --ff-only && npm install`. Either way it then refreshes the global skill and (if invoked from inside a Compose project) re-runs `compose init` to refresh `.mcp.json` and pipeline templates. Use `compose update --force` to bypass the dirty-tree check on git clones.
+
+Check what you're running:
+
+```bash
+compose --version
 ```
 
 ## Documentation

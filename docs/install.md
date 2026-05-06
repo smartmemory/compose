@@ -10,6 +10,16 @@ How to install Compose, initialize a project, and register the global skill.
 
 ## Install Compose
 
+The package is published to npm as `@smartmemory/compose`.
+
+**Option A — npm (recommended for users):**
+
+```bash
+npm install -g @smartmemory/compose
+```
+
+**Option B — git clone (for development):**
+
 ```bash
 git clone https://github.com/smartmemory/compose.git
 cd compose
@@ -22,7 +32,13 @@ Run from inside your project directory:
 
 ```bash
 cd /path/to/your/project
-npx compose init
+compose init
+```
+
+If compose is not on `PATH` (e.g. you cloned but didn't symlink to `~/bin`), use the fully-qualified package name with `npx`:
+
+```bash
+npx @smartmemory/compose init
 ```
 
 This:
@@ -43,7 +59,7 @@ Flags:
 Installs the `/compose` skill globally and registers `stratum-mcp`:
 
 ```bash
-npx compose setup
+compose setup
 ```
 
 This:
@@ -53,11 +69,30 @@ This:
 
 ## Global CLI via ~/bin
 
-To use `compose` as a global command:
+To use `compose` as a global command (only needed for git-clone installs — `npm install -g` puts `compose` on `PATH` automatically):
 
 ```bash
 ln -s /path/to/compose/bin/compose.js ~/bin/compose
 chmod +x ~/bin/compose
+```
+
+## Upgrading
+
+One command — auto-detects npm vs git-clone install:
+
+```bash
+compose update
+```
+
+- **npm install:** runs `npm install -g @smartmemory/compose@latest`
+- **git clone:** runs `git pull --ff-only && npm install` (refuses if the working tree is dirty; pass `--force` to skip that check)
+
+Either way, `compose update` then re-runs `compose setup` to refresh the global skill, and if invoked inside a Compose project, re-runs `compose init` to refresh `.mcp.json` and pipeline templates.
+
+Check the installed version, git SHA, and root path:
+
+```bash
+compose --version
 ```
 
 ## Backwards compatibility

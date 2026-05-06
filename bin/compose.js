@@ -10,7 +10,7 @@
  * compose fix      — headless bug-fix lifecycle runner (pipelines/bug-fix.stratum.yaml)
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, rmSync, readdirSync } from 'fs'
-import { resolve, join, basename, dirname } from 'path'
+import { resolve, join, basename, dirname, sep } from 'path'
 import { homedir } from 'os'
 import { spawn, spawnSync } from 'child_process'
 import { fileURLToPath } from 'url'
@@ -24,12 +24,27 @@ const PACKAGE_ROOT = resolve(__dirname, '..')
 // ---------------------------------------------------------------------------
 import { parseTeamFlag } from '../lib/team-flag.js';
 import { loadDeps, checkExternalSkills, printDepReport } from '../lib/deps.js';
+import { checkLatestVersion } from '../lib/version-check.js';
 
 const [,, cmd, ...args] = process.argv
 
 // ---------------------------------------------------------------------------
 // Help
 // ---------------------------------------------------------------------------
+
+if (cmd === '--version' || cmd === '-V' || cmd === 'version') {
+  const pkgPath = join(PACKAGE_ROOT, 'package.json')
+  let version = 'unknown'
+  try { version = JSON.parse(readFileSync(pkgPath, 'utf-8')).version } catch {}
+  console.log(`compose ${version}`)
+  const gitDir = join(PACKAGE_ROOT, '.git')
+  if (existsSync(gitDir)) {
+    const sha = spawnSync('git', ['-C', PACKAGE_ROOT, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf-8' })
+    if (sha.status === 0) console.log(`  git: ${sha.stdout.trim()}`)
+  }
+  console.log(`  root: ${PACKAGE_ROOT}`)
+  process.exit(0)
+}
 
 if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('Usage: compose <command>')
@@ -49,7 +64,9 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  qa-scope  Show affected routes from a feature\'s changed files')
   console.log('  init      Initialize Compose in the current project')
   console.log('  setup     Install global skill + register stratum-mcp')
+  console.log('  update    Pull latest compose, reinstall deps, refresh global skill')
   console.log('  doctor    Check external skill dependencies')
+  console.log('  --version Print compose version, git SHA, and install root')
   process.exit(0)
 }
 
@@ -195,10 +212,11 @@ function syncSkills(agents) {
 // compose doctor — re-run the external dep check
 // ---------------------------------------------------------------------------
 
-function runDoctor(flags = []) {
+async function runDoctor(flags = []) {
   const json = flags.includes('--json')
   const strict = flags.includes('--strict')
   const verbose = flags.includes('--verbose') || flags.includes('-v')
+  const refresh = flags.includes('--refresh-versions')
 
   const deps = loadDeps(PACKAGE_ROOT)
   if (!deps) {
@@ -206,8 +224,37 @@ function runDoctor(flags = []) {
     process.exit(1)
   }
   const result = checkExternalSkills(deps)
-  const allRequiredPresent = printDepReport(result, { json, verbose })
 
+  // Version drift check — never fails the doctor run.
+  const currentVersion = (() => {
+    try { return JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf-8')).version }
+    catch { return null }
+  })()
+  const versionInfo = await checkLatestVersion(currentVersion, { force: refresh })
+
+  if (json) {
+    const allRequiredPresent = printDepReport(result, { json: true, verbose })
+    // printDepReport(json) already printed the deps JSON; emit version separately.
+    console.log(JSON.stringify({ version: versionInfo }, null, 2))
+    if (strict && !allRequiredPresent) process.exit(1)
+    return
+  }
+
+  // Version section — printed first so it's visible above long dep lists.
+  console.log('Version:')
+  console.log(`  installed: ${currentVersion ?? 'unknown'}`)
+  if (versionInfo) {
+    console.log(`  latest:    ${versionInfo.latest} (${versionInfo.source})`)
+    if (versionInfo.behind) {
+      console.log(`  ⚠ behind — run: compose update`)
+    } else {
+      console.log(`  ✓ up to date`)
+    }
+  } else {
+    console.log(`  latest:    unavailable (registry unreachable or cache missing)`)
+  }
+
+  const allRequiredPresent = printDepReport(result, { json: false, verbose })
   if (strict && !allRequiredPresent) process.exit(1)
 }
 
@@ -435,6 +482,114 @@ function runSetup() {
 }
 
 // ---------------------------------------------------------------------------
+// compose update — pull latest, reinstall deps, refresh global skill
+// ---------------------------------------------------------------------------
+
+function detectInstallStyle() {
+  // npm install resolves bin to either:
+  //   - global: /<prefix>/lib/node_modules/@smartmemory/compose/bin/compose.js
+  //   - local:  <project>/node_modules/@smartmemory/compose/bin/compose.js
+  //   - npx cache: ~/.npm/_npx/<hash>/node_modules/@smartmemory/compose/bin/compose.js
+  // git clone places it under any path WITHOUT a node_modules ancestor that
+  // contains the package itself, but WITH a .git directory at PACKAGE_ROOT.
+  if (PACKAGE_ROOT.includes(`${sep}node_modules${sep}`)) {
+    return { style: 'npm', root: PACKAGE_ROOT }
+  }
+  if (existsSync(join(PACKAGE_ROOT, '.git'))) {
+    return { style: 'git', root: PACKAGE_ROOT }
+  }
+  return { style: 'unknown', root: PACKAGE_ROOT }
+}
+
+function getPkgVersion() {
+  try {
+    return JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf-8')).version
+  } catch { return 'unknown' }
+}
+
+function getGitSha(repoPath) {
+  const r = spawnSync('git', ['-C', repoPath, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf-8' })
+  return r.status === 0 ? r.stdout.trim() : null
+}
+
+async function runUpdate(flags) {
+  const force = flags.includes('--force')
+  const cwd = process.cwd()
+  const { style, root } = detectInstallStyle()
+
+  console.log(`compose update — install style: ${style}`)
+  console.log(`  root: ${root}`)
+  console.log(`  current: v${getPkgVersion()}${style === 'git' ? ` @ ${getGitSha(root) || '?'}` : ''}`)
+  console.log('')
+
+  if (style === 'unknown') {
+    console.error('Cannot determine install style. Expected either:')
+    console.error(`  - npm install: PACKAGE_ROOT inside node_modules`)
+    console.error(`  - git clone:   .git directory at ${root}`)
+    console.error('Reinstall with: npm install -g @smartmemory/compose')
+    process.exit(1)
+  }
+
+  if (style === 'npm') {
+    // Decide global vs local: global if root is under a global prefix.
+    const npmPrefix = spawnSync('npm', ['prefix', '-g'], { encoding: 'utf-8' }).stdout.trim()
+    const isGlobal = npmPrefix && root.startsWith(npmPrefix)
+    const installCmd = isGlobal
+      ? ['install', '-g', '@smartmemory/compose@latest']
+      : ['install', '@smartmemory/compose@latest']
+    console.log(`Running: npm ${installCmd.join(' ')}`)
+    const r = spawnSync('npm', installCmd, { stdio: 'inherit' })
+    if (r.status !== 0) {
+      console.error('npm install failed')
+      process.exit(r.status || 1)
+    }
+  } else {
+    // git clone — check clean, fast-forward pull, npm install
+    const status = spawnSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf-8' })
+    if (status.stdout.trim() && !force) {
+      console.error(`Working tree at ${root} has uncommitted changes.`)
+      console.error('Commit/stash them, or re-run with --force to skip the check.')
+      process.exit(1)
+    }
+    const beforeSha = getGitSha(root)
+    console.log(`Running: git fetch && git pull --ff-only`)
+    const fetch = spawnSync('git', ['-C', root, 'fetch'], { stdio: 'inherit' })
+    if (fetch.status !== 0) { process.exit(fetch.status || 1) }
+    const pull = spawnSync('git', ['-C', root, 'pull', '--ff-only'], { stdio: 'inherit' })
+    if (pull.status !== 0) {
+      console.error('git pull --ff-only failed (likely diverged from remote).')
+      console.error(`Reconcile manually in ${root}, then re-run compose update.`)
+      process.exit(pull.status || 1)
+    }
+    const afterSha = getGitSha(root)
+    if (beforeSha === afterSha) {
+      console.log(`Already up to date at ${afterSha}.`)
+    } else {
+      console.log(`Updated ${beforeSha} → ${afterSha}`)
+    }
+
+    console.log('Running: npm install')
+    const ni = spawnSync('npm', ['install'], { cwd: root, stdio: 'inherit' })
+    if (ni.status !== 0) { process.exit(ni.status || 1) }
+  }
+
+  // Refresh global skill + stratum-mcp registration
+  console.log('')
+  console.log('Refreshing global skill installation...')
+  runSetup()
+
+  // If invoked from inside a Compose project, refresh project artifacts too
+  if (existsSync(join(cwd, '.compose', 'compose.json'))) {
+    console.log('')
+    console.log(`Refreshing project at ${cwd}...`)
+    await runInit([])
+  }
+
+  console.log('')
+  console.log(`compose updated to v${getPkgVersion()}${style === 'git' ? ` @ ${getGitSha(root) || '?'}` : ''}`)
+}
+
+// ---------------------------------------------------------------------------
 // Command dispatch
 // ---------------------------------------------------------------------------
 
@@ -449,7 +604,12 @@ if (cmd === 'setup') {
 }
 
 if (cmd === 'doctor') {
-  runDoctor(args)
+  await runDoctor(args)
+  process.exit(0)
+}
+
+if (cmd === 'update' || cmd === 'upgrade') {
+  await runUpdate(args)
   process.exit(0)
 }
 
