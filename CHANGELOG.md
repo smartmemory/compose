@@ -2,6 +2,31 @@
 
 ## 2026-05-06
 
+### COMP-MCP-MIGRATION-2-1-1 — Lossless ROADMAP.md round-trip
+
+Typed writers like `set_feature_status` and `add_roadmap_entry` previously destroyed curated content during regen — anonymous historical rows, phase-status overrides like `PARKED (Claude Code dependency)`, and non-phase sections like `Roadmap Conventions` / `Dogfooding Milestones` / `Execution Sequencing` / `Key Documents` all got stripped. The trial bulk backfill that surfaced this ticket dropped `compose/ROADMAP.md` from 1,125 lines to 493. Now fixed via three targeted preservation patches: heading override capture/replay with drift detection, anonymous-row passthrough at parsed positions, and HTML-comment-marker anchors for non-feature sections. No new dependencies, no AST swap, no consumer migration.
+
+**Why hand-rolled, not remark/unified:** Decision 1 originally chose `unified` + `remark-parse` + `remark-stringify` + `remark-gfm`. T2 POC during execution proved the mechanism works for non-table preserved subtrees but `mdast-util-gfm-table` re-pads every column on every regen — hundreds of lines of cosmetic whitespace diff per typed-writer call. Stepped back, scoped to the actual goal (preserve curated content), shipped hand-rolled augmentation in ~200 lines instead of a multi-package AST swap. Full design history at `docs/features/COMP-MCP-MIGRATION-2-1-1/`.
+
+**Added:**
+- `lib/roadmap-preservers.js` — six pure functions: `readPhaseOverrides`, `readAnonymousRows`, `readPreservedSections`, `readPreservedSectionAnchors`, `readPhaseOrder`, `readPhaseBlocks`. Each scans existing ROADMAP.md text and returns curated content for the writer to splice back during regen.
+- `lib/roadmap-drift.js` — `emitDrift(cwd, {phaseId, override, computed})` writes a `roadmap_drift` event to `feature-events.jsonl` with read-side dedupe (24h window) and an always-emitted stderr warning. Surfaces when a curated heading override (`COMPLETE`) diverges from the rollup computed from feature.json (`PARTIAL`).
+- 31 new tests across 4 files: 19 preservers + 8 drift + 5 round-trip integration + 7 edge-case coverage (bootstrap path, absent markers, predecessor-deleted anon rows, override-only phases, multi-row anon chains, drift-on-rich-override, fenced-code-block false-positives).
+
+**Changed:**
+- `lib/roadmap-gen.js` — `generateRoadmap()` reads existing ROADMAP.md and splices regenerated tables into source phase blocks via `spliceTableIntoBlock()` so curated intro prose, exit text, and `See \`docs/...\`` doc links survive. Phase order from source is canonical (preserves curated sequencing for legacy phases). Preserved-section markers anchor at their parsed positions relative to phases. Key Documents auto-gen suppressed when a `key-documents` preserved-section exists.
+- `lib/feature-writer.js` — `roadmapDiff()` filters out `roadmap_drift` events (internal reconciliation, not user mutations).
+- `ROADMAP.md` — wrapped Roadmap Conventions, Dogfooding Milestones, Execution Sequencing, and Key Documents in `<!-- preserved-section: <id> -->` markers.
+- `templates/ROADMAP.md` — wrapped Roadmap Conventions and Dogfooding Milestones so `compose init` repos start marker-aware.
+
+**Process:** 7 rounds of Codex review on the (now-rejected) Option B blueprint surfaced 22 architectural findings. After the POC stop, one round of Codex review on the Option A implementation surfaced 2 real issues (typed-phase prose loss, weak round-trip test); both fixed in the same Phase 7 iteration. Final review: REVIEW CLEAN.
+
+**Follow-ups filed:**
+- `COMP-MCP-MIGRATION-2-1-1-1` — `/compose migrate-anon` interactive flow for promoting historical anonymous rows to typed features.
+- `COMP-MCP-MIGRATION-2-1-1-3` — Key Documents hybrid-merge (auto-add designDoc-linked rows + byte-preserve curated/external rows).
+
+**Tests:** 2495/2496 passing (one pre-existing flake in `test/comp-deps-package.test.js:235` unrelated to this work; reproduces against stash-revert). E2E demonstration via live `setFeatureStatus` against compose's actual ROADMAP.md confirmed all preservation invariants hold.
+
 ### COMP-UPDATE-1, COMP-UPDATE-3 — One-step `compose update`, `--version`, doctor version drift
 
 Compose was published to npm as `@smartmemory/compose` but the README still told users to run `npx compose init`, which fails with `could not determine executable to run`. Existing users also had no documented upgrade path — they had to remember `git pull && npm install && compose setup`. Both gaps closed in one feature.
