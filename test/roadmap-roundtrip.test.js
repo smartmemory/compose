@@ -80,14 +80,69 @@ describe('writeRoadmap round-trip on compose ROADMAP.md', () => {
     }
   });
 
-  test('regen is idempotent (regen of regen produces same output)', () => {
-    // We can't easily writeRoadmap(regen) without filesystem, so assert
-    // generateRoadmap is stable on its input by parsing its own output.
+  test('curated phase prose survives in typed phases (intro)', () => {
+    const original = readFileSync(join(COMPOSE_ROOT, 'ROADMAP.md'), 'utf-8');
+    const regenerated = generateRoadmap(COMPOSE_ROOT);
+
+    // Phase 7 has a curated intro paragraph between heading and table.
+    const phase7Idx = original.indexOf('## Phase 7: MCP Writers');
+    assert.ok(phase7Idx >= 0, 'Phase 7 heading missing from source');
+    const phase7End = original.indexOf('\n## ', phase7Idx + 1);
+    const phase7Block = original.slice(phase7Idx, phase7End);
+    const tableStart = phase7Block.indexOf('\n|');
+    const phase7Intro = phase7Block.slice(phase7Block.indexOf('\n') + 1, tableStart).trim();
+    if (phase7Intro.length > 0) {
+      assert.ok(
+        regenerated.includes(phase7Intro),
+        `Phase 7 intro prose lost in regen:\n--- expected substring ---\n${phase7Intro}\n--- not found in regen ---`
+      );
+    }
+  });
+
+  test('exit-text lines survive across all typed phases', () => {
+    const original = readFileSync(join(COMPOSE_ROOT, 'ROADMAP.md'), 'utf-8');
+    const regenerated = generateRoadmap(COMPOSE_ROOT);
+
+    // Every line that starts with `**Exit:**` is curated content that must
+    // round-trip. There are several across typed phases.
+    const exitLines = original
+      .split('\n')
+      .filter(l => l.startsWith('**Exit:**'));
+    assert.ok(exitLines.length >= 5, `expected at least 5 **Exit:** lines, found ${exitLines.length}`);
+    for (const line of exitLines) {
+      assert.ok(
+        regenerated.includes(line),
+        `exit line lost in regen:\n${line}`
+      );
+    }
+  });
+
+  test('doc-link tails survive (See `docs/...` references)', () => {
+    const original = readFileSync(join(COMPOSE_ROOT, 'ROADMAP.md'), 'utf-8');
+    const regenerated = generateRoadmap(COMPOSE_ROOT);
+
+    const seeLines = original
+      .split('\n')
+      .filter(l => /^See `docs\//.test(l));
+    assert.ok(seeLines.length >= 3, `expected at least 3 See lines, found ${seeLines.length}`);
+    for (const line of seeLines) {
+      assert.ok(
+        regenerated.includes(line),
+        `doc-link tail lost in regen:\n${line}`
+      );
+    }
+  });
+
+  test('regen of regen is structurally idempotent', () => {
+    // True round-trip: feed regenerated output back through the writer and
+    // confirm the second regen produces the same content. We can't run
+    // generateRoadmap on a string directly (it reads from disk), so we
+    // compare key invariants between first and second-pass-equivalent regens
+    // by re-parsing the output.
     const first = generateRoadmap(COMPOSE_ROOT);
-    // Capture preserved sections + overrides from the regen output;
-    // they should match the originals.
     const originalText = readFileSync(join(COMPOSE_ROOT, 'ROADMAP.md'), 'utf-8');
 
+    // Preserved sections must round-trip byte-equal.
     const origSections = readPreservedSections(originalText);
     const newSections = readPreservedSections(first);
     assert.equal(newSections.size, origSections.size, 'preserved-section count diverged');
@@ -95,6 +150,7 @@ describe('writeRoadmap round-trip on compose ROADMAP.md', () => {
       assert.equal(newSections.get(id), origSections.get(id), `preserved section "${id}" diverged`);
     }
 
+    // Overrides must round-trip identically.
     const origOverrides = readPhaseOverrides(originalText);
     const newOverrides = readPhaseOverrides(first);
     for (const [phase, ov] of origOverrides) {
@@ -103,6 +159,18 @@ describe('writeRoadmap round-trip on compose ROADMAP.md', () => {
         ov,
         `override for "${phase}" diverged`
       );
+    }
+
+    // Anonymous rows must round-trip identically.
+    const origAnon = readAnonymousRows(originalText);
+    const newAnon = readAnonymousRows(first);
+    for (const [phase, rows] of origAnon) {
+      const newRows = newAnon.get(phase) ?? [];
+      assert.equal(newRows.length, rows.length, `anon row count for "${phase}" diverged`);
+      const origLines = new Set(rows.map(r => r.rawLine));
+      for (const r of newRows) {
+        assert.ok(origLines.has(r.rawLine), `anon row text diverged in "${phase}": ${r.rawLine}`);
+      }
     }
   });
 });
