@@ -42,6 +42,31 @@ describe('classifyDiffSize', () => {
   it('handles non-array input gracefully (null → small)', () => {
     assert.equal(classifyDiffSize(null), 'small');
   });
+
+  // STRAT-REV-FU-1: line-count gate aligned with original design (>200 lines = large)
+  it('promotes small file-count diff to large when lineCount ≥ 200', () => {
+    assert.equal(classifyDiffSize(['big-refactor.js'], 250), 'large');
+  });
+
+  it('promotes small file-count diff to medium when 50 ≤ lineCount < 200', () => {
+    assert.equal(classifyDiffSize(['mid-refactor.js'], 100), 'medium');
+  });
+
+  it('keeps file-count gate primary — 9 files still large regardless of small lineCount', () => {
+    assert.equal(classifyDiffSize(Array.from({ length: 9 }, (_, i) => `f${i}.js`), 10), 'large');
+  });
+
+  it('takes the larger of file-count and line-count classifications', () => {
+    // 3 files = medium, 250 lines = large → large wins
+    assert.equal(classifyDiffSize(['a.js', 'b.js', 'c.js'], 250), 'large');
+    // 9 files = large, 10 lines = small → large wins
+    assert.equal(classifyDiffSize(Array.from({ length: 9 }, (_, i) => `f${i}.js`), 10), 'large');
+  });
+
+  it('omitting lineCount preserves original file-count behavior', () => {
+    assert.equal(classifyDiffSize(['a.js']), 'small');
+    assert.equal(classifyDiffSize(['a.js', 'b.js', 'c.js']), 'medium');
+  });
 });
 
 describe('shouldRunCrossModel', () => {
@@ -63,6 +88,44 @@ describe('shouldRunCrossModel', () => {
 
   it('returns false for empty file list', () => {
     assert.equal(shouldRunCrossModel([]), false);
+  });
+
+  // STRAT-REV-FU-1
+  it('returns true for small file count when lineCount ≥ 200 (single-file mega-refactor)', () => {
+    assert.equal(shouldRunCrossModel(['big-refactor.js'], 250), true);
+  });
+
+  it('returns false for small file count when lineCount < 200', () => {
+    assert.equal(shouldRunCrossModel(['small.js'], 50), false);
+  });
+});
+
+// STRAT-REV-FU-1: shortstat parser regression tests
+describe('parseShortstat (STRAT-REV-FU-1)', () => {
+  it('parses insertions+deletions', async () => {
+    const { parseShortstat } = await import('../lib/build.js');
+    assert.equal(parseShortstat(' 3 files changed, 10 insertions(+), 5 deletions(-)\n'), 15);
+  });
+
+  it('parses insertions-only (no deletions)', async () => {
+    const { parseShortstat } = await import('../lib/build.js');
+    assert.equal(parseShortstat(' 1 file changed, 250 insertions(+)\n'), 250);
+  });
+
+  it('parses deletions-only — must-fix from Codex review', async () => {
+    const { parseShortstat } = await import('../lib/build.js');
+    assert.equal(parseShortstat(' 1 file changed, 250 deletions(-)\n'), 250);
+  });
+
+  it('returns 0 for empty stdout (no changes)', async () => {
+    const { parseShortstat } = await import('../lib/build.js');
+    assert.equal(parseShortstat(''), 0);
+    assert.equal(parseShortstat('   \n'), 0);
+  });
+
+  it('returns null for unrecognized shape (preserves file-count-only fallback)', async () => {
+    const { parseShortstat } = await import('../lib/build.js');
+    assert.equal(parseShortstat('garbage output\n'), null);
   });
 });
 

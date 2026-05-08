@@ -435,4 +435,102 @@ describe('normalizeCrossModelResult: canonical finding shape', () => {
     assert.equal(result.codex_only.length, 1, 'codex fallback preserved');
     assert.equal(result.clean, false, 'not clean when blocking findings exist');
   });
+
+  // STRAT-REV-FU-3: fallback confidence invariant
+  it('promotes fallback finding confidence to applied_gate when caller under-stamps it', async () => {
+    // Regression: previously codexAsFallback shipped confidence=6 with gate=7,
+    // causing all fallback findings to silently drop below the gate filter.
+    // The normalizer must defensively promote fallback confidence so the
+    // findings survive the same filter that drops genuine low-confidence model output.
+    const claudeFallback = [
+      { lens: 'security', file: 'auth.js', line: 1, severity: 'must-fix', finding: 'sql injection', confidence: 5, applied_gate: 7 },
+    ];
+    const codexFallback = [
+      { lens: 'general', file: null, line: null, severity: 'should-fix', finding: 'codex sub-gate', confidence: 6, applied_gate: 7 },
+    ];
+
+    const result = await normalizeCrossModelResult('not valid json %%%()', {
+      confidenceGate: 7,
+      claudeFindingsFallback: claudeFallback,
+      codexFindingsFallback: codexFallback,
+    });
+
+    assert.equal(result.claude_only.length, 1, 'under-confidence claude fallback survives the filter');
+    assert.equal(result.codex_only.length, 1, 'under-confidence codex fallback survives the filter');
+    assert.ok(result.claude_only[0].confidence >= result.claude_only[0].applied_gate, 'claude fallback confidence ≥ gate');
+    assert.ok(result.codex_only[0].confidence >= result.codex_only[0].applied_gate, 'codex fallback confidence ≥ gate');
+    assert.equal(result.clean, false, 'fallback findings still mark clean=false');
+  });
+
+  // STRAT-REV-FU-2: consensus promotion
+  it('stamps consensus:true on findings in the consensus array', async () => {
+    const rawSynthesis = JSON.stringify({
+      consensus: [
+        { lens: 'security', file: 'auth.js', line: 42, severity: 'must-fix', finding: 'sql injection', confidence: 8, applied_gate: 7 },
+      ],
+      claude_only: [
+        { lens: 'diff-quality', file: 'api.js', line: 10, severity: 'should-fix', finding: 'claude-only', confidence: 7, applied_gate: 7 },
+      ],
+      codex_only: [
+        { lens: 'general', file: null, line: null, severity: 'nit', finding: 'codex-only', confidence: 7, applied_gate: 7 },
+      ],
+    });
+
+    const result = await normalizeCrossModelResult(rawSynthesis, { confidenceGate: 7 });
+
+    assert.equal(result.consensus[0].consensus, true, 'consensus finding has consensus:true');
+    assert.ok(!result.claude_only[0].consensus, 'claude_only finding has no consensus flag');
+    assert.ok(!result.codex_only[0].consensus, 'codex_only finding has no consensus flag');
+  });
+
+  it('boosts confidence on consensus findings (both models agreed = higher conviction)', async () => {
+    const rawSynthesis = JSON.stringify({
+      consensus: [
+        { lens: 'security', file: 'auth.js', line: 42, severity: 'must-fix', finding: 'sql injection', confidence: 8, applied_gate: 7 },
+        { lens: 'security', file: 'auth.js', line: 50, severity: 'must-fix', finding: 'already maxed', confidence: 10, applied_gate: 7 },
+      ],
+      claude_only: [],
+      codex_only: [],
+    });
+
+    const result = await normalizeCrossModelResult(rawSynthesis, { confidenceGate: 7 });
+
+    assert.equal(result.consensus[0].confidence, 10, 'confidence 8 boosted to 10 (capped at max)');
+    assert.equal(result.consensus[1].confidence, 10, 'already-maxed confidence stays at 10');
+    assert.ok(result.consensus[0].confidence > 8, 'consensus boost applied');
+  });
+
+  it('top-level findings array carries consensus flag through merge', async () => {
+    const rawSynthesis = JSON.stringify({
+      consensus: [
+        { lens: 'security', file: 'auth.js', line: 42, severity: 'must-fix', finding: 'sql injection', confidence: 9, applied_gate: 7 },
+      ],
+      claude_only: [
+        { lens: 'diff-quality', file: 'api.js', line: 10, severity: 'should-fix', finding: 'claude-only', confidence: 8, applied_gate: 7 },
+      ],
+      codex_only: [],
+    });
+
+    const result = await normalizeCrossModelResult(rawSynthesis, { confidenceGate: 7 });
+
+    const consensusInFindings = result.findings.filter(f => f.consensus === true);
+    const otherInFindings = result.findings.filter(f => !f.consensus);
+    assert.equal(consensusInFindings.length, 1, 'consensus flag preserved in merged findings[]');
+    assert.equal(otherInFindings.length, 1, 'non-consensus findings present without flag');
+  });
+
+  it('does not modify confidence on findings parsed from valid synthesis output', async () => {
+    // Sanity guard: the FU-3 promotion applies ONLY in the fallback branch.
+    // A genuine low-confidence finding from a parsed synthesis must still drop.
+    const rawSynthesis = JSON.stringify({
+      consensus: [],
+      claude_only: [
+        { lens: 'security', file: null, line: null, severity: 'must-fix', finding: 'low conf', confidence: 5, applied_gate: 7 },
+      ],
+      codex_only: [],
+    });
+
+    const result = await normalizeCrossModelResult(rawSynthesis, { confidenceGate: 7 });
+    assert.equal(result.claude_only.length, 0, 'parsed sub-gate finding still dropped (FU-3 only protects fallback path)');
+  });
 });

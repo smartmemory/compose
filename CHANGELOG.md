@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-05-08
+
+### STRAT-REV-FU-1 / FU-2 / FU-3 — cross-model review hardening
+
+Three follow-ups surfaced during the STRAT-REV reconciliation (the `STRAT-REV-7` archive entry was stale; the feature shipped 2026-05-08 but three refinements were captured during the audit). All three filed as `STRAT-REV-FU-*` rows in `ROADMAP.md` and shipped in this changeset.
+
+**FU-1: Diff-size dual gate.** Original design called for "200+ lines = large"; impl shipped with file-count-only (`≥9 files`). A 200-line single-file mega-refactor was under-classified as `small`. Now `classifyDiffSize(filesChanged, lineCount?)` takes the larger of the two classifications — file-count gate stays primary, line-count gate (`≥200` lines) catches single-file refactors. `runCrossModelReview` computes `lineCount` once via `git diff --shortstat HEAD` (5s timeout, falls back to null on failure preserving original behavior).
+
+**FU-2: Consensus promotion.** Findings present in both Claude and Codex output now get `consensus: true` stamped and confidence boosted by +2 (capped at 10). Cockpit can highlight high-conviction issues by filtering on the flag; numeric confidence reflects that two independent models agreed.
+
+**FU-3: Fallback confidence invariant.** Regression-proofing: previously the synthesis-failure fallback path could ship findings with `confidence < applied_gate`, dropping them silently at the gate filter (already hit once — `codexAsFallback` shipped at 6 with gate 7). `promoteFallbackConfidence` defensively raises any under-stamped fallback confidence to the gate value so caller-supplied findings survive.
+
+**Changed:**
+- `lib/review-normalize.js` — added `promoteConsensusFinding` and `promoteFallbackConfidence` helpers; consensus pipeline now `map(normalize) → filter(gate) → map(promoteConsensus)`; fallback branch wraps caller arrays through `promoteFallbackConfidence`.
+- `lib/review-lenses.js` — `classifyDiffSize` and `shouldRunCrossModel` accept an optional `lineCount` second arg; larger of file-class and line-class wins.
+- `lib/build.js` — added `computeChangedLineCount(cwd)` helper using `git diff --no-color --shortstat HEAD`; `runCrossModelReview` passes lineCount into `shouldRunCrossModel` and emits it on the `cross_model_review` start event.
+
+**Tests:** 21 cross-model + 39 lens tests passing (3 new FU-3 cases, 3 new FU-2 cases, 7 new FU-1 cases). Full node suite: 2622/2623 passing — single pre-existing failure (`comp-deps-package T6: compose doctor --json`) reproduces on clean tree, unrelated to this changeset.
+
 ## 2026-05-06
 
 ### COMP-MCP-MIGRATION-2-1-1 — Lossless ROADMAP.md round-trip

@@ -23,7 +23,7 @@ const PACKAGE_ROOT = resolve(__dirname, '..')
 // --team flag (COMP-TEAMS)
 // ---------------------------------------------------------------------------
 import { parseTeamFlag } from '../lib/team-flag.js';
-import { loadDeps, checkExternalSkills, printDepReport } from '../lib/deps.js';
+import { loadDeps, checkExternalSkills, printDepReport, buildDepReport } from '../lib/deps.js';
 import { checkLatestVersion } from '../lib/version-check.js';
 
 const [,, cmd, ...args] = process.argv
@@ -233,9 +233,11 @@ async function runDoctor(flags = []) {
   const versionInfo = await checkLatestVersion(currentVersion, { force: refresh })
 
   if (json) {
-    const allRequiredPresent = printDepReport(result, { json: true, verbose })
-    // printDepReport(json) already printed the deps JSON; emit version separately.
-    console.log(JSON.stringify({ version: versionInfo }, null, 2))
+    // Single top-level JSON document — the deps report and the version block share one root
+    // so consumers like `JSON.parse(stdout)` work. (Previously two concatenated objects.)
+    const report = buildDepReport(result)
+    console.log(JSON.stringify({ ...report, version: versionInfo }, null, 2))
+    const allRequiredPresent = result.missing.every(d => d.optional)
     if (strict && !allRequiredPresent) process.exit(1)
     return
   }
