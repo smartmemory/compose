@@ -5,13 +5,24 @@
     "lifecycle": true
   },
   "agents": {
-    "claude": { "detected": true, "skillInstalled": true },
-    "codex": { "detected": true, "skillInstalled": true },
-    "gemini": { "detected": false }
+    "claude": {
+      "detected": true,
+      "skillInstalled": true
+    },
+    "codex": {
+      "detected": true,
+      "skillInstalled": true
+    },
+    "gemini": {
+      "detected": true,
+      "skillInstalled": false
+    }
   },
   "paths": {
     "docs": "docs",
     "features": "docs/features",
-    "journal": "docs/journal"
+    "journal": "docs/journal",
+    "context": "docs/context",
+    "ideabox": "docs/product/ideabox.md"
   }
 }

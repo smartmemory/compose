@@ -360,3 +360,12 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-04T09:46:49+08:00 | COMP-MCP-MIGRATION-1 design — auto-rollback enforcement via build correlation IDs
 2026-05-04T10:09:24+08:00 | COMP-MCP-MIGRATION-2-1 backfill — parse ROADMAP, generate feature.json for legacy rows
 2026-05-08T17:11:06+08:00 | STRAT-REV-FU-1/2/3: line-count alignment, consensus promotion, fallback-confidence invariant
+2026-05-09T17:22:18+08:00 | COMP-WORKSPACE-ID phase 4 — drafting blueprint, reading critical files
+2026-05-09T21:28:52+08:00 | COMP-WORKSPACE-ID phase 7 — dispatching T1+T2 subagent for resolver lib
+2026-05-09T21:30:19+08:00 | T1+T2 COMP-WORKSPACE-ID: implement discover-workspaces and resolve-workspace libs
+2026-05-09T21:34:38+08:00 | Migrating bin/compose.js cwd sites to resolveCwdWithWorkspace per T3
+2026-05-09T21:40:31+08:00 | T4: thread workspace ID into post-commit and pre-push hook templates
+2026-05-09T21:41:22+08:00 | T5: hook install/status workspace ID baking + status drift detection
+2026-05-09T21:42:04+08:00 | T6: workspace-id MCP binding (set_workspace/get_workspace tools, lazy bridge)
+2026-05-09T21:47:09+08:00 | COMP-WORKSPACE-ID T7-T9 done; running broader suite
+2026-05-09T22:40:06+08:00 | tooling drift cleanup + push WORKSPACE-ID/POLICY-CHECK
