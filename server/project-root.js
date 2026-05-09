@@ -48,6 +48,10 @@ export function getTargetRoot() { return _targetRoot; }
 /** Data directory for Compose state. Lives in the target project. */
 export function getDataDir() { return _dataDir; }
 
+let _currentWorkspaceId = null;
+export function getCurrentWorkspaceId() { return _currentWorkspaceId; }
+export function setCurrentWorkspaceId(id) { _currentWorkspaceId = id; }
+
 // ---------------------------------------------------------------------------
 // Switch project at runtime
 // ---------------------------------------------------------------------------

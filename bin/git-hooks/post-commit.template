@@ -6,6 +6,7 @@
 set -u
 COMPOSE_NODE="__COMPOSE_NODE__"
 COMPOSE_BIN="__COMPOSE_BIN__"
+COMPOSE_WORKSPACE_ID="__COMPOSE_WORKSPACE_ID__"
 LOG="${COMPOSE_HOOK_LOG:-.compose/data/post-commit.log}"
 mkdir -p "$(dirname "$LOG")"
 
@@ -52,7 +53,7 @@ echo "$trailers" | while IFS= read -r line; do
   done
 
   if ! echo "$files" | "$COMPOSE_NODE" "$COMPOSE_BIN" record-completion "$code" \
-    --commit-sha="$sha" --tests-pass="$tp" --notes="$notes" \
+    --commit-sha="$sha" --tests-pass="$tp" --notes="$notes" --workspace="$COMPOSE_WORKSPACE_ID" \
     --files-changed-from-stdin >> "$LOG" 2>&1; then
     echo "[$(date -Iseconds)] hook: record_completion failed for $code (sha=$sha) — see above" >> "$LOG"
   fi

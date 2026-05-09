@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-05-09
+
+### COMP-WORKSPACE-ID — workspace identity disambiguation (parent vs child)
+
+Compose now disambiguates between parent and child workspaces (e.g. forge-top vs `forge/compose`) across CLI, stdio MCP, and git hooks. Previously, `add_roadmap_entry` and friends could silently write to the parent workspace when invoked from a Claude session whose cwd was the parent — even when the user mentally meant the child. The fix introduces a single canonical resolver chain plus an MCP `set_workspace` tool.
+
+**Why.** Observed concretely while scaffolding this very feature: invoking `compose feature COMP-WORKSPACE-ID` from forge-top scaffolded the folder under forge-top instead of compose, even though the feature semantically belongs to compose. The resolver had no channel for expressing intent.
+
+**Path A v1 scope.** Stdio MCP + CLI + git hooks. HTTP server's import-time `PROJECT_ROOT` snapshots are deferred to `COMP-WORKSPACE-HTTP` (filed). Cockpit single-workspace UX is unchanged.
+
+**Added:**
+- `lib/discover-workspaces.js` — bounded bidirectional discovery: walks up to a `.compose`/`.stratum.yaml`/`.git` anchor, then scans descendants up to MAX_DEPTH=3 / MAX_VISITED=500 for `.compose/` markers. Skip-dirs include `node_modules`, `.git`, `dist`, `build`, `.next`, `.turbo`. Throws `WorkspaceDiscoveryTooBroad` over cap; silently skips unreadable subtrees (EACCES/EPERM/ENOENT). Exports `findAnchor`, `discoverWorkspaces`, `deriveId`.
+- `lib/resolve-workspace.js` — single canonical resolver chain. Precedence: explicit `--workspace=<id>` flag → `COMPOSE_TARGET` env (path or id) → MCP binding → discovery + auto-prompt. Explicit-flag bypass uses cheap upward walk (`findWorkspaceById`) so a known ancestor workspace skips the descendant scan even in deep monorepos. Error classes: `WorkspaceUnknown`, `WorkspaceAmbiguous`, `WorkspaceIdCollision`, `WorkspaceUnset`. Helper `getWorkspaceFlag(args)` mutates args in place.
+- New MCP tools: `set_workspace({workspaceId})` and `get_workspace()`. State lives in the stdio child only; lost on MCP restart by design (per-Claude-session scope is the right boundary).
+- `__COMPOSE_WORKSPACE_ID__` substitution in git hook templates; hooks pass `--workspace="$COMPOSE_WORKSPACE_ID"` to `record-completion` and `validate`. `compose hooks status` now reports `MISSING_WORKSPACE_ID` (legacy install) and `STALE_WORKSPACE_ID` (drift) and prints the baked id when current.
+- 4 new test files: `discover-workspaces.test.js` (12 tests), `resolve-workspace.test.js` (14 tests), `hooks-workspace.test.js` (6 tests), `golden/multi-workspace.test.js` (3 tests). 35 net-new tests; 2547 total node tests pass.
+
+**Changed:**
+- `bin/compose.js` — 17 cwd resolution sites migrated to a unified `resolveCwdWithWorkspace(args)` helper that exits via `dieOnWorkspaceError` with structured candidate lists when the cwd is ambiguous. Cached after first resolution so auto-init re-entry from `import`/`new`/`build`/`fix` sees a consistent workspace. `compose init` and `compose update` are workspace-optional (init creates; update is user-global).
+- `server/compose-mcp-tools.js` — dropped the `PROJECT_ROOT = getTargetRoot()` import-time cache; `VISION_FILE`/`SESSIONS_FILE` constants converted to `getVisionFile()`/`getSessionsFile()` getters; added `_binding` state plus the new tools.
+- `server/compose-mcp.js` — lazy `switchProject` bridge before each tool call (errors propagate to MCP client as structured `WorkspaceAmbiguous` etc with candidate list and next-step guidance). `set_workspace`/`get_workspace` exempt from the bridge.
+- `server/project-root.js` — added `getCurrentWorkspaceId`/`setCurrentWorkspaceId`.
+
+**Followups filed:** `COMP-WORKSPACE-HTTP`, `COMP-WORKSPACE-WATCHERS`, `COMP-WORKSPACE-RESUME`, `COMP-CLI-GLOBAL-FLAGS`.
+
 ## 2026-05-08
 
 ### STRAT-REV-FU-1 / FU-2 / FU-3 — cross-model review hardening

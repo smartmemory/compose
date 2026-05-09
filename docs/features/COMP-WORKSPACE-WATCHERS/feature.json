@@ -1,0 +1,15 @@
+{
+  "code": "COMP-WORKSPACE-WATCHERS",
+  "description": "Runtime workspace rebinding for long-lived watchers (file-watcher, cc-session-watcher)",
+  "status": "PLANNED",
+  "created": "2026-05-09",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-05-09"
+}

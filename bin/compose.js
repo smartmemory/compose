@@ -15,9 +15,61 @@ import { homedir } from 'os'
 import { spawn, spawnSync } from 'child_process'
 import { fileURLToPath } from 'url'
 import { findProjectRoot } from '../server/find-root.js'
+import { resolveWorkspace, getWorkspaceFlag } from '../lib/resolve-workspace.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PACKAGE_ROOT = resolve(__dirname, '..')
+
+function dieOnWorkspaceError(err) {
+  switch (err.code) {
+    case 'WorkspaceAmbiguous':
+      console.error('Multiple workspaces match cwd. Add --workspace=<id> or set COMPOSE_TARGET:')
+      for (const c of err.candidates) console.error(`  --workspace=${c.id}    (${c.root})`)
+      process.exit(1)
+    case 'WorkspaceIdCollision':
+      console.error(`workspaceId "${err.id}" is used by multiple roots:`)
+      for (const r of err.roots) console.error(`  ${r}`)
+      console.error('Set an explicit workspaceId in each .compose/compose.json.')
+      process.exit(1)
+    case 'WorkspaceUnknown':
+      // err.message may be the path-doesn't-exist form; prefer it when richer.
+      console.error(err.message.includes('does not exist') ? err.message : `Unknown workspace: ${err.id}. Run \`compose doctor\` to list candidates.`)
+      process.exit(1)
+    case 'WorkspaceUnset':
+      console.error('No compose workspace found from the current directory.')
+      console.error('Run `compose init` to scaffold one, or cd into a project that has a .compose/ directory.')
+      process.exit(1)
+    case 'WorkspaceDiscoveryTooBroad':
+      console.error('Workspace discovery exceeded its bound from anchor.')
+      console.error('Set COMPOSE_TARGET=/absolute/path/to/workspace to bypass discovery.')
+      process.exit(1)
+    default:
+      throw err
+  }
+}
+
+// Cache the resolved cwd for the lifetime of this CLI process. resolveCwdWithWorkspace
+// strips --workspace from args on first call (via getWorkspaceFlag splice), so a second
+// call would re-resolve without the hint. Cache prevents this; ensures auto-init paths
+// (runInit re-entry from build/fix/import/new) see the same workspace.
+let _resolvedCwdCache = null
+
+function resolveCwdWithWorkspace(args) {
+  if (_resolvedCwdCache !== null) return _resolvedCwdCache
+  let wsId = getWorkspaceFlag(args)
+  // Legacy hooks may pass the unsubstituted token literally — treat as absent.
+  if (wsId === '__COMPOSE_WORKSPACE_ID__') {
+    console.warn('[compose] hook predates workspace-aware install — re-run `compose hooks install`')
+    wsId = null
+  }
+  try {
+    const ws = resolveWorkspace({ workspaceId: wsId })
+    _resolvedCwdCache = ws.root
+    return ws.root
+  } catch (err) {
+    dieOnWorkspaceError(err)
+  }
+}
 
 // ---------------------------------------------------------------------------
 // --team flag (COMP-TEAMS)
@@ -267,6 +319,10 @@ async function runDoctor(flags = []) {
 async function runInit(flags) {
   const noStratum = flags.includes('--no-stratum')
   const noLifecycle = flags.includes('--no-lifecycle')
+  // init creates the workspace — never go through resolveCwdWithWorkspace (which
+  // requires one to exist). Strip --workspace if present to avoid leaving it in
+  // the shared args array for downstream subcommands.
+  getWorkspaceFlag(args)
   const cwd = process.cwd()
 
   // 1. Create .compose/ directory
@@ -516,7 +572,20 @@ function getGitSha(repoPath) {
 
 async function runUpdate(flags) {
   const force = flags.includes('--force')
-  const cwd = process.cwd()
+  // update is user-global — workspace is optional. Try to resolve; if no
+  // workspace exists, just use process.cwd() (we may still operate on
+  // user-global state below).
+  const wsId = getWorkspaceFlag(args)
+  let cwd
+  try {
+    cwd = resolveWorkspace({ workspaceId: wsId }).root
+    _resolvedCwdCache = cwd
+  } catch (err) {
+    // Only WorkspaceUnset is benign for `update` (user-global). Any explicit
+    // mistake (bad --workspace, collision, ambiguity, too-broad) should still die.
+    if (err.code !== 'WorkspaceUnset') dieOnWorkspaceError(err)
+    cwd = process.cwd()
+  }
   const { style, root } = detectInstallStyle()
 
   console.log(`compose update — install style: ${style}`)
@@ -623,7 +692,7 @@ if (cmd === 'install') {
 }
 
 if (cmd === 'import') {
-  const cwd = process.cwd()
+  const cwd = resolveCwdWithWorkspace(args)
 
   // Auto-init if needed
   if (!existsSync(join(cwd, '.compose', 'compose.json'))) {
@@ -664,7 +733,7 @@ if (cmd === 'new') {
     process.exit(1)
   }
 
-  const cwd = process.cwd()
+  const cwd = resolveCwdWithWorkspace(args)
   const name = basename(cwd)
 
   // --from-idea <ID>: pre-populate intent from a promoted ideabox entry (Item 184)
@@ -792,7 +861,7 @@ if (cmd === 'feature') {
     process.exit(1)
   }
 
-  const cwd = process.cwd()
+  const cwd = resolveCwdWithWorkspace(args)
   const configPath = join(cwd, '.compose', 'compose.json')
   if (!existsSync(configPath)) {
     console.error("No .compose/compose.json found. Run 'compose init' first.")
@@ -958,7 +1027,7 @@ if (cmd === 'roadmap') {
   // compose roadmap generate — regenerate ROADMAP.md from feature.json files
   if (subcmd === 'generate' || subcmd === 'gen') {
     const { writeRoadmap } = await import('../lib/roadmap-gen.js')
-    const cwd = process.cwd()
+    const cwd = resolveCwdWithWorkspace(args)
     const path = writeRoadmap(cwd)
     console.log(`Generated ${path} from feature.json files`)
     process.exit(0)
@@ -967,7 +1036,7 @@ if (cmd === 'roadmap') {
   // compose roadmap migrate — extract ROADMAP.md entries into feature.json files
   if (subcmd === 'migrate') {
     const { migrateRoadmap } = await import('../lib/migrate-roadmap.js')
-    const cwd = process.cwd()
+    const cwd = resolveCwdWithWorkspace(args)
     const dryRun = args.includes('--dry-run')
     const overwrite = args.includes('--overwrite')
     const result = migrateRoadmap(cwd, { dryRun, overwrite })
@@ -986,7 +1055,7 @@ if (cmd === 'roadmap') {
   if (subcmd === 'check') {
     const { listFeatures } = await import('../lib/feature-json.js')
     const { parseRoadmap } = await import('../lib/roadmap-parser.js')
-    const cwd = process.cwd()
+    const cwd = resolveCwdWithWorkspace(args)
     const roadmapPath = join(cwd, 'ROADMAP.md')
     if (!existsSync(roadmapPath)) {
       console.error('No ROADMAP.md found. Run: compose roadmap generate')
@@ -1107,7 +1176,7 @@ if (cmd === 'roadmap') {
     }
   }
 
-  const cwd = process.cwd()
+  const cwd = resolveCwdWithWorkspace(args)
   const roadmapPath = join(cwd, 'ROADMAP.md')
 
   if (existsSync(roadmapPath)) {
@@ -1264,7 +1333,7 @@ if (cmd === 'record-completion') {
   if (flags['force'] === true) completionArgs.force = true
   if (flags['idempotency-key']) completionArgs.idempotency_key = flags['idempotency-key']
 
-  const cwd = findProjectRoot(process.cwd())
+  const cwd = resolveCwdWithWorkspace(args)
   const { recordCompletion } = await import('../lib/completion-writer.js')
   try {
     const result = await recordCompletion(cwd, completionArgs)
@@ -1332,7 +1401,7 @@ if (cmd === 'hooks') {
   const { join: pjoin, resolve: presolve } = await import('path')
   const { fileURLToPath: futp } = await import('url')
 
-  const projectRoot = findProjectRoot(process.cwd())
+  const projectRoot = resolveCwdWithWorkspace(args)
   const gitDir = pjoin(projectRoot, '.git')
   if (!exSync(gitDir)) {
     console.error('Error: not a git repository (no .git directory found)')
@@ -1387,14 +1456,24 @@ if (cmd === 'hooks') {
         return 1
       }
     }
+    // Hook install must pick exactly one workspace. Repo-level hooks bake one ID.
+    const wsHint = hookFlags['workspace']
+    let wsId
+    try {
+      wsId = resolveWorkspace({ cwd: projectRoot, workspaceId: wsHint }).id
+    } catch (err) {
+      dieOnWorkspaceError(err)
+    }
     const substituted = template
       .replace(/__COMPOSE_NODE__/g, composeNode)
       .replace(/__COMPOSE_BIN__/g, composeBin)
+      .replace(/__COMPOSE_WORKSPACE_ID__/g, wsId)
     wfSync(dest, substituted)
     chmodSync(dest, 0o755)
     console.log(`Installed ${type} hook at ${dest}`)
     console.log(`  COMPOSE_NODE=${composeNode}`)
     console.log(`  COMPOSE_BIN=${composeBin}`)
+    console.log(`  COMPOSE_WORKSPACE_ID=${wsId}`)
     return 0
   }
 
@@ -1415,6 +1494,11 @@ if (cmd === 'hooks') {
     return 0
   }
 
+  function extractBakedWorkspaceId(content) {
+    const m = content.match(/^COMPOSE_WORKSPACE_ID="([^"]*)"$/m)
+    return m ? m[1] : null
+  }
+
   function statusOne(type) {
     const { marker, dest } = HOOK_TYPES[type]
     if (!exSync(dest)) {
@@ -1426,12 +1510,29 @@ if (cmd === 'hooks') {
       console.log(`${type}: foreign — hook exists but is not a Compose hook`)
       return
     }
+    const wsHint = hookFlags['workspace']
+    let expectedWsId = null
+    if (wsHint) {
+      try { expectedWsId = resolveWorkspace({ cwd: projectRoot, workspaceId: wsHint }).id } catch { /* ignore for status */ }
+    } else {
+      try { expectedWsId = resolveWorkspace({ cwd: projectRoot }).id } catch { /* ignore for status */ }
+    }
     const nodeMatch = content.includes(`COMPOSE_NODE="${composeNode}"`)
     const binMatch  = content.includes(`COMPOSE_BIN="${composeBin}"`)
-    if (nodeMatch && binMatch) {
+    const hasRawToken = content.includes('__COMPOSE_WORKSPACE_ID__')
+    const wsMatch = hasRawToken ? false
+                  : expectedWsId ? content.includes(`COMPOSE_WORKSPACE_ID="${expectedWsId}"`)
+                  : true
+    if (nodeMatch && binMatch && wsMatch && !hasRawToken) {
       console.log(`${type}: installed (current)`)
+      const baked = extractBakedWorkspaceId(content)
+      if (baked) console.log(`  workspace: ${baked}`)
     } else {
-      console.log(`${type}: installed (stale paths — re-run install)`)
+      const reason = hasRawToken ? 'MISSING_WORKSPACE_ID'
+                   : (expectedWsId && !wsMatch) ? 'STALE_WORKSPACE_ID'
+                   : 'stale paths'
+      console.log(`${type}: installed (${reason} — re-run install)`)
+      if (expectedWsId && !wsMatch && !hasRawToken) console.log(`  expected COMPOSE_WORKSPACE_ID="${expectedWsId}"`)
       if (!nodeMatch) console.log(`  expected COMPOSE_NODE="${composeNode}"`)
       if (!binMatch)  console.log(`  expected COMPOSE_BIN="${composeBin}"`)
     }
@@ -1522,11 +1623,12 @@ Exit codes:
   }
 
   const { validateFeature, validateProject } = await import('../lib/feature-validator.js')
+  const valCwd = resolveCwdWithWorkspace(args)
   let result
   try {
     result = scope === 'feature'
-      ? await validateFeature(process.cwd(), code)
-      : await validateProject(process.cwd())
+      ? await validateFeature(valCwd, code)
+      : await validateProject(valCwd)
   } catch (err) {
     if (err.code === 'INVALID_INPUT') {
       console.error(`Error [INVALID_INPUT]: ${err.message}`)
@@ -1568,8 +1670,9 @@ Exit codes:
 
 if (cmd === 'pipeline') {
   const { runPipelineCli } = await import('../lib/pipeline-cli.js')
+  const pipeCwd = resolveCwdWithWorkspace(args)
   try {
-    runPipelineCli(process.cwd(), args)
+    runPipelineCli(pipeCwd, args)
   } catch (err) {
     console.error(`Error: ${err.message}`)
     process.exit(1)
@@ -1650,7 +1753,7 @@ if (cmd === 'build') {
   }
 
   // Auto-init if needed
-  const buildCwd = process.cwd()
+  const buildCwd = resolveCwdWithWorkspace(args)
   if (!existsSync(join(buildCwd, '.compose', 'compose.json')) || !existsSync(join(buildCwd, 'pipelines', 'build.stratum.yaml'))) {
     console.log('Running compose init...\n')
     await runInit(args.filter(a => a.startsWith('--')))
@@ -1725,7 +1828,7 @@ if (cmd === 'build') {
     process.exit(1)
   }
 
-  const fixCwd = process.cwd()
+  const fixCwd = resolveCwdWithWorkspace(args)
   if (!existsSync(join(fixCwd, '.compose', 'compose.json')) || !existsSync(join(fixCwd, 'pipelines', 'bug-fix.stratum.yaml'))) {
     console.log('Running compose init...\n')
     await runInit(args.filter(a => a.startsWith('--')))
@@ -1812,7 +1915,7 @@ if (cmd === 'build') {
   }
   import('../lib/triage.js').then(({ runTriage }) => {
     import('../lib/feature-json.js').then(({ readFeature, writeFeature, updateFeature }) => {
-      const trCwd = process.cwd()
+      const trCwd = resolveCwdWithWorkspace(args)
       runTriage(triageCode, { cwd: trCwd }).then((result) => {
         console.log(`\nFeature: ${triageCode}`)
         console.log(`Tier:     ${result.tier}`)
@@ -1856,16 +1959,11 @@ if (cmd === 'build') {
     })
   })
 } else if (cmd === 'start') {
-  // Resolve target root BEFORE spawning supervisor
-  const explicitTarget = process.env.COMPOSE_TARGET
-  const targetRoot = explicitTarget
-    ? resolve(explicitTarget)
-    : findProjectRoot(process.cwd())
+  // Resolve target root BEFORE spawning supervisor.
+  // Use the unified resolver — it handles COMPOSE_TARGET as either ID or absolute path,
+  // --workspace=<id>, and discovery. No need for the legacy explicitTarget short-circuit.
+  const targetRoot = resolveCwdWithWorkspace(args)
 
-  if (explicitTarget && !existsSync(resolve(explicitTarget))) {
-    console.error(`[compose] COMPOSE_TARGET=${explicitTarget} does not exist.`)
-    process.exit(1)
-  }
   if (!targetRoot || !existsSync(join(targetRoot, '.compose', 'compose.json'))) {
     console.error('[compose] No .compose/ found (searched from cwd upward).')
     console.error("[compose] Run 'compose init' first, or set COMPOSE_TARGET.")
@@ -1887,7 +1985,7 @@ if (cmd === 'build') {
   // compose ideabox — idea management CLI
   // ---------------------------------------------------------------------------
   const ibSubcmd = args[0]
-  const ibCwd = process.cwd()
+  const ibCwd = resolveCwdWithWorkspace(args)
 
   // Resolve compose config (paths, etc.)
   function loadComposeConfig(cwd) {
@@ -2186,7 +2284,7 @@ if (cmd === 'build') {
     process.exit(1)
   }
 
-  const qsCwd = process.cwd()
+  const qsCwd = resolveCwdWithWorkspace(args)
 
   import('../lib/feature-json.js').then(({ readFeature }) => {
     import('../lib/qa-scoping.js').then(({ mapFilesToRoutes, classifyRoutes }) => {

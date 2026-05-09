@@ -9,11 +9,12 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { ArtifactManager, ARTIFACT_SCHEMAS } from './artifact-manager.js';
-import { getTargetRoot, getDataDir, resolveProjectPath } from './project-root.js';
+import { getTargetRoot, getDataDir, resolveProjectPath, switchProject, setCurrentWorkspaceId } from './project-root.js';
+import { resolveWorkspace } from '../lib/resolve-workspace.js';
+import { discoverWorkspaces } from '../lib/discover-workspaces.js';
 
-export const PROJECT_ROOT = getTargetRoot();
-export const VISION_FILE = path.join(getDataDir(), 'vision-state.json');
-export const SESSIONS_FILE = path.join(getDataDir(), 'sessions.json');
+export function getVisionFile() { return path.join(getDataDir(), 'vision-state.json'); }
+export function getSessionsFile() { return path.join(getDataDir(), 'sessions.json'); }
 
 // ---------------------------------------------------------------------------
 // Data access
@@ -21,7 +22,7 @@ export const SESSIONS_FILE = path.join(getDataDir(), 'sessions.json');
 
 export function loadVisionState() {
   try {
-    const raw = fs.readFileSync(VISION_FILE, 'utf-8');
+    const raw = fs.readFileSync(getVisionFile(), 'utf-8');
     const state = JSON.parse(raw);
     if (Array.isArray(state.gates)) {
       const seen = new Map();
@@ -36,7 +37,7 @@ export function loadVisionState() {
 
 export function loadSessions() {
   try {
-    const raw = fs.readFileSync(SESSIONS_FILE, 'utf-8');
+    const raw = fs.readFileSync(getSessionsFile(), 'utf-8');
     const sessions = JSON.parse(raw);
     return Array.isArray(sessions) ? sessions : [];
   } catch {
@@ -465,4 +466,25 @@ export function toolGetPendingGates({ itemId }) {
   const pending = gates.filter(g => g.status === 'pending' && (!itemId || g.itemId === itemId));
   return { count: pending.length, gates: pending };
 }
+
+// ---------------------------------------------------------------------------
+// Workspace binding (MCP session-scoped)
+// ---------------------------------------------------------------------------
+
+let _binding = null;
+
+export function toolSetWorkspace({ workspaceId }) {
+  const resolved = resolveWorkspace({ workspaceId });
+  switchProject(resolved.root);
+  setCurrentWorkspaceId(resolved.id);
+  _binding = resolved;
+  return { id: resolved.id, root: resolved.root, source: 'mcp-binding' };
+}
+
+export function toolGetWorkspace() {
+  const { candidates } = discoverWorkspaces(process.cwd());
+  return { current: _binding, candidates };
+}
+
+export function _getBinding() { return _binding?.id ?? null; }
 

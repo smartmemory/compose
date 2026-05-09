@@ -14,6 +14,9 @@ function setupGitFixture() {
   const root = mkdtempSync(join(tmpdir(), 'fv-hook-'));
   // git init
   spawnSync('git', ['init', '--initial-branch=main'], { cwd: root });
+  // .compose/ required by workspace-aware hooks install (COMP-WORKSPACE-ID)
+  mkdirSync(join(root, '.compose'), { recursive: true });
+  writeFileSync(join(root, '.compose', 'compose.json'), JSON.stringify({ version: 1, workspaceId: 'fixture-ws' }));
   return root;
 }
 

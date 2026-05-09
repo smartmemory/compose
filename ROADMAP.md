@@ -1201,6 +1201,11 @@ Response-time policy gate that detects rule violations in candidate agent respon
 | 170 | COMP-POLICY-CHECK-4 | **Revision prompt.** When unsuppressed violations detected, surface to agent: *"Your draft contains pattern X for rule Y; revise unless precedence applies."* Agent revises; check re-runs once. Does NOT hard-block. | PLANNED |
 | 171 | COMP-POLICY-CHECK-5 | **Session trace.** Log all pattern matches (flagged + suppressed) to the session trace for post-hoc analysis by SmartMemory's DIST-CC-INGEST-1 ensemble. Closes the measurement loop. | PLANNED |
 | 172 | COMP-POLICY-CHECK-6 | **Stratum step postcondition.** Stratum specs can declare `ensure: compose.policy.unsuppressed_violations == 0` as a step postcondition. Runs the same check inside Stratum's evaluation layer for Stratum-driven flows. | PLANNED |
+| 197 | COMP-WORKSPACE-HTTP | Migrate HTTP server import-time PROJECT_ROOT snapshots to per-request workspace via Express middleware | PLANNED |
+| 198 | COMP-WORKSPACE-WATCHERS | Runtime workspace rebinding for long-lived watchers (file-watcher, cc-session-watcher) | PLANNED |
+| 199 | COMP-WORKSPACE-RESUME | Persist MCP workspace binding across restarts via CLAUDE_SESSION_ID env (when injected) | PLANNED |
+| 200 | COMP-CLI-GLOBAL-FLAGS | Pre-subcommand flag parser to enable compose --workspace=X build syntax | PLANNED |
+| 201 | COMP-WORKSPACE-ID | Workspace identity detection (parent vs child) across CLI, MCP, and hooks | COMPLETE |
 
 **Dependencies:** SmartMemory CORE-ADHERENCE-1 (pattern catalog + MCP tool); MCP connector path (existing).
 

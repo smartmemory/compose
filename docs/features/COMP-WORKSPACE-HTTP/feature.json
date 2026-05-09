@@ -1,0 +1,15 @@
+{
+  "code": "COMP-WORKSPACE-HTTP",
+  "description": "Migrate HTTP server import-time PROJECT_ROOT snapshots to per-request workspace via Express middleware",
+  "status": "PLANNED",
+  "created": "2026-05-09",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-05-09"
+}

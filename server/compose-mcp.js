@@ -59,7 +59,12 @@ import {
   toolGetCompletions,
   toolValidateFeature,
   toolValidateProject,
+  toolSetWorkspace,
+  toolGetWorkspace,
+  _getBinding,
 } from './compose-mcp-tools.js';
+import { switchProject, getTargetRoot } from './project-root.js';
+import { resolveWorkspace } from '../lib/resolve-workspace.js';
 
 // ---------------------------------------------------------------------------
 // Tool definitions
@@ -150,6 +155,20 @@ const TOOLS = [
       },
       required: ['featureCode'],
     },
+  },
+  {
+    name: 'set_workspace',
+    description: 'Bind this MCP session to a workspace. Required when cwd contains multiple workspaces. Lives in process memory; lost on MCP restart.',
+    inputSchema: {
+      type: 'object',
+      required: ['workspaceId'],
+      properties: { workspaceId: { type: 'string', description: 'Workspace ID (kebab-case)' } },
+    },
+  },
+  {
+    name: 'get_workspace',
+    description: 'Get the current MCP workspace binding plus all candidates discovered from cwd.',
+    inputSchema: { type: 'object', properties: {} },
   },
   {
     name: 'get_feature_lifecycle',
@@ -570,7 +589,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
 
+  const WORKSPACE_EXEMPT = new Set(['set_workspace', 'get_workspace']);
+
   try {
+    if (!WORKSPACE_EXEMPT.has(name)) {
+      const ws = resolveWorkspace({ getBinding: _getBinding });
+      if (ws.root !== getTargetRoot()) switchProject(ws.root);
+    }
     let result;
     switch (name) {
       case 'get_vision_items':    result = toolGetVisionItems(args); break;
@@ -579,6 +604,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_blocked_items':   result = toolGetBlockedItems(); break;
       case 'get_current_session': result = await toolGetCurrentSession(args); break;
       case 'bind_session':             result = await toolBindSession(args); break;
+      case 'set_workspace':            result = toolSetWorkspace(args); break;
+      case 'get_workspace':            result = toolGetWorkspace(); break;
       case 'get_feature_lifecycle':    result = toolGetFeatureLifecycle(args); break;
       case 'kill_feature':             result = await toolKillFeature(args); break;
       case 'complete_feature':         result = await toolCompleteFeature(args); break;
@@ -624,6 +651,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     let text = err && err.code
       ? `Error [${err.code}]: ${err.message}`
       : `Error: ${err.message}`;
+    // For workspace ambiguity, include the candidate list and the call to fix it
+    // so Claude can prompt the user without a follow-up tool call.
+    if (err && err.code === 'WorkspaceAmbiguous' && Array.isArray(err.candidates)) {
+      text += '\n\nCandidates:';
+      for (const c of err.candidates) text += `\n  - ${c.id}  (${c.root})`;
+      text += '\n\nNext step: call set_workspace({"workspaceId": "<id>"}) and retry.';
+    }
+    if (err && err.code === 'WorkspaceIdCollision' && Array.isArray(err.roots)) {
+      text += `\n\nworkspaceId "${err.id}" is used by multiple roots:`;
+      for (const r of err.roots) text += `\n  - ${r}`;
+      text += '\n\nFix: set an explicit workspaceId in each .compose/compose.json.';
+    }
+    if (err && err.code === 'WorkspaceUnset') {
+      text += '\n\nNo .compose/ workspace was found. Run `compose init` to scaffold one.';
+    }
     if (err && err.cause && typeof err.cause.message === 'string') {
       text += err.cause.code
         ? `\n  Caused by [${err.cause.code}]: ${err.cause.message}`
