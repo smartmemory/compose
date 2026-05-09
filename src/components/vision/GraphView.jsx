@@ -66,6 +66,19 @@ function getGroup(item) {
 // item.title is inconsistent — sometimes a code, sometimes a description, sometimes
 // a code+description joined by colon. The graph wants identifying labels.
 const CODE_RE = /^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*[a-z]?$/;
+const MAX_LABEL = 24;
+function shortenSlug(slug) {
+  if (!slug || slug.length <= MAX_LABEL) return slug;
+  // Take leading hyphen segments up to MAX_LABEL chars, append ellipsis.
+  const parts = slug.split('-');
+  let acc = '';
+  for (const p of parts) {
+    const next = acc ? acc + '-' + p : p;
+    if (next.length > MAX_LABEL - 1) break;
+    acc = next;
+  }
+  return (acc || slug.slice(0, MAX_LABEL - 1)) + '…';
+}
 function extractDisplayLabel(item) {
   const fc = item.lifecycle?.featureCode || item.featureCode;
   if (fc && CODE_RE.test(fc)) return fc;
@@ -74,7 +87,7 @@ function extractDisplayLabel(item) {
   // "COMP-BENCH-1: Seed repo: ~2k LOC..." → "COMP-BENCH-1"
   const prefix = raw.match(/^([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*[a-z]?)\b/);
   if (prefix && prefix[1].length >= 3) return prefix[1];
-  if (item.slug) return item.slug;
+  if (item.slug) return shortenSlug(item.slug);
   // Last resort: use a stable id-derived fallback rather than prose
   return item.id ? item.id.slice(0, 12) : 'item';
 }
