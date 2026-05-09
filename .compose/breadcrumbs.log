@@ -371,3 +371,5 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-09T22:40:06+08:00 | tooling drift cleanup + push WORKSPACE-ID/POLICY-CHECK
 2026-05-09T22:54:23+08:00 | COMP-WORKSPACE-HTTP phase 1 — dispatching 3 parallel explorers
 2026-05-09T23:21:52+08:00 | COMP-WORKSPACE-HTTP rescoped to MIDDLEWARE foundation; filed VISION/SESSIONS/AGENT-SVR/FILES as 4 new tickets
+2026-05-09T23:30:23+08:00 | COMP-WORKSPACE-HTTP phase 4 — blueprint, dispatching critical-file explorer
+2026-05-09T23:43:33+08:00 | COMP-WORKSPACE-HTTP phase 4+5 complete — blueprint, codex clean
