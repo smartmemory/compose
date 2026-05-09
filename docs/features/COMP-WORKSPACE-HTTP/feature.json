@@ -1,7 +1,7 @@
 {
   "code": "COMP-WORKSPACE-HTTP",
-  "description": "Migrate HTTP server import-time PROJECT_ROOT snapshots to per-request workspace via Express middleware",
-  "status": "PLANNED",
+  "description": "Foundation for HTTP workspace track: Express middleware reading X-Compose-Workspace-Id, GET /api/workspace bootstrap, Vite frontend context provider. Behavior-preserving substrate for COMP-WORKSPACE-{VISION,SESSIONS,AGENT-SVR,FILES}.",
+  "status": "IN_PROGRESS",
   "created": "2026-05-09",
   "profile": {
     "needs_prd": true,

@@ -1201,11 +1201,15 @@ Response-time policy gate that detects rule violations in candidate agent respon
 | 170 | COMP-POLICY-CHECK-4 | **Revision prompt.** When unsuppressed violations detected, surface to agent: *"Your draft contains pattern X for rule Y; revise unless precedence applies."* Agent revises; check re-runs once. Does NOT hard-block. | PLANNED |
 | 171 | COMP-POLICY-CHECK-5 | **Session trace.** Log all pattern matches (flagged + suppressed) to the session trace for post-hoc analysis by SmartMemory's DIST-CC-INGEST-1 ensemble. Closes the measurement loop. | PLANNED |
 | 172 | COMP-POLICY-CHECK-6 | **Stratum step postcondition.** Stratum specs can declare `ensure: compose.policy.unsuppressed_violations == 0` as a step postcondition. Runs the same check inside Stratum's evaluation layer for Stratum-driven flows. | PLANNED |
-| 197 | COMP-WORKSPACE-HTTP | Migrate HTTP server import-time PROJECT_ROOT snapshots to per-request workspace via Express middleware | PLANNED |
-| 198 | COMP-WORKSPACE-WATCHERS | Runtime workspace rebinding for long-lived watchers (file-watcher, cc-session-watcher) | PLANNED |
+| 197 | COMP-WORKSPACE-HTTP | **Foundation.** Express middleware reading `X-Compose-Workspace-Id`, `GET /api/workspace` bootstrap endpoint, Vite frontend workspace context. No behavior change to existing routes — sets up the substrate for the next 4 tickets. | PLANNED |
+| 198 | COMP-WORKSPACE-WATCHERS | Runtime workspace rebinding for long-lived watchers (cc-session-watcher, worktree-gc, stratum-sync). file-watcher's HTTP routes covered by COMP-WORKSPACE-FILES. | PLANNED |
 | 199 | COMP-WORKSPACE-RESUME | Persist MCP workspace binding across restarts via CLAUDE_SESSION_ID env (when injected) | PLANNED |
 | 200 | COMP-CLI-GLOBAL-FLAGS | Pre-subcommand flag parser to enable compose --workspace=X build syntax | PLANNED |
 | 201 | COMP-WORKSPACE-ID | Workspace identity detection (parent vs child) across CLI, MCP, and hooks | COMPLETE |
+| 202 | COMP-WORKSPACE-VISION | Per-workspace VisionStore + SettingsStore + DesignSessionManager registries. Vision/lifecycle/gate/settings routes use `req.workspace`. Depends on 197. | PLANNED |
+| 203 | COMP-WORKSPACE-SESSIONS | Per-workspace SessionManager registry. Session, activity, agent-spawn, summarizer routes. Snapshot fixes for session-manager.js, summarizer.js, agent-spawn.js. Depends on 197. | PLANNED |
+| 204 | COMP-WORKSPACE-AGENT-SVR | Cross-process workspace plumbing for the agent server (port 4002): pass workspaceId on `/api/agent/session`, persist to session record, factory-build hook options. Depends on 197, 203. | PLANNED |
+| 205 | COMP-WORKSPACE-FILES | file-watcher HTTP routes (`/api/file`, `/api/files`, `/api/canvas/open`) + vision-routes/vision-utils snapshot fixes use `req.workspace.root`. Depends on 197, 202. | PLANNED |
 
 **Dependencies:** SmartMemory CORE-ADHERENCE-1 (pattern catalog + MCP tool); MCP connector path (existing).
 
