@@ -136,7 +136,9 @@ function buildElements(items, connections, grouped, focusActive, featureCode) {
     const slug = item.slug || item.id.slice(0, 8);
     let rawTitle = (item.title || slug).replace(/`/g, '');
     if (rawTitle.includes('/')) rawTitle = rawTitle.split('/').pop().replace(/\.md$/, '');
-    const title = rawTitle.length > 28 ? rawTitle.slice(0, 28) + '\u2026' : rawTitle;
+    // Hyphen-wrap kebab-case titles so long IDs (e.g. T2-F5-COMPOSE-MIGRATE-WORKTREE)
+    // span multiple lines inside the box rather than truncate or overflow.
+    const title = wrapGroupId(rawTitle, 14);
     const group = getGroup(item);
     const dimmed = focusItemIds && !focusItemIds.has(item.id);
 
@@ -204,8 +206,8 @@ function buildStylesheet() {
         'label': 'data(label)', 'text-valign': 'center', 'text-halign': 'center',
         'font-size': '9px', 'font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", monospace',
         'font-weight': 500, 'color': '#e2e8f0',
-        'text-wrap': 'wrap', 'text-max-width': '100px',
-        'width': '120px', 'height': '48px', 'shape': 'round-rectangle',
+        'text-wrap': 'wrap', 'text-max-width': '130px',
+        'width': '150px', 'height': '60px', 'shape': 'round-rectangle',
         'background-color': '#1e293b',
         'border-style': 'solid', 'border-width': 2, 'border-color': '#3b82f6',
       },
