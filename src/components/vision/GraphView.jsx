@@ -172,9 +172,10 @@ function buildStylesheet() {
         'label': 'data(label)', 'text-valign': 'top', 'text-halign': 'center',
         'font-size': '10px', 'font-weight': 600, 'color': '#64748b',
         'text-transform': 'uppercase', 'letter-spacing': '0.08em',
+        'text-wrap': 'wrap', 'text-max-width': '160px',
         'background-color': '#1a2537',
         'border-width': 1, 'border-color': '#283548', 'border-style': 'solid',
-        'padding': '18px', 'text-margin-y': 0,
+        'padding': '24px', 'text-margin-y': -4,
       },
     },
     // Item nodes
