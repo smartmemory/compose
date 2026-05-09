@@ -462,6 +462,13 @@ export function toolGetPendingGates({ itemId }) {
 // ---------------------------------------------------------------------------
 // Workspace binding (MCP session-scoped)
 // ---------------------------------------------------------------------------
+//
+// `_binding` is process-global by intent. Claude Code spawns ONE stdio MCP
+// child per Claude session; the child's lifetime IS the session's lifetime.
+// "Session-scoped" therefore equals "process-scoped" in this architecture.
+// COMP-WORKSPACE-ID Decision 5 documents this. The HTTP server (port 4001)
+// is the shared-across-sessions process, NOT this module — it gets the
+// workspace per request via the X-Compose-Workspace-Id header instead.
 
 let _binding = null;
 

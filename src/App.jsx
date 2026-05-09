@@ -64,6 +64,7 @@ import GateNotificationBar from './components/vision/shared/GateNotificationBar.
 import { computeBuildStateMap, computeAgentOverlay } from './components/vision/graphOpsOverlays.js';
 import { withComposeToken } from './lib/compose-api.js';
 import { wsFetch } from './lib/wsFetch.js';
+import { useWorkspace } from './contexts/WorkspaceContext.jsx';
 
 /*
  * COMP-UI-1 — Cockpit shell (flat layout)
@@ -358,6 +359,9 @@ function CockpitView({
 // ---------------------------------------------------------------------------
 
 function AppInner() {
+  // ── Workspace context (for refresh after project switch) ────────────────
+  const { refresh: refreshWorkspace } = useWorkspace();
+
   // ── Design store ────────────────────────────────────────────────────────
   const designDecisions = useDesignStore(s => s.decisions);
   const designStatus = useDesignStore(s => s.status);
@@ -514,23 +518,28 @@ function AppInner() {
     }).catch(() => {});
   }, []);
 
-  const handleProjectSwitch = useCallback((newPath) => {
-    wsFetch('/api/project/switch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: newPath }),
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (data.ok) {
-          setProjectName(data.name);
-          setProjectRoot(data.targetRoot);
-          setProjectSwitchOpen(false);
-          // Vision store will get new state via WebSocket broadcast
-        }
-      })
-      .catch(() => {});
-  }, []);
+  const handleProjectSwitch = useCallback(async (newPath) => {
+    try {
+      const r = await wsFetch('/api/project/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: newPath }),
+      });
+      const data = await r.json();
+      if (!data.ok) return;
+      // Refresh cached workspace id BEFORE setting projectRoot — the latter
+      // triggers a remount of views keyed by projectRoot (e.g., DesignView),
+      // and their mount effects fire wsFetch immediately. Updating the cache
+      // first guarantees those fetches carry the new X-Compose-Workspace-Id.
+      await refreshWorkspace();
+      setProjectName(data.name);
+      setProjectRoot(data.targetRoot);
+      setProjectSwitchOpen(false);
+      // Vision store will get new state via WebSocket broadcast
+    } catch {
+      // swallow — same as prior behavior
+    }
+  }, [refreshWorkspace]);
 
   // ── Derived flags ───────────────────────────────────────────────────────
   const isMaximized = agentBarState === AGENT_BAR_STATES.MAXIMIZED;
