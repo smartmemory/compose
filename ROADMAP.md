@@ -1183,6 +1183,31 @@ Compose has no upgrade path. The README tells users to `npx compose init`, but c
 
 ---
 
+## COMP-POLICY-CHECK: Pre-Response Policy Check (Adherence Enforcement) — PLANNED
+
+Response-time policy gate that detects rule violations in candidate agent responses before they're emitted. Reads the rule-pattern catalog from SmartMemory's [CORE-ADHERENCE-1](../../../SmartMemory/smart-memory-docs/docs/features/CORE-ADHERENCE-1/design.md) (substrate-only sister feature: rules + patterns live in SmartMemory; the enforcement loop lives here in Compose).
+
+**Driving evidence:** SmartMemory's [DIST-CC-INGEST-1 50-event ensemble run (2026-05-09)](../../../SmartMemory/smart-memory-docs/docs/features/DIST-CC-INGEST-1/design.md) — claude:sonnet + codex:default judging real Claude Code sessions revealed ~16% real CONTRADICTED rate concentrated on a single rule cluster (*don't ask permission, just execute*: `feedback_never_suggest_stopping`, `feedback_just_do_it`, `feedback_full_auto_means_full_auto`). The pool is rich and correctly surfaced; selective adherence is the failure mode. That's a harness problem (response generation needs a check between draft and emit), not a memory-substrate problem.
+
+**Critically: user-intent-aware.** A naive regex flag would over-fire by ~30–40% on user-paced sessions where the user explicitly asked for slow pacing (*"one by one"*, *"walk me through"*) — under `superpowers:using-superpowers` user-precedence, those checkpoints are correct, not violations. The check classifies user-mode (AUTONOMOUS / PACED / SKILL_GATED) per turn and suppresses flags accordingly.
+
+**Design:** [`docs/design/2026-05-09-pre-response-policy-check.md`](design/2026-05-09-pre-response-policy-check.md)
+
+| # | Feature | Item | Status |
+|---|---------|------|--------|
+| 167 | COMP-POLICY-CHECK-1 | **Pattern-catalog client.** Fetch SmartMemory's violation-pattern catalog via `mcp__smartmemory__memory_get_violation_patterns` once per session; cache in-memory; refresh on rule-change signal. | PLANNED |
+| 168 | COMP-POLICY-CHECK-2 | **User-mode classifier.** Scan recent user turn(s) for suppression-signal patterns from the SmartMemory catalog. Output user_mode ∈ {AUTONOMOUS, PACED, SKILL_GATED}. SKILL_GATED set when an active skill (e.g. Compose's plan/blueprint gate) declares deliberate-permission-asking. | PLANNED |
+| 169 | COMP-POLICY-CHECK-3 | **Response scanner.** Scan candidate agent responses against pattern catalog. For matched rules, evaluate suppression_signals against user_mode. Emit (rule, match, suppressed?) records. | PLANNED |
+| 170 | COMP-POLICY-CHECK-4 | **Revision prompt.** When unsuppressed violations detected, surface to agent: *"Your draft contains pattern X for rule Y; revise unless precedence applies."* Agent revises; check re-runs once. Does NOT hard-block. | PLANNED |
+| 171 | COMP-POLICY-CHECK-5 | **Session trace.** Log all pattern matches (flagged + suppressed) to the session trace for post-hoc analysis by SmartMemory's DIST-CC-INGEST-1 ensemble. Closes the measurement loop. | PLANNED |
+| 172 | COMP-POLICY-CHECK-6 | **Stratum step postcondition.** Stratum specs can declare `ensure: compose.policy.unsuppressed_violations == 0` as a step postcondition. Runs the same check inside Stratum's evaluation layer for Stratum-driven flows. | PLANNED |
+
+**Dependencies:** SmartMemory CORE-ADHERENCE-1 (pattern catalog + MCP tool); MCP connector path (existing).
+
+**Exit:** Compose-mediated agent loops run pre-response checks against SmartMemory's pattern catalog. Unsuppressed violations on the dominant cluster drop from ~16% to <5% in DIST-CC-INGEST-1 ensemble runs after deployment. False-positive rate on user-paced sessions stays <5%. Compose phase latency does not regress measurably.
+
+---
+
 ## Backlog — PLANNED
 
 | # | Feature | Description | Status |
