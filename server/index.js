@@ -9,6 +9,8 @@ import { VisionServer } from './vision-server.js';
 import { SessionManager } from './session-manager.js';
 import { scanFeatures, seedFeatures, scanSubPackages, seedSubPackages, seedFromRoadmapGraph } from './feature-scan.js';
 import { attachGraphExportRoutes } from './graph-export.js';
+import { attachWorkspaceRoutes } from './workspace-routes.js';
+import { createWorkspaceMiddleware } from './workspace-middleware.js';
 import { getTargetRoot, getDataDir, ensureDataDir, loadProjectConfig, resolveProjectPath, switchProject } from './project-root.js';
 
 // Load project config and verify stratum capability matches reality
@@ -46,6 +48,9 @@ const PORT = process.env.PORT || 4001;
 const app = express();
 app.use(cors({ origin: /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/ }));
 app.use(express.json());
+
+attachWorkspaceRoutes(app);
+app.use(createWorkspaceMiddleware());
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.get('/api/status', (_req, res) => res.json({ session: 2, phase: '0.4-brainstorm', upSince: new Date().toISOString() }));

@@ -468,15 +468,18 @@ Output ONLY the Markdown content, no code fences.`;
       if (scope === 'feature' && featureCode) {
         try {
           const apiBase = `http://127.0.0.1:${process.env.PORT || 4001}`;
+          const wsHeaders = req.workspace?.id ? { 'X-Compose-Workspace-Id': req.workspace.id } : {};
           // Look up the vision item for this featureCode
-          const itemsRes = await fetch(`${apiBase}/api/vision/items?keyword=${encodeURIComponent(featureCode)}`);
+          const itemsRes = await fetch(`${apiBase}/api/vision/items?keyword=${encodeURIComponent(featureCode)}`, {
+            headers: { ...wsHeaders },
+          });
           const itemsData = await itemsRes.json();
           const featureItem = itemsData.items?.find(i =>
             i.title?.startsWith(featureCode) || i.lifecycle?.featureCode === featureCode || i.featureCode === featureCode
           );
           await fetch(`${apiBase}/api/vision/gates`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...wsHeaders },
             body: JSON.stringify({
               flowId: `design-${featureCode}`,
               stepId: 'design_gate',
