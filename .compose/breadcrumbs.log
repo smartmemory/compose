@@ -382,3 +382,5 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-09T23:47:21+08:00 | T6 COMP-WORKSPACE-HTTP: vision-writer workspaceId plumbing (constructor + _fetch header)
 2026-05-09T23:47:35+08:00 | T7 COMP-WORKSPACE-HTTP: thread workspace id through resolveCwdWithWorkspace and httpGet/httpPost
 2026-05-09T23:53:48+08:00 | Group A complete (T1-3, T5-7); committing before Group B
+2026-05-09T23:56:04+08:00 | T9: migrate same-origin fetch() to wsFetch and wrap app in WorkspaceProvider
+2026-05-09T23:56:08+08:00 | T10 golden multi-workspace HTTP middleware test

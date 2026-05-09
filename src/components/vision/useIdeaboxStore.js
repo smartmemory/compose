@@ -11,13 +11,14 @@
  */
 
 import { create } from 'zustand';
+import { wsFetch } from '../../lib/wsFetch.js';
 
 // ---------------------------------------------------------------------------
 // API helpers
 // ---------------------------------------------------------------------------
 
 async function apiFetch(url, opts = {}) {
-  const res = await fetch(url, opts);
+  const res = await wsFetch(url, opts);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;

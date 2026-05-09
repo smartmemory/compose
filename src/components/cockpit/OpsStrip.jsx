@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow';
 import OpsStripEntry from './OpsStripEntry.jsx';
 import { deriveEntries } from './opsStripLogic.js';
 import { formatBudgetCompact } from './stepDetailLogic.js';
+import { wsFetch } from '../../lib/wsFetch.js';
 
 /**
  * OpsStrip — Persistent 36px bar surfacing active builds, pending gates, and recent errors.
@@ -32,7 +33,7 @@ export default function OpsStrip({ activeView, onSelectFeature }) {
     if (!activeFeatureCode) { setBudget(null); budgetFeatureRef.current = null; return; }
     if (activeFeatureCode === budgetFeatureRef.current) return;
     budgetFeatureRef.current = activeFeatureCode;
-    fetch(`/api/lifecycle/budget?featureCode=${encodeURIComponent(activeFeatureCode)}`)
+    wsFetch(`/api/lifecycle/budget?featureCode=${encodeURIComponent(activeFeatureCode)}`)
       .then(r => r.json())
       .then(data => setBudget(data))
       .catch(() => {});
@@ -45,7 +46,7 @@ export default function OpsStrip({ activeView, onSelectFeature }) {
     const currentCount = iterationStates ? [...iterationStates.values()].reduce((n, i) => n + (i.count ?? 0), 0) : 0;
     if (currentCount !== iterCountRef.current) {
       iterCountRef.current = currentCount;
-      fetch(`/api/lifecycle/budget?featureCode=${encodeURIComponent(activeFeatureCode)}`)
+      wsFetch(`/api/lifecycle/budget?featureCode=${encodeURIComponent(activeFeatureCode)}`)
         .then(r => r.json())
         .then(data => setBudget(data))
         .catch(() => {});

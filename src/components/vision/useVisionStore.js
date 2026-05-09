@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { handleVisionMessage } from './visionMessageHandler.js';
+import { wsFetch } from '../../lib/wsFetch.js';
 
 /**
  * useVisionStore — Zustand singleton store.
@@ -82,7 +83,7 @@ export const useVisionStore = create((set, get) => {
   // ── REST helpers ─────────────────────────────────────────────────────────
 
   async function apiCall(url, options) {
-    const res = await fetch(url, options);
+    const res = await wsFetch(url, options);
     const data = await res.json();
     if (!res.ok) {
       console.error(`[vision] API error ${res.status}:`, data.error || data);
@@ -106,17 +107,17 @@ export const useVisionStore = create((set, get) => {
     ws.onopen = () => {
       set({ connected: true });
       // Hydrate build state on connect
-      fetch('/api/build/state')
+      wsFetch('/api/build/state')
         .then(r => r.json())
         .then(data => set({ activeBuild: data.state ?? null }))
         .catch(() => {});
       // COMP-PIPE-1-3: Hydrate pipeline draft on connect
-      fetch('/api/pipeline/draft')
+      wsFetch('/api/pipeline/draft')
         .then(r => r.json())
         .then(data => set({ pipelineDraft: data.draft ?? null }))
         .catch(() => {});
       // COMP-VIS-1: Hydrate spawned agents on connect (only if no live events yet)
-      fetch('/api/agents/tree')
+      wsFetch('/api/agents/tree')
         .then(r => r.json())
         .then(data => {
           const current = get().spawnedAgents;
@@ -207,7 +208,7 @@ export const useVisionStore = create((set, get) => {
   // ── Start connection + intervals on store creation ───────────────────────
 
   // Hydrate session
-  fetch('/api/session/current')
+  wsFetch('/api/session/current')
     .then(r => r.json())
     .then(data => {
       if (data.session) {
@@ -228,7 +229,7 @@ export const useVisionStore = create((set, get) => {
 
   // Build state polling (5s fallback)
   refs.buildPollInterval = setInterval(() => {
-    fetch('/api/build/state')
+    wsFetch('/api/build/state')
       .then(r => r.json())
       .then(data => set({ activeBuild: data.state ?? null }))
       .catch(() => {});

@@ -63,6 +63,7 @@ import SettingsModal from './components/vision/shared/SettingsModal.jsx';
 import GateNotificationBar from './components/vision/shared/GateNotificationBar.jsx';
 import { computeBuildStateMap, computeAgentOverlay } from './components/vision/graphOpsOverlays.js';
 import { withComposeToken } from './lib/compose-api.js';
+import { wsFetch } from './lib/wsFetch.js';
 
 /*
  * COMP-UI-1 — Cockpit shell (flat layout)
@@ -427,7 +428,7 @@ function AppInner() {
   useEffect(() => {
     if (!activeFeatureCode) return;
     if (statusSnapshots && statusSnapshots[activeFeatureCode]) return;
-    fetch(`/api/lifecycle/status?featureCode=${encodeURIComponent(activeFeatureCode)}`)
+    wsFetch(`/api/lifecycle/status?featureCode=${encodeURIComponent(activeFeatureCode)}`)
       .then(r => r.json())
       .then(data => {
         if (data?.snapshot && setStatusSnapshot) {
@@ -507,14 +508,14 @@ function AppInner() {
   const [projectSwitchOpen, setProjectSwitchOpen] = useState(false);
 
   useEffect(() => {
-    fetch('/api/project').then(r => r.json()).then(data => {
+    wsFetch('/api/project').then(r => r.json()).then(data => {
       setProjectName(data.name || '');
       setProjectRoot(data.targetRoot || '');
     }).catch(() => {});
   }, []);
 
   const handleProjectSwitch = useCallback((newPath) => {
-    fetch('/api/project/switch', {
+    wsFetch('/api/project/switch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: newPath }),
@@ -685,7 +686,7 @@ function AppInner() {
   // COMP-AGT: Stop a spawned agent via the vision-server API
   const handleStopAgent = useCallback(async (agentId) => {
     try {
-      await fetch(`/api/agent/${agentId}/stop`, {
+      await wsFetch(`/api/agent/${agentId}/stop`, {
         method: 'POST',
         headers: withComposeToken({ 'Content-Type': 'application/json' }),
       });
@@ -742,7 +743,7 @@ function AppInner() {
   const handleAddLoop = useCallback(async (featureCode, fields) => {
     const item = findItemByFeature(featureCode);
     if (!item) throw new Error(`No item found for feature ${featureCode}`);
-    const r = await fetch(`/api/vision/items/${item.id}/loops`, {
+    const r = await wsFetch(`/api/vision/items/${item.id}/loops`, {
       method: 'POST',
       headers: withComposeToken({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(fields),
@@ -752,7 +753,7 @@ function AppInner() {
   const handleResolveLoop = useCallback(async (featureCode, loopId, { note }) => {
     const item = findItemByFeature(featureCode);
     if (!item) throw new Error(`No item found for feature ${featureCode}`);
-    const r = await fetch(`/api/vision/items/${item.id}/loops/${loopId}/resolve`, {
+    const r = await wsFetch(`/api/vision/items/${item.id}/loops/${loopId}/resolve`, {
       method: 'POST',
       headers: withComposeToken({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ note }),
@@ -807,7 +808,7 @@ function AppInner() {
     const next = isDark ? 'light' : 'dark';
     document.documentElement.classList.toggle('dark', next === 'dark');
     localStorage.setItem(THEME_KEY, next);
-    fetch('/api/settings', {
+    wsFetch('/api/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ui: { theme: next } }),
@@ -891,7 +892,7 @@ function AppInner() {
   }, [deleteConnection]);
 
   const handleRefreshBuild = useCallback(() => {
-    fetch('/api/build/state')
+    wsFetch('/api/build/state')
       .then(r => r.json())
       .then(data => setActiveBuild(data.state ?? null))
       .catch(() => {});

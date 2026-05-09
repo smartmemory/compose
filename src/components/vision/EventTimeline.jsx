@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils.js';
 import { assembleTimeline } from './timelineAssembler.js';
 import TimelineEvent from './TimelineEvent.jsx';
 import { useVisionStore } from './useVisionStore.js';
+import { wsFetch } from '../../lib/wsFetch.js';
 
 const CATEGORIES = ['all', 'phase', 'gate', 'session', 'iteration', 'error'];
 
@@ -35,7 +36,7 @@ export default function EventTimeline({ featureCode, itemId, onSelectItem }) {
     if (!featureCode) return;
     let cancelled = false;
 
-    fetch(`/api/session/history?featureCode=${encodeURIComponent(featureCode)}&limit=50`)
+    wsFetch(`/api/session/history?featureCode=${encodeURIComponent(featureCode)}&limit=50`)
       .then(r => r.json())
       .then(data => {
         if (cancelled) return;

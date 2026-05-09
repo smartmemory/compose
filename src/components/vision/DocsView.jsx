@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils.js';
 import { Input } from '@/components/ui/input.jsx';
 import { ScrollArea } from '@/components/ui/scroll-area.jsx';
 import FeatureFocusToggle from '../shared/FeatureFocusToggle.jsx';
+import { wsFetch } from '../../lib/wsFetch.js';
 
 // Initialize mermaid once with dark theme
 mermaid.initialize({
@@ -260,7 +261,7 @@ export default function DocsView({ items, selectedFile: externalSelectedFile, on
     if (!selectedFile || saving) return;
     setSaving(true);
     try {
-      const res = await fetch('/api/file', {
+      const res = await wsFetch('/api/file', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: selectedFile, content: editContent }),
@@ -305,7 +306,7 @@ export default function DocsView({ items, selectedFile: externalSelectedFile, on
 
   // Fetch file list
   useEffect(() => {
-    fetch('/api/files')
+    wsFetch('/api/files')
       .then(r => r.json())
       .then(data => {
         setFiles(data.files || []);
@@ -325,7 +326,7 @@ export default function DocsView({ items, selectedFile: externalSelectedFile, on
   useEffect(() => {
     if (!selectedFile) { setFileContent(null); return; }
     setContentLoading(true);
-    fetch(`/api/file?path=${encodeURIComponent(selectedFile)}`)
+    wsFetch(`/api/file?path=${encodeURIComponent(selectedFile)}`)
       .then(r => r.json())
       .then(data => { setFileContent(data.content ?? null); setContentLoading(false); })
       .catch(() => { setFileContent(null); setContentLoading(false); });

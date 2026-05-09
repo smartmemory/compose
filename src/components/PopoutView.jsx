@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { ArrowDownToLine } from 'lucide-react';
 import VisionTracker from './vision/VisionTracker.jsx';
 import ProductGraph from './ProductGraph.jsx';
+import { wsFetch } from '../lib/wsFetch.js';
 
 /*
  * PopoutView — renders a single tab's content in a standalone browser window.
@@ -103,7 +104,7 @@ export default function PopoutView({ path }) {
       return;
     }
 
-    fetch(`/api/file?path=${encodeURIComponent(path)}`)
+    wsFetch(`/api/file?path=${encodeURIComponent(path)}`)
       .then(r => r.json())
       .then(data => {
         if (data.content !== undefined) setContent(data.content);

@@ -23,6 +23,7 @@ import SettingsModal       from './shared/SettingsModal.jsx';
 import GateNotificationBar from './shared/GateNotificationBar.jsx';
 import DecisionTimelineStrip from './DecisionTimelineStrip.jsx';
 import StatusBand from './StatusBand.jsx';
+import { wsFetch } from '../../lib/wsFetch.js';
 
 export default function VisionTracker({ onContextSelect, sidebarOpen = true, onToggleSidebar }) {
   const {
@@ -194,7 +195,7 @@ export default function VisionTracker({ onContextSelect, sidebarOpen = true, onT
   }, [deleteConnection]);
 
   const handleRefreshBuild = useCallback(() => {
-    fetch('/api/build/state')
+    wsFetch('/api/build/state')
       .then(r => r.json())
       .then(data => setActiveBuild(data.state ?? null))
       .catch(() => {});
@@ -218,7 +219,7 @@ export default function VisionTracker({ onContextSelect, sidebarOpen = true, onT
   useEffect(() => {
     if (!currentFeatureCode) return;
     if (statusSnapshots && statusSnapshots[currentFeatureCode]) return;
-    fetch(`/api/lifecycle/status?featureCode=${encodeURIComponent(currentFeatureCode)}`)
+    wsFetch(`/api/lifecycle/status?featureCode=${encodeURIComponent(currentFeatureCode)}`)
       .then(r => r.json())
       .then(data => {
         if (data.snapshot && setStatusSnapshot) {

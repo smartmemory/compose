@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ExternalLink, FolderOpen } from 'lucide-react';
 import ProductGraph from './ProductGraph.jsx';
+import { wsFetch } from '../lib/wsFetch.js';
 
 const POPOUT_CHANNEL = 'compose-popout';
 
@@ -177,7 +178,7 @@ export default function Canvas({ fontSize = 14 }) {
         if (path.startsWith('graph://')) {
           return Promise.resolve({ path, content: null, rendererType: 'graph' });
         }
-        return fetch(`/api/file?path=${encodeURIComponent(path)}`)
+        return wsFetch(`/api/file?path=${encodeURIComponent(path)}`)
           .then(r => r.json())
           .then(data => data.content !== undefined ? { path, content: data.content } : null)
           .catch(() => null);
@@ -243,14 +244,14 @@ export default function Canvas({ fontSize = 14 }) {
   }, []);
 
   const loadFileList = useCallback(() => {
-    fetch('/api/files')
+    wsFetch('/api/files')
       .then(r => r.json())
       .then(data => setFileList(data.files || []))
       .catch(() => {});
   }, []);
 
   const loadFile = useCallback((path) => {
-    fetch(`/api/file?path=${encodeURIComponent(path)}`)
+    wsFetch(`/api/file?path=${encodeURIComponent(path)}`)
       .then(r => r.json())
       .then(data => {
         if (data.content !== undefined) {

@@ -311,6 +311,7 @@ function scheduleReconnect() {
   _state.reconnectTimer = setTimeout(() => {
     _state.reconnectTimer = null;
     // Health-check first
+    // TODO COMP-WORKSPACE-AGENT-SVR
     fetch(`${window.location.protocol}//${window.location.hostname}:${AGENT_PORT}/api/health`)
       .then(r => { if (r.ok) connect(); else scheduleReconnect(); })
       .catch(() => scheduleReconnect());
@@ -324,6 +325,7 @@ function scheduleReconnect() {
 const COMPOSE_TOKEN = import.meta.env.VITE_COMPOSE_API_TOKEN;
 
 async function postAgent(path, body) {
+  // TODO COMP-WORKSPACE-AGENT-SVR
   const res = await fetch(
     `${window.location.protocol}//${window.location.hostname}:${AGENT_PORT}${path}`,
     {

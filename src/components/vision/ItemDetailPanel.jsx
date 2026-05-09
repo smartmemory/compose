@@ -11,6 +11,7 @@ import ConfidenceBar from './shared/ConfidenceBar.jsx';
 import BranchComparePanel from './BranchComparePanel.jsx';
 import DriftRibbon from './DriftRibbon.jsx';
 import { useVisionStore } from './useVisionStore.js';
+import { wsFetch } from '../../lib/wsFetch.js';
 
 function ConfidenceControl({ level, onChange }) {
   const colors = ['hsl(var(--muted-foreground))', 'hsl(var(--destructive))', 'hsl(var(--accent))', 'hsl(var(--success))', 'hsl(var(--success))'];
@@ -140,7 +141,7 @@ function SessionHistory({ featureCode }) {
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
-    fetch(`/api/session/history?featureCode=${encodeURIComponent(featureCode)}&limit=10`, { signal: controller.signal })
+    wsFetch(`/api/session/history?featureCode=${encodeURIComponent(featureCode)}&limit=10`, { signal: controller.signal })
       .then(r => r.json())
       .then(data => { if (!controller.signal.aborted) setSessions(data.sessions || []); })
       .catch(e => { if (!controller.signal.aborted) setSessions([]); })
@@ -708,7 +709,7 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
                   if (item.lifecycle) {
                     // Use lifecycle kill path to properly update phase state and resolve pending gates
                     try {
-                      const res = await fetch(`/api/vision/items/${item.id}/lifecycle/kill`, {
+                      const res = await wsFetch(`/api/vision/items/${item.id}/lifecycle/kill`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ reason: 'Killed via UI' }),

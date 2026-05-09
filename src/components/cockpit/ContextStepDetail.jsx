@@ -23,6 +23,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useVisionStore } from '../vision/useVisionStore.js';
 import { useShallow } from 'zustand/react/shallow';
+import { wsFetch } from '../../lib/wsFetch.js';
 import {
   selectRetriesSummary,
   selectViolations,
@@ -237,7 +238,7 @@ export default function ContextStepDetail({ stepId, tierEvents = [], healthEvent
     if (featureCode === prevFeatureCodeRef.current) return;
     prevFeatureCodeRef.current = featureCode;
 
-    fetch(`/api/lifecycle/budget?featureCode=${encodeURIComponent(featureCode)}`)
+    wsFetch(`/api/lifecycle/budget?featureCode=${encodeURIComponent(featureCode)}`)
       .then(r => r.json())
       .then(data => setBudget(data))
       .catch(() => {}); // budget is best-effort

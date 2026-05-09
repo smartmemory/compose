@@ -9,6 +9,7 @@
  */
 import React, { useState, useEffect, useMemo } from 'react';
 import { FileText, Folder } from 'lucide-react';
+import { wsFetch } from '../../lib/wsFetch.js';
 
 function formatBytes(bytes) {
   if (!bytes) return '—';
@@ -34,7 +35,7 @@ export default function ContextFilesTab({ featureCode, onOpenFile }) {
     const controller = new AbortController();
     setLoading(true);
 
-    fetch('/api/files', { signal: controller.signal })
+    wsFetch('/api/files', { signal: controller.signal })
       .then(r => r.json())
       .then(data => {
         if (controller.signal.aborted) return;

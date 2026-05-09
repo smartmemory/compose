@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { buildDraftDoc, buildTopicOutline } from './designSessionState.js';
+import { wsFetch } from '../../lib/wsFetch.js';
 
 /**
  * useDesignStore — Zustand singleton store for design sessions.
@@ -59,7 +60,7 @@ const useDesignStore = create((set, get) => ({
       : `?scope=${scope}`;
 
     try {
-      const res = await fetch(`/api/design/session${query}`);
+      const res = await wsFetch(`/api/design/session${query}`);
       const { session } = await res.json();
       if (session) {
         const msgs = session.messages || [];
@@ -93,7 +94,7 @@ const useDesignStore = create((set, get) => ({
 
   startSession: async (scope = 'product', featureCode = null) => {
     try {
-      const res = await fetch(`/api/design/start`, {
+      const res = await wsFetch(`/api/design/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scope, featureCode }),
@@ -132,7 +133,7 @@ const useDesignStore = create((set, get) => ({
     set(s => ({ messages: [...s.messages, humanMsg], status: 'streaming' }));
 
     try {
-      const res = await fetch(`/api/design/message`, {
+      const res = await wsFetch(`/api/design/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scope, featureCode, type: 'text', content }),
@@ -154,7 +155,7 @@ const useDesignStore = create((set, get) => ({
     set(s => ({ messages: [...s.messages, humanMsg], status: 'streaming' }));
 
     try {
-      const res = await fetch(`/api/design/message`, {
+      const res = await wsFetch(`/api/design/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scope: session.scope, featureCode: session.featureCode, type: 'card_select', cardId, comment, messageIndex }),
@@ -177,7 +178,7 @@ const useDesignStore = create((set, get) => ({
 
     try {
       // Mark the decision as superseded on the server
-      const reviseRes = await fetch(`/api/design/revise`, {
+      const reviseRes = await wsFetch(`/api/design/revise`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -209,7 +210,7 @@ const useDesignStore = create((set, get) => ({
     try {
       const body = { scope: session.scope, featureCode: session.featureCode };
       if (draftDoc) body.draftDoc = draftDoc;
-      const res = await fetch(`/api/design/complete`, {
+      const res = await wsFetch(`/api/design/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

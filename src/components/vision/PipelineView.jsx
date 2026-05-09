@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils.js';
 import { PIPELINE_STEPS, PIPELINE_PHASE_CONFIG } from './constants.js';
 import EmptyState from './shared/EmptyState.jsx';
 import TemplateSelector from './TemplateSelector.jsx';
+import { wsFetch } from '../../lib/wsFetch.js';
 
 /**
  * PipelineView — Visual step diagram for the Stratum build pipeline.
@@ -40,7 +41,7 @@ export default function PipelineView({ activeBuild, pipelineDraft, onSelectStep,
     if (!pipelineDraft?.draftId) return;
     setApproving(true);
     try {
-      await fetch('/api/pipeline/draft/approve', {
+      await wsFetch('/api/pipeline/draft/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ draftId: pipelineDraft.draftId }),
@@ -55,7 +56,7 @@ export default function PipelineView({ activeBuild, pipelineDraft, onSelectStep,
     if (!pipelineDraft?.draftId) return;
     setRejecting(true);
     try {
-      await fetch('/api/pipeline/draft/reject', {
+      await wsFetch('/api/pipeline/draft/reject', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ draftId: pipelineDraft.draftId }),

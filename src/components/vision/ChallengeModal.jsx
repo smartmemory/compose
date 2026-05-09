@@ -5,6 +5,7 @@ import { withComposeToken } from '@/lib/compose-api.js';
 import { Button } from '@/components/ui/button.jsx';
 import { TYPE_COLORS } from './constants.js';
 import { VisionChangesContext } from './VisionChangesContext.js';
+import { wsFetch } from '../../lib/wsFetch.js';
 
 function ChallengeRow({ item, onUpdate }) {
   const { newIds, changedIds } = useContext(VisionChangesContext);
@@ -31,6 +32,7 @@ function ChallengeRow({ item, onUpdate }) {
     const desc = item.description || item.title;
     const text = `Be brief. Summarize, give your recommendation, refine the decision wording based on the resolution if needed: ${desc}\n`;
     try {
+      // TODO COMP-WORKSPACE-AGENT-SVR
       await fetch('http://localhost:4002/api/terminal/inject', {
         method: 'POST',
         headers: withComposeToken({ 'Content-Type': 'application/json' }),
@@ -191,7 +193,7 @@ export default function ChallengeModal({ item, items, connections, onUpdate, onC
     if (!agentId || agentStatus !== 'running') return;
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`http://localhost:4001/api/agent/${agentId}`);
+        const res = await wsFetch(`http://localhost:4001/api/agent/${agentId}`);
         if (!res.ok) return;
         const data = await res.json();
         if (data.status !== 'running') {
@@ -222,7 +224,7 @@ export default function ChallengeModal({ item, items, connections, onUpdate, onC
     setAgentStatus('running');
 
     try {
-      const res = await fetch('http://localhost:4001/api/agent/spawn', {
+      const res = await wsFetch('http://localhost:4001/api/agent/spawn', {
         method: 'POST',
         headers: withComposeToken({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ prompt }),

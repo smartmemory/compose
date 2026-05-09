@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useVisionStore } from './vision/useVisionStore.js'
+import { wsFetch } from '../lib/wsFetch.js'
 
 // All stratum routes are served by the compose server at the same origin.
 const API = '/api/stratum'
@@ -9,7 +10,7 @@ const API = '/api/stratum'
 // ---------------------------------------------------------------------------
 
 async function apiFetch(path, opts = {}) {
-  const res = await fetch(`${API}${path}`, {
+  const res = await wsFetch(`${API}${path}`, {
     headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
     ...opts,
   })

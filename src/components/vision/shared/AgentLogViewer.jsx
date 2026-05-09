@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { wsFetch } from '../../../lib/wsFetch.js';
 
 /**
  * AgentLogViewer — polls GET /api/agent/:id and displays output + stderr.
@@ -30,7 +31,7 @@ function AgentLogViewer({ agentId, status }) {
 
     const doFetch = async () => {
       try {
-        const res = await fetch(`/api/agent/${agentId}`);
+        const res = await wsFetch(`/api/agent/${agentId}`);
         if (!res.ok) return;
         const data = await res.json();
         if (data.output != null) setOutput(data.output);

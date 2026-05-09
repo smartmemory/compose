@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FileText, Clock, Layers, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { TEMPLATE_CATEGORY_COLORS } from './constants.js';
+import { wsFetch } from '../../lib/wsFetch.js';
 
 /**
  * TemplateSelector — Grid of pipeline template cards.
@@ -18,7 +19,7 @@ export default function TemplateSelector() {
   const [creating, setCreating] = useState(null);
 
   useEffect(() => {
-    fetch('/api/pipeline/templates')
+    wsFetch('/api/pipeline/templates')
       .then(r => r.json())
       .then(data => {
         setTemplates(data.templates || []);
@@ -30,7 +31,7 @@ export default function TemplateSelector() {
   const handleSelect = async (templateId) => {
     setCreating(templateId);
     try {
-      await fetch('/api/pipeline/draft', {
+      await wsFetch('/api/pipeline/draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ templateId }),
