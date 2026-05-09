@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-05-10
+
+### COMP-WORKSPACE-HTTP — HTTP workspace foundation (middleware + bootstrap)
+
+Compose's HTTP server (port 4001) gains a per-request workspace channel: every request now resolves to a `req.workspace = { id, root, source }` via Express middleware reading `X-Compose-Workspace-Id`. **Behavior-preserving substrate** — singletons stay shared, snapshot sites stay snapshot, agent server stays untouched. The next four tickets (`COMP-WORKSPACE-VISION`, `-SESSIONS`, `-AGENT-SVR`, `-FILES`) build on this foundation.
+
+**Why narrowed.** Original framing was "fix the 6 import-time `PROJECT_ROOT` snapshots." Three Codex review passes surfaced that the real shape was bigger — boot-time `VisionStore`/`SettingsStore`/`SessionManager`/`DesignSessionManager` singletons, the separate agent server on port 4002, file-watcher's HTTP routes, `/api/project/switch` global state. Per `feedback_codex_review_convergence.md`, split into a 5-ticket track. This ticket ships the foundation; the rest builds on it.
+
+**Added:**
+- `server/workspace-middleware.js` — `createWorkspaceMiddleware()` factory. `EXEMPT_PATHS = {/api/workspace, /api/project/switch, /api/health}` bypass with `source: 'exempt'`. Header present + valid → resolved via `resolveWorkspace`. Header absent → soft-fallback (v1 applies to all methods, including mutations) with `X-Compose-Workspace-Fallback: true` response header. Resolver errors map to 400 (`WorkspaceUnknown`, `WorkspaceDiscoveryTooBroad`) and 409 (`WorkspaceAmbiguous` with candidates, `WorkspaceIdCollision` with roots). `mapResolverErrorToResponse` helper exported separately.
+- `server/workspace-routes.js` — `GET /api/workspace` returns `{id, root, source: 'boot'}` derived from `getTargetRoot()` + `deriveId({root}).id`. **Boot-deterministic**: does NOT call `resolveWorkspace()` so it doesn't 409 in nested-workspace setups.
+- `src/lib/wsFetch.js` — `wsFetch(url, opts)` wraps `fetch` and injects `X-Compose-Workspace-Id` from a module-local cache. Works for both relative and absolute URLs. `setWorkspaceId(id)` / `getWorkspaceId()` exposed.
+- `src/contexts/WorkspaceContext.jsx` — `WorkspaceProvider` fetches `/api/workspace` on mount, caches id via `setWorkspaceId`, exposes `useWorkspace()` returning `{loading, error, workspace, refresh}`. `refresh()` re-fetches and updates cache (used by `handleProjectSwitch` to invalidate stale id before any view remount fires downstream `wsFetch`).
+- 5 new test files: `workspace-middleware.test.js` (13 tests), `workspace-routes.test.js` (4), `compose-mcp-tools-http.test.js` (6), `cli-resolve-workspace.test.js` (3), `golden/http-middleware-multi-workspace.test.js` (5). Plus 4 added to `vision-writer.test.js` and the new `wsFetch.test.js` (5 vitest). 51 net-new tests.
+
+**Changed:**
+- `server/index.js` — mounts `attachWorkspaceRoutes(app)` and `createWorkspaceMiddleware()` after `express.json()` (line 49), before all other routes.
+- `server/compose-mcp-tools.js` — added `_httpRequest(method, path, body)` helper that reads `_binding.id` and injects `X-Compose-Workspace-Id`. 4 callsites (`toolGetCurrentSession`, `_bindSession`, `_postLifecycle`, `_postGate`) refactored to use it. Added comment documenting why `_binding` is process-global by design.
+- `lib/vision-writer.js` — constructor accepts `{workspaceId}`; `_fetch` injects header when set. Backward compat preserved.
+- `bin/compose.js` — `resolveCwdWithWorkspace` now returns `{root, id}` (was bare string). 17 consumers updated to destructure `.root`. `httpGet`/`httpPost` accept optional `workspaceId` param; 4 callsites at lines 2491/2510/2536/2584 thread the resolved id.
+- `server/design-routes.js` — post-design-completion gate creation (lines 472–477) injects `X-Compose-Workspace-Id` from `req.workspace.id`.
+- 19 frontend files migrated from `fetch()` to `wsFetch()` (41 same-origin + 2 absolute-localhost = 43 sites). 3 `:4002` agent-server fetches preserved with `// TODO COMP-WORKSPACE-AGENT-SVR` comments. 6 EventSource/WebSocket sites unchanged (deferred).
+- `src/main.jsx` — wraps app in `<WorkspaceProvider>`.
+
+**Out of scope (deferred):** boot-singleton splitting, 6 import-time `PROJECT_ROOT` snapshots, agent server on port 4002, file-watcher HTTP routes, `/api/project/switch` rework. Tracking rows 202–205 in `ROADMAP.md` carry the four follow-ups.
+
+**Verification:** 2743/2745 tests pass; the 2 failures (`STRAT-DEDUP-AGENTRUN-V3`) are pre-existing and unrelated. Frontend `npm run build` green. Codex review converged at iteration 2 of the implementation pass with REVIEW CLEAN.
+
 ## 2026-05-09
 
 ### COMP-WORKSPACE-ID — workspace identity disambiguation (parent vs child)

@@ -1,7 +1,7 @@
 {
   "code": "COMP-WORKSPACE-HTTP",
   "description": "Foundation for HTTP workspace track: Express middleware reading X-Compose-Workspace-Id, GET /api/workspace bootstrap, Vite frontend context provider. Behavior-preserving substrate for COMP-WORKSPACE-{VISION,SESSIONS,AGENT-SVR,FILES}.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "created": "2026-05-09",
   "profile": {
     "needs_prd": true,
