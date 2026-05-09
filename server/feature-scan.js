@@ -25,6 +25,11 @@ const STATUS_RE = /^\*\*Status:\*\*\s*(.+)$/im;
 const DATE_RE = /^\*\*Date:\*\*\s*(.+)$/im;
 const FEATURE_ID_RE = /^\*\*Feature\s*ID:\*\*\s*`?([^`\n]+)`?/im;
 const RELATED_DOC_RE = /\[.*?\]\(\.\.\/([\w-]+)\//g;
+// Match `**Predecessor:** CODE` and `**Successor:** CODE` lines in design docs.
+// Captures the feature code (CODE_RE-shaped) optionally with parenthetical
+// suffix like `COMP-WORKSPACE-{VISION,SESSIONS}` — we only take the bare code.
+const PREDECESSOR_RE = /^\*\*Predecessor:\*\*\s*([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\b/gim;
+const SUCCESSOR_RE   = /^\*\*Successor:\*\*\s*([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\b/gim;
 
 /**
  * Parse markdown frontmatter-style metadata from a file.
@@ -56,6 +61,19 @@ function parseRelatedFeatures(content) {
     related.add(match[1]);
   }
   return [...related];
+}
+
+// Returns { predecessors: string[], successors: string[] } from `**Predecessor:**`
+// and `**Successor:**` lines in design.md prose.
+function parseSequenceRefs(content) {
+  const predecessors = new Set();
+  const successors = new Set();
+  let m;
+  const pre = new RegExp(PREDECESSOR_RE.source, 'gim');
+  while ((m = pre.exec(content)) !== null) predecessors.add(m[1]);
+  const suc = new RegExp(SUCCESSOR_RE.source, 'gim');
+  while ((m = suc.exec(content)) !== null) successors.add(m[1]);
+  return { predecessors: [...predecessors], successors: [...successors] };
 }
 
 /**
@@ -139,6 +157,8 @@ export function scanFeatures(featuresDir) {
       confidence: 0,
       artifacts: [],
       relatedFeatures: [],
+      predecessors: [],
+      successors: [],
     };
 
     // List artifacts
@@ -194,12 +214,21 @@ export function scanFeatures(featuresDir) {
         for (const rel of parseRelatedFeatures(raw)) {
           allRelated.add(rel);
         }
+        // Collect sequence refs (predecessor → this → successor) — only design.md
+        // is authoritative; other docs may inherit copy-paste headers.
+        if (artifact === 'design.md') {
+          const seq = parseSequenceRefs(raw);
+          for (const code of seq.predecessors) feature.predecessors.push(code);
+          for (const code of seq.successors) feature.successors.push(code);
+        }
       } catch { /* skip */ }
     }
 
     // Remove self-references
     allRelated.delete(feature.name);
     feature.relatedFeatures = [...allRelated];
+    feature.predecessors = [...new Set(feature.predecessors.filter(c => c !== feature.name))];
+    feature.successors = [...new Set(feature.successors.filter(c => c !== feature.name))];
 
     // Infer phase from artifacts
     feature.phase = inferPhase(feature.artifacts);
@@ -505,7 +534,7 @@ export function seedFeatures(features, store) {
     featureItemMap.set(feature.name, featureItem.id);
   }
 
-  // Second pass: create connections for related features
+  // Second pass: create connections for related features (undirected informs)
   for (const feature of features) {
     const fromId = featureItemMap.get(feature.name);
     if (!fromId || !feature.relatedFeatures.length) continue;
@@ -525,6 +554,31 @@ export function seedFeatures(features, store) {
         store.createConnection({ fromId, toId, type: 'informs' });
         seeded.connections++;
       } catch { /* skip duplicate or invalid */ }
+    }
+  }
+
+  // Third pass: directional sequence edges (predecessor → this → successor).
+  // Mined from `**Predecessor:**` / `**Successor:**` lines in design.md.
+  // Direction is meaningful: `informs` from earlier-shipping feature toward later.
+  const addDirectional = (fromId, toId) => {
+    if (!fromId || !toId || fromId === toId) return;
+    const exists = Array.from(store.connections.values()).some(
+      c => c.fromId === fromId && c.toId === toId
+    );
+    if (exists) return;
+    try {
+      store.createConnection({ fromId, toId, type: 'informs' });
+      seeded.connections++;
+    } catch { /* skip */ }
+  };
+  for (const feature of features) {
+    const thisId = featureItemMap.get(feature.name);
+    if (!thisId) continue;
+    for (const predCode of feature.predecessors) {
+      addDirectional(featureItemMap.get(predCode), thisId);
+    }
+    for (const succCode of feature.successors) {
+      addDirectional(thisId, featureItemMap.get(succCode));
     }
   }
 
