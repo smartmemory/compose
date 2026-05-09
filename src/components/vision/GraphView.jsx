@@ -61,6 +61,25 @@ function getGroup(item) {
   return item.group || 'other';
 }
 
+// Wrap kebab-case group IDs at hyphens so long IDs (e.g. T2-F5-COMPOSE-MIGRATE-WORKTREE)
+// span multiple lines instead of overflowing into neighboring compound boxes.
+function wrapGroupId(group, maxLine = 18) {
+  const tokens = group.split('-');
+  const lines = [];
+  let current = '';
+  for (const tok of tokens) {
+    const next = current ? current + '-' + tok : tok;
+    if (next.length > maxLine && current) {
+      lines.push(current);
+      current = tok;
+    } else {
+      current = next;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.join('\n');
+}
+
 function buildElements(items, connections, grouped, focusActive, featureCode) {
   const elements = [];
   const itemIds = new Set(items.map(i => i.id));
@@ -103,7 +122,7 @@ function buildElements(items, connections, grouped, focusActive, featureCode) {
       elements.push({
         data: {
           id: `group-${group}`,
-          label: `${group}  (${active} active, ${total} total)`,
+          label: `${wrapGroupId(group)}\n(${active} active, ${total} total)`,
           isGroup: true,
           groupType: group,
         },
