@@ -27,10 +27,10 @@ import IdeaboxAnalytics from './IdeaboxAnalytics.jsx';
 // ---------------------------------------------------------------------------
 
 const PRIORITY_LANES = [
+  { key: '—',  label: 'Untriaged', color: 'text-muted-foreground', bg: 'bg-muted/20', border: 'border-border/50' },
   { key: 'P0', label: 'P0', color: 'text-red-400', bg: 'bg-red-400/10', border: 'border-red-400/30' },
   { key: 'P1', label: 'P1', color: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/30' },
   { key: 'P2', label: 'P2', color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-400/30' },
-  { key: '—',  label: 'Untriaged', color: 'text-muted-foreground', bg: 'bg-muted/20', border: 'border-border/50' },
 ];
 
 function priorityOrder(p) {
