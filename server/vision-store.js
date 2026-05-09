@@ -20,13 +20,20 @@ function slugify(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-const PREFIX_RE = /^([A-Z]+\d*(?:-[A-Z]+\d*)*)(?=-\d|$)/;
+const CODE_PREFIX_RE = /^([A-Z][A-Z0-9-]*)/;
+// Take first 2 hyphen-separated tokens after stripping any trailing numeric
+// suffix segments (-2, -2-1-1). This collapses sibling families:
+//   COMP-WORKSPACE-HTTP, COMP-WORKSPACE-ID, COMP-WORKSPACE-WATCHERS  → COMP-WORKSPACE
+//   COMP-MCP-COMPLETION, COMP-MCP-PUBLISH, COMP-MCP-MIGRATION-2-1-1  → COMP-MCP
+//   STRAT-REV, STRAT-REV-7                                           → STRAT-REV
+//   COMP-DESIGN (only 2 tokens already)                              → COMP-DESIGN
 function deriveGroup(title, featureCode) {
-  const titleMatch = (title || '').match(PREFIX_RE);
-  if (titleMatch) return titleMatch[1];
-  const fcMatch = (featureCode || '').match(PREFIX_RE);
-  if (fcMatch) return fcMatch[1];
-  return null;
+  const candidate = featureCode || (title || '').match(CODE_PREFIX_RE)?.[1];
+  if (!candidate) return null;
+  const stripped = candidate.replace(/(?:-\d+)+$/, '');
+  const tokens = stripped.split('-').filter(Boolean);
+  if (tokens.length === 0) return null;
+  return tokens.slice(0, 2).join('-');
 }
 
 export class VisionStore {
@@ -70,9 +77,16 @@ export class VisionStore {
           }
           if (!item.slug && item.title) item.slug = slugify(item.title);
           if (!item.files) item.files = [];
-          if (!item.group) {
-            item.group = deriveGroup(item.title, item.featureCode || item.lifecycle?.featureCode);
-            if (item.group) migrated = true;
+          // Always re-derive group on load — the rule has evolved (singletons →
+          // first-2-tokens) and existing items need the new shape. Custom
+          // user-set groups are not a use case here; group is derived metadata.
+          const newGroup = deriveGroup(item.title, item.featureCode || item.lifecycle?.featureCode);
+          if (newGroup && newGroup !== item.group) {
+            item.group = newGroup;
+            migrated = true;
+          } else if (!item.group && newGroup) {
+            item.group = newGroup;
+            migrated = true;
           }
           this.items.set(item.id, item);
         }
