@@ -132,8 +132,11 @@ function buildElements(items, connections, grouped, focusActive, featureCode) {
     }
   }
 
-  // Compound parent nodes by feature group, sorted by priority
+  // Compound parent nodes by feature group, sorted by priority. Singleton
+  // groups (only one member) are NOT rendered as compounds — the lone leaf
+  // node sits at the top level so we don't show pointless 1-feature boxes.
   const sortedGroups = [];
+  const renderedGroups = new Set();
   if (grouped) {
     const groupSet = [...new Set(items.map(i => getGroup(i)).filter(Boolean))];
     const groupPriority = groupSet.map(group => {
@@ -147,8 +150,10 @@ function buildElements(items, connections, grouped, focusActive, featureCode) {
     groupPriority.sort((a, b) =>
       (b.active - a.active) || (b.blocked - a.blocked) || (b.planned - a.planned) || a.group.localeCompare(b.group)
     );
-    for (const { group, active, blocked, total } of groupPriority) {
+    for (const { group, active, total } of groupPriority) {
       sortedGroups.push(group);
+      if (total < 2) continue;  // skip singleton groups
+      renderedGroups.add(group);
       const hasAnyFocused = focusItemIds && items.some(i => getGroup(i) === group && focusItemIds.has(i.id));
       elements.push({
         data: {
@@ -183,7 +188,7 @@ function buildElements(items, connections, grouped, focusActive, featureCode) {
         description: item.description,
         slug,
         featureCode: item.lifecycle?.featureCode || item.featureCode || null,
-        ...(grouped && group ? { parent: `group-${group}` } : {}),
+        ...(grouped && group && renderedGroups.has(group) ? { parent: `group-${group}` } : {}),
       },
       ...(dimmed ? { classes: 'focus-dimmed' } : {}),
     });
