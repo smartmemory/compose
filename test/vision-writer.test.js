@@ -282,6 +282,98 @@ describe('VisionWriter', () => {
   // Atomic write integrity
   // -------------------------------------------------------------------------
 
+  // -------------------------------------------------------------------------
+  // workspaceId plumbing (COMP-WORKSPACE-HTTP T6)
+  // -------------------------------------------------------------------------
+
+  describe('workspaceId header injection', () => {
+    let origFetch;
+
+    function stubFetch(captureRef) {
+      origFetch = globalThis.fetch;
+      globalThis.fetch = async (url, opts) => {
+        captureRef.url = url;
+        captureRef.opts = opts;
+        return {
+          ok: true,
+          status: 200,
+          async json() { return { items: [] }; },
+          async text() { return ''; },
+        };
+      };
+    }
+
+    function restoreFetch() {
+      globalThis.fetch = origFetch;
+    }
+
+    it('stores workspaceId on the instance', () => {
+      const dir = fs.mkdtempSync(path.join(tmpDir, 'test-'));
+      const writer = new VisionWriter(dir, { port: 19990, workspaceId: 'ws-abc' });
+      assert.equal(writer.workspaceId, 'ws-abc');
+    });
+
+    it('workspaceId is undefined when not supplied', () => {
+      const dir = fs.mkdtempSync(path.join(tmpDir, 'test-'));
+      const writer = new VisionWriter(dir, { port: 19990 });
+      assert.equal(writer.workspaceId, undefined);
+    });
+
+    it('injects X-Compose-Workspace-Id header in _fetch when workspaceId is set', async () => {
+      const dir = fs.mkdtempSync(path.join(tmpDir, 'test-'));
+      const writer = new VisionWriter(dir, { port: 19990, workspaceId: 'ws-xyz' });
+
+      const captured = {};
+      stubFetch(captured);
+      try {
+        await writer._fetch('/api/vision/items');
+      } finally {
+        restoreFetch();
+      }
+
+      assert.equal(captured.opts.headers['X-Compose-Workspace-Id'], 'ws-xyz');
+      assert.equal(captured.opts.headers['Content-Type'], 'application/json');
+    });
+
+    it('omits X-Compose-Workspace-Id header when workspaceId is not set', async () => {
+      const dir = fs.mkdtempSync(path.join(tmpDir, 'test-'));
+      const writer = new VisionWriter(dir, { port: 19990 });
+
+      const captured = {};
+      stubFetch(captured);
+      try {
+        await writer._fetch('/api/vision/items');
+      } finally {
+        restoreFetch();
+      }
+
+      assert.equal(captured.opts.headers['X-Compose-Workspace-Id'], undefined);
+      assert.ok(!('X-Compose-Workspace-Id' in captured.opts.headers));
+      assert.equal(captured.opts.headers['Content-Type'], 'application/json');
+    });
+
+    it('does not clobber caller-supplied opts.headers', async () => {
+      const dir = fs.mkdtempSync(path.join(tmpDir, 'test-'));
+      const writer = new VisionWriter(dir, { port: 19990, workspaceId: 'ws-1' });
+
+      const captured = {};
+      stubFetch(captured);
+      try {
+        await writer._fetch('/api/vision/items', {
+          method: 'POST',
+          headers: { 'X-Custom': 'keep-me' },
+          body: '{}',
+        });
+      } finally {
+        restoreFetch();
+      }
+
+      assert.equal(captured.opts.headers['X-Custom'], 'keep-me');
+      assert.equal(captured.opts.headers['X-Compose-Workspace-Id'], 'ws-1');
+      assert.equal(captured.opts.headers['Content-Type'], 'application/json');
+    });
+  });
+
   it('atomic write produces valid JSON on immediate read', async () => {
     const dir = fs.mkdtempSync(path.join(tmpDir, 'test-'));
     const writer = new VisionWriter(dir, { port: 19990 });

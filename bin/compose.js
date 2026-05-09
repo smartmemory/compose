@@ -52,6 +52,11 @@ function dieOnWorkspaceError(err) {
 // strips --workspace from args on first call (via getWorkspaceFlag splice), so a second
 // call would re-resolve without the hint. Cache prevents this; ensures auto-init paths
 // (runInit re-entry from build/fix/import/new) see the same workspace.
+//
+// COMP-WORKSPACE-HTTP T7: shape changed from bare string root → { root, id }.
+// Consumers read `.root` for path; HTTP callers read `.id` to inject
+// `X-Compose-Workspace-Id` header. id may be null/undefined when a workspace
+// resolved without an id (legacy projects).
 let _resolvedCwdCache = null
 
 function resolveCwdWithWorkspace(args) {
@@ -64,8 +69,8 @@ function resolveCwdWithWorkspace(args) {
   }
   try {
     const ws = resolveWorkspace({ workspaceId: wsId })
-    _resolvedCwdCache = ws.root
-    return ws.root
+    _resolvedCwdCache = { root: ws.root, id: ws.id }
+    return _resolvedCwdCache
   } catch (err) {
     dieOnWorkspaceError(err)
   }
@@ -578,8 +583,9 @@ async function runUpdate(flags) {
   const wsId = getWorkspaceFlag(args)
   let cwd
   try {
-    cwd = resolveWorkspace({ workspaceId: wsId }).root
-    _resolvedCwdCache = cwd
+    const ws = resolveWorkspace({ workspaceId: wsId })
+    cwd = ws.root
+    _resolvedCwdCache = { root: ws.root, id: ws.id }
   } catch (err) {
     // Only WorkspaceUnset is benign for `update` (user-global). Any explicit
     // mistake (bad --workspace, collision, ambiguity, too-broad) should still die.
@@ -692,7 +698,7 @@ if (cmd === 'install') {
 }
 
 if (cmd === 'import') {
-  const cwd = resolveCwdWithWorkspace(args)
+  const { root: cwd } = resolveCwdWithWorkspace(args)
 
   // Auto-init if needed
   if (!existsSync(join(cwd, '.compose', 'compose.json'))) {
@@ -733,7 +739,7 @@ if (cmd === 'new') {
     process.exit(1)
   }
 
-  const cwd = resolveCwdWithWorkspace(args)
+  const { root: cwd } = resolveCwdWithWorkspace(args)
   const name = basename(cwd)
 
   // --from-idea <ID>: pre-populate intent from a promoted ideabox entry (Item 184)
@@ -861,7 +867,7 @@ if (cmd === 'feature') {
     process.exit(1)
   }
 
-  const cwd = resolveCwdWithWorkspace(args)
+  const { root: cwd } = resolveCwdWithWorkspace(args)
   const configPath = join(cwd, '.compose', 'compose.json')
   if (!existsSync(configPath)) {
     console.error("No .compose/compose.json found. Run 'compose init' first.")
@@ -1027,7 +1033,7 @@ if (cmd === 'roadmap') {
   // compose roadmap generate — regenerate ROADMAP.md from feature.json files
   if (subcmd === 'generate' || subcmd === 'gen') {
     const { writeRoadmap } = await import('../lib/roadmap-gen.js')
-    const cwd = resolveCwdWithWorkspace(args)
+    const { root: cwd } = resolveCwdWithWorkspace(args)
     const path = writeRoadmap(cwd)
     console.log(`Generated ${path} from feature.json files`)
     process.exit(0)
@@ -1036,7 +1042,7 @@ if (cmd === 'roadmap') {
   // compose roadmap migrate — extract ROADMAP.md entries into feature.json files
   if (subcmd === 'migrate') {
     const { migrateRoadmap } = await import('../lib/migrate-roadmap.js')
-    const cwd = resolveCwdWithWorkspace(args)
+    const { root: cwd } = resolveCwdWithWorkspace(args)
     const dryRun = args.includes('--dry-run')
     const overwrite = args.includes('--overwrite')
     const result = migrateRoadmap(cwd, { dryRun, overwrite })
@@ -1055,7 +1061,7 @@ if (cmd === 'roadmap') {
   if (subcmd === 'check') {
     const { listFeatures } = await import('../lib/feature-json.js')
     const { parseRoadmap } = await import('../lib/roadmap-parser.js')
-    const cwd = resolveCwdWithWorkspace(args)
+    const { root: cwd } = resolveCwdWithWorkspace(args)
     const roadmapPath = join(cwd, 'ROADMAP.md')
     if (!existsSync(roadmapPath)) {
       console.error('No ROADMAP.md found. Run: compose roadmap generate')
@@ -1176,7 +1182,7 @@ if (cmd === 'roadmap') {
     }
   }
 
-  const cwd = resolveCwdWithWorkspace(args)
+  const { root: cwd } = resolveCwdWithWorkspace(args)
   const roadmapPath = join(cwd, 'ROADMAP.md')
 
   if (existsSync(roadmapPath)) {
@@ -1333,7 +1339,7 @@ if (cmd === 'record-completion') {
   if (flags['force'] === true) completionArgs.force = true
   if (flags['idempotency-key']) completionArgs.idempotency_key = flags['idempotency-key']
 
-  const cwd = resolveCwdWithWorkspace(args)
+  const { root: cwd } = resolveCwdWithWorkspace(args)
   const { recordCompletion } = await import('../lib/completion-writer.js')
   try {
     const result = await recordCompletion(cwd, completionArgs)
@@ -1401,7 +1407,7 @@ if (cmd === 'hooks') {
   const { join: pjoin, resolve: presolve } = await import('path')
   const { fileURLToPath: futp } = await import('url')
 
-  const projectRoot = resolveCwdWithWorkspace(args)
+  const { root: projectRoot } = resolveCwdWithWorkspace(args)
   const gitDir = pjoin(projectRoot, '.git')
   if (!exSync(gitDir)) {
     console.error('Error: not a git repository (no .git directory found)')
@@ -1623,7 +1629,7 @@ Exit codes:
   }
 
   const { validateFeature, validateProject } = await import('../lib/feature-validator.js')
-  const valCwd = resolveCwdWithWorkspace(args)
+  const { root: valCwd } = resolveCwdWithWorkspace(args)
   let result
   try {
     result = scope === 'feature'
@@ -1670,7 +1676,7 @@ Exit codes:
 
 if (cmd === 'pipeline') {
   const { runPipelineCli } = await import('../lib/pipeline-cli.js')
-  const pipeCwd = resolveCwdWithWorkspace(args)
+  const { root: pipeCwd } = resolveCwdWithWorkspace(args)
   try {
     runPipelineCli(pipeCwd, args)
   } catch (err) {
@@ -1753,7 +1759,7 @@ if (cmd === 'build') {
   }
 
   // Auto-init if needed
-  const buildCwd = resolveCwdWithWorkspace(args)
+  const { root: buildCwd } = resolveCwdWithWorkspace(args)
   if (!existsSync(join(buildCwd, '.compose', 'compose.json')) || !existsSync(join(buildCwd, 'pipelines', 'build.stratum.yaml'))) {
     console.log('Running compose init...\n')
     await runInit(args.filter(a => a.startsWith('--')))
@@ -1828,7 +1834,7 @@ if (cmd === 'build') {
     process.exit(1)
   }
 
-  const fixCwd = resolveCwdWithWorkspace(args)
+  const { root: fixCwd } = resolveCwdWithWorkspace(args)
   if (!existsSync(join(fixCwd, '.compose', 'compose.json')) || !existsSync(join(fixCwd, 'pipelines', 'bug-fix.stratum.yaml'))) {
     console.log('Running compose init...\n')
     await runInit(args.filter(a => a.startsWith('--')))
@@ -1915,7 +1921,7 @@ if (cmd === 'build') {
   }
   import('../lib/triage.js').then(({ runTriage }) => {
     import('../lib/feature-json.js').then(({ readFeature, writeFeature, updateFeature }) => {
-      const trCwd = resolveCwdWithWorkspace(args)
+      const { root: trCwd } = resolveCwdWithWorkspace(args)
       runTriage(triageCode, { cwd: trCwd }).then((result) => {
         console.log(`\nFeature: ${triageCode}`)
         console.log(`Tier:     ${result.tier}`)
@@ -1962,7 +1968,7 @@ if (cmd === 'build') {
   // Resolve target root BEFORE spawning supervisor.
   // Use the unified resolver — it handles COMPOSE_TARGET as either ID or absolute path,
   // --workspace=<id>, and discovery. No need for the legacy explicitTarget short-circuit.
-  const targetRoot = resolveCwdWithWorkspace(args)
+  const { root: targetRoot } = resolveCwdWithWorkspace(args)
 
   if (!targetRoot || !existsSync(join(targetRoot, '.compose', 'compose.json'))) {
     console.error('[compose] No .compose/ found (searched from cwd upward).')
@@ -1985,7 +1991,7 @@ if (cmd === 'build') {
   // compose ideabox — idea management CLI
   // ---------------------------------------------------------------------------
   const ibSubcmd = args[0]
-  const ibCwd = resolveCwdWithWorkspace(args)
+  const { root: ibCwd } = resolveCwdWithWorkspace(args)
 
   // Resolve compose config (paths, etc.)
   function loadComposeConfig(cwd) {
@@ -2284,7 +2290,7 @@ if (cmd === 'build') {
     process.exit(1)
   }
 
-  const qsCwd = resolveCwdWithWorkspace(args)
+  const { root: qsCwd } = resolveCwdWithWorkspace(args)
 
   import('../lib/feature-json.js').then(({ readFeature }) => {
     import('../lib/qa-scoping.js').then(({ mapFilesToRoutes, classifyRoutes }) => {
@@ -2447,31 +2453,59 @@ if (cmd === 'build') {
   // Resolve compose server URL (default http://localhost:3000)
   const baseUrl = process.env.COMPOSE_URL || 'http://localhost:3000'
 
-  async function httpGet(url) {
+  // COMP-WORKSPACE-HTTP T7: resolve workspace tolerantly so we can attach
+  // X-Compose-Workspace-Id to the HTTP calls below. Loops CLI did not previously
+  // need a workspace; if resolution fails for any reason, we send no header
+  // (server middleware soft-falls back to boot workspace, preserving prior
+  // behavior). We call resolveWorkspace directly so we can swallow the error
+  // instead of going through resolveCwdWithWorkspace -> dieOnWorkspaceError.
+  let _loopsWorkspaceId = null
+  try {
+    const wsId = getWorkspaceFlag(args)
+    const ws = resolveWorkspace({ workspaceId: wsId === '__COMPOSE_WORKSPACE_ID__' ? null : wsId })
+    _loopsWorkspaceId = ws.id || null
+    _resolvedCwdCache = { root: ws.root, id: ws.id }
+  } catch { /* preserve prior tolerant behavior — no header sent */ }
+
+  async function httpGet(url, workspaceId) {
     const { default: http } = await import(url.startsWith('https') ? 'https' : 'http')
     return new Promise((resolve, reject) => {
-      http.get(url, (res) => {
+      const u = new URL(url)
+      const headers = {}
+      if (workspaceId) headers['X-Compose-Workspace-Id'] = workspaceId
+      const options = {
+        hostname: u.hostname,
+        port: u.port || (url.startsWith('https') ? 443 : 80),
+        path: u.pathname + u.search,
+        method: 'GET',
+        headers,
+      }
+      const req = http.request(options, (res) => {
         let buf = ''
         res.on('data', c => { buf += c })
         res.on('end', () => {
           try { resolve({ status: res.statusCode, body: JSON.parse(buf) }) }
           catch { resolve({ status: res.statusCode, body: buf }) }
         })
-      }).on('error', reject)
+      })
+      req.on('error', reject)
+      req.end()
     })
   }
 
-  async function httpPost(urlStr, body) {
+  async function httpPost(urlStr, body, workspaceId) {
     const { default: http } = await import(urlStr.startsWith('https') ? 'https' : 'http')
     return new Promise((resolve, reject) => {
       const data = JSON.stringify(body)
       const url = new URL(urlStr)
+      const headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
+      if (workspaceId) headers['X-Compose-Workspace-Id'] = workspaceId
       const options = {
         hostname: url.hostname,
         port: url.port || (urlStr.startsWith('https') ? 443 : 80),
         path: url.pathname + url.search,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+        headers,
       }
       const req = http.request(options, (res) => {
         let buf = ''
@@ -2488,7 +2522,7 @@ if (cmd === 'build') {
 
   // Resolve item id from feature code
   async function getItemByFeatureCode(fc) {
-    const r = await httpGet(`${baseUrl}/api/vision/items`)
+    const r = await httpGet(`${baseUrl}/api/vision/items`, _loopsWorkspaceId)
     if (r.status !== 200) throw new Error(`Failed to list items: ${JSON.stringify(r.body)}`)
     const items = r.body.items || r.body
     const item = items.find(i => i.lifecycle?.featureCode === fc)
@@ -2507,7 +2541,7 @@ if (cmd === 'build') {
 
     try {
       const item = await getItemByFeatureCode(featureCode)
-      const r = await httpPost(`${baseUrl}/api/vision/items/${item.id}/loops`, { kind, summary, ttl_days: ttlDays, parent_branch: parentBranch })
+      const r = await httpPost(`${baseUrl}/api/vision/items/${item.id}/loops`, { kind, summary, ttl_days: ttlDays, parent_branch: parentBranch }, _loopsWorkspaceId)
       if (r.status !== 201) {
         console.error(`Error: ${JSON.stringify(r.body)}`)
         process.exit(1)
@@ -2533,7 +2567,7 @@ if (cmd === 'build') {
 
     try {
       const item = await getItemByFeatureCode(featureCode)
-      const r = await httpGet(`${baseUrl}/api/vision/items/${item.id}/loops${includeResolved ? '?includeResolved=true' : ''}`)
+      const r = await httpGet(`${baseUrl}/api/vision/items/${item.id}/loops${includeResolved ? '?includeResolved=true' : ''}`, _loopsWorkspaceId)
       if (r.status !== 200) {
         console.error(`Error: ${JSON.stringify(r.body)}`)
         process.exit(1)
@@ -2584,7 +2618,7 @@ if (cmd === 'build') {
       const r = await httpPost(`${baseUrl}/api/vision/items/${item.id}/loops/${loopId}/resolve`, {
         note,
         resolved_by: process.env.USER || 'unknown',
-      })
+      }, _loopsWorkspaceId)
       if (r.status !== 200) {
         console.error(`Error: ${JSON.stringify(r.body)}`)
         process.exit(1)

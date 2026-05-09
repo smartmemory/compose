@@ -154,21 +154,13 @@ export function toolGetBlockedItems() {
 export async function toolGetCurrentSession({ featureCode } = {}) {
   if (featureCode) {
     // Delegate to REST API for live session + lifecycle context
-    return new Promise((resolve, reject) => {
-      const url = new URL(`${_getComposeApi()}/api/session/current?featureCode=${encodeURIComponent(featureCode)}`);
-      const req = http.request(
-        { hostname: url.hostname, port: url.port, path: `${url.pathname}${url.search}`, method: 'GET' },
-        (res) => {
-          let buf = '';
-          res.on('data', chunk => buf += chunk);
-          res.on('end', () => {
-            try { resolve(JSON.parse(buf)); } catch { resolve({ session: null }); }
-          });
-        },
-      );
-      req.on('error', () => resolve({ session: null }));
-      req.end();
-    });
+    try {
+      const { body } = await _httpRequest('GET',
+        `/api/session/current?featureCode=${encodeURIComponent(featureCode)}`);
+      return typeof body === 'object' && body !== null ? body : { session: null };
+    } catch {
+      return { session: null };
+    }
   }
   // Existing disk-read path (keep as-is)
   const sessions = loadSessions();
@@ -307,30 +299,20 @@ export async function toolValidateProject(args = {}) {
 }
 
 export async function toolBindSession({ featureCode }) {
-  const postData = JSON.stringify({ featureCode });
-  return new Promise((resolve, reject) => {
-    const url = new URL(`${_getComposeApi()}/api/session/bind`);
-    const req = http.request(
-      { hostname: url.hostname, port: url.port, path: url.pathname, method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) } },
-      (res) => {
-        let buf = '';
-        res.on('data', chunk => buf += chunk);
-        res.on('end', () => {
-          let parsed;
-          try { parsed = JSON.parse(buf); } catch { parsed = { error: buf }; }
-          if (res.statusCode >= 400) {
-            reject(new Error(parsed.error || `HTTP ${res.statusCode}: ${buf}`));
-          } else {
-            resolve(parsed);
-          }
-        });
-      },
-    );
-    req.on('error', (err) => reject(new Error(`Compose server unreachable: ${err.message}`)));
-    req.write(postData);
-    req.end();
-  });
+  let result;
+  try {
+    result = await _httpRequest('POST', '/api/session/bind', { featureCode });
+  } catch (err) {
+    throw new Error(`Compose server unreachable: ${err.message}`);
+  }
+  const { status, body } = result;
+  if (status >= 400) {
+    const errMsg = (body && typeof body === 'object' && body.error)
+      ? body.error
+      : `HTTP ${status}: ${typeof body === 'string' ? body : JSON.stringify(body)}`;
+    throw new Error(errMsg);
+  }
+  return body;
 }
 
 // ---------------------------------------------------------------------------
@@ -341,57 +323,67 @@ function _getComposeApi() {
   return `http://127.0.0.1:${process.env.COMPOSE_PORT || process.env.PORT || 3001}`;
 }
 
-function _postLifecycle(itemId, action, body) {
-  return new Promise((resolve, reject) => {
-    const data = JSON.stringify(body);
-    const url = new URL(`${_getComposeApi()}/api/vision/items/${itemId}/lifecycle/${action}`);
-    const req = http.request(
-      { hostname: url.hostname, port: url.port, path: url.pathname, method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } },
-      (res) => {
-        let buf = '';
-        res.on('data', (chunk) => buf += chunk);
-        res.on('end', () => {
-          let parsed;
-          try { parsed = JSON.parse(buf); }
-          catch { parsed = { error: buf }; }
-          if (res.statusCode >= 400) {
-            reject(new Error(parsed.error || `HTTP ${res.statusCode}: ${buf}`));
-          } else {
-            resolve(parsed);
-          }
-        });
-      },
-    );
-    req.on('error', (err) => reject(new Error(`Compose server unreachable: ${err.message}`)));
-    req.end(data);
-  });
+async function _postLifecycle(itemId, action, body) {
+  let result;
+  try {
+    result = await _httpRequest('POST', `/api/vision/items/${itemId}/lifecycle/${action}`, body);
+  } catch (err) {
+    throw new Error(`Compose server unreachable: ${err.message}`);
+  }
+  const { status, body: respBody } = result;
+  if (status >= 400) {
+    const errMsg = (respBody && typeof respBody === 'object' && respBody.error)
+      ? respBody.error
+      : `HTTP ${status}: ${typeof respBody === 'string' ? respBody : JSON.stringify(respBody)}`;
+    throw new Error(errMsg);
+  }
+  return respBody;
 }
 
-function _postGate(gateId, action, body) {
+async function _postGate(gateId, action, body) {
+  let result;
+  try {
+    result = await _httpRequest('POST', `/api/vision/gates/${gateId}/${action}`, body);
+  } catch (err) {
+    throw new Error(`Compose server unreachable: ${err.message}`);
+  }
+  const { status, body: respBody } = result;
+  if (status >= 400) {
+    const errMsg = (respBody && typeof respBody === 'object' && respBody.error)
+      ? respBody.error
+      : `HTTP ${status}: ${typeof respBody === 'string' ? respBody : JSON.stringify(respBody)}`;
+    throw new Error(errMsg);
+  }
+  return respBody;
+}
+
+/**
+ * Centralized http.request wrapper for Compose REST calls from the MCP layer.
+ * Injects X-Compose-Workspace-Id from the current session binding when set.
+ * COMP-WORKSPACE-HTTP T5.
+ */
+async function _httpRequest(method, urlPath, body = null) {
+  const port = process.env.COMPOSE_PORT || process.env.PORT || 3001;
+  const headers = { 'Content-Type': 'application/json' };
+  if (_binding?.id) headers['X-Compose-Workspace-Id'] = _binding.id;
+  let payload = null;
+  if (body !== null && body !== undefined) {
+    payload = JSON.stringify(body);
+    headers['Content-Length'] = Buffer.byteLength(payload);
+  }
+  const opts = { hostname: '127.0.0.1', port, path: urlPath, method, headers };
   return new Promise((resolve, reject) => {
-    const data = JSON.stringify(body);
-    const url = new URL(`${_getComposeApi()}/api/vision/gates/${gateId}/${action}`);
-    const req = http.request(
-      { hostname: url.hostname, port: url.port, path: url.pathname, method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } },
-      (res) => {
-        let buf = '';
-        res.on('data', (chunk) => buf += chunk);
-        res.on('end', () => {
-          let parsed;
-          try { parsed = JSON.parse(buf); }
-          catch { parsed = { error: buf }; }
-          if (res.statusCode >= 400) {
-            reject(new Error(parsed.error || `HTTP ${res.statusCode}: ${buf}`));
-          } else {
-            resolve(parsed);
-          }
-        });
-      },
-    );
-    req.on('error', (err) => reject(new Error(`Compose server unreachable: ${err.message}`)));
-    req.end(data);
+    const req = http.request(opts, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        catch { resolve({ status: res.statusCode, body: data }); }
+      });
+    });
+    req.on('error', reject);
+    if (payload !== null) req.write(payload);
+    req.end();
   });
 }
 
