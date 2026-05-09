@@ -61,6 +61,24 @@ function getGroup(item) {
   return item.group || 'other';
 }
 
+// Pick the right "label" for a graph node: prefer a stable code-shaped identifier
+// (featureCode, code-shaped id, leading code prefix in title) over free-form prose.
+// item.title is inconsistent — sometimes a code, sometimes a description, sometimes
+// a code+description joined by colon. The graph wants identifying labels.
+const CODE_RE = /^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*[a-z]?$/;
+function extractDisplayLabel(item) {
+  const fc = item.lifecycle?.featureCode || item.featureCode;
+  if (fc && CODE_RE.test(fc)) return fc;
+  if (item.id && CODE_RE.test(item.id) && item.id.length <= 32) return item.id;
+  const raw = (item.title || '').replace(/`/g, '').trim();
+  // "COMP-BENCH-1: Seed repo: ~2k LOC..." → "COMP-BENCH-1"
+  const prefix = raw.match(/^([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*[a-z]?)\b/);
+  if (prefix && prefix[1].length >= 3) return prefix[1];
+  if (item.slug) return item.slug;
+  // Last resort: use a stable id-derived fallback rather than prose
+  return item.id ? item.id.slice(0, 12) : 'item';
+}
+
 // Wrap kebab-case group IDs at hyphens so long IDs (e.g. T2-F5-COMPOSE-MIGRATE-WORKTREE)
 // span multiple lines instead of overflowing into neighboring compound boxes.
 function wrapGroupId(group, maxLine = 18) {
@@ -134,11 +152,9 @@ function buildElements(items, connections, grouped, focusActive, featureCode) {
   // Item nodes
   for (const item of items) {
     const slug = item.slug || item.id.slice(0, 8);
-    let rawTitle = (item.title || slug).replace(/`/g, '');
-    if (rawTitle.includes('/')) rawTitle = rawTitle.split('/').pop().replace(/\.md$/, '');
-    // Hyphen-wrap kebab-case titles so long IDs (e.g. T2-F5-COMPOSE-MIGRATE-WORKTREE)
-    // span multiple lines inside the box rather than truncate or overflow.
-    const title = wrapGroupId(rawTitle, 14);
+    // Use the identifying code, not free-form title prose. Wrap at hyphens
+    // so long codes (e.g. T2-F5-COMPOSE-MIGRATE-WORKTREE) span multiple lines.
+    const title = wrapGroupId(extractDisplayLabel(item), 14);
     const group = getGroup(item);
     const dimmed = focusItemIds && !focusItemIds.has(item.id);
 
