@@ -189,6 +189,7 @@ function buildElements(items, connections, grouped, focusActive, featureCode) {
         description: item.description,
         slug,
         featureCode: item.lifecycle?.featureCode || item.featureCode || null,
+        group: group || null,
         ...(grouped && group && renderedGroups.has(group) ? { parent: `group-${group}` } : {}),
       },
       ...(dimmed ? { classes: 'focus-dimmed' } : {}),
@@ -362,6 +363,91 @@ function Tooltip({ data }) {
   );
 }
 
+// Right-click "Change group..." popover. Inline so the surrounding
+// component can wire onApply / onClose. We avoid native prompt/confirm
+// because they break browser automation.
+function GroupChangePopover({ data, onApply, onClose }) {
+  const { x, y, currentGroup } = data;
+  const [value, setValue] = useState(currentGroup || '');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  // Dismiss on Escape (window-level so it works even if input not focused).
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  // Click outside dismisses. We attach to window with a microtask delay so
+  // the click that opened the popover doesn't immediately close it.
+  useEffect(() => {
+    const handler = (e) => {
+      const root = document.getElementById('group-change-popover-root');
+      if (root && !root.contains(e.target)) onClose();
+    };
+    const t = setTimeout(() => window.addEventListener('mousedown', handler), 0);
+    return () => { clearTimeout(t); window.removeEventListener('mousedown', handler); };
+  }, [onClose]);
+
+  const left = x + 240 > window.innerWidth ? x - 234 : x + 14;
+  const top = Math.min(y - 10, window.innerHeight - 120);
+
+  const submit = () => onApply(value.trim());
+
+  return (
+    <div
+      id="group-change-popover-root"
+      data-testid="group-change-popover"
+      style={{
+        position: 'fixed', left, top, zIndex: 10000, width: 220,
+        background: '#1e293b', border: '1px solid #475569',
+        borderRadius: 8, padding: '10px 12px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+      }}
+    >
+      <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        Change group
+      </div>
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        }}
+        placeholder="(no group)"
+        style={{
+          width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '5px 7px',
+          background: '#0f172a', color: '#f8fafc', border: '1px solid #334155',
+          borderRadius: 4, outline: 'none',
+        }}
+      />
+      <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
+        <button
+          onClick={onClose}
+          style={{
+            fontSize: 11, padding: '3px 9px', borderRadius: 4, cursor: 'pointer',
+            background: 'transparent', color: '#94a3b8', border: '1px solid #334155',
+          }}
+        >Cancel</button>
+        <button
+          onClick={submit}
+          data-testid="group-change-apply"
+          style={{
+            fontSize: 11, padding: '3px 9px', borderRadius: 4, cursor: 'pointer',
+            background: '#2563eb', color: '#f8fafc', border: '1px solid #2563eb',
+          }}
+        >Apply</button>
+      </div>
+    </div>
+  );
+}
+
 function Badge({ color, children }) {
   return (
     <span style={{
@@ -480,6 +566,9 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
   const [grouped, setGrouped] = useState(true);
   const [showLegend, setShowLegend] = useState(false);
   const [gatePopoverNodeId, setGatePopoverNodeId] = useState(null);
+  // Right-click "Change group..." popover state. `null` = closed.
+  // When open: { x, y, itemId, currentGroup }
+  const [groupPopover, setGroupPopover] = useState(null);
   const [badgePositions, setBadgePositions] = useState([]);
   const [showAgentTopology, setShowAgentTopology] = useState(false);
   const [showIdeas, setShowIdeas] = useState(false);
@@ -743,6 +832,26 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
       }
     });
 
+    // Right-click leaf node → open "Change group..." popover.
+    // Skip overlay nodes (agents, ideas) and group compounds.
+    cy.on('cxttap', 'node[status]', (evt) => {
+      const data = evt.target.data();
+      if (data.isAgentNode || data.isIdeaNode || data.isGroup) return;
+      // Suppress browser context menu (cytoscape doesn't auto-suppress).
+      try { evt.originalEvent?.preventDefault(); } catch { /* noop */ }
+      const pos = evt.renderedPosition || evt.position;
+      const rect = cy.container().getBoundingClientRect();
+      setGroupPopover({
+        x: rect.left + pos.x,
+        y: rect.top + pos.y,
+        itemId: evt.target.id(),
+        currentGroup: data.group || '',
+      });
+      setTooltip(null);
+    });
+    // Also block the native browser context menu inside the graph container.
+    cy.container().addEventListener('contextmenu', (e) => e.preventDefault());
+
     return () => {
       // Flush any pending position saves before tearing down.
       if (saveTimerRef.current) {
@@ -981,6 +1090,22 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
         )}
 
         <Tooltip data={tooltip} />
+
+        {groupPopover && (
+          <GroupChangePopover
+            data={groupPopover}
+            onClose={() => setGroupPopover(null)}
+            onApply={(newGroup) => {
+              const itemId = groupPopover.itemId;
+              setGroupPopover(null);
+              wsFetch(`/api/vision/items/${itemId}`, {
+                method: 'PATCH',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ group: newGroup || null }),
+              }).catch(err => console.warn('[graph] group update failed:', err));
+            }}
+          />
+        )}
 
         {/* COMP-UX-1c: Badge overlays */}
         {badgePositions.map(badge => (

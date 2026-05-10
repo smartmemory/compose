@@ -30,6 +30,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extractFilePaths } from './vision-utils.js';
+import { writeFeatureGroupToDisk } from './feature-scan.js';
 import { ArtifactManager } from './artifact-manager.js';
 import { recordIteration, checkCumulativeBudget, readBudget } from '../lib/budget-ledger.js';
 import { SchemaValidator } from './schema-validator.js';
@@ -83,6 +84,15 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
   app.patch('/api/vision/items/:id', (req, res) => {
     try {
       const item = store.updateItem(req.params.id, req.body);
+      // If group changed, write back to docs/features/<code>/feature.json
+      // so the change survives restart and re-scan. Non-fatal on failure.
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, 'group')) {
+        try {
+          writeFeatureGroupToDisk(item, req.body.group);
+        } catch (err) {
+          console.warn(`[vision-routes] feature.json group write-back failed: ${err.message}`);
+        }
+      }
       scheduleBroadcast();
       res.json(item);
     } catch (err) {

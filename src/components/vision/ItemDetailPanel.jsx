@@ -330,6 +330,19 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
   const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState('');
   const [connectOpen, setConnectOpen] = useState(false);
+  const [groupDraft, setGroupDraft] = useState('');
+
+  // Sync groupDraft when item changes (selecting a different item).
+  useEffect(() => {
+    setGroupDraft(item?.group || '');
+  }, [item?.id, item?.group]);
+
+  const commitGroup = useCallback(() => {
+    const next = groupDraft.trim();
+    const current = item?.group || '';
+    if (next === current) return;
+    onUpdate(item.id, { group: next || null });
+  }, [groupDraft, item?.id, item?.group, onUpdate]);
 
   const startEditTitle = useCallback(() => {
     setTitleDraft(item.title);
@@ -460,6 +473,27 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
                 <option key={p} value={p}>{PHASE_LABELS[p]}</option>
               ))}
             </select>
+          </div>
+
+          {/* Group — free-text, persists to feature.json on save */}
+          <div>
+            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Group</p>
+            <input
+              type="text"
+              className="w-full text-xs bg-muted text-foreground px-2 py-1 rounded-md border border-border outline-none focus:border-ring"
+              value={groupDraft}
+              placeholder="(none)"
+              onChange={(e) => setGroupDraft(e.target.value)}
+              onBlur={commitGroup}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+                if (e.key === 'Escape') {
+                  setGroupDraft(item.group || '');
+                  e.currentTarget.blur();
+                }
+              }}
+              data-testid="item-detail-group-input"
+            />
           </div>
 
           {/* Description */}

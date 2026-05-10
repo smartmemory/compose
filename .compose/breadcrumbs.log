@@ -386,3 +386,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-09T23:56:08+08:00 | T10 golden multi-workspace HTTP middleware test
 2026-05-10T00:20:28+08:00 | COMP-WORKSPACE-HTTP review-loop fixes — refresh on project switch, _binding doc
 2026-05-10T09:08:23+08:00 | adding graph layout persistence (route + client preset apply + drag save)
+2026-05-10T09:13:14+08:00 | manual group editing for vision items: context menu, editable detail field, write-back to feature.json

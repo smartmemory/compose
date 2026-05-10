@@ -229,7 +229,7 @@ export function scanFeatures(featuresDir) {
         }
         // Collect sequence refs (predecessor → this → successor) — only design.md
         // is authoritative; other docs may inherit copy-paste headers.
-        if (artifact === 'design.md') {
+        if (docFile === 'design.md') {
           const seq = parseSequenceRefs(raw);
           for (const code of seq.predecessors) feature.predecessors.push(code);
           for (const code of seq.successors) feature.successors.push(code);
@@ -309,6 +309,101 @@ export function scanSubPackages() {
   }
 
   return packages;
+}
+
+// ---------------------------------------------------------------------------
+// Feature.json write-back
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve a feature directory for a vision item.
+ *
+ * Tries lifecycle.featureCode, item.featureCode, then item.title (since the
+ * feature directory name equals the feature code, and items seeded from
+ * scanFeatures use feature.name === feature code as the title).
+ *
+ * @returns {string|null} absolute path to docs/features/<code>, or null.
+ */
+function resolveFeatureDir(item, featuresDir) {
+  if (!item) return null;
+  const dir = featuresDir || resolveProjectPath('features');
+  const candidates = [
+    item.lifecycle?.featureCode,
+    item.featureCode,
+    item.title,
+  ].filter(Boolean);
+  for (const code of candidates) {
+    const p = path.join(dir, code);
+    try {
+      if (fs.existsSync(p) && fs.statSync(p).isDirectory()) return p;
+    } catch { /* skip */ }
+  }
+  return null;
+}
+
+/**
+ * Persist a new `group` value to docs/features/<code>/feature.json.
+ *
+ * Reads the existing feature.json, sets `spec.group = newGroup` (or removes
+ * the field if `newGroup` is null/empty), and writes atomically via temp +
+ * rename. Errors are logged but non-fatal — items without a backing
+ * feature.json simply skip silently.
+ *
+ * @param {object} item — vision item (must have lifecycle.featureCode or
+ *                       featureCode or title that matches a feature dir name)
+ * @param {string|null} newGroup — new group value (empty string / null to clear)
+ * @param {string} [featuresDir] — override features dir (test only)
+ * @returns {boolean} true if file was written, false if skipped.
+ */
+export function writeFeatureGroupToDisk(item, newGroup, featuresDir) {
+  const featureDir = resolveFeatureDir(item, featuresDir);
+  if (!featureDir) {
+    if (process.env.DEBUG) {
+      console.debug(`[feature-scan] writeFeatureGroupToDisk: no feature dir for item ${item?.id || '?'} (${item?.title || ''})`);
+    }
+    return false;
+  }
+  const specPath = path.join(featureDir, 'feature.json');
+  if (!fs.existsSync(specPath)) {
+    if (process.env.DEBUG) {
+      console.debug(`[feature-scan] writeFeatureGroupToDisk: no feature.json at ${specPath}`);
+    }
+    return false;
+  }
+
+  let spec;
+  try {
+    spec = JSON.parse(fs.readFileSync(specPath, 'utf-8'));
+  } catch (err) {
+    console.warn(`[feature-scan] writeFeatureGroupToDisk: malformed feature.json at ${specPath}: ${err.message}`);
+    return false;
+  }
+
+  const normalized = (typeof newGroup === 'string' && newGroup.trim()) ? newGroup.trim() : null;
+  const current = (typeof spec.group === 'string' && spec.group.trim()) ? spec.group.trim() : null;
+  if (normalized === current) {
+    return false; // idempotent: nothing to do
+  }
+
+  if (normalized === null) {
+    delete spec.group;
+  } else {
+    spec.group = normalized;
+  }
+  // Bump updated date if the field exists
+  if ('updated' in spec) {
+    spec.updated = new Date().toISOString().slice(0, 10);
+  }
+
+  try {
+    const tmp = path.join(featureDir, `feature.json.tmp.${Date.now()}.${process.pid}`);
+    fs.writeFileSync(tmp, JSON.stringify(spec, null, 2) + '\n', 'utf-8');
+    fs.renameSync(tmp, specPath);
+    return true;
+  } catch (err) {
+    console.warn(`[feature-scan] writeFeatureGroupToDisk: failed to write ${specPath}: ${err.message}`);
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
