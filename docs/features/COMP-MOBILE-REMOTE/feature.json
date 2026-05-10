@@ -1,0 +1,16 @@
+{
+  "code": "COMP-MOBILE-REMOTE",
+  "description": "Remote-reachable transport for COMP-MOBILE: 0.0.0.0 binding (opt-in), short-lived JWT access tokens with refresh, QR + URL + cockpit pairing modal, BYO tunnel (Tailscale/Cloudflare/ngrok). Server-side auth and pairing UI; tunnel layer left to user.",
+  "status": "PLANNED",
+  "created": "2026-05-10",
+  "updated": "2026-05-10",
+  "group": "COMP-MOBILE",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  }
+}
