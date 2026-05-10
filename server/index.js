@@ -10,6 +10,7 @@ import { SessionManager } from './session-manager.js';
 import { scanFeatures, seedFeatures, scanSubPackages, seedSubPackages, seedFromRoadmapGraph } from './feature-scan.js';
 import { attachGraphExportRoutes } from './graph-export.js';
 import { attachWorkspaceRoutes } from './workspace-routes.js';
+import { attachGraphLayoutRoutes } from './graph-layout-routes.js';
 import { createWorkspaceMiddleware } from './workspace-middleware.js';
 import { getTargetRoot, getDataDir, ensureDataDir, loadProjectConfig, resolveProjectPath, switchProject } from './project-root.js';
 
@@ -50,6 +51,7 @@ app.use(cors({ origin: /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/ }));
 app.use(express.json());
 
 attachWorkspaceRoutes(app);
+attachGraphLayoutRoutes(app);
 app.use(createWorkspaceMiddleware());
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));

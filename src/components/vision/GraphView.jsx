@@ -5,6 +5,7 @@ import cytoscapeFcose from 'cytoscape-fcose';
 import { TYPE_COLORS, PHASE_LABELS, CONFIDENCE_LABELS } from './constants.js';
 import FeatureFocusToggle from '../shared/FeatureFocusToggle.jsx';
 import { useIdeaboxStore } from './useIdeaboxStore.js';
+import { wsFetch } from '../../lib/wsFetch.js';
 
 try { cytoscape.use(cytoscapeDagre); } catch (e) { /* already registered */ }
 try { cytoscape.use(cytoscapeFcose); } catch (e) { /* already registered */ }
@@ -466,6 +467,14 @@ function GatePopover({ featureCode, gates, items, badgePositions, onResolve, onC
 export default function GraphView({ items, connections, selectedItemId, onSelect, visibleTracks, hiddenGroups, buildStateMap, resolveGate, gates, spawnedAgents, agentRelays, agentOverlay, featureCode, focusActive, onToggleFocus }) {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
+  // Persistent layout: saved positions keyed by item id (leaf nodes only —
+  // group compounds are derived from their children). Hydrated once from
+  // GET /api/graph/layout, then mutated in-place as nodes get placed/dragged.
+  const savedPositionsRef = useRef({});
+  const savedPositionsLoadedRef = useRef(false);
+  // Pending changes batched into a single POST (debounced).
+  const pendingPositionsRef = useRef({});
+  const saveTimerRef = useRef(null);
   const [tooltip, setTooltip] = useState(null);
   const [statusFilter, setStatusFilter] = useState('active');
   const [grouped, setGrouped] = useState(true);
@@ -477,6 +486,70 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
 
   // Ideabox store — ideas with mapsTo references (for Item 188)
   const ideaboxIdeas = useIdeaboxStore(s => s.ideas);
+
+  // ─── Layout persistence ────────────────────────────────────────────────
+  // Fetch saved layout once. The cytoscape effect below reads from
+  // savedPositionsRef synchronously; if the fetch hasn't resolved yet, the
+  // first mount runs full fcose and saves the result. Any subsequent
+  // re-mount (filter change, etc.) sees the hydrated map and applies it.
+  useEffect(() => {
+    let cancelled = false;
+    wsFetch('/api/graph/layout')
+      .then(r => r.ok ? r.json() : { positions: {} })
+      .then(body => {
+        if (cancelled) return;
+        savedPositionsRef.current = body.positions || {};
+        savedPositionsLoadedRef.current = true;
+        // If the graph already mounted before hydration completed, retro-apply.
+        const cy = cyRef.current;
+        if (cy) applySavedAndCapture(cy);
+      })
+      .catch(() => { savedPositionsLoadedRef.current = true; });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Schedule a debounced POST for any pending position changes.
+  const flushSave = useCallback(() => {
+    const positions = pendingPositionsRef.current;
+    pendingPositionsRef.current = {};
+    saveTimerRef.current = null;
+    if (!Object.keys(positions).length) return;
+    wsFetch('/api/graph/layout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ positions }),
+    }).catch(err => console.warn('[graph-layout] save failed:', err));
+  }, []);
+
+  const queueSave = useCallback((updates) => {
+    Object.assign(pendingPositionsRef.current, updates);
+    Object.assign(savedPositionsRef.current, updates);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(flushSave, 500);
+  }, [flushSave]);
+
+  // Apply saved positions to leaf item nodes; capture and save any unknowns.
+  // Group compounds are skipped — their position derives from children.
+  const applySavedAndCapture = useCallback((cy) => {
+    const saved = savedPositionsRef.current;
+    const newlyCaptured = {};
+    cy.nodes('node[status]').forEach(node => {
+      // Skip overlay nodes that aren't real items (agents, ideas).
+      const data = node.data();
+      if (data.isAgentNode || data.isIdeaNode) return;
+      const id = node.id();
+      const sp = saved[id];
+      if (sp && Number.isFinite(sp.x) && Number.isFinite(sp.y)) {
+        node.position({ x: sp.x, y: sp.y });
+      } else {
+        const p = node.position();
+        if (Number.isFinite(p.x) && Number.isFinite(p.y)) {
+          newlyCaptured[id] = { x: p.x, y: p.y };
+        }
+      }
+    });
+    if (Object.keys(newlyCaptured).length) queueSave(newlyCaptured);
+  }, [queueSave]);
 
   // COMP-VIS-1: Auto-enable on first running agent, auto-disable when all finish
   const prevHadRunning = useRef(false);
@@ -618,8 +691,28 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
     });
     cyRef.current = cy;
 
-    // Fit synchronously after layout (no animation)
+    // Layout persistence: as soon as fcose completes, override known-node
+    // positions with saved ones (no-op for nodes never seen) and capture
+    // any positions for nodes new to the layout file.
+    cy.one('layoutstop', () => {
+      if (savedPositionsLoadedRef.current) applySavedAndCapture(cy);
+      cy.fit(undefined, 30);
+    });
+
+    // Fit synchronously after layout (no animation) — fcose with animate:false
+    // may emit layoutstop synchronously during init; this fit is the fallback
+    // for engines that don't.
     cy.fit(undefined, 30);
+
+    // Persist user-dragged positions (leaf nodes only).
+    cy.on('dragfree', 'node[status]', (evt) => {
+      const node = evt.target;
+      const data = node.data();
+      if (data.isAgentNode || data.isIdeaNode) return;
+      const p = node.position();
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
+      queueSave({ [node.id()]: { x: p.x, y: p.y } });
+    });
 
     // Highlight initially selected item (no pan)
     if (selectedItemId) {
@@ -650,7 +743,15 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
       }
     });
 
-    return () => { cy.destroy(); cyRef.current = null; };
+    return () => {
+      // Flush any pending position saves before tearing down.
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        flushSave();
+      }
+      cy.destroy();
+      cyRef.current = null;
+    };
   }, [elements, stylesheet]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // COMP-UX-1e: Highlight selected item; only pan if selection came from outside the graph
