@@ -17,10 +17,10 @@ A separate mobile UX, scoped tightly to those workflows, is honest about the for
 
 A fully functional mobile PWA at `/m` that supports four workflow tracks:
 
-1. **Agents** — list active agents with live status, view their outputs, kill, approve/reject pending gates, send chat messages
-2. **Roadmap** — browse items, filter by status/group/track, drill into detail, edit `status`/`group`/`priority`/`tags`
+1. **Agents** — list spawned agents (background, multiple) with live status, view their outputs, kill; pending-gate list with approve/revise/kill; send messages to the **single interactive session** when one is active. (Per-spawned-agent chat would need new server APIs and is out of scope; tracked as future `COMP-AGENT-CHAT-PER-ID`.)
+2. **Roadmap** — browse items, filter by status/group/keyword, drill into detail, edit `status`/`group`/`confidence`. (Track and tags are not first-class vision-item fields today; deferred. Priority is an ideabox field, not a roadmap field — handled in track 3.)
 3. **Ideas** — capture (mobile-natural for shower thoughts), triage with swipe gestures
-4. **Builds** — list active and recent builds, start a `/compose build`/`fix` from a feature reference, watch the agent log tail, stop
+4. **Builds** — current-build view (reads `active-build.json`, which is last-writer-wins across the runner's per-feature concurrent builds), start a build for a feature (`mode: 'feature' | 'bug'`), watch the log tail, abort. Build history is out of scope (no persistent store today).
 
 Out-of-scope explicitly: graph view (cockpit-only), embedded terminal (cockpit-only), drag-resize panels, right-click menus.
 
@@ -62,13 +62,13 @@ src/mobile/
     BottomNav.jsx            # 4-button nav (icon + label), aria-pressed
     ItemCard.jsx             # roadmap/ideas card primitive
     AgentCard.jsx            # agent list primitive
-    BuildCard.jsx            # build list primitive
+    BuildCard.jsx            # current-build primitive (single, from active-build.json)
     StatusPill.jsx           # status indicator (planned/in_progress/blocked/...)
-    GatePromptSheet.jsx      # bottom sheet for approve/reject gate
+    GatePromptSheet.jsx      # bottom sheet for gate outcome (approve | revise | kill)
     StartBuildSheet.jsx      # bottom sheet form for build start
   hooks/
     useLiveAgents.js         # WS subscription, polled fallback
-    useActiveBuilds.js
+    useActiveBuild.js
     useRoadmapItems.js       # mirrors useVisionStore but mobile-shaped
     useIdeas.js
 ```
@@ -102,7 +102,7 @@ Real endpoints, verified against current code:
 | Surface | Endpoint | Notes |
 |---|---|---|
 | Roadmap list | `GET /api/vision/items` | Vision items only — ideas are a separate store |
-| Roadmap edit | `PATCH /api/vision/items/:id` | Status/group/priority editable; no sensitive-token required for these per current `vision-routes.js` |
+| Roadmap edit | `PATCH /api/vision/items/:id` | Status/group/confidence editable. **Priority is NOT a vision-item field** — only ideabox has it. Tags also not in the schema. No sensitive-token required for these. |
 | Roadmap live | `WebSocket /ws/vision` | Existing reconnect logic in `useVisionStore.js:103` |
 | Ideabox list | `GET /api/ideabox` | Returns all ideas |
 | Ideabox create / edit | `POST /api/ideabox/ideas`, `PATCH /api/ideabox/ideas/:id` | PATCH explicitly rejects status changes — use the dedicated routes below |
@@ -116,7 +116,7 @@ Real endpoints, verified against current code:
 | Gate detail | `GET /api/vision/gates/:id` | |
 | Gate decision | `POST /api/vision/gates/:id/resolve` body `{ outcome: "approve" \| "revise" \| "kill", ... }` | Single resolve route with outcome enum — NOT `/approve` or `/reject` |
 | Builds state | `GET /api/build/state` | |
-| Build start / stop | **NEW in M5** — `POST /api/build/start`, `POST /api/build/:id/stop` | Do not exist today; ship as part of M5 server-side work |
+| Build start / abort | **NEW in M5** — `POST /api/build/start`, `POST /api/build/abort` | Wraps existing `runBuild` and `abortBuild` from `lib/build.js`. Keyed by featureCode (no `:id`). Per-feature concurrency: same featureCode active → 409; different featureCode allowed; `active-build.json` is last-writer-wins so the surfaced "current build" reflects the most recent writer. |
 
 **Honest scope:** M2–M4 use only existing endpoints. **M5 ships new server routes** for build start/stop alongside the mobile client work; not a "no new endpoints" feature.
 
@@ -125,10 +125,10 @@ Real endpoints, verified against current code:
 | Phase | Goal | Ships when |
 |---|---|---|
 | **M1** Shell | `/m` route, mobile.css, bottom nav, tab placeholders, token plumbing, PWA manifest+SW (last) | Phone-friendly skeleton runs, all 4 tabs render placeholders, token round-trip works |
-| **M2** Roadmap | List, filter (status/group/track/keyword), card layout, detail sheet, inline edit (status/group/priority) | Browse + edit feels native; live updates via existing WS |
+| **M2** Roadmap | List, filter (status/group/keyword), card layout, detail sheet, inline edit (status/group/confidence) | Browse + edit feels native; live updates via existing WS. Track filtering and tags editing deferred (track is description-text scrape on desktop; tags not in schema). |
 | **M3** Ideas | Capture form (`POST /api/ideabox/ideas`), list (`GET /api/ideabox`), swipe-to-promote (`POST /api/ideabox/ideas/:id/promote`) / swipe-to-kill (`POST /api/ideabox/ideas/:id/kill`), P0/P1/P2/Untriaged filters | One-thumb capture + triage. Uses ideabox API — NOT vision-items |
 | **M4** Agents | Live agent list, status pills, output tail (SSE), kill button, pending gate approval sheet, chat reply | Approve a stuck gate from phone end-to-end |
-| **M5** Builds | Active builds, recent builds, start sheet (feature picker + verb), log tail, stop | Start a `/compose build` from phone, watch progress |
+| **M5** Builds | Current-build view (`active-build.json`), feature picker + mode (`feature`/`bug`), log tail, abort | Start a build from phone, watch progress. Build history out of scope. Concurrency: per-feature; UI surfaces only the most-recent writer of `active-build.json` (matches desktop). |
 
 **Shippability with honest dependencies:**
 
@@ -136,7 +136,7 @@ Real endpoints, verified against current code:
 - **M2** depends only on M1 + existing `/api/vision/items` PATCH.
 - **M3** depends only on M1 + existing ideabox routes.
 - **M4** depends on M1 + existing `x-compose-token` machinery (already wired in the cockpit at build time, so it works on home wifi from day one). No remote transport required for home-wifi use; remote use waits on `COMP-MOBILE-REMOTE`.
-- **M5** depends on M1 **and ships new server endpoints** (`POST /api/build/start`, `POST /api/build/:id/stop`). The build-control endpoints don't exist today; M5 is a coupled client+server delivery.
+- **M5** depends on M1 **and ships new server endpoints** (`POST /api/build/start`, `POST /api/build/abort`). The build-control HTTP routes don't exist today, but they're thin wrappers over the existing `runBuild` / `abortBuild` functions in `lib/build.js`. M5 is a coupled client+server delivery; no extraction work is required.
 
 M2, M3 can run in parallel after M1. M4 can ship before or after them. M5 is the largest because of the new server endpoints + log-tail UX; sequence it last.
 
