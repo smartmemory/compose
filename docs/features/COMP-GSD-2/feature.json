@@ -1,7 +1,7 @@
 {
   "code": "COMP-GSD-2",
   "description": "Per-task fresh-context dispatch. `/compose gsd <feature>` decomposes blueprint into tasks and dispatches each as a fresh sub-agent (Agent tool with isolated context window). Reuses Stratum's parallel_dispatch machinery from STRAT-PAR but in sequential mode by default. The load-bearing primitive that makes long autonomous runs possible.",
-  "status": "PLANNED",
+  "status": "IN_PROGRESS",
   "phase": "COMP-GSD: Autonomous Long-Run Mode",
   "created": "2026-05-10",
   "updated": "2026-05-10",
