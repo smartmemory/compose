@@ -19,5 +19,6 @@
       "kind": "informs",
       "to_code": "STRAT-REV"
     }
-  ]
+  ],
+  "group": "COMP-BMAD"
 }

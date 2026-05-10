@@ -7,5 +7,6 @@
   "updated": "2026-05-04",
   "complexity": "M",
   "position": 8,
-  "parent": "COMP-MCP-FEATURE-MGMT"
+  "parent": "COMP-MCP-FEATURE-MGMT",
+  "group": "COMP-MCP"
 }

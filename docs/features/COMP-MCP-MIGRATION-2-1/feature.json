@@ -13,5 +13,6 @@
       "kind": "surfaced_by",
       "to_code": "COMP-MCP-MIGRATION-2"
     }
-  ]
+  ],
+  "group": "COMP-MCP"
 }

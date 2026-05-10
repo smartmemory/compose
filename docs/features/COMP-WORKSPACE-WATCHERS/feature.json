@@ -11,5 +11,6 @@
     "language": "node",
     "test_framework": "vitest"
   },
-  "updated": "2026-05-09"
+  "updated": "2026-05-09",
+  "group": "COMP-WORKSPACE"
 }

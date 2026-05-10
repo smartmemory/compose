@@ -22,5 +22,6 @@
   ],
   "source": "SmartMemory weekly retro 2026-04-12",
   "description": "**Debug discipline: agent capability profiles + enforcement.** Limits each agent type to a tool subset; emits capability_violation events; opt-in block mode rejects calls outside the profile.",
-  "updated": "2026-05-04"
+  "updated": "2026-05-04",
+  "group": "COMP-DEBUG"
 }
