@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-05-11
+
+### COMP-GSD-2 — Per-task fresh-context dispatch (`compose gsd`)
+
+Second feature of the COMP-GSD initiative. Adds `compose gsd <feature-code>` as a third lifecycle mode alongside `build` and `fix`. Decomposes a feature's blueprint + Boundary Map into per-task work units and dispatches each as a fresh-context worktree-isolated agent via Stratum's `parallel_dispatch` (sequential by default — `max_concurrent: 1`). The load-bearing primitive that makes long autonomous runs possible.
+
+**CLI** — new `compose gsd <feature-code>` verb in `bin/compose.js` (alongside `build` and `fix`). Hard-requires `docs/features/<code>/blueprint.md` with a parseable Boundary Map — errors out with a pointer to `compose build <code>` otherwise. Refuses to start in a dirty workspace (clean-start precondition: every file in the post-execute dirty set is then unambiguously a GSD-produced change). `gateCommands` resolution: `loadProjectConfig().gateCommands` with explicit fallback to `["pnpm lint", "pnpm build", "pnpm test"]` (the loader does not merge defaults).
+
+**Pipeline** — new `pipelines/gsd.stratum.yaml` (3 steps: `decompose_gsd → execute → ship_gsd`). Decompose reads `blueprint.md` + Boundary Map and emits a `TaskGraph` whose `description` strings are pre-baked rich prompt fragments (Stratum's `parallel_dispatch` only interpolates a fixed token set per `stratum-mcp/src/stratum_mcp/spec.py:567-590`, so all spec context — produces/consumes/slice/upstream summary/gates — must ride inside `task.description`). Execute uses `max_concurrent: 1`, `isolation: worktree`, `capture_diff: true`, `merge: sequential_apply`, `retries: 2`. `ship_gsd` updates `ROADMAP.md` + `CHANGELOG.md` + optional `CLAUDE.md`, commits in-process via `executeShipStep`; push deferred to user (mirrors `compose build`).
+
+**Runner** — `lib/gsd.js` is a self-contained status loop. Does NOT modify `lib/build.js` — imports `executeParallelDispatchServer` and `executeShipStep` as existing exports. Validates decompose_gsd output via `enrichTaskGraph` (T3): three cases — structural success + valid descriptions → proceed; structural success + missing/malformed descriptions → repair via `buildTaskDescription` (T4) using the per-slice text and gateCommands; structural failure (orphan slice or task) → throw loudly, no repair. Post-execute, walks `.compose/gsd/<code>/results/<task_id>.json` files committed by each task agent and finalizes `.compose/gsd/<code>/blackboard.json` via `gsd-blackboard.writeAll` (one-shot replace, mkdir-advisory-lock per `lib/completion-writer.js:48-67`); throws loud listing all validation failures rather than producing a partial blackboard.
+
+**Contracts** — `contracts/taskgraph-gsd.json` (extends bare TaskGraph with required `produces`/`consumes` per task), `contracts/task-result.json` (post-execution per-task capture: `status`, `files_changed`, `summary`, `produces`, `gates: Array<{command, status, output}>`, `attempts`). The `gates` field is an array (not an object keyed by lint/build/test) so arbitrary project-configured `gateCommands` are supported.
+
+**Pure helpers** — `lib/gsd-decompose-enrich.js` (no fs; uses `parseBoundaryMap` only — `validateBoundaryMap` is `runGsd`'s precondition); `lib/gsd-prompt.js` `buildTaskDescription({task, slice, upstreamTasks, gateCommands})` produces canonical 6-section description strings; `lib/gsd-blackboard.js` provides `read`, `writeAll`, `validate`.
+
+**v1 scope reductions surfaced by Codex review** — runtime task-to-task handoff is NOT implemented (`executeParallelDispatchServer` is one atomic step; tasks see only spec-level upstream context from Boundary Map; realized handoff requires Stratum protocol extension or one-step-per-task pipelines, both deferred). No per-task gate bounce-back loop (`parallelAdvance` only accepts `clean|conflict`; gates execute inside the task agent's TDD loop instead, and Stratum's per-task `retries: 2` handles transient failure). No `lib/build.js` modifications.
+
+**Verification** — Codex review iterations to convergence: design (1), blueprint (5), plan (3), per-task implementation (T1: 2, T2: 1, T3: 2, T4: 2, T5: 2, T6: 6, T7: 3). 59 dedicated tests across 7 suites. Full suite: **2815/2815 node-test + 122/122 vitest** passing, no regressions.
+
+**Out-of-scope (deferred to subsequent COMP-GSD-N features)** — parallelism via `max_concurrent > 1` and merge-queue (GSD-3, narrowed); budget ceilings + hard stops (GSD-4); stuck detection (GSD-5); headless mode + crash recovery (GSD-6); milestone HTML report (GSD-7); file-granular Boundary Map fallback (no use case until file-only features appear).
+
 ## 2026-05-10
 
 ### COMP-GSD-1 — Boundary Map artifact for blueprint phase

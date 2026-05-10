@@ -408,3 +408,11 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-10T19:19:07+08:00 | Fix boundary-map contract drift: strip line field from violations, dedupe unknown_action by row not file
 2026-05-10T19:23:29+08:00 | boundary-map: locator population in entry violations, malformed_after_nothing parse check, file-plan multi-row write tracking — TDD
 2026-05-10T19:29:13+08:00 | COMP-GSD-1 phase 9 docs: update CHANGELOG, ROADMAP status, vision item, file follow-up tickets
+2026-05-10T20:35:09+08:00 | Phase 1 explore for COMP-GSD-2 (per-task fresh-context dispatch)
+2026-05-10T23:49:39+08:00 | T1: Write contracts (taskgraph-gsd.json, task-result.json) + ajv test, then codex review
+2026-05-10T23:58:22+08:00 | T2: blackboard I/O with mkdir-advisory-lock
+2026-05-11T00:03:31+08:00 | T3: enrichTaskGraph (parses Boundary Map, attaches produces/consumes)
+2026-05-11T00:13:00+08:00 | T4: buildTaskDescription — pack rich prompt sections for task.description
+2026-05-11T00:22:29+08:00 | T5: pipelines/gsd.stratum.yaml + validation test
+2026-05-11T00:30:18+08:00 | T6: runGsd entry + CLI verb (validate, gateCommands fallback, decompose validation+repair, status loop, post-step blackboard walk)
+2026-05-11T01:01:48+08:00 | T7: golden flow test with stubbed Stratum + mock connector + prompt-contract assertion

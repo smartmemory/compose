@@ -1241,12 +1241,40 @@ Response-time policy gate that detects rule violations in candidate agent respon
 |---|---------|-------------|--------|
 | 1 | COMP-GSD | Autonomous Long-Run Mode initiative — `/compose gsd <feature>` as a third lifecycle mode (alongside build/fix) for long autonomous runs across many context windows. Parity pass against gsd-build/gsd-2 — adopt the capabilities Compose lacks (per-task fresh context, worktree isolation, budget ceilings, stuck detection, milestone reports), reuse Compose's existing lifecycle/journal/gates as the substrate. Umbrella for COMP-GSD-1 through COMP-GSD-7. | IN_PROGRESS |
 | 2 | COMP-GSD-1 | Boundary Map artifact in blueprint phase — explicit Produces/Consumes lists at file→symbol granularity between sequential work units. Catches cross-component contract mismatches before code. Inspired by gsd-build/gsd-2; absorbs the previously-filed COMP-BOUNDARY-MAP. Independent of GSD-2..7 runtime work — ships first. | COMPLETE |
-| 3 | COMP-GSD-2 | Per-task fresh-context dispatch. `/compose gsd <feature>` decomposes blueprint into tasks and dispatches each as a fresh sub-agent (Agent tool with isolated context window). Reuses Stratum's parallel_dispatch machinery from STRAT-PAR but in sequential mode by default. The load-bearing primitive that makes long autonomous runs possible. | PLANNED |
+| 3 | COMP-GSD-2 | Per-task fresh-context dispatch. `/compose gsd <feature>` decomposes blueprint into tasks and dispatches each as a fresh sub-agent (Agent tool with isolated context window). Reuses Stratum's parallel_dispatch machinery from STRAT-PAR but in sequential mode by default. The load-bearing primitive that makes long autonomous runs possible. | COMPLETE |
 | 4 | COMP-GSD-3 | Worktree-per-task isolation + auto squash-merge. Each dispatched task runs in its own git worktree under .compose/gsd/<task-id>/. On task completion, diff is verified (lint/build/test gates), squash-merged to the feature branch, worktree torn down. Conflict → bounce task back with merge context. Builds on COMP-PAR-MERGE-QUEUE. | PLANNED |
 | 5 | COMP-GSD-4 | Budget ceilings + stop conditions. Token + iteration + wall-clock caps per task and per feature. Wires idea_budget_ceilings (parked) as the runtime stop condition. Surfaces budget burn in cockpit OpsStrip. Hard stop with diagnostics rather than runaway. | PLANNED |
 | 6 | COMP-GSD-5 | Stuck detection. Detect repeated tool-call patterns (same file edited 3+ times with no test progress, same error reappearing, no diff after N turns) and pause the run with a structured diagnostic + resume-or-abort prompt. Reuses agent-stream telemetry — no new instrumentation. | PLANNED |
 | 7 | COMP-GSD-6 | Headless CLI + crash recovery. `compose gsd <feature> --headless` for CI/cron. State persisted to .compose/gsd/state.json (no new SQLite — extends existing journal). Auto-resume on crash with backoff. `compose gsd query` returns instant JSON snapshot (no LLM, ~50ms) for status pollers. | PLANNED |
 | 8 | COMP-GSD-7 | Milestone report generator. Auto-generated HTML report per completed feature: task summaries, decision log, gate outcomes, budget actuals vs caps, agent-time breakdown, links to worktree diffs. Writes to .compose/gsd/reports/<feature>.html. Renders via existing cockpit asset pipeline. | PLANNED |
+
+---
+
+## Features — PARTIAL
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| — | COMP-CLI-GLOBAL-FLAGS | Pre-subcommand flag parser to enable compose --workspace=X build syntax | PLANNED |
+| — | COMP-MOBILE | Mobile PWA at /m route — fully functional companion to the desktop cockpit. Phone-first; tablet inherits. 5 phases: shell, roadmap, ideabox, agents, builds. Remote transport (auth + tunnel) deferred to COMP-MOBILE-REMOTE. | COMPLETE |
+| — | COMP-MOBILE-REMOTE | Remote-reachable transport for COMP-MOBILE: 0.0.0.0 binding (opt-in), short-lived JWT access tokens with refresh, QR + URL + cockpit pairing modal, BYO tunnel (Tailscale/Cloudflare/ngrok). Server-side auth and pairing UI; tunnel layer left to user. | PLANNED |
+| — | COMP-WORKSPACE-HTTP | Foundation for HTTP workspace track: Express middleware reading X-Compose-Workspace-Id, GET /api/workspace bootstrap, Vite frontend context provider. Behavior-preserving substrate for COMP-WORKSPACE-{VISION,SESSIONS,AGENT-SVR,FILES}. | COMPLETE |
+| — | COMP-WORKSPACE-ID | Workspace identity detection (parent vs child) across CLI, MCP, and hooks | PLANNED |
+| — | COMP-WORKSPACE-RESUME | Persist MCP workspace binding across restarts via CLAUDE_SESSION_ID env (when injected) | PLANNED |
+| — | COMP-WORKSPACE-WATCHERS | Runtime workspace rebinding for long-lived watchers (file-watcher, cc-session-watcher) | PLANNED |
+
+---
+
+## Features — PARTIAL
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| — | COMP-CLI-GLOBAL-FLAGS | Pre-subcommand flag parser to enable compose --workspace=X build syntax | PLANNED |
+| — | COMP-MOBILE | Mobile PWA at /m route — fully functional companion to the desktop cockpit. Phone-first; tablet inherits. 5 phases: shell, roadmap, ideabox, agents, builds. Remote transport (auth + tunnel) deferred to COMP-MOBILE-REMOTE. | COMPLETE |
+| — | COMP-MOBILE-REMOTE | Remote-reachable transport for COMP-MOBILE: 0.0.0.0 binding (opt-in), short-lived JWT access tokens with refresh, QR + URL + cockpit pairing modal, BYO tunnel (Tailscale/Cloudflare/ngrok). Server-side auth and pairing UI; tunnel layer left to user. | PLANNED |
+| — | COMP-WORKSPACE-HTTP | Foundation for HTTP workspace track: Express middleware reading X-Compose-Workspace-Id, GET /api/workspace bootstrap, Vite frontend context provider. Behavior-preserving substrate for COMP-WORKSPACE-{VISION,SESSIONS,AGENT-SVR,FILES}. | COMPLETE |
+| — | COMP-WORKSPACE-ID | Workspace identity detection (parent vs child) across CLI, MCP, and hooks | PLANNED |
+| — | COMP-WORKSPACE-RESUME | Persist MCP workspace binding across restarts via CLAUDE_SESSION_ID env (when injected) | PLANNED |
+| — | COMP-WORKSPACE-WATCHERS | Runtime workspace rebinding for long-lived watchers (file-watcher, cc-session-watcher) | PLANNED |
 
 ---
 
