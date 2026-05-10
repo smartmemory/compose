@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { handleVisionMessage } from './visionMessageHandler.js';
 import { wsFetch } from '../../lib/wsFetch.js';
+import { createReconnectingWS } from '../../lib/wsReconnect.js';
 
 /**
  * useVisionStore — Zustand singleton store.
@@ -62,8 +63,7 @@ function collectDOMSnapshot() {
 // ─── Refs (mutable, shared across all subscribers) ───────────────────────────
 
 const refs = {
-  ws: null,
-  reconnectTimer: null,
+  ws: null, // reconnect handle returned by createReconnectingWS (has .close())
   snapshotProvider: null,
   prevItemMap: null,
   changeTimer: null,
@@ -94,55 +94,45 @@ export const useVisionStore = create((set, get) => {
 
   // ── WebSocket connection ─────────────────────────────────────────────────
 
-  function connect() {
-    if (refs.disposed) return;
-    if (refs.ws && (refs.ws.readyState === WebSocket.OPEN || refs.ws.readyState === WebSocket.CONNECTING)) {
-      return; // already connected
-    }
+  function handleOpen() {
+    set({ connected: true });
+    // Hydrate build state on connect
+    wsFetch('/api/build/state')
+      .then(r => r.json())
+      .then(data => set({ activeBuild: data.state ?? null }))
+      .catch(() => {});
+    // COMP-PIPE-1-3: Hydrate pipeline draft on connect
+    wsFetch('/api/pipeline/draft')
+      .then(r => r.json())
+      .then(data => set({ pipelineDraft: data.draft ?? null }))
+      .catch(() => {});
+    // COMP-VIS-1: Hydrate spawned agents on connect (only if no live events yet)
+    wsFetch('/api/agents/tree')
+      .then(r => r.json())
+      .then(data => {
+        const current = get().spawnedAgents;
+        if (current.length === 0) {
+          set({ spawnedAgents: (data.agents || []).map(a => ({
+            agentId: a.agentId, parentSessionId: a.parentSessionId,
+            agentType: a.agentType, status: a.status || 'running',
+            startedAt: a.startedAt, prompt: a.prompt,
+          }))});
+        }
+      })
+      .catch(() => {});
+  }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/vision`);
-    refs.ws = ws;
-
-    ws.onopen = () => {
-      set({ connected: true });
-      // Hydrate build state on connect
-      wsFetch('/api/build/state')
-        .then(r => r.json())
-        .then(data => set({ activeBuild: data.state ?? null }))
-        .catch(() => {});
-      // COMP-PIPE-1-3: Hydrate pipeline draft on connect
-      wsFetch('/api/pipeline/draft')
-        .then(r => r.json())
-        .then(data => set({ pipelineDraft: data.draft ?? null }))
-        .catch(() => {});
-      // COMP-VIS-1: Hydrate spawned agents on connect (only if no live events yet)
-      wsFetch('/api/agents/tree')
-        .then(r => r.json())
-        .then(data => {
-          const current = get().spawnedAgents;
-          if (current.length === 0) {
-            set({ spawnedAgents: (data.agents || []).map(a => ({
-              agentId: a.agentId, parentSessionId: a.parentSessionId,
-              agentType: a.agentType, status: a.status || 'running',
-              startedAt: a.startedAt, prompt: a.prompt,
-            }))});
-          }
-        })
-        .catch(() => {});
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        handleVisionMessage(msg, {
+  function handleMessage(event) {
+    try {
+      const msg = JSON.parse(event.data);
+      handleVisionMessage(msg, {
           prevItemMapRef: { get current() { return refs.prevItemMap; }, set current(v) { refs.prevItemMap = v; } },
           snapshotProviderRef: { get current() { return refs.snapshotProvider; }, set current(v) { refs.snapshotProvider = v; } },
           gatesRef: { get current() { return refs.gates; }, set current(v) { refs.gates = v; } },
           pendingResolveIdsRef: { get current() { return refs.pendingResolveIds; }, set current(v) { refs.pendingResolveIds = v; } },
           changeTimerRef: { get current() { return refs.changeTimer; }, set current(v) { refs.changeTimer = v; } },
           sessionEndTimerRef: { get current() { return refs.sessionEndTimer; }, set current(v) { refs.sessionEndTimer = v; } },
-          wsRef: { get current() { return refs.ws; }, set current(v) { refs.ws = v; } },
+          wsRef: { get current() { return refs.ws?.socket || null; }, set current(_v) { /* managed by reconnect helper */ } },
           collectDOMSnapshot,
         }, {
           setItems: (updater) => set(s => ({ items: typeof updater === 'function' ? updater(s.items) : updater })),
@@ -192,17 +182,22 @@ export const useVisionStore = create((set, get) => {
           clearStatusSnapshots: () => set({ statusSnapshots: {} }),
           EMPTY_CHANGES,
         });
-      } catch {
-        // ignore parse errors
-      }
-    };
+    } catch {
+      // ignore parse errors
+    }
+  }
 
-    ws.onclose = () => {
-      set({ connected: false });
-      refs.reconnectTimer = setTimeout(connect, 2000);
-    };
-
-    ws.onerror = () => {};
+  function connect() {
+    if (refs.disposed) return;
+    if (refs.ws) return; // already constructed; reconnect helper manages lifecycle
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url = `${protocol}//${window.location.host}/ws/vision`;
+    refs.ws = createReconnectingWS({
+      url,
+      onOpen: handleOpen,
+      onMessage: handleMessage,
+      onClose: () => set({ connected: false }),
+    });
   }
 
   // ── Start connection + intervals on store creation ───────────────────────
@@ -382,8 +377,7 @@ export const useVisionStore = create((set, get) => {
 
 function teardown() {
   refs.disposed = true;
-  if (refs.ws) { refs.ws.onclose = null; refs.ws.close(); refs.ws = null; }
-  if (refs.reconnectTimer) { clearTimeout(refs.reconnectTimer); refs.reconnectTimer = null; }
+  if (refs.ws) { try { refs.ws.close(); } catch { /* ignore */ } refs.ws = null; }
   if (refs.changeTimer) { clearTimeout(refs.changeTimer); refs.changeTimer = null; }
   if (refs.sessionEndTimer) { clearTimeout(refs.sessionEndTimer); refs.sessionEndTimer = null; }
   if (refs.buildPollInterval) { clearInterval(refs.buildPollInterval); refs.buildPollInterval = null; }

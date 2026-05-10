@@ -8,6 +8,7 @@ import {
   hydrateVerboseStream,
   groupToolResults,
 } from './agent-stream-helpers.js';
+import { createAgentStream } from '../lib/agentStream.js';
 
 /**
  * AgentStream — structured SDK message stream + chat input.
@@ -254,68 +255,31 @@ function processMessage(msg) {
 // ---------------------------------------------------------------------------
 
 function connect() {
-  if (_state.connecting || (_state.es && _state.es.readyState === EventSource.OPEN)) return;
-  _state.connecting = true;
-
-  const sessionId = _state.sessionId || sessionStorage.getItem(SESSION_STORAGE_KEY);
+  if (_state.es) return; // handle already exists
   const url = `${window.location.protocol}//${window.location.hostname}:${AGENT_PORT}/api/agent/stream`;
 
-  const es = new EventSource(url);
-  _state.es = es;
-
-  es.onopen = () => {
-    _state.connecting = false;
-    _state.reconnectAttempts = 0;
-    _state.connected = true;
-    _state.sourceStatus.build = null; // clear stale build-working state after reconnect
-    if (_state.onConnectedChange) _state.onConnectedChange(true);
-  };
-
-  es.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data);
-      processMessage(msg);
-    } catch {
-      // ignore parse errors
-    }
-  };
-
-  es.addEventListener('hydrate', (event) => {
-    try {
-      const messages = JSON.parse(event.data);
-      if (Array.isArray(messages)) {
-        for (const msg of messages) processMessage(msg);
+  const handle = createAgentStream({
+    url,
+    namedEvents: ['hydrate'],
+    onOpen: () => {
+      _state.connected = true;
+      _state.sourceStatus.build = null; // clear stale build-working state after reconnect
+      if (_state.onConnectedChange) _state.onConnectedChange(true);
+    },
+    onClose: () => {
+      _state.connected = false;
+      if (_state.onConnectedChange) _state.onConnectedChange(false);
+    },
+    onEvent: (payload, name) => {
+      if (name === 'hydrate') {
+        if (Array.isArray(payload)) for (const m of payload) processMessage(m);
+        return;
       }
-    } catch {
-      // ignore parse errors
-    }
+      processMessage(payload);
+    },
+    maxBackoffMs: 8000,
   });
-
-  es.onerror = () => {
-    _state.connecting = false;
-    _state.connected = false;
-    if (_state.onConnectedChange) _state.onConnectedChange(false);
-    es.close();
-    if (_state.es === es) {
-      _state.es = null;
-      scheduleReconnect();
-    }
-  };
-}
-
-function scheduleReconnect() {
-  if (_state.reconnectTimer) return;
-  _state.reconnectAttempts = (_state.reconnectAttempts || 0) + 1;
-  const delay = Math.min(1000 * Math.pow(2, _state.reconnectAttempts - 1), 8000);
-
-  _state.reconnectTimer = setTimeout(() => {
-    _state.reconnectTimer = null;
-    // Health-check first
-    // TODO COMP-WORKSPACE-AGENT-SVR
-    fetch(`${window.location.protocol}//${window.location.hostname}:${AGENT_PORT}/api/health`)
-      .then(r => { if (r.ok) connect(); else scheduleReconnect(); })
-      .catch(() => scheduleReconnect());
-  }, delay);
+  _state.es = handle;
 }
 
 // ---------------------------------------------------------------------------
