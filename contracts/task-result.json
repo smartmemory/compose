@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "task-result.json",
+  "_source": "docs/features/COMP-GSD-2/blueprint.md",
+  "_roadmap": "COMP-GSD-2",
+  "title": "TaskResult",
+  "description": "Per-task post-execution capture written by the task agent at .compose/gsd/<featureCode>/results/<task_id>.json and committed as part of its diff. After execute step completion, runGsd walks the merged base cwd, reads each per-task file, and writes the consolidated blackboard.json. This schema is the post-execution audit/retro substrate (consumed by GSD-7 milestone reports), NOT a runtime channel between tasks.",
+  "type": "object",
+  "required": ["status", "files_changed", "summary", "produces", "gates", "attempts"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["passed", "failed"],
+      "description": "Whether the agent considered the task complete with all gates green."
+    },
+    "files_changed": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Repo-relative paths the agent touched in its worktree."
+    },
+    "summary": {
+      "type": "string",
+      "description": "One- or two-paragraph machine-readable summary of what was done."
+    },
+    "produces": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Realized symbol map: { symbolName: signature-or-shape-string }. Mirrors the task's declared produces but with the actually-implemented signatures."
+    },
+    "gates": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/GateRun" },
+      "description": "One entry per gate command run. Array (not lint/build/test object) so arbitrary project-configured gateCommands are supported."
+    },
+    "attempts": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of internal TDD-loop iterations the agent took before declaring done."
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "GateRun": {
+      "type": "object",
+      "required": ["command", "status", "output"],
+      "properties": {
+        "command": { "type": "string", "minLength": 1 },
+        "status": {
+          "type": "string",
+          "enum": ["pass", "fail"]
+        },
+        "output": {
+          "type": "string",
+          "description": "Truncated stdout/stderr from the gate run (e.g., last 2000 chars)."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

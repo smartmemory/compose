@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "taskgraph-gsd.json",
+  "_source": "docs/features/COMP-GSD-2/blueprint.md",
+  "_roadmap": "COMP-GSD-2",
+  "title": "TaskGraphGsd",
+  "description": "Output of the gsd pipeline's decompose_gsd step. Extends the bare TaskGraph (from build.stratum.yaml's decompose) with required produces/consumes per task, sourced from the blueprint's Boundary Map. Each task carries a rich `description` string pre-baked with the spec context that Stratum's parallel_dispatch interpolation cannot carry on its own.",
+  "type": "object",
+  "required": ["tasks"],
+  "properties": {
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/Task" }
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "Task": {
+      "type": "object",
+      "required": ["id", "files_owned", "files_read", "depends_on", "description", "produces", "consumes"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "files_owned": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files this task may write. Must not overlap with other tasks' files_owned (enforced by no_file_conflicts ensure)."
+        },
+        "files_read": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files this task may read but not write."
+        },
+        "depends_on": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Task ids that must complete before this one."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Rich prompt fragment containing the per-task spec context (produces/consumes/slice/upstream summary/gates). Packed at decompose time because Stratum's parallel_dispatch only interpolates a fixed set of tokens."
+        },
+        "produces": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ProducesEntry" },
+          "description": "Symbols this task lands. Sourced from the matching Boundary Map slice."
+        },
+        "consumes": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ConsumesEntry" },
+          "description": "Symbols this task may import from upstream tasks (resolved at end-of-step merge in topological order)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "ProducesEntry": {
+      "type": "object",
+      "required": ["file", "symbols", "kind"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "symbols": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["interface", "type", "function", "class", "const", "hook", "component"],
+          "description": "Symbol kind. Mirrors lib/boundary-map.js KIND_ALLOWLIST."
+        }
+      },
+      "additionalProperties": false
+    },
+    "ConsumesEntry": {
+      "type": "object",
+      "required": ["from", "file", "symbols"],
+      "properties": {
+        "from": {
+          "type": "string",
+          "pattern": "^S\\d{2,}$",
+          "description": "Upstream slice id (S01, S02, ...)."
+        },
+        "file": { "type": "string", "minLength": 1 },
+        "symbols": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
