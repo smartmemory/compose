@@ -188,7 +188,14 @@ function GroupFilter({ items, hiddenGroups, onToggleGroup }) {
       }
     }
     return Object.entries(counts)
-      .sort((a, b) => (activeCount[b[0]] || 0) - (activeCount[a[0]] || 0) || b[1] - a[1])
+      .sort((a, b) =>
+        // Primary: active count desc (most-active groups float up)
+        (activeCount[b[0]] || 0) - (activeCount[a[0]] || 0) ||
+        // Secondary: total count desc
+        b[1] - a[1] ||
+        // Tertiary: alphabetical — keeps order stable when counts match
+        a[0].localeCompare(b[0])
+      )
       .map(([group, count]) => ({ group, count, active: activeCount[group] || 0 }));
   }, [items]);
 
