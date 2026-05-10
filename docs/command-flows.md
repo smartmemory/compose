@@ -149,7 +149,7 @@ flowchart TD
     ValidateBM -->|yes| Clean
 
     Clean{git workspace<br/>clean?}
-    Clean -->|no| ErrorDirty[Error: commit or stash<br/>(allowDirtyWorkspace<br/>opt-in for advanced)]
+    Clean -->|no| ErrorDirty["Error: commit or stash<br/>(allowDirtyWorkspace<br/>opt-in for advanced)"]
     Clean -->|yes| GateCommands
 
     GateCommands[Resolve gateCommands<br/>compose.json or defaults<br/>pnpm lint/build/test] --> Plan
@@ -178,7 +178,7 @@ flowchart TD
     MergeDiffs --> CaptureFiles[Capture filesChanged<br/>via git diff]
     CaptureFiles --> Ship
 
-    Ship[Step 3: ship_gsd<br/>executeShipStep in-process<br/>stages filesChanged +<br/>ROADMAP/CHANGELOG/CLAUDE<br/>+ commit<br/>(push deferred to user)]
+    Ship["Step 3: ship_gsd<br/>executeShipStep in-process<br/>stages filesChanged +<br/>ROADMAP/CHANGELOG/CLAUDE<br/>+ commit<br/>(push deferred to user)"]
 
     Ship --> Blackboard
     Blackboard{collectBlackboard<br/>validate each<br/>TaskResult}
