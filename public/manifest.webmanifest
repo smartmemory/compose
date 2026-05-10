@@ -1,0 +1,10 @@
+{
+  "name": "Compose",
+  "short_name": "Compose",
+  "start_url": "/m",
+  "scope": "/m",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f"
+}

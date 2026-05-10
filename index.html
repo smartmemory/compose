@@ -2,14 +2,30 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Compose</title>
+    <script>
+      // Conditional PWA bits for /m paths only — keeps desktop unaffected
+      (function() {
+        if (window.location.pathname.startsWith('/m')) {
+          var manifest = document.createElement('link');
+          manifest.rel = 'manifest';
+          manifest.href = '/manifest.webmanifest';
+          document.head.appendChild(manifest);
+          var theme = document.createElement('meta');
+          theme.name = 'theme-color';
+          theme.content = '#0a0a0f';
+          document.head.appendChild(theme);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script>
-      // Kill any stale service workers — they break dev mode
-      if ('serviceWorker' in navigator) {
+      // Kill any stale service workers — they break dev mode.
+      // Scoped to non-/m paths so the mobile PWA SW survives.
+      if ('serviceWorker' in navigator && !window.location.pathname.startsWith('/m')) {
         navigator.serviceWorker.getRegistrations().then(regs => {
           regs.forEach(r => { r.unregister(); console.log('[compose] Unregistered stale service worker'); });
         });

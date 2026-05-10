@@ -18,4 +18,17 @@ export default defineConfig({
       '/ws/vision': { target: 'ws://localhost:4001', ws: true },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Mobile app gets its own chunk so desktop never pulls it in.
+          if (id.includes('/src/mobile/')) return 'mobile';
+          // Cytoscape and graph stuff stays in 'graph' (desktop only)
+          if (id.includes('cytoscape')) return 'graph';
+          // Existing diagram libs already auto-chunked; let Vite continue handling them.
+        },
+      },
+    },
+  },
 });

@@ -1,0 +1,143 @@
+/* Mobile-only styles. All selectors scoped under .m-* class names so they
+ * cannot leak to the desktop cockpit. Dark only for v1.
+ */
+
+.m-root {
+  --m-bg: #0a0a0f;
+  --m-surface: #14141c;
+  --m-surface-2: #1c1c26;
+  --m-border: #2a2a35;
+  --m-text: #e6e6f0;
+  --m-text-dim: #9090a0;
+  --m-accent: #7c8cff;
+  --m-danger: #ff6b6b;
+  --m-warn: #f5b342;
+  --m-ok: #4ad28b;
+  --m-touch: 44px;
+  --m-pad: 12px;
+  --m-pad-lg: 16px;
+  --m-radius: 10px;
+
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--m-bg);
+  color: var(--m-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.4;
+  overflow: hidden;
+}
+
+.m-header {
+  flex: 0 0 auto;
+  padding: env(safe-area-inset-top) var(--m-pad-lg) 0;
+  background: var(--m-surface);
+  border-bottom: 1px solid var(--m-border);
+}
+
+.m-header-title {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: 0.2px;
+}
+
+.m-main {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--m-pad-lg);
+  padding-bottom: calc(var(--m-pad-lg) + 64px + env(safe-area-inset-bottom));
+}
+
+/* Bottom nav */
+.m-bottom-nav {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  background: var(--m-surface);
+  border-top: 1px solid var(--m-border);
+  padding-bottom: env(safe-area-inset-bottom);
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.m-nav-btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--m-text-dim);
+  min-height: var(--m-touch);
+  height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 6px 4px;
+}
+
+.m-nav-btn[aria-pressed="true"] {
+  color: var(--m-accent);
+}
+
+.m-nav-btn .m-nav-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.m-nav-btn .m-nav-label {
+  font-size: 11px;
+  letter-spacing: 0.2px;
+}
+
+/* Status pill */
+.m-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  background: var(--m-surface-2);
+  color: var(--m-text-dim);
+  border: 1px solid var(--m-border);
+}
+
+.m-status-pill[data-status="planned"] { color: var(--m-text-dim); }
+.m-status-pill[data-status="in_progress"] { color: var(--m-accent); border-color: var(--m-accent); }
+.m-status-pill[data-status="blocked"] { color: var(--m-danger); border-color: var(--m-danger); }
+.m-status-pill[data-status="complete"] { color: var(--m-ok); border-color: var(--m-ok); }
+.m-status-pill[data-status="partial"] { color: var(--m-warn); border-color: var(--m-warn); }
+
+/* Placeholder card for tabs not yet implemented */
+.m-placeholder {
+  background: var(--m-surface);
+  border: 1px solid var(--m-border);
+  border-radius: var(--m-radius);
+  padding: var(--m-pad-lg);
+  text-align: center;
+  color: var(--m-text-dim);
+}
+
+.m-placeholder-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--m-text);
+  margin-bottom: 8px;
+}
+
+.m-placeholder-body {
+  font-size: 13px;
+}
