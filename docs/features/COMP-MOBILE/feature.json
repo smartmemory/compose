@@ -1,0 +1,16 @@
+{
+  "code": "COMP-MOBILE",
+  "description": "Mobile PWA at /m route — fully functional companion to the desktop cockpit. Phone-first; tablet inherits. 5 phases: shell, roadmap, ideabox, agents, builds. Remote transport (auth + tunnel) deferred to COMP-MOBILE-REMOTE.",
+  "status": "PLANNED",
+  "created": "2026-05-10",
+  "updated": "2026-05-10",
+  "group": "COMP-MOBILE",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  }
+}

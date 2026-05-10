@@ -1210,6 +1210,8 @@ Response-time policy gate that detects rule violations in candidate agent respon
 | 203 | COMP-WORKSPACE-SESSIONS | Per-workspace SessionManager registry. Session, activity, agent-spawn, summarizer routes. Snapshot fixes for session-manager.js, summarizer.js, agent-spawn.js. Depends on 197. | PLANNED |
 | 204 | COMP-WORKSPACE-AGENT-SVR | Cross-process workspace plumbing for the agent server (port 4002): pass workspaceId on `/api/agent/session`, persist to session record, factory-build hook options. Depends on 197, 203. | PLANNED |
 | 205 | COMP-WORKSPACE-FILES | file-watcher HTTP routes (`/api/file`, `/api/files`, `/api/canvas/open`) + vision-routes/vision-utils snapshot fixes use `req.workspace.root`. Depends on 197, 202. | PLANNED |
+| 206 | COMP-MOBILE | Mobile PWA at `/m` route. 5 phases: M1 shell + token-aware fetch + PWA manifest, M2 roadmap/items, M3 ideabox, M4 agent gates+chat, M5 builds. Phone-first; tablet inherits. Skips remote transport (filed separately as COMP-MOBILE-REMOTE). | PLANNED |
+| 207 | COMP-MOBILE-REMOTE | Remote-reachable transport for the mobile PWA: bind to 0.0.0.0, runtime-generated `x-compose-token` (replacing build-time-baked token for remote sessions), pairing-URL flow, tunnel guidance. Tunnel layer (Tailscale/Cloudflare) is out-of-band by user choice. Depends on 206. | PLANNED |
 
 **Dependencies:** SmartMemory CORE-ADHERENCE-1 (pattern catalog + MCP tool); MCP connector path (existing).
 
