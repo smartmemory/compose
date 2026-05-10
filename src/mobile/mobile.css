@@ -1015,3 +1015,94 @@
   gap: 8px;
 }
 
+
+/* ── Builds tab (M5) ─────────────────────────────────────────────────────── */
+
+.m-builds-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-pad);
+  padding: var(--m-pad);
+}
+
+.m-build-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--m-pad);
+  background: var(--m-surface);
+  border: 1px solid var(--m-border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.m-build-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.m-build-card-feature {
+  font-weight: 600;
+  color: var(--m-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+}
+
+.m-build-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--m-text-dim);
+}
+
+.m-build-card-mode {
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--m-text);
+}
+
+.m-build-card-mode[data-mode="bug"] {
+  background: rgba(245, 179, 66, 0.12);
+  color: var(--m-warn);
+}
+
+.m-build-card-tail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--m-text-dim);
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 6px;
+  padding: 6px 8px;
+  max-height: 64px;
+  overflow: hidden;
+}
+
+.m-build-card-tail-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.m-build-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.m-build-mode-row {
+  display: flex;
+  gap: 8px;
+}

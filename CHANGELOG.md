@@ -2,6 +2,36 @@
 
 ## 2026-05-10
 
+### COMP-MOBILE — Mobile PWA companion at `/m`
+
+Compose now has a fully functional mobile companion alongside the desktop cockpit — a PWA at `/m` shipped in 5 milestones (M1 shell → M5 builds). Phone-first; tablet inherits. Skips remote-transport (deferred to `COMP-MOBILE-REMOTE`); home-wifi use works today via the existing `x-compose-token` model.
+
+**M1 — Shell + plumbing:** `/m` route via `React.lazy()` split (mobile bundle stays separate from desktop), bottom nav with 4 tabs, mobile-only CSS scoped to `.m-*`, token pairing flow (`?token=…` → `localStorage` → `setSensitiveToken`), service worker (cache-first static, network-first `/api/*`), PWA manifest with `start_url=/m, display=standalone`. Vite `manualChunks` config keeps the mobile chunk under 5 KB gzipped at this stage.
+
+**M2 — Roadmap:** filter (status/group/keyword), drill into items, edit `status`/`group`/`confidence` with optimistic mutations + WS live updates. Extracted `src/lib/wsReconnect.js` (exponential backoff capped at 30s); `useVisionStore.js` refactored to use it (no behavior change for desktop). Edits restricted to fields that exist on vision items; priority/tags excluded.
+
+**M3 — Ideabox:** capture form, swipe-left-to-kill, swipe-right-to-promote, P0/P1/P2/Untriaged filter chips, priority editing. Pure-React pointer-event swipe detection (`src/mobile/lib/swipe.js`). Uses dedicated ideabox routes (`/api/ideabox/ideas/{:id}/{promote,kill}`); status changes via PATCH explicitly rejected by the server.
+
+**M4 — Agents + gates + interactive session:** spawned-agent list with kill, agent output tail (filtered from global SSE stream), single-interactive-session chat (when active), pending-gate list with approve/revise/kill via the `outcome` enum on `POST /api/vision/gates/:id/resolve`. Extracted `src/lib/agentStream.js` (pure SSE consumer with backoff) and `src/hooks/useAgentStream.js`; `AgentStream.jsx` refactored to consume the hook with no desktop behavior change. Sensitive endpoints (kill, chat, interrupt) thread `x-compose-token` via `withComposeToken`. Per-spawned-agent chat is intentionally absent — that surface needs new server APIs.
+
+**M5 — Builds:** `POST /api/build/start` and `POST /api/build/abort` server routes wrap the existing `runBuild`/`abortBuild` from `lib/build.js` (one-character `export` added to `abortBuild`; otherwise no internals changed). Mode is `feature` | `bug` (with `template: 'bug-fix'` for bug); `abortBuild` signature is `(dataDir, featureCode)`. Per-feature concurrency: same-feature active → 409, different feature allowed; UI surfaces the most-recent writer of `active-build.json` (matches desktop). Mobile builds tab: empty state with start sheet (feature autocomplete + mode chip + description), or active-build card with abort + log tail filtered by `flowId`.
+
+**Auth model.** Mobile uses the existing `x-compose-token` infrastructure verbatim. `src/lib/compose-api.js` gained `setSensitiveToken(t)` runtime override that takes precedence over the build-time `VITE_COMPOSE_API_TOKEN`; this is the seam `COMP-MOBILE-REMOTE` will use for remote-pairing tokens. No `Authorization: Bearer` plumbing — that conflicts with the existing model.
+
+**Out of scope for v1 (filed for follow-ups):**
+- `COMP-MOBILE-REMOTE` (rows 207) — bind 0.0.0.0, runtime-generated token, pairing URL, tunnel guidance
+- `COMP-AGENT-CHAT-PER-ID` — per-spawned-agent chat (server API needed first)
+- `COMP-BUILD-HISTORY` — persistent build log (today only `active-build.json` exists)
+- SSE/WebSocket workspace tagging — deferred until those routes consume workspace
+- Tablet-specific layouts — phone-first; tablet uses the same single-column shell
+
+**Verification across all 5 milestones:**
+- 122 vitest UI tests pass (was 92 pre-mobile; +30 across M1–M5)
+- 10 new node tests for build routes; full suite 2767/2769 (only pre-existing STRAT-DEDUP failures unchanged)
+- Mobile bundle: 65 KB raw / 18 KB gzipped — well under the 200 KB target
+- Desktop unchanged: same `App-*.js` size, all existing tests green
+- Codex review converged at design (3 passes), blueprint (4 passes), and implementation (clean)
+
 ### COMP-WORKSPACE-HTTP — HTTP workspace foundation (middleware + bootstrap)
 
 Compose's HTTP server (port 4001) gains a per-request workspace channel: every request now resolves to a `req.workspace = { id, root, source }` via Express middleware reading `X-Compose-Workspace-Id`. **Behavior-preserving substrate** — singletons stay shared, snapshot sites stay snapshot, agent server stays untouched. The next four tickets (`COMP-WORKSPACE-VISION`, `-SESSIONS`, `-AGENT-SVR`, `-FILES`) build on this foundation.

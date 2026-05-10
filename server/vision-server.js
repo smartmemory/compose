@@ -31,6 +31,7 @@ import { attachDesignRoutes } from './design-routes.js';
 import { DesignSessionManager } from './design-session.js';
 import { attachPipelineRoutes } from './pipeline-routes.js';
 import { attachIdeaboxRoutes } from './ideabox-routes.js';
+import { attachBuildRoutes } from './build-routes.js';
 import { CoalescingBuffer } from './coalescing-buffer.js';
 /** Settings defaults (previously derived from contracts/lifecycle.json). */
 const SETTINGS_DEFAULTS = {
@@ -143,6 +144,9 @@ export class VisionServer {
       },
       getProjectRoot: () => getTargetRoot(),
     });
+
+    // ── Build start/abort routes (sensitive) ───────────────────────────────
+    attachBuildRoutes(app);
 
     // ── Build state hydration ─────────────────────────────────────────────
     app.get('/api/build/state', (_req, res) => {

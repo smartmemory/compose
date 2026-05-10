@@ -396,3 +396,5 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-10T13:54:55+08:00 | M4: spawned-agents list/kill, interactive session chat, pending gates approve/revise/kill
 2026-05-10T14:02:27+08:00 | M2 done: useRoadmapItems hook + filter/list/detail/edit + WS reconnect extracted to src/lib/wsReconnect.js
 2026-05-10T14:03:54+08:00 | COMP-MOBILE M2+M3+M4 shipped via 3 parallel agents
+2026-05-10T14:05:25+08:00 | M5 build endpoints + mobile builds tab
+2026-05-10T14:14:49+08:00 | COMP-MOBILE M5 + docs + roadmap COMPLETE
