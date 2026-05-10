@@ -1,6 +1,6 @@
 {
   "name": "@smartmemory/compose",
-  "version": "0.1.24-beta",
+  "version": "0.1.25-beta",
   "description": "Structured AI dev pipeline — goal-to-product orchestration with gates, iteration loops, and feature lifecycle management.",
   "author": "SmartMemory",
   "license": "MIT",
