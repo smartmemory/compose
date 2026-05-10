@@ -112,6 +112,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  feature   Add a single feature (folder, design seed, ROADMAP entry)')
   console.log('  build     Run a feature through the headless lifecycle')
   console.log('  fix       Run a bug through the headless bug-fix lifecycle')
+  console.log('  gsd       Per-task fresh-context dispatch from existing blueprint+Boundary Map')
   console.log('  pipeline  View and edit the build pipeline')
   console.log('  roadmap            Show roadmap status and next buildable features')
   console.log('  roadmap generate   Regenerate ROADMAP.md from feature.json files')
@@ -1913,6 +1914,32 @@ if (cmd === 'build') {
       process.exit(1)
     })
   })
+} else if (cmd === 'gsd') {
+  // compose gsd <feature-code> — runs the per-task fresh-context dispatch
+  // pipeline (pipelines/gsd.stratum.yaml). Hard-requires existing
+  // docs/features/<code>/blueprint.md with a parseable Boundary Map.
+  const gsdCode = args.find(a => !a.startsWith('-'))
+  if (!gsdCode) {
+    console.error('Usage: compose gsd <feature-code>')
+    console.error('')
+    console.error('Runs the per-task fresh-context dispatch pipeline (COMP-GSD-2).')
+    console.error('Hard-requires docs/features/<code>/blueprint.md with a valid Boundary Map.')
+    console.error('')
+    console.error('Options:')
+    console.error('  --cwd <path>   Working directory (defaults to current)')
+    process.exit(1)
+  }
+  const { root: gsdCwd } = resolveCwdWithWorkspace(args)
+  const cwdIdx = args.indexOf('--cwd')
+  const gsdAgentCwd = cwdIdx !== -1 ? resolve(args[cwdIdx + 1]) : gsdCwd
+  const { runGsd } = await import('../lib/gsd.js')
+  try {
+    const result = await runGsd(gsdCode, { cwd: gsdAgentCwd })
+    console.log(`gsd complete: ${result.blackboardEntries} task results captured.`)
+  } catch (err) {
+    console.error(`gsd failed: ${err.message}`)
+    process.exit(1)
+  }
 } else if (cmd === 'triage') {
   const triageCode = args.find(a => !a.startsWith('-'))
   if (!triageCode) {

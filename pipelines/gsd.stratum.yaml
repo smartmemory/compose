@@ -129,8 +129,9 @@ flows:
             6. Stage changed files explicitly (no worktrees, pycache, build
                artifacts). Commit with message:
                "feat(COMP-GSD-2): per-task fresh-context dispatch"
-            7. Push to remote.
-            8. Report commit hash and files_changed in result JSON.
+               (Note: push is deferred to the user — `compose gsd` does not
+                auto-push, mirroring `compose build`'s ship behavior.)
+            7. Report commit hash and files_changed in result JSON.
         inputs:
           featureCode: "$.input.featureCode"
         output_contract: PhaseResult

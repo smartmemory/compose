@@ -103,14 +103,15 @@ test('execute intent_template uses ONLY supported tokens', () => {
   }
 });
 
-test('ship_gsd intent enumerates ROADMAP, CHANGELOG, optional CLAUDE.md, commit, push', () => {
+test('ship_gsd intent enumerates ROADMAP, CHANGELOG, optional CLAUDE.md, commit (push deferred to user)', () => {
   const step = spec.flows.gsd.steps.find((s) => s.id === 'ship_gsd');
   assert.match(step.intent, /ROADMAP\.md/);
   assert.match(step.intent, /CHANGELOG\.md/);
   assert.match(step.intent, /CLAUDE\.md/);
   assert.match(step.intent, /COMPLETE/);
   assert.match(step.intent, /[Cc]ommit/);
-  assert.match(step.intent, /[Pp]ush/);
+  // Push is intentionally NOT auto-performed in v1 — runBuild's ship doesn't
+  // auto-push either, and runGsd's executeShipStep delegate doesn't push.
 });
 
 test('ship_gsd does NOT precondition on plan.md or report.md', () => {
