@@ -159,7 +159,20 @@ export function scanFeatures(featuresDir) {
       relatedFeatures: [],
       predecessors: [],
       successors: [],
+      group: null,  // explicit group from feature.json overrides derivation
     };
+
+    // Read feature.json if present — supplies optional explicit `group`,
+    // and may override description/status if more authoritative than the docs.
+    try {
+      const specPath = path.join(featureDir, 'feature.json');
+      if (fs.existsSync(specPath)) {
+        const spec = JSON.parse(fs.readFileSync(specPath, 'utf-8'));
+        if (typeof spec.group === 'string' && spec.group.trim()) {
+          feature.group = spec.group.trim();
+        }
+      }
+    } catch { /* ignore malformed feature.json */ }
 
     // List artifacts
     try {
@@ -503,6 +516,7 @@ export function seedFeatures(features, store) {
         phase: feature.phase || 'planning',
         confidence: feature.confidence,
         files: feature.artifacts.map(a => `docs/features/${feature.name}/${a}`),
+        ...(feature.group ? { group: feature.group } : {}),
       });
       try {
         store.updateLifecycle(featureItem.id, { featureCode: feature.name, currentPhase: 'explore_design' });
@@ -524,6 +538,9 @@ export function seedFeatures(features, store) {
       const newFiles = feature.artifacts.map(a => `docs/features/${feature.name}/${a}`);
       if (JSON.stringify(newFiles) !== JSON.stringify(featureItem.files || [])) {
         updates.files = newFiles;
+      }
+      if (feature.group && feature.group !== featureItem.group) {
+        updates.group = feature.group;
       }
       if (Object.keys(updates).length > 0) {
         store.updateItem(featureItem.id, updates);

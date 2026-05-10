@@ -77,15 +77,19 @@ export class VisionStore {
           }
           if (!item.slug && item.title) item.slug = slugify(item.title);
           if (!item.files) item.files = [];
-          // Always re-derive group on load — the rule has evolved (singletons →
-          // first-2-tokens) and existing items need the new shape. Custom
-          // user-set groups are not a use case here; group is derived metadata.
-          const newGroup = deriveGroup(item.title, item.featureCode || item.lifecycle?.featureCode);
-          if (newGroup && newGroup !== item.group) {
-            item.group = newGroup;
+          // Group precedence (most-authoritative first):
+          //   1. feature.json `group` field — applied later in seedFeatures()
+          //   2. deriveGroup() heuristic — applied here on every load
+          //   3. previously stored value — overridden when (1) or (2) yields anything
+          // Always re-derive so items track rule changes (e.g. singleton →
+          // first-2-tokens migration). seedFeatures() runs after _load and
+          // overrides this with the feature.json value when present.
+          const derived = deriveGroup(item.title, item.featureCode || item.lifecycle?.featureCode);
+          if (derived && derived !== item.group) {
+            item.group = derived;
             migrated = true;
-          } else if (!item.group && newGroup) {
-            item.group = newGroup;
+          } else if (!item.group && derived) {
+            item.group = derived;
             migrated = true;
           }
           this.items.set(item.id, item);
