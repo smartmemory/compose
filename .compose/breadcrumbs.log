@@ -398,3 +398,13 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-10T14:03:54+08:00 | COMP-MOBILE M2+M3+M4 shipped via 3 parallel agents
 2026-05-10T14:05:25+08:00 | M5 build endpoints + mobile builds tab
 2026-05-10T14:14:49+08:00 | COMP-MOBILE M5 + docs + roadmap COMPLETE
+2026-05-10T16:47:39+08:00 | COMP-GSD-1 design phase: writing initial design.md for Boundary Map artifact
+2026-05-10T17:29:16+08:00 | COMP-GSD-1 design.md REVIEW CLEAN after 15 codex iterations; pausing before blueprint phase due to context budget
+2026-05-10T18:54:29+08:00 | COMP-GSD-1 phase 5 verification: 19 OK 1 STALE; Phase 6 to swap retro-annotation example from COMP-OBS-STREAM to COMP-MCP-MIGRATION-2-1-1
+2026-05-10T19:09:47+08:00 | COMP-GSD-1 phase A: TDD parser tests + impl for boundary-map
+2026-05-10T19:12:35+08:00 | COMP-GSD-1 phase C: integration — boundary-map template + SKILL.md + pipeline edits
+2026-05-10T19:14:01+08:00 | COMP-GSD-1 phase D: dogfood retroactive Boundary Map on COMP-MCP-MIGRATION-2-1-1
+2026-05-10T19:14:15+08:00 | COMP-GSD-1 phase E: verify dogfood + run full test suite
+2026-05-10T19:19:07+08:00 | Fix boundary-map contract drift: strip line field from violations, dedupe unknown_action by row not file
+2026-05-10T19:23:29+08:00 | boundary-map: locator population in entry violations, malformed_after_nothing parse check, file-plan multi-row write tracking — TDD
+2026-05-10T19:29:13+08:00 | COMP-GSD-1 phase 9 docs: update CHANGELOG, ROADMAP status, vision item, file follow-up tickets

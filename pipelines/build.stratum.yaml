@@ -278,8 +278,13 @@ flows:
         agent: claude
         intent: >
           Verify every file:line reference in the blueprint against the actual codebase.
-          Flag stale or incorrect references. Return { verified: true } only if all
-          references are valid. Return { verified: false, staleRefs: [...] } otherwise.
+          Flag stale or incorrect references. If the blueprint contains a `## Boundary Map`
+          section, additionally invoke `validateBoundaryMap` from `lib/boundary-map.js` and
+          treat its violations as stale references; treat its warnings as informational.
+          Summarize Boundary Map results (counts of violations and warnings, plus any
+          must-fix detail) inside the existing `summary` string field of the PhaseResult —
+          do not add new top-level fields. The phase outcome is `complete` only when every
+          file:line reference is valid AND the Boundary Map (if present) has zero violations.
         inputs:
           featureCode: "$.input.featureCode"
           description: "$.input.description"

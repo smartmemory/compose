@@ -2,6 +2,22 @@
 
 ## 2026-05-10
 
+### COMP-GSD-1 — Boundary Map artifact for blueprint phase
+
+First feature of the COMP-GSD initiative (autonomous long-run mode parity pass against gsd-build/gsd-2). Adds an opt-in `## Boundary Map` section to multi-unit blueprints declaring inter-slice contracts at file→symbol granularity. Phase 5 verification picks it up and runs four mandatory checks against any Boundary Map present.
+
+**Format** — markdown, embedded in `blueprint.md`, per-slice (not per-edge — fan-out doesn't duplicate). Each slice declares `Produces:` (mandatory `(<kind>)` annotation, ∈ `{interface, type, function, class, const, hook, component}`) and `Consumes: from S##: ...` rows. Leaf slices use `Consumes: nothing`; sink slices use `Produces: nothing`. Author template at `.claude/skills/compose/templates/boundary-map.md`.
+
+**Validator** — `lib/boundary-map.js` exports `parseBoundaryMap` and `validateBoundaryMap`. Returns `{ ok, violations, warnings }` with `Violation = {kind, scope: "parse"|"entry", slice?, file?, symbol?, message}` and `Warning = {kind, scope: "blueprint"|"file-plan"|"entry", ...}`. Four checks: (1) File-Plan-or-disk (accepts `## File Plan` / `## Files` / `## File-by-File Plan` aliases; allow-list of write actions matched on extracted leading verb so `MODIFY (existing, 119 lines)` normalizes to `modify`); (2) symbol-presence (substring grep, only for pre-existing files NOT in File Plan with allow-listed action — name-mention guarantee, see follow-up `COMP-GSD-1-FU-EXPORT-CHECK`); (3) topology (every `from S##:` references earlier slice; document-order acyclic by construction); (4) producer/consumer match (every consumed symbol must appear in the matching producer's symbol set — the core anti-drift check). Warnings: `no_file_plan` (blueprint-scope), `unknown_action` (file-plan-scope, deduplicated per row).
+
+**Skill + pipeline integration** — Phase 4 prompt (`.claude/skills/compose/SKILL.md` ~line 176) instructs authors to include the section when feature has 2+ work units, with kind restriction. Phase 5 prompt (~line 188) and `pipelines/build.stratum.yaml` verification step both reference `lib/boundary-map.js` and surface boundary results inside the existing `PhaseResult.summary` field (no schema widening — kept the contract narrow).
+
+**Dogfood** — `docs/features/COMP-MCP-MIGRATION-2-1-1/blueprint.md` retroactively annotated as the first worked example. Target swapped from COMP-OBS-STREAM after Phase 5 verification surfaced that the latter has no `## File Plan`, which would have made the dogfood fail its own validator.
+
+**Verification.** Codex review converged on design (15 passes), plan (3 passes), implementation (3 passes — final REVIEW CLEAN). 41 dedicated tests in `test/boundary-map.test.js` covering parser, all four checks, both warning kinds, parse violations, leaf+sink forms, both `→` and `->` arrow alternatives, duplicate slice IDs, post-`nothing` malformation, File Plan duplicate-row write detection, contract field shape. Full suite: **2878 tests passing** (2756 node + 122 vitest), no regressions.
+
+**Follow-ups filed** in `forge/ROADMAP.md` Standalone Tickets — `COMP-GSD-1-FU-EXPORT-CHECK` (tighten name-mention to definition/export-anchored regex), `COMP-GSD-1-FU-TYPECHECK` (real `tsc --noEmit` for type-only entries), `COMP-GSD-1-FU-MARKDOWN-DOGFOOD` (the COMP-GSD-1 self-Boundary-Map declares markdown anchors with kind `(const)`; surfaces when FU-EXPORT-CHECK lands), `COMP-GSD-1-FU-FILEPLAN-HEADER-DETECT` (validator picks up nested non-File-Plan tables under `## File-by-File Plan`; tighten to require recognized `| File | Action | ...` header).
+
 ### COMP-MOBILE — Mobile PWA companion at `/m`
 
 Compose now has a fully functional mobile companion alongside the desktop cockpit — a PWA at `/m` shipped in 5 milestones (M1 shell → M5 builds). Phone-first; tablet inherits. Skips remote-transport (deferred to `COMP-MOBILE-REMOTE`); home-wifi use works today via the existing `x-compose-token` model.

@@ -149,6 +149,21 @@ Wrap `## Roadmap Conventions` (template line 8) and `## Dogfooding Milestones` (
 
 **Existing tests stay green** — parser API surface unchanged (`parseRoadmap` still returns `FeatureEntry[]` including `_anon_<n>` codes; `filterBuildable` unchanged).
 
+## Boundary Map
+
+### S01: preserver primitives
+Produces:
+  lib/roadmap-preservers.js → readPhaseOverrides, readAnonymousRows, readPreservedSections (function)
+
+Consumes: nothing (leaf node)
+
+### S02: roadmap-gen integration
+Produces:
+  lib/roadmap-gen.js → generateRoadmap (function)
+
+Consumes:
+  from S01: lib/roadmap-preservers.js → readPhaseOverrides, readAnonymousRows, readPreservedSections
+
 ## Implementation Order
 
 1. **Markup wrap** (atomic with the rest because the current writer's `readPreamble()` would strand open markers — but with Option A the writer changes minimally and the strand risk is small. Land in same commit as B/C just to be safe.)

@@ -182,6 +182,7 @@ Present all proposals, trade-offs, your recommendation. User picks. Write to `do
 - Read every critical file, note patterns with line references
 - Build corrections table (spec assumption vs reality)
 - Write to `docs/features/<feature-code>/blueprint.md`
+- **Boundary Map (when feature has 2+ work units):** append a `## Boundary Map` section per `.claude/skills/compose/templates/boundary-map.md`. Each entry must name a concrete code symbol with a kind in `{interface, type, function, class, const, hook, component}`. Endpoints, event payloads, file formats, and invariants belong in prose, not in Boundary Map entries.
 
 **Gate:** Corrections table empty or all corrections documented.
 
@@ -194,11 +195,13 @@ For every file:line reference in the blueprint:
 4. Confirm imports/exports
 5. Flag stale references
 
+If the blueprint contains a `## Boundary Map` section, run `validateBoundaryMap` from `lib/boundary-map.js` against the blueprint. Append every violation as a row in the Verification Table; warnings render as informational rows but do not block the gate. The four checks are: File-Plan-or-disk, symbol presence (untouched dependencies only), topology (every `from S##` references an earlier slice), producer/consumer match.
+
 Produce a verification table, append to `blueprint.md`. If any stale/wrong, loop back to Phase 4.
 
-**Gate:** All file:line references verified. Zero stale entries.
+**Gate:** All file:line references verified. Zero stale entries. Zero Boundary Map violations (warnings allowed).
 
-**Skip when:** Blueprint written in the same session immediately after reading all referenced files.
+**Skip when:** Blueprint written in the same session immediately after reading all referenced files **and** the blueprint has no Boundary Map.
 
 ## Fix Mode Phases (F1–F3)
 
