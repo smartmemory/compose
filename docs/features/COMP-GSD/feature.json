@@ -1,0 +1,11 @@
+{
+  "code": "COMP-GSD",
+  "description": "Autonomous Long-Run Mode initiative — `/compose gsd <feature>` as a third lifecycle mode (alongside build/fix) for long autonomous runs across many context windows. Parity pass against gsd-build/gsd-2 — adopt the capabilities Compose lacks (per-task fresh context, worktree isolation, budget ceilings, stuck detection, milestone reports), reuse Compose's existing lifecycle/journal/gates as the substrate. Umbrella for COMP-GSD-1 through COMP-GSD-7.",
+  "status": "IN_PROGRESS",
+  "phase": "COMP-GSD: Autonomous Long-Run Mode",
+  "created": "2026-05-10",
+  "updated": "2026-05-10",
+  "complexity": "XL",
+  "position": 1,
+  "group": "COMP-GSD"
+}

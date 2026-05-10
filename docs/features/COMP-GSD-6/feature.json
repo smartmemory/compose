@@ -1,0 +1,13 @@
+{
+  "code": "COMP-GSD-6",
+  "description": "Headless CLI + crash recovery. `compose gsd <feature> --headless` for CI/cron. State persisted to .compose/gsd/state.json (no new SQLite — extends existing journal). Auto-resume on crash with backoff. `compose gsd query` returns instant JSON snapshot (no LLM, ~50ms) for status pollers.",
+  "status": "PLANNED",
+  "phase": "COMP-GSD: Autonomous Long-Run Mode",
+  "created": "2026-05-10",
+  "updated": "2026-05-10",
+  "complexity": "L",
+  "position": 7,
+  "parent": "COMP-GSD",
+  "links": [{"kind": "depends_on", "to_code": "COMP-GSD-2"}],
+  "group": "COMP-GSD"
+}

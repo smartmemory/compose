@@ -1,0 +1,13 @@
+{
+  "code": "COMP-GSD-5",
+  "description": "Stuck detection. Detect repeated tool-call patterns (same file edited 3+ times with no test progress, same error reappearing, no diff after N turns) and pause the run with a structured diagnostic + resume-or-abort prompt. Reuses agent-stream telemetry — no new instrumentation.",
+  "status": "PLANNED",
+  "phase": "COMP-GSD: Autonomous Long-Run Mode",
+  "created": "2026-05-10",
+  "updated": "2026-05-10",
+  "complexity": "M",
+  "position": 6,
+  "parent": "COMP-GSD",
+  "links": [{"kind": "depends_on", "to_code": "COMP-GSD-2"}],
+  "group": "COMP-GSD"
+}

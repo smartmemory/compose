@@ -1,0 +1,13 @@
+{
+  "code": "COMP-GSD-4",
+  "description": "Budget ceilings + stop conditions. Token + iteration + wall-clock caps per task and per feature. Wires idea_budget_ceilings (parked) as the runtime stop condition. Surfaces budget burn in cockpit OpsStrip. Hard stop with diagnostics rather than runaway.",
+  "status": "PLANNED",
+  "phase": "COMP-GSD: Autonomous Long-Run Mode",
+  "created": "2026-05-10",
+  "updated": "2026-05-10",
+  "complexity": "M",
+  "position": 5,
+  "parent": "COMP-GSD",
+  "links": [{"kind": "depends_on", "to_code": "COMP-GSD-2"}],
+  "group": "COMP-GSD"
+}

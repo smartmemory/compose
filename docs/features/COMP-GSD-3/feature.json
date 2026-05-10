@@ -1,0 +1,13 @@
+{
+  "code": "COMP-GSD-3",
+  "description": "Worktree-per-task isolation + auto squash-merge. Each dispatched task runs in its own git worktree under .compose/gsd/<task-id>/. On task completion, diff is verified (lint/build/test gates), squash-merged to the feature branch, worktree torn down. Conflict → bounce task back with merge context. Builds on COMP-PAR-MERGE-QUEUE.",
+  "status": "PLANNED",
+  "phase": "COMP-GSD: Autonomous Long-Run Mode",
+  "created": "2026-05-10",
+  "updated": "2026-05-10",
+  "complexity": "L",
+  "position": 4,
+  "parent": "COMP-GSD",
+  "links": [{"kind": "depends_on", "to_code": "COMP-GSD-2"}],
+  "group": "COMP-GSD"
+}

@@ -1,0 +1,18 @@
+{
+  "code": "COMP-GSD-1",
+  "description": "Boundary Map artifact in blueprint phase — explicit Produces/Consumes lists at file→symbol granularity between sequential work units. Catches cross-component contract mismatches before code. Inspired by gsd-build/gsd-2; absorbs the previously-filed COMP-BOUNDARY-MAP. Independent of GSD-2..7 runtime work — ships first.",
+  "status": "COMPLETE",
+  "phase": "COMP-GSD: Autonomous Long-Run Mode",
+  "created": "2026-05-10",
+  "updated": "2026-05-10",
+  "complexity": "M",
+  "position": 2,
+  "parent": "COMP-GSD",
+  "links": [
+    {
+      "kind": "supersedes",
+      "to_code": "COMP-BOUNDARY-MAP"
+    }
+  ],
+  "group": "COMP-GSD"
+}

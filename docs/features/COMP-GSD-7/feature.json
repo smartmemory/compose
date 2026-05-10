@@ -1,0 +1,13 @@
+{
+  "code": "COMP-GSD-7",
+  "description": "Milestone report generator. Auto-generated HTML report per completed feature: task summaries, decision log, gate outcomes, budget actuals vs caps, agent-time breakdown, links to worktree diffs. Writes to .compose/gsd/reports/<feature>.html. Renders via existing cockpit asset pipeline.",
+  "status": "PLANNED",
+  "phase": "COMP-GSD: Autonomous Long-Run Mode",
+  "created": "2026-05-10",
+  "updated": "2026-05-10",
+  "complexity": "M",
+  "position": 8,
+  "parent": "COMP-GSD",
+  "links": [{"kind": "depends_on", "to_code": "COMP-GSD-2"}],
+  "group": "COMP-GSD"
+}
