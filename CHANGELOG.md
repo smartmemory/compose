@@ -2,9 +2,13 @@
 
 ## 2026-05-15
 
+### CI — Beta publish workflow: drop racy commit-back
+
+- `.github/workflows/beta.yml`: removed the "Commit version bump" step. It pushed a `chore: bump` commit to `main` after a successful npm publish, which raced concurrent pushes and failed the job (with the beta already published) on rapid successive merges. The beta version is derived from `npm view @smartmemory/compose@beta`, so npm is the source of truth and the commit-back was redundant.
+
 ### STRAT-GOAL-V1 — New contract: `contracts/goal-result.json`
 
-- New `contracts/goal-result.json`: `allOf` superset of `judge-result.json` with STRAT-GOAL-specific fields — `goal_id` (string), `goal_version` (integer), `mode` (enum: shadow-driven / shadow-observed / advisory / autonomous), `status` (enum: running / awaiting_decision / complete / killed), `turns_run` (integer), `worker_runs` (integer), `round` (integer), `predicate_outcomes` (object), `would_have_decided` (string/null, shadow-only advisory output)
+- New `contracts/goal-result.json`: `allOf` superset of `judge-result.json` with STRAT-GOAL-specific fields — `goal_id` (string), `goal_version` (const `"1.0"`), `mode` (enum: shadow-driven / shadow-observed / advisory / autonomous), `status` (enum: met / not_met / awaiting_decision / budget_exhausted / killed / in_progress), `turns_run` (integer), `worker_runs` (integer), `round` (integer), `predicate_outcomes` (array, MAY be empty for zero-turn results), `would_have_decided` (string/null, shadow-only advisory output)
 
 ### STRAT-JUDGE-V1 — New contract: `contracts/judge-result.json`; `contracts/review-result.json` updated
 

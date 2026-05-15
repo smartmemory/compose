@@ -77,15 +77,9 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Commit version bump
-        env:
-          BETA_VERSION: ${{ steps.version.outputs.beta }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json
-          git commit -m "chore: bump version to ${BETA_VERSION} [skip ci]" || echo "No changes to commit"
-          git push
+      # No commit-back: the beta version is derived from `npm view @smartmemory/compose@beta`
+      # (see "Generate beta version"), so npm is the source of truth. Pushing a bump commit
+      # to main raced concurrent pushes and failed the job after a successful publish.
 
       - name: Summary
         env:
