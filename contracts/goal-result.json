@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "goal-result.json",
+  "_source": "docs/features/STRAT-GOAL/design.md",
+  "_roadmap": "STRAT-GOAL",
+  "title": "GoalResult",
+  "description": "Output of stratum_goal — superset of JudgeResult (judge-result.json). Adds goal-orchestrator top-level fields: goal_id, goal_version, mode, status, turns_run, worker_runs, round, predicate_outcomes, and the optional would_have_decided. Invariant inherited: clean == met.",
+  "allOf": [
+    { "$ref": "judge-result.json" },
+    {
+      "type": "object",
+      "required": [
+        "goal_id",
+        "goal_version",
+        "mode",
+        "status",
+        "turns_run",
+        "worker_runs",
+        "round",
+        "predicate_outcomes"
+      ],
+      "properties": {
+        "goal_id": {
+          "type": "string",
+          "description": "Caller-supplied stable goal identifier. Immutable after first call."
+        },
+        "goal_version": {
+          "type": "string",
+          "const": "1.0",
+          "description": "Schema version for forward compatibility."
+        },
+        "mode": {
+          "enum": ["shadow", "advisory", "autonomous"],
+          "description": "Orchestration mode for this goal."
+        },
+        "status": {
+          "enum": [
+            "met",
+            "not_met",
+            "awaiting_decision",
+            "budget_exhausted",
+            "killed",
+            "in_progress"
+          ],
+          "description": "Current goal status. Derived from FlowState on every read — not a sticky sentinel. 'awaiting_decision' means a met claim is pending human review (advisory / non-whitelisted autonomous class). 'budget_exhausted' means max_turns reached before all predicates met. 'in_progress' is emitted only by stratum_goal_status for an in-flight goal that has not yet reached a terminal step or awaiting_decision — it is never produced by the orchestrator's GoalResult."
+        },
+        "turns_run": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of judge-evaluated turns (worker-dispatch failures that never reached the judge are not counted)."
+        },
+        "worker_runs": {
+          "type": "array",
+          "description": "Per-turn worker dispatch record. Length may exceed turns_run when worker failures occurred before a judge call.",
+          "items": {
+            "type": "object",
+            "required": ["turn", "agent_correlation_id", "duration_ms"],
+            "properties": {
+              "turn": { "type": "integer", "minimum": 1 },
+              "agent_correlation_id": { "type": "string" },
+              "duration_ms": { "type": "integer", "minimum": 0 }
+            }
+          }
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current synthetic-flow round index. Used to address the goal_decision gate step as (goal_id, 'goal_decision')."
+        },
+        "predicate_outcomes": {
+          "type": "array",
+          "description": "Per-predicate outcome after autonomy partition. One entry per predicate in the goal's predicate list. MAY be empty for zero-turn results (e.g. budget exhausted before any judge call).",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "type",
+              "verdict",
+              "confidence",
+              "applied_gate",
+              "judge_verdict",
+              "bound_autonomously",
+              "awaiting_human"
+            ],
+            "properties": {
+              "id": { "type": "string" },
+              "type": {
+                "enum": ["deterministic", "verified", "judged"],
+                "description": "Predicate type — determines autonomy eligibility."
+              },
+              "verdict": {
+                "enum": ["met", "not_met", "ambiguous"],
+                "description": "Post-normalization verdict — same as JudgeResult.predicates[].verdict."
+              },
+              "confidence": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10
+              },
+              "applied_gate": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10
+              },
+              "judge_verdict": {
+                "enum": ["met", "not_met", "ambiguous"],
+                "description": "Raw kernel verdict before autonomy partition (same as verdict in v1; separate field reserved for v2 mixed-mode where autonomy can override)."
+              },
+              "bound_autonomously": {
+                "type": "boolean",
+                "description": "True iff this predicate class was on the autonomy allow-list AND the verdict was met. Only ever true in autonomous mode."
+              },
+              "awaiting_human": {
+                "type": "boolean",
+                "description": "True iff verdict was met but this predicate class is NOT on the autonomy allow-list (advisory mode, or autonomous mode with non-whitelisted class). The goal pauses for human review."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "would_have_decided": {
+          "enum": ["met", "not_met", "ambiguous"],
+          "description": "Shadow-mode only. Reflects what the loop would have decided if it were binding. Derived from the last turn's overall verdict. Present iff mode == 'shadow' AND at least one judge-evaluated turn ran. Omitted in the zero-turn edge case (e.g. all worker failures consumed budget)."
+        }
+      }
+    }
+  ]
+}
