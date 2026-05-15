@@ -1,0 +1,152 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "judge-result.json",
+  "_source": "docs/features/STRAT-JUDGE/design.md",
+  "_roadmap": "STRAT-JUDGE",
+  "title": "JudgeResult",
+  "description": "Output of stratum_judge — strict superset of CrossModelReviewResult. Adds judge-specific top-level fields (met, stakes, predicates, tier_disagreements, budget_consumed, judge_kernel_meta); inherits findings/clean/consensus/claude_only/codex_only/meta/summary unchanged. Invariant: clean == met. Findings are emitted only for not_met or ambiguous predicates; met predicates contribute zero findings.",
+  "allOf": [
+    { "$ref": "cross-model-review-result.json" },
+    {
+      "type": "object",
+      "required": [
+        "judge_version",
+        "met",
+        "stakes",
+        "predicates",
+        "budget_consumed",
+        "judge_kernel_meta"
+      ],
+      "properties": {
+        "judge_version": {
+          "type": "string",
+          "const": "1.0",
+          "description": "Schema version for forward compatibility."
+        },
+        "met": {
+          "type": "boolean",
+          "description": "Top-level goal verdict. Defined as all(p.verdict == 'met' for p in predicates) after per-predicate normalization. Identical to inherited `clean` by invariant."
+        },
+        "stakes": {
+          "enum": ["cheap", "default", "paranoid"],
+          "description": "Depth class set by caller. v1: cheap (T1 only), default (T1+T2). paranoid raises StakesNotAvailableError until v2."
+        },
+        "predicates": {
+          "type": "array",
+          "description": "Per-predicate verdicts. MAY be empty for zero-turn results (e.g. budget exhausted before any judge call). Non-empty results are validated at the kernel boundary (EmptyPredicateListError) to prevent vacuous-pass gate bypass.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "type",
+              "statement",
+              "verdict",
+              "confidence",
+              "applied_gate",
+              "evidence",
+              "tier_history"
+            ],
+            "properties": {
+              "id": { "type": "string" },
+              "type": {
+                "enum": ["deterministic", "verified", "judged"],
+                "description": "Predicate type sets the tier ceiling. deterministic = T1 only. verified = T2. judged = T3 in v2, downgraded to T2 in v1."
+              },
+              "statement": { "type": "string" },
+              "verdict": {
+                "enum": ["met", "not_met", "ambiguous"],
+                "description": "Post-normalization verdict. A raw 'met' with confidence < applied_gate is downgraded to 'ambiguous' before this is written."
+              },
+              "confidence": { "type": "integer", "minimum": 1, "maximum": 10 },
+              "applied_gate": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10,
+                "description": "Per-predicate confidence threshold. Defaults to 7 (mirrors review-finding convention)."
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["source", "quote", "tier"],
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "pattern": "^(artifacts|modified)/[^:]+:[0-9]+$",
+                      "description": "Canonical citation format <bucket>/<path>:<line>. bucket must be 'artifacts' or 'modified'. Validated at the kernel boundary; path must resolve under the current turn's staging tree."
+                    },
+                    "quote": { "type": "string" },
+                    "tier": { "enum": ["T1", "T1.5", "T2", "T3", "T4"] }
+                  }
+                }
+              },
+              "tier_history": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["tier", "verdict", "confidence", "reason"],
+                  "properties": {
+                    "tier": { "enum": ["T1", "T1.5", "T2", "T3", "T4"] },
+                    "verdict": { "enum": ["met", "not_met", "ambiguous", "n/a"] },
+                    "confidence": {
+                      "type": ["integer", "null"],
+                      "minimum": 1,
+                      "maximum": 10,
+                      "description": "Null for T1 'n/a' verdicts (no LLM tier ran)."
+                    },
+                    "reason": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tier_disagreements": {
+          "type": "array",
+          "description": "Cross-tier disagreements within a single judge call. Empty in v1 (single-tier-per-predicate after T1). Reserved for v2+ T2/T3 quorum resolution.",
+          "items": {
+            "type": "object",
+            "required": ["predicate", "tiers", "resolution"],
+            "properties": {
+              "predicate": { "type": "string" },
+              "tiers": { "type": "array", "items": { "type": "string" } },
+              "resolution": { "type": "string" }
+            }
+          }
+        },
+        "budget_consumed": {
+          "type": "object",
+          "required": ["turns", "dollars", "wall_clock_s"],
+          "properties": {
+            "turns": { "type": "integer", "minimum": 0 },
+            "dollars": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Recorded but NOT enforced in v1 (no token-cost accounting yet)."
+            },
+            "wall_clock_s": { "type": "number", "minimum": 0 }
+          }
+        },
+        "judge_kernel_meta": {
+          "type": "object",
+          "required": ["decomposer_mode"],
+          "properties": {
+            "decomposer_mode": {
+              "enum": ["user", "auto", "hybrid", "ask"],
+              "description": "v1 ships 'user' only; auto/hybrid/ask are v2."
+            },
+            "smartmemory_priors_consulted": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Always 0 in v1 (SmartMemory wiring is v2)."
+            },
+            "degraded_judged": {
+              "type": "boolean",
+              "description": "True when a 'judged' predicate was downgraded to T2 because T3 is unavailable in v1."
+            }
+          }
+        }
+      }
+    }
+  ]
+}

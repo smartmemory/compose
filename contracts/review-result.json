@@ -68,8 +68,8 @@
       "required": ["agent_type", "model_id"],
       "properties": {
         "agent_type": {
-          "enum": ["claude", "codex"],
-          "description": "Which model type produced this result."
+          "enum": ["claude", "codex", "judge"],
+          "description": "Which model type produced this result. 'judge' is used by stratum_judge for T1-only paths (no LLM dispatched); when T2 fires, agent_type reflects the actual model invoked."
         },
         "model_id": {
           "type": ["string", "null"],

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-05-15
+
+### STRAT-GOAL-V1 — New contract: `contracts/goal-result.json`
+
+- New `contracts/goal-result.json`: `allOf` superset of `judge-result.json` with STRAT-GOAL-specific fields — `goal_id` (string), `goal_version` (integer), `mode` (enum: shadow-driven / shadow-observed / advisory / autonomous), `status` (enum: running / awaiting_decision / complete / killed), `turns_run` (integer), `worker_runs` (integer), `round` (integer), `predicate_outcomes` (object), `would_have_decided` (string/null, shadow-only advisory output)
+
+### STRAT-JUDGE-V1 — New contract: `contracts/judge-result.json`; `contracts/review-result.json` updated
+
+- New `contracts/judge-result.json`: strict superset of `review-result.json` for STRAT-JUDGE outputs. Adds `met` (boolean), `stakes` (enum: cheap / default / paranoid), `predicates` (array of `PredicateResult` with id, type, statement, verdict, confidence, applied_gate, evidence, tier_history), `budget_consumed` (turns, dollars, wall_clock_s), `judge_kernel_meta` (decomposer_mode)
+- `contracts/review-result.json` updated: `meta.agent_type` enum extended from `["claude", "codex"]` to `["claude", "codex", "judge"]` — `"judge"` is used for T1-only paths where no LLM was dispatched; when T2 fires, `agent_type` reflects the actual model invoked
+
 ## 2026-05-11
 
 ### COMP-GSD-2 — Per-task fresh-context dispatch (`compose gsd`)
