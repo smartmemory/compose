@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ProjectSwitchPopover from '../../src/components/ProjectSwitchPopover.jsx';
 
 function renderWithOutside(props = {}) {
@@ -21,6 +21,21 @@ function renderWithOutside(props = {}) {
         projectRoot="/projects/foo"
         onSwitch={vi.fn()}
         {...props}
+      />
+    </div>
+  );
+}
+
+function Wrapper({ projectName = 'my-project', projectRoot, onSwitch }) {
+  return (
+    <div>
+      <div data-testid="outside-area" style={{ padding: 8 }}>
+        rest of the app
+      </div>
+      <ProjectSwitchPopover
+        projectName={projectName}
+        projectRoot={projectRoot}
+        onSwitch={onSwitch}
       />
     </div>
   );
@@ -67,5 +82,55 @@ describe('BUG-25: project switch popover dismissal', () => {
     fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
 
     expect(screen.queryByTestId('project-popover')).toBeNull();
+  });
+
+  it('syncs the controlled input when projectRoot prop changes', () => {
+    const { rerender } = render(<Wrapper projectRoot="/projects/foo" onSwitch={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('project-btn'));
+    expect(screen.getByTestId('project-input').value).toBe('/projects/foo');
+
+    rerender(<Wrapper projectRoot="/projects/bar" onSwitch={vi.fn()} />);
+
+    expect(screen.getByTestId('project-input').value).toBe('/projects/bar');
+  });
+
+  it('closes the popover after Enter is pressed in the input', async () => {
+    const onSwitch = vi.fn().mockResolvedValue(undefined);
+    render(<Wrapper projectRoot="/projects/foo" onSwitch={onSwitch} />);
+    fireEvent.click(screen.getByTestId('project-btn'));
+    expect(screen.queryByTestId('project-popover')).not.toBeNull();
+
+    fireEvent.keyDown(screen.getByTestId('project-input'), { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('project-popover')).toBeNull();
+    });
+  });
+
+  it('calls onSwitch with the typed value when Enter is pressed', () => {
+    const onSwitch = vi.fn();
+    render(<Wrapper projectRoot="/projects/foo" onSwitch={onSwitch} />);
+    fireEvent.click(screen.getByTestId('project-btn'));
+
+    const input = screen.getByTestId('project-input');
+    fireEvent.change(input, { target: { value: '/projects/elsewhere' } });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+    expect(onSwitch).toHaveBeenCalledWith('/projects/elsewhere');
+  });
+
+  it('exposes aria attributes that reflect open state and dialog semantics', () => {
+    renderWithOutside();
+    const btn = screen.getByTestId('project-btn');
+    expect(btn.getAttribute('aria-expanded')).toBe('false');
+    expect(btn.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(btn.getAttribute('aria-label')).toBe('Switch project');
+
+    fireEvent.click(btn);
+
+    expect(btn.getAttribute('aria-expanded')).toBe('true');
+    const popover = screen.getByTestId('project-popover');
+    expect(popover.getAttribute('role')).toBe('dialog');
+    expect(popover.getAttribute('aria-label')).toBe('Switch project');
   });
 });

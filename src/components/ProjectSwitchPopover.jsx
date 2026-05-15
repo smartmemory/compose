@@ -2,7 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 
 export default function ProjectSwitchPopover({ projectName, projectRoot, onSwitch }) {
   const [open, setOpen] = useState(false);
+  const [inputValue, setInputValue] = useState(projectRoot || '');
   const rootRef = useRef(null);
+
+  useEffect(() => {
+    setInputValue(projectRoot || '');
+  }, [projectRoot]);
 
   useEffect(() => {
     if (!open) return;
@@ -33,12 +38,17 @@ export default function ProjectSwitchPopover({ projectName, projectRoot, onSwitc
         className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
         onClick={() => setOpen(v => !v)}
         title={projectRoot || 'Switch project'}
+        aria-label="Switch project"
+        aria-haspopup="dialog"
+        aria-expanded={open}
       >
         {projectName || 'no project'}
       </button>
       {open && (
         <div
           data-testid="project-popover"
+          role="dialog"
+          aria-label="Switch project"
           className="absolute top-full left-0 mt-1 z-50 p-2 rounded-md shadow-lg"
           style={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', minWidth: '280px' }}
         >
@@ -51,9 +61,13 @@ export default function ProjectSwitchPopover({ projectName, projectRoot, onSwitc
             className="w-full px-2 py-1 text-xs rounded border bg-background text-foreground"
             style={{ borderColor: 'hsl(var(--border))' }}
             placeholder="Absolute path to project..."
-            defaultValue={projectRoot}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') onSwitch(e.target.value);
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={async (e) => {
+              if (e.key === 'Enter') {
+                await onSwitch(inputValue);
+                setOpen(false);
+              }
               if (e.key === 'Escape') setOpen(false);
             }}
           />
