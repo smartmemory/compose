@@ -107,6 +107,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('Usage: compose <command>')
   console.log('')
   console.log('Commands:')
+  console.log('  start     Start the compose app (UI + API) for this project')
   console.log('  new       Kickoff a product (research, brainstorm, roadmap, scaffold)')
   console.log('  import    Scan existing project and generate structured analysis')
   console.log('  feature   Add a single feature (folder, design seed, ROADMAP entry)')
