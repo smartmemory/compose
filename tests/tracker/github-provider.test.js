@@ -565,24 +565,24 @@ describe('GitHubProvider T17: health()', () => {
     }
   });
 
-  it('health() pendingOps > 0 after createFeature with reconcile-failing transport', async () => {
+  it('health() pendingOps >= 1 after createFeature with reconcile-failing transport', async () => {
     process.env.CTP_TEST_TOKEN = 'tok';
     const cwd = mkdtempSync(join(tmpdir(), 'ctp-gh-health-pending-'));
     try {
-      // A transport that succeeds the repo probe but fails issue creation (so reconcile can't flush)
-      let callCount = 0;
+      // Transport: allows the init repo probe (GET /repos/o/r → 200), but throws a plain
+      // non-CAS Error on createIssue so the reconciler's _applyOp fails deterministically.
+      // On a non-CAS error the reconciler calls bumpAttempt (attempts: 0→1) then breaks.
+      // Since 1 < maxAttempts(5), the op stays in pending state — NOT quarantined.
+      // No monkey-patching needed: createFeature calls flush() exactly once, which throws
+      // once, leaving the op pending. health() then reads log.pending() and sees 1 entry.
       const failingTransport = {
-        async request(method, path, body) {
-          // Allow GET /repos/o/r (repo probe)
+        async request(method, path) {
           if (method === 'GET' && path === '/repos/o/r') {
             return { status: 200, body: { full_name: 'o/r' }, headers: {} };
           }
-          // Fail all issue POST calls so ops stay pending
           if (method === 'POST' && path === '/repos/o/r/issues') {
-            callCount++;
-            return { status: 500, body: { message: 'server error' }, headers: {} };
+            throw new Error('network error: createIssue intentionally failed');
           }
-          // Search returns empty (no recovery possible)
           if (method === 'GET' && path.includes('/search/issues')) {
             return { status: 200, body: { items: [] }, headers: {} };
           }
@@ -596,24 +596,14 @@ describe('GitHubProvider T17: health()', () => {
         _transport: failingTransport,
       });
 
-      // createFeature writes to cache+oplog, then reconciler tries to flush → fails → op stays pending
-      // After maxAttempts (5) it's quarantined, so we check immediately after one failed reconcile.
-      // To keep ops in pending state we monkey-patch reconciler.flush to no-op after first call.
-      const origFlush = provider.reconciler.flush.bind(provider.reconciler);
-      let flushed = false;
-      provider.reconciler.flush = async () => {
-        if (!flushed) { flushed = true; try { await origFlush(); } catch {} }
-        // subsequent flush calls are no-ops to prevent quarantine
-      };
-
+      // createFeature: writes cache+oplog, then reconciler.flush() → _applyOp throws →
+      // bumpAttempt(attempts=1) → break. Op remains in pending state (1 < maxAttempts=5).
       await provider.createFeature('HLTH-PEND', { code: 'HLTH-PEND', description: 'd', status: 'PLANNED' });
+
       const h = await provider.health();
-      // At least 1 op must be pending or quarantined (we accept either given retry count)
-      // The key thing is pendingOps is a number and reflects what's actually in the log.
-      expect(typeof h.pendingOps).toBe('number');
-      // After the flush failure the op is either still pending or quarantined (5 retries)
-      // Either way health() should not throw.
       expect(h.ok).toBe(true);
+      // Strict assertion: op must remain pending (not resolved or quarantined after one attempt)
+      expect(h.pendingOps).toBeGreaterThanOrEqual(1);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
