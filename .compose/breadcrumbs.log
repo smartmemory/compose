@@ -416,3 +416,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-11T00:22:29+08:00 | T5: pipelines/gsd.stratum.yaml + validation test
 2026-05-11T00:30:18+08:00 | T6: runGsd entry + CLI verb (validate, gateCommands fallback, decompose validation+repair, status loop, post-step blackboard walk)
 2026-05-11T01:01:48+08:00 | T7: golden flow test with stubbed Stratum + mock connector + prompt-contract assertion
+2026-05-15T16:10:20-04:00 | Extract ProjectSwitchPopover into src/ component so App.jsx and the BUG-25 regression test share one implementation
