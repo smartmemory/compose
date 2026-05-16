@@ -13,6 +13,29 @@ runProviderConformance('LocalFileProvider', makeProvider);
 
 import { describe, it, expect } from 'vitest';
 
+describe('LocalFileProvider appendEvent / readEvents symmetry', () => {
+  it('accepts normalized type on write and round-trips type on read', async () => {
+    const { provider, cleanup } = await makeProvider();
+    try {
+      await provider.createFeature('EV-1', { code: 'EV-1', description: 'd', status: 'PLANNED' });
+      await provider.appendEvent('EV-1', { type: 'status', from: 'PLANNED', to: 'IN_PROGRESS' });
+      const ev = await provider.readEvents('EV-1');
+      expect(ev.length).toBe(1);
+      expect(ev[0].type).toBe('status');
+    } finally { await cleanup(); }
+  });
+
+  it('rejects appendEvent with no tool and no known type', async () => {
+    const { provider, cleanup } = await makeProvider();
+    try {
+      await provider.createFeature('EV-2', { code: 'EV-2', description: 'd', status: 'PLANNED' });
+      await expect(
+        provider.appendEvent('EV-2', { foo: 1 })
+      ).rejects.toThrow(/resolve writer tool/);
+    } finally { await cleanup(); }
+  });
+});
+
 describe('LocalFileProvider putFeature null/empty status clobber guard', () => {
   it('rejects null status when it differs from current', async () => {
     const { provider, cleanup } = await makeProvider();
