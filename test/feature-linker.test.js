@@ -380,7 +380,7 @@ describe('getFeatureLinks', () => {
     await linkFeatures(cwd, { from_code: 'GL-A', to_code: 'GL-B', kind: 'depends_on' });
     await linkFeatures(cwd, { from_code: 'GL-C', to_code: 'GL-A', kind: 'surfaced_by' });
 
-    const r = getFeatureLinks(cwd, { feature_code: 'GL-A' });
+    const r = await getFeatureLinks(cwd, { feature_code: 'GL-A' });
     assert.equal(r.outgoing.length, 1);
     assert.deepEqual(r.outgoing[0], { kind: 'depends_on', to_code: 'GL-B', note: undefined });
     assert.equal(r.incoming.length, 1);
@@ -394,11 +394,11 @@ describe('getFeatureLinks', () => {
     await linkFeatures(cwd, { from_code: 'DR-A', to_code: 'DR-B', kind: 'related' });
     await linkFeatures(cwd, { from_code: 'DR-B', to_code: 'DR-A', kind: 'related' });
 
-    const out = getFeatureLinks(cwd, { feature_code: 'DR-A', direction: 'outgoing' });
+    const out = await getFeatureLinks(cwd, { feature_code: 'DR-A', direction: 'outgoing' });
     assert.equal(out.outgoing.length, 1);
     assert.equal(out.incoming, undefined);
 
-    const inc = getFeatureLinks(cwd, { feature_code: 'DR-A', direction: 'incoming' });
+    const inc = await getFeatureLinks(cwd, { feature_code: 'DR-A', direction: 'incoming' });
     assert.equal(inc.incoming.length, 1);
     assert.equal(inc.outgoing, undefined);
   });
@@ -412,7 +412,7 @@ describe('getFeatureLinks', () => {
     await linkFeatures(cwd, { from_code: 'KF-A', to_code: 'KF-C', kind: 'related' });
     await linkFeatures(cwd, { from_code: 'KF-B', to_code: 'KF-A', kind: 'depends_on' });
 
-    const r = getFeatureLinks(cwd, { feature_code: 'KF-A', kind: 'depends_on' });
+    const r = await getFeatureLinks(cwd, { feature_code: 'KF-A', kind: 'depends_on' });
     assert.equal(r.outgoing.length, 1);
     assert.equal(r.outgoing[0].to_code, 'KF-B');
     assert.equal(r.incoming.length, 1);
@@ -422,7 +422,7 @@ describe('getFeatureLinks', () => {
   test('returns empty arrays when no links exist', async () => {
     const cwd = freshCwd();
     await seed(cwd, 'EM-1');
-    const r = getFeatureLinks(cwd, { feature_code: 'EM-1' });
+    const r = await getFeatureLinks(cwd, { feature_code: 'EM-1' });
     assert.deepEqual(r.outgoing, []);
     assert.deepEqual(r.incoming, []);
   });
@@ -430,7 +430,7 @@ describe('getFeatureLinks', () => {
   test('rejects invalid direction with a clear error', async () => {
     const cwd = freshCwd();
     await seed(cwd, 'BD-1');
-    assert.throws(
+    await assert.rejects(
       () => getFeatureLinks(cwd, { feature_code: 'BD-1', direction: 'sideways' }),
       /invalid direction/
     );
