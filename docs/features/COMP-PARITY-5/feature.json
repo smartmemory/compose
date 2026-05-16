@@ -1,0 +1,13 @@
+{
+  "code": "COMP-PARITY-5",
+  "description": "Reconcile completion vs. status across surfaces. The UI's free item status dropdown (PATCH vision item) can silently diverge from the CLI's commit-SHA-bound `record-completion` (feature.json completions[]). Surface the recorded completion (commit SHA + tests-pass) next to the status control and either gate UI status changes behind a binding or flag the divergence. Closes the highest-risk consistency hole between vision-state.json and feature.json.",
+  "status": "PLANNED",
+  "phase": "COMP-PARITY: UI↔CLI Parity",
+  "created": "2026-05-16",
+  "updated": "2026-05-16",
+  "complexity": "M",
+  "position": 6,
+  "parent": "COMP-PARITY",
+  "links": [{"kind": "depends_on", "to_code": "COMP-PARITY-7"}],
+  "group": "COMP-PARITY"
+}

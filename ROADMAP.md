@@ -1250,31 +1250,22 @@ Response-time policy gate that detects rule violations in candidate agent respon
 
 ---
 
-## Features — PARTIAL
+## COMP-PARITY: UI↔CLI Parity — PLANNED
+
+Close the asymmetries between the cockpit and the `compose` CLI documented in `docs/ui-cli-parity.md`.
+Each surface should drive a feature/bug through its full lifecycle. Reuses existing server endpoints
+and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (unblocks headless/CI).
 
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
-| — | COMP-CLI-GLOBAL-FLAGS | Pre-subcommand flag parser to enable compose --workspace=X build syntax | PLANNED |
-| — | COMP-MOBILE | Mobile PWA at /m route — fully functional companion to the desktop cockpit. Phone-first; tablet inherits. 5 phases: shell, roadmap, ideabox, agents, builds. Remote transport (auth + tunnel) deferred to COMP-MOBILE-REMOTE. | COMPLETE |
-| — | COMP-MOBILE-REMOTE | Remote-reachable transport for COMP-MOBILE: 0.0.0.0 binding (opt-in), short-lived JWT access tokens with refresh, QR + URL + cockpit pairing modal, BYO tunnel (Tailscale/Cloudflare/ngrok). Server-side auth and pairing UI; tunnel layer left to user. | PLANNED |
-| — | COMP-WORKSPACE-HTTP | Foundation for HTTP workspace track: Express middleware reading X-Compose-Workspace-Id, GET /api/workspace bootstrap, Vite frontend context provider. Behavior-preserving substrate for COMP-WORKSPACE-{VISION,SESSIONS,AGENT-SVR,FILES}. | COMPLETE |
-| — | COMP-WORKSPACE-ID | Workspace identity detection (parent vs child) across CLI, MCP, and hooks | PLANNED |
-| — | COMP-WORKSPACE-RESUME | Persist MCP workspace binding across restarts via CLAUDE_SESSION_ID env (when injected) | PLANNED |
-| — | COMP-WORKSPACE-WATCHERS | Runtime workspace rebinding for long-lived watchers (file-watcher, cc-session-watcher) | PLANNED |
-
----
-
-## Features — PARTIAL
-
-| # | Feature | Description | Status |
-|---|---------|-------------|--------|
-| — | COMP-CLI-GLOBAL-FLAGS | Pre-subcommand flag parser to enable compose --workspace=X build syntax | PLANNED |
-| — | COMP-MOBILE | Mobile PWA at /m route — fully functional companion to the desktop cockpit. Phone-first; tablet inherits. 5 phases: shell, roadmap, ideabox, agents, builds. Remote transport (auth + tunnel) deferred to COMP-MOBILE-REMOTE. | COMPLETE |
-| — | COMP-MOBILE-REMOTE | Remote-reachable transport for COMP-MOBILE: 0.0.0.0 binding (opt-in), short-lived JWT access tokens with refresh, QR + URL + cockpit pairing modal, BYO tunnel (Tailscale/Cloudflare/ngrok). Server-side auth and pairing UI; tunnel layer left to user. | PLANNED |
-| — | COMP-WORKSPACE-HTTP | Foundation for HTTP workspace track: Express middleware reading X-Compose-Workspace-Id, GET /api/workspace bootstrap, Vite frontend context provider. Behavior-preserving substrate for COMP-WORKSPACE-{VISION,SESSIONS,AGENT-SVR,FILES}. | COMPLETE |
-| — | COMP-WORKSPACE-ID | Workspace identity detection (parent vs child) across CLI, MCP, and hooks | PLANNED |
-| — | COMP-WORKSPACE-RESUME | Persist MCP workspace binding across restarts via CLAUDE_SESSION_ID env (when injected) | PLANNED |
-| — | COMP-WORKSPACE-WATCHERS | Runtime workspace rebinding for long-lived watchers (file-watcher, cc-session-watcher) | PLANNED |
+| 1 | COMP-PARITY | UI↔CLI Parity initiative — umbrella for COMP-PARITY-1..7. Today gate resolution is UI-only (blocks headless/CI) and the fix/new lifecycles are CLI-only (invisible to UI-first devs). | PLANNED |
+| 2 | COMP-PARITY-1 | CLI gate resolution — `compose gate list` + `compose gate resolve <id> --approve\|--revise\|--kill`. Wraps POST /api/vision/gates/{id}/resolve. Highest impact: headless/CI builds currently cannot clear a gate. Ships first. | PLANNED |
+| 3 | COMP-PARITY-2 | UI launchers for the `fix` and `new` lifecycles (and resume aborted fix). Pipeline tab already renders these flows once running — adds the missing launch/resume controls. | PLANNED |
+| 4 | COMP-PARITY-3 | Cockpit environment-health panel surfacing `compose doctor` + `compose hooks status`. Silent hook/version drift currently fails builds with zero UI signal. | PLANNED |
+| 5 | COMP-PARITY-4 | Loop create/resolve verbs in the UI. Attention queue shows loops but offers no create/resolve action — loop hygiene is terminal-only. | PLANNED |
+| 6 | COMP-PARITY-5 | Reconcile completion vs. status — UI free status dropdown can silently diverge from CLI commit-SHA-bound `record-completion`. Surface recorded completion next to status. Depends on COMP-PARITY-7. | PLANNED |
+| 7 | COMP-PARITY-6 | `compose validate` findings panel in the cockpit — verification (validate/qa-scope/roadmap check) is terminal-only and invisible to UI-first review. | PLANNED |
+| 8 | COMP-PARITY-7 | State-sync reconciliation — single source of truth across feature.json / ROADMAP.md / vision-state.json. Kills the bin/compose.js append path (cause of the triplicate `## Features` sections), de-dupes ROADMAP, makes UI item edits write through to canonical feature.json. Substrate for COMP-PARITY-5. | PLANNED |
 
 ---
 
