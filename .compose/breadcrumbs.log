@@ -428,3 +428,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-17T04:58:05+08:00 | compose tracker status/sync CLI
 2026-05-17T05:30:24+08:00 | reconnect production seam: provider.appendEvent + GH changelog low-level + design reconcile
 2026-05-15T16:10:20-04:00 | Extract ProjectSwitchPopover into src/ component so App.jsx and the BUG-25 regression test share one implementation
+2026-05-16T17:40:37-04:00 | Adding loading indicator for design agent active state (issue #16) and surfacing API errors during retry loops (issue #24)
