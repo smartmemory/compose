@@ -19,8 +19,9 @@
     "dev:client": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test test/*.test.js test/comp-obs-branch/*.test.js && npm run test:ui",
+    "test": "node --test test/*.test.js test/comp-obs-branch/*.test.js && npm run test:ui && npm run test:tracker",
     "test:ui": "vitest run",
+    "test:tracker": "vitest run --config vitest.tracker.config.js",
     "test:integration": "node --test test/integration/*.test.js",
     "test:wave-6": "node --test test/wave-6-integration.test.js test/wave-6-contract-compliance.test.js",
     "prepublishOnly": "npm run build"

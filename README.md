@@ -82,6 +82,48 @@ Check what you're running:
 compose --version
 ```
 
+## Tracker providers
+
+Compose can persist feature data to different backends via the `tracker` block in `.compose/compose.json`.
+
+**Default (local) — zero configuration required:**
+
+```json
+{ "tracker": { "provider": "local" } }
+```
+
+`local` is the default when no `tracker` block is present. All writes go to the filesystem exactly as before — no behavior change.
+
+**GitHub provider:**
+
+```json
+{
+  "tracker": {
+    "provider": "github",
+    "github": {
+      "repo": "owner/repo",
+      "projectNumber": 42,
+      "branch": "main",
+      "roadmapPath": "ROADMAP.md",
+      "changelogPath": "CHANGELOG.md",
+      "cacheTtlSeconds": 300,
+      "auth": { "tokenEnv": "GITHUB_TOKEN" }
+    }
+  }
+}
+```
+
+The GitHub provider syncs features to **Issues** (one per feature), **Projects v2** (`Status` custom field), and **Contents API** (roadmap + changelog files). Requires a token in the named env var (or `gh auth login` fallback) with `repo` and `project` scopes.
+
+CLI verbs:
+
+```bash
+compose tracker status   # show provider health + pending op-log + conflict ledger
+compose tracker sync     # reconcile op-log against remote provider
+```
+
+See [docs/configuration.md](docs/configuration.md) for the full `tracker` config reference.
+
 ## Documentation
 
 Topic-scoped reference:
