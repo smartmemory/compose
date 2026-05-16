@@ -45,7 +45,8 @@ The seam is **not** just `feature-json`/`roadmap-gen`. Every path that mutates t
 | `feature-writer.setFeatureStatus` / `addRoadmapEntry` | typed mutation + transition policy + event + roadmap regen | **route through provider** |
 | `completion-writer.recordCompletion` | persists completion, then flips status | **route through provider** (see partial-commit contract) |
 | `changelog-writer.addChangelogEntry` | atomic parse-and-rewrite of `CHANGELOG.md` | **route through provider** |
-| `build.js` direct `readFeature`/`writeFeature` — triage profile cache (`build.js:628`), status flips (`build.js:752`), terminal reset (`build.js:1833`) | bypasses feature-writer, transition policy, events, roadmap regen | **must be re-pointed at the provider.** These become `provider.getFeature`/`provider.putFeature`. The triage profile cache write is metadata-only (no status change) so it skips transition policy legitimately — the provider contract explicitly allows metadata-only `putFeature` that does not emit a status event. |
+| `build.js` triage/profile metadata cache (`build.js:644,653`) | metadata-only `writeFeature`, no status change | → `provider.putFeature` (metadata-only; legitimately skips transition policy + status event) |
+| `build.js` lifecycle status flips (`build.js:755,1834,1845,1854`) | **real status transitions** done via direct `writeFeature`, bypassing transition policy/events/roadmap | **must route through the `setStatus`-class composite op**, not raw `putFeature`. These are tracker-canonical status changes; under a remote provider they MUST go through transition policy + event + roadmap regen exactly like the MCP path. Explicit rule: **any `status` field change is canonical and only ever flows through `setStatus`; raw `putFeature` is rejected by the contract if the payload's `status` differs from the current cached value.** This closes the bypass at the source rather than relying on call-site discipline. |
 | `compose-mcp-tools.js` direct reads of vision-state / sessions (`:23,:38,:52`) | local disk reads, not provider-routed | **v1 decision:** vision/sessions are `JOURNAL`/`VISION`-capability — they always resolve through `LocalFileProvider` regardless of active provider. This is **expected mixed-source state**, not a bug: under GitHubProvider, features/roadmap/changelog/events are GitHub-canonical while vision/sessions stay local. `health()` reports `mixedSources: ["vision","sessions"]` and `compose tracker status` prints it so the operator is never surprised. Unifying these is a v2 capability, not a v1 silent behavior change. |
 
 "Zero change for local" is therefore defined precisely: with `provider: "local"`, every path above produces byte-identical files and the same typed errors as today (enforced by the regression golden flow + conformance suite below).
@@ -107,7 +108,19 @@ Today's writers have **typed partial-commit contracts** that callers depend on. 
   - `setStatus(code, to, meta)` → may throw `ROADMAP_PARTIAL_WRITE` (feature persisted, roadmap regen failed) exactly as `feature-writer.js:233` does today.
   - `recordCompletion(code, rec)` → persists completion **first**, then flips status; rethrows `STATUS_FLIP_AFTER_COMPLETION_RECORDED` if the flip fails (mirrors `completion-writer.js:305`). The provider guarantees the completion is durable before the status step is attempted.
   - `appendChangelog(entry)` → an **atomic whole-file parse-and-rewrite**, not a blind append (mirrors `changelog-writer.js:323/504`). Remote providers fetch the canonical file, parse, splice, and commit the full file in one Contents-API call.
-- `putFeature` is the low-level metadata upsert (used by triage cache); the composite methods above are what the mutation layer calls for status/completion/changelog. The transition policy still runs in the mutation layer *before* `setStatus` is invoked.
+- `putFeature` is the low-level **metadata-only** upsert (used by triage cache); it is contract-rejected if it would change `status` (status only flows through `setStatus`). The composite methods are what the mutation layer calls for status/completion/changelog. The transition policy still runs in the mutation layer *before* `setStatus` is invoked.
+
+### Idempotency keys & replay (Codex R2)
+
+Today's composite writers accept a caller-supplied `idempotency_key` for retry-safe MCP behavior (`feature-writer.js:66,202`, `completion-writer.js:257`, `changelog-writer.js:316`) — a replayed key returns the cached result without re-mutating. This is **first-class in the provider contract**, not just low-level payload idempotence:
+
+- Every composite op (`setStatus`, `addRoadmapEntry`, `recordCompletion`, `appendChangelog`) takes an optional `idempotencyKey`.
+- The op-log records it. **Op-log dedupe:** enqueuing an op whose `idempotencyKey` matches an un-reconciled or recently-reconciled op (bounded retention window) is a no-op that returns the prior result — identical observable behavior to today's writer-level dedupe, now also covering the queue/reconcile path (so a crash-and-retry between cache-commit and reconcile cannot double-apply remotely).
+- Remote application is additionally guarded by the CAS version check, so even a dedupe-window miss cannot double-apply.
+
+### Same-feature write serialization (Codex R2)
+
+`recordCompletion` correctness depends on a per-feature advisory lock (`completion-writer.js:56`) wrapping the read-modify-write/dedupe/persist of `completions[]` (`:257`). Pending-op shadowing + CAS handle *remote* drift but not *two local callers* racing the same feature. Requirement: **the provider serializes mutations per `code`** (per-feature advisory lock around the read-modify-write-append-oplog critical section, for both providers). `LocalFileProvider` reuses today's exact lock (zero behavior change); remote providers apply the same per-`code` lock around cache+op-log commit. The conformance suite asserts concurrent same-feature completions never lose or duplicate an entry.
 
 ## GitHub Provider Mapping
 
