@@ -46,16 +46,17 @@ export function runProviderConformance(label, makeProvider) {
       } finally { await cleanup(); }
     });
 
+    // real completion contract: feature-json stores commit_sha (COMP-TRACKER-PROVIDER plan defect fix)
     it('concurrent same-feature completions never lose or duplicate', async () => {
       const { provider, cleanup } = await makeProvider();
       try {
         await provider.createFeature('CONF-5', { code: 'CONF-5', description: 'd', status: 'IN_PROGRESS' });
         await Promise.all([
-          provider.recordCompletion('CONF-5', { sha: 'a'.repeat(40), notes: 'x' }),
-          provider.recordCompletion('CONF-5', { sha: 'b'.repeat(40), notes: 'y' }),
+          provider.recordCompletion('CONF-5', { commit_sha: 'a'.repeat(40), tests_pass: true, files_changed: ['x'], notes: 'x' }),
+          provider.recordCompletion('CONF-5', { commit_sha: 'b'.repeat(40), tests_pass: true, files_changed: ['y'], notes: 'y' }),
         ]);
         const f = await provider.getFeature('CONF-5');
-        const shas = (f.completions ?? []).map(c => c.sha).sort();
+        const shas = (f.completions ?? []).map(c => c.commit_sha).sort();
         expect(shas).toEqual(['a'.repeat(40), 'b'.repeat(40)]);
       } finally { await cleanup(); }
     });
