@@ -119,6 +119,8 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  roadmap generate   Regenerate ROADMAP.md from feature.json files')
   console.log('  roadmap migrate    Extract ROADMAP.md entries into feature.json files')
   console.log('  roadmap check      Verify feature.json and ROADMAP.md are in sync')
+  console.log('  items              List vision items from local state (no server)')
+  console.log('  items show <id>    Show detail for a specific vision item')
   console.log('  triage    Analyze a feature and recommend build profile')
   console.log('  qa-scope  Show affected routes from a feature\'s changed files')
   console.log('  init      Initialize Compose in the current project')
@@ -2669,6 +2671,104 @@ if (cmd === 'build') {
     console.error('  compose loops add --feature <FC> --kind <kind> --summary "<text>"')
     console.error('  compose loops list --feature <FC>')
     console.error('  compose loops resolve <loopId> --feature <FC> --note "<text>"')
+    process.exit(1)
+  }
+
+} else if (cmd === 'items') {
+  // ---------------------------------------------------------------------------
+  // compose items — read vision-state.json directly (no server required)
+  // ---------------------------------------------------------------------------
+  const itemsSub = args[0] && !args[0].startsWith('-') ? args[0] : 'list'
+  const jsonFlag = args.includes('--json')
+
+  const { root: itemsCwd } = resolveCwdWithWorkspace(args)
+  const vsPath = join(itemsCwd, '.compose', 'data', 'vision-state.json')
+
+  if (!existsSync(vsPath)) {
+    console.error('No vision state found. Run `compose start` first.')
+    process.exit(1)
+  }
+
+  let visionState
+  try {
+    visionState = JSON.parse(readFileSync(vsPath, 'utf-8'))
+  } catch (err) {
+    console.error(`Failed to read vision state: ${err.message}`)
+    process.exit(1)
+  }
+
+  const allItems = visionState.items || []
+
+  if (itemsSub === 'list') {
+    if (jsonFlag) {
+      console.log(JSON.stringify(allItems, null, 2))
+      process.exit(0)
+    }
+
+    if (allItems.length === 0) {
+      console.log('No items found.')
+      process.exit(0)
+    }
+
+    // Table output: id (truncated), title, status, type
+    const header = { id: 'ID', title: 'TITLE', status: 'STATUS', type: 'TYPE' }
+    const rows = allItems.map(it => ({
+      id: (it.id || '').slice(0, 8),
+      title: (it.title || '(untitled)').slice(0, 50),
+      status: it.status || '-',
+      type: it.type || '-',
+    }))
+
+    // Compute column widths
+    const cols = ['id', 'title', 'status', 'type']
+    const widths = {}
+    for (const c of cols) {
+      widths[c] = Math.max(header[c].length, ...rows.map(r => r[c].length))
+    }
+
+    const pad = (s, w) => s + ' '.repeat(Math.max(0, w - s.length))
+    const line = cols.map(c => pad(header[c], widths[c])).join('  ')
+    console.log(line)
+    console.log(cols.map(c => '-'.repeat(widths[c])).join('  '))
+    for (const r of rows) {
+      console.log(cols.map(c => pad(r[c], widths[c])).join('  '))
+    }
+    process.exit(0)
+
+  } else if (itemsSub === 'show') {
+    const showId = args[1]
+    if (!showId || showId.startsWith('-')) {
+      console.error('Usage: compose items show <id>')
+      process.exit(1)
+    }
+
+    const match = allItems.find(it => it.id === showId || it.id.startsWith(showId))
+    if (!match) {
+      console.error(`No item found matching: ${showId}`)
+      process.exit(1)
+    }
+
+    if (jsonFlag) {
+      console.log(JSON.stringify(match, null, 2))
+    } else {
+      for (const [key, val] of Object.entries(match)) {
+        if (val == null) continue
+        if (typeof val === 'object') {
+          console.log(`${key}: ${JSON.stringify(val)}`)
+        } else {
+          console.log(`${key}: ${val}`)
+        }
+      }
+    }
+    process.exit(0)
+
+  } else {
+    console.error(`Unknown items subcommand: ${itemsSub}`)
+    console.error('Usage:')
+    console.error('  compose items              List all items')
+    console.error('  compose items list         List all items')
+    console.error('  compose items show <id>    Show detail for a specific item')
+    console.error('  --json                     Output as JSON')
     process.exit(1)
   }
 
