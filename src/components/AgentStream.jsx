@@ -303,6 +303,10 @@ function connect() {
         stalled: true,
       });
     },
+    onExhausted: () => {
+      // Retries exhausted — clear the handle so connect() can re-establish
+      _state.es = null;
+    },
     onEvent: (payload, name) => {
       // Any event arriving clears stall/error state
       if (_state.stalled || _state.streamError) {
@@ -318,7 +322,7 @@ function connect() {
       processMessage(payload);
     },
     maxBackoffMs: 8000,
-    maxRetries: 10,
+    maxRetries: 5,
     stallTimeoutMs: 30000,
   });
   _state.es = handle;
@@ -544,7 +548,7 @@ export default function AgentStream() {
           className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none"
           style={{ background: 'hsl(var(--background) / 0.7)', backdropFilter: 'blur(2px)' }}
         >
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-col items-center gap-3" role="status" aria-live="polite">
             <div
               className="w-5 h-5 rounded-full animate-spin"
               style={{ border: '2px solid hsl(var(--accent) / 0.2)', borderTopColor: 'hsl(var(--accent))' }}
@@ -559,6 +563,27 @@ export default function AgentStream() {
                 {streamError.error}
               </span>
             )}
+            {/* Reconnect button — shown when retries are exhausted */}
+            {!_state.es && streamError.error && (
+              <button
+                onClick={() => {
+                  _state.streamError = null;
+                  _state.retryInfo = null;
+                  _state.stalled = false;
+                  setStreamError({ error: null, retryInfo: null, stalled: false });
+                  connect();
+                }}
+                className="pointer-events-auto px-3 py-1 rounded text-[11px] font-medium"
+                style={{
+                  background: 'hsl(var(--accent) / 0.15)',
+                  border: '1px solid hsl(var(--accent) / 0.3)',
+                  color: 'hsl(var(--accent-foreground))',
+                  cursor: 'pointer',
+                }}
+              >
+                Reconnect
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -566,6 +591,8 @@ export default function AgentStream() {
       {/* Stream error banner — shown while connected but experiencing issues */}
       {connected && (streamError.error || streamError.stalled) && (
         <div
+          role="status"
+          aria-live="polite"
           className="shrink-0 flex items-center gap-2 px-3 py-1.5 text-[11px]"
           style={{
             background: streamError.stalled ? 'hsl(45 93% 47% / 0.1)' : 'hsl(var(--destructive) / 0.1)',
