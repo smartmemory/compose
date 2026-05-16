@@ -69,10 +69,15 @@ const _state = {
   _idleTimer: null,
   sourceStatus: { build: null, interactive: null }, // per-source status tracking
   parallelTasks: null, // { total, completed, failed, active } when parallel dispatch is running
+  // Connection error / retry state (issue #24)
+  streamError: null,        // latest error message string
+  retryInfo: null,          // { attempt, maxRetries, nextBackoffMs } | null
+  stalled: false,           // true when no data for stallTimeoutMs
   // React setState callbacks — reattached on each mount
   onConnectedChange: null,
   onMessagesChange: null,
   onAgentStatusChange: null,
+  onStreamErrorChange: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -263,14 +268,53 @@ function connect() {
     namedEvents: ['hydrate'],
     onOpen: () => {
       _state.connected = true;
+      _state.streamError = null;
+      _state.retryInfo = null;
+      _state.stalled = false;
       _state.sourceStatus.build = null; // clear stale build-working state after reconnect
       if (_state.onConnectedChange) _state.onConnectedChange(true);
+      if (_state.onStreamErrorChange) _state.onStreamErrorChange({ error: null, retryInfo: null, stalled: false });
     },
     onClose: () => {
       _state.connected = false;
       if (_state.onConnectedChange) _state.onConnectedChange(false);
     },
+    onError: (err) => {
+      _state.streamError = err?.message || 'Connection error';
+      if (_state.onStreamErrorChange) _state.onStreamErrorChange({
+        error: _state.streamError,
+        retryInfo: _state.retryInfo,
+        stalled: _state.stalled,
+      });
+    },
+    onRetry: (info) => {
+      _state.retryInfo = info;
+      if (_state.onStreamErrorChange) _state.onStreamErrorChange({
+        error: _state.streamError,
+        retryInfo: info,
+        stalled: _state.stalled,
+      });
+    },
+    onStall: () => {
+      _state.stalled = true;
+      if (_state.onStreamErrorChange) _state.onStreamErrorChange({
+        error: _state.streamError,
+        retryInfo: _state.retryInfo,
+        stalled: true,
+      });
+    },
+    onExhausted: () => {
+      // Retries exhausted — clear the handle so connect() can re-establish
+      _state.es = null;
+    },
     onEvent: (payload, name) => {
+      // Any event arriving clears stall/error state
+      if (_state.stalled || _state.streamError) {
+        _state.stalled = false;
+        _state.streamError = null;
+        _state.retryInfo = null;
+        if (_state.onStreamErrorChange) _state.onStreamErrorChange({ error: null, retryInfo: null, stalled: false });
+      }
       if (name === 'hydrate') {
         if (Array.isArray(payload)) for (const m of payload) processMessage(m);
         return;
@@ -278,6 +322,8 @@ function connect() {
       processMessage(payload);
     },
     maxBackoffMs: 8000,
+    maxRetries: 5,
+    stallTimeoutMs: 30000,
   });
   _state.es = handle;
 }
@@ -332,6 +378,11 @@ export default function AgentStream() {
   });
   const [sending, setSending] = useState(false);
   const [elapsed, setElapsed] = useState(null);
+  const [streamError, setStreamError] = useState({
+    error: _state.streamError,
+    retryInfo: _state.retryInfo,
+    stalled: _state.stalled,
+  });
   const bottomRef = useRef(null);
   const isFirstMessage = messages.length === 0 || messages.every(
     m => m.type === 'system' && (m.subtype === 'init' || m.subtype === 'connected')
@@ -342,10 +393,12 @@ export default function AgentStream() {
     _state.onConnectedChange = setConnected;
     _state.onMessagesChange = setMessages;
     _state.onAgentStatusChange = setAgentStatusState;
+    _state.onStreamErrorChange = setStreamError;
     return () => {
       _state.onConnectedChange = null;
       _state.onMessagesChange = null;
       _state.onAgentStatusChange = null;
+      _state.onStreamErrorChange = null;
     };
   }, []);
 
@@ -495,15 +548,84 @@ export default function AgentStream() {
           className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none"
           style={{ background: 'hsl(var(--background) / 0.7)', backdropFilter: 'blur(2px)' }}
         >
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-col items-center gap-3" role="status" aria-live="polite">
             <div
               className="w-5 h-5 rounded-full animate-spin"
               style={{ border: '2px solid hsl(var(--accent) / 0.2)', borderTopColor: 'hsl(var(--accent))' }}
             />
             <span className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
-              connecting to agent server…
+              {streamError.retryInfo
+                ? `Retrying… ${streamError.retryInfo.attempt}/${streamError.retryInfo.maxRetries}`
+                : 'connecting to agent server…'}
             </span>
+            {streamError.error && (
+              <span className="text-[10px]" style={{ color: 'hsl(var(--destructive))' }}>
+                {streamError.error}
+              </span>
+            )}
+            {/* Reconnect button — shown when retries are exhausted */}
+            {!_state.es && streamError.error && (
+              <button
+                onClick={() => {
+                  _state.streamError = null;
+                  _state.retryInfo = null;
+                  _state.stalled = false;
+                  setStreamError({ error: null, retryInfo: null, stalled: false });
+                  connect();
+                }}
+                className="pointer-events-auto px-3 py-1 rounded text-[11px] font-medium"
+                style={{
+                  background: 'hsl(var(--accent) / 0.15)',
+                  border: '1px solid hsl(var(--accent) / 0.3)',
+                  color: 'hsl(var(--accent-foreground))',
+                  cursor: 'pointer',
+                }}
+              >
+                Reconnect
+              </button>
+            )}
           </div>
+        </div>
+      )}
+
+      {/* Stream error banner — shown while connected but experiencing issues */}
+      {connected && (streamError.error || streamError.stalled) && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="shrink-0 flex items-center gap-2 px-3 py-1.5 text-[11px]"
+          style={{
+            background: streamError.stalled ? 'hsl(45 93% 47% / 0.1)' : 'hsl(var(--destructive) / 0.1)',
+            borderBottom: `1px solid ${streamError.stalled ? 'hsl(45 93% 47% / 0.2)' : 'hsl(var(--destructive) / 0.2)'}`,
+            color: streamError.stalled ? 'hsl(45 93% 47%)' : 'hsl(var(--destructive))',
+          }}
+        >
+          {streamError.stalled ? (
+            <>
+              <span>No data received for 30s — connection may be stalled.</span>
+              <button
+                onClick={() => {
+                  // Force reconnect by closing and reopening
+                  if (_state.es) { _state.es.close(); _state.es = null; }
+                  _state.streamError = null;
+                  _state.retryInfo = null;
+                  _state.stalled = false;
+                  setStreamError({ error: null, retryInfo: null, stalled: false });
+                  connect();
+                }}
+                className="ml-auto px-2 py-0.5 rounded text-[10px] font-medium"
+                style={{
+                  background: 'hsl(45 93% 47% / 0.15)',
+                  border: '1px solid hsl(45 93% 47% / 0.3)',
+                  cursor: 'pointer',
+                }}
+              >
+                Reconnect
+              </button>
+            </>
+          ) : (
+            <span>{streamError.error}</span>
+          )}
         </div>
       )}
 
