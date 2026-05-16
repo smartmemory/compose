@@ -25,7 +25,7 @@ export default function InteractiveSessionCard({ session }) {
           className="m-status-pill"
           data-status={active ? 'in_progress' : 'planned'}
         >
-          {active ? 'active' : 'idle'}
+          {active ? 'active' : 'ready'}
         </span>
       </div>
       <div className="m-session-card-id">
