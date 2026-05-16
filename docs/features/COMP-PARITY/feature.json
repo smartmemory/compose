@@ -1,0 +1,11 @@
+{
+  "code": "COMP-PARITY",
+  "description": "UI↔CLI Parity initiative — close the asymmetries between the cockpit and the `compose` CLI documented in docs/ui-cli-parity.md. Each surface should be able to drive a feature/bug through its full lifecycle; today gate resolution is UI-only (blocks headless/CI) and the fix/new lifecycles are CLI-only (invisible to UI-first devs). Reuses existing server endpoints and pipeline machinery as the substrate — no new lifecycle model. Umbrella for COMP-PARITY-1 through COMP-PARITY-6.",
+  "status": "PLANNED",
+  "phase": "COMP-PARITY: UI↔CLI Parity",
+  "created": "2026-05-16",
+  "updated": "2026-05-16",
+  "complexity": "L",
+  "position": 1,
+  "group": "COMP-PARITY"
+}
