@@ -123,6 +123,41 @@ describe('GitHubApi', () => {
     expect(err).toBeDefined();
     expect(err.shaConflict).toBe(true);
   });
+  it('getContents throws on non-404 non-200 HTTP status (e.g. 403 Forbidden)', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const stubTransport = {
+      async request() {
+        return { status: 403, body: { message: 'Forbidden' }, headers: { get: () => null } };
+      },
+    };
+    const api = new GitHubApi({ repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' } }, stubTransport);
+    await expect(api.getContents('ROADMAP.md', 'main')).rejects.toThrow(/HTTP 403/);
+  });
+  it('getContents 404 via stub transport returns { text: "", sha: null } (not thrown)', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const stubTransport = {
+      async request() {
+        return { status: 404, body: { message: 'Not Found' }, headers: { get: () => null } };
+      },
+    };
+    const api = new GitHubApi({ repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' } }, stubTransport);
+    const result = await api.getContents('ROADMAP.md', 'main');
+    expect(result).toEqual({ text: '', sha: null });
+  });
+  it('getContents 200 via stub transport returns decoded text and sha', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const rawText = '# Roadmap\n\nHello.\n';
+    const encoded = Buffer.from(rawText, 'utf-8').toString('base64');
+    const stubTransport = {
+      async request() {
+        return { status: 200, body: { content: encoded, sha: 'abc123' }, headers: { get: () => null } };
+      },
+    };
+    const api = new GitHubApi({ repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' } }, stubTransport);
+    const result = await api.getContents('ROADMAP.md', 'main');
+    expect(result.text).toBe(rawText);
+    expect(result.sha).toBe('abc123');
+  });
   it('403 with no rate-limit headers is not misclassified as rate-limit', async () => {
     process.env.CTP_TEST_TOKEN = 'tok';
     // Stub transport that returns a plain 403 with no rate-limit headers (auth failure shape).
