@@ -28,4 +28,26 @@ describe('GitHubApi', () => {
     const found = await api.searchFeatureIssues();
     expect(found.length).toBe(1);
   });
+  it('fixture parameterized by repo: acme/widgets round-trips independently', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const fx = makeGitHubFixture('acme/widgets');
+    const api = new GitHubApi({ repo: 'acme/widgets', auth: { tokenEnv: 'CTP_TEST_TOKEN' } }, fx);
+    const issue = await api.createIssue({ title: 'widget task', body: 'details', labels: [] });
+    expect(issue.number).toBe(1);
+    const got = await api.getIssue(1);
+    expect(got.number).toBe(1);
+    expect(got.title).toBe('widget task');
+  });
+  it('403 with no rate-limit headers is not misclassified as rate-limit', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    // Stub transport that returns a plain 403 with no rate-limit headers (auth failure shape).
+    const stubTransport = {
+      async request() { return { status: 403, body: { message: 'Bad credentials' }, headers: { get: () => null } }; },
+    };
+    const api = new GitHubApi({ repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' } }, stubTransport);
+    // Should NOT throw a rate-limit error — _req returns the response object as-is.
+    const result = await api._req('GET', '/repos/o/r/issues/1');
+    expect(result.status).toBe(403);
+    expect(result.body.message).toBe('Bad credentials');
+  });
 });
