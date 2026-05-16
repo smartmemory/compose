@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { OpLog } from '../../lib/tracker/sync-engine.js';
+import { OpLog, Cache } from '../../lib/tracker/sync-engine.js';
 
 function tmp() { return mkdtempSync(join(tmpdir(), 'ctp-oplog-')); }
 
@@ -58,6 +58,30 @@ describe('OpLog', () => {
       await log.quarantine(op2.id, 'conflict');
       expect((await log.pending()).length).toBe(0);
       expect((await log.quarantined()).length).toBe(1);
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+});
+
+describe('Cache shadowing + CAS', () => {
+  it('getFeature returns post-op value while an op is pending (no rollback)', async () => {
+    const d = mkdtempSync(join(tmpdir(), 'ctp-cache-'));
+    try {
+      const c = new Cache(d);
+      await c.put('A', { code: 'A', status: 'PLANNED' }, { version: 'v1' });
+      await c.markPending('A');
+      await c.put('A', { code: 'A', status: 'IN_PROGRESS' }, { version: 'v1', pending: true });
+      await c.applyRemote('A', { code: 'A', status: 'PLANNED' }, { version: 'v2' });
+      expect((await c.get('A')).status).toBe('IN_PROGRESS');
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+  it('applyRemote updates entries with no pending op', async () => {
+    const d = mkdtempSync(join(tmpdir(), 'ctp-cache2-'));
+    try {
+      const c = new Cache(d);
+      await c.put('B', { code: 'B', status: 'PLANNED' }, { version: 'v1' });
+      await c.applyRemote('B', { code: 'B', status: 'COMPLETE' }, { version: 'v9' });
+      expect((await c.get('B')).status).toBe('COMPLETE');
+      expect(await c.version('B')).toBe('v9');
     } finally { rmSync(d, { recursive: true, force: true }); }
   });
 });
