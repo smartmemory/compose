@@ -1,0 +1,23 @@
+// Minimal in-process recorder: maps (method,path) -> handler returning {status, body, headers}.
+export function makeGitHubFixture() {
+  const issues = new Map(); let n = 0;
+  return {
+    async request(method, path, body) {
+      if (method === 'POST' && path === '/repos/o/r/issues') {
+        n += 1; const issue = { number: n, node_id: `gid_${n}`, title: body.title, body: body.body,
+          labels: (body.labels ?? []).map(name => ({ name })), state: 'open', updated_at: `t${n}` };
+        issues.set(n, issue); return { status: 201, body: issue, headers: {} };
+      }
+      if (method === 'GET' && /^\/repos\/o\/r\/issues\/\d+$/.test(path)) {
+        const num = Number(path.split('/').pop());
+        const i = issues.get(num);
+        return i ? { status: 200, body: i, headers: {} } : { status: 404, body: {}, headers: {} };
+      }
+      if (method === 'GET' && path.startsWith('/search/issues')) {
+        return { status: 200, body: { items: [...issues.values()] }, headers: {} };
+      }
+      return { status: 404, body: {}, headers: {} };
+    },
+    _issues: issues,
+  };
+}
