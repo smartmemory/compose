@@ -30,6 +30,23 @@ describe('OpLog', () => {
     } finally { rmSync(d, { recursive: true, force: true }); }
   });
 
+  it('engine-managed fields are authoritative (caller cannot clobber id/state/attempts/ts)', async () => {
+    const d = tmp();
+    try {
+      const log = new OpLog(d);
+      const r = await log.append({ op: 'setStatus', code: 'A', id: 'evil', state: 'resolved', attempts: 99, ts: 1, payload: {} });
+      expect(r.id).not.toBe('evil');
+      expect(r.state).toBe('pending');
+      expect(r.attempts).toBe(0);
+      expect(typeof r.ts).toBe('number');
+      expect(r.ts).not.toBe(1);
+      expect(r.code).toBe('A');
+      const pending = await log.pending();
+      expect(pending.length).toBe(1);
+      expect(pending[0].state).toBe('pending');
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+
   it('resolve removes an op; quarantine moves it aside', async () => {
     const d = tmp();
     try {
