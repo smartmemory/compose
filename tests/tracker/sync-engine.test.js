@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { OpLog, Cache } from '../../lib/tracker/sync-engine.js';
+import { OpLog, Cache, Reconciler, ConflictLedger } from '../../lib/tracker/sync-engine.js';
 
 function tmp() { return mkdtempSync(join(tmpdir(), 'ctp-oplog-')); }
 
@@ -82,6 +82,34 @@ describe('Cache shadowing + CAS', () => {
       await c.applyRemote('B', { code: 'B', status: 'COMPLETE' }, { version: 'v9' });
       expect((await c.get('B')).status).toBe('COMPLETE');
       expect(await c.version('B')).toBe('v9');
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+});
+
+describe('Reconciler', () => {
+  it('flushes pending ops in FIFO and resolves them', async () => {
+    const d = mkdtempSync(join(tmpdir(), 'ctp-rec-'));
+    try {
+      const log = new OpLog(d); const cache = new Cache(d);
+      await log.append({ op: 'setStatus', code: 'A', payload: { to: 'IN_PROGRESS' }, baseVersion: 'v1' });
+      const applied = [];
+      const apply = async (op) => { applied.push(op.code); return { version: 'v2' }; };
+      const r = new Reconciler({ log, cache, dir: d, apply });
+      await r.flush();
+      expect(applied).toEqual(['A']);
+      expect((await log.pending()).length).toBe(0);
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+  it('CAS mismatch quarantines the op and writes a conflict ledger entry', async () => {
+    const d = mkdtempSync(join(tmpdir(), 'ctp-rec2-'));
+    try {
+      const log = new OpLog(d); const cache = new Cache(d);
+      const op = await log.append({ op: 'setStatus', code: 'A', payload: { to: 'X' }, baseVersion: 'v1' });
+      const apply = async () => { const e = new Error('stale'); e.casMismatch = { remoteVersion: 'v7' }; throw e; };
+      const r = new Reconciler({ log, cache, dir: d, apply });
+      await r.flush();
+      expect((await log.quarantined()).map(o => o.id)).toContain(op.id);
+      expect((await new ConflictLedger(d).all()).length).toBe(1);
     } finally { rmSync(d, { recursive: true, force: true }); }
   });
 });
