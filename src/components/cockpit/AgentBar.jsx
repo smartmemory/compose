@@ -33,7 +33,7 @@ const CHEVRON_UP   = '▴';
 const EXPAND_ICON  = '⤢';   // maximized
 
 export default function AgentBar({ barState = 'collapsed', onStateChange }) {
-  const [statusText, setStatusText] = useState('idle');
+  const [statusText, setStatusText] = useState('ready');
   const [parallelProgress, setParallelProgress] = useState(null);
 
   // Listen for compose:agent-status events to power the collapsed status line
