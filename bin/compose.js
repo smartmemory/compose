@@ -340,7 +340,7 @@ async function runInit(flags) {
   let hasStratum = !noStratum && spawnSync('which', ['stratum-mcp'], { encoding: 'utf-8' }).status === 0
   if (!noStratum && !hasStratum) {
     console.log('stratum-mcp not found — installing via pip...')
-    const pipResult = spawnSync('pip', ['install', 'stratum'], {
+    const pipResult = spawnSync('pip', ['install', 'stratum-mcp'], {
       stdio: 'inherit',
       encoding: 'utf-8',
     })
@@ -350,11 +350,13 @@ async function runInit(flags) {
       if (hasStratum) {
         console.log('stratum-mcp installed successfully')
       } else {
-        console.warn('Warning: pip install stratum succeeded but stratum-mcp not found on PATH')
+        console.warn('Warning: pip install stratum-mcp succeeded but stratum-mcp not found on PATH')
+        console.warn('  The binary may live in a pyenv version dir not on $PATH.')
+        console.warn('  Try: ln -sf "$(python -c \'import sys,os; print(os.path.join(sys.prefix, "bin", "stratum-mcp"))\')" ~/.local/bin/stratum-mcp')
       }
     } else {
-      console.warn('Warning: pip install stratum failed — Stratum will be disabled')
-      console.warn('  Install manually: pip install stratum')
+      console.warn('Warning: pip install stratum-mcp failed — Stratum will be disabled')
+      console.warn('  Install manually: pip install stratum-mcp  (requires Python >= 3.11)')
     }
   }
   const hasLifecycle = !noLifecycle
