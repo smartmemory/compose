@@ -416,3 +416,7 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-11T00:22:29+08:00 | T5: pipelines/gsd.stratum.yaml + validation test
 2026-05-11T00:30:18+08:00 | T6: runGsd entry + CLI verb (validate, gateCommands fallback, decompose validation+repair, status loop, post-step blackboard walk)
 2026-05-11T01:01:48+08:00 | T7: golden flow test with stubbed Stratum + mock connector + prompt-contract assertion
+2026-05-16T23:39:52+08:00 | tracker provider interface + capability constants
+2026-05-16T23:46:44+08:00 | LocalFileProvider feature CRUD via existing feature-json
+2026-05-17T00:32:39+08:00 | rewire feature-writer persistence through provider (lazy import, no recursion)
+2026-05-17T00:45:36+08:00 | rewire completion/changelog through provider; pure spliceChangelog
