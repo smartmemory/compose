@@ -23,11 +23,12 @@ const DEFAULT_STALL_TIMEOUT_MS = 30_000;
  * @param {(err:Error) => void}                     [opts.onError]
  * @param {(info:{attempt:number, maxRetries:number, nextBackoffMs:number}) => void} [opts.onRetry] — called on each retry attempt so UIs can show progress
  * @param {(info:{elapsedMs:number}) => void}        [opts.onStall] — called when no data arrives within stallTimeoutMs
+ * @param {() => void}                              [opts.onExhausted] — called when all retries are exhausted
  * @param {string[]}                                [opts.namedEvents] extra named SSE events to subscribe to (e.g. 'hydrate')
  * @param {number}                                  [opts.maxBackoffMs]
  * @param {number}                                  [opts.maxRetries] — max consecutive reconnect attempts before giving up (default 5)
  * @param {number}                                  [opts.stallTimeoutMs] — ms with no data before onStall fires (default 30000)
- * @returns {{ close: () => void }}
+ * @returns {{ close: () => void, reconnect: () => void }}
  */
 export function createAgentStream({
   url,
@@ -37,6 +38,7 @@ export function createAgentStream({
   onError,
   onRetry,
   onStall,
+  onExhausted,
   namedEvents = ['hydrate'],
   maxBackoffMs = DEFAULT_MAX_BACKOFF_MS,
   maxRetries = DEFAULT_MAX_RETRIES,
@@ -83,15 +85,19 @@ export function createAgentStream({
   }
 
   function scheduleReconnect() {
+    clearStallTimer();
     if (stopped) return;
     if (reconnectTimer) return;
 
-    // If we've exhausted retries, report final error and stop
+    // If we've exhausted retries, report final error, close, and allow future reconnect
     if (attempt >= maxRetries) {
       const err = new Error(`agent-stream: failed after ${maxRetries} retries`);
       onError?.(err);
+      stopped = true;
+      try { es?.close(); } catch { /* */ }
+      es = null;
       onClose?.();
-      clearStallTimer();
+      onExhausted?.();
       return;
     }
 
@@ -120,7 +126,9 @@ export function createAgentStream({
     es.onopen = () => {
       attempt = 0;
       stalled = false;
-      resetStallTimer();
+      // Don't start stall timer here — no data is expected during idle.
+      // The timer starts in dispatch() when data actually begins flowing.
+      clearStallTimer();
       onOpen?.();
     };
 
@@ -151,6 +159,19 @@ export function createAgentStream({
       }
       try { es?.close(); } catch { /* */ }
       es = null;
+    },
+    /** Reset state and reconnect from scratch (e.g. after retries exhausted). */
+    reconnect() {
+      stopped = false;
+      attempt = 0;
+      clearStallTimer();
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      try { es?.close(); } catch { /* */ }
+      es = null;
+      connect();
     },
   };
 }
