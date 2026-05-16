@@ -38,6 +38,19 @@ describe('GitHubApi', () => {
     expect(got.number).toBe(1);
     expect(got.title).toBe('widget task');
   });
+  it('updateIssue patches title/body and bumps updated_at', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const api = new GitHubApi({ repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' } }, makeGitHubFixture());
+    const created = await api.createIssue({ title: 'orig', body: 'orig-body', labels: [] });
+    expect(created.updated_at).toBe('t1');
+    const updated = await api.updateIssue(1, { title: 'new-title', body: 'new-body' });
+    expect(updated.title).toBe('new-title');
+    expect(updated.body).toBe('new-body');
+    expect(updated.updated_at).not.toBe('t1');
+    const fetched = await api.getIssue(1);
+    expect(fetched.title).toBe('new-title');
+    expect(fetched.updated_at).toBe(updated.updated_at);
+  });
   it('403 with no rate-limit headers is not misclassified as rate-limit', async () => {
     process.env.CTP_TEST_TOKEN = 'tok';
     // Stub transport that returns a plain 403 with no rate-limit headers (auth failure shape).
