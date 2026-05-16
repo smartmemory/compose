@@ -26,6 +26,38 @@ Project-level configuration. Created by `compose init`.
 }
 ```
 
+### `tracker` block
+
+Optional. Controls where feature/completion/changelog/event data is persisted.
+
+```json
+{
+  "tracker": {
+    "provider": "local",
+    "github": {
+      "repo": "owner/repo",
+      "projectNumber": 42,
+      "branch": "main",
+      "roadmapPath": "ROADMAP.md",
+      "changelogPath": "CHANGELOG.md",
+      "cacheTtlSeconds": 300,
+      "auth": { "tokenEnv": "GITHUB_TOKEN" }
+    }
+  }
+}
+```
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| `provider` | `"local"` | `"local"` or `"github"`. `local` = filesystem only, zero behavior change. |
+| `github.repo` | — | Required for `github`. `owner/repo` format. |
+| `github.projectNumber` | — | Required for `github`. GitHub Projects v2 project number. |
+| `github.branch` | `"main"` | Branch for Contents API reads/writes (roadmap, changelog). |
+| `github.roadmapPath` | `"ROADMAP.md"` | Repo-relative path to roadmap file. |
+| `github.changelogPath` | `"CHANGELOG.md"` | Repo-relative path to changelog file. |
+| `github.cacheTtlSeconds` | `300` | Read-cache TTL for GitHub API responses. |
+| `github.auth.tokenEnv` | — | Name of env var holding a GitHub PAT. Falls back to `gh auth token` if unset. Required scopes: `repo`, `project`. |
+
 ## `.compose/questionnaire.json`
 
 Saved questionnaire answers (enriched intent, project type, language, scope, research preference, notes, review agent choice).

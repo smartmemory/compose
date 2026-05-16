@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-05-17
+
+### COMP-TRACKER-PROVIDER — Pluggable TrackerProvider — LocalFile (default, zero behavior change) + GitHub (Issues + Projects v2 + Contents API)
+
+Adds a provider abstraction so feature/completion/changelog/event persistence can be routed to different backends. The `local` provider is byte-identical to prior behavior; `github` syncs to GitHub Issues, Projects v2, and repository Contents API. Tracker tests wired into `npm test` CI gate.
+
+**Added:**
+- TrackerProvider interface (`lib/tracker/provider.js`) with capability constants and typed errors
+- LocalFileProvider — default provider, zero behavior change, byte-identical output verified by regression golden tests
+- GitHubProvider — Issues API (feature CRUD + status comments), Projects v2 GraphQL (field/option resolution, memoized), Contents API (roadmap.md + changelog.md read/write)
+- Durable op-log (`lib/tracker/op-log.js`) for offline-capable queued writes
+- Read cache + pending-op shadowing + CAS (`lib/tracker/cache.js`, `lib/tracker/cas.js`)
+- Sync engine + conflict ledger (`lib/tracker/sync-engine.js`, `lib/tracker/conflict-ledger.js`)
+- `compose tracker status` and `compose tracker sync` CLI verbs
+- `.compose/compose.json` `tracker` config block: `provider`, `github.{repo,projectNumber,branch,auth.tokenEnv}`
+- conformance suite (`tests/tracker/conformance.js`) exercising both providers against a shared contract
+- 100-test tracker suite (`tests/tracker/**`) now included in `npm test` CI gate via `test:tracker` script
+
+**Changed:**
+- Feature, completion, changelog, and event persistence in `lib/feature-writer.js`, `lib/completion-writer.js`, `lib/changelog-writer.js`, and `lib/build.js` routed through the provider seam — behavior unchanged under default `local` provider
+- Unused `appendEvent` import removed from `lib/feature-writer.js`
+
 ## 2026-05-15
 
 ### CI — Beta publish workflow: drop racy commit-back
