@@ -36,4 +36,15 @@ describe('providerFor', () => {
       expect(typeof p.createFeature).toBe('function');
     } finally { rmSync(cwd, { recursive: true, force: true }); }
   });
+  it('malformed compose.json falls back to local without throwing', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'ctp-fac-'));
+    try {
+      mkdirSync(join(cwd, '.compose'), { recursive: true });
+      writeFileSync(join(cwd, '.compose/compose.json'), '{ NOT VALID JSON !!');
+      const p = await providerFor(cwd);
+      expect(p.name()).toBe('local');
+      // ensure the provider is not thenable (symbol guard defensive check)
+      expect(p.then).toBeUndefined();
+    } finally { rmSync(cwd, { recursive: true, force: true }); }
+  });
 });
