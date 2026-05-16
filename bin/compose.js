@@ -2678,9 +2678,15 @@ if (cmd === 'build') {
   // compose tracker sync     — flush op-log and report drained/quarantined counts
   // COMP-TRACKER-PROVIDER T18
   // ---------------------------------------------------------------------------
-  const { runTrackerCli } = await import('../lib/tracker/cli.js')
-  const out = await runTrackerCli(process.cwd(), args)
-  console.log(out)
+  try {
+    const { runTrackerCli } = await import('../lib/tracker/cli.js')
+    const result = await runTrackerCli(process.cwd(), args)
+    console.log(result.output)
+    if (result.exitCode !== 0) process.exit(result.exitCode)
+  } catch (err) {
+    console.error(`tracker: ${err.message}`)
+    process.exit(1)
+  }
 
 } else {
   console.error(`Unknown command: ${cmd}`)
