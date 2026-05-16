@@ -525,7 +525,7 @@ function AppInner() {
         body: JSON.stringify({ path: newPath }),
       });
       const data = await r.json();
-      if (!data.ok) return;
+      if (!data.ok) return false;
       // Refresh cached workspace id BEFORE setting projectRoot — the latter
       // triggers a remount of views keyed by projectRoot (e.g., DesignView),
       // and their mount effects fire wsFetch immediately. Updating the cache
@@ -534,8 +534,9 @@ function AppInner() {
       setProjectName(data.name);
       setProjectRoot(data.targetRoot);
       // Vision store will get new state via WebSocket broadcast
+      return true;
     } catch {
-      // swallow — same as prior behavior
+      return false;
     }
   }, [refreshWorkspace]);
 

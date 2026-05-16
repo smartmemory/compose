@@ -65,8 +65,10 @@ export default function ProjectSwitchPopover({ projectName, projectRoot, onSwitc
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={async (e) => {
               if (e.key === 'Enter') {
-                await onSwitch(inputValue);
-                setOpen(false);
+                // Only close on successful switch — failed switches keep the
+                // popover open so the user can correct the typed path.
+                const ok = await onSwitch(inputValue);
+                if (ok) setOpen(false);
               }
               if (e.key === 'Escape') setOpen(false);
             }}

@@ -94,8 +94,8 @@ describe('BUG-25: project switch popover dismissal', () => {
     expect(screen.getByTestId('project-input').value).toBe('/projects/bar');
   });
 
-  it('closes the popover after Enter is pressed in the input', async () => {
-    const onSwitch = vi.fn().mockResolvedValue(undefined);
+  it('closes the popover after Enter when onSwitch reports success', async () => {
+    const onSwitch = vi.fn().mockResolvedValue(true);
     render(<Wrapper projectRoot="/projects/foo" onSwitch={onSwitch} />);
     fireEvent.click(screen.getByTestId('project-btn'));
     expect(screen.queryByTestId('project-popover')).not.toBeNull();
@@ -105,6 +105,22 @@ describe('BUG-25: project switch popover dismissal', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('project-popover')).toBeNull();
     });
+  });
+
+  it('keeps the popover open and preserves input when onSwitch reports failure', async () => {
+    const onSwitch = vi.fn().mockResolvedValue(false);
+    render(<Wrapper projectRoot="/projects/foo" onSwitch={onSwitch} />);
+    fireEvent.click(screen.getByTestId('project-btn'));
+
+    const input = screen.getByTestId('project-input');
+    fireEvent.change(input, { target: { value: '/bad/path' } });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+    // Let the async onSwitch resolve before asserting.
+    await waitFor(() => expect(onSwitch).toHaveBeenCalledWith('/bad/path'));
+
+    expect(screen.queryByTestId('project-popover')).not.toBeNull();
+    expect(screen.getByTestId('project-input').value).toBe('/bad/path');
   });
 
   it('calls onSwitch with the typed value when Enter is pressed', () => {
