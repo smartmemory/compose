@@ -1,0 +1,12 @@
+{
+  "code": "COMP-PARITY-7",
+  "description": "State-sync reconciliation — single source of truth across feature.json, ROADMAP.md, and data/vision-state.json. Three concrete sync gaps: (1) divergent ROADMAP write paths — lib/feature-writer.js regenerates via writeRoadmap() from canonical feature.json while bin/compose.js:~1008 appends a `## Features` block, producing the live triplicate `## Features — PARTIAL` section in ROADMAP.md; (2) one-way vision sync — server/feature-scan.js imports feature.json into vision items but UI edits (status/phase/confidence via ItemDetailPanel PATCH) write vision-state.json only and never propagate back to canonical feature.json/ROADMAP; (3) `compose roadmap check`/`migrate` exist solely to detect/repair this drift. Route all roadmap writes through writeRoadmap() (kill the append path), de-duplicate existing ROADMAP sections, and make UI item mutations write through to feature.json so the canonical store stays authoritative. Substrate for COMP-PARITY-5.",
+  "status": "PLANNED",
+  "phase": "COMP-PARITY: UI↔CLI Parity",
+  "created": "2026-05-16",
+  "updated": "2026-05-16",
+  "complexity": "M",
+  "position": 8,
+  "parent": "COMP-PARITY",
+  "group": "COMP-PARITY"
+}

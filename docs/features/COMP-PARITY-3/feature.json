@@ -1,0 +1,12 @@
+{
+  "code": "COMP-PARITY-3",
+  "description": "Cockpit environment-health panel surfacing `compose doctor` (dep/version drift) and `compose hooks status` (stale/foreign/missing git hooks). Silent hook and version drift currently causes mystery build failures with zero UI signal. Read-only panel backed by a thin /api/health endpoint wrapping the existing doctor/hooks-status logic.",
+  "status": "PLANNED",
+  "phase": "COMP-PARITY: UI↔CLI Parity",
+  "created": "2026-05-16",
+  "updated": "2026-05-16",
+  "complexity": "S",
+  "position": 4,
+  "parent": "COMP-PARITY",
+  "group": "COMP-PARITY"
+}
