@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { providerFor } from '../../lib/tracker/factory.js';
+import { TrackerConfigError } from '../../lib/tracker/provider.js';
 
 function projWith(trackerCfg) {
   const cwd = mkdtempSync(join(tmpdir(), 'ctp-fac-'));
@@ -36,15 +37,32 @@ describe('providerFor', () => {
       expect(typeof p.createFeature).toBe('function');
     } finally { rmSync(cwd, { recursive: true, force: true }); }
   });
-  it('malformed compose.json falls back to local without throwing', async () => {
+  it('malformed compose.json throws TrackerConfigError (fail-fast, never silent fallback)', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'ctp-fac-'));
     try {
       mkdirSync(join(cwd, '.compose'), { recursive: true });
       writeFileSync(join(cwd, '.compose/compose.json'), '{ NOT VALID JSON !!');
+      await expect(providerFor(cwd)).rejects.toThrow(TrackerConfigError);
+      await expect(providerFor(cwd)).rejects.toThrow(/invalid JSON/i);
+    } finally { rmSync(cwd, { recursive: true, force: true }); }
+  });
+
+  it('absent file → local default (not misconfig)', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'ctp-fac-nofile-'));
+    try {
+      // No .compose/compose.json at all — should silently default to local.
       const p = await providerFor(cwd);
       expect(p.name()).toBe('local');
-      // ensure the provider is not thenable (symbol guard defensive check)
-      expect(p.then).toBeUndefined();
+    } finally { rmSync(cwd, { recursive: true, force: true }); }
+  });
+
+  it('compose.json with no tracker key → local default (not misconfig)', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'ctp-fac-notracker-'));
+    try {
+      mkdirSync(join(cwd, '.compose'), { recursive: true });
+      writeFileSync(join(cwd, '.compose/compose.json'), JSON.stringify({ someOtherKey: 1 }));
+      const p = await providerFor(cwd);
+      expect(p.name()).toBe('local');
     } finally { rmSync(cwd, { recursive: true, force: true }); }
   });
 });
