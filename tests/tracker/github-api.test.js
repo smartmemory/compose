@@ -62,12 +62,22 @@ describe('GitHubApi', () => {
     expect(list).toHaveLength(1);
     expect(list[0].body).toBe('<!--compose-event {"type":"status"}-->');
   });
-  it('graphql returns data object', async () => {
+  it('graphql returns {data, errors} envelope', async () => {
     process.env.CTP_TEST_TOKEN = 'tok';
     const api = new GitHubApi({ repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' } }, makeGitHubFixture());
-    const data = await api.graphql('mutation{updateProjectV2ItemFieldValue(input:{}){projectV2Item{id}}}', {});
-    expect(data).toBeDefined();
-    expect(data.updateProjectV2ItemFieldValue?.projectV2Item?.id).toBe('pi');
+    const result = await api.graphql('mutation updateProjectV2ItemFieldValue($input: UpdateProjectV2ItemFieldValueInput!) { updateProjectV2ItemFieldValue(input: $input) { projectV2Item { id } } }', { input: { projectId: 'P1', itemId: 'IT1', fieldId: 'F1', value: { singleSelectOptionId: 'O_PLANNED' } } });
+    expect(result).toBeDefined();
+    expect(result.data).toBeDefined();
+    expect(result.data.updateProjectV2ItemFieldValue?.projectV2Item?.id).toBe('IT1');
+    expect(result.errors).toBeUndefined();
+  });
+  it('graphql surfaces errors array from GraphQL semantic errors', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const api = new GitHubApi({ repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' } }, makeGitHubFixture());
+    const result = await api.graphql('query { anything }', { __forceError: true });
+    expect(result.errors).toBeDefined();
+    expect(result.errors[0].message).toBe('boom');
+    expect(result.data).toBeUndefined();
   });
   it('403 with no rate-limit headers is not misclassified as rate-limit', async () => {
     process.env.CTP_TEST_TOKEN = 'tok';

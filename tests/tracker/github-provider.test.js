@@ -120,3 +120,143 @@ describe('GitHubProvider regression: idmap recovery from issue search', () => {
     }
   });
 });
+
+// ---- Projects v2 mirror tests ----
+
+describe('GitHubProvider: Projects v2 status mirror', () => {
+  async function makeProviderWithProject() {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const cwd = mkdtempSync(join(tmpdir(), 'ctp-gh-pv2-'));
+    const fixture = makeGitHubFixture('o/r');
+    const provider = await new GitHubProvider().init(cwd, {
+      repo: 'o/r',
+      auth: { tokenEnv: 'CTP_TEST_TOKEN' },
+      projectNumber: 1,
+      _transport: fixture,
+    });
+    return { provider, fixture, cleanup: async () => rmSync(cwd, { recursive: true, force: true }) };
+  }
+
+  it('setStatus posts a well-formed updateProjectV2ItemFieldValue mutation', async () => {
+    const { provider, fixture, cleanup } = await makeProviderWithProject();
+    try {
+      await provider.createFeature('PV2-1', { code: 'PV2-1', description: 'd', status: 'PLANNED' });
+      await provider.setStatus('PV2-1', 'IN_PROGRESS', { by: 'test' });
+
+      // Exactly one project update must have been recorded by the fixture
+      expect(fixture._projectUpdates).toHaveLength(1);
+      const input = fixture._projectUpdates[0];
+      // Must have all required fields — not an empty input:{}
+      expect(input.projectId).toBe('P1');
+      expect(input.itemId).toBe('IT1');
+      expect(input.fieldId).toBe('F1');
+      // singleSelectOptionId must match the IN_PROGRESS option
+      expect(input.value?.singleSelectOptionId).toBe('O_IN_PROGRESS');
+    } finally { await cleanup(); }
+  });
+
+  it('GraphQL errors response leaves setStatus still succeeding (non-fatal mirror failure)', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const cwd = mkdtempSync(join(tmpdir(), 'ctp-gh-pv2err-'));
+    // Custom fixture that returns errors for graphql calls that include __forceError
+    // We force the error by overriding _resolveProjectMeta to simulate an errors response.
+    const fixture = makeGitHubFixture('o/r');
+    const provider = await new GitHubProvider().init(cwd, {
+      repo: 'o/r',
+      auth: { tokenEnv: 'CTP_TEST_TOKEN' },
+      projectNumber: 1,
+      _transport: fixture,
+    });
+    // Override _resolveProjectMeta to simulate a GraphQL errors response
+    provider._resolveProjectMeta = async () => {
+      // Simulate what happens when the metadata lookup returns errors
+      return undefined; // signals "skip mirror" path
+    };
+    try {
+      await provider.createFeature('PV2-ERR', { code: 'PV2-ERR', description: 'd', status: 'PLANNED' });
+      // setStatus must succeed even though Projects v2 mirror is unavailable
+      const result = await provider.setStatus('PV2-ERR', 'IN_PROGRESS', { by: 'test' });
+      expect(result.status).toBe('IN_PROGRESS');
+      // Status was persisted in the issue body+labels (source of truth)
+      const f = await provider.getFeature('PV2-ERR');
+      expect(f.status).toBe('IN_PROGRESS');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('GraphQL errors array from real fixture sentinel → setStatus still succeeds', async () => {
+    // Use the fixture __forceError path: override the fixture transport to inject errors
+    // at the updateProjectV2ItemFieldValue step specifically.
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const cwd = mkdtempSync(join(tmpdir(), 'ctp-gh-pv2err2-'));
+    const baseFixture = makeGitHubFixture('o/r');
+    // Wrap the fixture to inject an errors response for updateProjectV2ItemFieldValue
+    const wrappedFixture = {
+      async request(method, path, body) {
+        if (method === 'POST' && path === '/graphql') {
+          const q = body?.query ?? '';
+          if (q.includes('updateProjectV2ItemFieldValue')) {
+            return { status: 200, body: { errors: [{ message: 'boom' }] }, headers: {} };
+          }
+        }
+        return baseFixture.request(method, path, body);
+      },
+      _issues: baseFixture._issues,
+      _comments: baseFixture._comments,
+      _projectUpdates: baseFixture._projectUpdates,
+    };
+    const provider = await new GitHubProvider().init(cwd, {
+      repo: 'o/r',
+      auth: { tokenEnv: 'CTP_TEST_TOKEN' },
+      projectNumber: 1,
+      _transport: wrappedFixture,
+    });
+    try {
+      await provider.createFeature('PV2-BOOM', { code: 'PV2-BOOM', description: 'd', status: 'PLANNED' });
+      // Must not throw even though GraphQL returns errors
+      const result = await provider.setStatus('PV2-BOOM', 'IN_PROGRESS', { by: 'test' });
+      expect(result.status).toBe('IN_PROGRESS');
+      const f = await provider.getFeature('PV2-BOOM');
+      expect(f.status).toBe('IN_PROGRESS');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
+// ---- recordCompletion enforcement tests ----
+
+describe('GitHubProvider: recordCompletion commit_sha enforcement', () => {
+  it('rejects a call without commit_sha', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const cwd = mkdtempSync(join(tmpdir(), 'ctp-gh-sha-'));
+    const fixture = makeGitHubFixture('o/r');
+    const provider = await new GitHubProvider().init(cwd,
+      { repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' }, _transport: fixture });
+    try {
+      await provider.createFeature('SHA-1', { code: 'SHA-1', description: 'd', status: 'IN_PROGRESS' });
+      await expect(
+        provider.recordCompletion('SHA-1', { tests_pass: true, files_changed: [] })
+      ).rejects.toThrow(/commit_sha/);
+    } finally { rmSync(cwd, { recursive: true, force: true }); }
+  });
+
+  it('duplicate commit_sha calls are idempotent — only one completion stored', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const cwd = mkdtempSync(join(tmpdir(), 'ctp-gh-dedup-'));
+    const fixture = makeGitHubFixture('o/r');
+    const provider = await new GitHubProvider().init(cwd,
+      { repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' }, _transport: fixture });
+    try {
+      await provider.createFeature('SHA-2', { code: 'SHA-2', description: 'd', status: 'IN_PROGRESS' });
+      const sha = 'c'.repeat(40);
+      await provider.recordCompletion('SHA-2', { commit_sha: sha, tests_pass: true, files_changed: ['a'] });
+      await provider.recordCompletion('SHA-2', { commit_sha: sha, tests_pass: true, files_changed: ['a'] });
+      const f = await provider.getFeature('SHA-2');
+      const shas = (f.completions ?? []).map(c => c.commit_sha);
+      // Must be exactly one entry — no duplicate
+      expect(shas.filter(s => s === sha)).toHaveLength(1);
+    } finally { rmSync(cwd, { recursive: true, force: true }); }
+  });
+});
