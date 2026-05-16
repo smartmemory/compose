@@ -333,6 +333,8 @@ export default function AgentStream() {
   const [sending, setSending] = useState(false);
   const [elapsed, setElapsed] = useState(null);
   const bottomRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const userHasScrolledUp = useRef(false);
   const isFirstMessage = messages.length === 0 || messages.every(
     m => m.type === 'system' && (m.subtype === 'init' || m.subtype === 'connected')
   );
@@ -355,9 +357,19 @@ export default function AgentStream() {
     // No cleanup: SSE survives HMR, same as old WebSocket pattern
   }, []);
 
-  // Auto-scroll to bottom as messages arrive
+  // Sticky scroll: auto-scroll only when user is already at bottom
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    // Consider "at bottom" if within 48px of the end
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    userHasScrolledUp.current = !atBottom;
+  }, []);
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!userHasScrolledUp.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages.length]);
 
   // Tick elapsed time while working
@@ -474,7 +486,7 @@ export default function AgentStream() {
       </div>
 
       {/* Message stream */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2" style={{ scrollBehavior: 'smooth' }}>
+      <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 min-h-0 overflow-y-auto px-3 py-2" style={{ scrollBehavior: 'smooth' }}>
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-3 opacity-40">
             <span className="text-2xl">⬡</span>
