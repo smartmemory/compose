@@ -361,10 +361,11 @@ function AttentionQueueSidebar({
             {onNewItem && (
               <button
                 onClick={onNewItem}
-                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs text-muted-foreground hover:text-foreground bg-sidebar-accent/50 hover:bg-sidebar-accent transition-colors"
                 title="New item (⌘N)"
               >
                 <Plus className="h-3.5 w-3.5" />
+                <span>New</span>
               </button>
             )}
             <button
