@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import AgentStream from './components/AgentStream';
 import PopoutView from './components/PopoutView';
 import StratumPanel from './components/StratumPanel';
+import ProjectSwitchPopover from './components/ProjectSwitchPopover.jsx';
 
 // Cockpit shell components
 import ViewTabs from './components/cockpit/ViewTabs.jsx';
@@ -509,8 +510,6 @@ function AppInner() {
   // ── Project info ────────────────────────────────────────────────────────
   const [projectName, setProjectName] = useState('');
   const [projectRoot, setProjectRoot] = useState('');
-  const [projectSwitchOpen, setProjectSwitchOpen] = useState(false);
-
   useEffect(() => {
     wsFetch('/api/project').then(r => r.json()).then(data => {
       setProjectName(data.name || '');
@@ -526,7 +525,7 @@ function AppInner() {
         body: JSON.stringify({ path: newPath }),
       });
       const data = await r.json();
-      if (!data.ok) return;
+      if (!data.ok) return false;
       // Refresh cached workspace id BEFORE setting projectRoot — the latter
       // triggers a remount of views keyed by projectRoot (e.g., DesignView),
       // and their mount effects fire wsFetch immediately. Updating the cache
@@ -534,10 +533,10 @@ function AppInner() {
       await refreshWorkspace();
       setProjectName(data.name);
       setProjectRoot(data.targetRoot);
-      setProjectSwitchOpen(false);
       // Vision store will get new state via WebSocket broadcast
+      return true;
     } catch {
-      // swallow — same as prior behavior
+      return false;
     }
   }, [refreshWorkspace]);
 
@@ -977,39 +976,11 @@ function AppInner() {
           style={{ borderBottom: '1px solid hsl(var(--border))' }}
         >
           {/* Logo + project name */}
-          <div className="flex items-center shrink-0 gap-2 relative">
-            <span className="text-xs font-semibold tracking-widest uppercase text-accent">
-              Compose
-            </span>
-            <button
-              className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => setProjectSwitchOpen(v => !v)}
-              title={projectRoot || 'Switch project'}
-            >
-              {projectName || 'no project'}
-            </button>
-            {projectSwitchOpen && (
-              <div
-                className="absolute top-full left-0 mt-1 z-50 p-2 rounded-md shadow-lg"
-                style={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', minWidth: '280px' }}
-              >
-                <div className="text-[10px] text-muted-foreground mb-1 px-1">
-                  Current: {projectRoot}
-                </div>
-                <input
-                  autoFocus
-                  className="w-full px-2 py-1 text-xs rounded border bg-background text-foreground"
-                  style={{ borderColor: 'hsl(var(--border))' }}
-                  placeholder="Absolute path to project..."
-                  defaultValue={projectRoot}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleProjectSwitch(e.target.value);
-                    if (e.key === 'Escape') setProjectSwitchOpen(false);
-                  }}
-                />
-              </div>
-            )}
-          </div>
+          <ProjectSwitchPopover
+            projectName={projectName}
+            projectRoot={projectRoot}
+            onSwitch={handleProjectSwitch}
+          />
 
           {/* View tabs — centred in the header */}
           <div className="flex-1 min-w-0 h-full flex items-center">
