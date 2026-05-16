@@ -2672,6 +2672,16 @@ if (cmd === 'build') {
     process.exit(1)
   }
 
+} else if (cmd === 'tracker') {
+  // ---------------------------------------------------------------------------
+  // compose tracker status   — print provider name, canonical, pendingOps, conflicts, mixedSources
+  // compose tracker sync     — flush op-log and report drained/quarantined counts
+  // COMP-TRACKER-PROVIDER T18
+  // ---------------------------------------------------------------------------
+  const { runTrackerCli } = await import('../lib/tracker/cli.js')
+  const out = await runTrackerCli(process.cwd(), args)
+  console.log(out)
+
 } else {
   console.error(`Unknown command: ${cmd}`)
   process.exit(1)
