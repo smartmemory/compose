@@ -1068,7 +1068,7 @@ function AppInner() {
               disabled={fontSize === DEFAULT_FONT_SIZE}
               title="Reset to default size"
             >
-              ↺
+              100%
             </button>
           </div>
         </header>
