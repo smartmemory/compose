@@ -409,7 +409,7 @@ export default function AgentStream() {
   const isWorking = connected && (agentStatus.status === 'working' || sending);
   const statusColor = !connected ? 'hsl(var(--destructive))' : isWorking ? '#fbbf24' : 'hsl(var(--success, 142 60% 50%))';
   const categoryLabel = agentStatus.category ? CATEGORY_LABELS[agentStatus.category] : null;
-  const statusLabel = !connected ? 'offline' : isWorking ? (categoryLabel || 'working') : 'idle';
+  const statusLabel = !connected ? 'offline' : isWorking ? (categoryLabel || 'working') : 'ready';
   const recentLog = agentStatus.activityLog || [];
 
   return (

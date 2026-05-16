@@ -1037,9 +1037,9 @@ function AppInner() {
               className="compose-btn-icon"
               onClick={resetFontSize}
               disabled={fontSize === DEFAULT_FONT_SIZE}
-              title="Reset font size"
+              title="Reset to default size"
             >
-              1:1
+              100%
             </button>
           </div>
         </header>

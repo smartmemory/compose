@@ -30,7 +30,7 @@ export default function ProjectSwitchPopover({ projectName, projectRoot, onSwitc
 
   return (
     <div ref={rootRef} className="flex items-center shrink-0 gap-2 relative">
-      <span className="text-xs font-semibold tracking-widest uppercase text-accent">
+      <span className="text-xs font-semibold tracking-widest uppercase text-blue-600 dark:text-accent">
         Compose
       </span>
       <button

@@ -33,7 +33,7 @@ const CHEVRON_UP   = '▴';
 const EXPAND_ICON  = '⤢';   // maximized
 
 export default function AgentBar({ barState = 'collapsed', onStateChange }) {
-  const [statusText, setStatusText] = useState('idle');
+  const [statusText, setStatusText] = useState('ready');
   const [parallelProgress, setParallelProgress] = useState(null);
 
   // Listen for compose:agent-status events to power the collapsed status line
@@ -48,13 +48,13 @@ export default function AgentBar({ barState = 'collapsed', onStateChange }) {
         const { total, completed, failed, active } = parallelTasks;
         setStatusText(`\u2225 ${completed}/${total} tasks${failed ? ` (${failed} failed)` : ''}${active ? ` \u2022 ${active} active` : ''}`);
       } else if (status === 'idle') {
-        setStatusText('idle');
+        setStatusText('ready');
       } else if (tool) {
         setStatusText(`${tool} — ${category ?? status}`);
       } else if (category) {
         setStatusText(category);
       } else {
-        setStatusText(status ?? 'idle');
+        setStatusText(status === 'idle' ? 'ready' : (status ?? 'ready'));
       }
     }
     window.addEventListener('compose:agent-status', handleStatus);
