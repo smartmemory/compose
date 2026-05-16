@@ -225,6 +225,170 @@ describe('GitHubProvider: Projects v2 status mirror', () => {
   });
 });
 
+// ---- T16: renderRoadmap + appendChangelog via Contents API ----
+
+describe('GitHubProvider T16: renderRoadmap via Contents API', () => {
+  it('merges remote ROADMAP.md as base — curated preamble preserved, new feature appears', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const cwd = mkdtempSync(join(tmpdir(), 'ctp-gh-roadmap-'));
+    const fixture = makeGitHubFixture('o/r');
+    const provider = await new GitHubProvider().init(cwd,
+      { repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' }, _transport: fixture });
+
+    // Seed the remote ROADMAP.md with a curated preamble line.
+    // readPreamble preserves everything before the first ## heading.
+    const curatedPreamble = '# My Project Roadmap\n\nCurated intro line — do not remove.\n\n**Last updated:** 2026-01-01\n';
+    fixture.setFile('ROADMAP.md', curatedPreamble);
+
+    try {
+      // Create a feature in the provider cache (reconciled)
+      await provider.createFeature('R-1', { code: 'R-1', description: 'Roadmap test feature', status: 'PLANNED' });
+
+      const result = await provider.renderRoadmap();
+
+      // Returns the path string
+      expect(result).toBe('ROADMAP.md');
+
+      // Remote file was updated
+      const remoteText = fixture.getFile('ROADMAP.md');
+      expect(remoteText).toBeTruthy();
+
+      // Curated preamble line is preserved
+      expect(remoteText).toContain('Curated intro line — do not remove.');
+
+      // New feature appears in the output
+      expect(remoteText).toContain('R-1');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('SHA conflict retry: concurrent change between getContents and putContents resolves correctly', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const cwd = mkdtempSync(join(tmpdir(), 'ctp-gh-roadmap-retry-'));
+    const baseFixture = makeGitHubFixture('o/r');
+
+    // Simulate a concurrent write: the first PUT after the initial getContents
+    // returns 409, then subsequent PUTs succeed.
+    let putCallCount = 0;
+    const wrappedFixture = {
+      async request(method, path, body) {
+        if (method === 'PUT' && path.includes('/contents/ROADMAP.md')) {
+          putCallCount++;
+          if (putCallCount === 1) {
+            // Simulate concurrent modification: reject the first PUT with 409
+            return { status: 409, body: { message: 'SHA conflict' }, headers: {} };
+          }
+        }
+        return baseFixture.request(method, path, body);
+      },
+      getFile: (p) => baseFixture.getFile(p),
+      setFile: (p, t) => baseFixture.setFile(p, t),
+      _files: baseFixture._files,
+    };
+
+    const provider = await new GitHubProvider().init(cwd,
+      { repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' }, _transport: wrappedFixture });
+
+    baseFixture.setFile('ROADMAP.md', '# My Roadmap\n\nCurated line.\n');
+
+    try {
+      await provider.createFeature('RETRY-1', { code: 'RETRY-1', description: 'retry test', status: 'PLANNED' });
+
+      // Should succeed despite the first PUT failing with 409 (retry path)
+      const result = await provider.renderRoadmap();
+      expect(result).toBe('ROADMAP.md');
+
+      // Must have retried: putCallCount >= 2 (first 409, then success)
+      expect(putCallCount).toBeGreaterThanOrEqual(2);
+
+      // After retry the file should exist in the base fixture
+      // (the second PUT went through to baseFixture)
+      const finalText = baseFixture.getFile('ROADMAP.md');
+      expect(finalText).toContain('RETRY-1');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('GitHubProvider T16: appendChangelog via Contents API', () => {
+  it('appends a new entry to the remote CHANGELOG.md', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const cwd = mkdtempSync(join(tmpdir(), 'ctp-gh-changelog-'));
+    const fixture = makeGitHubFixture('o/r');
+    const provider = await new GitHubProvider().init(cwd,
+      { repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' }, _transport: fixture });
+
+    // Seed the remote CHANGELOG.md with an existing entry
+    const existing = '# Changelog\n\n## 2026-01-01\n\n### OLD-1 — existing entry\n\nSome description.\n';
+    fixture.setFile('CHANGELOG.md', existing);
+
+    try {
+      await provider.appendChangelog({
+        code: 'NEW-1',
+        date_or_version: '2026-05-17',
+        summary: 'new feature shipped',
+      });
+
+      const remoteText = fixture.getFile('CHANGELOG.md');
+      expect(remoteText).toContain('OLD-1');
+      expect(remoteText).toContain('NEW-1');
+      expect(remoteText).toContain('new feature shipped');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('idempotent re-append does not duplicate the entry', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const cwd = mkdtempSync(join(tmpdir(), 'ctp-gh-changelog-idem-'));
+    const fixture = makeGitHubFixture('o/r');
+    const provider = await new GitHubProvider().init(cwd,
+      { repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' }, _transport: fixture });
+
+    fixture.setFile('CHANGELOG.md', '# Changelog\n\n## 2026-05-17\n\n### IDEM-1 — already here\n\nDesc.\n');
+
+    try {
+      const entry = { code: 'IDEM-1', date_or_version: '2026-05-17', summary: 'already here' };
+
+      // First append — idempotent (entry already exists)
+      const r1 = await provider.appendChangelog(entry);
+      expect(r1.idempotent).toBe(true);
+
+      // File must not have changed (no extra writes)
+      const text = fixture.getFile('CHANGELOG.md');
+      const occurrences = (text.match(/### IDEM-1/g) ?? []).length;
+      expect(occurrences).toBe(1);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('second entry on same surface appends without duplication', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const cwd = mkdtempSync(join(tmpdir(), 'ctp-gh-changelog-2nd-'));
+    const fixture = makeGitHubFixture('o/r');
+    const provider = await new GitHubProvider().init(cwd,
+      { repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' }, _transport: fixture });
+
+    fixture.setFile('CHANGELOG.md', '# Changelog\n\n## 2026-05-17\n\n### FIRST-1 — first entry\n\nFirst.\n');
+
+    try {
+      await provider.appendChangelog({ code: 'SECOND-1', date_or_version: '2026-05-17', summary: 'second entry' });
+
+      const text = fixture.getFile('CHANGELOG.md');
+      expect(text).toContain('FIRST-1');
+      expect(text).toContain('SECOND-1');
+      // Each entry appears exactly once
+      expect((text.match(/### FIRST-1/g) ?? []).length).toBe(1);
+      expect((text.match(/### SECOND-1/g) ?? []).length).toBe(1);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
 // ---- recordCompletion enforcement tests ----
 
 describe('GitHubProvider: recordCompletion commit_sha enforcement', () => {

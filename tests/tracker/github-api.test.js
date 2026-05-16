@@ -79,6 +79,50 @@ describe('GitHubApi', () => {
     expect(result.errors[0].message).toBe('boom');
     expect(result.data).toBeUndefined();
   });
+  it('getContents 404 returns { text: "", sha: null }', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const api = new GitHubApi({ repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' } }, makeGitHubFixture());
+    const result = await api.getContents('ROADMAP.md', 'main');
+    expect(result).toEqual({ text: '', sha: null });
+  });
+  it('getContents returns text and sha for an existing file', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const fixture = makeGitHubFixture();
+    fixture.setFile('ROADMAP.md', '# Roadmap\n\nHello world\n');
+    const api = new GitHubApi({ repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' } }, fixture);
+    const result = await api.getContents('ROADMAP.md', 'main');
+    expect(result.text).toBe('# Roadmap\n\nHello world\n');
+    expect(typeof result.sha).toBe('string');
+    expect(result.sha).toBeTruthy();
+  });
+  it('putContents create then update round-trips correctly', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const fixture = makeGitHubFixture();
+    const api = new GitHubApi({ repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' } }, fixture);
+    // Create: sha=null
+    await api.putContents('CHANGELOG.md', '# Changelog\n', { sha: null, branch: 'main', message: 'init' });
+    expect(fixture.getFile('CHANGELOG.md')).toBe('# Changelog\n');
+    // Update with current sha
+    const { sha } = await api.getContents('CHANGELOG.md', 'main');
+    await api.putContents('CHANGELOG.md', '# Changelog\n\n## v1\n', { sha, branch: 'main', message: 'update' });
+    expect(fixture.getFile('CHANGELOG.md')).toBe('# Changelog\n\n## v1\n');
+  });
+  it('putContents with stale sha throws with shaConflict = true', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const fixture = makeGitHubFixture();
+    fixture.setFile('ROADMAP.md', '# Roadmap\n');
+    const api = new GitHubApi({ repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' } }, fixture);
+    // Write with the correct sha first to advance the file
+    const { sha: currentSha } = await api.getContents('ROADMAP.md', 'main');
+    await api.putContents('ROADMAP.md', '# Roadmap updated\n', { sha: currentSha, branch: 'main', message: 'update' });
+    // Now try to put with the OLD sha — should conflict
+    let err;
+    try {
+      await api.putContents('ROADMAP.md', '# Roadmap stale\n', { sha: currentSha, branch: 'main', message: 'stale' });
+    } catch (e) { err = e; }
+    expect(err).toBeDefined();
+    expect(err.shaConflict).toBe(true);
+  });
   it('403 with no rate-limit headers is not misclassified as rate-limit', async () => {
     process.env.CTP_TEST_TOKEN = 'tok';
     // Stub transport that returns a plain 403 with no rate-limit headers (auth failure shape).

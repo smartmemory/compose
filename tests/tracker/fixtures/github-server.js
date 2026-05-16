@@ -4,6 +4,10 @@ export function makeGitHubFixture(repo = 'o/r') {
   const issues = new Map(); let n = 0; let upd = 0;
   const comments = new Map(); let cid = 0; // issueNumber -> [{id, body}]
   const projectUpdates = []; // inspectable: captures updateProjectV2ItemFieldValue inputs
+
+  // Contents file store: path -> { text: string, sha: string }
+  const files = new Map(); let shaCounter = 0;
+
   const escapedRepo = repo.replace('/', '\\/');
   const issuePathRe = new RegExp(`^/repos/${escapedRepo}/issues/\\d+$`);
   const issueCommentsPathRe = new RegExp(`^/repos/${escapedRepo}/issues/(\\d+)/comments$`);
@@ -129,10 +133,73 @@ export function makeGitHubFixture(repo = 'o/r') {
         return handleGraphql(body);
       }
 
+      // GET /repos/:repo/contents/:filepath — with optional ?ref=... query param
+      const contentsGetRe = new RegExp(`^/repos/${escapedRepo}/contents/(.+?)(?:\\?.*)?$`);
+      const contentsGetMatch = contentsGetRe.exec(path);
+      if (contentsGetMatch && method === 'GET') {
+        const filePath = decodeURIComponent(contentsGetMatch[1]);
+        const entry = files.get(filePath);
+        if (!entry) {
+          return { status: 404, body: { message: 'Not Found' }, headers: {} };
+        }
+        const encoded = Buffer.from(entry.text, 'utf-8').toString('base64');
+        return {
+          status: 200,
+          body: { content: encoded, sha: entry.sha, name: filePath.split('/').pop(), path: filePath },
+          headers: {},
+        };
+      }
+
+      // PUT /repos/:repo/contents/:filepath
+      const contentsPutRe = new RegExp(`^/repos/${escapedRepo}/contents/(.+)$`);
+      const contentsPutMatch = contentsPutRe.exec(path);
+      if (contentsPutMatch && method === 'PUT') {
+        const filePath = decodeURIComponent(contentsPutMatch[1]);
+        const current = files.get(filePath);
+        // Optimistic-lock check: if sha is provided and doesn't match current sha → 409
+        if (body?.sha && current && body.sha !== current.sha) {
+          return { status: 409, body: { message: 'SHA conflict' }, headers: {} };
+        }
+        // Also reject if sha provided but file doesn't exist (stale create)
+        // (GitHub behavior: sha is required on update, absent on create)
+        shaCounter += 1;
+        const newSha = `sha_${shaCounter}`;
+        const decoded = Buffer.from((body?.content ?? '').replace(/\n/g, ''), 'base64').toString('utf-8');
+        files.set(filePath, { text: decoded, sha: newSha });
+        return {
+          status: 200,
+          body: {
+            content: { sha: newSha, path: filePath },
+            commit: { sha: `commit_${shaCounter}`, message: body?.message ?? '' },
+          },
+          headers: {},
+        };
+      }
+
       return { status: 404, body: {}, headers: {} };
     },
     _issues: issues,
     _comments: comments,
     _projectUpdates: projectUpdates,
+    /**
+     * Get the current text of a file in the fixture store.
+     * Returns null if the file hasn't been set.
+     */
+    getFile(filePath) {
+      return files.get(filePath)?.text ?? null;
+    },
+    /**
+     * Seed a file into the fixture store (simulates a file already in the remote repo).
+     * @param {string} filePath
+     * @param {string} text
+     */
+    setFile(filePath, text) {
+      shaCounter += 1;
+      files.set(filePath, { text, sha: `sha_${shaCounter}` });
+    },
+    /**
+     * Expose files map for advanced test inspection.
+     */
+    _files: files,
   };
 }
