@@ -268,6 +268,32 @@ harness does, after verifying ground truth itself (run tests, check files, call 
 
 ---
 
+## Phase 8: Cinematic / Demo Tooling — PLANNED (Post-V1)
+
+**Scope:** Produce high-fidelity video/demo footage of the live cockpit by driving the
+real UI deterministically and exporting per-frame PNGs — instead of screen-capture +
+bitmap zoom (blurry past ~2.5×, no live motion, fake camera).
+
+Because the graph is a cytoscape canvas, `cy.zoom()/pan()/animate()` redraw vectors at
+the target zoom — pixel-sharp at **any** level, with real scripted camera moves
+(select node → pan → zoom into dependency cluster → pop the gate). The blocker is
+determinism: fcose layout randomness, RAF/`Date.now` animation timing, and live
+websocket data must all be made reproducible.
+
+Filed off producing the Stratum/Compose 60s explainers; the current explainer cockpit
+beat uses a hi-DPI still + Remotion zoom as a stopgap. This is the durable replacement.
+
+| Code | Item | Status |
+|------|------|--------|
+| COMP-CINE-1 | Cinematic route — hidden `?cinematic` route that loads a fixed fixture dataset with live websockets disabled, so scenes are reproducible | PLANNED |
+| COMP-CINE-2 | Deterministic layout — run fcose once, freeze node positions, replay as `preset` layout so every render is identical | PLANNED |
+| COMP-CINE-3 | Frame clock — drive all animation from an injected clock instead of RAF/`Date.now`. **Use an off-the-shelf time-override mechanism — `timecut`/`timesnap` (tungs) or CDP `HeadlessExperimental.beginFrame` / Playwright `page.clock` — rather than hand-rolling clock injection** | PLANNED |
+| COMP-CINE-4 | Camera timeline API — `setCamera({ zoom, pan, selected }, frame)` so shots are scripted in code | PLANNED |
+| COMP-CINE-5 | Frame-export harness — steps frames headless, writes sharp per-frame PNGs at 1920×1080 (≥2× for zoom headroom). **Consume the shared kit in `~/reg/my/movie-maker` (`MM-CINE-*`, built on `timecut`/CDP `beginFrame`) — do not build a Compose-only harness. This phase becomes "Compose cockpit implements the capture contract" (tracked as `MM-ADOPT-1`)** | PLANNED |
+| COMP-CINE-6 | Docs + sample shot — documented usage and one scripted reference shot (e.g. select → pan → zoom into cluster → gate popover) | PLANNED |
+
+---
+
 ## Dogfooding Milestones
 
 These milestones use sequential labels (D0–D3) that are independent of roadmap phase numbers.

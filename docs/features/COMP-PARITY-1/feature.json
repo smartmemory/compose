@@ -1,0 +1,12 @@
+{
+  "code": "COMP-PARITY-1",
+  "description": "CLI gate resolution. `compose gate list` (pending gates + artifact assessment) and `compose gate resolve <id> --approve|--revise [--comment]|--kill --reason`. Wraps the existing POST /api/vision/gates/{id}/resolve endpoint. Highest-impact gap: today a headless or CI-driven build cannot clear a gate, making the cockpit a hard dependency for any gated pipeline. Ships first; unblocks autonomous/CI runs.",
+  "status": "PLANNED",
+  "phase": "COMP-PARITY: UI↔CLI Parity",
+  "created": "2026-05-16",
+  "updated": "2026-05-16",
+  "complexity": "M",
+  "position": 2,
+  "parent": "COMP-PARITY",
+  "group": "COMP-PARITY"
+}

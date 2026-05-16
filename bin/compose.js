@@ -340,7 +340,7 @@ async function runInit(flags) {
   let hasStratum = !noStratum && spawnSync('which', ['stratum-mcp'], { encoding: 'utf-8' }).status === 0
   if (!noStratum && !hasStratum) {
     console.log('stratum-mcp not found — installing via pip...')
-    const pipResult = spawnSync('pip', ['install', 'stratum'], {
+    const pipResult = spawnSync('pip', ['install', 'stratum-mcp'], {
       stdio: 'inherit',
       encoding: 'utf-8',
     })
@@ -350,11 +350,13 @@ async function runInit(flags) {
       if (hasStratum) {
         console.log('stratum-mcp installed successfully')
       } else {
-        console.warn('Warning: pip install stratum succeeded but stratum-mcp not found on PATH')
+        console.warn('Warning: pip install stratum-mcp succeeded but stratum-mcp not found on PATH')
+        console.warn('  The binary may live in a pyenv version dir not on $PATH.')
+        console.warn('  Try: ln -sf "$(python -c \'import sys,os; print(os.path.join(sys.prefix, "bin", "stratum-mcp"))\')" ~/.local/bin/stratum-mcp')
       }
     } else {
-      console.warn('Warning: pip install stratum failed — Stratum will be disabled')
-      console.warn('  Install manually: pip install stratum')
+      console.warn('Warning: pip install stratum-mcp failed — Stratum will be disabled')
+      console.warn('  Install manually: pip install stratum-mcp  (requires Python >= 3.11)')
     }
   }
   const hasLifecycle = !noLifecycle
@@ -2669,6 +2671,22 @@ if (cmd === 'build') {
     console.error('  compose loops add --feature <FC> --kind <kind> --summary "<text>"')
     console.error('  compose loops list --feature <FC>')
     console.error('  compose loops resolve <loopId> --feature <FC> --note "<text>"')
+    process.exit(1)
+  }
+
+} else if (cmd === 'tracker') {
+  // ---------------------------------------------------------------------------
+  // compose tracker status   — print provider name, canonical, pendingOps, conflicts, mixedSources
+  // compose tracker sync     — flush op-log and report drained/quarantined counts
+  // COMP-TRACKER-PROVIDER T18
+  // ---------------------------------------------------------------------------
+  try {
+    const { runTrackerCli } = await import('../lib/tracker/cli.js')
+    const result = await runTrackerCli(process.cwd(), args)
+    console.log(result.output)
+    if (result.exitCode !== 0) process.exit(result.exitCode)
+  } catch (err) {
+    console.error(`tracker: ${err.message}`)
     process.exit(1)
   }
 

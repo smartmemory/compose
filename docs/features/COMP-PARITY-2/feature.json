@@ -1,0 +1,12 @@
+{
+  "code": "COMP-PARITY-2",
+  "description": "UI launchers for the fix and new lifecycles. Cockpit entry points to start `compose fix <bug>` and `compose new \"<intent>\"` (and resume an aborted fix). The Pipeline tab already renders these stratum flows once running — this adds the missing launch/resume controls so UI-first devs aren't forced to the terminal for the two richest lifecycles. Reuses POST /api/build/start-style dispatch.",
+  "status": "PLANNED",
+  "phase": "COMP-PARITY: UI↔CLI Parity",
+  "created": "2026-05-16",
+  "updated": "2026-05-16",
+  "complexity": "M",
+  "position": 3,
+  "parent": "COMP-PARITY",
+  "group": "COMP-PARITY"
+}
