@@ -51,6 +51,24 @@ describe('GitHubApi', () => {
     expect(fetched.title).toBe('new-title');
     expect(fetched.updated_at).toBe(updated.updated_at);
   });
+  it('addIssueComment then listIssueComments round-trips', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const api = new GitHubApi({ repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' } }, makeGitHubFixture());
+    await api.createIssue({ title: 'test', body: 'b', labels: [] });
+    const comment = await api.addIssueComment(1, '<!--compose-event {"type":"status"}-->');
+    expect(comment.id).toBe(1);
+    expect(comment.body).toBe('<!--compose-event {"type":"status"}-->');
+    const list = await api.listIssueComments(1);
+    expect(list).toHaveLength(1);
+    expect(list[0].body).toBe('<!--compose-event {"type":"status"}-->');
+  });
+  it('graphql returns data object', async () => {
+    process.env.CTP_TEST_TOKEN = 'tok';
+    const api = new GitHubApi({ repo: 'o/r', auth: { tokenEnv: 'CTP_TEST_TOKEN' } }, makeGitHubFixture());
+    const data = await api.graphql('mutation{updateProjectV2ItemFieldValue(input:{}){projectV2Item{id}}}', {});
+    expect(data).toBeDefined();
+    expect(data.updateProjectV2ItemFieldValue?.projectV2Item?.id).toBe('pi');
+  });
   it('403 with no rate-limit headers is not misclassified as rate-limit', async () => {
     process.env.CTP_TEST_TOKEN = 'tok';
     // Stub transport that returns a plain 403 with no rate-limit headers (auth failure shape).
