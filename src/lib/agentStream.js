@@ -11,6 +11,8 @@
  */
 
 const DEFAULT_MAX_BACKOFF_MS = 30_000;
+const DEFAULT_MAX_RETRIES = 5;
+const DEFAULT_STALL_TIMEOUT_MS = 30_000;
 
 /**
  * @param {object} opts
@@ -19,8 +21,12 @@ const DEFAULT_MAX_BACKOFF_MS = 30_000;
  * @param {() => void}                              [opts.onOpen]
  * @param {() => void}                              [opts.onClose]
  * @param {(err:Error) => void}                     [opts.onError]
+ * @param {(info:{attempt:number, maxRetries:number, nextBackoffMs:number}) => void} [opts.onRetry] — called on each retry attempt so UIs can show progress
+ * @param {(info:{elapsedMs:number}) => void}        [opts.onStall] — called when no data arrives within stallTimeoutMs
  * @param {string[]}                                [opts.namedEvents] extra named SSE events to subscribe to (e.g. 'hydrate')
  * @param {number}                                  [opts.maxBackoffMs]
+ * @param {number}                                  [opts.maxRetries] — max consecutive reconnect attempts before giving up (default 5)
+ * @param {number}                                  [opts.stallTimeoutMs] — ms with no data before onStall fires (default 30000)
  * @returns {{ close: () => void }}
  */
 export function createAgentStream({
@@ -29,8 +35,12 @@ export function createAgentStream({
   onOpen,
   onClose,
   onError,
+  onRetry,
+  onStall,
   namedEvents = ['hydrate'],
   maxBackoffMs = DEFAULT_MAX_BACKOFF_MS,
+  maxRetries = DEFAULT_MAX_RETRIES,
+  stallTimeoutMs = DEFAULT_STALL_TIMEOUT_MS,
 }) {
   if (!url) throw new Error('createAgentStream: url is required');
   if (typeof EventSource === 'undefined') {
@@ -42,8 +52,27 @@ export function createAgentStream({
   let stopped = false;
   let attempt = 0;
   let reconnectTimer = null;
+  let stallTimer = null;
+  let stalled = false;
+
+  function resetStallTimer() {
+    stalled = false;
+    if (stallTimer) clearTimeout(stallTimer);
+    if (stopped) return;
+    stallTimer = setTimeout(() => {
+      stalled = true;
+      onStall?.({ elapsedMs: stallTimeoutMs });
+    }, stallTimeoutMs);
+  }
+
+  function clearStallTimer() {
+    if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
+    stalled = false;
+  }
 
   function dispatch(eventName, raw) {
+    // Any incoming data resets the stall timer
+    resetStallTimer();
     if (!onEvent) return;
     try {
       const payload = JSON.parse(raw);
@@ -56,8 +85,22 @@ export function createAgentStream({
   function scheduleReconnect() {
     if (stopped) return;
     if (reconnectTimer) return;
+
+    // If we've exhausted retries, report final error and stop
+    if (attempt >= maxRetries) {
+      const err = new Error(`agent-stream: failed after ${maxRetries} retries`);
+      onError?.(err);
+      onClose?.();
+      clearStallTimer();
+      return;
+    }
+
     const backoff = Math.min(maxBackoffMs, 1000 * Math.pow(2, attempt));
     attempt += 1;
+
+    // Notify UI of retry attempt immediately
+    onRetry?.({ attempt, maxRetries, nextBackoffMs: backoff });
+
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
       connect();
@@ -76,6 +119,8 @@ export function createAgentStream({
 
     es.onopen = () => {
       attempt = 0;
+      stalled = false;
+      resetStallTimer();
       onOpen?.();
     };
 
@@ -85,6 +130,7 @@ export function createAgentStream({
     }
 
     es.onerror = (ev) => {
+      // Surface the error to the UI immediately — don't swallow it during retries
       onError?.(ev instanceof Error ? ev : new Error('agent-stream error'));
       try { es?.close(); } catch { /* */ }
       es = null;
@@ -98,6 +144,7 @@ export function createAgentStream({
   return {
     close() {
       stopped = true;
+      clearStallTimer();
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
