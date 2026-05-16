@@ -15,15 +15,15 @@ import React from 'react';
 import { Network, GitBranch, Activity, ShieldCheck, Search, FileText, Workflow, MessageSquare, LayoutDashboard, Lightbulb } from 'lucide-react';
 
 const TAB_META = {
-  dashboard: { label: 'Dashboard', icon: LayoutDashboard },
-  tree:      { label: 'Items',     icon: GitBranch },
-  graph:     { label: 'Graph',     icon: Network },
-  pipeline:  { label: 'Pipeline',  icon: Workflow },
-  sessions:  { label: 'Sessions',  icon: Activity },
-  gates:     { label: 'Gates',     icon: ShieldCheck },
-  docs:      { label: 'Docs',      icon: FileText },
-  design:    { label: 'Design',    icon: MessageSquare },
-  ideabox:   { label: 'Ideabox',   icon: Lightbulb },
+  dashboard: { label: 'Dashboard', icon: LayoutDashboard, tip: 'Overview of project status and activity' },
+  tree:      { label: 'Items',     icon: GitBranch,       tip: 'Hierarchical list of all items and features' },
+  graph:     { label: 'Graph',     icon: Network,         tip: 'Visual dependency graph of items' },
+  pipeline:  { label: 'Pipeline',  icon: Workflow,        tip: 'Build pipeline stages and progress' },
+  sessions:  { label: 'Sessions',  icon: Activity,        tip: 'Active and past agent sessions' },
+  gates:     { label: 'Gates',     icon: ShieldCheck,     tip: 'Quality gates and approval checkpoints' },
+  docs:      { label: 'Docs',      icon: FileText,        tip: 'Project documentation and specs' },
+  design:    { label: 'Design',    icon: MessageSquare,   tip: 'Design agent conversations and decisions' },
+  ideabox:   { label: 'Ideabox',   icon: Lightbulb,       tip: 'Captured ideas and suggestions' },
 };
 
 export default function ViewTabs({ tabs = [], activeTab, onTabChange, onOpenPalette, badges = {} }) {
@@ -44,6 +44,7 @@ export default function ViewTabs({ tabs = [], activeTab, onTabChange, onOpenPale
             key={tab}
             role="tab"
             aria-selected={isActive}
+            title={meta?.tip}
             className={[
               'flex items-center gap-1.5 px-3 h-full text-[11px] uppercase tracking-wider font-medium transition-colors',
               'border-b-2 -mb-px',
