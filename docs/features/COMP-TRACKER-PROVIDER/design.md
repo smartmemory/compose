@@ -36,6 +36,20 @@ Compose hardcodes feature/roadmap/changelog/event persistence to local files (`d
 4. **Write-through cache + async reconcile.** Mutations update cache + a durable outbound op-log immediately and return; a reconciler flushes to the provider with retry/backoff/rate-limit awareness; pull-reconcile keeps the cache canonical-consistent; conflicts are logged.
 5. **Seam at the data layer.** The existing mutation layer (transition policy in `feature-writer.js`, `completion-writer.js`, `changelog-writer.js`) and all `mcp__compose__*` tools stay; they call `provider.*`. Transition policy remains the single, provider-agnostic enforcement point.
 
+## Mutation Path Inventory (Codex R1 #1, #6)
+
+The seam is **not** just `feature-json`/`roadmap-gen`. Every path that mutates tracker state must route through the provider, or be explicitly scoped out. Audited paths:
+
+| Path | Today | v1 disposition |
+|---|---|---|
+| `feature-writer.setFeatureStatus` / `addRoadmapEntry` | typed mutation + transition policy + event + roadmap regen | **route through provider** |
+| `completion-writer.recordCompletion` | persists completion, then flips status | **route through provider** (see partial-commit contract) |
+| `changelog-writer.addChangelogEntry` | atomic parse-and-rewrite of `CHANGELOG.md` | **route through provider** |
+| `build.js` direct `readFeature`/`writeFeature` — triage profile cache (`build.js:628`), status flips (`build.js:752`), terminal reset (`build.js:1833`) | bypasses feature-writer, transition policy, events, roadmap regen | **must be re-pointed at the provider.** These become `provider.getFeature`/`provider.putFeature`. The triage profile cache write is metadata-only (no status change) so it skips transition policy legitimately — the provider contract explicitly allows metadata-only `putFeature` that does not emit a status event. |
+| `compose-mcp-tools.js` direct reads of vision-state / sessions (`:23,:38,:52`) | local disk reads, not provider-routed | **v1 decision:** vision/sessions are `JOURNAL`/`VISION`-capability — they always resolve through `LocalFileProvider` regardless of active provider. This is **expected mixed-source state**, not a bug: under GitHubProvider, features/roadmap/changelog/events are GitHub-canonical while vision/sessions stay local. `health()` reports `mixedSources: ["vision","sessions"]` and `compose tracker status` prints it so the operator is never surprised. Unifying these is a v2 capability, not a v1 silent behavior change. |
+
+"Zero change for local" is therefore defined precisely: with `provider: "local"`, every path above produces byte-identical files and the same typed errors as today (enforced by the regression golden flow + conformance suite below).
+
 ## Architecture
 
 ```
@@ -84,6 +98,17 @@ Contract rules:
 2. `putFeature` is idempotent — same payload twice is a no-op (clean retry/reconcile).
 3. Reads return cache-consistent data; staleness/refresh is the SyncEngine's concern, invisible to callers. Drift surfaces via `health()`.
 
+### Commit & partial-failure semantics (Codex R1 #2)
+
+Today's writers have **typed partial-commit contracts** that callers depend on. The provider contract must preserve them, not flatten them into a generic async upsert:
+
+- **Durability boundary at return.** `putFeature`/`appendEvent`/`appendChangelog` return only after the change is durably committed to *the canonical store for the active provider*. For `LocalFileProvider` that is the file on disk (synchronous, unchanged). For remote providers it is **cache + op-log fsync'd** — the op-log is the durable commit record; reconcile-to-remote is asynchronous but the op is never lost (this is the "provider-canonical, eventually" contract; `health()` exposes `pendingOps`).
+- **Multi-entity operations are explicit, ordered methods — not callers chaining primitives.** The contract defines composite operations that mirror today's writers and preserve their ordering + typed errors:
+  - `setStatus(code, to, meta)` → may throw `ROADMAP_PARTIAL_WRITE` (feature persisted, roadmap regen failed) exactly as `feature-writer.js:233` does today.
+  - `recordCompletion(code, rec)` → persists completion **first**, then flips status; rethrows `STATUS_FLIP_AFTER_COMPLETION_RECORDED` if the flip fails (mirrors `completion-writer.js:305`). The provider guarantees the completion is durable before the status step is attempted.
+  - `appendChangelog(entry)` → an **atomic whole-file parse-and-rewrite**, not a blind append (mirrors `changelog-writer.js:323/504`). Remote providers fetch the canonical file, parse, splice, and commit the full file in one Contents-API call.
+- `putFeature` is the low-level metadata upsert (used by triage cache); the composite methods above are what the mutation layer calls for status/completion/changelog. The transition policy still runs in the mutation layer *before* `setStatus` is invoked.
+
 ## GitHub Provider Mapping
 
 | Compose entity | GitHub primitive |
@@ -99,10 +124,28 @@ GitHubProvider declares `{FEATURES, EVENTS, ROADMAP, CHANGELOG}`; `{JOURNAL, VIS
 
 ## Data Flow
 
-- **Write:** mutation layer validates transition → `provider.putFeature` → cache write + op-log append → return (non-blocking).
-- **Reconciler:** FIFO drain of op-log → GraphQL/REST with exponential backoff + rate-limit header awareness. Success → op removed + cache stamped with provider `updatedAt`. Triggered after mutation batches, on `compose tracker sync`, best-effort at ship.
-- **Pull-reconcile:** on stale read (TTL default 60s) or explicit sync — fetch provider, diff cache. Provider canonical: remote change w/o pending local op → cache updated; pending local op vs remote change to same field → conflict-ledger entry, provider value wins in cache, local op flagged, surfaced via `health()` / `compose tracker status`.
+- **Write:** mutation layer validates transition (against the **pending-shadowed** view, see below) → composite/`putFeature` → cache write + op-log append (fsync) → return.
+- **Reconciler:** FIFO drain of op-log → GraphQL/REST with exponential backoff + rate-limit header awareness. Success → op removed + cache stamped with provider `updatedAt` + provider entity version (issue `updatedAt`/`nodeId` ETag-equivalent). Triggered after mutation batches, on `compose tracker sync`, best-effort at ship.
 - **Offline:** reads from cache; writes queue; reconciler resumes on connectivity. `LocalFileProvider` bypasses the engine (synchronous).
+
+### Pending-op shadowing & CAS (Codex R1 #3)
+
+Compose's writers are **read-before-write**: `setFeatureStatus` validates the transition from the *currently read* status (`feature-writer.js:217`), `recordCompletion` dedupes by scanning the current `completions[]` (`completion-writer.js:265`), `addRoadmapEntry` decides uniqueness from current reads (`feature-writer.js:103`). A naive "provider value wins in cache while a local op is pending" rule would let those reads observe rolled-back state and corrupt logic (re-created features, double completions, transition validated against the wrong status). Rules:
+
+1. **Pending writes shadow reads.** While an op for `code` is un-reconciled in the op-log, `getFeature(code)`/`listFeatures()` return the **post-op cache value**, never a remote-rolled-back value. Reads are always consistent with what this process has durably committed.
+2. **Optimistic concurrency on reconcile (CAS).** Each cached entity carries the provider version it was last reconciled from. The reconciler sends the mutation conditionally (GraphQL expected `updatedAt` / issue node version). If the remote moved underneath a pending op → the op is **not silently lost**: it goes to the conflict ledger with both values, the op is quarantined, and `health()`/`compose tracker status` surface it for operator resolution. Provider-canonical means the *resolved* state is the provider's — but resolution is explicit, not a silent cache rollback.
+3. **No cache rollback under pending ops.** Pull-reconcile only updates cache entries that have **zero** pending ops. Entities with pending ops are reconciled solely via the CAS path in rule 2.
+
+### Curated-merge views: ROADMAP & CHANGELOG (Codex R1 #4)
+
+`ROADMAP.md` and `CHANGELOG.md` are **not pure materialized views today** — `roadmap-gen.js` preserves curated phase prose, anonymous rows, preserved sections, anchors, and heading overrides by reading the *existing on-disk file* as the merge base (`roadmap-gen.js:62/122/196/252`); `changelog-writer.js` surgically rewrites the existing file (`:301/:516`). Therefore:
+
+- For remote providers the **merge base is the provider-canonical file contents**, fetched fresh via the Contents API immediately before regeneration — never the possibly-stale local cache. The flow is: fetch remote `ROADMAP.md`/`CHANGELOG.md` → run the *unchanged* `roadmap-gen`/`changelog-writer` merge logic with that as the base → commit the result back via Contents API with the fetched blob SHA as the expected base (Contents-API optimistic-lock; a 409 → retry with refetch).
+- This keeps all curated content intact and makes the existing generators provider-agnostic (they operate on a string, not a fixed path). `roadmapPath`/changelog path are config-driven.
+
+### Position allocation (Codex R1 #5)
+
+`nextPositionInPhase()` (`feature-writer.js:156`) computes `max(existing)+1` from the visible feature set — safe locally because reads/writes are one synchronous store, unsafe under queued writes + stale reads (two writers allocate the same position). Rule for remote providers: **`position` is best-effort and not authoritative for ordering.** Display order is derived from the provider's own ordering primitive (GitHub Projects v2 item position) at render time; the local `position` integer is a hint, and collisions are normalized deterministically (stable sort by `(position, code)`) during roadmap render. The conformance suite asserts two concurrent feature creations in the same phase never error and produce a stable, collision-free rendered order. (Local provider keeps exact current behavior.)
 
 ## Configuration & Auth
 
@@ -137,6 +180,18 @@ Absent `tracker` key → `provider: "local"` → zero behavior change for existi
 - **Capability fallback:** GitHubProvider + journal → routed to local, asserted.
 - **Contract suite:** both providers pass the same `TrackerProvider` conformance tests (idempotent `putFeature`, cache-consistent reads, capability honesty).
 - **Offline:** writes queue, reads serve cache, reconciler resumes.
+
+## LocalFileProvider Conformance Requirements (Codex R1 #7)
+
+`LocalFileProvider` is a behavior-preserving extraction. These currently-implicit behaviors are promoted to **explicit, tested conformance requirements** — the extraction must reproduce them exactly, and the contract suite asserts each:
+
+1. `getFeature` returns `null` (not throw) on malformed/unparseable JSON (`feature-json.js:35`).
+2. `listFeatures` silently skips malformed files and applies the existing sort order (`feature-json.js:67`) — order is part of the contract (roadmap-gen + validators depend on it).
+3. `putFeature` stamps `updated` — and preserves today's in-place mutation of the caller's object (`feature-json.js:52`) **or** every caller is audited and updated if we make it pure. v1 choice: **preserve in-place stamping** to guarantee zero behavior change; "make it pure" is tracked as a separate cleanup, not bundled here.
+4. Only `paths.features` from `.compose/compose.json` is honored for feature dir resolution (`project-paths.js:24`); no new resolution rules introduced.
+5. Same typed errors, same messages, same partial-commit ordering as the current writers (covered by the regression golden flow).
+
+A provider that "cleans up" any of these is non-conformant for v1, even if higher-level tests pass.
 
 ## Open Questions
 
