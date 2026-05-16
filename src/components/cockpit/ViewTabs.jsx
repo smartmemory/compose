@@ -48,7 +48,7 @@ export default function ViewTabs({ tabs = [], activeTab, onTabChange, onOpenPale
               'flex items-center gap-1.5 px-3 h-full text-[11px] uppercase tracking-wider font-medium transition-colors',
               'border-b-2 -mb-px',
               isActive
-                ? 'border-accent text-accent'
+                ? 'border-blue-600 text-blue-600 dark:border-accent dark:text-accent'
                 : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border',
             ].join(' ')}
             onClick={() => onTabChange?.(tab)}
