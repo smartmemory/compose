@@ -426,3 +426,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-17T04:24:08+08:00 | GitHub roadmap/changelog via Contents API, provider-canonical merge base
 2026-05-17T04:43:02+08:00 | GitHub init scope validation + health mixedSources
 2026-05-17T04:58:05+08:00 | compose tracker status/sync CLI
+2026-05-17T05:30:24+08:00 | reconnect production seam: provider.appendEvent + GH changelog low-level + design reconcile
