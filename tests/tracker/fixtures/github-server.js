@@ -1,6 +1,8 @@
 // Minimal in-process recorder: maps (method,path) -> handler returning {status, body, headers}.
 // repo param defaults to 'o/r' so existing tests need no changes.
-export function makeGitHubFixture(repo = 'o/r') {
+// opts.repoStatus: if set (e.g. 403 or 404), GET /repos/:repo returns that status.
+// opts.projectsAccessDenied: if true, graphql projectV2 metadata returns a 403-style errors array.
+export function makeGitHubFixture(repo = 'o/r', opts = {}) {
   const issues = new Map(); let n = 0; let upd = 0;
   const comments = new Map(); let cid = 0; // issueNumber -> [{id, body}]
   const projectUpdates = []; // inspectable: captures updateProjectV2ItemFieldValue inputs
@@ -31,6 +33,12 @@ export function makeGitHubFixture(repo = 'o/r') {
     // Force-error sentinel: any call with __forceError in variables
     if (vars.__forceError) {
       return { status: 200, body: { errors: [{ message: 'boom' }] }, headers: {} };
+    }
+
+    // ProjectV2 any non-mutation query: handle access-denied at this level so both
+    // the probe (_probeProjectsAccess) and metadata lookup (_resolveProjectMeta) are covered.
+    if (q.includes('projectV2') && !q.includes('mutation') && opts.projectsAccessDenied) {
+      return { status: 200, body: { errors: [{ type: 'FORBIDDEN', message: 'Resource not accessible by integration' }] }, headers: {} };
     }
 
     // ProjectV2 metadata lookup (owner.projectV2 by number)
@@ -80,8 +88,19 @@ export function makeGitHubFixture(repo = 'o/r') {
     return { status: 200, body: { data: {} }, headers: {} };
   }
 
+  const repoPath = `/repos/${repo}`;
+
   return {
     async request(method, path, body) {
+      // GET /repos/:repo — lightweight repo probe for init() scope validation
+      if (method === 'GET' && path === repoPath) {
+        const status = opts.repoStatus ?? 200;
+        if (status !== 200) {
+          return { status, body: { message: status === 404 ? 'Not Found' : 'Forbidden' }, headers: {} };
+        }
+        return { status: 200, body: { full_name: repo, private: false }, headers: {} };
+      }
+
       if (method === 'POST' && path === `/repos/${repo}/issues`) {
         n += 1;
         const issue = {
