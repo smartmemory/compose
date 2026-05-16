@@ -45,7 +45,7 @@ The seam is **not** just `feature-json`/`roadmap-gen`. Every path that mutates t
 | `feature-writer.setFeatureStatus` / `addRoadmapEntry` | typed mutation + transition policy + event + roadmap regen | **route through provider** |
 | `completion-writer.recordCompletion` | persists completion, then flips status | **route through provider** (see partial-commit contract) |
 | `changelog-writer.addChangelogEntry` | atomic parse-and-rewrite of `CHANGELOG.md` | **route through provider** |
-| `build.js` triage/profile metadata cache (`build.js:644,653`) | metadata-only `writeFeature`, no status change | → `provider.putFeature` (metadata-only; legitimately skips transition policy + status event) |
+| `build.js` triage path — creates missing `feature.json` with `status: 'PLANNED'` (`build.js:644`), then caches profile metadata (`build.js:653`) | mixed: an *initial create* (null→PLANNED) + later metadata-only updates | The create goes through a distinct **`createFeature(code, obj)`** composite op (initial status allowed exactly once, on a non-existent feature; emits the genesis event, no transition-policy check because there is no prior state). Subsequent profile-metadata writes use `putFeature` (metadata-only, status-delta rejected). This removes the "metadata-only" mislabel: creation and mutation are different ops. |
 | `build.js` lifecycle status flips (`build.js:755,1834,1845,1854`) | **real status transitions** done via direct `writeFeature`, bypassing transition policy/events/roadmap | **must route through the `setStatus`-class composite op**, not raw `putFeature`. These are tracker-canonical status changes; under a remote provider they MUST go through transition policy + event + roadmap regen exactly like the MCP path. Explicit rule: **any `status` field change is canonical and only ever flows through `setStatus`; raw `putFeature` is rejected by the contract if the payload's `status` differs from the current cached value.** This closes the bypass at the source rather than relying on call-site discipline. |
 | `compose-mcp-tools.js` direct reads of vision-state / sessions (`:23,:38,:52`) | local disk reads, not provider-routed | **v1 decision:** vision/sessions are `JOURNAL`/`VISION`-capability — they always resolve through `LocalFileProvider` regardless of active provider. This is **expected mixed-source state**, not a bug: under GitHubProvider, features/roadmap/changelog/events are GitHub-canonical while vision/sessions stay local. `health()` reports `mixedSources: ["vision","sessions"]` and `compose tracker status` prints it so the operator is never surprised. Unifying these is a v2 capability, not a v1 silent behavior change. |
 
@@ -81,7 +81,10 @@ health()                                 {ok, provider, canonical, lastSync, pen
 
 getFeature(code)                         feature | null         (cache-consistent for remote)
 listFeatures()                           feature[]
-putFeature(code, obj)                    idempotent upsert; called AFTER transition policy approved
+createFeature(code, obj)                 genesis op; initial status allowed once on a non-existent
+                                         feature; emits genesis event; no transition-policy check
+putFeature(code, obj)                    metadata-only upsert; contract-rejects a status delta
+                                         (status only flows through setStatus); idempotent
 deleteFeature(code)                      rare
 
 appendEvent(code, event)                 {ts,type,from,to,by,meta}
