@@ -132,7 +132,7 @@ Today's composite writers accept a caller-supplied `idempotency_key` for retry-s
 |---|---|
 | Feature | 1 Issue. Body = fenced ```compose-feature``` JSON block (canonical metadata) + prose. Title `[CODE] description`. |
 | Status | Projects v2 single-select `Status` (GraphQL) + mirror label `status:<value>`; terminal statuses close the issue. |
-| Events | Issue timeline + structured `<!--compose-event {json}-->` comments. |
+| Events | **Only** structured `<!--compose-event {json}-->` comments. Provider-native timeline entries (issue opened/closed/labeled/assigned) are explicitly **not** surfaced by `readEvents` — only Compose-authored event comments are parsed. This keeps `readEvents` parity with local: a bare `createFeature` (which issues a GitHub issue, producing a native "issue opened" timeline entry) yields **zero** Compose events, exactly like today's local triage create. Compose events are emitted only by the composite ops that emit them locally (`setStatus`, `recordCompletion`, etc.). |
 | Roadmap | `roadmap-gen.js` output committed via Contents API to configurable path/branch. |
 | Changelog | `CHANGELOG.md` committed via Contents API. |
 | Identity map | `.compose/data/tracker-cache/github/idmap.json`: `code ↔ {issueNumber, projectItemId, nodeId}`; rebuildable from `label:compose-feature` search. |
