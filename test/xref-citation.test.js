@@ -126,6 +126,8 @@ describe('parseCitations — rejects (structured ParseError)', () => {
     ['unknown provider', '<!-- xref: bitbucket o/n#1 -->'],
     ['github bad target (no #issue)', '<!-- xref: github owner/repo -->'],
     ['github non-numeric issue', '<!-- xref: github o/n#abc -->'],
+    ['github # in owner half', '<!-- xref: github ow#ner/name#1 -->'],
+    ['github # in name half', '<!-- xref: github owner/na#me#1 -->'],
     ['local missing feature code', '<!-- xref: local compose -->'],
     ['local invalid feature code', '<!-- xref: local compose not-a-code -->'],
     ['local repo token traversal', '<!-- xref: local ../../etc COMP-X-1 -->'],
