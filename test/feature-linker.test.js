@@ -418,6 +418,12 @@ describe('linkFeatures', () => {
       () => linkFeatures(cwd, { from_code: 'XR-8', kind: 'external', provider: 'local', repo: '../escape', to_code: 'COMP-X-1' }),
       /must be a single sibling directory name/,
     );
+    // `#` in the github repo is not representable in the citation carrier
+    // (it delimits the issue) — writer must reject it too.
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-8', kind: 'external', provider: 'github', repo: 'owner/na#me', issue: 1 }),
+      /github repo .* must be "owner\/name"/,
+    );
     // url-class expect is recorded, not rejected (parity with the grammar)
     const r = await linkFeatures(cwd, {
       from_code: 'XR-8', kind: 'external', provider: 'jira',
