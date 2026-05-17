@@ -90,15 +90,32 @@
               "allOf": [
                 {
                   "if": { "properties": { "provider": { "const": "github" } }, "required": ["provider"] },
-                  "then": { "required": ["repo", "issue"] }
+                  "then": {
+                    "required": ["repo", "issue"],
+                    "properties": {
+                      "repo": { "pattern": "^[^\\s/#]+/[^\\s/#]+$" },
+                      "expect": { "enum": ["open", "closed"] }
+                    }
+                  }
                 },
                 {
                   "if": { "properties": { "provider": { "const": "local" } }, "required": ["provider"] },
-                  "then": { "required": ["repo", "to_code"] }
+                  "then": {
+                    "required": ["repo", "to_code"],
+                    "properties": {
+                      "repo": { "pattern": "^[A-Za-z0-9._-]+$" },
+                      "expect": { "enum": ["PLANNED", "IN_PROGRESS", "PARTIAL", "COMPLETE", "SUPERSEDED", "PARKED", "BLOCKED", "KILLED"] }
+                    }
+                  }
                 },
                 {
                   "if": { "properties": { "provider": { "enum": ["url", "jira", "linear", "notion", "obsidian"] } }, "required": ["provider"] },
-                  "then": { "required": ["url"] }
+                  "then": {
+                    "required": ["url"],
+                    "properties": {
+                      "url": { "format": "uri" }
+                    }
+                  }
                 }
               ]
             }
