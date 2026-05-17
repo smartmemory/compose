@@ -2,6 +2,14 @@
 # Compose pre-push hook — runs `compose validate` and blocks the push on
 # any error-severity drift finding. Installed by `compose hooks install --pre-push`;
 # placeholders below are substituted at install time.
+#
+# External-reference (xref) resolution is OFF here by default: github xref:
+# citations / kind:"external" links emit XREF_RESOLUTION_SKIPPED (warning,
+# non-blocking under --block-on=error) while local/url/malformed still
+# surface. Opt in to network github resolution by exporting
+# COMPOSE_XREF_ONLINE=1, or set `xref.prePushOnline: true` in
+# .compose/compose.json — both are honored by `compose validate` directly
+# (no flag change needed below). XREF_TARGET_MISSING stays error and blocks.
 
 set -u
 COMPOSE_NODE="__COMPOSE_NODE__"

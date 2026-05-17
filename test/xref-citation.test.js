@@ -128,6 +128,8 @@ describe('parseCitations — rejects (structured ParseError)', () => {
     ['github non-numeric issue', '<!-- xref: github o/n#abc -->'],
     ['local missing feature code', '<!-- xref: local compose -->'],
     ['local invalid feature code', '<!-- xref: local compose not-a-code -->'],
+    ['local repo token traversal', '<!-- xref: local ../../etc COMP-X-1 -->'],
+    ['local repo token with slash', '<!-- xref: local a/b COMP-X-1 -->'],
     ['missing target', '<!-- xref: github -->'],
     ['unterminated note quote', '<!-- xref: github o/n#1 note="oops -->'],
     ['github invalid expect token', '<!-- xref: github o/n#1 expect=merged -->'],

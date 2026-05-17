@@ -363,12 +363,13 @@ const TOOLS = [
   },
   {
     name: 'validate_project',
-    description: 'Run validate_feature for every code in vision-state, ROADMAP, and folders, plus cross-cutting checks (orphan folders, dangling cross-refs, CHANGELOG references, journal index drift). Returns the union of all findings.',
+    description: 'Run validate_feature for every code in vision-state, ROADMAP, and folders, plus cross-cutting checks (orphan folders, dangling cross-refs, CHANGELOG references, journal index drift) and read-only external-reference staleness (kind:"external" links + xref: roadmap citations). external:true enables network resolution of github refs (off by default — github refs then emit XREF_RESOLUTION_SKIPPED). Returns the union of all findings.',
     inputSchema: {
       type: 'object',
       properties: {
         external_prefixes: { type: 'array', items: { type: 'string' } },
         feature_json_mode: { type: 'boolean' },
+        external: { type: 'boolean', description: 'Resolve github external refs over the network (read-only). Default false: github refs degrade to XREF_RESOLUTION_SKIPPED.' },
       },
     },
   },

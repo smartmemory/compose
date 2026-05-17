@@ -291,10 +291,11 @@ export async function toolValidateFeature(args = {}) {
 
 export async function toolValidateProject(args = {}) {
   const { validateProject } = await import('../lib/feature-validator.js');
-  const { external_prefixes, feature_json_mode } = args;
+  const { external_prefixes, feature_json_mode, external } = args;
   return validateProject(getTargetRoot(), {
     externalPrefixes: external_prefixes,
     featureJsonMode: feature_json_mode,
+    external: external === true,
   });
 }
 
