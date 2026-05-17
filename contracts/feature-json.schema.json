@@ -103,7 +103,10 @@
                   "then": {
                     "required": ["repo", "to_code"],
                     "properties": {
-                      "repo": { "pattern": "^[A-Za-z0-9._-]+$" },
+                      "repo": {
+                        "pattern": "^[A-Za-z0-9._-]+$",
+                        "not": { "enum": [".", ".."] }
+                      },
                       "expect": { "enum": ["PLANNED", "IN_PROGRESS", "PARTIAL", "COMPLETE", "SUPERSEDED", "PARKED", "BLOCKED", "KILLED"] }
                     }
                   }
