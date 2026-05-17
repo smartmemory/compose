@@ -411,14 +411,19 @@ const TOOLS = [
   },
   {
     name: 'link_features',
-    description: 'Register a typed cross-feature relationship. Stores on the source feature; query the inverse via get_feature_links(direction:"incoming"). Closed enum on kind; self-links rejected; dedups on (kind, to_code).',
+    description: 'Register a typed cross-feature relationship. Two shapes: (1) SAME-PROJECT — kind ∈ surfaced_by|blocks|depends_on|follow_up|supersedes|related, requires to_code; self-links rejected; dedups on (kind,to_code). (2) EXTERNAL (kind:"external") — a cross-project pointer, NOT a same-project link: requires provider; three resolvable sub-shapes — github (repo "owner/name" + integer issue), local (repo token + to_code), url (url); plus reserved url-class providers jira|linear|notion|obsidian (parse-valid, require url, NOT resolved in v1). External dedups on (kind=external, provider, repo, issue|to_code|url). Stores on the source feature; query inverse via get_feature_links(direction:"incoming").',
     inputSchema: {
       type: 'object',
-      required: ['from_code', 'to_code', 'kind'],
+      required: ['from_code', 'kind'],
       properties: {
         from_code: { type: 'string' },
-        to_code: { type: 'string', description: 'Target feature code. Need not exist yet (you can link to a code you are about to create).' },
-        kind: { type: 'string', enum: ['surfaced_by', 'blocks', 'depends_on', 'follow_up', 'supersedes', 'related'] },
+        to_code: { type: 'string', description: 'Same-project: target feature code (required unless kind:"external"). External local: the cited feature code. Need not exist yet.' },
+        kind: { type: 'string', enum: ['surfaced_by', 'blocks', 'depends_on', 'follow_up', 'supersedes', 'related', 'external'] },
+        provider: { type: 'string', enum: ['github', 'local', 'url', 'jira', 'linear', 'notion', 'obsidian'], description: 'Required when kind:"external". Resolvable: github|local|url. Reserved url-class (require url, not resolved in v1): jira|linear|notion|obsidian.' },
+        repo: { type: 'string', description: 'External github: "owner/name". External local: workspace-relative repo token.' },
+        issue: { type: 'integer', minimum: 1, description: 'External github: issue/PR number.' },
+        url: { type: 'string', description: 'External url-class (url|jira|linear|notion|obsidian): the pointer URL.' },
+        expect: { type: 'string', description: 'Optional expected state. github: open|closed. local: a status token. url-class: recorded, never resolved.' },
         note: { type: 'string' },
         force: { type: 'boolean' },
         idempotency_key: { type: 'string' },

@@ -68,12 +68,42 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["kind", "to_code"],
         "properties": {
-          "kind": { "type": "string", "enum": ["surfaced_by", "blocks", "depends_on", "follow_up", "supersedes", "related"] },
+          "kind": { "type": "string", "enum": ["surfaced_by", "blocks", "depends_on", "follow_up", "supersedes", "related", "external"] },
           "to_code": { "type": "string", "pattern": "^[A-Z][A-Z0-9-]*[A-Z0-9]$" },
-          "note": { "type": "string" }
-        }
+          "note": { "type": "string" },
+          "provider": { "type": "string", "enum": ["github", "local", "url", "jira", "linear", "notion", "obsidian"] },
+          "repo": { "type": "string" },
+          "issue": { "type": "integer", "minimum": 1 },
+          "url": { "type": "string", "format": "uri" },
+          "expect": { "type": "string" }
+        },
+        "allOf": [
+          {
+            "if": { "not": { "required": ["kind"], "properties": { "kind": { "const": "external" } } } },
+            "then": { "required": ["kind", "to_code"] }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "external" } }, "required": ["kind"] },
+            "then": {
+              "required": ["provider"],
+              "allOf": [
+                {
+                  "if": { "properties": { "provider": { "const": "github" } }, "required": ["provider"] },
+                  "then": { "required": ["repo", "issue"] }
+                },
+                {
+                  "if": { "properties": { "provider": { "const": "local" } }, "required": ["provider"] },
+                  "then": { "required": ["repo", "to_code"] }
+                },
+                {
+                  "if": { "properties": { "provider": { "enum": ["url", "jira", "linear", "notion", "obsidian"] } }, "required": ["provider"] },
+                  "then": { "required": ["url"] }
+                }
+              ]
+            }
+          }
+        ]
       }
     },
     "completions": {
