@@ -128,6 +128,8 @@ describe('parseCitations — rejects (structured ParseError)', () => {
     ['github non-numeric issue', '<!-- xref: github o/n#abc -->'],
     ['github # in owner half', '<!-- xref: github ow#ner/name#1 -->'],
     ['github # in name half', '<!-- xref: github owner/na#me#1 -->'],
+    ['url target without scheme', '<!-- xref: url example.com/no-scheme -->'],
+    ['reserved url-class without scheme', '<!-- xref: jira AB-1 -->'],
     ['local missing feature code', '<!-- xref: local compose -->'],
     ['local invalid feature code', '<!-- xref: local compose not-a-code -->'],
     ['local repo token traversal', '<!-- xref: local ../../etc COMP-X-1 -->'],

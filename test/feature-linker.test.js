@@ -424,12 +424,33 @@ describe('linkFeatures', () => {
       () => linkFeatures(cwd, { from_code: 'XR-8', kind: 'external', provider: 'github', repo: 'owner/na#me', issue: 1 }),
       /github repo .* must be "owner\/name"/,
     );
+    // url-class url must be a scheme:// URI (parity with grammar + schema)
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-8', kind: 'external', provider: 'url', url: 'example.com/no-scheme' }),
+      /must be a valid URI/,
+    );
     // url-class expect is recorded, not rejected (parity with the grammar)
     const r = await linkFeatures(cwd, {
       from_code: 'XR-8', kind: 'external', provider: 'jira',
       url: 'https://j.example/AB-1', expect: 'whatever',
     });
     assert.equal(r.provider, 'jira');
+  });
+
+  test('getFeatureLinks returns full external fields, not just {kind,to_code,note}', async () => {
+    const cwd = freshCwd();
+    await seed(cwd, 'XR-GL');
+    await linkFeatures(cwd, {
+      from_code: 'XR-GL', kind: 'external', provider: 'github',
+      repo: 'smartmemory/compose', issue: 7, expect: 'closed', note: 'n',
+    });
+    const { outgoing } = await getFeatureLinks(cwd, { feature_code: 'XR-GL', direction: 'outgoing' });
+    const ext = outgoing.find((l) => l.kind === 'external');
+    assert.ok(ext, 'external link present in outgoing');
+    assert.equal(ext.provider, 'github');
+    assert.equal(ext.repo, 'smartmemory/compose');
+    assert.equal(ext.issue, 7);
+    assert.equal(ext.expect, 'closed');
   });
 
   test('same-project link path unchanged (regression)', async () => {
