@@ -396,6 +396,36 @@ describe('linkFeatures', () => {
     );
   });
 
+  // Carrier equivalence: the feature.json-link writer must reject exactly
+  // what the inline citation grammar rejects (invalid expect / repo shapes),
+  // so #16's resolver never receives a value it would mishandle.
+  test('external expect/repo validation matches the citation grammar', async () => {
+    const cwd = freshCwd();
+    await seed(cwd, 'XR-8');
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-8', kind: 'external', provider: 'github', repo: 'o/n', issue: 1, expect: 'merged' }),
+      /github expect must be open\|closed/,
+    );
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-8', kind: 'external', provider: 'local', repo: 'compose', to_code: 'COMP-X-1', expect: 'DONE' }),
+      /local expect must be one of/,
+    );
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-8', kind: 'external', provider: 'github', repo: 'badformat', issue: 1 }),
+      /github repo .* must be "owner\/name"/,
+    );
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-8', kind: 'external', provider: 'local', repo: '../escape', to_code: 'COMP-X-1' }),
+      /must be a single sibling directory name/,
+    );
+    // url-class expect is recorded, not rejected (parity with the grammar)
+    const r = await linkFeatures(cwd, {
+      from_code: 'XR-8', kind: 'external', provider: 'jira',
+      url: 'https://j.example/AB-1', expect: 'whatever',
+    });
+    assert.equal(r.provider, 'jira');
+  });
+
   test('same-project link path unchanged (regression)', async () => {
     const cwd = freshCwd();
     await seed(cwd, 'XR-6');
