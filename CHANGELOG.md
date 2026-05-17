@@ -2,6 +2,16 @@
 
 ## 2026-05-17
 
+### docs: Phase 8 (Cinematic) reframed as `MM-ADOPT-1`
+
+`docs/ROADMAP.md` Phase 8 clarified now that `~/reg/my/movie-maker` owns the capture
+kit. The phase is the *product-side* adoption of the movie-maker capture contract
+(`MM-ADOPT-1`). `COMP-CINE-3` reframed to "expose the `window.__cine` clock seam" (the
+stepper/substrate is movie-maker's `MM-CINE-2b`, pluggable, default `claude-in-chrome` —
+not Playwright/timecut, not chosen here). `COMP-CINE-5` marked **SUPERSEDED** by
+`MM-CINE-2b`/`MM-CINE-3`. Product-side rows (route/layout/camera/sample) unchanged.
+Facts only — no renumbering.
+
 ### COMP-MCP-XREF-VALIDATE (#16) — read-only external-reference staleness resolution
 
 Second half of COMP-MCP-XREF. Extends `validateProject` in place (no fork). Resolves the external references #15 can store/cite, read-only, and reports drift — never writes back, never bidirectional sync.
