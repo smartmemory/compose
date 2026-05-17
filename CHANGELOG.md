@@ -2,6 +2,39 @@
 
 ## 2026-05-17
 
+### COMP-MCP-XREF-VALIDATE (#16) — read-only external-reference staleness resolution
+
+Second half of COMP-MCP-XREF. Extends `validateProject` in place (no fork). Resolves the external references #15 can store/cite, read-only, and reports drift — never writes back, never bidirectional sync.
+
+**Added:**
+- `lib/feature-validator.js` `runExternalRefChecks(ctx, findings, options)` — invoked from `validateProject` after the existing project-level checks. Collects refs from both carriers: an **anon-row-safe** raw ROADMAP citation scan (independent of `roadmapByCode`, which drops non-strict codes) + `feature.json` `links[].kind:"external"`; normalizes to one `ExternalRef`; resolves per provider.
+- `lib/tracker/github-api.js` `getIssueResult(number)` — status-returning sibling of `getIssue()` (modeled on `getRepo()`, `{status,body,headers}`, no throw on 4xx). The ONLY github-api.js change; `getIssue()` untouched.
+- 5 finding kinds: `XREF_DRIFT` (warning), `XREF_TARGET_MISSING` (error), `XREF_MALFORMED` (warning), `XREF_RESOLUTION_SKIPPED` (warning, never error), `XREF_URL_UNCHECKED` (info).
+- `test/xref-golden-flow.test.js` (spec §7: aligned/flipped/degrade/anon-row/#15-independence) + `test/xref-degrade-harness.test.js` (spec §6 matrix) + carrier-parity test in `feature-json-schema-external.test.js`.
+
+**Changed:**
+- `bin/compose.js` — `compose validate --external` (parsed before the unknown-flag catch-all) threaded into `validateProject(cwd, {external})`.
+- `server/compose-mcp.js` / `server/compose-mcp-tools.js` — `validate_project` gains `external` option.
+- `bin/git-hooks/pre-push.template` — documents the OFF-by-default xref behavior + `COMPOSE_XREF_ONLINE=1` / `xref.prePushOnline` opt-in (honored inside the validator; no flag change in the hook).
+
+Degrade contract (spec §6): no-token → one aggregate `XREF_RESOLUTION_SKIPPED` (remaining github silently skipped); offline/≥500/unparseable-2xx → per-ref skip+continue; rate-limit → aggregate + silent short-circuit of remaining github only (local/url still resolve); 404 → `XREF_TARGET_MISSING` (error). Gate OFF (default, incl. pre-push) → github refs skip with no network; local/url/malformed still surface. `validateProject` extended in place with an outer backstop (staleness pass can never abort the run). Local repo token constrained to a safe sibling directory name (no path traversal), grammar-level + resolver containment guard. Catalog doc `docs/features/COMP-MCP-VALIDATE/design.md` created (32 kinds + degrade/gating contract). Codex impl review fixed 4 MUST + 3 SHOULD pre-merge. Codex final integration review fixed a carrier-equivalence gap: the feature.json-link writer (`linkFeatures`) now rejects exactly what the inline citation grammar rejects — invalid github/local `expect` tokens and malformed `repo` shapes (github `owner/name`, local safe sibling segment) — so #16's resolver can never receive a value it would mishandle; `citing.workspaceId` now surfaced in finding detail; unused `_internals` export removed. Suite: node 2883 + tracker 100 + UI 131, 0 fail.
+
+### COMP-MCP-XREF-SCHEMA (#15) — Cross-project external references: schema + grammar + linkFeatures
+
+First half of COMP-MCP-XREF. Local-only, zero network, no validator changes — ships independently with #16 (read-only staleness resolution) entirely absent. Realizes the per-project-provider Roadmap Model: a prose roadmap can cite a product-repo issue/PR via an external reference without embedding or syncing its status.
+
+**Added:**
+- `lib/xref-citation.js` — pure parser for inline `<!-- xref: <provider> <target> [expect=…] [note="…"] -->` citations (spec §3.1 EBNF). Order-independent `expect`/`note`, structured `ParseError`, zero I/O.
+- `test/xref-citation.test.js` — grammar accept/reject table.
+- `test/feature-json-schema-external.test.js` — schema contract test (both link variants; previously-valid real `feature.json` no-regression contract).
+
+**Changed:**
+- `contracts/feature-json.schema.json` — `links[]` gains a `kind:"external"` discriminated `if/then` variant (provider enum `github|local|url|jira|linear|notion|obsidian`; github→repo+issue, local→repo+to_code, url-class→url). Same-project links left permissive (no `oneOf`, no `additionalProperties:false`) — no existing `feature.json` regresses.
+- `lib/feature-writer.js` — `linkFeatures()` external branch: bypasses same-project `validateCode`/self-link/`LINK_KINDS` guards for `kind:"external"`, in-code provider validation, idempotency on `(kind=external, provider, repo, issue|to_code|url)`. Same-project path byte-for-byte unchanged.
+- `server/compose-mcp.js` — `link_features` input schema accepts the external shape (`to_code` no longer globally required; `provider`/`repo`/`issue`/`url`/`expect` added); description documents both shapes + reserved url-class providers.
+
+Reserved providers `jira|linear|notion|obsidian` are parse-valid url-class (recorded, not resolved in v1); real resolvers are follow-on `COMP-MCP-XREF-JIRA` #17 / `COMP-MCP-XREF-LINEAR` #18. Codex impl review fixed 4 findings pre-merge: end-anchored `note=`/`expect=` parsing (URLs containing them no longer mis-parse), schema same-project branch now requires `kind` (no validation widening), external-local `to_code` regex-validated, idempotency null/undefined repo normalized. Suite: node 2868 + tracker 100 + UI 131, 0 fail.
+
 ### COMP-TRACKER-PROVIDER — Pluggable TrackerProvider — LocalFile (default, zero behavior change) + GitHub (Issues + Projects v2 + Contents API)
 
 Adds a provider abstraction so feature/completion/changelog/event persistence can be routed to different backends. The `local` provider is byte-identical to prior behavior; `github` syncs to GitHub Issues, Projects v2, and repository Contents API. Tracker tests wired into `npm test` CI gate.

@@ -312,6 +312,166 @@ describe('linkFeatures', () => {
       /not found/
     );
   });
+
+  // -------------------------------------------------------------------------
+  // COMP-MCP-XREF-SCHEMA #15 (T003) — external cross-project references
+  // -------------------------------------------------------------------------
+
+  test('external github link stored with all keys', async () => {
+    const cwd = freshCwd();
+    await seed(cwd, 'XR-1');
+    const r = await linkFeatures(cwd, {
+      from_code: 'XR-1', kind: 'external', provider: 'github',
+      repo: 'smartmemory/compose', issue: 7, expect: 'closed', note: 'shipped',
+    });
+    assert.equal(r.kind, 'external');
+    assert.equal(r.provider, 'github');
+    const f = await readFeature(cwd, 'XR-1');
+    assert.equal(f.links.length, 1);
+    assert.deepEqual(f.links[0], {
+      kind: 'external', provider: 'github', repo: 'smartmemory/compose',
+      issue: 7, expect: 'closed', note: 'shipped',
+    });
+  });
+
+  test('re-linking same external ref is a noop (idempotency key)', async () => {
+    const cwd = freshCwd();
+    await seed(cwd, 'XR-2');
+    const base = { from_code: 'XR-2', kind: 'external', provider: 'github', repo: 'o/n', issue: 3 };
+    await linkFeatures(cwd, base);
+    const again = await linkFeatures(cwd, { ...base, note: 'ignored on noop' });
+    assert.equal(again.noop, true);
+    const f = await readFeature(cwd, 'XR-2');
+    assert.equal(f.links.length, 1);
+  });
+
+  test('external local + url variants accepted', async () => {
+    const cwd = freshCwd();
+    await seed(cwd, 'XR-3');
+    await linkFeatures(cwd, {
+      from_code: 'XR-3', kind: 'external', provider: 'local',
+      repo: 'compose', to_code: 'COMP-MCP-VALIDATE',
+    });
+    await linkFeatures(cwd, {
+      from_code: 'XR-3', kind: 'external', provider: 'url', url: 'https://x.example/s',
+    });
+    const f = await readFeature(cwd, 'XR-3');
+    assert.equal(f.links.length, 2);
+    assert.equal(f.links[0].to_code, 'COMP-MCP-VALIDATE');
+    assert.equal(f.links[1].url, 'https://x.example/s');
+  });
+
+  test('reserved url-class provider accepted', async () => {
+    const cwd = freshCwd();
+    await seed(cwd, 'XR-4');
+    await linkFeatures(cwd, {
+      from_code: 'XR-4', kind: 'external', provider: 'jira', url: 'https://j.example/AB-1',
+    });
+    const f = await readFeature(cwd, 'XR-4');
+    assert.equal(f.links[0].provider, 'jira');
+    assert.equal(f.links[0].url, 'https://j.example/AB-1');
+  });
+
+  test('invalid external combos throw a clear Error', async () => {
+    const cwd = freshCwd();
+    await seed(cwd, 'XR-5');
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-5', kind: 'external', provider: 'github', repo: 'o/n' }),
+      /requires repo \+ integer issue/,
+    );
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-5', kind: 'external', url: 'https://x' }),
+      /requires provider/,
+    );
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-5', kind: 'external', provider: 'jira' }),
+      /url-class.*requires url/,
+    );
+    await assert.rejects(
+      () => linkFeatures(cwd, {
+        from_code: 'XR-5', kind: 'external', provider: 'local',
+        repo: 'compose', to_code: 'not-a-valid-code',
+      }),
+      /must match/,
+    );
+  });
+
+  // Carrier equivalence: the feature.json-link writer must reject exactly
+  // what the inline citation grammar rejects (invalid expect / repo shapes),
+  // so #16's resolver never receives a value it would mishandle.
+  test('external expect/repo validation matches the citation grammar', async () => {
+    const cwd = freshCwd();
+    await seed(cwd, 'XR-8');
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-8', kind: 'external', provider: 'github', repo: 'o/n', issue: 1, expect: 'merged' }),
+      /github expect must be open\|closed/,
+    );
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-8', kind: 'external', provider: 'local', repo: 'compose', to_code: 'COMP-X-1', expect: 'DONE' }),
+      /local expect must be one of/,
+    );
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-8', kind: 'external', provider: 'github', repo: 'badformat', issue: 1 }),
+      /github repo .* must be "owner\/name"/,
+    );
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-8', kind: 'external', provider: 'local', repo: '../escape', to_code: 'COMP-X-1' }),
+      /must be a single sibling directory name/,
+    );
+    // `#` in the github repo is not representable in the citation carrier
+    // (it delimits the issue) — writer must reject it too.
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-8', kind: 'external', provider: 'github', repo: 'owner/na#me', issue: 1 }),
+      /github repo .* must be "owner\/name"/,
+    );
+    // url-class url must be a scheme:// URI (parity with grammar + schema)
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-8', kind: 'external', provider: 'url', url: 'example.com/no-scheme' }),
+      /must be a valid URI/,
+    );
+    // url-class expect is recorded, not rejected (parity with the grammar)
+    const r = await linkFeatures(cwd, {
+      from_code: 'XR-8', kind: 'external', provider: 'jira',
+      url: 'https://j.example/AB-1', expect: 'whatever',
+    });
+    assert.equal(r.provider, 'jira');
+  });
+
+  test('getFeatureLinks returns full external fields, not just {kind,to_code,note}', async () => {
+    const cwd = freshCwd();
+    await seed(cwd, 'XR-GL');
+    await linkFeatures(cwd, {
+      from_code: 'XR-GL', kind: 'external', provider: 'github',
+      repo: 'smartmemory/compose', issue: 7, expect: 'closed', note: 'n',
+    });
+    const { outgoing } = await getFeatureLinks(cwd, { feature_code: 'XR-GL', direction: 'outgoing' });
+    const ext = outgoing.find((l) => l.kind === 'external');
+    assert.ok(ext, 'external link present in outgoing');
+    assert.equal(ext.provider, 'github');
+    assert.equal(ext.repo, 'smartmemory/compose');
+    assert.equal(ext.issue, 7);
+    assert.equal(ext.expect, 'closed');
+  });
+
+  test('same-project link path unchanged (regression)', async () => {
+    const cwd = freshCwd();
+    await seed(cwd, 'XR-6');
+    await seed(cwd, 'XR-7');
+    // self-link guard still fires
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-6', to_code: 'XR-6', kind: 'related' }),
+      /cannot link a feature to itself/,
+    );
+    // LINK_KINDS check still fires
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'XR-6', to_code: 'XR-7', kind: 'bogus' }),
+      /invalid link kind/,
+    );
+    // (kind,to_code) idempotency unchanged
+    await linkFeatures(cwd, { from_code: 'XR-6', to_code: 'XR-7', kind: 'depends_on' });
+    const dup = await linkFeatures(cwd, { from_code: 'XR-6', to_code: 'XR-7', kind: 'depends_on' });
+    assert.equal(dup.noop, true);
+  });
 });
 
 // ---------------------------------------------------------------------------
