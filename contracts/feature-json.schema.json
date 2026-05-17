@@ -75,7 +75,7 @@
           "provider": { "type": "string", "enum": ["github", "local", "url", "jira", "linear", "notion", "obsidian"] },
           "repo": { "type": "string" },
           "issue": { "type": "integer", "minimum": 1 },
-          "url": { "type": "string", "format": "uri" },
+          "url": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9+\\-.]*://" },
           "expect": { "type": "string" }
         },
         "allOf": [
@@ -116,7 +116,7 @@
                   "then": {
                     "required": ["url"],
                     "properties": {
-                      "url": { "format": "uri" }
+                      "url": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9+\\-.]*://" }
                     }
                   }
                 }
