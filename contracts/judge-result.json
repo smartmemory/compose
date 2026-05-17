@@ -29,7 +29,7 @@
         },
         "stakes": {
           "enum": ["cheap", "default", "paranoid"],
-          "description": "Depth class set by caller. v1: cheap (T1 only), default (T1+T2). paranoid raises StakesNotAvailableError until v2."
+          "description": "Depth class set by caller. cheap (T1 only), default (T1+T2). paranoid (T1+T2, then T3 cold-read adversary over every interpretive 'met'; STRAT-JUDGE v2 slice 1)."
         },
         "predicates": {
           "type": "array",
@@ -50,7 +50,7 @@
               "id": { "type": "string" },
               "type": {
                 "enum": ["deterministic", "verified", "judged"],
-                "description": "Predicate type sets the tier ceiling. deterministic = T1 only. verified = T2. judged = T3 in v2, downgraded to T2 in v1."
+                "description": "Predicate type sets the tier ceiling. deterministic = T1 only. verified = T2. judged = T2, plus T3 cold-read adversary when stakes=paranoid (else T2-terminal; judge_kernel_meta.degraded_judged flags judged predicates that got no adversary)."
               },
               "statement": { "type": "string" },
               "verdict": {
@@ -103,7 +103,7 @@
         },
         "tier_disagreements": {
           "type": "array",
-          "description": "Cross-tier disagreements within a single judge call. Empty in v1 (single-tier-per-predicate after T1). Reserved for v2+ T2/T3 quorum resolution.",
+          "description": "Cross-tier disagreements within a single judge call. Populated when stakes=paranoid and T3 contradicts a T2 'met' (resolved to 'ambiguous'; T4 quorum deferred). Empty for cheap/default.",
           "items": {
             "type": "object",
             "required": ["predicate", "tiers", "resolution"],
@@ -142,7 +142,7 @@
             },
             "degraded_judged": {
               "type": "boolean",
-              "description": "True when a 'judged' predicate was downgraded to T2 because T3 is unavailable in v1."
+              "description": "True when a 'judged' predicate did not receive adversarial (T3) verification — i.e. stakes was cheap/default so T2 was terminal. False once T3 ran (stakes=paranoid)."
             }
           }
         }
