@@ -11,7 +11,10 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+
+import { validateProject } from '../lib/feature-validator.js';
 
 import { SchemaValidator } from '../server/schema-validator.js';
 
@@ -123,5 +126,35 @@ describe('feature-json schema — no regression on real feature.json', () => {
       asserted++;
     }
     assert.ok(asserted > 0, 'expected at least one previously-valid real feature.json to assert against');
+  });
+});
+
+describe('#16 carrier parity — roadmap-citation and feature-json-link consumed identically', () => {
+  test('a url-class ref via both carriers yields the same XREF_URL_UNCHECKED finding', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'xref-parity-'));
+    mkdirSync(join(cwd, '.compose', 'data'), { recursive: true });
+    // Carrier 1: roadmap citation (anon row).
+    writeFileSync(join(cwd, 'ROADMAP.md'), [
+      '# R', '', '## Phase 1: X', '',
+      '| # | Feature | Description | Status |',
+      '|---|---------|-------------|--------|',
+      '| 1 | XR-PAR-1 | via citation <!-- xref: jira https://j.example/AB-1 --> | PLANNED |',
+    ].join('\n'));
+    // Carrier 2: feature.json kind:"external" link.
+    const fdir = join(cwd, 'docs', 'features', 'XR-PAR-2');
+    mkdirSync(fdir, { recursive: true });
+    writeFileSync(join(fdir, 'feature.json'), JSON.stringify({
+      code: 'XR-PAR-2', status: 'PLANNED',
+      links: [{ kind: 'external', provider: 'jira', url: 'https://j.example/AB-1' }],
+    }));
+    const r = await validateProject(cwd, {});
+    const unchecked = r.findings.filter((f) => f.kind === 'XREF_URL_UNCHECKED');
+    const fromCitation = unchecked.find((f) => f.source === 'roadmap-citation');
+    const fromLink = unchecked.find((f) => f.source === 'feature-json-link');
+    assert.ok(fromCitation, 'roadmap-citation carrier produced XREF_URL_UNCHECKED');
+    assert.ok(fromLink, 'feature-json-link carrier produced XREF_URL_UNCHECKED');
+    assert.equal(fromCitation.severity, 'info');
+    assert.equal(fromLink.severity, 'info');
+    rmSync(cwd, { recursive: true, force: true });
   });
 });

@@ -1589,6 +1589,7 @@ if (cmd === 'validate') {
   let code = null
   let blockOn = 'error'
   let asJson = false
+  let externalXref = false
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
     if (a === '--help' || a === '-h') {
@@ -1608,6 +1609,7 @@ Exit codes:
       process.exit(0)
     }
     if (a === '--json') { asJson = true; continue }
+    if (a === '--external') { externalXref = true; continue }
     if (a.startsWith('--scope=')) scope = a.slice('--scope='.length)
     else if (a === '--scope') scope = args[++i]
     else if (a.startsWith('--code=')) code = a.slice('--code='.length)
@@ -1638,7 +1640,7 @@ Exit codes:
   try {
     result = scope === 'feature'
       ? await validateFeature(valCwd, code)
-      : await validateProject(valCwd)
+      : await validateProject(valCwd, { external: externalXref })
   } catch (err) {
     if (err.code === 'INVALID_INPUT') {
       console.error(`Error [INVALID_INPUT]: ${err.message}`)
