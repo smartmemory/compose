@@ -283,13 +283,18 @@ websocket data must all be made reproducible.
 Filed off producing the Stratum/Compose 60s explainers; the current explainer cockpit
 beat uses a hi-DPI still + Remotion zoom as a stopgap. This is the durable replacement.
 
+> **This whole phase = `MM-ADOPT-1`** (Compose cockpit implements the `movie-maker`
+> capture contract). The engine, frame-stepper, and determinism substrate are owned
+> by `~/reg/my/movie-maker` (`MM-CINE-*`) — **not built here**. The rows below are the
+> *product-side* adoption work: implement the four-seam `window.__cine` contract.
+
 | Code | Item | Status |
 |------|------|--------|
 | COMP-CINE-1 | Cinematic route — hidden `?cinematic` route that loads a fixed fixture dataset with live websockets disabled, so scenes are reproducible | PLANNED |
 | COMP-CINE-2 | Deterministic layout — run fcose once, freeze node positions, replay as `preset` layout so every render is identical | PLANNED |
-| COMP-CINE-3 | Frame clock — drive all animation from an injected clock instead of RAF/`Date.now`. **Use an off-the-shelf time-override mechanism — `timecut`/`timesnap` (tungs) or CDP `HeadlessExperimental.beginFrame` / Playwright `page.clock` — rather than hand-rolling clock injection** | PLANNED |
+| COMP-CINE-3 | Frame clock — expose the injectable clock seam via the `window.__cine` contract (drive animation from it, not RAF/`Date.now`). The stepper/substrate that *drives* the clock is movie-maker's `MM-CINE-2b` (pluggable, default `claude-in-chrome` — **not** Playwright/timecut; not chosen here). Product-side: just the seam | PLANNED |
 | COMP-CINE-4 | Camera timeline API — `setCamera({ zoom, pan, selected }, frame)` so shots are scripted in code | PLANNED |
-| COMP-CINE-5 | Frame-export harness — steps frames headless, writes sharp per-frame PNGs at 1920×1080 (≥2× for zoom headroom). **Consume the shared kit in `~/reg/my/movie-maker` (`MM-CINE-*`, built on `timecut`/CDP `beginFrame`) — do not build a Compose-only harness. This phase becomes "Compose cockpit implements the capture contract" (tracked as `MM-ADOPT-1`)** | PLANNED |
+| COMP-CINE-5 | ~~Frame-export harness~~ — **SUPERSEDED by movie-maker `MM-CINE-2b`/`MM-CINE-3`.** Frame-stepping + sharp per-frame PNG export is the engine's job, not Compose's. Compose consumes it via `MM-ADOPT-1`; do not build a Compose-only harness | SUPERSEDED |
 | COMP-CINE-6 | Docs + sample shot — documented usage and one scripted reference shot (e.g. select → pan → zoom into cluster → gate popover) | PLANNED |
 
 ---
