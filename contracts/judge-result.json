@@ -29,7 +29,7 @@
         },
         "stakes": {
           "enum": ["cheap", "default", "paranoid"],
-          "description": "Depth class set by caller. cheap (T1 only), default (T1+T2). paranoid (T1+T2, then T3 cold-read adversary over every interpretive 'met'; STRAT-JUDGE v2 slice 1)."
+          "description": "Depth class set by caller. cheap (T1 only), default (T1+T2). paranoid (T1+T2, then a T3 adversary over every interpretive 'met'). STRAT-JUDGE-T3-READJAIL: the paranoid T3 is now a true cross-model jailed Codex adversary (macOS sandbox-exec read-jail confining reads to the staged turn tree) when available, else an honest probe-time degrade to the v1 in-process Claude cold-read. Per-predicate provenance is in predicates[].t3."
         },
         "predicates": {
           "type": "array",
@@ -95,6 +95,29 @@
                       "description": "Null for T1 'n/a' verdicts (no LLM tier ran)."
                     },
                     "reason": { "type": "string" }
+                  }
+                }
+              },
+              "t3": {
+                "type": ["object", "null"],
+                "description": "STRAT-JUDGE-T3-READJAIL. Populated ONLY when a T3 adversary was reached for this predicate (stakes='paranoid' AND T2='met'); null/absent means no adversary ran for this predicate (the absence is itself the honest signal). Descriptive of what actually ran, never intent. Authoritative T3 model identity is t3.model_id — top-level meta.model_id is the T1/T2 worker-lane identity only.",
+                "required": ["mode", "residual"],
+                "properties": {
+                  "mode": {
+                    "enum": ["codex_jailed", "codex_jailed_error", "claude_cold_fallback"],
+                    "description": "codex_jailed: true cross-model Codex adversary, OS read-jailed (macOS sandbox-exec) to the staged turn tree. claude_cold_fallback: probe-time degrade to in-process Claude cold-read (no OS jail; reasoning-isolation+ordering only). codex_jailed_error: jailed adversary failed post-launch — predicate resolved ambiguous, error surfaced, NEVER silently relabeled fallback."
+                  },
+                  "guarantee": {
+                    "type": ["string", "null"],
+                    "description": "os_read_jail+cross_model | reasoning_isolation+ordering | null (error)."
+                  },
+                  "model_id": {
+                    "type": ["string", "null"],
+                    "description": "The actual model that ran T3 (authoritative for the adversary lane)."
+                  },
+                  "residual": {
+                    "type": "string",
+                    "description": "The accepted residual for this mode, verbatim from the design Problem statement. Never rounded up to 'confined'."
                   }
                 }
               }
