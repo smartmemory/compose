@@ -26,6 +26,9 @@ const SESSION_STORAGE_KEY = 'compose-agent-session';
 const MAX_MESSAGES = 500;
 const MAX_ACTIVITY_LOG = 8;
 const IDLE_DEBOUNCE_MS = 2000;
+// Stall detection window. Single source of truth for both the stream config
+// and the banner text so they can never drift apart.
+const STALL_TIMEOUT_MS = 30000;
 
 // Tool category mapping — matches agent-hooks.js (single source in prod,
 // duplicated here so the client is self-contained at dev time)
@@ -304,8 +307,16 @@ function connect() {
       });
     },
     onExhausted: () => {
-      // Retries exhausted — clear the handle so connect() can re-establish
+      // Retries exhausted — clear the handle so connect() can re-establish.
       _state.es = null;
+      // Also clear retryInfo, otherwise the overlay keeps reading
+      // "Retrying… 5/5" forever next to the Reconnect button.
+      _state.retryInfo = null;
+      if (_state.onStreamErrorChange) _state.onStreamErrorChange({
+        error: _state.streamError,
+        retryInfo: null,
+        stalled: _state.stalled,
+      });
     },
     onEvent: (payload, name) => {
       // Any event arriving clears stall/error state
@@ -323,7 +334,7 @@ function connect() {
     },
     maxBackoffMs: 8000,
     maxRetries: 5,
-    stallTimeoutMs: 30000,
+    stallTimeoutMs: STALL_TIMEOUT_MS,
   });
   _state.es = handle;
 }
@@ -602,11 +613,16 @@ export default function AgentStream() {
         >
           {streamError.stalled ? (
             <>
-              <span>No data received for 30s — connection may be stalled.</span>
+              <span>No data received for {STALL_TIMEOUT_MS / 1000}s — connection may be stalled.</span>
               <button
                 onClick={() => {
-                  // Force reconnect by closing and reopening
+                  // Force reconnect by closing and reopening. handle.close()
+                  // does NOT invoke onClose, so mark the connection down
+                  // explicitly — otherwise the status bar stays green during
+                  // the reconnect gap and misreports a healthy connection.
                   if (_state.es) { _state.es.close(); _state.es = null; }
+                  _state.connected = false;
+                  if (_state.onConnectedChange) _state.onConnectedChange(false);
                   _state.streamError = null;
                   _state.retryInfo = null;
                   _state.stalled = false;

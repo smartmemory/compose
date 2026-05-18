@@ -157,7 +157,7 @@ export default function DesignView() {
         )}
 
         {/* Loading indicator — agent is processing but no streaming content yet */}
-        {(status === 'active' || status === 'streaming') && !streamingMessage && messages.length > 0 && messages[messages.length - 1]?.role === 'human' && (
+        {!error && (status === 'active' || status === 'streaming') && !streamingMessage && messages.length > 0 && messages[messages.length - 1]?.role === 'human' && (
           <div className="flex justify-start" role="status" aria-live="polite">
             <div className="flex items-center gap-2 rounded-lg px-3 py-2 bg-muted text-muted-foreground text-[12px]">
               <div
