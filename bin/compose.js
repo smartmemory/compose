@@ -2705,7 +2705,8 @@ if (cmd === 'build') {
   const vsPath = join(itemsCwd, '.compose', 'data', 'vision-state.json')
 
   if (!existsSync(vsPath)) {
-    console.error('No vision state found. Run `compose start` first.')
+    console.error('No vision state found at .compose/data/vision-state.json')
+    console.error('Run `compose start` at least once to generate it, then you can use `compose items` offline.')
     process.exit(1)
   }
 
@@ -2756,13 +2757,20 @@ if (cmd === 'build') {
     process.exit(0)
 
   } else if (itemsSub === 'show') {
-    const showId = args[1]
-    if (!showId || showId.startsWith('-')) {
+    const positionalArgs = args.filter(a => !a.startsWith('-'))
+    const showId = positionalArgs[1]
+    if (!showId) {
       console.error('Usage: compose items show <id>')
       process.exit(1)
     }
 
-    const match = allItems.find(it => it.id === showId || it.id.startsWith(showId))
+    const matches = allItems.filter(it => it.id === showId || it.id.startsWith(showId))
+    if (matches.length > 1) {
+      console.error(`Ambiguous ID prefix '${showId}' matches ${matches.length} items:`)
+      for (const m of matches) console.error(`  ${(m.id || '').slice(0, 8)}  ${m.title || '(untitled)'}`)
+      process.exit(1)
+    }
+    const match = matches[0]
     if (!match) {
       console.error(`No item found matching: ${showId}`)
       process.exit(1)
