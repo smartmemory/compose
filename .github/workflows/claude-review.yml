@@ -1,0 +1,72 @@
+name: Claude Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+# Cancel an in-flight review if the PR is pushed again before it finishes.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Codex CLI for the second-opinion pass. Non-blocking: if install or
+      # auth fails, the review still runs Claude-only (see prompt fail-soft).
+      - name: Install Codex CLI
+        continue-on-error: true
+        run: npm install -g @openai/codex
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          track_progress: true
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            You are the sole reviewer of record for this PR. Produce ONE
+            consolidated review — do not post multiple comments.
+
+            Process:
+            1. Read the PR diff and the surrounding code. Form your own review:
+               correctness, regressions, scope creep, security, test coverage.
+            2. Get an independent second opinion from Codex. Run, with a hard
+               timeout so a hung Codex never blocks the PR:
+                 timeout 420 codex exec "Review this PR for real bugs,
+                 regressions, and test gaps. Inspect the diff (git diff
+                 origin/${{ github.event.pull_request.base.ref }}...HEAD) and
+                 the changed files. Be concise; only flag genuine issues."
+               Codex auth is OPENAI_API_KEY (already in env).
+            3. RECONCILE — do not just concatenate. For every Codex finding,
+               verify it against the actual code before repeating it: confirm
+               file:line, confirm it is a real defect and not a false
+               positive. Drop or correct anything that does not hold up.
+               Merge with your own findings, de-duplicated.
+            4. Fail-soft: if Codex is unavailable, errors, or times out,
+               proceed with your own review and add one line noting Codex
+               was not available this run. Never fail the job for that.
+            5. Post the result as ONE review. Use inline comments for
+               specific code defects (only when confirmed), a top-level
+               summary with an overall verdict (APPROVE / COMMENT /
+               REQUEST CHANGES and why) for everything else. Keep it tight —
+               only real issues; do not pad with style nits.
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git diff:*),Bash(git log:*),Bash(timeout:*),Bash(codex:*)"
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
