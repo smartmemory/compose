@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-05-18
+
+### fix(roadmap-gen): typed-writer regen now converges on duplicate phase headings
+
+**Root cause of the recurring forge-top "Wave 6" duplication (seen 4×, then 2×
+again after hand-collapse).** `readPhaseOrder` returns a phaseId once per `## `
+heading occurrence; `generateRoadmapFromBase` iterated that array verbatim and,
+for an anon-only phase, pushed `phaseBlocks.get(phase)` once per occurrence.
+Regen therefore reproduced the input duplicate count exactly (a fixed point:
+2×→2×→2×, proven) instead of converging — so any duplicate introduced once
+became permanent and survived a manual collapse on the very next regen.
+
+Fix: dedupe phase identity in the emit order (`[...new Set(sourcePhaseOrder)]`,
+first occurrence wins) in `lib/roadmap-gen.js`. Regen is now self-healing:
+4×/2×/1× source all converge to a single section, idempotent thereafter.
+
+Latent, not fixed here (noted for follow-up): the phase-heading regex
+`/^##\s+(.+?)(?:\s+—\s+.+)?\s*$/` truncates `## Wave 6 — Situational Awareness
+— COMPLETE` to phaseId `"Wave 6"` (em-dash in the title collides with the
+` — STATUS` delimiter). Dedup converges regardless; an explicit follow-up should
+disambiguate title-vs-status parsing.
+
+Regression coverage: `test/roadmap-dup-phase-converge.test.js` (3 tests —
+collapse, 4×→1× convergence + byte-idempotence, title/content survival). Full
+suite green: 2891 node + 131 UI + 100 tracker.
+
+forge-top `ROADMAP.md` duplicate Wave 6 block hand-removed (narrative-owned;
+the typed writer would flatten its curated reconciliation prose).
+
 ## 2026-05-17
 
 ### docs: Phase 8 (Cinematic) reframed as `MM-ADOPT-1`
