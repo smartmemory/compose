@@ -29,7 +29,7 @@
         },
         "stakes": {
           "enum": ["cheap", "default", "paranoid"],
-          "description": "Depth class set by caller. cheap (T1 only), default (T1+T2). paranoid (T1+T2, then a T3 adversary over every interpretive 'met'). STRAT-JUDGE-T3-READJAIL: the paranoid T3 is now a true cross-model jailed Codex adversary (macOS sandbox-exec read-jail confining reads to the staged turn tree) when available, else an honest probe-time degrade to the v1 in-process Claude cold-read. Per-predicate provenance is in predicates[].t3."
+          "description": "Depth class set by caller. cheap (T1 only), default (T1+T2). paranoid (T1+T2, then a T3 adversary over every interpretive 'met'). STRAT-JUDGE-T3-READJAIL[-CODEXNEST]: the paranoid T3 is a true cross-model jailed Codex adversary (container namespace read-jail — Docker driver; sandbox-exec retained as inert substrate — confining reads to the staged turn tree) when available, else an honest probe-time degrade to the in-process Claude cold-read. Per-predicate provenance is in predicates[].t3."
         },
         "predicates": {
           "type": "array",
@@ -105,7 +105,7 @@
                 "properties": {
                   "mode": {
                     "enum": ["codex_jailed", "codex_jailed_error", "claude_cold_fallback"],
-                    "description": "codex_jailed: true cross-model Codex adversary, OS read-jailed (macOS sandbox-exec) to the staged turn tree. claude_cold_fallback: probe-time degrade to in-process Claude cold-read (no OS jail; reasoning-isolation+ordering only). codex_jailed_error: jailed adversary failed post-launch — predicate resolved ambiguous, error surfaced, NEVER silently relabeled fallback."
+                    "description": "codex_jailed: true cross-model Codex adversary, read-jailed to the staged turn tree by a non-nesting container namespace (Docker driver). claude_cold_fallback: probe-time degrade to in-process Claude cold-read (no OS jail; reasoning-isolation+ordering only). codex_jailed_error: jailed adversary failed post-launch — predicate resolved ambiguous, error surfaced, NEVER silently relabeled fallback."
                   },
                   "guarantee": {
                     "type": ["string", "null"],
