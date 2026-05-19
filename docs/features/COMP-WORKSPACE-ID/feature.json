@@ -1,7 +1,7 @@
 {
   "code": "COMP-WORKSPACE-ID",
   "description": "Workspace identity detection (parent vs child) across CLI, MCP, and hooks",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "created": "2026-05-09",
   "profile": {
     "needs_prd": true,
@@ -11,6 +11,6 @@
     "language": "node",
     "test_framework": "vitest"
   },
-  "updated": "2026-05-09",
+  "updated": "2026-05-19",
   "group": "COMP-WORKSPACE"
 }

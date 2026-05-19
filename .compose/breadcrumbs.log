@@ -429,3 +429,5 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-17T05:30:24+08:00 | reconnect production seam: provider.appendEvent + GH changelog low-level + design reconcile
 2026-05-15T16:10:20-04:00 | Extract ProjectSwitchPopover into src/ component so App.jsx and the BUG-25 regression test share one implementation
 2026-05-16T17:40:37-04:00 | Adding loading indicator for design agent active state (issue #16) and surfacing API errors during retry loops (issue #24)
+2026-05-18T05:00:00+00:00 | fix compose items: --json flag ordering, ambiguous prefix match, improve missing-state error message
+2026-05-19T00:04:09+08:00 | Reconcile stale COMP-WORKSPACE-ID feature.json: PLANNED->COMPLETE to match shipped code (a8db93b) + compose ROADMAP
