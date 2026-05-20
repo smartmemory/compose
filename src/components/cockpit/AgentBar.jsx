@@ -81,7 +81,7 @@ export default function AgentBar({ barState = 'collapsed', onStateChange }) {
 
   return (
     <div
-      className="flex flex-col shrink-0 overflow-hidden"
+      className="flex flex-col h-full overflow-hidden"
       style={{ borderTop: '1px solid hsl(var(--border))' }}
       data-agent-bar-state={barState}
     >
