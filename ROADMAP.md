@@ -1289,6 +1289,7 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 |---|---------|-------------|--------|
 | 1 | COMP-ROADMAP-RT | Harden deterministic roadmap roundtripping: prove gen↔parse fixed-point + losslessness, write-time auto-canonicalize-or-block guard, unified feature-code parsing, and hierarchy/drift validation findings. | PLANNED |
 | 2 | COMP-ROADMAP-XREF-SYNC | Reconcile external cross-references (GitHub/Jira/Linear issues) against their targets — turn read-only XREF_DRIFT warnings into verifiable sync. Network/provider subsystem, split from COMP-ROADMAP-RT. | PLANNED |
+| 3 | COMP-ROADMAP-RT-GENFIX | Generator/parser roundtrip-lossiness fixes surfaced by checkRoundtrip: (1) parser SKIP_STATUSES phase-override rewrites sub-item rows, losing mixed item statuses under a rolled-up COMPLETE/PARKED phase; (2) malformed feature codes (e.g. lowercase) cause row duplication + non-convergence. Both are pre-existing gen/parse defects, not roadmap drift. | PLANNED |
 
 ---
 
