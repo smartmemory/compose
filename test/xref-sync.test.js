@@ -110,6 +110,21 @@ describe('syncExternalRefs (feature.json links carrier)', () => {
     assert.equal(res.unchanged, 1);
   });
 
+  test('default resolver rejects a local repo token that escapes the sibling boundary', async () => {
+    const cwd = freshCwd();
+    // repo tokens containing separators or traversal must be refused (skipped),
+    // never followed — mirrors the validator's containment guard.
+    seed(cwd, 'A-1', [
+      { kind: 'external', provider: 'local', repo: '../evil', to_code: 'X-1', expect: 'PLANNED' },
+      { kind: 'external', provider: 'local', repo: 'a/b', to_code: 'X-1', expect: 'PLANNED' },
+      { kind: 'external', provider: 'local', repo: '..', to_code: 'X-1', expect: 'PLANNED' },
+    ]);
+    const res = await syncExternalRefs(cwd, {}); // default resolver
+    assert.equal(res.synced.length, 0, 'no escaping ref may be reconciled');
+    assert.equal(res.skipped.length, 3, 'all escaping refs reported skipped');
+    assert.equal(readFeature(cwd, 'A-1').links[0].expect, 'PLANNED', 'unchanged');
+  });
+
   test('default resolver reads a sibling feature.json for local links (no injection, no network)', async () => {
     // Lay out parent/<repo> (cwd) + parent/sib so the default local resolver
     // resolves ../sib/docs/features/X-1/feature.json.
