@@ -448,3 +448,5 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-29T14:23:30+07:00 | GENFIX T1: SKIP_STATUSES override only fills empty status cells
 2026-05-29T14:30:06+07:00 | GENFIX T2: milestone reset-to-parent + top-level phase compare
 2026-05-29T14:35:01+07:00 | GENFIX T3: symmetric pipe escaping in table cells
+2026-05-29T14:45:23+07:00 | GENFIX T4a: numeric range-tolerant position sort key in listFeatures (kill NaN comparator)
+2026-05-29T14:54:50+07:00 | GENFIX T4b: end-to-end convergence test (ranged positions + struck anon row); fixed point holds with stable sort
