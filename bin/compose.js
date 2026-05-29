@@ -1042,12 +1042,14 @@ if (cmd === 'roadmap') {
     const { writeRoadmap } = await import('../lib/roadmap-gen.js')
     const { checkRoundtrip } = await import('../lib/roadmap-roundtrip.js')
     const { listFeatures } = await import('../lib/feature-json.js')
+    const { loadExternalPrefixes } = await import('../lib/project-paths.js')
     const { root: cwd } = resolveCwdWithWorkspace(args)
     const path = writeRoadmap(cwd)
+    const externalPrefixes = loadExternalPrefixes(cwd)
     // checkRoundtrip's now:'0000-00-00' is only used to detect/canonicalize
     // structural non-convergence — once the file has headings, readPreamble
     // preserves the existing preamble date verbatim, so no sentinel date leaks.
-    const rt = checkRoundtrip(readFileSync(path, 'utf-8'), listFeatures(cwd), { now: '0000-00-00' })
+    const rt = checkRoundtrip(readFileSync(path, 'utf-8'), listFeatures(cwd), { now: '0000-00-00', externalPrefixes })
     if (!rt.fixedPoint) {
       writeFileSync(path, rt.canonical)
       console.log(`Generated ${path} (canonicalized over ${rt.passes} passes)`)
@@ -1060,10 +1062,12 @@ if (cmd === 'roadmap') {
   // compose roadmap migrate — extract ROADMAP.md entries into feature.json files
   if (subcmd === 'migrate') {
     const { migrateRoadmap } = await import('../lib/migrate-roadmap.js')
+    const { loadExternalPrefixes } = await import('../lib/project-paths.js')
     const { root: cwd } = resolveCwdWithWorkspace(args)
     const dryRun = args.includes('--dry-run')
     const overwrite = args.includes('--overwrite')
-    const result = migrateRoadmap(cwd, { dryRun, overwrite })
+    const externalPrefixes = loadExternalPrefixes(cwd)
+    const result = migrateRoadmap(cwd, { dryRun, overwrite, externalPrefixes })
     if (!dryRun) {
       console.log(`Created: ${result.created.length} feature.json files`)
       if (result.created.length > 0) console.log(`  ${result.created.join(', ')}`)
@@ -1071,6 +1075,9 @@ if (cmd === 'roadmap') {
       if (result.updated.length > 0) console.log(`  ${result.updated.join(', ')}`)
       console.log(`Skipped: ${result.skipped.length} (already exist, use --overwrite to replace)`)
       if (result.skipped.length > 0) console.log(`  ${result.skipped.join(', ')}`)
+      const ext = result.skippedExternal ?? []
+      console.log(`Skipped (external, cross-project refs): ${ext.length}`)
+      if (ext.length > 0) console.log(`  ${ext.join(', ')}`)
     }
     process.exit(0)
   }
@@ -1079,13 +1086,15 @@ if (cmd === 'roadmap') {
   if (subcmd === 'check') {
     const { listFeatures } = await import('../lib/feature-json.js')
     const { checkRoundtrip, describeLossyDiff } = await import('../lib/roadmap-roundtrip.js')
+    const { loadExternalPrefixes } = await import('../lib/project-paths.js')
     const { root: cwd } = resolveCwdWithWorkspace(args)
     const roadmapPath = join(cwd, 'ROADMAP.md')
     if (!existsSync(roadmapPath)) {
       console.error('No ROADMAP.md found. Run: compose roadmap generate')
       process.exit(1)
     }
-    const rt = checkRoundtrip(readFileSync(roadmapPath, 'utf-8'), listFeatures(cwd), { now: '0000-00-00' })
+    const externalPrefixes = loadExternalPrefixes(cwd)
+    const rt = checkRoundtrip(readFileSync(roadmapPath, 'utf-8'), listFeatures(cwd), { now: '0000-00-00', externalPrefixes })
     if (rt.fixedPoint && rt.lossless) {
       console.log('feature.json and ROADMAP.md are in sync (fixed point, lossless).')
       process.exit(0)
