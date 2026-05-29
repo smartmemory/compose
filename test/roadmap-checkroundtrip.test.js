@@ -93,11 +93,12 @@ describe('checkRoundtrip — fixed point + lossless', () => {
     assert.equal(r.lossless, true, JSON.stringify(r.diffs));
   });
 
-  test('reports LOSSLESS_CHANGED when a phase-heading override rewrites a row status away from feature.json', () => {
-    // The base phase heading carries a curated COMPLETE override. The generator
-    // preserves that override in the heading; on re-parse the parser's
-    // SKIP_STATUSES rule rewrites the FEAT-1 row status to COMPLETE, while
-    // feature.json says IN_PROGRESS — so the projection is genuinely lossy.
+  test('explicit row status under a SKIP-status phase survives roundtrip (GENFIX T1)', () => {
+    // The base phase heading carries a curated COMPLETE override, but the FEAT-1
+    // row has an EXPLICIT IN_PROGRESS status that matches feature.json. The
+    // SKIP_STATUSES override only fills BLANK status cells, so the explicit row
+    // status is preserved on re-parse and the projection is lossless — there is
+    // no false LOSSLESS_CHANGED.
     const base = [
       '# X Roadmap', '',
       '## Phase 1 — COMPLETE', '',
@@ -109,9 +110,9 @@ describe('checkRoundtrip — fixed point + lossless', () => {
       { code: 'FEAT-1', phase: 'Phase 1', status: 'IN_PROGRESS', description: 'x', position: 1 },
     ];
     const r = checkRoundtrip(base, features, OPTS);
-    assert.equal(r.lossless, false, JSON.stringify(r.diffs));
-    assert.ok(r.diffs.some(d => d.kind === 'LOSSLESS_CHANGED' && d.code === 'FEAT-1'),
-      `expected LOSSLESS_CHANGED for FEAT-1, got ${JSON.stringify(r.diffs)}`);
+    assert.equal(r.lossless, true, JSON.stringify(r.diffs));
+    assert.ok(!r.diffs.some(d => d.kind === 'LOSSLESS_CHANGED' && d.code === 'FEAT-1'),
+      `explicit row status must not be rewritten, got ${JSON.stringify(r.diffs)}`);
   });
 
   test('externalPrefixes suppresses LOSSLESS_EXTRA for cross-project rows', () => {
