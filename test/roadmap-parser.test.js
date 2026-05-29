@@ -113,6 +113,28 @@ describe('parseRoadmap', () => {
     assert.ok(eng1.phaseId.includes('Milestone 1'));
     assert.ok(eng2.phaseId.includes('Milestone 2'));
   });
+
+  test('explicit row status wins over SKIP_STATUS phase override', () => {
+    const roadmap = `\
+## Phase X: Rollup — COMPLETE
+
+| # | Feature | Item | Status |
+|---|---------|------|--------|
+| 1 | ROLL-1 | Done item | COMPLETE |
+| 2 | ROLL-2 | Carried over | PLANNED |
+| 3 | ROLL-3 | Blank cell |  |
+`;
+    const entries = parseRoadmap(roadmap);
+    const roll1 = entries.find(e => e.code === 'ROLL-1');
+    const roll2 = entries.find(e => e.code === 'ROLL-2');
+    const roll3 = entries.find(e => e.code === 'ROLL-3');
+    // Explicit PLANNED under a COMPLETE phase must NOT be rewritten to COMPLETE.
+    assert.equal(roll2.status, 'PLANNED', 'explicit PLANNED row should be preserved');
+    // Explicit COMPLETE stays COMPLETE.
+    assert.equal(roll1.status, 'COMPLETE');
+    // Blank status cell under a COMPLETE phase still falls back to COMPLETE.
+    assert.equal(roll3.status, 'COMPLETE', 'blank cell should inherit phase COMPLETE');
+  });
 });
 
 // ---------------------------------------------------------------------------
