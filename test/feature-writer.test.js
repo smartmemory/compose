@@ -387,3 +387,24 @@ describe('roadmapDiff', () => {
     assert.deepEqual(r, { events: [], added: [], status_changed: [] });
   });
 });
+
+describe('write-time roundtrip guard', () => {
+  test('addRoadmapEntry still succeeds on a normal (convergent) mutation', async () => {
+    const cwd = freshCwd();
+    const r = await addRoadmapEntry(cwd, { code: 'FOO-1', description: 'x', phase: 'Phase 0' });
+    assert.equal(r.code, 'FOO-1');
+    assert.ok(existsSync(join(cwd, 'ROADMAP.md')));
+    const { checkRoundtrip } = await import('../lib/roadmap-roundtrip.js');
+    const { listFeatures } = await import('../lib/feature-json.js');
+    const text = readFileSync(join(cwd, 'ROADMAP.md'), 'utf-8');
+    const rt = checkRoundtrip(text, listFeatures(cwd), { now: '0000-00-00' });
+    assert.equal(rt.fixedPoint, true);
+    assert.equal(rt.lossless, true);
+  });
+
+  test('guard result is exposed on the return value', async () => {
+    const cwd = freshCwd();
+    const r = await addRoadmapEntry(cwd, { code: 'FOO-2', description: 'y', phase: 'Phase 0' });
+    assert.equal(r.roundtrip.fixedPoint, true);
+  });
+});
