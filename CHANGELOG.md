@@ -14,8 +14,10 @@ a "skipped" notice (generate would otherwise canonicalize-overwrite or crash on
 the hand-authored file), the project validator emits an info
 `ROADMAP_NARRATIVE_OWNED` instead of `ROUNDTRIP_NOT_FIXED_POINT`/`ROADMAP_LOSSY`,
 and killed-mode `KILLED_STATUS_NOT_TERMINAL` ignores the roadmap source (still
-checks feature.json/vision) — otherwise the hand-authored `ROADMAP.md` would
-always read as false drift. This stops the typed writer from
+checks feature.json/vision). Hand-authored rows are also exempt from
+`ROADMAP_ROW_SCHEMA_VIOLATION`, and per-feature artifact/completion checks no
+longer fall back to the roadmap row status (feature.json stays canonical) —
+otherwise the hand-authored `ROADMAP.md` would always read as false drift. This stops the typed writer from
 flattening curated reconciliation prose into rendered tables — the root cause of
 the recurring forge-top "Wave 6" duplication. `feature.json` files may still
 exist in such a workspace as structured link carriers; the guard stops the

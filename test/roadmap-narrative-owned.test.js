@@ -206,3 +206,59 @@ describe('validateProject killed-mode roadmap-source guard (#39)', () => {
       'feature.json non-terminal status with killed.md must still flag — only the roadmap source is suppressed');
   });
 });
+
+describe('validateProject narrative-owned: row-schema + status-fallback (#39 codex round)', () => {
+  const rowSchemaBad = `# Hand-authored
+
+## Phase 0 — PLANNED
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 1 | FOO-1 | x | WIP |
+`;
+
+  test('narrative-owned: an invalid hand-authored ROADMAP row is NOT schema-validated', async () => {
+    const cwd = makeWorkspace({ narrative: true });
+    writeFileSync(join(cwd, 'ROADMAP.md'), rowSchemaBad);
+    const { findings } = await validateProject(cwd);
+    assert.equal(findings.filter(f => f.kind === 'ROADMAP_ROW_SCHEMA_VIOLATION').length, 0,
+      'a hand-authored row must not be typed-schema-validated');
+  });
+
+  test('control: non-narrative DOES raise ROADMAP_ROW_SCHEMA_VIOLATION', async () => {
+    const cwd = makeWorkspace({ narrative: false });
+    writeFileSync(join(cwd, 'ROADMAP.md'), rowSchemaBad);
+    const { findings } = await validateProject(cwd);
+    assert.ok(findings.some(f => f.kind === 'ROADMAP_ROW_SCHEMA_VIOLATION'),
+      'guard is load-bearing: a normal workspace still schema-validates rows');
+  });
+
+  // A folder-only feature (no feature.json) must NOT inherit its status from a
+  // hand-authored roadmap row in narrative mode — the row is not canonical.
+  const folderOnlyRoadmap = `# Hand-authored
+
+## Phase 0 — IN_PROGRESS
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 1 | BAR-1 | active per hand-authored row | IN_PROGRESS |
+`;
+
+  test('narrative-owned: folder-only feature does not inherit roadmap IN_PROGRESS (no MISSING_DESIGN_ARTIFACT)', async () => {
+    const cwd = makeWorkspace({ narrative: true });
+    mkdirSync(join(cwd, 'docs', 'features', 'BAR-1'), { recursive: true }); // folder, no feature.json, no design.md
+    writeFileSync(join(cwd, 'ROADMAP.md'), folderOnlyRoadmap);
+    const { findings } = await validateProject(cwd);
+    assert.equal(findings.filter(f => f.kind === 'MISSING_DESIGN_ARTIFACT' && f.feature_code === 'BAR-1').length, 0,
+      'narrative-owned must not enforce design.md off a hand-authored roadmap status');
+  });
+
+  test('control: non-narrative folder-only feature DOES inherit roadmap status → MISSING_DESIGN_ARTIFACT', async () => {
+    const cwd = makeWorkspace({ narrative: false });
+    mkdirSync(join(cwd, 'docs', 'features', 'BAR-1'), { recursive: true });
+    writeFileSync(join(cwd, 'ROADMAP.md'), folderOnlyRoadmap);
+    const { findings } = await validateProject(cwd);
+    assert.ok(findings.some(f => f.kind === 'MISSING_DESIGN_ARTIFACT' && f.feature_code === 'BAR-1'),
+      'guard is load-bearing: normal workspace still uses the roadmap status fallback');
+  });
+});
