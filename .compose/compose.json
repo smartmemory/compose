@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "externalPrefixes": ["STRAT-"],
   "capabilities": {
     "stratum": true,
     "lifecycle": true
