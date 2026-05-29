@@ -1044,6 +1044,9 @@ if (cmd === 'roadmap') {
     const { listFeatures } = await import('../lib/feature-json.js')
     const { root: cwd } = resolveCwdWithWorkspace(args)
     const path = writeRoadmap(cwd)
+    // checkRoundtrip's now:'0000-00-00' is only used to detect/canonicalize
+    // structural non-convergence — once the file has headings, readPreamble
+    // preserves the existing preamble date verbatim, so no sentinel date leaks.
     const rt = checkRoundtrip(readFileSync(path, 'utf-8'), listFeatures(cwd), { now: '0000-00-00' })
     if (!rt.fixedPoint) {
       writeFileSync(path, rt.canonical)
@@ -1075,7 +1078,7 @@ if (cmd === 'roadmap') {
   // compose roadmap check — verify feature.json ↔ ROADMAP.md consistency
   if (subcmd === 'check') {
     const { listFeatures } = await import('../lib/feature-json.js')
-    const { checkRoundtrip } = await import('../lib/roadmap-roundtrip.js')
+    const { checkRoundtrip, describeLossyDiff } = await import('../lib/roadmap-roundtrip.js')
     const { root: cwd } = resolveCwdWithWorkspace(args)
     const roadmapPath = join(cwd, 'ROADMAP.md')
     if (!existsSync(roadmapPath)) {
@@ -1092,7 +1095,7 @@ if (cmd === 'roadmap') {
       console.log(`NOT A FIXED POINT: ${d?.detail ?? 'ROADMAP.md changes on regen'}`)
     }
     for (const d of rt.diffs.filter(x => x.kind.startsWith('LOSSLESS_'))) {
-      console.log(`${d.kind}${d.code ? ' ' + d.code : ''}${d.detail ? ': ' + d.detail : ''}`)
+      console.log(describeLossyDiff(d))
     }
     console.log('\nRun `compose roadmap generate` to regenerate ROADMAP.md from feature.json.')
     process.exit(1)
