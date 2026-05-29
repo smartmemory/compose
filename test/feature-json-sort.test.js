@@ -13,7 +13,7 @@ import { mkdtempSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { listFeatures, writeFeature } from '../lib/feature-json.js';
+import { listFeatures, writeFeature, positionSortKey } from '../lib/feature-json.js';
 
 function freshCwd() {
   const cwd = mkdtempSync(join(tmpdir(), 'feat-sort-'));
@@ -42,5 +42,19 @@ describe('listFeatures sort — deterministic with ranged-string positions', () 
 
     // Numeric order on the leading integer of each position: 2, 10, 92, 141, then null last.
     assert.deepEqual(order1, ['C-2', 'C-10', 'C-92', 'C-141', 'C-NULL']);
+  });
+
+  test('positionSortKey: numeric, ranged, and malformed inputs', () => {
+    assert.equal(positionSortKey(7), 7);
+    assert.equal(positionSortKey('92–95'), 92);   // en-dash range
+    assert.equal(positionSortKey('141-144'), 141); // ascii range
+    assert.equal(positionSortKey('  3 '), 3);       // leading whitespace tolerated
+    // Malformed / absent → sentinel (sorts last), not a mid-string digit run.
+    const SENTINEL = Number.MAX_SAFE_INTEGER;
+    assert.equal(positionSortKey(null), SENTINEL);
+    assert.equal(positionSortKey(undefined), SENTINEL);
+    assert.equal(positionSortKey('—'), SENTINEL);
+    assert.equal(positionSortKey('foo 12'), SENTINEL, 'no leading digits → sentinel, not 12');
+    assert.equal(positionSortKey(NaN), SENTINEL);
   });
 });

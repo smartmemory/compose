@@ -80,4 +80,22 @@ describe('generateRoadmap converges with ranged positions + a struck anon row', 
     assert.ok(idx92 < idxOld && idxOld < idx141,
       'struck row must stay anchored between its predecessor (WAVE-92) and WAVE-141');
   });
+
+  test('new phases (absent from base) order numerically by ranged position', () => {
+    // No base ROADMAP: every phase is "new", exercising the newPhases sort path
+    // in generateRoadmapFromBase, which also must use the range-tolerant key.
+    const cwd = freshCwd();
+    for (const f of [
+      { code: 'LATE-1', phase: 'Phase 141', status: 'PLANNED', description: 'd', position: '141–144' },
+      { code: 'EARLY-1', phase: 'Phase 92', status: 'PLANNED', description: 'd', position: '92–95' },
+    ]) {
+      writeFeature(cwd, { created: '2026-05-02', updated: '2026-05-02', ...f });
+    }
+
+    const out = generateRoadmap(cwd, { now: '2026-05-29' });
+    // Phase 92 (leading 92) must precede Phase 141 (leading 141), not sort by the
+    // NaN-collapsed comparator or phase-name lexical order ("141" < "92").
+    assert.ok(out.indexOf('## Phase 92') < out.indexOf('## Phase 141'),
+      'new phases must order by leading-int position (92 before 141)');
+  });
 });

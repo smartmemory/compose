@@ -451,3 +451,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-29T14:45:23+07:00 | GENFIX T4a: numeric range-tolerant position sort key in listFeatures (kill NaN comparator)
 2026-05-29T14:54:50+07:00 | GENFIX T4b: end-to-end convergence test (ranged positions + struck anon row); fixed point holds with stable sort
 2026-05-29T14:55:48+07:00 | GENFIX T5: lowercase strict-code match treated as typed (uppercased) in readAnonymousRows, not anon
+2026-05-29T15:02:15+07:00 | GENFIX T4 review-fix: positionSortKey in newPhases sort (kill 2nd NaN comparator); anchor leading-digit regex so malformed positions hit sentinel
