@@ -58,6 +58,22 @@ Optional. Controls where feature/completion/changelog/event data is persisted.
 | `github.cacheTtlSeconds` | `300` | Read-cache TTL for GitHub API responses. |
 | `github.auth.tokenEnv` | — | Name of env var holding a GitHub PAT. Falls back to `gh auth token` if unset. Required scopes: `repo`, `project`. |
 
+### `roadmap` block
+
+Optional. Controls roadmap generation policy.
+
+```json
+{
+  "roadmap": {
+    "narrative": true
+  }
+}
+```
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| `narrative` | `false` | When `true`, the workspace is **narrative-owned**: `ROADMAP.md` is hand-authored and must not be machine-regenerated from `feature.json`. `generateRoadmap`/`writeRoadmap` no-op with a warning and `add_roadmap_entry` refuses. `feature.json` files may still exist as structured link carriers (xref-sync) — they just don't drive `ROADMAP.md`. See issue #39. |
+
 ## `.compose/questionnaire.json`
 
 Saved questionnaire answers (enriched intent, project type, language, scope, research preference, notes, review agent choice).

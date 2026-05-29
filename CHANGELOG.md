@@ -2,6 +2,19 @@
 
 ## 2026-05-29
 
+### fix(roadmap): guard narrative-owned workspaces from the typed writer (#39)
+
+A workspace whose `.compose/compose.json` declares `roadmap.narrative: true` is
+now **narrative-owned**: its hand-authored `ROADMAP.md` is never machine-
+regenerated from `feature.json`. `generateRoadmap` returns the on-disk content
+verbatim, `writeRoadmap` is a no-op (both warn with an actionable message), and
+`add_roadmap_entry` refuses before writing any `feature.json`. This stops the
+typed writer from flattening curated reconciliation prose into rendered tables —
+the root cause of the recurring forge-top "Wave 6" duplication. `feature.json`
+files may still exist in such a workspace as structured link carriers; the guard
+stops the writer, it does not delete data. New `lib/roadmap-config.js`
+(`isNarrativeOwned`); documented in `docs/configuration.md`.
+
 ### feat(COMP-ROADMAP-XREF-SYNC): v1 pull reconciliation for external links
 
 Turns the read-only `XREF_DRIFT` warning into an applied fix. `compose roadmap
