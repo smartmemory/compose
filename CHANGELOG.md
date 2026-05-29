@@ -2,6 +2,21 @@
 
 ## 2026-05-29
 
+### fix(roadmap): em-dash in a phase title no longer truncates the phaseId (#38)
+
+Phase headings whose *title* contains an em-dash (`## Wave 6 — Situational
+Awareness — COMPLETE`) were split on the first ` — `, collapsing the phaseId to
+`Wave 6` and mis-reading the status as `Situational Awareness — COMPLETE`. That
+broke phaseId identity (collisions) and the phase-level status rollup (an
+unmarked row under a `COMPLETE` phase was treated as `PLANNED`/buildable). New
+shared `lib/roadmap-heading.js` owns `splitPhaseHeading` — the status is the
+trailing segment that begins, at a ` — ` boundary, with a recognized status
+token; everything before it is the title. The parser and all five preserver
+call sites (`readPhaseOverrides`, `readAnonymousRows`, `readPhaseBlocks`,
+`readPhaseOrder`, `readPreservedSectionAnchors`) now route through it, so they
+can't disagree on a phaseId. `STATUS_TOKENS`/`parseStatusToken` moved there too
+(re-exported from `roadmap-parser.js` for compatibility).
+
 ### fix(vision): wire UI items to the build/bug-fix lifecycle; stop CLI orphaning (#31)
 
 Desktop `ItemDetailPanel` now has a **Start** button (new
