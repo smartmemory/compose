@@ -316,6 +316,7 @@ const TOOLS = [
         position: { type: 'number', description: 'Sort order within phase' },
         parent: { type: 'string', description: 'Parent feature code, for cross-references' },
         tags: { type: 'array', items: { type: 'string' } },
+        force: { type: 'boolean', description: 'Bypass the pre-commit roundtrip guard (commit even if ROADMAP.md would not be a generation fixed point).' },
         idempotency_key: { type: 'string', description: 'Optional caller-provided key. Same key replays return the cached result without re-mutating.' },
       },
     },
