@@ -466,3 +466,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-29T20:08:48+07:00 | #39 gap fix: skip roadmap roundtrip checks (validator + roadmap check CLI) on narrative-owned workspaces
 2026-05-29T21:06:11+07:00 | #39 codex: roadmap generate must skip narrative-owned (was clobbering/crashing); killed-mode KILLED_STATUS_NOT_TERMINAL must ignore roadmap source in narrative mode
 2026-05-29T21:15:35+07:00 | #39 codex r2: complete narrative suppression — exempt ROADMAP_ROW_SCHEMA_VIOLATION + drop hand-authored-row status fallback in artifact/completion checks (ctx.narrativeOwned + effectiveStatus)
+2026-05-29T21:21:05+07:00 | #39 codex r3: apply narrative suppression at validateFeature too (per-feature CLI/MCP scope), shared applyNarrativeSuppression + _deferNarrative so project still emits single info

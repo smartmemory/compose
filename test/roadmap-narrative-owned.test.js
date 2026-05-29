@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { isNarrativeOwned } from '../lib/roadmap-config.js';
 import { generateRoadmap, writeRoadmap } from '../lib/roadmap-gen.js';
 import { addRoadmapEntry } from '../lib/feature-writer.js';
-import { validateProject } from '../lib/feature-validator.js';
+import { validateProject, validateFeature } from '../lib/feature-validator.js';
 
 const HAND_AUTHORED = `# Hand-authored Roadmap
 
@@ -260,5 +260,42 @@ describe('validateProject narrative-owned: row-schema + status-fallback (#39 cod
     const { findings } = await validateProject(cwd);
     assert.ok(findings.some(f => f.kind === 'MISSING_DESIGN_ARTIFACT' && f.feature_code === 'BAR-1'),
       'guard is load-bearing: normal workspace still uses the roadmap status fallback');
+  });
+});
+
+describe('validateFeature (single-feature scope) honors narrative-owned (#39 codex round)', () => {
+  const badRow = `# Hand-authored
+
+## Phase 0 — PLANNED
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 1 | FOO-1 | x | WIP |
+`;
+
+  test('narrative-owned: validateFeature suppresses roadmap-derived findings for one feature', async () => {
+    const cwd = makeWorkspace({ narrative: true });
+    writeFileSync(join(cwd, 'ROADMAP.md'), badRow);
+    const { findings } = await validateFeature(cwd, 'FOO-1');
+    const leaked = findings.filter(f =>
+      f.kind === 'ROADMAP_ROW_SCHEMA_VIOLATION' || f.kind === 'STATUS_MISMATCH_ROADMAP_VS_FEATUREJSON');
+    assert.deepEqual(leaked, [], `roadmap-derived findings must be suppressed in feature scope, got ${JSON.stringify(leaked)}`);
+  });
+
+  test('control: non-narrative validateFeature DOES report them', async () => {
+    const cwd = makeWorkspace({ narrative: false });
+    writeFileSync(join(cwd, 'ROADMAP.md'), badRow);
+    const { findings } = await validateFeature(cwd, 'FOO-1');
+    assert.ok(findings.some(f => f.kind === 'ROADMAP_ROW_SCHEMA_VIOLATION'
+      || f.kind === 'STATUS_MISMATCH_ROADMAP_VS_FEATUREJSON'),
+      'guard is load-bearing: a normal workspace reports roadmap-derived findings in feature scope');
+  });
+
+  test('validateProject still emits exactly one ROADMAP_NARRATIVE_OWNED (no per-feature duplication)', async () => {
+    const cwd = makeWorkspace({ narrative: true });
+    writeFileSync(join(cwd, 'ROADMAP.md'), badRow);
+    const { findings } = await validateProject(cwd);
+    assert.equal(findings.filter(f => f.kind === 'ROADMAP_NARRATIVE_OWNED').length, 1,
+      'aggregation must not multiply the info finding across features');
   });
 });
