@@ -19,6 +19,36 @@ exist in such a workspace as structured link carriers; the guard stops the
 writer, it does not delete data. New `lib/roadmap-config.js`
 (`isNarrativeOwned`); documented in `docs/configuration.md`.
 
+### fix(roadmap): em-dash in a phase title no longer truncates the phaseId (#38)
+
+Phase headings whose *title* contains an em-dash (`## Wave 6 — Situational
+Awareness — COMPLETE`) were split on the first ` — `, collapsing the phaseId to
+`Wave 6` and mis-reading the status as `Situational Awareness — COMPLETE`. That
+broke phaseId identity (collisions) and the phase-level status rollup (an
+unmarked row under a `COMPLETE` phase was treated as `PLANNED`/buildable). New
+shared `lib/roadmap-heading.js` owns `splitPhaseHeading` — the status is the
+trailing segment that begins, at a ` — ` boundary, with a recognized status
+token; everything before it is the title. The parser and all five preserver
+call sites (`readPhaseOverrides`, `readAnonymousRows`, `readPhaseBlocks`,
+`readPhaseOrder`, `readPreservedSectionAnchors`) now route through it, so they
+can't disagree on a phaseId. `STATUS_TOKENS`/`parseStatusToken` moved there too
+(re-exported from `roadmap-parser.js` for compatibility).
+
+### fix(vision): wire UI items to the build/bug-fix lifecycle; stop CLI orphaning (#31)
+
+Desktop `ItemDetailPanel` now has a **Start** button (new
+`StartBuildPopover.jsx`) — shown when `!item.lifecycle && status !== 'killed' &&
+type !== 'question'` — that POSTs `/api/build/start` (`{featureCode, mode,
+description}`, x-compose-token), the same endpoint mobile uses, and surfaces
+409/500 errors. The CLI no longer orphans UI-created items: `VisionWriter`'s
+lookup (`matchFeatureItem`) falls back from `lifecycle.featureCode` to `item.id`
+then top-level `item.featureCode`, so `compose fix <code>` binds to an existing
+item instead of minting a duplicate. On bind it seeds `lifecycle.featureCode`
+(REST + direct), and `ensureFeatureItem`/`runBuild` now thread `mode` so a bug
+build creates a `type: 'bug'` item rather than always `type: 'feature'`. `'bug'`
+is now a first-class vision item type (added to `VALID_TYPES` + `TYPE_COLORS`),
+so the REST/server create path accepts it instead of rejecting `Invalid type: bug`.
+
 ### feat(COMP-ROADMAP-XREF-SYNC): v1 pull reconciliation for external links
 
 Turns the read-only `XREF_DRIFT` warning into an applied fix. `compose roadmap
