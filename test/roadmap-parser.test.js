@@ -330,6 +330,25 @@ test('ignores rows inside a preserved-section (MIGRATE-PREP)', () => {
     'struck preserved-section rows must not become anon entries');
 });
 
+test('status cells with trailing commentary are tokenized to a bare enum value (hardening)', () => {
+  const md = [
+    '## Phase Z — PLANNED',
+    '| # | Feature | Description | Status |',
+    '|---|---------|-------------|--------|',
+    '| 1 | TOK-1 | parked with rationale | PARKED — needs Claude Code adoption to be useful |',
+    '| 2 | TOK-2 | bold + commentary | **COMPLETE** — shipped v1 |',
+    '| 3 | TOK-3 | parenthetical | PARTIAL (1a COMPLETE, 2 PLANNED) |',
+    '| 4 | TOK-4 | bare token unchanged | PLANNED |',
+    '| 5 | TOK-5 | lowercase normalized | parked — soft hints only |',
+  ].join('\n');
+  const byCode = Object.fromEntries(parseRoadmap(md).map(e => [e.code, e.status]));
+  assert.equal(byCode['TOK-1'], 'PARKED', 'trailing em-dash commentary stripped');
+  assert.equal(byCode['TOK-2'], 'COMPLETE');
+  assert.equal(byCode['TOK-3'], 'PARTIAL', 'parenthetical detail stripped');
+  assert.equal(byCode['TOK-4'], 'PLANNED', 'bare token unchanged');
+  assert.equal(byCode['TOK-5'], 'PARKED', 'case normalized to canonical token');
+});
+
 test('a preserved-section marker INSIDE a fenced code block is not honored, and later rows still parse (review fix)', () => {
   const md = [
     '## Phase A — PLANNED',

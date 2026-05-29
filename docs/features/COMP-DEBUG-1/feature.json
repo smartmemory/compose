@@ -2,7 +2,7 @@
   "code": "COMP-DEBUG-1",
   "name": "Debug Discipline Engine",
   "status": "PLANNED",
-  "phase": "implementation",
+  "phase": "COMP-DEBUG: Debug Discipline",
   "complexity": 3,
   "profile": {
     "needs_prd": false,
