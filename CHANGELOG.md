@@ -2,6 +2,11 @@
 
 ## 2026-05-29
 
+### release: 0.2.0
+
+First `0.2.0` stable release of `@smartmemory/compose`. Supersedes the retired
+`0.1.0` tag/release; published from the consolidated `smartmemory` org.
+
 ### fix(roadmap): guard narrative-owned workspaces from the typed writer (#39)
 
 A workspace whose `.compose/compose.json` declares `roadmap.narrative: true` is
