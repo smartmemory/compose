@@ -172,6 +172,19 @@ describe('readAnonymousRows', () => {
     assert.equal(rows[1].predecessorCode, null);
     assert.equal(rows[0].rawLine, '| — | Discovery and PRD | COMPLETE |');
   });
+
+  test('a non-numeric-suffixed code in the Feature column is NOT treated as anonymous', () => {
+    const md = [
+      '## Phase 6 — PLANNED',
+      '| # | Feature | Description | Status |',
+      '|---|---------|-------------|--------|',
+      '| 1 | COMP-ROADMAP-RT | x | PLANNED |',
+      '| — | — | a curated note | PLANNED |',
+    ].join('\n');
+    const rows = readAnonymousRows(md).get('Phase 6') ?? [];
+    assert.equal(rows.length, 1); // only the em-dash row is anon
+    assert.ok(rows[0].rawLine.includes('curated note'));
+  });
 });
 
 // ---------------------------------------------------------------------------
