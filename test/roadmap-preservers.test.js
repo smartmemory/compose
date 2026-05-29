@@ -13,6 +13,8 @@ import {
   readAnonymousRows,
   readPreservedSections,
   readPreservedSectionAnchors,
+  readPhaseOrder,
+  readPhaseBlocks,
 } from '../lib/roadmap-preservers.js';
 
 // ---------------------------------------------------------------------------
@@ -413,5 +415,42 @@ content
     // y's anchor should still be P1, not "Some Heading Inside Preserved"
     assert.equal(anchors.get('x'), 'P1');
     assert.equal(anchors.get('y'), 'P1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #38: em-dash inside a phase TITLE must not truncate the phaseId across the
+// preserver functions (constant regex in readPhaseOverrides + the shared inline
+// pattern in readPhaseOrder / readPhaseBlocks / readAnonymousRows /
+// readPreservedSectionAnchors).
+// ---------------------------------------------------------------------------
+
+describe('em-dash in phase title (#38)', () => {
+  const text = `## Wave 6 — Situational Awareness — COMPLETE
+
+| # | Feature | Item | Status |
+|---|---------|------|--------|
+| 1 | — | a curated note | COMPLETE |
+`;
+
+  test('readPhaseOverrides keys on the full title; value is the trailing status', () => {
+    const o = readPhaseOverrides(text);
+    assert.equal(o.get('Wave 6 — Situational Awareness'), 'COMPLETE');
+    assert.equal(o.has('Wave 6'), false);
+  });
+
+  test('readPhaseOrder returns the full title as the phase id', () => {
+    assert.deepEqual(readPhaseOrder(text), ['Wave 6 — Situational Awareness']);
+  });
+
+  test('readPhaseBlocks keys the phase block on the full title', () => {
+    assert.equal(readPhaseBlocks(text).has('Wave 6 — Situational Awareness'), true);
+    assert.equal(readPhaseBlocks(text).has('Wave 6'), false);
+  });
+
+  test('readAnonymousRows keys anon rows under the full title', () => {
+    const rows = readAnonymousRows(text);
+    assert.equal(rows.has('Wave 6 — Situational Awareness'), true);
+    assert.equal(rows.has('Wave 6'), false);
   });
 });
