@@ -172,4 +172,13 @@ describe('checkRoundtrip — fixed point + lossless', () => {
     assert.ok(!r.diffs.some(d => d.kind === 'LOSSLESS_CHANGED' && d.code === 'FEAT-1' && d.detail.startsWith('phase:')),
       `top-level phase must match, got ${JSON.stringify(r.diffs)}`);
   });
+
+  test('a description containing literal pipes round-trips losslessly (GENFIX T3)', () => {
+    const features = [
+      { code: 'FOO-1', phase: 'Phase 1', status: 'PLANNED', description: 'run a|b|c flags', position: 1 },
+    ];
+    const r = checkRoundtrip('', features, { now: '2020-01-02' });
+    assert.equal(r.lossless, true, JSON.stringify(r.diffs));
+    assert.equal(r.fixedPoint, true, JSON.stringify(r.diffs));
+  });
 });

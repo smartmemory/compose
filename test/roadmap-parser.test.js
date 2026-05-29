@@ -294,3 +294,19 @@ test('parses a feature code that does not end in -<digits> as a real code', () =
   assert.ok(!codes.some(c => c.startsWith('_anon_')),
     'COMP-ROADMAP-RT must not be classified anonymous');
 });
+
+test('unescapes escaped pipes in a description cell and reads status correctly (GENFIX T3)', () => {
+  const md = [
+    '## Phase 7: Escaping — PLANNED',
+    '',
+    '| # | Feature | Description | Status |',
+    '|---|---------|-------------|--------|',
+    '| 1 | ESC-1 | a \\| b | IN_PROGRESS |',
+    '',
+  ].join('\n');
+  const entries = parseRoadmap(md);
+  const esc = entries.find(e => e.code === 'ESC-1');
+  assert.ok(esc, `expected ESC-1 in ${JSON.stringify(entries.map(e => e.code))}`);
+  assert.equal(esc.description, 'a | b', 'escaped pipe must be unescaped to a literal pipe');
+  assert.equal(esc.status, 'IN_PROGRESS', 'status column must not be a description fragment');
+});
