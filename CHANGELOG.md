@@ -1,5 +1,42 @@
 # Changelog
 
+## 2026-05-29
+
+### fix(COMP-ROADMAP-RT-GENFIX): deterministic roadmap roundtripping — 5 gen/parse defects
+
+Fixes the five gen/parse defects that broke the roundtrip fixed point, unblocking
+(in code) the deferred migration of historical ROADMAP rows into `feature.json`:
+
+- **T1** — `SKIP_STATUSES` override only fills an *empty* status cell, never
+  overwrites an explicit one (`roadmap-parser.js`).
+- **T2** — `###` milestone headings reset to their parent phase instead of
+  accumulating a `Phase > Milestone` path; `checkRoundtrip` compares the
+  top-level phase only (`roadmap-parser.js`, `roadmap-roundtrip.js`).
+- **T3** — symmetric pipe escaping: emit `\|` in free-text table cells, split on
+  unescaped `|` and unescape on parse, in lockstep across
+  `roadmap-gen.js`/`roadmap-parser.js`/`roadmap-preservers.js`.
+- **T4** — `listFeatures` sorted positions with `(a.position ?? 999) - …`, which
+  is `NaN` for ranged-string positions like `"141–144"` — a non-total order that
+  made typed-row emit order (and anon-row anchoring) non-deterministic, so regen
+  never reached a fixed point. New `positionSortKey()` parses the leading integer
+  (numeric or ranged), sentinel + code tie-break. The same key now also drives
+  the `newPhases` sort in `roadmap-gen.js` (a second NaN comparator found in
+  review). Affects all `listFeatures` consumers (build lists, UI).
+- **T5** — `readAnonymousRows` treats a case-insensitive strict-code match as a
+  typed row (anchored by the uppercased canonical code) instead of anonymous,
+  eliminating phantom-duplicate churn.
+
+Coverage: `test/feature-json-sort.test.js`, `test/roadmap-ranged-position-converge.test.js`,
+plus additions to `test/roadmap-parser.test.js`, `test/roadmap-checkroundtrip.test.js`,
+`test/roadmap-preservers.test.js`. Full suite green (node 2933 / vitest 139 / tracker 100).
+
+Known follow-up (NOT fixed here): re-running the migration on a scratch copy
+still diverges, but the root cause is not the sort — `migrate` parses the curated
+`## Execution Sequencing` planning narrative (non-standard `| Feature | Items |
+Effort | Rationale |` schema) as feature tables and ignores
+`<!-- preserved-section -->` markers, minting phantom bare-code features. Tracked
+for a dedicated migrate-hardening + source-cleanup pass.
+
 ## 2026-05-18
 
 ### fix(roadmap-gen): typed-writer regen now converges on duplicate phase headings
