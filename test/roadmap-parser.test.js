@@ -418,3 +418,35 @@ test('unescapes escaped pipes in a description cell and reads status correctly (
   assert.equal(esc.description, 'a | b', 'escaped pipe must be unescaped to a literal pipe');
   assert.equal(esc.status, 'IN_PROGRESS', 'status column must not be a description fragment');
 });
+
+// ---------------------------------------------------------------------------
+// #38: em-dash inside a phase TITLE must not truncate the phaseId or break the
+// phase-level status rollup.
+// ---------------------------------------------------------------------------
+
+test('em-dash in phase title: full title preserved + phase-level COMPLETE rolls up (#38)', () => {
+  const text = `# Roadmap
+
+## Wave 6 — Situational Awareness — COMPLETE
+
+| # | Feature | Item | Status |
+|---|---------|------|--------|
+| 1 | OBS-1 | Branch awareness |  |
+
+## Wave 7 — Next — IN_PROGRESS
+
+| # | Feature | Item | Status |
+|---|---------|------|--------|
+| 1 | NEXT-1 | A thing | PLANNED |
+`;
+  const entries = parseRoadmap(text);
+
+  const obs = entries.find(e => e.code === 'OBS-1');
+  assert.ok(obs, `expected OBS-1 in ${JSON.stringify(entries.map(e => e.code))}`);
+  assert.equal(obs.phaseId, 'Wave 6 — Situational Awareness', 'full title must survive, not truncate to "Wave 6"');
+  assert.equal(obs.status, 'COMPLETE', 'unmarked row inherits the phase-level COMPLETE rollup');
+
+  const next = entries.find(e => e.code === 'NEXT-1');
+  assert.equal(next.phaseId, 'Wave 7 — Next');
+  assert.equal(next.status, 'PLANNED', 'explicit per-row status wins');
+});

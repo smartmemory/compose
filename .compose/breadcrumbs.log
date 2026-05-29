@@ -458,3 +458,5 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-29T17:34:17+07:00 | leftovers: status tokenization in parser; rename 'implementation' phase → COMP-DEBUG: Debug Discipline
 2026-05-29T18:03:51+07:00 | COMP-ROADMAP-XREF-SYNC v1 (pull): reconcile feature.json external links' expect= to live target state; CLI roadmap xref-sync
 2026-05-29T18:12:33+07:00 | XREF-SYNC review-fix: sibling-containment guard + realpath on local refs; resolve sibling's own featuresDir
+2026-05-29T19:48:21+07:00 | #38 fix em-dash phase-heading truncation: shared splitPhaseHeading helper (status = trailing recognized token), rewire parser + 5 preserver call sites
+2026-05-29T20:15:48+07:00 | #38 codex: status must be the RIGHTMOST qualifying em-dash boundary, not the first (title fragment can start with a status token)
