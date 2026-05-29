@@ -12,6 +12,11 @@
       "kind": "follow_up",
       "to_code": "COMP-ROADMAP-XREF-SYNC",
       "note": "External xref reconciliation deferred from COMP-ROADMAP-RT scope"
+    },
+    {
+      "kind": "follow_up",
+      "to_code": "COMP-ROADMAP-RT-GENFIX",
+      "note": "Latent gen/parse lossiness defects surfaced by checkRoundtrip during COMP-ROADMAP-RT impl"
     }
   ]
 }
