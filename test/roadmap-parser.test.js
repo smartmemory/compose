@@ -114,6 +114,31 @@ describe('parseRoadmap', () => {
     assert.ok(eng2.phaseId.includes('Milestone 2'));
   });
 
+  test('consecutive milestones reset to parent phase (no nesting) (GENFIX T2)', () => {
+    const roadmap = `\
+## Phase A — PLANNED
+
+### Milestone 1
+
+| # | Feature | Item | Status |
+|---|---------|------|--------|
+| 1 | MA-1 | first | PLANNED |
+
+### Milestone 2
+
+| # | Feature | Item | Status |
+|---|---------|------|--------|
+| 2 | MA-2 | second | PLANNED |
+`;
+    const entries = parseRoadmap(roadmap);
+    const ma1 = entries.find(e => e.code === 'MA-1');
+    const ma2 = entries.find(e => e.code === 'MA-2');
+    assert.equal(ma1.phaseId, 'Phase A > Milestone 1',
+      `expected reset-to-parent, got ${ma1.phaseId}`);
+    assert.equal(ma2.phaseId, 'Phase A > Milestone 2',
+      `expected reset-to-parent (not accumulated), got ${ma2.phaseId}`);
+  });
+
   test('explicit row status wins over SKIP_STATUS phase override', () => {
     const roadmap = `\
 ## Phase X: Rollup — COMPLETE

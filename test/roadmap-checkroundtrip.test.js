@@ -149,4 +149,27 @@ describe('checkRoundtrip — fixed point + lossless', () => {
       `no row must be missing, got ${JSON.stringify(r.diffs)}`);
     assert.equal(r.lossless, true, JSON.stringify(r.diffs));
   });
+
+  test('milestone phaseId compares on top-level phase only (no false LOSSLESS_CHANGED) (GENFIX T2)', () => {
+    // The base carries a `### Milestone 1` sub-heading. The generator splices the
+    // source block, so the canonical roadmap preserves the milestone heading and
+    // the parser reads FEAT-1's phaseId as "Phase A > Milestone 1". feature.json
+    // stores a FLAT phase "Phase A". A full-path comparison would falsely flag
+    // LOSSLESS_CHANGED; comparing the top-level phase only ("Phase A" === "Phase A")
+    // must not.
+    const base = [
+      '# X Roadmap', '',
+      '## Phase A — PLANNED', '',
+      '### Milestone 1', '',
+      '| # | Feature | Description | Status |',
+      '|---|---------|-------------|--------|',
+      '| 1 | FEAT-1 | x | PLANNED |', '',
+    ].join('\n');
+    const features = [
+      { code: 'FEAT-1', phase: 'Phase A', status: 'PLANNED', description: 'x', position: 1 },
+    ];
+    const r = checkRoundtrip(base, features, OPTS);
+    assert.ok(!r.diffs.some(d => d.kind === 'LOSSLESS_CHANGED' && d.code === 'FEAT-1' && d.detail.startsWith('phase:')),
+      `top-level phase must match, got ${JSON.stringify(r.diffs)}`);
+  });
 });
