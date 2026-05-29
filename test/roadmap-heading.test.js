@@ -35,6 +35,16 @@ test('splitPhaseHeading: status with em-dash commentary stays attached to status
   );
 });
 
+test('splitPhaseHeading: a title fragment that STARTS with a status token is still title (rightmost boundary wins)', () => {
+  // The status is the trailing token (COMPLETE), not the earlier "BLOCKED ..."
+  // fragment which is part of the title. Choosing the first qualifying boundary
+  // would mis-split this to { title: "Phase 9", status: "BLOCKED ... — COMPLETE" }.
+  assert.deepEqual(
+    splitPhaseHeading('Phase 9 — BLOCKED API Cleanup — COMPLETE'),
+    { title: 'Phase 9 — BLOCKED API Cleanup', status: 'COMPLETE' },
+  );
+});
+
 test('splitPhaseHeading: em-dash title with NO status is all title', () => {
   assert.deepEqual(
     splitPhaseHeading('Wave 6 — Situational Awareness'),
