@@ -295,6 +295,41 @@ test('parses a feature code that does not end in -<digits> as a real code', () =
     'COMP-ROADMAP-RT must not be classified anonymous');
 });
 
+test('ignores rows inside a preserved-section (MIGRATE-PREP)', () => {
+  // A curated planning narrative wrapped in a preserved-section uses a
+  // non-feature table schema. parseRoadmap must not mint entries from it —
+  // otherwise migrate creates phantom features and the roundtrip diverges.
+  const md = [
+    '## Real Phase — PLANNED',
+    '| # | Feature | Description | Status |',
+    '|---|---------|-------------|--------|',
+    '| 1 | REAL-1 | real feature | PLANNED |',
+    '',
+    '<!-- preserved-section: execution-sequencing -->',
+    '## Execution Sequencing',
+    '',
+    '| Feature | Items | Effort | Rationale |',
+    '|---------|-------|--------|-----------|',
+    '| FAKE-BUDGET | 141–144 | M | planning reference, not a feature |',
+    '| ~~FAKE-TEAMS~~ | 92–95 | S | struck planning row |',
+    '<!-- /preserved-section -->',
+    '',
+    '## After Phase — PLANNED',
+    '| # | Feature | Description | Status |',
+    '|---|---------|-------------|--------|',
+    '| 1 | REAL-2 | after the preserved block | PLANNED |',
+  ].join('\n');
+  const entries = parseRoadmap(md);
+  const codes = entries.map(e => e.code);
+  assert.ok(codes.includes('REAL-1'), 'real rows before the block must parse');
+  assert.ok(codes.includes('REAL-2'), 'real rows after the block must parse');
+  assert.ok(!codes.includes('FAKE-BUDGET'),
+    `preserved-section rows must NOT be parsed, got ${JSON.stringify(codes)}`);
+  // The struck row must not show up as an anon entry either.
+  assert.ok(!entries.some(e => /FAKE-TEAMS/.test(e.description)),
+    'struck preserved-section rows must not become anon entries');
+});
+
 test('unescapes escaped pipes in a description cell and reads status correctly (GENFIX T3)', () => {
   const md = [
     '## Phase 7: Escaping — PLANNED',
