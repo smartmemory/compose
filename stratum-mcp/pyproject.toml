@@ -2,10 +2,17 @@
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
+# NOTE: This is the vendored Stratum IR validator/executor *kernel* used only as
+# a local test fixture by Compose's GSD pipeline tests (imported via
+# `sys.path.insert(0, 'stratum-mcp/src')`, never pip-installed). It is NOT the
+# published MCP server — that lives in the stratum repo and ships to PyPI as
+# `stratum-mcp`. The distribution name here is deliberately `stratum-mcp-kernel`
+# so an accidental `pip install ./stratum-mcp` can't shadow the real PyPI package
+# in `pip show stratum-mcp`. See smartmemory/stratum#1.
 [project]
-name = "stratum-mcp"
+name = "stratum-mcp-kernel"
 version = "0.3.0"
-description = "Stratum MCP — IR schema validator and executor"
+description = "Vendored Stratum IR schema validator + executor kernel (Compose test fixture — not the published MCP server)"
 license = {text = "MIT"}
 requires-python = ">=3.11"
 dependencies = [

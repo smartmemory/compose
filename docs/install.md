@@ -5,7 +5,7 @@ How to install Compose, initialize a project, and register the global skill.
 ## Prerequisites
 
 - Node.js 18+
-- `stratum-mcp` on PATH (`pip install stratum`)
+- Python 3.11+ and `stratum-mcp` on PATH (`pip install stratum-mcp`). Run `stratum-mcp doctor` to diagnose install/PATH issues.
 - For Codex steps: the official OpenAI `codex` CLI (`npm i -g @openai/codex` or `brew install codex`), authenticated via `codex login` (ChatGPT OAuth) or `OPENAI_API_KEY`. Optional: install the Claude Code plugin for interactive slash commands: `/plugin marketplace add openai/codex-plugin-cc` then `/plugin install codex@openai-codex`.
 
 ## Install Compose

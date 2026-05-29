@@ -2,6 +2,20 @@
 
 ## 2026-05-29
 
+### fix(install): correct `pip install` package name in docs + stop vendored kernel shadowing PyPI (stratum#1)
+
+`README.md` and `docs/install.md` still told users to `pip install stratum` —
+the wrong package (a stale unrelated PyPI project); the correct package is
+`stratum-mcp` (requires Python 3.11+). Both now point at `stratum-mcp` and
+mention `stratum-mcp doctor` for install diagnostics. (The `bin/compose.js`
+auto-installer typo was already fixed under compose#1.) Separately, the vendored
+test-fixture kernel at `stratum-mcp/` declared distribution `name = "stratum-mcp"`
+`version = "0.3.0"` despite being only the IR validator/executor with no MCP
+server or console script — an accidental `pip install ./stratum-mcp` would shadow
+the real PyPI `stratum-mcp` in `pip show`. Renamed the distribution to
+`stratum-mcp-kernel` (module `stratum_mcp` and the `sys.path`-based test imports
+unchanged; `test/gsd*.test.js` still green).
+
 ### release: 0.2.0
 
 First `0.2.0` stable release of `@smartmemory/compose`. Supersedes the retired

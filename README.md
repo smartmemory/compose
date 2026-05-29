@@ -32,7 +32,7 @@ compose build TODO-1
 
 ## Quick install
 
-Prerequisites: Node.js 18+ and `stratum-mcp` on PATH (`pip install stratum`). Codex steps additionally need the OpenAI `codex` CLI. Full prereqs in [docs/install.md](docs/install.md).
+Prerequisites: Node.js 18+ and `stratum-mcp` on PATH (`pip install stratum-mcp`, requires Python 3.11+). Codex steps additionally need the OpenAI `codex` CLI. Full prereqs in [docs/install.md](docs/install.md).
 
 The package is published to npm as `@smartmemory/compose`. Pick one install style:
 
