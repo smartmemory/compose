@@ -1,9 +1,10 @@
-import { test } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validateFeature, validateProject } from '../lib/feature-validator.js';
+import { writeRoadmap as generateRoadmapFile } from '../lib/roadmap-gen.js';
 
 function newFixture() {
   const root = mkdtempSync(join(tmpdir(), 'fv-'));
@@ -363,4 +364,87 @@ test('false positive: legacy mode skips feature.json checks', async () => {
   writeFeatureFolder(root, 'FEAT-1', { 'design.md': 'x' }); // no feature.json
   const r = await validateFeature(root, 'FEAT-1', { featureJsonMode: false });
   assert.ok(!r.findings.some((f) => f.kind === 'FOLDER_WITHOUT_FEATURE_JSON'));
+});
+
+// ---------------------------------------------------------------------------
+// COMP-ROADMAP-RT: roundtrip + hierarchy findings
+// ---------------------------------------------------------------------------
+
+describe('COMP-ROADMAP-RT validator findings', () => {
+  test('HIERARCHY_DEPTH_INVALID for a feature with no phase', async () => {
+    const root = newFixture();
+    writeFeatureFolder(root, 'FOO-1', { 'design.md': 'x' },
+      { code: 'FOO-1', description: 'x', status: 'PLANNED' }); // no phase
+    writeFileSync(join(root, 'ROADMAP.md'), [
+      '# X Roadmap', '',
+      '| # | Feature | Description | Status |',
+      '|---|---------|-------------|--------|',
+      '| 1 | FOO-1 | x | PLANNED |', '',
+    ].join('\n'));
+    const { findings } = await validateProject(root);
+    assert.ok(findings.some((f) => f.kind === 'HIERARCHY_DEPTH_INVALID' && f.feature_code === 'FOO-1'),
+      JSON.stringify(findings.map((f) => f.kind)));
+  });
+
+  test('ORPHAN_PHASE for a heading with no features and no preserved block', async () => {
+    const root = newFixture();
+    writeFeatureFolder(root, 'FOO-1', { 'design.md': 'x' },
+      { code: 'FOO-1', description: 'x', status: 'PLANNED', phase: 'Phase 1', position: 1 });
+    writeFileSync(join(root, 'ROADMAP.md'), [
+      '# X Roadmap', '',
+      '## Phase 1 — PLANNED', '',
+      '| # | Feature | Description | Status |',
+      '|---|---------|-------------|--------|',
+      '| 1 | FOO-1 | x | PLANNED |', '',
+      '## Phase 99 — PLANNED', '',
+    ].join('\n'));
+    const { findings } = await validateProject(root);
+    assert.ok(findings.some((f) => f.kind === 'ORPHAN_PHASE'),
+      JSON.stringify(findings.map((f) => f.kind)));
+  });
+
+  test('ROADMAP_LOSSY when ROADMAP has a typed code absent from feature.json', async () => {
+    const root = newFixture();
+    writeFeatureFolder(root, 'FOO-1', { 'design.md': 'x' },
+      { code: 'FOO-1', description: 'x', status: 'PLANNED', phase: 'Phase 1', position: 1 });
+    writeFileSync(join(root, 'ROADMAP.md'), [
+      '# X Roadmap', '',
+      '## Phase 9 — PLANNED', '',
+      '| # | Feature | Description | Status |',
+      '|---|---------|-------------|--------|',
+      '| 1 | GHOST-1 | not in feature.json | PLANNED |', '',
+    ].join('\n'));
+    const { findings } = await validateProject(root);
+    assert.ok(findings.some((f) => f.kind === 'ROADMAP_LOSSY'),
+      JSON.stringify(findings.map((f) => f.kind)));
+  });
+
+  test('ORPHAN_PHASE escalates to error when the dead heading carries an active status', async () => {
+    const root = newFixture();
+    writeFeatureFolder(root, 'FOO-1', { 'design.md': 'x' },
+      { code: 'FOO-1', description: 'x', status: 'PLANNED', phase: 'Phase 1', position: 1 });
+    writeFileSync(join(root, 'ROADMAP.md'), [
+      '# X Roadmap', '',
+      '## Phase 1 — PLANNED', '',
+      '| # | Feature | Description | Status |',
+      '|---|---------|-------------|--------|',
+      '| 1 | FOO-1 | x | PLANNED |', '',
+      '## Phase 99 — IN_PROGRESS', '',
+    ].join('\n'));
+    const { findings } = await validateProject(root);
+    assert.ok(findings.some((f) => f.kind === 'ORPHAN_PHASE' && f.severity === 'error'),
+      JSON.stringify(findings.map((f) => `${f.kind}:${f.severity}`)));
+  });
+
+  test('clean project (generated fixed-point ROADMAP) fires none of the new findings', async () => {
+    const root = newFixture();
+    writeFeatureFolder(root, 'FOO-1', { 'design.md': 'x' },
+      { code: 'FOO-1', description: 'x', status: 'PLANNED', phase: 'Phase 1', position: 1 });
+    // Generate ROADMAP.md from feature.json so it is a guaranteed fixed point.
+    generateRoadmapFile(root);
+    const { findings } = await validateProject(root);
+    const newKinds = ['HIERARCHY_DEPTH_INVALID', 'ROUNDTRIP_NOT_FIXED_POINT', 'ROADMAP_LOSSY', 'ORPHAN_PHASE'];
+    assert.ok(!findings.some((f) => newKinds.includes(f.kind)),
+      JSON.stringify(findings.map((f) => f.kind)));
+  });
 });

@@ -1,0 +1,22 @@
+{
+  "code": "COMP-ROADMAP-RT",
+  "description": "Harden deterministic roadmap roundtripping: prove gen↔parse fixed-point + losslessness, write-time auto-canonicalize-or-block guard, unified feature-code parsing, and hierarchy/drift validation findings.",
+  "status": "PLANNED",
+  "phase": "Phase 6: MCP Writers",
+  "created": "2026-05-29",
+  "updated": "2026-05-29",
+  "complexity": "L",
+  "position": 1,
+  "links": [
+    {
+      "kind": "follow_up",
+      "to_code": "COMP-ROADMAP-XREF-SYNC",
+      "note": "External xref reconciliation deferred from COMP-ROADMAP-RT scope"
+    },
+    {
+      "kind": "follow_up",
+      "to_code": "COMP-ROADMAP-RT-GENFIX",
+      "note": "Latent gen/parse lossiness defects surfaced by checkRoundtrip during COMP-ROADMAP-RT impl"
+    }
+  ]
+}
