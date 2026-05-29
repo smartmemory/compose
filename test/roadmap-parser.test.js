@@ -113,6 +113,53 @@ describe('parseRoadmap', () => {
     assert.ok(eng1.phaseId.includes('Milestone 1'));
     assert.ok(eng2.phaseId.includes('Milestone 2'));
   });
+
+  test('consecutive milestones reset to parent phase (no nesting) (GENFIX T2)', () => {
+    const roadmap = `\
+## Phase A — PLANNED
+
+### Milestone 1
+
+| # | Feature | Item | Status |
+|---|---------|------|--------|
+| 1 | MA-1 | first | PLANNED |
+
+### Milestone 2
+
+| # | Feature | Item | Status |
+|---|---------|------|--------|
+| 2 | MA-2 | second | PLANNED |
+`;
+    const entries = parseRoadmap(roadmap);
+    const ma1 = entries.find(e => e.code === 'MA-1');
+    const ma2 = entries.find(e => e.code === 'MA-2');
+    assert.equal(ma1.phaseId, 'Phase A > Milestone 1',
+      `expected reset-to-parent, got ${ma1.phaseId}`);
+    assert.equal(ma2.phaseId, 'Phase A > Milestone 2',
+      `expected reset-to-parent (not accumulated), got ${ma2.phaseId}`);
+  });
+
+  test('explicit row status wins over SKIP_STATUS phase override', () => {
+    const roadmap = `\
+## Phase X: Rollup — COMPLETE
+
+| # | Feature | Item | Status |
+|---|---------|------|--------|
+| 1 | ROLL-1 | Done item | COMPLETE |
+| 2 | ROLL-2 | Carried over | PLANNED |
+| 3 | ROLL-3 | Blank cell |  |
+`;
+    const entries = parseRoadmap(roadmap);
+    const roll1 = entries.find(e => e.code === 'ROLL-1');
+    const roll2 = entries.find(e => e.code === 'ROLL-2');
+    const roll3 = entries.find(e => e.code === 'ROLL-3');
+    // Explicit PLANNED under a COMPLETE phase must NOT be rewritten to COMPLETE.
+    assert.equal(roll2.status, 'PLANNED', 'explicit PLANNED row should be preserved');
+    // Explicit COMPLETE stays COMPLETE.
+    assert.equal(roll1.status, 'COMPLETE');
+    // Blank status cell under a COMPLETE phase still falls back to COMPLETE.
+    assert.equal(roll3.status, 'COMPLETE', 'blank cell should inherit phase COMPLETE');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -246,4 +293,20 @@ test('parses a feature code that does not end in -<digits> as a real code', () =
     `expected COMP-ROADMAP-RT as a real code, got ${JSON.stringify(codes)}`);
   assert.ok(!codes.some(c => c.startsWith('_anon_')),
     'COMP-ROADMAP-RT must not be classified anonymous');
+});
+
+test('unescapes escaped pipes in a description cell and reads status correctly (GENFIX T3)', () => {
+  const md = [
+    '## Phase 7: Escaping — PLANNED',
+    '',
+    '| # | Feature | Description | Status |',
+    '|---|---------|-------------|--------|',
+    '| 1 | ESC-1 | a \\| b | IN_PROGRESS |',
+    '',
+  ].join('\n');
+  const entries = parseRoadmap(md);
+  const esc = entries.find(e => e.code === 'ESC-1');
+  assert.ok(esc, `expected ESC-1 in ${JSON.stringify(entries.map(e => e.code))}`);
+  assert.equal(esc.description, 'a | b', 'escaped pipe must be unescaped to a literal pipe');
+  assert.equal(esc.status, 'IN_PROGRESS', 'status column must not be a description fragment');
 });

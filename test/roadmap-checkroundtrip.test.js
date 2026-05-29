@@ -93,11 +93,12 @@ describe('checkRoundtrip — fixed point + lossless', () => {
     assert.equal(r.lossless, true, JSON.stringify(r.diffs));
   });
 
-  test('reports LOSSLESS_CHANGED when a phase-heading override rewrites a row status away from feature.json', () => {
-    // The base phase heading carries a curated COMPLETE override. The generator
-    // preserves that override in the heading; on re-parse the parser's
-    // SKIP_STATUSES rule rewrites the FEAT-1 row status to COMPLETE, while
-    // feature.json says IN_PROGRESS — so the projection is genuinely lossy.
+  test('explicit row status under a SKIP-status phase survives roundtrip (GENFIX T1)', () => {
+    // The base phase heading carries a curated COMPLETE override, but the FEAT-1
+    // row has an EXPLICIT IN_PROGRESS status that matches feature.json. The
+    // SKIP_STATUSES override only fills BLANK status cells, so the explicit row
+    // status is preserved on re-parse and the projection is lossless — there is
+    // no false LOSSLESS_CHANGED.
     const base = [
       '# X Roadmap', '',
       '## Phase 1 — COMPLETE', '',
@@ -109,9 +110,9 @@ describe('checkRoundtrip — fixed point + lossless', () => {
       { code: 'FEAT-1', phase: 'Phase 1', status: 'IN_PROGRESS', description: 'x', position: 1 },
     ];
     const r = checkRoundtrip(base, features, OPTS);
-    assert.equal(r.lossless, false, JSON.stringify(r.diffs));
-    assert.ok(r.diffs.some(d => d.kind === 'LOSSLESS_CHANGED' && d.code === 'FEAT-1'),
-      `expected LOSSLESS_CHANGED for FEAT-1, got ${JSON.stringify(r.diffs)}`);
+    assert.equal(r.lossless, true, JSON.stringify(r.diffs));
+    assert.ok(!r.diffs.some(d => d.kind === 'LOSSLESS_CHANGED' && d.code === 'FEAT-1'),
+      `explicit row status must not be rewritten, got ${JSON.stringify(r.diffs)}`);
   });
 
   test('externalPrefixes suppresses LOSSLESS_EXTRA for cross-project rows', () => {
@@ -147,5 +148,37 @@ describe('checkRoundtrip — fixed point + lossless', () => {
     assert.ok(!r.diffs.some(d => d.kind === 'LOSSLESS_MISSING'),
       `no row must be missing, got ${JSON.stringify(r.diffs)}`);
     assert.equal(r.lossless, true, JSON.stringify(r.diffs));
+  });
+
+  test('milestone phaseId compares on top-level phase only (no false LOSSLESS_CHANGED) (GENFIX T2)', () => {
+    // The base carries a `### Milestone 1` sub-heading. The generator splices the
+    // source block, so the canonical roadmap preserves the milestone heading and
+    // the parser reads FEAT-1's phaseId as "Phase A > Milestone 1". feature.json
+    // stores a FLAT phase "Phase A". A full-path comparison would falsely flag
+    // LOSSLESS_CHANGED; comparing the top-level phase only ("Phase A" === "Phase A")
+    // must not.
+    const base = [
+      '# X Roadmap', '',
+      '## Phase A — PLANNED', '',
+      '### Milestone 1', '',
+      '| # | Feature | Description | Status |',
+      '|---|---------|-------------|--------|',
+      '| 1 | FEAT-1 | x | PLANNED |', '',
+    ].join('\n');
+    const features = [
+      { code: 'FEAT-1', phase: 'Phase A', status: 'PLANNED', description: 'x', position: 1 },
+    ];
+    const r = checkRoundtrip(base, features, OPTS);
+    assert.ok(!r.diffs.some(d => d.kind === 'LOSSLESS_CHANGED' && d.code === 'FEAT-1' && d.detail.startsWith('phase:')),
+      `top-level phase must match, got ${JSON.stringify(r.diffs)}`);
+  });
+
+  test('a description containing literal pipes round-trips losslessly (GENFIX T3)', () => {
+    const features = [
+      { code: 'FOO-1', phase: 'Phase 1', status: 'PLANNED', description: 'run a|b|c flags', position: 1 },
+    ];
+    const r = checkRoundtrip('', features, { now: '2020-01-02' });
+    assert.equal(r.lossless, true, JSON.stringify(r.diffs));
+    assert.equal(r.fixedPoint, true, JSON.stringify(r.diffs));
   });
 });
