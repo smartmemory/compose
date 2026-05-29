@@ -1,0 +1,9 @@
+{
+  "code": "COMP-SPECFLOW-3",
+  "description": "`compose artifact validate` CLI: schema + quality check without running a full build. Validates artifact against its template schema, checks required fields, flags missing cross-references, scores against quality bar. Returns structured pass/warn/fail per check.",
+  "status": "PLANNED",
+  "phase": "COMP-SPECFLOW: Spec-Driven Development Artifacts",
+  "position": 243,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

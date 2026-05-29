@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TUI-5",
+  "description": "File manifest: running list of files changed by the build, updated after execute step.",
+  "status": "PLANNED",
+  "phase": "COMP-TUI: CLI Terminal UI",
+  "position": 132,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

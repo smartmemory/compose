@@ -1,0 +1,9 @@
+{
+  "code": "COMP-AUTOHARNESS-2",
+  "description": "Iteration loop: modify → dispatch → score → keep/discard cycle. Selects dimension to mutate, generates variant, runs benchmark suite, compares score to current best. Keeps improvement, discards regression. Configurable iteration count and convergence threshold.",
+  "status": "PLANNED",
+  "phase": "COMP-AUTOHARNESS: Autonomous Agent Harness Optimization",
+  "position": 235,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

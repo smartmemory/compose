@@ -1,0 +1,9 @@
+{
+  "code": "COMP-OBS-COST-3",
+  "description": "Ops strip cost display: cumulative build cost shown in ops strip during active builds (e.g., \"$0.42\"). Updates on each `build_step_done`.",
+  "status": "COMPLETE",
+  "phase": "COMP-OBS-COST: Token and Cost Tracking",
+  "position": 210,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

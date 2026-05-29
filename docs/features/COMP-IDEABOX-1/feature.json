@@ -1,0 +1,9 @@
+{
+  "code": "COMP-IDEABOX-1",
+  "description": "`compose init` ideabox scaffold: `compose init` creates `docs/product/ideabox.md` with conventions header (ID format, statuses, priorities, tags). Manifest gains `ideabox_path` field. `/ideabox` skill resolves path from manifest — works on any Compose project. Existing SmartMemory ideabox migrates cleanly (already follows the format). LLM-assisted auto-clustering on `/ideabox add` — suggests best-fit cluster or proposes a new one.",
+  "status": "COMPLETE",
+  "phase": "COMP-IDEABOX: Product Idea Capture & Triage",
+  "position": 255,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

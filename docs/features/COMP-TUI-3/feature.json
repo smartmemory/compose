@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TUI-3",
+  "description": "Violation/findings table: formatted table for review findings (severity, file, line, description) instead of raw JSON output.",
+  "status": "PLANNED",
+  "phase": "COMP-TUI: CLI Terminal UI",
+  "position": 130,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

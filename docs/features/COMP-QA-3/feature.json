@@ -1,0 +1,9 @@
+{
+  "code": "COMP-QA-3",
+  "description": "Targeted browser verification: for each affected route, run a Playwright verification pass — navigate, check for console errors, verify key elements render, take before/after screenshots. Findings feed into review merge step.",
+  "status": "COMPLETE",
+  "phase": "COMP-QA: Diff-Aware QA Scoping",
+  "position": 168,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

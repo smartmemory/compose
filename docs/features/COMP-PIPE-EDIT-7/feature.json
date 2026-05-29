@@ -1,0 +1,9 @@
+{
+  "code": "COMP-PIPE-EDIT-7",
+  "description": "Template save: Save the current canvas as a new pipeline template in `pipelines/`. Templates appear in the existing TemplateSelector for future builds.",
+  "status": "COMPLETE",
+  "phase": "COMP-PIPE-EDIT: Visual Pipeline Editor",
+  "position": 142,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

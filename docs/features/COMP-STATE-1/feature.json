@@ -1,0 +1,9 @@
+{
+  "code": "COMP-STATE-1",
+  "description": "Zustand migration: Convert `useVisionStore.js` from React hook to Zustand `create()` store. Single WebSocket connection, single state atom. All components read from same store via `useVisionStore()` selector hooks. One 10s recentErrors interval, one 5s build poll.",
+  "status": "COMPLETE",
+  "phase": "COMP-STATE: Singleton State Store",
+  "position": 89,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

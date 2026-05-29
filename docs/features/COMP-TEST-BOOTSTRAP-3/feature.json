@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TEST-BOOTSTRAP-3",
+  "description": "Golden flow generation: from the implementation diff, generate 1–3 golden flow tests covering the core capability lifecycle. Tests follow the project's testing hierarchy (golden flows > error harness > contract > unit).",
+  "status": "PLANNED",
+  "phase": "COMP-TEST-BOOTSTRAP: Test Framework Bootstrap",
+  "position": 180,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

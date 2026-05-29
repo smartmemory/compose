@@ -1,0 +1,9 @@
+{
+  "code": "COMP-CAPS-ENFORCE-3",
+  "description": "Build audit integration: Violations written to build-stream as `capability_violation` events with step, agent, tool, template, severity. Surface in review findings and context panel audit trail.",
+  "status": "PLANNED",
+  "phase": "COMP-CAPS-ENFORCE: Agent Capability Violation Detection",
+  "position": 192,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

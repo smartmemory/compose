@@ -454,3 +454,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-29T15:02:15+07:00 | GENFIX T4 review-fix: positionSortKey in newPhases sort (kill 2nd NaN comparator); anchor leading-digit regex so malformed positions hit sentinel
 2026-05-29T15:16:45+07:00 | MIGRATE-PREP: preserved-section awareness in parseRoadmap + readPhaseOverrides + readAnonymousRows (stop migrate phantoms + generate dup of curated narratives)
 2026-05-29T15:27:48+07:00 | MIGRATE-PREP review-fix: parser fence tracking + raw-line marker match; readAnonymousRows keeps currentPhaseId across preserved block
+2026-05-29T15:30:35+07:00 | MIGRATE: wrap Execution Sequencing as preserved-section; run real ROADMAP→feature.json migration (147 rows) + canonical generate

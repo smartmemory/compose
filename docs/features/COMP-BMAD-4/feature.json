@@ -1,0 +1,9 @@
+{
+  "code": "COMP-BMAD-4",
+  "description": "Story state tracking in vision surface: stories surface as child items under their parent feature in `vision-state.json` — same `currentPhase` / `phaseHistory` machinery, scoped to story granularity. Sidebar shows story progress (`3/7 stories complete`). Stratum flow per story; parent feature flow aggregates. Reuses existing lifecycle contract — no new state machine.",
+  "status": "PLANNED",
+  "phase": "COMP-BMAD: BMAD Method on Compose",
+  "position": 252,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

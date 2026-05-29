@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TEAMS-2",
+  "description": "File ownership enforcement: Plan-time validation via `no_file_conflicts` ensure on decompose step. Runtime enforcement deferred to COMP-CAPS-ENFORCE.",
+  "status": "PARTIAL",
+  "phase": "COMP-TEAMS: Agent Team Presets",
+  "position": 148,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

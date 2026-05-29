@@ -1,0 +1,9 @@
+{
+  "code": "COMP-CAPS-ENFORCE-1",
+  "description": "Normalizer event tap: Extend `result-normalizer.js` to emit structured `tool_use` events (tool name, timestamp) to a callback or event emitter during `runAndNormalize()`. Currently normalizer only returns `{ text, result }` — tool events are consumed but not surfaced.",
+  "status": "PLANNED",
+  "phase": "COMP-CAPS-ENFORCE: Agent Capability Violation Detection",
+  "position": 190,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

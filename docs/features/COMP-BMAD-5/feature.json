@@ -1,0 +1,9 @@
+{
+  "code": "COMP-BMAD-5",
+  "description": "Expansion packs (domain-specific persona bundles): packaging mechanism for domain personas beyond software (BMAD ships expansion packs for game dev, creative writing, business strategy). Compose-flavored expansion: persona bundle = `analyst` + `pm` + `architect` + `scrum-master` + `dev` + `qa` variants for a specific domain (e.g. `compose-bmad-data`, `compose-bmad-infra`). Loaded via `.compose/compose.json#bmadPack`. Story sharder respects pack-specific story templates.",
+  "status": "PLANNED",
+  "phase": "COMP-BMAD: BMAD Method on Compose",
+  "position": 253,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

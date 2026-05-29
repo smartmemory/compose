@@ -1,0 +1,9 @@
+{
+  "code": "COMP-IDEABOX-3",
+  "description": "Priority lens support: Persona-based triage lenses. `/ideabox triage --lens <name>` filters and ranks ideas through a target-user lens (e.g., \"vibe-coder\", \"enterprise-admin\"). Lenses stored as `ideabox-priority-<lens>.md` alongside the ideabox. `compose init` scaffolds an empty lens template.",
+  "status": "COMPLETE",
+  "phase": "COMP-IDEABOX: Product Idea Capture & Triage",
+  "position": 257,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

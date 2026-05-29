@@ -1,0 +1,9 @@
+{
+  "code": "COMP-HEALTH-3",
+  "description": "Policy integration: gates can declare `min_score: 70` as a threshold. Score below threshold → gate blocks. Score between threshold and target → gate warns. Score above target → auto-approve (if policy allows).",
+  "status": "COMPLETE",
+  "phase": "COMP-HEALTH: Quantified Quality Score for Gates",
+  "position": 172,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

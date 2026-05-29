@@ -1,0 +1,9 @@
+{
+  "code": "COMP-BUDGET-4",
+  "description": "Policy integration: Per-loop-type settings: `iterations.review.timeout` (15min), `iterations.coverage.timeout` (30min), `iterations.review.maxTotal` (20), `iterations.coverage.maxTotal` (50). Validated in settings-store.",
+  "status": "COMPLETE",
+  "phase": "COMP-BUDGET: Iteration Budget Enforcement",
+  "position": 200,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

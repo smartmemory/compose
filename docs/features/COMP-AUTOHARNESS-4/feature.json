@@ -1,0 +1,9 @@
+{
+  "code": "COMP-AUTOHARNESS-4",
+  "description": "`compose optimize --feature X` CLI command: runs harness overnight against a specific feature's benchmark. Reports: best config found, score delta vs baseline, iteration history, recommended changes. Writes result to `.compose/data/optimize-results/<feature>.json`.",
+  "status": "PLANNED",
+  "phase": "COMP-AUTOHARNESS: Autonomous Agent Harness Optimization",
+  "position": 237,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

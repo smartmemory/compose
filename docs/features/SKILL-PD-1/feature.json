@@ -1,0 +1,9 @@
+{
+  "code": "SKILL-PD-1",
+  "description": "Tier format spec: Three-tier SKILL.md format with frontmatter, `## Instructions`, `## Resources` with `<!-- lazy -->` markers. (Parked: needs Claude Code adoption to be useful.)",
+  "status": "PARKED",
+  "phase": "SKILL-PD: Progressive Disclosure for Skills",
+  "position": 151,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

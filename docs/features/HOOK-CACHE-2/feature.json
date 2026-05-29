@@ -1,0 +1,9 @@
+{
+  "code": "HOOK-CACHE-2",
+  "description": "Invalidation rules: `read-cache-invalidate.py` PostToolUse hook on Edit/Write/MultiEdit deletes cache entry. `read-cache-compact.py` PreCompact hook clears entire session cache. All registered in `hooks.json`.",
+  "status": "COMPLETE",
+  "phase": "HOOK-CACHE: Read Cache Hook",
+  "position": 163,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

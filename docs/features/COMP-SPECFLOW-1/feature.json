@@ -1,0 +1,9 @@
+{
+  "code": "COMP-SPECFLOW-1",
+  "description": "Artifact schemas: `proposal.md`, `spec.md`, `design.md`, `tasks.md` templates with required/optional sections. Each template declares: required fields, optional fields, cross-reference expectations, minimum content thresholds. Stored in `.compose/templates/artifacts/`.",
+  "status": "PLANNED",
+  "phase": "COMP-SPECFLOW: Spec-Driven Development Artifacts",
+  "position": 241,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

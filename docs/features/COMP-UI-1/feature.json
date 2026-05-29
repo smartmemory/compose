@@ -1,0 +1,9 @@
+{
+  "code": "COMP-UI-1",
+  "description": "Cockpit shell: rewrite `App.jsx` to render cockpit layout (header with ViewTabs, sidebar, main area, context panel, agent bar, notification bar). Move existing views from canvas tabs to main-area tabs. Agent stream becomes a collapsible bottom panel (agent bar) — always present, not a view tab. Three states: collapsed (status line), expanded (message stream + input), maximized (fills main area).",
+  "status": "COMPLETE",
+  "phase": "COMP-UI: Cockpit Integration",
+  "position": 77,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

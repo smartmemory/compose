@@ -1,0 +1,9 @@
+{
+  "code": "COMP-IDEABOX-7",
+  "description": "Compose lifecycle integration: `compose design` and `compose build` sessions auto-detect surfaced ideas and suggest `/ideabox add`. Auto-capture prompt (never auto-file). Promoted ideas feed into `compose new` as enriched intent — skipping questionnaire fields already answered in the idea. Ideabox stats visible in cockpit sidebar (N new, N triaged, N promoted). Staleness nudges: ideas untriaged for 14+ days surfaced in sidebar attention queue. Ideas with no activity for 30+ days flagged in triage.",
+  "status": "COMPLETE",
+  "phase": "COMP-IDEABOX: Product Idea Capture & Triage",
+  "position": 261,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

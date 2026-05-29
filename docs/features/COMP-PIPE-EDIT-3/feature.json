@@ -1,0 +1,9 @@
+{
+  "code": "COMP-PIPE-EDIT-3",
+  "description": "Dependency wiring: Drag from one node's output port to another's input port to create `depends_on` edges. Visual feedback for invalid connections (cycles, missing refs). Auto-layout via dagre/elk.",
+  "status": "COMPLETE",
+  "phase": "COMP-PIPE-EDIT: Visual Pipeline Editor",
+  "position": 138,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

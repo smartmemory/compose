@@ -1,0 +1,9 @@
+{
+  "code": "COMP-OBS-SURFACE-4",
+  "description": "Live iteration budget counters: OpsStrip shows \"review 3/5, 2:34/15:00\" during active iterations. Live elapsed timer via 1s setInterval. Reads wallClockTimeout/startedAt from iterationState.",
+  "status": "COMPLETE",
+  "phase": "COMP-OBS-SURFACE: Step Detail Surface",
+  "position": 204,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

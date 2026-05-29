@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TRIAGE-2",
+  "description": "`compose triage` CLI command: standalone command prints tier, profile flags, signal counts, rationale. Persists to feature.json.",
+  "status": "COMPLETE",
+  "phase": "COMP-TRIAGE: Task Tier Classification",
+  "position": 183,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

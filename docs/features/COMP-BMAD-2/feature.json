@@ -1,0 +1,9 @@
+{
+  "code": "COMP-BMAD-2",
+  "description": "Story file schema + sharder: define `story.md` template — `goal`, `acceptance_criteria` (checkbox list), `relevant_files` (verified file:line refs from blueprint), `pattern_to_follow`, `test_plan`, `dependencies` (other story IDs), `dev_notes`, `qa_notes`. Implement `compose-scrum-master` agent: reads `plan.md`, shards into N story files at `docs/features/<id>/stories/<n>-<slug>.md`, each fully self-contained so any agent session can pick one up cold. Validation: every file:line ref in a story must verify (Phase 5 reuse).",
+  "status": "PLANNED",
+  "phase": "COMP-BMAD: BMAD Method on Compose",
+  "position": 250,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

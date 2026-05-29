@@ -1,0 +1,9 @@
+{
+  "code": "COMP-BENCH-5",
+  "description": "`compose bench` CLI: `compose bench run --model X --feature Y`, `compose bench report --compare X,Y,Z`. Results persisted in `bench/results/{model}-{feature}-{timestamp}/`.",
+  "status": "PLANNED",
+  "phase": "COMP-BENCH: Model Benchmark Suite",
+  "position": 124,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

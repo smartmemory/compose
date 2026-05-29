@@ -1,0 +1,9 @@
+{
+  "code": "COMP-REVIEW-ENH-2",
+  "description": "Domain-aware conditional dispatch: review triage step activates lenses based on detected codebase characteristics — Rails reviewer only for Rails projects, migration reviewer only when migrations are present, security reviewer weighted higher when auth files change. Extends STRAT-REV-1 (triage step, COMPLETE) with richer activation rules.",
+  "status": "PLANNED",
+  "phase": "COMP-REVIEW-ENH: Review Pipeline Enhancements",
+  "position": 246,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

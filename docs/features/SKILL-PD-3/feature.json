@@ -1,0 +1,9 @@
+{
+  "code": "SKILL-PD-3",
+  "description": "Migrate existing skills: Convert SKILL.md files to three-tier format. (Parked: provides zero savings until item 97 ships.)",
+  "status": "PARKED",
+  "phase": "SKILL-PD: Progressive Disclosure for Skills",
+  "position": 153,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

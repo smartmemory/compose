@@ -1,0 +1,9 @@
+{
+  "code": "COMP-DESIGN-2",
+  "description": "compose new integration: `compose new` detects `docs/design.md` and uses it as enriched intent, skipping the questionnaire. Research and brainstorm steps reference design decisions.",
+  "status": "COMPLETE",
+  "phase": "COMP-DESIGN: Interactive Design Conversation",
+  "position": 97,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

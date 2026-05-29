@@ -1,0 +1,9 @@
+{
+  "code": "COMP-AGENT-CAPS-4",
+  "description": "Violation detection: informational logging via stream events in v1. Runtime violation detection (inspecting actual tool_use events against profile) requires normalizer integration — deferred to v2.",
+  "status": "PARTIAL",
+  "phase": "COMP-AGENT-CAPS: Agent Capability Profiles",
+  "position": 189,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

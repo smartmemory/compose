@@ -1,0 +1,9 @@
+{
+  "code": "COMP-POLICY-CHECK-5",
+  "description": "Session trace. Log all pattern matches (flagged + suppressed) to the session trace for post-hoc analysis by SmartMemory's DIST-CC-INGEST-1 ensemble. Closes the measurement loop.",
+  "status": "PLANNED",
+  "phase": "COMP-POLICY-CHECK: Pre-Response Policy Check (Adherence Enforcement)",
+  "position": 276,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

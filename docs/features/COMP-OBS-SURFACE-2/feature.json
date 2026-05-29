@@ -1,0 +1,9 @@
+{
+  "code": "COMP-OBS-SURFACE-2",
+  "description": "Postcondition visibility: `build_step_done` events already carry `violations` array from `response.violations` in `build.js`. Render in MessageCard: check name, pass/fail icon, violation detail (expandable). Currently opaque — user sees \"step done\" but not what was verified.",
+  "status": "PLANNED",
+  "phase": "COMP-OBS-SURFACE: Step Detail Surface",
+  "position": 202,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

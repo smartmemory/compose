@@ -1,0 +1,9 @@
+{
+  "code": "COMP-IDEABOX-5",
+  "description": "Design UI — Triage flow: Interactive triage mode in the web UI. Presents untriaged ideas one-at-a-time (or in batches). For each: full idea card + related context + LLM-detected duplicates (\"similar to IDEA-12, IDEA-45\"). Actions: assign priority, promote, kill, skip, discuss, merge (mark as duplicate of another idea). Progress indicator (N/total). Triage summary on completion. Priority lens selector to filter triage by persona.",
+  "status": "COMPLETE",
+  "phase": "COMP-IDEABOX: Product Idea Capture & Triage",
+  "position": 259,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TEST-BOOTSTRAP-2",
+  "description": "Scaffold generation: install test runner, create config, generate a minimal test helper with project-specific setup (db connection, server boot, auth fixture). Output as a `test-bootstrap` decompose task in the implementation phase.",
+  "status": "PLANNED",
+  "phase": "COMP-TEST-BOOTSTRAP: Test Framework Bootstrap",
+  "position": 179,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

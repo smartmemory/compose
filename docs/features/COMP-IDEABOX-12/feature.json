@@ -1,0 +1,9 @@
+{
+  "code": "COMP-IDEABOX-12",
+  "description": "Design UI — Source analytics + digest: Dashboard section in the Ideabox tab header. Source breakdown: bar chart of idea sources (competitor analysis, session insight, user feedback, research paper). Conversion funnel: NEW → DISCUSSING → PROMOTED (with kill rate). Cluster health: which clusters have the most ideas, most promoted, most killed. Time series: ideas added per week. All derived from ideabox.md metadata, no external tracking.",
+  "status": "COMPLETE",
+  "phase": "COMP-IDEABOX: Product Idea Capture & Triage",
+  "position": 266,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

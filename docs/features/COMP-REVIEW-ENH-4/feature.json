@@ -1,0 +1,9 @@
+{
+  "code": "COMP-REVIEW-ENH-4",
+  "description": "Document review personas: pre-implementation gate with specialized document reviewers — coherence checker, feasibility assessor, scope guardian, product lens, design lens. Validates plan/spec quality before the build phase begins. Extends COMP-DESIGN (design conversation) with structured plan validation.",
+  "status": "PLANNED",
+  "phase": "COMP-REVIEW-ENH: Review Pipeline Enhancements",
+  "position": 248,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

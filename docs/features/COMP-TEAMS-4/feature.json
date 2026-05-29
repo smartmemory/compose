@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TEAMS-4",
+  "description": "`compose build --team`: CLI flag rewrites to `--template team-<name>`. Named presets only. Batch rejection. New `read-only-researcher` capability profile for web research.",
+  "status": "COMPLETE",
+  "phase": "COMP-TEAMS: Agent Team Presets",
+  "position": 150,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

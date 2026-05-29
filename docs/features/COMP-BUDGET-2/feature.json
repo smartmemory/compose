@@ -1,0 +1,9 @@
+{
+  "code": "COMP-BUDGET-2",
+  "description": "Cumulative tracking: `budget-ledger.js` persists per-feature iteration totals in `.compose/data/budget-ledger.json`. Recorded from both report and abort routes. `checkCumulativeBudget()` blocks start when exceeded (429).",
+  "status": "COMPLETE",
+  "phase": "COMP-BUDGET: Iteration Budget Enforcement",
+  "position": 198,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

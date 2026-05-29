@@ -1,0 +1,9 @@
+{
+  "code": "COMP-WORKSPACE-FILES",
+  "description": "file-watcher HTTP routes (`/api/file`, `/api/files`, `/api/canvas/open`) + vision-routes/vision-utils snapshot fixes use `req.workspace.root`. Depends on 197, 202.",
+  "status": "PLANNED",
+  "phase": "COMP-POLICY-CHECK: Pre-Response Policy Check (Adherence Enforcement)",
+  "position": 286,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

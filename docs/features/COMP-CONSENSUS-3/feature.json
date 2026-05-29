@@ -1,0 +1,9 @@
+{
+  "code": "COMP-CONSENSUS-3",
+  "description": "Disagreement gate: surface divergent responses as a gate decision. When agreement falls below threshold, gate blocks with a structured comparison view: areas of agreement, areas of divergence, per-provider response excerpts. Human selects winner or requests re-run.",
+  "status": "PLANNED",
+  "phase": "COMP-CONSENSUS: Multi-LLM Consensus Orchestration",
+  "position": 232,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

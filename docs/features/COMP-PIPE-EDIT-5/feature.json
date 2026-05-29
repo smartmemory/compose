@@ -1,0 +1,9 @@
+{
+  "code": "COMP-PIPE-EDIT-5",
+  "description": "Sub-flow support: Collapse a group of steps into a named sub-flow. Expand sub-flows to edit internals. Sub-flow inputs/outputs visible as ports on the collapsed node.",
+  "status": "COMPLETE",
+  "phase": "COMP-PIPE-EDIT: Visual Pipeline Editor",
+  "position": 140,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

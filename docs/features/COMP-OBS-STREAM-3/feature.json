@@ -1,0 +1,9 @@
+{
+  "code": "COMP-OBS-STREAM-3",
+  "description": "Verbose gating: reuses COMP-OBS-SURFACE's verbose toggle (no separate toggle). Verbose off: summaries filtered, no results visible. Verbose on: summaries consumed by pre-grouping, results render attached to tool_use. `tool_progress` renders standalone dimmed.",
+  "status": "PLANNED",
+  "phase": "COMP-OBS-STREAM: Tool Result Streaming",
+  "position": 207,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

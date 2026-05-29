@@ -1,0 +1,9 @@
+{
+  "code": "COMP-OBS-STREAM-1",
+  "description": "Connector enrichment: both connectors yield enriched `tool_use_summary` with `output` field (≤2KB). `result-normalizer.js` forwards to streamWriter (currently missing). Bridge adds `tool_use_summary` case to `_mapEvent`.",
+  "status": "PLANNED",
+  "phase": "COMP-OBS-STREAM: Tool Result Streaming",
+  "position": 205,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

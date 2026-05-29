@@ -1,0 +1,9 @@
+{
+  "code": "COMP-BUDGET-1",
+  "description": "Iteration ceilings: Wall-clock timeout and action count ceiling checked at each `report_iteration_result`. Timeout and maxActions stored in iterationState. Exceeded → auto-abort with `timeout` or `action_limit` outcome.",
+  "status": "COMPLETE",
+  "phase": "COMP-BUDGET: Iteration Budget Enforcement",
+  "position": 197,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

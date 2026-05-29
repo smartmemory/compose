@@ -1,0 +1,9 @@
+{
+  "code": "COMP-BENCH-4",
+  "description": "Scoring and calibration: composite score (50% automated + 50% judge), cost-efficiency ratio, rubric anchor calibration from baseline runs. Judge stddev < 2 across repeated evaluations.",
+  "status": "PLANNED",
+  "phase": "COMP-BENCH: Model Benchmark Suite",
+  "position": 123,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

@@ -1,0 +1,9 @@
+{
+  "code": "T2-F5-COMPOSE-MIGRATE-2",
+  "description": "Server executor: New `executeParallelDispatchServer()` function in `build.js`. Uses non-module-scoped emitted-states map to track per-task progress. Calls `parallelStart()`, then polls with `parallelPoll()` in a loop that exits on `outcome != null`. Emits per-task progress events via `emitPerTaskProgress()` helper. 7 tests.",
+  "status": "COMPLETE",
+  "phase": "T2-F5-COMPOSE-MIGRATE: Server-Side Dispatch for All Parallel Steps",
+  "position": 116,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

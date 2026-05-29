@@ -1,0 +1,9 @@
+{
+  "code": "COMP-HEALTH-4",
+  "description": "Score history and trends: persist scores in `.compose/data/health-scores.json` per feature per phase. `compose status` shows current score. Context panel shows score trend across phases. `/retro` includes score trends.",
+  "status": "COMPLETE",
+  "phase": "COMP-HEALTH: Quantified Quality Score for Gates",
+  "position": 173,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

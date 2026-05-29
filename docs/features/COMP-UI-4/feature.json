@@ -1,0 +1,9 @@
+{
+  "code": "COMP-UI-4",
+  "description": "View upgrades: replace BoardView (drag-drop with gate-aware transitions), ListView (filter bar: status/phase/type/agent), RoadmapView (collapsible tree with indentation). Restyle existing GraphView. Add PipelineView (visual step diagram) and SessionsView (browser with agent/status filters, read/write/error counters).",
+  "status": "COMPLETE",
+  "phase": "COMP-UI: Cockpit Integration",
+  "position": 80,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

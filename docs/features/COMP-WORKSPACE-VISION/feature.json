@@ -1,0 +1,9 @@
+{
+  "code": "COMP-WORKSPACE-VISION",
+  "description": "Per-workspace VisionStore + SettingsStore + DesignSessionManager registries. Vision/lifecycle/gate/settings routes use `req.workspace`. Depends on 197.",
+  "status": "PLANNED",
+  "phase": "COMP-POLICY-CHECK: Pre-Response Policy Check (Adherence Enforcement)",
+  "position": 283,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

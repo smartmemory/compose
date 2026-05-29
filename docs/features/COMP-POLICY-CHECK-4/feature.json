@@ -1,0 +1,9 @@
+{
+  "code": "COMP-POLICY-CHECK-4",
+  "description": "Revision prompt. When unsuppressed violations detected, surface to agent: *\"Your draft contains pattern X for rule Y; revise unless precedence applies.\"* Agent revises; check re-runs once. Does NOT hard-block.",
+  "status": "PLANNED",
+  "phase": "COMP-POLICY-CHECK: Pre-Response Policy Check (Adherence Enforcement)",
+  "position": 275,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

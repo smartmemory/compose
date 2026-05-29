@@ -1,0 +1,9 @@
+{
+  "code": "COMP-PLAN-VERIFY-1",
+  "description": "Plan parser: `plan-parser.js` — `parsePlanItems()` extracts checkbox items with file paths and critical flags from plan.md. Agent-side helper for the ship step.",
+  "status": "COMPLETE",
+  "phase": "COMP-PLAN-VERIFY: Plan-Diff Verification",
+  "position": 174,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

@@ -1,0 +1,9 @@
+{
+  "code": "COMP-IDEABOX-2",
+  "description": "Promote + kill workflows: `/ideabox promote` creates feature folder in `docs/features/`, seeds `plan.md`, adds to ROADMAP.md, updates `roadmap-graph.html`, marks idea as PROMOTED. `/ideabox kill` moves to Killed section with reason and date. Works against any project's ideabox via manifest path.",
+  "status": "COMPLETE",
+  "phase": "COMP-IDEABOX: Product Idea Capture & Triage",
+  "position": 256,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

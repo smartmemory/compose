@@ -1,0 +1,9 @@
+{
+  "code": "COMP-CONSENSUS-2",
+  "description": "Agreement scorer: semantic similarity + structured diff across responses. Pairwise comparison matrix. Agreement threshold configurable (default 75%). Scoring method pluggable — exact match, embedding cosine, LLM-as-judge.",
+  "status": "PLANNED",
+  "phase": "COMP-CONSENSUS: Multi-LLM Consensus Orchestration",
+  "position": 231,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

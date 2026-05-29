@@ -1,0 +1,9 @@
+{
+  "code": "COMP-BENCH-1",
+  "description": "Seed repo: ~2k LOC task management API (Express + SQLite + integration tests). Planted race condition for BENCH-4. Pre-initialized `.compose/` manifest. Deterministic `npm test`.",
+  "status": "PLANNED",
+  "phase": "COMP-BENCH: Model Benchmark Suite",
+  "position": 120,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

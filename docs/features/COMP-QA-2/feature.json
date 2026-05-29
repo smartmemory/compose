@@ -1,0 +1,9 @@
+{
+  "code": "COMP-QA-2",
+  "description": "Dev server detection: scan common ports (3000, 4000, 5173, 8080) for running dev servers. If none found, attempt `npm run dev` or equivalent from manifest. Timeout after 30s.",
+  "status": "COMPLETE",
+  "phase": "COMP-QA: Diff-Aware QA Scoping",
+  "position": 167,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

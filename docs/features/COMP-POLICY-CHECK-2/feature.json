@@ -1,0 +1,9 @@
+{
+  "code": "COMP-POLICY-CHECK-2",
+  "description": "User-mode classifier. Scan recent user turn(s) for suppression-signal patterns from the SmartMemory catalog. Output user_mode ∈ {AUTONOMOUS, PACED, SKILL_GATED}. SKILL_GATED set when an active skill (e.g. Compose's plan/blueprint gate) declares deliberate-permission-asking.",
+  "status": "PLANNED",
+  "phase": "COMP-POLICY-CHECK: Pre-Response Policy Check (Adherence Enforcement)",
+  "position": 273,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

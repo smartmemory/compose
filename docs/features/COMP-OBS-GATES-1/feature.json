@@ -1,0 +1,9 @@
+{
+  "code": "COMP-OBS-GATES-1",
+  "description": "Tier definition: define 5 gate evaluation tiers: T0 schema/type validation, T1 lint/format, T2 test suite, T3 LLM review (Claude lenses), T4 cross-model review (Codex). Each tier declares cost category (fast/medium/expensive). Configured in `.compose/compose.json` under `gate_tiers`.",
+  "status": "COMPLETE",
+  "phase": "COMP-OBS-GATES: Tiered Gate Evaluation",
+  "position": 212,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

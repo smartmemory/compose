@@ -1,0 +1,9 @@
+{
+  "code": "COMP-CAPS-ENFORCE-4",
+  "description": "Enforcement mode: Policy setting `capabilities.enforcement: \"log\" | \"block\"`. Log mode (default): violations recorded but don't block. Block mode: violation fails the step with `capability_violation` error.",
+  "status": "PLANNED",
+  "phase": "COMP-CAPS-ENFORCE: Agent Capability Violation Detection",
+  "position": 193,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

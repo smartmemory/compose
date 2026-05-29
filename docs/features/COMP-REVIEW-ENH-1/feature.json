@@ -1,0 +1,9 @@
+{
+  "code": "COMP-REVIEW-ENH-1",
+  "description": "Adversarial review lens: new lens that constructs failure scenarios to break implementations across component boundaries. Unlike existing lenses (diff-quality, security, contract-compliance) which check what IS there, this lens imagines what COULD go wrong. Feeds into existing merge + dedup step.",
+  "status": "PLANNED",
+  "phase": "COMP-REVIEW-ENH: Review Pipeline Enhancements",
+  "position": 245,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

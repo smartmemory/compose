@@ -1,0 +1,9 @@
+{
+  "code": "COMP-AGENT-CAPS-3",
+  "description": "Compose enforcement: `build.js` connector factory resolves agent string → template → tool restrictions. `claude-sdk-connector` passes `allowedTools`/`disallowedTools` to SDK. Review sub-flow steps use `claude:orchestrator` and `claude:read-only-reviewer`. `capability_profile` stream events emitted.",
+  "status": "COMPLETE",
+  "phase": "COMP-AGENT-CAPS: Agent Capability Profiles",
+  "position": 188,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

@@ -1,0 +1,9 @@
+{
+  "code": "COMP-STATE-4",
+  "description": "Session zombie cleanup: 3s end timer (was 15s). New session start unconditionally clears previous session and its timer.",
+  "status": "COMPLETE",
+  "phase": "COMP-STATE: Singleton State Store",
+  "position": 92,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

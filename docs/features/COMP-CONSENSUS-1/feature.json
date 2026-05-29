@@ -1,0 +1,9 @@
+{
+  "code": "COMP-CONSENSUS-1",
+  "description": "Consensus dispatcher: send same prompt to N connectors in parallel. Reuses existing connector trait + STRAT-PAR parallel execution. Configurable provider list per consensus step. Timeout per provider with partial-result fallback.",
+  "status": "PLANNED",
+  "phase": "COMP-CONSENSUS: Multi-LLM Consensus Orchestration",
+  "position": 230,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

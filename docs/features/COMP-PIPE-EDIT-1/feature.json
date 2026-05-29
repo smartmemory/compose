@@ -1,0 +1,9 @@
+{
+  "code": "COMP-PIPE-EDIT-1",
+  "description": "Step canvas: Drag-and-drop step nodes on a canvas. Each node shows step ID, agent, intent preview. Dependency edges rendered as arrows. Add step via toolbar or context menu. Delete step via node menu.",
+  "status": "PLANNED",
+  "phase": "COMP-PIPE-EDIT: Visual Pipeline Editor",
+  "position": 136,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

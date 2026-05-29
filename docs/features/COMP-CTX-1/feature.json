@@ -1,0 +1,9 @@
+{
+  "code": "COMP-CTX-1",
+  "description": "Ambient context layer: `compose init` scaffolds `docs/context/` with `tech-stack.md`, `conventions.md`, `decisions.md`. These are injected into every agent prompt during `compose build` as read-only context. Updated manually or via `compose context update`.",
+  "status": "PLANNED",
+  "phase": "COMP-CTX: Context Artifacts",
+  "position": 125,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

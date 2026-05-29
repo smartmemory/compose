@@ -1,0 +1,9 @@
+{
+  "code": "COMP-IDEABOX-14",
+  "description": "External source sync: `/ideabox sync` pulls and pushes ideas between ideabox and external systems. Supported sources: GitHub issues (by label, e.g. `idea` or `enhancement`), Linear tickets (by project/status), Jira issues (by JQL filter or label), clipboard (paste a URL or text block). Bidirectional: import creates IDEA-N with source attribution and backlink; promote/kill status syncs back to the external system (close issue, update ticket status). Dedup check on sync. Bulk import with preview before filing. Configurable sync schedule or manual trigger.",
+  "status": "PLANNED",
+  "phase": "COMP-IDEABOX: Product Idea Capture & Triage",
+  "position": 268,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

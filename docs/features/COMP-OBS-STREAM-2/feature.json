@@ -1,0 +1,9 @@
+{
+  "code": "COMP-OBS-STREAM-2",
+  "description": "UI rendering: AgentStream pre-groups consecutive `tool_use` → `tool_use_summary` pairs. MessageCard renders `ToolResultBlock` (new component) attached below tool_use blocks. Collapsible: summary one-liner → first 20 lines → full content. Error detection with destructive styling.",
+  "status": "PLANNED",
+  "phase": "COMP-OBS-STREAM: Tool Result Streaming",
+  "position": 206,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

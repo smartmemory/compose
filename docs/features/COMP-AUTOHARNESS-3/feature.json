@@ -1,0 +1,9 @@
+{
+  "code": "COMP-AUTOHARNESS-3",
+  "description": "COMP-BENCH integration: use bench suite as scoring oracle. Harness submits config variant → COMP-BENCH runs feature set → returns aggregate score. Harness compares against baseline. Requires COMP-BENCH seed repos and scoring rubric.",
+  "status": "PLANNED",
+  "phase": "COMP-AUTOHARNESS: Autonomous Agent Harness Optimization",
+  "position": 236,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

@@ -1,0 +1,9 @@
+{
+  "code": "COMP-UI-6",
+  "description": "Polish and teardown: error boundaries per zone, delete replaced vision components and all compose-ui dead code (old pages, Layout, auth, base44). Merge color tokens into single constants file. localStorage persistence for cockpit state (active view, sidebar collapsed, font size).",
+  "status": "COMPLETE",
+  "phase": "COMP-UI: Cockpit Integration",
+  "position": 82,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

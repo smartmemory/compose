@@ -1,0 +1,9 @@
+{
+  "code": "COMP-OBS-GATES-3",
+  "description": "Gate detail view: context panel gate review shows tier pipeline visualization — each tier as a dot (green=pass, red=fail, gray=skipped). Click tier for detail. Failed tier shows findings. Skipped tiers show \"skipped — prior tier failed\".",
+  "status": "COMPLETE",
+  "phase": "COMP-OBS-GATES: Tiered Gate Evaluation",
+  "position": 214,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

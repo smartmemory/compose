@@ -1,0 +1,9 @@
+{
+  "code": "COMP-WORKSPACE-AGENT-SVR",
+  "description": "Cross-process workspace plumbing for the agent server (port 4002): pass workspaceId on `/api/agent/session`, persist to session record, factory-build hook options. Depends on 197, 203.",
+  "status": "PLANNED",
+  "phase": "COMP-POLICY-CHECK: Pre-Response Policy Check (Adherence Enforcement)",
+  "position": 285,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

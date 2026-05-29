@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TUI-8",
+  "description": "Item detail on gate: pull item connections, lifecycle phase, related artifacts into the gate review panel.",
+  "status": "PLANNED",
+  "phase": "COMP-TUI: CLI Terminal UI",
+  "position": 135,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

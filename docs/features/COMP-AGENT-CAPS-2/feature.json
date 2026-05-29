@@ -1,0 +1,9 @@
+{
+  "code": "COMP-AGENT-CAPS-2",
+  "description": "Profile templates: `read-only-reviewer`, `implementer`, `orchestrator`, `security-auditor`. Resolved by agent string parser at build time.",
+  "status": "COMPLETE",
+  "phase": "COMP-AGENT-CAPS: Agent Capability Profiles",
+  "position": 187,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

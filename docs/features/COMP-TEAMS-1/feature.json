@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TEAMS-1",
+  "description": "Team presets library (v1): 3 preset configs — `review` (3 reviewers: security/perf/arch), `feature` (decompose + parallel implement + verify), `research` (3 explorers: codebase/web/docs). Stored as `.stratum.yaml` in bundled `presets/`. Two-level template loader (project → bundled fallback).",
+  "status": "COMPLETE",
+  "phase": "COMP-TEAMS: Agent Team Presets",
+  "position": 147,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

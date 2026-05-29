@@ -1,0 +1,9 @@
+{
+  "code": "COMP-REVIEW-ENH-3",
+  "description": "Plan deepening: re-run research agents against an existing plan to find gaps, without re-planning from scratch. `compose deepen FEAT-X` dispatches investigators that probe the plan for missing edge cases, untested paths, and implicit assumptions. Findings surface as plan amendments, not rewrites.",
+  "status": "PLANNED",
+  "phase": "COMP-REVIEW-ENH: Review Pipeline Enhancements",
+  "position": 247,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

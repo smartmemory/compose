@@ -1,0 +1,9 @@
+{
+  "code": "HOOK-CACHE-4",
+  "description": "Metrics: Appends to `~/.claude/read-cache/stats.json` on every decision — timestamp, session, decision, file path, estimated tokens saved. Metrics for the human, not injected into context.",
+  "status": "COMPLETE",
+  "phase": "HOOK-CACHE: Read Cache Hook",
+  "position": 165,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

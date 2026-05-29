@@ -1,0 +1,9 @@
+{
+  "code": "T2-F5-COMPOSE-MIGRATE-4",
+  "description": "Environment variables: Documented `COMPOSE_SERVER_DISPATCH` (off by default) and `COMPOSE_SERVER_DISPATCH_POLL_MS` (500ms default) in README. Configurable poll interval allows tuning event propagation vs. MCP load.",
+  "status": "COMPLETE",
+  "phase": "T2-F5-COMPOSE-MIGRATE: Server-Side Dispatch for All Parallel Steps",
+  "position": 118,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

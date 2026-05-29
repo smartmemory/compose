@@ -1,0 +1,9 @@
+{
+  "code": "COMP-OBS-GATES-4",
+  "description": "Cost savings tracking: track and display estimated cost saved by short-circuiting (cost of skipped tiers). Accumulate in `.compose/data/gate-savings.json`. Surface in build summary.",
+  "status": "COMPLETE",
+  "phase": "COMP-OBS-GATES: Tiered Gate Evaluation",
+  "position": 215,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

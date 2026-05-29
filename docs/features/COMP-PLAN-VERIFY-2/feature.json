@@ -1,0 +1,9 @@
+{
+  "code": "COMP-PLAN-VERIFY-2",
+  "description": "Diff matcher: `matchItemsToDiff()` classifies plan items as DONE (file in diff), MISSING (file not in diff), EXTRA (diff file not in plan — scope creep).",
+  "status": "COMPLETE",
+  "phase": "COMP-PLAN-VERIFY: Plan-Diff Verification",
+  "position": 175,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

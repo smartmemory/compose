@@ -1,0 +1,9 @@
+{
+  "code": "COMP-HEALTH-2",
+  "description": "Score computation: after each phase completes, compute composite score from available signals (Stratum audit trace, review findings, test results). Missing dimensions scored as neutral (50), not zero.",
+  "status": "COMPLETE",
+  "phase": "COMP-HEALTH: Quantified Quality Score for Gates",
+  "position": 171,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

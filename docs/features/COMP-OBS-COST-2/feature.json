@@ -1,0 +1,9 @@
+{
+  "code": "COMP-OBS-COST-2",
+  "description": "Build-stream cost events: `build_step_done` events gain `tokens` and `cost_usd` fields from the audit data. `build_end` event gains `total_tokens` and `total_cost_usd` aggregated across all steps.",
+  "status": "COMPLETE",
+  "phase": "COMP-OBS-COST: Token and Cost Tracking",
+  "position": 209,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}
