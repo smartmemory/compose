@@ -349,6 +349,20 @@ test('status cells with trailing commentary are tokenized to a bare enum value (
   assert.equal(byCode['TOK-5'], 'PARKED', 'case normalized to canonical token');
 });
 
+test('glued (non-separator) status forms are NOT coerced to an enum (conservative tokenize)', () => {
+  const md = [
+    '## Phase Y — PLANNED',
+    '| # | Feature | Description | Status |',
+    '|---|---------|-------------|--------|',
+    '| 1 | GLU-1 | hyphen-glued is left invalid | PLANNED-ish |',
+    '| 2 | GLU-2 | slash-glued is left invalid | PARKED/blocked |',
+  ].join('\n');
+  const byCode = Object.fromEntries(parseRoadmap(md).map(e => [e.code, e.status]));
+  // Not silently coerced — the raw cell survives so the validator can flag it.
+  assert.equal(byCode['GLU-1'], 'PLANNED-ish');
+  assert.equal(byCode['GLU-2'], 'PARKED/blocked');
+});
+
 test('a preserved-section marker INSIDE a fenced code block is not honored, and later rows still parse (review fix)', () => {
   const md = [
     '## Phase A — PLANNED',
