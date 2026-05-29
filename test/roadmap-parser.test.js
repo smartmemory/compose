@@ -231,3 +231,19 @@ describe('actual ROADMAP.md', () => {
     assert.ok(buildable.every(e => !['COMPLETE', 'SUPERSEDED', 'PARKED'].includes(e.status)));
   });
 });
+
+test('parses a feature code that does not end in -<digits> as a real code', () => {
+  const md = [
+    '## Phase 6: MCP Writers — PLANNED',
+    '',
+    '| # | Feature | Description | Status |',
+    '|---|---------|-------------|--------|',
+    '| 1 | COMP-ROADMAP-RT | harden roundtrip | PLANNED |',
+    '',
+  ].join('\n');
+  const codes = parseRoadmap(md).map(e => e.code);
+  assert.ok(codes.includes('COMP-ROADMAP-RT'),
+    `expected COMP-ROADMAP-RT as a real code, got ${JSON.stringify(codes)}`);
+  assert.ok(!codes.some(c => c.startsWith('_anon_')),
+    'COMP-ROADMAP-RT must not be classified anonymous');
+});

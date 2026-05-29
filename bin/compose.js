@@ -1036,12 +1036,24 @@ _This is a seed design doc created by \`compose feature\`. The \`compose build\`
 if (cmd === 'roadmap') {
   const subcmd = args[0]
 
-  // compose roadmap generate — regenerate ROADMAP.md from feature.json files
+  // compose roadmap generate — regenerate ROADMAP.md from feature.json files,
+  // converging to a fixed point before finishing.
   if (subcmd === 'generate' || subcmd === 'gen') {
     const { writeRoadmap } = await import('../lib/roadmap-gen.js')
+    const { checkRoundtrip } = await import('../lib/roadmap-roundtrip.js')
+    const { listFeatures } = await import('../lib/feature-json.js')
     const { root: cwd } = resolveCwdWithWorkspace(args)
     const path = writeRoadmap(cwd)
-    console.log(`Generated ${path} from feature.json files`)
+    // checkRoundtrip's now:'0000-00-00' is only used to detect/canonicalize
+    // structural non-convergence — once the file has headings, readPreamble
+    // preserves the existing preamble date verbatim, so no sentinel date leaks.
+    const rt = checkRoundtrip(readFileSync(path, 'utf-8'), listFeatures(cwd), { now: '0000-00-00' })
+    if (!rt.fixedPoint) {
+      writeFileSync(path, rt.canonical)
+      console.log(`Generated ${path} (canonicalized over ${rt.passes} passes)`)
+    } else {
+      console.log(`Generated ${path} from feature.json files`)
+    }
     process.exit(0)
   }
 
@@ -1066,51 +1078,27 @@ if (cmd === 'roadmap') {
   // compose roadmap check — verify feature.json ↔ ROADMAP.md consistency
   if (subcmd === 'check') {
     const { listFeatures } = await import('../lib/feature-json.js')
-    const { parseRoadmap } = await import('../lib/roadmap-parser.js')
+    const { checkRoundtrip, describeLossyDiff } = await import('../lib/roadmap-roundtrip.js')
     const { root: cwd } = resolveCwdWithWorkspace(args)
     const roadmapPath = join(cwd, 'ROADMAP.md')
     if (!existsSync(roadmapPath)) {
       console.error('No ROADMAP.md found. Run: compose roadmap generate')
       process.exit(1)
     }
-    const features = listFeatures(cwd)
-    const roadmapEntries = parseRoadmap(readFileSync(roadmapPath, 'utf-8'))
-    const roadmapCodes = new Set(roadmapEntries.filter(e => !e.code.startsWith('_anon_')).map(e => e.code))
-    const featureCodes = new Set(features.map(f => f.code))
-
-    let clean = true
-    // Features in feature.json but missing from ROADMAP.md
-    for (const f of features) {
-      if (!roadmapCodes.has(f.code)) {
-        console.log(`MISSING from ROADMAP.md: ${f.code}`)
-        clean = false
-      }
+    const rt = checkRoundtrip(readFileSync(roadmapPath, 'utf-8'), listFeatures(cwd), { now: '0000-00-00' })
+    if (rt.fixedPoint && rt.lossless) {
+      console.log('feature.json and ROADMAP.md are in sync (fixed point, lossless).')
+      process.exit(0)
     }
-    // Features in ROADMAP.md but missing feature.json
-    for (const e of roadmapEntries) {
-      if (e.code.startsWith('_anon_')) continue
-      if (!featureCodes.has(e.code)) {
-        console.log(`NO feature.json: ${e.code}`)
-        clean = false
-      }
+    if (!rt.fixedPoint) {
+      const d = rt.diffs.find(x => x.kind === 'FIXED_POINT_DIVERGENCE')
+      console.log(`NOT A FIXED POINT: ${d?.detail ?? 'ROADMAP.md changes on regen'}`)
     }
-    // Status mismatches
-    const roadmapMap = new Map(roadmapEntries.map(e => [e.code, e]))
-    for (const f of features) {
-      const rm = roadmapMap.get(f.code)
-      if (rm && rm.status !== f.status) {
-        console.log(`STATUS MISMATCH: ${f.code} — feature.json=${f.status}, ROADMAP.md=${rm.status}`)
-        clean = false
-      }
+    for (const d of rt.diffs.filter(x => x.kind.startsWith('LOSSLESS_'))) {
+      console.log(describeLossyDiff(d))
     }
-
-    if (clean) {
-      console.log('feature.json and ROADMAP.md are in sync.')
-    } else {
-      console.log('\nRun `compose roadmap generate` to regenerate ROADMAP.md from feature.json.')
-      process.exit(1)
-    }
-    process.exit(0)
+    console.log('\nRun `compose roadmap generate` to regenerate ROADMAP.md from feature.json.')
+    process.exit(1)
   }
 
   // Default: compose roadmap (show status)

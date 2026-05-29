@@ -431,3 +431,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-16T17:40:37-04:00 | Adding loading indicator for design agent active state (issue #16) and surfacing API errors during retry loops (issue #24)
 2026-05-18T05:00:00+00:00 | fix compose items: --json flag ordering, ambiguous prefix match, improve missing-state error message
 2026-05-19T00:04:09+08:00 | Reconcile stale COMP-WORKSPACE-ID feature.json: PLANNED->COMPLETE to match shipped code (a8db93b) + compose ROADMAP
+2026-05-29T09:16:46+07:00 | Filing COMP-ROADMAP-RT — harden deterministic roadmap roundtripping (fixed-point + lossless guard, write-time canonicalize, hierarchy validation)
