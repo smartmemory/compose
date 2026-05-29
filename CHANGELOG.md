@@ -2,6 +2,30 @@
 
 ## 2026-05-29
 
+### feat(COMP-ROADMAP-XREF-SYNC): v1 pull reconciliation for external links
+
+Turns the read-only `XREF_DRIFT` warning into an applied fix. `compose roadmap
+xref-sync [--dry-run]` (+ `lib/xref-sync.js`) reconciles every feature.json
+external `links[]` entry's `expect=` to the live target state — github issues via
+`getIssueResult`, local refs via the sibling feature.json status. PULL only: it
+updates the local expectation to match reality and **never writes to an external
+system**. Operates on the structured links carrier (post-migration source of
+truth), so it rewrites no markdown and can't perturb the roundtrip fixed point.
+Resolver is injectable (network-free tests); unresolved refs (offline / no-token
+/ 404 / rate-limit) are reported skipped, never guessed. External-write (push) is
+deliberately out of scope — see docs/features/COMP-ROADMAP-XREF-SYNC/design.md.
+
+### fix(roadmap): tokenize status cells; rename stray 'implementation' phase
+
+`parseRoadmap` now reduces a status cell to its bare enum token, tolerant of
+trailing commentary (`PARKED — needs X` → `PARKED`, `PARTIAL (1a COMPLETE)` →
+`PARTIAL`), but conservatively — glued forms like `PLANNED-ish` are left for the
+validator to flag, not coerced. Prevents inline-rationale status cells from
+producing schema-invalid feature.json on (re-)migration. `STATUS_TOKENS` +
+`parseStatusToken` consolidated into `roadmap-parser.js` (single source). Also
+renamed the stray lowercase `## implementation` phase to `COMP-DEBUG: Debug
+Discipline`.
+
 ### feat(roadmap): preserved-section-aware parser + historical-row migration (fixed point)
 
 After GENFIX (below) the migration still diverged — root cause was not the sort but
