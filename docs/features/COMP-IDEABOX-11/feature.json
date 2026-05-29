@@ -1,0 +1,9 @@
+{
+  "code": "COMP-IDEABOX-11",
+  "description": "Design UI — Roadmap graph integration: Ideas appear as a ghost layer in the existing Graph view. Idea nodes rendered as dashed-border circles, smaller than feature nodes, colored by priority. Connected to roadmap features via \"maps to\" edges (dotted lines). Toggle: \"Show ideas\" checkbox in graph controls. Clicking an idea node opens ideabox context panel. Promoted ideas animate from idea node → solid feature node on promote.",
+  "status": "COMPLETE",
+  "phase": "COMP-IDEABOX: Product Idea Capture & Triage",
+  "position": 265,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

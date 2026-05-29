@@ -1,0 +1,9 @@
+{
+  "code": "COMP-BENCH-3",
+  "description": "Benchmark harness: runner with git worktree isolation per run, connector config per model, `audit-scorer.js` (6 automated axes from Stratum audit), `judge-scorer.js` (5 qualitative axes, blind evaluation, 3x inter-rater check).",
+  "status": "PLANNED",
+  "phase": "COMP-BENCH: Model Benchmark Suite",
+  "position": 122,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

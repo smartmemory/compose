@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TRIAGE-1",
+  "description": "Classification engine: `lib/triage.js` — pure file analysis. Counts paths in plan/blueprint, detects security/core paths, assigns tier 0-4 and build profile (`needs_prd`, `needs_architecture`, `needs_verification`, `needs_report`). No LLM calls.",
+  "status": "COMPLETE",
+  "phase": "COMP-TRIAGE: Task Tier Classification",
+  "position": 182,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

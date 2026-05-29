@@ -1,0 +1,9 @@
+{
+  "code": "COMP-RT-2",
+  "description": "Client hydration on connect: `getVisionSnapshot(ws)` sends `type: 'hydrate'` on WS connect (preserves `settingsState` co-send); SSE emits `event: hydrate` with last 50 messages via `_recentMessages` ring buffer before `system/connected`. Frontend handles both in `visionMessageHandler.js` and `AgentStream.jsx` (named event via `addEventListener`). 5 hydration tests.",
+  "status": "COMPLETE",
+  "phase": "COMP-RT: Real-Time Resilience",
+  "position": 99,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

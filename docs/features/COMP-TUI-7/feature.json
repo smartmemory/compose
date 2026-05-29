@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TUI-7",
+  "description": "Split pane layout: top pane for pipeline progress, bottom for tool output. Terminal equivalent of cockpit main area + agent bar.",
+  "status": "PLANNED",
+  "phase": "COMP-TUI: CLI Terminal UI",
+  "position": 134,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

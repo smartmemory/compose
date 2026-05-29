@@ -1,0 +1,9 @@
+{
+  "code": "COMP-IDEABOX-9",
+  "description": "Design UI — Discussion threads: When an idea is DISCUSSING, context panel shows a lightweight threaded conversation. Each message: author (human or agent), timestamp, text. Discussion context preserved and included when the idea is eventually promoted (seeded into `plan.md` as \"Prior discussion\"). `/ideabox discuss IDEA-N <comment>` from CLI appends to thread. Stored inline in ideabox.md under the idea entry.",
+  "status": "COMPLETE",
+  "phase": "COMP-IDEABOX: Product Idea Capture & Triage",
+  "position": 263,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

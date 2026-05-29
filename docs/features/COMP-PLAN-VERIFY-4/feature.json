@@ -1,0 +1,9 @@
+{
+  "code": "COMP-PLAN-VERIFY-4",
+  "description": "Scope creep report: EXTRA items from `matchItemsToDiff` are informational. Agent presents at ship_gate for human review. Optional policy gate via `len(result.scope_creep) == 0`.",
+  "status": "COMPLETE",
+  "phase": "COMP-PLAN-VERIFY: Plan-Diff Verification",
+  "position": 177,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

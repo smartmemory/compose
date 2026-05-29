@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TRIAGE-4",
+  "description": "Tier history: deferred — triage results persist in feature.json per feature. Cross-feature history log is a one-liner addition when needed.",
+  "status": "PARKED",
+  "phase": "COMP-TRIAGE: Task Tier Classification",
+  "position": 185,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

@@ -1,0 +1,9 @@
+{
+  "code": "COMP-PLAN-VERIFY-3",
+  "description": "`plan_completion` ensure function: Python ensure builtin in spec.py. Runs on the ship step (not ship_gate). Division-by-zero guard. Critical missing → plain string violations. Below threshold → violation with percentage. Registered in executor sandbox.",
+  "status": "COMPLETE",
+  "phase": "COMP-PLAN-VERIFY: Plan-Diff Verification",
+  "position": 176,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

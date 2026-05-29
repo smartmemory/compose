@@ -1,0 +1,9 @@
+{
+  "code": "COMP-CONSENSUS-4",
+  "description": "Pipeline integration: optional `consensus: true` flag on any Stratum step. When enabled, step dispatches through consensus dispatcher instead of single connector. Consensus result replaces step output. Audit trace includes per-provider responses and agreement score.",
+  "status": "PLANNED",
+  "phase": "COMP-CONSENSUS: Multi-LLM Consensus Orchestration",
+  "position": 233,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

@@ -1,0 +1,9 @@
+{
+  "code": "COMP-BMAD-3",
+  "description": "Agile execution mode (`/compose bmad`): new entry verb in the compose skill that runs the BMAD pipeline. Phases 1–5 reuse existing Compose phases (design, PRD, architecture, blueprint, verification). Phase 6 (plan) becomes \"shard into stories\" via `compose-scrum-master`. Phase 7 (execute) iterates one story at a time: `compose-dev` implements with TDD, `compose-qa` verifies acceptance + runs Codex review, gate per story (not per feature). Stories ship incrementally — each green story is a commit.",
+  "status": "PLANNED",
+  "phase": "COMP-BMAD: BMAD Method on Compose",
+  "position": 251,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

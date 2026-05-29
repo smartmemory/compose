@@ -1,0 +1,9 @@
+{
+  "code": "COMP-OBS-COST-4",
+  "description": "Context panel cost breakdown: build detail in context panel shows per-step table: step name, input tokens, output tokens, cost, duration. Sortable by cost. Highlights most expensive step.",
+  "status": "COMPLETE",
+  "phase": "COMP-OBS-COST: Token and Cost Tracking",
+  "position": 211,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

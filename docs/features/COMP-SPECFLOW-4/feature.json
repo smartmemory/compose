@@ -1,0 +1,9 @@
+{
+  "code": "COMP-SPECFLOW-4",
+  "description": "Standalone export: artifacts usable with any AI coding tool, not just Compose. Export strips Compose-specific metadata, preserves content and cross-references as relative links. Output formats: markdown (default), JSON (for tooling). `compose artifact export --format md`.",
+  "status": "PLANNED",
+  "phase": "COMP-SPECFLOW: Spec-Driven Development Artifacts",
+  "position": 244,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

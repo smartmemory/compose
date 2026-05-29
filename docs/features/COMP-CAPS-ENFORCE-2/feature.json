@@ -1,0 +1,9 @@
+{
+  "code": "COMP-CAPS-ENFORCE-2",
+  "description": "Violation checker: After each step completes, compare observed tool_use events against the step's agent template (`allowedTools`/`disallowedTools`). Classify: VIOLATION (disallowed tool used), WARNING (tool not in allowedTools but not explicitly disallowed).",
+  "status": "PLANNED",
+  "phase": "COMP-CAPS-ENFORCE: Agent Capability Violation Detection",
+  "position": 191,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

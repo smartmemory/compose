@@ -1,0 +1,9 @@
+{
+  "code": "COMP-CTX-2",
+  "description": "Artifact staleness detection: track last-modified timestamps and phase at time of writing. When the feature advances past the artifact's phase or code changes touch files referenced in the artifact, flag it as potentially stale. Surface in context panel and gate reviews.",
+  "status": "PLANNED",
+  "phase": "COMP-CTX: Context Artifacts",
+  "position": 126,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

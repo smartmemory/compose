@@ -1,0 +1,9 @@
+{
+  "code": "COMP-QA-1",
+  "description": "Diff-to-route mapper: analyze git diff to identify changed files, map to routes/pages via framework conventions (Next.js pages/, Express routes/, etc.) or explicit `routes.yaml` mapping. Output: list of affected URLs to test.",
+  "status": "COMPLETE",
+  "phase": "COMP-QA: Diff-Aware QA Scoping",
+  "position": 166,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

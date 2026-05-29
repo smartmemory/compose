@@ -1,0 +1,9 @@
+{
+  "code": "COMP-RT-3",
+  "description": "Connector trait split — discovery vs runtime: new `ConnectorDiscovery` and `ConnectorRuntime` reference interfaces (JSDoc contracts, not base classes — avoids collision with existing `AgentRegistry` subagent tracker). Discovery stubs (`listModels`, `supportsModel`, `loadHistory`) added to `AgentConnector` base; three concrete connectors annotated with `// ── Discovery ──` / `// ── Runtime ──` section comments. 18-test shape compliance suite.",
+  "status": "COMPLETE",
+  "phase": "COMP-RT: Real-Time Resilience",
+  "position": 100,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

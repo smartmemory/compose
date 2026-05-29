@@ -1,0 +1,9 @@
+{
+  "code": "T2-F5-COMPOSE-MIGRATE-1",
+  "description": "Client methods: Added `parallelStart()` and `parallelPoll()` to `StratumMcpClient` for server-side dispatch. Methods convert camelCase args to snake_case, call stratum MCP tools, parse JSON responses. Reuse existing `parallelDone()` pattern. 2 new tests.",
+  "status": "COMPLETE",
+  "phase": "T2-F5-COMPOSE-MIGRATE: Server-Side Dispatch for All Parallel Steps",
+  "position": 115,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

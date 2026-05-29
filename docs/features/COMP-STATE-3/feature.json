@@ -1,0 +1,9 @@
+{
+  "code": "COMP-STATE-3",
+  "description": "Build completion reliability: 5s build poll. Synthetic 'done' build kept for 3s so ops strip flash fires even on fast builds.",
+  "status": "COMPLETE",
+  "phase": "COMP-STATE: Singleton State Store",
+  "position": 91,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

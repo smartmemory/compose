@@ -1,0 +1,9 @@
+{
+  "code": "COMP-SPECFLOW-2",
+  "description": "Quality bar definitions: per-artifact \"good enough\" checklist that gates can reference. Proposal: problem stated, audience identified, scope bounded. Spec: acceptance criteria as checkboxes, contract references. Design: component diagram, data flow, error handling. Tasks: dependencies ordered, effort estimated, file paths annotated `(new)`/`(existing)`.",
+  "status": "PLANNED",
+  "phase": "COMP-SPECFLOW: Spec-Driven Development Artifacts",
+  "position": 242,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

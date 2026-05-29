@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TEAMS-3",
+  "description": "Team-lead agent pattern: `decompose` step with `claude:orchestrator` serves this role in v1. Dedicated team-lead profile deferred.",
+  "status": "PARTIAL",
+  "phase": "COMP-TEAMS: Agent Team Presets",
+  "position": 149,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

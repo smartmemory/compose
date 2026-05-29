@@ -1,0 +1,9 @@
+{
+  "code": "COMP-STATE-2",
+  "description": "Gate race fix: Remove optimistic fetch on gateCreated (server already broadcasts). Prevent null itemId in gate resolved toast.",
+  "status": "COMPLETE",
+  "phase": "COMP-STATE: Singleton State Store",
+  "position": 90,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

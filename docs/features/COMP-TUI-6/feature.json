@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TUI-6",
+  "description": "Build summary: completion report with step durations, retries, total cost/tokens, pass/fail per step.",
+  "status": "PLANNED",
+  "phase": "COMP-TUI: CLI Terminal UI",
+  "position": 133,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

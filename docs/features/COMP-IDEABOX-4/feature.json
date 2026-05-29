@@ -1,0 +1,9 @@
+{
+  "code": "COMP-IDEABOX-4",
+  "description": "Design UI — Ideabox view: New \"Ideabox\" tab in the Compose cockpit. Landing state: digest summary (\"3 new since last visit, 12 untriaged, top P0 cluster: Graph Viewer\"). Card-based layout with ideas grouped by cluster. Each card: ID, title, tags, priority badge, source, status. Drag-and-drop between priority lanes (P0/P1/P2/untriaged). Click card → context panel with full idea details, related roadmap features, promote/kill/discuss actions. Filter by tag, status, priority, source. Search bar. Killed ideas in a collapsible \"Graveyard\" section with reason, date, and resurrect action.",
+  "status": "COMPLETE",
+  "phase": "COMP-IDEABOX: Product Idea Capture & Triage",
+  "position": 258,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

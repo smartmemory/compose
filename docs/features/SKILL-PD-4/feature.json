@@ -1,0 +1,9 @@
+{
+  "code": "SKILL-PD-4",
+  "description": "Compose skill activation: Phase\u2192skill mapping. (Parked: soft hints only without loader support.)",
+  "status": "PARKED",
+  "phase": "SKILL-PD: Progressive Disclosure for Skills",
+  "position": 154,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TEST-BOOTSTRAP-1",
+  "description": "Framework detection: check for test config files (jest.config, vitest.config, pytest.ini, go test files, etc.). If none found, classify project by language/framework and select appropriate test runner.",
+  "status": "PLANNED",
+  "phase": "COMP-TEST-BOOTSTRAP: Test Framework Bootstrap",
+  "position": 178,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

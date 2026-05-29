@@ -1,0 +1,9 @@
+{
+  "code": "T2-F5-COMPOSE-MIGRATE-3",
+  "description": "Routing check: One-line flag + isolation check at top of `executeParallelDispatch()`. If `COMPOSE_SERVER_DISPATCH=1` AND `isolation: \"none\"`, routes to server executor; else routes to existing consumer executor. Routing logic validated in 6 tests covering flag states, isolation modes, and default behavior.",
+  "status": "COMPLETE",
+  "phase": "T2-F5-COMPOSE-MIGRATE: Server-Side Dispatch for All Parallel Steps",
+  "position": 117,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

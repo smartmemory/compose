@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TRIAGE-3",
+  "description": "Build integration: `compose build` runs triage before `stratum_plan()`. Profile toggles `skip_if` on existing pipeline steps — no new templates needed. `--skip-triage` and `--template` flags. Cache invalidation via mtime comparison. Creates feature.json if missing.",
+  "status": "COMPLETE",
+  "phase": "COMP-TRIAGE: Task Tier Classification",
+  "position": 184,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

@@ -1,0 +1,9 @@
+{
+  "code": "COMP-RT-1",
+  "description": "Event coalescing for WebSocket broadcasts: 16ms `CoalescingBuffer` with `latest-wins` and `append` modes. Replaces 100ms debounce in `VisionServer`; buffers agent SSE messages in `agent-server.js`. 6 unit tests + flush-rate guarantee.",
+  "status": "COMPLETE",
+  "phase": "COMP-RT: Real-Time Resilience",
+  "position": 98,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

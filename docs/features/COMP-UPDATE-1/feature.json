@@ -1,0 +1,9 @@
+{
+  "code": "COMP-UPDATE-1",
+  "description": "`compose update` subcommand: Auto-detects npm install (PACKAGE_ROOT under `node_modules/`) vs git clone (`.git` at PACKAGE_ROOT). For npm: runs `npm install [-g] @smartmemory/compose@latest`. For git: refuses on dirty tree unless `--force`, runs `git fetch && git pull --ff-only`, prints before/after SHAs, runs `npm install`. Either path then re-runs `compose setup` and (if invoked inside `.compose/`) `compose init`. Aliased as `compose upgrade`.",
+  "status": "COMPLETE",
+  "phase": "COMP-UPDATE: One-Step Manual Upgrade",
+  "position": 269,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

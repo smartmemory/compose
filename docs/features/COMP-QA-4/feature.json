@@ -1,0 +1,9 @@
+{
+  "code": "COMP-QA-4",
+  "description": "Regression guard: on adjacent routes (one hop from changed routes in the route graph), run a lightweight smoke check (200 OK + no console errors) to catch collateral breakage without full verification cost.",
+  "status": "COMPLETE",
+  "phase": "COMP-QA: Diff-Aware QA Scoping",
+  "position": 169,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

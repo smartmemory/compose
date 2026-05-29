@@ -1,0 +1,9 @@
+{
+  "code": "COMP-UI-2",
+  "description": "Live sidebar: replace AppSidebar with attention-queue sidebar. Wire to useVisionStore for phase filter (global, affects all views), pending gates, blocked items, active build status (current step, progress from `active-build.json`), compact stats. Absorbs sidebar scope from STRAT-COMP-8.",
+  "status": "COMPLETE",
+  "phase": "COMP-UI: Cockpit Integration",
+  "position": 78,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

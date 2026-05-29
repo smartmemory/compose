@@ -1,0 +1,9 @@
+{
+  "code": "COMP-AUTOHARNESS-1",
+  "description": "Harness definition format: YAML describing mutable config dimensions — system prompt variants, tool subsets, routing rule alternatives, model tier overrides. Each dimension declares value space and constraints. Stored in `.compose/harness/<name>.yaml`.",
+  "status": "PLANNED",
+  "phase": "COMP-AUTOHARNESS: Autonomous Agent Harness Optimization",
+  "position": 234,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

@@ -1,0 +1,9 @@
+{
+  "code": "COMP-IDEABOX-13",
+  "description": "Multi-project aggregation: When Compose manages multiple projects (via parent workspace manifest or explicit project list), unified ideabox view across all projects. Ideas tagged with project origin. Cross-project dedup detection (\"SmartMemory IDEA-42 and Forge IDEA-7 overlap\"). Promote targets a specific project's roadmap. Filter by project. Requires: workspace-level manifest in parent repo listing Compose projects.",
+  "status": "PLANNED",
+  "phase": "COMP-IDEABOX: Product Idea Capture & Triage",
+  "position": 267,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

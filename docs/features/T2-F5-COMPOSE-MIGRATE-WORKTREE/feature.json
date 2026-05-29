@@ -1,0 +1,9 @@
+{
+  "code": "T2-F5-COMPOSE-MIGRATE-WORKTREE",
+  "description": "Worktree diff consumption: extended routing to accept `isolation: \"worktree\"` + `capture_diff: true`. New `applyServerDispatchDiffs` reads `ts.diff` from poll response, delegates to shared `applyTaskDiffsToBaseCwd` helper (extracted from consumer-dispatch). Conflicts throw to halt CLI; trade-off documented. 10 new tests.",
+  "status": "COMPLETE",
+  "phase": "T2-F5-COMPOSE-MIGRATE: Server-Side Dispatch for All Parallel Steps",
+  "position": 119,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

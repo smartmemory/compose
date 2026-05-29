@@ -1,0 +1,9 @@
+{
+  "code": "COMP-BUDGET-3",
+  "description": "Budget visibility: Client handles `timeout` and `action_limit` outcomes with distinct messages. Ops strip displays live elapsed/timeout via `opsStripLogic.js` (formatElapsed/formatTimeout, reads `wallClockTimeout` + `startedAt` from iterationState) — shipped via COMP-OBS-SURFACE-4.",
+  "status": "COMPLETE",
+  "phase": "COMP-BUDGET: Iteration Budget Enforcement",
+  "position": 199,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

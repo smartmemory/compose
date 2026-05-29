@@ -1,0 +1,9 @@
+{
+  "code": "COMP-BENCH-2",
+  "description": "Feature specs: 5 canonical requests as YAML — OAuth (hard), repo refactor (medium), WebSocket notifications (hard), race condition fix (medium), CSV export (easy). Machine-checkable acceptance criteria + judge rubric per feature.",
+  "status": "PLANNED",
+  "phase": "COMP-BENCH: Model Benchmark Suite",
+  "position": 121,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

@@ -1,0 +1,9 @@
+{
+  "code": "COMP-POLICY-CHECK-3",
+  "description": "Response scanner. Scan candidate agent responses against pattern catalog. For matched rules, evaluate suppression_signals against user_mode. Emit (rule, match, suppressed?) records.",
+  "status": "PLANNED",
+  "phase": "COMP-POLICY-CHECK: Pre-Response Policy Check (Adherence Enforcement)",
+  "position": 274,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

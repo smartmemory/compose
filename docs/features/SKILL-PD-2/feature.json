@@ -1,0 +1,9 @@
+{
+  "code": "SKILL-PD-2",
+  "description": "Skill loader refactor: Tier parsing and lazy loading in the skill loader. (Parked: owned by Claude Code, not Compose.)",
+  "status": "PARKED",
+  "phase": "SKILL-PD: Progressive Disclosure for Skills",
+  "position": 152,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

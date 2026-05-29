@@ -1,0 +1,9 @@
+{
+  "code": "HOOK-CACHE-3",
+  "description": "Partial read awareness: block message includes cached line ranges so Claude can request uncovered ranges via offset/limit.",
+  "status": "COMPLETE",
+  "phase": "HOOK-CACHE: Read Cache Hook",
+  "position": 164,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

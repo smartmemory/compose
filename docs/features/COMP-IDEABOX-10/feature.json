@@ -1,0 +1,9 @@
+{
+  "code": "COMP-IDEABOX-10",
+  "description": "Design UI — Impact/effort matrix: Visual 2x2 scatter plot view alongside the card/lane view. X-axis: estimated effort (S/M/L, assignable during triage). Y-axis: estimated impact (low/medium/high). Ideas plotted as dots colored by cluster. Quadrant labels: Quick Wins (high impact, low effort), Big Bets (high impact, high effort), Fill-ins (low impact, low effort), Money Pits (low impact, high effort). Click dot → context panel. Drag dot to reassign effort/impact.",
+  "status": "COMPLETE",
+  "phase": "COMP-IDEABOX: Product Idea Capture & Triage",
+  "position": 264,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

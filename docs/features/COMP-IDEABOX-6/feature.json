@@ -1,0 +1,9 @@
+{
+  "code": "COMP-IDEABOX-6",
+  "description": "Design UI — Promote flow: Wizard-style flow. Single idea: select or create feature ID → confirm roadmap placement → preview generated `plan.md` → confirm. Cluster merge-and-promote: select 2+ related ideas from same cluster → merge into single feature with combined context → promote as one. Updates ideabox.md, ROADMAP.md, and `roadmap-graph.html` in one operation. Visual confirmation with link to new feature in Graph/Tree view.",
+  "status": "COMPLETE",
+  "phase": "COMP-IDEABOX: Product Idea Capture & Triage",
+  "position": 260,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

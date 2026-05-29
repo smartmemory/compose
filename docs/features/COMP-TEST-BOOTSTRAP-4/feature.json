@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TEST-BOOTSTRAP-4",
+  "description": "Gate integration: test phase ensure requires `test_count >= 1` and `test_pass_rate == 100%`. If bootstrap generated the tests, review lens flags them for human verification (\"auto-generated tests — verify assertions match intent\").",
+  "status": "PLANNED",
+  "phase": "COMP-TEST-BOOTSTRAP: Test Framework Bootstrap",
+  "position": 181,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

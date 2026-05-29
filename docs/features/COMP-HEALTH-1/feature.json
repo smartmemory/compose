@@ -1,0 +1,9 @@
+{
+  "code": "COMP-HEALTH-1",
+  "description": "Score dimensions: define 6 weighted dimensions — test coverage (25%), review findings (25%, weighted by severity), contract compliance (15%), console/runtime errors (15%), documentation freshness (10%), plan completion (10%). Configurable weights in `.compose/compose.json`.",
+  "status": "COMPLETE",
+  "phase": "COMP-HEALTH: Quantified Quality Score for Gates",
+  "position": 170,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

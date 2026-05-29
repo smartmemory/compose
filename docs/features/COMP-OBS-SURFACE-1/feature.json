@@ -1,0 +1,9 @@
+{
+  "code": "COMP-OBS-SURFACE-1",
+  "description": "Retry surface: when a Stratum step fails postconditions and retries, show the failure reason and retry count in the message stream. Data already exists: `build.js` tracks `retries` per step, `ItemDetailPanel` shows `step.attempts` in audit trace. Add: retry badge on ops strip entry (\"retry 2/3\"), failure reason inline in build step message. Currently silent retries look like the agent is stuck.",
+  "status": "PLANNED",
+  "phase": "COMP-OBS-SURFACE: Step Detail Surface",
+  "position": 201,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

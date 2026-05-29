@@ -1,0 +1,9 @@
+{
+  "code": "COMP-OBS-GATES-2",
+  "description": "Short-circuit execution: gate evaluator runs tiers in order. First tier failure halts evaluation — expensive tiers never run. Gate result includes: tiers_run, tier_that_failed (if any), tiers_skipped.",
+  "status": "COMPLETE",
+  "phase": "COMP-OBS-GATES: Tiered Gate Evaluation",
+  "position": 213,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

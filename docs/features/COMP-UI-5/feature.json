@@ -1,0 +1,9 @@
+{
+  "code": "COMP-UI-5",
+  "description": "Interaction components: CommandPalette (Cmd+K search across items/gates/sessions), ItemFormDialog (quick-type creation presets), SettingsModal (governance dials per phase), GateNotificationBar (persistent bottom bar with inline actions). Shared primitives: StatusBadge, PhaseTag, AgentAvatar, ConfidenceBar, RelativeTime, EmptyState, SkeletonCard.",
+  "status": "COMPLETE",
+  "phase": "COMP-UI: Cockpit Integration",
+  "position": 81,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

@@ -1,0 +1,9 @@
+{
+  "code": "COMP-UI-3",
+  "description": "Context panel: right-side slide-in panel. Item click → ItemDetailPanel (inline field editing, connection editor). Gate click → GateReviewPanel (prior decisions, artifact summary, connected items, feedback). Build step detail component exists (`ContextStepDetail.jsx`) but not wired into item detail tabs. Artifact files open in DocsView. Persists across view switches. Absorbs detail scope from STRAT-COMP-8.",
+  "status": "COMPLETE",
+  "phase": "COMP-UI: Cockpit Integration",
+  "position": 79,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

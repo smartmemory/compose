@@ -1,0 +1,9 @@
+{
+  "code": "COMP-AGENT-CAPS-1",
+  "description": "Capability profile schema: `server/agent-templates.js` — 4 profiles with `allowedTools`/`disallowedTools`. `lib/agent-string.js` — centralized `parseAgentString(\"claude:template\")` parser + `resolveAgentConfig()`.",
+  "status": "COMPLETE",
+  "phase": "COMP-AGENT-CAPS: Agent Capability Profiles",
+  "position": 186,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

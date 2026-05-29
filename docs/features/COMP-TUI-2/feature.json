@@ -1,0 +1,9 @@
+{
+  "code": "COMP-TUI-2",
+  "description": "Gate panel: interactive gate UI with artifact summary, approve/revise/kill as selectable options. Replaces raw readline prompt.",
+  "status": "PLANNED",
+  "phase": "COMP-TUI: CLI Terminal UI",
+  "position": 129,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

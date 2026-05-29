@@ -1,0 +1,9 @@
+{
+  "code": "HOOK-CACHE-1",
+  "description": "Read cache core: `read-cache.py` PreToolUse hook. Per-agent mtime + line-range tracking in `~/.claude/read-cache/<session>/<agent>/`. First read records mtime + range. Subsequent reads: mtime changed → allow + update; range fully covered → block; uncovered range → allow + merge intervals.",
+  "status": "COMPLETE",
+  "phase": "HOOK-CACHE: Read Cache Hook",
+  "position": 162,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

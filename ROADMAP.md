@@ -260,14 +260,14 @@ Merge the cockpit architecture from compose-ui into the production compose/src/ 
 
 See `compose-ui/INTEGRATION-BRIEF.md` for the full merge spec.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 52 | COMP-UI-1 | **Cockpit shell:** rewrite `App.jsx` to render cockpit layout (header with ViewTabs, sidebar, main area, context panel, agent bar, notification bar). Move existing views from canvas tabs to main-area tabs. Agent stream becomes a collapsible bottom panel (agent bar) — always present, not a view tab. Three states: collapsed (status line), expanded (message stream + input), maximized (fills main area). | COMPLETE |
-| 53 | COMP-UI-2 | **Live sidebar:** replace AppSidebar with attention-queue sidebar. Wire to useVisionStore for phase filter (global, affects all views), pending gates, blocked items, active build status (current step, progress from `active-build.json`), compact stats. Absorbs sidebar scope from STRAT-COMP-8. | COMPLETE |
-| 54 | COMP-UI-3 | **Context panel:** right-side slide-in panel. Item click → ItemDetailPanel (inline field editing, connection editor). Gate click → GateReviewPanel (prior decisions, artifact summary, connected items, feedback). Build step detail component exists (`ContextStepDetail.jsx`) but not wired into item detail tabs. Artifact files open in DocsView. Persists across view switches. Absorbs detail scope from STRAT-COMP-8. | COMPLETE |
-| 55 | COMP-UI-4 | **View upgrades:** replace BoardView (drag-drop with gate-aware transitions), ListView (filter bar: status/phase/type/agent), RoadmapView (collapsible tree with indentation). Restyle existing GraphView. Add PipelineView (visual step diagram) and SessionsView (browser with agent/status filters, read/write/error counters). | COMPLETE |
-| 56 | COMP-UI-5 | **Interaction components:** CommandPalette (Cmd+K search across items/gates/sessions), ItemFormDialog (quick-type creation presets), SettingsModal (governance dials per phase), GateNotificationBar (persistent bottom bar with inline actions). Shared primitives: StatusBadge, PhaseTag, AgentAvatar, ConfidenceBar, RelativeTime, EmptyState, SkeletonCard. | COMPLETE |
-| 57 | COMP-UI-6 | **Polish and teardown:** error boundaries per zone, delete replaced vision components and all compose-ui dead code (old pages, Layout, auth, base44). Merge color tokens into single constants file. localStorage persistence for cockpit state (active view, sidebar collapsed, font size). | COMPLETE |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 77 | COMP-UI-1 | Cockpit shell: rewrite `App.jsx` to render cockpit layout (header with ViewTabs, sidebar, main area, context panel, agent bar, notification bar). Move existing views from canvas tabs to main-area tabs. Agent stream becomes a collapsible bottom panel (agent bar) — always present, not a view tab. Three states: collapsed (status line), expanded (message stream + input), maximized (fills main area). | COMPLETE |
+| 78 | COMP-UI-2 | Live sidebar: replace AppSidebar with attention-queue sidebar. Wire to useVisionStore for phase filter (global, affects all views), pending gates, blocked items, active build status (current step, progress from `active-build.json`), compact stats. Absorbs sidebar scope from STRAT-COMP-8. | COMPLETE |
+| 79 | COMP-UI-3 | Context panel: right-side slide-in panel. Item click → ItemDetailPanel (inline field editing, connection editor). Gate click → GateReviewPanel (prior decisions, artifact summary, connected items, feedback). Build step detail component exists (`ContextStepDetail.jsx`) but not wired into item detail tabs. Artifact files open in DocsView. Persists across view switches. Absorbs detail scope from STRAT-COMP-8. | COMPLETE |
+| 80 | COMP-UI-4 | View upgrades: replace BoardView (drag-drop with gate-aware transitions), ListView (filter bar: status/phase/type/agent), RoadmapView (collapsible tree with indentation). Restyle existing GraphView. Add PipelineView (visual step diagram) and SessionsView (browser with agent/status filters, read/write/error counters). | COMPLETE |
+| 81 | COMP-UI-5 | Interaction components: CommandPalette (Cmd+K search across items/gates/sessions), ItemFormDialog (quick-type creation presets), SettingsModal (governance dials per phase), GateNotificationBar (persistent bottom bar with inline actions). Shared primitives: StatusBadge, PhaseTag, AgentAvatar, ConfidenceBar, RelativeTime, EmptyState, SkeletonCard. | COMPLETE |
+| 82 | COMP-UI-6 | Polish and teardown: error boundaries per zone, delete replaced vision components and all compose-ui dead code (old pages, Layout, auth, base44). Merge color tokens into single constants file. localStorage persistence for cockpit state (active view, sidebar collapsed, font size). | COMPLETE |
 
 **Gate:** Each step must pass its test criteria from `INTEGRATION-BRIEF.md` before the next begins.
 
@@ -302,12 +302,12 @@ See `docs/features/COMP-UX-1/design.md` for full spec and interactive mockups.
 
 Replace the `useVisionStore` hook (called independently by 12+ components, creating 12 WebSocket connections and 12 state copies) with a Zustand singleton store. One connection, one state, one set of intervals.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 79 | COMP-STATE-1 | **Zustand migration:** Convert `useVisionStore.js` from React hook to Zustand `create()` store. Single WebSocket connection, single state atom. All components read from same store via `useVisionStore()` selector hooks. One 10s recentErrors interval, one 5s build poll. | COMPLETE |
-| 80 | COMP-STATE-2 | **Gate race fix:** Remove optimistic fetch on gateCreated (server already broadcasts). Prevent null itemId in gate resolved toast. | COMPLETE |
-| 81 | COMP-STATE-3 | **Build completion reliability:** 5s build poll. Synthetic 'done' build kept for 3s so ops strip flash fires even on fast builds. | COMPLETE |
-| 82 | COMP-STATE-4 | **Session zombie cleanup:** 3s end timer (was 15s). New session start unconditionally clears previous session and its timer. | COMPLETE |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 89 | COMP-STATE-1 | Zustand migration: Convert `useVisionStore.js` from React hook to Zustand `create()` store. Single WebSocket connection, single state atom. All components read from same store via `useVisionStore()` selector hooks. One 10s recentErrors interval, one 5s build poll. | COMPLETE |
+| 90 | COMP-STATE-2 | Gate race fix: Remove optimistic fetch on gateCreated (server already broadcasts). Prevent null itemId in gate resolved toast. | COMPLETE |
+| 91 | COMP-STATE-3 | Build completion reliability: 5s build poll. Synthetic 'done' build kept for 3s so ops strip flash fires even on fast builds. | COMPLETE |
+| 92 | COMP-STATE-4 | Session zombie cleanup: 3s end timer (was 15s). New session start unconditionally clears previous session and its timer. | COMPLETE |
 
 **Dependencies:** 1 → 2 ∥ 3 ∥ 4
 
@@ -319,13 +319,9 @@ Replace the `useVisionStore` hook (called independently by 12+ components, creat
 
 Product design conversation with the LLM before the roadmap exists. The LLM asks questions, presents structured decision cards with recommendations, and the human selects or responds with free text. Decisions accumulate into a design document that feeds into `compose new`.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 83 | COMP-DESIGN-1a | **Design view + message thread:** "Design" tab in cockpit. Conversation UI with text input. SSE streaming to agent via `ClaudeSDKConnector`. Markdown rendering. Server-side design session (`design-routes.js`, `design-session.js`). Product-scope and feature-scope sessions. Tests passing. | COMPLETE |
-| 84 | COMP-DESIGN-1b | **Decision cards:** `parseDecisionBlocks` extracts fenced `decision` JSON from LLM responses. `DesignCard` renders clickable panels (letter prefix, title, bullets, recommendation badge, selected check). Card selection sends `card_select` message. Revisable via `reviseDecision`. | COMPLETE |
-| 85 | COMP-DESIGN-1c | **Live design doc:** DesignDocPanel in context panel with live markdown preview (react-markdown + remark-gfm). Draft builds incrementally from decisions via `buildDraftDoc()`. Human can edit inline — edits survive across assistant turns and rehydration. `POST /complete` accepts edited draft as seed for final LLM polish. | COMPLETE |
-| 86 | COMP-DESIGN-1d | **Research + sidebar:** DesignSidebar with Decisions/Research tab bar. ResearchTab shows topic outline, codebase references (Read/Grep/Glob), and web searches. Live SSE events (`research`/`research_result`) with unique IDs for reliable correlation. Topic outline auto-generated from decisions. | COMPLETE |
-| 87 | COMP-DESIGN-2 | **compose new integration:** `compose new` detects `docs/design.md` and uses it as enriched intent, skipping the questionnaire. Research and brainstorm steps reference design decisions. | COMPLETE |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 97 | COMP-DESIGN-2 | compose new integration: `compose new` detects `docs/design.md` and uses it as enriched intent, skipping the questionnaire. Research and brainstorm steps reference design decisions. | COMPLETE |
 
 **Dependencies:** 1a → 1b → 1c, 1a → 1d, 1c → 2
 
@@ -337,11 +333,11 @@ Product design conversation with the LLM before the roadmap exists. The LLM asks
 
 Harden the streaming and connector layer for production-quality performance, late-joining clients, and multi-vendor extensibility.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 58 | COMP-RT-1 | **Event coalescing for WebSocket broadcasts:** 16ms `CoalescingBuffer` with `latest-wins` and `append` modes. Replaces 100ms debounce in `VisionServer`; buffers agent SSE messages in `agent-server.js`. 6 unit tests + flush-rate guarantee. | COMPLETE |
-| 59 | COMP-RT-2 | **Client hydration on connect:** `getVisionSnapshot(ws)` sends `type: 'hydrate'` on WS connect (preserves `settingsState` co-send); SSE emits `event: hydrate` with last 50 messages via `_recentMessages` ring buffer before `system/connected`. Frontend handles both in `visionMessageHandler.js` and `AgentStream.jsx` (named event via `addEventListener`). 5 hydration tests. | COMPLETE |
-| 60 | COMP-RT-3 | **Connector trait split — discovery vs runtime:** new `ConnectorDiscovery` and `ConnectorRuntime` reference interfaces (JSDoc contracts, not base classes — avoids collision with existing `AgentRegistry` subagent tracker). Discovery stubs (`listModels`, `supportsModel`, `loadHistory`) added to `AgentConnector` base; three concrete connectors annotated with `// ── Discovery ──` / `// ── Runtime ──` section comments. 18-test shape compliance suite. | COMPLETE |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 98 | COMP-RT-1 | Event coalescing for WebSocket broadcasts: 16ms `CoalescingBuffer` with `latest-wins` and `append` modes. Replaces 100ms debounce in `VisionServer`; buffers agent SSE messages in `agent-server.js`. 6 unit tests + flush-rate guarantee. | COMPLETE |
+| 99 | COMP-RT-2 | Client hydration on connect: `getVisionSnapshot(ws)` sends `type: 'hydrate'` on WS connect (preserves `settingsState` co-send); SSE emits `event: hydrate` with last 50 messages via `_recentMessages` ring buffer before `system/connected`. Frontend handles both in `visionMessageHandler.js` and `AgentStream.jsx` (named event via `addEventListener`). 5 hydration tests. | COMPLETE |
+| 100 | COMP-RT-3 | Connector trait split — discovery vs runtime: new `ConnectorDiscovery` and `ConnectorRuntime` reference interfaces (JSDoc contracts, not base classes — avoids collision with existing `AgentRegistry` subagent tracker). Discovery stubs (`listModels`, `supportsModel`, `loadHistory`) added to `AgentConnector` base; three concrete connectors annotated with `// ── Discovery ──` / `// ── Runtime ──` section comments. 18-test shape compliance suite. | COMPLETE |
 | 61 | ~~COMP-RT-4~~ | **SUPERSEDED — promoted to Wave 6 as `COMP-OBS-BRANCH`.** Exploration 2026-04-19 verified that Claude Code's `~/.claude/projects/**/*.jsonl` already stores sessions as a parent-pointer tree where rewinds are preserved as sibling children of shared `parentUuid` (18 real user-rewind fork points across 30 recent sessions). No new fork mechanism or storage needed — Forge is a reader + per-feature compare view. Scope ships coordinated with the Wave 6 OBS cluster (drift axes, open-loops, decision timeline) behind the `COMP-OBS-CONTRACT` shared-schema gate. See main `ROADMAP.md` Wave 6 for the full entry and sequence. | SUPERSEDED |
 
 **Exit:** WebSocket clients never miss state. Streaming is smooth under load. New agent vendors plug in without modifying the runtime. (Session branching compare-view split out to Wave 6 / `COMP-OBS-BRANCH`.)
@@ -395,13 +391,13 @@ See `docs/features/STRAT-REV/design.md` for the full design.
 
 Compose's `parallel_dispatch` branch now routes through Stratum's server-side `stratum_parallel_start` + `stratum_parallel_poll` when `COMPOSE_SERVER_DISPATCH=1` AND `isolation: "none"`. Code-writing paths (`isolation: "worktree"`) remain on consumer-dispatch pending T2-F5-DIFF-EXPORT. Poll loop correctly breaks on `outcome != null`, not `can_advance`, so failure-path `ensure_failed` / retry dispatches propagate correctly.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 86 | T2-F5-COMPOSE-MIGRATE-1 | **Client methods:** Added `parallelStart()` and `parallelPoll()` to `StratumMcpClient` for server-side dispatch. Methods convert camelCase args to snake_case, call stratum MCP tools, parse JSON responses. Reuse existing `parallelDone()` pattern. 2 new tests. | COMPLETE |
-| 87 | T2-F5-COMPOSE-MIGRATE-2 | **Server executor:** New `executeParallelDispatchServer()` function in `build.js`. Uses non-module-scoped emitted-states map to track per-task progress. Calls `parallelStart()`, then polls with `parallelPoll()` in a loop that exits on `outcome != null`. Emits per-task progress events via `emitPerTaskProgress()` helper. 7 tests. | COMPLETE |
-| 88 | T2-F5-COMPOSE-MIGRATE-3 | **Routing check:** One-line flag + isolation check at top of `executeParallelDispatch()`. If `COMPOSE_SERVER_DISPATCH=1` AND `isolation: "none"`, routes to server executor; else routes to existing consumer executor. Routing logic validated in 6 tests covering flag states, isolation modes, and default behavior. | COMPLETE |
-| 89 | T2-F5-COMPOSE-MIGRATE-4 | **Environment variables:** Documented `COMPOSE_SERVER_DISPATCH` (off by default) and `COMPOSE_SERVER_DISPATCH_POLL_MS` (500ms default) in README. Configurable poll interval allows tuning event propagation vs. MCP load. | COMPLETE |
-| 90 | T2-F5-COMPOSE-MIGRATE-WORKTREE | **Worktree diff consumption:** extended routing to accept `isolation: "worktree"` + `capture_diff: true`. New `applyServerDispatchDiffs` reads `ts.diff` from poll response, delegates to shared `applyTaskDiffsToBaseCwd` helper (extracted from consumer-dispatch). Conflicts throw to halt CLI; trade-off documented. 10 new tests. | COMPLETE |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 115 | T2-F5-COMPOSE-MIGRATE-1 | Client methods: Added `parallelStart()` and `parallelPoll()` to `StratumMcpClient` for server-side dispatch. Methods convert camelCase args to snake_case, call stratum MCP tools, parse JSON responses. Reuse existing `parallelDone()` pattern. 2 new tests. | COMPLETE |
+| 116 | T2-F5-COMPOSE-MIGRATE-2 | Server executor: New `executeParallelDispatchServer()` function in `build.js`. Uses non-module-scoped emitted-states map to track per-task progress. Calls `parallelStart()`, then polls with `parallelPoll()` in a loop that exits on `outcome != null`. Emits per-task progress events via `emitPerTaskProgress()` helper. 7 tests. | COMPLETE |
+| 117 | T2-F5-COMPOSE-MIGRATE-3 | Routing check: One-line flag + isolation check at top of `executeParallelDispatch()`. If `COMPOSE_SERVER_DISPATCH=1` AND `isolation: "none"`, routes to server executor; else routes to existing consumer executor. Routing logic validated in 6 tests covering flag states, isolation modes, and default behavior. | COMPLETE |
+| 118 | T2-F5-COMPOSE-MIGRATE-4 | Environment variables: Documented `COMPOSE_SERVER_DISPATCH` (off by default) and `COMPOSE_SERVER_DISPATCH_POLL_MS` (500ms default) in README. Configurable poll interval allows tuning event propagation vs. MCP load. | COMPLETE |
+| 119 | T2-F5-COMPOSE-MIGRATE-WORKTREE | Worktree diff consumption: extended routing to accept `isolation: "worktree"` + `capture_diff: true`. New `applyServerDispatchDiffs` reads `ts.diff` from poll response, delegates to shared `applyTaskDiffsToBaseCwd` helper (extracted from consumer-dispatch). Conflicts throw to halt CLI; trade-off documented. 10 new tests. | COMPLETE |
 
 **Dependencies:** STRAT-PAR (parallel dispatch infrastructure)
 
@@ -427,13 +423,13 @@ Score LLMs on multi-phase workflow fidelity — not just code correctness (SWE-b
 
 See `docs/features/COMP-BENCH/design.md` for the full design.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 62 | COMP-BENCH-1 | **Seed repo:** ~2k LOC task management API (Express + SQLite + integration tests). Planted race condition for BENCH-4. Pre-initialized `.compose/` manifest. Deterministic `npm test`. | PLANNED |
-| 63 | COMP-BENCH-2 | **Feature specs:** 5 canonical requests as YAML — OAuth (hard), repo refactor (medium), WebSocket notifications (hard), race condition fix (medium), CSV export (easy). Machine-checkable acceptance criteria + judge rubric per feature. | PLANNED |
-| 64 | COMP-BENCH-3 | **Benchmark harness:** runner with git worktree isolation per run, connector config per model, `audit-scorer.js` (6 automated axes from Stratum audit), `judge-scorer.js` (5 qualitative axes, blind evaluation, 3x inter-rater check). | PLANNED |
-| 65 | COMP-BENCH-4 | **Scoring and calibration:** composite score (50% automated + 50% judge), cost-efficiency ratio, rubric anchor calibration from baseline runs. Judge stddev < 2 across repeated evaluations. | PLANNED |
-| 66 | COMP-BENCH-5 | **`compose bench` CLI:** `compose bench run --model X --feature Y`, `compose bench report --compare X,Y,Z`. Results persisted in `bench/results/{model}-{feature}-{timestamp}/`. | PLANNED |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 120 | COMP-BENCH-1 | Seed repo: ~2k LOC task management API (Express + SQLite + integration tests). Planted race condition for BENCH-4. Pre-initialized `.compose/` manifest. Deterministic `npm test`. | PLANNED |
+| 121 | COMP-BENCH-2 | Feature specs: 5 canonical requests as YAML — OAuth (hard), repo refactor (medium), WebSocket notifications (hard), race condition fix (medium), CSV export (easy). Machine-checkable acceptance criteria + judge rubric per feature. | PLANNED |
+| 122 | COMP-BENCH-3 | Benchmark harness: runner with git worktree isolation per run, connector config per model, `audit-scorer.js` (6 automated axes from Stratum audit), `judge-scorer.js` (5 qualitative axes, blind evaluation, 3x inter-rater check). | PLANNED |
+| 123 | COMP-BENCH-4 | Scoring and calibration: composite score (50% automated + 50% judge), cost-efficiency ratio, rubric anchor calibration from baseline runs. Judge stddev < 2 across repeated evaluations. | PLANNED |
+| 124 | COMP-BENCH-5 | `compose bench` CLI: `compose bench run --model X --feature Y`, `compose bench report --compare X,Y,Z`. Results persisted in `bench/results/{model}-{feature}-{timestamp}/`. | PLANNED |
 
 **Exit:** `compose bench run --model claude-opus --feature all` produces scored results. `compose bench report` generates a comparison table across 3+ models. Automated scores correlate with human judgment.
 
@@ -447,11 +443,11 @@ Inspired by [Conductor](https://github.com/nicklatkovich/conductor-plugin)'s "co
 
 Note: cross-artifact consistency (design↔blueprint↔plan alignment) is already handled by Codex review loops in the build pipeline.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 100 | COMP-CTX-1 | **Ambient context layer:** `compose init` scaffolds `docs/context/` with `tech-stack.md`, `conventions.md`, `decisions.md`. These are injected into every agent prompt during `compose build` as read-only context. Updated manually or via `compose context update`. | PLANNED |
-| 101 | COMP-CTX-2 | **Artifact staleness detection:** track last-modified timestamps and phase at time of writing. When the feature advances past the artifact's phase or code changes touch files referenced in the artifact, flag it as potentially stale. Surface in context panel and gate reviews. | PLANNED |
-| 102 | COMP-CTX-3 | **Decision log accumulation:** agent decisions during `compose build` (model choices, architecture trade-offs, rejected approaches) auto-append to `docs/context/decisions.md` with timestamp, feature ref, and rationale. Queryable via `compose context decisions`. | PLANNED |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 125 | COMP-CTX-1 | Ambient context layer: `compose init` scaffolds `docs/context/` with `tech-stack.md`, `conventions.md`, `decisions.md`. These are injected into every agent prompt during `compose build` as read-only context. Updated manually or via `compose context update`. | PLANNED |
+| 126 | COMP-CTX-2 | Artifact staleness detection: track last-modified timestamps and phase at time of writing. When the feature advances past the artifact's phase or code changes touch files referenced in the artifact, flag it as potentially stale. Surface in context panel and gate reviews. | PLANNED |
+| 127 | COMP-CTX-3 | Decision log accumulation: agent decisions during `compose build` (model choices, architecture trade-offs, rejected approaches) auto-append to `docs/context/decisions.md` with timestamp, feature ref, and rationale. Queryable via `compose context decisions`. | PLANNED |
 
 **Dependencies:** None — independent of other features. Enhances L2 artifact awareness and L3 policy enforcement.
 
@@ -463,16 +459,16 @@ Note: cross-artifact consistency (design↔blueprint↔plan alignment) is alread
 
 Rich terminal interface for `compose build`. Replaces raw text output with structured progress visualization, interactive gates, and live parallel task tracking.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 103 | COMP-TUI-1 | **Step pipeline bar:** horizontal progress visualization showing all build steps with done/active/pending states. Always visible at top of output. | PLANNED |
-| 104 | COMP-TUI-2 | **Gate panel:** interactive gate UI with artifact summary, approve/revise/kill as selectable options. Replaces raw readline prompt. | PLANNED |
-| 105 | COMP-TUI-3 | **Violation/findings table:** formatted table for review findings (severity, file, line, description) instead of raw JSON output. | PLANNED |
-| 106 | COMP-TUI-4 | **Parallel task grid:** live 2-4 row grid during `parallel_dispatch` showing per-task status (spinner/done/failed) with agent and elapsed time. | PLANNED |
-| 107 | COMP-TUI-5 | **File manifest:** running list of files changed by the build, updated after execute step. | PLANNED |
-| 108 | COMP-TUI-6 | **Build summary:** completion report with step durations, retries, total cost/tokens, pass/fail per step. | PLANNED |
-| 109 | COMP-TUI-7 | **Split pane layout:** top pane for pipeline progress, bottom for tool output. Terminal equivalent of cockpit main area + agent bar. | PLANNED |
-| 110 | COMP-TUI-8 | **Item detail on gate:** pull item connections, lifecycle phase, related artifacts into the gate review panel. | PLANNED |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 128 | COMP-TUI-1 | Step pipeline bar: horizontal progress visualization showing all build steps with done/active/pending states. Always visible at top of output. | PLANNED |
+| 129 | COMP-TUI-2 | Gate panel: interactive gate UI with artifact summary, approve/revise/kill as selectable options. Replaces raw readline prompt. | PLANNED |
+| 130 | COMP-TUI-3 | Violation/findings table: formatted table for review findings (severity, file, line, description) instead of raw JSON output. | PLANNED |
+| 131 | COMP-TUI-4 | Parallel task grid: live 2-4 row grid during `parallel_dispatch` showing per-task status (spinner/done/failed) with agent and elapsed time. | PLANNED |
+| 132 | COMP-TUI-5 | File manifest: running list of files changed by the build, updated after execute step. | PLANNED |
+| 133 | COMP-TUI-6 | Build summary: completion report with step durations, retries, total cost/tokens, pass/fail per step. | PLANNED |
+| 134 | COMP-TUI-7 | Split pane layout: top pane for pipeline progress, bottom for tool output. Terminal equivalent of cockpit main area + agent bar. | PLANNED |
+| 135 | COMP-TUI-8 | Item detail on gate: pull item connections, lifecycle phase, related artifacts into the gate review panel. | PLANNED |
 
 **Support features (complete):**
 - Heartbeat timer: 5s elapsed time tick during silent agent runs
@@ -489,15 +485,15 @@ Rich terminal interface for `compose build`. Replaces raw text output with struc
 
 Drag-and-drop pipeline editor in the web UI. Build, modify, and rewire `.stratum.yaml` specs visually instead of editing YAML by hand. Extends the existing COMP-PIPE template picker with a full editor.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 111 | COMP-PIPE-EDIT-1 | **Step canvas:** Drag-and-drop step nodes on a canvas. Each node shows step ID, agent, intent preview. Dependency edges rendered as arrows. Add step via toolbar or context menu. Delete step via node menu. | PLANNED |
-| 112 | COMP-PIPE-EDIT-2 | **Step inspector:** Click a step node to open a side panel with editable fields: ID, agent, intent (multiline), inputs (key-value), output_contract (dropdown from defined contracts), ensure conditions, retries, on_fail. Live validation as you type. | PLANNED |
-| 113 | COMP-PIPE-EDIT-3 | **Dependency wiring:** Drag from one node's output port to another's input port to create `depends_on` edges. Visual feedback for invalid connections (cycles, missing refs). Auto-layout via dagre/elk. | COMPLETE |
-| 114 | COMP-PIPE-EDIT-4 | **Contract editor:** Define and edit contracts (LensFinding, ReviewResult, etc.) in a schema form. Contracts available as dropdowns in step inspector. New contracts auto-added to the spec. | COMPLETE |
-| 115 | COMP-PIPE-EDIT-5 | **Sub-flow support:** Collapse a group of steps into a named sub-flow. Expand sub-flows to edit internals. Sub-flow inputs/outputs visible as ports on the collapsed node. | COMPLETE |
-| 116 | COMP-PIPE-EDIT-6 | **YAML sync:** Bidirectional sync between canvas and YAML. Edit in canvas → YAML updates live. Edit YAML in Docs view → canvas updates. Conflict resolution when both sides change. | COMPLETE |
-| 117 | COMP-PIPE-EDIT-7 | **Template save:** Save the current canvas as a new pipeline template in `pipelines/`. Templates appear in the existing TemplateSelector for future builds. | COMPLETE |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 136 | COMP-PIPE-EDIT-1 | Step canvas: Drag-and-drop step nodes on a canvas. Each node shows step ID, agent, intent preview. Dependency edges rendered as arrows. Add step via toolbar or context menu. Delete step via node menu. | PLANNED |
+| 137 | COMP-PIPE-EDIT-2 | Step inspector: Click a step node to open a side panel with editable fields: ID, agent, intent (multiline), inputs (key-value), output_contract (dropdown from defined contracts), ensure conditions, retries, on_fail. Live validation as you type. | PLANNED |
+| 138 | COMP-PIPE-EDIT-3 | Dependency wiring: Drag from one node's output port to another's input port to create `depends_on` edges. Visual feedback for invalid connections (cycles, missing refs). Auto-layout via dagre/elk. | COMPLETE |
+| 139 | COMP-PIPE-EDIT-4 | Contract editor: Define and edit contracts (LensFinding, ReviewResult, etc.) in a schema form. Contracts available as dropdowns in step inspector. New contracts auto-added to the spec. | COMPLETE |
+| 140 | COMP-PIPE-EDIT-5 | Sub-flow support: Collapse a group of steps into a named sub-flow. Expand sub-flows to edit internals. Sub-flow inputs/outputs visible as ports on the collapsed node. | COMPLETE |
+| 141 | COMP-PIPE-EDIT-6 | YAML sync: Bidirectional sync between canvas and YAML. Edit in canvas → YAML updates live. Edit YAML in Docs view → canvas updates. Conflict resolution when both sides change. | COMPLETE |
+| 142 | COMP-PIPE-EDIT-7 | Template save: Save the current canvas as a new pipeline template in `pipelines/`. Templates appear in the existing TemplateSelector for future builds. | COMPLETE |
 
 **Dependencies:** COMP-PIPE (template selector, pipeline routes — complete), COMP-UX-1 (context panel — complete)
 
@@ -530,12 +526,12 @@ Pre-configured multi-agent team compositions for common workflows. Each preset d
 
 Inspired by [wshobson/agents](https://github.com/wshobson/agents) agent-teams plugin — team-lead orchestration with file ownership model.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 92 | COMP-TEAMS-1 | **Team presets library (v1):** 3 preset configs — `review` (3 reviewers: security/perf/arch), `feature` (decompose + parallel implement + verify), `research` (3 explorers: codebase/web/docs). Stored as `.stratum.yaml` in bundled `presets/`. Two-level template loader (project → bundled fallback). | COMPLETE |
-| 93 | COMP-TEAMS-2 | **File ownership enforcement:** Plan-time validation via `no_file_conflicts` ensure on decompose step. Runtime enforcement deferred to COMP-CAPS-ENFORCE. | PARTIAL |
-| 94 | COMP-TEAMS-3 | **Team-lead agent pattern:** `decompose` step with `claude:orchestrator` serves this role in v1. Dedicated team-lead profile deferred. | PARTIAL |
-| 95 | COMP-TEAMS-4 | **`compose build --team`:** CLI flag rewrites to `--template team-<name>`. Named presets only. Batch rejection. New `read-only-researcher` capability profile for web research. | COMPLETE |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 147 | COMP-TEAMS-1 | Team presets library (v1): 3 preset configs — `review` (3 reviewers: security/perf/arch), `feature` (decompose + parallel implement + verify), `research` (3 explorers: codebase/web/docs). Stored as `.stratum.yaml` in bundled `presets/`. Two-level template loader (project → bundled fallback). | COMPLETE |
+| 148 | COMP-TEAMS-2 | File ownership enforcement: Plan-time validation via `no_file_conflicts` ensure on decompose step. Runtime enforcement deferred to COMP-CAPS-ENFORCE. | PARTIAL |
+| 149 | COMP-TEAMS-3 | Team-lead agent pattern: `decompose` step with `claude:orchestrator` serves this role in v1. Dedicated team-lead profile deferred. | PARTIAL |
+| 150 | COMP-TEAMS-4 | `compose build --team`: CLI flag rewrites to `--template team-<name>`. Named presets only. Batch rejection. New `read-only-researcher` capability profile for web research. | COMPLETE |
 
 **Dependencies:** STRAT-PAR (parallel dispatch, worktree isolation, `no_file_conflicts`)
 
@@ -551,12 +547,12 @@ Restructure Compose and Claude Code skills into a three-tier progressive disclos
 
 Inspired by [wshobson/agents](https://github.com/wshobson/agents) progressive disclosure architecture for agent skills.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 96 | SKILL-PD-1 | **Tier format spec:** Three-tier SKILL.md format with frontmatter, `## Instructions`, `## Resources` with `<!-- lazy -->` markers. | PARKED — needs Claude Code adoption to be useful |
-| 97 | SKILL-PD-2 | **Skill loader refactor:** Tier parsing and lazy loading in the skill loader. | PARKED — owned by Claude Code, not Compose |
-| 98 | SKILL-PD-3 | **Migrate existing skills:** Convert SKILL.md files to three-tier format. | PARKED — provides zero savings until item 97 ships |
-| 99 | SKILL-PD-4 | **Compose skill activation:** Phase→skill mapping. | PARKED — soft hints only without loader support |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 151 | SKILL-PD-1 | Tier format spec: Three-tier SKILL.md format with frontmatter, `## Instructions`, `## Resources` with `<!-- lazy -->` markers. (Parked: needs Claude Code adoption to be useful.) | PARKED |
+| 152 | SKILL-PD-2 | Skill loader refactor: Tier parsing and lazy loading in the skill loader. (Parked: owned by Claude Code, not Compose.) | PARKED |
+| 153 | SKILL-PD-3 | Migrate existing skills: Convert SKILL.md files to three-tier format. (Parked: provides zero savings until item 97 ships.) | PARKED |
+| 154 | SKILL-PD-4 | Compose skill activation: Phase→skill mapping. (Parked: soft hints only without loader support.) | PARKED |
 
 **Dependencies:** None — independent of other features.
 
@@ -607,12 +603,12 @@ PreToolUse hook that blocks redundant file reads within a session. Claude re-rea
 
 Inspired by [claude-context-optimizer](https://github.com/egorfedorov/claude-context-optimizer) — reported 68% token savings on heavy sessions (362K → 115K). We take the core idea (mtime + range tracking) and drop the baggage (historical pattern DB, crypto donation injection, heuristic token estimates, warnings that consume the tokens they're trying to save).
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 103 | HOOK-CACHE-1 | **Read cache core:** `read-cache.py` PreToolUse hook. Per-agent mtime + line-range tracking in `~/.claude/read-cache/<session>/<agent>/`. First read records mtime + range. Subsequent reads: mtime changed → allow + update; range fully covered → block; uncovered range → allow + merge intervals. | COMPLETE |
-| 104 | HOOK-CACHE-2 | **Invalidation rules:** `read-cache-invalidate.py` PostToolUse hook on Edit/Write/MultiEdit deletes cache entry. `read-cache-compact.py` PreCompact hook clears entire session cache. All registered in `hooks.json`. | COMPLETE |
-| 105 | HOOK-CACHE-3 | **Partial read awareness:** block message includes cached line ranges so Claude can request uncovered ranges via offset/limit. | COMPLETE |
-| 106 | HOOK-CACHE-4 | **Metrics:** Appends to `~/.claude/read-cache/stats.json` on every decision — timestamp, session, decision, file path, estimated tokens saved. Metrics for the human, not injected into context. | COMPLETE |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 162 | HOOK-CACHE-1 | Read cache core: `read-cache.py` PreToolUse hook. Per-agent mtime + line-range tracking in `~/.claude/read-cache/<session>/<agent>/`. First read records mtime + range. Subsequent reads: mtime changed → allow + update; range fully covered → block; uncovered range → allow + merge intervals. | COMPLETE |
+| 163 | HOOK-CACHE-2 | Invalidation rules: `read-cache-invalidate.py` PostToolUse hook on Edit/Write/MultiEdit deletes cache entry. `read-cache-compact.py` PreCompact hook clears entire session cache. All registered in `hooks.json`. | COMPLETE |
+| 164 | HOOK-CACHE-3 | Partial read awareness: block message includes cached line ranges so Claude can request uncovered ranges via offset/limit. | COMPLETE |
+| 165 | HOOK-CACHE-4 | Metrics: Appends to `~/.claude/read-cache/stats.json` on every decision — timestamp, session, decision, file path, estimated tokens saved. Metrics for the human, not injected into context. | COMPLETE |
 
 **Dependencies:** None — standalone hook, independent of Compose/Stratum.
 
@@ -626,12 +622,12 @@ Scope integration/browser testing to changed functionality instead of full regre
 
 Inspired by gstack `/qa` diff-aware mode — git diff analysis → affected route identification → targeted browser verification.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 113 | COMP-QA-1 | **Diff-to-route mapper:** analyze git diff to identify changed files, map to routes/pages via framework conventions (Next.js pages/, Express routes/, etc.) or explicit `routes.yaml` mapping. Output: list of affected URLs to test. | COMPLETE |
-| 114 | COMP-QA-2 | **Dev server detection:** scan common ports (3000, 4000, 5173, 8080) for running dev servers. If none found, attempt `npm run dev` or equivalent from manifest. Timeout after 30s. | COMPLETE |
-| 115 | COMP-QA-3 | **Targeted browser verification:** for each affected route, run a Playwright verification pass — navigate, check for console errors, verify key elements render, take before/after screenshots. Findings feed into review merge step. | COMPLETE |
-| 116 | COMP-QA-4 | **Regression guard:** on adjacent routes (one hop from changed routes in the route graph), run a lightweight smoke check (200 OK + no console errors) to catch collateral breakage without full verification cost. | COMPLETE |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 166 | COMP-QA-1 | Diff-to-route mapper: analyze git diff to identify changed files, map to routes/pages via framework conventions (Next.js pages/, Express routes/, etc.) or explicit `routes.yaml` mapping. Output: list of affected URLs to test. | COMPLETE |
+| 167 | COMP-QA-2 | Dev server detection: scan common ports (3000, 4000, 5173, 8080) for running dev servers. If none found, attempt `npm run dev` or equivalent from manifest. Timeout after 30s. | COMPLETE |
+| 168 | COMP-QA-3 | Targeted browser verification: for each affected route, run a Playwright verification pass — navigate, check for console errors, verify key elements render, take before/after screenshots. Findings feed into review merge step. | COMPLETE |
+| 169 | COMP-QA-4 | Regression guard: on adjacent routes (one hop from changed routes in the route graph), run a lightweight smoke check (200 OK + no console errors) to catch collateral breakage without full verification cost. | COMPLETE |
 
 **Dependencies:** None — standalone, but enhances `compose build` test phase.
 
@@ -645,12 +641,12 @@ Assign a numeric quality score to gate decisions based on weighted dimensions. I
 
 Inspired by gstack `/qa` health scoring — weighted average across 8 dimensions with per-severity deductions.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 117 | COMP-HEALTH-1 | **Score dimensions:** define 6 weighted dimensions — test coverage (25%), review findings (25%, weighted by severity), contract compliance (15%), console/runtime errors (15%), documentation freshness (10%), plan completion (10%). Configurable weights in `.compose/compose.json`. | COMPLETE |
-| 118 | COMP-HEALTH-2 | **Score computation:** after each phase completes, compute composite score from available signals (Stratum audit trace, review findings, test results). Missing dimensions scored as neutral (50), not zero. | COMPLETE |
-| 119 | COMP-HEALTH-3 | **Policy integration:** gates can declare `min_score: 70` as a threshold. Score below threshold → gate blocks. Score between threshold and target → gate warns. Score above target → auto-approve (if policy allows). | COMPLETE |
-| 120 | COMP-HEALTH-4 | **Score history and trends:** persist scores in `.compose/data/health-scores.json` per feature per phase. `compose status` shows current score. Context panel shows score trend across phases. `/retro` includes score trends. | COMPLETE |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 170 | COMP-HEALTH-1 | Score dimensions: define 6 weighted dimensions — test coverage (25%), review findings (25%, weighted by severity), contract compliance (15%), console/runtime errors (15%), documentation freshness (10%), plan completion (10%). Configurable weights in `.compose/compose.json`. | COMPLETE |
+| 171 | COMP-HEALTH-2 | Score computation: after each phase completes, compute composite score from available signals (Stratum audit trace, review findings, test results). Missing dimensions scored as neutral (50), not zero. | COMPLETE |
+| 172 | COMP-HEALTH-3 | Policy integration: gates can declare `min_score: 70` as a threshold. Score below threshold → gate blocks. Score between threshold and target → gate warns. Score above target → auto-approve (if policy allows). | COMPLETE |
+| 173 | COMP-HEALTH-4 | Score history and trends: persist scores in `.compose/data/health-scores.json` per feature per phase. `compose status` shows current score. Context panel shows score trend across phases. `/retro` includes score trends. | COMPLETE |
 
 **Dependencies:** STRAT-REV (review findings feed into scoring), COMP-CTX-2 (documentation freshness signal).
 
@@ -664,12 +660,12 @@ Mechanical verification that plan items appear in the implementation diff before
 
 Inspired by gstack `/ship` plan completion audit — cross-referencing TODOS.md against diff to detect scope drift.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 121 | COMP-PLAN-VERIFY-1 | **Plan parser:** `plan-parser.js` — `parsePlanItems()` extracts checkbox items with file paths and critical flags from plan.md. Agent-side helper for the ship step. | COMPLETE |
-| 122 | COMP-PLAN-VERIFY-2 | **Diff matcher:** `matchItemsToDiff()` classifies plan items as DONE (file in diff), MISSING (file not in diff), EXTRA (diff file not in plan — scope creep). | COMPLETE |
-| 123 | COMP-PLAN-VERIFY-3 | **`plan_completion` ensure function:** Python ensure builtin in spec.py. Runs on the ship step (not ship_gate). Division-by-zero guard. Critical missing → plain string violations. Below threshold → violation with percentage. Registered in executor sandbox. | COMPLETE |
-| 124 | COMP-PLAN-VERIFY-4 | **Scope creep report:** EXTRA items from `matchItemsToDiff` are informational. Agent presents at ship_gate for human review. Optional policy gate via `len(result.scope_creep) == 0`. | COMPLETE |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 174 | COMP-PLAN-VERIFY-1 | Plan parser: `plan-parser.js` — `parsePlanItems()` extracts checkbox items with file paths and critical flags from plan.md. Agent-side helper for the ship step. | COMPLETE |
+| 175 | COMP-PLAN-VERIFY-2 | Diff matcher: `matchItemsToDiff()` classifies plan items as DONE (file in diff), MISSING (file not in diff), EXTRA (diff file not in plan — scope creep). | COMPLETE |
+| 176 | COMP-PLAN-VERIFY-3 | `plan_completion` ensure function: Python ensure builtin in spec.py. Runs on the ship step (not ship_gate). Division-by-zero guard. Critical missing → plain string violations. Below threshold → violation with percentage. Registered in executor sandbox. | COMPLETE |
+| 177 | COMP-PLAN-VERIFY-4 | Scope creep report: EXTRA items from `matchItemsToDiff` are informational. Agent presents at ship_gate for human review. Optional policy gate via `len(result.scope_creep) == 0`. | COMPLETE |
 
 **Dependencies:** None — standalone ensure function. Enhances any `compose build` pipeline with a plan.
 
@@ -683,12 +679,12 @@ Detect when a project has no test framework and auto-generate one during the bui
 
 Inspired by gstack `/ship` test bootstrap — detects missing framework, installs it, generates initial tests before first PR.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 125 | COMP-TEST-BOOTSTRAP-1 | **Framework detection:** check for test config files (jest.config, vitest.config, pytest.ini, go test files, etc.). If none found, classify project by language/framework and select appropriate test runner. | PLANNED |
-| 126 | COMP-TEST-BOOTSTRAP-2 | **Scaffold generation:** install test runner, create config, generate a minimal test helper with project-specific setup (db connection, server boot, auth fixture). Output as a `test-bootstrap` decompose task in the implementation phase. | PLANNED |
-| 127 | COMP-TEST-BOOTSTRAP-3 | **Golden flow generation:** from the implementation diff, generate 1–3 golden flow tests covering the core capability lifecycle. Tests follow the project's testing hierarchy (golden flows > error harness > contract > unit). | PLANNED |
-| 128 | COMP-TEST-BOOTSTRAP-4 | **Gate integration:** test phase ensure requires `test_count >= 1` and `test_pass_rate == 100%`. If bootstrap generated the tests, review lens flags them for human verification ("auto-generated tests — verify assertions match intent"). | PLANNED |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 178 | COMP-TEST-BOOTSTRAP-1 | Framework detection: check for test config files (jest.config, vitest.config, pytest.ini, go test files, etc.). If none found, classify project by language/framework and select appropriate test runner. | PLANNED |
+| 179 | COMP-TEST-BOOTSTRAP-2 | Scaffold generation: install test runner, create config, generate a minimal test helper with project-specific setup (db connection, server boot, auth fixture). Output as a `test-bootstrap` decompose task in the implementation phase. | PLANNED |
+| 180 | COMP-TEST-BOOTSTRAP-3 | Golden flow generation: from the implementation diff, generate 1–3 golden flow tests covering the core capability lifecycle. Tests follow the project's testing hierarchy (golden flows > error harness > contract > unit). | PLANNED |
+| 181 | COMP-TEST-BOOTSTRAP-4 | Gate integration: test phase ensure requires `test_count >= 1` and `test_pass_rate == 100%`. If bootstrap generated the tests, review lens flags them for human verification ("auto-generated tests — verify assertions match intent"). | PLANNED |
 
 **Dependencies:** None — standalone enhancement to the build pipeline test phase.
 
@@ -702,12 +698,12 @@ Pre-flight classification of task complexity and blast radius before work begins
 
 Inspired by [Hub3r7/claude-code-orchestration-template](https://github.com/Hub3r7/claude-code-orchestration-template) `/tier-check` skill — upfront task classification with chain recommendation.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 129 | COMP-TRIAGE-1 | **Classification engine:** `lib/triage.js` — pure file analysis. Counts paths in plan/blueprint, detects security/core paths, assigns tier 0-4 and build profile (`needs_prd`, `needs_architecture`, `needs_verification`, `needs_report`). No LLM calls. | COMPLETE |
-| 130 | COMP-TRIAGE-2 | **`compose triage` CLI command:** standalone command prints tier, profile flags, signal counts, rationale. Persists to feature.json. | COMPLETE |
-| 131 | COMP-TRIAGE-3 | **Build integration:** `compose build` runs triage before `stratum_plan()`. Profile toggles `skip_if` on existing pipeline steps — no new templates needed. `--skip-triage` and `--template` flags. Cache invalidation via mtime comparison. Creates feature.json if missing. | COMPLETE |
-| 132 | COMP-TRIAGE-4 | **Tier history:** deferred — triage results persist in feature.json per feature. Cross-feature history log is a one-liner addition when needed. | PARKED |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 182 | COMP-TRIAGE-1 | Classification engine: `lib/triage.js` — pure file analysis. Counts paths in plan/blueprint, detects security/core paths, assigns tier 0-4 and build profile (`needs_prd`, `needs_architecture`, `needs_verification`, `needs_report`). No LLM calls. | COMPLETE |
+| 183 | COMP-TRIAGE-2 | `compose triage` CLI command: standalone command prints tier, profile flags, signal counts, rationale. Persists to feature.json. | COMPLETE |
+| 184 | COMP-TRIAGE-3 | Build integration: `compose build` runs triage before `stratum_plan()`. Profile toggles `skip_if` on existing pipeline steps — no new templates needed. `--skip-triage` and `--template` flags. Cache invalidation via mtime comparison. Creates feature.json if missing. | COMPLETE |
+| 185 | COMP-TRIAGE-4 | Tier history: deferred — triage results persist in feature.json per feature. Cross-feature history log is a one-liner addition when needed. | PARKED |
 
 **Dependencies:** None — standalone, enhances `compose build` entry point.
 
@@ -721,12 +717,12 @@ Standardize agent capability profiles with explicit tool restrictions. Each agen
 
 Inspired by [Hub3r7/claude-code-orchestration-template](https://github.com/Hub3r7/claude-code-orchestration-template) `disallowedTools` pattern — review agents restricted to `[Read, Grep, Glob]`, orchestrator restricted to meta-config only.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 133 | COMP-AGENT-CAPS-1 | **Capability profile schema:** `server/agent-templates.js` — 4 profiles with `allowedTools`/`disallowedTools`. `lib/agent-string.js` — centralized `parseAgentString("claude:template")` parser + `resolveAgentConfig()`. | COMPLETE |
-| 134 | COMP-AGENT-CAPS-2 | **Profile templates:** `read-only-reviewer`, `implementer`, `orchestrator`, `security-auditor`. Resolved by agent string parser at build time. | COMPLETE |
-| 135 | COMP-AGENT-CAPS-3 | **Compose enforcement:** `build.js` connector factory resolves agent string → template → tool restrictions. `claude-sdk-connector` passes `allowedTools`/`disallowedTools` to SDK. Review sub-flow steps use `claude:orchestrator` and `claude:read-only-reviewer`. `capability_profile` stream events emitted. | COMPLETE |
-| 136 | COMP-AGENT-CAPS-4 | **Violation detection:** informational logging via stream events in v1. Runtime violation detection (inspecting actual tool_use events against profile) requires normalizer integration — deferred to v2. | PARTIAL |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 186 | COMP-AGENT-CAPS-1 | Capability profile schema: `server/agent-templates.js` — 4 profiles with `allowedTools`/`disallowedTools`. `lib/agent-string.js` — centralized `parseAgentString("claude:template")` parser + `resolveAgentConfig()`. | COMPLETE |
+| 187 | COMP-AGENT-CAPS-2 | Profile templates: `read-only-reviewer`, `implementer`, `orchestrator`, `security-auditor`. Resolved by agent string parser at build time. | COMPLETE |
+| 188 | COMP-AGENT-CAPS-3 | Compose enforcement: `build.js` connector factory resolves agent string → template → tool restrictions. `claude-sdk-connector` passes `allowedTools`/`disallowedTools` to SDK. Review sub-flow steps use `claude:orchestrator` and `claude:read-only-reviewer`. `capability_profile` stream events emitted. | COMPLETE |
+| 189 | COMP-AGENT-CAPS-4 | Violation detection: informational logging via stream events in v1. Runtime violation detection (inspecting actual tool_use events against profile) requires normalizer integration — deferred to v2. | PARTIAL |
 
 **Dependencies:** None — standalone, enhances agent dispatch in `compose build`.
 
@@ -738,12 +734,12 @@ Inspired by [Hub3r7/claude-code-orchestration-template](https://github.com/Hub3r
 
 Runtime detection of agent tool calls that violate their capability profile. Currently COMP-AGENT-CAPS logs which template was active per step, but doesn't inspect actual tool_use events. This feature hooks into the result normalizer's event stream to compare each tool call against the agent's profile and surface violations.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 193 | COMP-CAPS-ENFORCE-1 | **Normalizer event tap:** Extend `result-normalizer.js` to emit structured `tool_use` events (tool name, timestamp) to a callback or event emitter during `runAndNormalize()`. Currently normalizer only returns `{ text, result }` — tool events are consumed but not surfaced. | PLANNED |
-| 194 | COMP-CAPS-ENFORCE-2 | **Violation checker:** After each step completes, compare observed tool_use events against the step's agent template (`allowedTools`/`disallowedTools`). Classify: VIOLATION (disallowed tool used), WARNING (tool not in allowedTools but not explicitly disallowed). | PLANNED |
-| 195 | COMP-CAPS-ENFORCE-3 | **Build audit integration:** Violations written to build-stream as `capability_violation` events with step, agent, tool, template, severity. Surface in review findings and context panel audit trail. | PLANNED |
-| 196 | COMP-CAPS-ENFORCE-4 | **Enforcement mode:** Policy setting `capabilities.enforcement: "log" | "block"`. Log mode (default): violations recorded but don't block. Block mode: violation fails the step with `capability_violation` error. | PLANNED |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 190 | COMP-CAPS-ENFORCE-1 | Normalizer event tap: Extend `result-normalizer.js` to emit structured `tool_use` events (tool name, timestamp) to a callback or event emitter during `runAndNormalize()`. Currently normalizer only returns `{ text, result }` — tool events are consumed but not surfaced. | PLANNED |
+| 191 | COMP-CAPS-ENFORCE-2 | Violation checker: After each step completes, compare observed tool_use events against the step's agent template (`allowedTools`/`disallowedTools`). Classify: VIOLATION (disallowed tool used), WARNING (tool not in allowedTools but not explicitly disallowed). | PLANNED |
+| 192 | COMP-CAPS-ENFORCE-3 | Build audit integration: Violations written to build-stream as `capability_violation` events with step, agent, tool, template, severity. Surface in review findings and context panel audit trail. | PLANNED |
+| 193 | COMP-CAPS-ENFORCE-4 | Enforcement mode: Policy setting `capabilities.enforcement: "log" \| "block"`. Log mode (default): violations recorded but don't block. Block mode: violation fails the step with `capability_violation` error. | PLANNED |
 
 **Dependencies:** COMP-AGENT-CAPS (template registry — COMPLETE)
 
@@ -775,12 +771,12 @@ Hard ceilings on iteration loops to prevent runaway agents. Today `abort_iterati
 
 Inspired by [LaneKeep](https://github.com/algorismo-au/lanekeep)'s budget-as-enforcement pattern — action counts, token caps, cost thresholds, and wall-clock timeouts as hard limits, not warnings. Cross-session cumulative limits.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 141 | COMP-BUDGET-1 | **Iteration ceilings:** Wall-clock timeout and action count ceiling checked at each `report_iteration_result`. Timeout and maxActions stored in iterationState. Exceeded → auto-abort with `timeout` or `action_limit` outcome. | COMPLETE |
-| 142 | COMP-BUDGET-2 | **Cumulative tracking:** `budget-ledger.js` persists per-feature iteration totals in `.compose/data/budget-ledger.json`. Recorded from both report and abort routes. `checkCumulativeBudget()` blocks start when exceeded (429). | COMPLETE |
-| 143 | COMP-BUDGET-3 | **Budget visibility:** Client handles `timeout` and `action_limit` outcomes with distinct messages. Ops strip displays live elapsed/timeout via `opsStripLogic.js` (formatElapsed/formatTimeout, reads `wallClockTimeout` + `startedAt` from iterationState) — shipped via COMP-OBS-SURFACE-4. | COMPLETE |
-| 144 | COMP-BUDGET-4 | **Policy integration:** Per-loop-type settings: `iterations.review.timeout` (15min), `iterations.coverage.timeout` (30min), `iterations.review.maxTotal` (20), `iterations.coverage.maxTotal` (50). Validated in settings-store. | COMPLETE |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 197 | COMP-BUDGET-1 | Iteration ceilings: Wall-clock timeout and action count ceiling checked at each `report_iteration_result`. Timeout and maxActions stored in iterationState. Exceeded → auto-abort with `timeout` or `action_limit` outcome. | COMPLETE |
+| 198 | COMP-BUDGET-2 | Cumulative tracking: `budget-ledger.js` persists per-feature iteration totals in `.compose/data/budget-ledger.json`. Recorded from both report and abort routes. `checkCumulativeBudget()` blocks start when exceeded (429). | COMPLETE |
+| 199 | COMP-BUDGET-3 | Budget visibility: Client handles `timeout` and `action_limit` outcomes with distinct messages. Ops strip displays live elapsed/timeout via `opsStripLogic.js` (formatElapsed/formatTimeout, reads `wallClockTimeout` + `startedAt` from iterationState) — shipped via COMP-OBS-SURFACE-4. | COMPLETE |
+| 200 | COMP-BUDGET-4 | Policy integration: Per-loop-type settings: `iterations.review.timeout` (15min), `iterations.coverage.timeout` (30min), `iterations.review.maxTotal` (20), `iterations.coverage.maxTotal` (50). Validated in settings-store. | COMPLETE |
 
 **Dependencies:** None — enhances existing iteration loop infrastructure.
 
@@ -794,12 +790,12 @@ Render existing but invisible data in the UI. Retry counts, postcondition result
 
 Inspired by [LaneKeep](https://github.com/algorismo-au/lanekeep)'s append-only audit trail — structured visibility into every evaluation tier and decision point.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 146 | COMP-OBS-SURFACE-1 | **Retry surface:** when a Stratum step fails postconditions and retries, show the failure reason and retry count in the message stream. Data already exists: `build.js` tracks `retries` per step, `ItemDetailPanel` shows `step.attempts` in audit trace. Add: retry badge on ops strip entry ("retry 2/3"), failure reason inline in build step message. Currently silent retries look like the agent is stuck. | PLANNED |
-| 148 | COMP-OBS-SURFACE-2 | **Postcondition visibility:** `build_step_done` events already carry `violations` array from `response.violations` in `build.js`. Render in MessageCard: check name, pass/fail icon, violation detail (expandable). Currently opaque — user sees "step done" but not what was verified. | PLANNED |
-| 150 | COMP-OBS-SURFACE-3 | **Filtered event toggle:** AgentStream.jsx suppresses `tool_progress`, `tool_use_summary`, `stream_event` (lines 226-228). Add a "verbose" toggle in agent bar settings. When on, these events render as dimmed, smaller-font entries. Off by default. Persisted in localStorage with other cockpit state. | PLANNED |
-| 192 | COMP-OBS-SURFACE-4 | **Live iteration budget counters:** OpsStrip shows "review 3/5, 2:34/15:00" during active iterations. Live elapsed timer via 1s setInterval. Reads wallClockTimeout/startedAt from iterationState. | COMPLETE |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 201 | COMP-OBS-SURFACE-1 | Retry surface: when a Stratum step fails postconditions and retries, show the failure reason and retry count in the message stream. Data already exists: `build.js` tracks `retries` per step, `ItemDetailPanel` shows `step.attempts` in audit trace. Add: retry badge on ops strip entry ("retry 2/3"), failure reason inline in build step message. Currently silent retries look like the agent is stuck. | PLANNED |
+| 202 | COMP-OBS-SURFACE-2 | Postcondition visibility: `build_step_done` events already carry `violations` array from `response.violations` in `build.js`. Render in MessageCard: check name, pass/fail icon, violation detail (expandable). Currently opaque — user sees "step done" but not what was verified. | PLANNED |
+| 203 | COMP-OBS-SURFACE-3 | Filtered event toggle: AgentStream.jsx suppresses `tool_progress`, `tool_use_summary`, `stream_event` (lines 226-228). Add a "verbose" toggle in agent bar settings. When on, these events render as dimmed, smaller-font entries. Off by default. Persisted in localStorage with other cockpit state. | PLANNED |
+| 204 | COMP-OBS-SURFACE-4 | Live iteration budget counters: OpsStrip shows "review 3/5, 2:34/15:00" during active iterations. Live elapsed timer via 1s setInterval. Reads wallClockTimeout/startedAt from iterationState. | COMPLETE |
 
 **Dependencies:** None — all data already available in the event stream. Item 192 depends on COMP-BUDGET (COMPLETE).
 
@@ -813,11 +809,11 @@ Enrich the existing `tool_use_summary` event with full output content and render
 
 See `docs/features/COMP-OBS-STREAM/design.md` for the full design.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 145 | COMP-OBS-STREAM-1 | **Connector enrichment:** both connectors yield enriched `tool_use_summary` with `output` field (≤2KB). `result-normalizer.js` forwards to streamWriter (currently missing). Bridge adds `tool_use_summary` case to `_mapEvent`. | PLANNED |
-| 151 | COMP-OBS-STREAM-2 | **UI rendering:** AgentStream pre-groups consecutive `tool_use` → `tool_use_summary` pairs. MessageCard renders `ToolResultBlock` (new component) attached below tool_use blocks. Collapsible: summary one-liner → first 20 lines → full content. Error detection with destructive styling. | PLANNED |
-| 152 | COMP-OBS-STREAM-3 | **Verbose gating:** reuses COMP-OBS-SURFACE's verbose toggle (no separate toggle). Verbose off: summaries filtered, no results visible. Verbose on: summaries consumed by pre-grouping, results render attached to tool_use. `tool_progress` renders standalone dimmed. | PLANNED |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 205 | COMP-OBS-STREAM-1 | Connector enrichment: both connectors yield enriched `tool_use_summary` with `output` field (≤2KB). `result-normalizer.js` forwards to streamWriter (currently missing). Bridge adds `tool_use_summary` case to `_mapEvent`. | PLANNED |
+| 206 | COMP-OBS-STREAM-2 | UI rendering: AgentStream pre-groups consecutive `tool_use` → `tool_use_summary` pairs. MessageCard renders `ToolResultBlock` (new component) attached below tool_use blocks. Collapsible: summary one-liner → first 20 lines → full content. Error detection with destructive styling. | PLANNED |
+| 207 | COMP-OBS-STREAM-3 | Verbose gating: reuses COMP-OBS-SURFACE's verbose toggle (no separate toggle). Verbose off: summaries filtered, no results visible. Verbose on: summaries consumed by pre-grouping, results render attached to tool_use. `tool_progress` renders standalone dimmed. | PLANNED |
 
 **Dependencies:** COMP-OBS-SURFACE (verbose toggle).
 
@@ -829,12 +825,12 @@ See `docs/features/COMP-OBS-STREAM/design.md` for the full design.
 
 Per-step token usage and cost. Currently only session-level `total_cost_usd` appears in the result message. No per-step breakdown, no cumulative build cost, no input/output token split. Requires extending the Stratum audit format and the build-stream event schema.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 147 | COMP-OBS-COST-1 | **Audit format extension:** Stratum `stratum_audit` response gains per-step `input_tokens`, `output_tokens`, `cost_usd` fields. Populated from SDK result events accumulated during step execution. Stored in flow state alongside existing `duration_ms`. | COMPLETE |
-| 153 | COMP-OBS-COST-2 | **Build-stream cost events:** `build_step_done` events gain `tokens` and `cost_usd` fields from the audit data. `build_end` event gains `total_tokens` and `total_cost_usd` aggregated across all steps. | COMPLETE |
-| 154 | COMP-OBS-COST-3 | **Ops strip cost display:** cumulative build cost shown in ops strip during active builds (e.g., "$0.42"). Updates on each `build_step_done`. | COMPLETE |
-| 155 | COMP-OBS-COST-4 | **Context panel cost breakdown:** build detail in context panel shows per-step table: step name, input tokens, output tokens, cost, duration. Sortable by cost. Highlights most expensive step. | COMPLETE |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 208 | COMP-OBS-COST-1 | Audit format extension: Stratum `stratum_audit` response gains per-step `input_tokens`, `output_tokens`, `cost_usd` fields. Populated from SDK result events accumulated during step execution. Stored in flow state alongside existing `duration_ms`. | COMPLETE |
+| 209 | COMP-OBS-COST-2 | Build-stream cost events: `build_step_done` events gain `tokens` and `cost_usd` fields from the audit data. `build_end` event gains `total_tokens` and `total_cost_usd` aggregated across all steps. | COMPLETE |
+| 210 | COMP-OBS-COST-3 | Ops strip cost display: cumulative build cost shown in ops strip during active builds (e.g., "$0.42"). Updates on each `build_step_done`. | COMPLETE |
+| 211 | COMP-OBS-COST-4 | Context panel cost breakdown: build detail in context panel shows per-step table: step name, input tokens, output tokens, cost, duration. Sortable by cost. Highlights most expensive step. | COMPLETE |
 
 **Dependencies:** None — standalone. Benefits from COMP-BUDGET (cumulative cost tracking reuses budget ledger).
 
@@ -848,12 +844,12 @@ Gate checks run in cost order with short-circuit on failure. Currently gates hav
 
 Inspired by [LaneKeep](https://github.com/algorismo-au/lanekeep)'s 7-9 tier evaluation pipeline — fast pattern matching first, expensive LLM verification last, first failure blocks.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 149 | COMP-OBS-GATES-1 | **Tier definition:** define 5 gate evaluation tiers: T0 schema/type validation, T1 lint/format, T2 test suite, T3 LLM review (Claude lenses), T4 cross-model review (Codex). Each tier declares cost category (fast/medium/expensive). Configured in `.compose/compose.json` under `gate_tiers`. | COMPLETE |
-| 156 | COMP-OBS-GATES-2 | **Short-circuit execution:** gate evaluator runs tiers in order. First tier failure halts evaluation — expensive tiers never run. Gate result includes: tiers_run, tier_that_failed (if any), tiers_skipped. | COMPLETE |
-| 157 | COMP-OBS-GATES-3 | **Gate detail view:** context panel gate review shows tier pipeline visualization — each tier as a dot (green=pass, red=fail, gray=skipped). Click tier for detail. Failed tier shows findings. Skipped tiers show "skipped — prior tier failed". | COMPLETE |
-| 158 | COMP-OBS-GATES-4 | **Cost savings tracking:** track and display estimated cost saved by short-circuiting (cost of skipped tiers). Accumulate in `.compose/data/gate-savings.json`. Surface in build summary. | COMPLETE |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 212 | COMP-OBS-GATES-1 | Tier definition: define 5 gate evaluation tiers: T0 schema/type validation, T1 lint/format, T2 test suite, T3 LLM review (Claude lenses), T4 cross-model review (Codex). Each tier declares cost category (fast/medium/expensive). Configured in `.compose/compose.json` under `gate_tiers`. | COMPLETE |
+| 213 | COMP-OBS-GATES-2 | Short-circuit execution: gate evaluator runs tiers in order. First tier failure halts evaluation — expensive tiers never run. Gate result includes: tiers_run, tier_that_failed (if any), tiers_skipped. | COMPLETE |
+| 214 | COMP-OBS-GATES-3 | Gate detail view: context panel gate review shows tier pipeline visualization — each tier as a dot (green=pass, red=fail, gray=skipped). Click tier for detail. Failed tier shows findings. Skipped tiers show "skipped — prior tier failed". | COMPLETE |
+| 215 | COMP-OBS-GATES-4 | Cost savings tracking: track and display estimated cost saved by short-circuiting (cost of skipped tiers). Accumulate in `.compose/data/gate-savings.json`. Surface in build summary. | COMPLETE |
 
 **Dependencies:** STRAT-REV (lens library provides T3/T4 tier implementations).
 
@@ -877,6 +873,7 @@ Inspired by [LaneKeep](https://github.com/algorismo-au/lanekeep)'s 7-9 tier eval
 ---
 
 <!-- preserved-section: execution-sequencing -->
+
 ## Execution Sequencing
 
 Proposed wave order for all PLANNED and PARTIAL features. Dependencies flow forward — each wave
@@ -991,6 +988,10 @@ Parallel: Wave 1 items are independent of each other
 ---
 
 <!-- preserved-section: key-documents -->
+<!-- /preserved-section -->
+
+---
+
 ## Key Documents
 
 | Document | What it is |
@@ -1020,12 +1021,12 @@ Run multiple LLM providers on the same task and use a consensus gate (e.g., 75% 
 
 Inspired by [Claude Octopus](https://github.com/nyldn/claude-octopus) (2.4K stars) — multi-provider consensus pattern.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 159 | COMP-CONSENSUS-1 | **Consensus dispatcher:** send same prompt to N connectors in parallel. Reuses existing connector trait + STRAT-PAR parallel execution. Configurable provider list per consensus step. Timeout per provider with partial-result fallback. | PLANNED |
-| 160 | COMP-CONSENSUS-2 | **Agreement scorer:** semantic similarity + structured diff across responses. Pairwise comparison matrix. Agreement threshold configurable (default 75%). Scoring method pluggable — exact match, embedding cosine, LLM-as-judge. | PLANNED |
-| 161 | COMP-CONSENSUS-3 | **Disagreement gate:** surface divergent responses as a gate decision. When agreement falls below threshold, gate blocks with a structured comparison view: areas of agreement, areas of divergence, per-provider response excerpts. Human selects winner or requests re-run. | PLANNED |
-| 162 | COMP-CONSENSUS-4 | **Pipeline integration:** optional `consensus: true` flag on any Stratum step. When enabled, step dispatches through consensus dispatcher instead of single connector. Consensus result replaces step output. Audit trace includes per-provider responses and agreement score. | PLANNED |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 230 | COMP-CONSENSUS-1 | Consensus dispatcher: send same prompt to N connectors in parallel. Reuses existing connector trait + STRAT-PAR parallel execution. Configurable provider list per consensus step. Timeout per provider with partial-result fallback. | PLANNED |
+| 231 | COMP-CONSENSUS-2 | Agreement scorer: semantic similarity + structured diff across responses. Pairwise comparison matrix. Agreement threshold configurable (default 75%). Scoring method pluggable — exact match, embedding cosine, LLM-as-judge. | PLANNED |
+| 232 | COMP-CONSENSUS-3 | Disagreement gate: surface divergent responses as a gate decision. When agreement falls below threshold, gate blocks with a structured comparison view: areas of agreement, areas of divergence, per-provider response excerpts. Human selects winner or requests re-run. | PLANNED |
+| 233 | COMP-CONSENSUS-4 | Pipeline integration: optional `consensus: true` flag on any Stratum step. When enabled, step dispatches through consensus dispatcher instead of single connector. Consensus result replaces step output. Audit trace includes per-provider responses and agreement score. | PLANNED |
 
 **Dependencies:** Phase 4 connectors (COMPLETE).
 
@@ -1039,12 +1040,12 @@ Meta-agent that iterates on agent configurations (system prompts, tool lists, ro
 
 Inspired by [AutoAgent](https://github.com/kevinrgu/autoagent) (MarkTechPost) — hit #1 on SpreadsheetBench (96.5%) via autonomous iteration.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 163 | COMP-AUTOHARNESS-1 | **Harness definition format:** YAML describing mutable config dimensions — system prompt variants, tool subsets, routing rule alternatives, model tier overrides. Each dimension declares value space and constraints. Stored in `.compose/harness/<name>.yaml`. | PLANNED |
-| 164 | COMP-AUTOHARNESS-2 | **Iteration loop:** modify → dispatch → score → keep/discard cycle. Selects dimension to mutate, generates variant, runs benchmark suite, compares score to current best. Keeps improvement, discards regression. Configurable iteration count and convergence threshold. | PLANNED |
-| 165 | COMP-AUTOHARNESS-3 | **COMP-BENCH integration:** use bench suite as scoring oracle. Harness submits config variant → COMP-BENCH runs feature set → returns aggregate score. Harness compares against baseline. Requires COMP-BENCH seed repos and scoring rubric. | PLANNED |
-| 166 | COMP-AUTOHARNESS-4 | **`compose optimize --feature X` CLI command:** runs harness overnight against a specific feature's benchmark. Reports: best config found, score delta vs baseline, iteration history, recommended changes. Writes result to `.compose/data/optimize-results/<feature>.json`. | PLANNED |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 234 | COMP-AUTOHARNESS-1 | Harness definition format: YAML describing mutable config dimensions — system prompt variants, tool subsets, routing rule alternatives, model tier overrides. Each dimension declares value space and constraints. Stored in `.compose/harness/<name>.yaml`. | PLANNED |
+| 235 | COMP-AUTOHARNESS-2 | Iteration loop: modify → dispatch → score → keep/discard cycle. Selects dimension to mutate, generates variant, runs benchmark suite, compares score to current best. Keeps improvement, discards regression. Configurable iteration count and convergence threshold. | PLANNED |
+| 236 | COMP-AUTOHARNESS-3 | COMP-BENCH integration: use bench suite as scoring oracle. Harness submits config variant → COMP-BENCH runs feature set → returns aggregate score. Harness compares against baseline. Requires COMP-BENCH seed repos and scoring rubric. | PLANNED |
+| 237 | COMP-AUTOHARNESS-4 | `compose optimize --feature X` CLI command: runs harness overnight against a specific feature's benchmark. Reports: best config found, score delta vs baseline, iteration history, recommended changes. Writes result to `.compose/data/optimize-results/<feature>.json`. | PLANNED |
 
 **Dependencies:** COMP-BENCH (benchmark infrastructure).
 
@@ -1076,12 +1077,12 @@ Formalize the proposal → spec → design → tasks artifact flow as a lightwei
 
 Inspired by [OpenSpec](https://github.com/Fission-AI/OpenSpec/) — spec-driven development framework.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 170 | COMP-SPECFLOW-1 | **Artifact schemas:** `proposal.md`, `spec.md`, `design.md`, `tasks.md` templates with required/optional sections. Each template declares: required fields, optional fields, cross-reference expectations, minimum content thresholds. Stored in `.compose/templates/artifacts/`. | PLANNED |
-| 171 | COMP-SPECFLOW-2 | **Quality bar definitions:** per-artifact "good enough" checklist that gates can reference. Proposal: problem stated, audience identified, scope bounded. Spec: acceptance criteria as checkboxes, contract references. Design: component diagram, data flow, error handling. Tasks: dependencies ordered, effort estimated, file paths annotated `(new)`/`(existing)`. | PLANNED |
-| 172 | COMP-SPECFLOW-3 | **`compose artifact validate` CLI:** schema + quality check without running a full build. Validates artifact against its template schema, checks required fields, flags missing cross-references, scores against quality bar. Returns structured pass/warn/fail per check. | PLANNED |
-| 173 | COMP-SPECFLOW-4 | **Standalone export:** artifacts usable with any AI coding tool, not just Compose. Export strips Compose-specific metadata, preserves content and cross-references as relative links. Output formats: markdown (default), JSON (for tooling). `compose artifact export --format md`. | PLANNED |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 241 | COMP-SPECFLOW-1 | Artifact schemas: `proposal.md`, `spec.md`, `design.md`, `tasks.md` templates with required/optional sections. Each template declares: required fields, optional fields, cross-reference expectations, minimum content thresholds. Stored in `.compose/templates/artifacts/`. | PLANNED |
+| 242 | COMP-SPECFLOW-2 | Quality bar definitions: per-artifact "good enough" checklist that gates can reference. Proposal: problem stated, audience identified, scope bounded. Spec: acceptance criteria as checkboxes, contract references. Design: component diagram, data flow, error handling. Tasks: dependencies ordered, effort estimated, file paths annotated `(new)`/`(existing)`. | PLANNED |
+| 243 | COMP-SPECFLOW-3 | `compose artifact validate` CLI: schema + quality check without running a full build. Validates artifact against its template schema, checks required fields, flags missing cross-references, scores against quality bar. Returns structured pass/warn/fail per check. | PLANNED |
+| 244 | COMP-SPECFLOW-4 | Standalone export: artifacts usable with any AI coding tool, not just Compose. Export strips Compose-specific metadata, preserves content and cross-references as relative links. Output formats: markdown (default), JSON (for tooling). `compose artifact export --format md`. | PLANNED |
 
 **Dependencies:** COMP-DESIGN (design conversation — PARTIAL).
 
@@ -1095,12 +1096,12 @@ Enhance the existing STRAT-REV review pipeline with patterns from compound-engin
 
 Inspired by [compound-engineering-plugin](https://github.com/EveryInc/compound-engineering-plugin) (Every Inc) — ~50 agents, ~40 skills, Brainstorm→Plan→Work→Review→Compound lifecycle.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 174 | COMP-REVIEW-ENH-1 | **Adversarial review lens:** new lens that constructs failure scenarios to break implementations across component boundaries. Unlike existing lenses (diff-quality, security, contract-compliance) which check what IS there, this lens imagines what COULD go wrong. Feeds into existing merge + dedup step. | PLANNED |
-| 175 | COMP-REVIEW-ENH-2 | **Domain-aware conditional dispatch:** review triage step activates lenses based on detected codebase characteristics — Rails reviewer only for Rails projects, migration reviewer only when migrations are present, security reviewer weighted higher when auth files change. Extends STRAT-REV-1 (triage step, COMPLETE) with richer activation rules. | PLANNED |
-| 176 | COMP-REVIEW-ENH-3 | **Plan deepening:** re-run research agents against an existing plan to find gaps, without re-planning from scratch. `compose deepen FEAT-X` dispatches investigators that probe the plan for missing edge cases, untested paths, and implicit assumptions. Findings surface as plan amendments, not rewrites. | PLANNED |
-| 177 | COMP-REVIEW-ENH-4 | **Document review personas:** pre-implementation gate with specialized document reviewers — coherence checker, feasibility assessor, scope guardian, product lens, design lens. Validates plan/spec quality before the build phase begins. Extends COMP-DESIGN (design conversation) with structured plan validation. | PLANNED |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 245 | COMP-REVIEW-ENH-1 | Adversarial review lens: new lens that constructs failure scenarios to break implementations across component boundaries. Unlike existing lenses (diff-quality, security, contract-compliance) which check what IS there, this lens imagines what COULD go wrong. Feeds into existing merge + dedup step. | PLANNED |
+| 246 | COMP-REVIEW-ENH-2 | Domain-aware conditional dispatch: review triage step activates lenses based on detected codebase characteristics — Rails reviewer only for Rails projects, migration reviewer only when migrations are present, security reviewer weighted higher when auth files change. Extends STRAT-REV-1 (triage step, COMPLETE) with richer activation rules. | PLANNED |
+| 247 | COMP-REVIEW-ENH-3 | Plan deepening: re-run research agents against an existing plan to find gaps, without re-planning from scratch. `compose deepen FEAT-X` dispatches investigators that probe the plan for missing edge cases, untested paths, and implicit assumptions. Findings surface as plan amendments, not rewrites. | PLANNED |
+| 248 | COMP-REVIEW-ENH-4 | Document review personas: pre-implementation gate with specialized document reviewers — coherence checker, feasibility assessor, scope guardian, product lens, design lens. Validates plan/spec quality before the build phase begins. Extends COMP-DESIGN (design conversation) with structured plan validation. | PLANNED |
 
 **Dependencies:** STRAT-REV (parallel multi-lens review — PARTIAL), COMP-DESIGN (design conversation — PARTIAL)
 
@@ -1116,13 +1117,13 @@ Inspired by [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) (BMad Co
 
 Compose already covers most of the lifecycle (design → PRD → architecture → blueprint → plan → execute) via phases and gates. This feature adds the missing **agile sharding layer**: story files as the unit of execution, with persona-tagged agent dispatch (`compose-analyst`, `compose-pm`, `compose-architect` already exists, plus new `compose-scrum-master`, `compose-dev`, `compose-qa`). Existing Compose primitives (Stratum specs, Codex review loops, vision items) remain the substrate; BMAD personas + story shards become a higher-level orchestration mode invoked by `/compose bmad <feature>`.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 178 | COMP-BMAD-1 | **Persona definitions + agent registry:** create persona files for `compose-analyst` (problem framing, market/codebase research), `compose-pm` (PRD authoring, scope guarding), `compose-scrum-master` (story sharding, context packing), `compose-dev` (story execution, TDD), `compose-qa` (acceptance verification, regression sweep). Each persona declares: prompt template, allowed tool set, gate authority, handoff format. Reuse existing `compose-architect` and `compose-explorer`. Stored under `.claude/agents/compose-*`. | PLANNED |
-| 179 | COMP-BMAD-2 | **Story file schema + sharder:** define `story.md` template — `goal`, `acceptance_criteria` (checkbox list), `relevant_files` (verified file:line refs from blueprint), `pattern_to_follow`, `test_plan`, `dependencies` (other story IDs), `dev_notes`, `qa_notes`. Implement `compose-scrum-master` agent: reads `plan.md`, shards into N story files at `docs/features/<id>/stories/<n>-<slug>.md`, each fully self-contained so any agent session can pick one up cold. Validation: every file:line ref in a story must verify (Phase 5 reuse). | PLANNED |
-| 180 | COMP-BMAD-3 | **Agile execution mode (`/compose bmad`):** new entry verb in the compose skill that runs the BMAD pipeline. Phases 1–5 reuse existing Compose phases (design, PRD, architecture, blueprint, verification). Phase 6 (plan) becomes "shard into stories" via `compose-scrum-master`. Phase 7 (execute) iterates one story at a time: `compose-dev` implements with TDD, `compose-qa` verifies acceptance + runs Codex review, gate per story (not per feature). Stories ship incrementally — each green story is a commit. | PLANNED |
-| 181 | COMP-BMAD-4 | **Story state tracking in vision surface:** stories surface as child items under their parent feature in `vision-state.json` — same `currentPhase` / `phaseHistory` machinery, scoped to story granularity. Sidebar shows story progress (`3/7 stories complete`). Stratum flow per story; parent feature flow aggregates. Reuses existing lifecycle contract — no new state machine. | PLANNED |
-| 182 | COMP-BMAD-5 | **Expansion packs (domain-specific persona bundles):** packaging mechanism for domain personas beyond software (BMAD ships expansion packs for game dev, creative writing, business strategy). Compose-flavored expansion: persona bundle = `analyst` + `pm` + `architect` + `scrum-master` + `dev` + `qa` variants for a specific domain (e.g. `compose-bmad-data`, `compose-bmad-infra`). Loaded via `.compose/compose.json#bmadPack`. Story sharder respects pack-specific story templates. | PLANNED |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 249 | COMP-BMAD-1 | Persona definitions + agent registry: create persona files for `compose-analyst` (problem framing, market/codebase research), `compose-pm` (PRD authoring, scope guarding), `compose-scrum-master` (story sharding, context packing), `compose-dev` (story execution, TDD), `compose-qa` (acceptance verification, regression sweep). Each persona declares: prompt template, allowed tool set, gate authority, handoff format. Reuse existing `compose-architect` and `compose-explorer`. Stored under `.claude/agents/compose-*`. | PLANNED |
+| 250 | COMP-BMAD-2 | Story file schema + sharder: define `story.md` template — `goal`, `acceptance_criteria` (checkbox list), `relevant_files` (verified file:line refs from blueprint), `pattern_to_follow`, `test_plan`, `dependencies` (other story IDs), `dev_notes`, `qa_notes`. Implement `compose-scrum-master` agent: reads `plan.md`, shards into N story files at `docs/features/<id>/stories/<n>-<slug>.md`, each fully self-contained so any agent session can pick one up cold. Validation: every file:line ref in a story must verify (Phase 5 reuse). | PLANNED |
+| 251 | COMP-BMAD-3 | Agile execution mode (`/compose bmad`): new entry verb in the compose skill that runs the BMAD pipeline. Phases 1–5 reuse existing Compose phases (design, PRD, architecture, blueprint, verification). Phase 6 (plan) becomes "shard into stories" via `compose-scrum-master`. Phase 7 (execute) iterates one story at a time: `compose-dev` implements with TDD, `compose-qa` verifies acceptance + runs Codex review, gate per story (not per feature). Stories ship incrementally — each green story is a commit. | PLANNED |
+| 252 | COMP-BMAD-4 | Story state tracking in vision surface: stories surface as child items under their parent feature in `vision-state.json` — same `currentPhase` / `phaseHistory` machinery, scoped to story granularity. Sidebar shows story progress (`3/7 stories complete`). Stratum flow per story; parent feature flow aggregates. Reuses existing lifecycle contract — no new state machine. | PLANNED |
+| 253 | COMP-BMAD-5 | Expansion packs (domain-specific persona bundles): packaging mechanism for domain personas beyond software (BMAD ships expansion packs for game dev, creative writing, business strategy). Compose-flavored expansion: persona bundle = `analyst` + `pm` + `architect` + `scrum-master` + `dev` + `qa` variants for a specific domain (e.g. `compose-bmad-data`, `compose-bmad-infra`). Loaded via `.compose/compose.json#bmadPack`. Story sharder respects pack-specific story templates. | PLANNED |
 
 **Dependencies:** COMP-DESIGN (design conversation — PARTIAL), COMP-SPECFLOW (artifact schemas — PLANNED, story files extend the schema set), STRAT-REV (review loop, COMPLETE), Phase 6 lifecycle engine (COMPLETE).
 
@@ -1140,24 +1141,22 @@ Built-in product ideabox for any Compose-managed project. `compose init` scaffol
 
 **Prior art:** SmartMemory has a mature `ideabox.md` (85+ ideas, clustered by feature, priority lenses, sequential IDs) and a `/ideabox` skill. This feature productizes that pattern into Compose so any project gets it out of the box.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 178 | COMP-IDEABOX-1 | **`compose init` ideabox scaffold:** `compose init` creates `docs/product/ideabox.md` with conventions header (ID format, statuses, priorities, tags). Manifest gains `ideabox_path` field. `/ideabox` skill resolves path from manifest — works on any Compose project. Existing SmartMemory ideabox migrates cleanly (already follows the format). LLM-assisted auto-clustering on `/ideabox add` — suggests best-fit cluster or proposes a new one. | COMPLETE |
-| 179 | COMP-IDEABOX-2 | **Promote + kill workflows:** `/ideabox promote` creates feature folder in `docs/features/`, seeds `plan.md`, adds to ROADMAP.md, updates `roadmap-graph.html`, marks idea as PROMOTED. `/ideabox kill` moves to Killed section with reason and date. Works against any project's ideabox via manifest path. | COMPLETE |
-| 180 | COMP-IDEABOX-3 | **Priority lens support:** Persona-based triage lenses. `/ideabox triage --lens <name>` filters and ranks ideas through a target-user lens (e.g., "vibe-coder", "enterprise-admin"). Lenses stored as `ideabox-priority-<lens>.md` alongside the ideabox. `compose init` scaffolds an empty lens template. | COMPLETE |
-| 181 | COMP-IDEABOX-4 | **Design UI — Ideabox view:** New "Ideabox" tab in the Compose cockpit. Landing state: digest summary ("3 new since last visit, 12 untriaged, top P0 cluster: Graph Viewer"). Card-based layout with ideas grouped by cluster. Each card: ID, title, tags, priority badge, source, status. Drag-and-drop between priority lanes (P0/P1/P2/untriaged). Click card → context panel with full idea details, related roadmap features, promote/kill/discuss actions. Filter by tag, status, priority, source. Search bar. Killed ideas in a collapsible "Graveyard" section with reason, date, and resurrect action. | COMPLETE |
-| 182 | COMP-IDEABOX-5 | **Design UI — Triage flow:** Interactive triage mode in the web UI. Presents untriaged ideas one-at-a-time (or in batches). For each: full idea card + related context + LLM-detected duplicates ("similar to IDEA-12, IDEA-45"). Actions: assign priority, promote, kill, skip, discuss, merge (mark as duplicate of another idea). Progress indicator (N/total). Triage summary on completion. Priority lens selector to filter triage by persona. | COMPLETE |
-| 183 | COMP-IDEABOX-6 | **Design UI — Promote flow:** Wizard-style flow. Single idea: select or create feature ID → confirm roadmap placement → preview generated `plan.md` → confirm. Cluster merge-and-promote: select 2+ related ideas from same cluster → merge into single feature with combined context → promote as one. Updates ideabox.md, ROADMAP.md, and `roadmap-graph.html` in one operation. Visual confirmation with link to new feature in Graph/Tree view. | COMPLETE |
-| 184 | COMP-IDEABOX-7 | **Compose lifecycle integration:** `compose design` and `compose build` sessions auto-detect surfaced ideas and suggest `/ideabox add`. Auto-capture prompt (never auto-file). Promoted ideas feed into `compose new` as enriched intent — skipping questionnaire fields already answered in the idea. Ideabox stats visible in cockpit sidebar (N new, N triaged, N promoted). Staleness nudges: ideas untriaged for 14+ days surfaced in sidebar attention queue. Ideas with no activity for 30+ days flagged in triage. | COMPLETE |
-| 185 | COMP-IDEABOX-8 | **API + persistence:** REST API for ideabox CRUD (`GET/POST/PATCH/DELETE /api/ideabox`, `POST /api/ideabox/:id/discuss`, `POST /api/ideabox/:id/promote`, `POST /api/ideabox/:id/kill`). Markdown parser reads `ideabox.md` into structured JSON. WebSocket broadcast on ideabox state changes. File-based persistence in `ideabox.md` (source of truth) with parsed JSON cache in `.compose/data/ideabox-cache.json` for fast UI queries. | COMPLETE |
-| 186 | COMP-IDEABOX-9 | **Design UI — Discussion threads:** When an idea is DISCUSSING, context panel shows a lightweight threaded conversation. Each message: author (human or agent), timestamp, text. Discussion context preserved and included when the idea is eventually promoted (seeded into `plan.md` as "Prior discussion"). `/ideabox discuss IDEA-N <comment>` from CLI appends to thread. Stored inline in ideabox.md under the idea entry. | COMPLETE |
-| 187 | COMP-IDEABOX-10 | **Design UI — Impact/effort matrix:** Visual 2x2 scatter plot view alongside the card/lane view. X-axis: estimated effort (S/M/L, assignable during triage). Y-axis: estimated impact (low/medium/high). Ideas plotted as dots colored by cluster. Quadrant labels: Quick Wins (high impact, low effort), Big Bets (high impact, high effort), Fill-ins (low impact, low effort), Money Pits (low impact, high effort). Click dot → context panel. Drag dot to reassign effort/impact. | COMPLETE |
-| 188 | COMP-IDEABOX-11 | **Design UI — Roadmap graph integration:** Ideas appear as a ghost layer in the existing Graph view. Idea nodes rendered as dashed-border circles, smaller than feature nodes, colored by priority. Connected to roadmap features via "maps to" edges (dotted lines). Toggle: "Show ideas" checkbox in graph controls. Clicking an idea node opens ideabox context panel. Promoted ideas animate from idea node → solid feature node on promote. | COMPLETE |
-| 189 | COMP-IDEABOX-12 | **Design UI — Source analytics + digest:** Dashboard section in the Ideabox tab header. Source breakdown: bar chart of idea sources (competitor analysis, session insight, user feedback, research paper). Conversion funnel: NEW → DISCUSSING → PROMOTED (with kill rate). Cluster health: which clusters have the most ideas, most promoted, most killed. Time series: ideas added per week. All derived from ideabox.md metadata, no external tracking. | COMPLETE |
-| 190 | COMP-IDEABOX-13 | **Multi-project aggregation:** When Compose manages multiple projects (via parent workspace manifest or explicit project list), unified ideabox view across all projects. Ideas tagged with project origin. Cross-project dedup detection ("SmartMemory IDEA-42 and Forge IDEA-7 overlap"). Promote targets a specific project's roadmap. Filter by project. Requires: workspace-level manifest in parent repo listing Compose projects. | PLANNED |
-| 191 | COMP-IDEABOX-14 | **External source sync:** `/ideabox sync` pulls and pushes ideas between ideabox and external systems. Supported sources: GitHub issues (by label, e.g. `idea` or `enhancement`), Linear tickets (by project/status), Jira issues (by JQL filter or label), clipboard (paste a URL or text block). Bidirectional: import creates IDEA-N with source attribution and backlink; promote/kill status syncs back to the external system (close issue, update ticket status). Dedup check on sync. Bulk import with preview before filing. Configurable sync schedule or manual trigger. | PLANNED |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 255 | COMP-IDEABOX-1 | `compose init` ideabox scaffold: `compose init` creates `docs/product/ideabox.md` with conventions header (ID format, statuses, priorities, tags). Manifest gains `ideabox_path` field. `/ideabox` skill resolves path from manifest — works on any Compose project. Existing SmartMemory ideabox migrates cleanly (already follows the format). LLM-assisted auto-clustering on `/ideabox add` — suggests best-fit cluster or proposes a new one. | COMPLETE |
+| 256 | COMP-IDEABOX-2 | Promote + kill workflows: `/ideabox promote` creates feature folder in `docs/features/`, seeds `plan.md`, adds to ROADMAP.md, updates `roadmap-graph.html`, marks idea as PROMOTED. `/ideabox kill` moves to Killed section with reason and date. Works against any project's ideabox via manifest path. | COMPLETE |
+| 257 | COMP-IDEABOX-3 | Priority lens support: Persona-based triage lenses. `/ideabox triage --lens <name>` filters and ranks ideas through a target-user lens (e.g., "vibe-coder", "enterprise-admin"). Lenses stored as `ideabox-priority-<lens>.md` alongside the ideabox. `compose init` scaffolds an empty lens template. | COMPLETE |
+| 258 | COMP-IDEABOX-4 | Design UI — Ideabox view: New "Ideabox" tab in the Compose cockpit. Landing state: digest summary ("3 new since last visit, 12 untriaged, top P0 cluster: Graph Viewer"). Card-based layout with ideas grouped by cluster. Each card: ID, title, tags, priority badge, source, status. Drag-and-drop between priority lanes (P0/P1/P2/untriaged). Click card → context panel with full idea details, related roadmap features, promote/kill/discuss actions. Filter by tag, status, priority, source. Search bar. Killed ideas in a collapsible "Graveyard" section with reason, date, and resurrect action. | COMPLETE |
+| 259 | COMP-IDEABOX-5 | Design UI — Triage flow: Interactive triage mode in the web UI. Presents untriaged ideas one-at-a-time (or in batches). For each: full idea card + related context + LLM-detected duplicates ("similar to IDEA-12, IDEA-45"). Actions: assign priority, promote, kill, skip, discuss, merge (mark as duplicate of another idea). Progress indicator (N/total). Triage summary on completion. Priority lens selector to filter triage by persona. | COMPLETE |
+| 260 | COMP-IDEABOX-6 | Design UI — Promote flow: Wizard-style flow. Single idea: select or create feature ID → confirm roadmap placement → preview generated `plan.md` → confirm. Cluster merge-and-promote: select 2+ related ideas from same cluster → merge into single feature with combined context → promote as one. Updates ideabox.md, ROADMAP.md, and `roadmap-graph.html` in one operation. Visual confirmation with link to new feature in Graph/Tree view. | COMPLETE |
+| 261 | COMP-IDEABOX-7 | Compose lifecycle integration: `compose design` and `compose build` sessions auto-detect surfaced ideas and suggest `/ideabox add`. Auto-capture prompt (never auto-file). Promoted ideas feed into `compose new` as enriched intent — skipping questionnaire fields already answered in the idea. Ideabox stats visible in cockpit sidebar (N new, N triaged, N promoted). Staleness nudges: ideas untriaged for 14+ days surfaced in sidebar attention queue. Ideas with no activity for 30+ days flagged in triage. | COMPLETE |
+| 262 | COMP-IDEABOX-8 | API + persistence: REST API for ideabox CRUD (`GET/POST/PATCH/DELETE /api/ideabox`, `POST /api/ideabox/:id/discuss`, `POST /api/ideabox/:id/promote`, `POST /api/ideabox/:id/kill`). Markdown parser reads `ideabox.md` into structured JSON. WebSocket broadcast on ideabox state changes. File-based persistence in `ideabox.md` (source of truth) with parsed JSON cache in `.compose/data/ideabox-cache.json` for fast UI queries. | COMPLETE |
+| 263 | COMP-IDEABOX-9 | Design UI — Discussion threads: When an idea is DISCUSSING, context panel shows a lightweight threaded conversation. Each message: author (human or agent), timestamp, text. Discussion context preserved and included when the idea is eventually promoted (seeded into `plan.md` as "Prior discussion"). `/ideabox discuss IDEA-N <comment>` from CLI appends to thread. Stored inline in ideabox.md under the idea entry. | COMPLETE |
+| 264 | COMP-IDEABOX-10 | Design UI — Impact/effort matrix: Visual 2x2 scatter plot view alongside the card/lane view. X-axis: estimated effort (S/M/L, assignable during triage). Y-axis: estimated impact (low/medium/high). Ideas plotted as dots colored by cluster. Quadrant labels: Quick Wins (high impact, low effort), Big Bets (high impact, high effort), Fill-ins (low impact, low effort), Money Pits (low impact, high effort). Click dot → context panel. Drag dot to reassign effort/impact. | COMPLETE |
+| 265 | COMP-IDEABOX-11 | Design UI — Roadmap graph integration: Ideas appear as a ghost layer in the existing Graph view. Idea nodes rendered as dashed-border circles, smaller than feature nodes, colored by priority. Connected to roadmap features via "maps to" edges (dotted lines). Toggle: "Show ideas" checkbox in graph controls. Clicking an idea node opens ideabox context panel. Promoted ideas animate from idea node → solid feature node on promote. | COMPLETE |
+| 266 | COMP-IDEABOX-12 | Design UI — Source analytics + digest: Dashboard section in the Ideabox tab header. Source breakdown: bar chart of idea sources (competitor analysis, session insight, user feedback, research paper). Conversion funnel: NEW → DISCUSSING → PROMOTED (with kill rate). Cluster health: which clusters have the most ideas, most promoted, most killed. Time series: ideas added per week. All derived from ideabox.md metadata, no external tracking. | COMPLETE |
+| 267 | COMP-IDEABOX-13 | Multi-project aggregation: When Compose manages multiple projects (via parent workspace manifest or explicit project list), unified ideabox view across all projects. Ideas tagged with project origin. Cross-project dedup detection ("SmartMemory IDEA-42 and Forge IDEA-7 overlap"). Promote targets a specific project's roadmap. Filter by project. Requires: workspace-level manifest in parent repo listing Compose projects. | PLANNED |
+| 268 | COMP-IDEABOX-14 | External source sync: `/ideabox sync` pulls and pushes ideas between ideabox and external systems. Supported sources: GitHub issues (by label, e.g. `idea` or `enhancement`), Linear tickets (by project/status), Jira issues (by JQL filter or label), clipboard (paste a URL or text block). Bidirectional: import creates IDEA-N with source attribution and backlink; promote/kill status syncs back to the external system (close issue, update ticket status). Dedup check on sync. Bulk import with preview before filing. Configurable sync schedule or manual trigger. | PLANNED |
 
 **Dependencies:** COMP-UX-1 (context panel — COMPLETE), COMP-DESIGN (design conversation — PARTIAL for auto-capture in item 7)
 
@@ -1171,11 +1170,11 @@ Compose has no upgrade path. The README tells users to `npx compose init`, but c
 
 **Scope:** manual only. No background auto-update, no nag prompts on every invocation. A future `auto_update` opt-in is out of scope.
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 192 | COMP-UPDATE-1 | **`compose update` subcommand:** Auto-detects npm install (PACKAGE_ROOT under `node_modules/`) vs git clone (`.git` at PACKAGE_ROOT). For npm: runs `npm install [-g] @smartmemory/compose@latest`. For git: refuses on dirty tree unless `--force`, runs `git fetch && git pull --ff-only`, prints before/after SHAs, runs `npm install`. Either path then re-runs `compose setup` and (if invoked inside `.compose/`) `compose init`. Aliased as `compose upgrade`. | COMPLETE |
-| 193 | COMP-UPDATE-2 | **npm package publish:** Already shipped before COMP-UPDATE was filed. `package.json` has `bin`, `files`, `publishConfig: public`, `prepublishOnly`. `.github/workflows/publish.yml` publishes on `v*` tags with provenance; `beta.yml` publishes betas; `publish-compose-mcp.yml` ships the MCP server. `npm view @smartmemory/compose dist-tags`: `latest: 0.1.0`, `beta: 0.1.7-beta`. | COMPLETE |
-| 194 | COMP-UPDATE-3 | **Doctor + version surfacing:** `compose --version` / `compose version` / `compose -V` prints package version + git SHA + resolved root. `compose doctor` gained a Version section that fetches the latest from `registry.npmjs.org/@smartmemory/compose`, compares to installed (semver-ish, prerelease-aware), and prints `✓ up to date` or `⚠ behind — run: compose update`. 24h cache at `~/.compose/version-cache.json`, 3s timeout, never fails the doctor run. `--refresh-versions` bypasses cache. README and `docs/install.md` got "Upgrading" sections. | COMPLETE |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 269 | COMP-UPDATE-1 | `compose update` subcommand: Auto-detects npm install (PACKAGE_ROOT under `node_modules/`) vs git clone (`.git` at PACKAGE_ROOT). For npm: runs `npm install [-g] @smartmemory/compose@latest`. For git: refuses on dirty tree unless `--force`, runs `git fetch && git pull --ff-only`, prints before/after SHAs, runs `npm install`. Either path then re-runs `compose setup` and (if invoked inside `.compose/`) `compose init`. Aliased as `compose upgrade`. | COMPLETE |
+| 270 | COMP-UPDATE-2 | npm package publish: Already shipped before COMP-UPDATE was filed. `package.json` has `bin`, `files`, `publishConfig: public`, `prepublishOnly`. `.github/workflows/publish.yml` publishes on `v*` tags with provenance; `beta.yml` publishes betas; `publish-compose-mcp.yml` ships the MCP server. `npm view @smartmemory/compose dist-tags`: `latest: 0.1.0`, `beta: 0.1.7-beta`. | COMPLETE |
+| 271 | COMP-UPDATE-3 | Doctor + version surfacing: `compose --version` / `compose version` / `compose -V` prints package version + git SHA + resolved root. `compose doctor` gained a Version section that fetches the latest from `registry.npmjs.org/@smartmemory/compose`, compares to installed (semver-ish, prerelease-aware), and prints `✓ up to date` or `⚠ behind — run: compose update`. 24h cache at `~/.compose/version-cache.json`, 3s timeout, never fails the doctor run. `--refresh-versions` bypasses cache. README and `docs/install.md` got "Upgrading" sections. | COMPLETE |
 
 **Dependencies:** none — `compose setup`, `compose init`, and `compose hooks install` already exist and are idempotent.
 
@@ -1193,25 +1192,18 @@ Response-time policy gate that detects rule violations in candidate agent respon
 
 **Design:** [`docs/design/2026-05-09-pre-response-policy-check.md`](design/2026-05-09-pre-response-policy-check.md)
 
-| # | Feature | Item | Status |
-|---|---------|------|--------|
-| 167 | COMP-POLICY-CHECK-1 | **Pattern-catalog client.** Fetch SmartMemory's violation-pattern catalog via `mcp__smartmemory__memory_get_violation_patterns` once per session; cache in-memory; refresh on rule-change signal. | PLANNED |
-| 168 | COMP-POLICY-CHECK-2 | **User-mode classifier.** Scan recent user turn(s) for suppression-signal patterns from the SmartMemory catalog. Output user_mode ∈ {AUTONOMOUS, PACED, SKILL_GATED}. SKILL_GATED set when an active skill (e.g. Compose's plan/blueprint gate) declares deliberate-permission-asking. | PLANNED |
-| 169 | COMP-POLICY-CHECK-3 | **Response scanner.** Scan candidate agent responses against pattern catalog. For matched rules, evaluate suppression_signals against user_mode. Emit (rule, match, suppressed?) records. | PLANNED |
-| 170 | COMP-POLICY-CHECK-4 | **Revision prompt.** When unsuppressed violations detected, surface to agent: *"Your draft contains pattern X for rule Y; revise unless precedence applies."* Agent revises; check re-runs once. Does NOT hard-block. | PLANNED |
-| 171 | COMP-POLICY-CHECK-5 | **Session trace.** Log all pattern matches (flagged + suppressed) to the session trace for post-hoc analysis by SmartMemory's DIST-CC-INGEST-1 ensemble. Closes the measurement loop. | PLANNED |
-| 172 | COMP-POLICY-CHECK-6 | **Stratum step postcondition.** Stratum specs can declare `ensure: compose.policy.unsuppressed_violations == 0` as a step postcondition. Runs the same check inside Stratum's evaluation layer for Stratum-driven flows. | PLANNED |
-| 197 | COMP-WORKSPACE-HTTP | **Foundation.** Express middleware reading `X-Compose-Workspace-Id`, `GET /api/workspace` bootstrap endpoint, Vite frontend workspace context. No behavior change to existing routes — sets up the substrate for the next 4 tickets. | COMPLETE |
-| 198 | COMP-WORKSPACE-WATCHERS | Runtime workspace rebinding for long-lived watchers (cc-session-watcher, worktree-gc, stratum-sync). file-watcher's HTTP routes covered by COMP-WORKSPACE-FILES. | PLANNED |
-| 199 | COMP-WORKSPACE-RESUME | Persist MCP workspace binding across restarts via CLAUDE_SESSION_ID env (when injected) | PLANNED |
-| 200 | COMP-CLI-GLOBAL-FLAGS | Pre-subcommand flag parser to enable compose --workspace=X build syntax | PLANNED |
-| 201 | COMP-WORKSPACE-ID | Workspace identity detection (parent vs child) across CLI, MCP, and hooks | COMPLETE |
-| 202 | COMP-WORKSPACE-VISION | Per-workspace VisionStore + SettingsStore + DesignSessionManager registries. Vision/lifecycle/gate/settings routes use `req.workspace`. Depends on 197. | PLANNED |
-| 203 | COMP-WORKSPACE-SESSIONS | Per-workspace SessionManager registry. Session, activity, agent-spawn, summarizer routes. Snapshot fixes for session-manager.js, summarizer.js, agent-spawn.js. Depends on 197. | PLANNED |
-| 204 | COMP-WORKSPACE-AGENT-SVR | Cross-process workspace plumbing for the agent server (port 4002): pass workspaceId on `/api/agent/session`, persist to session record, factory-build hook options. Depends on 197, 203. | PLANNED |
-| 205 | COMP-WORKSPACE-FILES | file-watcher HTTP routes (`/api/file`, `/api/files`, `/api/canvas/open`) + vision-routes/vision-utils snapshot fixes use `req.workspace.root`. Depends on 197, 202. | PLANNED |
-| 206 | COMP-MOBILE | Mobile PWA at `/m` route. 5 phases: M1 shell + token-aware fetch + PWA manifest, M2 roadmap/items, M3 ideabox, M4 agent gates+chat, M5 builds. Phone-first; tablet inherits. Skips remote transport (filed separately as COMP-MOBILE-REMOTE). | COMPLETE |
-| 207 | COMP-MOBILE-REMOTE | Remote-reachable transport for the mobile PWA: bind to 0.0.0.0, runtime-generated `x-compose-token` (replacing build-time-baked token for remote sessions), pairing-URL flow, tunnel guidance. Tunnel layer (Tailscale/Cloudflare) is out-of-band by user choice. Depends on 206. | PLANNED |
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 272 | COMP-POLICY-CHECK-1 | Pattern-catalog client. Fetch SmartMemory's violation-pattern catalog via `mcp__smartmemory__memory_get_violation_patterns` once per session; cache in-memory; refresh on rule-change signal. | PLANNED |
+| 273 | COMP-POLICY-CHECK-2 | User-mode classifier. Scan recent user turn(s) for suppression-signal patterns from the SmartMemory catalog. Output user_mode ∈ {AUTONOMOUS, PACED, SKILL_GATED}. SKILL_GATED set when an active skill (e.g. Compose's plan/blueprint gate) declares deliberate-permission-asking. | PLANNED |
+| 274 | COMP-POLICY-CHECK-3 | Response scanner. Scan candidate agent responses against pattern catalog. For matched rules, evaluate suppression_signals against user_mode. Emit (rule, match, suppressed?) records. | PLANNED |
+| 275 | COMP-POLICY-CHECK-4 | Revision prompt. When unsuppressed violations detected, surface to agent: *"Your draft contains pattern X for rule Y; revise unless precedence applies."* Agent revises; check re-runs once. Does NOT hard-block. | PLANNED |
+| 276 | COMP-POLICY-CHECK-5 | Session trace. Log all pattern matches (flagged + suppressed) to the session trace for post-hoc analysis by SmartMemory's DIST-CC-INGEST-1 ensemble. Closes the measurement loop. | PLANNED |
+| 277 | COMP-POLICY-CHECK-6 | Stratum step postcondition. Stratum specs can declare `ensure: compose.policy.unsuppressed_violations == 0` as a step postcondition. Runs the same check inside Stratum's evaluation layer for Stratum-driven flows. | PLANNED |
+| 283 | COMP-WORKSPACE-VISION | Per-workspace VisionStore + SettingsStore + DesignSessionManager registries. Vision/lifecycle/gate/settings routes use `req.workspace`. Depends on 197. | PLANNED |
+| 284 | COMP-WORKSPACE-SESSIONS | Per-workspace SessionManager registry. Session, activity, agent-spawn, summarizer routes. Snapshot fixes for session-manager.js, summarizer.js, agent-spawn.js. Depends on 197. | PLANNED |
+| 285 | COMP-WORKSPACE-AGENT-SVR | Cross-process workspace plumbing for the agent server (port 4002): pass workspaceId on `/api/agent/session`, persist to session record, factory-build hook options. Depends on 197, 203. | PLANNED |
+| 286 | COMP-WORKSPACE-FILES | file-watcher HTTP routes (`/api/file`, `/api/files`, `/api/canvas/open`) + vision-routes/vision-utils snapshot fixes use `req.workspace.root`. Depends on 197, 202. | PLANNED |
 
 **Dependencies:** SmartMemory CORE-ADHERENCE-1 (pattern catalog + MCP tool); MCP connector path (existing).
 
@@ -1259,7 +1251,7 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
 | 1 | COMP-PARITY | UI↔CLI Parity initiative — close the asymmetries between the cockpit and the `compose` CLI documented in docs/ui-cli-parity.md. Each surface should be able to drive a feature/bug through its full lifecycle; today gate resolution is UI-only (blocks headless/CI) and the fix/new lifecycles are CLI-only (invisible to UI-first devs). Reuses existing server endpoints and pipeline machinery as the substrate — no new lifecycle model. Umbrella for COMP-PARITY-1 through COMP-PARITY-6. | PLANNED |
-| 2 | COMP-PARITY-1 | CLI gate resolution. `compose gate list` (pending gates + artifact assessment) and `compose gate resolve <id> --approve|--revise [--comment]|--kill --reason`. Wraps the existing POST /api/vision/gates/{id}/resolve endpoint. Highest-impact gap: today a headless or CI-driven build cannot clear a gate, making the cockpit a hard dependency for any gated pipeline. Ships first; unblocks autonomous/CI runs. | PLANNED |
+| 2 | COMP-PARITY-1 | CLI gate resolution. `compose gate list` (pending gates + artifact assessment) and `compose gate resolve <id> --approve\|--revise [--comment]\|--kill --reason`. Wraps the existing POST /api/vision/gates/{id}/resolve endpoint. Highest-impact gap: today a headless or CI-driven build cannot clear a gate, making the cockpit a hard dependency for any gated pipeline. Ships first; unblocks autonomous/CI runs. | PLANNED |
 | 3 | COMP-PARITY-2 | UI launchers for the fix and new lifecycles. Cockpit entry points to start `compose fix <bug>` and `compose new "<intent>"` (and resume an aborted fix). The Pipeline tab already renders these stratum flows once running — this adds the missing launch/resume controls so UI-first devs aren't forced to the terminal for the two richest lifecycles. Reuses POST /api/build/start-style dispatch. | PLANNED |
 | 4 | COMP-PARITY-3 | Cockpit environment-health panel surfacing `compose doctor` (dep/version drift) and `compose hooks status` (stale/foreign/missing git hooks). Silent hook and version drift currently causes mystery build failures with zero UI signal. Read-only panel backed by a thin /api/health endpoint wrapping the existing doctor/hooks-status logic. | PLANNED |
 | 5 | COMP-PARITY-4 | Loop create/resolve verbs in the UI. The attention queue already displays open loops but offers no create/resolve action — loop hygiene is terminal-only. Add create/resolve controls wired to the existing POST /api/vision/items/{id}/loops and .../loops/{loopId}/resolve endpoints the CLI already uses. | PLANNED |
@@ -1289,7 +1281,7 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 |---|---------|-------------|--------|
 | 1 | COMP-ROADMAP-RT | Harden deterministic roadmap roundtripping: prove gen↔parse fixed-point + losslessness, write-time auto-canonicalize-or-block guard, unified feature-code parsing, and hierarchy/drift validation findings. | PLANNED |
 | 2 | COMP-ROADMAP-XREF-SYNC | Reconcile external cross-references (GitHub/Jira/Linear issues) against their targets — turn read-only XREF_DRIFT warnings into verifiable sync. Network/provider subsystem, split from COMP-ROADMAP-RT. | PLANNED |
-| 3 | COMP-ROADMAP-RT-GENFIX | Generator/parser roundtrip defects surfaced by checkRoundtrip (BLOCKS the full feature.json migration of ~169 historical compose rows): (1) parser SKIP_STATUSES phase-override rewrites sub-item rows, losing mixed item statuses under a rolled-up COMPLETE/PARKED phase; (2) malformed feature codes (e.g. lowercase) cause row duplication + non-convergence; (3) parser accumulates consecutive ### milestone headings into the phaseId ('Phase > M1 > M2 > ...') instead of resetting to the parent ## phase, producing false phase LOSSLESS_CHANGED on milestone-nested rows; (4) generator does not converge on strikethrough/renumbered rows (e.g. ~~COMP-TEAMS~~), breaking the fixed point; (5) unescaped pipes in a description cell (e.g. COMP-PARITY-1 '--approve|--revise|--kill') mis-split the markdown table so the parser reads a description fragment as the status. All pre-existing gen/parse defects, not roadmap drift. | PLANNED |
+| 3 | COMP-ROADMAP-RT-GENFIX | Generator/parser roundtrip defects surfaced by checkRoundtrip (BLOCKS the full feature.json migration of ~169 historical compose rows): (1) parser SKIP_STATUSES phase-override rewrites sub-item rows, losing mixed item statuses under a rolled-up COMPLETE/PARKED phase; (2) malformed feature codes (e.g. lowercase) cause row duplication + non-convergence; (3) parser accumulates consecutive ### milestone headings into the phaseId ('Phase > M1 > M2 > ...') instead of resetting to the parent ## phase, producing false phase LOSSLESS_CHANGED on milestone-nested rows; (4) generator does not converge on strikethrough/renumbered rows (e.g. ~~COMP-TEAMS~~), breaking the fixed point; (5) unescaped pipes in a description cell (e.g. COMP-PARITY-1 '--approve\|--revise\|--kill') mis-split the markdown table so the parser reads a description fragment as the status. All pre-existing gen/parse defects, not roadmap drift. | PLANNED |
 
 ---
 

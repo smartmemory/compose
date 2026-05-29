@@ -1,0 +1,9 @@
+{
+  "code": "COMP-IDEABOX-8",
+  "description": "API + persistence: REST API for ideabox CRUD (`GET/POST/PATCH/DELETE /api/ideabox`, `POST /api/ideabox/:id/discuss`, `POST /api/ideabox/:id/promote`, `POST /api/ideabox/:id/kill`). Markdown parser reads `ideabox.md` into structured JSON. WebSocket broadcast on ideabox state changes. File-based persistence in `ideabox.md` (source of truth) with parsed JSON cache in `.compose/data/ideabox-cache.json` for fast UI queries.",
+  "status": "COMPLETE",
+  "phase": "COMP-IDEABOX: Product Idea Capture & Triage",
+  "position": 262,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

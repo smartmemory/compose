@@ -1,0 +1,9 @@
+{
+  "code": "COMP-OBS-SURFACE-3",
+  "description": "Filtered event toggle: AgentStream.jsx suppresses `tool_progress`, `tool_use_summary`, `stream_event` (lines 226-228). Add a \"verbose\" toggle in agent bar settings. When on, these events render as dimmed, smaller-font entries. Off by default. Persisted in localStorage with other cockpit state.",
+  "status": "PLANNED",
+  "phase": "COMP-OBS-SURFACE: Step Detail Surface",
+  "position": 203,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

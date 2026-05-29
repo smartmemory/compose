@@ -1,0 +1,9 @@
+{
+  "code": "COMP-UPDATE-2",
+  "description": "npm package publish: Already shipped before COMP-UPDATE was filed. `package.json` has `bin`, `files`, `publishConfig: public`, `prepublishOnly`. `.github/workflows/publish.yml` publishes on `v*` tags with provenance; `beta.yml` publishes betas; `publish-compose-mcp.yml` ships the MCP server. `npm view @smartmemory/compose dist-tags`: `latest: 0.1.0`, `beta: 0.1.7-beta`.",
+  "status": "COMPLETE",
+  "phase": "COMP-UPDATE: One-Step Manual Upgrade",
+  "position": 270,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

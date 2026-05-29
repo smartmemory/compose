@@ -1,0 +1,9 @@
+{
+  "code": "COMP-UPDATE-3",
+  "description": "Doctor + version surfacing: `compose --version` / `compose version` / `compose -V` prints package version + git SHA + resolved root. `compose doctor` gained a Version section that fetches the latest from `registry.npmjs.org/@smartmemory/compose`, compares to installed (semver-ish, prerelease-aware), and prints `✓ up to date` or `⚠ behind — run: compose update`. 24h cache at `~/.compose/version-cache.json`, 3s timeout, never fails the doctor run. `--refresh-versions` bypasses cache. README and `docs/install.md` got \"Upgrading\" sections.",
+  "status": "COMPLETE",
+  "phase": "COMP-UPDATE: One-Step Manual Upgrade",
+  "position": 271,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}

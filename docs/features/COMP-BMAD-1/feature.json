@@ -1,0 +1,9 @@
+{
+  "code": "COMP-BMAD-1",
+  "description": "Persona definitions + agent registry: create persona files for `compose-analyst` (problem framing, market/codebase research), `compose-pm` (PRD authoring, scope guarding), `compose-scrum-master` (story sharding, context packing), `compose-dev` (story execution, TDD), `compose-qa` (acceptance verification, regression sweep). Each persona declares: prompt template, allowed tool set, gate authority, handoff format. Reuse existing `compose-architect` and `compose-explorer`. Stored under `.claude/agents/compose-*`.",
+  "status": "PLANNED",
+  "phase": "COMP-BMAD: BMAD Method on Compose",
+  "position": 249,
+  "created": "2026-05-29",
+  "updated": "2026-05-29"
+}
