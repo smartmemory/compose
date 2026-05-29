@@ -1,10 +1,10 @@
 {
   "code": "COMP-ROADMAP-RT-GENFIX",
-  "description": "Generator/parser roundtrip-lossiness fixes surfaced by checkRoundtrip: (1) parser SKIP_STATUSES phase-override rewrites sub-item rows, losing mixed item statuses under a rolled-up COMPLETE/PARKED phase; (2) malformed feature codes (e.g. lowercase) cause row duplication + non-convergence. Both are pre-existing gen/parse defects, not roadmap drift.",
+  "description": "Generator/parser roundtrip defects surfaced by checkRoundtrip (BLOCKS the full feature.json migration of ~169 historical compose rows): (1) parser SKIP_STATUSES phase-override rewrites sub-item rows, losing mixed item statuses under a rolled-up COMPLETE/PARKED phase; (2) malformed feature codes (e.g. lowercase) cause row duplication + non-convergence; (3) parser accumulates consecutive ### milestone headings into the phaseId ('Phase > M1 > M2 > ...') instead of resetting to the parent ## phase, producing false phase LOSSLESS_CHANGED on milestone-nested rows; (4) generator does not converge on strikethrough/renumbered rows (e.g. ~~COMP-TEAMS~~), breaking the fixed point; (5) unescaped pipes in a description cell (e.g. COMP-PARITY-1 '--approve|--revise|--kill') mis-split the markdown table so the parser reads a description fragment as the status. All pre-existing gen/parse defects, not roadmap drift.",
   "status": "PLANNED",
   "phase": "Phase 6: MCP Writers",
   "created": "2026-05-29",
   "updated": "2026-05-29",
-  "complexity": "M",
+  "complexity": "L",
   "position": 3
 }
