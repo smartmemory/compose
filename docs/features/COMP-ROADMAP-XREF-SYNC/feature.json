@@ -1,0 +1,10 @@
+{
+  "code": "COMP-ROADMAP-XREF-SYNC",
+  "description": "Reconcile external cross-references (GitHub/Jira/Linear issues) against their targets — turn read-only XREF_DRIFT warnings into verifiable sync. Network/provider subsystem, split from COMP-ROADMAP-RT.",
+  "status": "PLANNED",
+  "phase": "Phase 6: MCP Writers",
+  "created": "2026-05-29",
+  "updated": "2026-05-29",
+  "complexity": "M",
+  "position": 2
+}
