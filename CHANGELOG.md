@@ -13,7 +13,9 @@ lookup (`matchFeatureItem`) falls back from `lifecycle.featureCode` to `item.id`
 then top-level `item.featureCode`, so `compose fix <code>` binds to an existing
 item instead of minting a duplicate. On bind it seeds `lifecycle.featureCode`
 (REST + direct), and `ensureFeatureItem`/`runBuild` now thread `mode` so a bug
-build creates a `type: 'bug'` item rather than always `type: 'feature'`.
+build creates a `type: 'bug'` item rather than always `type: 'feature'`. `'bug'`
+is now a first-class vision item type (added to `VALID_TYPES` + `TYPE_COLORS`),
+so the REST/server create path accepts it instead of rejecting `Invalid type: bug`.
 
 ### feat(COMP-ROADMAP-XREF-SYNC): v1 pull reconciliation for external links
 
