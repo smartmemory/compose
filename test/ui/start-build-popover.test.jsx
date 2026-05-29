@@ -57,6 +57,14 @@ describe('<StartBuildPopover>', () => {
     expect(JSON.parse(call.opts.body)).toEqual({ featureCode: 'ui-uuid-2', mode: 'bug', description: 'crashes on save' });
   });
 
+  it('defaults mode to bug for a type:bug item', async () => {
+    render(<StartBuildPopover item={{ id: 'b-1', title: 'A bug', type: 'bug', featureCode: 'BUG-7' }} onClose={vi.fn()} />);
+    expect(screen.getByTestId('start-build-mode-bug').getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByTestId('start-build-submit'));
+    await waitFor(() => expect(fetchCalls.some(c => c.url.includes('/api/build/start'))).toBe(true));
+    expect(JSON.parse(fetchCalls.find(c => c.url.includes('/api/build/start')).opts.body).mode).toBe('bug');
+  });
+
   it('surfaces a server error (409) and does not close', async () => {
     startResponse = { status: 409, body: { error: 'A build is already active for ui-uuid-1' } };
     const onClose = vi.fn();

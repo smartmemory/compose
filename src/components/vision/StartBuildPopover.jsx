@@ -20,7 +20,8 @@ import { withComposeToken } from '../../lib/compose-api.js';
 export default function StartBuildPopover({ item, onClose }) {
   const defaultCode = item?.lifecycle?.featureCode || item?.featureCode || item?.id || '';
   const [featureCode, setFeatureCode] = useState(defaultCode);
-  const [mode, setMode] = useState('feature');
+  // A bug-typed item should launch the bug-fix pipeline by default (#31).
+  const [mode, setMode] = useState(item?.type === 'bug' ? 'bug' : 'feature');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState(null);
