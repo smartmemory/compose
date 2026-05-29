@@ -432,3 +432,19 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-18T05:00:00+00:00 | fix compose items: --json flag ordering, ambiguous prefix match, improve missing-state error message
 2026-05-19T00:04:09+08:00 | Reconcile stale COMP-WORKSPACE-ID feature.json: PLANNED->COMPLETE to match shipped code (a8db93b) + compose ROADMAP
 2026-05-29T09:16:46+07:00 | Filing COMP-ROADMAP-RT — harden deterministic roadmap roundtripping (fixed-point + lossless guard, write-time canonicalize, hierarchy validation)
+2026-05-29T11:07:51+07:00 | Task 1: add canonical isFeatureCode predicate
+2026-05-29T11:11:25+07:00 | Task 2: parser uses canonical isFeatureCode, drop buggy trailing-digit regex
+2026-05-29T11:16:37+07:00 | Task 3: preservers import canonical FEATURE_CODE_RE_STRICT
+2026-05-29T11:21:22+07:00 | Task 4: inject now clock + suppressDrift into roadmap-gen
+2026-05-29T11:29:04+07:00 | Task 5: checkRoundtrip primitive (fixed-point + lossless)
+2026-05-29T11:37:32+07:00 | Task 5 review fixes: add LOSSLESS_CHANGED + MISSING-inverse tests, simplify fixed-point loop
+2026-05-29T11:40:25+07:00 | Task 6: validator roundtrip + hierarchy findings
+2026-05-29T11:54:04+07:00 | Task 7: pre-commit roundtrip guard on local writers
+2026-05-29T12:02:12+07:00 | Task 7 follow-up: expose force on add_roadmap_entry schema + document fixed-point-only guard
+2026-05-29T12:05:07+07:00 | Task 8: roundtrip-backed roadmap check + convergent generate
+2026-05-29T12:15:03+07:00 | Task 8 followup: share lossy-diff humanization across CLI and validator
+2026-05-29T13:01:27+07:00 | external-prefix awareness across checkRoundtrip/CLI/migrate/validator
+2026-05-29T14:18:47+07:00 | GENFIX: start root-caused 5 gen/parse roundtrip fixes
+2026-05-29T14:23:30+07:00 | GENFIX T1: SKIP_STATUSES override only fills empty status cells
+2026-05-29T14:30:06+07:00 | GENFIX T2: milestone reset-to-parent + top-level phase compare
+2026-05-29T14:35:01+07:00 | GENFIX T3: symmetric pipe escaping in table cells
