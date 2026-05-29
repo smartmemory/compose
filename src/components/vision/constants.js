@@ -3,10 +3,11 @@
  * Single source of truth for types, statuses, phases, and their colors.
  */
 
-export const VALID_TYPES = ['feature', 'track', 'idea', 'decision', 'question', 'thread', 'artifact', 'task', 'spec', 'evaluation'];
+export const VALID_TYPES = ['feature', 'bug', 'track', 'idea', 'decision', 'question', 'thread', 'artifact', 'task', 'spec', 'evaluation'];
 
 export const TYPE_COLORS = {
   feature: '#3b82f6',     // blue — top-level container
+  bug: '#ef4444',         // red — defect / bug-fix build
   track: '#06b6d4',       // cyan — deliverable unit
   decision: '#22c55e',    // emerald — resolved decisions
   task: '#94a3b8',        // slate — work items

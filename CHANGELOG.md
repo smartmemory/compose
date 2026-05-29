@@ -17,6 +17,21 @@ call sites (`readPhaseOverrides`, `readAnonymousRows`, `readPhaseBlocks`,
 can't disagree on a phaseId. `STATUS_TOKENS`/`parseStatusToken` moved there too
 (re-exported from `roadmap-parser.js` for compatibility).
 
+### fix(vision): wire UI items to the build/bug-fix lifecycle; stop CLI orphaning (#31)
+
+Desktop `ItemDetailPanel` now has a **Start** button (new
+`StartBuildPopover.jsx`) — shown when `!item.lifecycle && status !== 'killed' &&
+type !== 'question'` — that POSTs `/api/build/start` (`{featureCode, mode,
+description}`, x-compose-token), the same endpoint mobile uses, and surfaces
+409/500 errors. The CLI no longer orphans UI-created items: `VisionWriter`'s
+lookup (`matchFeatureItem`) falls back from `lifecycle.featureCode` to `item.id`
+then top-level `item.featureCode`, so `compose fix <code>` binds to an existing
+item instead of minting a duplicate. On bind it seeds `lifecycle.featureCode`
+(REST + direct), and `ensureFeatureItem`/`runBuild` now thread `mode` so a bug
+build creates a `type: 'bug'` item rather than always `type: 'feature'`. `'bug'`
+is now a first-class vision item type (added to `VALID_TYPES` + `TYPE_COLORS`),
+so the REST/server create path accepts it instead of rejecting `Invalid type: bug`.
+
 ### feat(COMP-ROADMAP-XREF-SYNC): v1 pull reconciliation for external links
 
 Turns the read-only `XREF_DRIFT` warning into an applied fix. `compose roadmap

@@ -386,4 +386,74 @@ describe('VisionWriter', () => {
     assert.equal(state.items.length, 1);
     assert.equal(state.items[0].lifecycle.featureCode, 'FEAT-6');
   });
+
+  // -------------------------------------------------------------------------
+  // #31: bind UI-created items (no lifecycle yet) instead of orphaning them
+  // -------------------------------------------------------------------------
+
+  it('binds to a UI-created item matched by item.id, seeding lifecycle (no duplicate) (#31)', async () => {
+    const dir = fs.mkdtempSync(path.join(tmpDir, 'test-'));
+    // A UI-created item: has an id + title but NO lifecycle and NO featureCode.
+    const existing = {
+      items: [{ id: 'ui-uuid-1', type: 'feature', title: 'UI Item', status: 'planned' }],
+      connections: [],
+      gates: [],
+    };
+    fs.writeFileSync(path.join(dir, 'vision-state.json'), JSON.stringify(existing));
+
+    const writer = new VisionWriter(dir, { port: 19990 });
+    const id = await writer.ensureFeatureItem('ui-uuid-1');
+
+    assert.equal(id, 'ui-uuid-1', 'should bind to the existing UI item, not create a new one');
+    const state = JSON.parse(fs.readFileSync(path.join(dir, 'vision-state.json'), 'utf-8'));
+    assert.equal(state.items.length, 1, 'must not create a duplicate item');
+    assert.equal(state.items[0].lifecycle?.featureCode, 'ui-uuid-1', 'lifecycle.featureCode must be seeded on bind');
+  });
+
+  it('binds to a UI-created item matched by top-level item.featureCode (#31)', async () => {
+    const dir = fs.mkdtempSync(path.join(tmpDir, 'test-'));
+    const existing = {
+      items: [{ id: 'abc-1', type: 'feature', title: 'UI Item', featureCode: 'FIX-9', status: 'planned' }],
+      connections: [],
+      gates: [],
+    };
+    fs.writeFileSync(path.join(dir, 'vision-state.json'), JSON.stringify(existing));
+
+    const writer = new VisionWriter(dir, { port: 19990 });
+    const id = await writer.ensureFeatureItem('FIX-9');
+
+    assert.equal(id, 'abc-1', 'should bind via top-level item.featureCode');
+    const state = JSON.parse(fs.readFileSync(path.join(dir, 'vision-state.json'), 'utf-8'));
+    assert.equal(state.items.length, 1, 'must not create a duplicate item');
+    assert.equal(state.items[0].lifecycle?.featureCode, 'FIX-9', 'lifecycle.featureCode must be seeded on bind');
+  });
+
+  it('findFeatureItem falls back to item.id then item.featureCode (#31)', async () => {
+    const dir = fs.mkdtempSync(path.join(tmpDir, 'test-'));
+    const existing = {
+      items: [
+        { id: 'id-match', type: 'feature', title: 'A' },
+        { id: 'fc-holder', type: 'feature', title: 'B', featureCode: 'FC-2' },
+      ],
+      connections: [],
+      gates: [],
+    };
+    fs.writeFileSync(path.join(dir, 'vision-state.json'), JSON.stringify(existing));
+
+    const writer = new VisionWriter(dir, { port: 19990 });
+    assert.equal((await writer.findFeatureItem('id-match'))?.id, 'id-match');
+    assert.equal((await writer.findFeatureItem('FC-2'))?.id, 'fc-holder');
+    assert.equal(await writer.findFeatureItem('nope'), null);
+  });
+
+  it('fallback create honors bug mode (type: "bug") (#31)', async () => {
+    const dir = fs.mkdtempSync(path.join(tmpDir, 'test-'));
+    const writer = new VisionWriter(dir, { port: 19990 });
+
+    const id = await writer.ensureFeatureItem('BUG-1', 'Bug One', 'bug');
+
+    const state = JSON.parse(fs.readFileSync(path.join(dir, 'vision-state.json'), 'utf-8'));
+    const item = state.items.find(i => i.id === id);
+    assert.equal(item.type, 'bug', 'bug mode must create a type:bug item, not type:feature');
+  });
 });

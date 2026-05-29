@@ -132,3 +132,11 @@ describe('VisionStore.updateLifecycleExt', () => {
     assert.throws(() => store.updateLifecycleExt('nope', 'branch_lineage', {}), /not found/i);
   });
 });
+
+describe('VisionStore.createItem — type: bug (#31)', () => {
+  it('accepts type "bug" so a bug-mode build can create a bug item', () => {
+    const item = store.createItem({ title: 'A bug', type: 'bug' });
+    assert.equal(item.type, 'bug');
+    assert.equal(store.items.get(item.id).type, 'bug');
+  });
+});

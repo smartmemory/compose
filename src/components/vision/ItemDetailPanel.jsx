@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { X, Link2, Pencil, Trash2, ChevronRight, ChevronDown, Search, Zap } from 'lucide-react';
+import { X, Link2, Pencil, Trash2, ChevronRight, ChevronDown, Search, Zap, Play } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -10,6 +10,7 @@ import ConnectionGraph from './ConnectionGraph.jsx';
 import ConfidenceBar from './shared/ConfidenceBar.jsx';
 import BranchComparePanel from './BranchComparePanel.jsx';
 import DriftRibbon from './DriftRibbon.jsx';
+import StartBuildPopover from './StartBuildPopover.jsx';
 import { useVisionStore } from './useVisionStore.js';
 import { wsFetch } from '../../lib/wsFetch.js';
 
@@ -330,6 +331,7 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
   const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState('');
   const [connectOpen, setConnectOpen] = useState(false);
+  const [startOpen, setStartOpen] = useState(false);
   const [groupDraft, setGroupDraft] = useState('');
 
   // Sync groupDraft when item changes (selecting a different item).
@@ -699,6 +701,23 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
 
           {/* Actions */}
           <div className="flex items-center gap-1.5 flex-wrap">
+            {!item.lifecycle && item.status !== 'killed' && item.type !== 'question' && (
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn('h-7 text-xs gap-1', startOpen && 'bg-accent/10 border-accent')}
+                  onClick={() => setStartOpen(!startOpen)}
+                  data-testid="item-start-build"
+                  title="Start the build/bug-fix lifecycle for this item"
+                >
+                  <Play className="h-3 w-3" /> Start
+                </Button>
+                {startOpen && (
+                  <StartBuildPopover item={item} onClose={() => setStartOpen(false)} />
+                )}
+              </div>
+            )}
             <div className="relative">
               <Button
                 variant="outline"
