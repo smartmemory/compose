@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validateFeature, validateProject } from '../lib/feature-validator.js';
+import { writeRoadmap as generateRoadmapFile } from '../lib/roadmap-gen.js';
 
 function newFixture() {
   const root = mkdtempSync(join(tmpdir(), 'fv-'));
@@ -415,6 +416,35 @@ describe('COMP-ROADMAP-RT validator findings', () => {
     ].join('\n'));
     const { findings } = await validateProject(root);
     assert.ok(findings.some((f) => f.kind === 'ROADMAP_LOSSY'),
+      JSON.stringify(findings.map((f) => f.kind)));
+  });
+
+  test('ORPHAN_PHASE escalates to error when the dead heading carries an active status', async () => {
+    const root = newFixture();
+    writeFeatureFolder(root, 'FOO-1', { 'design.md': 'x' },
+      { code: 'FOO-1', description: 'x', status: 'PLANNED', phase: 'Phase 1', position: 1 });
+    writeFileSync(join(root, 'ROADMAP.md'), [
+      '# X Roadmap', '',
+      '## Phase 1 — PLANNED', '',
+      '| # | Feature | Description | Status |',
+      '|---|---------|-------------|--------|',
+      '| 1 | FOO-1 | x | PLANNED |', '',
+      '## Phase 99 — IN_PROGRESS', '',
+    ].join('\n'));
+    const { findings } = await validateProject(root);
+    assert.ok(findings.some((f) => f.kind === 'ORPHAN_PHASE' && f.severity === 'error'),
+      JSON.stringify(findings.map((f) => `${f.kind}:${f.severity}`)));
+  });
+
+  test('clean project (generated fixed-point ROADMAP) fires none of the new findings', async () => {
+    const root = newFixture();
+    writeFeatureFolder(root, 'FOO-1', { 'design.md': 'x' },
+      { code: 'FOO-1', description: 'x', status: 'PLANNED', phase: 'Phase 1', position: 1 });
+    // Generate ROADMAP.md from feature.json so it is a guaranteed fixed point.
+    generateRoadmapFile(root);
+    const { findings } = await validateProject(root);
+    const newKinds = ['HIERARCHY_DEPTH_INVALID', 'ROUNDTRIP_NOT_FIXED_POINT', 'ROADMAP_LOSSY', 'ORPHAN_PHASE'];
+    assert.ok(!findings.some((f) => newKinds.includes(f.kind)),
       JSON.stringify(findings.map((f) => f.kind)));
   });
 });
