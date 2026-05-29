@@ -159,3 +159,50 @@ describe('validateProject roadmap-correspondence guard (#39 gap fix)', () => {
     assert.deepEqual(correspondence(findings), [], 'roadmap-derived findings still suppressed');
   });
 });
+
+describe('validateProject killed-mode roadmap-source guard (#39)', () => {
+  // A killed feature whose ROADMAP row is non-terminal must NOT raise
+  // KILLED_STATUS_NOT_TERMINAL from the roadmap source on a narrative-owned
+  // workspace — the roadmap is hand-authored, not canonical. feature.json /
+  // vision sources are still checked (no over-suppression).
+  const killedRoadmap = `# Hand-authored
+
+## Phase 0 — PLANNED
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 1 | FOO-1 | killed but row still says planned | PLANNED |
+`;
+
+  function seedKilled(cwd, featureStatus) {
+    writeFileSync(join(cwd, 'docs', 'features', 'FOO-1', 'feature.json'),
+      JSON.stringify({ code: 'FOO-1', description: 'a feature', status: featureStatus, phase: 'Phase 0', position: 1, created: '2026-05-02', updated: '2026-05-02' }, null, 2));
+    writeFileSync(join(cwd, 'docs', 'features', 'FOO-1', 'killed.md'), '# Killed\n\nNo longer pursuing.\n');
+    writeFileSync(join(cwd, 'ROADMAP.md'), killedRoadmap);
+  }
+  const killedTerminal = (findings) => findings.filter(f => f.kind === 'KILLED_STATUS_NOT_TERMINAL');
+
+  test('narrative-owned: a non-terminal ROADMAP row does NOT raise KILLED_STATUS_NOT_TERMINAL', async () => {
+    const cwd = makeWorkspace({ narrative: true });
+    seedKilled(cwd, 'KILLED'); // feature.json terminal; only the roadmap row is non-terminal
+    const { findings } = await validateProject(cwd);
+    assert.deepEqual(killedTerminal(findings), [],
+      `roadmap-sourced KILLED_STATUS_NOT_TERMINAL must be suppressed, got ${JSON.stringify(killedTerminal(findings))}`);
+  });
+
+  test('control: a NON-narrative workspace DOES raise it from the roadmap row', async () => {
+    const cwd = makeWorkspace({ narrative: false });
+    seedKilled(cwd, 'KILLED');
+    const { findings } = await validateProject(cwd);
+    assert.ok(killedTerminal(findings).some(f => /roadmap/i.test(f.detail)),
+      'guard is load-bearing: a normal workspace flags the non-terminal roadmap row');
+  });
+
+  test('does NOT over-suppress: a non-terminal feature.json with killed.md still flags', async () => {
+    const cwd = makeWorkspace({ narrative: true });
+    seedKilled(cwd, 'IN_PROGRESS'); // feature.json itself is non-terminal — real drift
+    const { findings } = await validateProject(cwd);
+    assert.ok(killedTerminal(findings).some(f => /feature\.json/i.test(f.detail)),
+      'feature.json non-terminal status with killed.md must still flag — only the roadmap source is suppressed');
+  });
+});

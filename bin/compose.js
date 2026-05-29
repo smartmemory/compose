@@ -1044,7 +1044,16 @@ if (cmd === 'roadmap') {
     const { checkRoundtrip } = await import('../lib/roadmap-roundtrip.js')
     const { listFeatures } = await import('../lib/feature-json.js')
     const { loadExternalPrefixes } = await import('../lib/project-paths.js')
+    const { isNarrativeOwned } = await import('../lib/roadmap-config.js')
     const { root: cwd } = resolveCwdWithWorkspace(args)
+    // Narrative-owned workspaces (#39): ROADMAP.md is hand-authored, not a render
+    // of feature.json. writeRoadmap already no-ops, but the canonicalization pass
+    // below would still overwrite the file (or crash if it's absent) — skip the
+    // whole generate path here so the hand-authored file is never touched.
+    if (isNarrativeOwned(cwd)) {
+      console.log('narrative-owned workspace (roadmap.narrative=true) — ROADMAP.md is hand-authored; generate skipped.')
+      process.exit(0)
+    }
     const path = writeRoadmap(cwd)
     const externalPrefixes = loadExternalPrefixes(cwd)
     // checkRoundtrip's now:'0000-00-00' is only used to detect/canonicalize

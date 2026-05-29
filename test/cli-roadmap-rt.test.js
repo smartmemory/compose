@@ -45,6 +45,19 @@ describe('compose roadmap check (COMP-ROADMAP-RT)', () => {
     assert.ok(/LOSSLESS|GHOST-1|lossy|feature\.json/i.test(r.stdout), r.stdout);
   });
 
+  test('generate is a no-op on a narrative-owned workspace — never overwrites the hand-authored ROADMAP (#39)', () => {
+    const cwd = project();
+    writeFileSync(join(cwd, '.compose', 'compose.json'),
+      JSON.stringify({ version: '0.1', paths: { features: 'docs/features' }, roadmap: { narrative: true } }));
+    const hand = '# Hand-authored\n\nCurated prose the generator would otherwise clobber.\n';
+    writeFileSync(join(cwd, 'ROADMAP.md'), hand);
+    const r = run(cwd, ['roadmap', 'generate']);
+    assert.equal(r.code, 0, r.stdout);
+    assert.equal(readFileSync(join(cwd, 'ROADMAP.md'), 'utf-8'), hand,
+      'narrative-owned ROADMAP.md must survive `roadmap generate` byte-for-byte');
+    assert.ok(/narrative-owned/i.test(r.stdout), r.stdout);
+  });
+
   test('skips (exit 0) on a narrative-owned workspace even when ROADMAP mismatches feature.json (#39)', () => {
     const cwd = project();
     // Flag narrative-owned and hand-author a ROADMAP that does NOT match FOO-1.
