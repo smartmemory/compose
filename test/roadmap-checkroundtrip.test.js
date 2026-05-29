@@ -114,6 +114,27 @@ describe('checkRoundtrip — fixed point + lossless', () => {
       `expected LOSSLESS_CHANGED for FEAT-1, got ${JSON.stringify(r.diffs)}`);
   });
 
+  test('externalPrefixes suppresses LOSSLESS_EXTRA for cross-project rows', () => {
+    const base = [
+      '# X Roadmap', '',
+      '## Phase 9 — PLANNED', '',
+      '| # | Feature | Description | Status |',
+      '|---|---------|-------------|--------|',
+      '| 1 | STRAT-FOO-1 | owned by another project | PLANNED |', '',
+    ].join('\n');
+    const features = [
+      { code: 'FEAT-1', phase: 'Phase 1', status: 'PLANNED', description: 'first', position: 1 },
+    ];
+    const withPrefix = checkRoundtrip(base, features, { ...OPTS, externalPrefixes: ['STRAT-'] });
+    assert.ok(!withPrefix.diffs.some(d => d.kind === 'LOSSLESS_EXTRA' && d.code === 'STRAT-FOO-1'),
+      `STRAT-FOO-1 must NOT be flagged extra with externalPrefixes, got ${JSON.stringify(withPrefix.diffs)}`);
+
+    // Without the prefix the same row IS flagged — proving the opt is load-bearing.
+    const noPrefix = checkRoundtrip(base, features, OPTS);
+    assert.ok(noPrefix.diffs.some(d => d.kind === 'LOSSLESS_EXTRA' && d.code === 'STRAT-FOO-1'),
+      `STRAT-FOO-1 must be flagged extra without externalPrefixes, got ${JSON.stringify(noPrefix.diffs)}`);
+  });
+
   test('a feature with an empty items[] emits exactly one recoverable row (no LOSSLESS_MISSING)', () => {
     // The generator always emits every well-formed feature as a typed row, so
     // LOSSLESS_MISSING cannot be triggered through gen with valid input. Pin the

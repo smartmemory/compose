@@ -8,7 +8,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { loadFeaturesDir, _internals } from '../lib/project-paths.js';
+import { loadFeaturesDir, loadExternalPrefixes, _internals } from '../lib/project-paths.js';
 
 function freshCwd() {
   return mkdtempSync(join(tmpdir(), 'project-paths-'));
@@ -61,5 +61,37 @@ describe('loadFeaturesDir', () => {
     const cwd = freshCwd();
     writeConfig(cwd, { paths: { features: 42 } });
     assert.equal(loadFeaturesDir(cwd), 'docs/features');
+  });
+});
+
+describe('loadExternalPrefixes', () => {
+  test('returns [] when no .compose/compose.json', () => {
+    const cwd = freshCwd();
+    assert.deepEqual(loadExternalPrefixes(cwd), []);
+  });
+
+  test('returns [] when externalPrefixes is absent', () => {
+    const cwd = freshCwd();
+    writeConfig(cwd, { paths: {} });
+    assert.deepEqual(loadExternalPrefixes(cwd), []);
+  });
+
+  test('returns the array when present', () => {
+    const cwd = freshCwd();
+    writeConfig(cwd, { externalPrefixes: ['STRAT-', 'EXT-'] });
+    assert.deepEqual(loadExternalPrefixes(cwd), ['STRAT-', 'EXT-']);
+  });
+
+  test('returns [] when externalPrefixes is non-array', () => {
+    const cwd = freshCwd();
+    writeConfig(cwd, { externalPrefixes: 'STRAT-' });
+    assert.deepEqual(loadExternalPrefixes(cwd), []);
+  });
+
+  test('returns [] on malformed JSON', () => {
+    const cwd = freshCwd();
+    mkdirSync(join(cwd, '.compose'), { recursive: true });
+    writeFileSync(join(cwd, '.compose', 'compose.json'), '{not valid', 'utf-8');
+    assert.deepEqual(loadExternalPrefixes(cwd), []);
   });
 });
