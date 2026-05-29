@@ -332,7 +332,7 @@ const TOOLS = [
         status: { type: 'string', enum: ['PLANNED', 'IN_PROGRESS', 'PARTIAL', 'COMPLETE', 'BLOCKED', 'KILLED', 'PARKED', 'SUPERSEDED'] },
         reason: { type: 'string', description: 'Free-form reason persisted in the audit event' },
         commit_sha: { type: 'string', description: 'Optional commit binding' },
-        force: { type: 'boolean', description: 'Bypass the transition policy. Recorded in audit.' },
+        force: { type: 'boolean', description: 'Bypass the transition policy AND the roundtrip fixed-point guard (commits even if ROADMAP.md would not be a generation fixed point). Recorded in audit.' },
         idempotency_key: { type: 'string' },
       },
     },
