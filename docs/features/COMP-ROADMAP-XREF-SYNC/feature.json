@@ -1,7 +1,7 @@
 {
   "code": "COMP-ROADMAP-XREF-SYNC",
-  "description": "Reconcile external cross-references (GitHub/Jira/Linear issues) against their targets — turn read-only XREF_DRIFT warnings into verifiable sync. Network/provider subsystem, split from COMP-ROADMAP-RT.",
-  "status": "PLANNED",
+  "description": "Reconcile external cross-references (GitHub/Jira/Linear issues) against their targets \u2014 turn read-only XREF_DRIFT warnings into verifiable sync. v1 PULL shipped: `compose roadmap xref-sync [--dry-run]` reconciles feature.json external links' expect= to live target state (github/local), never writing external. External-write (push) deferred to a separate ticket.",
+  "status": "PARTIAL",
   "phase": "Phase 6: MCP Writers",
   "created": "2026-05-29",
   "updated": "2026-05-29",

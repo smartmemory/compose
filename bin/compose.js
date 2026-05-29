@@ -119,6 +119,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  roadmap generate   Regenerate ROADMAP.md from feature.json files')
   console.log('  roadmap migrate    Extract ROADMAP.md entries into feature.json files')
   console.log('  roadmap check      Verify feature.json and ROADMAP.md are in sync')
+  console.log('  roadmap xref-sync  Pull-reconcile feature.json external links to live state')
   console.log('  items              List vision items from local state (no server)')
   console.log('  items show <id>    Show detail for a specific vision item')
   console.log('  triage    Analyze a feature and recommend build profile')
@@ -1108,6 +1109,27 @@ if (cmd === 'roadmap') {
     }
     console.log('\nRun `compose roadmap generate` to regenerate ROADMAP.md from feature.json.')
     process.exit(1)
+  }
+
+  // compose roadmap xref-sync — pull-reconcile feature.json external links'
+  // expect= to live target state (COMP-ROADMAP-XREF-SYNC v1). Never writes external.
+  if (subcmd === 'xref-sync') {
+    const { syncExternalRefs } = await import('../lib/xref-sync.js')
+    const { root: cwd } = resolveCwdWithWorkspace(args)
+    const dryRun = args.includes('--dry-run')
+    const res = await syncExternalRefs(cwd, { dryRun })
+    const verb = dryRun ? 'would update' : 'updated'
+    if (res.synced.length === 0) {
+      console.log(`No external-link drift to reconcile (${res.scanned} resolvable link(s) checked, ${res.unchanged} already in sync).`)
+    } else {
+      console.log(`${dryRun ? 'Would reconcile' : 'Reconciled'} ${res.synced.length} external link(s):`)
+      for (const s of res.synced) console.log(`  ${s.code}  ${s.provider} ${s.target}: expect ${s.from} → ${s.to} (${verb})`)
+    }
+    if (res.skipped.length > 0) {
+      console.log(`\nSkipped ${res.skipped.length} unresolved link(s):`)
+      for (const s of res.skipped) console.log(`  ${s.code}  ${s.provider} ${s.target}: ${s.reason}`)
+    }
+    process.exit(0)
   }
 
   // Default: compose roadmap (show status)
