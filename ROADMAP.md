@@ -1219,14 +1219,6 @@ Response-time policy gate that detects rule violations in candidate agent respon
 
 ---
 
-## implementation — PLANNED
-
-| # | Feature | Description | Status |
-|---|---------|-------------|--------|
-| — | COMP-DEBUG-1 | **Debug discipline: agent capability profiles + enforcement.** Limits each agent type to a tool subset; emits capability_violation events; opt-in block mode rejects calls outside the profile. | PLANNED |
-
----
-
 ## COMP-GSD: Autonomous Long-Run Mode — PARTIAL
 
 | # | Feature | Description | Status |
@@ -1290,6 +1282,14 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
 | 1 | COMP-ROADMAP-GRAPH-1 | **Generated roadmap dependency graph (compose substrate).** Per-project `roadmap-graph.html` derived from compose lifecycle state + `deps.yaml` per feature folder + `design.md` (or `feature.json`) frontmatter metadata. Replaces hand-maintained graph HTML with a deterministic generator (`compose roadmap-graph` subcommand or `mcp__compose__roadmap_graph` tool). Generic across compose-using projects (SmartMemory, ScaleMate, Maya, Coder-Config). Includes deps.yaml schema, idempotent generator, dangling-edge refusal, pre-commit hook + CI gate. Migrated from SmartMemory's META-GRAPH-1 2026-05-23 after recognizing the work is compose-substrate, not SmartMemory-specific. SmartMemory remains the first consumer via thin adoption feature META-GRAPH-1. | PLANNED |
+
+---
+
+## COMP-DEBUG: Debug Discipline — PLANNED
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| — | COMP-DEBUG-1 | **Debug discipline: agent capability profiles + enforcement.** Limits each agent type to a tool subset; emits capability_violation events; opt-in block mode rejects calls outside the profile. | PLANNED |
 
 ---
 
