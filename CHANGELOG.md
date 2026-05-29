@@ -2,6 +2,28 @@
 
 ## 2026-05-29
 
+### fix(roadmap): guard narrative-owned workspaces from the typed writer (#39)
+
+A workspace whose `.compose/compose.json` declares `roadmap.narrative: true` is
+now **narrative-owned**: its hand-authored `ROADMAP.md` is never machine-
+regenerated from `feature.json`. `generateRoadmap` returns the on-disk content
+verbatim, `writeRoadmap` is a no-op (both warn with an actionable message), and
+`add_roadmap_entry` refuses before writing any `feature.json`. The drift
+*checks* skip too: `compose roadmap check` **and `roadmap generate`** exit 0 with
+a "skipped" notice (generate would otherwise canonicalize-overwrite or crash on
+the hand-authored file), the project validator emits an info
+`ROADMAP_NARRATIVE_OWNED` instead of `ROUNDTRIP_NOT_FIXED_POINT`/`ROADMAP_LOSSY`,
+and killed-mode `KILLED_STATUS_NOT_TERMINAL` ignores the roadmap source (still
+checks feature.json/vision). Hand-authored rows are also exempt from
+`ROADMAP_ROW_SCHEMA_VIOLATION`, and per-feature artifact/completion checks no
+longer fall back to the roadmap row status (feature.json stays canonical) —
+otherwise the hand-authored `ROADMAP.md` would always read as false drift. This stops the typed writer from
+flattening curated reconciliation prose into rendered tables — the root cause of
+the recurring forge-top "Wave 6" duplication. `feature.json` files may still
+exist in such a workspace as structured link carriers; the guard stops the
+writer, it does not delete data. New `lib/roadmap-config.js`
+(`isNarrativeOwned`); documented in `docs/configuration.md`.
+
 ### fix(roadmap): em-dash in a phase title no longer truncates the phaseId (#38)
 
 Phase headings whose *title* contains an em-dash (`## Wave 6 — Situational
