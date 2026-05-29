@@ -1,6 +1,6 @@
-import { test } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { FEATURE_CODE_RE_STRICT, validateCode } from '../lib/feature-code.js';
+import { FEATURE_CODE_RE_STRICT, validateCode, isFeatureCode } from '../lib/feature-code.js';
 
 test('FEATURE_CODE_RE_STRICT accepts canonical codes', () => {
   for (const code of [
@@ -56,4 +56,24 @@ test('validateCode error message includes the rejected value', () => {
     assert.match(err.message, /bad/);
     assert.equal(err.code, 'INVALID_INPUT');
   }
+});
+
+describe('isFeatureCode', () => {
+  test('accepts a code that does not end in -<digits>', () => {
+    assert.equal(isFeatureCode('COMP-ROADMAP-RT'), true);
+  });
+  test('accepts a numeric-suffixed code', () => {
+    assert.equal(isFeatureCode('FEAT-1'), true);
+  });
+  test('rejects leading/trailing hyphen, lowercase, em-dash, empty, null', () => {
+    assert.equal(isFeatureCode('-FOO'), false);
+    assert.equal(isFeatureCode('FOO-'), false);
+    assert.equal(isFeatureCode('foo-1'), false);
+    assert.equal(isFeatureCode('—'), false);
+    assert.equal(isFeatureCode(''), false);
+    assert.equal(isFeatureCode(null), false);
+  });
+  test('predicate agrees with the strict regex', () => {
+    assert.equal(isFeatureCode('COMP-X'), FEATURE_CODE_RE_STRICT.test('COMP-X'));
+  });
 });
