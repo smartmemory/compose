@@ -218,6 +218,31 @@ describe('readAnonymousRows', () => {
       'no phase entry for a heading inside a preserved-section');
   });
 
+  test('captures anon rows that follow a balanced preserved-section in the same phase (review fix)', () => {
+    // A preserved block mid-phase must not blind readAnonymousRows to later
+    // real anon rows in the same phase — currentPhaseId survives the block.
+    const md = [
+      '## Phase 1 — PLANNED',
+      '| # | Feature | Description | Status |',
+      '|---|---------|-------------|--------|',
+      '| 1 | REAL-1 | typed | PLANNED |',
+      '',
+      '<!-- preserved-section: note -->',
+      'curated prose',
+      '<!-- /preserved-section -->',
+      '',
+      '| # | Feature | Description | Status |',
+      '|---|---------|-------------|--------|',
+      '| 2 | REAL-2 | typed again | PLANNED |',
+      '| — | — | anon after the preserved block | PLANNED |',
+    ].join('\n');
+    const rows = readAnonymousRows(md).get('Phase 1') ?? [];
+    assert.equal(rows.length, 1, 'the post-block anon row must still be captured');
+    assert.ok(rows[0].rawLine.includes('anon after the preserved block'));
+    assert.equal(rows[0].predecessorCode, 'REAL-2',
+      'predecessor anchoring resumes correctly after the preserved block');
+  });
+
   test('a lowercase feature code is treated as TYPED (not anon) and anchors anon rows by uppercased code (GENFIX T5)', () => {
     // A hand-authored row with a lowercase code (`comp-foo-1`) is the same
     // feature as feature.json's `COMP-FOO-1`. Classifying it anon would preserve

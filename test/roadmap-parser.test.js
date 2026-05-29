@@ -330,6 +330,46 @@ test('ignores rows inside a preserved-section (MIGRATE-PREP)', () => {
     'struck preserved-section rows must not become anon entries');
 });
 
+test('a preserved-section marker INSIDE a fenced code block is not honored, and later rows still parse (review fix)', () => {
+  const md = [
+    '## Phase A — PLANNED',
+    '| # | Feature | Description | Status |',
+    '|---|---------|-------------|--------|',
+    '| 1 | REAL-1 | before fence | PLANNED |',
+    '',
+    '```',
+    '<!-- preserved-section: not-a-real-marker -->',
+    'example markup in a code block',
+    '```',
+    '',
+    '## Phase B — PLANNED',
+    '| # | Feature | Description | Status |',
+    '|---|---------|-------------|--------|',
+    '| 1 | REAL-2 | after fence | PLANNED |',
+  ].join('\n');
+  const codes = parseRoadmap(md).map(e => e.code);
+  assert.ok(codes.includes('REAL-1') && codes.includes('REAL-2'),
+    `a fenced marker must not black-hole later rows, got ${JSON.stringify(codes)}`);
+});
+
+test('an indented preserved-section marker is NOT honored (matches preservers, raw-line match)', () => {
+  // The marker sits on its own line (not interrupting a table). With raw-line
+  // matching it is inert, so the later table still parses. If the parser matched
+  // the trimmed line it would enter preserved mode and black-hole REAL-1.
+  const md = [
+    '## Phase A — PLANNED',
+    '',
+    '   <!-- preserved-section: indented -->',
+    '',
+    '| # | Feature | Description | Status |',
+    '|---|---------|-------------|--------|',
+    '| 1 | REAL-1 | indented marker is inert, this must parse | PLANNED |',
+  ].join('\n');
+  const codes = parseRoadmap(md).map(e => e.code);
+  assert.ok(codes.includes('REAL-1'),
+    'an indented marker must not be treated as a preserved-section open');
+});
+
 test('unescapes escaped pipes in a description cell and reads status correctly (GENFIX T3)', () => {
   const md = [
     '## Phase 7: Escaping — PLANNED',
