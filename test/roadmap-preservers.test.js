@@ -185,6 +185,26 @@ describe('readAnonymousRows', () => {
     assert.equal(rows.length, 1); // only the em-dash row is anon
     assert.ok(rows[0].rawLine.includes('curated note'));
   });
+
+  test('a lowercase feature code is treated as TYPED (not anon) and anchors anon rows by uppercased code (GENFIX T5)', () => {
+    // A hand-authored row with a lowercase code (`comp-foo-1`) is the same
+    // feature as feature.json's `COMP-FOO-1`. Classifying it anon would preserve
+    // a phantom duplicate next to the regenerated typed row. It must be typed,
+    // and the following anon row must anchor to the canonical UPPERCASE code so
+    // emitAnonAfter('COMP-FOO-1') re-places it during regen.
+    const md = [
+      '## Phase 9 — PLANNED',
+      '| # | Feature | Description | Status |',
+      '|---|---------|-------------|--------|',
+      '| 1 | comp-foo-1 | lower-cased code | PLANNED |',
+      '| — | — | a curated note | PLANNED |',
+    ].join('\n');
+    const rows = readAnonymousRows(md).get('Phase 9') ?? [];
+    assert.equal(rows.length, 1, 'the lowercase-code row must NOT be classified anon');
+    assert.ok(rows[0].rawLine.includes('curated note'));
+    assert.equal(rows[0].predecessorCode, 'COMP-FOO-1',
+      'anon predecessor must be the uppercased canonical code');
+  });
 });
 
 // ---------------------------------------------------------------------------
