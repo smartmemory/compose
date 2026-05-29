@@ -186,6 +186,38 @@ describe('readAnonymousRows', () => {
     assert.ok(rows[0].rawLine.includes('curated note'));
   });
 
+  test('ignores anon rows inside a preserved-section (MIGRATE-PREP)', () => {
+    // Content inside a preserved-section is owned verbatim by
+    // readPreservedSections. readAnonymousRows must not ALSO capture its rows,
+    // or generate emits them twice (once verbatim, once re-interleaved) and the
+    // roundtrip grows duplicates every pass.
+    const md = [
+      '## Phase 1 — PLANNED',
+      '| # | Feature | Description | Status |',
+      '|---|---------|-------------|--------|',
+      '| 1 | REAL-1 | real | PLANNED |',
+      '| — | — | real anon note | PLANNED |',
+      '',
+      '<!-- preserved-section: execution-sequencing -->',
+      '## Execution Sequencing',
+      '',
+      '| Feature | Items | Effort | Rationale |',
+      '|---------|-------|--------|-----------|',
+      '| ~~COMP-TEAMS~~ | 92–95 | S | struck planning row |',
+      '<!-- /preserved-section -->',
+    ].join('\n');
+    const map = readAnonymousRows(md);
+    const phase1 = map.get('Phase 1') ?? [];
+    assert.equal(phase1.length, 1, 'only the real anon note in Phase 1 is captured');
+    assert.ok(phase1[0].rawLine.includes('real anon note'));
+    // Nothing from inside the preserved block — including its struck row.
+    const allRaw = [...map.values()].flat().map(r => r.rawLine).join('\n');
+    assert.ok(!allRaw.includes('COMP-TEAMS'),
+      'preserved-section struck rows must not be captured as anon');
+    assert.ok(!map.has('Execution Sequencing'),
+      'no phase entry for a heading inside a preserved-section');
+  });
+
   test('a lowercase feature code is treated as TYPED (not anon) and anchors anon rows by uppercased code (GENFIX T5)', () => {
     // A hand-authored row with a lowercase code (`comp-foo-1`) is the same
     // feature as feature.json's `COMP-FOO-1`. Classifying it anon would preserve
