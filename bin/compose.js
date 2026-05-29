@@ -1094,6 +1094,14 @@ if (cmd === 'roadmap') {
       console.error('No ROADMAP.md found. Run: compose roadmap generate')
       process.exit(1)
     }
+    // Narrative-owned workspaces (#39): ROADMAP.md is hand-authored, not a render
+    // of feature.json — the roundtrip would always report false drift. The file
+    // must still EXIST (checked above); we only skip the drift comparison.
+    const { isNarrativeOwned } = await import('../lib/roadmap-config.js')
+    if (isNarrativeOwned(cwd)) {
+      console.log('narrative-owned workspace (roadmap.narrative=true) — ROADMAP.md is hand-authored; roundtrip check skipped.')
+      process.exit(0)
+    }
     const externalPrefixes = loadExternalPrefixes(cwd)
     const rt = checkRoundtrip(readFileSync(roadmapPath, 'utf-8'), listFeatures(cwd), { now: '0000-00-00', externalPrefixes })
     if (rt.fixedPoint && rt.lossless) {

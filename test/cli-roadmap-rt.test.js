@@ -44,4 +44,15 @@ describe('compose roadmap check (COMP-ROADMAP-RT)', () => {
     assert.equal(r.code, 1, r.stdout);
     assert.ok(/LOSSLESS|GHOST-1|lossy|feature\.json/i.test(r.stdout), r.stdout);
   });
+
+  test('skips (exit 0) on a narrative-owned workspace even when ROADMAP mismatches feature.json (#39)', () => {
+    const cwd = project();
+    // Flag narrative-owned and hand-author a ROADMAP that does NOT match FOO-1.
+    writeFileSync(join(cwd, '.compose', 'compose.json'),
+      JSON.stringify({ version: '0.1', paths: { features: 'docs/features' }, roadmap: { narrative: true } }));
+    writeFileSync(join(cwd, 'ROADMAP.md'), '# Hand-authored\n\nCurated prose, no feature tables.\n');
+    const r = run(cwd, ['roadmap', 'check']);
+    assert.equal(r.code, 0, r.stdout);
+    assert.ok(/narrative-owned/i.test(r.stdout), r.stdout);
+  });
 });

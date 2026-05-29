@@ -72,7 +72,7 @@ Optional. Controls roadmap generation policy.
 
 | Field | Default | Notes |
 |-------|---------|-------|
-| `narrative` | `false` | When `true`, the workspace is **narrative-owned**: `ROADMAP.md` is hand-authored and must not be machine-regenerated from `feature.json`. `generateRoadmap`/`writeRoadmap` no-op with a warning and `add_roadmap_entry` refuses. `feature.json` files may still exist as structured link carriers (xref-sync) — they just don't drive `ROADMAP.md`. See issue #39. |
+| `narrative` | `false` | When `true`, the workspace is **narrative-owned**: `ROADMAP.md` is hand-authored and must not be machine-regenerated from `feature.json`. `generateRoadmap`/`writeRoadmap` no-op with a warning and `add_roadmap_entry` refuses. The roundtrip *checks* skip too — `compose roadmap check` exits 0 ("skipped") and the validator emits an info `ROADMAP_NARRATIVE_OWNED` rather than false `ROUNDTRIP_NOT_FIXED_POINT`/`ROADMAP_LOSSY` drift. `feature.json` files may still exist as structured link carriers (xref-sync) — they just don't drive `ROADMAP.md`. See issue #39. |
 
 ## `.compose/questionnaire.json`
 

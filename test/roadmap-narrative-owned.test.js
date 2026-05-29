@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { isNarrativeOwned } from '../lib/roadmap-config.js';
 import { generateRoadmap, writeRoadmap } from '../lib/roadmap-gen.js';
 import { addRoadmapEntry } from '../lib/feature-writer.js';
+import { validateProject } from '../lib/feature-validator.js';
 
 const HAND_AUTHORED = `# Hand-authored Roadmap
 
@@ -95,5 +96,66 @@ describe('add_roadmap_entry guard (#39)', () => {
     );
     assert.equal(existsSync(join(cwd, 'docs', 'features', 'BAR-1', 'feature.json')), false,
       'no feature.json should be created when the workspace is narrative-owned');
+  });
+});
+
+describe('validateProject roadmap-correspondence guard (#39 gap fix)', () => {
+  // Every finding that treats a roadmap row as canonical is suppressed when
+  // narrative-owned — roundtrip, folder↔row linkage, AND roadmap-vs-* drift.
+  const SUPPRESSED = new Set([
+    'ROUNDTRIP_NOT_FIXED_POINT', 'ROADMAP_LOSSY', 'HIERARCHY_DEPTH_INVALID', 'ORPHAN_PHASE',
+    'ROADMAP_ROW_WITHOUT_FOLDER', 'FOLDER_WITHOUT_ROADMAP_ROW', 'ORPHAN_FOLDER',
+    'STATUS_MISMATCH_ROADMAP_VS_FEATUREJSON', 'STATUS_MISMATCH_ROADMAP_VS_VISION_STATE',
+    'COMPLEXITY_OR_DESCRIPTION_DRIFT',
+  ]);
+  const correspondence = (findings) => findings.filter(f => SUPPRESSED.has(f.kind));
+
+  // FOO-1 has a folder but no ROADMAP row; GHOST-1 has a row but no folder — this
+  // drives ROADMAP_LOSSY, FOLDER_WITHOUT_ROADMAP_ROW, ROADMAP_ROW_WITHOUT_FOLDER,
+  // and ORPHAN_FOLDER on a normal workspace.
+  const driftingRoadmap = `# Roadmap
+
+## Phase 9 — PLANNED
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 1 | GHOST-1 | not backed by feature.json | PLANNED |
+`;
+
+  test('narrative-owned: ALL correspondence findings suppressed, one ROADMAP_NARRATIVE_OWNED info', async () => {
+    const cwd = makeWorkspace({ narrative: true });
+    writeFileSync(join(cwd, 'ROADMAP.md'), driftingRoadmap);
+    const { findings } = await validateProject(cwd);
+    assert.deepEqual(correspondence(findings), [],
+      `narrative-owned must suppress the whole correspondence class, got ${JSON.stringify(correspondence(findings))}`);
+    assert.equal(findings.filter(f => f.kind === 'ROADMAP_NARRATIVE_OWNED').length, 1,
+      'exactly one info finding records the skip, not silent');
+    assert.ok(findings.some(f => f.kind === 'ROADMAP_NARRATIVE_OWNED' && f.severity === 'info'));
+  });
+
+  test('control: a NON-narrative workspace with the same drift DOES report correspondence findings', async () => {
+    const cwd = makeWorkspace({ narrative: false });
+    writeFileSync(join(cwd, 'ROADMAP.md'), driftingRoadmap);
+    const { findings } = await validateProject(cwd);
+    assert.ok(correspondence(findings).length > 0,
+      'guard is load-bearing: a normal workspace still reports correspondence drift');
+    assert.ok(!findings.some(f => f.kind === 'ROADMAP_NARRATIVE_OWNED'),
+      'no narrative-owned info on a normal workspace');
+  });
+
+  test('does NOT over-suppress: feature.json↔vision drift survives (no roadmap involved)', async () => {
+    const cwd = makeWorkspace({ narrative: true });
+    writeFileSync(join(cwd, 'ROADMAP.md'), driftingRoadmap); // FOO-1 absent from roadmap → rStatus null
+    // vision-state binds FOO-1 as COMPLETE while feature.json says PLANNED →
+    // STATUS_MISMATCH_FEATUREJSON_VS_VISION_STATE (no roadmap on either side).
+    mkdirSync(join(cwd, '.compose', 'data'), { recursive: true });
+    writeFileSync(join(cwd, '.compose', 'data', 'vision-state.json'), JSON.stringify({
+      items: [{ id: 'v1', type: 'feature', status: 'COMPLETE', lifecycle: { featureCode: 'FOO-1' } }],
+      connections: [], gates: [],
+    }));
+    const { findings } = await validateProject(cwd);
+    assert.ok(findings.some(f => f.kind === 'STATUS_MISMATCH_FEATUREJSON_VS_VISION_STATE'),
+      'feature.json↔vision drift must survive — narrative only suppresses roadmap-derived findings');
+    assert.deepEqual(correspondence(findings), [], 'roadmap-derived findings still suppressed');
   });
 });

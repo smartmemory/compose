@@ -459,3 +459,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-29T18:03:51+07:00 | COMP-ROADMAP-XREF-SYNC v1 (pull): reconcile feature.json external links' expect= to live target state; CLI roadmap xref-sync
 2026-05-29T18:12:33+07:00 | XREF-SYNC review-fix: sibling-containment guard + realpath on local refs; resolve sibling's own featuresDir
 2026-05-29T19:53:19+07:00 | #39 guard typed roadmap writer against narrative-owned workspaces: add roadmap.narrative signal to compose.json, no-op+warn in generateRoadmap/writeRoadmap/addRoadmapEntry, byte-equal regression fixture
+2026-05-29T20:08:48+07:00 | #39 gap fix: skip roadmap roundtrip checks (validator + roadmap check CLI) on narrative-owned workspaces
