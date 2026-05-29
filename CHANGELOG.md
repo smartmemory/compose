@@ -2,6 +2,28 @@
 
 ## 2026-05-29
 
+### feat(roadmap): preserved-section-aware parser + historical-row migration (fixed point)
+
+After GENFIX (below) the migration still diverged — root cause was not the sort but
+`migrate`/`parseRoadmap` treating the curated `## Execution Sequencing` planning
+narrative (non-standard `| Feature | Items | Effort | Rationale |` schema) as feature
+tables, minting phantom bare-code features, while `readAnonymousRows` double-captured
+its struck rows.
+
+- `parseRoadmap`, `readPhaseOverrides`, `readAnonymousRows` now skip content inside
+  `<!-- preserved-section -->` markers (matching `readPhaseBlocks`/`readPhaseOrder`).
+  `parseRoadmap` also gained fence tracking and raw-line marker matching so it agrees
+  with the preservers. `PRESERVED_OPEN_RE`/`PRESERVED_CLOSE_RE` exported as the single
+  source of truth. (Codex-reviewed; review caught + fixed a fence black-hole, a
+  dropped-anon-after-block bug, and a trimmed-vs-raw marker mismatch.)
+- ROADMAP.md: `## Execution Sequencing` wrapped as a preserved-section (emitted
+  verbatim); ~149 compose-owned rows migrated to `feature.json`; 42 STRAT-* skipped
+  as external. `roadmap check` is now a clean fixed point + lossless.
+- Fixed 5 malformed source rows that yielded schema-invalid feature.json: SKILL-PD-1..4
+  carried inline rationale in the status cell (folded into description; status → bare
+  PARKED); COMP-CAPS-ENFORCE-4 had an unescaped pipe eating its status (description
+  restored, status → PLANNED to match siblings).
+
 ### fix(COMP-ROADMAP-RT-GENFIX): deterministic roadmap roundtripping — 5 gen/parse defects
 
 Fixes the five gen/parse defects that broke the roundtrip fixed point, unblocking
