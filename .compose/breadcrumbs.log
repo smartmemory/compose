@@ -462,3 +462,8 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-29T20:15:48+07:00 | #38 codex: status must be the RIGHTMOST qualifying em-dash boundary, not the first (title fragment can start with a status token)
 2026-05-29T19:58:41+07:00 | #31 wire UI items to lifecycle: add Start button+popover to desktop ItemDetailPanel, fix vision-writer lookup (lifecycle.featureCode→item.id→item.featureCode) + honor bug mode, thread mode through build.js
 2026-05-29T20:17:52+07:00 | #31 codex: 'bug' missing from VALID_TYPES — REST createItem rejects type:bug. Add bug to server+client VALID_TYPES + TYPE_COLORS, add server-path test
+2026-05-29T19:53:19+07:00 | #39 guard typed roadmap writer against narrative-owned workspaces: add roadmap.narrative signal to compose.json, no-op+warn in generateRoadmap/writeRoadmap/addRoadmapEntry, byte-equal regression fixture
+2026-05-29T20:08:48+07:00 | #39 gap fix: skip roadmap roundtrip checks (validator + roadmap check CLI) on narrative-owned workspaces
+2026-05-29T21:06:11+07:00 | #39 codex: roadmap generate must skip narrative-owned (was clobbering/crashing); killed-mode KILLED_STATUS_NOT_TERMINAL must ignore roadmap source in narrative mode
+2026-05-29T21:15:35+07:00 | #39 codex r2: complete narrative suppression — exempt ROADMAP_ROW_SCHEMA_VIOLATION + drop hand-authored-row status fallback in artifact/completion checks (ctx.narrativeOwned + effectiveStatus)
+2026-05-29T21:21:05+07:00 | #39 codex r3: apply narrative suppression at validateFeature too (per-feature CLI/MCP scope), shared applyNarrativeSuppression + _deferNarrative so project still emits single info
