@@ -47,6 +47,14 @@ Root-caused to `STRAT-PAR-STREAM-CONSUMER-VALIDATE` tightening validation while
 this test (which only runs under `npm run test:integration`, not the default
 `npm test` gate) went un-rerun. Integration suite now 47/47.
 
+### chore(test): fold `test:integration` into the default `npm test` gate
+
+`test/integration/*.test.js` now runs as part of `npm test` (previously only via
+`npm run test:integration`), so contract-drift in integration tests can't rot
+undetected — the exact trigger behind the agent-run-streaming break above. All 6
+integration suites are self-contained (tmp dirs / git / fakes / mocks; no live
+services or fixed ports). Full gate green: 3144 node + 146 UI + 100 tracker.
+
 ### COMP-MCP-ENFORCE — Slices 1–4 — mechanical lifecycle/gate enforcement via stratum STRAT-GUARD (default-OFF capabilities.guard, now enabled)
 
 Moves lifecycle enforcement from prompt-trust into the tool/server layer by consuming stratum's STRAT-GUARD. No caller (skill, cockpit, or rogue MCP/REST client) can effect an unverified transition, complete without real evidence, or reach a terminal status outside the lifecycle. All behind capabilities.guard; guard-OFF is byte-identical to before.
