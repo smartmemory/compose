@@ -2,9 +2,10 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "gsd-stuck.json",
   "_source": "COMP-GSD-5",
+  "_also": "COMP-GSD-4",
   "_roadmap": "COMP-GSD-5",
   "title": "GsdStuckContracts",
-  "description": "Two artifacts written by a stuck `compose gsd` run. `stuck` is the human-facing halt diagnostic persisted to .compose/gsd/<feature>/stuck.json (a Markdown twin, stuck.md, is written alongside). `pause` is the machine-readable resume state persisted to .compose/gsd/<feature>/pause.json; `compose gsd <feature> --resume` reads it, validates ownership/mode, and re-dispatches decomposedTasks minus completedTaskIds (completed results already live in the blackboard). GSD-6 reuses the `pause` shape for automatic crash-recovery.",
+  "description": "Artifacts written when a `compose gsd` run halts. A STUCK halt (COMP-GSD-5) writes stuck.json/stuck.md; a BUDGET halt (COMP-GSD-4) writes budget.json/budget.md. Both persist `pause.json` (machine-readable resume state); `compose gsd <feature> --resume` reads it, validates ownership/mode, and re-dispatches decomposedTasks minus completedTaskIds (completed results already live in the blackboard). The pause `kind` field (optional; absent ⇒ 'stuck' for back-compat) discriminates: a 'stuck' pause carries the stuck-specific fields, a 'budget' pause carries the `budget` block. GSD-6 reuses the `pause` shape for automatic crash-recovery.",
   "definitions": {
     "stuck": {
       "type": "object",
@@ -54,10 +55,30 @@
     "pause": {
       "type": "object",
       "title": "GsdPauseState",
-      "description": "Resume state persisted on a stuck halt. Drives blackboard-driven re-dispatch on --resume — NOT mid-task re-entry.",
-      "required": ["flowId", "stepId", "stuckTaskId", "signal", "detail", "decomposedTasks", "completedTaskIds", "pid", "mode", "ts"],
+      "description": "Resume state persisted on a stuck OR budget halt. Drives blackboard-driven re-dispatch on --resume — NOT mid-task re-entry. Base required fields are kind-agnostic; the `kind` field (optional; absent ⇒ stuck) selects which extra fields are required via the if/then/else at the end.",
+      "required": ["flowId", "stepId", "decomposedTasks", "completedTaskIds", "pid", "mode", "ts"],
       "additionalProperties": false,
       "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["stuck", "budget"],
+          "description": "Halt kind. Optional for back-compat: an absent kind is interpreted as 'stuck'. Determines which extra fields are required (see if/then/else)."
+        },
+        "budget": {
+          "type": "object",
+          "description": "Present on a budget halt (kind='budget'). The enforced axis that tripped + the stratum budget_state snapshot.",
+          "required": ["axis", "caps", "consumed"],
+          "additionalProperties": true,
+          "properties": {
+            "axis": {
+              "type": ["string", "null"],
+              "enum": ["ms", "max_agent_dispatches", "max_tokens", "usd", null],
+              "description": "Which enforced stratum axis reached its cap (null if indeterminate)."
+            },
+            "caps": { "type": "object", "description": "The flow budget caps {ms?,max_agent_dispatches?,max_tokens?,usd?}." },
+            "consumed": { "type": "object", "description": "Consumed totals {tokens,dispatches,wall_s,dollars}." }
+          }
+        },
         "flowId": {
           "type": "string",
           "description": "Stratum flow id of the halted run (informational; resume opens a fresh flow)."
@@ -104,6 +125,16 @@
           "format": "date-time",
           "description": "ISO-8601 timestamp the pause file was written."
         }
+      },
+      "if": {
+        "properties": { "kind": { "const": "budget" } },
+        "required": ["kind"]
+      },
+      "then": {
+        "required": ["budget"]
+      },
+      "else": {
+        "required": ["stuckTaskId", "signal", "detail"]
       }
     }
   }

@@ -113,3 +113,56 @@ test('gsd-stuck.json — pause completedTaskIds may be empty', () => {
   const validate = compile('pause');
   assert.ok(validate({ ...SAMPLE_PAUSE, completedTaskIds: [] }), JSON.stringify(validate.errors));
 });
+
+// ── COMP-GSD-4: budget-kind pause + back-compat ──────────────────────────────
+
+const SAMPLE_BUDGET_PAUSE = {
+  flowId: 'F1',
+  stepId: 'execute',
+  kind: 'budget',
+  budget: {
+    axis: 'max_tokens',
+    caps: { max_tokens: 500000, ms: 600000 },
+    consumed: { tokens: 500001, dispatches: 4, wall_s: 120, dollars: 0.0 },
+  },
+  decomposedTasks: [
+    { id: 'T01', files_owned: ['a.js'], files_read: [], depends_on: [], description: 'x' },
+    { id: 'T02', files_owned: ['b.js'], files_read: [], depends_on: ['T01'], description: 'y' },
+  ],
+  completedTaskIds: ['T01'],
+  pid: 12345,
+  mode: 'gsd',
+  ts: '2026-06-03T12:00:00.000Z',
+};
+
+test('gsd-stuck.json — COMP-GSD-4: a budget-kind pause validates', () => {
+  const validate = compile('pause');
+  assert.ok(validate(SAMPLE_BUDGET_PAUSE), JSON.stringify(validate.errors));
+});
+
+test('gsd-stuck.json — COMP-GSD-4: budget pause WITHOUT the budget block fails', () => {
+  const validate = compile('pause');
+  const { budget, ...without } = SAMPLE_BUDGET_PAUSE;
+  assert.equal(validate(without), false, 'kind=budget requires the budget block');
+});
+
+test('gsd-stuck.json — COMP-GSD-4: budget pause need NOT carry stuck-only fields', () => {
+  const validate = compile('pause');
+  // SAMPLE_BUDGET_PAUSE has no stuckTaskId/signal/detail — must still validate.
+  assert.ok(validate(SAMPLE_BUDGET_PAUSE), JSON.stringify(validate.errors));
+});
+
+test('gsd-stuck.json — COMP-GSD-4: kind="stuck" still requires stuck fields', () => {
+  const validate = compile('pause');
+  assert.ok(validate({ ...SAMPLE_PAUSE, kind: 'stuck' }), JSON.stringify(validate.errors));
+  const { signal, ...noSignal } = SAMPLE_PAUSE;
+  assert.equal(validate({ ...noSignal, kind: 'stuck' }), false, 'kind=stuck requires signal');
+});
+
+test('gsd-stuck.json — COMP-GSD-4: legacy kind-less pause still validates (else branch)', () => {
+  const validate = compile('pause');
+  // SAMPLE_PAUSE has no `kind` — the else branch requires the stuck fields, which it has.
+  assert.ok(validate(SAMPLE_PAUSE), JSON.stringify(validate.errors));
+  const { detail, ...noDetail } = SAMPLE_PAUSE;
+  assert.equal(validate(noDetail), false, 'kind-less pause must still require detail (else branch)');
+});
