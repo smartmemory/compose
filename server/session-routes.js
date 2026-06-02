@@ -9,7 +9,13 @@
  *   GET  /api/session/current
  */
 
+import path from 'node:path';
 import { readSessionsByFeature } from './session-store.js';
+import { getTargetRoot, getDataDir } from './project-root.js';
+import { appendPhaseHistory } from './lifecycle-phase-history.js';
+import { reconcile } from '../lib/checkpoint/reconciler.js';
+import { checkpointConfig } from '../lib/checkpoint/checkpoint-writer.js';
+import { createCheckpointStore } from '../lib/checkpoint/store/index.js';
 
 /**
  * Attach session lifecycle routes to an Express app.
@@ -104,6 +110,65 @@ export function attachSessionRoutes(app, { sessionManager, scheduleBroadcast, br
           phase,
           timestamp: new Date().toISOString(),
         });
+      }
+
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/session/bind/reconcile — COMP-RESUME: reconcile a build against
+  // ground-truth environment state and return the resume decision. reconcile()
+  // is deterministic and computes lifecycleMutations; THIS ROUTE persists them
+  // (store.updateLifecycle) and broadcasts — the persistence boundary (Codex #2).
+  app.post('/api/session/bind/reconcile', (req, res) => {
+    try {
+      const { featureCode } = req.body || {};
+      if (!featureCode) return res.status(400).json({ error: 'featureCode required' });
+      if (!/^[A-Za-z0-9_-]+$/.test(featureCode)) return res.status(400).json({ error: 'Invalid featureCode' });
+
+      const item = store.getItemByFeatureCode(featureCode);
+      if (!item) return res.status(404).json({ error: `No lifecycle item for feature code: ${featureCode}` });
+
+      const targetRoot = getTargetRoot();
+      const dataDir = getDataDir();
+      const cfg = checkpointConfig(targetRoot);
+      const cpStore = createCheckpointStore(cfg.backend, { dataDir });
+
+      const result = reconcile({
+        featureCode,
+        item,
+        cwd: targetRoot,
+        featureDir: path.join(targetRoot, 'docs', 'features', featureCode),
+        composeDir: path.join(targetRoot, '.compose'),
+        dataDir,
+        store: cpStore,
+        confidenceThreshold: cfg.confidenceThreshold,
+      });
+
+      // Apply the mutations reconcile computed (it does not persist itself).
+      // v1 reconcile only emits 'phaseHistory.append'; other mutation types
+      // (e.g. a future 'currentPhase.set' derived from active-build.json) would
+      // be added here together with the reconciler that emits them.
+      let mutated = false;
+      for (const m of result.lifecycleMutations ?? []) {
+        if (m.type === 'phaseHistory.append' && m.entry) {
+          appendPhaseHistory(item, m.entry);
+          mutated = true;
+        }
+      }
+      if (mutated) {
+        store.updateLifecycle(item.id, item.lifecycle);
+        broadcastMessage({
+          type: 'lifecycleReconciled',
+          itemId: item.id,
+          featureCode,
+          action: result.action,
+          drift: result.drift,
+          timestamp: new Date().toISOString(),
+        });
+        scheduleBroadcast();
       }
 
       res.json(result);

@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-06-02
+
+### feat(COMP-RESUME): environment-based resumability for builds
+
+Interrupted builds (crash, killed session, reboot, MCP restart) can now resume
+from ground-truth environment state instead of reconstructing context. The
+environment — git state + on-disk phase artifacts + append-only logs — is the
+checkpoint.
+
+**Added**
+- `lib/checkpoint/` subsystem: `fingerprint.js` (deterministic `EnvFingerprint`
+  capture + pure `classify` → `clean`/`advanced`/`diverged`), capability-tiered
+  `CheckpointStore` (`store/index.js` + `store/jsonl.js`; `smartmemory` and
+  `memory-pointer` are registered seams throwing `NOT_IMPLEMENTED`), `anchor.js`
+  (best-effort boundary capture), `reconciler.js` (deterministic `reconcile` →
+  `ReconcileResult`), `prompts.js`, `render.js`, `checkpoint-writer.js`.
+- Contract `contracts/checkpoint.schema.json` (Checkpoint + EnvFingerprint).
+- MCP tools `write_checkpoint` (anchor or narrative; returns a `scribePrompt`)
+  and `compose_resume` (reconcile → `resume`/`needs-sync`/`gate`).
+- `POST /api/session/bind/reconcile`; best-effort anchor checkpoints at every
+  lifecycle boundary (phase advance/skip/kill/complete, gate resolve, iteration
+  complete/abort) in `server/vision-routes.js`.
+- `checkpoint` config block in `.compose/compose.json` (`enabled`, `backend`,
+  `confidenceThreshold`).
+
+**Notes**
+- Two checkpoint grades: cheap deterministic *anchors* (`soft: null`) at every
+  boundary; agent-authored *narrative* checkpoints (`{goal,nextStep,risks}`) on
+  demand, anchored to the fingerprint (never assert verdicts — point at `testRef`).
+- `reconcile()` is deterministic (no store write, no DB mutation, no LLM); the
+  route persists `lifecycleMutations`, the orchestrator runs the agent on
+  `needs-sync`. Anchor writes are best-effort and never break a route handler.
+- SmartMemory backend intentionally deferred to a follow-up (seam only).
+
 ## 2026-05-29
 
 ### fix(install): correct `pip install` package name in docs + stop vendored kernel shadowing PyPI (stratum#1)

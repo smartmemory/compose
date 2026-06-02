@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "checkpoint.schema.json",
+  "_source": "docs/features/COMP-RESUME/design.md",
+  "_roadmap": "COMP-RESUME",
+  "title": "Checkpoint",
+  "description": "A durable, advisory build checkpoint anchored to a deterministic environment fingerprint. Anchor checkpoints have soft:null; narrative checkpoints carry agent-authored intent.",
+  "type": "object",
+  "required": ["id", "featureCode", "phase", "createdAt", "trigger", "fingerprint"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "description": "Unique checkpoint id (idempotency key for append)." },
+    "featureCode": { "type": "string" },
+    "phase": { "type": "string", "description": "Lifecycle phase at capture time." },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "trigger": {
+      "type": "string",
+      "enum": ["phase-transition", "pre-risky-action", "iteration-complete", "gate-resolution", "manual", "resume-sync"]
+    },
+    "fingerprint": { "$ref": "#/$defs/EnvFingerprint" },
+    "soft": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["goal", "nextStep"],
+          "additionalProperties": false,
+          "properties": {
+            "goal": { "type": "string" },
+            "nextStep": { "type": "string" },
+            "risks": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      ],
+      "description": "null for hook-written anchor checkpoints; populated by the scribe/reconciliation agent for narrative checkpoints."
+    },
+    "artifactIds": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Backend-specific refs (e.g. SmartMemory traceIds). Empty for jsonl backend."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Present only on resume-sync checkpoints emitted by the reconciliation agent."
+    }
+  },
+  "$defs": {
+    "EnvFingerprint": {
+      "type": "object",
+      "description": "Deterministic snapshot of the environment. Records what exists; never interprets (no pass/fail verdicts).",
+      "required": ["capturedAt", "git"],
+      "additionalProperties": false,
+      "properties": {
+        "capturedAt": { "type": "string", "format": "date-time" },
+        "git": {
+          "type": "object",
+          "required": ["head", "branch", "dirty", "dirtyHash"],
+          "additionalProperties": false,
+          "properties": {
+            "head": { "type": ["string", "null"], "description": "HEAD sha, or null outside a git repo." },
+            "branch": { "type": ["string", "null"] },
+            "dirty": { "type": "boolean" },
+            "dirtyHash": { "type": ["string", "null"], "description": "sha256 of `git status --porcelain` + `git diff`; null when clean or no repo." }
+          }
+        },
+        "phaseArtifacts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "design": { "type": ["string", "null"] },
+            "blueprint": { "type": ["string", "null"] },
+            "plan": { "type": ["string", "null"] },
+            "implementFiles": { "type": "array", "items": { "type": "string" } },
+            "contracts": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "testRef": { "type": ["string", "null"], "description": "Path to the latest raw test-output artifact. Never a summarized verdict." },
+        "buildStreamSeq": { "type": ["integer", "null"], "description": "Last build-stream _seq at capture." },
+        "flowId": { "type": ["string", "null"], "description": "Stratum flow this build drives." }
+      }
+    }
+  }
+}

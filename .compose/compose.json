@@ -25,5 +25,10 @@
     "journal": "docs/journal",
     "context": "docs/context",
     "ideabox": "docs/product/ideabox.md"
+  },
+  "checkpoint": {
+    "enabled": true,
+    "backend": "jsonl",
+    "confidenceThreshold": 0.6
   }
 }
