@@ -64,8 +64,12 @@ import {
   toolWriteCheckpoint,
   toolComposeResume,
   _getBinding,
+  assertToolPhaseAllowed,
+  _getSessionProfile,
+  resolveBoundPhase,
 } from './compose-mcp-tools.js';
-import { switchProject, getTargetRoot } from './project-root.js';
+import { isToolAllowed } from './mcp-tool-policy.js';
+import { switchProject, getTargetRoot, loadProjectConfig } from './project-root.js';
 import { resolveWorkspace } from '../lib/resolve-workspace.js';
 
 // ---------------------------------------------------------------------------
@@ -627,14 +631,40 @@ const server = new Server(
   { capabilities: { tools: {} } }
 );
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: TOOLS,
-}));
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  // COMP-MCP-ENFORCE-1: best-effort surface filter by the session's profile×phase.
+  // The hard guarantee is the CallTool gate below; ListTools just hides what the
+  // current context can't use (no tools/list_changed dependency).
+  const enabled = loadProjectConfig()?.capabilities?.phaseScopedTools === true;
+  if (!enabled) return { tools: TOOLS };
+  const profile = _getSessionProfile();
+  if (profile === 'orchestrator') return { tools: TOOLS };
+  const phase = resolveBoundPhase();
+  // target match is unknowable at list time → list a tool if its profile base
+  // (ignoring the feature-scoped re-permit) would ever permit it in this phase.
+  const tools = TOOLS.filter((t) =>
+    isToolAllowed({ tool: t.name, profile, phase, targetMatchesBoundFeature: true }).allowed);
+  return { tools };
+});
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
 
   const WORKSPACE_EXEMPT = new Set(['set_workspace', 'get_workspace']);
+
+  // COMP-MCP-ENFORCE-1: phase-scoped tool gate (hard guarantee). No-op when the
+  // capability is off, on a valid override token, or when context is unresolved.
+  try {
+    assertToolPhaseAllowed(name, args);
+  } catch (err) {
+    if (err && err.code === 'PHASE_TOOL_DENIED') {
+      return {
+        content: [{ type: 'text', text: `Error [PHASE_TOOL_DENIED]: ${err.message}` }],
+        isError: true,
+      };
+    }
+    throw err;
+  }
 
   try {
     if (!WORKSPACE_EXEMPT.has(name)) {

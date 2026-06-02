@@ -10,6 +10,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { ArtifactManager, ARTIFACT_SCHEMAS } from './artifact-manager.js';
 import { getTargetRoot, getDataDir, resolveProjectPath, switchProject, setCurrentWorkspaceId, loadProjectConfig } from './project-root.js';
+import { resolveProfile, isToolAllowed } from './mcp-tool-policy.js';
 
 /**
  * COMP-MCP-ENFORCE Slice 3 — kill the `force` escape hatch at the MCP tool
@@ -438,7 +439,7 @@ export async function toolValidateProject(args = {}) {
   });
 }
 
-export async function toolBindSession({ featureCode }) {
+export async function toolBindSession({ featureCode, profile } = {}) {
   let result;
   try {
     result = await _httpRequest('POST', '/api/session/bind', { featureCode });
@@ -452,6 +453,15 @@ export async function toolBindSession({ featureCode }) {
       : `HTTP ${status}: ${typeof body === 'string' ? body : JSON.stringify(body)}`;
     throw new Error(errMsg);
   }
+  // COMP-MCP-ENFORCE-1: record the bound feature (anchor for phase resolution)
+  // on any non-error reply — including `already_bound` — so reconnects/repeat
+  // binds keep the anchor. Use the server's AUTHORITATIVE featureCode from the
+  // reply (an `already_bound` reply returns the real bound feature, which may
+  // differ from the request arg) so the anchor never drifts. The trusted env
+  // profile is the floor; the bind `profile` arg may only NARROW it.
+  const boundCode = (body && typeof body === 'object' && body.featureCode) || featureCode;
+  if (boundCode) _boundFeatureCode = boundCode;
+  _sessionProfile = resolveProfile(process.env.COMPOSE_SESSION_PROFILE, profile);
   return body;
 }
 
@@ -626,4 +636,96 @@ export function toolGetWorkspace() {
 }
 
 export function _getBinding() { return _binding?.id ?? null; }
+
+// ---------------------------------------------------------------------------
+// COMP-MCP-ENFORCE-1 — phase-scoped MCP tool gate (profile × phase)
+//
+// Trusted profile = spawn-injected COMPOSE_SESSION_PROFILE (the agent cannot
+// rewrite its own launch env); bind_session may only NARROW it. The bound
+// feature anchor (_boundFeatureCode) lets the gate resolve the current phase
+// on-disk and check that re-permitted mutations target the bound feature.
+// All process-global by intent (one MCP child per session).
+// ---------------------------------------------------------------------------
+
+let _sessionProfile = resolveProfile(process.env.COMPOSE_SESSION_PROFILE, null);
+let _boundFeatureCode = null;
+
+export function _getSessionProfile() { return _sessionProfile; }
+export function _getBoundFeatureCode() { return _boundFeatureCode; }
+/** @internal test seam */
+export function _testOnly_setSessionContext({ profile, boundFeatureCode } = {}) {
+  if (profile !== undefined) _sessionProfile = profile;
+  if (boundFeatureCode !== undefined) _boundFeatureCode = boundFeatureCode;
+}
+
+/** The bound feature's current lifecycle phase from vision-state.json, or null. */
+export function resolveBoundPhase() {
+  if (!_boundFeatureCode) return null;
+  try {
+    const { items } = loadVisionState();
+    const item = items.find((i) => i.lifecycle?.featureCode === _boundFeatureCode);
+    return item?.lifecycle?.currentPhase ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Resolve a gated tool's target to a feature code (for the feature-scoped re-permit check). */
+function _resolveTargetFeatureCode(tool, args = {}) {
+  try {
+    if (tool === 'record_completion') return args.feature_code ?? null;
+    if (tool === 'set_feature_status' || tool === 'add_roadmap_entry' || tool === 'propose_followup') {
+      return args.code ?? null;
+    }
+    if (tool === 'complete_feature' || tool === 'kill_feature') {
+      const { items } = loadVisionState();
+      return items.find((i) => i.id === args.id)?.lifecycle?.featureCode ?? null;
+    }
+    if (tool === 'approve_gate') {
+      const { items, gates } = loadVisionState();
+      const gate = gates?.find((g) => g.id === args.gateId);
+      return items.find((i) => i.id === gate?.itemId)?.lifecycle?.featureCode ?? null;
+    }
+  } catch { /* fall through */ }
+  return null;
+}
+
+function _targetMatchesBoundFeature(tool, args) {
+  if (!_boundFeatureCode) return false;
+  const code = _resolveTargetFeatureCode(tool, args);
+  return code !== null && code === _boundFeatureCode;
+}
+
+/**
+ * Throw PHASE_TOOL_DENIED if the tool is not allowed for the current
+ * profile×phase. No-op when the capability is off (default) or on a valid
+ * override token. On unresolved CONTEXT the behavior is graduated, NOT blanket
+ * fail-open: an unresolved PROFILE (no/unknown env) normalizes to orchestrator →
+ * unrestricted; an unresolved PHASE only fails open the phase *refinement* — the
+ * profile BASE policy (implementer deny / reviewer allowlist) still applies
+ * (a restricted context with unknown phase stays restricted, which is the safe
+ * reading). `_testCtx` lets tests drive flag/profile/phase/target without disk/env.
+ */
+export function assertToolPhaseAllowed(tool, args = {}, _testCtx) {
+  const guardOn = _testCtx?.phaseScopedTools ?? (loadProjectConfig()?.capabilities?.phaseScopedTools === true);
+  if (!guardOn) return;
+  if (_overrideOk(args)) return;
+
+  const profile = _testCtx?.profile ?? _sessionProfile;
+  const phase = _testCtx?.phase ?? resolveBoundPhase();
+  const targetMatchesBoundFeature = _testCtx?.targetMatches ?? _targetMatchesBoundFeature(tool, args);
+
+  const verdict = isToolAllowed({ tool, profile, phase, targetMatchesBoundFeature });
+  if (!verdict.allowed) {
+    const e = new Error(
+      `${tool} is not available to profile '${profile}'` +
+      (phase ? ` in phase '${phase}'` : '') + `: ${verdict.reason}. ` +
+      `Supply a valid override_token to deviate.`,
+    );
+    e.code = 'PHASE_TOOL_DENIED';
+    e.profile = profile;
+    e.phase = phase;
+    throw e;
+  }
+}
 

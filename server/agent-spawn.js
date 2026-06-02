@@ -9,6 +9,7 @@ import path from 'node:path';
 
 import { getTargetRoot } from './project-root.js';
 import { gracefulKill } from './agent-health.js';
+import { resolveSpawnProfile } from './mcp-tool-policy.js';
 
 const PROJECT_ROOT = getTargetRoot();
 
@@ -38,7 +39,7 @@ export function attachAgentSpawnRoutes(app, { projectRoot = PROJECT_ROOT, broadc
   const _agents = new Map();
   // POST /api/agent/spawn — spawn a hidden Claude subagent
   app.post('/api/agent/spawn', requireSensitiveToken, (req, res) => {
-    const { prompt, id } = req.body || {};
+    const { prompt, id, profile, template } = req.body || {};
     if (!prompt || typeof prompt !== 'string') return res.status(400).json({ error: 'prompt is required and must be a string' });
 
     const agentId = id || `agent-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -49,6 +50,11 @@ export function attachAgentSpawnRoutes(app, { projectRoot = PROJECT_ROOT, broadc
 
     const cleanEnv = { ...process.env, NO_COLOR: '1' };
     delete cleanEnv.CLAUDECODE;
+    // COMP-MCP-ENFORCE-1: inject a TRUSTED, spawn-time MCP profile the subagent
+    // cannot rewrite (its compose-mcp child inherits this env). Only restrictive
+    // profiles are injected; an orchestrator/unspecified spawn stays unrestricted.
+    const spawnProfile = resolveSpawnProfile({ profile, template });
+    if (spawnProfile) cleanEnv.COMPOSE_SESSION_PROFILE = spawnProfile;
 
     const proc = spawn('claude', [
       '-p', prompt,

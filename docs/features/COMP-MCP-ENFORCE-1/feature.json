@@ -1,7 +1,7 @@
 {
   "code": "COMP-MCP-ENFORCE-1",
   "description": "Phase-scoped MCP tool capabilities — an implement-phase context should not even HAVE approve_gate/set_feature_status in its toolset (unrepresentable beats forbidden). Filter the compose MCP ListTools response by the session's current lifecycle phase. Needs the stdio MCP server to track per-session phase (the architectural gap); agent-capability profiles in server/agent-templates.js are the substrate. Was COMP-DEBUG-1.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-PARITY: UI↔CLI Parity",
   "created": "2026-06-02",
   "updated": "2026-06-02",
