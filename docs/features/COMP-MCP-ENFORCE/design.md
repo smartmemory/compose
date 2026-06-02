@@ -1,6 +1,6 @@
 # COMP-MCP-ENFORCE — Mechanical Enforcement of Lifecycle/Gate Guarantees
 
-**Status:** Slice 1 SHIPPED (2026-06-02) — see [`blueprint.md`](./blueprint.md), [`report.md`](./report.md). Slices 2–4 remain PLANNED. This remains the Phase-1 intent document; file:line references describe the original surface, not shipped behavior.
+**Status:** Slices 1–3 SHIPPED + Slice 4 Part A SHIPPED (2026-06-02) — see [`blueprint.md`](./blueprint.md), [`report.md`](./report.md). Slice 4 Part B (phase-scoped MCP tool filtering) is the one deferred follow-up. This remains the Phase-1 intent document; file:line references describe the original surface, not shipped behavior.
 **Owner:** compose
 **Depends on:** stratum `STRAT-GUARD` (standalone guarded-transition primitive)
 **Created:** 2026-06-02

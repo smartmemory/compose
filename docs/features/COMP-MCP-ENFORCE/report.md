@@ -45,6 +45,22 @@ Lifecycle phase transitions in compose are now **verdict-gated by stratum's STRA
 - **`vision-routes.js` `featuresPath` still reads process-global `loadProjectConfig()`** (pinned to `getTargetRoot()`) for the `/artifacts` routes. The new guard code is workspace-root-aware, but for a non-current served `projectRoot` the artifact routes still consult the global feature dir. **Pre-existing** (not introduced by this slice) and out of Slice 1 scope; the single-workspace default (how compose actually runs) is correct. → file as a multi-workspace config-resolution follow-up.
 - **Slices 2–4 (PLANNED):** collapse the two state machines (lifecycle-as-truth, status as projection); kill `force` → `stratum_guard_override`; evidence-bound completion (`command_exit_zero`/`git_commit_exists` on `ship→complete`); phase-scoped tool capabilities + loopback REST auth. Per the design, COMP-PARITY-7 / COMP-DEBUG-1 are absorbed and COMP-PARITY-5 reduces to a view — that roadmap restatusing lands when the umbrella progresses, not in Slice 1.
 
+## Slices 2–4 (shipped 2026-06-02)
+
+All gated behind `capabilities.guard` (now enabled in this repo); guard-OFF is byte-identical to before. Each slice was implemented TDD-first and Codex-reviewed to CLEAN.
+
+### Slice 2 — lifecycle-as-truth (status projection)
+Roadmap STATUS is now a projection driven by lifecycle phase. `phaseToStatus()` (complete→COMPLETE, killed→KILLED, active→IN_PROGRESS) + `projectFeatureStatus()` write through to feature.json after every guarded transition and at `/lifecycle/start` (best-effort; never rolls back an applied transition). Closes the COMP-PARITY-7 one-way-sync gap. `setFeatureStatus` gained a `derived` option — lifecycle is the authority, so the roadmap transition table no longer gates lifecycle-driven projections (e.g. PARKED→IN_PROGRESS on resume); the roundtrip fixed-point guard still applies. Off-lifecycle statuses (BLOCKED/PARKED/PARTIAL/SUPERSEDED) stay `set_feature_status`'s domain. *(Codex: 3 findings — transition-table bypass, complete-ordering mask, start gap → CLEAN.)*
+
+### Slice 3 — evidence-bound completion + kill the force bypass
+`verifyCompletionEvidence()` substrate-verifies completion: server-read git commit existence (not a syntax check) + test attestation (configured `guard.testCommand` exits 0, OR explicit `tests_pass` true — **no silent default-to-true**). `/lifecycle/complete` verifies before the guarded transition. The MCP boundary is closed against four bypass paths (`set_feature_status`, `add_roadmap_entry`, `propose_followup` reject lifecycle-owned COMPLETE/KILLED; `record_completion` enforces the same evidence) — each requires an out-of-band `STRATUM_GUARD_OVERRIDE_TOKEN` to deviate, the single authorized escape replacing `force`. *(Codex: 4 rounds enumerating every public terminal-write path → CLEAN.)*
+
+### Slice 4 Part A — opt-in loopback REST auth
+A `guardAuth` middleware (`capabilities.guardAuth`, default OFF) requires `x-compose-token` on every vision mutation endpoint; reads stay open; fail-closed (503) if enabled without a configured token. Default OFF because the cockpit UI does not yet send the token. *(Codex: 3 findings — coverage of iteration/branch/PATCH, fail-closed semantics → CLEAN.)*
+
+### Slice 4 Part B — DEFERRED
+Phase-scoped MCP tool filtering ("an implement-phase context should not even *have* `approve_gate`/`set_feature_status`") needs the MCP stdio server to track per-session phase, which it does not today — a real architectural addition (originally COMP-DEBUG-1). Filed as a follow-up; the agent-capability profiles in `server/agent-templates.js` are the substrate.
+
 ## 7. Lessons Learned
 
 - The design assumed "compose → stratum over MCP," but the server request path is a CLI subprocess and the guard had no CLI surface — verifying the seam first (rather than trusting the design's framing) turned a hidden blocker into a clean prerequisite work-unit.

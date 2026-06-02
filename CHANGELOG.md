@@ -33,19 +33,19 @@ checkpoint.
   route persists `lifecycleMutations`, the orchestrator runs the agent on
   `needs-sync`. Anchor writes are best-effort and never break a route handler.
 - SmartMemory backend intentionally deferred to a follow-up (seam only).
+### COMP-MCP-ENFORCE — Slices 1–4 — mechanical lifecycle/gate enforcement via stratum STRAT-GUARD (default-OFF capabilities.guard, now enabled)
 
-### COMP-MCP-ENFORCE — Slice 1 — lifecycle transitions verdict-gated by stratum STRAT-GUARD (fail-closed, default OFF)
-
-Moves lifecycle-transition enforcement from prompt-trust into the tool/server layer by consuming stratum's STRAT-GUARD primitive. When `capabilities.guard` is enabled, `advance`/`skip`/`complete`/`kill` apply only if the edge's server-read evidence verifies; every attempt lands in the tamper-evident guard ledger. No caller (skill, cockpit, or rogue MCP/REST client) can effect a transition the guard refuses. Default OFF — flag-off behavior is byte-identical to before.
+Moves lifecycle enforcement from prompt-trust into the tool/server layer by consuming stratum's STRAT-GUARD. No caller (skill, cockpit, or rogue MCP/REST client) can effect an unverified transition, complete without real evidence, or reach a terminal status outside the lifecycle. All behind capabilities.guard; guard-OFF is byte-identical to before.
 
 **Added:**
-- server/lifecycle-guard.js — compose-owned phase graph (single source of truth), per-edge server-read evidence predicates, idempotent registration, fail-closed guarded transitions
-- STRAT-GUARD adapter in server/stratum-client.js (guardRegister/guardTransition/guardOverride/guardHistory)
-- Eager guard registration at /lifecycle/start; project-scoped resource ids
+- Slice 1: advance/skip/complete/kill verdict-gated by STRAT-GUARD (server-read evidence, tamper-evident ledger); new `guard` CLI subcommand on stratum-mcp; server/lifecycle-guard.js owns the phase graph
+- Slice 2: lifecycle-as-truth — roadmap STATUS projected from phase (phaseToStatus/projectFeatureStatus), closing the COMP-PARITY-7 one-way-sync gap; setFeatureStatus `derived` option
+- Slice 3: evidence-bound completion (server-read git commit + test attestation, no silent tests_pass=true); MCP boundary closed against force + terminal-status bypasses (set_feature_status/add_roadmap_entry/propose_followup/record_completion) — authorized escape is STRATUM_GUARD_OVERRIDE_TOKEN
+- Slice 4 Part A: opt-in loopback REST auth (capabilities.guardAuth, default OFF, fail-closed) on all vision mutation endpoints
 
 **Changed:**
-- vision-routes.js advance/skip/complete/kill now verdict-gate via the guard when capabilities.guard=true; phase graph (TRANSITIONS/SKIPPABLE/TERMINAL) imported from lifecycle-guard.js to prevent drift
-- vision-server.js passes capabilities to the vision routes
+- capabilities.guard enabled in .compose/compose.json
+- vision-routes lifecycle endpoints async + guarded; phase graph imported from lifecycle-guard.js (single source of truth)
 
 ## 2026-05-29
 
