@@ -9,7 +9,108 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { ArtifactManager, ARTIFACT_SCHEMAS } from './artifact-manager.js';
-import { getTargetRoot, getDataDir, resolveProjectPath, switchProject, setCurrentWorkspaceId } from './project-root.js';
+import { getTargetRoot, getDataDir, resolveProjectPath, switchProject, setCurrentWorkspaceId, loadProjectConfig } from './project-root.js';
+
+/**
+ * COMP-MCP-ENFORCE Slice 3 — kill the `force` escape hatch at the MCP tool
+ * boundary. When capabilities.guard is on, a caller-supplied force:true on a
+ * status/roadmap mutation is the bypass STRAT-GUARD exists to close, so it is
+ * rejected unless it carries a valid out-of-band override token (the agent
+ * cannot mint it). Guard off → legacy behavior (no-op). Internal callers
+ * (recordCompletion → setFeatureStatus directly) never pass through here.
+ *
+ * @param {object} args tool args (may carry force / override_token)
+ * @param {string} toolName for the error message
+ * @param {{guard?: boolean}} [capsOverride] test seam; otherwise read from config
+ */
+/**
+ * COMP-MCP-ENFORCE Slice 3 — close the record_completion bypass. record_completion
+ * is a public MCP tool that flips status to COMPLETE; under capabilities.guard it
+ * must satisfy the SAME evidence as /lifecycle/complete (real commit + attested
+ * tests), else a rogue client could complete a feature without a guard verdict or
+ * evidence. Guard off → legacy behavior (no-op).
+ *
+ * @param {object} args record_completion args (commit_sha, tests_pass)
+ * @param {{guard?: boolean}} [capsOverride] test seam
+ * @param {string} [cwd]
+ */
+export async function assertCompletionEvidence(args, capsOverride, cwd = getTargetRoot()) {
+  let guardOn;
+  if (capsOverride && typeof capsOverride.guard === 'boolean') {
+    guardOn = capsOverride.guard;
+  } else {
+    try { guardOn = loadProjectConfig()?.capabilities?.guard === true; } catch { guardOn = false; }
+  }
+  if (!guardOn) return;
+  const { verifyCompletionEvidence, guardTestCommand } = await import('./lifecycle-guard.js');
+  const ev = await verifyCompletionEvidence({
+    commitSha: args?.commit_sha,
+    cwd,
+    testCommand: guardTestCommand(cwd),
+    testsPassClaim: args?.tests_pass,
+  });
+  if (!ev.ok) {
+    const e = new Error(
+      `record_completion: completion evidence not satisfied under capabilities.guard: ${ev.reasons.join('; ')}`,
+    );
+    e.code = 'COMPLETION_EVIDENCE_REQUIRED';
+    throw e;
+  }
+}
+
+/** Terminal statuses owned by the lifecycle (projected from phase, Slice 2). */
+const LIFECYCLE_OWNED_STATUS = new Set(['COMPLETE', 'KILLED']);
+
+function _guardOn(capsOverride) {
+  if (capsOverride && typeof capsOverride.guard === 'boolean') return capsOverride.guard;
+  try { return loadProjectConfig()?.capabilities?.guard === true; } catch { return false; }
+}
+
+/** True iff a valid, non-agent-mintable override token accompanies the call. */
+function _overrideOk(args) {
+  const expected = process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
+  return !!expected && args?.override_token === expected;
+}
+
+export function assertForceAuthorized(args, toolName, capsOverride) {
+  if (!args?.force) return;
+  if (!_guardOn(capsOverride)) return;
+  if (!_overrideOk(args)) {
+    const e = new Error(
+      `${toolName}: force is disabled under capabilities.guard — supply a valid override_token ` +
+      `(out-of-band STRATUM_GUARD_OVERRIDE_TOKEN; not agent-mintable) to deviate, or drive the ` +
+      `change through the lifecycle.`,
+    );
+    e.code = 'FORCE_REQUIRES_OVERRIDE';
+    throw e;
+  }
+}
+
+/**
+ * COMP-MCP-ENFORCE Slice 3 — terminal statuses (COMPLETE/KILLED) are owned by the
+ * lifecycle (Slice 2: status is a projection of phase). Under capabilities.guard,
+ * a public MCP caller cannot set/mint them directly — that would bypass the
+ * evidence-gated /lifecycle/complete and the guarded /lifecycle/kill. The single
+ * authorized escape is an out-of-band override token. Guard off → legacy.
+ *
+ * @param {object} args carries `status` (set_feature_status / add_roadmap_entry)
+ * @param {string} toolName
+ * @param {{guard?: boolean}} [capsOverride] test seam
+ */
+export function assertTerminalStatusAuthorized(args, toolName, capsOverride) {
+  const status = args?.status;
+  if (!status || !LIFECYCLE_OWNED_STATUS.has(status)) return;
+  if (!_guardOn(capsOverride)) return;
+  if (!_overrideOk(args)) {
+    const e = new Error(
+      `${toolName}: status ${status} is lifecycle-owned under capabilities.guard — drive it through ` +
+      `/lifecycle (evidence-gated for complete, guarded for kill) instead of setting it directly, ` +
+      `or supply a valid override_token.`,
+    );
+    e.code = 'STATUS_OWNED_BY_LIFECYCLE';
+    throw e;
+  }
+}
 import { resolveWorkspace } from '../lib/resolve-workspace.js';
 import { discoverWorkspaces } from '../lib/discover-workspaces.js';
 
@@ -195,11 +296,15 @@ export async function toolGetCurrentSession({ featureCode } = {}) {
 // ---------------------------------------------------------------------------
 
 export async function toolAddRoadmapEntry(args) {
+  assertForceAuthorized(args, 'add_roadmap_entry');
+  assertTerminalStatusAuthorized(args, 'add_roadmap_entry');
   const { addRoadmapEntry } = await import('../lib/feature-writer.js');
   return addRoadmapEntry(getTargetRoot(), args);
 }
 
 export async function toolSetFeatureStatus(args) {
+  assertForceAuthorized(args, 'set_feature_status');
+  assertTerminalStatusAuthorized(args, 'set_feature_status');
   const { setFeatureStatus } = await import('../lib/feature-writer.js');
   return setFeatureStatus(getTargetRoot(), args);
 }
@@ -234,6 +339,9 @@ export async function toolGetFeatureLinks(args) {
 // ---------------------------------------------------------------------------
 
 export async function toolProposeFollowup(args) {
+  // propose_followup also accepts a caller-supplied `status` and routes to
+  // addRoadmapEntry — gate lifecycle-owned terminal statuses the same way.
+  assertTerminalStatusAuthorized(args, 'propose_followup');
   const { proposeFollowup } = await import('../lib/followup-writer.js');
   return proposeFollowup(getTargetRoot(), args);
 }
@@ -301,6 +409,7 @@ export async function toolGetJournalEntries(args) {
 // ---------------------------------------------------------------------------
 
 export async function toolRecordCompletion(args) {
+  await assertCompletionEvidence(args);
   const { recordCompletion } = await import('../lib/completion-writer.js');
   return recordCompletion(getTargetRoot(), args);
 }
