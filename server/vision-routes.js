@@ -56,6 +56,7 @@ import {
   guardedTransition, ensureGuard, projectFeatureStatus,
   verifyCompletionEvidence, guardTestCommand,
 } from './lifecycle-guard.js';
+import { requireSensitiveToken } from './security.js';
 
 const PROJECT_ROOT = getTargetRoot();
 
@@ -69,6 +70,19 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
   // COMP-MCP-ENFORCE: when enabled, lifecycle transitions are verdict-gated by
   // stratum's STRAT-GUARD (fail-closed). Default OFF — legacy behavior intact.
   const guardEnabled = capabilities?.guard === true;
+
+  // COMP-MCP-ENFORCE Slice 4: opt-in loopback REST auth on vision MUTATION
+  // endpoints (lifecycle transitions, iterations, gate resolve, item CRUD,
+  // branch-lineage). Default OFF (the cockpit does not yet send the token, so
+  // forcing it would break the UI) — defense-in-depth for headless/CI surfaces.
+  // Reads stay open. Fail-closed: when guardAuth is on, mutations require
+  // x-compose-token; if COMPOSE_API_TOKEN is NOT configured, requireSensitiveToken
+  // returns 503 (mutations disabled) rather than silently allowing them — enabling
+  // auth without a token is a misconfiguration, not an open door. Pass-through
+  // when off, so route wiring is unconditional.
+  const guardAuthEnabled = capabilities?.guardAuth === true;
+  const guardAuth = (req, res, next) =>
+    guardAuthEnabled ? requireSensitiveToken(req, res, next) : next();
   // GET /api/vision/items — full state (optional ?group= filter)
   app.get('/api/vision/items', (req, res) => {
     let state = store.getState();
@@ -79,7 +93,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
   });
 
   // POST /api/vision/items — create item
-  app.post('/api/vision/items', (req, res) => {
+  app.post('/api/vision/items', guardAuth, (req, res) => {
     try {
       const item = store.createItem(req.body);
       scheduleBroadcast();
@@ -90,7 +104,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
   });
 
   // PATCH /api/vision/items/:id — update item
-  app.patch('/api/vision/items/:id', (req, res) => {
+  app.patch('/api/vision/items/:id', guardAuth, (req, res) => {
     try {
       const item = store.updateItem(req.params.id, req.body);
       // If group changed, write back to docs/features/<code>/feature.json
@@ -111,7 +125,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
   });
 
   // DELETE /api/vision/items/:id — delete item + connections
-  app.delete('/api/vision/items/:id', (req, res) => {
+  app.delete('/api/vision/items/:id', guardAuth, (req, res) => {
     try {
       store.deleteItem(req.params.id);
       scheduleBroadcast();
@@ -190,7 +204,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
     }
   });
 
-  app.post('/api/vision/items/:id/lifecycle/start', async (req, res) => {
+  app.post('/api/vision/items/:id/lifecycle/start', guardAuth, async (req, res) => {
     try {
       const { featureCode } = req.body;
       if (!featureCode) return res.status(400).json({ error: 'featureCode is required' });
@@ -237,7 +251,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
   });
 
   // COMP-OBS-BRANCH: accept BranchLineage payloads from the CC-session watcher.
-  app.post('/api/vision/items/:id/lifecycle/branch-lineage', (req, res) => {
+  app.post('/api/vision/items/:id/lifecycle/branch-lineage', guardAuth, (req, res) => {
     try {
       const item = store.items.get(req.params.id);
       if (!item) return res.status(404).json({ error: `Item not found: ${req.params.id}` });
@@ -268,7 +282,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
     }
   });
 
-  app.post('/api/vision/items/:id/lifecycle/advance', async (req, res) => {
+  app.post('/api/vision/items/:id/lifecycle/advance', guardAuth, async (req, res) => {
     try {
       const { targetPhase, outcome } = req.body;
       const item = store.items.get(req.params.id);
@@ -308,7 +322,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
     }
   });
 
-  app.post('/api/vision/items/:id/lifecycle/skip', async (req, res) => {
+  app.post('/api/vision/items/:id/lifecycle/skip', guardAuth, async (req, res) => {
     try {
       const { targetPhase, reason } = req.body;
       const item = store.items.get(req.params.id);
@@ -348,7 +362,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
     }
   });
 
-  app.post('/api/vision/items/:id/lifecycle/kill', async (req, res) => {
+  app.post('/api/vision/items/:id/lifecycle/kill', guardAuth, async (req, res) => {
     try {
       const { reason } = req.body;
       const item = store.items.get(req.params.id);
@@ -392,7 +406,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
     }
   });
 
-  app.post('/api/vision/items/:id/lifecycle/complete', async (req, res) => {
+  app.post('/api/vision/items/:id/lifecycle/complete', guardAuth, async (req, res) => {
     try {
       const item = store.items.get(req.params.id);
       if (!item?.lifecycle) return res.status(404).json({ error: 'No lifecycle on this item' });
@@ -505,7 +519,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
 
   // ── Iteration loop endpoints ──────────────────────────────────────────
 
-  app.post('/api/vision/items/:id/lifecycle/iteration/start', (req, res) => {
+  app.post('/api/vision/items/:id/lifecycle/iteration/start', guardAuth, (req, res) => {
     try {
       const item = store.items.get(req.params.id);
       if (!item?.lifecycle) return res.status(404).json({ error: 'No lifecycle on this item' });
@@ -570,7 +584,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
     }
   });
 
-  app.post('/api/vision/items/:id/lifecycle/iteration/report', (req, res) => {
+  app.post('/api/vision/items/:id/lifecycle/iteration/report', guardAuth, (req, res) => {
     try {
       const item = store.items.get(req.params.id);
       if (!item?.lifecycle?.iterationState) return res.status(404).json({ error: 'No iteration loop active' });
@@ -657,7 +671,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
     }
   });
 
-  app.post('/api/vision/items/:id/lifecycle/iteration/abort', (req, res) => {
+  app.post('/api/vision/items/:id/lifecycle/iteration/abort', guardAuth, (req, res) => {
     try {
       const item = store.items.get(req.params.id);
       if (!item?.lifecycle?.iterationState) return res.status(404).json({ error: 'No iteration loop active' });
@@ -833,7 +847,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
     }
   });
 
-  app.post('/api/vision/gates/:id/resolve', (req, res) => {
+  app.post('/api/vision/gates/:id/resolve', guardAuth, (req, res) => {
     try {
       const { outcome: rawOutcome, comment, resolvedBy } = req.body;
       if (!rawOutcome) return res.status(400).json({ error: 'outcome is required' });
