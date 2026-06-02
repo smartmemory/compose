@@ -35,6 +35,8 @@ Compose exposes project state as MCP tools via `server/compose-mcp.js` (stdio tr
 | `start_iteration_loop` | Start an iteration loop on a feature |
 | `report_iteration_result` | Report an iteration's result; the server decides whether to continue. Terminal outcomes are `clean`, `max_reached`, `action_limit`, or `timeout`; while the loop is still running, `outcome` is `null`. |
 | `abort_iteration_loop` | Abort an active iteration loop |
+| `write_checkpoint` | COMP-RESUME: write a durable build checkpoint anchored to a deterministic environment fingerprint. Omit `soft` for an anchor checkpoint — the response then carries a `scribePrompt` to answer and re-submit as a narrative checkpoint. Returns `{checkpoint, scribePrompt}`. Direct-to-disk. |
+| `compose_resume` | COMP-RESUME: reconcile a build against ground-truth environment state; returns the resume decision (`resume`/`needs-sync`/`gate`), drift class, a rendered checkpoint view, and (on `needs-sync`) a reconciliation prompt. Requires the server. |
 
 > **Note:** an `agent_run` tool used to live here for LLM-facing dispatch. It was removed on 2026-04-18 (`STRAT-DEDUP-AGENTRUN`); use `mcp__stratum__stratum_agent_run` instead.
 
@@ -258,3 +260,17 @@ In all three subcases, the completion record is on disk; only the status flip pa
 **Git post-commit hook (opt-in).** A shipped template at `compose/bin/git-hooks/post-commit.template` is materialized into `.git/hooks/post-commit` by `compose hooks install`, with `__COMPOSE_NODE__` and `__COMPOSE_BIN__` substituted to absolute paths. The runtime hook does not depend on `compose` or `node` being on PATH. The hook reads `Records-completion: <CODE>` trailers via `git interpret-trailers --parse`, computes the commit SHA, and calls `compose record-completion` for each trailer. Failures log to `.compose/data/post-commit.log` and the hook always exits 0. See `docs/cli.md` for the trailer format.
 
 **Target storage:** `compose/docs/features/<CODE>/feature.json` only. ROADMAP.md is regenerated from feature.json files via the existing `lib/roadmap-gen.js` path; completions themselves do not surface in ROADMAP.md.
+
+## Checkpoints + resume (COMP-RESUME)
+
+`write_checkpoint` and `compose_resume` give a build environment-based resumability: durable boundary checkpoints anchored to a deterministic environment fingerprint, plus a reconcile-on-resume that treats the environment (git state + on-disk artifacts + append logs) as ground truth.
+
+**Library:** `lib/checkpoint/` — `fingerprint.js` (capture + `classify` drift `clean`/`advanced`/`diverged`), `store/{index,jsonl}.js` (capability-tiered `CheckpointStore`; `jsonl` default, `smartmemory`/`memory-pointer` are registered seams that throw `NOT_IMPLEMENTED`), `anchor.js` (best-effort boundary capture), `reconciler.js` (deterministic `reconcile` → `ReconcileResult`), `prompts.js`/`render.js`, `checkpoint-writer.js` (the `write_checkpoint`/`anchorBoundary` entry points). Contract: `contracts/checkpoint.schema.json`.
+
+**Two checkpoint grades.** *Anchor* checkpoints (`soft: null`) are written cheaply by `anchorBoundary` at every lifecycle boundary — phase transition (advance/skip/kill/complete), gate resolution, and iteration complete/abort in `server/vision-routes.js`. *Narrative* checkpoints carry agent-authored `{goal, nextStep, risks}` and are written on demand at major boundaries: call `write_checkpoint` without `soft`, answer the returned `scribePrompt`, and re-submit it as `soft`.
+
+**Fingerprint records, never interprets.** The `EnvFingerprint` captures git head/branch/dirty-hash, present phase artifacts, the latest test-output ref, and the build-stream `_seq` — never a pass/fail verdict. Every scribe claim must reference an anchor (point at `testRef`, don't assert "tests pass").
+
+**Resume is deterministic + agent-assisted.** `compose_resume` → `POST /api/session/bind/reconcile`: rebuild derived state (backfill `phaseHistory` via the sole writer), classify drift, and decide. `clean`/`advanced` → auto-resume at the recorded `nextStep`. `diverged` → `needs-sync`: the orchestrator runs the reconciliation agent with the returned `reconcilePrompt`, writes the synced checkpoint, then `resume` (confidence ≥ `checkpoint.confidenceThreshold`, default 0.6) or `gate`. `reconcile()` itself never writes the store, mutates the vision DB, or calls an LLM — the route persists, the orchestrator runs the agent.
+
+**Config** (`.compose/compose.json`): `"checkpoint": { "enabled": true, "backend": "jsonl", "confidenceThreshold": 0.6 }`. Anchor writes are best-effort and gated on `enabled` — a checkpoint failure never breaks a route handler.

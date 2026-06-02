@@ -239,6 +239,36 @@ export async function toolProposeFollowup(args) {
 }
 
 // ---------------------------------------------------------------------------
+// Checkpoints / resume — COMP-RESUME
+// ---------------------------------------------------------------------------
+
+// write_checkpoint reads/writes directly from disk so it works even when the
+// Compose server is down (same stance as the rest of this file).
+export async function toolWriteCheckpoint(args) {
+  const { writeCheckpoint } = await import('../lib/checkpoint/checkpoint-writer.js');
+  return writeCheckpoint(getTargetRoot(), args);
+}
+
+// compose_resume HTTP-delegates: reconcile must run server-side where the live
+// vision item / lifecycle state and broadcasts exist (mirrors toolBindSession).
+export async function toolComposeResume({ featureCode }) {
+  let result;
+  try {
+    result = await _httpRequest('POST', '/api/session/bind/reconcile', { featureCode });
+  } catch (err) {
+    throw new Error(`Compose server unreachable: ${err.message}`);
+  }
+  const { status, body } = result;
+  if (status >= 400) {
+    const errMsg = (body && typeof body === 'object' && body.error)
+      ? body.error
+      : `HTTP ${status}: ${typeof body === 'string' ? body : JSON.stringify(body)}`;
+    throw new Error(errMsg);
+  }
+  return body;
+}
+
+// ---------------------------------------------------------------------------
 // Changelog writer — COMP-MCP-CHANGELOG-WRITER
 // ---------------------------------------------------------------------------
 

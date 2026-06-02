@@ -1,0 +1,10 @@
+{
+  "code": "COMP-RESUME",
+  "description": "Environment-based resumability: durable boundary checkpoints + reconcile-on-bind so interrupted builds resume from ground-truth env state, not reconstructed context.",
+  "status": "COMPLETE",
+  "phase": "COMP-RESUME: Environment-Based Resumability",
+  "created": "2026-06-02",
+  "updated": "2026-06-02",
+  "complexity": "L",
+  "position": 1
+}

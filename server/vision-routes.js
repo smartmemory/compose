@@ -48,6 +48,7 @@ function getSchemaValidator() {
 
 import { randomUUID } from 'node:crypto';
 import { getTargetRoot, resolveProjectPath, loadProjectConfig } from './project-root.js';
+import { anchorBoundary } from '../lib/checkpoint/checkpoint-writer.js';
 import { appendGateLogEntry, readGateLog, mapResolveOutcomeToSchema } from './gate-log-store.js';
 import { addOpenLoop, resolveOpenLoop, listOpenLoops } from './open-loops-store.js';
 
@@ -281,6 +282,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       emitDriftAxes(broadcastMessage, store, item, projectRoot, now);
       // COMP-OBS-STATUS: emit status snapshot after lifecycle transition (advance)
       emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
+      // COMP-RESUME: best-effort anchor checkpoint at the phase boundary
+      anchorBoundary(getTargetRoot(), { item, trigger: 'phase-transition' });
       res.json({ from, to: targetPhase, outcome });
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
@@ -311,6 +314,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       emitDriftAxes(broadcastMessage, store, item, projectRoot, now);
       // COMP-OBS-STATUS: emit status snapshot after lifecycle transition (skip)
       emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
+      // COMP-RESUME: best-effort anchor checkpoint at the phase boundary
+      anchorBoundary(getTargetRoot(), { item, trigger: 'phase-transition' });
       res.json({ from, to: targetPhase, outcome: 'skipped', reason });
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
@@ -341,6 +346,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       emitDriftAxes(broadcastMessage, store, item, projectRoot, now);
       // COMP-OBS-STATUS: emit status snapshot after lifecycle transition (kill)
       emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
+      // COMP-RESUME: best-effort anchor checkpoint at the (terminal) phase boundary
+      anchorBoundary(getTargetRoot(), { item, trigger: 'phase-transition' });
       res.json({ phase: from, reason });
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
@@ -370,6 +377,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       emitDriftAxes(broadcastMessage, store, item, projectRoot, now);
       // COMP-OBS-STATUS: emit status snapshot after lifecycle transition (complete)
       emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
+      // COMP-RESUME: best-effort anchor checkpoint at the (terminal) phase boundary
+      anchorBoundary(getTargetRoot(), { item, trigger: 'phase-transition' });
 
       // COMP-MCP-MIGRATION: reconcile cockpit complete with record_completion
       // (commit-bound completion writer). Best-effort: failures emit a decision
@@ -561,6 +570,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
           emitDriftAxes(broadcastMessage, store, item, projectRoot, now);
           // COMP-OBS-STATUS: emit status snapshot after iteration complete
           emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
+          // COMP-RESUME: best-effort anchor checkpoint at iteration-complete boundary
+          anchorBoundary(getTargetRoot(), { item, trigger: 'iteration-complete' });
         }
       } else {
         // per-attempt update: NO DecisionEvent (Decision 2 — would flood strip)
@@ -614,6 +625,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
         emitDriftAxes(broadcastMessage, store, item, projectRoot, now);
         // COMP-OBS-STATUS: emit status snapshot after iteration abort
         emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
+        // COMP-RESUME: best-effort anchor checkpoint at iteration-complete (abort) boundary
+        anchorBoundary(getTargetRoot(), { item, trigger: 'iteration-complete' });
       }
       res.json({ aborted: true });
     } catch (err) {
@@ -835,6 +848,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
           // COMP-OBS-DRIFT: emit drift axes before status so STATUS reads fresh drift_axes
           emitDriftAxes(broadcastMessage, store, resolvedItem, projectRoot, resolvedAt);
           emitStatusSnapshot(broadcastMessage, store, resolvedItem.lifecycle.featureCode, resolvedAt);
+          // COMP-RESUME: best-effort anchor checkpoint at gate-resolution boundary
+          anchorBoundary(getTargetRoot(), { item: resolvedItem, trigger: 'gate-resolution' });
         }
       }
       res.json({ gateId: req.params.id, gateOutcome: outcome });

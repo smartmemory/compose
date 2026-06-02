@@ -61,6 +61,8 @@ import {
   toolValidateProject,
   toolSetWorkspace,
   toolGetWorkspace,
+  toolWriteCheckpoint,
+  toolComposeResume,
   _getBinding,
 } from './compose-mcp-tools.js';
 import { switchProject, getTargetRoot } from './project-root.js';
@@ -578,6 +580,42 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: 'write_checkpoint',
+    description: 'COMP-RESUME: write a durable build checkpoint anchored to a deterministic environment fingerprint. Omit `soft` for a cheap anchor checkpoint — the response then includes a `scribePrompt` you can answer (returning {goal,nextStep,risks} anchored to the fingerprint) and re-submit as `soft` for a narrative checkpoint. Pass `soft` directly to skip that. Returns {checkpoint, scribePrompt}. Direct-to-disk (works when the server is down).',
+    inputSchema: {
+      type: 'object',
+      required: ['featureCode', 'trigger'],
+      properties: {
+        featureCode: { type: 'string' },
+        trigger: { type: 'string', enum: ['phase-transition', 'pre-risky-action', 'iteration-complete', 'gate-resolution', 'manual', 'resume-sync'] },
+        phase: { type: 'string', description: 'Lifecycle phase label; falls back to feature.json then "unknown".' },
+        soft: {
+          type: 'object',
+          description: 'Narrative intent; omit for an anchor checkpoint. Every factual claim should reference a fingerprint anchor.',
+          required: ['goal', 'nextStep'],
+          properties: {
+            goal: { type: 'string' },
+            nextStep: { type: 'string' },
+            risks: { type: 'array', items: { type: 'string' } },
+          },
+        },
+        flowId: { type: 'string', description: 'Stratum flow id, if any.' },
+        confidence: { type: 'number', description: 'Only on resume-sync checkpoints (0..1).' },
+      },
+    },
+  },
+  {
+    name: 'compose_resume',
+    description: 'COMP-RESUME: reconcile a build against ground-truth environment state and return the resume decision. Rebuilds derived state, classifies drift (clean/advanced/diverged), and returns action resume|needs-sync|gate. On needs-sync the caller runs the reconciliation agent with the returned prompt. Requires the Compose server (reconciles live lifecycle state).',
+    inputSchema: {
+      type: 'object',
+      required: ['featureCode'],
+      properties: {
+        featureCode: { type: 'string' },
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -639,6 +677,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'validate_feature':         result = await toolValidateFeature(args); break;
       case 'validate_project':         result = await toolValidateProject(args); break;
       case 'propose_followup':         result = await toolProposeFollowup(args); break;
+      case 'write_checkpoint':         result = await toolWriteCheckpoint(args); break;
+      case 'compose_resume':           result = await toolComposeResume(args); break;
       // agent_run removed — STRAT-DEDUP-AGENTRUN v1. Use mcp__stratum__stratum_agent_run.
       default:
         return {
