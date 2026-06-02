@@ -176,3 +176,107 @@ test('CONTRADICTORY_PHASE_CLAIM: legacy board phase (no lifecycle on vision) doe
   const claims = result.findings.filter((f) => f.kind === 'CONTRADICTORY_PHASE_CLAIM');
   assert.equal(claims.length, 0, `legacy board phase must not be compared to lifecycle phase; got ${JSON.stringify(claims)}`);
 });
+
+// ── STATUS_MISMATCH vs vision-state: PARTIAL vocabulary projection ────────────
+// vision-state's status enum has no PARTIAL (planned|in_progress|complete|…). A
+// tracker status of PARTIAL is the SAME lifecycle reality as vision's IN_PROGRESS
+// (partially shipped = still in progress), so the *_VS_VISION_STATE checks must
+// project PARTIAL→IN_PROGRESS before comparing. Tracker↔tracker comparisons keep
+// the full vocabulary — PARTIAL there is a real distinction.
+
+function visionMismatches(findings, code) {
+  return findings.filter((f) => f.feature_code === code &&
+    (f.kind === 'STATUS_MISMATCH_ROADMAP_VS_VISION_STATE' ||
+     f.kind === 'STATUS_MISMATCH_FEATUREJSON_VS_VISION_STATE'));
+}
+
+test('STATUS_MISMATCH vs vision: tracker PARTIAL ≡ vision in_progress does NOT fire', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'fv-piv-'));
+  mkdirSync(join(root, '.compose', 'data'), { recursive: true });
+  mkdirSync(join(root, 'docs', 'features', 'PIV-1'), { recursive: true });
+  writeFileSync(join(root, 'docs', 'features', 'PIV-1', 'feature.json'),
+    JSON.stringify({ code: 'PIV-1', status: 'PARTIAL', description: 'x' }));
+  writeFileSync(join(root, 'docs', 'features', 'PIV-1', 'design.md'), '# d');
+  writeFileSync(join(root, '.compose', 'data', 'vision-state.json'), JSON.stringify({
+    items: [{ id: '00000000-0000-0000-0000-0000000000d4', type: 'feature', featureCode: 'PIV-1',
+              status: 'in_progress' }],
+    connections: [], gates: [],
+  }));
+  writeFileSync(join(root, 'ROADMAP.md'),
+    '# R\n\n## Phase 1\n\n| # | Feature | Description | Status |\n|---|---|---|---|\n| 1 | PIV-1 | x | PARTIAL |\n');
+  const result = await validateProject(root);
+  const vis = visionMismatches(result.findings, 'PIV-1');
+  assert.equal(vis.length, 0,
+    `PARTIAL↔in_progress is a vocabulary match, not drift; got ${JSON.stringify(vis.map((f) => f.detail))}`);
+});
+
+test('STATUS_MISMATCH vs vision: tracker PARTIAL vs vision complete IS real drift and fires', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'fv-pvc-'));
+  mkdirSync(join(root, '.compose', 'data'), { recursive: true });
+  mkdirSync(join(root, 'docs', 'features', 'PVC-1'), { recursive: true });
+  writeFileSync(join(root, 'docs', 'features', 'PVC-1', 'feature.json'),
+    JSON.stringify({ code: 'PVC-1', status: 'PARTIAL', description: 'x' }));
+  writeFileSync(join(root, 'docs', 'features', 'PVC-1', 'design.md'), '# d');
+  writeFileSync(join(root, '.compose', 'data', 'vision-state.json'), JSON.stringify({
+    items: [{ id: '00000000-0000-0000-0000-0000000000e5', type: 'feature', featureCode: 'PVC-1',
+              status: 'complete' }],
+    connections: [], gates: [],
+  }));
+  writeFileSync(join(root, 'ROADMAP.md'),
+    '# R\n\n## Phase 1\n\n| # | Feature | Description | Status |\n|---|---|---|---|\n| 1 | PVC-1 | x | PARTIAL |\n');
+  const result = await validateProject(root);
+  const vis = visionMismatches(result.findings, 'PVC-1');
+  assert.equal(vis.length, 2,
+    `PARTIAL vs complete must fire both vision mismatches; got ${JSON.stringify(vis.map((f) => f.kind))}`);
+  assert.ok(vis.every((f) => f.severity === 'error'), 'both should be error severity (neither side PLANNED)');
+});
+
+test('STATUS_MISMATCH: PARTIAL vs IN_PROGRESS between ROADMAP and feature.json still fires (tracker keeps full vocab)', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'fv-ptt-'));
+  mkdirSync(join(root, '.compose', 'data'), { recursive: true });
+  mkdirSync(join(root, 'docs', 'features', 'PTT-1'), { recursive: true });
+  writeFileSync(join(root, 'docs', 'features', 'PTT-1', 'feature.json'),
+    JSON.stringify({ code: 'PTT-1', status: 'IN_PROGRESS', description: 'x' }));
+  writeFileSync(join(root, 'docs', 'features', 'PTT-1', 'design.md'), '# d');
+  writeFileSync(join(root, '.compose', 'data', 'vision-state.json'), JSON.stringify({
+    items: [{ id: '00000000-0000-0000-0000-0000000000f6', type: 'feature', featureCode: 'PTT-1',
+              status: 'in_progress' }],
+    connections: [], gates: [],
+  }));
+  writeFileSync(join(root, 'ROADMAP.md'),
+    '# R\n\n## Phase 1\n\n| # | Feature | Description | Status |\n|---|---|---|---|\n| 1 | PTT-1 | x | PARTIAL |\n');
+  const result = await validateProject(root);
+  const rf = result.findings.filter((f) => f.feature_code === 'PTT-1' &&
+    f.kind === 'STATUS_MISMATCH_ROADMAP_VS_FEATUREJSON');
+  assert.equal(rf.length, 1,
+    `ROADMAP PARTIAL vs feature.json IN_PROGRESS must still fire; got ${JSON.stringify(result.findings.filter((f) => f.feature_code === 'PTT-1').map((f) => f.kind))}`);
+  // ROADMAP PARTIAL projects to IN_PROGRESS; feature.json IN_PROGRESS; vision in_progress → no vision drift
+  assert.equal(visionMismatches(result.findings, 'PTT-1').length, 0,
+    'projected PARTIAL↔in_progress must not fire vision drift');
+});
+
+test('STATUS_MISMATCH vs vision: malformed vision status "partial" still aligns with tracker PARTIAL (no false drift)', async () => {
+  // vision status "partial" is schema-INVALID (the enum has no partial). The
+  // VISION_STATE_SCHEMA_VIOLATION is reported separately, but the projection must
+  // be symmetric so a malformed "partial" does not ALSO false-fire a status
+  // mismatch against a tracker that legitimately says PARTIAL.
+  const root = mkdtempSync(join(tmpdir(), 'fv-vpart-'));
+  mkdirSync(join(root, '.compose', 'data'), { recursive: true });
+  mkdirSync(join(root, 'docs', 'features', 'VPART-1'), { recursive: true });
+  writeFileSync(join(root, 'docs', 'features', 'VPART-1', 'feature.json'),
+    JSON.stringify({ code: 'VPART-1', status: 'PARTIAL', description: 'x' }));
+  writeFileSync(join(root, 'docs', 'features', 'VPART-1', 'design.md'), '# d');
+  writeFileSync(join(root, '.compose', 'data', 'vision-state.json'), JSON.stringify({
+    items: [{ id: '00000000-0000-0000-0000-00000000a7b8', type: 'feature', featureCode: 'VPART-1',
+              status: 'partial' }],
+    connections: [], gates: [],
+  }));
+  writeFileSync(join(root, 'ROADMAP.md'),
+    '# R\n\n## Phase 1\n\n| # | Feature | Description | Status |\n|---|---|---|---|\n| 1 | VPART-1 | x | PARTIAL |\n');
+  const result = await validateProject(root);
+  assert.equal(visionMismatches(result.findings, 'VPART-1').length, 0,
+    `malformed vision 'partial' aligns with tracker PARTIAL — no status drift; got ${JSON.stringify(visionMismatches(result.findings, 'VPART-1').map((f) => f.detail))}`);
+  // the real issue (invalid enum) must still be surfaced elsewhere
+  assert.ok(result.findings.some((f) => f.feature_code === 'VPART-1' && f.kind === 'VISION_STATE_SCHEMA_VIOLATION'),
+    'the schema violation for vision status "partial" must still be reported');
+});
