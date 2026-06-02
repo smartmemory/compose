@@ -1,10 +1,11 @@
 {
   "code": "COMP-MCP-ENFORCE",
-  "description": "Mechanical enforcement of lifecycle/gate guarantees by consuming stratum STRAT-GUARD. **Slice 1 SHIPPED (2026-06-02):** advance/skip/complete/kill are verdict-gated by STRAT-GUARD (fail-closed, server-read evidence, tamper-evident ledger) behind capabilities.guard (default OFF); new `guard` CLI subcommand on stratum-mcp; server/lifecycle-guard.js owns the phase graph (single source of truth). **PLANNED:** Slice 2 collapse two state machines (lifecycle-as-truth, status as projection); Slice 3 kill `force`→stratum_guard_override + evidence-bound completion (real commit/test attestation); Slice 4 phase-scoped tool capabilities + loopback REST auth. Absorbs COMP-PARITY-7 + COMP-DEBUG-1; reduces COMP-PARITY-5 to a UI view.",
-  "status": "PARTIAL",
+  "description": "Mechanical enforcement of lifecycle/gate guarantees by consuming stratum STRAT-GUARD. **Slices 1–4 SHIPPED + enabled (2026-06-02):** Slice 1 — advance/skip/complete/kill verdict-gated by STRAT-GUARD (fail-closed, server-read evidence, tamper-evident ledger); `server/lifecycle-guard.js` owns the phase graph (single source of truth). Slice 2 — lifecycle-as-truth: roadmap STATUS projected from phase (`phaseToStatus`/`projectFeatureStatus`), closing COMP-PARITY-7's one-way-sync gap. Slice 3 — `force` replaced by `stratum_guard_override` + evidence-bound completion (real commit/test attestation). Slice 4 Part A — opt-in loopback REST auth (`capabilities.guardAuth`, default OFF, fail-closed) on vision mutations; Part B — phase-scoped MCP tool capabilities (profile × phase CallTool gate) shipped as COMP-MCP-ENFORCE-1. `capabilities.guard` now enabled in `.compose/compose.json`; guard-OFF byte-identical to before. Commits b6bb4d6(S1)/a9212e0(S2)/0ccceb7(S3)/136f0db(S4A)/ea02d85(enable)/f7be0dd(S4B) on `main`. Absorbs COMP-PARITY-7 + COMP-DEBUG-1; reduces COMP-PARITY-5 to a UI view.",
+  "status": "COMPLETE",
   "phase": "COMP-PARITY: UI↔CLI Parity",
   "created": "2026-06-02",
   "updated": "2026-06-02",
   "complexity": "L",
-  "position": 9
+  "position": 9,
+  "commit_sha": "c3061a97635c89d84441ee6efa9a77216b020392"
 }
