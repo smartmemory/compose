@@ -2,6 +2,10 @@
 
 ## 2026-06-02
 
+### feat(build-stream): accept schema 0.2.7 (STRAT-PAR-STREAM-TOOLDETAIL tool-detail events)
+
+Consumer side of stratum `STRAT-PAR-STREAM-TOOLDETAIL`: `lib/build-stream-schema.js` `KNOWN_VERSIONS` accepts `0.2.7`. The enriched `tool_use_summary` (raw `input` + `tool_use_id`) and the new `tool_result` event ride the open catch-all (no closed-kind change). Unblocks COMP-GSD-5 stuck detection's per-task tool-use observation. Tests: `test/build-stream-validate.test.js` (0.2.7 envelope + `tool_result` + enriched `tool_use_summary` accepted; unknown versions still rejected).
+
 ### fix(validate): CONTRADICTORY_PHASE_CLAIM compared roadmap heading to lifecycle phase
 
 `feature-validator.js`'s `CONTRADICTORY_PHASE_CLAIM` (error) compared
