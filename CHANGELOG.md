@@ -2,6 +2,30 @@
 
 ## 2026-06-02
 
+### fix+chore: harden the enforcement gate (post-review follow-up)
+
+Follow-ups from Codex-reviewing the prior commits — "ensure enforcement actually works."
+
+**Fixed (live bug):** `lib/result-normalizer.js`, `lib/build.js`, and
+`server/design-routes.js` hard-pinned `schema_version === '0.2.5'` and silently
+dropped the current producer's `0.2.6` BuildStreamEvents — live agent-run
+streaming (narration/tool-use/usage) was lost end-to-end. All three now gate on
+`KNOWN_VERSIONS.has()`. Added a behavioral test (0.2.6 event is forwarded) and a
+contract/regression guard that no stream consumer re-pins a version literal.
+
+**Fixed (broken enforcement):** `compose validate` rejected its own documented
+`--workspace` flag (exit 2 "Unknown flag"), which broke the pre-push hook's
+validate step. Now accepted.
+
+**Gate hardening:** `bin/git-hooks/pre-push.template` now runs `npm test` as a
+HARD gate (fail-closed; auto-skips only when `scripts.test` is definitively
+absent) — the gate whose absence let a broken integration test reach main. The
+`compose validate` drift step is now ADVISORY (the repo carries pre-existing
+error-severity drift; strict drift-blocking to be re-enabled after reconciliation).
+`test/integration/hook-read-cache.test.js` is now hermetic (skips when its host
+hooks/python3 are absent; fixed an `after()` cleanup that orphaned
+`~/.claude/read-cache` session dirs) so it's safe in the default gate.
+
 ### feat(COMP-RESUME): environment-based resumability for builds
 
 Interrupted builds (crash, killed session, reboot, MCP restart) can now resume

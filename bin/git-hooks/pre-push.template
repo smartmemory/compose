@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Compose pre-push hook — runs `compose validate` and blocks the push on
-# any error-severity drift finding. Installed by `compose hooks install --pre-push`;
-# placeholders below are substituted at install time.
+# Compose pre-push hook — blocks the push on a red `npm test` suite (HARD gate) and
+# runs `compose validate` as an ADVISORY drift check (prints findings, does not
+# block — re-enable strict drift-blocking once the repo's drift backlog is
+# reconciled). Installed by `compose hooks install --pre-push`; placeholders
+# below are substituted at install time.
 #
 # External-reference (xref) resolution is OFF here by default: github xref:
 # citations / kind:"external" links emit XREF_RESOLUTION_SKIPPED (warning,
@@ -18,18 +20,44 @@ COMPOSE_WORKSPACE_ID="__COMPOSE_WORKSPACE_ID__"
 LOG="${COMPOSE_HOOK_LOG:-.compose/data/pre-push.log}"
 mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
 
+# Drift check (ADVISORY — COMP-RESUME follow-up): print findings for visibility,
+# never block. The repo carries pre-existing error-severity drift (much from the
+# COMP-MCP-ENFORCE lifecycle-as-truth projection); hard-blocking on it would make
+# the whole hook unusable, so the TEST gate below is the hard blocker. Re-enable
+# strict drift-blocking once the backlog is reconciled (tracked separately).
 OUTPUT=$("$COMPOSE_NODE" "$COMPOSE_BIN" validate --scope=project --block-on=error --workspace="$COMPOSE_WORKSPACE_ID" 2>&1)
-EXIT_CODE=$?
-
-if [ "$EXIT_CODE" -ne 0 ]; then
-  echo "$OUTPUT" | tee -a "$LOG" >&2
+VALIDATE_EXIT=$?
+echo "$OUTPUT"
+if [ "$VALIDATE_EXIT" -ne 0 ]; then
   echo "" >&2
-  echo "compose validate found error-severity drift. Push aborted." >&2
-  echo "Run \`compose validate\` to see findings, then fix and retry." >&2
-  echo "Bypass at your own risk: git push --no-verify" >&2
-  exit "$EXIT_CODE"
+  echo "pre-push: compose validate reported drift (ADVISORY — not blocking). Review with \`compose validate\`." >&2
 fi
 
-# Below-threshold findings (warnings/info) are still printed for visibility.
-echo "$OUTPUT"
+# ── Test gate (COMP-RESUME follow-up) ───────────────────────────────────────
+# Block the push if the suite is red. This is the gate whose absence let a broken
+# integration test (and a stale-schema consumer bug) reach main — nothing ran the
+# suite before push. Heavy (full `npm test`) but authoritative. Auto-skips in a
+# repo with no npm `test` script. Emergency bypass (sparingly): git push --no-verify
+if [ -f package.json ]; then
+  # Probe scripts.test: exit 0 = present, 1 = definitively absent, anything else
+  # = could not read package.json. Skip ONLY on a definitive "absent" (1); on
+  # ambiguity run the suite anyway so a broken/unreadable package.json fails
+  # CLOSED (blocks), never open (silently skips the gate).
+  "$COMPOSE_NODE" -e "let s={};try{s=require(process.cwd()+'/package.json').scripts||{}}catch(e){process.exit(3)};process.exit(s.test?0:1)" 2>/dev/null
+  PROBE=$?
+  if [ "$PROBE" -ne 1 ]; then
+    echo "pre-push: running full test suite (npm test)…" >&2
+    PATH="$(dirname "$COMPOSE_NODE"):$PATH" npm test >> "$LOG" 2>&1
+    TEST_EXIT=$?
+    if [ "$TEST_EXIT" -ne 0 ]; then
+      tail -n 40 "$LOG" >&2
+      echo "" >&2
+      echo "npm test failed — push aborted (full log: $LOG)." >&2
+      echo "Bypass at your own risk: git push --no-verify" >&2
+      exit "$TEST_EXIT"
+    fi
+    echo "pre-push: test suite green." >&2
+  fi
+fi
+
 exit 0

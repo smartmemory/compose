@@ -15,6 +15,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { parseDecisionBlocks } from '../src/components/vision/designSessionState.js';
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
+import { KNOWN_VERSIONS } from '../lib/build-stream-schema.js';
 
 // Lazy singleton — design conversations share one stratum-mcp connection
 // across the server process lifetime. Concurrent runs are correlation-id scoped.
@@ -144,7 +145,9 @@ ${formattedMessages}`;
     const subStepId = '_agent_run';
 
     const unsub = stratum.onEvent(correlationId, subStepId, (env) => {
-      if (!env || env.schema_version !== '0.2.5') return;
+      // Accept all KNOWN_VERSIONS (producer emits 0.2.6); pinning '0.2.5' dropped
+      // the current producer's events. Client already validated before dispatch.
+      if (!env || !KNOWN_VERSIONS.has(env.schema_version)) return;
       const m = env.metadata ?? {};
       switch (env.kind) {
         case 'agent_relay':

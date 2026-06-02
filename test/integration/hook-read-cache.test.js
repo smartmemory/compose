@@ -12,7 +12,7 @@
 import { test, describe, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { execSync, spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 
@@ -24,6 +24,20 @@ const CACHE_ROOT = join(homedir(), ".claude", "read-cache");
 const READ_HOOK = join(HOOKS_DIR, "read-cache.py");
 const INVALIDATE_HOOK = join(HOOKS_DIR, "read-cache-invalidate.py");
 const COMPACT_HOOK = join(HOOKS_DIR, "read-cache-compact.py");
+
+// HOOK-CACHE tests drive the real Python hooks under ~/.claude/hooks; they are
+// NOT self-contained. Skip cleanly when python3 or the hook scripts are absent
+// so this file is hermetic in the default `npm test` gate — a missing host
+// dependency SKIPS, never fails.
+function python3Available() {
+  try { return spawnSync("python3", ["--version"], { encoding: "utf8" }).status === 0; }
+  catch { return false; }
+}
+const PREREQS_OK =
+  existsSync(READ_HOOK) && existsSync(INVALIDATE_HOOK) && existsSync(COMPACT_HOOK) && python3Available();
+const SUITE_OPTS = PREREQS_OK
+  ? {}
+  : { skip: "HOOK-CACHE prereqs absent (python3 + ~/.claude/hooks/read-cache*.py) — not part of the hermetic gate" };
 
 /**
  * Run a hook with the given JSON payload.
@@ -93,9 +107,18 @@ beforeEach(() => {
 });
 
 after(() => {
-  // Clean up all test sessions created during this run
+  // Clean up ALL sessions created during this run. Sessions are named
+  // `test-session-${RUN_ID}-${rand}`, so match by prefix — the prior code
+  // deleted a bare `test-session-${RUN_ID}` that never existed, orphaning every
+  // session dir under ~/.claude/read-cache.
   try {
-    rmSync(join(CACHE_ROOT, `test-session-${RUN_ID}`), { recursive: true, force: true });
+    if (existsSync(CACHE_ROOT)) {
+      for (const name of readdirSync(CACHE_ROOT)) {
+        if (name.startsWith(`test-session-${RUN_ID}`)) {
+          rmSync(join(CACHE_ROOT, name), { recursive: true, force: true });
+        }
+      }
+    }
   } catch {}
   try {
     rmSync(tmpFile, { force: true });
@@ -104,7 +127,7 @@ after(() => {
 
 // ─── tests ───────────────────────────────────────────────────────────────────
 
-describe("read-cache.py — PreToolUse hook", () => {
+describe("read-cache.py — PreToolUse hook", SUITE_OPTS, () => {
   test("first read of a file is allowed (exit 0)", () => {
     const result = runHook(READ_HOOK, makePayload());
     assert.equal(result.exitCode, 0, `stderr: ${result.stderr}`);
@@ -176,7 +199,7 @@ describe("read-cache.py — PreToolUse hook", () => {
   });
 });
 
-describe("read-cache-invalidate.py — PostToolUse hook", () => {
+describe("read-cache-invalidate.py — PostToolUse hook", SUITE_OPTS, () => {
   test("Edit invalidation clears the cache entry, next read is allowed", () => {
     // Prime cache
     runHook(READ_HOOK, makePayload());
@@ -235,7 +258,7 @@ describe("read-cache-invalidate.py — PostToolUse hook", () => {
   });
 });
 
-describe("read-cache-compact.py — PreCompact hook", () => {
+describe("read-cache-compact.py — PreCompact hook", SUITE_OPTS, () => {
   test("PreCompact clears the entire session cache directory", () => {
     // Prime a cache entry
     runHook(READ_HOOK, makePayload());
