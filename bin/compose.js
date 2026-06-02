@@ -1970,17 +1970,21 @@ if (cmd === 'build') {
   // docs/features/<code>/blueprint.md with a parseable Boundary Map.
   const gsdCode = args.find(a => !a.startsWith('-'))
   const gsdResume = args.includes('--resume')
+  const gsdResetBudget = args.includes('--reset-budget')
   if (!gsdCode) {
-    console.error('Usage: compose gsd <feature-code> [--resume]')
+    console.error('Usage: compose gsd <feature-code> [--resume] [--reset-budget]')
     console.error('')
     console.error('Runs the per-task fresh-context dispatch pipeline (COMP-GSD-2).')
     console.error('Hard-requires docs/features/<code>/blueprint.md with a valid Boundary Map.')
     console.error('Detects stuck tasks (COMP-GSD-5) and halts with a structured diagnostic.')
+    console.error('Enforces budget ceilings (COMP-GSD-4) from .compose/compose.json gsd.budget.*')
     console.error('')
     console.error('Options:')
-    console.error('  --resume       Resume a halted run: re-dispatch the unfinished tasks')
-    console.error('                 from .compose/gsd/<code>/pause.json (skips completed tasks).')
-    console.error('  --cwd <path>   Working directory (defaults to current)')
+    console.error('  --resume        Resume a halted run: re-dispatch the unfinished tasks')
+    console.error('                  from .compose/gsd/<code>/pause.json (skips completed tasks).')
+    console.error('  --reset-budget  Clear the feature\'s cumulative budget ledger before running')
+    console.error('                  (use after raising or removing a spent gsd.budget.cumulative cap).')
+    console.error('  --cwd <path>    Working directory (defaults to current)')
     process.exit(1)
   }
   const { root: gsdCwd } = resolveCwdWithWorkspace(args)
@@ -1988,12 +1992,32 @@ if (cmd === 'build') {
   const gsdAgentCwd = cwdIdx !== -1 ? resolve(args[cwdIdx + 1]) : gsdCwd
   const { runGsd } = await import('../lib/gsd.js')
   try {
+    if (gsdResetBudget) {
+      // COMP-GSD-4: clear the cumulative ledger so a spent ceiling no longer
+      // refuses the run. Runs before dispatch; per-run windows reset anyway.
+      const { resetGsdUsage } = await import('../lib/budget-ledger.js')
+      resetGsdUsage(resolve(gsdAgentCwd, '.compose'), gsdCode)
+      console.log(`gsd: cleared cumulative budget ledger for ${gsdCode}.`)
+    }
     const result = await runGsd(gsdCode, { cwd: gsdAgentCwd, resume: gsdResume })
     if (result.status === 'stuck') {
       // COMP-GSD-5: a stuck halt is a clean, recoverable stop — not a crash.
       console.error(`gsd stuck: task ${result.stuckTaskId} tripped the ${result.signal} detector.`)
       console.error(`Diagnostic: .compose/gsd/${gsdCode}/stuck.md`)
       console.error(`Resume with: compose gsd ${gsdCode} --resume`)
+      process.exit(2)
+    }
+    if (result.status === 'budget') {
+      // COMP-GSD-4: a budget halt is a clean, recoverable stop — not a crash.
+      if (result.axis === 'cumulative') {
+        console.error(`gsd budget: cumulative ceiling for ${gsdCode} is already spent.`)
+        console.error(`Diagnostic: .compose/gsd/${gsdCode}/budget.md`)
+        console.error(`Raise gsd.budget.cumulative.* or clear it: compose gsd ${gsdCode} --reset-budget`)
+      } else {
+        console.error(`gsd budget: the ${result.axis} ceiling tripped mid-run.`)
+        console.error(`Diagnostic: .compose/gsd/${gsdCode}/budget.md`)
+        console.error(`Raise gsd.budget.* and resume: compose gsd ${gsdCode} --resume`)
+      }
       process.exit(2)
     }
     console.log(`gsd complete: ${result.blackboardEntries} task results captured.`)
