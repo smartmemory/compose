@@ -3,7 +3,8 @@
   "externalPrefixes": ["STRAT-"],
   "capabilities": {
     "stratum": true,
-    "lifecycle": true
+    "lifecycle": true,
+    "guard": true
   },
   "agents": {
     "claude": {
