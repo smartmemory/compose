@@ -468,3 +468,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-29T21:15:35+07:00 | #39 codex r2: complete narrative suppression — exempt ROADMAP_ROW_SCHEMA_VIOLATION + drop hand-authored-row status fallback in artifact/completion checks (ctx.narrativeOwned + effectiveStatus)
 2026-05-29T21:21:05+07:00 | #39 codex r3: apply narrative suppression at validateFeature too (per-feature CLI/MCP scope), shared applyNarrativeSuppression + _deferNarrative so project still emits single info
 2026-05-29T22:44:39+07:00 | Fix stratum#1: correct pip install stratum→stratum-mcp in docs, rename vendored kernel to stop shadowing PyPI
+2026-06-02T13:39:13+08:00 | Finalize COMP-MCP-ENFORCE design + roadmap: absorb COMP-PARITY-7/COMP-DEBUG-1, lifecycle-as-truth, Slice 1 guards lifecycle endpoints
