@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-06-03
+
+### fix(validate): reconcile the 8 status-mismatch drift errors (PARTIAL vision-vocabulary projection)
+
+`feature-validator.js`'s `STATUS_MISMATCH_*_VS_VISION_STATE` checks string-compared
+the tracker status (ROADMAP / feature.json) against the vision-state item status,
+but vision-state's status enum (`contracts/vision-state.schema.json`) is the
+tracker's set **minus `PARTIAL`** — it cannot represent "partially shipped". A
+legitimately-PARTIAL feature therefore false-fired against a vision item that can
+only say `in_progress`. `runStateMismatchChecks` now projects **both** operands to
+the vision vocabulary (`PARTIAL`→`IN_PROGRESS`) before comparing: a PARTIAL feature
+no longer drifts against `in_progress`; real drift (`PARTIAL` vs `complete`/`planned`)
+still fires; tracker↔tracker (`ROADMAP_VS_FEATUREJSON`) keeps the full vocabulary;
+and a malformed/legacy vision `"partial"` — still reported as
+`VISION_STATE_SCHEMA_VIOLATION` — aligns instead of double-reporting. Paired with a
+local vision-state reconciliation of three items whose `status` predated their
+real state (COMP-GSD, COMP-GSD-3 → `in_progress`; COMP-WORKSPACE-HTTP →
+`complete`). Error findings 18→10 — the 8 `*_VS_VISION_STATE` errors cleared; the
+residual 10 (feature.json schema, missing-design debt, entangled cross-feature
+links) remain owned elsewhere. Added 4 regression tests; Codex-reviewed clean.
+
 ## 2026-06-02
 
 ### feat(build-stream): accept schema 0.2.7 (STRAT-PAR-STREAM-TOOLDETAIL tool-detail events)
