@@ -69,6 +69,18 @@ Moves lifecycle enforcement from prompt-trust into the tool/server layer by cons
 - capabilities.guard enabled in .compose/compose.json
 - vision-routes lifecycle endpoints async + guarded; phase graph imported from lifecycle-guard.js (single source of truth)
 
+### COMP-MCP-ENFORCE-1 — Phase-scoped MCP tool capabilities — profile × phase CallTool gate (default-OFF capabilities.phaseScopedTools)
+
+Completes COMP-MCP-ENFORCE Slice 4 Part B (was COMP-DEBUG-1). The compose MCP server gates tool calls by the session's trusted profile × the bound feature's current phase. A subagent spawned with a restrictive profile (implementer/reviewer) is kept in-lane — cannot self-approve, self-complete, or mutate roadmap; the /compose orchestrator (unprofiled) stays unrestricted. Default-OFF; CallTool is the hard guarantee, ListTools a best-effort surface filter.
+
+**Added:**
+- server/mcp-tool-policy.js — pure profile×phase policy (isToolAllowed, resolveProfile, resolveSpawnProfile, TEMPLATE_PROFILE_MAP, PROFILE_POLICY, PHASE_REFINEMENT, SETUP_TOOLS)
+- Trusted profile via spawn-injected COMPOSE_SESSION_PROFILE env (bind_session may only narrow); _boundFeatureCode anchor (authoritative bind reply) + on-disk phase resolution; feature-scoped ship re-permits
+
+**Changed:**
+- server/compose-mcp.js CallTool gate (PHASE_TOOL_DENIED) + ListTools filter behind capabilities.phaseScopedTools (default OFF)
+- server/agent-spawn.js injects COMPOSE_SESSION_PROFILE for restrictive spawn profiles/templates
+
 ## 2026-05-29
 
 ### fix(install): correct `pip install` package name in docs + stop vendored kernel shadowing PyPI (stratum#1)
