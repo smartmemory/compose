@@ -164,10 +164,58 @@ describe('validateBuildStreamEvent — unknown schema_version', () => {
     assert.equal(result.valid, false);
   });
 
-  it('KNOWN_VERSIONS set contains exactly 0.2.5 and 0.2.6', () => {
+  it('KNOWN_VERSIONS set contains exactly 0.2.5, 0.2.6 and 0.2.7', () => {
     assert.ok(KNOWN_VERSIONS.has('0.2.5'), '0.2.5 backward-compat');
-    assert.ok(KNOWN_VERSIONS.has('0.2.6'), '0.2.6 current');
-    assert.equal(KNOWN_VERSIONS.size, 2, 'no other versions accepted');
+    assert.ok(KNOWN_VERSIONS.has('0.2.6'), '0.2.6 backward-compat');
+    assert.ok(KNOWN_VERSIONS.has('0.2.7'), '0.2.7 current (STRAT-PAR-STREAM-TOOLDETAIL)');
+    assert.equal(KNOWN_VERSIONS.size, 3, 'no other versions accepted');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// STRAT-PAR-STREAM-TOOLDETAIL: v0.2.7 + tool_result + enriched tool_use_summary
+// tool_use_summary and tool_result ride the OPEN catch-all (no closed schema).
+// ---------------------------------------------------------------------------
+
+describe('validateBuildStreamEvent — v0.2.7 tool detail', () => {
+  it('accepts a well-formed v0.2.7 envelope', () => {
+    const result = validateBuildStreamEvent(makeEnvelope({ schema_version: '0.2.7' }));
+    assert.equal(result.valid, true, `expected valid but got: ${result.error}`);
+  });
+
+  it('accepts a v0.2.7 tool_result envelope (open kind)', () => {
+    const result = validateBuildStreamEvent(makeEnvelope({
+      schema_version: '0.2.7',
+      kind: 'tool_result',
+      metadata: { tool_use_id: 'toolu_42', ok: false, output: 'String not found in file' },
+    }));
+    assert.equal(result.valid, true, `expected valid but got: ${result.error}`);
+  });
+
+  it('accepts a v0.2.7 tool_use_summary carrying raw input + tool_use_id', () => {
+    const result = validateBuildStreamEvent(makeEnvelope({
+      schema_version: '0.2.7',
+      kind: 'tool_use_summary',
+      metadata: {
+        tool: 'Edit',
+        summary: '/repo/app.py',
+        ok: true,
+        duration_ms: 0,
+        input: { file_path: '/repo/app.py', old_string: 'a', new_string: 'b' },
+        tool_use_id: 'toolu_42',
+      },
+    }));
+    assert.equal(result.valid, true, `expected valid but got: ${result.error}`);
+  });
+
+  it('still rejects an unknown future version at the tool_result kind', () => {
+    const result = validateBuildStreamEvent(makeEnvelope({
+      schema_version: '0.3.0',
+      kind: 'tool_result',
+      metadata: { tool_use_id: 't', ok: true, output: 'x' },
+    }));
+    assert.equal(result.valid, false, 'unknown schema_version must still be rejected');
+    assert.ok(result.error.includes('schema_version'), `error: ${result.error}`);
   });
 });
 
@@ -272,13 +320,14 @@ describe('validateBuildStreamEvent — open kinds (metadata not closed)', () => 
 // ---------------------------------------------------------------------------
 // Producer↔consumer schema_version contract (COMP-RESUME follow-up)
 // Guards the bug where consumers hard-pinned '0.2.5' and silently dropped the
-// current producer's (0.2.6) events.
+// current producer's events.
 // ---------------------------------------------------------------------------
 
 describe('producer↔consumer schema_version contract', () => {
-  it('KNOWN_VERSIONS accepts the current producer version 0.2.6 (and 0.2.5 compat)', () => {
-    // Producer of record: stratum_mcp/events.py emits schema_version "0.2.6".
-    assert.ok(KNOWN_VERSIONS.has('0.2.6'), 'consumers must accept the current producer version');
+  it('KNOWN_VERSIONS accepts the current producer version 0.2.7 (and 0.2.5/0.2.6 compat)', () => {
+    // Producer of record: stratum_mcp/events.py emits schema_version "0.2.7".
+    assert.ok(KNOWN_VERSIONS.has('0.2.7'), 'consumers must accept the current producer version');
+    assert.ok(KNOWN_VERSIONS.has('0.2.6'), 'backward-compat window retained');
     assert.ok(KNOWN_VERSIONS.has('0.2.5'), 'backward-compat window retained');
   });
 
