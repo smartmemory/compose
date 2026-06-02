@@ -54,6 +54,7 @@ import { addOpenLoop, resolveOpenLoop, listOpenLoops } from './open-loops-store.
 import {
   BASE_TRANSITIONS, SKIPPABLE, TERMINAL,
   guardedTransition, ensureGuard, projectFeatureStatus,
+  verifyCompletionEvidence, guardTestCommand,
 } from './lifecycle-guard.js';
 
 const PROJECT_ROOT = getTargetRoot();
@@ -399,10 +400,24 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
         return res.status(400).json({ error: `Can only complete from ship phase, currently in: ${item.lifecycle.currentPhase}` });
       }
 
-      // COMP-MCP-ENFORCE: verdict-gate ship→complete (fail-closed). commit_sha is
-      // recorded in the ledger via artifacts; evidence-bound completion (real
-      // git/commit/test attestation) is Slice 3.
+      // COMP-MCP-ENFORCE Slice 3: evidence-bound completion. Under the guard,
+      // ship→complete requires REAL evidence — the commit must exist (server-read
+      // git) and tests must be attested (configured test command exits 0, or
+      // tests_pass is explicitly true; never a silent default). Then the guard
+      // verdict gates the transition (fail-closed).
+      let verifiedTestsPass = req.body?.tests_pass;
       if (guardEnabled) {
+        const ev = await verifyCompletionEvidence({
+          commitSha: req.body?.commit_sha,
+          cwd: projectRoot,
+          testCommand: guardTestCommand(projectRoot),
+          testsPassClaim: req.body?.tests_pass,
+        });
+        if (!ev.ok) {
+          return res.status(422).json({ error: 'completion evidence not satisfied', reasons: ev.reasons });
+        }
+        verifiedTestsPass = ev.testsAttested ? true : (req.body?.tests_pass === true);
+
         const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from: 'ship', to: 'complete', workspaceRoot: projectRoot, commitSha: req.body?.commit_sha, resolvedBy: 'agent' });
         if (!g.applied) return res.status(422).json({ error: 'completion refused by guard', from: 'ship', to: 'complete', verdict: g.verdict, guardError: g.error });
       }
@@ -441,7 +456,9 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
             await recordCompletion(projectRoot, {
               feature_code: featureCode,
               commit_sha,
-              tests_pass: tests_pass ?? true,
+              // Slice 3: under the guard, tests_pass reflects verified evidence
+              // (attested or explicit), NOT a silent default-to-true.
+              tests_pass: guardEnabled ? (verifiedTestsPass === true) : (tests_pass ?? true),
               files_changed: files_changed ?? [],
               notes: notes ?? `cockpit lifecycle: ${featureCode} complete`,
             });

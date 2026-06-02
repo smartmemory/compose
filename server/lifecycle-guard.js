@@ -14,6 +14,7 @@
 
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
 import {
@@ -156,6 +157,54 @@ export async function projectFeatureStatus({ featureCode, phase, cwd, commitSha 
 }
 
 // ---------------------------------------------------------------------------
+// Evidence-bound completion (Slice 3)
+// ---------------------------------------------------------------------------
+
+/** True if `sha` resolves to a real commit object in the repo at `cwd`. */
+function gitCommitExists(sha, cwd) {
+  const r = spawnSync('git', ['rev-parse', '--verify', '--quiet', `${sha}^{commit}`],
+    { cwd, encoding: 'utf8' });
+  return r.status === 0;
+}
+
+/**
+ * Verify the evidence required to complete a feature under the guard — the
+ * substrate confirms it, not a caller boolean (the design's "trusted evidence"
+ * principle, evaluated compose-side because compose owns the repo + test runner):
+ *   - `commit_sha` must exist as a real git commit (server-read, not syntax).
+ *   - tests must be ATTESTED: a configured `testCommand` exits 0 (real exit code),
+ *     OR `testsPassClaim` is explicitly true. There is NO silent default-to-true.
+ *
+ * @returns {Promise<{ok:boolean, reasons:string[], testsAttested:boolean}>}
+ */
+export async function verifyCompletionEvidence({ commitSha, cwd, testCommand, testsPassClaim }) {
+  const reasons = [];
+
+  if (!commitSha || typeof commitSha !== 'string' || !commitSha.trim()) {
+    reasons.push('commit_sha is required for evidence-bound completion');
+  } else if (!gitCommitExists(commitSha.trim(), cwd)) {
+    reasons.push(`commit ${commitSha.trim()} not found in repository (server-read git verification)`);
+  }
+
+  let testsAttested = false;
+  if (Array.isArray(testCommand) && testCommand.length > 0) {
+    const [bin, ...rest] = testCommand;
+    const r = spawnSync(bin, rest, { cwd, encoding: 'utf8' });
+    if (r.error) {
+      reasons.push(`test command failed to run: ${r.error.message}`);
+    } else if (r.status !== 0) {
+      reasons.push(`test command exited ${r.status} (not 0)`);
+    } else {
+      testsAttested = true;
+    }
+  } else if (testsPassClaim !== true) {
+    reasons.push('tests_pass must be explicitly true (no configured test command to attest test results)');
+  }
+
+  return { ok: reasons.length === 0, reasons, testsAttested };
+}
+
+// ---------------------------------------------------------------------------
 // Guard client (injectable for tests)
 // ---------------------------------------------------------------------------
 
@@ -183,6 +232,22 @@ function _featureRelDir(featureCode, workspaceRoot) {
     featuresRel = cfg?.paths?.features || 'docs/features';
   } catch { /* missing/invalid config → default */ }
   return `${featuresRel}/${featureCode}`;
+}
+
+/**
+ * The configured evidence-bound-completion test command (array form, e.g.
+ * ["npm","test"]) from `<workspaceRoot>/.compose/compose.json` `guard.testCommand`,
+ * or null when unconfigured. When null, evidence-bound completion falls back to
+ * requiring an explicit tests_pass=true (still no silent default).
+ */
+export function guardTestCommand(workspaceRoot) {
+  try {
+    const cfg = JSON.parse(readFileSync(path.join(workspaceRoot, '.compose', 'compose.json'), 'utf-8'));
+    const cmd = cfg?.guard?.testCommand;
+    return Array.isArray(cmd) && cmd.length > 0 ? cmd : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
