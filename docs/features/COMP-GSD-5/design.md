@@ -40,7 +40,7 @@ The detector subscribes through the **existing** `stratum.onEvent(flowId, stepId
 `GsdStuckDetector` (keyed by `taskId`), reusing `debug-discipline.js`'s per-key counter + `toJSON/fromJSON`:
 - **same-file-edited:** reuse `FixChainDetector` (per-key file-hit, `count>=3` critical), fed `input.file_path` from each `Edit`/`Write`/`MultiEdit` `tool_use_summary`.
 - **error-recurrence:** normalize + hash `output` from each `tool_result` with `ok:false`; fire at repeats ≥ threshold.
-- **no-progress:** count consecutive `tool_use_summary` events with no file-changing tool; fire at ≥ K (a concrete event count — **not** an ill-defined "turn"); wall-clock stall (poll elapsed) is a parallel guard.
+- **no-progress:** count consecutive `tool_use_summary` events with no file-changing tool; fire at ≥ K (a concrete event count — **not** an ill-defined "turn"). **Armed only after the task's first file-changing edit** — upfront read/grep/test exploration is legitimate work, not a stall (a task that never edits at all is caught by the wall-clock guard). Wall-clock stall (poll elapsed) is a parallel guard.
 
 We do **not** wire gsd into bug-fix escalation (Codex/fresh-agent) — that path is bug-specific. We reuse primitives, not the remediation pathway.
 
