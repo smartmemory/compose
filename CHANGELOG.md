@@ -33,6 +33,20 @@ checkpoint.
   route persists `lifecycleMutations`, the orchestrator runs the agent on
   `needs-sync`. Anchor writes are best-effort and never break a route handler.
 - SmartMemory backend intentionally deferred to a follow-up (seam only).
+
+### fix(test): agent-run streaming integration test emitted contract-invalid events
+
+`test/integration/agent-run-streaming.test.js` was failing 2/2 (`expected 3,
+actual 0`). Its fake server emitted `task_id: null`, but the real producer
+(`stratum_mcp/events.py#to_json`) omits `task_id` when `None`, and the consumer
+envelope schema (`lib/build-stream-schema.js`, mirroring the canonical v0.2.6
+contract) requires `task_id` to be a string when present — so every event was
+correctly dropped as invalid. Fixed the fake server to omit `task_id` (and bumped
+its `schema_version` to the current `0.2.6`); the schema/consumer were correct.
+Root-caused to `STRAT-PAR-STREAM-CONSUMER-VALIDATE` tightening validation while
+this test (which only runs under `npm run test:integration`, not the default
+`npm test` gate) went un-rerun. Integration suite now 47/47.
+
 ### COMP-MCP-ENFORCE — Slices 1–4 — mechanical lifecycle/gate enforcement via stratum STRAT-GUARD (default-OFF capabilities.guard, now enabled)
 
 Moves lifecycle enforcement from prompt-trust into the tool/server layer by consuming stratum's STRAT-GUARD. No caller (skill, cockpit, or rogue MCP/REST client) can effect an unverified transition, complete without real evidence, or reach a terminal status outside the lifecycle. All behind capabilities.guard; guard-OFF is byte-identical to before.

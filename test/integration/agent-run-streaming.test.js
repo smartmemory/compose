@@ -19,11 +19,15 @@ import { StratumMcpClient } from '../../lib/stratum-mcp-client.js';
 const STEP_ID = '_agent_run';
 
 function makeEvent(correlationId, seq, kind, metadata) {
+  // Agent-run events have no parallel task, so task_id is omitted — matching the
+  // real producer (stratum_mcp/events.py#to_json pops task_id when None). The
+  // consumer's v0.2.6 envelope schema requires task_id to be a string when
+  // present and rejects an explicit null, so emitting `task_id: null` here would
+  // (and did) get the event dropped as contract-invalid.
   return {
-    schema_version: '0.2.5',
+    schema_version: '0.2.6',
     flow_id:        correlationId,
     step_id:        STEP_ID,
-    task_id:        null,
     seq,
     ts:             new Date().toISOString(),
     kind,
