@@ -1,0 +1,10 @@
+{
+  "code": "COMP-MCP-ENFORCE",
+  "description": "Mechanical enforcement of lifecycle/gate guarantees by consuming stratum STRAT-GUARD. **Slice 1 SHIPPED (2026-06-02):** advance/skip/complete/kill are verdict-gated by STRAT-GUARD (fail-closed, server-read evidence, tamper-evident ledger) behind capabilities.guard (default OFF); new `guard` CLI subcommand on stratum-mcp; server/lifecycle-guard.js owns the phase graph (single source of truth). **PLANNED:** Slice 2 collapse two state machines (lifecycle-as-truth, status as projection); Slice 3 kill `force`→stratum_guard_override + evidence-bound completion (real commit/test attestation); Slice 4 phase-scoped tool capabilities + loopback REST auth. Absorbs COMP-PARITY-7 + COMP-DEBUG-1; reduces COMP-PARITY-5 to a UI view.",
+  "status": "PARTIAL",
+  "phase": "COMP-PARITY: UI↔CLI Parity",
+  "created": "2026-06-02",
+  "updated": "2026-06-02",
+  "complexity": "L",
+  "position": 9
+}

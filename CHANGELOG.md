@@ -34,6 +34,19 @@ checkpoint.
   `needs-sync`. Anchor writes are best-effort and never break a route handler.
 - SmartMemory backend intentionally deferred to a follow-up (seam only).
 
+### COMP-MCP-ENFORCE — Slice 1 — lifecycle transitions verdict-gated by stratum STRAT-GUARD (fail-closed, default OFF)
+
+Moves lifecycle-transition enforcement from prompt-trust into the tool/server layer by consuming stratum's STRAT-GUARD primitive. When `capabilities.guard` is enabled, `advance`/`skip`/`complete`/`kill` apply only if the edge's server-read evidence verifies; every attempt lands in the tamper-evident guard ledger. No caller (skill, cockpit, or rogue MCP/REST client) can effect a transition the guard refuses. Default OFF — flag-off behavior is byte-identical to before.
+
+**Added:**
+- server/lifecycle-guard.js — compose-owned phase graph (single source of truth), per-edge server-read evidence predicates, idempotent registration, fail-closed guarded transitions
+- STRAT-GUARD adapter in server/stratum-client.js (guardRegister/guardTransition/guardOverride/guardHistory)
+- Eager guard registration at /lifecycle/start; project-scoped resource ids
+
+**Changed:**
+- vision-routes.js advance/skip/complete/kill now verdict-gate via the guard when capabilities.guard=true; phase graph (TRANSITIONS/SKIPPABLE/TERMINAL) imported from lifecycle-guard.js to prevent drift
+- vision-server.js passes capabilities to the vision routes
+
 ## 2026-05-29
 
 ### fix(install): correct `pip install` package name in docs + stop vendored kernel shadowing PyPI (stratum#1)

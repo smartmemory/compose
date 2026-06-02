@@ -90,6 +90,8 @@ export class VisionServer {
       broadcastMessage: (msg) => this.broadcastMessage(msg),
       projectRoot: getTargetRoot(),
       settingsStore: this.settingsStore,
+      // COMP-MCP-ENFORCE: capabilities.guard gates STRAT-GUARD enforcement (default OFF).
+      capabilities: this._config.capabilities,
     });
 
     // ── Activity + error routes ─────────────────────────────────────────────

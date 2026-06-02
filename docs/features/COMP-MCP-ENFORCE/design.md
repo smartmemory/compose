@@ -1,6 +1,6 @@
 # COMP-MCP-ENFORCE — Mechanical Enforcement of Lifecycle/Gate Guarantees
 
-**Status:** DESIGN (Phase 1) — not implemented. Intent document; file:line references describe the *current* surface to be changed, not shipped behavior.
+**Status:** Slice 1 SHIPPED (2026-06-02) — see [`blueprint.md`](./blueprint.md), [`report.md`](./report.md). Slices 2–4 remain PLANNED. This remains the Phase-1 intent document; file:line references describe the original surface, not shipped behavior.
 **Owner:** compose
 **Depends on:** stratum `STRAT-GUARD` (standalone guarded-transition primitive)
 **Created:** 2026-06-02
