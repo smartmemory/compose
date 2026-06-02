@@ -1969,13 +1969,17 @@ if (cmd === 'build') {
   // pipeline (pipelines/gsd.stratum.yaml). Hard-requires existing
   // docs/features/<code>/blueprint.md with a parseable Boundary Map.
   const gsdCode = args.find(a => !a.startsWith('-'))
+  const gsdResume = args.includes('--resume')
   if (!gsdCode) {
-    console.error('Usage: compose gsd <feature-code>')
+    console.error('Usage: compose gsd <feature-code> [--resume]')
     console.error('')
     console.error('Runs the per-task fresh-context dispatch pipeline (COMP-GSD-2).')
     console.error('Hard-requires docs/features/<code>/blueprint.md with a valid Boundary Map.')
+    console.error('Detects stuck tasks (COMP-GSD-5) and halts with a structured diagnostic.')
     console.error('')
     console.error('Options:')
+    console.error('  --resume       Resume a halted run: re-dispatch the unfinished tasks')
+    console.error('                 from .compose/gsd/<code>/pause.json (skips completed tasks).')
     console.error('  --cwd <path>   Working directory (defaults to current)')
     process.exit(1)
   }
@@ -1984,7 +1988,14 @@ if (cmd === 'build') {
   const gsdAgentCwd = cwdIdx !== -1 ? resolve(args[cwdIdx + 1]) : gsdCwd
   const { runGsd } = await import('../lib/gsd.js')
   try {
-    const result = await runGsd(gsdCode, { cwd: gsdAgentCwd })
+    const result = await runGsd(gsdCode, { cwd: gsdAgentCwd, resume: gsdResume })
+    if (result.status === 'stuck') {
+      // COMP-GSD-5: a stuck halt is a clean, recoverable stop — not a crash.
+      console.error(`gsd stuck: task ${result.stuckTaskId} tripped the ${result.signal} detector.`)
+      console.error(`Diagnostic: .compose/gsd/${gsdCode}/stuck.md`)
+      console.error(`Resume with: compose gsd ${gsdCode} --resume`)
+      process.exit(2)
+    }
     console.log(`gsd complete: ${result.blackboardEntries} task results captured.`)
   } catch (err) {
     console.error(`gsd failed: ${err.message}`)

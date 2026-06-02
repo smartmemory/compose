@@ -2,6 +2,15 @@
 
 ## 2026-06-03
 
+### feat(COMP-GSD-5): stuck detection + `--resume` for autonomous `compose gsd` runs
+
+A real-time safety rail for the gsd autonomous long-run mode: during per-task fresh-context dispatch, a `GsdStuckDetector` (`lib/gsd-stuck.js`) watches the agent-stream and halts a spinning task with a structured diagnostic + resume-or-abort.
+
+- **Four signals** (tunable via `.compose/compose.json` `gsd.stuck.*`; defaults 3/3/8/600000ms): same file edited ≥3×; the same *normalized* error recurring ≥3×; ≥8 consecutive non-file-changing tool calls **after the first edit** (upfront read/grep/test exploration is not penalized — a never-editing task is caught by the wall-clock guard); a per-task wall-clock stall. Same-file reuses `FixChainDetector` (`lib/debug-discipline.js`); consumes the per-task `tool_use_summary.input` + `tool_result` telemetry from stratum `STRAT-PAR-STREAM-TOOLDETAIL` (schema 0.2.7).
+- **Halt + diagnostic:** on a stuck verdict the dispatch loop cancels the task (`parallelAdvance(…, 'conflict')`), writes `.compose/gsd/<feature>/stuck.{md,json}` (`contracts/gsd-stuck.json`), returns status `stuck`. The detector is an **opt-in** param to `executeParallelDispatchServer` — `compose build` is byte-identical (no detector passed).
+- **`compose gsd <feature> --resume`:** re-dispatches the persisted enriched task graph minus already-completed tasks (blackboard-driven; completed deps stripped from remaining `depends_on`), guarded by an **atomic `mkdir` ownership claim** + live-pid/mode check. NOT a mid-task `stratum.resume` (that lands in the wrong step — see T2-F5). The `pause.json` shape is the contract GSD-6 (auto crash-recovery) builds on; stale-claim auto-recovery is deferred to GSD-6.
+- **Tests:** `test/gsd-stuck.test.js`, `test/gsd-resume.test.js`, `test/contracts-gsd-stuck.test.js` + dispatch-path cases in `test/parallel-dispatch-server.test.js` (50 GSD-5 tests; build mode unchanged). Full suite: node 3236 + UI 146 + tracker 100, 0 fail. Codex review 3 rounds (telemetry-derivability → resume-into-cancelled-task + no_progress false-positive + resume-claim TOCTOU) → REVIEW CLEAN. `docs/features/COMP-GSD-5/{design,blueprint,plan}.md`.
+
 ### fix(validate): reconcile the 8 status-mismatch drift errors (PARTIAL vision-vocabulary projection)
 
 `feature-validator.js`'s `STATUS_MISMATCH_*_VS_VISION_STATE` checks string-compared

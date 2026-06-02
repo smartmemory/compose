@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "gsd-stuck.json",
+  "_source": "COMP-GSD-5",
+  "_roadmap": "COMP-GSD-5",
+  "title": "GsdStuckContracts",
+  "description": "Two artifacts written by a stuck `compose gsd` run. `stuck` is the human-facing halt diagnostic persisted to .compose/gsd/<feature>/stuck.json (a Markdown twin, stuck.md, is written alongside). `pause` is the machine-readable resume state persisted to .compose/gsd/<feature>/pause.json; `compose gsd <feature> --resume` reads it, validates ownership/mode, and re-dispatches decomposedTasks minus completedTaskIds (completed results already live in the blackboard). GSD-6 reuses the `pause` shape for automatic crash-recovery.",
+  "definitions": {
+    "stuck": {
+      "type": "object",
+      "title": "GsdStuckDiagnostic",
+      "description": "Structured diagnostic emitted on the first stuck verdict for a task.",
+      "required": ["feature", "taskId", "signal", "detail", "attemptCounts", "ts"],
+      "additionalProperties": false,
+      "properties": {
+        "feature": {
+          "type": "string",
+          "description": "Feature code the gsd run is building (e.g. COMP-GSD-5)."
+        },
+        "taskId": {
+          "type": "string",
+          "description": "The decomposed task id that tripped the detector."
+        },
+        "signal": {
+          "type": "string",
+          "enum": ["same_file", "error_recurrence", "no_progress", "wall_clock"],
+          "description": "Which stuck pattern fired. same_file: one file edited >= sameFileEdits times. error_recurrence: a normalized error hash recurred >= errorRepeats. no_progress: >= noProgressCalls consecutive non-file-changing tool calls. wall_clock: task ran >= wallClockMs without finishing."
+        },
+        "detail": {
+          "type": "string",
+          "description": "Human-readable explanation of the offending file / error / stall."
+        },
+        "attemptCounts": {
+          "type": "object",
+          "description": "Snapshot of the per-task counters at the moment of the verdict.",
+          "properties": {
+            "sameFileEdits": { "type": "integer", "minimum": 0, "description": "Max edit count across files for this task." },
+            "errorRepeats": { "type": "integer", "minimum": 0, "description": "Max repeat count across normalized error hashes." },
+            "noProgressCalls": { "type": "integer", "minimum": 0, "description": "Current consecutive non-file-changing tool-call count." }
+          },
+          "additionalProperties": true
+        },
+        "partialDiff": {
+          "type": "string",
+          "description": "Optional unified diff of the stuck task's worktree at halt time, for triage."
+        },
+        "ts": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 timestamp of the verdict."
+        }
+      }
+    },
+    "pause": {
+      "type": "object",
+      "title": "GsdPauseState",
+      "description": "Resume state persisted on a stuck halt. Drives blackboard-driven re-dispatch on --resume — NOT mid-task re-entry.",
+      "required": ["flowId", "stepId", "stuckTaskId", "signal", "detail", "decomposedTasks", "completedTaskIds", "pid", "mode", "ts"],
+      "additionalProperties": false,
+      "properties": {
+        "flowId": {
+          "type": "string",
+          "description": "Stratum flow id of the halted run (informational; resume opens a fresh flow)."
+        },
+        "stepId": {
+          "type": "string",
+          "description": "The parallel_dispatch step id that was cancelled (e.g. execute)."
+        },
+        "stuckTaskId": {
+          "type": "string",
+          "description": "The task id that tripped the detector."
+        },
+        "signal": {
+          "type": "string",
+          "enum": ["same_file", "error_recurrence", "no_progress", "wall_clock"],
+          "description": "Which stuck pattern fired (mirrors stuck.signal)."
+        },
+        "detail": {
+          "type": "string",
+          "description": "Human-readable explanation (mirrors stuck.detail)."
+        },
+        "decomposedTasks": {
+          "type": "array",
+          "minItems": 1,
+          "description": "The full decomposed task list, persisted so --resume does NOT re-decompose (stable task ids).",
+          "items": { "type": "object" }
+        },
+        "completedTaskIds": {
+          "type": "array",
+          "description": "Task ids whose VALIDATED result is already in the blackboard. --resume skips these.",
+          "items": { "type": "string" }
+        },
+        "pid": {
+          "type": "integer",
+          "description": "OS pid of the process that wrote the pause file. --resume refuses if this pid is still alive (another owner)."
+        },
+        "mode": {
+          "type": "string",
+          "const": "gsd",
+          "description": "Run mode. --resume refuses if this is not 'gsd' (mirrors `compose fix --resume` mode guard)."
+        },
+        "ts": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 timestamp the pause file was written."
+        }
+      }
+    }
+  }
+}
