@@ -20,6 +20,7 @@ import {
   guardRegister as _guardRegister,
   guardTransition as _guardTransition,
 } from './stratum-client.js';
+import { setFeatureStatus as _setFeatureStatus } from '../lib/feature-writer.js';
 
 // ---------------------------------------------------------------------------
 // Canonical phase graph (compose-owned data — single source of truth)
@@ -106,6 +107,52 @@ export function edgePredicates(featureRelDir) {
 export function resourceId(featureCode, workspaceRoot) {
   const hash = createHash('sha256').update(path.resolve(workspaceRoot)).digest('hex').slice(0, 12);
   return `compose:${hash}:${featureCode}`;
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle-as-truth: roadmap STATUS is a projection of lifecycle phase (Slice 2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Project a lifecycle phase onto the roadmap STATUS enum. The lifecycle is the
+ * source of truth; STATUS is derived. `complete`/`killed` are terminal; every
+ * active phase (explore_design…ship) is IN_PROGRESS. PLANNED is the PRE-lifecycle
+ * state (no projection needed); BLOCKED/PARKED/PARTIAL/SUPERSEDED have no phase
+ * and stay set_feature_status's domain.
+ */
+export function phaseToStatus(phase) {
+  if (phase === 'complete') return 'COMPLETE';
+  if (phase === 'killed') return 'KILLED';
+  return 'IN_PROGRESS';
+}
+
+let _statusWriter = _setFeatureStatus;
+/** @internal test seam */
+export function _testOnly_setStatusWriter(fn) { _statusWriter = fn; }
+/** @internal test seam */
+export function _testOnly_resetStatusWriter() { _statusWriter = _setFeatureStatus; }
+
+/**
+ * Write the phase-projected STATUS through to feature.json (closes the
+ * COMP-PARITY-7 one-way-sync gap for the lifecycle-driven path). Best-effort:
+ * a missing feature or a writer error is captured and returned, never thrown —
+ * status projection must not roll back a lifecycle transition that already
+ * applied. setFeatureStatus is itself idempotent (from===to → noop), so calling
+ * it on every transition only writes on a real status change.
+ */
+export async function projectFeatureStatus({ featureCode, phase, cwd, commitSha }) {
+  if (!featureCode) return { skipped: true };
+  const status = phaseToStatus(phase);
+  try {
+    // derived:true — the lifecycle is authoritative, so the roadmap transition
+    // table does not gate this projection (e.g. PARKED→IN_PROGRESS on resume).
+    const args = { code: featureCode, status, reason: `lifecycle:${phase}`, derived: true };
+    if (commitSha) args.commit_sha = commitSha;
+    const result = await _statusWriter(cwd, args);
+    return { status, result };
+  } catch (e) {
+    return { status, error: e.message };
+  }
 }
 
 // ---------------------------------------------------------------------------

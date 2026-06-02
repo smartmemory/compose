@@ -53,7 +53,7 @@ import { appendGateLogEntry, readGateLog, mapResolveOutcomeToSchema } from './ga
 import { addOpenLoop, resolveOpenLoop, listOpenLoops } from './open-loops-store.js';
 import {
   BASE_TRANSITIONS, SKIPPABLE, TERMINAL,
-  guardedTransition, ensureGuard,
+  guardedTransition, ensureGuard, projectFeatureStatus,
 } from './lifecycle-guard.js';
 
 const PROJECT_ROOT = getTargetRoot();
@@ -216,6 +216,9 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (guardEnabled) {
         try { await ensureGuard(featureCode, 'explore_design', projectRoot); }
         catch (e) { console.warn(`[lifecycle/start] guard register for ${featureCode} failed: ${e.message}`); }
+        // Slice 2: starting a lifecycle projects explore_design → IN_PROGRESS so
+        // the first active phase is not left stuck at PLANNED in feature.json.
+        await projectFeatureStatus({ featureCode, phase: 'explore_design', cwd: projectRoot });
       }
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleStarted', itemId: req.params.id, phase: 'explore_design', featureCode, timestamp: now });
@@ -285,6 +288,9 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       const now = new Date().toISOString();
       appendPhaseHistory(item, { from, to: targetPhase, outcome: outcome ?? null, timestamp: now });
       store.updateLifecycle(req.params.id, item.lifecycle);
+      // COMP-MCP-ENFORCE Slice 2 (lifecycle-as-truth): project the new phase onto
+      // feature.json STATUS (best-effort; idempotent — only writes on a real change).
+      if (guardEnabled) await projectFeatureStatus({ featureCode: item.lifecycle.featureCode, phase: targetPhase, cwd: projectRoot });
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: targetPhase, outcome, timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, outcome, timestamp: now }));
@@ -323,6 +329,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       const now = new Date().toISOString();
       appendPhaseHistory(item, { from, to: targetPhase, outcome: 'skipped', timestamp: now });
       store.updateLifecycle(req.params.id, item.lifecycle);
+      // COMP-MCP-ENFORCE Slice 2 (lifecycle-as-truth): project phase → STATUS.
+      if (guardEnabled) await projectFeatureStatus({ featureCode: item.lifecycle.featureCode, phase: targetPhase, cwd: projectRoot });
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: targetPhase, outcome: 'skipped', timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, outcome: 'skipped', timestamp: now }));
@@ -364,6 +372,9 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       appendPhaseHistory(item, { from, to: 'killed', outcome: 'killed', timestamp: now });
       store.updateLifecycle(req.params.id, item.lifecycle);
       store.updateItem(req.params.id, { status: 'killed' });
+      // COMP-MCP-ENFORCE Slice 2: project kill → KILLED onto feature.json
+      // (closes the COMP-PARITY-7 gap — kill previously wrote vision-state only).
+      if (guardEnabled) await projectFeatureStatus({ featureCode: item.lifecycle.featureCode, phase: 'killed', cwd: projectRoot });
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: 'killed', outcome: 'killed', timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: 'killed', outcome: 'killed', timestamp: now }));
@@ -403,6 +414,10 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       appendPhaseHistory(item, { from: 'ship', to: 'complete', outcome: 'approved', timestamp: now });
       store.updateLifecycle(req.params.id, item.lifecycle);
       store.updateItem(req.params.id, { status: 'complete' });
+      // COMP-MCP-ENFORCE Slice 2: status projection for the no-commit path is
+      // applied BELOW (in the `else` branch) so it does not pre-empt and mask the
+      // recordCompletion bridge, which is the authority + partial-write reporter
+      // on the commit_sha path.
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from: 'ship', to: 'complete', outcome: 'approved', timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from: 'ship', to: 'complete', outcome: 'approved', timestamp: now }));
@@ -458,6 +473,9 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
               reason: 'no_commit_sha',
             });
           } catch { /* decision event emit best-effort */ }
+          // No recordCompletion bridge ran — project complete → COMPLETE so
+          // lifecycle-as-truth still reaches feature.json (best-effort).
+          if (guardEnabled) await projectFeatureStatus({ featureCode, phase: 'complete', cwd: projectRoot });
         }
       }
 
