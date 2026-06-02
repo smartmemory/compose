@@ -110,3 +110,69 @@ test('integration: result shape conforms to contract', async () => {
     assert.ok(typeof f.detail === 'string');
   }
 });
+
+// ── CONTRADICTORY_PHASE_CLAIM regression (COMP-RESUME follow-up) ─────────────
+// feature.json's top-level `phase` is the ROADMAP heading, not a lifecycle
+// stage. The check must compare LIFECYCLE phase to LIFECYCLE phase, never the
+// roadmap heading to the vision-state lifecycle phase (that false-fired ~40×).
+
+test('CONTRADICTORY_PHASE_CLAIM: roadmap-heading phase does NOT false-fire', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'fv-rmh-'));
+  mkdirSync(join(root, '.compose', 'data'), { recursive: true });
+  mkdirSync(join(root, 'docs', 'features', 'RMH-1'), { recursive: true });
+  // phase = roadmap heading; NO lifecycle block on feature.json.
+  writeFileSync(join(root, 'docs', 'features', 'RMH-1', 'feature.json'),
+    JSON.stringify({ code: 'RMH-1', status: 'COMPLETE', phase: 'Phase 7: MCP Writers' }));
+  writeFileSync(join(root, 'docs', 'features', 'RMH-1', 'design.md'), '# d');
+  writeFileSync(join(root, '.compose', 'data', 'vision-state.json'), JSON.stringify({
+    items: [{ id: '00000000-0000-0000-0000-0000000000a1', type: 'feature', featureCode: 'RMH-1',
+              status: 'complete', lifecycle: { featureCode: 'RMH-1', currentPhase: 'explore_design' } }],
+    connections: [], gates: [],
+  }));
+  writeFileSync(join(root, 'ROADMAP.md'),
+    '# R\n\n## Phase 7: MCP Writers\n\n| # | Feature | Description | Status |\n|---|---|---|---|\n| 1 | RMH-1 | x | COMPLETE |\n');
+  const result = await validateProject(root);
+  const claims = result.findings.filter((f) => f.kind === 'CONTRADICTORY_PHASE_CLAIM');
+  assert.equal(claims.length, 0, `roadmap-heading phase must not trip the check; got ${JSON.stringify(claims)}`);
+});
+
+test('CONTRADICTORY_PHASE_CLAIM: a real lifecycle-vs-lifecycle mismatch DOES fire', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'fv-lcm-'));
+  mkdirSync(join(root, '.compose', 'data'), { recursive: true });
+  mkdirSync(join(root, 'docs', 'features', 'LCM-1'), { recursive: true });
+  writeFileSync(join(root, 'docs', 'features', 'LCM-1', 'feature.json'),
+    JSON.stringify({ code: 'LCM-1', status: 'IN_PROGRESS', lifecycle: { currentPhase: 'design' } }));
+  writeFileSync(join(root, 'docs', 'features', 'LCM-1', 'design.md'), '# d');
+  writeFileSync(join(root, '.compose', 'data', 'vision-state.json'), JSON.stringify({
+    items: [{ id: '00000000-0000-0000-0000-0000000000b2', type: 'feature', featureCode: 'LCM-1',
+              status: 'in_progress', lifecycle: { featureCode: 'LCM-1', currentPhase: 'implementation' } }],
+    connections: [], gates: [],
+  }));
+  writeFileSync(join(root, 'ROADMAP.md'),
+    '# R\n\n## Phase 1\n\n| # | Feature | Description | Status |\n|---|---|---|---|\n| 1 | LCM-1 | x | IN_PROGRESS |\n');
+  const result = await validateProject(root);
+  const claims = result.findings.filter((f) => f.kind === 'CONTRADICTORY_PHASE_CLAIM');
+  assert.equal(claims.length, 1, `lifecycle design vs implementation must fire; kinds: ${JSON.stringify(result.findings.map((f) => f.kind))}`);
+});
+
+test('CONTRADICTORY_PHASE_CLAIM: legacy board phase (no lifecycle on vision) does NOT false-fire', async () => {
+  // vision item carries only the legacy board `phase` ("planning"), no
+  // lifecycle.currentPhase. feature.json has a real lifecycle phase. The check
+  // must NOT compare lifecycle-phase against the board taxonomy (Codex).
+  const root = mkdtempSync(join(tmpdir(), 'fv-board-'));
+  mkdirSync(join(root, '.compose', 'data'), { recursive: true });
+  mkdirSync(join(root, 'docs', 'features', 'BRD-1'), { recursive: true });
+  writeFileSync(join(root, 'docs', 'features', 'BRD-1', 'feature.json'),
+    JSON.stringify({ code: 'BRD-1', status: 'IN_PROGRESS', lifecycle: { currentPhase: 'design' } }));
+  writeFileSync(join(root, 'docs', 'features', 'BRD-1', 'design.md'), '# d');
+  writeFileSync(join(root, '.compose', 'data', 'vision-state.json'), JSON.stringify({
+    items: [{ id: '00000000-0000-0000-0000-0000000000c3', type: 'feature', featureCode: 'BRD-1',
+              status: 'in_progress', phase: 'planning' }],   // legacy board phase, no lifecycle block
+    connections: [], gates: [],
+  }));
+  writeFileSync(join(root, 'ROADMAP.md'),
+    '# R\n\n## Phase 1\n\n| # | Feature | Description | Status |\n|---|---|---|---|\n| 1 | BRD-1 | x | IN_PROGRESS |\n');
+  const result = await validateProject(root);
+  const claims = result.findings.filter((f) => f.kind === 'CONTRADICTORY_PHASE_CLAIM');
+  assert.equal(claims.length, 0, `legacy board phase must not be compared to lifecycle phase; got ${JSON.stringify(claims)}`);
+});
