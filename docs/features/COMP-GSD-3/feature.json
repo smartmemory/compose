@@ -1,13 +1,18 @@
 {
   "code": "COMP-GSD-3",
-  "description": "Worktree-per-task isolation + auto squash-merge. Each dispatched task runs in its own git worktree under .compose/gsd/<task-id>/. On task completion, diff is verified (lint/build/test gates), squash-merged to the feature branch, worktree torn down. Conflict → bounce task back with merge context. Builds on COMP-PAR-MERGE-QUEUE.",
-  "status": "PLANNED",
+  "description": "Worktree-per-task isolation + merge-back. **PARTIAL (2026-06-02, verified vs disk):** the core shipped via the Stratum substrate GSD-2 wired — the gsd `execute` step (`pipelines/gsd.stratum.yaml`) runs `isolation: worktree` + `capture_diff: true` + `merge: sequential_apply` + `retries: 2`, and `ship_gsd` runs the project test suite + build pre-commit. So worktree-per-task isolation, diff capture, sequential merge-to-base, teardown, and conflict-detect-with-retry are DONE (Stratum `worktree.py`/`parallel_exec.py`; worktrees at `~/.stratum/worktrees/<flow>/<task>`, not `.compose/gsd/<task-id>/`). **Residual carried by COMP-PAR-MERGE-QUEUE:** (1) per-task *pre-merge* lint/build/test gating on each task's diff (today the project gates run once at `ship_gsd`, post-all-merges; per-task is only TaskResult cert/ensure); (2) conflict→bounce that feeds merge-conflict context to the re-dispatched agent (today `retries` re-runs blind). See ROADMAP.md 2026-06-02 reconciliation log.",
+  "status": "PARTIAL",
   "phase": "COMP-GSD: Autonomous Long-Run Mode",
   "created": "2026-05-10",
-  "updated": "2026-05-10",
+  "updated": "2026-06-02",
   "complexity": "L",
   "position": 4,
   "parent": "COMP-GSD",
-  "links": [{"kind": "depends_on", "to_code": "COMP-GSD-2"}],
+  "links": [
+    {
+      "kind": "depends_on",
+      "to_code": "COMP-GSD-2"
+    }
+  ],
   "group": "COMP-GSD"
 }
