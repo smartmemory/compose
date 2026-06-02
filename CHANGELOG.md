@@ -2,6 +2,20 @@
 
 ## 2026-06-02
 
+### fix(validate): CONTRADICTORY_PHASE_CLAIM compared roadmap heading to lifecycle phase
+
+`feature-validator.js`'s `CONTRADICTORY_PHASE_CLAIM` (error) compared
+`feature.json.phase` — which holds the ROADMAP heading ("Phase 7: MCP Writers")
+— against vision-state's lifecycle phase ("vision"/"explore_design"). Different
+vocabularies, so it false-fired on ~40 features (the bulk of the repo's
+error-severity validate drift). Now compares lifecycle-phase to lifecycle-phase
+only (no roadmap-heading source, no legacy board-`phase` fallback), aligning the
+code with its own "does not involve the roadmap" intent. Error findings dropped
+58→18. Added 3 regression tests (roadmap-heading and legacy-board-phase must not
+fire; a genuine lifecycle mismatch does). The remaining 18 (status mismatches +
+missing-design debt + entangled cross-feature links) are owned elsewhere; the
+pre-push validate step stays advisory until they're reconciled.
+
 ### fix+chore: harden the enforcement gate (post-review follow-up)
 
 Follow-ups from Codex-reviewing the prior commits — "ensure enforcement actually works."
