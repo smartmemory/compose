@@ -12,7 +12,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
 import { validateBuildStreamEvent, KNOWN_VERSIONS } from '../lib/build-stream-schema.js';
+
+const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -260,5 +266,39 @@ describe('validateBuildStreamEvent — open kinds (metadata not closed)', () => 
       metadata: { agent: 'claude', model: 'claude-sonnet-4-6', prompt_chars: 1000 },
     }));
     assert.equal(result.valid, true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Producer↔consumer schema_version contract (COMP-RESUME follow-up)
+// Guards the bug where consumers hard-pinned '0.2.5' and silently dropped the
+// current producer's (0.2.6) events.
+// ---------------------------------------------------------------------------
+
+describe('producer↔consumer schema_version contract', () => {
+  it('KNOWN_VERSIONS accepts the current producer version 0.2.6 (and 0.2.5 compat)', () => {
+    // Producer of record: stratum_mcp/events.py emits schema_version "0.2.6".
+    assert.ok(KNOWN_VERSIONS.has('0.2.6'), 'consumers must accept the current producer version');
+    assert.ok(KNOWN_VERSIONS.has('0.2.5'), 'backward-compat window retained');
+  });
+
+  it('stream consumers gate on KNOWN_VERSIONS, never a hard-coded version literal', () => {
+    // result-normalizer.js, build.js, and design-routes.js once used
+    // `schema_version !== '0.2.5'`, dropping every 0.2.6 event end-to-end. They
+    // must route through KNOWN_VERSIONS.has() so a producer bump can't silently
+    // sever the stream. Strip line-comments first so explanatory comments that
+    // mention the old literal don't false-trip the guard.
+    const LITERAL_CMP = /schema_version\s*[!=]==\s*['"]0\.2\.\d+['"]/;
+    // Drop only FULL-LINE comments (leading-whitespace `//`). Stripping from the
+    // first `//` anywhere would truncate a code line containing a string literal
+    // like "http://…", which could hide a real comparison after it.
+    const stripLineComments = (s) => s.split('\n').map((l) => (/^\s*\/\//.test(l) ? '' : l)).join('\n');
+    for (const rel of ['lib/result-normalizer.js', 'lib/build.js', 'server/design-routes.js']) {
+      const src = stripLineComments(readFileSync(join(REPO, rel), 'utf8'));
+      assert.equal(
+        LITERAL_CMP.test(src), false,
+        `${rel} compares schema_version to a version literal — use KNOWN_VERSIONS.has() instead`,
+      );
+    }
   });
 });

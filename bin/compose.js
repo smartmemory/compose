@@ -1654,6 +1654,13 @@ Exit codes:
     else if (a === '--code') code = args[++i]
     else if (a.startsWith('--block-on=')) blockOn = a.slice('--block-on='.length)
     else if (a === '--block-on') blockOn = args[++i]
+    else if (a === '--workspace' || a.startsWith('--workspace=')) {
+      // --workspace is a valid global flag consumed by resolveCwdWithWorkspace(args)
+      // below; skip it here so the unknown-flag guard doesn't reject it. Don't
+      // consume the next token: a bare `--workspace <id>` leaves <id> as a
+      // positional (harmlessly ignored by this loop, parsed by resolveCwdWith-
+      // Workspace), so `--workspace --help` still resolves --help correctly.
+    }
     else if (a.startsWith('--')) {
       console.error(`Unknown flag: ${a}`)
       process.exit(2)

@@ -193,6 +193,26 @@ test('forwards agent_relay envelope as assistant stream-writer event', async () 
   assert.deepEqual(written, [{ type: 'assistant', content: 'hello world' }]);
 });
 
+test('forwards a v0.2.6 agent_relay envelope (consumer accepts KNOWN_VERSIONS, not just 0.2.5)', async () => {
+  // The producer (stratum_mcp/events.py) emits schema_version 0.2.6. The consumer
+  // must not hard-pin 0.2.5 or it silently drops all live agent-run narration.
+  const written = [];
+  const stratum = fakeStratum({
+    text: '',
+    events: [
+      { schema_version: '0.2.6', kind: 'agent_relay', metadata: { role: 'assistant', text: 'from 0.2.6' } },
+    ],
+  });
+  const { text } = await runAndNormalize(
+    null,
+    'p',
+    { step_id: 's', output_fields: {} },
+    { stratum, streamWriter: { write: (ev) => written.push(ev) } },
+  );
+  assert.equal(text, 'from 0.2.6', 'v0.2.6 agent_relay must be forwarded, not dropped');
+  assert.deepEqual(written, [{ type: 'assistant', content: 'from 0.2.6' }]);
+});
+
 test('aggregates step_usage envelopes into usage totals', async () => {
   const stratum = fakeStratum({
     text: 'ok',
