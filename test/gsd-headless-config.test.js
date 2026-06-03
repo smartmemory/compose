@@ -101,6 +101,19 @@ describe('gsd-headless-config', () => {
     assert.equal(c.watchdogHeartbeatMs, 20000);
   });
 
+  test('COMP-GSD-6-WATCHDOG: a degenerate stale window (0) falls back to default; invariant holds', () => {
+    const c = mod.resolveHeadlessConfig({ heartbeatStaleMs: 0 });
+    assert.equal(c.heartbeatStaleMs, 90000, '0 stale → default');
+    assert.ok(c.watchdogHeartbeatMs < c.heartbeatStaleMs);
+  });
+
+  test('COMP-GSD-6-WATCHDOG: short-but-valid windows keep heartbeat strictly below stale', () => {
+    const c = mod.resolveHeadlessConfig({ heartbeatStaleMs: 100, watchdogHeartbeatMs: 100 });
+    assert.equal(c.heartbeatStaleMs, 100);
+    assert.equal(c.watchdogHeartbeatMs, 50);
+    assert.ok(c.watchdogHeartbeatMs < c.heartbeatStaleMs);
+  });
+
   test('backoffMs: exponential, capped at maxMs', () => {
     const c = mod.resolveHeadlessConfig({ backoff: { baseMs: 1000, factor: 2, maxMs: 5000 } });
     assert.equal(mod.backoffMs(c, 1), 1000); // 1000 * 2^0
