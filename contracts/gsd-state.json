@@ -1,0 +1,140 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "gsd-state.json",
+  "_source": "COMP-GSD-6",
+  "_also": "COMP-GSD-4",
+  "_roadmap": "COMP-GSD-6",
+  "title": "GsdStateContracts",
+  "description": "COMP-GSD-6 run-state artifacts. `state` is the continuously-flushed checkpoint at .compose/gsd/<feature>/state.json — written pre-plan (phase:planning, flowId:null), updated with flowId after stratum.plan, heartbeat-bumped per task event, marked resumeReady once decomposedTasks is populated, and terminally flushed (complete|stuck|budget|failed). A hard crash leaves status:running + a dead pid, which readers derive as 'crashed'. `query` is the read-only envelope emitted by `compose gsd query` — it adds the reader-only derived statuses 'crashed' and 'absent' to the runner taxonomy, plus the advisory heartbeatStale flag. decomposedTasks stores FULL enriched task objects (id/depends_on/description), not ids, so crash-recovery can synthesize a resume graph (it reuses the gsd-stuck.json#/definitions/pause decomposedTasks shape).",
+  "definitions": {
+    "state": {
+      "type": "object",
+      "title": "GsdRunState",
+      "description": "The continuously-flushed run checkpoint. Status is what the RUNNER writes; readers derive 'crashed'/'absent' from this via deriveRunStatus (lib/gsd-state.js).",
+      "required": ["feature", "pid", "mode", "phase", "status", "heartbeatAt"],
+      "additionalProperties": true,
+      "properties": {
+        "feature": {
+          "type": "string",
+          "description": "Feature code the gsd run is building (e.g. COMP-GSD-6)."
+        },
+        "flowId": {
+          "type": ["string", "null"],
+          "description": "Stratum flow id. null in the pre-plan 'planning' checkpoint; set after stratum.plan returns."
+        },
+        "pid": {
+          "type": "integer",
+          "description": "OS pid of the running process. The authoritative crash signal: status:running + a dead pid (process.kill(pid,0) ESRCH) ⇒ crashed."
+        },
+        "mode": {
+          "type": "string",
+          "const": "gsd",
+          "description": "Run mode. Always 'gsd'."
+        },
+        "phase": {
+          "type": "string",
+          "enum": ["planning", "decompose", "execute", "ship", "done"],
+          "description": "Coarse lifecycle phase. 'planning' is the pre-plan checkpoint (before stratum.plan); the failed-vs-fatal boundary is whether this checkpoint exists."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["running", "complete", "stuck", "budget", "failed"],
+          "description": "Runner-written status. 'failed' = an orderly exception AFTER the planning checkpoint (the dispatch-try catch). 'running' persisted with a dead pid is derived as 'crashed' by readers (never self-written)."
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 timestamp the run started."
+        },
+        "heartbeatAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 timestamp bumped on every flush AND from the per-task push-event path. A stale heartbeat on a LIVE pid is advisory only (heartbeatStale) — never a crash verdict."
+        },
+        "headless": {
+          "type": "boolean",
+          "description": "True if launched under the --headless supervisor."
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Supervisor attempt counter (resume generation)."
+        },
+        "resumeReady": {
+          "type": "boolean",
+          "description": "True once decomposedTasks is flushed post-decompose. Gates the supervisor crash branch: --resume when true, fresh restart when false (crashed during plan/decompose — nothing merged yet)."
+        },
+        "decomposedTasks": {
+          "type": "array",
+          "description": "Full enriched task objects (id/depends_on/description, NOT bare ids), so the crash bridge can synthesize a resume graph. Empty until decompose completes.",
+          "items": { "type": "object" }
+        },
+        "completedTaskIds": {
+          "type": "array",
+          "description": "Task ids whose validated result is already merged/in the blackboard. Resume skips these.",
+          "items": { "type": "string" }
+        },
+        "lastTaskId": {
+          "type": ["string", "null"],
+          "description": "Most recently completed task id (progress hint)."
+        },
+        "lastStepId": {
+          "type": ["string", "null"],
+          "description": "Most recent stratum step id."
+        },
+        "budget": {
+          "type": "object",
+          "description": "Optional mirror of the live flow budget {caps,consumed} for query burn reporting.",
+          "additionalProperties": true
+        }
+      }
+    },
+    "query": {
+      "type": "object",
+      "title": "GsdQuerySnapshot",
+      "description": "Read-only envelope emitted by `compose gsd query <feature>`. Synthesized with a fixed source precedence (state.json → pause.json → budget.json → absent). One status vocabulary across query/supervisor/tests.",
+      "required": ["feature", "status"],
+      "additionalProperties": true,
+      "properties": {
+        "feature": { "type": "string", "description": "Feature code queried." },
+        "status": {
+          "type": "string",
+          "enum": ["running", "crashed", "complete", "stuck", "budget", "failed", "absent"],
+          "description": "Derived status. 'crashed' (running+dead-pid) and 'absent' (no run state anywhere) are reader-only; the rest mirror the runner taxonomy."
+        },
+        "phase": {
+          "type": ["string", "null"],
+          "enum": ["planning", "decompose", "execute", "ship", "done", null]
+        },
+        "heartbeatStale": {
+          "type": "boolean",
+          "description": "Advisory: status is 'running' on a live pid but the heartbeat exceeded the stale threshold (run may be wedged). Never implies crashed."
+        },
+        "progress": {
+          "type": "object",
+          "description": "Task progress.",
+          "properties": {
+            "completed": { "type": "integer", "minimum": 0 },
+            "total": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "resumeReady": {
+          "type": "boolean",
+          "description": "Whether a crash here would --resume (true) or restart fresh (false)."
+        },
+        "pid": { "type": ["integer", "null"] },
+        "flowId": { "type": ["string", "null"] },
+        "pause": {
+          "type": ["object", "null"],
+          "description": "When paused: the pause kind + detail (from pause.json)."
+        },
+        "budget": {
+          "type": ["object", "null"],
+          "description": "Cumulative/flow budget info when available (from state.json or budget.json)."
+        },
+        "heartbeatAt": { "type": ["string", "null"], "format": "date-time" }
+      }
+    }
+  }
+}
