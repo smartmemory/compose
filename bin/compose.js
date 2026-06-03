@@ -1968,11 +1968,31 @@ if (cmd === 'build') {
   // compose gsd <feature-code> — runs the per-task fresh-context dispatch
   // pipeline (pipelines/gsd.stratum.yaml). Hard-requires existing
   // docs/features/<code>/blueprint.md with a parseable Boundary Map.
+
+  // COMP-GSD-6: `compose gsd query <feature>` — instant read-only JSON snapshot
+  // (no LLM/server/Stratum). For status pollers + CI dashboards.
+  if (args[0] === 'query') {
+    const qCode = args.find((a, i) => i > 0 && !a.startsWith('-'))
+    if (!qCode) {
+      console.error('Usage: compose gsd query <feature-code> [--cwd <path>]')
+      process.exit(1)
+    }
+    const { root: qRoot } = resolveCwdWithWorkspace(args.slice(1))
+    const qCwdIdx = args.indexOf('--cwd')
+    const qCwd = qCwdIdx !== -1 ? resolve(args[qCwdIdx + 1]) : qRoot
+    const { buildGsdQuery } = await import('../lib/gsd-state.js')
+    const snapshot = buildGsdQuery(qCwd, qCode)
+    console.log(JSON.stringify(snapshot, null, 2))
+    process.exit(snapshot.status === 'absent' ? 3 : 0)
+  }
+
   const gsdCode = args.find(a => !a.startsWith('-'))
   const gsdResume = args.includes('--resume')
   const gsdResetBudget = args.includes('--reset-budget')
+  const gsdHeadless = args.includes('--headless')
   if (!gsdCode) {
-    console.error('Usage: compose gsd <feature-code> [--resume] [--reset-budget]')
+    console.error('Usage: compose gsd <feature-code> [--resume] [--reset-budget] [--headless]')
+    console.error('       compose gsd query <feature-code>   (instant JSON status snapshot)')
     console.error('')
     console.error('Runs the per-task fresh-context dispatch pipeline (COMP-GSD-2).')
     console.error('Hard-requires docs/features/<code>/blueprint.md with a valid Boundary Map.')
@@ -1984,12 +2004,35 @@ if (cmd === 'build') {
     console.error('                  from .compose/gsd/<code>/pause.json (skips completed tasks).')
     console.error('  --reset-budget  Clear the feature\'s cumulative budget ledger before running')
     console.error('                  (use after raising or removing a spent gsd.budget.cumulative cap).')
+    console.error('  --headless      Unattended supervisor (COMP-GSD-6): auto-resume on crash/stuck')
+    console.error('                  with backoff + crash recovery. Policy: gsd.headless.* in compose.json.')
     console.error('  --cwd <path>    Working directory (defaults to current)')
     process.exit(1)
   }
   const { root: gsdCwd } = resolveCwdWithWorkspace(args)
   const cwdIdx = args.indexOf('--cwd')
   const gsdAgentCwd = cwdIdx !== -1 ? resolve(args[cwdIdx + 1]) : gsdCwd
+
+  // COMP-GSD-6: --headless hands off to the supervisor, which spawns plain
+  // `compose gsd` children and auto-resumes per policy. Exit 0 on completion,
+  // non-zero on a terminal stop (failed/fatal/budget/stuck-exhausted/aborted).
+  if (gsdHeadless) {
+    const { runGsdHeadless } = await import('../lib/gsd-supervisor.js')
+    try {
+      const r = await runGsdHeadless(gsdCode, { cwd: gsdAgentCwd, resume: gsdResume })
+      if (r.ok) {
+        console.log(`gsd headless: complete after ${r.attempts} attempt(s).`)
+        process.exit(0)
+      }
+      console.error(`gsd headless: stopped with status "${r.status}" after ${r.attempts} attempt(s).`)
+      console.error(`Query: compose gsd query ${gsdCode}`)
+      process.exit(r.status === 'failed' || r.status === 'fatal' ? 1 : 2)
+    } catch (err) {
+      console.error(`gsd headless failed: ${err.message}`)
+      process.exit(1)
+    }
+  }
+
   const { runGsd } = await import('../lib/gsd.js')
   try {
     if (gsdResetBudget) {
