@@ -1,0 +1,13 @@
+{
+  "code": "COMP-GSD-7-EVENTLOG",
+  "description": "Append-only GSD run-event log (.compose/gsd/<f>/events.jsonl) written at gsd lifecycle points (run_started, phase, task_completed, paused, resumed, completed, failed). Replaces the milestone report's snapshot-derived timeline (COMP-GSD-7 v1) with a real event stream. Fresh run truncates; resume appends (multi-session history).",
+  "status": "IN_PROGRESS",
+  "phase": "COMP-GSD: Autonomous Long-Run Mode",
+  "created": "2026-06-03",
+  "updated": "2026-06-03",
+  "complexity": "M",
+  "position": 10,
+  "parent": "COMP-GSD",
+  "links": [{"kind": "depends_on", "to_code": "COMP-GSD-7"}],
+  "group": "COMP-GSD"
+}
