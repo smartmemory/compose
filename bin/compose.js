@@ -2063,6 +2063,13 @@ if (cmd === 'build') {
       }
       process.exit(2)
     }
+    if (result.status !== 'complete') {
+      // COMP-GSD-6: any non-complete terminal (e.g. a stratum 'killed') is a
+      // failure, not success — don't print "complete" or exit 0.
+      console.error(`gsd ${result.status}: run ended without completing.`)
+      console.error(`Inspect: compose gsd query ${gsdCode}`)
+      process.exit(1)
+    }
     console.log(`gsd complete: ${result.blackboardEntries} task results captured.`)
   } catch (err) {
     console.error(`gsd failed: ${err.message}`)

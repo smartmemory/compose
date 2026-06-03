@@ -374,3 +374,25 @@ describe('runGsd --resume', () => {
     }
   });
 });
+
+// COMP-GSD-6: a stratum 'killed' terminal must NOT be reported as success.
+const { readGsdState } = await import(`${REPO_ROOT}/lib/gsd-state.js`);
+describe('runGsd killed-terminal normalization', () => {
+  test('a stratum killed terminal normalizes to status:failed (closed vocabulary)', async () => {
+    const cwd = scaffoldRepo();
+    try {
+      const killStub = {
+        connect: async () => {}, disconnect: async () => {},
+        plan: async () => ({ status: 'killed', flow_id: 'FK' }),
+      };
+      const result = await runGsd('COMP-GSD-5-FIX', { cwd, stratum: killStub });
+      assert.equal(result.status, 'failed', 'killed → failed in the returned envelope');
+      assert.equal(
+        readGsdState(cwd, 'COMP-GSD-5-FIX')?.status, 'failed',
+        'state.json terminal also normalized to failed',
+      );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});

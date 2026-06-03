@@ -72,6 +72,25 @@ describe('gsd crash-recovery', () => {
     });
   });
 
+  describe('fresh run clears stale state (fix: prior-run misclassification)', () => {
+    test('a fresh run clears a prior run\'s stale state.json before preconditions', async () => {
+      // A prior run left a 'complete' checkpoint.
+      seedState({ status: 'complete', phase: 'done' });
+      // This fresh run fails a precondition (no blueprint) — but only AFTER the
+      // up-front clear, so no stale 'complete' survives to mislead the supervisor.
+      await assert.rejects(() => gsd.runGsd(FEATURE, { cwd }), /blueprint missing/i);
+      assert.equal(state.readGsdState(cwd, FEATURE), null, 'stale state.json was cleared on the fresh run');
+    });
+
+    test('a resume run does NOT clear state.json (the crash-bridge may need it)', async () => {
+      seedState({}); // running + dead pid + task graph, no pause.json
+      // Resume with no blueprint still throws on the precondition, but the state
+      // must survive so a subsequent attempt can still recover.
+      await assert.rejects(() => gsd.runGsd(FEATURE, { cwd, resume: true }), /blueprint missing/i);
+      assert.ok(state.readGsdState(cwd, FEATURE), 'resume preserved state.json for recovery');
+    });
+  });
+
   describe('loadResumeTaskGraph crash-bridge (no pause.json)', () => {
     test('synthesizes resume from a running+dead-pid state.json with a task graph', () => {
       seedState({});
