@@ -1,7 +1,7 @@
 {
   "code": "COMP-GSD-6-WATCHDOG",
   "description": "Headless supervisor watchdog: detect a HUNG gsd child (state.json heartbeat stale past gsd.headless.heartbeatStaleMs while its pid is still alive) and kill+resume it. v1 supervisor only reacts to child exit; deriveRunStatus already returns heartbeatStale advisory. Adds a watch poll that races child-exit, a SIGTERM->grace->SIGKILL killChild, and an autoResume.hung policy.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "COMP-GSD: Autonomous Long-Run Mode",
   "created": "2026-06-03",
   "updated": "2026-06-03",
