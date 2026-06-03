@@ -1,7 +1,7 @@
 {
   "code": "COMP-GSD-7",
   "description": "Milestone report generator. Auto-generated self-contained HTML report per completed GSD feature: per-task summary (status/attempts/files/elapsed), budget actuals vs caps, snapshot-derived run timeline, inline per-task diffs. Writes to docs/gsd-reports/<feature>.html (auto-discovered by the cockpit DocsView; no server change). Auto on completion + `compose gsd report <feature>` CLI.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "COMP-GSD: Autonomous Long-Run Mode",
   "created": "2026-05-10",
   "updated": "2026-06-03",
