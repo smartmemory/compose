@@ -2,6 +2,16 @@
 
 ## 2026-06-03
 
+### feat(COMP-GSD-7-EVENTLOG): append-only GSD run-event log + real report timeline
+
+GSD runs now write an append-only **`.compose/gsd/<feature>/events.jsonl`** at their lifecycle points, and the COMP-GSD-7 milestone report renders its **Timeline** from that real event stream (the snapshot-derived timeline becomes the fallback). GSD otherwise persists only snapshots, so the report's timeline couldn't show task completions, phase transitions, or cross-session resumes — only whatever halt artifacts happened to be on disk.
+
+- **`lib/gsd-events.js`** (new): `appendGsdEvent`/`readGsdEvents`/`clearGsdEvents` — one `{ts, kind, ...detail}` JSON object per line, **best-effort append** (a log failure never affects the run), reader skips torn/corrupt lines **and parseable non-objects** (a `null` line is not an event).
+- **Emission** (`lib/gsd.js`): `run_started` (at the planning checkpoint — a **fresh** run truncates the log + clears stale halt artifacts *after* preconditions pass so a failed fresh start never destroys prior history; a **resume** appends), `phase` (decompose/execute, via `emitPhaseOnce` + a dedupe set — `runState.phase` is set to `execute` before the merge checkpoint so it can't gate the emission), `task_completed` (`emitCompletionDeltas` at the execute-merge **and** both halts, since stuck/budget return before the merge checkpoint; deduped via a set **seeded from the initial completed snapshot** so a resume never re-fires prior-session completions), `paused` (`pauseKind` stuck/budget — *not* `kind`, which the `{ts,kind,...detail}` spread would clobber), `completed`, `failed`.
+- **`clearGsdHaltArtifacts`** (`lib/gsd-state.js`): a fresh run removes stale `stuck`/`budget` `.json`+`.md` so both the event log and the report's snapshot fallback reflect only the current run.
+- **Report timeline** (`lib/gsd-milestone-report.js`): `buildTimeline` prefers the event stream and falls back to the snapshot timeline on **zero usable events** (absent/empty/torn/corrupt), never rendering empty. Unknown future kinds render verbatim. Zero change to the report's output contract.
+- **Tests:** `test/gsd-events.test.js` (10), `test/gsd-milestone-report.test.js` (+2), `test/gsd-budget-run.test.js` (+1 real-`runGsd` integration assertion). Full suite **3228**, 0 fail. Codex gate: design (5 findings — early-truncate history loss, stuck-path completion miss, resume re-emit, zero-event fallback, stale halt markers), impl (2 — `runState.phase` can't gate the execute event, non-object lines crash the reader) → REVIEW CLEAN. `docs/features/COMP-GSD-7-EVENTLOG/`. Closes the last COMP-GSD follow-up tracked from GSD-7.
+
 ### feat(COMP-GSD-6-WATCHDOG): hung-child detection for the headless supervisor
 
 The `--headless` supervisor now recovers a **hung** GSD child — one wedged with a frozen heartbeat while its pid is still alive — not just an exited one. v1 blocked forever on `await spawnRun()`; now each attempt **races child-exit against a heartbeat watchdog**, kills a hung child, and resumes it like a crash. On by default, fully configurable.
