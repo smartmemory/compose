@@ -1986,6 +1986,29 @@ if (cmd === 'build') {
     process.exit(snapshot.status === 'absent' ? 3 : 0)
   }
 
+  // COMP-GSD-7: `compose gsd report <feature>` — (re)generate the milestone HTML
+  // report from persisted run artifacts (auto-generated on completion; this is
+  // the retroactive/archival path). Writes docs/gsd-reports/<feature>.html.
+  if (args[0] === 'report') {
+    const rCwdIdx = args.indexOf('--cwd')
+    const rCwdValIdx = rCwdIdx !== -1 ? rCwdIdx + 1 : -1
+    const rCode = args.find((a, i) => i > 0 && i !== rCwdValIdx && !a.startsWith('-'))
+    if (!rCode) {
+      console.error('Usage: compose gsd report <feature-code> [--cwd <path>]')
+      process.exit(1)
+    }
+    const { root: rRoot } = resolveCwdWithWorkspace(args.slice(1))
+    const rCwd = rCwdIdx !== -1 ? resolve(args[rCwdIdx + 1]) : rRoot
+    const { generateGsdMilestoneReport } = await import('../lib/gsd-milestone-report.js')
+    const r = generateGsdMilestoneReport(rCode, rCwd)
+    if (!r.ok) {
+      console.error(`gsd report: ${r.error}`)
+      process.exit(1)
+    }
+    console.log(`Milestone report written: ${r.path}`)
+    process.exit(0)
+  }
+
   const gsdCode = args.find(a => !a.startsWith('-'))
   const gsdResume = args.includes('--resume')
   const gsdResetBudget = args.includes('--reset-budget')
@@ -1993,6 +2016,7 @@ if (cmd === 'build') {
   if (!gsdCode) {
     console.error('Usage: compose gsd <feature-code> [--resume] [--reset-budget] [--headless]')
     console.error('       compose gsd query <feature-code>   (instant JSON status snapshot)')
+    console.error('       compose gsd report <feature-code>  (generate milestone HTML report)')
     console.error('')
     console.error('Runs the per-task fresh-context dispatch pipeline (COMP-GSD-2).')
     console.error('Hard-requires docs/features/<code>/blueprint.md with a valid Boundary Map.')
