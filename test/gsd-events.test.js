@@ -59,6 +59,20 @@ describe('gsd-events', () => {
     assert.deepEqual(mod.readGsdEvents(cwd, FEATURE), []);
   });
 
+  test('read skips parseable NON-object lines (null, scalar, array)', () => {
+    mkdirSync(join(cwd, '.compose', 'gsd', FEATURE), { recursive: true });
+    writeFileSync(mod.gsdEventsPath(cwd, FEATURE), 'null\n42\n"hi"\n[1,2]\n{"kind":"completed"}\n');
+    const ev = mod.readGsdEvents(cwd, FEATURE);
+    assert.equal(ev.length, 1, 'only the object line is a usable event');
+    assert.equal(ev[0].kind, 'completed');
+  });
+
+  test('a file of only non-object lines yields zero events', () => {
+    mkdirSync(join(cwd, '.compose', 'gsd', FEATURE), { recursive: true });
+    writeFileSync(mod.gsdEventsPath(cwd, FEATURE), 'null\n');
+    assert.deepEqual(mod.readGsdEvents(cwd, FEATURE), []);
+  });
+
   test('clear truncates to zero events (file may remain empty)', () => {
     mod.appendGsdEvent(cwd, FEATURE, 'run_started', { mode: 'fresh' });
     mod.clearGsdEvents(cwd, FEATURE);
