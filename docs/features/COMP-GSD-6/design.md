@@ -161,7 +161,7 @@ So: `run.lock` = exclusivity (atomic, pre-plan); `state.json` = observable statu
 
 ## Decision 5: Stale `pause.lock` takeover (the deferred `gsd.js:728-732` item)
 
-**Decision:** `claimResumeLock` (`lib/gsd.js:733`) currently throws on `EEXIST` with no recovery. Add a stale check: if `pause.lock` exists but the owning pid (from `pause.json`/`state.json`) is dead **and** the lock dir mtime is older than `heartbeatStaleMs`, remove and re-claim (TOCTOU-safe: re-attempt the atomic `mkdirSync` after removal; loser still throws). A crashed `--resume` no longer wedges the feature permanently.
+**Decision:** `claimResumeLock` currently throws on `EEXIST` with no recovery. Add a stale check. **Crucial correction (caught by the concurrent-resume test):** the holder pid must come from a **`pause.lock/owner.json`** record that the *current holder* writes on claim — **not** from `pause.json.pid`, which is the *original crashed run's* pid (always dead by resume time, so it would make takeover fire unconditionally and break mutual exclusion between two live resumes). Takeover when the holder pid (from `pause.lock/owner.json`) is dead, **or** no owner record exists and the lock-dir mtime is older than the stale window. TOCTOU-safe: remove + re-attempt the atomic `mkdirSync`; a concurrent winner still wins. A crashed `--resume` no longer wedges the feature permanently. (Symmetric with `run.lock/owner.json` in Decision 4 — both locks carry a holder-written owner record.)
 
 ---
 
