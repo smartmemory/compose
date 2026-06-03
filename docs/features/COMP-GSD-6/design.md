@@ -50,15 +50,17 @@ Make `compose gsd` safe to run unattended and observable from outside the proces
 ```jsonc
 {
   "feature": "COMP-GSD-6",
-  "flowId": "<stratum-flow-id>",
+  "flowId": null,                  // null in the pre-plan "planning" checkpoint; set after stratum.plan
   "pid": 12345,
   "mode": "gsd",
-  "phase": "execute",              // decompose | execute | ship | done
+  "phase": "execute",              // planning | decompose | execute | ship | done
   "status": "running",             // running | complete | stuck | budget | failed
   "startedAt": "<iso>",
   "heartbeatAt": "<iso>",          // bumped on every flush AND from the push-event path
   "headless": true,
   "attempt": 1,                    // supervisor attempt counter (resume generation)
+  "resumeReady": false,            // true once decomposedTasks is flushed (post-decompose);
+                                   // gates whether a crash re-spawns --resume vs fresh (Decision 3)
   // decomposedTasks holds FULL enriched task objects (NOT bare IDs) — resume needs
   // id + depends_on + repaired description because --resume bypasses re-decompose.
   "decomposedTasks": [
@@ -78,12 +80,12 @@ Make `compose gsd` safe to run unattended and observable from outside the proces
 - `pid` liveness (`isPidAlive`, `lib/gsd.js:839`) is the **authoritative** crash signal; `heartbeatAt` is corroborating/advisory only (see Decision 4 — long tasks legitimately sit in the dispatch poll loop, so stale heartbeat alone must never authorize takeover).
 
 **Status taxonomy & the crash-vs-fatal distinction (Codex finding #3):** there is no self-written `crashed` status (a live process can't observe its own SIGKILL). Instead:
-- Terminal statuses the runner **writes**: `complete | stuck | budget | failed`. `failed` is new — the top-level `runGsd` body is wrapped so any thrown/orderly error (dirty workspace `lib/gsd.js:92`, parse/flow errors `lib/gsd.js:331`, etc.) flushes `state.json` `status:"failed"` before the process exits 1.
-- `crashed` is a **derived** reader status: `status === "running"` persisted **and** pid dead. Because `failed` is written on every orderly throw, a `running`+dead-pid state now reliably means a *hard* crash (SIGKILL/OOM/reboot), not a deterministic exception — so the supervisor won't auto-retry non-recoverable failures.
+- Terminal statuses the runner **writes**: `complete | stuck | budget | failed`. `failed` is new — the dispatch-try catch flushes `state.json` `status:"failed"` on an orderly throw **iff a `running` checkpoint already exists** (guard on `readGsdState()?.status === 'running'`). The dividing line is the pre-plan `planning` checkpoint (flush point 0), **not** `flowId` (see blueprint D-A): a throw *before* that checkpoint — preconditions like dirty-workspace (`lib/gsd.js:98-104`) or the cumulative-budget early-return (`:128`) — writes **no** `running` state, so it is classified **fatal** by absence (exit≠0 + no running state), not `failed`. A throw *after* the checkpoint (plan/decompose/execute/ship) is converted to `failed`.
+- `crashed` is a **derived** reader status: `status === "running"` persisted **and** pid dead. Because every orderly *post-checkpoint* throw writes `failed` and every pre-checkpoint throw leaves no running state, a `running`+dead-pid state now reliably means a *hard* crash (SIGKILL/OOM/reboot) — so the supervisor won't auto-retry deterministic failures.
 
 **Heartbeat from the dispatch loop (Codex finding #2):** the long-running work is inside `executeParallelDispatchServer`, which can poll for minutes before `runGsd` regains control (`lib/gsd.js:176`, `lib/build.js:3016`). Flushing the heartbeat only at loop turns would mark a healthy long task "stale". Fix: bump `heartbeatAt` from the **push-event callback** that already fires per task event (the `stratum.onEvent` subscription at `lib/build.js:2992` feeding `stuckDetector.record`) — piggyback a lightweight `touchHeartbeat()` there. Even so, takeover keys on **dead pid**, not stale heartbeat (heartbeat staleness is only a *query* hint that a run *may* be wedged).
 
-**Flush points (in `lib/gsd.js`):** init before the dispatch loop (after `flowId`, ~`:159`); per-task heartbeat via the push-event path; checkpoint after each task-complete / `ctx.filesChanged` capture; terminal flush (`complete|stuck|budget`) at the existing halt branches; `failed` flush in the new top-level catch.
+**Flush points (in `lib/gsd.js`):** **(0)** a pre-plan `planning` checkpoint written *before* `stratum.plan` — `{pid, flowId:null, phase:"planning", status:"running", resumeReady:false}` — so even a plan-phase crash leaves a dead-pid `state.json` (pairs with `run.lock/owner.json`, Decision 4); **(1)** update with `flowId` right after `stratum.plan` (~`:159`); **(2)** per-task heartbeat via the push-event path; **(3)** post-decompose checkpoint sets `resumeReady:true` once `decomposedTasks` is populated; **(4)** checkpoint after each task-complete / `ctx.filesChanged` capture; **(5)** terminal flush (`complete|stuck|budget`) at the existing halt branches; **(6)** `failed` flush in the dispatch-try catch (only when a `running` checkpoint already exists — blueprint D-A).
 
 **Crash-recovery bridge (resume load):** on `--resume`, `loadResumeTaskGraph` (`lib/gsd.js:663`) currently reads `pause.json` and throws if absent. Add a fallback: if `pause.json` is missing **but** a `state.json` with persisted `status:"running"` and a dead pid exists, synthesize the resume input from `state.json.decomposedTasks`/`completedTaskIds` (same enriched-task-object shape the function already filters). This is the only path by which a hard crash — which never wrote `pause.json` — becomes resumable.
 
@@ -94,14 +96,15 @@ Make `compose gsd` safe to run unattended and observable from outside the proces
 **Decision:** Add a `query` subcommand to the existing `gsd` CLI block (`bin/compose.js:1967`), branching on `args[0] === 'query'` before the feature-code path (mirrors the `roadmap`/`gates` sub-routers). Pure synchronous reads, no LLM, no server, no Stratum — target ~50ms.
 
 **Synthesizes from** (all already on disk except `state.json` from Decision 1):
-- `state.json` → phase, status, progress (`completed/total`), heartbeat, pid-liveness → derived `running | crashed | complete | stuck | budget | failed | absent`.
-- `pause.json` → halt kind + detail if paused.
-- `results/*.json` count → cross-check of completed tasks.
-- `budget-ledger.json` (`readBudget`, `lib/budget-ledger.js:186`) → cumulative spend.
+Status is derived by a **fixed source precedence** (blueprint D-F) so the pre-dispatch cumulative-budget refusal — which writes `budget.json` but **no** `state.json` (it returns at `:128`) — isn't mislabeled `absent`:
+1. `state.json` present → `deriveRunStatus` (phase, progress `completed/total`, heartbeat, pid-liveness → `running | crashed | complete | stuck | budget | failed`; `running`+live+stale-heartbeat ⇒ `running` + advisory `heartbeatStale`).
+2. else `pause.json` present → its `kind` (`stuck | budget`) + detail.
+3. else `budget.json` present (cumulative refusal) → `budget` (`axis:"cumulative"`).
+4. else → `absent`.
 
-`query`'s derived status set is exactly the runner/supervisor taxonomy plus the two reader-only states — `crashed` and `absent` — so external pollers see the same terminal vocabulary the supervisor acts on (including `failed`).
+Cross-checks: `results/*.json` count (completed tasks); `budget-ledger.json` (`readBudget`, `lib/budget-ledger.js:186`) for cumulative spend. The full vocabulary `running | crashed | complete | stuck | budget | failed | absent` is exactly the runner/supervisor taxonomy plus the two reader-only states (`crashed`, `absent`) — one shared vocabulary across `query`, supervisor, and tests.
 
-**Output:** single `JSON.stringify` to stdout, exit 0 (or exit 3 + `{status:"absent"}` if no run state). Follows the `compose items --json` precedent (`bin/compose.js:2775`). A `--watch` flag is deferred (pollers can loop the command themselves).
+**Output:** single `JSON.stringify` to stdout, exit 0 (or exit 3 + `{status:"absent"}` only when **all four** sources are absent). Follows the `compose items --json` precedent (`bin/compose.js:2775`). A `--watch` flag is deferred (pollers can loop the command themselves).
 
 **Crash detection rule (dead-pid authoritative — heartbeat never alone):** with `state.json status === "running"`:
 - `!isPidAlive(pid)` ⇒ `"crashed"` (the only crash signal).
@@ -114,13 +117,14 @@ Make `compose gsd` safe to run unattended and observable from outside the proces
 **Decision:** `compose gsd <feature> --headless` runs an **outer supervisor loop** that owns child run attempts. A self-resuming in-process loop cannot survive a hard crash, so the supervisor spawns each attempt and re-spawns `--resume` on a recoverable non-clean exit, with exponential backoff and a max-attempts cap.
 
 **Loop:**
-1. Spawn the run (attempt 1: fresh; attempt N>1: `--resume`).
+1. Spawn the run. Attempt 1: fresh. Attempt N>1: **`--resume`** when the prior state was `crashed`+`resumeReady`; otherwise **fresh** (see the crashed branch below).
 2. On child exit, classify outcome from exit code + the **terminal `state.json` status** (not exit code alone — finding #3):
    - **complete** (`state.status==complete`, exit 0) → done, exit 0.
    - **stuck** (`state.status==stuck`, exit 2) → if policy allows and under retry cap, backoff + resume; else exit 2.
    - **budget** (`state.status==budget`, exit 2) → policy default **halt** (exit 2); never resume unless explicitly overridden.
-   - **failed** (`state.status==failed`, exit 1) → **non-recoverable**, exit 1. This is the orderly-exception path; never auto-retried (a dirty workspace or parse error would just re-fail).
-   - **crashed** (`state.status==running` persisted **and** child pid dead — i.e. no terminal status was ever written) → genuine hard crash; if policy allows, backoff + resume.
+   - **failed** (`state.status==failed`, exit 1) → **non-recoverable**, exit 1. The orderly-exception path; never auto-retried (a dirty workspace or parse error would just re-fail).
+   - **fatal / no-state** (exit≠0 **and no `running` `state.json`** — a *pre-checkpoint* failure: bad args, dirty workspace before the planning checkpoint) → **non-recoverable**, exit with the child's code. Distinct from `crashed`: there is no running state to recover.
+   - **crashed** (`state.status==running` persisted **and** child pid dead — no terminal status written) → genuine hard crash; if policy allows, backoff then re-spawn: **`--resume`** when `state.resumeReady` (task graph exists), or **fresh** when `!resumeReady` (crashed during plan/decompose — nothing merged yet, clean restart is safe).
 3. Backoff: `base · 2^(attempt−1)`, capped; `maxAttempts` overall (separate cap per kind).
 
 **Configurable policy** (per the decision to make *every* pause kind overridable) under `gsd.headless.*` in `.compose/compose.json`, with conservative defaults:
@@ -149,11 +153,11 @@ Defaults match the chosen policy (crash + bounded-stuck, never budget). Every fi
 
 **Decision:** `state.json` is **status only**, never the lock — tmp+rename gives durability, not mutual exclusion, so two fresh runs could both observe "no owner" and both start. Exclusivity needs an **atomic claim primitive acquired before any side effect** (before `stratum.plan`).
 
-Reuse the same atomic `mkdirSync` pattern `claimResumeLock` already uses (`lib/gsd.js:733`): a `run.lock` directory under `.compose/gsd/<feature>/`, claimed at the **top of the dispatch try, before `stratum.plan`** (currently the first side-effecting call is at `lib/gsd.js:155-159`, with no fresh-run claim before it — the gap). `mkdirSync` is atomic on POSIX: the loser gets `EEXIST` and refuses.
+Reuse the same atomic `mkdirSync` pattern `claimResumeLock` already uses (`lib/gsd.js:733`): a `run.lock` directory under `.compose/gsd/<feature>/`, claimed at the **top of the dispatch try, before `stratum.plan`** (currently the first side-effecting call is at `lib/gsd.js:155-159`, with no fresh-run claim before it — the gap). `mkdirSync` is atomic on POSIX: the loser gets `EEXIST` and refuses. **Immediately after winning the `mkdir`, write `run.lock/owner.json {pid, startedAt}`** — the lock-local owner record (and write the pre-plan `planning` `state.json` per Decision 1 flush point 0).
 
-**Stale-claim takeover** (keyed on **dead pid**, authoritative — heartbeat is advisory): if `run.lock` exists but the owning pid (read from `state.json`) is dead, remove and re-claim (TOCTOU-safe: re-attempt the atomic `mkdirSync`; a concurrent winner still wins). Released in the `finally` that already guards `pause.lock` (`lib/gsd.js:228-237`).
+**Stale-claim takeover** — ownership precedence (keyed on **dead pid**, authoritative; heartbeat advisory only): read the owning pid from **`run.lock/owner.json` first**, falling back to **`state.json`** if `owner.json` is absent. Takeover (remove + re-claim, TOCTOU-safe re-attempt of the atomic `mkdirSync`; a concurrent winner still wins) when: that pid is **dead**, OR **neither owner record exists** and the lock-dir mtime is older than `heartbeatStaleMs` (covers the sub-ms window before `owner.json` lands). Released in the `finally` that already guards `pause.lock` (`lib/gsd.js:228-237`).
 
-So: `run.lock` = exclusivity (atomic, pre-plan); `state.json` = observable status + resume payload; `pause.lock` = the existing resume-claim lock (unchanged, but its stale-takeover is Decision 5). A fresh `--headless` run that finds a live `run.lock` refuses; one that finds a dead-pid `run.lock` takes over (and resumes from `state.json`).
+So: `run.lock` = exclusivity (atomic, pre-plan); `state.json` = observable status + resume payload; `pause.lock` = the existing resume-claim lock (unchanged, but its stale-takeover is Decision 5). A fresh `--headless` run that finds a live `run.lock` refuses; one that finds a dead-pid `run.lock` takes over and re-spawns per the Decision 3 crashed branch — **`--resume`** when `state.resumeReady`, else a **fresh** restart (early plan/decompose crash, nothing merged).
 
 ## Decision 5: Stale `pause.lock` takeover (the deferred `gsd.js:728-732` item)
 
