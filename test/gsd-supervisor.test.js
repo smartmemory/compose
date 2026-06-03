@@ -6,7 +6,7 @@
 
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -129,6 +129,34 @@ describe('gsd-supervisor', () => {
     const { result, calls } = await run([null]);
     assert.equal(result.status, 'fatal');
     assert.equal(calls.length, 1);
+  });
+
+  test('a prior run\'s stale "complete" does NOT yield false success when the fresh child fails pre-checkpoint', async () => {
+    // Emulate the Codex-flagged repro: a prior run left status:complete.
+    state.writeGsdState(cwd, FEATURE, base({ status: 'complete', phase: 'done' }));
+    // The fresh child clears stale state and fails before its checkpoint
+    // (scripted `null` removes state.json + exits non-zero) → absent → fatal.
+    const { result } = await run([null]);
+    assert.equal(result.status, 'fatal', 'must not report the prior run\'s stale complete');
+    assert.notEqual(result.status, 'complete');
+  });
+
+  test('pre-dispatch cumulative-budget refusal (budget.json, no state.json) → budget, not absent', async () => {
+    const calls = [];
+    const spawnRun = async () => {
+      calls.push({});
+      const dir = join(cwd, '.compose', 'gsd', FEATURE);
+      mkdirSync(dir, { recursive: true });
+      // refusal writes budget.json and NO state.json, exits 2
+      writeFileSync(join(dir, 'budget.json'), JSON.stringify({
+        feature: FEATURE, kind: 'budget', axis: 'cumulative', reason: 'spent',
+      }));
+      return { code: 2, signal: null };
+    };
+    const result = await sup.runGsdHeadless(FEATURE, { cwd, spawnRun, sleep: async () => {}, log: () => {} });
+    assert.equal(result.status, 'budget', 'cumulative refusal classified as budget, not absent');
+    assert.equal(result.ok, false);
+    assert.equal(calls.length, 1, 'budget not auto-resumed by default');
   });
 
   describe('classifyOutcome (pure)', () => {
