@@ -88,6 +88,19 @@ describe('gsd-headless-config', () => {
     assert.equal(c.autoResume.crash.enabled, true);
   });
 
+  test('COMP-GSD-6-WATCHDOG: watchdogHeartbeatMs is clamped below heartbeatStaleMs', () => {
+    // Misconfig: heartbeat cadence >= stale window would false-kill healthy quiet
+    // children. Must be clamped to half the stale window.
+    const c = mod.resolveHeadlessConfig({ heartbeatStaleMs: 10000, watchdogHeartbeatMs: 30000 });
+    assert.ok(c.watchdogHeartbeatMs < c.heartbeatStaleMs, 'heartbeat must restamp within the stale window');
+    assert.equal(c.watchdogHeartbeatMs, 5000, 'clamped to floor(stale/2)');
+  });
+
+  test('COMP-GSD-6-WATCHDOG: a valid heartbeat < stale is honored as-is', () => {
+    const c = mod.resolveHeadlessConfig({ heartbeatStaleMs: 90000, watchdogHeartbeatMs: 20000 });
+    assert.equal(c.watchdogHeartbeatMs, 20000);
+  });
+
   test('backoffMs: exponential, capped at maxMs', () => {
     const c = mod.resolveHeadlessConfig({ backoff: { baseMs: 1000, factor: 2, maxMs: 5000 } });
     assert.equal(mod.backoffMs(c, 1), 1000); // 1000 * 2^0
