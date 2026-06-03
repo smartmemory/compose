@@ -162,6 +162,13 @@ describe('runGsd budget wiring (COMP-GSD-4)', () => {
       // cumulative ledger recorded the consumed usage
       const feat = readLedger(join(cwd, '.compose')).features[FEATURE];
       assert.equal(feat.totalTokens, 1001);
+      // COMP-GSD-7-EVENTLOG: the real runGsd path emitted lifecycle events.
+      const events = readFileSync(join(gdir, 'events.jsonl'), 'utf-8').trim().split('\n').map((l) => JSON.parse(l));
+      const kinds = events.map((e) => e.kind);
+      assert.ok(kinds.includes('run_started'), 'run_started emitted');
+      assert.ok(kinds.includes('phase'), 'phase emitted');
+      const paused = events.find((e) => e.kind === 'paused');
+      assert.ok(paused && paused.pauseKind === 'budget', 'paused(budget) emitted with pauseKind (not clobbered)');
     } finally { rmSync(cwd, { recursive: true, force: true }); }
   });
 

@@ -93,12 +93,39 @@ describe('gsd-milestone-report', () => {
       assert.deepEqual(m.tasks.map((t) => t.id), ['task-a', 'task-b']);
     });
 
-    test('timeline includes start and completion', () => {
+    test('timeline includes start and completion (snapshot fallback)', () => {
       seedFull();
       const m = mod.assembleReportModel(FEATURE, cwd);
       const labels = m.timeline.map((e) => e.label);
       assert.ok(labels.some((l) => /start/i.test(l)));
       assert.ok(labels.some((l) => /complet/i.test(l)));
+    });
+
+    test('COMP-GSD-7-EVENTLOG: timeline comes from events.jsonl when present', () => {
+      seedFull();
+      const ev = [
+        { ts: 't0', kind: 'run_started', mode: 'fresh' },
+        { ts: 't1', kind: 'phase', phase: 'decompose' },
+        { ts: 't2', kind: 'task_completed', taskId: 'task-a' },
+        { ts: 't3', kind: 'paused', pauseKind: 'stuck', taskId: 'task-b' },
+        { ts: 't4', kind: 'completed' },
+      ];
+      writeFileSync(gdir('events.jsonl'), ev.map((e) => JSON.stringify(e)).join('\n') + '\n');
+      const m = mod.assembleReportModel(FEATURE, cwd);
+      assert.equal(m.timeline.length, 5, 'one row per event, not the snapshot timeline');
+      assert.match(m.timeline[0].label, /Run started \(fresh\)/);
+      assert.match(m.timeline[2].label, /Task completed: task-a/);
+      assert.match(m.timeline[3].label, /Paused \(stuck\)/);
+      assert.equal(m.timeline[4].label, 'Run completed');
+    });
+
+    test('COMP-GSD-7-EVENTLOG: falls back to snapshot timeline on an empty/torn events file', () => {
+      seedFull();
+      // present but yields zero usable events (only a torn line)
+      writeFileSync(gdir('events.jsonl'), '{ not json\n');
+      const m = mod.assembleReportModel(FEATURE, cwd);
+      const labels = m.timeline.map((e) => e.label);
+      assert.ok(labels.some((l) => /start/i.test(l)), 'snapshot fallback, not empty');
     });
 
     test('degrade: no timing → durationMs null', () => {
