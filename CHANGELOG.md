@@ -2,6 +2,16 @@
 
 ## 2026-06-03
 
+### feat(COMP-GSD-6-WATCHDOG): hung-child detection for the headless supervisor
+
+The `--headless` supervisor now recovers a **hung** GSD child — one wedged with a frozen heartbeat while its pid is still alive — not just an exited one. v1 blocked forever on `await spawnRun()`; now each attempt **races child-exit against a heartbeat watchdog**, kills a hung child, and resumes it like a crash. On by default, fully configurable.
+
+- **Independent wall-clock heartbeat (the load-bearing fix)** (`lib/gsd.js`): the pre-existing heartbeat only advanced on agent push-events, so a quiet-but-healthy task looked stale — which is exactly why GSD-6 made `heartbeatStale` *advisory only*. A `setInterval` (unref'd, cleared in `finally`) restamps `state.json`'s heartbeat whenever the event loop is turning, so a **frozen** heartbeat now genuinely means the loop is wedged (or the process dead). Gated on `GSD_HEADLESS_ATTEMPT` (supervised children only) → interactive `compose gsd` stays byte-identical.
+- **Confirm-poll watchdog** (`lib/gsd-supervisor.js` `defaultWatch`): declares hung only after **two consecutive stale polls with an unchanged `heartbeatAt`** — surviving host suspend / forward clock jumps (a just-woken healthy child re-stamps and clears the alarm). The poll sleep is abort-aware and unref'd, so a clean exit never leaves the supervisor waiting.
+- **Kill by pid** (`defaultKillChild`): the supervisor doesn't hold the child handle, so it sends `SIGTERM`, waits `watchdogKillGraceMs`, then `SIGKILL` if `pidAlive`.
+- **`hung` resumes like `crash`**: a hung kill leaves the crash signature (running + dead pid); the supervisor `clearGsdPause`s (new export in `lib/gsd-state.js`) so `loadResumeTaskGraph`'s crash-bridge recovers from the current `state.json` rather than a stale `pause.json`. New `autoResume.hung` policy ({enabled:true, maxAttempts:3}) for independent caps; `watchdogPollMs`/`watchdogKillGraceMs`/`watchdogHeartbeatMs` timings, with the `watchdogHeartbeatMs < heartbeatStaleMs` invariant enforced (clamped).
+- **Tests:** `test/gsd-watchdog.test.js` (11), `test/gsd-supervisor.test.js` (+4 hung-path), `test/gsd-headless-config.test.js` (+4). Full suite **3201**, 0 fail. Codex gate: design (3 findings — the advisory-heartbeat trap, stale-pause shadowing, suspend/clock-jump), impl (3 — ref'd poll timer, unenforced invariant, non-byte-identical disabled path), + 1 follow-up (`heartbeatStaleMs:0`) → REVIEW CLEAN. `docs/features/COMP-GSD-6-WATCHDOG/`.
+
 ### feat(COMP-GSD-7): milestone HTML report generator for completed `compose gsd` runs
 
 The observability capstone of the COMP-GSD umbrella: a GSD feature now finishes with a single self-contained HTML report a human can open from the cockpit. On a clean `compose gsd` completion the run writes **`docs/gsd-reports/<feature>.html`** — per-task summary (status / attempts / files / **elapsed**), **budget actuals-vs-caps**, a run timeline, and **inline per-task diffs**. `compose gsd report <feature>` regenerates it retroactively. It rides the existing cockpit `DocsView` discovery (`/api/files` + `/api/file`, which already renders `.html`) — **zero server changes**.

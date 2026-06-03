@@ -10,6 +10,7 @@ Each entry is a dated session log capturing what we tried, what broke, what we l
 
 | Date | Entry | Summary |
 |------|-------|---------|
+| 2026-06-03 | [Session 51: COMP-GSD-6-WATCHDOG: hung-child detection for the headless supervisor](2026-06-03-session-51-gsd-6-watchdog.md) | COMP-GSD-6-WATCHDOG: hung-child detection for the headless supervisor |
 | 2026-06-03 | [Session 50: COMP-GSD-7: milestone HTML report generator — closes the COMP-GSD umbrella](2026-06-03-session-50-gsd-7-milestone-report.md) | COMP-GSD-7: milestone HTML report generator — closes the COMP-GSD umbrella |
 | 2026-06-03 | [Session 49: COMP-GSD-6 headless gsd + crash recovery — state.json checkpoint, query snapshot, --headless supervisor; closed run.lock + stale pause.lock gaps](2026-06-03-session-49-comp-gsd-6-headless-crash-recovery.md) | COMP-GSD-6 headless gsd + crash recovery — state.json checkpoint, query snapshot, --headless supervisor; closed run.lock + stale pause.lock gaps |
 | 2026-06-03 | [Session 48: COMP-GSD-4 budget ceilings for gsd runs — adopted the stratum flow budget rather than rebuilding; Codex gate caught a real issue at every phase.](2026-06-03-session-48-comp-gsd-4-budget-ceilings.md) | COMP-GSD-4 budget ceilings for gsd runs — adopted the stratum flow budget rather than rebuilding; Codex gate caught a real issue at every phase. |
