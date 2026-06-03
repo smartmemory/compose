@@ -64,6 +64,30 @@ describe('gsd-headless-config', () => {
     assert.deepEqual(c, mod.resolveHeadlessConfig({}));
   });
 
+  test('COMP-GSD-6-WATCHDOG: hung auto-resumes by default + watchdog timings', () => {
+    const c = mod.readHeadlessConfig(cwd); // no config
+    assert.deepEqual(c.autoResume.hung, { enabled: true, maxAttempts: 3 });
+    assert.equal(c.watchdogPollMs, 15000);
+    assert.equal(c.watchdogKillGraceMs, 5000);
+    assert.equal(c.watchdogHeartbeatMs, 30000);
+  });
+
+  test('COMP-GSD-6-WATCHDOG: hung policy + watchdog timings are overridable; bad types → default', () => {
+    writeConfig({ gsd: { headless: {
+      autoResume: { hung: { enabled: false, maxAttempts: 1 } },
+      watchdogPollMs: 5000,
+      watchdogKillGraceMs: 'soon', // bad → default 5000
+      watchdogHeartbeatMs: 10000,
+    } } });
+    const c = mod.readHeadlessConfig(cwd);
+    assert.deepEqual(c.autoResume.hung, { enabled: false, maxAttempts: 1 });
+    assert.equal(c.watchdogPollMs, 5000, 'valid override');
+    assert.equal(c.watchdogKillGraceMs, 5000, 'bad type → default');
+    assert.equal(c.watchdogHeartbeatMs, 10000);
+    // unspecified kinds keep defaults
+    assert.equal(c.autoResume.crash.enabled, true);
+  });
+
   test('backoffMs: exponential, capped at maxMs', () => {
     const c = mod.resolveHeadlessConfig({ backoff: { baseMs: 1000, factor: 2, maxMs: 5000 } });
     assert.equal(mod.backoffMs(c, 1), 1000); // 1000 * 2^0

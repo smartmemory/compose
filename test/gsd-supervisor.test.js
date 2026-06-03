@@ -6,7 +6,7 @@
 
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -43,12 +43,22 @@ function scripted(states, calls) {
   };
 }
 
+// A watch that never declares hung — it waits for the abort the supervisor fires
+// when the child exits. Keeps the (now default-on) watchdog from interfering with
+// exit-path tests; defaultWatch's own polling is tested in gsd-watchdog.test.js.
+const idleWatch = ({ signal }) =>
+  new Promise((res) => {
+    if (signal.aborted) return res(null);
+    signal.addEventListener('abort', () => res(null), { once: true });
+  });
+
 async function run(states, opts = {}) {
   const calls = [];
   const result = await sup.runGsdHeadless(FEATURE, {
     cwd,
     spawnRun: scripted(states, calls),
     sleep: async () => {},
+    watch: idleWatch,
     log: () => {},
     ...opts,
   });
@@ -157,6 +167,97 @@ describe('gsd-supervisor', () => {
     assert.equal(result.status, 'budget', 'cumulative refusal classified as budget, not absent');
     assert.equal(result.ok, false);
     assert.equal(calls.length, 1, 'budget not auto-resumed by default');
+  });
+
+  describe('COMP-GSD-6-WATCHDOG: hung-child detection', () => {
+    // A hung snapshot: running + alive pid (use this process) + stale heartbeat.
+    const hungSnap = () => ({
+      feature: FEATURE, status: 'running', pid: process.pid,
+      resumeReady: true, heartbeatStale: true, heartbeatAt: 'frozen',
+    });
+
+    test('hung child → killed by pid + resumed → completes', async () => {
+      const calls = [];
+      const killed = [];
+      let attempt = 0;
+      let unblock = null;
+      const spawnRun = async ({ resume }) => {
+        attempt += 1;
+        calls.push({ resume });
+        if (attempt === 1) {
+          state.writeGsdState(cwd, FEATURE, base({ status: 'running', pid: process.pid }));
+          await new Promise((r) => { unblock = r; });   // "hang" until killed
+          return { code: null, signal: 'SIGKILL' };
+        }
+        state.writeGsdState(cwd, FEATURE, base({ status: 'complete', phase: 'done' }));
+        return { code: 0, signal: null };
+      };
+      const watch = async ({ signal }) =>
+        attempt === 1 ? hungSnap() : new Promise((res) => signal.addEventListener('abort', () => res(null), { once: true }));
+      const killChild = async (pid) => { killed.push(pid); unblock?.(); };
+
+      const result = await sup.runGsdHeadless(FEATURE, {
+        cwd, spawnRun, watch, killChild, sleep: async () => {}, log: () => {},
+      });
+      assert.equal(result.status, 'complete');
+      assert.equal(result.attempts, 2);
+      assert.deepEqual(killed, [process.pid], 'killed the hung child by its pid');
+      assert.equal(calls[1].resume, true, 'hung w/ resumeReady → --resume');
+    });
+
+    test('hung clears pause.json so the crash-bridge recovers from state.json', async () => {
+      const gdir = join(cwd, '.compose', 'gsd', FEATURE);
+      let attempt = 0, unblock = null;
+      const spawnRun = async () => {
+        attempt += 1;
+        if (attempt === 1) {
+          state.writeGsdState(cwd, FEATURE, base({ status: 'running', pid: process.pid }));
+          // a stale pause.json from an earlier halt that would shadow the bridge
+          writeFileSync(join(gdir, 'pause.json'), JSON.stringify({ kind: 'stuck', stale: true }));
+          await new Promise((r) => { unblock = r; });
+          return { code: null, signal: 'SIGKILL' };
+        }
+        state.writeGsdState(cwd, FEATURE, base({ status: 'complete', phase: 'done' }));
+        return { code: 0, signal: null };
+      };
+      const watch = async ({ signal }) =>
+        attempt === 1 ? { feature: FEATURE, status: 'running', pid: process.pid, resumeReady: true, heartbeatStale: true, heartbeatAt: 'x' }
+                      : new Promise((res) => signal.addEventListener('abort', () => res(null), { once: true }));
+      const killChild = async () => { unblock?.(); };
+
+      await sup.runGsdHeadless(FEATURE, { cwd, spawnRun, watch, killChild, sleep: async () => {}, log: () => {} });
+      assert.ok(!existsSync(join(gdir, 'pause.json')), 'stale pause.json cleared on hung-kill');
+    });
+
+    test('hung retries up to maxAttempts then terminal hung (not ok)', async () => {
+      const config = cfgMod.resolveHeadlessConfig({ autoResume: { hung: { enabled: true, maxAttempts: 2 } } });
+      const calls = [];
+      let unblock = null;
+      const spawnRun = async () => {
+        calls.push({});
+        state.writeGsdState(cwd, FEATURE, base({ status: 'running', pid: process.pid }));
+        await new Promise((r) => { unblock = r; });
+        return { code: null, signal: 'SIGKILL' };
+      };
+      const watch = async () => ({ feature: FEATURE, status: 'running', pid: process.pid, resumeReady: true, heartbeatStale: true, heartbeatAt: 'x' });
+      const killChild = async () => { unblock?.(); };
+
+      const result = await sup.runGsdHeadless(FEATURE, { cwd, config, spawnRun, watch, killChild, sleep: async () => {}, log: () => {} });
+      assert.equal(result.status, 'hung');
+      assert.equal(result.ok, false);
+      assert.equal(calls.length, 3, '1 initial + 2 retries, then capped');
+    });
+
+    test('watchdog disabled → no watch, plain await spawnRun (byte-identical)', async () => {
+      const config = cfgMod.resolveHeadlessConfig({ autoResume: { hung: { enabled: false } } });
+      let watchCalled = false;
+      const { result } = await run([base({ status: 'complete', phase: 'done' })], {
+        config,
+        watch: async () => { watchCalled = true; return null; },
+      });
+      assert.equal(result.status, 'complete');
+      assert.equal(watchCalled, false, 'watch never started when hung.enabled is false');
+    });
   });
 
   describe('classifyOutcome (pure)', () => {
