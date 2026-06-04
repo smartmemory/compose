@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "par-merge-bounce.json",
+  "_source": "docs/features/COMP-PAR-MERGE-QUEUE/design.md",
+  "_roadmap": "COMP-PAR-MERGE-QUEUE",
+  "title": "ParMergeBounce",
+  "description": "A single bounce record produced by parallel_dispatch's post-dispatch merge gate. Unifies both failure kinds (a failed pre-merge verify gate, or a merge conflict during diff apply) into one structured contract. It is surfaced on the ensure_failed.bounced_tasks[] envelope AND persisted onto the failed task's state so that when the step is re-dispatched, Stratum's ParallelExecutor._render_prompt injects the failure context into the re-run task's prompt (server-side, because the server re-resolves the task list on each re-dispatch). Convention: _source = design doc origin, _roadmap = feature code.",
+  "type": "object",
+  "required": ["task_id", "reason", "files", "excerpt"],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "description": "Which task to bounce / re-dispatch."
+    },
+    "reason": {
+      "type": "string",
+      "enum": ["gate_failed", "merge_conflict"],
+      "description": "Why the task bounced. 'gate_failed' = a pre_merge_verify command exited non-zero in the task worktree; 'merge_conflict' = git apply --check/apply failed when merging the task diff onto base."
+    },
+    "files": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Files involved. gate_failed: from `git diff --name-only HEAD` in the worktree. merge_conflict: parsed from the git-apply error, falling back to the task's owned files."
+    },
+    "command": {
+      "type": ["string", "null"],
+      "description": "The gate command that failed, e.g. 'pnpm build'. Populated for gate_failed only; null for merge_conflict."
+    },
+    "exit_code": {
+      "type": ["integer", "null"],
+      "description": "Exit code of the failed gate command. Populated for gate_failed only; null for merge_conflict."
+    },
+    "excerpt": {
+      "type": "string",
+      "description": "Bounded (~2KB) tail of the gate stdout+stderr (gate_failed) OR the git-apply error text (merge_conflict). Bounded to avoid unbounded prompt growth and to limit credential leakage; do not echo environment."
+    }
+  },
+  "additionalProperties": true
+}

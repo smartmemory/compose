@@ -18,6 +18,9 @@ workflow:
     gateCommands:
       type: array
       required: true   # injected by runGsd from loadProjectConfig() with default fallback
+    pre_merge_gate:
+      type: array
+      required: false  # COMP-PAR-MERGE-QUEUE: fast per-task enforced gate (lint+build); injected by runGsd
 
 contracts:
   PhaseResult:
@@ -36,6 +39,7 @@ flows:
     input:
       featureCode: {type: string}
       gateCommands: {type: array}
+      pre_merge_gate: {type: array}   # COMP-PAR-MERGE-QUEUE
     output: PhaseResult
     max_rounds: 10
     steps:
@@ -61,7 +65,7 @@ flows:
             - "Upstream tasks (spec-level summary; their code lands at end-of-step
               merge):" + one line per upstream task listing its declared produces
             - "GATES — you MUST run each command and they MUST pass before
-              declaring done:" + each command from the gateCommands array
+              declaring done:" + each command from the pre_merge_gate array
             - "Fix and re-run within this invocation. Do NOT declare done while
               gates are red."
 
@@ -75,10 +79,12 @@ flows:
           has no matching task or its File Plan files are split across
           multiple tasks.
 
-          gateCommands to embed: {input.gateCommands}
+          pre_merge_gate commands to embed (the fast per-task gate; the full
+          test suite runs once at ship): {input.pre_merge_gate}
         inputs:
-          featureCode:  "$.input.featureCode"
-          gateCommands: "$.input.gateCommands"
+          featureCode:    "$.input.featureCode"
+          gateCommands:   "$.input.gateCommands"
+          pre_merge_gate: "$.input.pre_merge_gate"
         output_contract: TaskGraph
         ensure:
           - "no_file_conflicts(result.tasks)"
@@ -93,6 +99,8 @@ flows:
         max_concurrent: 1
         isolation: worktree
         capture_diff: true
+        defer_advance: true   # COMP-PAR-MERGE-QUEUE: consumer merges + reports status, enabling conflict-bounce
+        pre_merge_verify: "$.input.pre_merge_gate"   # COMP-PAR-MERGE-QUEUE: enforced fast gate per task worktree
         require: all
         merge: sequential_apply
         retries: 2

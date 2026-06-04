@@ -367,17 +367,23 @@ test('execute-step prompt contract: task 2 prompt includes upstream T01 symbols 
     assert.match(t02Intent, /Symbols you may consume from upstream tasks/, 'T02 prompt must contain consume section (load-bearing v1 handoff)');
     assert.match(t02Intent, /Boundary Map slice/, 'T02 prompt must embed slice text');
     assert.match(t02Intent, /Upstream tasks/, 'T02 prompt must contain upstream summary section');
-    assert.match(t02Intent, /pnpm test/, 'T02 prompt must list gate commands (default fallback)');
+    // COMP-PAR-MERGE-QUEUE: the per-task instructed gate is the FAST gate
+    // (lint+build) — single-sourced with the enforced execute.pre_merge_verify.
+    // The full `pnpm test` runs once at ship_gsd, not per task.
+    assert.match(t02Intent, /pnpm lint/, 'T02 prompt must list the fast gate commands (default fallback)');
+    assert.match(t02Intent, /pnpm build/, 'T02 prompt must list the fast gate commands (default fallback)');
+    assert.doesNotMatch(t02Intent, /pnpm test/, 'per-task gate is fast (no full test suite; that runs at ship)');
     assert.match(t02Intent, /\.compose\/gsd\/COMP-GSD-2-FIX\/results\/T02\.json/, 'T02 prompt must include the per-task TaskResult path');
   } finally {
     rmSync(subCwd, { recursive: true, force: true });
   }
 });
 
-test('runGsd uses default gateCommands when project config lacks the field', async () => {
+test('runGsd uses default fast pre-merge gate when project config lacks the field', async () => {
   // Reuse the existing fixture; this test asserts behavior not file output.
-  // The decomposeResult tasks' descriptions should contain the default
-  // gate commands (lint/build/test).
+  // COMP-PAR-MERGE-QUEUE: the per-task description embeds the FAST gate
+  // (lint+build) — single-sourced with the enforced gate. `pnpm test` runs at
+  // ship_gsd only, so it must NOT appear in a per-task description.
   const captured = {};
   const subCwd = mkdtempSync(join(tmpdir(), 'gsd-golden-default-'));
   try {
@@ -395,10 +401,10 @@ test('runGsd uses default gateCommands when project config lacks the field', asy
     await runGsd('COMP-GSD-2-FIX', { cwd: subCwd, stratum: stub });
 
     const t01 = captured.decomposeResult.tasks.find((t) => t.id === 'T01');
-    // Defaults from runGsd: pnpm lint, pnpm build, pnpm test
+    // Default fast pre-merge gate from runGsd: pnpm lint, pnpm build (no test).
     assert.match(t01.description, /pnpm lint/);
     assert.match(t01.description, /pnpm build/);
-    assert.match(t01.description, /pnpm test/);
+    assert.doesNotMatch(t01.description, /pnpm test/);
   } finally {
     rmSync(subCwd, { recursive: true, force: true });
   }

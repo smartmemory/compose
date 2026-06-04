@@ -1,10 +1,10 @@
 {
   "code": "COMP-GSD-3",
-  "description": "Worktree-per-task isolation + merge-back. **PARTIAL (2026-06-02, verified vs disk):** the core shipped via the Stratum substrate GSD-2 wired — the gsd `execute` step (`pipelines/gsd.stratum.yaml`) runs `isolation: worktree` + `capture_diff: true` + `merge: sequential_apply` + `retries: 2`, and `ship_gsd` runs the project test suite + build pre-commit. So worktree-per-task isolation, diff capture, sequential merge-to-base, teardown, and conflict-detect-with-retry are DONE (Stratum `worktree.py`/`parallel_exec.py`; worktrees at `~/.stratum/worktrees/<flow>/<task>`, not `.compose/gsd/<task-id>/`). **Residual carried by COMP-PAR-MERGE-QUEUE:** (1) per-task *pre-merge* lint/build/test gating on each task's diff (today the project gates run once at `ship_gsd`, post-all-merges; per-task is only TaskResult cert/ensure); (2) conflict→bounce that feeds merge-conflict context to the re-dispatched agent (today `retries` re-runs blind). See ROADMAP.md 2026-06-02 reconciliation log.",
-  "status": "PARTIAL",
+  "description": "Worktree-per-task isolation + merge-back. **COMPLETE 2026-06-04.** The core (worktree-per-task isolation, diff capture, sequential merge-to-base, teardown, conflict-detect-with-retry) shipped via the Stratum substrate GSD-2 wired (`pipelines/gsd.stratum.yaml` `execute`: `isolation: worktree` + `capture_diff: true` + `merge: sequential_apply` + `retries: 2`; worktrees at `~/.stratum/worktrees/<flow>/<task>`). The residual — (1) per-task **pre-merge** lint/build gating on each task's diff, and (2) conflict→bounce-with-context to the re-dispatched agent — shipped in **COMP-PAR-MERGE-QUEUE** (2026-06-04): `execute` now opts into `defer_advance: true` + `pre_merge_verify: $.input.pre_merge_gate` (fast lint+build per task worktree before merge; full `pnpm test` stays at `ship_gsd`), and both gate-failed and merge-conflict bounce records are injected into the re-run task's prompt (no longer blind). See COMP-PAR-MERGE-QUEUE/report.md.",
+  "status": "COMPLETE",
   "phase": "COMP-GSD: Autonomous Long-Run Mode",
   "created": "2026-05-10",
-  "updated": "2026-06-02",
+  "updated": "2026-06-04",
   "complexity": "L",
   "position": 4,
   "parent": "COMP-GSD",
