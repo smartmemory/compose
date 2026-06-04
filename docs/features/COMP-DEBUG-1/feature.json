@@ -1,7 +1,7 @@
 {
   "code": "COMP-DEBUG-1",
   "name": "Debug Discipline Engine",
-  "status": "PLANNED",
+  "status": "SUPERSEDED",
   "phase": "COMP-DEBUG: Debug Discipline",
   "complexity": 3,
   "profile": {
@@ -21,7 +21,7 @@
     "quality"
   ],
   "source": "SmartMemory weekly retro 2026-04-12",
-  "description": "**Debug discipline: agent capability profiles + enforcement.** Limits each agent type to a tool subset; emits capability_violation events; opt-in block mode rejects calls outside the profile.",
-  "updated": "2026-05-04",
+  "description": "**Debug discipline: agent capability profiles + enforcement.** Limits each agent type to a tool subset; emits capability_violation events; opt-in block mode rejects calls outside the profile. **SUPERSEDED by COMP-MCP-ENFORCE-1 (2026-06-04 reconciliation):** re-filed as COMP-MCP-ENFORCE-1 (\"Was COMP-DEBUG-1\") and shipped COMPLETE 2026-06-02 — phase-scoped MCP tool capabilities (profile × phase CallTool gate); agent-capability profiles in `server/agent-templates.js` are the substrate.",
+  "updated": "2026-06-04",
   "group": "COMP-DEBUG"
 }

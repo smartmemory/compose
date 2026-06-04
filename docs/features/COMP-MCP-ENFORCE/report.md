@@ -1,6 +1,6 @@
-# COMP-MCP-ENFORCE — Implementation Report (Slice 1)
+# COMP-MCP-ENFORCE — Implementation Report (Slices 1–4)
 
-**Status:** SHIPPED (Slice 1) — 2026-06-02. Slices 2–4 remain PLANNED.
+**Status:** SHIPPED (Slices 1–4 + COMP-MCP-ENFORCE-1) — 2026-06-02. `capabilities.guard` enabled in this repo (guard-OFF byte-identical). See [Slices 2–4](#slices-24-shipped-2026-06-02) below.
 **Source:** [`design.md`](./design.md) → [`blueprint.md`](./blueprint.md) → [`plan.md`](./plan.md).
 
 ## 1. Summary
@@ -43,7 +43,7 @@ Lifecycle phase transitions in compose are now **verdict-gated by stratum's STRA
 ## 6. Known Issues & Follow-ups
 
 - **`vision-routes.js` `featuresPath` still reads process-global `loadProjectConfig()`** (pinned to `getTargetRoot()`) for the `/artifacts` routes. The new guard code is workspace-root-aware, but for a non-current served `projectRoot` the artifact routes still consult the global feature dir. **Pre-existing** (not introduced by this slice) and out of Slice 1 scope; the single-workspace default (how compose actually runs) is correct. → file as a multi-workspace config-resolution follow-up.
-- **Slices 2–4 (PLANNED):** collapse the two state machines (lifecycle-as-truth, status as projection); kill `force` → `stratum_guard_override`; evidence-bound completion (`command_exit_zero`/`git_commit_exists` on `ship→complete`); phase-scoped tool capabilities + loopback REST auth. Per the design, COMP-PARITY-7 / COMP-DEBUG-1 are absorbed and COMP-PARITY-5 reduces to a view — that roadmap restatusing lands when the umbrella progresses, not in Slice 1.
+- **Slices 2–4 — SHIPPED 2026-06-02** (see [section below](#slices-24-shipped-2026-06-02)): collapsed the two state machines (lifecycle-as-truth, status as projection); killed `force` → `stratum_guard_override`; evidence-bound completion (`command_exit_zero`/`git_commit_exists` on `ship→complete`); phase-scoped tool capabilities + loopback REST auth. The absorbed-row restatusing (COMP-PARITY-7 / COMP-DEBUG-1 → SUPERSEDED, COMP-PARITY-5 reduced to a UI view) landed 2026-06-04.
 
 ## Slices 2–4 (shipped 2026-06-02)
 
