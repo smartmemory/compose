@@ -2,6 +2,15 @@
 
 ## 2026-06-04
 
+### chore(roadmap): reconcile COMP-PARITY-5/7 + COMP-DEBUG-1 status vs shipped COMP-MCP-ENFORCE
+
+Roadmap-metadata reconciliation surfaced by a forge-top sync audit: three rows stayed `PLANNED` after their work shipped/was absorbed under **COMP-MCP-ENFORCE** (Slices 1–4, 2026-06-02). The ENFORCE `report.md` itself deferred the restatusing ("lands when the umbrella progresses") and it was never done. No code change — `feature.json` (canonical) + `ROADMAP.md` (render) kept in sync; `roadmap check` green (fixed point, lossless); `compose validate` error count unchanged (no new errors).
+
+- **COMP-PARITY-7 → SUPERSEDED** — its one-way-sync gap was closed by ENFORCE Slice 2 (lifecycle-as-truth, `phaseToStatus`/`projectFeatureStatus`).
+- **COMP-DEBUG-1 → SUPERSEDED** — re-filed as **COMP-MCP-ENFORCE-1** ("Was COMP-DEBUG-1"), shipped COMPLETE. `## COMP-DEBUG` phase heading → SUPERSEDED.
+- **COMP-PARITY-5 → PLANNED (reduced scope)** — enforcement half absorbed by ENFORCE (guard verdict-gate + evidence-bound completion + loopback REST auth); only the UI-view residual remains. Kept PLANNED rather than PARTIAL (never started; PARTIAL would falsely trip `MISSING_DESIGN_ARTIFACT`).
+- **COMP-MCP-ENFORCE/report.md** header corrected: Slice 1 → Slices 1–4 shipped.
+
 ### feat(COMP-PAR-MERGE-QUEUE-CONSUMER): per-task pre-merge gate on the consumer-dispatch path (v1: gate + surfacing)
 
 Extends the per-task pre-merge gate + structured bounce to Compose's **consumer-dispatch** path (`executeParallelDispatch` → `stratum_parallel_done`) — the default for `compose build` (agents run in Compose, not Stratum's `_run_one`; the parent feature only covered server-dispatch/GSD). v1 ships the gate + bounce surfacing; the retry-with-context loop is deferred (see follow-up).

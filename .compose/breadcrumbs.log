@@ -502,3 +502,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-03T11:22:22+08:00 | COMP-GSD-6-WATCHDOG impl: config + clearGsdPause + heartbeat timer + supervisor watch/kill/race
 2026-06-03T23:27:46+08:00 | COMP-GSD-7-EVENTLOG design: append-only events.jsonl at gsd lifecycle points; report timeline consumes it
 2026-06-03T23:43:37+08:00 | COMP-GSD-7-EVENTLOG impl: events.jsonl + gsd.js emit points + report timeline consumer
+2026-06-04T23:14:43+08:00 | Reconcile dangling roadmap rows: PARITY-7/DEBUG-1 absorbed by COMP-MCP-ENFORCE (→SUPERSEDED), PARITY-5 reduced to UI view (→PARTIAL); restatusing deferred by ENFORCE report.md and never done
