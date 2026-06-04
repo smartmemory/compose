@@ -469,3 +469,36 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-05-29T21:21:05+07:00 | #39 codex r3: apply narrative suppression at validateFeature too (per-feature CLI/MCP scope), shared applyNarrativeSuppression + _deferNarrative so project still emits single info
 2026-05-29T22:44:39+07:00 | Fix stratum#1: correct pip install stratum→stratum-mcp in docs, rename vendored kernel to stop shadowing PyPI
 2026-06-02T13:39:13+08:00 | Finalize COMP-MCP-ENFORCE design + roadmap: absorb COMP-PARITY-7/COMP-DEBUG-1, lifecycle-as-truth, Slice 1 guards lifecycle endpoints
+2026-06-02T14:14:43+08:00 | Writing COMP-RESUME design doc (env-based resumability spine) into feature folder
+2026-06-02T14:26:10+08:00 | COMP-RESUME: writing plan.md then TDD-executing checkpoint subsystem slices S1-S11
+2026-06-02T14:28:55+08:00 | COMP-RESUME S2/S3: checkpoint git wrapper + env fingerprint + classify (TDD)
+2026-06-02T14:29:10+08:00 | COMP-RESUME S4/S5: checkpoint store registry + jsonl backend + atomic helpers
+2026-06-02T14:29:21+08:00 | COMP-RESUME S6+S11-render: scribe/reconcile prompt builders + checkpoint markdown render (pure string fns, TDD)
+2026-06-02T14:41:42+08:00 | COMP-RESUME: fixed 5 Codex boundary findings (build-stream path code fix + blueprint S8/S9/S10/config), re-validating
+2026-06-02T14:45:18+08:00 | COMP-RESUME S7: anchor.js best-effort boundary checkpoint capture + test
+2026-06-02T14:45:53+08:00 | S8 reconciler.js — deterministic resume reconcile() + decideAfterSync(), lifecycleMutations backfill, classify-driven resume/needs-sync
+2026-06-02T15:19:32+08:00 | COMP-RESUME: final full-suite verification before ship
+2026-06-02T16:51:51+08:00 | COMP-MCP-ENFORCE Slice 1: blueprint guarded transitions via stratum guard CLI seam
+2026-06-02T20:16:51+08:00 | folded test:integration into npm test gate; verifying full gate green
+2026-06-02T22:34:01+08:00 | reconcile stale COMP-MCP-ENFORCE PARTIAL→COMPLETE — Slices 1–4 + ENFORCE-1 all shipped & merged, guard enabled; verified vs git log + CHANGELOG
+2026-06-02T22:45:16+08:00 | reconcile COMP-GSD-3 PLANNED→PARTIAL — worktree/merge core already shipped via Stratum substrate; residual = COMP-PAR-MERGE-QUEUE
+2026-06-02T22:54:24+08:00 | GSD-5 Phase 1 design — stuck detection: tool_use event-stream observer + reuse debug-discipline primitives, halt+diagnostic on stuck
+2026-06-02T23:44:09+08:00 | Implementing COMP-GSD-5 stuck detection (detector, dispatch wiring, gsd resume, CLI flag) via TDD
+2026-06-02T23:53:00+08:00 | reconcile 8 error-level status-mismatch validate findings: validator PARTIAL≡in_progress vision-vocab projection (root-cause for COMP-MCP-MIGRATION-2-1) + refresh 3 stale vision-state statuses (COMP-GSD, COMP-GSD-3, COMP-WORKSPACE-HTTP) to reality
+2026-06-03T07:01:13+08:00 | COMP-GSD-4: implement budget ceilings for gsd runs (contract, ledger, gsd-budget helpers, gsd.js wiring, build.js short-circuit, CLI)
+2026-06-03T07:59:06+08:00 | COMP-GSD-6 Phase 1: design doc for headless+crash-recovery, Codex-reviewed (2 rounds)
+2026-06-03T08:20:59+08:00 | COMP-GSD-6 Phase 4/5: blueprint + boundary map, seam-verified, Codex coherence loop to CLEAN
+2026-06-03T08:24:01+08:00 | COMP-GSD-6 Phase 7 S01+S02: gsd-state.js (atomic checkpoint + deriveRunStatus) + gsd-state.json contract, TDD
+2026-06-03T08:32:18+08:00 | COMP-GSD-6 Phase 7 S03+S04: build.js onHeartbeat seam + gsd.js run-state wiring (run.lock, state flushes, failed-catch, crash-bridge, stale-lock takeover)
+2026-06-03T08:34:48+08:00 | COMP-GSD-6 Phase 7 S05+S06: headless config policy + supervisor auto-resume loop
+2026-06-03T08:36:38+08:00 | COMP-GSD-6 Phase 7 S07: gsd query CLI sub-route + --headless dispatch + buildGsdQuery precedence
+2026-06-03T08:54:24+08:00 | COMP-GSD-6 Phase 7 review-loop: fix stale-state misclassify, atomic lock takeover, killed->failed, supervisor budget.json precedence + tests
+2026-06-03T09:02:00+08:00 | COMP-GSD-6 Phase 8/9: report, CHANGELOG, ROADMAP COMPLETE, feature.json COMPLETE, journal session 49
+2026-06-03T10:21:50+08:00 | COMP-GSD-7 Phase 1: design for GSD milestone HTML report generator (docs/ output, timing sidecar, compose-side diff/timing capture)
+2026-06-03T10:28:05+08:00 | COMP-GSD-7 Phase 4-6: verified blueprint (anchors, Boundary Map, C1 resolved via context.gsd marker) + plan (S1-S6 TDD slices)
+2026-06-03T10:39:00+08:00 | COMP-GSD-7 Phase 7: implement S1-S5 (timing sidecar, report generator, build instrumentation, gsd completion wiring, gsd report CLI)
+2026-06-03T11:05:11+08:00 | COMP-GSD-7 S6: ship — report.md, CHANGELOG, ROADMAP+umbrella COMPLETE, journal session 50
+2026-06-03T11:11:03+08:00 | COMP-GSD-6-WATCHDOG design: hung-child watchdog in headless supervisor (race exit vs heartbeat-stale poll, kill+resume)
+2026-06-03T11:22:22+08:00 | COMP-GSD-6-WATCHDOG impl: config + clearGsdPause + heartbeat timer + supervisor watch/kill/race
+2026-06-03T23:27:46+08:00 | COMP-GSD-7-EVENTLOG design: append-only events.jsonl at gsd lifecycle points; report timeline consumes it
+2026-06-03T23:43:37+08:00 | COMP-GSD-7-EVENTLOG impl: events.jsonl + gsd.js emit points + report timeline consumer
