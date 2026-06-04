@@ -1,0 +1,17 @@
+{
+  "code": "COMP-PAR-MERGE-QUEUE",
+  "description": "Dynamic post-dispatch merge gate for parallel_dispatch (the dynamic complement to STRAT-PAR-2's static no_file_conflicts). **SHIPPED 2026-06-04.** Each task runs a configurable per-task **pre-merge verify gate** (`pre_merge_verify`, default `pnpm lint`+`pnpm build`) in its worktree BEFORE its diff is captured/merged; a non-zero gate marks the task failed and skips its diff. Both failure kinds — gate-failed (Stratum-side) and merge-conflict (Compose-side) — produce a structured ParMergeBounce record that is surfaced on `ensure_failed.bounced_tasks[]` AND injected into the re-dispatched task's prompt server-side (Stratum `ParallelExecutor._render_prompt`). Implementation discovered + fixed two blueprint-missed gaps (bounce delivery must be server-side; parallel-step retry routing) under the full-fix scope. Cross-repo: stratum (IR field + worktree gate + bounce channel + reprompt) + compose (conflict bounce + server-owned parallel retry loop + gsd wiring). v1 = server-dispatch only. Stratum 1409 + compose 3401 tests green; Codex review 3 rounds → CLEAN. **Closes COMP-GSD-3.**",
+  "status": "COMPLETE",
+  "phase": "Standalone Tickets",
+  "created": "2026-06-04",
+  "updated": "2026-06-04",
+  "complexity": "L",
+  "position": 1,
+  "links": [
+    {
+      "kind": "unblocks",
+      "to_code": "COMP-GSD-3"
+    }
+  ],
+  "group": "Standalone"
+}

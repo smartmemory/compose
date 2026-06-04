@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-06-04
+
+### feat(COMP-PAR-MERGE-QUEUE): per-task pre-merge gate + bounce-with-context — closes COMP-GSD-3
+
+A dynamic post-dispatch merge gate for `parallel_dispatch`: each task runs a fast per-task **pre-merge verify gate** (default `pnpm lint` + `pnpm build`) in its worktree *before* its diff is captured/merged, so a task whose gate fails (or whose diff conflicts at merge) is rejected before it can pollute base — and re-runs **informed**, with the failure context injected into its next prompt. Cross-repo (stratum primary + compose consumer); v1 = server-dispatch (the GSD/build path). Closes the COMP-GSD-3 residual.
+
+- **GSD wiring** (`lib/gsd.js`, `pipelines/gsd.stratum.yaml`): a `pre_merge_gate` flow input (`resolvePreMergeGate`, default `DEFAULT_FAST_GATE` = lint+build, honors `.compose/compose.json#preMergeGate` / the non-test subset of `gateCommands`) is **single-sourced** into both the enforced gate (`execute.pre_merge_verify: $.input.pre_merge_gate`) and the instructed per-task gate; the `execute` step gains `defer_advance: true`. Full `pnpm test` stays at `ship_gsd`.
+- **Merge-conflict bounce** (`lib/build.js`): `extractConflictFiles` + `buildMergeConflictBounce`; the deferred-advance path sends a structured `{status:'conflict', bounced_tasks:[…]}` advance payload instead of a bare `'conflict'`.
+- **Server-owned parallel retry loop** (`lib/build.js`): `executeParallelDispatchServer` now owns the parallel retry — on an `ensure_failed`/`schema_failed` parallel outcome it **re-dispatches the same step** (carrying `isolation`/`capture_diff` forward so the re-run still merges), depth-capped, returning only terminal results; `build_step_done` fires once on the terminal attempt. `runGsd` treats a terminal `error` (retries_exhausted) as a clean failure instead of throwing. Replaces the old behavior where a parallel failure leaked to the single-agent retry path / threw `unknown response status`.
+- **Bounce delivery moved server-side** (the Compose-side `buildRetryPrompt`/`buildBounceSection` injection was removed as dead — Stratum re-resolves tasks on re-dispatch, so the injection lives in Stratum's `ParallelExecutor._render_prompt`; see stratum CHANGELOG).
+- **Contract** `contracts/par-merge-bounce.json` (`ParMergeBounce`).
+- Reconciled **COMP-GSD-3 PARTIAL → COMPLETE** and the **COMP-GSD umbrella → COMPLETE**.
+- Compose `node --test` 3401 passing (new: `test/par-merge-queue.test.js`, `test/parallel-dispatch-server-defer.test.js` re-dispatch cases); Codex review 3 rounds → CLEAN (round 1 caught two blueprint-missed must-fixes: server-side bounce delivery + parallel retry routing). `docs/features/COMP-PAR-MERGE-QUEUE/`.
+
 ## 2026-06-03
 
 ### feat(COMP-GSD-7-EVENTLOG): append-only GSD run-event log + real report timeline

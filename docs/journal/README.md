@@ -10,6 +10,7 @@ Each entry is a dated session log capturing what we tried, what broke, what we l
 
 | Date | Entry | Summary |
 |------|-------|---------|
+| 2026-06-04 | [Session 53: COMP-PAR-MERGE-QUEUE: per-task pre-merge gate + bounce-with-context (closes COMP-GSD-3)](2026-06-04-session-53-par-merge-queue.md) | Per-task pre-merge verify gate + gate/conflict bounce-into-reprompt; Codex round 1 caught two blueprint-missed must-fixes (server-side bounce delivery, parallel retry routing); full fix made executeParallelDispatchServer own the parallel retry loop. Closes COMP-GSD-3 + the COMP-GSD umbrella. |
 | 2026-06-03 | [Session 52: COMP-GSD-7-EVENTLOG: append-only run-event log + real report timeline](2026-06-03-session-52-gsd-7-eventlog.md) | COMP-GSD-7-EVENTLOG: append-only run-event log + real report timeline |
 | 2026-06-03 | [Session 51: COMP-GSD-6-WATCHDOG: hung-child detection for the headless supervisor](2026-06-03-session-51-gsd-6-watchdog.md) | COMP-GSD-6-WATCHDOG: hung-child detection for the headless supervisor |
 | 2026-06-03 | [Session 50: COMP-GSD-7: milestone HTML report generator — closes the COMP-GSD umbrella](2026-06-03-session-50-gsd-7-milestone-report.md) | COMP-GSD-7: milestone HTML report generator — closes the COMP-GSD umbrella |

@@ -134,7 +134,15 @@ describe('executeParallelDispatchServer — defer-advance conflict path', () => 
         dispatch, stratum, { filesChanged: [] }, null, streamWriter, repo,
       );
       assert.equal(advanceCalls.length, 1);
-      assert.equal(advanceCalls[0].mergeStatus, 'conflict');
+      // COMP-PAR-MERGE-QUEUE: a conflict now sends a STRUCTURED payload carrying a
+      // merge_conflict bounce record (task id + files), not a bare 'conflict' string.
+      const payload = advanceCalls[0].mergeStatus;
+      assert.equal(payload.status, 'conflict');
+      assert.ok(Array.isArray(payload.bounced_tasks) && payload.bounced_tasks.length === 1);
+      const bounce = payload.bounced_tasks[0];
+      assert.equal(bounce.reason, 'merge_conflict');
+      assert.equal(bounce.task_id, 'ty');
+      assert.ok(bounce.files.includes('shared.txt'));
       assert.equal(resp.status, 'complete');
       assert.equal(resp.output?.outcome, 'failed');
       assert.equal(resp.output?.merge_status, 'conflict');
@@ -225,6 +233,111 @@ describe('executeParallelDispatchServer — advance error propagates', () => {
         ),
         /stratum_parallel_advance failed: spec_integrity_violation/,
       );
+    } finally {
+      delete process.env.COMPOSE_SERVER_DISPATCH_POLL_MS;
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+});
+
+// COMP-PAR-MERGE-QUEUE: a parallel step that fails its pre-merge gate / require /
+// merge comes back as ensure_failed carrying the parallel surface. The server
+// dispatcher must RE-DISPATCH it as a parallel step (not leak it to the outer
+// single-agent retry), bounded by Stratum's retry cap.
+function makeSeqStub({ startResult, pollResults, advanceResults }) {
+  let pollIdx = 0, advIdx = 0, startCount = 0;
+  const advanceCalls = [];
+  return {
+    advanceCalls,
+    startCount: () => startCount,
+    stratum: {
+      parallelStart: async () => { startCount += 1; pollIdx = 0; return startResult; },
+      parallelPoll: async () => {
+        // Fresh clone per poll — the real MCP poll returns a new JSON object each
+        // time; production mutates pollResult.outcome, so a shared reference would
+        // leak the previous pass's advance result into the next poll.
+        const r = structuredClone(pollResults[Math.min(pollIdx, pollResults.length - 1)]);
+        pollIdx += 1;
+        return r;
+      },
+      parallelAdvance: async (flowId, stepId, mergeStatus) => {
+        advanceCalls.push({ flowId, stepId, mergeStatus });
+        const r = advanceResults[Math.min(advIdx, advanceResults.length - 1)];
+        advIdx += 1;
+        return r;
+      },
+    },
+  };
+}
+
+describe('executeParallelDispatchServer — parallel ensure_failed re-dispatch', () => {
+  it('re-dispatches the parallel step on ensure_failed, stops on complete', async () => {
+    const repo = initRepo('redispatch', { 'seed.txt': 'x\n' });
+    const dispatch = {
+      flow_id: 'f1', step_id: 's1', step_number: 1, total_steps: 1,
+      tasks: [{ id: 'tx' }], isolation: 'worktree', capture_diff: true,
+    };
+    const sentinelPoll = {
+      flow_id: 'f1', step_id: 's1',
+      summary: { pending: 0, running: 0, complete: 1, failed: 0, cancelled: 0 },
+      tasks: { tx: { task_id: 'tx', state: 'complete' } }, // no diff → clean merge
+      require_satisfied: true, can_advance: false,
+      outcome: { status: 'awaiting_consumer_advance', aggregate: {} },
+    };
+    // First advance: the step failed its gate (ensure_failed + parallel surface).
+    // Second advance: the re-run succeeded (complete).
+    const ensureFailed = {
+      status: 'ensure_failed', flow_id: 'f1', step_id: 's1',
+      step_number: 1, total_steps: 1, isolation: 'worktree',
+      tasks: [{ id: 'tx' }],
+      violations: ['require not satisfied'],
+      bounced_tasks: [{ task_id: 'tx', reason: 'gate_failed', files: ['a.ts'], command: 'pnpm build', exit_code: 1, excerpt: 'boom' }],
+    };
+    const complete = { status: 'complete', output: { outcome: 'complete' } };
+    const stub = makeSeqStub({
+      startResult: { status: 'started' },
+      pollResults: [sentinelPoll],
+      advanceResults: [ensureFailed, complete],
+    });
+    process.env.COMPOSE_SERVER_DISPATCH_POLL_MS = '5';
+    try {
+      const resp = await executeParallelDispatchServer(
+        dispatch, stub.stratum, { filesChanged: [] }, null, sw(), repo,
+      );
+      assert.equal(resp.status, 'complete', 'final result is the successful re-run');
+      assert.equal(stub.startCount(), 2, 'parallel step was re-dispatched exactly once');
+      assert.equal(stub.advanceCalls.length, 2);
+    } finally {
+      delete process.env.COMPOSE_SERVER_DISPATCH_POLL_MS;
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it('does NOT re-dispatch when the parallel step completes (no regression)', async () => {
+    const repo = initRepo('no-redispatch', { 'seed.txt': 'x\n' });
+    const dispatch = {
+      flow_id: 'f1', step_id: 's1', step_number: 1, total_steps: 1,
+      tasks: [{ id: 'tx' }], isolation: 'worktree', capture_diff: true,
+    };
+    const sentinelPoll = {
+      flow_id: 'f1', step_id: 's1',
+      summary: { pending: 0, running: 0, complete: 1, failed: 0, cancelled: 0 },
+      tasks: { tx: { task_id: 'tx', state: 'complete' } },
+      require_satisfied: true, can_advance: true,
+      outcome: { status: 'awaiting_consumer_advance', aggregate: {} },
+    };
+    const stub = makeSeqStub({
+      startResult: { status: 'started' },
+      pollResults: [sentinelPoll],
+      advanceResults: [{ status: 'complete', output: { outcome: 'complete' } }],
+    });
+    process.env.COMPOSE_SERVER_DISPATCH_POLL_MS = '5';
+    try {
+      const resp = await executeParallelDispatchServer(
+        dispatch, stub.stratum, { filesChanged: [] }, null, sw(), repo,
+      );
+      assert.equal(resp.status, 'complete');
+      assert.equal(stub.startCount(), 1, 'no re-dispatch on success');
     } finally {
       delete process.env.COMPOSE_SERVER_DISPATCH_POLL_MS;
       rmSync(repo, { recursive: true, force: true });

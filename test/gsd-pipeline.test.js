@@ -52,11 +52,14 @@ test('flow has three steps with expected ids', () => {
   assert.deepEqual(ids, ['decompose_gsd', 'execute', 'ship_gsd']);
 });
 
-test('flow inputs include featureCode and gateCommands', () => {
+test('flow inputs include featureCode, gateCommands, and pre_merge_gate', () => {
   const inputs = spec.flows.gsd.input;
   assert.ok(inputs.featureCode);
   assert.ok(inputs.gateCommands);
   assert.equal(inputs.gateCommands.type, 'array');
+  // COMP-PAR-MERGE-QUEUE: the fast per-task enforced gate.
+  assert.ok(inputs.pre_merge_gate);
+  assert.equal(inputs.pre_merge_gate.type, 'array');
 });
 
 test('decompose_gsd has correct ensure postconditions', () => {
@@ -122,8 +125,17 @@ test('ship_gsd does NOT precondition on plan.md or report.md', () => {
   assert.doesNotMatch(step.intent, /report\.md/);
 });
 
-test('decompose_gsd intent embeds gateCommands input reference', () => {
+test('decompose_gsd intent embeds the fast pre_merge_gate (single-sourced with the enforced gate)', () => {
   const step = spec.flows.gsd.steps.find((s) => s.id === 'decompose_gsd');
-  assert.match(step.intent, /\{input\.gateCommands\}/);
+  // COMP-PAR-MERGE-QUEUE: the per-task instructed gate == the enforced gate.
+  assert.match(step.intent, /\{input\.pre_merge_gate\}/);
+  assert.equal(step.inputs.pre_merge_gate, '$.input.pre_merge_gate');
+  // gateCommands input is still mapped (retained for the full ship-time suite).
   assert.equal(step.inputs.gateCommands, '$.input.gateCommands');
+});
+
+test('execute enforces the pre-merge gate and defers advance (COMP-PAR-MERGE-QUEUE)', () => {
+  const step = spec.flows.gsd.steps.find((s) => s.id === 'execute');
+  assert.equal(step.defer_advance, true, 'defer_advance enables consumer merge + conflict-bounce');
+  assert.equal(step.pre_merge_verify, '$.input.pre_merge_gate', 'enforced fast gate per task worktree');
 });
