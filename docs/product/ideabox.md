@@ -90,6 +90,11 @@
 **Source:** gsd-build/gsd-2
 **Idea:** GSD-2 declares per-unit-type tool surfaces in a `UnitContextManifest` (planning units cannot Write; execution units can; researchers cannot Edit). CI guards the manifest. Stratum already has per-step tool restrictions but they're per-call; lifting them to per-step-type with a CI-checked manifest is the same shape, sharper. Prevents drift like "the planner agent silently gained Edit and started writing code from a planning step."
 
+#### IDEA-16 — Peer-interrogation fault attribution for batch builds
+**Status:** NEW | **Priority:** — | **Tags:** review fault-attribution concurrency stratum research-influence
+**Source:** POIROT (arXiv 2606.02282, 2026-06-03)
+**Idea:** When a parallel/GSD batch build fails (or before the merge queue commits), run a POIROT-style attribution pass instead of guessing: each slice-building agent (1) self-assesses its own trajectory, (2) interrogates peers' contract assumptions via structured exchange, (3) **privately** emits a binary blame vector over structural axes (which slice/step/contract/file), (4) distance-weighted aggregation picks the blamed component — a mechanically-checkable attribution, not prose. Three principles worth stealing even standalone: **private voting before aggregation** (prevents reviewer/lens herding — worth auditing whether STRAT-REV's Claude lenses + Codex leak verdicts to each other), **blame structural components not vibes**, and **the build-agents themselves audit** (complements, doesn't replace, the external Codex pass). Directly targets the known batch-build fault gap (shared build-stream, last-writer-wins, coverage-agent confusion — `project_compose_idempotency_gaps`) and the cross-feature contract mismatches per-feature reviews miss (`feedback_integration_review`). POIROT shows the layer only pays off at high complexity/fanout (a strong single model wins at low complexity), so gate it on agent-count. **Depends on** Umbrella B concurrency primitives (IDEA-11/14). BLAME benchmark (injected faults + ground-truth attribution annotations) is a template for *measuring* whether integration review catches what we claim it does.
+
 ---
 
 ### Umbrella D — Cockpit & loop ergonomics
