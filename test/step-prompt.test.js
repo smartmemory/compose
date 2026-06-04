@@ -4,7 +4,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildStepPrompt, buildRetryPrompt, buildFlowStepPrompt } from '../lib/step-prompt.js';
+import { buildStepPrompt, buildRetryPrompt, buildFlowStepPrompt, formatBounceForPrompt } from '../lib/step-prompt.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -173,4 +173,42 @@ test('T10.5 — buildRetryPrompt with two conflict pairs — both listed', () =>
   assert.ok(prompt.includes('src/foo.js'), 'should list src/foo.js');
   assert.ok(prompt.includes('src/bar.js'), 'should list src/bar.js');
   assert.ok(prompt.includes('src/baz.js'), 'should list src/baz.js');
+});
+
+// ---------------------------------------------------------------------------
+// formatBounceForPrompt — COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY (W1)
+// Compose-side mirror of Stratum's _format_bounce_for_prompt (parallel_exec.py).
+// ---------------------------------------------------------------------------
+
+test('formatBounceForPrompt: gate_failed includes command, exit code, files, excerpt', () => {
+  const out = formatBounceForPrompt({
+    task_id: 't2', reason: 'gate_failed', command: 'pnpm build',
+    exit_code: 1, files: ['src/a.js', 'src/b.js'], excerpt: 'TypeError: boom',
+  });
+  assert.match(out, /rejected before merge/i);
+  assert.match(out, /pnpm build/);
+  assert.match(out, /exit 1/);
+  assert.match(out, /src\/a\.js, src\/b\.js/);
+  assert.match(out, /TypeError: boom/);
+});
+
+test('formatBounceForPrompt: merge_conflict uses conflict wording, no command', () => {
+  const out = formatBounceForPrompt({
+    task_id: 't3', reason: 'merge_conflict', files: ['src/c.js'], excerpt: 'patch failed',
+  });
+  assert.match(out, /CONFLICTED/i);
+  assert.match(out, /src\/c\.js/);
+  assert.doesNotMatch(out, /exit/);
+});
+
+test('formatBounceForPrompt: missing exit_code renders ? and missing files renders none', () => {
+  const out = formatBounceForPrompt({ task_id: 't1', reason: 'gate_failed', command: 'pnpm lint' });
+  assert.match(out, /exit \?\)/);
+  assert.match(out, /\(none reported\)/);
+});
+
+test('formatBounceForPrompt: null/garbage input returns empty string', () => {
+  assert.equal(formatBounceForPrompt(null), '');
+  assert.equal(formatBounceForPrompt(undefined), '');
+  assert.equal(formatBounceForPrompt('nope'), '');
 });
