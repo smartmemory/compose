@@ -1,9 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { extractConflictFiles, buildMergeConflictBounce } from '../lib/build.js';
+import { execSync } from 'node:child_process';
+import { extractConflictFiles, buildMergeConflictBounce, runPreMergeGateLocal } from '../lib/build.js';
 import { resolvePreMergeGate } from '../lib/gsd.js';
 
 // COMP-PAR-MERGE-QUEUE — Compose-side merge-conflict bounce + retry-prompt injection.
@@ -53,6 +54,60 @@ describe('buildMergeConflictBounce', () => {
 // SERVER-SIDE (Stratum ParallelExecutor._render_prompt), not via Compose's
 // buildRetryPrompt — the server re-resolves tasks on each re-dispatch. The
 // injection is covered by stratum-mcp/tests/test_par_merge_queue.py.
+
+// COMP-PAR-MERGE-QUEUE-CONSUMER: the Compose-side per-task pre-merge gate runner
+// (consumer-dispatch mirror of Stratum's worktree.run_pre_merge_gate).
+describe('runPreMergeGateLocal', () => {
+  function tmpDir() { return mkdtempSync(join(tmpdir(), 'pmg-local-')); }
+
+  it('returns null when every command passes', () => {
+    assert.equal(runPreMergeGateLocal(tmpDir(), ['git --version'], null, 30000), null);
+  });
+
+  it('returns null for an empty command list', () => {
+    assert.equal(runPreMergeGateLocal(tmpDir(), [], null, 30000), null);
+  });
+
+  it('returns a gate_failed bounce on the first non-zero command', () => {
+    const b = runPreMergeGateLocal(
+      tmpDir(), ['git --version', 'sh -c "echo boom >&2; exit 3"'], null, 30000,
+    );
+    assert.ok(b);
+    assert.equal(b.reason, 'gate_failed');
+    assert.equal(b.command, 'sh -c "echo boom >&2; exit 3"');
+    assert.equal(b.exit_code, 3);
+    assert.match(b.excerpt, /boom/);
+    assert.ok(Array.isArray(b.files));
+  });
+
+  it('bounds the excerpt to ~2KB', () => {
+    const b = runPreMergeGateLocal(
+      tmpDir(),
+      ['sh -c "for i in $(seq 1 5000); do echo XXXXXXXXXX; done; exit 1"'],
+      null, 30000,
+    );
+    assert.ok(b);
+    assert.ok(b.excerpt.length <= 2048);
+  });
+
+  it('lists changed/untracked files in the bounce', () => {
+    const dir = tmpDir();
+    execSync('git init -q', { cwd: dir });
+    writeFileSync(join(dir, 'foo.txt'), 'work\n');
+    const b = runPreMergeGateLocal(dir, ['false'], null, 30000);
+    assert.ok(b);
+    assert.ok(b.files.includes('foo.txt'));
+  });
+
+  it('best-effort symlinks node_modules from base before running', () => {
+    const base = tmpDir();
+    const wt = tmpDir();
+    mkdirSync(join(base, 'node_modules', 'pkg'), { recursive: true });
+    runPreMergeGateLocal(wt, ['git --version'], base, 30000);
+    // The symlink should exist and resolve to base's node_modules.
+    assert.ok(existsSync(join(wt, 'node_modules', 'pkg')));
+  });
+});
 
 describe('resolvePreMergeGate', () => {
   function tmpCwd(config) {
