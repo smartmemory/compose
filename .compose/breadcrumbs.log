@@ -505,3 +505,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-04T23:14:43+08:00 | Reconcile dangling roadmap rows: PARITY-7/DEBUG-1 absorbed by COMP-MCP-ENFORCE (→SUPERSEDED), PARITY-5 reduced to UI view (→PARTIAL); restatusing deferred by ENFORCE report.md and never done
 2026-06-05T07:08:46+08:00 | COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY Phase 1: design.md — retry state model C confirmed at gate (failed-subset + anchor commit); 3 Codex design findings fixed
 2026-06-05T07:33:28+08:00 | COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY Phase 4-5: blueprint + verification; 4 Codex blueprint rounds -> CLEAN (merge-state model: restore-between-rounds, apply-before-parallelDone, temp-index entry snapshot, _parallelRetriesExhausted guard)
+2026-06-05T07:36:50+08:00 | COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY Phase 6-7: plan.md + T1 formatBounceForPrompt (W1) TDD green (13/13 step-prompt)
