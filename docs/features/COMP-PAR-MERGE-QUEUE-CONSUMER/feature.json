@@ -1,0 +1,17 @@
+{
+  "code": "COMP-PAR-MERGE-QUEUE-CONSUMER",
+  "description": "Per-task pre-merge gate + structured bounce on Compose's consumer-dispatch path (executeParallelDispatch -> stratum_parallel_done; the default for `compose build`, agents run in Compose not Stratum's _run_one). **SHIPPED 2026-06-04 (v1 = gate + surfacing).** Stratum surfaces the resolved pre_merge_verify on the parallel_dispatch dispatch envelope (shared resolver; omitted when empty -> byte-identical) and stratum_parallel_done accepts a structured merge_status {status, bounced_tasks}; _evaluate_parallel_results derives human-readable violation strings. Compose's runPreMergeGateLocal runs the gate in each task worktree before diff capture (gate-fail -> task failed + gate_failed bounce + skip diff), and passes gate+conflict bounces to parallelDone. Reuses the parent's ParMergeBounce contract + buildMergeConflictBounce + applyTaskDiffsToBaseCwd. The gate activates for any parallel_dispatch step declaring pre_merge_verify; compose build's default behavior is unchanged unless a step opts in. The retry-with-context loop (D4) + build.stratum.yaml default-OFF opt-in (D5) are DEFERRED to COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY (the consumer retry state-model is heavier than the server path's — Compose applies successful diffs to base before parallelDone). Stratum 1413 + compose 3395 tests green; Codex design gate + impl review -> CLEAN. See report.md.",
+  "status": "COMPLETE",
+  "phase": "Standalone Tickets",
+  "created": "2026-06-04",
+  "updated": "2026-06-04",
+  "complexity": "M",
+  "position": 2,
+  "links": [
+    {
+      "kind": "depends_on",
+      "to_code": "COMP-PAR-MERGE-QUEUE"
+    }
+  ],
+  "group": "Standalone"
+}

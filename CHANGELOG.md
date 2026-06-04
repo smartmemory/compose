@@ -2,6 +2,17 @@
 
 ## 2026-06-04
 
+### feat(COMP-PAR-MERGE-QUEUE-CONSUMER): per-task pre-merge gate on the consumer-dispatch path (v1: gate + surfacing)
+
+Extends the per-task pre-merge gate + structured bounce to Compose's **consumer-dispatch** path (`executeParallelDispatch` → `stratum_parallel_done`) — the default for `compose build` (agents run in Compose, not Stratum's `_run_one`; the parent feature only covered server-dispatch/GSD). v1 ships the gate + bounce surfacing; the retry-with-context loop is deferred (see follow-up).
+
+- **`runPreMergeGateLocal`** (`lib/build.js`): the consumer-dispatch mirror of Stratum's `worktree.run_pre_merge_gate` (node_modules symlink, per-command run, bounded excerpt, changed-files). Runs in each task's worktree in `executeParallelDispatch` **before diff capture**; a gate failure marks the task failed, records a `gate_failed` bounce, emits a `build_error` stream event, and **skips diff capture** so the bad work never merges.
+- **Structured `parallelDone`** (`lib/build.js`): gate-failed + merge-conflict bounces are collected and passed via a structured `{status, bounced_tasks}` `merge_status` (bare string when no bounces — byte-identical). Reuses `buildMergeConflictBounce` + `applyTaskDiffsToBaseCwd` from the parent.
+- **Stratum** (see stratum CHANGELOG): a shared `resolve_pre_merge_verify` surfaces the resolved gate on the dispatch envelope (omitted when empty); `stratum_parallel_done` accepts `merge_status: str | dict`; gate/conflict bounces derive readable `violations` strings.
+- **Activation:** any `parallel_dispatch` step declaring `pre_merge_verify` gets the gate — `compose build`'s default behavior is unchanged unless a step opts in.
+- **Deferred → COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY:** the consumer retry loop (Compose-side bounce-into-reprompt + fixing the pre-existing single-agent mis-route of a parallel `ensure_failed`) + the `build.stratum.yaml` default-OFF opt-in. The consumer retry state-model is heavier than the server path's (Compose applies successful diffs to base before `parallelDone`).
+- Compose 3395 + stratum 1413 tests green; Codex design gate + impl review → CLEAN. `docs/features/COMP-PAR-MERGE-QUEUE-CONSUMER/`.
+
 ### feat(COMP-PAR-MERGE-QUEUE): per-task pre-merge gate + bounce-with-context — closes COMP-GSD-3
 
 A dynamic post-dispatch merge gate for `parallel_dispatch`: each task runs a fast per-task **pre-merge verify gate** (default `pnpm lint` + `pnpm build`) in its worktree *before* its diff is captured/merged, so a task whose gate fails (or whose diff conflicts at merge) is rejected before it can pollute base — and re-runs **informed**, with the failure context injected into its next prompt. Cross-repo (stratum primary + compose consumer); v1 = server-dispatch (the GSD/build path). Closes the COMP-GSD-3 residual.
