@@ -1,11 +1,37 @@
 {
   "code": "COMP-MCP-VALIDATE-3",
   "description": "**vision-state projection from the lifecycle source of truth — close the COMP-MCP-ENFORCE back-projection gap.** Status lives in three surfaces (ROADMAP.md, feature.json, vision-state.json); the typed writers keep feature.json (canonical) + ROADMAP in sync but NEVER touch vision-state, so it drifts as an orphan — e.g. COMP-GSD / COMP-GSD-3 read COMPLETE in ROADMAP+feature.json but IN_PROGRESS in vision-state, indefinitely. COMP-MCP-ENFORCE made the lifecycle the intended single truth projecting to all surfaces, but historical vision-state was never back-projected and nothing reconciles it on write. Project vision-state status from the lifecycle/feature.json truth on every status mutation, plus a one-time back-projection migration. Eliminates STATUS_MISMATCH_ROADMAP_VS_VISION_STATE and STATUS_MISMATCH_FEATUREJSON_VS_VISION_STATE. Related to COMP-MCP-ENFORCE. Surfaced by the 2026-06-05 validate-backlog triage.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-MCP-VALIDATE: Closed-Loop Hardening",
   "created": "2026-06-05",
   "updated": "2026-06-05",
   "complexity": "M",
   "position": 3,
-  "parent": "COMP-MCP-VALIDATE"
+  "parent": "COMP-MCP-VALIDATE",
+  "completions": [
+    {
+      "completion_id": "COMP-MCP-VALIDATE-3:d986e76634fed88340f81fbed441d1e5b3663343",
+      "feature_code": "COMP-MCP-VALIDATE-3",
+      "commit_sha": "d986e76634fed88340f81fbed441d1e5b3663343",
+      "commit_sha_short": "d986e766",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/status-projection.js",
+        "lib/feature-writer.js",
+        "lib/feature-validator.js",
+        "server/vision-store.js",
+        "server/graph-export.js",
+        "src/components/vision/constants.js",
+        "scripts/backproject-vision-status.mjs",
+        "test/status-projection.test.js",
+        "test/feature-writer-vision-projection.test.js",
+        "test/backproject-migration.test.js",
+        "test/feature-validator.integration.test.js"
+      ],
+      "recorded_at": "2026-06-05T11:12:24.337Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Vision-state status projection at the setFeatureStatus chokepoint + one-time back-projection migration. STATUS_MISMATCH_*_VS_VISION_STATE 38->0. Codex design+blueprint+impl CLEAN; full suite green."
+    }
+  ],
+  "commit_sha": "d986e76634fed88340f81fbed441d1e5b3663343"
 }
