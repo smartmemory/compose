@@ -12,10 +12,6 @@
       "to_code": "COMP-DESIGN"
     },
     {
-      "kind": "depends_on",
-      "to_code": "COMP-SPECFLOW"
-    },
-    {
       "kind": "related",
       "to_code": "STRAT-REV"
     }
