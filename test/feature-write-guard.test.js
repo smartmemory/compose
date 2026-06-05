@@ -188,6 +188,15 @@ describe('linkFeatures integration', () => {
     const f = readFeature(root, 'COMP-A');
     assert.equal(f.links[0].to_code, 'COMP-GONE');
   });
+  test('idempotent retry of a forced dangling link no-ops (does not re-throw)', async () => {
+    const root = newFixture();
+    writeFeature(root, base('COMP-A'));
+    await linkFeatures(root, { from_code: 'COMP-A', to_code: 'COMP-GONE', kind: 'depends_on', force: true });
+    // Re-issuing the same (still-dangling) link WITHOUT force must no-op, not throw.
+    const r = await linkFeatures(root, { from_code: 'COMP-A', to_code: 'COMP-GONE', kind: 'depends_on' });
+    assert.equal(r.noop, true);
+    assert.equal(readFeature(root, 'COMP-A').links.length, 1);
+  });
 });
 
 describe('corpus regression', () => {
