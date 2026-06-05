@@ -513,3 +513,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-05T10:01:34+08:00 | tests: silence expected emitDrift WARN across both suites via shared stderr-filter preload (node --import + vitest setupFiles)
 2026-06-05T12:22:23+08:00 | validator: external-prefix codes skip ALL local-correspondence checks (completion/artifact/status/row-schema/folder/changelog) — clears 75 STRAT-* false positives
 2026-06-05T12:25:39+08:00 | validate errors: fix 2 invalid link kinds (COMP-BMAD informs→related, COMP-PAR-MERGE-QUEUE unblocks→blocks)
+2026-06-05T12:31:36+08:00 | validate errors: drop 2 dangling links (COMP-BMAD→COMP-SPECFLOW, COMP-GSD-1→COMP-BOUNDARY-MAP) — targets never existed; provenance stays in prose
