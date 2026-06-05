@@ -1,0 +1,17 @@
+{
+  "code": "COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY-1",
+  "description": "Fix undefined `response` reference in executeParallelDispatch review-scaffold branch (likely a typo for dispatchResponse)",
+  "status": "PLANNED",
+  "phase": "Standalone Tickets",
+  "created": "2026-06-05",
+  "updated": "2026-06-05",
+  "complexity": "S",
+  "position": 4,
+  "parent": "COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY"
+    }
+  ]
+}
