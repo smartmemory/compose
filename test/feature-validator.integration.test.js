@@ -280,3 +280,25 @@ test('STATUS_MISMATCH vs vision: malformed vision status "partial" still aligns 
   assert.ok(result.findings.some((f) => f.feature_code === 'VPART-1' && f.kind === 'VISION_STATE_SCHEMA_VIOLATION'),
     'the schema violation for vision status "partial" must still be reported');
 });
+
+test('STATUS_MISMATCH vs vision: feature SUPERSEDED aligns with vision "superseded" (COMP-MCP-VALIDATE-3)', async () => {
+  // The write-side projection maps SUPERSEDED → 'superseded'; the validator now
+  // shares that mapping, so a feature whose vision status was projected from a
+  // SUPERSEDED feature must NOT false-fire a status mismatch.
+  const root = mkdtempSync(join(tmpdir(), 'fv-vsup-'));
+  mkdirSync(join(root, '.compose', 'data'), { recursive: true });
+  mkdirSync(join(root, 'docs', 'features', 'VSUP-1'), { recursive: true });
+  writeFileSync(join(root, 'docs', 'features', 'VSUP-1', 'feature.json'),
+    JSON.stringify({ code: 'VSUP-1', status: 'SUPERSEDED', description: 'x' }));
+  writeFileSync(join(root, 'docs', 'features', 'VSUP-1', 'design.md'), '# d');
+  writeFileSync(join(root, '.compose', 'data', 'vision-state.json'), JSON.stringify({
+    items: [{ id: '00000000-0000-0000-0000-00000000a7c9', type: 'feature', featureCode: 'VSUP-1',
+              status: 'superseded' }],
+    connections: [], gates: [],
+  }));
+  writeFileSync(join(root, 'ROADMAP.md'),
+    '# R\n\n## Phase 1\n\n| # | Feature | Description | Status |\n|---|---|---|---|\n| 1 | VSUP-1 | x | SUPERSEDED |\n');
+  const result = await validateProject(root);
+  assert.equal(visionMismatches(result.findings, 'VSUP-1').length, 0,
+    `feature SUPERSEDED aligns with vision 'superseded' — no status drift; got ${JSON.stringify(visionMismatches(result.findings, 'VSUP-1').map((f) => f.detail))}`);
+});

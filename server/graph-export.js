@@ -24,6 +24,7 @@ const STATUS_MAP = {
   parked: 'parked',
   complete: 'complete',
   killed: 'complete',
+  superseded: 'complete',
 };
 
 const EDGE_TYPE_MAP = {

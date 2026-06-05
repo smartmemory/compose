@@ -28,9 +28,10 @@ export const STATUS_COLORS = {
   blocked: '#ef4444',     // rose — blocked
   parked: '#475569',      // dim slate — on hold
   killed: '#1e293b',      // near-bg — cancelled
+  superseded: '#6b5b8a',  // muted violet — replaced/archived
 };
 
-export const STATUSES = ['planned', 'ready', 'in_progress', 'review', 'complete', 'blocked', 'parked', 'killed'];
+export const STATUSES = ['planned', 'ready', 'in_progress', 'review', 'complete', 'blocked', 'parked', 'killed', 'superseded'];
 
 export const PHASES = ['vision', 'specification', 'planning', 'implementation', 'verification', 'release'];
 
