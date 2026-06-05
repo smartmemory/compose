@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const VALID_TYPES = ['feature', 'bug', 'track', 'idea', 'decision', 'question', 'thread', 'artifact', 'task', 'spec', 'evaluation'];
-export const VALID_STATUSES = ['planned', 'ready', 'in_progress', 'review', 'complete', 'blocked', 'parked', 'killed'];
+export const VALID_STATUSES = ['planned', 'ready', 'in_progress', 'review', 'complete', 'blocked', 'parked', 'killed', 'superseded'];
 export const VALID_CONNECTION_TYPES = ['informs', 'blocks', 'supports', 'contradicts', 'implements'];
 export const VALID_PHASES = ['vision', 'specification', 'planning', 'implementation', 'verification', 'release'];
 

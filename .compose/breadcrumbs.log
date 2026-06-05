@@ -518,3 +518,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-05T17:02:25+08:00 | COMP-MCP-VALIDATE-1 Phase 1: design write-time feature.json validation (chokepoint schema guard + typed-writer existence check)
 2026-06-05T17:22:59+08:00 | COMP-MCP-VALIDATE-1: blueprint + Codex-driven revisions (self-contained scanRoadmapRows, no memo, repair COMP-ROADMAP-GRAPH-1)
 2026-06-05T17:43:45+08:00 | COMP-MCP-VALIDATE-1: implement write-time link-shape + existence guard, scoped to /links per SCHEMA-TIGHTEN deferral
+2026-06-05T18:35:09+08:00 | COMP-MCP-VALIDATE-3 design: vision-state projection at setFeatureStatus chokepoint + back-projection migration + shared mapping helper
