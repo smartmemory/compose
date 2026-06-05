@@ -509,3 +509,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-05T07:52:42+08:00 | T2: D5 opt-in wiring — export startFresh + thread optional preMergeGate into planInputs (omit when off), YAML input+verify
 2026-06-05T08:17:16+08:00 | T4 done: consumer-path retry loop + .owner diff-capture fix; starting T5 mis-route guard
 2026-06-05T09:23:49+08:00 | CONSUMER-RETRY-1: TDD regression test + fix for unbound response→dispatchResponse in executeParallelDispatch review scaffold
+2026-06-05T09:51:24+08:00 | validator: honor externalPrefixes for ROADMAP_ROW_WITHOUT_FOLDER (STRAT-* cross-repo rows) + config fallback in loadValidationContext

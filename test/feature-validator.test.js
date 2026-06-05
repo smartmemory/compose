@@ -143,6 +143,35 @@ test('ROADMAP_ROW_WITHOUT_FOLDER: PARTIAL is warning (sub-tickets may live elsew
   assert.equal(f.severity, 'warning');
 });
 
+test('ROADMAP_ROW_WITHOUT_FOLDER: external-prefix row is skipped (folder lives in the owning repo)', async () => {
+  const root = newFixture();
+  // STRAT-* is an external namespace (Stratum repo); its folder is never expected
+  // here, so folder-linkage does not apply. A non-external row is the control.
+  writeRoadmap(root, [{ code: 'STRAT-99', status: 'COMPLETE' }, { code: 'FEAT-1', status: 'COMPLETE' }]);
+  const r = await validateProject(root, { externalPrefixes: ['STRAT-'] });
+  assert.ok(
+    !r.findings.some((x) => x.kind === 'ROADMAP_ROW_WITHOUT_FOLDER' && x.feature_code === 'STRAT-99'),
+    'external-prefix row must not trip ROADMAP_ROW_WITHOUT_FOLDER',
+  );
+  const ctrl = r.findings.find((x) => x.kind === 'ROADMAP_ROW_WITHOUT_FOLDER' && x.feature_code === 'FEAT-1');
+  assert.ok(ctrl, 'a non-external row without a folder is still flagged');
+  assert.equal(ctrl.severity, 'warning');
+});
+
+test('ROADMAP_ROW_WITHOUT_FOLDER: externalPrefixes read from .compose/compose.json when not in options (CLI path)', async () => {
+  const root = newFixture();
+  // The `compose validate` CLI calls validateProject WITHOUT options.externalPrefixes,
+  // so the config value must be the fallback — otherwise every external row trips.
+  writeFileSync(join(root, '.compose', 'compose.json'),
+    JSON.stringify({ version: 2, externalPrefixes: ['STRAT-'] }, null, 2));
+  writeRoadmap(root, [{ code: 'STRAT-99', status: 'COMPLETE' }]);
+  const r = await validateProject(root);
+  assert.ok(
+    !r.findings.some((x) => x.kind === 'ROADMAP_ROW_WITHOUT_FOLDER' && x.feature_code === 'STRAT-99'),
+    'config externalPrefixes must suppress the external row-without-folder finding even without options',
+  );
+});
+
 test('FOLDER_WITHOUT_FEATURE_JSON (info)', async () => {
   const root = newFixture();
   writeRoadmap(root, [{ code: 'FEAT-1', status: 'IN_PROGRESS' }]);
