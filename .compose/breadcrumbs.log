@@ -515,3 +515,5 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-05T12:25:39+08:00 | validate errors: fix 2 invalid link kinds (COMP-BMAD informs→related, COMP-PAR-MERGE-QUEUE unblocks→blocks)
 2026-06-05T12:31:36+08:00 | validate errors: drop 2 dangling links (COMP-BMAD→COMP-SPECFLOW, COMP-GSD-1→COMP-BOUNDARY-MAP) — targets never existed; provenance stays in prose
 2026-06-05T15:04:54+08:00 | file 3 validate-hardening gap tickets (write-time validation, reconcile/--fix, vision-state projection) surfaced by the validate-backlog triage
+2026-06-05T17:02:25+08:00 | COMP-MCP-VALIDATE-1 Phase 1: design write-time feature.json validation (chokepoint schema guard + typed-writer existence check)
+2026-06-05T17:22:59+08:00 | COMP-MCP-VALIDATE-1: blueprint + Codex-driven revisions (self-contained scanRoadmapRows, no memo, repair COMP-ROADMAP-GRAPH-1)
