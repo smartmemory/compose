@@ -396,7 +396,11 @@ export function writeFeatureGroupToDisk(item, newGroup, featuresDir) {
     spec.updated = new Date().toISOString().slice(0, 10);
   }
 
-  // COMP-MCP-VALIDATE-1: never persist a malformed link shape via the vision route.
+  // COMP-MCP-VALIDATE-1: never persist a malformed link shape via the vision
+  // route. Existence (DANGLING) is intentionally NOT checked here: this path
+  // only mutates `group`, so it cannot introduce a new dangling link, and
+  // re-validating existence would wrongly block a group rename on a feature that
+  // already carries a (possibly legitimately forced) forward-ref.
   try {
     assertValidLinkShape(spec);
   } catch (err) {
