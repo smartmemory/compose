@@ -21,10 +21,13 @@ function freshCwd() {
 }
 
 function seed(cwd, code, links, extra = {}) {
+  // Fixture planter: some tests intentionally seed malformed / boundary-escaping
+  // external links to exercise downstream resolver guards, so bypass the
+  // COMP-MCP-VALIDATE-1 write-time link guard here.
   writeFeature(cwd, {
     code, description: 'd', status: 'PLANNED', phase: 'P', position: 1,
     created: '2026-05-02', updated: '2026-05-02', links, ...extra,
-  });
+  }, 'docs/features', { validate: false });
 }
 
 describe('reconcileExpect (pure)', () => {

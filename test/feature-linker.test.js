@@ -256,11 +256,17 @@ describe('linkFeatures', () => {
     assert.equal(f2.links, undefined);
   });
 
-  test('to_code does not need to exist yet', async () => {
+  test('forward-ref to a not-yet-filed target requires force (COMP-MCP-VALIDATE-1)', async () => {
     const cwd = freshCwd();
     await seed(cwd, 'LP-1');
+    // Without force, a dangling target is now rejected at write time.
+    await assert.rejects(
+      () => linkFeatures(cwd, { from_code: 'LP-1', to_code: 'NOT-YET-FILED-1', kind: 'follow_up' }),
+      (e) => e.kind === 'DANGLING_LINK_FEATURES_TARGET',
+    );
+    // With force, the intentional forward-reference is persisted.
     const r = await linkFeatures(cwd, {
-      from_code: 'LP-1', to_code: 'NOT-YET-FILED-1', kind: 'follow_up',
+      from_code: 'LP-1', to_code: 'NOT-YET-FILED-1', kind: 'follow_up', force: true,
     });
     assert.equal(r.to_code, 'NOT-YET-FILED-1');
   });

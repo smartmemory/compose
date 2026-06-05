@@ -2328,14 +2328,16 @@ if (cmd === 'build') {
     const featuresRel = ibConfig.paths?.features || 'docs/features'
     const featuresDir = join(ibCwd, featuresRel, resolvedCode)
     if (!existsSync(featuresDir)) {
-      mkdirSync(featuresDir, { recursive: true })
-      writeFileSync(join(featuresDir, 'feature.json'), JSON.stringify({
+      // COMP-MCP-VALIDATE-1: route through the validated writer (schema-guarded)
+      // instead of a raw writeFileSync.
+      const { writeFeature } = await import('../lib/feature-json.js')
+      writeFeature(ibCwd, {
         code: resolvedCode,
         description: idea.title,
         status: 'PLANNED',
         promotedFrom: ideaId,
         createdAt: new Date().toISOString(),
-      }, null, 2))
+      }, featuresRel)
       console.log(`Created feature folder: ${featuresRel}/${resolvedCode}/`)
     }
 
