@@ -1,0 +1,11 @@
+{
+  "code": "COMP-MCP-VALIDATE-2",
+  "description": "**Reconcile / `compose validate --fix` — turn the validator from detect-only into a closed loop.** `validate_project` reports findings but offers no remediation, so every drift becomes manual JSON surgery (the 2026-06-05 triage hand-fixed 4 errors by hand and stalled on 9 more). Add a `--fix`/reconcile mode that applies the canonical fix for the mechanical finding classes: invalid link `kind` → repair to nearest allowed / reject, dangling link → drop, status-surface drift → project from the lifecycle source of truth, PARTIAL-without-artifact → age to PLANNED. Dry-run by default; `--apply` to write; per-class opt-in so judgment-heavy classes stay manual. Depends on COMP-MCP-VALIDATE-1 (write-time validation stops NEW drift) and COMP-MCP-VALIDATE-3 (projection gives the status classes a canonical source). Without it, a human keeps mopping a leak. Surfaced by the 2026-06-05 validate-backlog triage (13 errors, ~605 warnings).",
+  "status": "PLANNED",
+  "phase": "COMP-MCP-VALIDATE: Closed-Loop Hardening",
+  "created": "2026-06-05",
+  "updated": "2026-06-05",
+  "complexity": "L",
+  "position": 2,
+  "parent": "COMP-MCP-VALIDATE"
+}
