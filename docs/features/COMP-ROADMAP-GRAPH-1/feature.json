@@ -12,6 +12,7 @@
       "kind": "external",
       "provider": "local",
       "repo": "smart-memory",
+      "to_code": "META-GRAPH-1",
       "path": "smart-memory-docs/docs/features/META-GRAPH-1/plan.md",
       "note": "First consumer; original SmartMemory-scoped feature that motivated this substrate."
     }

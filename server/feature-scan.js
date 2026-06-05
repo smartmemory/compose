@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { getTargetRoot, resolveProjectPath } from './project-root.js';
+import { assertValidLinkShape } from '../lib/feature-write-guard.js';
 
 // ---------------------------------------------------------------------------
 // Metadata extraction
@@ -393,6 +394,14 @@ export function writeFeatureGroupToDisk(item, newGroup, featuresDir) {
   // Bump updated date if the field exists
   if ('updated' in spec) {
     spec.updated = new Date().toISOString().slice(0, 10);
+  }
+
+  // COMP-MCP-VALIDATE-1: never persist a malformed link shape via the vision route.
+  try {
+    assertValidLinkShape(spec);
+  } catch (err) {
+    console.warn(`[feature-scan] writeFeatureGroupToDisk: invalid feature.json at ${specPath}, not writing: ${err.message}`);
+    return false;
   }
 
   try {

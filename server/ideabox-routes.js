@@ -23,6 +23,7 @@ import {
   updateIdea,
   addDiscussion,
 } from '../lib/ideabox.js'
+import { writeFeature } from '../lib/feature-json.js'
 import { IdeaboxCache } from './ideabox-cache.js'
 
 /**
@@ -182,14 +183,15 @@ export function attachIdeaboxRoutes(app, { getProjectRoot, getDataDir, broadcast
       }
       const featuresDir = path.join(projectRoot, featuresRel, resolvedCode)
       if (!fs.existsSync(featuresDir)) {
-        fs.mkdirSync(featuresDir, { recursive: true })
-        fs.writeFileSync(path.join(featuresDir, 'feature.json'), JSON.stringify({
+        // COMP-MCP-VALIDATE-1: route through the validated writer instead of a
+        // raw fs.writeFileSync so the promoted feature.json is schema-guarded.
+        writeFeature(projectRoot, {
           code: resolvedCode,
           description: sourceIdea.title,
           status: 'PLANNED',
           promotedFrom: sourceIdea.id,
           createdAt: new Date().toISOString(),
-        }, null, 2))
+        }, featuresRel)
       }
 
       promoteIdea(parsed, id, resolvedCode)
