@@ -162,6 +162,22 @@ describe('writeFeature integration', () => {
     const f = readFeature(root, 'COMP-A');
     assert.equal(f.links[0].to_code, 'COMP-LATER');
   });
+  test('a forced forward-ref survives later unrelated writes; new dangling still caught (delta-aware)', async () => {
+    const root = newFixture();
+    writeFeature(root, base('COMP-A'));
+    await linkFeatures(root, { from_code: 'COMP-A', to_code: 'COMP-GONE', kind: 'depends_on', force: true });
+    // Later unrelated write (status change) to the same feature must NOT re-block
+    // on the already-persisted dangling link.
+    assert.doesNotThrow(() => writeFeature(root, { ...readFeature(root, 'COMP-A'), status: 'IN_PROGRESS' }));
+    // But a write that INTRODUCES a new dangling link is still rejected.
+    assert.throws(
+      () => {
+        const f = readFeature(root, 'COMP-A');
+        writeFeature(root, { ...f, links: [...f.links, { kind: 'related', to_code: 'COMP-NEWGONE' }] });
+      },
+      (e) => e instanceof FeatureWriteValidationError && e.kind === 'DANGLING_LINK_FEATURES_TARGET',
+    );
+  });
 });
 
 describe('linkFeatures integration', () => {
