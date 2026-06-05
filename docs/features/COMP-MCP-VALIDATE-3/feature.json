@@ -1,0 +1,11 @@
+{
+  "code": "COMP-MCP-VALIDATE-3",
+  "description": "**vision-state projection from the lifecycle source of truth — close the COMP-MCP-ENFORCE back-projection gap.** Status lives in three surfaces (ROADMAP.md, feature.json, vision-state.json); the typed writers keep feature.json (canonical) + ROADMAP in sync but NEVER touch vision-state, so it drifts as an orphan — e.g. COMP-GSD / COMP-GSD-3 read COMPLETE in ROADMAP+feature.json but IN_PROGRESS in vision-state, indefinitely. COMP-MCP-ENFORCE made the lifecycle the intended single truth projecting to all surfaces, but historical vision-state was never back-projected and nothing reconciles it on write. Project vision-state status from the lifecycle/feature.json truth on every status mutation, plus a one-time back-projection migration. Eliminates STATUS_MISMATCH_ROADMAP_VS_VISION_STATE and STATUS_MISMATCH_FEATUREJSON_VS_VISION_STATE. Related to COMP-MCP-ENFORCE. Surfaced by the 2026-06-05 validate-backlog triage.",
+  "status": "PLANNED",
+  "phase": "COMP-MCP-VALIDATE: Closed-Loop Hardening",
+  "created": "2026-06-05",
+  "updated": "2026-06-05",
+  "complexity": "M",
+  "position": 3,
+  "parent": "COMP-MCP-VALIDATE"
+}

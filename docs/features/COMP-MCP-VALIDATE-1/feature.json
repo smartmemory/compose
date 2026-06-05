@@ -1,0 +1,11 @@
+{
+  "code": "COMP-MCP-VALIDATE-1",
+  "description": "**Write-time schema validation in the typed writers.** Today the feature.json schema (link `kind` enum, `to_code` requirement, required fields) is enforced ONLY on read by `validate_*`; the writers (`feature-writer.js`, scaffold, link creation) persist whatever they are given with no `validateRoot` call. Invalid data lands on disk and is only caught later — e.g. link kinds `informs`/`unblocks` (not in the enum) and dangling `to_code` targets (COMP-SPECFLOW, COMP-BOUNDARY-MAP) sat in feature.json until the pre-push validator flagged them. Reuse the validator's `FEATURE_JSON_SCHEMA` + a cross-ref existence check at write time so the writer rejects (or normalizes) invalid kind/target/shape before commit — single rule set, enforced on write not just read. Closes the source of FEATURE_JSON_SCHEMA_VIOLATION + DANGLING_LINK_FEATURES_TARGET. Surfaced by the 2026-06-05 validate-backlog triage.",
+  "status": "PLANNED",
+  "phase": "COMP-MCP-VALIDATE: Closed-Loop Hardening",
+  "created": "2026-06-05",
+  "updated": "2026-06-05",
+  "complexity": "M",
+  "position": 1,
+  "parent": "COMP-MCP-VALIDATE"
+}
