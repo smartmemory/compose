@@ -2,6 +2,17 @@
 
 ## 2026-06-05
 
+### COMP-MCP-VALIDATE-1 — write-time feature.json link validation
+
+Closes the **source** of `FEATURE_JSON_SCHEMA_VIOLATION` (link-kind) and `DANGLING_LINK_FEATURES_TARGET` by enforcing, at write time, the same rules the read validator (`validate_*`) applied only on read. First slice of the **COMP-MCP-VALIDATE: Closed-Loop Hardening** umbrella (−2 reconcile / −3 vision-state projection still PLANNED).
+
+- **New `lib/feature-write-guard.js`** — a leaf module (imports only the Ajv `SchemaValidator` + the feature-code regex, so the graph stays acyclic) exporting `assertValidLinkShape` (link-shape via the canonical `contracts/feature-json.schema.json`), `assertLinkTargetsExist` (same-project target existence), `knownFeatureCodes` (folders ∪ ROADMAP ∪ vision-state union, mirroring the read validator), `scanRoadmapRows`, and `FeatureWriteValidationError`.
+- **Chokepoint guard** (`writeFeature`, `lib/feature-json.js`): every funnel write (CLI, all three providers, xref-sync, migrate, build-raw, completion) now validates link shape + introduces-existence before `writeFileSync`. The existence check is **delta-aware** — it only validates links a write *introduces* (vs the on-disk `priorLinks`), so a legitimately forced forward-reference is durable across later status/completion/build writes while a genuinely-new dangling link on any raw write is still caught. The prior-read is skipped unless the payload carries same-project targets (the common write stays zero-I/O).
+- **Typed `linkFeatures`** gives an early, friendly `DANGLING` error (after the source-exists guard; the no-op short-circuit precedes it so an idempotent retry of a forced link doesn't throw) and stamps a `forced_dangling` event marker so the one case `force` intentionally allows is auditable.
+- **Bypass writers routed through the guard**: the vision-route group write-back (`server/feature-scan.js`, shape-only by design — group-only mutation can't introduce a dangling link) and both ideabox-promote paths (`server/ideabox-routes.js`, `bin/compose.js`) now go through `writeFeature`. The GitHub provider enforces link-shape on `create`/`put`/`persistRaw` too, making the guarantee uniform across backends.
+- **Scope:** only `/links` violations are gated; `complexity`/`artifacts`/`additionalProperties` tightening stays deferred to `COMP-MCP-VALIDATE-SCHEMA-TIGHTEN` (per the schema's own field comments). `{ validate: false }` opt-out for migration/fixture-planting; `force` / `allowForwardRefs` for intentional forward-refs.
+- Repaired the one shape-invalid corpus file (`COMP-ROADMAP-GRAPH-1` — added the missing `to_code` on its external-local link); a corpus-clean regression test guards against new ones. Codex impl-review CLEAN (3 rounds: GitHub-provider parity, idempotent-retry ordering, forward-ref durability). Full suite green: `node:test` 3455, ui 146, tracker 100. `docs/features/COMP-MCP-VALIDATE-1/`.
+
 ### feat(COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY): consumer-path parallel retry loop + mis-route fix + default-OFF gate opt-in
 
 Closes the deferred D4/D5 of **COMP-PAR-MERGE-QUEUE-CONSUMER**: the consumer-dispatch path (`executeParallelDispatch`, the default for `compose build`) gains a bounded, bounce-injected **retry loop** (design model **C**), the pre-existing single-agent **mis-route** of a parallel `ensure_failed` is fixed for both outer loops, and `build.stratum.yaml` gets a **default-OFF** `pre_merge_gate` opt-in. No Stratum change.
