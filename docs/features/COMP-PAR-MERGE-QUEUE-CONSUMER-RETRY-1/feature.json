@@ -1,7 +1,7 @@
 {
   "code": "COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY-1",
-  "description": "Fix undefined `response` reference in executeParallelDispatch review-scaffold branch (likely a typo for dispatchResponse)",
-  "status": "PLANNED",
+  "description": "Fix undefined `response` reference in executeParallelDispatch review-scaffold branch (typo for dispatchResponse). **SHIPPED 2026-06-05.** Inside `executeParallelDispatch(dispatchResponse, ...)` the `if (isReview)` scaffold branch read `response.inputs?.task` / `response.inputs?.blueprint`, but `response` is unbound in that function (only `dispatchResponse` is in scope) — a latent ReferenceError swallowed by the per-task try/catch that silently failed any review/lens task reaching the scaffold on the consumer-dispatch path. Fix: `response.inputs` -> `dispatchResponse.inputs` (the two startFresh call sites at ~1109/~1734 legitimately keep `response`). TDD regression test in test/par-merge-consumer-retry.test.js drives an isolation:none lens dispatch with dr.inputs={task,blueprint} through the scaffold and asserts the task+blueprint thread into the dispatched prompt (the existing isolation:none test never set lens_name, so isReview stayed false and the bug stayed latent). Full suite green (3429 node --test + 146 + 100 vitest); Codex review CLEAN (1 round).",
+  "status": "COMPLETE",
   "phase": "Standalone Tickets",
   "created": "2026-06-05",
   "updated": "2026-06-05",
@@ -13,5 +13,6 @@
       "kind": "surfaced_by",
       "to_code": "COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY"
     }
-  ]
+  ],
+  "group": "Standalone"
 }

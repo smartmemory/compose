@@ -511,6 +511,63 @@ describe('executeParallelDispatch — consumer-path retry loop (T4/T6)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// CONSUMER-RETRY-1 — review-scaffold branch on the consumer-dispatch path.
+// The `if (isReview)` branch read `response.inputs` — but `response` is unbound
+// inside executeParallelDispatch (only `dispatchResponse` is in scope), so a
+// review/lens task that reached the scaffold threw a ReferenceError swallowed by
+// the per-task try/catch, silently failing the lens. The existing isolation:none
+// test never set lens_name/review_mode, so isReview stayed false and the bug
+// stayed latent. This drives a real review dispatch through the scaffold.
+// ---------------------------------------------------------------------------
+
+describe('executeParallelDispatch — review-scaffold on the consumer path (CONSUMER-RETRY-1)', () => {
+  it('a review/lens task reaches the scaffold without a ReferenceError and threads dispatchResponse.inputs (task + blueprint) into the dispatched prompt', () => {
+    const base = initRepo({ 'seed.txt': 'seed\n' });
+    const prompts = [];
+    let agentRuns = 0;
+    const stratum = {
+      onEvent: () => () => {},
+      cancelAgentRun: async () => {},
+      agentRun: async (_agentType, prompt) => { agentRuns++; prompts.push(prompt); return { text: 'reviewed' }; },
+      parallelDone: async (flowId, stepId, taskResults) => {
+        const failed = taskResults.filter(r => r.status === 'failed');
+        return failed.length
+          ? { status: 'ensure_failed', step_id: stepId, flow_id: flowId, tasks: failed.map(r => ({ id: r.task_id })) }
+          : { status: 'complete', step_id: stepId, flow_id: flowId };
+      },
+    };
+    const events = [];
+    const dr = {
+      tasks: [{ id: 'lensA', lens_name: 'security' }],     // lens_name != null ⇒ isReview true
+      intent_template: 'Run {task.id}',
+      agent: 'claude',
+      flow_id: 'rf', step_id: 'review_lenses', step_number: 2, total_steps: 3,
+      isolation: 'none',
+      // The dispatch carries task/blueprint context via inputs — exactly what the
+      // scaffold must read off `dispatchResponse.inputs`, NOT the unbound `response`.
+      inputs: { task: 'GOLDEN_TASK_DESC', blueprint: 'GOLDEN_BLUEPRINT_TEXT' },
+    };
+
+    return executeParallelDispatch(
+      dr, stratum, { featureCode: 'X', filesChanged: [] }, null, { write: (e) => events.push(e) }, base, null,
+    ).then((env) => {
+      // Pre-fix: buildReviewPrompt({ taskDescription: response.inputs..., blueprint: response.inputs... })
+      // throws ReferenceError (response undefined) → lensA fails → ensure_failed, agentRun never called.
+      // (review-mode runAndNormalize may dispatch a follow-up repair pass when the stub
+      //  output isn't valid ReviewResult JSON, so the count is >= 1, not exactly 1.)
+      assert.ok(agentRuns >= 1, 'the review task reached agentRun (scaffold built without throwing)');
+      assert.equal(env.status, 'complete', 'review task completed — no swallowed ReferenceError');
+      // Post-fix: the scaffold is fed from dispatchResponse.inputs (not the unbound `response`).
+      assert.ok(prompts.some(p => /## Task\n\nGOLDEN_TASK_DESC/.test(p)),
+        'task description threaded from dispatchResponse.inputs.task');
+      assert.ok(prompts.some(p => /## Blueprint\n\nGOLDEN_BLUEPRINT_TEXT/.test(p)),
+        'blueprint threaded from dispatchResponse.inputs.blueprint');
+      rmSync(base, { recursive: true, force: true });
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // T5 — Mis-route guard (W4): a parallel step that exhausted its own retry loop
 // must terminate the outer loops, never get single-agent-retried.
 // ---------------------------------------------------------------------------

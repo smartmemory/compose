@@ -13,6 +13,17 @@ Closes the deferred D4/D5 of **COMP-PAR-MERGE-QUEUE-CONSUMER**: the consumer-dis
 - **Fix (parent-feature latent bug):** the per-task `.owner` worktree-ownership marker is now unstaged before diff capture — it was being captured into every task's diff, so multi-task consumer-dispatch merges conflicted on `.owner` in any repo not gitignoring it.
 - Compose 3426 `node --test` green (new `test/par-merge-consumer-retry.test.js`, 17 tests covering every blueprint test-plan row); Codex impl-review CLEAN (4 rounds: cap source, `isolation:none` emit parity, snapshot-required-for-retry invariant). `docs/features/COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY/`.
 
+### COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY-1 — fix unbound `response` ref in executeParallelDispatch review scaffold
+
+Follow-up to **COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY**, surfaced by its golden integration test. Inside `executeParallelDispatch(dispatchResponse, ...)` (`lib/build.js`) the `if (isReview)` review-scaffold branch read `response.inputs?.task` / `response.inputs?.blueprint` — but `response` is unbound in that function; only `dispatchResponse` is in scope. The result was a latent `ReferenceError`, swallowed by the per-task try/catch, that silently failed any review/lens task reaching the scaffold on the consumer-dispatch path (the default for `compose build`). The two `startFresh` call sites (~1109 main, ~1734 retry) legitimately use `response` and are unchanged.
+
+**Fixed:**
+- `executeParallelDispatch` review-scaffold (`lib/build.js`): `response.inputs` → `dispatchResponse.inputs` for `taskDescription`/`blueprint`, so a consumer-path lens dispatch builds its review scaffold instead of throwing an unbound-reference error.
+- Regression test (`test/par-merge-consumer-retry.test.js`, 'CONSUMER-RETRY-1'): drives an `isolation:none` lens dispatch with `dr.inputs={task,blueprint}` through the scaffold and asserts the task+blueprint thread into the dispatched prompt. The pre-existing `isolation:none` test never set `lens_name`/`review_mode`, so `isReview` stayed false and the bug stayed latent — this is the first test to exercise the scaffold on the consumer path.
+
+**Snapshot:**
+- Full suite green: 3429 `node --test` + 146 vitest UI + 100 vitest tracker. Codex review CLEAN (1 round). `docs/features/COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY-1/`.
+
 ## 2026-06-04
 
 ### chore(roadmap): reconcile COMP-PARITY-5/7 + COMP-DEBUG-1 status vs shipped COMP-MCP-ENFORCE
