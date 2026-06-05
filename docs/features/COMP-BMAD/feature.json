@@ -16,7 +16,7 @@
       "to_code": "COMP-SPECFLOW"
     },
     {
-      "kind": "informs",
+      "kind": "related",
       "to_code": "STRAT-REV"
     }
   ],

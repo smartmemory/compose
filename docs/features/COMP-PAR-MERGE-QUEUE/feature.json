@@ -9,7 +9,7 @@
   "position": 1,
   "links": [
     {
-      "kind": "unblocks",
+      "kind": "blocks",
       "to_code": "COMP-GSD-3"
     }
   ],
