@@ -172,6 +172,38 @@ test('ROADMAP_ROW_WITHOUT_FOLDER: externalPrefixes read from .compose/compose.js
   );
 });
 
+test('external-prefix codes skip ALL local-correspondence checks (completion/artifact/status/folder); non-external control still flagged', async () => {
+  const root = newFixture();
+  // External feature lives in another repo: its changelog/journal/design/report and
+  // its authoritative status all live there, so compose must not flag their absence.
+  writeFileSync(join(root, '.compose', 'compose.json'),
+    JSON.stringify({ version: 2, externalPrefixes: ['STRAT-'] }, null, 2));
+  writeRoadmap(root, [{ code: 'STRAT-FOO-1', status: 'COMPLETE' }, { code: 'COMP-CTRL-1', status: 'COMPLETE' }]);
+  // A CHANGELOG must EXIST for COMPLETION_WITHOUT_CHANGELOG to fire (it flags a
+  // missing entry, not a missing file); it references neither code.
+  writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n\n### OTHER-1 — unrelated\n');
+  // vision-state disagrees with the external row — must NOT raise a status mismatch for it.
+  writeVisionState(root, [
+    { id: '00000000-0000-0000-0000-000000000001', type: 'feature', featureCode: 'STRAT-FOO-1', status: 'in_progress' },
+  ]);
+  const r = await validateProject(root);
+
+  const LOCAL_KINDS = new Set([
+    'ROADMAP_ROW_WITHOUT_FOLDER', 'FOLDER_WITHOUT_ROADMAP_ROW', 'EMPTY_FEATURE_FOLDER',
+    'MISSING_DESIGN_ARTIFACT', 'MISSING_COMPLETION_REPORT', 'COMPLETION_WITHOUT_CHANGELOG',
+    'MISSING_COMPLETION_JOURNAL', 'STATUS_MISMATCH_ROADMAP_VS_VISION_STATE', 'ROADMAP_ROW_SCHEMA_VIOLATION',
+  ]);
+  const leaked = r.findings.filter((f) => f.feature_code === 'STRAT-FOO-1' && LOCAL_KINDS.has(f.kind));
+  assert.deepEqual(leaked.map((f) => f.kind), [],
+    'external code must skip local-correspondence checks');
+
+  // Control: a non-external COMPLETE code with no changelog still trips the warning.
+  assert.ok(
+    r.findings.some((f) => f.feature_code === 'COMP-CTRL-1' && f.kind === 'COMPLETION_WITHOUT_CHANGELOG'),
+    'non-external COMPLETE code is still flagged for the missing changelog entry',
+  );
+});
+
 test('FOLDER_WITHOUT_FEATURE_JSON (info)', async () => {
   const root = newFixture();
   writeRoadmap(root, [{ code: 'FEAT-1', status: 'IN_PROGRESS' }]);

@@ -511,3 +511,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-05T09:23:49+08:00 | CONSUMER-RETRY-1: TDD regression test + fix for unbound response→dispatchResponse in executeParallelDispatch review scaffold
 2026-06-05T09:51:24+08:00 | validator: honor externalPrefixes for ROADMAP_ROW_WITHOUT_FOLDER (STRAT-* cross-repo rows) + config fallback in loadValidationContext
 2026-06-05T10:01:34+08:00 | tests: silence expected emitDrift WARN across both suites via shared stderr-filter preload (node --import + vitest setupFiles)
+2026-06-05T12:22:23+08:00 | validator: external-prefix codes skip ALL local-correspondence checks (completion/artifact/status/row-schema/folder/changelog) — clears 75 STRAT-* false positives
