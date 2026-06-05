@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-06-05
+
+### feat(COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY): consumer-path parallel retry loop + mis-route fix + default-OFF gate opt-in
+
+Closes the deferred D4/D5 of **COMP-PAR-MERGE-QUEUE-CONSUMER**: the consumer-dispatch path (`executeParallelDispatch`, the default for `compose build`) gains a bounded, bounce-injected **retry loop** (design model **C**), the pre-existing single-agent **mis-route** of a parallel `ensure_failed` is fixed for both outer loops, and `build.stratum.yaml` gets a **default-OFF** `pre_merge_gate` opt-in. No Stratum change.
+
+- **Retry loop** (`executeParallelDispatch`, `lib/build.js`): each round re-runs ONLY the failed subset (`taskResults.filter(failed)` — covers gate-failed, schema_failed, and the merge-conflict loser); the round's successful diffs replay onto a throwaway per-round **anchor commit** (`buildAnchorCommit`, dangling commit-tree built through a temp index — base/HEAD untouched) so re-run tasks see prior good work; the real base is restored to an **entry snapshot** (`captureEntrySnapshot`/`restoreToSnapshot`, tracked + untracked via temp index) between rounds, so `applyTaskDiffsToBaseCwd` never double-applies a prior round's union. The union is applied to the base BEFORE `parallelDone` every round (today's order); a single terminal `build_step_done` fires after the terminal `parallelDone` (mirrors `executeParallelDispatchServer`). Retry is **gated on a guaranteed-clean base** (`entrySnapshot !== null`; a restore failure aborts the retry) and is **worktree-only** — `isolation: none` steps (the review lenses) are byte-identical to before (raw envelope, pre-feature emit ordering, no snapshot).
+- **Bounce injection** (`lib/step-prompt.js` `formatBounceForPrompt`, ported from Stratum's `_format_bounce_for_prompt`): a re-run task's prompt carries the prior round's gate-failure / merge-conflict context, appended at the consumer-dispatch task-prompt hook.
+- **Mis-route guard** (W4): `executeParallelDispatch` tags a cap-exhausted terminal `_parallelRetriesExhausted`; `isParallelRetriesExhausted` guards the `ensure_failed`/`schema_failed` branches of both `runBuild` and `executeChildFlow` so a failed parallel step terminates the build instead of being single-agent-retried (which cannot re-run parallel tasks). Keyed on the explicit marker, not a brittle `response.tasks` heuristic.
+- **D5 opt-in** (default-OFF): `runBuild` resolves the gate via `resolvePreMergeGate` only when `capabilities.preMergeGate` is set, threads it through `startFresh` into `planInputs` ONLY when defined (key omitted, not `[]`, when off → byte-identical plan envelope); `build.stratum.yaml` gains a `pre_merge_gate` input + `execute.pre_merge_verify`.
+- **Fix (parent-feature latent bug):** the per-task `.owner` worktree-ownership marker is now unstaged before diff capture — it was being captured into every task's diff, so multi-task consumer-dispatch merges conflicted on `.owner` in any repo not gitignoring it.
+- Compose 3426 `node --test` green (new `test/par-merge-consumer-retry.test.js`, 17 tests covering every blueprint test-plan row); Codex impl-review CLEAN (4 rounds: cap source, `isolation:none` emit parity, snapshot-required-for-retry invariant). `docs/features/COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY/`.
+
 ## 2026-06-04
 
 ### chore(roadmap): reconcile COMP-PARITY-5/7 + COMP-DEBUG-1 status vs shipped COMP-MCP-ENFORCE

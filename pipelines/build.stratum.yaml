@@ -18,6 +18,9 @@ workflow:
     description:
       type: string
       required: true
+    pre_merge_gate:
+      type: array
+      required: false   # COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY: default-OFF per-task gate (lint+build), omitted unless capabilities.preMergeGate
 
 contracts:
   PhaseResult:
@@ -189,6 +192,7 @@ flows:
     input:
       featureCode: {type: string}
       description: {type: string}
+      pre_merge_gate: {type: array}   # COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY: optional per-task pre-merge gate
     output: PhaseResult
     max_rounds: 10
     steps:
@@ -345,6 +349,7 @@ flows:
         isolation: worktree
         capture_diff: true
         defer_advance: true
+        pre_merge_verify: "$.input.pre_merge_gate"   # COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY: optional per-task fast gate (default-OFF)
         require: all
         merge: sequential_apply
         intent_template: >
