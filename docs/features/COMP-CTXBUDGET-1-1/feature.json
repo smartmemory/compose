@@ -1,7 +1,7 @@
 {
   "code": "COMP-CTXBUDGET-1-1",
   "description": "Add `--test-timeout` to the `npm test` node-suite script so a starved/flaky integration test (e.g. proof-run) fails loudly instead of hanging the suite and the pre-push hook indefinitely. (Independent test-infra fix; surfaced by COMP-CTXBUDGET-1, not part of the context-budget skill.)",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-CTXBUDGET: Context Budget Audit",
   "created": "2026-06-06",
   "updated": "2026-06-06",
@@ -13,5 +13,23 @@
       "kind": "surfaced_by",
       "to_code": "COMP-CTXBUDGET-1"
     }
-  ]
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-CTXBUDGET-1-1:0fb22a68abd27a0c8eef2e04683a9f32bade6378",
+      "feature_code": "COMP-CTXBUDGET-1-1",
+      "commit_sha": "0fb22a68abd27a0c8eef2e04683a9f32bade6378",
+      "commit_sha_short": "0fb22a68",
+      "tests_pass": true,
+      "files_changed": [
+        "package.json",
+        "CHANGELOG.md",
+        "docs/features/COMP-CTXBUDGET-1-1/design.md"
+      ],
+      "recorded_at": "2026-06-06T20:23:52.841Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Added --test-timeout=120000 to test/test:integration/test:wave-6. Bounded full suite runs to completion green (node 3516, ui 146, tracker 100); a starved test now fails at 120s instead of hanging forever."
+    }
+  ],
+  "commit_sha": "0fb22a68abd27a0c8eef2e04683a9f32bade6378"
 }
