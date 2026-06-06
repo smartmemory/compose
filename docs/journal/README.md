@@ -10,6 +10,7 @@ Each entry is a dated session log capturing what we tried, what broke, what we l
 
 | Date | Entry | Summary |
 |------|-------|---------|
+| 2026-06-06 | [Session 60: COMP-MCP-VALIDATE-4: fix validator escaped-pipe column-parse false positives — shared splitRoadmapCells across all row-parse sites](2026-06-06-session-60-validate-escaped-pipe-fix.md) | COMP-MCP-VALIDATE-4: fix validator escaped-pipe column-parse false positives — shared splitRoadmapCells across all row-parse sites |
 | 2026-06-06 | [Session 59: COMP-MCP-VALIDATE-2: compose validate --fix closes the validator loop — shared-context reconcile, surgical ROADMAP edit, 4 Codex impl rounds](2026-06-06-session-59-validate-fix-reconcile.md) | COMP-MCP-VALIDATE-2: compose validate --fix closes the validator loop — shared-context reconcile, surgical ROADMAP edit, 4 Codex impl rounds |
 | 2026-06-05 | [Session 58: COMP-MCP-VALIDATE-3: project feature.json status onto vision-state at the setFeatureStatus chokepoint + one-time back-projection; STATUS_MISMATCH_*_VS_VISION_STATE 38→0](2026-06-05-session-58-vision-state-status-projection.md) | COMP-MCP-VALIDATE-3: project feature.json status onto vision-state at the setFeatureStatus chokepoint + one-time back-projection; STATUS_MISMATCH_*_VS_VISION_STATE 38→0 |
 | 2026-06-05 | [Session 57: COMP-MCP-VALIDATE-1: write-time feature.json link validation (chokepoint shape + delta-aware existence)](2026-06-05-session-57-write-time-link-validation.md) | COMP-MCP-VALIDATE-1: write-time feature.json link validation (chokepoint shape + delta-aware existence) |
