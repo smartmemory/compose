@@ -1,0 +1,17 @@
+{
+  "code": "COMP-CTXBUDGET-1-1",
+  "description": "Add `--test-timeout` to the `npm test` node-suite script so a starved/flaky integration test (e.g. proof-run) fails loudly instead of hanging the suite and the pre-push hook indefinitely. (Independent test-infra fix; surfaced by COMP-CTXBUDGET-1, not part of the context-budget skill.)",
+  "status": "PLANNED",
+  "phase": "COMP-CTXBUDGET: Context Budget Audit",
+  "created": "2026-06-06",
+  "updated": "2026-06-06",
+  "complexity": "S",
+  "position": 288,
+  "parent": "COMP-CTXBUDGET-1",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-CTXBUDGET-1"
+    }
+  ]
+}
