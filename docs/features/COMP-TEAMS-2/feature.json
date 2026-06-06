@@ -1,9 +1,25 @@
 {
   "code": "COMP-TEAMS-2",
   "description": "File ownership enforcement: Plan-time validation via `no_file_conflicts` ensure on decompose step. Runtime enforcement deferred to COMP-CAPS-ENFORCE.",
-  "status": "PARTIAL",
+  "status": "COMPLETE",
   "phase": "COMP-TEAMS: Agent Team Presets",
   "position": 148,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-06",
+  "completions": [
+    {
+      "completion_id": "COMP-TEAMS-2:fd95a360170fcd1ba5d095c58b1b9d88f4c5234b",
+      "feature_code": "COMP-TEAMS-2",
+      "commit_sha": "fd95a360170fcd1ba5d095c58b1b9d88f4c5234b",
+      "commit_sha_short": "fd95a360",
+      "tests_pass": true,
+      "files_changed": [
+        "ROADMAP.md"
+      ],
+      "recorded_at": "2026-06-06T01:57:23.366Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Retroactive completion reconciliation: COMP-TEAMS-2 (file-ownership enforcement) v1 shipped — plan-time validation via the no_file_conflicts ensure on the decompose step. Marked complete with the COMP-TEAMS v1 completion (commit fd95a36). Was mislabeled PARTIAL with no design.md. Runtime enforcement remains deferred to COMP-CAPS-ENFORCE as noted in the description."
+    }
+  ],
+  "commit_sha": "fd95a360170fcd1ba5d095c58b1b9d88f4c5234b"
 }

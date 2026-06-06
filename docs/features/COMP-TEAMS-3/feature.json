@@ -1,9 +1,25 @@
 {
   "code": "COMP-TEAMS-3",
   "description": "Team-lead agent pattern: `decompose` step with `claude:orchestrator` serves this role in v1. Dedicated team-lead profile deferred.",
-  "status": "PARTIAL",
+  "status": "COMPLETE",
   "phase": "COMP-TEAMS: Agent Team Presets",
   "position": 149,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-06",
+  "completions": [
+    {
+      "completion_id": "COMP-TEAMS-3:fd95a360170fcd1ba5d095c58b1b9d88f4c5234b",
+      "feature_code": "COMP-TEAMS-3",
+      "commit_sha": "fd95a360170fcd1ba5d095c58b1b9d88f4c5234b",
+      "commit_sha_short": "fd95a360",
+      "tests_pass": true,
+      "files_changed": [
+        "ROADMAP.md"
+      ],
+      "recorded_at": "2026-06-06T01:57:28.318Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Retroactive completion reconciliation: COMP-TEAMS-3 (team-lead agent pattern) v1 shipped — the decompose step with claude:orchestrator serves this role. Marked complete with the COMP-TEAMS v1 completion (commit fd95a36). Was mislabeled PARTIAL with no design.md. A dedicated team-lead profile remains deferred as noted in the description."
+    }
+  ],
+  "commit_sha": "fd95a360170fcd1ba5d095c58b1b9d88f4c5234b"
 }

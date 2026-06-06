@@ -529,8 +529,8 @@ Inspired by [wshobson/agents](https://github.com/wshobson/agents) agent-teams pl
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
 | 147 | COMP-TEAMS-1 | Team presets library (v1): 3 preset configs — `review` (3 reviewers: security/perf/arch), `feature` (decompose + parallel implement + verify), `research` (3 explorers: codebase/web/docs). Stored as `.stratum.yaml` in bundled `presets/`. Two-level template loader (project → bundled fallback). | COMPLETE |
-| 148 | COMP-TEAMS-2 | File ownership enforcement: Plan-time validation via `no_file_conflicts` ensure on decompose step. Runtime enforcement deferred to COMP-CAPS-ENFORCE. | PARTIAL |
-| 149 | COMP-TEAMS-3 | Team-lead agent pattern: `decompose` step with `claude:orchestrator` serves this role in v1. Dedicated team-lead profile deferred. | PARTIAL |
+| 148 | COMP-TEAMS-2 | File ownership enforcement: Plan-time validation via `no_file_conflicts` ensure on decompose step. Runtime enforcement deferred to COMP-CAPS-ENFORCE. | COMPLETE |
+| 149 | COMP-TEAMS-3 | Team-lead agent pattern: `decompose` step with `claude:orchestrator` serves this role in v1. Dedicated team-lead profile deferred. | COMPLETE |
 | 150 | COMP-TEAMS-4 | `compose build --team`: CLI flag rewrites to `--template team-<name>`. Named presets only. Batch rejection. New `read-only-researcher` capability profile for web research. | COMPLETE |
 
 **Dependencies:** STRAT-PAR (parallel dispatch, worktree isolation, `no_file_conflicts`)
@@ -722,7 +722,7 @@ Inspired by [Hub3r7/claude-code-orchestration-template](https://github.com/Hub3r
 | 186 | COMP-AGENT-CAPS-1 | Capability profile schema: `server/agent-templates.js` — 4 profiles with `allowedTools`/`disallowedTools`. `lib/agent-string.js` — centralized `parseAgentString("claude:template")` parser + `resolveAgentConfig()`. | COMPLETE |
 | 187 | COMP-AGENT-CAPS-2 | Profile templates: `read-only-reviewer`, `implementer`, `orchestrator`, `security-auditor`. Resolved by agent string parser at build time. | COMPLETE |
 | 188 | COMP-AGENT-CAPS-3 | Compose enforcement: `build.js` connector factory resolves agent string → template → tool restrictions. `claude-sdk-connector` passes `allowedTools`/`disallowedTools` to SDK. Review sub-flow steps use `claude:orchestrator` and `claude:read-only-reviewer`. `capability_profile` stream events emitted. | COMPLETE |
-| 189 | COMP-AGENT-CAPS-4 | Violation detection: informational logging via stream events in v1. Runtime violation detection (inspecting actual tool_use events against profile) requires normalizer integration — deferred to v2. | PARTIAL |
+| 189 | COMP-AGENT-CAPS-4 | Violation detection: informational logging via stream events in v1. Runtime violation detection (inspecting actual tool_use events against profile) requires normalizer integration — deferred to v2. | COMPLETE |
 
 **Dependencies:** None — standalone, enhances agent dispatch in `compose build`.
 
