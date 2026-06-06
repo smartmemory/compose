@@ -43,6 +43,25 @@ node <compose-root>/lib/context-budget.js <project-root> \
 - Token estimate is a dependency-free ~4-chars-per-token heuristic — **relative budgeting,
   not billing-accurate**. Use it to rank, not to bill.
 
+### Surface vs. live — read this before recommending cuts
+
+The report prints **two numbers per component**: `surface` (full file on disk) and `live`
+(what actually loads into context at session start). They differ because of **progressive
+disclosure**:
+
+- **Skills & agents** load only their **frontmatter (name + description)** at startup; the body
+  loads when the skill/agent is invoked. So a 5K-token skill costs ~40 live tokens until used.
+  **Deleting it reclaims its description, not its body.**
+- **Rules & the CLAUDE.md chain** are inlined into the system prompt at startup → `live == surface`.
+- **MCP tool schemas** load fully *when eagerly loaded*, but tool-deferral harnesses (e.g.
+  ToolSearch) load them on demand — flagged `mcp-may-defer`. Treat their live cost as an upper bound.
+
+**Always reason about cuts in `live` tokens, not `surface`.** TOP 5 RECLAIMS is ranked by live.
+The common trap: a catalog of 50 skills shows a huge `surface` total but a tiny `live` total —
+mass-deleting them reclaims almost nothing while destroying capability. The real micro-levers are
+usually **trimming verbose agent/skill descriptions**, **removing genuinely-unused entries** (their
+descriptions are pure live cost), and **disabling unused MCP servers** (the biggest live line items).
+
 ### Step 3 — Interpret the report
 
 The report prints three buckets and a TOP 5 RECLAIMS list. Walk the user through:

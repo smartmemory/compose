@@ -12,6 +12,7 @@ import {
   auditContextBudget,
   nameReferenced,
   parseToolCounts,
+  extractFrontmatter,
 } from '../lib/context-budget.js';
 
 // ---------- Helpers ----------
@@ -91,6 +92,98 @@ test('estimateTokens lands within ±25% of a word-count×1.3 reference', () => {
 
 test('estimateTokens handles empty string', () => {
   assert.equal(estimateTokens(''), 0);
+});
+
+// ---------- progressive disclosure: live vs surface ----------
+const FM_SKILL =
+  '---\nname: demo\ndescription: A short one-line description.\n---\n\n# Demo Skill\n' +
+  'huge body line\n'.repeat(400);
+
+test('extractFrontmatter returns the fenced block, or null when absent', () => {
+  const fm = extractFrontmatter(FM_SKILL);
+  assert.ok(fm.startsWith('---'));
+  assert.ok(fm.includes('description: A short one-line description.'));
+  assert.ok(!fm.includes('huge body line'));
+  assert.equal(extractFrontmatter('# no frontmatter here\nbody'), null);
+  assert.equal(extractFrontmatter(''), null);
+});
+
+test('skill liveTokens counts only the frontmatter (description), not the body', () => {
+  const home = newDir('cb-home-');
+  const cwd = newDir('cb-cwd-');
+  write(cwd, '.claude/skills/demo/SKILL.md', FM_SKILL);
+  writeFileSync(join(cwd, '.mcp.json'), JSON.stringify({ mcpServers: {} }), 'utf-8');
+  const components = scanSurface({ home, cwd, mcpConfigPath: join(cwd, '.mcp.json') });
+  const demo = components.find((c) => c.label === 'skill:demo');
+  assert.ok(demo.tokens > 500, 'surface counts the full body');
+  assert.ok(demo.liveTokens < 50, 'live counts only the small frontmatter');
+  assert.ok(demo.liveTokens < demo.tokens);
+});
+
+test('rule and claude-md liveTokens equal their full surface (inlined at startup)', () => {
+  const fx = buildFixture();
+  const components = scanSurface({ ...fx, toolCounts: {} });
+  for (const c of components.filter((c) => c.kind === 'rule' || c.kind === 'claude-md')) {
+    assert.equal(c.liveTokens, c.tokens, `${c.label} should load fully`);
+  }
+});
+
+test('mcp-server carries liveTokens and the mcp-may-defer flag', () => {
+  const fx = buildFixture();
+  const components = scanSurface({ ...fx, toolCounts: { compose: 30 } });
+  const compose = components.find((c) => c.kind === 'mcp-server' && c.label.includes('compose'));
+  assert.equal(compose.liveTokens, compose.tokens);
+  assert.ok(compose.flags.includes('mcp-may-defer'));
+});
+
+test('dedupeSkills zeroes liveTokens on the duplicate too', () => {
+  const fx = buildFixture();
+  const deduped = dedupeSkills(scanSurface({ ...fx, toolCounts: {} }));
+  const dup = deduped.find((c) => c.duplicateOf);
+  assert.equal(dup.tokens, 0);
+  assert.equal(dup.liveTokens, 0);
+});
+
+test('buildReport reports totalLiveTokens and renders surface/live; reclaim by live', () => {
+  const home = newDir('cb-home-');
+  const cwd = newDir('cb-cwd-');
+  write(cwd, '.claude/skills/big-unused/SKILL.md', FM_SKILL); // big body, tiny description
+  write(cwd, '.claude/rules/heavy.md', 'x\n'.repeat(300)); // rule: full live cost
+  write(cwd, 'CLAUDE.md', 'nothing referenced');
+  writeFileSync(join(cwd, '.mcp.json'), JSON.stringify({ mcpServers: {} }), 'utf-8');
+  const report = auditContextBudget({ home, cwd, mcpConfigPath: join(cwd, '.mcp.json') });
+
+  assert.ok(report.totalLiveTokens < report.totalTokens, 'live below surface (skill body excluded)');
+  assert.ok(report.text.includes('on disk') && report.text.includes('loaded at startup'));
+  // The heavy rule should out-rank the big skill in reclaims because its LIVE cost is higher.
+  const topLabels = report.topReclaims.map((c) => c.label);
+  if (report.topReclaims.length >= 1) {
+    assert.equal(report.topReclaims[0].label, 'rule:heavy');
+  }
+  assert.ok(topLabels.includes('rule:heavy'));
+});
+
+test('liveTextFor counts only name+description, ignoring extra frontmatter keys', () => {
+  const home = newDir('cb-home-');
+  const cwd = newDir('cb-cwd-');
+  const withExtra =
+    '---\nname: x\ndescription: tiny.\nallowed-tools: ["Bash","Read","Edit","Write","Grep","Glob"]\nmodel: opus\n---\n' +
+    'body\n'.repeat(200);
+  write(cwd, '.claude/skills/x/SKILL.md', withExtra);
+  writeFileSync(join(cwd, '.mcp.json'), JSON.stringify({ mcpServers: {} }), 'utf-8');
+  const c = scanSurface({ home, cwd, mcpConfigPath: join(cwd, '.mcp.json') }).find(
+    (c) => c.label === 'skill:x'
+  );
+  // allowed-tools / model lines must NOT inflate the live estimate.
+  assert.ok(c.liveTokens < 15, `live should be ~name+description only, got ${c.liveTokens}`);
+});
+
+test('buildReport defaults a missing liveTokens to surface tokens (conservative)', () => {
+  const report = buildReport(
+    [{ kind: 'rule', label: 'rule:x', tokens: 100, lines: 5, flags: [] }],
+    { claudeMdText: '', projectType: 'node' }
+  );
+  assert.equal(report.totalLiveTokens, 100, 'unknown liveTokens assumed fully loaded');
 });
 
 // ---------- scanSurface ----------
@@ -231,14 +324,18 @@ test('buildReport partitions buckets, ranks top reclaims, totals de-duped tokens
   const sum = deduped.reduce((a, c) => a + c.tokens, 0);
   assert.equal(report.totalTokens, sum);
 
-  // topReclaims are descending by tokens and drawn from sometimes+rarely only
+  // topReclaims are descending by LIVE tokens and drawn from sometimes+rarely only
   assert.ok(report.topReclaims.length <= 5);
   for (let i = 1; i < report.topReclaims.length; i++) {
-    assert.ok(report.topReclaims[i - 1].tokens >= report.topReclaims[i].tokens);
+    assert.ok(report.topReclaims[i - 1].liveTokens >= report.topReclaims[i].liveTokens);
   }
   for (const r of report.topReclaims) {
     assert.notEqual(r.bucket, 'always');
   }
+
+  // Live total is reported and never exceeds the on-disk surface
+  assert.equal(typeof report.totalLiveTokens, 'number');
+  assert.ok(report.totalLiveTokens <= report.totalTokens);
 
   // Rendered text exists and mentions the total
   assert.ok(typeof report.text === 'string' && report.text.includes('CONTEXT BUDGET'));

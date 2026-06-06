@@ -2,6 +2,17 @@
 
 ## 2026-06-07
 
+### COMP-CTXBUDGET-1-2 — context-budget is now progressive-disclosure-aware
+
+The audit now reports **two numbers per component**: `surface` (full file on disk) and `live` (what actually loads at session start). Claude Code lazy-loads skills/agents — only their `name`+`description` frontmatter loads until invoked — so the prior single number massively over-stated reclaimable context (Forge: ~70.5K "reclaimable" was really **~5.0K live**; deleting the catalog would reclaim descriptions, not bodies, for ~nothing). Now:
+
+- **skills / agents** → `liveTokens` counts only the `name`+`description` fields (robust to extra frontmatter keys; falls back to the whole block only if neither is present).
+- **rules / CLAUDE.md chain** → `live == surface` (inlined into the system prompt at startup).
+- **MCP servers** → `live == surface` plus an `mcp-may-defer` flag (tool-deferral harnesses like ToolSearch load schemas on demand, so treat as an upper bound).
+- **TOP RECLAIMS ranked by live tokens** (what you actually get back); report shows both totals; `buildReport` defaults a missing `liveTokens` conservatively to surface. SKILL.md documents surface-vs-live and the "don't mass-delete lazy-loaded skills" trap.
+
+19→27 `node:test` tests; Codex 2 rounds → CLEAN. Surfaced by dogfooding COMP-CTXBUDGET-1. `docs/features/COMP-CTXBUDGET-1-2/`.
+
 ### CLI — `compose sync` alias for `setup`
 
 Added `sync` as an alias for `compose setup` (both run `runSetup` — mirror compose-owned skills into the agent skill dirs + register stratum-mcp). `sync` better signals the idempotent "reconcile local skills with this install" job you run after editing skills locally, when there's no new version to `compose update` to. Help text and `docs/cli.md` updated.
