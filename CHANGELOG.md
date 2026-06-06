@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-06-07
+
+### COMP-CTXBUDGET-1-1 — bound the test suite with `--test-timeout`
+
+Added `--test-timeout=120000` to every bare `node --test` script (`test`, `test:integration`, `test:wave-6`). Previously the scripts omitted a per-test timeout and node's `--test` has no default, so a starved/flaky integration test (`test/proof-run.test.js` — a real ~25s stratum pipeline, the suite's slowest test) could hang the full suite **forever** under parallel load instead of failing — observed as a 1h+ hang during COMP-CTXBUDGET-1, and a hang risk for the pre-push hook (which hard-gates on bare `npm test`). A starved test now fails loudly at 120s. `test:ui`/`test:tracker` are vitest (own timeouts) — unchanged. Surfaced by COMP-CTXBUDGET-1. `docs/features/COMP-CTXBUDGET-1-1/`.
+
 ## 2026-06-06
 
 ### COMP-CTXBUDGET-1 — `/context-budget` skill: token audit across the loaded surface
