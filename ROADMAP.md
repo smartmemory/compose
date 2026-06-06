@@ -857,6 +857,22 @@ Inspired by [LaneKeep](https://github.com/algorismo-au/lanekeep)'s 7-9 tier eval
 
 ---
 
+## COMP-CTXBUDGET: Context Budget Audit — COMPLETE
+
+Read-only audit of the session-start loaded surface — agents, skills, rules, MCP server tool schemas, and the CLAUDE.md chain. Estimates per-component token cost, classifies each into always / sometimes / rarely needed (with an explaining reason), and prints a ranked cut list with estimated reclaim. Cuts are never auto-applied — the user reviews and decides.
+
+Lifted from ECC (`affaan-m/everything-claude-code`) `skills/context-budget/SKILL.md` competitive scan 2026-05-11. Promoted from IDEA-5.
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 287 | COMP-CTXBUDGET-1 | `/context-budget` skill: token audit across the loaded surface. Logic in `lib/context-budget.js` (pure ESM: `estimateTokens` dependency-free ~4-chars/token heuristic, `scanSurface`, `dedupeSkills` content-hash dedup, `nameReferenced` word-boundary matching, `classifyComponent`, `buildReport`, `auditContextBudget` + CLI guard); thin `.claude/skills/context-budget/SKILL.md` wrapper. MCP tool counts caller-supplied (missing/invalid → `tool-count-unknown`, excluded from totals). Forge baseline ~107.8K tokens, ~55.5K reclaimable. 19 node:test tests; Codex 3 rounds → CLEAN. `docs/features/COMP-CTXBUDGET-1/`. | COMPLETE |
+
+**Dependencies:** None — standalone skill, uses Node built-ins only.
+
+**Exit:** `/context-budget` produces a classified, ranked context report over all five surfaces; duplicate skill copies detected and not double-counted; Forge baseline captured. Read-only — no auto-apply.
+
+---
+
 <!-- preserved-section: dogfooding-milestones -->
 ## Dogfooding Milestones
 

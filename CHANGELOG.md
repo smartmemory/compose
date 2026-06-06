@@ -2,6 +2,15 @@
 
 ## 2026-06-06
 
+### COMP-CTXBUDGET-1 — `/context-budget` skill: token audit across the loaded surface
+
+New read-only `/context-budget` skill that audits the session-start loaded surface — agents, skills, rules, MCP server tool schemas, and the CLAUDE.md chain — estimates per-component token cost, classifies each into **always / sometimes / rarely needed** (with an explaining reason), and prints a ranked cut list with estimated reclaim. Heuristics are guides surfaced *with their reason*; cuts are never auto-applied (the user reviews and decides). Promoted from `IDEA-5` (ECC competitive scan).
+
+- **`lib/context-budget.js` (new)** — pure ESM core: `estimateTokens` (dependency-free ~4-chars/token heuristic, pluggable; relative budgeting, not billing-accurate), `scanSurface`, `dedupeSkills` (content-hash dedup across `compose/.claude/skills/` vs `~/.claude/skills/`, dup zeroed so totals don't double-count), `nameReferenced` (word-boundary, hyphen/space-tolerant — `compose` matches "compose skill" but not "decompose"), `classifyComponent`, `buildReport`, `auditContextBudget`, plus a CLI guard (`node lib/context-budget.js <root> --tool-counts=compose=46,…`). MCP tool counts aren't on disk → caller-supplied; missing/invalid counts flag `tool-count-unknown` and are excluded from totals (no fabrication).
+- **`.claude/skills/context-budget/SKILL.md` (new)** — thin wrapper: gather live tool counts → run the module → interpret buckets + flags (`duplicate`, `wraps-simple-cli`, `over-N-lines`).
+- **Forge baseline captured:** ~107.8K loaded tokens; ~55.5K reclaimable (agent/skill catalog); the compose+stratum MCP schemas (~45K) are load-bearing and kept. `docs/features/COMP-CTXBUDGET-1/report.md`.
+- 19 new `node:test` tests (real temp-FS fixtures); full node suite green (3339). Codex review 3 rounds → CLEAN (caught a negative-count library-API gap the CLI guard masked, locked with a test). `docs/features/COMP-CTXBUDGET-1/`.
+
 ### COMP-MCP-VALIDATE-4 — fix validator escaped-pipe column-parse false positives
 
 `compose validate` was emitting false `STATUS_MISMATCH_ROADMAP_VS_FEATUREJSON` / `STATUS_MISMATCH_ROADMAP_VS_VISION_STATE` / `ROADMAP_ROW_SCHEMA_VIOLATION` / `COMPLEXITY_OR_DESCRIPTION_DRIFT` warnings for ROADMAP rows whose status visually **agreed** with feature.json. Root cause: the validator split table cells with `split('|')`, which also splits on escaped `\|` (the markdown escape for a literal pipe). A description containing `\|` added a phantom column, shifting status-column detection so the validator read description prose as the row's "status" (e.g. `ROADMAP says "FLAG"`). Surfaced by COMP-MCP-VALIDATE-2 dogfooding (3 live rows: COMP-PARITY-1, COMP-CAPS-ENFORCE-4, COMP-ROADMAP-RT-GENFIX).
