@@ -1,11 +1,36 @@
 {
   "code": "COMP-MCP-VALIDATE-2",
   "description": "**Reconcile / `compose validate --fix` — turn the validator from detect-only into a closed loop.** `validate_project` reports findings but offers no remediation, so every drift becomes manual JSON surgery (the 2026-06-05 triage hand-fixed 4 errors by hand and stalled on 9 more). Add a `--fix`/reconcile mode that applies the canonical fix for the mechanical finding classes: invalid link `kind` → repair to nearest allowed / reject, dangling link → drop, status-surface drift → project from the lifecycle source of truth, PARTIAL-without-artifact → age to PLANNED. Dry-run by default; `--apply` to write; per-class opt-in so judgment-heavy classes stay manual. Depends on COMP-MCP-VALIDATE-1 (write-time validation stops NEW drift) and COMP-MCP-VALIDATE-3 (projection gives the status classes a canonical source). Without it, a human keeps mopping a leak. Surfaced by the 2026-06-05 validate-backlog triage (13 errors, ~605 warnings).",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-MCP-VALIDATE: Closed-Loop Hardening",
   "created": "2026-06-05",
-  "updated": "2026-06-05",
+  "updated": "2026-06-06",
   "complexity": "L",
   "position": 2,
-  "parent": "COMP-MCP-VALIDATE"
+  "parent": "COMP-MCP-VALIDATE",
+  "completions": [
+    {
+      "completion_id": "COMP-MCP-VALIDATE-2:89d2b476eeab2a07ab8fbfe2742b6751963cc091",
+      "feature_code": "COMP-MCP-VALIDATE-2",
+      "commit_sha": "89d2b476eeab2a07ab8fbfe2742b6751963cc091",
+      "commit_sha_short": "89d2b476",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/feature-reconciler.js",
+        "lib/feature-writer.js",
+        "lib/feature-json.js",
+        "lib/feature-validator.js",
+        "bin/compose.js",
+        "server/compose-mcp-tools.js",
+        "server/compose-mcp.js",
+        "test/feature-reconciler.test.js",
+        "test/cli-validate-fix.test.js",
+        "test/mcp-validate-fix.test.js"
+      ],
+      "recorded_at": "2026-06-06T03:30:52.989Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Closes COMP-MCP-VALIDATE umbrella. compose validate --fix closed-loop remediation; 5 fix classes; surgical ROADMAP-row edit; local-provider only. Codex design+blueprint+impl CLEAN; full suite green."
+    }
+  ],
+  "commit_sha": "89d2b476eeab2a07ab8fbfe2742b6751963cc091"
 }
