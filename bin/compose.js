@@ -1628,6 +1628,9 @@ if (cmd === 'validate') {
   let blockOn = 'error'
   let asJson = false
   let externalXref = false
+  let doFix = false
+  let doApply = false
+  let fixClasses = null
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
     if (a === '--help' || a === '-h') {
@@ -1639,15 +1642,23 @@ Options:
   --block-on=LEVEL            Exit non-zero if any finding >= LEVEL (default: error)
                               LEVEL: error | warning | info
   --json                      Emit findings as JSON (default: human-readable)
+  --fix                       Reconcile mechanical drift (dry-run: prints a fix plan)
+  --apply                     With --fix, write the fixes (default is dry-run)
+  --fix-class=CSV             Override the fix class set, e.g.
+                              dangling_link,invalid_link_kind,status_fj_vision,
+                              partial_age,roadmap_status_rewrite,invalid_link_kind_repair
 
 Exit codes:
   0   no findings >= block-on threshold
   1   findings >= block-on threshold present
-  2   usage error`)
+  2   usage error (or reconcile refused on a non-local provider)`)
       process.exit(0)
     }
     if (a === '--json') { asJson = true; continue }
     if (a === '--external') { externalXref = true; continue }
+    if (a === '--fix') { doFix = true; continue }
+    if (a === '--apply') { doApply = true; continue }
+    if (a.startsWith('--fix-class=')) { fixClasses = a.slice('--fix-class='.length).split(',').map((s) => s.trim()).filter(Boolean); continue }
     if (a.startsWith('--scope=')) scope = a.slice('--scope='.length)
     else if (a === '--scope') scope = args[++i]
     else if (a.startsWith('--code=')) code = a.slice('--code='.length)
@@ -1695,13 +1706,64 @@ Exit codes:
     process.exit(2)
   }
 
+  // --fix: reconcile mechanical drift. Dry-run prints a plan; --apply writes and
+  // re-validates so the exit code reflects what's left after the fixes.
+  let reconcile = null
+  if (doFix) {
+    const { reconcileProject } = await import('../lib/feature-reconciler.js')
+    reconcile = await reconcileProject(valCwd, {
+      apply: doApply,
+      classes: fixClasses,
+      scope,
+      code,
+      external: externalXref,
+    })
+    if (reconcile.refused === 'non_local_provider') {
+      console.error('compose validate --fix: reconcile is local-provider only (this workspace uses a remote tracker). No changes made.')
+      process.exit(2)
+    }
+    if (doApply) {
+      // Re-validate so findings/exit reflect the post-fix state.
+      result = scope === 'feature'
+        ? await validateFeature(valCwd, code)
+        : await validateProject(valCwd, { external: externalXref })
+    }
+    if (!asJson) {
+      const verb = doApply ? 'applied' : 'would apply'
+      const total = reconcile.plan.length
+      console.log(`compose validate --fix (${doApply ? 'apply' : 'dry-run'}): ${verb} ${total} fix(es)`)
+      for (const e of reconcile.plan) {
+        const cls = e.classes.join(',')
+        console.log(`  [${cls}] ${e.feature_code}: ${e.action}`)
+        console.log(`    before: ${Array.isArray(e.before) ? e.before.join(', ') : e.before}`)
+        console.log(`    after:  ${Array.isArray(e.after) ? e.after.join(', ') : e.after}`)
+      }
+      for (const s of reconcile.skipped_classes || []) {
+        console.log(`  (skipped class ${s.class}: ${s.reason})`)
+      }
+      if (doApply) {
+        const failed = (reconcile.applied || []).filter((a) => !a.ok)
+        if (failed.length) {
+          console.log(`  ${failed.length} fix(es) failed:`)
+          for (const f of failed) console.log(`    ${f.feature_code} ${f.action}: ${f.error}`)
+        }
+        const noops = (reconcile.applied || []).filter((a) => a.ok && a.noop)
+        if (noops.length) {
+          console.log(`  ${noops.length} fix(es) made no change (refused as unsafe/ambiguous; left for manual review):`)
+          for (const n of noops) console.log(`    ${n.feature_code} ${n.action}`)
+        }
+      }
+      console.log('')
+    }
+  }
+
   // Threshold: findings at or above this severity block the exit code
   const SEV_RANK = { error: 3, warning: 2, info: 1 }
   const threshold = SEV_RANK[blockOn]
   const blocking = result.findings.filter((f) => SEV_RANK[f.severity] >= threshold)
 
   if (asJson) {
-    console.log(JSON.stringify(result, null, 2))
+    console.log(JSON.stringify(reconcile ? { ...result, reconcile } : result, null, 2))
   } else {
     const byKind = {}
     for (const f of result.findings) {
