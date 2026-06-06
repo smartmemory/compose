@@ -125,7 +125,8 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  triage    Analyze a feature and recommend build profile')
   console.log('  qa-scope  Show affected routes from a feature\'s changed files')
   console.log('  init      Initialize Compose in the current project')
-  console.log('  setup     Install global skill + register stratum-mcp')
+  console.log('  setup     Install/sync global skills + register stratum-mcp (alias: sync)')
+  console.log('  sync      Re-sync global skills from this install (alias of setup)')
   console.log('  update    Pull latest compose, reinstall deps, refresh global skill')
   console.log('  doctor    Check external skill dependencies')
   console.log('  --version Print compose version, git SHA, and install root')
@@ -682,7 +683,11 @@ if (cmd === 'init') {
   process.exit(0)
 }
 
-if (cmd === 'setup') {
+if (cmd === 'setup' || cmd === 'sync') {
+  // `sync` is an alias for `setup` — both mirror compose-owned skills into the
+  // agent skill dirs and register stratum-mcp. The name `sync` better signals
+  // the idempotent "reconcile local skills with this install" job (run it after
+  // editing skills locally, when there's no new version to `update` to).
   runSetup()
   process.exit(0)
 }

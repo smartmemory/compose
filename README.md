@@ -40,7 +40,7 @@ The package is published to npm as `@smartmemory/compose`. Pick one install styl
 
 ```bash
 npm install -g @smartmemory/compose
-compose setup                # global skill + stratum-mcp registration
+compose setup                # install bundled skills + register stratum-mcp (alias: compose sync)
 ```
 
 **Option B — git clone (for development):**
@@ -81,6 +81,15 @@ Check what you're running:
 ```bash
 compose --version
 ```
+
+## Bundled skills
+
+`compose setup` (alias `compose sync`) mirrors compose-owned skills into your agent skill dirs (`~/.claude/skills/`, shared with Codex). Re-run it after a `compose update` or after editing skills locally — it's idempotent.
+
+- **`/compose`** — the build/fix lifecycle orchestrator (idea → design → blueprint → implement; or triage → fix → verify).
+- **`/context-budget`** — read-only audit of the session-start loaded surface (agents, skills, rules, MCP tool schemas, CLAUDE.md chain). Estimates per-component token cost, classifies each into always / sometimes / rarely needed, and prints a ranked cut list with estimated reclaim. Never auto-applies cuts.
+
+`compose update` fetches a newer compose (npm or git) and then runs setup for you; use `compose sync` when there's no new version to pull — you just changed skills locally.
 
 ## Tracker providers
 
