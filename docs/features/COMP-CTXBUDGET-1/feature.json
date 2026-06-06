@@ -1,0 +1,10 @@
+{
+  "code": "COMP-CTXBUDGET-1",
+  "description": "**`/context-budget` skill: token audit across the loaded surface.** Read-only audit of the session-start loaded surface — agents, skills, rules, MCP server tool schemas, and the CLAUDE.md chain. Estimates per-component token cost (dependency-free ~4-chars/token heuristic, pluggable), classifies each into `always` / `sometimes` / `rarely` needed with an explaining reason, and prints a ranked cut list with estimated reclaim. Detects duplicate skill copies between `compose/.claude/skills/` and `~/.claude/skills/` (content-hash dedup, not double-counted), flags MCP servers that wrap simple CLIs, and over-size files (agents >200, skills >400, rules >100 lines). MCP tool counts are caller-supplied (not on disk); missing/invalid counts flag `tool-count-unknown` and are excluded from totals. Logic in `lib/context-budget.js`; thin `SKILL.md` wrapper. Cuts are never auto-applied (non-goal). Promoted from IDEA-5 (ECC competitive scan).",
+  "status": "COMPLETE",
+  "phase": "COMP-CTXBUDGET: Context Budget Audit",
+  "position": 287,
+  "complexity": "S",
+  "created": "2026-06-06",
+  "updated": "2026-06-06"
+}
