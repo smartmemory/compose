@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://regression.io/compose/roadmap-graph-frontmatter.schema.json",
+  "title": "Roadmap graph node display metadata",
+  "description": "Per-feature display fields for the roadmap dependency graph, sourced from design.md YAML frontmatter or feature.json extension keys. All optional; extra keys ignored. COMP-ROADMAP-GRAPH-1.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Human-readable feature title."
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "description": "Drives node border weight."
+    },
+    "track": {
+      "type": "string",
+      "description": "Project-defined grouping; drives node color via the track->color map."
+    },
+    "desc": {
+      "type": "string",
+      "description": "One-paragraph blurb shown in the node tooltip."
+    }
+  }
+}

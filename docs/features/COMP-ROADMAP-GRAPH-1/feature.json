@@ -1,10 +1,10 @@
 {
   "code": "COMP-ROADMAP-GRAPH-1",
   "description": "**Generated roadmap dependency graph (compose substrate).** Per-project `roadmap-graph.html` derived from compose lifecycle state + `deps.yaml` per feature folder + `design.md` (or `feature.json`) frontmatter metadata. Replaces hand-maintained graph HTML with a deterministic generator (`compose roadmap-graph` subcommand or `mcp__compose__roadmap_graph` tool). Generic across compose-using projects (SmartMemory, ScaleMate, Maya, Coder-Config). Includes deps.yaml schema, idempotent generator, dangling-edge refusal, pre-commit hook + CI gate. Migrated from SmartMemory's META-GRAPH-1 2026-05-23 after recognizing the work is compose-substrate, not SmartMemory-specific. SmartMemory remains the first consumer via thin adoption feature META-GRAPH-1.",
-  "status": "PLANNED",
+  "status": "PARTIAL",
   "phase": "Standalone",
   "position": 1,
   "created": "2026-05-23",
-  "updated": "2026-05-23",
+  "updated": "2026-06-06",
   "group": "COMP-MCP"
 }
