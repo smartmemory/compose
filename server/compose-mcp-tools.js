@@ -431,12 +431,30 @@ export async function toolValidateFeature(args = {}) {
 
 export async function toolValidateProject(args = {}) {
   const { validateProject } = await import('../lib/feature-validator.js');
-  const { external_prefixes, feature_json_mode, external } = args;
-  return validateProject(getTargetRoot(), {
+  const { external_prefixes, feature_json_mode, external, fix, apply, fix_classes } = args;
+  const opts = {
     externalPrefixes: external_prefixes,
     featureJsonMode: feature_json_mode,
     external: external === true,
+  };
+  const result = await validateProject(getTargetRoot(), opts);
+  if (!fix) return result;
+  // COMP-MCP-VALIDATE-2: reconcile mechanical drift. Forwards the same validate
+  // options so the fixer operates on the same context that was validated.
+  const { reconcileProject } = await import('../lib/feature-reconciler.js');
+  const reconcile = await reconcileProject(getTargetRoot(), {
+    apply: apply === true,
+    classes: fix_classes,
+    featureJsonMode: feature_json_mode,
+    externalPrefixes: external_prefixes,
+    external: external === true,
   });
+  // When fixes were applied, re-validate so the returned findings reflect the
+  // post-fix state (closed loop).
+  const finalResult = (apply === true && !reconcile.refused)
+    ? await validateProject(getTargetRoot(), opts)
+    : result;
+  return { ...finalResult, reconcile };
 }
 
 export async function toolBindSession({ featureCode, profile } = {}) {

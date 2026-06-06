@@ -2,6 +2,17 @@
 
 ## 2026-06-06
 
+### COMP-MCP-VALIDATE-2 — reconcile / `compose validate --fix` (closed-loop remediation)
+
+Turns the detect-only cross-artifact validator into a **closed loop**. `compose validate --fix` (and `validate_project {fix:true}` over MCP) reconciles five mechanical drift classes through typed, audited writers — draining the validate backlog instead of hand-fixing JSON. **Dry-run by default**; `--apply` writes; **per-class opt-in** keeps destructive/heuristic classes off unless explicitly selected. Final slice of the **COMP-MCP-VALIDATE: Closed-Loop Hardening** umbrella (with −1 write-time validation and −3 vision-state projection, both shipped).
+
+- **New `lib/feature-reconciler.js` — shared-context reconcile pass.** `reconcileProject(cwd, {apply, classes, scope, code, …})` reuses the validator's now-exported `loadValidationContext`/`loadFeatureContext` to rebuild the *same* `ctx` the detector builds — the **validator itself is unchanged in behavior** (pure detect-only). Status/ROADMAP classes dispatch on the validator's emitted findings (post-projection, narrative-suppressed); link/partial classes derive from `ctx`. Mirroring the detector's exact semantics is the convergence invariant.
+- **Five fix classes.** *Default (non-destructive):* `dangling_link` → drop (per-feature single `rewriteLinks` so one bad link can't block another), `invalid_link_kind` → drop, `status_fj_vision` → reproject vision-state from canonical feature.json via `featureStatusToVisionStatus`. *Opt-in:* `partial_age` (PARTIAL→PLANNED, but only when there are no canonical docs **and** no `artifacts[]` **and** no CHANGELOG evidence), `roadmap_status_rewrite`, and `invalid_link_kind_repair` (edit-distance nearest-allowed).
+- **Surgical ROADMAP-row edit (`setRoadmapRowStatus`).** A full `renderRoadmap()` regeneration was found to *corrupt* hand-authored ROADMAPs — it appends a generated section beside existing rows, leaving duplicate conflicting rows. Replaced with a column-aware single-cell edit that mirrors the validator's row parser, patches the **last** matching row (validator `Map` last-wins), requires an alpha status token, **refuses escaped-pipe rows**, preserves emphasis, and leaves every other byte untouched.
+- **Safety rails.** v1 is **local-provider only** (`GitHubProvider` skips the local existence + narrative guarantees the fixes rely on — reconcile refuses on non-local). `featureJsonMode:false` drops feature.json-mutating classes. Guarded no-ops are reported as `noop` (never claimed as fixes); CLI/MCP **re-validate after `--apply`** so the exit/finding state reflects actual convergence. `writeFeature` hardened to an atomic temp+rename.
+- **Surfaces.** CLI `--fix` / `--apply` / `--fix-class=CSV`; MCP `validate_project` gains `fix` / `apply` / `fix_classes`, returning the plan under `reconcile`.
+- Codex design+blueprint+impl review CLEAN (impl loop caught: per-feature-link convergence, both-side status projection, dropped validate options, GitHub-provider divergence, ROADMAP regeneration corruption, duplicate-row last-wins, non-status-cell mangling, false-success on guarded no-ops — all fixed before ship). Full suite green: `node:test` 3483, ui 146, tracker 100. `docs/features/COMP-MCP-VALIDATE-2/`.
+
 ### chore(validate): clear the 5 blocking `compose validate` errors (roadmap-data hygiene)
 
 Pre-existing data drift unrelated to any feature build, surfaced as advisory at pre-push. Brings `compose validate` to **0 errors** (warnings only).
