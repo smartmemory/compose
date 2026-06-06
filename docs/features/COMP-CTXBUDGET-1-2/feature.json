@@ -1,7 +1,7 @@
 {
   "code": "COMP-CTXBUDGET-1-2",
   "description": "Make context-budget progressive-disclosure-aware: report a real `live startup` token estimate (skills/agents counted at frontmatter description size, since Claude Code loads only name+description until invoked; rules/CLAUDE.md/MCP at full) alongside the on-disk surface, and rank reclaims by live tokens. Fixes the tool over-counting lazy-loaded skill/agent bodies as if loaded at startup.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "COMP-CTXBUDGET: Context Budget Audit",
   "created": "2026-06-06",
   "updated": "2026-06-06",
@@ -13,5 +13,26 @@
       "kind": "surfaced_by",
       "to_code": "COMP-CTXBUDGET-1"
     }
-  ]
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-CTXBUDGET-1-2:52eb01a305b089eb1d08bba1ba608849e0d65054",
+      "feature_code": "COMP-CTXBUDGET-1-2",
+      "commit_sha": "52eb01a305b089eb1d08bba1ba608849e0d65054",
+      "commit_sha_short": "52eb01a3",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/context-budget.js",
+        "test/context-budget.test.js",
+        ".claude/skills/context-budget/SKILL.md",
+        "CHANGELOG.md",
+        "docs/features/COMP-CTXBUDGET-1-2/design.md",
+        "ROADMAP.md"
+      ],
+      "recorded_at": "2026-06-06T21:33:34.925Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Progressive-disclosure-aware: surface vs live tokens per component (skills/agents=name+description only; rules/CLAUDE.md/mcp=full, mcp flagged may-defer). Reclaims ranked by live. Forge: 70.5K surface reclaimable = ~5.0K live. 27 tests; Codex 2 rounds CLEAN; full suite green (3530/146/100)."
+    }
+  ],
+  "commit_sha": "52eb01a305b089eb1d08bba1ba608849e0d65054"
 }
