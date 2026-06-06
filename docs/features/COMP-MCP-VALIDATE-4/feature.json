@@ -1,11 +1,30 @@
 {
   "code": "COMP-MCP-VALIDATE-4",
   "description": "**Validator escaped-pipe column-parse bug — `\\|` in a ROADMAP description produces false STATUS_MISMATCH / ROADMAP_ROW_SCHEMA_VIOLATION warnings.** The cross-artifact validator splits table rows on `split('|')`, which also splits on escaped `\\|`. A description cell containing `\\|` (the standard markdown escape for a literal pipe) adds a phantom column, shifting status-column detection so the validator reads description prose as the row's \"status\" (e.g. ROADMAP says \"FLAG\", feature.json says PLANNED). Surfaced 3 false warnings on the live repo (COMP-PARITY-1, COMP-CAPS-ENFORCE-4, COMP-ROADMAP-RT-GENFIX) whose ROADMAP rows visually agree with feature.json. `lib/roadmap-parser.js` already splits on unescaped pipes only (`/(?<!\\\\)\\|/` + unescape); the read validator (`lib/feature-validator.js`) and `lib/feature-write-guard.js` use the naive split. Fix: share the escaped-pipe-aware splitter across all row-parse sites. Surfaced by COMP-MCP-VALIDATE-2 dogfooding.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "COMP-MCP-VALIDATE: Closed-Loop Hardening",
   "created": "2026-06-06",
   "updated": "2026-06-06",
   "complexity": "S",
   "position": 4,
-  "parent": "COMP-MCP-VALIDATE"
+  "parent": "COMP-MCP-VALIDATE",
+  "completions": [
+    {
+      "completion_id": "COMP-MCP-VALIDATE-4:3c68b6e3ab15300c80b1ca4adbe22749a8215c9c",
+      "feature_code": "COMP-MCP-VALIDATE-4",
+      "commit_sha": "3c68b6e3ab15300c80b1ca4adbe22749a8215c9c",
+      "commit_sha_short": "3c68b6e3",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/roadmap-parser.js",
+        "lib/feature-validator.js",
+        "lib/feature-write-guard.js",
+        "test/validate-escaped-pipe.test.js"
+      ],
+      "recorded_at": "2026-06-06T08:29:59.742Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Fix validator escaped-pipe column-parse false positives via shared splitRoadmapCells. 601→592 findings, 0 errors. Codex CLEAN."
+    }
+  ],
+  "commit_sha": "3c68b6e3ab15300c80b1ca4adbe22749a8215c9c"
 }
