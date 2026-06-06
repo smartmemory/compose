@@ -457,6 +457,57 @@ export async function toolValidateProject(args = {}) {
   return { ...finalResult, reconcile };
 }
 
+// COMP-ROADMAP-GRAPH-1: generate / verify the roadmap dependency graph HTML.
+// Returns small summaries only (counts + warning/dangling lists) — never the
+// HTML body, which would blow the MCP response token cap.
+export async function toolRoadmapGraph({ project, out } = {}) {
+  const { generateRoadmapGraph } = await import('../lib/roadmap-graph/index.js');
+  const cwd = project || getTargetRoot();
+  try {
+    const r = generateRoadmapGraph(cwd, { out });
+    return {
+      path: r.path,
+      nodeCount: r.nodeCount,
+      edgeCount: r.edgeCount,
+      droppedCount: r.droppedCount,
+      warnings: r.warnings,
+    };
+  } catch (err) {
+    if (err && err.code === 'DANGLING_EDGE') {
+      const e = new Error(err.message);
+      e.code = 'DANGLING_EDGE';
+      e.dangling = err.dangling;
+      throw e;
+    }
+    throw err;
+  }
+}
+
+export async function toolRoadmapGraphCheck({ project, out } = {}) {
+  const { checkRoadmapGraph } = await import('../lib/roadmap-graph/index.js');
+  const cwd = project || getTargetRoot();
+  try {
+    const r = checkRoadmapGraph(cwd, { out });
+    return {
+      matches: r.matches,
+      exists: r.exists,
+      path: r.path,
+      diffSummary: r.diffSummary,
+      nodeCount: r.nodeCount,
+      edgeCount: r.edgeCount,
+      warnings: r.warnings,
+    };
+  } catch (err) {
+    if (err && err.code === 'DANGLING_EDGE') {
+      const e = new Error(err.message);
+      e.code = 'DANGLING_EDGE';
+      e.dangling = err.dangling;
+      throw e;
+    }
+    throw err;
+  }
+}
+
 export async function toolBindSession({ featureCode, profile } = {}) {
   let result;
   try {

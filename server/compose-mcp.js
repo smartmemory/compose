@@ -59,6 +59,8 @@ import {
   toolGetCompletions,
   toolValidateFeature,
   toolValidateProject,
+  toolRoadmapGraph,
+  toolRoadmapGraphCheck,
   toolSetWorkspace,
   toolGetWorkspace,
   toolWriteCheckpoint,
@@ -380,6 +382,28 @@ const TOOLS = [
         fix: { type: 'boolean', description: 'COMP-MCP-VALIDATE-2: reconcile mechanical drift. Returns a fix plan under `reconcile` (dry-run unless apply:true). Local-provider only.' },
         apply: { type: 'boolean', description: 'With fix:true, write the fixes and re-validate. Default false (dry-run plan only).' },
         fix_classes: { type: 'array', items: { type: 'string' }, description: 'Override the enabled fix classes: dangling_link, invalid_link_kind, status_fj_vision, partial_age, roadmap_status_rewrite, invalid_link_kind_repair. Default: the non-destructive set.' },
+      },
+    },
+  },
+  {
+    name: 'roadmap_graph',
+    description: 'COMP-ROADMAP-GRAPH-1: generate a self-contained roadmap dependency-graph HTML from feature.json status/phase + per-feature deps.yaml edges + display frontmatter. Drops COMPLETE/SUPERSEDED/KILLED nodes; refuses (DANGLING_EDGE) when any edge points at an unknown feature. Deterministic/idempotent. Returns a small summary (path + counts + warnings), never the HTML body.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', description: 'Project root path. Default: current workspace.' },
+        out: { type: 'string', description: 'Output HTML path (relative to project root unless absolute). Default: compose.json#roadmap_graph.out or roadmap-graph.html.' },
+      },
+    },
+  },
+  {
+    name: 'roadmap_graph_check',
+    description: 'COMP-ROADMAP-GRAPH-1: render the roadmap graph in-memory and diff against the on-disk HTML without writing. Returns { matches, exists, diffSummary, counts, warnings }. matches:false means the file is stale/missing — run roadmap_graph. Raises DANGLING_EDGE on a bad edge.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', description: 'Project root path. Default: current workspace.' },
+        out: { type: 'string', description: 'Output HTML path to compare against. Default: compose.json#roadmap_graph.out or roadmap-graph.html.' },
       },
     },
   },
@@ -709,6 +733,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_completions':          result = await toolGetCompletions(args); break;
       case 'validate_feature':         result = await toolValidateFeature(args); break;
       case 'validate_project':         result = await toolValidateProject(args); break;
+      case 'roadmap_graph':            result = await toolRoadmapGraph(args); break;
+      case 'roadmap_graph_check':      result = await toolRoadmapGraphCheck(args); break;
       case 'propose_followup':         result = await toolProposeFollowup(args); break;
       case 'write_checkpoint':         result = await toolWriteCheckpoint(args); break;
       case 'compose_resume':           result = await toolComposeResume(args); break;

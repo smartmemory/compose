@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://regression.io/compose/roadmap-deps.schema.json",
+  "title": "Roadmap graph dependency manifest (deps.yaml)",
+  "description": "Per-feature-folder edge declarations for the roadmap dependency graph. All keys optional; absent means no edges of that kind. COMP-ROADMAP-GRAPH-1.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "depends_on": {
+      "type": "array",
+      "description": "Feature codes that are prerequisites of this feature.",
+      "items": { "$ref": "#/definitions/featureCode" }
+    },
+    "concurrent_with": {
+      "type": "array",
+      "description": "Sibling feature codes with no blocking relationship.",
+      "items": { "$ref": "#/definitions/featureCode" }
+    },
+    "blocks": {
+      "type": "array",
+      "description": "Feature codes that this feature is a prerequisite of (inverse convenience).",
+      "items": { "$ref": "#/definitions/featureCode" }
+    }
+  },
+  "definitions": {
+    "featureCode": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$"
+    }
+  }
+}

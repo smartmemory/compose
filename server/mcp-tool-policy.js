@@ -34,7 +34,7 @@ const REVIEWER_ALLOW = [
   'get_vision_items', 'get_item_detail', 'get_phase_summary', 'get_blocked_items',
   'get_current_session', 'get_feature_lifecycle', 'get_feature_artifacts', 'get_feature_links',
   'get_pending_gates', 'get_changelog_entries', 'get_journal_entries', 'get_completions',
-  'validate_feature', 'validate_project', 'roadmap_diff', 'assess_feature_artifacts',
+  'validate_feature', 'validate_project', 'roadmap_diff', 'roadmap_graph_check', 'assess_feature_artifacts',
   'set_workspace', 'get_workspace', 'bind_session',
 ];
 

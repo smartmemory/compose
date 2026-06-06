@@ -1154,6 +1154,47 @@ if (cmd === 'roadmap') {
     process.exit(0)
   }
 
+  // compose roadmap graph — generate a self-contained dependency-graph HTML
+  // from feature.json + deps.yaml + frontmatter (COMP-ROADMAP-GRAPH-1).
+  if (subcmd === 'graph') {
+    const { generateRoadmapGraph, checkRoadmapGraph } = await import('../lib/roadmap-graph/index.js')
+    let cwd
+    const projIdx = args.indexOf('--project')
+    if (projIdx !== -1 && args[projIdx + 1]) {
+      cwd = resolve(args[projIdx + 1])
+    } else {
+      cwd = resolveCwdWithWorkspace(args).root
+    }
+    let out
+    const outIdx = args.indexOf('--out')
+    if (outIdx !== -1 && args[outIdx + 1]) out = args[outIdx + 1]
+    const checkMode = args.includes('--check')
+    try {
+      if (checkMode) {
+        const r = checkRoadmapGraph(cwd, { out })
+        for (const w of r.warnings) console.warn(`  warning: ${w}`)
+        if (r.matches) {
+          console.log(`roadmap-graph up to date (${r.nodeCount} nodes, ${r.edgeCount} edges): ${r.path}`)
+          process.exit(0)
+        }
+        console.error(r.diffSummary)
+        process.exit(1)
+      }
+      const r = generateRoadmapGraph(cwd, { out })
+      for (const w of r.warnings) console.warn(`  warning: ${w}`)
+      console.log(`Generated ${r.path} — ${r.nodeCount} nodes, ${r.edgeCount} edges` +
+        (r.droppedCount ? ` (${r.droppedCount} completed/superseded/killed dropped)` : ''))
+      process.exit(0)
+    } catch (err) {
+      if (err && err.code === 'DANGLING_EDGE') {
+        console.error(err.message)
+        console.error('\nFix the deps.yaml edge(s) above, or complete/register the missing feature(s).')
+        process.exit(1)
+      }
+      throw err
+    }
+  }
+
   // Default: compose roadmap (show status)
   const { parseRoadmap, filterBuildable } = await import('../lib/roadmap-parser.js')
   const { buildDag, topoSort } = await import('../lib/build-dag.js')

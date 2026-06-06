@@ -21,6 +21,20 @@ Added `sync` as an alias for `compose setup` (both run `runSetup` — mirror com
 
 Added `--test-timeout=120000` to every bare `node --test` script (`test`, `test:integration`, `test:wave-6`). Previously the scripts omitted a per-test timeout and node's `--test` has no default, so a starved/flaky integration test (`test/proof-run.test.js` — a real ~25s stratum pipeline, the suite's slowest test) could hang the full suite **forever** under parallel load instead of failing — observed as a 1h+ hang during COMP-CTXBUDGET-1, and a hang risk for the pre-push hook (which hard-gates on bare `npm test`). A starved test now fails loudly at 120s. `test:ui`/`test:tracker` are vitest (own timeouts) — unchanged. Surfaced by COMP-CTXBUDGET-1. `docs/features/COMP-CTXBUDGET-1-1/`.
 
+### COMP-ROADMAP-GRAPH-1 — Generated roadmap dependency graph (compose substrate) — v1 (generator core + CLI + MCP)
+
+A generic, deterministic roadmap dependency-graph generator that any compose-using project inherits for free. Walks `docs/features/*/`, derives nodes from feature.json status/phase (ROADMAP.md fallback for unregistered features, feature.json wins), edges from per-folder `deps.yaml`, and display metadata from design.md frontmatter or feature.json keys. Drops COMPLETE/SUPERSEDED/KILLED nodes and **refuses to emit** when any edge points at an unknown feature — killing the dangling-edge Cytoscape-crash bug class that recurred in hand-maintained graphs. Output is byte-identical on re-run (no wall-clock), so `--check` is a reliable CI/pre-commit gate. Ships v1 narrow (P1+P2); enforcement templates (COMP-ROADMAP-GRAPH-1-1) and forge-top dogfood/adoption (COMP-ROADMAP-GRAPH-1-2) are filed follow-ups.
+
+**Added:**
+- `compose roadmap graph [--out <html>] [--project <path>] [--check]` CLI subcommand
+- `roadmap_graph` / `roadmap_graph_check` MCP tools (small summaries only — never the HTML body; check tool is reviewer-allowlisted)
+- `lib/roadmap-graph/` generator core (collect → model → render) + packaged Cytoscape/dagre template with `@generated:*` sentinel regions
+- `contracts/roadmap-deps.schema.json` + `contracts/roadmap-graph-frontmatter.schema.json`
+- 27 unit + integration tests
+
+**Changed:**
+- External-prefix codes (cross-project refs) are treated as known-but-unrendered so edges to them never dangle
+
 ## 2026-06-06
 
 ### COMP-CTXBUDGET-1 — `/context-budget` skill: token audit across the loaded surface

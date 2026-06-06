@@ -1,0 +1,17 @@
+{
+  "code": "COMP-ROADMAP-GRAPH-1-2",
+  "description": "Roadmap-graph compose-side dogfood + adoption recipe: generate forge/docs/roadmap-graph.html from forge's own ROADMAP and write docs/howto/roadmap-graph.md (deferred P4 from COMP-ROADMAP-GRAPH-1 v1).",
+  "status": "PLANNED",
+  "phase": "Standalone",
+  "created": "2026-06-06",
+  "updated": "2026-06-06",
+  "complexity": "S",
+  "position": 3,
+  "parent": "COMP-ROADMAP-GRAPH-1",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-ROADMAP-GRAPH-1"
+    }
+  ]
+}
