@@ -54,18 +54,20 @@ Flags:
 - `--no-stratum` — disable Stratum integration
 - `--no-lifecycle` — disable lifecycle tracking
 
-## Global setup (`compose setup`)
+## Global setup (`compose setup`, alias `compose sync`)
 
-Installs the `/compose` skill globally and registers `stratum-mcp`:
+Installs all compose-owned skills globally and registers `stratum-mcp`:
 
 ```bash
-compose setup
+compose setup     # or: compose sync
 ```
 
 This:
-1. Copies the `/compose` skill to `~/.claude/skills/compose/`
+1. Copies every bundled skill to `~/.claude/skills/` (`/compose`, `/context-budget`, …)
 2. Installs the Stratum skill to all detected agents
 3. Registers `stratum-mcp` with Claude Code (if available)
+
+It's idempotent — re-run it (or `compose sync`) after adding/editing skills locally to re-sync them. `sync` is just a clearer-named alias; it does **not** fetch a new version (that's `compose update`).
 
 ## Global CLI via ~/bin
 

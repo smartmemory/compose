@@ -2,6 +2,10 @@
 
 ## 2026-06-07
 
+### CLI — `compose sync` alias for `setup`
+
+Added `sync` as an alias for `compose setup` (both run `runSetup` — mirror compose-owned skills into the agent skill dirs + register stratum-mcp). `sync` better signals the idempotent "reconcile local skills with this install" job you run after editing skills locally, when there's no new version to `compose update` to. Help text and `docs/cli.md` updated.
+
 ### COMP-CTXBUDGET-1-1 — bound the test suite with `--test-timeout`
 
 Added `--test-timeout=120000` to every bare `node --test` script (`test`, `test:integration`, `test:wave-6`). Previously the scripts omitted a per-test timeout and node's `--test` has no default, so a starved/flaky integration test (`test/proof-run.test.js` — a real ~25s stratum pipeline, the suite's slowest test) could hang the full suite **forever** under parallel load instead of failing — observed as a 1h+ hang during COMP-CTXBUDGET-1, and a hang risk for the pre-push hook (which hard-gates on bare `npm test`). A starved test now fails loudly at 120s. `test:ui`/`test:tracker` are vitest (own timeouts) — unchanged. Surfaced by COMP-CTXBUDGET-1. `docs/features/COMP-CTXBUDGET-1-1/`.

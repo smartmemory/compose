@@ -8,7 +8,7 @@ The verbs group naturally:
 - **Triage and QA:** `triage`, `qa-scope`
 - **Tracking:** `ideabox`, `gates`, `loops`
 - **Completion:** `record-completion`, `hooks`
-- **Setup:** `init`, `setup`, `install`, `doctor`
+- **Setup:** `init`, `setup` (alias `sync`), `update`, `install`, `doctor`
 - **Server:** `start`
 
 ---
@@ -274,12 +274,14 @@ compose init --no-stratum
 compose init --no-lifecycle
 ```
 
-### `compose setup`
+### `compose setup` (alias: `compose sync`)
 
-Global skill and MCP registration. Installs the `/compose` skill and Stratum skill to all detected agents. At the end, runs an external-dependency check (see `compose doctor`) and prints actionable install hints for any missing required external skill or command.
+Global skill and MCP registration. Installs **all** compose-owned skills (`/compose`, `/context-budget`, the Stratum skill, …) to every detected agent's skill dir, then registers stratum-mcp. At the end, runs an external-dependency check (see `compose doctor`) and prints actionable install hints for any missing required external skill or command.
+
+Idempotent — re-run it after editing or adding skills locally to re-sync them. `sync` is an alias that names that job more clearly; it does **not** fetch a new version (use `compose update` for that).
 
 ```bash
-compose setup
+compose setup     # or: compose sync
 ```
 
 ### `compose install`
