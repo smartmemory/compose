@@ -413,3 +413,16 @@ test('setRoadmapRowStatus preserves emphasis markers in the cell', async () => {
   await setRoadmapRowStatus(root, { code: 'FEAT-1', status: 'IN_PROGRESS' });
   assert.match(readFileSync(join(root, 'ROADMAP.md'), 'utf8'), /\*\*IN_PROGRESS\*\*/);
 });
+
+test('roadmap_status_rewrite does NOT plan a fix for a row whose status mis-parses to prose', async () => {
+  const root = scaffold();
+  addFeature(root, 'FEAT-1', { status: 'PLANNED' });
+  // Description contains an escaped pipe → the validator parses prose into the
+  // status column. The planner must skip it (the surgical writer would refuse).
+  writeFileSync(join(root, 'ROADMAP.md'),
+`# R\n\n## Phase 1\n\n| # | Feature | Description | Status |\n|---|---|---|---|\n| 1 | FEAT-1 | use a \\| b flag | PLANNED |\n`);
+  writeVision(root, [visionItem('FEAT-1', 'planned')]);
+
+  const res = await reconcileProject(root, { apply: false, classes: ['roadmap_status_rewrite'] });
+  assert.equal(res.plan.filter((e) => e.action === 'set_roadmap_row_status').length, 0);
+});
