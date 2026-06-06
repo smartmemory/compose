@@ -1,41 +1,45 @@
-# <Feature Name>: Design
+# COMP-CTXBUDGET-1-1: Bound the test suite with `--test-timeout` — Design
 
+**Status:** COMPLETE
+**Date:** 2026-06-07
+**Parent:** [COMP-CTXBUDGET-1](../COMP-CTXBUDGET-1/) (surfaced_by)
 
 ## Why
 
-During COMP-CTXBUDGET-1 the full `npm test` hung for over an hour. Investigated root cause: `test/proof-run.test.js` runs a real ~25s stratum pipeline and is the suite's slowest test; under full parallel load it can starve, and because the `test` script omits `--test-timeout` (node's --test has no default), a starved test hangs forever instead of failing. In isolation proof-run passes; bounded with `--test-timeout=90000` the whole node suite is reliably green (3516 pass). The unbounded hang also threatens the pre-push hook, which runs the same bare `npm test` as a hard gate. Fix: add a sane `--test-timeout` to the node portion of the `test` script (and consider isolating real-pipeline integration tests so they don't contend). Independent of the context-budget skill; surfaced by it.
+During COMP-CTXBUDGET-1 the full `npm test` hung for over an hour. Root cause (investigated):
+`test/proof-run.test.js` runs a real ~25s stratum pipeline and is the suite's slowest test;
+under full parallel load it can starve, and because the `test` script omitted `--test-timeout`
+(node's `--test` has no default), a starved test hangs forever instead of failing. In isolation
+proof-run passes; bounded with a per-test timeout the whole node suite is reliably green. The
+unbounded hang also threatened the pre-push hook, which runs the same bare `npm test` as a hard gate.
 
-**Status:** DESIGN
-**Date:** <date>
+## Decision: per-test timeout on every bare `node --test` script
 
-## Related Documents
+Add `--test-timeout=120000` (2 min — ample headroom over proof-run's ~25s even under load, while
+turning a true hang into a loud failure) to the node-suite portion of:
 
-<!-- Link to roadmap, dependencies, and related features -->
+- `test` (the pre-push hard gate)
+- `test:integration`
+- `test:wave-6`
 
----
+`test:ui` / `test:tracker` are vitest (already have their own timeouts) — unchanged.
 
-## Problem
-
-<!-- Describe the problem this feature solves -->
-
-## Goal
-
-<!-- What does success look like? Scope and non-scope. -->
-
----
-
-## Decision 1: <Title>
-
-<!-- Describe the decision, options considered, and rationale -->
-
----
+Deliberately minimal: no test-file reorganization or proof-run isolation in this slice (that's a
+larger, optional follow-up). A bounded timeout is the smallest change that removes the
+hang-forever failure mode.
 
 ## Files
 
 | File | Action | Purpose |
 |------|--------|---------|
-| | | |
+| `package.json` | modify | Add `--test-timeout=120000` to `test`, `test:integration`, `test:wave-6` |
 
-## Open Questions
+## Verification
 
-<!-- List unresolved questions -->
+Full `npm test` runs to completion and stays green (node 3516 / ui 146 / tracker 100); a starved
+integration test now fails at 120s instead of hanging indefinitely.
+
+## Non-Goals
+
+- Isolating real-pipeline integration tests (proof-run) into a separate non-parallel lane.
+- Tuning per-test timeouts individually.
