@@ -521,3 +521,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-05T18:35:09+08:00 | COMP-MCP-VALIDATE-3 design: vision-state projection at setFeatureStatus chokepoint + back-projection migration + shared mapping helper
 2026-06-06T10:32:21+08:00 | COMP-MCP-VALIDATE-2: writing Phase-1 design for validate --fix reconcile mode
 2026-06-06T10:53:35+08:00 | COMP-MCP-VALIDATE-2: implement reconcile mode (validator exports, atomic writeFeature, rewriteLinks/resyncRoadmap, feature-reconciler, CLI+MCP)
+2026-06-06T16:20:47+08:00 | COMP-MCP-VALIDATE-4: fix validator escaped-pipe column-parse false positives via shared escaped-aware cell splitter

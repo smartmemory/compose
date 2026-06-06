@@ -1,0 +1,11 @@
+{
+  "code": "COMP-MCP-VALIDATE-4",
+  "description": "**Validator escaped-pipe column-parse bug — `\\|` in a ROADMAP description produces false STATUS_MISMATCH / ROADMAP_ROW_SCHEMA_VIOLATION warnings.** The cross-artifact validator splits table rows on `split('|')`, which also splits on escaped `\\|`. A description cell containing `\\|` (the standard markdown escape for a literal pipe) adds a phantom column, shifting status-column detection so the validator reads description prose as the row's \"status\" (e.g. ROADMAP says \"FLAG\", feature.json says PLANNED). Surfaced 3 false warnings on the live repo (COMP-PARITY-1, COMP-CAPS-ENFORCE-4, COMP-ROADMAP-RT-GENFIX) whose ROADMAP rows visually agree with feature.json. `lib/roadmap-parser.js` already splits on unescaped pipes only (`/(?<!\\\\)\\|/` + unescape); the read validator (`lib/feature-validator.js`) and `lib/feature-write-guard.js` use the naive split. Fix: share the escaped-pipe-aware splitter across all row-parse sites. Surfaced by COMP-MCP-VALIDATE-2 dogfooding.",
+  "status": "IN_PROGRESS",
+  "phase": "COMP-MCP-VALIDATE: Closed-Loop Hardening",
+  "created": "2026-06-06",
+  "updated": "2026-06-06",
+  "complexity": "S",
+  "position": 4,
+  "parent": "COMP-MCP-VALIDATE"
+}

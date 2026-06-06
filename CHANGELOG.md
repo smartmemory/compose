@@ -2,6 +2,13 @@
 
 ## 2026-06-06
 
+### COMP-MCP-VALIDATE-4 — fix validator escaped-pipe column-parse false positives
+
+`compose validate` was emitting false `STATUS_MISMATCH_ROADMAP_VS_FEATUREJSON` / `STATUS_MISMATCH_ROADMAP_VS_VISION_STATE` / `ROADMAP_ROW_SCHEMA_VIOLATION` / `COMPLEXITY_OR_DESCRIPTION_DRIFT` warnings for ROADMAP rows whose status visually **agreed** with feature.json. Root cause: the validator split table cells with `split('|')`, which also splits on escaped `\|` (the markdown escape for a literal pipe). A description containing `\|` added a phantom column, shifting status-column detection so the validator read description prose as the row's "status" (e.g. `ROADMAP says "FLAG"`). Surfaced by COMP-MCP-VALIDATE-2 dogfooding (3 live rows: COMP-PARITY-1, COMP-CAPS-ENFORCE-4, COMP-ROADMAP-RT-GENFIX).
+
+- **New exported `splitRoadmapCells(rawLine)` in `lib/roadmap-parser.js`** — the canonical escaped-pipe-aware row splitter (`/(?<!\\)\|/` + `\| → |` unescape), promoted from the parser's existing inline logic. Now used at **every** ROADMAP-row parse site: the read validator (`lib/feature-validator.js`) and `lib/feature-write-guard.js` (`scanRoadmapRows`), replacing the naive `rowMatch[1].split('|')`. Byte-identical to the old split for pipe-free rows.
+- Live repo: the 3 false positives cleared (601 → 592 findings, 0 errors). Real status mismatches on `\|`-rows are still detected. Codex review CLEAN; full suite green (`node:test` 3471 + ui + tracker). `docs/features/COMP-MCP-VALIDATE-4/`.
+
 ### COMP-MCP-VALIDATE-2 — reconcile / `compose validate --fix` (closed-loop remediation)
 
 Turns the detect-only cross-artifact validator into a **closed loop**. `compose validate --fix` (and `validate_project {fix:true}` over MCP) reconciles five mechanical drift classes through typed, audited writers — draining the validate backlog instead of hand-fixing JSON. **Dry-run by default**; `--apply` writes; **per-class opt-in** keeps destructive/heuristic classes off unless explicitly selected. Final slice of the **COMP-MCP-VALIDATE: Closed-Loop Hardening** umbrella (with −1 write-time validation and −3 vision-state projection, both shipped).
