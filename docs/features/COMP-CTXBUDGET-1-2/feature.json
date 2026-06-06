@@ -1,0 +1,17 @@
+{
+  "code": "COMP-CTXBUDGET-1-2",
+  "description": "Make context-budget progressive-disclosure-aware: report a real `live startup` token estimate (skills/agents counted at frontmatter description size, since Claude Code loads only name+description until invoked; rules/CLAUDE.md/MCP at full) alongside the on-disk surface, and rank reclaims by live tokens. Fixes the tool over-counting lazy-loaded skill/agent bodies as if loaded at startup.",
+  "status": "IN_PROGRESS",
+  "phase": "COMP-CTXBUDGET: Context Budget Audit",
+  "created": "2026-06-06",
+  "updated": "2026-06-06",
+  "complexity": "S",
+  "position": 289,
+  "parent": "COMP-CTXBUDGET-1",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-CTXBUDGET-1"
+    }
+  ]
+}
