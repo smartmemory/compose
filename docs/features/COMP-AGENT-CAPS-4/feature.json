@@ -1,9 +1,27 @@
 {
   "code": "COMP-AGENT-CAPS-4",
   "description": "Violation detection: informational logging via stream events in v1. Runtime violation detection (inspecting actual tool_use events against profile) requires normalizer integration — deferred to v2.",
-  "status": "PARTIAL",
+  "status": "COMPLETE",
   "phase": "COMP-AGENT-CAPS: Agent Capability Profiles",
   "position": 189,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-06",
+  "completions": [
+    {
+      "completion_id": "COMP-AGENT-CAPS-4:03ebfffb946e65c1bc11a260fbb0ce6bd394ef4b",
+      "feature_code": "COMP-AGENT-CAPS-4",
+      "commit_sha": "03ebfffb946e65c1bc11a260fbb0ce6bd394ef4b",
+      "commit_sha_short": "03ebfffb",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/build.js",
+        "test/capability-enforcement-block.test.js",
+        "src/components/vision/SettingsPanel.jsx"
+      ],
+      "recorded_at": "2026-06-06T01:57:14.419Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Retroactive completion reconciliation: COMP-AGENT-CAPS-4 (runtime violation detection v1 — informational logging via stream events) shipped; its polish items were completed under COMP-AGENT-CAPS-5 (commit 03ebfff per CHANGELOG). Was mislabeled PARTIAL with no design.md, tripping MISSING_DESIGN_ARTIFACT. Deeper normative runtime detection remains deferred as noted in the description."
+    }
+  ],
+  "commit_sha": "03ebfffb946e65c1bc11a260fbb0ce6bd394ef4b"
 }

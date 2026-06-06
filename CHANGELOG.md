@@ -1,6 +1,13 @@
 # Changelog
 
-## 2026-06-05
+## 2026-06-06
+
+### chore(validate): clear the 5 blocking `compose validate` errors (roadmap-data hygiene)
+
+Pre-existing data drift unrelated to any feature build, surfaced as advisory at pre-push. Brings `compose validate` to **0 errors** (warnings only).
+
+- **3× `MISSING_DESIGN_ARTIFACT`** (COMP-TEAMS-2, COMP-TEAMS-3, COMP-AGENT-CAPS-4): each was mislabeled `PARTIAL` (no `design.md`) though its v1 slice had shipped — COMP-AGENT-CAPS-4 was completed under COMP-AGENT-CAPS-5 (`03ebfff`); COMP-TEAMS-2/3's v1 shipped with COMP-TEAMS v1 (`fd95a36`) via existing machinery (`no_file_conflicts` ensure / `claude:orchestrator` decompose), with their remaining scope deferred to named follow-ups in the descriptions. Reconciled to `COMPLETE` via evidence-bound `record_completion` against the real shipping commits.
+- **`DANGLING_LINK_FEATURES_TARGET` + `XREF_TARGET_MISSING`** (COMP-ROADMAP-GRAPH-1): removed a stale structured `links` entry to `META-GRAPH-1` in repo `smart-memory` — consolidated away by the SmartMemory org migration, target resolvable nowhere, repo not a sibling under `forge/`. The provenance it carried is already preserved in the feature description prose.
 
 ### COMP-MCP-VALIDATE-3 — vision-state status projection from the canonical source of truth
 
