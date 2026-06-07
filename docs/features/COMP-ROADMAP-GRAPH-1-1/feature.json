@@ -1,7 +1,7 @@
 {
   "code": "COMP-ROADMAP-GRAPH-1-1",
   "description": "Roadmap-graph enforcement templates: pre-commit hook + CI gate snippet + hand-edit sentinel lint (deferred P3 from COMP-ROADMAP-GRAPH-1 v1).",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "Standalone",
   "created": "2026-06-06",
   "updated": "2026-06-07",
@@ -13,5 +13,23 @@
       "kind": "surfaced_by",
       "to_code": "COMP-ROADMAP-GRAPH-1"
     }
-  ]
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-ROADMAP-GRAPH-1-1:905b1347f22de120a395275c33c8cc78d23f6a7d",
+      "feature_code": "COMP-ROADMAP-GRAPH-1-1",
+      "commit_sha": "905b1347f22de120a395275c33c8cc78d23f6a7d",
+      "commit_sha_short": "905b1347",
+      "tests_pass": true,
+      "files_changed": [
+        "templates/hooks/roadmap-graph-pre-push.sh",
+        "templates/ci/roadmap-graph.yml",
+        "test/integration/roadmap-graph-hook.test.js"
+      ],
+      "recorded_at": "2026-06-07T03:14:06.218Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Enforcement: source-safe opt-in pre-push gate + CI snippet; --check is the hand-edit lint"
+    }
+  ],
+  "commit_sha": "905b1347f22de120a395275c33c8cc78d23f6a7d"
 }

@@ -1304,8 +1304,8 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
 | 1 | COMP-ROADMAP-GRAPH-1 | **Generated roadmap dependency graph (compose substrate).** Per-project `roadmap-graph.html` derived from compose lifecycle state + `deps.yaml` per feature folder + `design.md` (or `feature.json`) frontmatter metadata. Replaces hand-maintained graph HTML with a deterministic generator (`compose roadmap-graph` subcommand or `mcp__compose__roadmap_graph` tool). Generic across compose-using projects (SmartMemory, ScaleMate, Maya, Coder-Config). Includes deps.yaml schema, idempotent generator, dangling-edge refusal, pre-commit hook + CI gate. Migrated from SmartMemory's META-GRAPH-1 2026-05-23 after recognizing the work is compose-substrate, not SmartMemory-specific. SmartMemory remains the first consumer via thin adoption feature META-GRAPH-1. | PARTIAL |
-| 2 | COMP-ROADMAP-GRAPH-1-1 | Roadmap-graph enforcement templates: pre-commit hook + CI gate snippet + hand-edit sentinel lint (deferred P3 from COMP-ROADMAP-GRAPH-1 v1). | IN_PROGRESS |
-| 3 | COMP-ROADMAP-GRAPH-1-2 | Roadmap-graph compose-side dogfood + adoption recipe: generate forge/docs/roadmap-graph.html from forge's own ROADMAP and write docs/howto/roadmap-graph.md (deferred P4 from COMP-ROADMAP-GRAPH-1 v1). | IN_PROGRESS |
+| 2 | COMP-ROADMAP-GRAPH-1-1 | Roadmap-graph enforcement templates: pre-commit hook + CI gate snippet + hand-edit sentinel lint (deferred P3 from COMP-ROADMAP-GRAPH-1 v1). | COMPLETE |
+| 3 | COMP-ROADMAP-GRAPH-1-2 | Roadmap-graph compose-side dogfood + adoption recipe: generate forge/docs/roadmap-graph.html from forge's own ROADMAP and write docs/howto/roadmap-graph.md (deferred P4 from COMP-ROADMAP-GRAPH-1 v1). | COMPLETE |
 
 ---
 

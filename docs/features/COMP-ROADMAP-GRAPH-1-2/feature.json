@@ -1,7 +1,7 @@
 {
   "code": "COMP-ROADMAP-GRAPH-1-2",
   "description": "Roadmap-graph compose-side dogfood + adoption recipe: generate forge/docs/roadmap-graph.html from forge's own ROADMAP and write docs/howto/roadmap-graph.md (deferred P4 from COMP-ROADMAP-GRAPH-1 v1).",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "Standalone",
   "created": "2026-06-06",
   "updated": "2026-06-07",
@@ -13,5 +13,24 @@
       "kind": "surfaced_by",
       "to_code": "COMP-ROADMAP-GRAPH-1"
     }
-  ]
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-ROADMAP-GRAPH-1-2:905b1347f22de120a395275c33c8cc78d23f6a7d",
+      "feature_code": "COMP-ROADMAP-GRAPH-1-2",
+      "commit_sha": "905b1347f22de120a395275c33c8cc78d23f6a7d",
+      "commit_sha_short": "905b1347",
+      "tests_pass": true,
+      "files_changed": [
+        ".github/workflows/roadmap-graph.yml",
+        "docs/howto/roadmap-graph.md",
+        "docs/features/COMP-ROADMAP-GRAPH-1-1/deps.yaml",
+        "docs/features/COMP-ROADMAP-GRAPH-1-2/deps.yaml"
+      ],
+      "recorded_at": "2026-06-07T03:14:13.558Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Dogfood: compose CI workflow (fresh regen + fail-on-dangling + artifact) + howto + seeded edges. Deviation: compose-self target (forge root not git)."
+    }
+  ],
+  "commit_sha": "905b1347f22de120a395275c33c8cc78d23f6a7d"
 }
