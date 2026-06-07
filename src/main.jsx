@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
+import { DialogProvider } from './components/ui/DialogProvider.jsx';
 import './index.css';
 
 const isMobile = window.location.pathname.startsWith('/m');
@@ -10,8 +11,10 @@ const Root = isMobile
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <WorkspaceProvider>
-    <Suspense fallback={null}>
-      <Root />
-    </Suspense>
+    <DialogProvider>
+      <Suspense fallback={null}>
+        <Root />
+      </Suspense>
+    </DialogProvider>
   </WorkspaceProvider>
 );
