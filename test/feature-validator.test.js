@@ -50,6 +50,39 @@ function writeVisionState(root, items) {
 // Per-finding-kind tests
 // ---------------------------------------------------------------------------
 
+test('DUPLICATE_PHASE_HEADING: a phase title appearing twice is flagged (BUG-26)', async () => {
+  const root = newFixture();
+  writeFileSync(join(root, 'ROADMAP.md'), [
+    '# Roadmap', '', '## Features — PARTIAL', '',
+    '| # | Feature | Description | Status |', '|---|---------|-------------|--------|',
+    '| — | FOO | desc | PLANNED |', '',
+    '---', '',
+    '## Features — PARTIAL', '',
+    '| # | Feature | Description | Status |', '|---|---------|-------------|--------|',
+    '| — | BAR | desc | PLANNED |', '',
+  ].join('\n') + '\n');
+  const r = await validateProject(root);
+  const dups = r.findings.filter((f) => f.kind === 'DUPLICATE_PHASE_HEADING');
+  assert.equal(dups.length, 1, 'exactly one DUPLICATE_PHASE_HEADING finding');
+  assert.equal(dups[0].severity, 'warning');
+  assert.match(dups[0].detail, /## Features/);
+});
+
+test('DUPLICATE_PHASE_HEADING: distinct phase titles do NOT trip the check', async () => {
+  const root = newFixture();
+  writeFileSync(join(root, 'ROADMAP.md'), [
+    '# Roadmap', '', '## Phase 1: Alpha — COMPLETE', '',
+    '| # | Feature | Description | Status |', '|---|---------|-------------|--------|',
+    '| — | FOO | desc | COMPLETE |', '',
+    '---', '',
+    '## Phase 2: Beta — PLANNED', '',
+    '| # | Feature | Description | Status |', '|---|---------|-------------|--------|',
+    '| — | BAR | desc | PLANNED |', '',
+  ].join('\n') + '\n');
+  const r = await validateProject(root);
+  assert.equal(r.findings.filter((f) => f.kind === 'DUPLICATE_PHASE_HEADING').length, 0);
+});
+
 test('FEATURE_NOT_FOUND: returns single finding for unknown code', async () => {
   const root = newFixture();
   writeRoadmap(root, []);
