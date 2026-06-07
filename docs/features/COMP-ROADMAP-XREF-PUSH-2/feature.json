@@ -1,11 +1,39 @@
 {
   "code": "COMP-ROADMAP-XREF-PUSH-2",
   "description": "Deferred extensions to COMP-ROADMAP-XREF-PUSH: (1) roadmap_xref_push MCP tool, (2) local-provider push (delegates to the sibling repo's own setFeatureStatus → respects its transition policy/lifecycle guard/ROADMAP regen, degrade-skip on rejection), (3) additive relabel via expect_labels (add missing labels, never remove). Same dry-run-default + push:true opt-in + degrade-never-write posture.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "Phase 6: MCP Writers",
   "created": "2026-06-07",
   "updated": "2026-06-07",
   "complexity": "M",
   "position": 5,
-  "parent": "COMP-ROADMAP-XREF-PUSH"
+  "parent": "COMP-ROADMAP-XREF-PUSH",
+  "completions": [
+    {
+      "completion_id": "COMP-ROADMAP-XREF-PUSH-2:e65c9207f19bd5781f5f34138f79a54edf5a1813",
+      "feature_code": "COMP-ROADMAP-XREF-PUSH-2",
+      "commit_sha": "e65c9207f19bd5781f5f34138f79a54edf5a1813",
+      "commit_sha_short": "e65c9207",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/xref-push.js",
+        "lib/xref-local.js",
+        "lib/xref-sync.js",
+        "lib/feature-writer.js",
+        "contracts/feature-json.schema.json",
+        "bin/compose.js",
+        "server/compose-mcp.js",
+        "server/compose-mcp-tools.js",
+        "test/xref-push.test.js",
+        "test/xref-push-local.test.js",
+        "test/xref-local.test.js",
+        "test/feature-linker.test.js",
+        "test/feature-json-schema-external.test.js"
+      ],
+      "recorded_at": "2026-06-07T06:07:17.932Z",
+      "recorded_by": "mcp:agent",
+      "notes": "v1 shipped: roadmap_xref_push MCP tool + local-provider push (sibling delegation) + additive relabel (expect_labels). Full suite green, reviewed CLEAN."
+    }
+  ],
+  "commit_sha": "e65c9207f19bd5781f5f34138f79a54edf5a1813"
 }
