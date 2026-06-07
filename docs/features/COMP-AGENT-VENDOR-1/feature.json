@@ -1,0 +1,16 @@
+{
+  "code": "COMP-AGENT-VENDOR-1",
+  "description": "Ship the compose-explorer/compose-architect subagents the SKILL.md depends on — author the two agent definitions and have `compose setup` install them to ~/.claude/agents/ (or switch the skill to built-in Explore/Plan). Today the skill's \"Vendored\" table references them but no definition file exists anywhere and syncSkills() never installs them, so any `subagent_type: compose-explorer` dispatch fails and the lifecycle silently falls back to built-ins.",
+  "status": "PLANNED",
+  "phase": "Standalone Tickets",
+  "created": "2026-06-07",
+  "updated": "2026-06-07",
+  "complexity": "S",
+  "position": 5,
+  "tags": [
+    "compose-setup",
+    "agents",
+    "dx",
+    "sweep-2026-06-07"
+  ]
+}
