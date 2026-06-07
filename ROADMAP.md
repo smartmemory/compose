@@ -1282,13 +1282,14 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
-| — | COMP-CLI-GLOBAL-FLAGS | Pre-subcommand flag parser to enable compose --workspace=X build syntax | PLANNED |
-| — | COMP-MOBILE | Mobile PWA at /m route — fully functional companion to the desktop cockpit. Phone-first; tablet inherits. 5 phases: shell, roadmap, ideabox, agents, builds. Remote transport (auth + tunnel) deferred to COMP-MOBILE-REMOTE. | COMPLETE |
-| — | COMP-MOBILE-REMOTE | Remote-reachable transport for COMP-MOBILE: 0.0.0.0 binding (opt-in), short-lived JWT access tokens with refresh, QR + URL + cockpit pairing modal, BYO tunnel (Tailscale/Cloudflare/ngrok). Server-side auth and pairing UI; tunnel layer left to user. | PLANNED |
-| — | COMP-WORKSPACE-HTTP | Foundation for HTTP workspace track: Express middleware reading X-Compose-Workspace-Id, GET /api/workspace bootstrap, Vite frontend context provider. Behavior-preserving substrate for COMP-WORKSPACE-{VISION,SESSIONS,AGENT-SVR,FILES}. | COMPLETE |
-| — | COMP-WORKSPACE-ID | Workspace identity detection (parent vs child) across CLI, MCP, and hooks | COMPLETE |
-| — | COMP-WORKSPACE-RESUME | Persist MCP workspace binding across restarts via CLAUDE_SESSION_ID env (when injected) | PLANNED |
-| — | COMP-WORKSPACE-WATCHERS | Runtime workspace rebinding for long-lived watchers (file-watcher, cc-session-watcher) | PLANNED |
+| 290 | COMP-BUILD-QUICK | Build-mode Quick path (`/compose build --quick`) — symmetric to the existing `/compose fix --quick`. Collapses the 10-phase build lifecycle to design → implement → ship (single gate) for small-but-real additive work, so a one-flag-plus-test change stops paying full-lifecycle tax. Enforcement (TDD, verification-before-completion, review loop) preserved; only phase ceremony shrinks. Explicitly does NOT adopt OpenSpec's no-gates model. Promoted from ideabox IDEA-18; scoped carve-out of IDEA-15. | PLANNED |
+| 291 | COMP-CLI-GLOBAL-FLAGS | Pre-subcommand flag parser to enable compose --workspace=X build syntax | PLANNED |
+| 292 | COMP-MOBILE | Mobile PWA at /m route — fully functional companion to the desktop cockpit. Phone-first; tablet inherits. 5 phases: shell, roadmap, ideabox, agents, builds. Remote transport (auth + tunnel) deferred to COMP-MOBILE-REMOTE. | COMPLETE |
+| 293 | COMP-MOBILE-REMOTE | Remote-reachable transport for COMP-MOBILE: 0.0.0.0 binding (opt-in), short-lived JWT access tokens with refresh, QR + URL + cockpit pairing modal, BYO tunnel (Tailscale/Cloudflare/ngrok). Server-side auth and pairing UI; tunnel layer left to user. | PLANNED |
+| 294 | COMP-WORKSPACE-HTTP | Foundation for HTTP workspace track: Express middleware reading X-Compose-Workspace-Id, GET /api/workspace bootstrap, Vite frontend context provider. Behavior-preserving substrate for COMP-WORKSPACE-{VISION,SESSIONS,AGENT-SVR,FILES}. | COMPLETE |
+| 295 | COMP-WORKSPACE-ID | Workspace identity detection (parent vs child) across CLI, MCP, and hooks | COMPLETE |
+| 296 | COMP-WORKSPACE-RESUME | Persist MCP workspace binding across restarts via CLAUDE_SESSION_ID env (when injected) | PLANNED |
+| 297 | COMP-WORKSPACE-WATCHERS | Runtime workspace rebinding for long-lived watchers (file-watcher, cc-session-watcher) | PLANNED |
 
 ---
 
@@ -1372,17 +1373,3 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 | 5 | COMP-COCKPIT-4 | Inline artifact content in gate review. GateView shows only artifact metadata (assessment percent, word count, missing sections); a reviewer must leave for the Docs tab to actually read design.md before deciding. Render the artifact body inline in the gate panel so a gate can be approved/revised/killed without losing context. | PLANNED |
 | 6 | COMP-COCKPIT-5 | First-run empty-state CTAs. Fresh-project views dead-end to the terminal: Graph shows "No items match the current filters" (wrong when the project is simply empty), Tree shows "No items to display", and Dashboard says "Run /compose in the terminal" (DashboardView.jsx:315) with no in-UI path. Add create-first-feature and onboarding CTAs to the empty states so a UI-first user is not stranded. | PLANNED |
 | 7 | COMP-COCKPIT-6 | Gate-kill guardrail consistency. DashboardView fires onResolveGate(id, killed) with no comment or confirmation (DashboardView.jsx:203) while GateView requires a non-empty reason before allowing a kill (GateView.jsx:127). Unify so killing a gate from any surface requires a reason, eliminating instant no-undo kills from the dashboard. | PLANNED |
-
----
-
-## Features — PARTIAL
-
-| # | Feature | Description | Status |
-|---|---------|-------------|--------|
-| — | COMP-CLI-GLOBAL-FLAGS | Pre-subcommand flag parser to enable compose --workspace=X build syntax | PLANNED |
-| — | COMP-MOBILE | Mobile PWA at /m route — fully functional companion to the desktop cockpit. Phone-first; tablet inherits. 5 phases: shell, roadmap, ideabox, agents, builds. Remote transport (auth + tunnel) deferred to COMP-MOBILE-REMOTE. | COMPLETE |
-| — | COMP-MOBILE-REMOTE | Remote-reachable transport for COMP-MOBILE: 0.0.0.0 binding (opt-in), short-lived JWT access tokens with refresh, QR + URL + cockpit pairing modal, BYO tunnel (Tailscale/Cloudflare/ngrok). Server-side auth and pairing UI; tunnel layer left to user. | PLANNED |
-| — | COMP-WORKSPACE-HTTP | Foundation for HTTP workspace track: Express middleware reading X-Compose-Workspace-Id, GET /api/workspace bootstrap, Vite frontend context provider. Behavior-preserving substrate for COMP-WORKSPACE-{VISION,SESSIONS,AGENT-SVR,FILES}. | COMPLETE |
-| — | COMP-WORKSPACE-ID | Workspace identity detection (parent vs child) across CLI, MCP, and hooks | COMPLETE |
-| — | COMP-WORKSPACE-RESUME | Persist MCP workspace binding across restarts via CLAUDE_SESSION_ID env (when injected) | PLANNED |
-| — | COMP-WORKSPACE-WATCHERS | Runtime workspace rebinding for long-lived watchers (file-watcher, cc-session-watcher) | PLANNED |

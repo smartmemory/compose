@@ -2,6 +2,15 @@
 
 ## 2026-06-07
 
+### Fixed — BUG-26: `roadmap generate` emitted a duplicate `## Features` section for phase-less features
+
+Features whose `feature.json` had no `phase` were collected into an `ungrouped` bucket and emitted via a hardcoded `renderPhase('Features', …)`. When the source `ROADMAP.md` already carried a curated `## Features` section, the generator emitted **both** — two identical headings that re-split on every regen and that `roadmap check` masked as a "lossless fixed point" (hand-merging never survived the next `generate`).
+
+- **`lib/roadmap-gen.js`** — phase-less features now fall into the conventional `Features` phase key (the same identity a `## Features` source section parses to), so they **merge** into one section via the normal phase loop instead of double-emitting. Removed the separate ungrouped-bucket render.
+- **`lib/feature-validator.js`** — new project-level **`DUPLICATE_PHASE_HEADING`** warning (one per duplicated `## ` title) so a checked-in, never-regenerated duplicate can't silently hide again.
+- **Workaround applied to this repo's ROADMAP:** backfilled `phase: "Features"` + sequential `position` on 7 phase-less features (`COMP-CLI-GLOBAL-FLAGS`, `COMP-MOBILE`, `COMP-MOBILE-REMOTE`, `COMP-WORKSPACE-{HTTP,ID,RESUME,WATCHERS}`), collapsing the roadmap to one stable `## Features` section (validate 482 → 475).
+- **Tests:** `test/roadmap-ungrouped-features-merge.test.js` (5, BUG-26 convergence + idempotence) and 2 new `DUPLICATE_PHASE_HEADING` cases in `test/feature-validator.test.js`. Regression sweep green: 242 tests across roadmap + validate suites. `docs/bugs/BUG-26/`.
+
 ### Fixed — P0 port-default mismatch silently broke the headless CLI ↔ server ↔ MCP handoff
 
 The API server starts on `4001` (`server/index.js`, supervisor), but `lib/resolve-port.js` and several callers still defaulted to the pre-`e139ec3` value `3001` (and `compose loops` to `3000`). In a default install with no `COMPOSE_PORT`/`PORT` set, every CLI server-probe, MCP lifecycle call (`complete_feature`/`approve_gate`/`bind_session`/`compose_resume`), agent-hook event POST, and `compose loops` call hit a dead port — so gate delegation silently fell back to a readline prompt, completions/loops failed with `ECONNREFUSED`, and MCP lifecycle tools threw "Compose server unreachable" while the cockpit was alive on 4001.

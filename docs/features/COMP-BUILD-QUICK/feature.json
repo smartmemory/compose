@@ -1,0 +1,9 @@
+{
+  "code": "COMP-BUILD-QUICK",
+  "description": "Build-mode Quick path (`/compose build --quick`) — symmetric to the existing `/compose fix --quick`. Collapses the 10-phase build lifecycle to design → implement → ship (single gate) for small-but-real additive work, so a one-flag-plus-test change stops paying full-lifecycle tax. Enforcement (TDD, verification-before-completion, review loop) preserved; only phase ceremony shrinks. Explicitly does NOT adopt OpenSpec's no-gates model. Promoted from ideabox IDEA-18; scoped carve-out of IDEA-15.",
+  "status": "PLANNED",
+  "phase": "Features",
+  "position": 290,
+  "created": "2026-06-07",
+  "updated": "2026-06-07"
+}
