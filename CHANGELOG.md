@@ -2,6 +2,16 @@
 
 ## 2026-06-07
 
+### COMP-ROADMAP-XREF-PUSH-2 — xref-push deferred extensions (MCP tool · local push · additive relabel)
+
+The three pieces `COMP-ROADMAP-XREF-PUSH` deferred, same safety posture (dry-run default, per-ref `push:true` opt-in, degrade-never-write):
+
+- **`roadmap_xref_push` MCP tool** — programmatic push surface (`{ project?, apply? }`), dry-run by default, returns the small `{pushed, skipped, unchanged, scanned}` summary.
+- **`local`-provider push** — a `local` push-opted link writes the **sibling repo's** feature status to match `expect`, by delegating to the sibling's own `setFeatureStatus` (so its transition policy + ROADMAP roundtrip apply). Never `force`/`derived`; a disallowed transition or containment-escape token degrades to a skip. The shared containment guard is now extracted to `lib/xref-local.js` `resolveSiblingRoot` and used by both Pull and Push.
+- **Additive relabel via `expect_labels`** — a new github-only carrier field: push adds any missing labels and **never removes** ones a human added (PATCHes the full `union(current, expect_labels)`, not the subset). Current labels are normalized from GitHub's label objects to names; case-sensitive; best-effort under concurrency (read-modify-write, no ETag). A single github link reconciles state + labels in **one** PATCH.
+
+**Added:** `lib/xref-local.js`; `planLabels` + provider dispatch in `lib/xref-push.js`; `expect_labels` carrier (schema github-scoped with `expect_labels:false` on local/url, writer validate+preserve+reject-non-github); `roadmap_xref_push` MCP tool (3 sites). ~30 new tests (planLabels/resolveSiblingRoot pure, github-labels golden incl. union-not-subset, local-push golden via real temp sibling, MCP, carrier/schema). Reviewed to CLEAN (design 1 round, blueprint 2 rounds, impl 1 round). Full suite: node 3594 / tracker 100 / UI 146. `docs/features/COMP-ROADMAP-XREF-PUSH-2/`.
+
 ### COMP-ROADMAP-XREF-PUSH — write-side counterpart to xref-sync (Pull → Push)
 
 The deferred "push" half of `COMP-ROADMAP-XREF-SYNC`. Pull rewrites the local citation's `expect=` to match external reality; **Push writes the external GitHub tracker to match the locally-declared `expect=` intent** (e.g. close an issue when the repo says it should be closed). Because it mutates a system outside the repo, the safety posture is deliberately conservative:

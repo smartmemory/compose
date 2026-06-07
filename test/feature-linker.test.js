@@ -353,6 +353,41 @@ describe('linkFeatures', () => {
     assert.equal(f.links[0].push, true, 'push:true must not be dropped by the writer');
   });
 
+  test('external github link preserves expect_labels (carrier round-trip)', async () => {
+    const cwd = freshCwd();
+    await seed(cwd, 'XR-LBL');
+    await linkFeatures(cwd, {
+      from_code: 'XR-LBL', kind: 'external', provider: 'github',
+      repo: 'o/r', issue: 11, expect_labels: ['done', 'shipped'],
+    });
+    const f = await readFeature(cwd, 'XR-LBL');
+    assert.deepEqual(f.links[0].expect_labels, ['done', 'shipped']);
+  });
+
+  test('expect_labels rejected on a local provider (github-only)', async () => {
+    const cwd = freshCwd();
+    await seed(cwd, 'XR-LBLLOC');
+    await assert.rejects(
+      () => linkFeatures(cwd, {
+        from_code: 'XR-LBLLOC', kind: 'external', provider: 'local',
+        repo: 'sib', to_code: 'COMP-X', expect_labels: ['done'],
+      }),
+      /expect_labels is github-only/,
+    );
+  });
+
+  test('external github expect_labels must be an array of non-empty strings', async () => {
+    const cwd = freshCwd();
+    await seed(cwd, 'XR-LBLBAD');
+    await assert.rejects(
+      () => linkFeatures(cwd, {
+        from_code: 'XR-LBLBAD', kind: 'external', provider: 'github',
+        repo: 'o/r', issue: 11, expect_labels: ['', 'ok'],
+      }),
+      /expect_labels must be an array of non-empty strings/,
+    );
+  });
+
   test('external github push must be boolean', async () => {
     const cwd = freshCwd();
     await seed(cwd, 'XR-PUSHBAD');

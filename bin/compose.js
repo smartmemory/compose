@@ -1167,15 +1167,15 @@ if (cmd === 'roadmap') {
     if (res.pushed.length === 0) {
       console.log(`No external trackers to push (${res.scanned} push-opted link(s) checked, ${res.unchanged} already in sync).`)
     } else {
-      console.log(`${apply ? 'Pushed' : 'Would push'} ${res.pushed.length} external tracker(s):`)
-      for (const s of res.pushed) console.log(`  ${s.code}  github ${s.target}: ${s.from} → ${s.to} (${verb})`)
+      console.log(`${apply ? 'Pushed' : 'Would push'} ${res.pushed.length} external target(s):`)
+      for (const s of res.pushed) console.log(`  ${s.code}  ${s.provider} ${s.target}: ${s.summary} (${verb})`)
     }
     if (res.skipped.length > 0) {
       console.log(`\nSkipped ${res.skipped.length} link(s):`)
-      for (const s of res.skipped) console.log(`  ${s.code}  github ${s.target}: ${s.reason}`)
+      for (const s of res.skipped) console.log(`  ${s.code}  ${s.provider} ${s.target}: ${s.reason}`)
     }
     if (!apply && res.pushed.length > 0) {
-      console.log(`\nDry-run — pass --apply to write these changes to GitHub.`)
+      console.log(`\nDry-run — pass --apply to write these changes.`)
     }
     process.exit(0)
   }

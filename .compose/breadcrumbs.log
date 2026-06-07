@@ -526,3 +526,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-07T10:38:41+08:00 | COMP-ROADMAP-GRAPH-1-1/-1-2: reusable pre-push+CI enforcement templates, howto doc, compose CI dogfood, seed deps.yaml on follow-ups
 2026-06-07T12:07:44+08:00 | Seed deps.yaml across compose features (explicit links + epic-numbering convention) + fix DanglingEdgeError endpoint naming
 2026-06-07T12:45:55+08:00 | COMP-ROADMAP-XREF-PUSH: implement push core + orchestrator + CLI, schema/writer push carrier, pull skip-guard
+2026-06-07T13:51:03+08:00 | COMP-ROADMAP-XREF-PUSH-2: shared xref-local resolver, local+labels push, MCP tool, expect_labels carrier

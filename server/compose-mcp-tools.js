@@ -483,6 +483,16 @@ export async function toolRoadmapGraph({ project, out } = {}) {
   }
 }
 
+// COMP-ROADMAP-XREF-PUSH-2: programmatic push surface. Dry-run by default;
+// only links with push:true are eligible. Returns the small summary, never a
+// large body. apply:true performs the writes (github issue state/labels, local
+// sibling status via the sibling's own setFeatureStatus).
+export async function toolRoadmapXrefPush({ project, apply } = {}) {
+  const { pushExternalRefs } = await import('../lib/xref-push.js');
+  const cwd = project || getTargetRoot();
+  return pushExternalRefs(cwd, { apply: apply === true });
+}
+
 export async function toolRoadmapGraphCheck({ project, out } = {}) {
   const { checkRoadmapGraph } = await import('../lib/roadmap-graph/index.js');
   const cwd = project || getTargetRoot();

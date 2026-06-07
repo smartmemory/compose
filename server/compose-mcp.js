@@ -61,6 +61,7 @@ import {
   toolValidateProject,
   toolRoadmapGraph,
   toolRoadmapGraphCheck,
+  toolRoadmapXrefPush,
   toolSetWorkspace,
   toolGetWorkspace,
   toolWriteCheckpoint,
@@ -408,6 +409,17 @@ const TOOLS = [
     },
   },
   {
+    name: 'roadmap_xref_push',
+    description: 'COMP-ROADMAP-XREF-PUSH: write external trackers to match feature.json `expect=`/`expect_labels` declared intent (the write-side counterpart to roadmap xref-sync Pull). DRY-RUN by default — returns {pushed, skipped, unchanged, scanned} describing what WOULD change. Only links with `push: true` are eligible. apply:true performs the writes: github issue open/closed + additive labels (never removes; PR-backed refs skipped), and local refs via the sibling repo\'s own setFeatureStatus. Degrades (skips, never guesses) on offline/no-token/404/non-2xx/disallowed-transition. Returns a small summary, never a large body.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', description: 'Project root path. Default: current workspace.' },
+        apply: { type: 'boolean', description: 'Perform the writes. Default false (dry-run — report only).' },
+      },
+    },
+  },
+  {
     name: 'propose_followup',
     description: 'File a follow-up feature against a parent. Auto-numbers the next code in the parent\'s namespace (parent_code-N), adds the ROADMAP row, links surfaced_by from new → parent, and scaffolds design.md with a "## Why" rationale block. Idempotent on (parent_code, idempotency_key); resumes across partial failures via an inflight ledger.',
     inputSchema: {
@@ -735,6 +747,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'validate_project':         result = await toolValidateProject(args); break;
       case 'roadmap_graph':            result = await toolRoadmapGraph(args); break;
       case 'roadmap_graph_check':      result = await toolRoadmapGraphCheck(args); break;
+      case 'roadmap_xref_push':        result = await toolRoadmapXrefPush(args); break;
       case 'propose_followup':         result = await toolProposeFollowup(args); break;
       case 'write_checkpoint':         result = await toolWriteCheckpoint(args); break;
       case 'compose_resume':           result = await toolComposeResume(args); break;
