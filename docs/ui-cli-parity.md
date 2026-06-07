@@ -1,9 +1,41 @@
 # Compose UI ↔ CLI Parity Map
 
-**Date:** 2026-05-16
-**Scope:** Every developer-facing action in the Compose cockpit (`localhost:5195`) mapped to its `compose` CLI equivalent, organized by the typical developer flow. Gaps flagged.
+**Date:** 2026-05-16 · **Revised:** 2026-06-07 (full E2E UX sweep — gaps reconciled and filed to the roadmap; see banner below)
+**Scope:** Every developer-facing action in the Compose cockpit (UI on `localhost:5195`, API on `:4001`) mapped to its `compose` CLI equivalent, organized by the typical developer flow. Gaps flagged.
 
 > **Method note:** The live cockpit walkthrough was blocked by a Chrome-extension host-permission limit on `localhost`, so this map is derived from the frontend source (`src/`, `server/` routes) and the CLI source (`bin/compose.js`, pipelines). Source enumeration is exhaustive where a click-through would have been partial.
+
+---
+
+## Revision 2026-06-07 — sweep, correctness fix, roadmap filing
+
+A four-surface E2E UX sweep (CLI journey, cockpit completeness, cross-surface continuity, first-run) re-verified this map against current source and turned the open gaps into tracked roadmap work. Two outcomes:
+
+**1. A P0 correctness bug that silently broke the headless handoff — now fixed (`e7ae335`).** The API server runs on `4001`, but `lib/resolve-port.js` and several callers defaulted to the pre-`e139ec3` port `3001` (and `compose loops` to `3000`). In a default install (no `COMPOSE_PORT`/`PORT`), every CLI server-probe, MCP lifecycle call, agent-hook POST, and `compose loops` call hit a dead port — so the "UI delegation" path below was *functionally dead*: gates fell back to readline, completions/loops failed with `ECONNREFUSED`, and MCP lifecycle tools threw "server unreachable" while the cockpit was alive on 4001. This map's parity verdicts assume that handoff works; before this fix, much of the CLI↔server↔UI bridge did not.
+
+**2. Open gaps are now filed.** Each gap below maps to a roadmap code; status as of this revision:
+
+| Gap | Roadmap code | Status |
+|---|---|---|
+| Gate resolution from CLI (`gate list`/`gate resolve`) | `COMP-PARITY-1` | PLANNED |
+| UI launchers for `fix` / `new` (+ resume) | `COMP-PARITY-2` | PLANNED |
+| Cockpit environment-health panel (`doctor` + `hooks status`) | `COMP-PARITY-3` | PLANNED |
+| Loop create/resolve verbs in the UI | `COMP-PARITY-4` | PLANNED |
+| Reconcile completion vs. status (UI view of recorded completion) | `COMP-PARITY-5` | PLANNED (enforcement half shipped via `COMP-MCP-ENFORCE`) |
+| `compose validate` findings panel | `COMP-PARITY-6` | PLANNED |
+| UI launchers for `build --all` / `gsd` | `COMP-PARITY-8` | PLANNED |
+| UI feature scaffold (`compose feature <CODE>`) | `COMP-PARITY-9` | PLANNED |
+| `qa-scope` cockpit panel | `COMP-PARITY-10` | PLANNED |
+| Cockpit action feedback + native-`prompt`/`confirm` replacement | `COMP-COCKPIT-1` | PLANNED |
+| ChallengeModal hardcoded host (breaks non-local deploy) | `COMP-COCKPIT-2` | PLANNED |
+| Run history / past builds list | `COMP-COCKPIT-3` | PLANNED |
+| Inline artifact content in gate review | `COMP-COCKPIT-4` | PLANNED |
+| First-run empty-state CTAs / onboarding | `COMP-COCKPIT-5` | PLANNED |
+| Gate-kill guardrail consistency (Dashboard vs GateView) | `COMP-COCKPIT-6` | PLANNED |
+
+**Already shipped / not separately filed:** per-step token+cost breakdown (`COMP-OBS-COST-4`, COMPLETE); failed-step retry/postcondition surfacing (`COMP-OBS-SURFACE-1`/`-2`, PLANNED — covers the failed-step signal, minus raw-log drill-down); state-sync write-back + guard enforcement (`COMP-MCP-ENFORCE`, COMPLETE — reduces `COMP-PARITY-5` to a UI view). The mobile app still omits Design/Docs/Graph/Tree/Pipeline (`COMP-MOBILE` umbrella, no follow-on filed).
+
+**Still un-filed (deliberately):** `compose import`, `compose roadmap check` drift surfacing, `compose ideabox triage` lens-batch in UI, ideabox effort/impact matrix↔CLI, ideabox resurrect↔CLI, agent-interrupt from CLI, sessions-list from CLI — lower-impact asymmetries; revisit if they bite.
 
 ## Legend
 
@@ -158,7 +190,7 @@ Each stage below is a table. The right two columns are the parity verdict and th
 | Record completion bound to commit SHA | `compose record-completion <CODE> --commit-sha=…` | — | ⌨️ CLI-only | **Gap:** completion provenance is CLI/hook-only (intentional — needs a real SHA — but no UI confirmation/override). |
 | Flip feature status | (via `record-completion` / hooks) | Item Detail → status dropdown | 🟡 Partial | UI sets status freely (no SHA binding); CLI binds to commit. Different guarantees. |
 
-**Verdict:** Completion is correctly CLI-anchored (commit-bound), but the UI's free status dropdown can diverge from recorded completions — a consistency risk.
+**Verdict:** Completion is correctly CLI-anchored (commit-bound), but the UI's free status dropdown can diverge from recorded completions — a consistency risk. **Update (2026-06-07):** the *enforcement* half shipped via `COMP-MCP-ENFORCE` (evidence-bound completion + opt-in loopback REST auth on vision mutations, guard default-OFF); the remaining gap is the UI *view* — surfacing the recorded completion (commit SHA + tests-pass) next to the status control — tracked as `COMP-PARITY-5` (reduced scope). Note the dropdown still writes only in-memory VisionStore, not `feature.json`, so a manual status reverts on the next server re-seed.
 
 ---
 
@@ -166,7 +198,7 @@ Each stage below is a table. The right two columns are the parity verdict and th
 
 | Action | CLI | UI location | Parity | Gap / note |
 |---|---|---|---|---|
-| Create/list/resolve open loops | `compose loops add\|list\|resolve` | (Attention queue *shows* loops) | 🟡 Partial | **Gap:** UI displays loops in the attention queue but offers no create/resolve action. |
+| Create/list/resolve open loops | `compose loops add\|list\|resolve` | OpenLoopsPanel: add modal + resolve; attention queue *shows* loops | 🟡 Partial | **Update (2026-06-07):** an add modal now exists; **resolve uses a blocking native `window.prompt`** (`OpenLoopsPanel.jsx:209`) and the attention-queue view itself still has no inline verbs. Tracked: `COMP-PARITY-4` (verbs) + `COMP-COCKPIT-1` (replace the native dialog). |
 | Browse/edit project docs & artifacts | — | Docs tab → tree + editor (PUT /api/file) | 🖥️ UI-only | In-cockpit doc editing has no CLI equivalent (edit files directly instead). |
 | Graph / timeline / lifecycle viz | — | Graph, Decision Timeline, Lifecycle, Connection graph | 🖥️ UI-only | Pure visualization — no CLI need. |
 
@@ -204,12 +236,15 @@ Each stage below is a table. The right two columns are the parity verdict and th
 
 ## Recommendations (ordered by dev-flow friction)
 
-1. **Gate resolution from CLI** (`compose gate list` / `compose gate resolve <id> --approve|--revise|--kill`). Highest impact: today a headless or CI-driven build *cannot* clear a gate, so the UI is a hard dependency for any pipeline that gates. Mirrors the existing `/api/vision/gates/{id}/resolve` endpoint.
-2. **`compose fix` and `compose new` launchers in the UI.** The two richest lifecycles are invisible to UI-first users; the Pipeline tab already renders them once running — add a "Start fix / Start product" entry.
-3. **Environment-health panel in the cockpit** surfacing `doctor` + `hooks status`. Silent hook/version drift currently causes mystery build failures with zero UI signal.
-4. **Loop create/resolve in the UI.** The attention queue already *shows* loops; add the verbs so loop hygiene isn't terminal-only.
-5. **Reconcile completion vs. status.** Either gate the UI status dropdown behind a commit binding, or show "recorded completion: <sha>" next to status so the two can't silently diverge.
-6. **`compose validate` findings panel** so verification isn't invisible to UI-first review.
+> **Status (2026-06-07):** all six original recommendations are now filed to the roadmap, plus the cockpit-completeness cluster surfaced by the sweep. Codes in the banner table above. Listed here for the rationale, with their filed code.
+
+1. **Gate resolution from CLI** (`compose gate list` / `compose gate resolve <id> --approve|--revise|--kill`) → **filed `COMP-PARITY-1`** (ships first). Highest impact: today a headless or CI-driven build *cannot* clear a gate, so the UI is a hard dependency for any pipeline that gates. Mirrors the existing `/api/vision/gates/{id}/resolve` endpoint.
+2. **`compose fix` and `compose new` launchers in the UI** → **filed `COMP-PARITY-2`**. The two richest lifecycles are invisible to UI-first users; the Pipeline tab already renders them once running — add a "Start fix / Start product" entry.
+3. **Environment-health panel in the cockpit** surfacing `doctor` + `hooks status` → **filed `COMP-PARITY-3`**. Silent hook/version drift currently causes mystery build failures with zero UI signal.
+4. **Loop create/resolve in the UI** → **filed `COMP-PARITY-4`** (verbs) + `COMP-COCKPIT-1` (native-dialog replacement). The attention queue already *shows* loops; add the verbs so loop hygiene isn't terminal-only.
+5. **Reconcile completion vs. status** → **filed `COMP-PARITY-5`** (UI view; enforcement half shipped via `COMP-MCP-ENFORCE`). Show "recorded completion: <sha>" next to status, and write status changes through to `feature.json` so they survive a server re-seed.
+6. **`compose validate` findings panel** → **filed `COMP-PARITY-6`**. So verification isn't invisible to UI-first review.
+7. **Cockpit-completeness cluster** (surfaced 2026-06-07) → **filed `COMP-COCKPIT-1..6`** + `COMP-PARITY-8/9/10`: silent action feedback, ChallengeModal host portability, run history, inline gate artifact, empty-state onboarding, gate-kill guardrail, plus `build --all`/`gsd` launchers, UI feature scaffold, and the `qa-scope` panel.
 
 ---
 
@@ -218,4 +253,6 @@ Each stage below is a table. The right two columns are the parity verdict and th
 - `docs/cockpit.md` — cockpit UI guide
 - `docs/command-flows.md` — end-to-end flows
 - `docs/lifecycle.md` — lifecycle/gate model
-- `ROADMAP.md` — Phase 8 (cinematic capture) and feature backlog
+- `docs/e2e-checklist.md` — manual end-to-end smoke checklist (port refs corrected 2026-06-07)
+- `ROADMAP.md` — `COMP-PARITY` (CLI↔UI capability parity) and `COMP-COCKPIT` (cockpit completeness) umbrellas; feature backlog
+- `docs/journal/2026-06-07-session-67-e2e-ux-sweep-port-fix.md` — the sweep + fix session that drove this revision
