@@ -1,0 +1,15 @@
+{
+  "code": "COMP-COCKPIT",
+  "description": "Cockpit completeness and polish — close the gaps that keep a UI-first user from running their whole dev process in the cockpit without dropping to the terminal. Surfaced by the 2026-06-07 E2E UX sweep (docs/ui-cli-parity.md baseline). Sibling to COMP-PARITY (which covers CLI↔UI capability parity); COMP-COCKPIT covers in-cockpit action feedback, observability, onboarding, and correctness. Umbrella for COMP-COCKPIT-1 through COMP-COCKPIT-6.",
+  "status": "PLANNED",
+  "phase": "COMP-COCKPIT: Cockpit Completeness",
+  "created": "2026-06-07",
+  "updated": "2026-06-07",
+  "complexity": "L",
+  "position": 1,
+  "tags": [
+    "ux",
+    "cockpit",
+    "sweep-2026-06-07"
+  ]
+}
