@@ -1,9 +1,9 @@
 /**
  * Process supervisor for Compose.
  * Manages three independent processes:
- *   1. API server (port 3001) — Express + file-watcher + vision
- *   2. Agent server (port 3002) — SDK streaming, structured messages (Tier 1, immortal)
- *   3. Vite dev server (port 5173) — Frontend HMR
+ *   1. API server (port 4001) — Express + file-watcher + vision
+ *   2. Agent server (port 4002) — SDK streaming, structured messages (Tier 1, immortal)
+ *   3. Vite dev server (port 5195) — Frontend HMR
  *
  * Each process gets independent restart with exponential backoff.
  * If a process keeps crashing for > 1 minute, the supervisor gives up on it.

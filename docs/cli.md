@@ -203,7 +203,7 @@ Reports per-gate stats: total decisions, approve/deny/interrupt percentages, med
 
 ### `compose loops`
 
-Open-loop tracker (COMP-OBS-LOOPS). Communicates with the running compose server (default `http://localhost:3000`; override via `COMPOSE_URL`).
+Open-loop tracker (COMP-OBS-LOOPS). Communicates with the running compose server (default `http://127.0.0.1:4001`, matching `COMPOSE_PORT`/`PORT`; override via `COMPOSE_URL`).
 
 ```bash
 compose loops add --feature FEAT-1 --kind decision --summary "Pick auth provider" [--ttl-days 14] [--parent-branch <bid>]

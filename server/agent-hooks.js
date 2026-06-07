@@ -2,14 +2,16 @@
  * SDK hook callbacks for the Agent Server.
  *
  * These are in-process JavaScript functions passed to query() — not shell
- * scripts. They POST structured events to the api-server (port 3001), which
+ * scripts. They POST structured events to the api-server (port 4001), which
  * feeds SessionManager and VisionServer, preserving all Phase 3 monitoring.
  *
  * Single source of truth for TOOL_CATEGORIES (previously duplicated in
  * Terminal.jsx and vision-server.js).
  */
 
-const API_SERVER = `http://127.0.0.1:${process.env.PORT || 3001}`;
+import { resolvePort } from '../lib/resolve-port.js';
+
+const API_SERVER = `http://127.0.0.1:${resolvePort()}`;
 
 /** Semantic category for each Claude Code tool */
 export const TOOL_CATEGORIES = {

@@ -16,6 +16,7 @@ import { spawn, spawnSync } from 'child_process'
 import { fileURLToPath } from 'url'
 import { findProjectRoot } from '../server/find-root.js'
 import { resolveWorkspace, getWorkspaceFlag } from '../lib/resolve-workspace.js'
+import { resolvePort } from '../lib/resolve-port.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PACKAGE_ROOT = resolve(__dirname, '..')
@@ -2772,8 +2773,10 @@ if (cmd === 'build') {
     process.exit(1)
   }
 
-  // Resolve compose server URL (default http://localhost:3000)
-  const baseUrl = process.env.COMPOSE_URL || 'http://localhost:3000'
+  // Resolve compose server URL. Default must match the API server port
+  // (resolvePort: COMPOSE_PORT > PORT > 4001) — a stale :3000 here made every
+  // `compose loops` call fail with ECONNREFUSED in a default install.
+  const baseUrl = process.env.COMPOSE_URL || `http://127.0.0.1:${resolvePort()}`
 
   // COMP-WORKSPACE-HTTP T7: resolve workspace tolerantly so we can attach
   // X-Compose-Workspace-Id to the HTTP calls below. Loops CLI did not previously
