@@ -340,6 +340,31 @@ describe('linkFeatures', () => {
     });
   });
 
+  // COMP-ROADMAP-XREF-PUSH: the push opt-in flag must survive the typed writer's
+  // entry reconstruction (it rebuilds the link from a fixed field list).
+  test('external github link preserves push:true (carrier round-trip)', async () => {
+    const cwd = freshCwd();
+    await seed(cwd, 'XR-PUSH');
+    await linkFeatures(cwd, {
+      from_code: 'XR-PUSH', kind: 'external', provider: 'github',
+      repo: 'o/r', issue: 9, expect: 'closed', push: true,
+    });
+    const f = await readFeature(cwd, 'XR-PUSH');
+    assert.equal(f.links[0].push, true, 'push:true must not be dropped by the writer');
+  });
+
+  test('external github push must be boolean', async () => {
+    const cwd = freshCwd();
+    await seed(cwd, 'XR-PUSHBAD');
+    await assert.rejects(
+      () => linkFeatures(cwd, {
+        from_code: 'XR-PUSHBAD', kind: 'external', provider: 'github',
+        repo: 'o/r', issue: 9, expect: 'closed', push: 'true',
+      }),
+      /push must be boolean/,
+    );
+  });
+
   test('re-linking same external ref is a noop (idempotency key)', async () => {
     const cwd = freshCwd();
     await seed(cwd, 'XR-2');

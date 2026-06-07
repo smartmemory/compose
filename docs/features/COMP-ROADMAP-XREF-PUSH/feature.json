@@ -1,0 +1,11 @@
+{
+  "code": "COMP-ROADMAP-XREF-PUSH",
+  "description": "External-write counterpart to COMP-ROADMAP-XREF-SYNC's Pull: write GitHub trackers to match the local `expect=` declared intent. Dry-run by default, per-ref `push:true` opt-in, `--apply` to mutate, degrade-skip on offline/no-token/404. github provider only in v1.",
+  "status": "IN_PROGRESS",
+  "phase": "Phase 6: MCP Writers",
+  "created": "2026-06-07",
+  "updated": "2026-06-07",
+  "complexity": "M",
+  "position": 4,
+  "parent": "COMP-ROADMAP-XREF-SYNC"
+}

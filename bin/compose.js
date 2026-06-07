@@ -120,6 +120,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  roadmap migrate    Extract ROADMAP.md entries into feature.json files')
   console.log('  roadmap check      Verify feature.json and ROADMAP.md are in sync')
   console.log('  roadmap xref-sync  Pull-reconcile feature.json external links to live state')
+  console.log('  roadmap xref-push  Push-write GitHub trackers to match expect= (dry-run; --apply to write)')
   console.log('  items              List vision items from local state (no server)')
   console.log('  items show <id>    Show detail for a specific vision item')
   console.log('  triage    Analyze a feature and recommend build profile')
@@ -1150,6 +1151,31 @@ if (cmd === 'roadmap') {
     if (res.skipped.length > 0) {
       console.log(`\nSkipped ${res.skipped.length} unresolved link(s):`)
       for (const s of res.skipped) console.log(`  ${s.code}  ${s.provider} ${s.target}: ${s.reason}`)
+    }
+    process.exit(0)
+  }
+
+  // compose roadmap xref-push — write GitHub trackers to match feature.json
+  // expect= declared intent (COMP-ROADMAP-XREF-PUSH v1). Dry-run by default,
+  // per-ref push:true opt-in, --apply to mutate. Degrade-skip, never guesses.
+  if (subcmd === 'xref-push') {
+    const { pushExternalRefs } = await import('../lib/xref-push.js')
+    const { root: cwd } = resolveCwdWithWorkspace(args)
+    const apply = args.includes('--apply')
+    const res = await pushExternalRefs(cwd, { apply })
+    const verb = apply ? 'wrote' : 'would write'
+    if (res.pushed.length === 0) {
+      console.log(`No external trackers to push (${res.scanned} push-opted link(s) checked, ${res.unchanged} already in sync).`)
+    } else {
+      console.log(`${apply ? 'Pushed' : 'Would push'} ${res.pushed.length} external tracker(s):`)
+      for (const s of res.pushed) console.log(`  ${s.code}  github ${s.target}: ${s.from} → ${s.to} (${verb})`)
+    }
+    if (res.skipped.length > 0) {
+      console.log(`\nSkipped ${res.skipped.length} link(s):`)
+      for (const s of res.skipped) console.log(`  ${s.code}  github ${s.target}: ${s.reason}`)
+    }
+    if (!apply && res.pushed.length > 0) {
+      console.log(`\nDry-run — pass --apply to write these changes to GitHub.`)
     }
     process.exit(0)
   }

@@ -54,6 +54,10 @@ describe('feature-json schema — accepts', () => {
     assert.equal(ok(v, link({ kind: 'external', provider: 'local', repo: 'compose', to_code: 'COMP-MCP-VALIDATE' })).valid, true);
   });
 
+  test('external github with push:true (COMP-ROADMAP-XREF-PUSH opt-in)', () => {
+    assert.equal(ok(v, link({ kind: 'external', provider: 'github', repo: 'o/n', issue: 7, expect: 'closed', push: true })).valid, true);
+  });
+
   test('external url', () => {
     assert.equal(ok(v, link({ kind: 'external', provider: 'url', url: 'https://x.example/a' })).valid, true);
   });
@@ -74,6 +78,10 @@ describe('feature-json schema — rejects', () => {
 
   test('external missing provider', () => {
     assert.equal(ok(v, link({ kind: 'external', url: 'https://x.example' })).valid, false);
+  });
+
+  test('external github push must be boolean, not string', () => {
+    assert.equal(ok(v, link({ kind: 'external', provider: 'github', repo: 'o/n', issue: 7, push: 'true' })).valid, false);
   });
 
   test('external url with non-uri url', () => {

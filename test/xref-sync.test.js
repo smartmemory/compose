@@ -146,4 +146,18 @@ describe('syncExternalRefs (feature.json links carrier)', () => {
     assert.equal(res.synced[0].to, 'COMPLETE');
     assert.equal(readFeature(cwd, 'A-1').links[0].expect, 'COMPLETE');
   });
+
+  // COMP-ROADMAP-XREF-PUSH cross-feature contract: a push-managed link (push:true)
+  // is owned by the write side — Pull must leave its expect untouched, else the
+  // two would oscillate and the declared push intent would be silently lost.
+  test('leaves a push:true link untouched (push-managed, not pull-managed)', async () => {
+    const cwd = freshCwd();
+    seed(cwd, 'A-1', [{ kind: 'external', provider: 'github', repo: 'o/r', issue: 7, expect: 'closed', push: true }]);
+    const resolve = async () => ({ state: 'open' }); // would report drift — Pull must NOT act
+
+    const res = await syncExternalRefs(cwd, { resolve });
+    assert.equal(res.synced.length, 0);
+    assert.equal(res.scanned, 0, 'push-managed link must not even be scanned by Pull');
+    assert.equal(readFeature(cwd, 'A-1').links[0].expect, 'closed', 'expect must be preserved');
+  });
 });
