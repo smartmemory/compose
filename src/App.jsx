@@ -11,7 +11,7 @@ import ContextPanel from './components/cockpit/ContextPanel.jsx';
 import ContextItemDetail from './components/cockpit/ContextItemDetail.jsx';
 import ContextStepDetail from './components/cockpit/ContextStepDetail.jsx';
 import DesignDocPanel from './components/cockpit/DesignDocPanel.jsx';
-import NotificationBar from './components/cockpit/NotificationBar.jsx';
+import NotificationBar, { notify } from './components/cockpit/NotificationBar.jsx';
 import OpsStrip from './components/cockpit/OpsStrip.jsx';
 
 // Pure state-logic modules
@@ -694,12 +694,14 @@ function AppInner() {
   // COMP-AGT: Stop a spawned agent via the vision-server API
   const handleStopAgent = useCallback(async (agentId) => {
     try {
-      await wsFetch(`/api/agent/${agentId}/stop`, {
+      const res = await wsFetch(`/api/agent/${agentId}/stop`, {
         method: 'POST',
         headers: withComposeToken({ 'Content-Type': 'application/json' }),
       });
+      if (!res.ok) notify(`Could not stop agent (${res.status})`, 'error');
     } catch (err) {
       console.error(`[App] Failed to stop agent ${agentId}:`, err.message);
+      notify(`Could not stop agent: ${err.message}`, 'error');
     }
   }, []);
 

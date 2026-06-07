@@ -14,6 +14,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { sortByAge, formatAge, isStaleLoop } from './openLoopsPanelLogic.js';
+import { notify } from '../cockpit/NotificationBar.jsx';
+import { usePrompt } from '@/components/ui/DialogProvider.jsx';
 
 const PANEL_WIDTH = 320;
 const COLLAPSED_WIDTH = 40;
@@ -164,6 +166,7 @@ function LoopRow({ loop, onResolve, nowMs }) {
 // ── Main panel ─────────────────────────────────────────────────────────────────
 
 export default function OpenLoopsPanel({ featureCode, items = [], onAddLoop, onResolveLoop }) {
+  const prompt = usePrompt(); // COMP-COCKPIT-1
   const [collapsed, setCollapsed] = useState(() => loadCollapsed(featureCode));
   const [showAddModal, setShowAddModal] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -200,17 +203,24 @@ export default function OpenLoopsPanel({ featureCode, items = [], onAddLoop, onR
     setShowAddModal(false);
     if (onAddLoop) {
       try { await onAddLoop(featureCode, fields); }
-      catch (err) { console.error('[OpenLoopsPanel] addLoop failed:', err.message); }
+      catch (err) {
+        console.error('[OpenLoopsPanel] addLoop failed:', err.message);
+        notify(`Could not add loop: ${err.message}`, 'error');
+      }
     }
   }, [featureCode, onAddLoop]);
 
   const handleResolve = useCallback(async (loopId) => {
     if (onResolveLoop) {
-      const note = window.prompt('Resolve note (optional):') || '';
+      const note = await prompt({ title: 'Resolve note', label: '(optional)' });
+      if (note === null) return; // cancelled
       try { await onResolveLoop(featureCode, loopId, { note }); }
-      catch (err) { console.error('[OpenLoopsPanel] resolveLoop failed:', err.message); }
+      catch (err) {
+        console.error('[OpenLoopsPanel] resolveLoop failed:', err.message);
+        notify(`Could not resolve loop: ${err.message}`, 'error');
+      }
     }
-  }, [featureCode, onResolveLoop]);
+  }, [featureCode, onResolveLoop, prompt]);
 
   if (!featureCode) return null;
 

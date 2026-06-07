@@ -123,9 +123,41 @@ export function DialogProvider({ children }) {
   );
 }
 
+// Fallback used only when no <DialogProvider> is mounted (e.g. a component
+// rendered in isolation in a test). main.jsx always mounts the provider in the
+// real app, so the in-app modals are what users see; this just degrades to the
+// native dialogs instead of crashing, and warns so a missing provider is visible.
+let warned = false;
+const nativeFallback = {
+  confirm: (opts = {}) =>
+    Promise.resolve(
+      typeof window !== 'undefined' && typeof window.confirm === 'function'
+        ? window.confirm(opts.title || 'Are you sure?')
+        : false,
+    ),
+  prompt: (opts = {}) =>
+    Promise.resolve(
+      typeof window !== 'undefined' && typeof window.prompt === 'function'
+        ? window.prompt(opts.title || '') ?? null
+        : null,
+    ),
+  confirmWithReason: (opts = {}) =>
+    Promise.resolve(
+      typeof window !== 'undefined' && typeof window.prompt === 'function'
+        ? window.prompt(opts.title || 'Reason:')?.trim() || null
+        : null,
+    ),
+};
+
 function useDialogContext() {
   const ctx = useContext(DialogContext);
-  if (!ctx) throw new Error('useConfirm/usePrompt must be used within <DialogProvider>');
+  if (!ctx) {
+    if (!warned && typeof console !== 'undefined') {
+      warned = true;
+      console.warn('[DialogProvider] no provider mounted — falling back to native dialogs');
+    }
+    return nativeFallback;
+  }
   return ctx;
 }
 

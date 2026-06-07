@@ -1,5 +1,6 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { LIFECYCLE_PHASE_LABELS } from './constants.js';
+import { useConfirm } from '@/components/ui/DialogProvider.jsx';
 
 const POLICY_PHASES = [
   'explore_design', 'prd', 'architecture', 'blueprint', 'verification',
@@ -42,6 +43,7 @@ function ModelInput({ value: propValue, className, onCommit }) {
 }
 
 export default function SettingsPanel({ settings, onSettingsChange, onReset }) {
+  const confirm = useConfirm(); // COMP-COCKPIT-1: in-app confirm (was window.confirm)
   if (!settings) {
     return <div className="p-6 text-sm text-muted-foreground">Loading settings...</div>;
   }
@@ -85,11 +87,11 @@ export default function SettingsPanel({ settings, onSettingsChange, onReset }) {
     onSettingsChange({ capabilities: { enforcement: value } });
   }, [onSettingsChange]);
 
-  const handleReset = useCallback(() => {
-    if (window.confirm('Reset all settings to defaults?')) {
+  const handleReset = useCallback(async () => {
+    if (await confirm({ title: 'Reset all settings to defaults?', destructive: true })) {
       onReset();
     }
-  }, [onReset]);
+  }, [onReset, confirm]);
 
   const selectClass = "h-7 text-xs rounded-md border border-input bg-background px-2 py-1";
   const inputClass = "h-7 text-xs rounded-md border border-input bg-background px-2 py-1 w-24";

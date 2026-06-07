@@ -8,6 +8,7 @@ import { LIFECYCLE_PHASE_LABELS, LIFECYCLE_PHASE_ARTIFACTS, GATE_STEP_LABELS } f
 import ArtifactDiff from '../shared/ArtifactDiff.jsx';
 import AgentCard from '../shared/AgentCard.jsx';
 import EventTimeline from './EventTimeline.jsx';
+import { useConfirmWithReason } from '@/components/ui/DialogProvider.jsx';
 
 const PHASES = ['explore_design', 'prd', 'architecture', 'blueprint', 'plan', 'execute', 'report'];
 
@@ -136,6 +137,7 @@ function ActiveAgents({ spawnedAgents, activeBuild, sessionState, agentActivity 
 }
 
 function PendingGates({ gates, allGates, items, onResolveGate }) {
+  const confirmWithReason = useConfirmWithReason(); // COMP-COCKPIT-6
   const priorMap = useMemo(() => {
     const map = new Map();
     const resolved = (allGates || []).filter(g =>
@@ -200,7 +202,14 @@ function PendingGates({ gates, allGates, items, onResolveGate }) {
                 <Button
                   variant="outline" size="sm"
                   className="h-6 text-[10px] gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
-                  onClick={() => onResolveGate(gate.id, 'killed')}
+                  onClick={async () => {
+                    const reason = await confirmWithReason({
+                      title: 'Kill this gate?',
+                      label: 'Reason (required)',
+                      destructive: true,
+                    });
+                    if (reason) onResolveGate(gate.id, 'killed', reason);
+                  }}
                 >
                   Kill
                 </Button>
