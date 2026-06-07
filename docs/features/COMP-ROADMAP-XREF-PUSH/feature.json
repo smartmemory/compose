@@ -1,11 +1,36 @@
 {
   "code": "COMP-ROADMAP-XREF-PUSH",
   "description": "External-write counterpart to COMP-ROADMAP-XREF-SYNC's Pull: write GitHub trackers to match the local `expect=` declared intent. Dry-run by default, per-ref `push:true` opt-in, `--apply` to mutate, degrade-skip on offline/no-token/404. github provider only in v1.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "Phase 6: MCP Writers",
   "created": "2026-06-07",
   "updated": "2026-06-07",
   "complexity": "M",
   "position": 4,
-  "parent": "COMP-ROADMAP-XREF-SYNC"
+  "parent": "COMP-ROADMAP-XREF-SYNC",
+  "completions": [
+    {
+      "completion_id": "COMP-ROADMAP-XREF-PUSH:393074ebc4eb3514a565911c721149db03aaa25f",
+      "feature_code": "COMP-ROADMAP-XREF-PUSH",
+      "commit_sha": "393074ebc4eb3514a565911c721149db03aaa25f",
+      "commit_sha_short": "393074eb",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/xref-push.js",
+        "lib/xref-sync.js",
+        "lib/feature-writer.js",
+        "lib/tracker/github-api.js",
+        "contracts/feature-json.schema.json",
+        "bin/compose.js",
+        "test/xref-push.test.js",
+        "test/xref-sync.test.js",
+        "test/feature-linker.test.js",
+        "test/feature-json-schema-external.test.js"
+      ],
+      "recorded_at": "2026-06-07T05:04:56.799Z",
+      "recorded_by": "mcp:agent",
+      "notes": "v1 Push shipped: compose roadmap xref-push [--apply], dry-run default + push:true opt-in + degrade-skip. Full suite green, Codex CLEAN."
+    }
+  ],
+  "commit_sha": "393074ebc4eb3514a565911c721149db03aaa25f"
 }
