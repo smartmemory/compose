@@ -58,6 +58,10 @@ describe('feature-json schema — accepts', () => {
     assert.equal(ok(v, link({ kind: 'external', provider: 'github', repo: 'o/n', issue: 7, expect: 'closed', push: true })).valid, true);
   });
 
+  test('external github with expect_labels (COMP-ROADMAP-XREF-PUSH-2)', () => {
+    assert.equal(ok(v, link({ kind: 'external', provider: 'github', repo: 'o/n', issue: 7, push: true, expect_labels: ['done'] })).valid, true);
+  });
+
   test('external url', () => {
     assert.equal(ok(v, link({ kind: 'external', provider: 'url', url: 'https://x.example/a' })).valid, true);
   });
@@ -82,6 +86,15 @@ describe('feature-json schema — rejects', () => {
 
   test('external github push must be boolean, not string', () => {
     assert.equal(ok(v, link({ kind: 'external', provider: 'github', repo: 'o/n', issue: 7, push: 'true' })).valid, false);
+  });
+
+  test('expect_labels rejected on a local link (github-only)', () => {
+    assert.equal(ok(v, link({ kind: 'external', provider: 'local', repo: 'compose', to_code: 'COMP-X', expect_labels: ['done'] })).valid, false);
+  });
+
+  test('expect_labels item must be a non-empty string', () => {
+    assert.equal(ok(v, link({ kind: 'external', provider: 'github', repo: 'o/n', issue: 7, expect_labels: [''] })).valid, false);
+    assert.equal(ok(v, link({ kind: 'external', provider: 'github', repo: 'o/n', issue: 7, expect_labels: [5] })).valid, false);
   });
 
   test('external url with non-uri url', () => {
