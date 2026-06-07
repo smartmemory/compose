@@ -1348,6 +1348,14 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 
 ---
 
+## COMP-SESSION-COORD: Independent Session Coordination — PARKED
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 1 | COMP-SESSION-COORD | Make independently-launched `claude` sessions in the same working dir aware of each other at the file grain — warn+ask on same-file edits via a PreToolUse hook + local claim registry. No coordinator/daemon. Hybrid pid/heartbeat liveness, claim-then-check ordering, recency rule, canonical-path keys, best-effort Bash heuristic, events.jsonl audit. Design-complete + Codex-reviewed; parked. | PARKED |
+
+---
+
 ## Features — PARTIAL
 
 | # | Feature | Description | Status |
