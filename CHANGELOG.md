@@ -2,6 +2,16 @@
 
 ## 2026-06-07
 
+### Added — COMP-COCKPIT Slice A: cockpit action feedback, native-dialog replacement, hostname portability, gate-kill guardrail
+
+Closes the correctness/foundation gaps from the 2026-06-07 cockpit UX sweep ({COCKPIT-2, COCKPIT-1, COCKPIT-6}; Slice B {COCKPIT-4,5,3} deferred). A UI-first user no longer hits silent failures, blocking native dialogs, a broken-off-localhost pressure test, or an unguarded one-click gate kill.
+
+- **Shared primitives.** `src/lib/agentServer.js` — `agentServerUrl(path)` builds the agent-server URL from the page hostname + `VITE_AGENT_PORT` (default 4002); `defaultAgentStreamUrl()` now delegates to it. `src/components/ui/DialogProvider.jsx` — a promise-based replacement for `window.confirm`/`prompt` exposing `useConfirm` / `usePrompt` / `useConfirmWithReason`, mounted app-root in `main.jsx`. Degrades to native dialogs if unmounted; reentrancy-safe (a second open settles the prior caller).
+- **COCKPIT-2** — `ChallengeModal` no longer hardcodes `localhost:4001/4002`: agent spawn/status use relative `wsFetch` (proxied to 4001), terminal-inject uses `agentServerUrl` (4002), and failures surface a toast.
+- **COCKPIT-1** — `notify()` now fires on the previously-silent action sites (`PipelineView` approve/reject, `TemplateSelector` draft, `DocsView` save, `OpenLoopsPanel` resolve, `ItemDetailPanel` kill, `App` stop-agent) on **both** transport and non-ok paths; four blocking `window.prompt`/`confirm` (DesignView, OpenLoopsPanel, ItemDetailPanel delete, SettingsPanel reset) replaced with in-app modals.
+- **COCKPIT-6** — killing a gate from the Dashboard now requires a reason via `confirmWithReason`, matching `GateView`/`ItemDetailPanel` (no more instant no-undo kills).
+- **Tests:** 16 new Vitest tests in `test/ui/` (agent-server, dialog-provider incl. reentrancy, challenge-modal-host, cockpit-feedback, dashboard-kill-guardrail). Full UI suite 161 + tracker 100 green; `npm run build` OK; Codex design + plan + impl reviews all CLEAN. `docs/features/COMP-COCKPIT/`.
+
 ### Fixed — BUG-26: `roadmap generate` emitted a duplicate `## Features` section for phase-less features
 
 Features whose `feature.json` had no `phase` were collected into an `ungrouped` bucket and emitted via a hardcoded `renderPhase('Features', …)`. When the source `ROADMAP.md` already carried a curated `## Features` section, the generator emitted **both** — two identical headings that re-split on every regen and that `roadmap check` masked as a "lossless fixed point" (hand-merging never survived the next `generate`).
