@@ -71,6 +71,34 @@ describe('DialogProvider', () => {
     expect(screen.getByTestId('dialog-confirm').disabled).toBe(false);
   });
 
+  it('opening a second dialog settles the first caller (no stranded promise)', async () => {
+    function Twice() {
+      const confirm = useConfirm();
+      const [a, setA] = React.useState('<<pending>>');
+      const [b, setB] = React.useState('<<pending>>');
+      return (
+        <div>
+          <button onClick={async () => { setA(String(await confirm({ title: 'Q1' }))); }}>open-a</button>
+          <button onClick={async () => { setB(String(await confirm({ title: 'Q2' }))); }}>open-b</button>
+          <span data-testid="a">{a}</span>
+          <span data-testid="b">{b}</span>
+        </div>
+      );
+    }
+    render(
+      <DialogProvider>
+        <Twice />
+      </DialogProvider>,
+    );
+    fireEvent.click(screen.getByText('open-a'));
+    await screen.findByText('Q1');
+    fireEvent.click(screen.getByText('open-b')); // preempts the first
+    // first caller is settled (cancelled → false), not stranded
+    await waitFor(() => expect(screen.getByTestId('a').textContent).toBe('false'));
+    fireEvent.click(screen.getByTestId('dialog-confirm'));
+    await waitFor(() => expect(screen.getByTestId('b').textContent).toBe('true'));
+  });
+
   it('confirmWithReason blocks empty and returns the trimmed reason', async () => {
     renderHook(useConfirmWithReason, { title: 'Kill gate?', destructive: true });
     fireEvent.click(screen.getByText('go'));

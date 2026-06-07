@@ -38,10 +38,20 @@ export function DialogProvider({ children }) {
   const [req, setReq] = useState(null); // { kind, opts } | null
   const [value, setValue] = useState('');
   const resolveRef = useRef(null);
+  const reqRef = useRef(null); // synchronous mirror of `req` for reentrancy handling
 
   const open = useCallback((kind, opts = {}) => {
     return new Promise((resolve) => {
+      // Reentrancy guard: if a dialog is already pending, settle the prior caller
+      // with its cancel value first so its promise never strands (Codex review).
+      if (resolveRef.current) {
+        const prev = resolveRef.current;
+        const prevKind = reqRef.current?.kind;
+        resolveRef.current = null;
+        prev(prevKind === 'confirm' ? false : null);
+      }
       resolveRef.current = resolve;
+      reqRef.current = { kind, opts };
       setValue(opts.defaultValue || '');
       setReq({ kind, opts });
     });
@@ -50,6 +60,7 @@ export function DialogProvider({ children }) {
   const settle = useCallback((outcome) => {
     const resolve = resolveRef.current;
     resolveRef.current = null;
+    reqRef.current = null;
     setReq(null);
     setValue('');
     if (resolve) resolve(outcome);
