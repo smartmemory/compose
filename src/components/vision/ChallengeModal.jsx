@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button.jsx';
 import { TYPE_COLORS } from './constants.js';
 import { VisionChangesContext } from './VisionChangesContext.js';
 import { wsFetch } from '../../lib/wsFetch.js';
+import { agentServerUrl } from '../../lib/agentServer.js';
+import { notify } from '../cockpit/NotificationBar.jsx';
 
 function ChallengeRow({ item, onUpdate }) {
   const { newIds, changedIds } = useContext(VisionChangesContext);
@@ -32,16 +34,21 @@ function ChallengeRow({ item, onUpdate }) {
     const desc = item.description || item.title;
     const text = `Be brief. Summarize, give your recommendation, refine the decision wording based on the resolution if needed: ${desc}\n`;
     try {
-      // TODO COMP-WORKSPACE-AGENT-SVR
-      await fetch('http://localhost:4002/api/terminal/inject', {
+      // COMP-COCKPIT-2: hostname-portable agent-server URL (was hardcoded localhost:4002).
+      const res = await wsFetch(agentServerUrl('/api/terminal/inject'), {
         method: 'POST',
         headers: withComposeToken({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ text }),
       });
+      if (!res.ok) {
+        notify(`Could not send to terminal (${res.status})`, 'error');
+        return;
+      }
       const xtermTextarea = document.querySelector('.xterm-helper-textarea');
       if (xtermTextarea) xtermTextarea.focus();
     } catch (err) {
       console.error('Failed to inject into terminal:', err);
+      notify(`Could not send to terminal: ${err.message}`, 'error');
     }
   }, [item]);
 
@@ -193,14 +200,15 @@ export default function ChallengeModal({ item, items, connections, onUpdate, onC
     if (!agentId || agentStatus !== 'running') return;
     pollRef.current = setInterval(async () => {
       try {
-        const res = await wsFetch(`http://localhost:4001/api/agent/${agentId}`);
+        // COMP-COCKPIT-2: relative → same-origin orchestrator API (4001).
+        const res = await wsFetch(`/api/agent/${agentId}`);
         if (!res.ok) return;
         const data = await res.json();
         if (data.status !== 'running') {
           setAgentStatus(data.status);
           clearInterval(pollRef.current);
         }
-      } catch { /* ignore */ }
+      } catch { /* tolerate transient poll failures — one-shot status is set by handleRun */ }
     }, 1500);
     return () => clearInterval(pollRef.current);
   }, [agentId, agentStatus]);
@@ -224,7 +232,8 @@ export default function ChallengeModal({ item, items, connections, onUpdate, onC
     setAgentStatus('running');
 
     try {
-      const res = await wsFetch('http://localhost:4001/api/agent/spawn', {
+      // COMP-COCKPIT-2: relative → same-origin orchestrator API (4001).
+      const res = await wsFetch('/api/agent/spawn', {
         method: 'POST',
         headers: withComposeToken({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ prompt }),
@@ -233,6 +242,7 @@ export default function ChallengeModal({ item, items, connections, onUpdate, onC
         const err = await res.json().catch(() => ({}));
         setAgentStatus('failed');
         setAgentOutput(err.error || 'Failed to spawn agent');
+        notify(`Could not start challenge agent (${res.status})`, 'error');
         return;
       }
       const data = await res.json();
@@ -240,6 +250,7 @@ export default function ChallengeModal({ item, items, connections, onUpdate, onC
     } catch (err) {
       setAgentStatus('failed');
       setAgentOutput(err.message);
+      notify(`Could not start challenge agent: ${err.message}`, 'error');
     }
   }, [item, agentStatus]);
 

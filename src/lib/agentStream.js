@@ -10,6 +10,8 @@
  * payload themselves (see `useAgentStream` for an example).
  */
 
+import { agentServerUrl } from './agentServer.js';
+
 const DEFAULT_MAX_BACKOFF_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 5;
 const DEFAULT_STALL_TIMEOUT_MS = 30_000;
@@ -177,11 +179,11 @@ export function createAgentStream({
 }
 
 /**
- * Default URL builder for the agent stream — assumes the agent-server runs on
+ * Default URL builder for the agent stream — the agent-server runs on
  * AGENT_PORT (default 4002) on the same hostname as the page.
+ * COMP-COCKPIT-2: delegates to the shared agentServerUrl helper.
  */
 export function defaultAgentStreamUrl() {
   if (typeof window === 'undefined' || !window.location) return '';
-  const port = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_AGENT_PORT) || '4002';
-  return `${window.location.protocol}//${window.location.hostname}:${port}/api/agent/stream`;
+  return agentServerUrl('/api/agent/stream');
 }
