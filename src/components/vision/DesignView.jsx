@@ -4,6 +4,7 @@ import DesignCard from './DesignCard.jsx';
 import { parseDecisionBlocks } from './designSessionState.js';
 import { cn } from '@/lib/utils.js';
 import { MessageSquare, Send, Sparkles } from 'lucide-react';
+import { usePrompt } from '@/components/ui/DialogProvider.jsx';
 
 /**
  * DesignView — Interactive design conversation with decision cards.
@@ -25,6 +26,7 @@ export default function DesignView() {
   const [selectedCard, setSelectedCard] = useState(null); // { messageIndex: number, cardId: string } | null
   const [cardComment, setCardComment] = useState('');
   const messagesEndRef = useRef(null);
+  const prompt = usePrompt(); // COMP-COCKPIT-1: in-app prompt (was window.prompt)
 
   // Hydrate on mount — hydrate() handles SSE connection after setting state
   // Clear in-memory scope first so hydrate falls through to localStorage/default
@@ -89,8 +91,8 @@ export default function DesignView() {
             Product Design
           </button>
           <button
-            onClick={() => {
-              const code = prompt('Feature code:');
+            onClick={async () => {
+              const code = await prompt({ title: 'Feature code', required: true });
               if (code) startSession('feature', code);
             }}
             className="px-4 py-2 text-[11px] font-medium rounded border border-border text-foreground hover:bg-muted transition-colors"

@@ -3,6 +3,7 @@ import { FileText, Clock, Layers, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { TEMPLATE_CATEGORY_COLORS } from './constants.js';
 import { wsFetch } from '../../lib/wsFetch.js';
+import { notify } from '../cockpit/NotificationBar.jsx';
 
 /**
  * TemplateSelector — Grid of pipeline template cards.
@@ -31,13 +32,15 @@ export default function TemplateSelector() {
   const handleSelect = async (templateId) => {
     setCreating(templateId);
     try {
-      await wsFetch('/api/pipeline/draft', {
+      const res = await wsFetch('/api/pipeline/draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ templateId }),
       });
+      if (!res.ok) notify(`Could not create draft (${res.status})`, 'error');
     } catch (err) {
       console.error('[TemplateSelector] Failed to create draft:', err);
+      notify(`Could not create draft: ${err.message}`, 'error');
     }
     setCreating(null);
   };

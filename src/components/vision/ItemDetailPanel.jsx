@@ -13,6 +13,8 @@ import DriftRibbon from './DriftRibbon.jsx';
 import StartBuildPopover from './StartBuildPopover.jsx';
 import { useVisionStore } from './useVisionStore.js';
 import { wsFetch } from '../../lib/wsFetch.js';
+import { notify } from '../cockpit/NotificationBar.jsx';
+import { useConfirm } from '@/components/ui/DialogProvider.jsx';
 
 function ConfidenceControl({ level, onChange }) {
   const colors = ['hsl(var(--muted-foreground))', 'hsl(var(--destructive))', 'hsl(var(--accent))', 'hsl(var(--success))', 'hsl(var(--success))'];
@@ -326,6 +328,7 @@ function GateBannerActions({ gate, onResolveGate }) {
 }
 
 export default function ItemDetailPanel({ item, items, connections, gates, onUpdate, onDelete, onCreateConnection, onDeleteConnection, onSelect, onClose, onPressureTest, onResolveGate }) {
+  const confirm = useConfirm(); // COMP-COCKPIT-1
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [editingDesc, setEditingDesc] = useState(false);
@@ -768,11 +771,13 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
                         body: JSON.stringify({ reason: 'Killed via UI' }),
                       });
                       if (!res.ok) {
-                        const data = await res.json();
+                        const data = await res.json().catch(() => ({}));
                         console.error('[vision] Lifecycle kill failed:', data.error);
+                        notify(`Kill failed: ${data.error || res.status}`, 'error');
                       }
                     } catch (err) {
                       console.error('[vision] Lifecycle kill failed:', err.message);
+                      notify(`Kill failed: ${err.message}`, 'error');
                     }
                   } else {
                     onUpdate(item.id, { status: 'killed' });
@@ -787,8 +792,12 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
                 variant="outline"
                 size="sm"
                 className="h-7 text-xs gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
-                onClick={() => {
-                  if (window.confirm(`Delete "${item.title}" permanently? This cannot be undone.`)) {
+                onClick={async () => {
+                  if (await confirm({
+                    title: 'Delete permanently?',
+                    body: `"${item.title}" cannot be undone.`,
+                    destructive: true,
+                  })) {
                     onDelete(item.id);
                   }
                 }}

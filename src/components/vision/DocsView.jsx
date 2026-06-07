@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input.jsx';
 import { ScrollArea } from '@/components/ui/scroll-area.jsx';
 import FeatureFocusToggle from '../shared/FeatureFocusToggle.jsx';
 import { wsFetch } from '../../lib/wsFetch.js';
+import { notify } from '../cockpit/NotificationBar.jsx';
 
 // Initialize mermaid once with dark theme
 mermaid.initialize({
@@ -269,8 +270,13 @@ export default function DocsView({ items, selectedFile: externalSelectedFile, on
       if (res.ok) {
         setSavedContent(editContent);
         setFileContent(editContent);
+        notify('Saved', 'info');
+      } else {
+        notify(`Save failed (${res.status})`, 'error');
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      notify(`Save failed: ${err.message}`, 'error');
+    }
     setSaving(false);
   }, [selectedFile, editContent, saving]);
 
