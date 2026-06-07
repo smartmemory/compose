@@ -2,7 +2,7 @@
 
 Web UI shell for Compose: layout, zones, navigation, and persistence.
 
-`compose start` opens a browser-based cockpit at `http://localhost:3001`. The layout is organized around three zoom levels: Graph (macro), Tree (meso), and Detail (micro).
+`compose start` opens a browser-based cockpit at `http://localhost:5195` (the Vite dev server; the API server runs on `:4001`). The layout is organized around three zoom levels: Graph (macro), Tree (meso), and Detail (micro).
 
 ```
 ┌──────────────────────────────────────────────────────────────┐

@@ -114,6 +114,7 @@ export function assertTerminalStatusAuthorized(args, toolName, capsOverride) {
 }
 import { resolveWorkspace } from '../lib/resolve-workspace.js';
 import { discoverWorkspaces } from '../lib/discover-workspaces.js';
+import { resolvePort } from '../lib/resolve-port.js';
 
 export function getVisionFile() { return path.join(getDataDir(), 'vision-state.json'); }
 export function getSessionsFile() { return path.join(getDataDir(), 'sessions.json'); }
@@ -549,7 +550,7 @@ export async function toolBindSession({ featureCode, profile } = {}) {
 // ---------------------------------------------------------------------------
 
 function _getComposeApi() {
-  return `http://127.0.0.1:${process.env.COMPOSE_PORT || process.env.PORT || 3001}`;
+  return `http://127.0.0.1:${resolvePort()}`;
 }
 
 async function _postLifecycle(itemId, action, body) {
@@ -592,7 +593,7 @@ async function _postGate(gateId, action, body) {
  * COMP-WORKSPACE-HTTP T5.
  */
 async function _httpRequest(method, urlPath, body = null) {
-  const port = process.env.COMPOSE_PORT || process.env.PORT || 3001;
+  const port = resolvePort();
   const headers = { 'Content-Type': 'application/json' };
   if (_binding?.id) headers['X-Compose-Workspace-Id'] = _binding.id;
   let payload = null;

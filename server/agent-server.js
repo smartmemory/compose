@@ -6,7 +6,7 @@
  * User input arrives via POST — SSE is the right transport for a unidirectional
  * async iterator.
  *
- * Process isolation: this server only talks to api-server (3001) via SDK hooks.
+ * Process isolation: this server only talks to api-server (4001) via SDK hooks.
  * SessionManager and VisionServer require zero changes.
  */
 

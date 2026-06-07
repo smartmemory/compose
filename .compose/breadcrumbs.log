@@ -527,3 +527,5 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-07T12:07:44+08:00 | Seed deps.yaml across compose features (explicit links + epic-numbering convention) + fix DanglingEdgeError endpoint naming
 2026-06-07T12:45:55+08:00 | COMP-ROADMAP-XREF-PUSH: implement push core + orchestrator + CLI, schema/writer push carrier, pull skip-guard
 2026-06-07T13:51:03+08:00 | COMP-ROADMAP-XREF-PUSH-2: shared xref-local resolver, local+labels push, MCP tool, expect_labels carrier
+2026-06-07T18:19:34+08:00 | Fix P0 port-default mismatch: CLI/MCP/agent-hooks/loops defaulted to 3001/3000 while server runs on 4001 — silently broke gates, completion, loops headless
+2026-06-07T18:19:41+08:00 | Fix P0 port-default mismatch: CLI/MCP/agent-hooks/loops defaulted to 3001/3000 while server runs on 4001 — silently broke gates, completion, loops headless

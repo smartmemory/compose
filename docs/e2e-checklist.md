@@ -11,10 +11,10 @@ Each step lists the **action**, the **expected result**, and any **APIs/files in
 | # | Action | Expected |
 |---|---|---|
 | 0.1 | `cd compose && npm run dev` | Supervisor reports `api-server`, `agent-server`, `vite` all up |
-| 0.2 | `curl -sf http://127.0.0.1:3001/` | 404 (server alive, no root route) |
-| 0.3 | `lsof -nP -iTCP:3001 -sTCP:LISTEN` and `:4002`, `:5195` | All three ports bound |
+| 0.2 | `curl -sf http://127.0.0.1:4001/` | 404 (server alive, no root route) |
+| 0.3 | `lsof -nP -iTCP:4001 -sTCP:LISTEN` and `:4002`, `:5195` | All three ports bound |
 | 0.4 | Open `http://localhost:5195/` | Cockpit shell renders: header (Compose logo + ViewTabs + controls), sidebar, main view, no console errors |
-| 0.5 | Devtools → Network → WS | `ws://localhost:3001/ws/vision` and `ws://localhost:3001/ws/files` connect; status `101 Switching Protocols` |
+| 0.5 | Devtools → Network → WS | `ws://localhost:4001/ws/vision` and `ws://localhost:4001/ws/files` connect; status `101 Switching Protocols` |
 
 If any of 0.1–0.5 fails, stop and fix before continuing — every later step assumes a healthy shell.
 
@@ -173,7 +173,7 @@ Runs the actual Compose pipeline through the UI to verify CLI ↔ server ↔ UI 
 ## 7. Final teardown
 
 - [ ] Stop dev server (`Ctrl+C` in supervisor terminal)
-- [ ] No orphan processes on `:3001`, `:4002`, `:5195`
+- [ ] No orphan processes on `:4001`, `:4002`, `:5195`
 - [ ] `.compose/data/vision-state.json` consistent (no truncation, valid JSON)
 
 ---

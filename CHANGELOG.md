@@ -2,6 +2,16 @@
 
 ## 2026-06-07
 
+### Fixed — P0 port-default mismatch silently broke the headless CLI ↔ server ↔ MCP handoff
+
+The API server starts on `4001` (`server/index.js`, supervisor), but `lib/resolve-port.js` and several callers still defaulted to the pre-`e139ec3` value `3001` (and `compose loops` to `3000`). In a default install with no `COMPOSE_PORT`/`PORT` set, every CLI server-probe, MCP lifecycle call (`complete_feature`/`approve_gate`/`bind_session`/`compose_resume`), agent-hook event POST, and `compose loops` call hit a dead port — so gate delegation silently fell back to a readline prompt, completions/loops failed with `ECONNREFUSED`, and MCP lifecycle tools threw "Compose server unreachable" while the cockpit was alive on 4001.
+
+- **`lib/resolve-port.js`** default `3001 → 4001` (the single source of truth; now matches `server/index.js`).
+- **`server/compose-mcp-tools.js`** (`_getComposeApi`, `_httpRequest`) and **`server/agent-hooks.js`** now route through `resolvePort()` instead of duplicating a stale `|| 3001` literal.
+- **`compose loops`** (`bin/compose.js`) default URL `http://localhost:3000 → http://127.0.0.1:${resolvePort()}`.
+- Stale comments fixed in `server/supervisor.js` (4001/4002/5195) and `server/agent-server.js`; stale port docs fixed in `docs/cockpit.md` (UI is `:5195`), `docs/cli.md` (loops), `docs/e2e-checklist.md` (`:4001`).
+- Corrected `test/integration/vision-unification.test.js` which had asserted the buggy `3001` default. Relevant-surface suite green (242 tests across resolve-port/probe/loops/mcp-tools/vision).
+
 ### COMP-ROADMAP-XREF-PUSH-2 — xref-push deferred extensions (MCP tool · local push · additive relabel)
 
 The three pieces `COMP-ROADMAP-XREF-PUSH` deferred, same safety posture (dry-run default, per-ref `push:true` opt-in, degrade-never-write):

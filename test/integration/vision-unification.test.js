@@ -179,14 +179,14 @@ describe('STRAT-COMP-4 Integration', () => {
   // -----------------------------------------------------------------------
 
   describe('port coordination', () => {
-    it('resolvePort returns default 3001', () => {
+    it('resolvePort returns default 4001 (matches server/index.js + supervisor)', () => {
       // Save and clear env vars
       const saved = { COMPOSE_PORT: process.env.COMPOSE_PORT, PORT: process.env.PORT };
       delete process.env.COMPOSE_PORT;
       delete process.env.PORT;
 
       try {
-        assert.equal(resolvePort(), 3001);
+        assert.equal(resolvePort(), 4001);
       } finally {
         // Restore
         if (saved.COMPOSE_PORT) process.env.COMPOSE_PORT = saved.COMPOSE_PORT;
