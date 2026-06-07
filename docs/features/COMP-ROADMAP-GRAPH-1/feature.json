@@ -1,10 +1,36 @@
 {
   "code": "COMP-ROADMAP-GRAPH-1",
   "description": "**Generated roadmap dependency graph (compose substrate).** Per-project `roadmap-graph.html` derived from compose lifecycle state + `deps.yaml` per feature folder + `design.md` (or `feature.json`) frontmatter metadata. Replaces hand-maintained graph HTML with a deterministic generator (`compose roadmap-graph` subcommand or `mcp__compose__roadmap_graph` tool). Generic across compose-using projects (SmartMemory, ScaleMate, Maya, Coder-Config). Includes deps.yaml schema, idempotent generator, dangling-edge refusal, pre-commit hook + CI gate. Migrated from SmartMemory's META-GRAPH-1 2026-05-23 after recognizing the work is compose-substrate, not SmartMemory-specific. SmartMemory remains the first consumer via thin adoption feature META-GRAPH-1.",
-  "status": "PARTIAL",
+  "status": "COMPLETE",
   "phase": "Standalone",
   "position": 1,
   "created": "2026-05-23",
-  "updated": "2026-06-06",
-  "group": "COMP-MCP"
+  "updated": "2026-06-07",
+  "group": "COMP-MCP",
+  "completions": [
+    {
+      "completion_id": "COMP-ROADMAP-GRAPH-1:0cabaaee59c1f30ce923e680d347a55403e82ca2",
+      "feature_code": "COMP-ROADMAP-GRAPH-1",
+      "commit_sha": "0cabaaee59c1f30ce923e680d347a55403e82ca2",
+      "commit_sha_short": "0cabaaee",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/roadmap-graph/",
+        "contracts/roadmap-deps.schema.json",
+        "contracts/roadmap-graph-frontmatter.schema.json",
+        "bin/compose.js",
+        "server/compose-mcp.js",
+        "server/compose-mcp-tools.js",
+        "server/mcp-tool-policy.js",
+        "templates/hooks/roadmap-graph-pre-push.sh",
+        "templates/ci/roadmap-graph.yml",
+        ".github/workflows/roadmap-graph.yml",
+        "docs/howto/roadmap-graph.md"
+      ],
+      "recorded_at": "2026-06-07T03:48:34.243Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Full 4-phase scope delivered: v1 generator+CLI+MCP (04edf6c), enforcement -1-1 + dogfood -1-2 (0cabaae). All deferred phases completed in follow-ups."
+    }
+  ],
+  "commit_sha": "0cabaaee59c1f30ce923e680d347a55403e82ca2"
 }
