@@ -2,6 +2,21 @@
 
 ## 2026-06-07
 
+### COMP-ROADMAP-XREF-PUSH — write-side counterpart to xref-sync (Pull → Push)
+
+The deferred "push" half of `COMP-ROADMAP-XREF-SYNC`. Pull rewrites the local citation's `expect=` to match external reality; **Push writes the external GitHub tracker to match the locally-declared `expect=` intent** (e.g. close an issue when the repo says it should be closed). Because it mutates a system outside the repo, the safety posture is deliberately conservative:
+
+- **Dry-run by default** — `compose roadmap xref-push` prints what it *would* write; `--apply` is required to mutate.
+- **Per-ref opt-in** — only external links carrying `"push": true` in `feature.json` are eligible; nothing is touched without the marker, even under `--apply`.
+- **Degrade = never write** — offline / no-token / 404 / rate-limit / non-2xx PATCH / unparseable state → reported skipped, never guessed (mirrors xref-sync's resolver).
+- **Idempotent** — reads current state first; if the issue already matches `expect`, no PATCH is issued.
+- **Never writes a PR** — GitHub's Issues API treats pull requests as issues, so a PR-backed ref (`body.pull_request`) is skipped, never state-flipped.
+- **github only (v1)** — `expect` must be `open|closed`; `local`/`url`/reserved providers are untouched. `expect=` (not feature status) is the explicit per-ref intent.
+
+**Cross-feature contract:** Pull now skips `push:true` links (they're write-managed) so the two never oscillate and the declared intent is never clobbered.
+
+**Added:** `lib/xref-push.js` (pure `planPush` + orchestrator `pushExternalRefs` + exported `defaultResolve`/`defaultWrite` with injectable transport), `GitHubApi.updateIssueResult` (status-returning PATCH so a failed write degrades, never falsely succeeds), `"push"` boolean on external links (schema + typed writer preservation), `compose roadmap xref-push [--apply]` CLI. 23 new tests incl. real-path degrade coverage (PR-skip, 404, no-token, non-2xx) via stubbed transport; Codex 4 rounds → CLEAN. `docs/features/COMP-ROADMAP-XREF-PUSH/`.
+
 ### COMP-CTXBUDGET-1-2 — context-budget is now progressive-disclosure-aware
 
 The audit now reports **two numbers per component**: `surface` (full file on disk) and `live` (what actually loads at session start). Claude Code lazy-loads skills/agents — only their `name`+`description` frontmatter loads until invoked — so the prior single number massively over-stated reclaimable context (Forge: ~70.5K "reclaimable" was really **~5.0K live**; deleting the catalog would reclaim descriptions, not bodies, for ~nothing). Now:
