@@ -1,0 +1,4 @@
+# Roadmap-graph edges (COMP-ROADMAP-GRAPH-1) — seeded from feature.json links + epic numbering convention.
+depends_on:
+  - COMP-GSD-2
+  - COMP-GSD-5

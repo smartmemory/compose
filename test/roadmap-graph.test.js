@@ -63,6 +63,18 @@ describe('model.buildGraph', () => {
     );
   });
 
+  test('dangling error names the actual unknown endpoint (from, not just to)', () => {
+    const nodes = [{ id: 'B', status: 'PLANNED' }];
+    // edge GHOST -> B: the source is unknown, the target B is known
+    let err;
+    try { buildGraph({ nodes, rawEdges: [{ from: 'GHOST', to: 'B', type: 'dep' }], knownCodes: new Set(['B']) }); }
+    catch (e) { err = e; }
+    assert.ok(err instanceof DanglingEdgeError);
+    assert.deepEqual(err.dangling[0].missing, ['GHOST']);
+    assert.match(err.message, /GHOST is not a known feature/);
+    assert.doesNotMatch(err.message, /B is not a known feature/);
+  });
+
   test('silently drops an edge to a known-but-dropped node (not dangling)', () => {
     const nodes = [{ id: 'A', status: 'PLANNED' }, { id: 'B', status: 'COMPLETE' }];
     const { edges } = buildGraph({
