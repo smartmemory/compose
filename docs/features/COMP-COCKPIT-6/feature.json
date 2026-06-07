@@ -1,0 +1,16 @@
+{
+  "code": "COMP-COCKPIT-6",
+  "description": "Gate-kill guardrail consistency. DashboardView fires onResolveGate(id, killed) with no comment or confirmation (DashboardView.jsx:203) while GateView requires a non-empty reason before allowing a kill (GateView.jsx:127). Unify so killing a gate from any surface requires a reason, eliminating instant no-undo kills from the dashboard.",
+  "status": "PLANNED",
+  "phase": "COMP-COCKPIT: Cockpit Completeness",
+  "created": "2026-06-07",
+  "updated": "2026-06-07",
+  "complexity": "S",
+  "position": 7,
+  "parent": "COMP-COCKPIT",
+  "tags": [
+    "bug",
+    "cockpit",
+    "gates"
+  ]
+}

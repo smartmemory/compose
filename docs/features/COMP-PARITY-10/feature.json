@@ -1,0 +1,16 @@
+{
+  "code": "COMP-PARITY-10",
+  "description": "qa-scope cockpit panel. `compose qa-scope <CODE>` (changed files to affected routes) is terminal-only; COMP-QA shipped the diff-to-route mapper as a build-phase step but there is no standalone cockpit view. Surface affected-route analysis in the cockpit backed by the existing qa-scoping logic so UI-first review can see what a change touches.",
+  "status": "PLANNED",
+  "phase": "COMP-PARITY: UI↔CLI Parity",
+  "created": "2026-06-07",
+  "updated": "2026-06-07",
+  "complexity": "M",
+  "position": 13,
+  "parent": "COMP-PARITY",
+  "tags": [
+    "ux",
+    "cockpit",
+    "parity"
+  ]
+}
