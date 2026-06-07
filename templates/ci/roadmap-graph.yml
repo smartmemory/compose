@@ -1,0 +1,47 @@
+# Compose roadmap-graph CI gate — COMP-ROADMAP-GRAPH-1-1.
+#
+# Drop this into .github/workflows/ (or merge the `roadmap-graph` job into an
+# existing workflow). It guards the roadmap dependency graph on every push / PR.
+#
+# Two modes — pick one:
+#   A. COMMITTED GRAPH (recommended for stable roadmaps): the repo commits
+#      roadmap-graph.html; CI runs `--check` and fails the PR if it is stale or
+#      dangling, forcing contributors to regenerate.
+#   B. ARTIFACT-ONLY (recommended for high-churn roadmaps): the graph is NOT
+#      committed; CI regenerates it fresh each run, fails only on a dangling
+#      edge, and uploads the HTML as a downloadable artifact.
+#
+# The `compose` CLI must be available — adjust the install step to your setup
+# (global install, npx, or a local checkout's `node bin/compose.js`).
+
+name: roadmap-graph
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  roadmap-graph:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Make `compose` available. Replace with your install method.
+      - name: Install compose
+        run: npm install -g @smartmemory/compose
+
+      # ---- Mode A: committed graph (fails on stale OR dangling) --------------
+      - name: Check roadmap graph (committed)
+        run: compose roadmap graph --check
+
+      # ---- Mode B: artifact-only (uncomment; remove Mode A above) ------------
+      # - name: Generate roadmap graph (fails on dangling edge)
+      #   run: compose roadmap graph --out roadmap-graph.html
+      # - name: Upload roadmap graph
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: roadmap-graph
+      #     path: roadmap-graph.html

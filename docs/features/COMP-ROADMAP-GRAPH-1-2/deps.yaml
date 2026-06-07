@@ -1,0 +1,5 @@
+# Roadmap-graph edges (COMP-ROADMAP-GRAPH-1). depends_on = prerequisites.
+depends_on:
+  - COMP-ROADMAP-GRAPH-1
+concurrent_with:
+  - COMP-ROADMAP-GRAPH-1-1

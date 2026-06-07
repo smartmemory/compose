@@ -1,10 +1,10 @@
 {
   "code": "COMP-ROADMAP-GRAPH-1-1",
   "description": "Roadmap-graph enforcement templates: pre-commit hook + CI gate snippet + hand-edit sentinel lint (deferred P3 from COMP-ROADMAP-GRAPH-1 v1).",
-  "status": "PLANNED",
+  "status": "IN_PROGRESS",
   "phase": "Standalone",
   "created": "2026-06-06",
-  "updated": "2026-06-06",
+  "updated": "2026-06-07",
   "complexity": "S",
   "position": 2,
   "parent": "COMP-ROADMAP-GRAPH-1",

@@ -35,6 +35,24 @@ A generic, deterministic roadmap dependency-graph generator that any compose-usi
 **Changed:**
 - External-prefix codes (cross-project refs) are treated as known-but-unrendered so edges to them never dangle
 
+### COMP-ROADMAP-GRAPH-1-1 — Roadmap-graph enforcement: reusable opt-in pre-push gate + CI snippet; --check is the hand-edit lint
+
+Ships the enforcement layer for the roadmap dependency graph. A reusable, source-safe pre-push hook template and a copy-paste GitHub Actions snippet let any compose project guard the graph. The gate is opt-in by graph-file presence (no-op until a graph is generated) and blocks on dangling edges (the Cytoscape-crash bug class) or a stale/hand-edited graph. `compose roadmap graph --check` regenerates and byte-compares the whole file, so it subsumes the proposed sentinel-only hand-edit lint — no separate lint script needed.
+
+**Added:**
+- `templates/hooks/roadmap-graph-pre-push.sh` — source-safe (`roadmap_graph_gate` fn) opt-in pre-push gate; standalone or sourced
+- `templates/ci/roadmap-graph.yml` — reusable CI snippet (Mode A committed-graph `--check`; Mode B artifact-only generate)
+- `test/integration/roadmap-graph-hook.test.js` — executes the hook (opt-in skip, fresh ok, stale/dangling block, source-safety)
+
+### COMP-ROADMAP-GRAPH-1-2 — Roadmap-graph dogfood: compose CI workflow + adoption howto; seeded real deps.yaml edges
+
+Dogfoods the roadmap-graph generator on the compose project itself and documents adoption. A CI workflow regenerates compose's own graph fresh on relevant changes, fails on any dangling edge, and uploads the HTML as a build artifact — the graph is deliberately NOT committed because compose's feature statuses churn too often for a committed graph to stay fresh (it would block every status-flip push). Seeding real deps.yaml on the two follow-ups gives the live graph its first edges (3: two depends_on + one concurrent_with), exercising the deps.yaml path end to end. Deviation from the original spec: the literal plan named forge-top as the first consumer, but forge's root is not a git repo, so compose-self is the committable, CI-gated dogfood target.
+
+**Added:**
+- `.github/workflows/roadmap-graph.yml` — compose dogfood: fresh regen + fail-on-dangling + artifact upload (path-filtered, incl. .compose/compose.json)
+- `docs/howto/roadmap-graph.md` — adoption recipe (deps.yaml, frontmatter, config, CLI/MCP, both enforcement modes)
+- `docs/features/COMP-ROADMAP-GRAPH-1-{1,2}/deps.yaml` — first real edges in compose's own graph
+
 ## 2026-06-06
 
 ### COMP-CTXBUDGET-1 — `/context-budget` skill: token audit across the loaded surface

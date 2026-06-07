@@ -1,0 +1,54 @@
+# Roadmap graph (dogfood) — COMP-ROADMAP-GRAPH-1-2.
+#
+# Compose dogfoods its own roadmap-graph generator: every run regenerates the
+# graph FRESH from this repo's feature.json + deps.yaml + ROADMAP.md and fails
+# only on a dangling edge (the Cytoscape-crash bug class). The graph is NOT
+# committed (compose's feature statuses churn constantly, which would make a
+# committed graph perpetually stale) — it is uploaded as a build artifact
+# instead. This proves the substrate on a second real project beyond the unit
+# fixtures. See docs/howto/roadmap-graph.md.
+
+name: roadmap-graph
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/features/**/feature.json'
+      - 'docs/features/**/deps.yaml'
+      - 'docs/features/**/design.md'
+      - 'ROADMAP.md'
+      - '.compose/compose.json'
+      - 'lib/roadmap-graph/**'
+      - '.github/workflows/roadmap-graph.yml'
+  pull_request:
+    paths:
+      - 'docs/features/**/feature.json'
+      - 'docs/features/**/deps.yaml'
+      - 'docs/features/**/design.md'
+      - 'ROADMAP.md'
+      - '.compose/compose.json'
+      - 'lib/roadmap-graph/**'
+      - '.github/workflows/roadmap-graph.yml'
+
+jobs:
+  roadmap-graph:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Generate roadmap graph (fails on dangling edge)
+        run: node bin/compose.js roadmap graph --project . --out roadmap-graph.html
+
+      - name: Upload roadmap graph
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: roadmap-graph
+          path: roadmap-graph.html
+          if-no-files-found: ignore
