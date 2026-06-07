@@ -1,7 +1,7 @@
 {
   "code": "COMP-COCKPIT-2",
   "description": "ChallengeModal hostname portability. The pressure-test and discuss actions hardcode http://127.0.0.1:4001 and 4002 (ChallengeModal.jsx:36,196,227) instead of the hostname-aware wsFetch the rest of the UI uses, so the entire pressure-test feature breaks on any non-localhost deploy (remote, staging, Docker) and fails to console.error only. Route these calls through wsFetch / the resolved host.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-COCKPIT: Cockpit Completeness",
   "created": "2026-06-07",
   "updated": "2026-06-07",
@@ -12,5 +12,25 @@
     "bug",
     "cockpit",
     "deploy"
-  ]
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-COCKPIT-2:0371121764b7ed5afc307c1b8cde40b86e0137b0",
+      "feature_code": "COMP-COCKPIT-2",
+      "commit_sha": "0371121764b7ed5afc307c1b8cde40b86e0137b0",
+      "commit_sha_short": "03711217",
+      "tests_pass": true,
+      "files_changed": [
+        "src/lib/agentServer.js",
+        "src/lib/agentStream.js",
+        "src/components/vision/ChallengeModal.jsx",
+        "test/ui/agent-server.test.jsx",
+        "test/ui/challenge-modal-host.test.jsx"
+      ],
+      "recorded_at": "2026-06-07T15:54:00.946Z",
+      "recorded_by": "mcp:agent",
+      "notes": "COCKPIT-2 hostname portability: relative wsFetch (4001) + agentServerUrl (4002) + error toasts. UI 161 + tracker 100 green; Codex CLEAN."
+    }
+  ],
+  "commit_sha": "0371121764b7ed5afc307c1b8cde40b86e0137b0"
 }

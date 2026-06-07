@@ -1,7 +1,7 @@
 {
   "code": "COMP-COCKPIT-1",
   "description": "Cockpit action feedback and native-dialog replacement. Core actions fail silently (catch to console.error only): PipelineView approve/reject (PipelineView.jsx:49-66), TemplateSelector draft create (:38-43), DocsView save (:272), OpenLoops add/resolve, ItemDetail kill (:772), stop-agent (App.jsx:702). Two actions use blocking native dialogs: Feature Design start uses window.prompt (DesignView.jsx:93) and loop resolve uses window.prompt (OpenLoopsPanel.jsx:209). Add a general toast/banner system (desktop has only GateNotificationBar; mobile already ships a Toast) and replace native prompt/confirm with in-app modals.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-COCKPIT: Cockpit Completeness",
   "created": "2026-06-07",
   "updated": "2026-06-07",
@@ -12,5 +12,32 @@
     "ux",
     "cockpit",
     "feedback"
-  ]
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-COCKPIT-1:2472758630370d68b6c687e3e3183122c2ee62f7",
+      "feature_code": "COMP-COCKPIT-1",
+      "commit_sha": "2472758630370d68b6c687e3e3183122c2ee62f7",
+      "commit_sha_short": "24727586",
+      "tests_pass": true,
+      "files_changed": [
+        "src/components/ui/DialogProvider.jsx",
+        "src/main.jsx",
+        "src/App.jsx",
+        "src/components/vision/PipelineView.jsx",
+        "src/components/vision/TemplateSelector.jsx",
+        "src/components/vision/DocsView.jsx",
+        "src/components/vision/OpenLoopsPanel.jsx",
+        "src/components/vision/ItemDetailPanel.jsx",
+        "src/components/vision/DesignView.jsx",
+        "src/components/vision/SettingsPanel.jsx",
+        "test/ui/dialog-provider.test.jsx",
+        "test/ui/cockpit-feedback.test.jsx"
+      ],
+      "recorded_at": "2026-06-07T15:54:09.565Z",
+      "recorded_by": "mcp:agent",
+      "notes": "COCKPIT-1: notify on silent action sites (transport + non-ok) + 4 native dialogs replaced with DialogProvider hooks. UI 161 + tracker 100 green; Codex CLEAN."
+    }
+  ],
+  "commit_sha": "2472758630370d68b6c687e3e3183122c2ee62f7"
 }
