@@ -21,6 +21,7 @@ import { useVisionStore } from '../useVisionStore.js';
 import { PHASES, PHASE_LABELS, AGENTS } from '../constants.js';
 
 const QUICK_TYPES = [
+  { id: 'feature',  label: 'Feature',  defaults: { type: 'feature',  phase: 'vision',        priority: 2, governance: 'gate' } },
   { id: 'task',     label: 'Task',     defaults: { type: 'task',     phase: 'planning',      priority: 1, governance: 'flag' } },
   { id: 'decision', label: 'Decision', defaults: { type: 'decision', phase: 'specification', priority: 2, governance: 'gate' } },
   { id: 'question', label: 'Question', defaults: { type: 'question', phase: 'specification', priority: 1, governance: 'flag' } },
@@ -43,7 +44,7 @@ function initialFormState(parentItem) {
   };
 }
 
-export default function ItemFormDialog({ open, onClose, parentItem }) {
+export default function ItemFormDialog({ open, onClose, parentItem, initialType = 'task' }) {
   const createItem = useVisionStore(s => s.createItem);
   const [form, setForm] = useState(() => initialFormState(parentItem));
   const [selectedType, setSelectedType] = useState('task');
@@ -52,17 +53,25 @@ export default function ItemFormDialog({ open, onClose, parentItem }) {
   const [error, setError] = useState('');
   const titleRef = useRef(null);
 
-  // Reset form when dialog opens
+  // Reset form when dialog opens. COMP-COCKPIT-5: honor initialType so an
+  // empty-state "Create your first feature" CTA opens preset to feature.
   useEffect(() => {
     if (open) {
-      const next = initialFormState(parentItem);
-      setForm(next);
-      setSelectedType('task');
+      const preset = QUICK_TYPES.find(t => t.id === initialType) || QUICK_TYPES.find(t => t.id === 'task');
+      const base = initialFormState(parentItem);
+      setForm({
+        ...base,
+        type: preset.defaults.type,
+        phase: parentItem?.phase ?? preset.defaults.phase,
+        priority: preset.defaults.priority,
+        governance: preset.defaults.governance,
+      });
+      setSelectedType(preset.id);
       setAdvancedOpen(false);
       setError('');
       setTimeout(() => titleRef.current?.focus(), 50);
     }
-  }, [open, parentItem]);
+  }, [open, parentItem, initialType]);
 
   const applyPreset = (typeId) => {
     const preset = QUICK_TYPES.find(t => t.id === typeId);

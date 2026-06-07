@@ -16,11 +16,25 @@
 import { runBuild as defaultRunBuild, abortBuild as defaultAbortBuild } from '../lib/build.js';
 import { requireSensitiveToken } from './security.js';
 import { getDataDir as defaultGetDataDir } from './project-root.js';
+import { readBuildHistory } from '../lib/build-history.js';
 
 export function attachBuildRoutes(app, deps = {}) {
   const runBuild = deps.runBuild || defaultRunBuild;
   const abortBuild = deps.abortBuild || defaultAbortBuild;
   const getDataDir = deps.getDataDir || defaultGetDataDir;
+
+  // COMP-COCKPIT-3: read-only past-builds history. No sensitive token —
+  // mirrors GET /api/build/state (read-only, no secrets in the records).
+  app.get('/api/builds', (req, res) => {
+    try {
+      const raw = parseInt(req.query.limit, 10);
+      const limit = Number.isFinite(raw) ? Math.min(Math.max(raw, 1), 200) : 50;
+      const builds = readBuildHistory(getDataDir(), { limit });
+      res.json({ builds });
+    } catch (err) {
+      res.status(500).json({ error: err.message || String(err) });
+    }
+  });
 
   app.post('/api/build/start', requireSensitiveToken, async (req, res) => {
     const body = req.body || {};

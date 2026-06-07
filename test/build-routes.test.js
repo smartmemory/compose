@@ -236,4 +236,39 @@ describe('Build routes', () => {
     assert.deepEqual(captured, { dataDir: '/tmp/test-data-dir', featureCode: 'F-2' });
     assert.equal(res.body.aborted, true);
   });
+
+  // COMP-COCKPIT-3 — GET /api/builds
+  test('GET /api/builds returns archived records, newest first, no token required', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'builds-route-'));
+    writeFileSync(join(dir, 'build-history.jsonl'),
+      JSON.stringify({ featureCode: 'A', status: 'complete' }) + '\n' +
+      JSON.stringify({ featureCode: 'B', status: 'failed' }) + '\n');
+    try {
+      server = await listen(makeApp({
+        runBuild: async () => ({ ok: true }),
+        abortBuild: async () => ({ ok: true }),
+        getDataDir: () => dir,
+      }));
+      const res = await request(server, '/api/builds', { method: 'GET' });
+      assert.equal(res.status, 200);
+      assert.equal(res.body.builds.length, 2);
+      assert.equal(res.body.builds[0].featureCode, 'B', 'newest first');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('GET /api/builds returns empty array when no history exists', async () => {
+    server = await listen(makeApp({
+      runBuild: async () => ({ ok: true }),
+      abortBuild: async () => ({ ok: true }),
+      getDataDir: () => '/tmp/no-such-builds-dir-xyz',
+    }));
+    const res = await request(server, '/api/builds', { method: 'GET' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.builds, []);
+  });
 });

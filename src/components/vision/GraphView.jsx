@@ -550,7 +550,7 @@ function GatePopover({ featureCode, gates, items, badgePositions, onResolve, onC
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
-export default function GraphView({ items, connections, selectedItemId, onSelect, visibleTracks, hiddenGroups, buildStateMap, resolveGate, gates, spawnedAgents, agentRelays, agentOverlay, featureCode, focusActive, onToggleFocus }) {
+export default function GraphView({ items, connections, selectedItemId, onSelect, onCreateFeature, isEmptyProject, visibleTracks, hiddenGroups, buildStateMap, resolveGate, gates, spawnedAgents, agentRelays, agentOverlay, featureCode, focusActive, onToggleFocus }) {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   // Persistent layout: saved positions keyed by item id (leaf nodes only —
@@ -1037,12 +1037,30 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
         </div>
       </div>
 
-      {/* COMP-UX-2b: Empty state when no items match filters */}
+      {/* COMP-UX-2b / COMP-COCKPIT-5: empty state — distinguish empty project
+          (offer a create-feature CTA) from filters excluding everything. */}
       {filteredItems.length === 0 && !showAgentTopology ? (
         <div className="flex-1 flex items-center justify-center">
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>No items match the current filters</div>
-            <div style={{ fontSize: 11, color: '#475569' }}>Try adjusting the status or group filters</div>
+            {isEmptyProject ? (
+              <>
+                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>No items yet</div>
+                <div style={{ fontSize: 11, color: '#475569', marginBottom: 10 }}>Create your first feature to start building in the cockpit.</div>
+                {onCreateFeature && (
+                  <button
+                    onClick={onCreateFeature}
+                    style={{ fontSize: 11, color: '#e2e8f0', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, padding: '5px 12px', cursor: 'pointer' }}
+                  >
+                    Create your first feature
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>No items match the current filters</div>
+                <div style={{ fontSize: 11, color: '#475569' }}>Try adjusting the status or group filters</div>
+              </>
+            )}
           </div>
         </div>
       ) : (

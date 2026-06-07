@@ -1,10 +1,10 @@
 {
   "code": "COMP-COCKPIT-5",
   "description": "First-run empty-state CTAs. Fresh-project views dead-end to the terminal: Graph shows \"No items match the current filters\" (wrong when the project is simply empty), Tree shows \"No items to display\", and Dashboard says \"Run /compose in the terminal\" (DashboardView.jsx:315) with no in-UI path. Add create-first-feature and onboarding CTAs to the empty states so a UI-first user is not stranded.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-COCKPIT: Cockpit Completeness",
   "created": "2026-06-07",
-  "updated": "2026-06-07",
+  "updated": "2026-06-08",
   "complexity": "M",
   "position": 6,
   "parent": "COMP-COCKPIT",

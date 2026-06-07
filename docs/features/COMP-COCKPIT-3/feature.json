@@ -1,10 +1,10 @@
 {
   "code": "COMP-COCKPIT-3",
   "description": "Run history / past builds. The cockpit tracks only the single active build (active-build.json); SessionsView is a session browser, not a build-run history. Add a past-builds surface (per feature: outcome, duration, cost, failure reason) so a user can audit prior runs from the UI instead of terminal scrollback.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-COCKPIT: Cockpit Completeness",
   "created": "2026-06-07",
-  "updated": "2026-06-07",
+  "updated": "2026-06-08",
   "complexity": "M",
   "position": 4,
   "parent": "COMP-COCKPIT",

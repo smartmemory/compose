@@ -278,6 +278,8 @@ export default function DashboardView({
   onSelect,
   onResolveGate,
   onOpenGate,
+  onCreateFeature,
+  isEmptyProject,
 }) {
   const featureItem = useMemo(
     () => items.find(i => i.featureCode === featureCode || i.lifecycle?.featureCode === featureCode),
@@ -319,7 +321,14 @@ export default function DashboardView({
     return (
       <div className="flex-1 overflow-auto p-4">
         <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
-          <p className="text-sm text-muted-foreground">No feature in progress.</p>
+          <p className="text-sm text-muted-foreground">
+            {isEmptyProject ? 'No items yet.' : 'No feature in progress.'}
+          </p>
+          {isEmptyProject && onCreateFeature && (
+            <Button variant="outline" size="sm" onClick={onCreateFeature}>
+              Create your first feature
+            </Button>
+          )}
           <p className="text-[11px] text-muted-foreground/70 font-mono">
             Run /compose &lt;feature-code&gt; in the terminal to start.
           </p>

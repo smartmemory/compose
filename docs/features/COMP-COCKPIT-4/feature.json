@@ -1,10 +1,10 @@
 {
   "code": "COMP-COCKPIT-4",
   "description": "Inline artifact content in gate review. GateView shows only artifact metadata (assessment percent, word count, missing sections); a reviewer must leave for the Docs tab to actually read design.md before deciding. Render the artifact body inline in the gate panel so a gate can be approved/revised/killed without losing context.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-COCKPIT: Cockpit Completeness",
   "created": "2026-06-07",
-  "updated": "2026-06-07",
+  "updated": "2026-06-08",
   "complexity": "M",
   "position": 5,
   "parent": "COMP-COCKPIT",

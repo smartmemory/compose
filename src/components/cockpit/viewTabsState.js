@@ -15,7 +15,7 @@
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_MAIN_TABS = [
-  'dashboard', 'graph', 'tree', 'docs', 'design', 'gates', 'pipeline', 'sessions', 'ideabox'
+  'dashboard', 'graph', 'tree', 'docs', 'design', 'gates', 'pipeline', 'sessions', 'build-history', 'ideabox'
 ];
 
 // ---------------------------------------------------------------------------

@@ -52,6 +52,7 @@ import ChallengeModal from './components/vision/ChallengeModal.jsx';
 import SettingsPanel from './components/vision/SettingsPanel.jsx';
 import PipelineView from './components/vision/PipelineView.jsx';
 import SessionsView from './components/vision/SessionsView.jsx';
+import PastBuildsView from './components/vision/PastBuildsView.jsx';
 import DashboardView from './components/vision/DashboardView.jsx';
 import IdeaboxView from './components/vision/IdeaboxView.jsx';
 import DesignView from './components/vision/DesignView.jsx';
@@ -218,6 +219,7 @@ function CockpitView({
   // data
   items, filteredItems, phaseFilteredItems, phaseFilteredGates,
   connections, filteredConnections, sessions, activeBuild, pipelineDraft,
+  buildHistory,
   gates, settings, selectedPhase, selectedItemId,
   buildStateMap, agentOverlay, spawnedAgents, agentRelays,
   // docs navigation
@@ -225,7 +227,7 @@ function CockpitView({
   // graph filtering
   visibleTracks, hiddenGroups,
   // callbacks
-  onSelect, onUpdate, onCreate, onDelete, onOpenGate,
+  onSelect, onUpdate, onCreate, onCreateFeature, isEmptyProject, onDelete, onOpenGate,
   onCreateConnection, onDeleteConnection, onRefreshBuild, onSelectStep,
   onResolveGate, onUpdateSettings, onResetSettings,
   projectRoot,
@@ -252,6 +254,8 @@ function CockpitView({
           onSelect={onSelect}
           onResolveGate={onResolveGate}
           onOpenGate={onOpenGate}
+          onCreateFeature={onCreateFeature}
+          isEmptyProject={isEmptyProject}
         />
       );
     case 'tree':
@@ -262,6 +266,8 @@ function CockpitView({
           selectedItemId={selectedItemId}
           onSelect={onSelect}
           onCreate={onCreate}
+          onCreateFeature={onCreateFeature}
+          isEmptyProject={isEmptyProject}
           featureCode={featureCode}
           focusActive={focusActive}
           onToggleFocus={onToggleFocus}
@@ -274,6 +280,8 @@ function CockpitView({
           connections={connections}
           selectedItemId={selectedItemId}
           onSelect={onSelect}
+          onCreateFeature={onCreateFeature}
+          isEmptyProject={isEmptyProject}
           visibleTracks={visibleTracks}
           hiddenGroups={hiddenGroups}
           buildStateMap={buildStateMap}
@@ -305,6 +313,14 @@ function CockpitView({
           featureCode={featureCode}
           focusActive={focusActive}
           onToggleFocus={onToggleFocus}
+        />
+      );
+    case 'build-history':
+      return (
+        <PastBuildsView
+          builds={buildHistory}
+          items={items}
+          onSelectItem={onSelect}
         />
       );
     case 'gates':
@@ -408,6 +424,7 @@ function AppInner() {
     settings, updateSettings, resetSettings,
     activeBuild, setActiveBuild, pipelineDraft,
     sessions, iterationStates,
+    buildHistory, fetchBuildHistory,
     selectedPhase, setSelectedPhase,
     statusSnapshots, setStatusSnapshot,
   } = useVisionStore(useShallow(s => ({
@@ -421,6 +438,7 @@ function AppInner() {
     settings: s.settings, updateSettings: s.updateSettings, resetSettings: s.resetSettings,
     activeBuild: s.activeBuild, setActiveBuild: s.setActiveBuild, pipelineDraft: s.pipelineDraft,
     sessions: s.sessions, iterationStates: s.iterationStates,
+    buildHistory: s.buildHistory, fetchBuildHistory: s.fetchBuildHistory,
     selectedPhase: s.selectedPhase, setSelectedPhase: s.setSelectedPhase,
     statusSnapshots: s.statusSnapshots, setStatusSnapshot: s.setStatusSnapshot,
   })));
@@ -505,6 +523,8 @@ function AppInner() {
   const [challengeItemId, setChallengeItemId] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  // COMP-COCKPIT-5: preselected type for the create dialog (empty-state CTA → 'feature').
+  const [createInitialType, setCreateInitialType] = useState('task');
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // ── Project info ────────────────────────────────────────────────────────
@@ -813,6 +833,13 @@ function AppInner() {
     }
   }, [activeView]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── COMP-COCKPIT-3: refresh past-builds history when the view opens ──────
+  useEffect(() => {
+    if (activeView === 'build-history') {
+      fetchBuildHistory();
+    }
+  }, [activeView, fetchBuildHistory]);
+
   // ── Callbacks ───────────────────────────────────────────────────────────
   const toggleTheme = useCallback(() => {
     const next = isDark ? 'light' : 'dark';
@@ -877,6 +904,17 @@ function AppInner() {
       handleSelect(result.id);
     }
   }, [createItem, selectedPhase]);
+
+  // COMP-COCKPIT-5: open the create dialog preset to a feature (empty-state CTA).
+  const handleCreateFeature = useCallback(() => {
+    setCreateInitialType('feature');
+    setCreateOpen(true);
+  }, []);
+
+  // COMP-COCKPIT-5: the ONLY correct emptiness signal — every view receives
+  // pre-filtered data, so they cannot distinguish "empty project" from
+  // "filters exclude everything" locally. Computed from raw store items.
+  const isEmptyProject = items.length === 0;
 
   const handleDelete = useCallback(async (id) => {
     await deleteItem(id);
@@ -1150,6 +1188,7 @@ function AppInner() {
                       connections={connections}
                       filteredConnections={filteredConnections}
                       sessions={sessions}
+                      buildHistory={buildHistory}
                       activeBuild={activeBuild}
                       pipelineDraft={pipelineDraft}
                       gates={gates}
@@ -1159,6 +1198,8 @@ function AppInner() {
                       onSelect={handleSelect}
                       onUpdate={handleUpdate}
                       onCreate={handleCreate}
+                      onCreateFeature={handleCreateFeature}
+                      isEmptyProject={isEmptyProject}
                       onDelete={handleDelete}
                       onOpenGate={handleOpenGate}
                       onCreateConnection={handleCreateConnection}
@@ -1315,7 +1356,8 @@ function AppInner() {
         <PanelErrorBoundary zone="item form">
         <ItemFormDialog
           open={createOpen}
-          onClose={() => setCreateOpen(false)}
+          initialType={createInitialType}
+          onClose={() => { setCreateOpen(false); setCreateInitialType('task'); }}
         />
         </PanelErrorBoundary>
 
