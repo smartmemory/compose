@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
+import { ChevronRight, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { LIFECYCLE_PHASE_LABELS, LIFECYCLE_PHASE_ARTIFACTS, GATE_STEP_LABELS } from './constants.js';
 import FeatureFocusToggle from '../shared/FeatureFocusToggle.jsx';
 import ArtifactDiff from '../shared/ArtifactDiff.jsx';
+import MarkdownViewer from './shared/MarkdownViewer.jsx';
 
 function relativeTime(isoString) {
   if (!isoString) return '';
@@ -116,6 +118,11 @@ function Section({ title, count, color, children }) {
 
 function PendingGateRow({ gate, item, priorRevision, isExpanded, expandedAction, onExpand, onResolve, onSelect }) {
   const [comment, setComment] = useState('');
+  // COMP-COCKPIT-4: inline artifact body so a reviewer can read design.md/etc.
+  // without leaving the gate. Renders the gate's immutable artifactSnapshot
+  // (captured at gate creation) — never a live file fetch, preserving gate
+  // immutability. Collapsed by default.
+  const [showArtifact, setShowArtifact] = useState(false);
 
   const handleSubmitRevise = () => {
     onResolve(gate.id, 'revised', comment || undefined);
@@ -144,6 +151,23 @@ function PendingGateRow({ gate, item, priorRevision, isExpanded, expandedAction,
             {GATE_STEP_LABELS[gate.stepId] ?? `${LIFECYCLE_PHASE_LABELS[gate.fromPhase] ?? gate.fromPhase} → ${LIFECYCLE_PHASE_LABELS[gate.toPhase] ?? gate.toPhase}`}
           </p>
           <ArtifactAssessment gate={gate} />
+          {gate.artifactSnapshot ? (
+            <div className="space-y-1">
+              <button
+                onClick={() => setShowArtifact(v => !v)}
+                className="flex items-center gap-1 text-[10px] text-accent hover:underline"
+                data-testid="gate-artifact-toggle"
+              >
+                {showArtifact ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                {showArtifact ? 'Hide artifact' : 'View artifact'}
+              </button>
+              {showArtifact && (
+                <div className="px-2 py-2 rounded bg-muted/40 border border-border max-h-96 overflow-auto" data-testid="gate-artifact-body">
+                  <MarkdownViewer content={gate.artifactSnapshot} />
+                </div>
+              )}
+            </div>
+          ) : null}
           {priorRevision ? (
             <div className="space-y-1">
               <div className="text-[10px] px-2 py-1 rounded bg-amber-400/10 border border-amber-400/20 text-amber-400">

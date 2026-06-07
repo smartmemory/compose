@@ -265,6 +265,8 @@ export const useVisionStore = create((set, get) => {
     activeBuild: null,
     iterationStates: new Map(),
     sessions: [],
+    // COMP-COCKPIT-3: past-builds history (fetched on demand when the view opens)
+    buildHistory: [],
     featureTimeline: [],
     selectedPhase: (() => {
       try { return localStorage.getItem('compose:selectedPhase') || null; } catch { return null; }
@@ -309,6 +311,18 @@ export const useVisionStore = create((set, get) => {
     registerSnapshotProvider: (provider) => { refs.snapshotProvider = provider; },
 
     setActiveBuild: (v) => set({ activeBuild: v }),
+
+    // COMP-COCKPIT-3: fetch past-builds history (read-only GET /api/builds).
+    setBuildHistory: (v) => set({ buildHistory: Array.isArray(v) ? v : [] }),
+    fetchBuildHistory: async () => {
+      try {
+        const res = await wsFetch('/api/builds');
+        const data = await res.json();
+        set({ buildHistory: Array.isArray(data.builds) ? data.builds : [] });
+      } catch {
+        set({ buildHistory: [] });
+      }
+    },
 
     setPipelineDraft: (v) => set({ pipelineDraft: v }),
 

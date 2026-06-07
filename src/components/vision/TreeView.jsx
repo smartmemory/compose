@@ -8,6 +8,7 @@ import { TYPE_COLORS, STATUS_COLORS } from './constants.js';
 import ConfidenceDots from './ConfidenceDots.jsx';
 import { VisionChangesContext } from './VisionChangesContext.js';
 import FeatureFocusToggle from '../shared/FeatureFocusToggle.jsx';
+import EmptyState from './shared/EmptyState.jsx';
 
 // ─── Filter presets ──────────────────────────────────────────────────────────
 
@@ -143,7 +144,7 @@ function TreeItem({ item, children, depth, selectedItemId, onSelect, onToggle, e
   );
 }
 
-export default function TreeView({ items, connections, selectedItemId, onSelect, onCreate, featureCode, focusActive, onToggleFocus }) {
+export default function TreeView({ items, connections, selectedItemId, onSelect, onCreate, onCreateFeature, isEmptyProject, featureCode, focusActive, onToggleFocus }) {
   const [expandedIds, setExpandedIds] = useState(() => new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -427,9 +428,20 @@ export default function TreeView({ items, connections, selectedItemId, onSelect,
       <ScrollArea className="flex-1">
         <div className="py-1">
           {tree.length === 0 ? (
-            <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-              No items to display
-            </div>
+            isEmptyProject ? (
+              <EmptyState
+                icon={Plus}
+                title="No items yet"
+                description="Create your first feature to start building in the cockpit."
+                action={onCreateFeature ? 'Create your first feature' : undefined}
+                onAction={onCreateFeature}
+                className="py-8"
+              />
+            ) : (
+              <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                No items match the current filters
+              </div>
+            )
           ) : (
             tree.map(item => (
               <TreeItem
