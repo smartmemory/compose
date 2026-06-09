@@ -1,0 +1,8 @@
+{
+  "code": "COMP-MIGRATE-ON-UPGRADE",
+  "description": "Versioned, eager, idempotent feature.json state-migration runner wired into compose upgrade/init + explicit `compose migrate-state` verb. Durable stamp in .compose/data/migration-state.json. v1 normalizes legacy free-text complexity to the S/M/L/XL enum. Also fixes runInit silently dropping unknown compose.json keys (roadmap/tracker).",
+  "status": "COMPLETE",
+  "phase": "Standalone",
+  "created": "2026-06-09",
+  "updated": "2026-06-10"
+}
