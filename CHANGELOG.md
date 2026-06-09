@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-06-09
+
+### Fixed — `compose doctor` false-negative on plugin-provided bare-name skills
+
+`checkExternalSkills` (`lib/deps.js`) matched a bare manifest dep id (e.g. `refactor`, `update-docs`) only against `~/.claude/skills/<id>/`, while plugin-provided skills were recorded namespaced (`coder-config:refactor`). Claude Code surfaces those plugin skills under their bare names, so doctor wrongly reported them missing. A bare dep is now satisfied by a user skill at that path **or** any plugin skill whose leaf name matches; namespaced deps still require an exact `<plugin>:<skill>` match (no loosening). Result: `compose doctor` reports `All 12 deps present`. Updated the bare-vs-namespaced matching test to assert the corrected semantics plus a true-negative guard.
+
 ## 2026-06-07
 
 ### Added — COMP-COCKPIT Slice A: cockpit action feedback, native-dialog replacement, hostname portability, gate-kill guardrail
