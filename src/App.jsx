@@ -56,6 +56,7 @@ import SessionsView from './components/vision/SessionsView.jsx';
 import PastBuildsView from './components/vision/PastBuildsView.jsx';
 import DashboardView from './components/vision/DashboardView.jsx';
 import IdeaboxView from './components/vision/IdeaboxView.jsx';
+import JournalView from './components/vision/JournalView.jsx';
 import DesignView from './components/vision/DesignView.jsx';
 import DesignSidebar from './components/vision/DesignSidebar.jsx';
 import OpenLoopsPanel from './components/vision/OpenLoopsPanel.jsx';
@@ -357,6 +358,8 @@ function CockpitView({
       return <DesignView key={projectRoot} />;
     case 'ideabox':
       return <IdeaboxView />;
+    case 'journal':
+      return <JournalView />;
     case 'settings':
       return (
         <SettingsPanel
