@@ -31,5 +31,12 @@
       "notes": "Read-only get_roadmap MCP primitive + /roadmap skill rewire. 11 new tests, full suite 3657 green, Codex REVIEW CLEAN."
     }
   ],
-  "commit_sha": "e764481967e1b9f39f029449abca1b0cafde48eb"
+  "commit_sha": "e764481967e1b9f39f029449abca1b0cafde48eb",
+  "links": [
+    {
+      "kind": "follow_up",
+      "to_code": "COMP-MCP-ROADMAP-READ-1",
+      "note": "rows[]/limit enhancement so /roadmap next reads PLANNED structured"
+    }
+  ]
 }
