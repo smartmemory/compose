@@ -2,6 +2,14 @@
 
 ## 2026-06-10
 
+### Added — COMP-MIGRATE-ON-UPGRADE: versioned feature.json state migration on upgrade
+
+`compose upgrade` refreshed code but ran no `feature.json` state migration, so cold data (legacy free-text `complexity`) sat erroring on every validate. New `lib/state-migrations.js` provides a versioned, eager, idempotent runner (`runStateMigrations`) with an ordered registry of pure/total transforms and a durable stamp at `.compose/data/migration-state.json` (atomic temp+rename; deliberately not in `compose.json`). v1 migration `normalize-complexity` maps legacy free-text complexity to the `S/M/L/XL` enum (`low→S, medium→M, high→L, xl→XL`), leaving valid enum/number untouched and dropping null/unmappable. Convergent (corrupt files reported, not a permanent block); local-provider only; narrative-safe. Wired into `runInit` and `runUpdate` (resolved-cwd threaded), plus a new explicit `compose migrate-state [--dry-run]` verb (distinct from `compose roadmap migrate`). Cleared the 12 live `FEATURE_JSON_SCHEMA_VIOLATION` errors at forge-top.
+
+### Fixed — `compose init`/`upgrade` silently dropped unknown compose.json keys
+
+`runInit` rebuilt `.compose/compose.json` from a fixed `{version,capabilities,agents,paths}` shape, dropping any other top-level key — so an upgrade would wipe `roadmap.narrative` and `tracker` config. It now spreads `...existing` before rebuilding the known sections (regression test in `test/init.test.js`). A corrupt prior `compose.json` is detected and the state-migration step is skipped with a warning rather than running against the normalized rewrite.
+
 ### COMP-MCP-ROADMAP-READ-1 — get_roadmap gains a general filtered rows[] + limit so /roadmap next reads PLANNED structured
 
 Follow-up to COMP-MCP-ROADMAP-READ. The shipped tool exposed PLANNED only as a count and the active/blocked lists are fixed-status, so /roadmap's "what to work on next" had to fall back to markdown re-parsing. get_roadmap now returns a general filtered rows list when a status/phase filter or limit is supplied.

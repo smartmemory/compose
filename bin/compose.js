@@ -329,14 +329,16 @@ async function runDoctor(flags = []) {
 // compose init — project-local setup
 // ---------------------------------------------------------------------------
 
-async function runInit(flags) {
+async function runInit(flags, cwdOverride) {
   const noStratum = flags.includes('--no-stratum')
   const noLifecycle = flags.includes('--no-lifecycle')
   // init creates the workspace — never go through resolveCwdWithWorkspace (which
   // requires one to exist). Strip --workspace if present to avoid leaving it in
   // the shared args array for downstream subcommands.
   getWorkspaceFlag(args)
-  const cwd = process.cwd()
+  // cwdOverride lets callers (e.g. runUpdate) target the resolved workspace root
+  // instead of process.cwd(), which differs when run from a subdirectory.
+  const cwd = cwdOverride || process.cwd()
 
   // 1. Create .compose/ directory
   const composeDir = join(cwd, '.compose')
@@ -373,8 +375,10 @@ async function runInit(flags) {
   // 4. Write .compose/compose.json (merge with existing if present)
   const configPath = join(composeDir, 'compose.json')
   let existing = {}
+  let existingConfigCorrupt = false
   if (existsSync(configPath)) {
-    try { existing = JSON.parse(readFileSync(configPath, 'utf-8')) } catch {}
+    try { existing = JSON.parse(readFileSync(configPath, 'utf-8')) }
+    catch { existingConfigCorrupt = true }
   }
 
   const agentsConfig = {}
@@ -388,6 +392,10 @@ async function runInit(flags) {
   }
 
   const config = {
+    // Preserve unknown top-level keys (tracker, roadmap, stateVersion, …) — the
+    // explicit keys below override the merged sub-objects. Without this spread,
+    // init/upgrade silently drops e.g. `roadmap.narrative` and `tracker` config.
+    ...existing,
     version: 2,
     capabilities: {
       ...(existing.capabilities || {}),
@@ -417,6 +425,23 @@ async function runInit(flags) {
 
   // 5. Create .compose/data/
   mkdirSync(join(composeDir, 'data'), { recursive: true })
+
+  // 5a. Run pending feature.json state migrations (COMP-MIGRATE-ON-UPGRADE).
+  // Uses init's own resolved cwd; never aborts init on a migration fault. Skip
+  // when the prior compose.json was corrupt — init just normalized it to a
+  // default, so its tracker/paths can't be trusted to scope the migration.
+  if (existingConfigCorrupt) {
+    console.warn('state migration skipped: prior compose.json was unreadable (normalized to default; re-run `compose migrate-state` after verifying config)')
+  } else {
+    try {
+      const { runStateMigrations, summarizeMigrationReport } = await import('../lib/state-migrations.js')
+      const rep = runStateMigrations(cwd, {})
+      const line = summarizeMigrationReport(rep)
+      if (line && !rep.noop) console.log(line)
+    } catch (err) {
+      console.warn(`state migration skipped: ${err.message}`)
+    }
+  }
 
   // 5b. Scaffold docs/context/ with ambient context templates
   const contextDir = join(cwd, config.paths.context)
@@ -669,7 +694,11 @@ async function runUpdate(flags) {
   if (existsSync(join(cwd, '.compose', 'compose.json'))) {
     console.log('')
     console.log(`Refreshing project at ${cwd}...`)
-    await runInit([])
+    // Thread the RESOLVED workspace root into runInit (it otherwise uses
+    // process.cwd(), which differs when upgrading from a subdirectory). This
+    // makes all of init's refresh — including its state-migration step — target
+    // the right workspace (COMP-MIGRATE-ON-UPGRADE finding 6).
+    await runInit([], cwd)
   }
 
   console.log('')
@@ -701,6 +730,25 @@ if (cmd === 'doctor') {
 
 if (cmd === 'update' || cmd === 'upgrade') {
   await runUpdate(args)
+  process.exit(0)
+}
+
+if (cmd === 'migrate-state') {
+  // COMP-MIGRATE-ON-UPGRADE — run pending feature.json state migrations explicitly.
+  // Distinct from `compose roadmap migrate` (ROADMAP→feature.json backfill).
+  const { root: cwd } = resolveCwdWithWorkspace(args)
+  const dryRun = args.includes('--dry-run')
+  const { runStateMigrations, summarizeMigrationReport } = await import('../lib/state-migrations.js')
+  const rep = runStateMigrations(cwd, { dryRun })
+  if (rep.skipped) {
+    console.log(`migrate-state: skipped (${rep.skipped})`)
+    process.exit(0)
+  }
+  console.log(summarizeMigrationReport(rep))
+  for (const m of rep.perMigration) {
+    if (m.touched.length) console.log(`  [${m.id}] v${m.version}: ${m.touched.join(', ')}`)
+  }
+  for (const e of rep.parseErrors) console.error(`  unparseable: ${e.path} — ${e.message}`)
   process.exit(0)
 }
 

@@ -172,6 +172,27 @@ describe('compose init', () => {
     assert.equal(updated.paths.features, 'documentation/features', 'custom features path should be preserved');
   });
 
+  test('re-init preserves unknown top-level keys (roadmap, tracker)', () => {
+    // Regression: COMP-MIGRATE-ON-UPGRADE — init rebuilt config from a fixed
+    // shape and silently dropped roadmap.narrative / tracker config on upgrade.
+    const cwd = tmpDir();
+    const home = tmpDir();
+    const env = makeEnv(cwd, home);
+
+    runCmd('init', cwd, env);
+    const configPath = join(cwd, '.compose', 'compose.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+    config.roadmap = { narrative: true };
+    config.tracker = { provider: 'github', github: { repo: 'o/r' } };
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+    runCmd('init', cwd, env);
+
+    const updated = JSON.parse(readFileSync(configPath, 'utf-8'));
+    assert.deepEqual(updated.roadmap, { narrative: true }, 'roadmap.narrative preserved');
+    assert.equal(updated.tracker?.provider, 'github', 'tracker config preserved');
+  });
+
   test('re-init refreshes capabilities from detection', () => {
     const cwd = tmpDir();
     const home = tmpDir();
