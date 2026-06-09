@@ -105,6 +105,78 @@ test('compose hooks install with no flag defaults to post-commit (back-compat)',
   assert.ok(!existsSync(join(root, '.git', 'hooks', 'pre-push')));
 });
 
+// ── Docs-only test-gate skip ────────────────────────────────────────────────
+// Run the installed hook directly, feeding ref lines on stdin the way git does.
+// The fixture's `npm test` is `exit 1`, so the hook exits non-zero IFF the test
+// gate actually ran — letting us assert skip vs run from the exit code alone.
+function setupDocsOnlyFixture() {
+  const root = setupGitFixture();
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fx', scripts: { test: 'exit 1' } }));
+  spawnSync('git', ['add', '-A'], { cwd: root });
+  spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-m', 'base'], { cwd: root });
+  return root;
+}
+
+function commitFile(root, rel, message) {
+  mkdirSync(dirname(join(root, rel)), { recursive: true });
+  writeFileSync(join(root, rel), 'x\n');
+  spawnSync('git', ['add', '-A'], { cwd: root });
+  spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-m', message], { cwd: root });
+}
+
+function gitSha(root, ref) {
+  return spawnSync('git', ['rev-parse', ref], { cwd: root }).stdout.toString().trim();
+}
+
+function runHookWithStdin(root, stdinLine) {
+  const hookPath = join(root, '.git', 'hooks', 'pre-push');
+  const r = spawnSync('bash', [hookPath, 'origin', 'file:///dev/null'], {
+    cwd: root, input: stdinLine, timeout: 60_000,
+  });
+  return { code: r.status, stderr: r.stderr.toString() };
+}
+
+test('docs-only push skips the test gate', async () => {
+  const root = setupDocsOnlyFixture();
+  await runHooks(['install', '--pre-push'], root);
+  const base = gitSha(root, 'HEAD');
+  commitFile(root, 'docs/features/X-1/feature.json', 'docs change');
+  commitFile(root, 'ROADMAP.md', 'roadmap change');
+  const head = gitSha(root, 'HEAD');
+  const r = runHookWithStdin(root, `refs/heads/main ${head} refs/heads/main ${base}\n`);
+  assert.equal(r.code, 0, `expected skip (exit 0), stderr: ${r.stderr}`);
+  assert.match(r.stderr, /docs-only push .* skipping test gate/);
+});
+
+test('code push still runs the test gate (fails on red suite)', async () => {
+  const root = setupDocsOnlyFixture();
+  await runHooks(['install', '--pre-push'], root);
+  const base = gitSha(root, 'HEAD');
+  commitFile(root, 'docs/notes.md', 'docs change');
+  commitFile(root, 'lib/code.js', 'code change');
+  const head = gitSha(root, 'HEAD');
+  const r = runHookWithStdin(root, `refs/heads/main ${head} refs/heads/main ${base}\n`);
+  assert.notEqual(r.code, 0, 'mixed docs+code push must run the (red) test gate');
+  assert.doesNotMatch(r.stderr, /skipping test gate/);
+});
+
+test('new-branch push (zero remote sha) fails closed and runs the gate', async () => {
+  const root = setupDocsOnlyFixture();
+  await runHooks(['install', '--pre-push'], root);
+  commitFile(root, 'docs/notes.md', 'docs change');
+  const head = gitSha(root, 'HEAD');
+  const zero = '0'.repeat(40);
+  const r = runHookWithStdin(root, `refs/heads/feat ${head} refs/heads/feat ${zero}\n`);
+  assert.notEqual(r.code, 0, 'unbounded range must fail closed to the (red) test gate');
+});
+
+test('empty stdin fails closed and runs the gate', async () => {
+  const root = setupDocsOnlyFixture();
+  await runHooks(['install', '--pre-push'], root);
+  const r = runHookWithStdin(root, '');
+  assert.notEqual(r.code, 0, 'no ref lines must fail closed to the (red) test gate');
+});
+
 test('foreign pre-push hook is preserved without --force', async () => {
   const root = setupGitFixture();
   // Write a foreign hook

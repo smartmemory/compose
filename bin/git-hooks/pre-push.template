@@ -20,6 +20,34 @@ COMPOSE_WORKSPACE_ID="__COMPOSE_WORKSPACE_ID__"
 LOG="${COMPOSE_HOOK_LOG:-.compose/data/pre-push.log}"
 mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
 
+# ── Docs-only detection ──────────────────────────────────────────────────────
+# Parse the ref updates git feeds on stdin (this MUST run before anything else
+# touches stdin). If every pushed commit touches only docs/** or *.md, the test
+# gate below is skipped — a roadmap/changelog push shouldn't pay for the full
+# suite. Anything we can't positively bound (new branch, unknown remote sha,
+# diff failure, empty stdin) fails CLOSED: the gate runs.
+ZERO_SHA="0000000000000000000000000000000000000000"
+DOCS_ONLY=1
+SAW_RANGE=0
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  [ "$local_sha" = "$ZERO_SHA" ] && continue   # ref delete — no content pushed
+  if [ "$remote_sha" = "$ZERO_SHA" ]; then
+    DOCS_ONLY=0; SAW_RANGE=1; continue          # new ref — range unbounded, fail closed
+  fi
+  SAW_RANGE=1
+  CHANGED=$(git diff --name-only "$remote_sha".."$local_sha" 2>/dev/null) || { DOCS_ONLY=0; continue; }
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    case "$f" in
+      docs/*|*.md) ;;
+      *) DOCS_ONLY=0 ;;
+    esac
+  done <<EOF
+$CHANGED
+EOF
+done
+[ "$SAW_RANGE" -eq 1 ] || DOCS_ONLY=0
+
 # Drift check (ADVISORY — COMP-RESUME follow-up): print findings for visibility,
 # never block. The repo carries pre-existing error-severity drift (much from the
 # COMP-MCP-ENFORCE lifecycle-as-truth projection); hard-blocking on it would make
@@ -37,8 +65,11 @@ fi
 # Block the push if the suite is red. This is the gate whose absence let a broken
 # integration test (and a stale-schema consumer bug) reach main — nothing ran the
 # suite before push. Heavy (full `npm test`) but authoritative. Auto-skips in a
-# repo with no npm `test` script. Emergency bypass (sparingly): git push --no-verify
-if [ -f package.json ]; then
+# repo with no npm `test` script, and for docs-only pushes (docs/** + *.md,
+# detected fail-closed above). Emergency bypass (sparingly): git push --no-verify
+if [ "$DOCS_ONLY" -eq 1 ]; then
+  echo "pre-push: docs-only push (docs/** and *.md) — skipping test gate." >&2
+elif [ -f package.json ]; then
   # Probe scripts.test: exit 0 = present, 1 = definitively absent, anything else
   # = could not read package.json. Skip ONLY on a definitive "absent" (1); on
   # ambiguity run the suite anyway so a broken/unreadable package.json fails
