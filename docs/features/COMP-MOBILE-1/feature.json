@@ -1,0 +1,10 @@
+{
+  "code": "COMP-MOBILE-1",
+  "description": "Mobile monitoring-loop completeness. Mobile handles gates, build start/abort, agents, and ideas well, but cannot complete its core monitoring journeys: (1) no notification badges on BottomNav and no top-level alert bar — gate/build events arrive over WebSocket but the user is never alerted (the alerted-and-able-to-act loop is half-missing); (2) failing builds show only the raw agent log (BuildDetailView.jsx) with no pipeline stage/step breakdown, so which-step-failed requires desktop; (3) no session/build history; (4) roadmap is read-mostly — ItemDetailSheet mutates only status/group/confidence, no create/delete/connections; (5) hygiene: 3 mobile files re-declare AGENT_PORT with a 4002 fallback (AgentCard.jsx:5, AgentDetailView.jsx:6, useInteractiveSession.js:14) instead of the shared agentServerUrl() helper — same drift class COMP-COCKPIT-2 fixed on desktop. P1 cluster from the 2026-06-10 mobile parity sweep.",
+  "status": "PLANNED",
+  "phase": "COMP-COCKPIT Wave 2: UX Journey Gaps (2026-06-10 sweep)",
+  "created": "2026-06-09",
+  "updated": "2026-06-09",
+  "complexity": "L",
+  "position": 5
+}

@@ -1,0 +1,11 @@
+{
+  "code": "COMP-COCKPIT-8",
+  "description": "Cross-view entity links. Entities referenced in one view are not clickable to their action surface: pending gate in ItemDetailPanel has no jump-to-Gates link, AttentionQueueSidebar overflow (+N more) has no view-all path, resolved loops in OpenLoopsPanel do not link back to their parent feature, and the no-selection ContextPanel summary says \"1 pending gate\" without identifying the feature. One pattern fix: every feature code / gate id / session id rendered anywhere becomes a navigable link to its home view. P2 friction cluster from the 2026-06-10 UX journey sweep.",
+  "status": "PLANNED",
+  "phase": "COMP-COCKPIT Wave 2: UX Journey Gaps (2026-06-10 sweep)",
+  "created": "2026-06-09",
+  "updated": "2026-06-09",
+  "complexity": "M",
+  "position": 2,
+  "parent": "COMP-COCKPIT"
+}
