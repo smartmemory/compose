@@ -28,6 +28,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import {
   toolGetVisionItems,
+  toolGetRoadmap,
   toolGetItemDetail,
   toolGetPhasesSummary,
   toolGetBlockedItems,
@@ -355,6 +356,19 @@ const TOOLS = [
         since: { type: 'string', description: 'Window: shorthand like "24h"/"7d"/"30m", or an ISO date. Default 24h.' },
         feature_code: { type: 'string' },
         tool: { type: 'string', description: 'Filter to one tool name, e.g. "set_feature_status"' },
+      },
+    },
+  },
+  {
+    name: 'get_roadmap',
+    description: 'Read the current roadmap rendered from canon (feature.json) WITHOUT writing. Returns a status summary plus active/blocked rows, and a staleness flag comparing the render against on-disk ROADMAP.md. Narrative-owned workspaces return the hand-authored file verbatim. Read-only — prefer this over reading ROADMAP.md directly.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', description: 'Filter active/blocked rows by status (comma-separated): PLANNED, IN_PROGRESS, PARTIAL, BLOCKED, COMPLETE, …' },
+        phase: { type: 'string', description: 'Filter active/blocked rows to a single phase (matched against phaseId)' },
+        format: { type: 'string', description: '"summary" (default — counts + lists, token-safe) or "markdown" (full rendered text)' },
+        check_drift: { type: 'boolean', description: 'Compare the render against on-disk ROADMAP.md and set stale/drift (default true)' },
       },
     },
   },
@@ -733,6 +747,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'add_roadmap_entry':        result = await toolAddRoadmapEntry(args); break;
       case 'set_feature_status':       result = await toolSetFeatureStatus(args); break;
       case 'roadmap_diff':             result = await toolRoadmapDiff(args); break;
+      case 'get_roadmap':              result = toolGetRoadmap(args); break;
       case 'link_artifact':            result = await toolLinkArtifact(args); break;
       case 'link_features':            result = await toolLinkFeatures(args); break;
       case 'get_feature_artifacts':    result = await toolGetFeatureArtifacts(args); break;

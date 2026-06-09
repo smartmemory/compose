@@ -77,6 +77,7 @@ test('implementer + execute → completion denied even on own feature (phase ref
 
 test('reviewer: allowlist of reads/setup; every mutation denied', () => {
   ALLOW(isToolAllowed({ tool: 'get_vision_items', profile: 'reviewer', phase: 'execute' }));
+  ALLOW(isToolAllowed({ tool: 'get_roadmap', profile: 'reviewer', phase: 'execute' }));
   ALLOW(isToolAllowed({ tool: 'set_workspace', profile: 'reviewer', phase: 'execute' }));
   DENY(isToolAllowed({ tool: 'link_artifact', profile: 'reviewer', phase: 'execute' }));
   DENY(isToolAllowed({ tool: 'set_feature_status', profile: 'reviewer', phase: 'execute' }));

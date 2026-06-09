@@ -1,0 +1,10 @@
+{
+  "code": "COMP-MCP-ROADMAP-READ",
+  "description": "**Read-only `get_roadmap` MCP primitive — closes the read-side gap in the roadmap surface.** The MCP roadmap surface was write-complete (`add_roadmap_entry`, `set_feature_status`) but read-incomplete: no tool returned the rendered roadmap, so every reader — including the global `/roadmap` skill — fell back to `Read`-ing `ROADMAP.md` directly. On feature.json-backed workspaces that means reading a *rendered artifact* that can drift from canon. `get_roadmap` renders in-memory from canon via `generateRoadmap` (never writes), reads narrative-owned workspaces verbatim (no console.warn), reuses `parseRoadmap` for rows, reports a `stale`/`drift` flag vs on-disk `ROADMAP.md` (stripping the volatile `Last updated:` line), and defaults to a token-safe `summary` format. `/roadmap` skill rewired to prefer it when a compose MCP server is connected. Closes the direct-read leak and the `/roadmap` stale-view conflict.",
+  "status": "PLANNED",
+  "phase": "COMP-MCP-VALIDATE: Closed-Loop Hardening",
+  "created": "2026-06-09",
+  "updated": "2026-06-09",
+  "complexity": "S",
+  "position": 5
+}
