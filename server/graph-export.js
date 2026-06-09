@@ -317,8 +317,13 @@ setTimeout(() => cy.fit(undefined, 30), 100);
 // Route
 // ---------------------------------------------------------------------------
 
-export function attachGraphExportRoutes(app, { store }) {
-  // GET /api/export/roadmap-graph — returns generated HTML
+export function attachGraphExportRoutes(app, { store, requireSensitiveToken }) {
+  // The save route writes to the project filesystem, so it must be token-
+  // gated like every other state-changing route (COMP-COCKPIT-10 review).
+  const tokenGate = requireSensitiveToken || ((_req, res, _next) =>
+    res.status(500).json({ error: 'requireSensitiveToken not configured' }));
+
+  // GET /api/export/roadmap-graph — returns generated HTML (read-only)
   app.get('/api/export/roadmap-graph', (_req, res) => {
     try {
       const html = generateHTML(store);
@@ -329,7 +334,7 @@ export function attachGraphExportRoutes(app, { store }) {
   });
 
   // POST /api/export/roadmap-graph/save — writes to project docs
-  app.post('/api/export/roadmap-graph/save', (_req, res) => {
+  app.post('/api/export/roadmap-graph/save', tokenGate, (_req, res) => {
     try {
       const html = generateHTML(store);
       const docsDir = path.join(getTargetRoot(), 'docs');

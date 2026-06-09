@@ -946,8 +946,8 @@ function AppInner() {
   const openGate = useCallback((gateId) => {
     const gate = gates.find(g => g.id === gateId);
     if (!gate) {
-      // Gate is gone — fall back to item selection.
-      handleSelect(gate?.itemId);
+      // Gate is gone — no itemId is derivable from a missing gate, so do
+      // nothing rather than corrupt the selection state.
       return;
     }
     // Clear the phase filter: phaseFilteredGates would hide a gate whose
@@ -968,13 +968,28 @@ function AppInner() {
     if (item) handleSelect(item.id);
   }, [items, handleSelect]);
 
+  // COMP-COCKPIT-8: resolvability check so EntityLink can degrade to plain
+  // text for targets that no longer exist (stale gate ids, unknown codes).
+  const canNavigate = useCallback((kind, id) => {
+    if (!id) return false;
+    switch (kind) {
+      case 'gate': return gates.some(g => g.id === id);
+      case 'item': return items.some(i => i.id === id);
+      case 'feature': return items.some(i =>
+        i.featureCode === id || i.feature_code === id || i.lifecycle?.featureCode === id);
+      case 'view': return true;
+      default: return false;
+    }
+  }, [gates, items]);
+
   // COMP-COCKPIT-8: navigation context value consumed by EntityLink.
   const navigationValue = useMemo(() => ({
     openItem: handleSelect,
     openGate,
     openView: handleViewChange,
     openFeature,
-  }), [handleSelect, openGate, handleViewChange, openFeature]);
+    canNavigate,
+  }), [handleSelect, openGate, handleViewChange, openFeature, canNavigate]);
 
   const handleCreateConnection = useCallback(async (data) => {
     return createConnection(data);
