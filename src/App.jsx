@@ -950,12 +950,15 @@ function AppInner() {
       // nothing rather than corrupt the selection state.
       return;
     }
-    // Clear the phase filter: phaseFilteredGates would hide a gate whose
-    // owning item is outside the selected phase, making the jump a no-op.
+    // Clear both gate-hiding filters: phaseFilteredGates would hide a gate
+    // whose owning item is outside the selected phase, and GateView's
+    // feature-focus filter (focusActive) would hide a gate belonging to a
+    // different feature — either would make the jump a silent no-op.
     setSelectedPhase(null);
+    setFocusFeature(false);
     setFocusedGateId(gateId);
     handleViewChange('gates');
-  }, [gates, handleSelect, setSelectedPhase, handleViewChange]);
+  }, [gates, setSelectedPhase, setFocusFeature, handleViewChange]);
 
   const handleGateFocusHandled = useCallback(() => setFocusedGateId(null), []);
 
