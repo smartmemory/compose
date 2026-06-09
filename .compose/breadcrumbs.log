@@ -544,3 +544,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-10T07:08:47+08:00 | COMP-COCKPIT-10: delete 3 orphan vision routes, wire roadmap-graph export into GraphView toolbar
 2026-06-10T07:13:30+08:00 | COMP-COCKPIT-8: cross-view entity links — EntityLink primitive + NavigationContext, wire gate/feature links across panels
 2026-06-10T07:20:58+08:00 | COMP-COCKPIT-9 S04: journal & changelog cockpit surface — journal-routes API + JournalView tab
+2026-06-10T07:32:08+08:00 | Wave 2 review fixes: token-gate export save, EntityLink resolvability, openGate stale no-op, stale comments

@@ -7,6 +7,7 @@ import FeatureFocusToggle from '../shared/FeatureFocusToggle.jsx';
 import { useIdeaboxStore } from './useIdeaboxStore.js';
 import { wsFetch } from '../../lib/wsFetch.js';
 import { notify } from '../cockpit/NotificationBar.jsx';
+import { withComposeToken } from '../../lib/compose-api.js';
 
 try { cytoscape.use(cytoscapeDagre); } catch (e) { /* already registered */ }
 try { cytoscape.use(cytoscapeFcose); } catch (e) { /* already registered */ }
@@ -1010,7 +1011,10 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
   }, []);
   const handleExportSave = useCallback(async () => {
     try {
-      const res = await wsFetch('/api/export/roadmap-graph/save', { method: 'POST' });
+      const res = await wsFetch('/api/export/roadmap-graph/save', {
+        method: 'POST',
+        headers: withComposeToken({ 'Content-Type': 'application/json' }),
+      });
       const body = await res.json().catch(() => ({}));
       if (res.ok && body.ok) {
         notify(`Saved ${body.path}`, 'info');

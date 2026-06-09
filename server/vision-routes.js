@@ -57,7 +57,7 @@ import { requireSensitiveToken } from './security.js';
 const PROJECT_ROOT = getTargetRoot();
 
 /**
- * Attach vision CRUD and plan/parse REST routes to an Express app.
+ * Attach vision CRUD and lifecycle REST routes to an Express app.
  *
  * @param {object} app — Express app
  * @param {{ store: object, scheduleBroadcast: function, broadcastMessage: function, projectRoot: string, settingsStore?: object, capabilities?: object }} deps

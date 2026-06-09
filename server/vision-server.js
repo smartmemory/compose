@@ -84,7 +84,7 @@ export class VisionServer {
       broadcastMessage: (msg) => this.broadcastMessage(msg),
     });
 
-    // ── Vision CRUD + plan/parse routes ────────────────────────────────────
+    // ── Vision CRUD + lifecycle routes ─────────────────────────────────────
     attachVisionRoutes(app, {
       store: this.store,
       scheduleBroadcast: () => this.scheduleBroadcast(),
@@ -225,7 +225,7 @@ export class VisionServer {
     });
 
     // ── Graph export routes ──────────────────────────────────────────────
-    attachGraphExportRoutes(app, { store: this.store });
+    attachGraphExportRoutes(app, { store: this.store, requireSensitiveToken });
 
     // ── Journal & changelog routes (COMP-COCKPIT-9) ──────────────────────
     attachJournalRoutes(app, {

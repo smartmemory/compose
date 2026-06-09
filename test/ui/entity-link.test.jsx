@@ -103,3 +103,26 @@ describe('<EntityLink> — gate kind graceful degradation', () => {
     expect(screen.getByText('No Gate Nav')).toBeTruthy();
   });
 });
+
+describe('<EntityLink> — resolvability (canNavigate)', () => {
+  it('renders plain text when canNavigate reports the target unresolvable', () => {
+    const nav = makeNav({ canNavigate: vi.fn(() => false) });
+    renderWithNav(<EntityLink kind="gate" id="gate-gone" label="Stale Gate" />, nav);
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByText('Stale Gate')).toBeTruthy();
+    expect(nav.canNavigate).toHaveBeenCalledWith('gate', 'gate-gone');
+  });
+
+  it('renders a clickable link when canNavigate reports the target resolvable', () => {
+    const nav = makeNav({ canNavigate: vi.fn(() => true) });
+    renderWithNav(<EntityLink kind="feature" id="FEAT-1" />, nav);
+    fireEvent.click(screen.getByRole('button', { name: 'FEAT-1' }));
+    expect(nav.openFeature).toHaveBeenCalledWith('FEAT-1');
+  });
+
+  it('stays optimistic (clickable) when the provider has no canNavigate', () => {
+    const nav = makeNav();
+    renderWithNav(<EntityLink kind="item" id="item-1" label="Legacy" />, nav);
+    expect(screen.getByRole('button', { name: 'Legacy' })).toBeTruthy();
+  });
+});

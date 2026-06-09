@@ -91,20 +91,26 @@ function request(server, urlPath, { method = 'GET', body, headers = {} } = {}) {
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
+const TOKEN = 'test-export-token';
+
 describe('graph export routes (COMP-COCKPIT-10)', () => {
   let server;
   let tmpRoot;
   let originalRoot;
+  let _origToken;
 
   before(async () => {
     originalRoot = getTargetRoot();
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'graph-export-routes-'));
     switchProject(tmpRoot);
+    _origToken = process.env.COMPOSE_API_TOKEN;
+    process.env.COMPOSE_API_TOKEN = TOKEN;
 
     const app = express();
     app.use(express.json());
     const store = makeStore();
-    attachGraphExportRoutes(app, { store });
+    const { requireSensitiveToken } = await import(`${REPO_ROOT}/server/security.js`);
+    attachGraphExportRoutes(app, { store, requireSensitiveToken });
     attachVisionRoutes(app, {
       store,
       scheduleBroadcast: () => {},
@@ -118,6 +124,8 @@ describe('graph export routes (COMP-COCKPIT-10)', () => {
     server?.close();
     switchProject(originalRoot);
     fs.rmSync(tmpRoot, { recursive: true, force: true });
+    if (_origToken === undefined) delete process.env.COMPOSE_API_TOKEN;
+    else process.env.COMPOSE_API_TOKEN = _origToken;
   });
 
   test('GET /api/export/roadmap-graph returns non-empty HTML', async () => {
@@ -128,8 +136,16 @@ describe('graph export routes (COMP-COCKPIT-10)', () => {
     assert.match(res.text, /<html/i);
   });
 
-  test('POST /api/export/roadmap-graph/save writes docs/roadmap-graph.html and returns {ok, path}', async () => {
+  test('POST /api/export/roadmap-graph/save without token returns 401', async () => {
     const res = await request(server, '/api/export/roadmap-graph/save', { method: 'POST' });
+    assert.equal(res.status, 401);
+  });
+
+  test('POST /api/export/roadmap-graph/save writes docs/roadmap-graph.html and returns {ok, path}', async () => {
+    const res = await request(server, '/api/export/roadmap-graph/save', {
+      method: 'POST',
+      headers: { 'x-compose-token': TOKEN },
+    });
     assert.equal(res.status, 200);
     assert.equal(res.json.ok, true);
     const expected = path.join(tmpRoot, 'docs', 'roadmap-graph.html');
