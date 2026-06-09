@@ -1,10 +1,35 @@
 {
   "code": "COMP-MCP-ROADMAP-READ",
   "description": "**Read-only `get_roadmap` MCP primitive — closes the read-side gap in the roadmap surface.** The MCP roadmap surface was write-complete (`add_roadmap_entry`, `set_feature_status`) but read-incomplete: no tool returned the rendered roadmap, so every reader — including the global `/roadmap` skill — fell back to `Read`-ing `ROADMAP.md` directly. On feature.json-backed workspaces that means reading a *rendered artifact* that can drift from canon. `get_roadmap` renders in-memory from canon via `generateRoadmap` (never writes), reads narrative-owned workspaces verbatim (no console.warn), reuses `parseRoadmap` for rows, reports a `stale`/`drift` flag vs on-disk `ROADMAP.md` (stripping the volatile `Last updated:` line), and defaults to a token-safe `summary` format. `/roadmap` skill rewired to prefer it when a compose MCP server is connected. Closes the direct-read leak and the `/roadmap` stale-view conflict.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-MCP-VALIDATE: Closed-Loop Hardening",
   "created": "2026-06-09",
   "updated": "2026-06-09",
   "complexity": "S",
-  "position": 5
+  "position": 5,
+  "completions": [
+    {
+      "completion_id": "COMP-MCP-ROADMAP-READ:e764481967e1b9f39f029449abca1b0cafde48eb",
+      "feature_code": "COMP-MCP-ROADMAP-READ",
+      "commit_sha": "e764481967e1b9f39f029449abca1b0cafde48eb",
+      "commit_sha_short": "e7644819",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/get-roadmap.js",
+        "server/compose-mcp-tools.js",
+        "server/compose-mcp.js",
+        "server/mcp-tool-policy.js",
+        "test/get-roadmap.test.js",
+        "test/mcp-tool-policy.test.js",
+        "ROADMAP.md",
+        "CHANGELOG.md",
+        "docs/features/COMP-MCP-ROADMAP-READ/design.md",
+        "docs/features/COMP-MCP-ROADMAP-READ/blueprint.md"
+      ],
+      "recorded_at": "2026-06-09T10:07:06.362Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Read-only get_roadmap MCP primitive + /roadmap skill rewire. 11 new tests, full suite 3657 green, Codex REVIEW CLEAN."
+    }
+  ],
+  "commit_sha": "e764481967e1b9f39f029449abca1b0cafde48eb"
 }
