@@ -11,6 +11,7 @@ import path from 'node:path';
 import { ArtifactManager, ARTIFACT_SCHEMAS } from './artifact-manager.js';
 import { getTargetRoot, getDataDir, resolveProjectPath, switchProject, setCurrentWorkspaceId, loadProjectConfig } from './project-root.js';
 import { resolveProfile, isToolAllowed } from './mcp-tool-policy.js';
+import { getRoadmap } from '../lib/get-roadmap.js';
 
 /**
  * COMP-MCP-ENFORCE Slice 3 — kill the `force` escape hatch at the MCP tool
@@ -151,6 +152,12 @@ export function loadSessions() {
 // ---------------------------------------------------------------------------
 // Tool implementations
 // ---------------------------------------------------------------------------
+
+// COMP-MCP-ROADMAP-READ — read-only roadmap reader. Thin wrapper over
+// lib/get-roadmap.js; never mutates the filesystem.
+export function toolGetRoadmap(args = {}) {
+  return getRoadmap(getTargetRoot(), args ?? {});
+}
 
 export function toolGetVisionItems({ phase, status, type, keyword, limit = 30 }) {
   const { items } = loadVisionState();

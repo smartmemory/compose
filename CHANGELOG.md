@@ -6,6 +6,18 @@
 
 `checkExternalSkills` (`lib/deps.js`) matched a bare manifest dep id (e.g. `refactor`, `update-docs`) only against `~/.claude/skills/<id>/`, while plugin-provided skills were recorded namespaced (`coder-config:refactor`). Claude Code surfaces those plugin skills under their bare names, so doctor wrongly reported them missing. A bare dep is now satisfied by a user skill at that path **or** any plugin skill whose leaf name matches; namespaced deps still require an exact `<plugin>:<skill>` match (no loosening). Result: `compose doctor` reports `All 12 deps present`. Updated the bare-vs-namespaced matching test to assert the corrected semantics plus a true-negative guard.
 
+### COMP-MCP-ROADMAP-READ — read-only get_roadmap MCP primitive closes the roadmap read-side gap
+
+Adds `get_roadmap`, a read-only MCP tool that returns the roadmap rendered from canon (feature.json) without writing, plus a staleness flag vs on-disk ROADMAP.md. Closes the gap that forced every reader — including the `/roadmap` skill — to read ROADMAP.md directly (a rendered artifact that can drift from canon on feature.json-backed workspaces).
+
+**Added:**
+- `lib/get-roadmap.js` — pure `getRoadmap(root, opts)`: renders via generateRoadmap (no write), reads narrative-owned workspaces verbatim, reuses parseRoadmap for rows, reports stale/drift vs on-disk ROADMAP.md (stripping the volatile `**Last updated:**` line), defaults to token-safe `summary` format.
+- `get_roadmap` MCP tool — registered in compose-mcp.js, dispatched, and added to the reviewer read-only allowlist.
+- `test/get-roadmap.test.js` — 11 tests: rendered/narrative source, no-write (mtime), drift detection, Last-updated normalization, status/phase filters, format, token-size, anonymous-row exclusion.
+
+**Changed:**
+- `/roadmap` skill (`~/.claude/skills/roadmap/SKILL.md`) — new step 0 prefers `get_roadmap` when a compose MCP server is connected; surfaces `stale` drift; falls back to file-read otherwise.
+
 ## 2026-06-07
 
 ### Added — COMP-COCKPIT Slice A: cockpit action feedback, native-dialog replacement, hostname portability, gate-kill guardrail
