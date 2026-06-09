@@ -73,6 +73,12 @@ export default function JournalView() {
 
   useEffect(() => { fetchEntries(); }, [fetchEntries]);
 
+  // Post-write refresh must use the LATEST source/filter, not the closure
+  // captured when the submit started — an old closure would issue a
+  // numerically-newest but semantically stale request for the old view.
+  const fetchRef = useRef(fetchEntries);
+  useEffect(() => { fetchRef.current = fetchEntries; }, [fetchEntries]);
+
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
@@ -103,7 +109,7 @@ export default function JournalView() {
       notify('Journal entry written', 'info');
       setForm(EMPTY_FORM);
       setShowForm(false);
-      fetchEntries();
+      fetchRef.current();
     } catch (err) {
       notify(err.message || String(err), 'error');
     } finally {
