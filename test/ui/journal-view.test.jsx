@@ -150,11 +150,35 @@ describe('JournalView (COCKPIT-9)', () => {
     expect(body.summary).toBe('Fresh entry');
     expect(body.sections.what_happened).toBe('h');
     expect(body.sections.open_threads).toBe('t');
+    expect(body.feature_code).toBeUndefined(); // no code entered → omitted
 
     // refresh happened: a GET after the POST
     await waitFor(() => {
       const after = fetchCalls.slice(fetchCountBefore);
       expect(after.some(c => !c.opts.method && c.url.startsWith('/api/journal'))).toBe(true);
+    });
+  });
+
+  it('write form sends feature_code, seeded from the active filter', async () => {
+    render(<JournalView />);
+    await waitFor(() => expect(screen.getByText('A big session')).toBeTruthy());
+
+    fireEvent.change(screen.getByPlaceholderText(/filter by feature code/i), { target: { value: 'FEAT-9' } });
+    fireEvent.click(screen.getByRole('button', { name: /new entry/i }));
+    // Seeded from the filter, still editable.
+    expect(screen.getByLabelText('Feature code').value).toBe('FEAT-9');
+
+    fireEvent.change(screen.getByLabelText('Summary'), { target: { value: 'Scoped entry' } });
+    fireEvent.change(screen.getByLabelText('What happened'), { target: { value: 'h' } });
+    fireEvent.change(screen.getByLabelText('What we built'), { target: { value: 'b' } });
+    fireEvent.change(screen.getByLabelText('What we learned'), { target: { value: 'l' } });
+    fireEvent.change(screen.getByLabelText('Open threads'), { target: { value: 't' } });
+    fireEvent.click(screen.getByRole('button', { name: /write entry/i }));
+
+    await waitFor(() => {
+      const post = fetchCalls.find(c => c.opts.method === 'POST');
+      expect(post).toBeTruthy();
+      expect(JSON.parse(post.opts.body).feature_code).toBe('FEAT-9');
     });
   });
 

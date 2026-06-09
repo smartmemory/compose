@@ -28,6 +28,7 @@ const SECTION_META = [
 
 const EMPTY_FORM = {
   summary: '',
+  feature_code: '',
   what_happened: '',
   what_we_built: '',
   what_we_learned: '',
@@ -73,6 +74,9 @@ export default function JournalView() {
         headers: withComposeToken({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           summary: form.summary,
+          // Pre-filled from the active filter; without it a filtered refresh
+          // would hide the just-written (unscoped) entry.
+          ...(form.feature_code.trim() ? { feature_code: form.feature_code.trim() } : {}),
           sections: {
             what_happened: form.what_happened,
             what_we_built: form.what_we_built,
@@ -145,7 +149,11 @@ export default function JournalView() {
         {/* New entry */}
         <button
           type="button"
-          onClick={() => setShowForm(v => !v)}
+          onClick={() => setShowForm(v => {
+            // Opening: seed the entry's feature code from the active filter.
+            if (!v) setForm(f => ({ ...f, feature_code: f.feature_code || featureFilter.trim() }));
+            return !v;
+          })}
           className="ml-auto flex items-center gap-1 text-xs px-2 py-0.5 h-6 rounded bg-muted text-foreground border border-border hover:bg-accent cursor-pointer"
         >
           <Plus className="h-3 w-3" />
@@ -163,6 +171,14 @@ export default function JournalView() {
             value={form.summary}
             onChange={e => setForm(f => ({ ...f, summary: e.target.value }))}
             className="text-xs px-2 py-1 rounded bg-muted text-foreground border border-border w-full"
+          />
+          <input
+            type="text"
+            placeholder="Feature code (optional)"
+            aria-label="Feature code"
+            value={form.feature_code}
+            onChange={e => setForm(f => ({ ...f, feature_code: e.target.value }))}
+            className="text-xs px-2 py-1 rounded bg-muted text-foreground border border-border w-full font-mono"
           />
           {SECTION_META.map(([key, label]) => (
             <textarea
