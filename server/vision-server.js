@@ -32,6 +32,7 @@ import { DesignSessionManager } from './design-session.js';
 import { attachPipelineRoutes } from './pipeline-routes.js';
 import { attachIdeaboxRoutes } from './ideabox-routes.js';
 import { attachBuildRoutes } from './build-routes.js';
+import { attachJournalRoutes } from './journal-routes.js';
 import { CoalescingBuffer } from './coalescing-buffer.js';
 /** Settings defaults (previously derived from contracts/lifecycle.json). */
 const SETTINGS_DEFAULTS = {
@@ -225,6 +226,12 @@ export class VisionServer {
 
     // ── Graph export routes ──────────────────────────────────────────────
     attachGraphExportRoutes(app, { store: this.store });
+
+    // ── Journal & changelog routes (COMP-COCKPIT-9) ──────────────────────
+    attachJournalRoutes(app, {
+      projectRoot: () => getTargetRoot(),
+      requireSensitiveToken,
+    });
 
     // ── Stratum (conditional) ────────────────────────────────────────────
     if (this._config.capabilities?.stratum) {

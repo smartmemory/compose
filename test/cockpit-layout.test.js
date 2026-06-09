@@ -29,6 +29,7 @@ import {
   addTab,
   removeTab,
   reorderTabs,
+  loadMainTabs,
 } from '../src/components/cockpit/viewTabsState.js';
 
 // ---------------------------------------------------------------------------
@@ -204,5 +205,37 @@ describe('viewTabsState — reorderTabs', () => {
     const tabs = ['Canvas', 'Stratum'];
     const result = reorderTabs(tabs, -1, 5);
     assert.deepEqual(result, ['Canvas', 'Stratum']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadMainTabs — persisted-tab migration (COMP-COCKPIT-9)
+// ---------------------------------------------------------------------------
+
+describe('viewTabsState — loadMainTabs migration', () => {
+  it('includes journal in DEFAULT_MAIN_TABS', () => {
+    assert.ok(DEFAULT_MAIN_TABS.includes('journal'));
+  });
+
+  it('inserts journal into a persisted tab list that predates it', () => {
+    const persisted = DEFAULT_MAIN_TABS.filter(t => t !== 'journal');
+    const stored = new Map([['compose:mainTabs', JSON.stringify(persisted)]]);
+    const origLocalStorage = globalThis.localStorage;
+    globalThis.localStorage = {
+      getItem: (k) => (stored.has(k) ? stored.get(k) : null),
+      setItem: (k, v) => stored.set(k, String(v)),
+      removeItem: (k) => stored.delete(k),
+    };
+    try {
+      const tabs = loadMainTabs();
+      assert.ok(tabs.includes('journal'), 'journal migrated into persisted tabs');
+      // Inserted after 'docs' when docs is present
+      assert.equal(tabs[tabs.indexOf('docs') + 1], 'journal');
+      // All persisted tabs survive
+      for (const t of persisted) assert.ok(tabs.includes(t));
+    } finally {
+      if (origLocalStorage === undefined) delete globalThis.localStorage;
+      else globalThis.localStorage = origLocalStorage;
+    }
   });
 });

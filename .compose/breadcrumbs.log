@@ -543,3 +543,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-10T07:05:31+08:00 | COMP-COCKPIT-7 S01: retry failed builds from PastBuildsView via shared startBuild helper
 2026-06-10T07:08:47+08:00 | COMP-COCKPIT-10: delete 3 orphan vision routes, wire roadmap-graph export into GraphView toolbar
 2026-06-10T07:13:30+08:00 | COMP-COCKPIT-8: cross-view entity links — EntityLink primitive + NavigationContext, wire gate/feature links across panels
+2026-06-10T07:20:58+08:00 | COMP-COCKPIT-9 S04: journal & changelog cockpit surface — journal-routes API + JournalView tab
