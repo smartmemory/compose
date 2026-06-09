@@ -1,11 +1,31 @@
 {
   "code": "COMP-MCP-ROADMAP-READ-1",
   "description": "**`get_roadmap` general filtered `rows[]` + `limit` — structured status lists so `/roadmap next` never re-parses markdown.** Follow-up to COMP-MCP-ROADMAP-READ. The shipped `get_roadmap` exposed PLANNED only as a count (`summary.planned`); the convenience `active`/`blocked` lists are fixed-status, so the `/roadmap` skill's \"what to work on next\" recommendation had no structured way to read PLANNED candidates and would fall back to `format:\"markdown\"` + re-parse — the exact direct-read behavior the primitive existed to kill. Adds a `limit` input (default 50, floored + clamped ≥0) and, when status/phase/limit is supplied, emits `rows` (named rows matching the status+phase filter, `_anon_` excluded), `rowsTotal`, and `rowsTruncated`. No-filter summary call stays token-safe (rows omitted). `/roadmap` skill's `next` path rewired to `get_roadmap({status:\"PLANNED\", limit:10})`. Codex caught a malformed-limit token-safety footgun (negative/float silently widened to 50) before REVIEW CLEAN.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-MCP-VALIDATE: Closed-Loop Hardening",
   "created": "2026-06-09",
   "updated": "2026-06-09",
   "complexity": "S",
   "position": 6,
-  "parent": "COMP-MCP-ROADMAP-READ"
+  "parent": "COMP-MCP-ROADMAP-READ",
+  "completions": [
+    {
+      "completion_id": "COMP-MCP-ROADMAP-READ-1:19a46a074dd75fa98a6e439276736f37d199bb74",
+      "feature_code": "COMP-MCP-ROADMAP-READ-1",
+      "commit_sha": "19a46a074dd75fa98a6e439276736f37d199bb74",
+      "commit_sha_short": "19a46a07",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/get-roadmap.js",
+        "server/compose-mcp.js",
+        "test/get-roadmap.test.js",
+        "ROADMAP.md",
+        "CHANGELOG.md"
+      ],
+      "recorded_at": "2026-06-09T16:07:50.901Z",
+      "recorded_by": "mcp:agent",
+      "notes": "General filtered rows[]/rowsTotal/rowsTruncated + limit; /roadmap next rewired to structured rows. 17 tests, suite 3647 green, Codex REVIEW CLEAN."
+    }
+  ],
+  "commit_sha": "19a46a074dd75fa98a6e439276736f37d199bb74"
 }
