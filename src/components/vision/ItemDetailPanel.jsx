@@ -11,6 +11,7 @@ import ConfidenceBar from './shared/ConfidenceBar.jsx';
 import BranchComparePanel from './BranchComparePanel.jsx';
 import DriftRibbon from './DriftRibbon.jsx';
 import StartBuildPopover from './StartBuildPopover.jsx';
+import EntityLink from '../shared/EntityLink.jsx';
 import { useVisionStore } from './useVisionStore.js';
 import { wsFetch } from '../../lib/wsFetch.js';
 import { notify } from '../cockpit/NotificationBar.jsx';
@@ -600,7 +601,13 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
                     return (
                       <div key={gate.id} className="rounded bg-amber-400/10 border border-amber-400/20 px-2 py-1.5">
                         <p className="text-[10px] text-amber-400 font-medium mb-1">
-                          Pending: {GATE_STEP_LABELS[gate.stepId] ?? `${LIFECYCLE_PHASE_LABELS[gate.fromPhase] ?? gate.fromPhase} → ${LIFECYCLE_PHASE_LABELS[gate.toPhase] ?? gate.toPhase}`}
+                          Pending:{' '}
+                          <EntityLink
+                            kind="gate"
+                            id={gate.id}
+                            label={GATE_STEP_LABELS[gate.stepId] ?? `${LIFECYCLE_PHASE_LABELS[gate.fromPhase] ?? gate.fromPhase} → ${LIFECYCLE_PHASE_LABELS[gate.toPhase] ?? gate.toPhase}`}
+                            className="text-[10px]"
+                          />
                         </p>
                         {assessment && assessment.exists && (
                           <p className="text-[10px] text-muted-foreground mb-1">
