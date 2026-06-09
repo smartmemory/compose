@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-06-10
+
+### COMP-MCP-ROADMAP-READ-1 — get_roadmap gains a general filtered rows[] + limit so /roadmap next reads PLANNED structured
+
+Follow-up to COMP-MCP-ROADMAP-READ. The shipped tool exposed PLANNED only as a count and the active/blocked lists are fixed-status, so /roadmap's "what to work on next" had to fall back to markdown re-parsing. get_roadmap now returns a general filtered rows list when a status/phase filter or limit is supplied.
+
+**Added:**
+- `get_roadmap` `limit` input (default 50; finite values floored and clamped ≥ 0).
+- `rows` / `rowsTotal` / `rowsTruncated` output — emitted when status/phase/limit is supplied: named rows matching the status+phase filter (`_anon_` excluded), capped at limit. No-filter summary call stays token-safe (rows omitted).
+
+**Changed:**
+- `/roadmap` skill `next` path — now calls `get_roadmap({status:"PLANNED", limit:10})` and reads `rows` instead of re-parsing the markdown table.
+- `get_roadmap` MCP schema — `limit` declared integer/minimum:0.
+
 ## 2026-06-09
 
 ### Fixed — `compose doctor` false-negative on plugin-provided bare-name skills

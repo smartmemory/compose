@@ -536,3 +536,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-09T13:51:53+08:00 | fix workspace resolution: nearest-enclosing wins so running compose from a workspace root never triggers the descendant-scan TooBroad cap
 2026-06-09T14:34:36+08:00 | discovery scan: prune dot-dirs + vendor/cache subtrees and raise visit cap to 10k so large repos enumerate fully (degrade-on-TooBroad kept as backstop)
 2026-06-09T17:37:34+08:00 | COMP-MCP-ROADMAP-READ: add read-only get_roadmap MCP primitive (lib + tool wrapper + tests)
+2026-06-09T23:56:44+08:00 | COMP-MCP-ROADMAP-READ-1: general filtered rows[] + limit so /roadmap next can read PLANNED structured (not via markdown reparse)
