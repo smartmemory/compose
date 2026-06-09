@@ -16,6 +16,7 @@ const {
   findAnchor,
   discoverWorkspaces,
   deriveId,
+  MAX_VISITED,
 } = await import(`${REPO_ROOT}/lib/discover-workspaces.js`);
 
 function makeWorkspace(root, opts = {}) {
@@ -105,8 +106,10 @@ describe('discoverWorkspaces', () => {
 
   test('visit-cap: tree exceeding MAX_VISITED throws WorkspaceDiscoveryTooBroad', () => {
     makeWorkspace(dir, { workspaceId: 'top' });
-    // create MAX_VISITED+50 sibling subdirs at depth 1 (under MAX_DEPTH=3)
-    for (let i = 0; i < 550; i++) {
+    // create MAX_VISITED+50 sibling subdirs at depth 1 (under MAX_DEPTH=3).
+    // Bound to the exported constant so the test can't silently rot if the cap
+    // is retuned.
+    for (let i = 0; i < MAX_VISITED + 50; i++) {
       mkdirSync(join(dir, `d${i}`));
     }
     assert.throws(
@@ -120,6 +123,27 @@ describe('discoverWorkspaces', () => {
     const nm = join(dir, 'node_modules', 'pkg');
     mkdirSync(nm, { recursive: true });
     makeWorkspace(nm, { workspaceId: 'should-skip' });
+    const { candidates } = discoverWorkspaces(dir);
+    const ids = candidates.map(c => c.id);
+    assert.deepEqual(ids, ['top']);
+  });
+
+  test('dot-dirs are pruned: a workspace under a hidden dir is not discovered', () => {
+    makeWorkspace(dir, { workspaceId: 'top' });
+    // A workspace root is never a dot-dir, so anything beneath one is cruft.
+    const hidden = join(dir, '.playwright-mcp', 'snap');
+    mkdirSync(hidden, { recursive: true });
+    makeWorkspace(hidden, { workspaceId: 'buried' });
+    const { candidates } = discoverWorkspaces(dir);
+    const ids = candidates.map(c => c.id);
+    assert.deepEqual(ids, ['top']);
+  });
+
+  test('vendor dirs are pruned: a workspace under vendor/ is not discovered', () => {
+    makeWorkspace(dir, { workspaceId: 'top' });
+    const vend = join(dir, 'vendor', 'pkg');
+    mkdirSync(vend, { recursive: true });
+    makeWorkspace(vend, { workspaceId: 'vendored' });
     const { candidates } = discoverWorkspaces(dir);
     const ids = candidates.map(c => c.id);
     assert.deepEqual(ids, ['top']);
