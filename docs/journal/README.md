@@ -10,6 +10,7 @@ Each entry is a dated session log capturing what we tried, what broke, what we l
 
 | Date | Entry | Summary |
 |------|-------|---------|
+| 2026-06-10 | [Session 70: get_roadmap gains general filtered rows[] + limit so /roadmap next reads PLANNED structured](2026-06-10-session-70-roadmap-read-rows.md) | get_roadmap gains general filtered rows[] + limit so /roadmap next reads PLANNED structured |
 | 2026-06-09 | [Session 69: get_roadmap read primitive closes the roadmap read-side gap; /roadmap skill rewired to prefer it](2026-06-09-session-69-mcp-roadmap-read.md) | get_roadmap read primitive closes the roadmap read-side gap; /roadmap skill rewired to prefer it |
 | 2026-06-08 | [Session 68: COMP-COCKPIT Slice B — run history, inline gate artifact, first-run empty-state CTAs; umbrella COMPLETE](2026-06-08-session-68-cockpit-slice-b.md) | COMP-COCKPIT Slice B — run history, inline gate artifact, first-run empty-state CTAs; umbrella COMPLETE |
 | 2026-06-07 | [Session 67: E2E UX sweep of the app; fixed the P0 port-default mismatch and filed cockpit-completeness gaps as COMP-COCKPIT + COMP-PARITY-8/9/10.](2026-06-07-session-67-e2e-ux-sweep-port-fix.md) | E2E UX sweep of the app; fixed the P0 port-default mismatch and filed cockpit-completeness gaps as COMP-COCKPIT + COMP-PARITY-8/9/10. |
