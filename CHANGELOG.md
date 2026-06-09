@@ -2,6 +2,10 @@
 
 ## 2026-06-10
 
+### Changed — pre-push hook: docs-only pushes skip the full-suite test gate
+
+The pre-push template ran `npm test` on every push regardless of content, so a roadmap/changelog-only push paid for the whole suite. The hook now parses git's stdin ref lines (before anything else consumes stdin) and skips the test gate when every pushed commit touches only `docs/**` or `*.md`. Detection fails CLOSED — ref deletes are ignored, but new branches (zero remote sha), diff failures, and empty stdin all run the gate; the `compose validate` advisory drift check still runs unconditionally (docs are exactly what it validates). Template change only (`bin/git-hooks/pre-push.template`); reinstall with `compose hooks install --pre-push` to pick it up. 4 new tests execute the installed hook against a red-suite fixture to assert skip vs fail-closed from the exit code.
+
 ### Added — COMP-MIGRATE-ON-UPGRADE: versioned feature.json state migration on upgrade
 
 `compose upgrade` refreshed code but ran no `feature.json` state migration, so cold data (legacy free-text `complexity`) sat erroring on every validate. New `lib/state-migrations.js` provides a versioned, eager, idempotent runner (`runStateMigrations`) with an ordered registry of pure/total transforms and a durable stamp at `.compose/data/migration-state.json` (atomic temp+rename; deliberately not in `compose.json`). v1 migration `normalize-complexity` maps legacy free-text complexity to the `S/M/L/XL` enum (`low→S, medium→M, high→L, xl→XL`), leaving valid enum/number untouched and dropping null/unmappable. Convergent (corrupt files reported, not a permanent block); local-provider only; narrative-safe. Wired into `runInit` and `runUpdate` (resolved-cwd threaded), plus a new explicit `compose migrate-state [--dry-run]` verb (distinct from `compose roadmap migrate`). Cleared the 12 live `FEATURE_JSON_SCHEMA_VIOLATION` errors at forge-top.
