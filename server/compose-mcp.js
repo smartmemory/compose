@@ -361,14 +361,15 @@ const TOOLS = [
   },
   {
     name: 'get_roadmap',
-    description: 'Read the current roadmap rendered from canon (feature.json) WITHOUT writing. Returns a status summary plus active/blocked rows, and a staleness flag comparing the render against on-disk ROADMAP.md. Narrative-owned workspaces return the hand-authored file verbatim. Read-only — prefer this over reading ROADMAP.md directly.',
+    description: 'Read the current roadmap rendered from canon (feature.json) WITHOUT writing. Returns a status summary, the active/blocked convenience lists, and a staleness flag vs on-disk ROADMAP.md. Pass a status/phase filter or a limit to also get a general `rows` list (e.g. {status:"PLANNED", limit:10} for "what to work on next") — structured rows so callers never re-parse the markdown. Narrative-owned workspaces return the hand-authored file verbatim. Read-only — prefer this over reading ROADMAP.md directly.',
     inputSchema: {
       type: 'object',
       properties: {
-        status: { type: 'string', description: 'Filter active/blocked rows by status (comma-separated): PLANNED, IN_PROGRESS, PARTIAL, BLOCKED, COMPLETE, …' },
-        phase: { type: 'string', description: 'Filter active/blocked rows to a single phase (matched against phaseId)' },
+        status: { type: 'string', description: 'Filter active/blocked + rows by status (comma-separated): PLANNED, IN_PROGRESS, PARTIAL, BLOCKED, COMPLETE, …' },
+        phase: { type: 'string', description: 'Filter active/blocked + rows to a single phase (matched against phaseId)' },
         format: { type: 'string', description: '"summary" (default — counts + lists, token-safe) or "markdown" (full rendered text)' },
         check_drift: { type: 'boolean', description: 'Compare the render against on-disk ROADMAP.md and set stale/drift (default true)' },
+        limit: { type: 'integer', minimum: 0, description: 'Cap on the general `rows` list (default 50). Supplying status/phase/limit emits rows[]/rowsTotal/rowsTruncated; without any of them rows is omitted (token-safe summary). A finite value is floored and clamped to ≥ 0.' },
       },
     },
   },

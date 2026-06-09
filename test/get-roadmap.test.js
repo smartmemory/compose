@@ -100,6 +100,66 @@ describe('getRoadmap — rendered (feature.json-backed)', () => {
   });
 });
 
+describe('getRoadmap — general rows[] filter', () => {
+  test('no rows key on an unfiltered summary call (token-safe default)', async () => {
+    const cwd = await seedRendered();
+    const r = getRoadmap(cwd, {});
+    assert.ok(!('rows' in r), 'rows omitted without a filter/limit');
+  });
+
+  test('status filter yields structured rows (the /roadmap next path)', async () => {
+    const cwd = await seedRendered();
+    const r = getRoadmap(cwd, { status: 'PLANNED' });
+    assert.ok(Array.isArray(r.rows));
+    assert.equal(r.rowsTotal, 1);                 // only AAA-1 is PLANNED
+    assert.equal(r.rows.length, 1);
+    assert.equal(r.rows[0].code, 'AAA-1');
+    assert.deepEqual(Object.keys(r.rows[0]).sort(), ['code', 'description', 'phaseId', 'status']);
+  });
+
+  test('rows respect AND of status + phase', async () => {
+    const cwd = await seedRendered();
+    const all = getRoadmap(cwd, { status: 'BLOCKED' });
+    const phaseId = all.rows[0].phaseId;          // CCC-3 BLOCKED, in Phase 1
+    const r = getRoadmap(cwd, { status: 'BLOCKED', phase: phaseId });
+    assert.ok(r.rows.every((x) => x.phaseId === phaseId && x.status === 'BLOCKED'));
+    assert.ok(r.rows.some((x) => x.code === 'CCC-3'));
+  });
+
+  test('limit truncates and flags rowsTruncated', async () => {
+    const cwd = await seedRendered();
+    // 3 named rows total; limit 2 over an all-rows (limit-only) call.
+    const r = getRoadmap(cwd, { limit: 2 });
+    assert.equal(r.rows.length, 2);
+    assert.equal(r.rowsTotal, 3);
+    assert.equal(r.rowsTruncated, true);
+  });
+
+  test('malformed limit is clamped/floored, never silently widened', async () => {
+    const cwd = await seedRendered();             // 3 named rows
+    const neg = getRoadmap(cwd, { limit: -1 });
+    assert.equal(neg.rows.length, 0, 'negative limit → 0 rows');
+    assert.equal(neg.rowsTotal, 3);
+    assert.equal(neg.rowsTruncated, true);
+    const frac = getRoadmap(cwd, { limit: 1.9 });
+    assert.equal(frac.rows.length, 1, 'fractional limit floored to 1');
+    const zero = getRoadmap(cwd, { limit: 0 });
+    assert.equal(zero.rows.length, 0, 'zero limit → 0 rows but still emits rowsTotal');
+    assert.equal(zero.rowsTotal, 3);
+  });
+
+  test('rows exclude anonymous rows', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'get-roadmap-rows-anon-'));
+    mkdirSync(join(cwd, '.compose'), { recursive: true });
+    writeFileSync(join(cwd, '.compose', 'compose.json'), JSON.stringify({ roadmap: { narrative: true } }));
+    const md = `# Roadmap\n\n## Phase 0 — PLANNED\n\n| # | Feature | Description | Status |\n|---|---------|-------------|--------|\n| 1 | — | codeless | PLANNED |\n| 2 | REAL-1 | real | PLANNED |\n`;
+    writeFileSync(join(cwd, 'ROADMAP.md'), md);
+    const r = getRoadmap(cwd, { status: 'PLANNED' });
+    assert.equal(r.rowsTotal, 1);
+    assert.ok(!r.rows.some((x) => x.code.startsWith('_anon_')));
+  });
+});
+
 describe('getRoadmap — anonymous rows', () => {
   test('anonymous (codeless) rows are counted in summary but excluded from lists', () => {
     // A narrative file with an anonymous BLOCKED row (no feature code).

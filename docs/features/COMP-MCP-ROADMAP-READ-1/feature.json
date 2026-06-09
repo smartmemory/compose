@@ -1,0 +1,11 @@
+{
+  "code": "COMP-MCP-ROADMAP-READ-1",
+  "description": "**`get_roadmap` general filtered `rows[]` + `limit` — structured status lists so `/roadmap next` never re-parses markdown.** Follow-up to COMP-MCP-ROADMAP-READ. The shipped `get_roadmap` exposed PLANNED only as a count (`summary.planned`); the convenience `active`/`blocked` lists are fixed-status, so the `/roadmap` skill's \"what to work on next\" recommendation had no structured way to read PLANNED candidates and would fall back to `format:\"markdown\"` + re-parse — the exact direct-read behavior the primitive existed to kill. Adds a `limit` input (default 50, floored + clamped ≥0) and, when status/phase/limit is supplied, emits `rows` (named rows matching the status+phase filter, `_anon_` excluded), `rowsTotal`, and `rowsTruncated`. No-filter summary call stays token-safe (rows omitted). `/roadmap` skill's `next` path rewired to `get_roadmap({status:\"PLANNED\", limit:10})`. Codex caught a malformed-limit token-safety footgun (negative/float silently widened to 50) before REVIEW CLEAN.",
+  "status": "PLANNED",
+  "phase": "COMP-MCP-VALIDATE: Closed-Loop Hardening",
+  "created": "2026-06-09",
+  "updated": "2026-06-09",
+  "complexity": "S",
+  "position": 6,
+  "parent": "COMP-MCP-ROADMAP-READ"
+}
