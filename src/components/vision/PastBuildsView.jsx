@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { Search, History } from 'lucide-react';
+import { Search, History, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import RelativeTime from './shared/RelativeTime.jsx';
 import EmptyState from './shared/EmptyState.jsx';
+import { startBuild } from '../../lib/startBuild.js';
+import { notify } from '../cockpit/NotificationBar.jsx';
 
 /**
  * PastBuildsView — COMP-COCKPIT-3 run history / past builds.
@@ -127,6 +129,26 @@ function BuildRow({ build, items, onSelectItem }) {
     : null;
   const statusCls = STATUS_COLORS[build.status] || STATUS_COLORS.killed;
   const cost = formatCost(build.cost_usd);
+  // COMP-COCKPIT-7: retry only failed/aborted (killed = deliberately stopped).
+  const canRetry = build.status === 'failed' || build.status === 'aborted';
+  const [retrying, setRetrying] = useState(false);
+
+  async function handleRetry() {
+    const code = build.featureCode;
+    setRetrying(true);
+    try {
+      await startBuild({ featureCode: code, mode: build.mode });
+      notify(`Build restarted for ${code}`, 'info');
+    } catch (e) {
+      if (e.status === 409) {
+        notify(`A build for ${code} is already active`, 'warn');
+      } else {
+        notify(e.message || 'Failed to restart build', 'error');
+      }
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-1 px-3 py-2.5 border-b border-border/50 hover:bg-muted/30 transition-colors">
@@ -161,9 +183,25 @@ function BuildRow({ build, items, onSelectItem }) {
         {typeof build.stepCount === 'number' && <span>◆ {build.stepCount} steps</span>}
       </div>
 
-      {/* Row 3: failure reason (only for non-complete) */}
-      {build.failureReason && (
-        <p className="text-[11px] text-red-400/90 truncate">{build.failureReason}</p>
+      {/* Row 3: failure reason (only for non-complete) + retry */}
+      {(build.failureReason || canRetry) && (
+        <div className="flex items-center gap-2 min-w-0">
+          {build.failureReason && (
+            <p className="text-[11px] text-red-400/90 truncate flex-1 min-w-0">{build.failureReason}</p>
+          )}
+          {canRetry && (
+            <button
+              onClick={handleRetry}
+              disabled={retrying}
+              className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50 disabled:opacity-50 shrink-0 ml-auto cursor-pointer"
+              title={`Restart build for ${build.featureCode}`}
+              data-testid="past-build-retry"
+            >
+              <RotateCcw className="h-2.5 w-2.5" />
+              {retrying ? 'Retrying…' : 'Retry'}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

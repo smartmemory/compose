@@ -6,6 +6,7 @@ import { TYPE_COLORS, PHASE_LABELS, CONFIDENCE_LABELS } from './constants.js';
 import FeatureFocusToggle from '../shared/FeatureFocusToggle.jsx';
 import { useIdeaboxStore } from './useIdeaboxStore.js';
 import { wsFetch } from '../../lib/wsFetch.js';
+import { notify } from '../cockpit/NotificationBar.jsx';
 
 try { cytoscape.use(cytoscapeDagre); } catch (e) { /* already registered */ }
 try { cytoscape.use(cytoscapeFcose); } catch (e) { /* already registered */ }
@@ -1002,6 +1003,25 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
     if (cy) cy.zoom({ level: cy.zoom() / 1.3, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
   }, []);
 
+  // COMP-COCKPIT-10: roadmap-graph export. Open HTML in a new tab (relative
+  // URL matches page origin), or save to docs/roadmap-graph.html server-side.
+  const handleExportOpen = useCallback(() => {
+    window.open('/api/export/roadmap-graph', '_blank', 'noopener');
+  }, []);
+  const handleExportSave = useCallback(async () => {
+    try {
+      const res = await wsFetch('/api/export/roadmap-graph/save', { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.ok) {
+        notify(`Saved ${body.path}`, 'info');
+      } else {
+        notify(body.error || `Export save failed (HTTP ${res.status})`, 'error');
+      }
+    } catch (err) {
+      notify(`Export save failed: ${err.message}`, 'error');
+    }
+  }, []);
+
   // ─── Render ─────────────────────────────────────────────────────────────
 
   return (
@@ -1031,6 +1051,9 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
           <CtrlBtn onClick={handleZoomOut} title="Zoom out">&minus;</CtrlBtn>
           <CtrlBtn onClick={handleFit} title="Fit to view">Fit</CtrlBtn>
           <CtrlBtn onClick={handleZoomIn} title="Zoom in">+</CtrlBtn>
+          <Sep />
+          <CtrlBtn onClick={handleExportOpen} title="Open roadmap graph HTML export in a new tab">Export</CtrlBtn>
+          <CtrlBtn onClick={handleExportSave} title="Save roadmap graph export to docs/roadmap-graph.html">Save HTML</CtrlBtn>
           <Sep />
           <FilterBtn active={showLegend} onClick={() => setShowLegend(!showLegend)}>Legend</FilterBtn>
           </div>

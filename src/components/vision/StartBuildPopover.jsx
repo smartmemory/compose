@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { wsFetch } from '../../lib/wsFetch.js';
-import { withComposeToken } from '../../lib/compose-api.js';
+import { startBuild } from '../../lib/startBuild.js';
 
 /**
  * StartBuildPopover — desktop equivalent of the mobile StartBuildSheet. Lets a
@@ -12,8 +11,8 @@ import { withComposeToken } from '../../lib/compose-api.js';
  * item's id/featureCode lets the CLI/server bind to THIS item rather than
  * creating a duplicate (see matchFeatureItem in lib/vision-writer.js).
  *
- * Does the fetch itself (mirrors useActiveBuild.startBuild) so it needs no new
- * prop threaded through the parent surface.
+ * Dispatches via the shared startBuild helper (src/lib/startBuild.js) so it
+ * needs no new prop threaded through the parent surface.
  *
  * @param {{ item: object, onClose: () => void }} props
  */
@@ -33,16 +32,7 @@ export default function StartBuildPopover({ item, onClose }) {
     setSubmitting(true);
     setErr(null);
     try {
-      const res = await wsFetch('/api/build/start', {
-        method: 'POST',
-        headers: withComposeToken({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ featureCode: code, mode, description: description.trim() }),
-      });
-      if (!res.ok) {
-        let data = null;
-        try { data = await res.json(); } catch { /* non-JSON error body */ }
-        throw new Error((data && data.error) || `Failed to start build (HTTP ${res.status})`);
-      }
+      await startBuild({ featureCode: code, mode, description: description.trim() });
       onClose?.();
     } catch (e) {
       setErr(e.message || 'Failed to start build');
