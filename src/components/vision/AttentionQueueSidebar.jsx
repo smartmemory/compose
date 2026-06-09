@@ -94,14 +94,17 @@ function BuildStatusWidget({ activeBuild }) {
  * AttentionQueueSection — inline queue of blocked + pending-gate + decision items.
  * Clicking an item navigates to it.
  */
-function AttentionQueueSection({ items, gates, onSelectItem, onViewChange }) {
+function AttentionQueueSection({ items, gates, onSelectItem }) {
   const queue = React.useMemo(() => computeAttentionQueue(items, gates), [items, gates]);
+  // COMP-COCKPIT-8: "+N more" used to navigate to a nonexistent 'attention'
+  // view; it now expands the full queue in place (rows are already clickable).
+  const [expanded, setExpanded] = React.useState(false);
 
   if (queue.length === 0) return null;
 
-  // Show up to 5 items; more → link to Attention view
-  const visible = queue.slice(0, 5);
-  const overflow = queue.length - visible.length;
+  // Show up to 5 items; more → expand in place
+  const visible = expanded ? queue : queue.slice(0, 5);
+  const overflow = queue.length - 5;
 
   const iconFor = (priority) => {
     if (priority === ATTENTION_PRIORITY.BLOCKED) return <AlertTriangle className="h-3 w-3 shrink-0" style={{ color: 'hsl(var(--destructive))' }} />;
@@ -133,11 +136,11 @@ function AttentionQueueSection({ items, gates, onSelectItem, onViewChange }) {
       ))}
       {overflow > 0 && (
         <button
-          onClick={() => onViewChange?.('attention')}
+          onClick={() => setExpanded(v => !v)}
           className="flex w-full items-center px-2 py-0.5 text-[10px] rounded-md hover:bg-sidebar-accent/50 transition-colors"
           style={{ color: 'hsl(var(--muted-foreground))' }}
         >
-          +{overflow} more
+          {expanded ? 'Show less' : `+${overflow} more`}
         </button>
       )}
     </div>

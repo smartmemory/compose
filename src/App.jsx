@@ -37,6 +37,7 @@ import {
 } from './components/cockpit/contextPanelState.js';
 
 // Vision surface — views, sidebar, modals, store
+import { NavigationContext } from './lib/navigation.jsx';
 import { VisionChangesContext } from './components/vision/VisionChangesContext.js';
 import { useVisionStore } from './components/vision/useVisionStore.js';
 import { useShallow } from 'zustand/react/shallow';
@@ -237,6 +238,8 @@ function CockpitView({
   sessionState, agentActivity,
   // COMP-UX-9: Iteration progress
   iterationStates,
+  // COMP-COCKPIT-8: gate focus deep-link
+  focusedGateId, onFocusHandled,
 }) {
   switch (activeView) {
     case 'dashboard':
@@ -333,6 +336,8 @@ function CockpitView({
           featureCode={featureCode}
           focusActive={focusActive}
           onToggleFocus={onToggleFocus}
+          focusedGateId={focusedGateId}
+          onFocusHandled={onFocusHandled}
         />
       );
     case 'docs':
@@ -931,6 +936,43 @@ function AppInner() {
     onContextSelect({ type: 'item', id: gate.itemId });
   }, [gates, onContextSelect]);
 
+  // COMP-COCKPIT-8: true jump-to-gate navigation (distinct from handleOpenGate,
+  // which only selects the owning item in the context panel).
+  const [focusedGateId, setFocusedGateId] = useState(null);
+
+  const openGate = useCallback((gateId) => {
+    const gate = gates.find(g => g.id === gateId);
+    if (!gate) {
+      // Gate is gone — fall back to item selection.
+      handleSelect(gate?.itemId);
+      return;
+    }
+    // Clear the phase filter: phaseFilteredGates would hide a gate whose
+    // owning item is outside the selected phase, making the jump a no-op.
+    setSelectedPhase(null);
+    setFocusedGateId(gateId);
+    handleViewChange('gates');
+  }, [gates, handleSelect, setSelectedPhase, handleViewChange]);
+
+  const handleGateFocusHandled = useCallback(() => setFocusedGateId(null), []);
+
+  // COMP-COCKPIT-8: jump to a feature's vision item by feature code.
+  const openFeature = useCallback((code) => {
+    if (!code) return;
+    const item = items.find(i =>
+      i.featureCode === code || i.feature_code === code || i.lifecycle?.featureCode === code
+    );
+    if (item) handleSelect(item.id);
+  }, [items, handleSelect]);
+
+  // COMP-COCKPIT-8: navigation context value consumed by EntityLink.
+  const navigationValue = useMemo(() => ({
+    openItem: handleSelect,
+    openGate,
+    openView: handleViewChange,
+    openFeature,
+  }), [handleSelect, openGate, handleViewChange, openFeature]);
+
   const handleCreateConnection = useCallback(async (data) => {
     return createConnection(data);
   }, [createConnection]);
@@ -1002,6 +1044,7 @@ function AppInner() {
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
+    <NavigationContext.Provider value={navigationValue}>
     <VisionChangesContext.Provider value={recentChanges}>
       <div
         className="h-screen w-screen flex flex-col bg-background overflow-hidden"
@@ -1226,6 +1269,8 @@ function AppInner() {
                       sessionState={sessionState}
                       agentActivity={agentActivity}
                       iterationStates={iterationStates}
+                      focusedGateId={focusedGateId}
+                      onFocusHandled={handleGateFocusHandled}
                     />
                   </PanelErrorBoundary>
                 </div>
@@ -1371,5 +1416,6 @@ function AppInner() {
         </PanelErrorBoundary>
       </div>
     </VisionChangesContext.Provider>
+    </NavigationContext.Provider>
   );
 }

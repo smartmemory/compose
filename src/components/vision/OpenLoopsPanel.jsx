@@ -16,6 +16,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { sortByAge, formatAge, isStaleLoop } from './openLoopsPanelLogic.js';
 import { notify } from '../cockpit/NotificationBar.jsx';
 import { usePrompt } from '@/components/ui/DialogProvider.jsx';
+import EntityLink from '../shared/EntityLink.jsx';
 
 const PANEL_WIDTH = 320;
 const COLLAPSED_WIDTH = 40;
@@ -140,8 +141,14 @@ function LoopRow({ loop, onResolve, nowMs }) {
             &gt;TTL
           </span>
         )}
-        <span style={{ fontSize: 10, color: '#6c7086', marginLeft: 'auto' }}>
-          {formatAge(loop.created_at, nowMs)}
+        <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {/* COMP-COCKPIT-8: parent feature jump link */}
+          {loop.parent_feature && (
+            <EntityLink kind="feature" id={loop.parent_feature} label={loop.parent_feature} className="text-[10px]" />
+          )}
+          <span style={{ fontSize: 10, color: '#6c7086' }}>
+            {formatAge(loop.created_at, nowMs)}
+          </span>
         </span>
       </div>
       <p style={{ margin: '4px 0 6px', fontSize: 12, color: stale && !resolved ? '#f38ba8' : '#cdd6f4', lineHeight: 1.4 }}>

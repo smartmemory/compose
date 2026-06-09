@@ -7,6 +7,7 @@ import { CheckCircle2, Circle, ArrowRight, Bot, FileText, Terminal, List } from 
 import { LIFECYCLE_PHASE_LABELS, LIFECYCLE_PHASE_ARTIFACTS, GATE_STEP_LABELS } from './constants.js';
 import ArtifactDiff from '../shared/ArtifactDiff.jsx';
 import AgentCard from '../shared/AgentCard.jsx';
+import EntityLink from '../shared/EntityLink.jsx';
 import EventTimeline from './EventTimeline.jsx';
 import { useConfirmWithReason } from '@/components/ui/DialogProvider.jsx';
 
@@ -247,9 +248,7 @@ function RecentSessions({ sessions, items, onSelect }) {
             <Terminal className="w-3 h-3 text-muted-foreground shrink-0" />
             <span className="text-[11px] text-foreground">{s.agent || 'agent'}</span>
             {fc && (
-              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-mono">
-                {fc}
-              </Badge>
+              <EntityLink kind="feature" id={fc} label={fc} className="text-[9px]" />
             )}
             <span className="ml-auto text-[10px] text-muted-foreground tabular-nums shrink-0">
               {relativeTime(startedAt)}

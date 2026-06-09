@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { Badge } from '@/components/ui/badge.jsx';
@@ -319,9 +319,14 @@ function ResolvedGateRow({ gate, item }) {
   );
 }
 
-export default function GateView({ gates, items, onResolve, onSelect, featureCode, focusActive, onToggleFocus }) {
+export default function GateView({ gates, items, onResolve, onSelect, featureCode, focusActive, onToggleFocus, focusedGateId, onFocusHandled }) {
   const [expandedGateId, setExpandedGateId] = useState(null);
   const [expandedAction, setExpandedAction] = useState(null);
+
+  // COMP-COCKPIT-8: deep-link focus — scroll the target gate card into view,
+  // flash a brief highlight, then report back so App clears the focus state.
+  const gateRefs = useRef(new Map());
+  const [highlightedGateId, setHighlightedGateId] = useState(null);
 
   // COMP-UX-2a: Feature focus filter
   const displayGates = useMemo(() => {
@@ -374,6 +379,19 @@ export default function GateView({ gates, items, onResolve, onSelect, featureCod
   const [showAllHistory, setShowAllHistory] = useState(false);
   const itemMap = useMemo(() => new Map(items.map(i => [i.id, i])), [items]);
 
+  // COMP-COCKPIT-8: when a focused gate is present in the rendered list,
+  // scroll to it, highlight briefly, and clear the focus request.
+  useEffect(() => {
+    if (!focusedGateId) return undefined;
+    const el = gateRefs.current.get(focusedGateId);
+    if (!el) return undefined; // gate not rendered (yet) — wait for next update
+    el.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    setHighlightedGateId(focusedGateId);
+    onFocusHandled?.();
+    const timer = setTimeout(() => setHighlightedGateId(null), 1600);
+    return () => clearTimeout(timer);
+  }, [focusedGateId, pending, resolved, onFocusHandled]);
+
   return (
     <div className="flex-1 overflow-auto flex flex-col">
       {/* Summary bar */}
@@ -399,17 +417,28 @@ export default function GateView({ gates, items, onResolve, onSelect, featureCod
         {pending.length > 0 && (
           <Section title="Pending" count={pending.length} color="#f59e0b">
             {pending.map(gate => (
-              <PendingGateRow
+              <div
                 key={gate.id}
-                gate={gate}
-                item={itemMap.get(gate.itemId)}
-                priorRevision={priorRevisions.get(gate.id)}
-                isExpanded={expandedGateId === gate.id}
-                expandedAction={expandedGateId === gate.id ? expandedAction : null}
-                onExpand={handleExpand}
-                onResolve={onResolve}
-                onSelect={onSelect}
-              />
+                ref={el => {
+                  if (el) gateRefs.current.set(gate.id, el);
+                  else gateRefs.current.delete(gate.id);
+                }}
+                className={cn(
+                  'transition-colors duration-500',
+                  highlightedGateId === gate.id && 'bg-amber-400/15 ring-1 ring-amber-400/40 rounded',
+                )}
+              >
+                <PendingGateRow
+                  gate={gate}
+                  item={itemMap.get(gate.itemId)}
+                  priorRevision={priorRevisions.get(gate.id)}
+                  isExpanded={expandedGateId === gate.id}
+                  expandedAction={expandedGateId === gate.id ? expandedAction : null}
+                  onExpand={handleExpand}
+                  onResolve={onResolve}
+                  onSelect={onSelect}
+                />
+              </div>
             ))}
           </Section>
         )}
@@ -418,11 +447,22 @@ export default function GateView({ gates, items, onResolve, onSelect, featureCod
         {resolved.length > 0 && (
           <Section title="History" count={resolved.length} color="#22c55e">
             {(showAllHistory ? resolved.slice(0, 50) : resolved.slice(0, 10)).map(gate => (
-              <ResolvedGateRow
+              <div
                 key={gate.id}
-                gate={gate}
-                item={itemMap.get(gate.itemId)}
-              />
+                ref={el => {
+                  if (el) gateRefs.current.set(gate.id, el);
+                  else gateRefs.current.delete(gate.id);
+                }}
+                className={cn(
+                  'transition-colors duration-500',
+                  highlightedGateId === gate.id && 'bg-amber-400/15 ring-1 ring-amber-400/40 rounded',
+                )}
+              >
+                <ResolvedGateRow
+                  gate={gate}
+                  item={itemMap.get(gate.itemId)}
+                />
+              </div>
             ))}
             {resolved.length > 10 && !showAllHistory && (
               <button

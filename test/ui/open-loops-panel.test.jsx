@@ -15,6 +15,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import OpenLoopsPanel from '../../src/components/vision/OpenLoopsPanel.jsx';
+import { NavigationContext } from '../../src/lib/navigation.jsx';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -195,5 +196,34 @@ describe('<OpenLoopsPanel> — add modal', () => {
     fireEvent.click(screen.getByTestId('add-loop-btn'));
     expect(screen.getByTestId('add-loop-modal')).toBeTruthy();
     expect(screen.getByTestId('add-loop-submit')).toBeTruthy();
+  });
+});
+
+describe('<OpenLoopsPanel> — parent feature entity link (COMP-COCKPIT-8)', () => {
+  beforeEach(() => { localStorageMock.clear(); });
+
+  it('renders parent_feature as a clickable link that triggers navigation', () => {
+    const loop = makeLoop({ id: 'loop-pf', parent_feature: 'FC-PARENT' });
+    const item = makeItem('FC-TEST', [loop]);
+    const openFeature = vi.fn();
+    const nav = {
+      openItem: vi.fn(), openGate: vi.fn(), openView: vi.fn(), openFeature,
+    };
+    render(
+      <NavigationContext.Provider value={nav}>
+        <OpenLoopsPanel featureCode="FC-TEST" items={[item]} />
+      </NavigationContext.Provider>
+    );
+    const link = screen.getByRole('button', { name: 'FC-PARENT' });
+    fireEvent.click(link);
+    expect(openFeature).toHaveBeenCalledWith('FC-PARENT');
+  });
+
+  it('renders parent_feature as plain text without a navigation provider', () => {
+    const loop = makeLoop({ id: 'loop-pf2', parent_feature: 'FC-PARENT' });
+    const item = makeItem('FC-TEST', [loop]);
+    render(<OpenLoopsPanel featureCode="FC-TEST" items={[item]} />);
+    expect(screen.getByText('FC-PARENT')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'FC-PARENT' })).toBeNull();
   });
 });

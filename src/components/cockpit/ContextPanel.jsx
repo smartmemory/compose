@@ -16,6 +16,7 @@
  */
 import React, { useCallback, useRef } from 'react';
 import { gateLabel } from '../vision/constants.js';
+import EntityLink from '../shared/EntityLink.jsx';
 
 const MIN_WIDTH = 280;
 const MAX_WIDTH_FRACTION = 0.6;
@@ -169,8 +170,13 @@ function ProjectSummary({ activeBuild, pendingGates, agentErrors, items }) {
           ) : (
             <div className="space-y-0.5">
               {pendingGates.slice(0, 5).map((g, i) => (
-                <p key={i} className="text-[10px] text-amber-400 truncate">
-                  {gateLabel(g, items.find(it => it.id === g.itemId))}
+                <p key={i} className="text-[10px] truncate">
+                  <EntityLink
+                    kind="gate"
+                    id={g.id}
+                    label={gateLabel(g, items.find(it => it.id === g.itemId))}
+                    className="text-[10px]"
+                  />
                 </p>
               ))}
             </div>
