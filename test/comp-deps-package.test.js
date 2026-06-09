@@ -162,19 +162,47 @@ test('T4: checkExternalSkills detects bare, command-pattern, and cache-pattern s
   }
 })
 
-test('T4: bare-vs-namespaced matching prevents false positives', () => {
+test('T4: a bare dep is satisfied by a plugin-provided skill of the same leaf name', () => {
+  // Real-world case: the manifest lists bare `refactor`/`update-docs`, but they
+  // ship as coder-config plugin skills (marketplaces/<m>/plugins/coder-config/skills/<s>).
+  // Claude Code surfaces them under their BARE names, so doctor must count them present
+  // even though they live under a namespaced plugin path on disk.
   const home = setupFakeHome()
   try {
-    // Manifest claims there's a bare skill named "review" — there isn't (only codex:review exists).
+    const p = join(home, '.claude', 'plugins', 'marketplaces', 'claude-config-plugins', 'plugins', 'coder-config', 'skills')
+    for (const s of ['refactor', 'update-docs']) {
+      mkdirSync(join(p, s), { recursive: true })
+      writeFileSync(join(p, s, 'SKILL.md'), `# ${s}\n`)
+    }
     const deps = {
       version: 1,
       external_skills: [
-        { id: 'review', required_for: ['x'], install: 'cmd', fallback: null, optional: true },
+        { id: 'refactor', required_for: ['x'], install: 'cmd', fallback: null, optional: true },
+        { id: 'update-docs', required_for: ['x'], install: 'cmd', fallback: null, optional: true },
+      ],
+    }
+    const result = checkExternalSkills(deps, home)
+    assert.equal(result.present.length, 2, 'bare deps should resolve via plugin leaf match')
+    assert.equal(result.missing.length, 0)
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('T4: a bare dep with no install (bare or plugin leaf) is still reported missing', () => {
+  // True-negative guard: leaf matching must not turn detection into "always present".
+  const home = setupFakeHome()
+  try {
+    const deps = {
+      version: 1,
+      external_skills: [
+        { id: 'does-not-exist-anywhere', required_for: ['x'], install: 'cmd', fallback: null, optional: false },
       ],
     }
     const result = checkExternalSkills(deps, home)
     assert.equal(result.present.length, 0)
     assert.equal(result.missing.length, 1)
+    assert.equal(result.missing[0].id, 'does-not-exist-anywhere')
   } finally {
     rmSync(home, { recursive: true, force: true })
   }
