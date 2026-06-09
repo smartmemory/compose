@@ -1,7 +1,7 @@
 {
   "code": "COMP-COCKPIT-9",
   "description": "Journal and changelog cockpit surface. The MCP tools are complete (write_journal_entry/get_journal_entries, add_changelog_entry/get_changelog_entries) but the cockpit's only trace is a \"journal\" status badge in AgentPanel.jsx:182 — the project's narrative memory cannot be browsed or written from the UI. Add a read surface (journal + changelog browse, filter by feature) and a lightweight write form, backed by thin routes wrapping the existing tool logic. P2 from the 2026-06-10 UX journey sweep.",
-  "status": "PLANNED",
+  "status": "IN_PROGRESS",
   "phase": "COMP-COCKPIT Wave 2: UX Journey Gaps (2026-06-10 sweep)",
   "created": "2026-06-09",
   "updated": "2026-06-09",
