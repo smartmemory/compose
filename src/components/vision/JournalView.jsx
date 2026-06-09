@@ -146,7 +146,10 @@ export default function JournalView() {
 
         <span className="text-[10px] text-muted-foreground">{entries.length} entries</span>
 
-        {/* New entry */}
+        {/* New entry — journal only: changelog writes stay agent/pipeline-owned
+            (design §COCKPIT-9), and a write here would refresh the changelog
+            feed and "lose" the new journal entry from view. */}
+        {source === 'journal' && (
         <button
           type="button"
           onClick={() => setShowForm(v => {
@@ -159,10 +162,11 @@ export default function JournalView() {
           <Plus className="h-3 w-3" />
           New entry
         </button>
+        )}
       </div>
 
-      {/* Inline write form */}
-      {showForm && (
+      {/* Inline write form (journal source only) */}
+      {showForm && source === 'journal' && (
         <div className="px-3 py-2 border-b border-border shrink-0 space-y-1.5" data-testid="journal-write-form">
           <input
             type="text"

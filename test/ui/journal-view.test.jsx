@@ -182,6 +182,15 @@ describe('JournalView (COCKPIT-9)', () => {
     });
   });
 
+  it('hides the New entry control on the changelog source', async () => {
+    render(<JournalView />);
+    await waitFor(() => expect(screen.getByText('A big session')).toBeTruthy());
+    expect(screen.getByRole('button', { name: /new entry/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'changelog' }));
+    expect(screen.queryByRole('button', { name: /new entry/i })).toBeNull();
+    expect(screen.queryByTestId('journal-write-form')).toBeNull();
+  });
+
   it('write failure notifies error and keeps the form open', async () => {
     postResponse = { status: 400, body: { error: 'summary is required' } };
     render(<JournalView />);
