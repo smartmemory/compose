@@ -91,13 +91,13 @@ curl -s -X POST $BASE/api/vision/connections \
 
 ### Summary & Blocked
 
+> **Note (2026-06-10, COMP-COCKPIT-10):** `GET /api/vision/blocked` was removed (blocked items are computed client-side from `item.status`). Only `/summary` remains.
+
 ```bash
 curl -s $BASE/api/vision/summary
-curl -s $BASE/api/vision/blocked
 ```
 
 - [ ] `/summary`: counts by phase/status/type, avg confidence, `openQuestions`, `blockedItems`
-- [ ] Create item A with `status: blocks` connection to incomplete item B; `/blocked` lists B
 
 ---
 

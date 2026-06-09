@@ -307,7 +307,7 @@ Agent Awareness (feature, in_progress, phase: implementation)
 
 - [x] **D1: Files as flat array, not glob patterns** — Exact paths and directory prefixes are sufficient at our scale (~200 items). Avoids glob library dependency. Can upgrade later if needed.
 - [x] **D2: Slug derived from title, not a separate field** — `slugify(title)` runs on create/update. No manual slug entry. Keeps the data model simpler but means title changes affect matching.
-- [x] **D3: Plan parser as a server endpoint, not in the hook** — Shell-based markdown parsing is fragile. `POST /api/plan/parse` does parsing in Node.js with proper string handling. Hook or agent calls it after writing a plan doc.
+- [x] **D3: Plan parser as a server endpoint, not in the hook** — Shell-based markdown parsing is fragile. `POST /api/plan/parse` does parsing in Node.js with proper string handling. Hook or agent calls it after writing a plan doc. **KILLED (2026-06-10):** endpoint removed by COMP-COCKPIT-10 — no caller ever shipped; trivially restorable from git if a paste-a-plan UI lands.
 - [x] **D4: Activity resolution is server-side, not client-side** — The server has the items in memory. Doing resolution there means the broadcast already includes resolved items — no client-side scanning needed. The client is a dumb display.
 - [x] **D5: Convention matching at resolution time, not at item creation** — Don't pre-compute artifact associations. Derive them when a docs/ file is touched. Simpler, no stale mappings.
 - [x] **D6: Resolved items fade after 30 seconds of inactivity** — Prevents stale "Working on" display when the agent moves to unrelated work. 30 seconds accommodates normal thinking gaps between edits. The timeout is client-side, not server-side.

@@ -1,5 +1,5 @@
 /**
- * vision-routes.js — Vision CRUD + plan/parse routes.
+ * vision-routes.js — Vision CRUD + lifecycle routes.
  *
  * Routes:
  *   GET    /api/vision/items
@@ -10,9 +10,6 @@
  *   POST   /api/vision/connections
  *   DELETE /api/vision/connections/:id
  *   GET    /api/vision/summary
- *   GET    /api/vision/blocked
- *   POST   /api/vision/ui
- *   POST   /api/plan/parse
  *   GET    /api/vision/items/:id/lifecycle
  *   POST   /api/vision/items/:id/lifecycle/start
  *   POST   /api/vision/items/:id/lifecycle/advance
@@ -29,7 +26,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { extractFilePaths } from './vision-utils.js';
 import { writeFeatureGroupToDisk } from './feature-scan.js';
 import { ArtifactManager } from './artifact-manager.js';
 import { recordIteration, checkCumulativeBudget, readBudget } from '../lib/budget-ledger.js';
@@ -1076,35 +1072,6 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
     });
   });
 
-  // GET /api/vision/blocked — items blocked by non-complete items
-  app.get('/api/vision/blocked', (_req, res) => {
-    const { items, connections } = store.getState();
-    const itemMap = new Map(items.map(i => [i.id, i]));
-
-    const blocked = [];
-    for (const conn of connections) {
-      if (conn.type === 'blocks') {
-        const blocker = itemMap.get(conn.fromId);
-        const target = itemMap.get(conn.toId);
-        if (blocker && target && blocker.status !== 'complete' && blocker.status !== 'killed') {
-          blocked.push({
-            item: target,
-            blockedBy: blocker,
-            connectionId: conn.id,
-          });
-        }
-      }
-    }
-
-    res.json({ blocked, count: blocked.length });
-  });
-
-  // POST /api/vision/ui — push UI commands (lens, layout, phase)
-  app.post('/api/vision/ui', (req, res) => {
-    broadcastMessage({ type: 'visionUI', ...req.body });
-    res.json({ ok: true });
-  });
-
   // GET /api/lifecycle/budget?featureCode=<FC> — COMP-OBS-STEPDETAIL
   // Returns per-loop-type budget breakdown from ledger + settings.
   // v1 limitation: usedIterations is feature-wide (ledger doesn't split by loopType).
@@ -1119,34 +1086,4 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
     res.json(budget);
   });
 
-  // POST /api/plan/parse — extract file paths from plan/spec markdown
-  app.post('/api/plan/parse', (req, res) => {
-    const { filePath, itemId } = req.body || {};
-    if (!filePath) return res.status(400).json({ error: 'filePath required' });
-
-    const fullPath = path.resolve(projectRoot, filePath);
-    if (!fullPath.startsWith(projectRoot)) {
-      return res.status(400).json({ error: 'Path must be within project' });
-    }
-    let content;
-    try {
-      content = fs.readFileSync(fullPath, 'utf-8');
-    } catch {
-      return res.status(404).json({ error: `File not found: ${filePath}` });
-    }
-
-    const extracted = extractFilePaths(content);
-
-    if (itemId) {
-      const item = store.items.get(itemId);
-      if (item) {
-        const existing = item.files || [];
-        const merged = [...new Set([...existing, ...extracted])];
-        store.updateItem(itemId, { files: merged });
-        scheduleBroadcast();
-      }
-    }
-
-    res.json({ files: extracted, itemId: itemId || null });
-  });
 }
