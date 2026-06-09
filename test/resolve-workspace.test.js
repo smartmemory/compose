@@ -21,6 +21,7 @@ const {
   WorkspaceIdCollision,
   WorkspaceUnset,
 } = await import(`${REPO_ROOT}/lib/resolve-workspace.js`);
+const { MAX_VISITED } = await import(`${REPO_ROOT}/lib/discover-workspaces.js`);
 
 function makeWorkspace(root, opts = {}) {
   mkdirSync(join(root, '.compose'), { recursive: true });
@@ -104,6 +105,9 @@ describe('resolveWorkspace — precedence', () => {
   });
 
   test('discovery throws WorkspaceAmbiguous with candidate list', () => {
+    // A tractable tree is enumerated in full, so a parent workspace with a
+    // nested child below it deliberately surfaces as ambiguous and forces an
+    // explicit --workspace (mirrors the forge-top + nested-compose topology).
     makeWorkspace(dir, { workspaceId: 'parent' });
     const child = join(dir, 'child');
     mkdirSync(child);
@@ -119,6 +123,16 @@ describe('resolveWorkspace — precedence', () => {
         return true;
       },
     );
+  });
+
+  test('nearest-enclosing from a non-workspace subdir resolves to its workspace ancestor', () => {
+    makeWorkspace(dir, { workspaceId: 'host' });
+    const deep = join(dir, 'src', 'pkg', 'mod');
+    mkdirSync(deep, { recursive: true });
+    const result = resolveWorkspace({ cwd: deep });
+    assert.equal(result.id, 'host');
+    assert.equal(result.root, dir);
+    assert.equal(result.source, 'discovery');
   });
 
   test('discovery throws WorkspaceIdCollision when two basenames match', () => {
@@ -215,6 +229,22 @@ describe('resolveWorkspace — bypass paths around discovery cap', () => {
     assert.equal(result.id, 'anchor-ws');
     assert.equal(result.root, dir);
     assert.equal(result.source, 'explicit-flag');
+  });
+
+  test('no-hint from a workspace root with a huge subtree resolves without TooBroad', () => {
+    // Regression: a real workspace (e.g. SmartMemory) whose subtree exceeds the
+    // descendant-scan visit cap. The scan throws WorkspaceDiscoveryTooBroad
+    // internally, but because cwd is itself inside a workspace, resolution
+    // degrades to that nearest-enclosing root instead of propagating the error.
+    // Running compose from the root with NO flag and NO env just works.
+    // Bound to the exported cap so this genuinely overflows the visit budget
+    // and exercises the degrade path even if MAX_VISITED is retuned.
+    makeWorkspace(dir, { workspaceId: 'huge-ws' });
+    for (let i = 0; i < MAX_VISITED + 50; i++) mkdirSync(join(dir, `node${i}`));
+    const result = resolveWorkspace({ cwd: dir });
+    assert.equal(result.id, 'huge-ws');
+    assert.equal(result.root, dir);
+    assert.equal(result.source, 'discovery');
   });
 
   test('explicit-flag fallback: --workspace=<descendant-id> falls through to discovery (small tree)', () => {

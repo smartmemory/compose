@@ -533,3 +533,5 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-07T23:37:27+08:00 | COMP-COCKPIT-1/6 done: notify on silent sites, native dialogs → DialogProvider hooks, dashboard kill requires reason; full UI suite green
 2026-06-08T00:27:35+08:00 | COMP-COCKPIT Slice B: run history (build-history log+route+PastBuildsView), inline gate artifact, empty-state CTAs
 2026-06-08T00:33:41+08:00 | COMP-COCKPIT-5: feature preset + central isEmptyProject + create-feature empty-state CTAs (Tree/Graph/Dashboard)
+2026-06-09T13:51:53+08:00 | fix workspace resolution: nearest-enclosing wins so running compose from a workspace root never triggers the descendant-scan TooBroad cap
+2026-06-09T14:34:36+08:00 | discovery scan: prune dot-dirs + vendor/cache subtrees and raise visit cap to 10k so large repos enumerate fully (degrade-on-TooBroad kept as backstop)
