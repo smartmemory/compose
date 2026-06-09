@@ -1,0 +1,11 @@
+{
+  "code": "COMP-COCKPIT-10",
+  "description": "Orphaned server routes — wire or remove. Three capabilities are built server-side with zero callers anywhere (verified against src/, bin/, lib/): GET /api/vision/blocked (vision-routes.js:1080 — blocked-items feed that would naturally power the attention queue), GET/POST /api/export/roadmap-graph[/save] (graph-export.js:322,332 — graph export with no Export button, not called by CLI either), POST /api/plan/parse (vision-routes.js:1123 — plan-text parsing with no paste-a-plan dialog). Also audit POST /api/vision/ui (telemetry, purpose unclear). For each: surface it in the UI or delete the dead route. P2 from the 2026-06-10 wiring sweep.",
+  "status": "PLANNED",
+  "phase": "COMP-COCKPIT Wave 2: UX Journey Gaps (2026-06-10 sweep)",
+  "created": "2026-06-09",
+  "updated": "2026-06-09",
+  "complexity": "M",
+  "position": 4,
+  "parent": "COMP-COCKPIT"
+}

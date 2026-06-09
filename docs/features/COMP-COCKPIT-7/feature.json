@@ -1,0 +1,11 @@
+{
+  "code": "COMP-COCKPIT-7",
+  "description": "Failed-build retry from Past Builds. PastBuildsView (COMP-COCKPIT-3) shows failed/aborted builds with failure reason but offers no retry/rerun control (verified: no retry affordance in PastBuildsView.jsx) — the investigate-and-retry journey starts in the UI and dead-ends to the terminal. Add a Retry button on failed/aborted build records reusing the existing POST /api/build/start dispatch with the recorded feature code. P1: forces-terminal. From the 2026-06-10 UX journey sweep.",
+  "status": "PLANNED",
+  "phase": "COMP-COCKPIT Wave 2: UX Journey Gaps (2026-06-10 sweep)",
+  "created": "2026-06-09",
+  "updated": "2026-06-09",
+  "complexity": "S",
+  "position": 1,
+  "parent": "COMP-COCKPIT"
+}
