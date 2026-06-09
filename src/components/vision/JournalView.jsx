@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BookOpen, Plus, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import EmptyState from './shared/EmptyState.jsx';
@@ -44,8 +44,13 @@ export default function JournalView() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
+  // Monotonic request id: a response only lands if it is still the latest
+  // request, so a slow fetch can't overwrite state after the user switches
+  // source or edits the filter (and post-write refreshes can't go stale).
+  const fetchSeq = useRef(0);
 
   const fetchEntries = useCallback(async () => {
+    const seq = ++fetchSeq.current;
     setLoading(true);
     setError(null);
     try {
@@ -55,12 +60,14 @@ export default function JournalView() {
       const res = await wsFetch(`/api/${source}${qs ? `?${qs}` : ''}`);
       if (!res.ok) throw new Error(`fetch failed (${res.status})`);
       const data = await res.json();
+      if (seq !== fetchSeq.current) return; // superseded — drop stale response
       setEntries(data.entries || []);
     } catch (err) {
+      if (seq !== fetchSeq.current) return;
       setError(err.message || String(err));
       setEntries([]);
     } finally {
-      setLoading(false);
+      if (seq === fetchSeq.current) setLoading(false);
     }
   }, [source, featureFilter]);
 
