@@ -537,3 +537,6 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-09T14:34:36+08:00 | discovery scan: prune dot-dirs + vendor/cache subtrees and raise visit cap to 10k so large repos enumerate fully (degrade-on-TooBroad kept as backstop)
 2026-06-09T17:37:34+08:00 | COMP-MCP-ROADMAP-READ: add read-only get_roadmap MCP primitive (lib + tool wrapper + tests)
 2026-06-09T23:56:44+08:00 | COMP-MCP-ROADMAP-READ-1: general filtered rows[] + limit so /roadmap next can read PLANNED structured (not via markdown reparse)
+2026-06-10T06:22:10+08:00 | pre-push hook: skip npm-test gate for docs-only pushes (keep hard gate for code)
+2026-06-10T06:53:11+08:00 | COMP-COCKPIT Wave 2 blueprint: verifying file:line refs for items 7-10
+2026-06-10T07:04:30+08:00 | COMP-COCKPIT Wave 2 implement: Wave A (retry button + orphan routes) via parallel subagents
