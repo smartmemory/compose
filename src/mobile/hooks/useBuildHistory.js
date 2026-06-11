@@ -138,8 +138,17 @@ export function useBuildHistory({ active, limit = 20 } = {}) {
     const isNowTerminal = isTerminalBuildStatus(active.status);
     if (!isNowTerminal) return;
 
-    // Only trigger once per flowId reaching terminal
-    if (seenTerminalRef.current.has(fid)) return;
+    if (seenTerminalRef.current.has(fid)) {
+      // Already triggered for this flowId — but the backend may re-broadcast a
+      // health-gate downgrade (complete → failed) after the first terminal
+      // status (COMP-MOBILE-1-1). Track the latest observed status so the
+      // corrective alert doesn't false-fire when history later agrees with
+      // what the live state already told us.
+      if (seenTerminalRef.current.get(fid) !== active.status) {
+        seenTerminalRef.current.set(fid, active.status);
+      }
+      return;
+    }
 
     // Record the terminal status we saw from the active-build
     seenTerminalRef.current.set(fid, active.status);

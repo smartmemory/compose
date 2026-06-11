@@ -560,3 +560,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-11T12:46:12+08:00 | COMP-MOBILE-1 Phase 7 S03: CreateItemSheet, ItemDetailSheet delete+connections, useRoadmapItems mutations, status/confidence contract fix
 2026-06-11T12:51:57+08:00 | S03 implementation: contract alignment + mutations + CreateItemSheet + FAB + connections
 2026-06-11T13:09:26+08:00 | COMP-MOBILE-1 coverage sweep: writing locking regression tests for 4 review findings + secondary gaps
+2026-06-11T15:52:04+08:00 | COMP-MOBILE-1-1 backend follow-ups: health-gate buildState re-broadcast + per-step history records

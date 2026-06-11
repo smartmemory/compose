@@ -84,3 +84,121 @@ test('appendBuildHistory never throws on a bad dir (build path safety)', () => {
   // A non-existent nested path should be created; an impossible path should not throw.
   assert.doesNotThrow(() => appendBuildHistory('/dev/null/cannot/exist', { featureCode: 'X' }));
 });
+
+// ── COMP-MOBILE-1-1: per-step projection + health-gate downgrade persistence ──
+
+test('stepOutcomeToStatus maps every outcome to the UI vocabulary', async () => {
+  const { stepOutcomeToStatus } = await import('../lib/build-history.js');
+  assert.equal(stepOutcomeToStatus('complete'), 'done');
+  assert.equal(stepOutcomeToStatus('approve'), 'done');
+  assert.equal(stepOutcomeToStatus('failed'), 'failed');
+  assert.equal(stepOutcomeToStatus('revise'), 'revised');
+  assert.equal(stepOutcomeToStatus('kill'), 'killed');
+  assert.equal(stepOutcomeToStatus('custom'), 'custom');
+  assert.equal(stepOutcomeToStatus(undefined), 'done');
+});
+
+test('projectHistorySteps projects compact steps; summary only on failed', async () => {
+  const { projectHistorySteps } = await import('../lib/build-history.js');
+  const out = projectHistorySteps([
+    { stepId: 'execute', outcome: 'complete', agent: 'claude', durationMs: 1200, summary: 'ok fine' },
+    { stepId: 'review', outcome: 'failed', agent: 'codex', durationMs: 900, summary: 'tests red' },
+    { stepId: 'mystery' },
+  ]);
+  assert.deepEqual(out, [
+    { id: 'execute', status: 'done', agent: 'claude', durationMs: 1200 },
+    { id: 'review', status: 'failed', agent: 'codex', durationMs: 900, summary: 'tests red' },
+    { id: 'mystery', status: 'done', agent: null, durationMs: null },
+  ]);
+});
+
+test('projectHistorySteps tolerates non-array input', async () => {
+  const { projectHistorySteps } = await import('../lib/build-history.js');
+  assert.deepEqual(projectHistorySteps(null), []);
+  assert.deepEqual(projectHistorySteps(undefined), []);
+});
+
+test('history record round-trips steps[] (new contract field)', () => {
+  const dir = freshDir();
+  try {
+    const steps = [{ id: 'execute', status: 'failed', agent: 'claude', durationMs: 5, summary: 'boom' }];
+    appendBuildHistory(dir, { featureCode: 'F-1', status: 'failed', steps });
+    assert.deepEqual(readBuildHistory(dir)[0].steps, steps);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('persistHealthGateDowngrade rewrites active-build.json to failed (triggers re-broadcast)', async () => {
+  const { persistHealthGateDowngrade } = await import('../lib/build.js');
+  const dir = freshDir();
+  try {
+    writeFileSync(join(dir, 'active-build.json'), JSON.stringify({
+      featureCode: 'F-1', flowId: 'flow-1', status: 'complete',
+      completedAt: '2026-06-11T00:00:00.000Z', steps: [],
+    }));
+    const written = persistHealthGateDowngrade(dir, { score: 42, threshold: 70 });
+    assert.equal(written.status, 'failed');
+    const onDisk = JSON.parse(readFileSync(join(dir, 'active-build.json'), 'utf-8'));
+    assert.equal(onDisk.status, 'failed');
+    assert.equal(onDisk.failureReason, 'Health score 42 below threshold 70');
+    assert.deepEqual(onDisk.healthDowngrade, { score: 42, threshold: 70 });
+    assert.equal(onDisk.completedAt, '2026-06-11T00:00:00.000Z'); // preserved
+    assert.equal(onDisk.flowId, 'flow-1');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('persistHealthGateDowngrade no-ops when already failed or file missing', async () => {
+  const { persistHealthGateDowngrade } = await import('../lib/build.js');
+  const dir = freshDir();
+  try {
+    assert.equal(persistHealthGateDowngrade(dir, { score: 1, threshold: 2 }), null);
+    writeFileSync(join(dir, 'active-build.json'), JSON.stringify({ status: 'failed', failureReason: 'orig' }));
+    assert.equal(persistHealthGateDowngrade(dir, { score: 1, threshold: 2 }), null);
+    const onDisk = JSON.parse(readFileSync(join(dir, 'active-build.json'), 'utf-8'));
+    assert.equal(onDisk.failureReason, 'orig'); // untouched
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('persistHealthGateDowngrade identity guard: no-ops when flowId/featureCode mismatch', async () => {
+  const { persistHealthGateDowngrade } = await import('../lib/build.js');
+  const dir = freshDir();
+  try {
+    const state = { featureCode: 'F-OTHER', flowId: 'flow-other', status: 'complete', steps: [] };
+    writeFileSync(join(dir, 'active-build.json'), JSON.stringify(state));
+    // flowId mismatch → untouched
+    assert.equal(persistHealthGateDowngrade(dir, { score: 1, threshold: 2, flowId: 'flow-mine' }), null);
+    assert.equal(JSON.parse(readFileSync(join(dir, 'active-build.json'), 'utf-8')).status, 'complete');
+    // no flowId, featureCode mismatch → untouched
+    assert.equal(persistHealthGateDowngrade(dir, { score: 1, threshold: 2, featureCode: 'F-MINE' }), null);
+    assert.equal(JSON.parse(readFileSync(join(dir, 'active-build.json'), 'utf-8')).status, 'complete');
+    // matching flowId → downgrade applies
+    const written = persistHealthGateDowngrade(dir, { score: 1, threshold: 2, flowId: 'flow-other' });
+    assert.equal(written.status, 'failed');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('persistHealthGateDowngrade guard: legacy state without flowId but different featureCode is untouched', async () => {
+  const { persistHealthGateDowngrade } = await import('../lib/build.js');
+  const dir = freshDir();
+  try {
+    // Legacy writer: no flowId on disk, different feature
+    writeFileSync(join(dir, 'active-build.json'), JSON.stringify({ featureCode: 'F-OTHER', status: 'complete' }));
+    assert.equal(
+      persistHealthGateDowngrade(dir, { score: 1, threshold: 2, flowId: 'flow-mine', featureCode: 'F-MINE' }),
+      null
+    );
+    assert.equal(JSON.parse(readFileSync(join(dir, 'active-build.json'), 'utf-8')).status, 'complete');
+    // Same feature, no flowId on disk → downgrade applies
+    const written = persistHealthGateDowngrade(dir, { score: 1, threshold: 2, flowId: 'flow-mine', featureCode: 'F-OTHER' });
+    assert.equal(written.status, 'failed');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -46,6 +46,8 @@ function humanizeDuration(ms) {
 
 const TRUNCATE_LEN = 80;
 
+const STEP_GLYPHS = { done: '●', failed: '✕', revised: '↻', killed: '✕' };
+
 function statusClass(status) {
   if (!status) return '';
   const s = status.toLowerCase();
@@ -104,6 +106,24 @@ function HistoryRow({ build, index }) {
             <div className="m-build-history-field">
               <span className="m-build-history-field-label">Steps</span>
               <span className="m-build-history-field-value">{build.stepCount}</span>
+            </div>
+          )}
+          {Array.isArray(build.steps) && build.steps.length > 0 && (
+            <div className="m-build-history-steps" data-testid={`mobile-build-history-steps-${index}`}>
+              {build.steps.map((s, i) => (
+                <div
+                  key={`${s.id || i}`}
+                  className={`m-build-history-step${s.status === 'failed' ? ' is-failed' : ''}`}
+                  data-status={s.status}
+                >
+                  <span className="m-build-history-step-glyph">{STEP_GLYPHS[s.status] || '○'}</span>
+                  <span className="m-build-history-step-id">{(s.id || '').replace(/_/g, ' ')}</span>
+                  {s.agent && <span className="m-build-history-step-agent">{s.agent}</span>}
+                  {s.status === 'failed' && s.summary && (
+                    <span className="m-build-history-step-summary">{s.summary}</span>
+                  )}
+                </div>
+              ))}
             </div>
           )}
           {build.failureReason && (
