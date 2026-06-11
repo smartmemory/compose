@@ -82,7 +82,17 @@ export default function MobileApp() {
   // Each tab receives hook values as props so it doesn't open duplicate WS connections.
   const { gates, loading: gatesLoading, resolve: resolveGate } = usePendingGates();
   const { active, loading: buildLoading, error: buildError, startBuild, abortBuild } = useActiveBuild();
-  const { items, loading: itemsLoading, error: itemsError, applyOptimisticEdit } = useRoadmapItems();
+  const {
+    items,
+    loading: itemsLoading,
+    error: itemsError,
+    applyOptimisticEdit,
+    createItem,
+    deleteItem,
+    addConnection,
+    removeConnection,
+    fetchItemDetail,
+  } = useRoadmapItems();
 
   // Monitor build + gate transitions → compose:notify alerts (uses lifted data, no extra WS)
   useMonitorEvents({ active, gates, items });
@@ -115,6 +125,11 @@ export default function MobileApp() {
         loading={itemsLoading}
         error={itemsError}
         applyOptimisticEdit={applyOptimisticEdit}
+        createItem={createItem}
+        deleteItem={deleteItem}
+        addConnection={addConnection}
+        removeConnection={removeConnection}
+        fetchItemDetail={fetchItemDetail}
       />
     );
   } else if (tab === 'ideas') {
