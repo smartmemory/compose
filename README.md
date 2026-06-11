@@ -133,6 +133,23 @@ compose tracker sync     # reconcile op-log against remote provider
 
 See [docs/configuration.md](docs/configuration.md) for the full `tracker` config reference.
 
+## Remote access (mobile PWA from anywhere)
+
+The mobile cockpit at `/m` can be reached from outside localhost — bring your own tunnel, compose handles auth and pairing:
+
+```bash
+npm run build                                  # remote serves the built PWA from the API server
+COMPOSE_REMOTE_AUTH=enabled compose start --host=0.0.0.0
+compose remote pair --public-host=https://your-tunnel-host   # prints a QR — scan it with your phone
+compose remote status                          # bind, devices, tunnel reachability
+```
+
+How it works: binding beyond `127.0.0.1` refuses to start unless `COMPOSE_REMOTE_AUTH=enabled` is set. In remote mode every request needs a credential — there is deliberately **no IP-based trust** (tunnel daemons connect from loopback). Phones pair once via QR (5-minute single-use code) and stay authenticated for 30 days through rotating refresh tokens + 15-minute access JWTs; reuse of a rotated refresh token revokes the device. Devices are listable and revocable (`compose remote list|revoke`, or the cockpit's "Pair mobile" modal). Only port 4001 needs to be exposed — agent-server traffic is proxied through it.
+
+Tunnel layer is yours: Tailscale (serve/funnel), Cloudflare Tunnel, or a reverse proxy on your own VPS+domain all work — the last is the most reliable from restrictive networks (e.g. mainland China, where `trycloudflare.com`/ngrok domains are commonly blocked; plain TLS on 443 to an unremarkable domain travels best). Pair the device *before* traveling: pairing needs a live round-trip, while an already-paired phone only needs refresh.
+
+`compose remote rotate-secret --yes` invalidates every paired device (post-leak hammer).
+
 ## Documentation
 
 Topic-scoped reference:
