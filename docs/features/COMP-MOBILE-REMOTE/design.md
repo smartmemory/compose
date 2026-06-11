@@ -182,7 +182,7 @@ Cockpit compatibility in remote mode: `wsFetch` in `'cockpit'` mode attaches `x-
 | Route | Auth | Purpose |
 |---|---|---|
 | `POST /api/auth/pair/init` | requires sensitive token (cockpit/CLI) | Returns `{ code, expires_at, pair_url }` — code is single-use, 5-min TTL |
-| `GET /api/auth/pair/status?code=...` | none (uses code as the auth) | For CLI polling — returns `{ status: "pending" \| "consumed" \| "expired" }` |
+| `GET /api/auth/pair/status?code=...` | requires sensitive token (only CLI/cockpit poll it; both hold the token — keeps it off the public allowlist) | For CLI polling — returns `{ status: "pending" \| "consumed" \| "expired" }` |
 | `POST /api/auth/pair/complete` | none (uses code as the auth) | Body `{ code, device_name? }`; consumes code, creates device, returns `{ access_token, refresh_token, device_id, expires_in }`. UA captured from request. |
 | `POST /api/auth/refresh` | none (uses refresh token as the auth) | Body `{ refresh_token }`; rotates refresh, returns `{ access_token, refresh_token, expires_in }` |
 | `GET /api/auth/devices` | requires sensitive token | Lists paired devices |
