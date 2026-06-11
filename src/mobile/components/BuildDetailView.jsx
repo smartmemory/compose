@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAgentStream } from '../../hooks/useAgentStream.js';
+import { isTerminalBuildStatus } from '../../lib/pipeline-steps.js';
 import BuildStepsList from './BuildStepsList.jsx';
 
 function eventLine(evt, idx) {
@@ -9,10 +10,6 @@ function eventLine(evt, idx) {
   }
   if (evt?.type) return `[${evt.type}] ${JSON.stringify(evt).slice(0, 240)}`;
   try { return JSON.stringify(evt); } catch { return `(unserializable #${idx})`; }
-}
-
-function isTerminal(status) {
-  return status === 'completed' || status === 'aborted' || status === 'failed' || status === 'done';
 }
 
 export default function BuildDetailView({ active, onClose, onAbort }) {
@@ -58,7 +55,7 @@ export default function BuildDetailView({ active, onClose, onAbort }) {
           <button
             type="button"
             className="m-btn m-btn-danger m-btn-sm"
-            disabled={aborting || isTerminal(status)}
+            disabled={aborting || isTerminalBuildStatus(status)}
             onClick={handleAbort}
             data-testid="mobile-build-detail-abort"
           >

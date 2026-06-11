@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import { isTerminalBuildStatus } from '../../lib/pipeline-steps.js';
 
 function formatRelative(ts) {
   if (!ts) return '';
@@ -19,10 +20,6 @@ function tailLines(active, n = 3) {
     return active.steps.slice(-n).map(s => `${s.id || s.name || ''}: ${s.status || ''}`.trim());
   }
   return [];
-}
-
-function isTerminal(status) {
-  return status === 'completed' || status === 'aborted' || status === 'failed' || status === 'done';
 }
 
 export default function BuildCard({ active, onOpen, onAbort, aborting }) {
@@ -76,7 +73,7 @@ export default function BuildCard({ active, onOpen, onAbort, aborting }) {
           type="button"
           className="m-btn m-btn-danger m-btn-sm"
           data-testid="mobile-build-abort"
-          disabled={aborting || isTerminal(status)}
+          disabled={aborting || isTerminalBuildStatus(status)}
           onClick={handleAbort}
         >
           {aborting ? 'Aborting…' : 'Abort'}
