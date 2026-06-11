@@ -1,0 +1,11 @@
+{
+  "code": "COMP-COCKPIT-11",
+  "description": "ChallengeModal \"Discuss\" posts to /api/terminal/inject (ChallengeModal.jsx:38 via agentServerUrl) but no such route exists on ANY server — dead endpoint, 404s on localhost too (client-side counterpart of the COMP-COCKPIT-10 orphaned-route sweep). Found by the COMP-MOBILE-REMOTE review gate (flagged as a missing remote proxy; root cause is the endpoint never existing). Fix: wire a real inject path on the agent server + proxy it, or remove/disable the Discuss action.",
+  "status": "PLANNED",
+  "phase": "COMP-COCKPIT Wave 2: UX Journey Gaps (2026-06-10 sweep)",
+  "created": "2026-06-11",
+  "updated": "2026-06-11",
+  "complexity": "S",
+  "position": 7,
+  "parent": "COMP-COCKPIT"
+}
