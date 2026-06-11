@@ -7,7 +7,7 @@ import { WebSocketServer } from 'ws';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { requireSensitiveToken } from './security.js';
+import { requireSensitiveOrPaired as requireSensitiveToken } from './security.js';
 import { spawnJournalAgent, extractSlugFromPath } from './vision-utils.js';
 import { attachFeatureScanRoutes } from './feature-scan.js';
 import { attachGraphExportRoutes } from './graph-export.js';

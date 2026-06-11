@@ -140,7 +140,13 @@ function startProcess(proc) {
   console.log(`[supervisor] Starting ${proc.name}...`);
 
   if (proc.type === 'fork') {
-    proc.child = fork(proc.path, { stdio: 'inherit' });
+    const forkEnv = { ...process.env };
+    if (proc.name !== 'api-server') {
+      // agent-server stays 127.0.0.1 always — never gets remote-auth env
+      delete forkEnv.COMPOSE_HOST;
+      delete forkEnv.COMPOSE_REMOTE_AUTH;
+    }
+    proc.child = fork(proc.path, { stdio: 'inherit', env: forkEnv });
   } else {
     proc.child = spawn(proc.command, [], {
       stdio: 'inherit',
