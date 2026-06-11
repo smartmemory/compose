@@ -51,7 +51,7 @@ import {
   guardedTransition, ensureGuard, projectFeatureStatus,
   verifyCompletionEvidence, guardTestCommand,
 } from './lifecycle-guard.js';
-import { requireSensitiveToken } from './security.js';
+import { requireSensitiveOrPaired as requireSensitiveToken } from './security.js';
 
 const PROJECT_ROOT = getTargetRoot();
 

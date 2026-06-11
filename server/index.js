@@ -3,6 +3,7 @@ import cors from 'cors';
 import http from 'node:http';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { existsSync, statSync } from 'node:fs';
 import { FileWatcherServer } from './file-watcher.js';
 import { VisionStore } from './vision-store.js';
 import { VisionServer } from './vision-server.js';
@@ -12,7 +13,29 @@ import { attachGraphExportRoutes } from './graph-export.js';
 import { attachWorkspaceRoutes } from './workspace-routes.js';
 import { attachGraphLayoutRoutes } from './graph-layout-routes.js';
 import { createWorkspaceMiddleware } from './workspace-middleware.js';
-import { getTargetRoot, getDataDir, ensureDataDir, loadProjectConfig, resolveProjectPath, switchProject } from './project-root.js';
+import { getTargetRoot, getDataDir, ensureDataDir, loadProjectConfig, resolveProjectPath, switchProject, COMPOSE_HOME } from './project-root.js';
+import { createAuthStore } from './auth-store.js';
+import { createAuthGate, wsUpgradeTokenOk } from './auth-middleware.js';
+import { attachAuthRoutes } from './auth-routes.js';
+import { configureAuthStore, requireSensitiveToken } from './security.js';
+import { resolveComposeHost, attachAgentProxy } from './remote-utils.js';
+
+// Re-export for Boundary Map (S02) and tests
+export { resolveComposeHost, attachAgentProxy };
+
+// ---------------------------------------------------------------------------
+// Remote mode detection — synchronous, before any app setup.
+// Exits early if non-localhost bind without COMPOSE_REMOTE_AUTH=enabled.
+// ---------------------------------------------------------------------------
+
+const _host = resolveComposeHost();
+const remoteMode = _host !== '127.0.0.1' && _host !== 'localhost';
+
+if (remoteMode && process.env.COMPOSE_REMOTE_AUTH !== 'enabled') {
+  console.error('[compose] ERROR: bound to non-localhost without COMPOSE_REMOTE_AUTH=enabled.');
+  console.error('[compose] Set COMPOSE_REMOTE_AUTH=enabled to acknowledge the security model, then retry.');
+  process.exit(1);
+}
 
 // Load project config and verify stratum capability matches reality
 const projectConfig = loadProjectConfig();
@@ -47,8 +70,61 @@ process.on('SIGTERM', () => {
 
 const PORT = process.env.PORT || 4001;
 const app = express();
+
+// ---------------------------------------------------------------------------
+// Auth store — created early so the gate can be mounted before route handlers.
+// Created in BOTH modes (pairing setup on localhost is a supported flow).
+// ensureDataDir() called here so getDataDir() is stable for the store.
+// ---------------------------------------------------------------------------
+ensureDataDir();
+const _authStore = createAuthStore(getDataDir());
+configureAuthStore(_authStore);
+
 app.use(cors({ origin: /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/ }));
 app.use(express.json());
+
+// ---------------------------------------------------------------------------
+// Auth gate (remote mode ONLY) — mounted AFTER express.json(), BEFORE all
+// route handlers. When off: this block does not execute — zero behavior change.
+// ---------------------------------------------------------------------------
+if (remoteMode) {
+  app.use(createAuthGate({
+    store: _authStore,
+    allowlist: [
+      '/m',                        // PWA shell + pair page and all sub-paths
+      '/assets/',                  // static assets
+      '/manifest.webmanifest',
+      '/m-sw.js',
+      '/api/health',               // health check (read-only, no secrets)
+      '/api/workspace',            // boot fetch: WorkspaceContext.jsx:40
+      '/api/auth/pair/complete',   // pairing bootstrap (code is the auth)
+      '/api/auth/refresh',         // token refresh (refresh token is the auth)
+    ],
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Auth routes (BOTH modes) — pairing setup on localhost (ahead of enabling
+// remote) is a supported flow. broadcast is a late-bound closure: visionServer
+// is declared below; by the time any pairing request arrives the server is
+// listening and visionServer is fully initialized.
+// ---------------------------------------------------------------------------
+attachAuthRoutes(app, {
+  store: _authStore,
+  broadcast: (msg) => {
+    if (typeof visionServer?.broadcastMessage === 'function') {
+      visionServer.broadcastMessage(msg);
+    }
+  },
+  requireSensitive: requireSensitiveToken,
+});
+
+// ---------------------------------------------------------------------------
+// Agent proxy (BOTH modes — additive) — mounted after the gate so gate clears
+// requests first. Proxy injects the real sensitive token server-side.
+// ---------------------------------------------------------------------------
+const _agentPort = parseInt(process.env.AGENT_PORT || '4002', 10);
+attachAgentProxy(app, { agentPort: _agentPort });
 
 attachWorkspaceRoutes(app);
 attachGraphLayoutRoutes(app);
@@ -96,7 +172,7 @@ app.post('/api/project/switch', (req, res) => {
 const server = http.createServer(app);
 const fileWatcher = new FileWatcherServer();
 fileWatcher.attach(server, app);
-ensureDataDir();
+
 const visionStore = new VisionStore(getDataDir());
 const sessionManager = new SessionManager({
   getFeaturePhase: (featureCode) => {
@@ -138,9 +214,38 @@ fileWatcher.onBuildStateChanged = (state) => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Static serving + SPA fallback (BOTH modes — additive)
+// Mounted AFTER all API routes so /api/* is never shadowed.
+// In dev Vite (5195) serves the SPA; in remote mode the built dist/ is used.
+// ---------------------------------------------------------------------------
+const _distDir = path.join(COMPOSE_HOME, 'dist');
+const _distExists = () => {
+  try { return existsSync(_distDir) && statSync(_distDir).isDirectory(); }
+  catch { return false; }
+};
+
+app.use(express.static(_distDir, { index: false }));
+
+// /m/* SPA fallback — paths matching /m or /m/...
+app.get(/^\/m(\/|$)/, (_req, res) => {
+  if (!_distExists()) {
+    return res.status(503).json({ error: 'PWA bundle not built — run npm run build' });
+  }
+  res.sendFile(path.join(_distDir, 'index.html'));
+});
+
 // Manual WebSocket upgrade routing — avoids the ws library bug where multiple
 // WebSocketServers on the same HTTP server write 400 on each other's connections
 server.on('upgrade', (req, socket, head) => {
+  // S02: remote-mode WS auth — check ?token= (sensitive or JWT) before upgrade
+  // Token value is never logged.
+  if (remoteMode && !wsUpgradeTokenOk(_authStore, req)) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+
   const { pathname } = new URL(req.url, 'http://localhost');
   if (pathname === '/ws/files' && fileWatcher.wss) {
     fileWatcher.wss.handleUpgrade(req, socket, head, (ws) => {
@@ -155,9 +260,14 @@ server.on('upgrade', (req, socket, head) => {
   }
 });
 
-server.listen(PORT, '127.0.0.1', () => {
+server.listen(PORT, _host, () => {
   serverListening = true;
-  console.log(`Compose server running on http://127.0.0.1:${PORT}`);
-  console.log(`File watcher WebSocket: ws://localhost:${PORT}/ws/files`);
-  console.log(`Vision WebSocket: ws://localhost:${PORT}/ws/vision`);
+  console.log(`Compose server running on http://${_host}:${PORT}`);
+  console.log(`File watcher WebSocket: ws://${_host}:${PORT}/ws/files`);
+  console.log(`Vision WebSocket: ws://${_host}:${PORT}/ws/vision`);
+  if (remoteMode) {
+    console.log('[compose] WARNING: bound to ' + _host + ' — accessible from local network and beyond');
+    console.log('[compose] Auth gate active: localhost trusted; remote requests require pairing token.');
+    console.log('[compose] Run `compose remote pair --public-host=<URL>` from the cockpit terminal to add a device.');
+  }
 });

@@ -14,7 +14,7 @@
  */
 
 import { runBuild as defaultRunBuild, abortBuild as defaultAbortBuild } from '../lib/build.js';
-import { requireSensitiveToken } from './security.js';
+import { requireSensitiveOrPaired as requireSensitiveToken } from './security.js';
 import { getDataDir as defaultGetDataDir } from './project-root.js';
 import { readBuildHistory } from '../lib/build-history.js';
 
