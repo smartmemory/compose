@@ -461,6 +461,132 @@ describe('createAuthGate', () => {
 });
 
 // ---------------------------------------------------------------------------
+// COMP-MOBILE-REMOTE coverage sweep additions — createAuthGate edge cases
+// ---------------------------------------------------------------------------
+
+describe('createAuthGate — /api/design/stream and non-GET stream', () => {
+  const allowlist2 = [
+    '/api/health',
+    '/m',
+    '/assets/',
+  ];
+  let gate2;
+
+  before(() => {
+    gate2 = createAuthGate({
+      store: _store,
+      allowlist: allowlist2,
+      streamPaths: ['/api/agent/proxy/stream', '/api/design/stream'],
+    });
+  });
+
+  function run2(req) {
+    const res = makeRes();
+    return new Promise((resolve) => {
+      gate2(req, res, () => resolve({ out: 'next', req, res }));
+      if (res._body !== null) resolve({ out: 'sent', req, res });
+    });
+  }
+
+  test('?token= query param accepted on /api/design/stream (GET)', async () => {
+    const jwt = makeJwt({ id: 'dev_design1', name: 'DesignStream' });
+    const req = makeReq({
+      path: '/api/design/stream',
+      method: 'GET',
+      url: `/api/design/stream?token=${jwt}`,
+      query: { token: jwt },
+      headers: {},
+    });
+    const { out } = await run2(req);
+    assert.equal(out, 'next', '/api/design/stream GET with ?token= should be accepted');
+  });
+
+  test('?token= query param NOT accepted for POST on /api/design/stream (non-GET)', async () => {
+    const jwt = makeJwt({ id: 'dev_design_post', name: 'DesignStreamPOST' });
+    const req = makeReq({
+      path: '/api/design/stream',
+      method: 'POST',
+      url: `/api/design/stream?token=${jwt}`,
+      query: { token: jwt },
+      headers: {},
+    });
+    const { out, res } = await run2(req);
+    assert.equal(out, 'sent', 'POST on stream path with ?token= should be rejected');
+    assert.equal(res._status, 401);
+  });
+
+  test('?token= query param NOT accepted for POST on /api/agent/proxy/stream', async () => {
+    const jwt = makeJwt({ id: 'dev_proxy_post', name: 'ProxyStreamPOST' });
+    const req = makeReq({
+      path: '/api/agent/proxy/stream',
+      method: 'POST',
+      url: `/api/agent/proxy/stream?token=${jwt}`,
+      query: { token: jwt },
+      headers: {},
+    });
+    const { out, res } = await run2(req);
+    assert.equal(out, 'sent', 'POST on proxy stream with ?token= should be rejected');
+    assert.equal(res._status, 401);
+  });
+});
+
+describe('createAuthGate — /m prefix does NOT accidentally cover /mfoo', () => {
+  const allowlistM = ['/m', '/api/health'];
+  let gateM;
+
+  before(() => {
+    gateM = createAuthGate({
+      store: _store,
+      allowlist: allowlistM,
+      streamPaths: [],
+    });
+  });
+
+  function runM(req) {
+    const res = makeRes();
+    return new Promise((resolve) => {
+      gateM(req, res, () => resolve({ out: 'next', req, res }));
+      if (res._body !== null) resolve({ out: 'sent', req, res });
+    });
+  }
+
+  test('/m exact path passes (exact match)', async () => {
+    const { out } = await runM(makeReq({ path: '/m' }));
+    assert.equal(out, 'next');
+  });
+
+  test('/m/pair passes (sub-path of /m)', async () => {
+    const { out } = await runM(makeReq({ path: '/m/pair' }));
+    assert.equal(out, 'next');
+  });
+
+  test('/m/agents passes (sub-path of /m)', async () => {
+    const { out } = await runM(makeReq({ path: '/m/agents' }));
+    assert.equal(out, 'next');
+  });
+
+  test('/mfoo does NOT pass (only starts with /m but no slash)', async () => {
+    // The _allowed logic: path === '/m' or startsWith('/m/') or startsWith('/m?')
+    // '/mfoo' does NOT satisfy any of these — it must require auth
+    const { out, res } = await runM(makeReq({ path: '/mfoo' }));
+    assert.equal(out, 'sent', '/mfoo should NOT be covered by /m allowlist entry');
+    assert.equal(res._status, 401);
+  });
+
+  test('/metrics does NOT pass (only starts with /m but no slash)', async () => {
+    const { out, res } = await runM(makeReq({ path: '/metrics' }));
+    assert.equal(out, 'sent', '/metrics should NOT be covered by /m allowlist entry');
+    assert.equal(res._status, 401);
+  });
+
+  test('/mobile does NOT pass', async () => {
+    const { out, res } = await runM(makeReq({ path: '/mobile' }));
+    assert.equal(out, 'sent', '/mobile should NOT be covered by /m allowlist entry');
+    assert.equal(res._status, 401);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // wsUpgradeTokenOk
 // ---------------------------------------------------------------------------
 

@@ -539,6 +539,40 @@ describe('Auth routes — broadcast on pair/complete', () => {
 // rotate-secret route (deviation: S01 omitted this; added in S03)
 // ---------------------------------------------------------------------------
 
+describe('Auth routes — pair_url trailing-slash normalization', () => {
+  test('trailing slash on public_host is stripped — no double-slash in pair_url', async () => {
+    // Regression: public_host = 'https://example.com/' (with trailing slash)
+    // must produce 'https://example.com/m/pair?code=…' (not 'https://example.com//m/pair…')
+    const dir = mkdtempSync(join(tmpdir(), 'auth-routes-pairurl-slash-'));
+    const orig = process.env.COMPOSE_API_TOKEN;
+    process.env.COMPOSE_API_TOKEN = 'slash-test-token';
+    const store = createAuthStore(dir);
+    const app = express();
+    app.use(express.json());
+    attachAuthRoutes(app, {
+      store,
+      requireSensitive: (req, res, next) => next(),
+      getPublicHost: () => 'https://forge.example.com/',  // trailing slash
+    });
+    const server = await listen(app);
+    try {
+      const r = await request(server, '/api/auth/pair/init', { method: 'POST', body: {} });
+      assert.equal(r.status, 200);
+      // Must not contain double slash between host and /m/pair
+      assert.ok(
+        !r.body.pair_url.includes('//m/'),
+        `pair_url must not have double slash: ${r.body.pair_url}`,
+      );
+      assert.match(r.body.pair_url, /^https:\/\/forge\.example\.com\/m\/pair\?code=/);
+    } finally {
+      server.close();
+      rmSync(dir, { recursive: true, force: true });
+      if (orig === undefined) delete process.env.COMPOSE_API_TOKEN;
+      else process.env.COMPOSE_API_TOKEN = orig;
+    }
+  });
+});
+
 describe('Auth routes — pair_url composition (review fix #3)', () => {
   test('pair/init composes pair_url from configured public_host; null without', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'auth-routes-pairurl-'));

@@ -634,3 +634,155 @@ describe('Guard-swap parity (build routes + requireSensitiveOrPaired)', () => {
     assert.equal(r.status, 200);
   });
 });
+
+// ---------------------------------------------------------------------------
+// COMP-MOBILE-REMOTE coverage sweep additions
+// ---------------------------------------------------------------------------
+
+// 12. Agent proxy: query string forwarded on stream path, upstream 500 passthrough
+// (Authorization strip already covered in test 10 — proxy strips client Authorization)
+
+describe('Agent proxy — additional edge cases', () => {
+  let agentStub2;
+  let proxyServer2;
+  let origToken2;
+  const PROXY_TOKEN2 = 'real-agent-token-proxy2';
+
+  before(async () => {
+    origToken2 = process.env.COMPOSE_API_TOKEN;
+    process.env.COMPOSE_API_TOKEN = PROXY_TOKEN2;
+
+    // Stub that echoes back path + query string + status it decides from a header
+    agentStub2 = http.createServer((req, res) => {
+      const requestedStatus = parseInt(req.headers['x-reply-status'] || '200', 10);
+      res.writeHead(requestedStatus, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        path: req.url,
+        method: req.method,
+        token: req.headers['x-compose-token'] || null,
+        authorization: req.headers['authorization'] || null,
+      }));
+    });
+    await new Promise(res => agentStub2.listen(0, '127.0.0.1', res));
+
+    const agentPort2 = agentStub2.address().port;
+    const app2 = express();
+    app2.use(express.json());
+    attachAgentProxy(app2, { agentPort: agentPort2 });
+    proxyServer2 = await listen(app2);
+  });
+
+  after(async () => {
+    if (origToken2 === undefined) delete process.env.COMPOSE_API_TOKEN;
+    else process.env.COMPOSE_API_TOKEN = origToken2;
+    await close(proxyServer2);
+    await close(agentStub2);
+  });
+
+  test('query string forwarded on GET /api/agent/proxy/stream path', async () => {
+    // The proxy path for stream: GET /api/agent/proxy/stream?token=X&foo=bar
+    // qs must reach upstream as /api/agent/stream?token=X&foo=bar
+    const agentPort = agentStub2.address().port;
+    const port = proxyServer2.address().port;
+    return new Promise((resolve, reject) => {
+      const req2 = http.get(
+        `http://127.0.0.1:${port}/api/agent/proxy/stream?token=testtoken&foo=bar`,
+        (res) => {
+          let buf = '';
+          res.on('data', d => { buf += d; });
+          res.on('end', () => {
+            try {
+              const body = JSON.parse(buf);
+              assert.ok(body.path.includes('token=testtoken'), `Expected query forwarded: ${body.path}`);
+              assert.ok(body.path.includes('foo=bar'), `Expected foo=bar forwarded: ${body.path}`);
+              resolve();
+            } catch (e) { reject(e); }
+          });
+        },
+      );
+      req2.on('error', reject);
+    });
+  });
+
+  test('upstream 500 response status is passed through', async () => {
+    // Use a stub route that echos status from a request header
+    // For GET proxy/session/status we can't send custom headers via our test helper trivially,
+    // so we wire a separate sub-test using the explicit proxy server directly.
+    const agentPort = agentStub2.address().port;
+    const stubPort = agentStub2.address().port;
+    const proxyPort = proxyServer2.address().port;
+
+    return new Promise((resolve, reject) => {
+      // Send a request with x-reply-status: 500 via the proxy
+      const opts = {
+        hostname: '127.0.0.1',
+        port: proxyPort,
+        path: '/api/agent/proxy/session/status',
+        method: 'GET',
+        headers: {
+          'x-reply-status': '500',
+        },
+      };
+      const req2 = http.request(opts, (res) => {
+        let buf = '';
+        res.on('data', d => { buf += d; });
+        res.on('end', () => {
+          try {
+            assert.equal(res.statusCode, 500, 'upstream 500 must be passed through');
+            resolve();
+          } catch (e) { reject(e); }
+        });
+      });
+      req2.on('error', reject);
+      req2.end();
+    });
+  });
+
+  test('client-sent Authorization header is stripped before reaching upstream', async () => {
+    const r = await request(proxyServer2, '/api/agent/proxy/session/status', {
+      headers: { Authorization: 'Bearer injected-by-client' },
+    });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.authorization, null,
+      'Client-sent Authorization must be stripped by the proxy');
+    // But x-compose-token must be the real server-side token
+    assert.equal(r.body.token, PROXY_TOKEN2);
+  });
+});
+
+// 13. Desktop remote-mode wiring: WorkspaceProvider reads /api/health {remote:true} → setRemoteMode
+// NOTE: WorkspaceProvider is a React component tested in test/ui/workspace-remote-mode.test.jsx (vitest).
+// That test covers the health-fetch path which requires jsdom + React.
+
+// 14. Supervisor env threading: COMPOSE_HOST reaches api-server fork but NOT agent-server fork.
+// The startProcess logic is inline in supervisor.js and cannot be unit-tested without forking.
+// We test the exported PROCESSES array to verify the names expected.
+
+describe('Supervisor env threading (structural check)', () => {
+  test('PROCESSES array has api-server and agent-server entries', async () => {
+    // We do NOT import supervisor.js (it has top-level side-effects: kills processes,
+    // writes PID files). Instead we read the PROCESSES definition via regex from source.
+    // This is a best-effort structural check, not an execution test.
+    const { readFileSync } = await import('node:fs');
+    const { join, dirname } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
+    const src = readFileSync(join(REPO, 'server', 'supervisor.js'), 'utf8');
+
+    // Verify the delete-forkEnv logic is present for agent-server
+    assert.ok(
+      src.includes("proc.name !== 'api-server'") ||
+      src.includes("proc.name === 'agent-server'") ||
+      src.includes("delete forkEnv.COMPOSE_HOST"),
+      'supervisor must contain logic to strip COMPOSE_HOST from agent-server fork env',
+    );
+    assert.ok(
+      src.includes("delete forkEnv.COMPOSE_REMOTE_AUTH"),
+      'supervisor must strip COMPOSE_REMOTE_AUTH from agent-server fork env',
+    );
+    assert.ok(
+      src.includes("name: 'api-server'") && src.includes("name: 'agent-server'"),
+      'PROCESSES must contain both api-server and agent-server entries',
+    );
+  });
+});

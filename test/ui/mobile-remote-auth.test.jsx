@@ -749,3 +749,76 @@ describe('useInteractiveSession proxy paths', () => {
     unmount();
   });
 });
+
+// ─── wsFetch network error propagation ───────────────────────────────────────
+// COMP-MOBILE-REMOTE coverage sweep: paired mode with fetch itself rejecting
+// (network error) propagates naturally — no redirect to /m/pair.
+
+describe('wsFetch — network error propagation (no /m/pair redirect)', () => {
+  let wsMod2;
+  let savedLocation;
+
+  function stubLoc() {
+    const state = { redirectedTo: null };
+    savedLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      writable: true,
+      value: {
+        protocol: 'http:', host: 'localhost', hostname: 'localhost',
+        pathname: '/', search: '', hash: '',
+        get href() { return state.redirectedTo || 'http://localhost/'; },
+        set href(v) { state.redirectedTo = v; },
+      },
+    });
+    return state;
+  }
+
+  beforeEach(async () => {
+    localStorage.clear();
+    wsMod2 = await import('../../src/lib/wsFetch.js');
+    const apiMod2 = await import('../../src/lib/compose-api.js');
+    wsMod2.setAuthMode('cockpit');
+    apiMod2.setSensitiveToken(null);
+  });
+
+  afterEach(() => {
+    if (savedLocation) {
+      Object.defineProperty(window, 'location', {
+        configurable: true, writable: true, value: savedLocation,
+      });
+      savedLocation = null;
+    }
+    localStorage.clear();
+    wsMod2.setAuthMode('cockpit');
+    vi.restoreAllMocks();
+  });
+
+  it('cockpit mode: fetch network error propagates as-is (no redirect, no NeedsPairing)', async () => {
+    const state = stubLoc();
+    wsMod2.setAuthMode('cockpit');
+    globalThis.fetch = vi.fn(async () => { throw new TypeError('Failed to fetch'); });
+    await expect(wsMod2.wsFetch('/api/foo')).rejects.toThrow('Failed to fetch');
+    // No redirect in cockpit mode
+    expect(state.redirectedTo).toBeNull();
+  });
+
+  it('paired mode: fetch network error propagates (not wrapped as NeedsPairing)', async () => {
+    const state = stubLoc();
+    // No stored tokens → getValidAccessToken throws NoRefreshToken → drops to legacy mode
+    wsMod2.setAuthMode('mobile-paired');
+    globalThis.fetch = vi.fn(async () => { throw new TypeError('Network offline'); });
+    let caughtError = null;
+    try {
+      await wsMod2.wsFetch('/api/foo');
+    } catch (e) {
+      caughtError = e;
+    }
+    expect(caughtError).toBeTruthy();
+    // The error must be the original network error, not NeedsPairing
+    expect(caughtError.message).toContain('Network offline');
+    expect(caughtError.message).not.toBe('NeedsPairing');
+    // No redirect triggered by a plain network error
+    expect(state.redirectedTo).toBeNull();
+  });
+});

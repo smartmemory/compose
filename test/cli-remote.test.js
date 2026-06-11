@@ -721,3 +721,51 @@ describe('remote status', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// COMP-MOBILE-REMOTE coverage sweep additions
+// ---------------------------------------------------------------------------
+
+describe('remote pair — --public-host trailing-slash normalization', () => {
+  const TOKEN = 'stub-token';
+  let server;
+  let dir;
+
+  before(async () => {
+    server = await makeStubServer({
+      initCode: 'SLASHTEST',
+      statusSequence: ['consumed'],
+      token: TOKEN,
+    });
+    dir = makeComposeDir();
+  });
+
+  after(() => {
+    server.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('--public-host with trailing slash produces clean pair URL (no double-slash)', async () => {
+    const lines = [];
+    await runRemoteCommand(['pair', '--public-host=https://host.example.com/'], {
+      ...makeOpts(server, { token: TOKEN }),
+      cwd: dir,
+      lines,
+      qr: () => {},
+      poll: () => Promise.resolve('consumed'),
+    });
+    const out = lines.join('\n');
+    // Must contain the URL — and it must NOT have //m/pair
+    const urlLine = lines.find(l => l.includes('/m/pair?code='));
+    assert.ok(urlLine, `Expected pair URL line, got: ${out}`);
+    assert.ok(
+      !urlLine.includes('//m/'),
+      `pair URL must not have double slash: ${urlLine}`,
+    );
+    // Must be well-formed
+    assert.ok(
+      urlLine.includes('https://host.example.com/m/pair?code=SLASHTEST'),
+      `Expected normalized URL, got: ${urlLine}`,
+    );
+  });
+});
