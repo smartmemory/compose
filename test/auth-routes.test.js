@@ -539,6 +539,48 @@ describe('Auth routes — broadcast on pair/complete', () => {
 // rotate-secret route (deviation: S01 omitted this; added in S03)
 // ---------------------------------------------------------------------------
 
+describe('Auth routes — pair_url composition (review fix #3)', () => {
+  test('pair/init composes pair_url from configured public_host; null without', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'auth-routes-pairurl-'));
+    const orig = process.env.COMPOSE_API_TOKEN;
+    process.env.COMPOSE_API_TOKEN = 'pairurl-test-token';
+    const store = createAuthStore(dir);
+    const app = express();
+    app.use(express.json());
+    attachAuthRoutes(app, {
+      store,
+      requireSensitive: (req, res, next) => next(),
+      getPublicHost: () => 'https://forge.example.com/',
+    });
+    const server = await listen(app);
+    try {
+      const r = await request(server, '/api/auth/pair/init', { method: 'POST', body: {} });
+      assert.equal(r.status, 200);
+      assert.equal(r.body.public_host, 'https://forge.example.com/');
+      assert.match(r.body.pair_url, /^https:\/\/forge\.example\.com\/m\/pair\?code=/);
+      assert.ok(r.body.pair_url.includes(r.body.code));
+
+      // Second app without getPublicHost → pair_url null
+      const app2 = express();
+      app2.use(express.json());
+      attachAuthRoutes(app2, { store, requireSensitive: (req, res, next) => next() });
+      const server2 = await listen(app2);
+      try {
+        const r2 = await request(server2, '/api/auth/pair/init', { method: 'POST', body: {} });
+        assert.equal(r2.status, 200);
+        assert.equal(r2.body.pair_url, null);
+      } finally {
+        server2.close();
+      }
+    } finally {
+      server.close();
+      rmSync(dir, { recursive: true, force: true });
+      if (orig === undefined) delete process.env.COMPOSE_API_TOKEN;
+      else process.env.COMPOSE_API_TOKEN = orig;
+    }
+  });
+});
+
 describe('Auth routes — rotate-secret', () => {
   let dir;
   let store;

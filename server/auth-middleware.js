@@ -168,7 +168,7 @@ export function requireSensitiveOrPaired(store) {
  * @param {{ store: object, allowlist: string[] }} opts
  * @returns {function}  Express middleware
  */
-export function createAuthGate({ store, allowlist = [] }) {
+export function createAuthGate({ store, allowlist = [], streamPaths = [] }) {
   const _exactPaths = new Set();
   const _prefixes = [];
 
@@ -212,13 +212,13 @@ export function createAuthGate({ store, allowlist = [] }) {
       return res.status(401).json({ error: 'Unauthorized', code: result.code });
     }
 
-    // 4. Query-param token for SSE GETs and WS-upgrade paths
-    const isSSE =
-      req.method === 'GET' &&
-      (req.get('Accept') || '').includes('text/event-stream');
-    const isSseProxyPath = req.path === '/api/agent/proxy/stream';
+    // 4. Query-param token — ONLY on the explicit stream-path allowlist.
+    // Never keyed on the Accept header: a spoofed `Accept: text/event-stream`
+    // must not let arbitrary GETs authenticate via URL (credentials would
+    // leak into URLs/logs that the header-only contract keeps out of band).
+    const isStreamPath = req.method === 'GET' && streamPaths.includes(path);
 
-    if (isSSE || isSseProxyPath) {
+    if (isStreamPath) {
       const queryToken = _extractQueryToken(req);
       if (queryToken) {
         // Accept sensitive token or JWT

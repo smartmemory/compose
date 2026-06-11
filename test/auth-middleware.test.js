@@ -318,7 +318,7 @@ describe('createAuthGate', () => {
     '/m-sw.js',
   ];
   let gate;
-  before(() => { gate = createAuthGate({ store: _store, allowlist }); });
+  before(() => { gate = createAuthGate({ store: _store, allowlist, streamPaths: ['/api/agent/proxy/stream', '/api/design/stream'] }); });
 
   function run(req) {
     const res = makeRes();
@@ -392,7 +392,22 @@ describe('createAuthGate', () => {
     }
   });
 
-  test('?token= query param accepted for GET with Accept: text/event-stream', async () => {
+  test('?token= rejected on non-stream path even with spoofed Accept: text/event-stream', async () => {
+    const jwt2 = makeJwt({ id: 'dev_spoof', name: 'Spoof' });
+    const req2 = makeReq({
+      method: 'GET',
+      path: '/api/agents/tree',
+      url: `/api/agents/tree?token=${jwt2}`,
+      query: { token: jwt2 },
+      headers: { accept: 'text/event-stream' },
+    });
+    const res2 = makeRes();
+    const out = await captureMiddleware(gate, req2, res2);
+    assert.notEqual(out, 'next');
+    assert.equal(res2._status, 401);
+  });
+
+  test('?token= query param accepted on allowlisted stream path', async () => {
     const jwt = makeJwt({ id: 'dev_sse', name: 'SSE' });
     const req = makeReq({
       path: '/api/agent/proxy/stream',

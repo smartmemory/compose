@@ -28,7 +28,7 @@ import { createRateLimiter } from './auth-middleware.js';
  *   - broadcast:       optional function(msg) for WS broadcast (e.g. vision-server's broadcastMessage)
  *   - requireSensitive: middleware that enforces COMPOSE_API_TOKEN (requireSensitiveToken or composite)
  */
-export function attachAuthRoutes(app, { store, broadcast = null, requireSensitive }) {
+export function attachAuthRoutes(app, { store, broadcast = null, requireSensitive, getPublicHost = () => null }) {
   const publicLimiter = createRateLimiter({ windowMs: 60_000, max: 10 });
 
   // -------------------------------------------------------------------------
@@ -36,15 +36,21 @@ export function attachAuthRoutes(app, { store, broadcast = null, requireSensitiv
   // -------------------------------------------------------------------------
   /**
    * Initiate a pairing session.
-   * Returns { code, expires_at, pair_url: null }.
-   * pair_url composition is the CLI/cockpit's responsibility — they know public_host.
+   * Returns { code, expires_at, pair_url, public_host } — pair_url is composed
+   * server-side when a public_host is configured (.compose/compose.json
+   * remote.public_host, persisted by `compose remote pair --public-host=`),
+   * else null and the caller falls back/warns.
    *
    * BP-gate finding #2: only CLI/cockpit poll status; both hold the sensitive token.
    * pair/init is NOT allowlisted.
    */
   app.post('/api/auth/pair/init', requireSensitive, (req, res) => {
     const { code, expires_at } = store.createPairingCode();
-    res.json({ code, expires_at, pair_url: null });
+    const publicHost = getPublicHost();
+    const pair_url = publicHost
+      ? `${publicHost.replace(/\/$/, '')}/m/pair?code=${encodeURIComponent(code)}`
+      : null;
+    res.json({ code, expires_at, pair_url, public_host: publicHost });
   });
 
   // -------------------------------------------------------------------------

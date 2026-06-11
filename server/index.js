@@ -3,7 +3,7 @@ import cors from 'cors';
 import http from 'node:http';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, statSync, readFileSync } from 'node:fs';
 import { FileWatcherServer } from './file-watcher.js';
 import { VisionStore } from './vision-store.js';
 import { VisionServer } from './vision-server.js';
@@ -100,6 +100,12 @@ if (remoteMode) {
       '/api/auth/pair/complete',   // pairing bootstrap (code is the auth)
       '/api/auth/refresh',         // token refresh (refresh token is the auth)
     ],
+    // Query-token (?token=) accepted ONLY on these exact stream paths —
+    // EventSource cannot send headers. Everything else is header-auth.
+    streamPaths: [
+      '/api/agent/proxy/stream',
+      '/api/design/stream',
+    ],
   }));
 }
 
@@ -111,6 +117,15 @@ if (remoteMode) {
 // ---------------------------------------------------------------------------
 attachAuthRoutes(app, {
   store: _authStore,
+  // Configured public host (compose remote pair --public-host=...) so the
+  // cockpit modal can compose the real pair URL. Read per-request: the CLI
+  // may persist it while the server is running.
+  getPublicHost: () => {
+    try {
+      const cfg = JSON.parse(readFileSync(path.join(getDataDir(), '..', 'compose.json'), 'utf-8'));
+      return cfg?.remote?.public_host || null;
+    } catch { return null; }
+  },
   broadcast: (msg) => {
     if (typeof visionServer?.broadcastMessage === 'function') {
       visionServer.broadcastMessage(msg);
@@ -130,7 +145,9 @@ attachWorkspaceRoutes(app);
 attachGraphLayoutRoutes(app);
 app.use(createWorkspaceMiddleware());
 
-app.get('/api/health', (_req, res) => res.json({ ok: true }));
+// `remote` lets clients (desktop cockpit served through a tunnel) detect
+// remote mode at boot and switch their WS/SSE URLs to token-carrying form.
+app.get('/api/health', (_req, res) => res.json({ ok: true, remote: remoteMode }));
 app.get('/api/status', (_req, res) => res.json({ session: 2, phase: '0.4-brainstorm', upSince: new Date().toISOString() }));
 
 // Project info + switching

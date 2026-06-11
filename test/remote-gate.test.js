@@ -190,6 +190,7 @@ describe('Gate ON (remote mode)', () => {
         '/api/auth/pair/complete',
         '/api/auth/refresh',
       ],
+      streamPaths: ['/api/agent/proxy/stream', '/api/design/stream'],
     }));
     app.get('/api/status', (req, res) => res.json({ ok: true, device: req.device || null }));
     app.get('/api/health', (_req, res) => res.json({ ok: true }));

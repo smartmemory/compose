@@ -109,6 +109,7 @@ export default function PairDeviceModal({ open, onClose, publicHost }) {
   const [pairUrl, setPairUrl] = useState('');
   const [expiresAt, setExpiresAt] = useState(null);
   const [countdown, setCountdown] = useState('');
+  const [resolvedPublicHost, setResolvedPublicHost] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [pairedDevice, setPairedDevice] = useState(null); // success state
   const [devices, setDevices] = useState([]);
@@ -186,8 +187,12 @@ export default function PairDeviceModal({ open, onClose, publicHost }) {
       }
 
       const data = await res.json();
-      const host = publicHost || (typeof window !== 'undefined' ? window.location.origin : '');
-      const url = `${host}/m/pair?code=${data.code}`;
+      // Prefer the server-composed pair_url (configured remote.public_host) —
+      // the prop and window.origin are fallbacks for unconfigured setups.
+      const host = data.public_host || publicHost
+        || (typeof window !== 'undefined' ? window.location.origin : '');
+      const url = data.pair_url || `${host}/m/pair?code=${data.code}`;
+      setResolvedPublicHost(data.public_host || publicHost || null);
 
       setPairCode(data.code);
       setPairUrl(url);
@@ -272,7 +277,7 @@ export default function PairDeviceModal({ open, onClose, publicHost }) {
 
   if (!open) return null;
 
-  const noPublicHost = !publicHost;
+  const noPublicHost = !resolvedPublicHost;
 
   return (
     <div
