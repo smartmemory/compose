@@ -10,12 +10,28 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { withComposeToken } from '../../lib/compose-api.js';
+import { wsFetch, getAuthMode } from '../../lib/wsFetch.js';
 
 import { agentServerUrl } from '../../lib/agentServer.js';
 const POLL_MS = 5000;
 
+// COMP-MOBILE-REMOTE S05: single mode check. In paired mode the agent-server
+// is reached through the 4001 proxy (relative paths, wsFetch auth); in legacy
+// mode the direct :4002 URLs keep working (localhost).
+const PROXY_PATHS = {
+  '/api/agent/session': '/api/agent/proxy/session',
+  '/api/agent/message': '/api/agent/proxy/message',
+  '/api/agent/interrupt': '/api/agent/proxy/interrupt',
+  '/api/agent/session/status': '/api/agent/proxy/session/status',
+};
+
+function resolveAgentUrl(path) {
+  if (getAuthMode() === 'mobile-paired') return PROXY_PATHS[path] || path;
+  return agentServerUrl(path);
+}
+
 async function postSensitive(path, body) {
-  const res = await fetch(agentServerUrl(path), {
+  const res = await wsFetch(resolveAgentUrl(path), {
     method: 'POST',
     headers: withComposeToken({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body || {}),
@@ -39,7 +55,7 @@ export function useInteractiveSession() {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(agentServerUrl('/api/agent/session/status'));
+      const res = await wsFetch(resolveAgentUrl('/api/agent/session/status'));
       const data = await res.json().catch(() => ({}));
       if (!aliveRef.current) return;
       setActive(!!data.active);

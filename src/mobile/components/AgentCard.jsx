@@ -2,7 +2,6 @@ import React, { useCallback, useState } from 'react';
 import { wsFetch } from '../../lib/wsFetch.js';
 import { withComposeToken } from '../../lib/compose-api.js';
 
-import { agentServerUrl } from '../../lib/agentServer.js';
 
 function formatRelative(ts) {
   if (!ts) return '';
@@ -31,7 +30,7 @@ export default function AgentCard({ agent, onOpen, onAfterKill }) {
     setKilling(true);
     setError(null);
     try {
-      const res = await wsFetch(agentServerUrl(`/api/agent/${encodeURIComponent(id)}/stop`), {
+      const res = await wsFetch(`/api/agent/${encodeURIComponent(id)}/stop`, {
         method: 'POST',
         headers: withComposeToken({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({}),

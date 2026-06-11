@@ -5,6 +5,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { wsFetch } from '../../lib/wsFetch.js';
+import { createReconnectingWS } from '../../lib/wsReconnect.js';
+import { visionWsUrl } from '../../lib/wsUrl.js';
 
 async function apiJSON(url, opts = {}) {
   const res = await wsFetch(url, opts);
@@ -45,20 +47,9 @@ export function usePendingGates() {
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof WebSocket === 'undefined') return undefined;
-    let ws = null;
-    let stopped = false;
-    let reconnectTimer = null;
-
-    function connect() {
-      if (stopped) return;
-      try {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        ws = new WebSocket(`${protocol}//${window.location.host}/ws/vision`);
-      } catch {
-        scheduleReconnect();
-        return;
-      }
-      ws.onmessage = (ev) => {
+    const handle = createReconnectingWS({
+      url: () => visionWsUrl(),
+      onMessage: (ev) => {
         try {
           const msg = JSON.parse(ev.data);
           if (!msg || !msg.type) return;
@@ -66,21 +57,10 @@ export function usePendingGates() {
             refetch();
           }
         } catch { /* */ }
-      };
-      ws.onclose = () => { if (!stopped) scheduleReconnect(); };
-      ws.onerror = () => { try { ws.close(); } catch { /* */ } };
-    }
-
-    function scheduleReconnect() {
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      reconnectTimer = setTimeout(connect, 3000);
-    }
-
-    connect();
+      },
+    });
     return () => {
-      stopped = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      try { if (ws) { ws.onclose = null; ws.close(); } } catch { /* */ }
+      try { handle.close(); } catch { /* */ }
     };
   }, [refetch]);
 

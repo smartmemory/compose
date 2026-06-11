@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { handleVisionMessage } from './visionMessageHandler.js';
 import { wsFetch } from '../../lib/wsFetch.js';
 import { createReconnectingWS } from '../../lib/wsReconnect.js';
+import { visionWsUrl } from '../../lib/wsUrl.js';
 
 /**
  * useVisionStore — Zustand singleton store.
@@ -190,10 +191,8 @@ export const useVisionStore = create((set, get) => {
   function connect() {
     if (refs.disposed) return;
     if (refs.ws) return; // already constructed; reconnect helper manages lifecycle
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${protocol}//${window.location.host}/ws/vision`;
     refs.ws = createReconnectingWS({
-      url,
+      url: () => visionWsUrl(),
       onOpen: handleOpen,
       onMessage: handleMessage,
       onClose: () => set({ connected: false }),

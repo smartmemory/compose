@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { wsFetch } from '../../lib/wsFetch.js';
+import { visionWsUrl } from '../../lib/wsUrl.js';
 
 // ---------------------------------------------------------------------------
 // API helpers
@@ -38,8 +39,7 @@ function attachWSListener(onMessage) {
   // — but that requires patching it. Instead, open our own WS and close on hot reload.
   if (_wsListener) return; // already attached
 
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${protocol}//${window.location.host}/ws/vision`);
+  const ws = new WebSocket(visionWsUrl());
   _wsListener = ws;
 
   ws.onmessage = (event) => {
