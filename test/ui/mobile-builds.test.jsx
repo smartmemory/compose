@@ -381,6 +381,36 @@ describe('<BuildDetailView> Steps/Log toggle', () => {
 // ── S02: BuildHistoryList tests ───────────────────────────────────────────
 
 describe('<BuildHistoryList>', () => {
+  it('renders per-step results in expanded row when steps[] present (COMP-MOBILE-1-1)', () => {
+    const builds = [{
+      flowId: 'f-steps', featureCode: 'FEAT-S', status: 'failed',
+      completedAt: new Date().toISOString(), stepCount: 2, failureReason: 'review red',
+      steps: [
+        { id: 'execute', status: 'done', agent: 'claude', durationMs: 1000 },
+        { id: 'review', status: 'failed', agent: 'codex', durationMs: 500, summary: 'tests red' },
+      ],
+    }];
+    render(<BuildHistoryList builds={builds} loading={false} error={null} />);
+    fireEvent.click(screen.getByTestId('mobile-build-history-0'));
+    const steps = screen.getByTestId('mobile-build-history-steps-0');
+    expect(steps.textContent).toContain('execute');
+    expect(steps.textContent).toContain('review');
+    expect(steps.textContent).toContain('tests red');
+    const failedRow = steps.querySelector('[data-status="failed"]');
+    expect(failedRow).toBeTruthy();
+    expect(failedRow.className).toContain('is-failed');
+  });
+
+  it('omits the steps block for legacy records without steps[]', () => {
+    const builds = [{
+      flowId: 'f-legacy', featureCode: 'FEAT-L', status: 'complete',
+      completedAt: new Date().toISOString(), stepCount: 3,
+    }];
+    render(<BuildHistoryList builds={builds} loading={false} error={null} />);
+    fireEvent.click(screen.getByTestId('mobile-build-history-0'));
+    expect(screen.queryByTestId('mobile-build-history-steps-0')).toBeNull();
+  });
+
   it('renders empty state when no builds', () => {
     render(<BuildHistoryList builds={[]} loading={false} error={null} />);
     const container = screen.getByTestId('mobile-build-history');
@@ -477,6 +507,40 @@ describe('useBuildHistory hook', () => {
       </div>
     );
   }
+
+  it('does NOT fire corrective alert when the rebroadcast already flipped active to failed (COMP-MOBILE-1-1)', async () => {
+    const notifications = [];
+    const onNotify = (e) => notifications.push(e.detail);
+    window.addEventListener('compose:notify', onNotify);
+    try {
+      historyBuilds = [];
+      const { rerender } = render(<HookHarness active={{ flowId: 'f-hg', featureCode: 'F-HG', status: 'running' }} />);
+      await waitFor(() => screen.getByTestId('loading').textContent === 'done');
+
+      // First terminal observation: complete (pre-health-gate broadcast)
+      historyBuilds = [];
+      await act(async () => {
+        rerender(<HookHarness active={{ flowId: 'f-hg', featureCode: 'F-HG', status: 'complete' }} />);
+      });
+
+      // Backend rebroadcast: same flowId now failed (health-gate downgrade)
+      await act(async () => {
+        rerender(<HookHarness active={{ flowId: 'f-hg', featureCode: 'F-HG', status: 'failed' }} />);
+      });
+
+      // History row lands with failed — observed status agrees, so no corrective alert
+      historyBuilds = [{ flowId: 'f-hg', featureCode: 'F-HG', status: 'failed' }];
+      await act(async () => {
+        rerender(<HookHarness active={{ flowId: 'f-hg', featureCode: 'F-HG', status: 'failed' }} limit={21} />);
+      });
+      await waitFor(() => expect(screen.getByTestId('count').textContent).toBe('1'));
+
+      const corrective = notifications.filter(n => String(n?.message || '').includes('post-checks'));
+      expect(corrective.length).toBe(0);
+    } finally {
+      window.removeEventListener('compose:notify', onNotify);
+    }
+  });
 
   it('fetches on mount', async () => {
     historyBuilds = [

@@ -35,8 +35,8 @@ MODIFIED: MobileApp.jsx (3-hook lift to shell, badges, alert bar), BottomNav.jsx
 ## Open threads
 
 - [ ] COMP-MOBILE-REMOTE is now the gating item for the end-to-end phone story (servers bind 127.0.0.1; PWA unreachable without a tunnel)
-- [ ] Backend follow-up candidate: re-broadcast buildState after the health gate downgrades a build (mobile currently compensates with a corrective alert from history)
-- [ ] Backend follow-up candidate: include per-step data in build-history records to enable historical step breakdown on mobile (scope-cut from D3)
+- [x] Backend follow-up candidate: re-broadcast buildState after the health gate downgrades a build — DONE same day as COMP-MOBILE-1-1 (persistHealthGateDowngrade, identity-guarded)
+- [x] Backend follow-up candidate: include per-step data in build-history records — DONE same day as COMP-MOBILE-1-1 (projectHistorySteps; mobile history rows render steps)
 - [ ] Desktop NotificationBar still has no WS→notify mapping for gate/build events; mobile's useMonitorEvents pattern could be ported back
 - [ ] No Playwright E2E exists for mobile — Phase 7's E2E step degraded to vitest integration + build smoke
 

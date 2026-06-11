@@ -2,6 +2,10 @@
 
 ## 2026-06-11
 
+### Fixed — COMP-MOBILE-1-1: health-gate downgrades now reach buildState; history records carry per-step results
+
+Backend follow-ups from COMP-MOBILE-1. (1) When the COMP-HEALTH gate downgrades a finished build to failed, the downgrade is now re-persisted to `active-build.json` (new `persistHealthGateDowngrade`, identity-guarded by flowId/featureCode so a concurrent build's last-writer-wins state is never clobbered), which makes the server's file watcher re-broadcast `buildState` with the real outcome; the health reason also threads into the history record's `failureReason` instead of a generic "Build failed". (2) `build-history.jsonl` records gain compact per-step results (`projectHistorySteps`; the outcome→status mapping is now shared with `syncStepHistory` via `stepOutcomeToStatus`; summaries kept only for failed steps), enabling which-step-failed on historical builds — mobile `BuildHistoryList` renders them in expanded rows. Mobile's `useBuildHistory` tracks rebroadcast status changes per flowId so the corrective "post-checks" alert no longer false-fires now that the live state tells the truth.
+
 ### Added — COMP-MOBILE-1: mobile monitoring-loop completeness
 
 The mobile PWA can now complete its core monitoring journeys end-to-end (alerted → inspect → act), closing the P1 cluster from the 2026-06-10 mobile parity sweep. UI-only; every endpoint already existed.

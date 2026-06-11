@@ -1,0 +1,11 @@
+{
+  "code": "COMP-MOBILE-1-1",
+  "description": "Backend follow-ups from COMP-MOBILE-1: (1) COMP-HEALTH gate downgrade now re-persists active-build.json (identity-guarded by flowId/featureCode against last-writer-wins clobber) so the watcher re-broadcasts buildState with the real failed outcome; healthDowngradeReason threads into the history record's failureReason. (2) build-history.jsonl records gain compact per-step results (projectHistorySteps; shared stepOutcomeToStatus dedupes syncStepHistory's mapping; summary kept only for failed steps); mobile BuildHistoryList renders steps in expanded rows; useBuildHistory tracks rebroadcast status changes so the corrective post-checks alert no longer false-fires.",
+  "status": "IN_PROGRESS",
+  "phase": "COMP-COCKPIT Wave 2: UX Journey Gaps (2026-06-10 sweep)",
+  "created": "2026-06-11",
+  "updated": "2026-06-11",
+  "complexity": "S",
+  "position": 6,
+  "parent": "COMP-MOBILE-1"
+}
