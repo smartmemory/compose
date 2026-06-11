@@ -508,3 +508,147 @@ describe('listDevices', () => {
     assert.equal(devices[0].name, 'ListTest');
   });
 });
+
+// ---------------------------------------------------------------------------
+// COMP-MOBILE-REMOTE coverage sweep additions
+// ---------------------------------------------------------------------------
+
+// ── JWT skew boundary ─────────────────────────────────────────────────────────
+
+describe('JWT skew boundary (±30s)', () => {
+  let dir;
+  let store;
+
+  before(() => {
+    dir = freshDir();
+    store = makeStore(dir);
+  });
+
+  after(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  /**
+   * verifyAccessToken: now > exp + 30 → TokenExpired
+   *   - At now == exp + 30: still valid (boundary inclusive)
+   *   - At now == exp + 31: expired
+   */
+  test('JWT exactly at exp+30s boundary is still valid', () => {
+    const device = { id: 'dev_skew1', name: 'Skew Test' };
+    const jwt = store.signAccessToken(device);
+    // Parse the exp from the JWT payload
+    const payloadB64 = jwt.split('.')[1];
+    const claims = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    const exp = claims.exp;
+    // Advance Date.now to exactly exp+30s — boundary must still pass
+    const realNow = Date.now;
+    Date.now = () => (exp + 30) * 1000;
+    try {
+      const result = store.verifyAccessToken(jwt);
+      assert.equal(result.ok, true, 'exp+30s boundary should still be valid');
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  test('JWT at exp+31s boundary is expired', () => {
+    const device = { id: 'dev_skew2', name: 'Skew Expired' };
+    const jwt = store.signAccessToken(device);
+    const payloadB64 = jwt.split('.')[1];
+    const claims = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    const exp = claims.exp;
+    // 1 second past the skew window
+    const realNow = Date.now;
+    Date.now = () => (exp + 31) * 1000;
+    try {
+      const result = store.verifyAccessToken(jwt);
+      assert.equal(result.ok, false, 'exp+31s should be expired');
+      assert.equal(result.code, 'TokenExpired');
+    } finally {
+      Date.now = realNow;
+    }
+  });
+});
+
+// ── Pairing code sweep under many expired codes ───────────────────────────────
+
+describe('Pairing code sweep with many expired codes', () => {
+  let dir;
+  let store;
+
+  before(() => {
+    dir = freshDir();
+    store = makeStore(dir);
+  });
+
+  after(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  test('consuming a fresh code still works after many prior codes expire', () => {
+    // Create 20 codes, let them all expire via Date.now mock
+    const codes = [];
+    for (let i = 0; i < 20; i++) {
+      codes.push(store.createPairingCode().code);
+    }
+
+    // Advance time past TTL to expire all of them
+    const realNow = Date.now;
+    Date.now = () => realNow() + 10 * 60 * 1000; // +10 min
+    try {
+      for (const c of codes) {
+        assert.equal(store.getPairingCodeStatus(c), 'expired',
+          `Code ${c} should be expired`);
+      }
+    } finally {
+      Date.now = realNow;
+    }
+
+    // Now create a fresh code (back to real time) and consume it — must succeed
+    const { code: freshCode } = store.createPairingCode();
+    const r = store.consumePairingCode(freshCode, { name: 'AfterSweep' });
+    assert.ok(!r.error, `Fresh code should be consumable after sweep: ${r.error}`);
+    assert.ok(typeof r.access_token === 'string');
+  });
+
+  test('getPairingCodeStatus for unknown code returns "expired" (no crash)', () => {
+    // Many calls for unknown codes — must not throw or accumulate state
+    for (let i = 0; i < 50; i++) {
+      assert.equal(store.getPairingCodeStatus(`UNKNOWN${i}`), 'expired');
+    }
+  });
+});
+
+// ── refresh with nonexistent device id prefix ─────────────────────────────────
+
+describe('refresh token with nonexistent device id prefix', () => {
+  let dir;
+  let store;
+
+  before(() => {
+    dir = freshDir();
+    store = makeStore(dir);
+  });
+
+  after(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  test('refresh token whose device_id prefix matches no device → generic TokenInvalid, no crash', () => {
+    // Craft a refresh token with a nonexistent device id prefix (dev_XXXXX.payload)
+    const fakeToken = 'dev_NONEXIST.aaaabbbbccccddddeeeeffffgggghhhhiiiijjjj';
+    const r = store.refresh(fakeToken);
+    assert.equal(r.error, 'TokenInvalid', 'Should return generic TokenInvalid, not crash');
+  });
+
+  test('refresh token with malformed prefix (no dot) → TokenInvalid', () => {
+    const r = store.refresh('devnoprefix');
+    assert.equal(r.error, 'TokenInvalid');
+  });
+
+  test('refresh with prefix matching existing device but wrong hash → TokenInvalid', () => {
+    const { code } = store.createPairingCode();
+    const { device, refresh_token: rt } = store.consumePairingCode(code, { name: 'HashCheck' });
+    // Build a token with the right device prefix but wrong hash
+    const wrongToken = `${device.id}.wronghashvalue`;
+    const r = store.refresh(wrongToken);
+    assert.equal(r.error, 'TokenInvalid', 'Wrong hash for existing device should be TokenInvalid');
+    // Original token is still usable
+    const r2 = store.refresh(rt);
+    assert.ok(!r2.error, `Original token should still work: ${r2.error}`);
+  });
+});
