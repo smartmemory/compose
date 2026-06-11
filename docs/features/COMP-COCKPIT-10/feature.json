@@ -1,11 +1,29 @@
 {
   "code": "COMP-COCKPIT-10",
   "description": "Orphaned server routes — wire or remove. Three capabilities are built server-side with zero callers anywhere (verified against src/, bin/, lib/): GET /api/vision/blocked (vision-routes.js:1080 — blocked-items feed that would naturally power the attention queue), GET/POST /api/export/roadmap-graph[/save] (graph-export.js:322,332 — graph export with no Export button, not called by CLI either), POST /api/plan/parse (vision-routes.js:1123 — plan-text parsing with no paste-a-plan dialog). Also audit POST /api/vision/ui (telemetry, purpose unclear). For each: surface it in the UI or delete the dead route. P2 from the 2026-06-10 wiring sweep.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "COMP-COCKPIT Wave 2: UX Journey Gaps (2026-06-10 sweep)",
   "created": "2026-06-09",
-  "updated": "2026-06-09",
+  "updated": "2026-06-11",
   "complexity": "M",
   "position": 4,
-  "parent": "COMP-COCKPIT"
+  "parent": "COMP-COCKPIT",
+  "completions": [
+    {
+      "completion_id": "COMP-COCKPIT-10:969106c971d2de977f60523a3cae2ff236625cff",
+      "feature_code": "COMP-COCKPIT-10",
+      "commit_sha": "969106c971d2de977f60523a3cae2ff236625cff",
+      "commit_sha_short": "969106c9",
+      "tests_pass": true,
+      "files_changed": [
+        "server/vision-routes.js",
+        "src/components/vision/GraphView.jsx",
+        "test/graph-export-routes.test.js"
+      ],
+      "recorded_at": "2026-06-11T02:22:53.187Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Deleted /api/vision/blocked, /api/vision/ui, /api/plan/parse (zero callers); wired GraphView export; save route token-gated in follow-up 32e90d6."
+    }
+  ],
+  "commit_sha": "969106c971d2de977f60523a3cae2ff236625cff"
 }

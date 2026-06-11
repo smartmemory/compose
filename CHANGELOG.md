@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-06-11
+
+### Added — COMP-COCKPIT Wave 2: UX journey gaps (COCKPIT-7/8/9/10)
+
+- **COMP-COCKPIT-7 — failed-build retry.** Past Builds records with status failed/aborted get a Retry button dispatching the recorded `featureCode`+`mode` through a new shared `startBuild()` helper (also adopted by StartBuildPopover); the per-feature 409 surfaces as a warning toast.
+- **COMP-COCKPIT-8 — cross-view entity links.** New `EntityLink` + `NavigationContext` primitive: feature codes, gate ids, and item refs become navigable links. `openGate()` deep-links clear both gate-hiding filters (phase, feature-focus) and scroll-highlight the target in GateView; unresolvable targets degrade to plain text via `canNavigate`. Wired: ItemDetailPanel pending gates, ContextPanel summary gates, OpenLoopsPanel parent feature, Dashboard session codes; the attention queue's "+N more" expands in place (its old target view never existed).
+- **COMP-COCKPIT-9 — journal & changelog surface.** `GET/POST /api/journal` and `GET /api/changelog` as thin adapters over the existing writer libs (numeric limit clamp, `?feature` key normalization, token-gated write with slug-collision retry on the writer's `idempotent` signal, `INVALID_INPUT`→400), plus a JournalView tab: source toggle, feature filter, sections through MarkdownViewer, journal-only write form carrying `feature_code`, stale-fetch race guards.
+
+### Changed — COMP-COCKPIT-10: orphaned routes wire-or-remove
+
+- Deleted `GET /api/vision/blocked`, `POST /api/vision/ui`, `POST /api/plan/parse` (zero callers anywhere; blocked-state is already computed client-side).
+- Wired roadmap-graph export into the GraphView toolbar (open HTML / save to `docs/roadmap-graph.html`); the save route now requires the sensitive token (it writes to the project filesystem).
+
 ## 2026-06-10
 
 ### Changed — pre-push hook: docs-only pushes skip the full-suite test gate

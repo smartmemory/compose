@@ -1,11 +1,30 @@
 {
   "code": "COMP-COCKPIT-7",
   "description": "Failed-build retry from Past Builds. PastBuildsView (COMP-COCKPIT-3) shows failed/aborted builds with failure reason but offers no retry/rerun control (verified: no retry affordance in PastBuildsView.jsx) — the investigate-and-retry journey starts in the UI and dead-ends to the terminal. Add a Retry button on failed/aborted build records reusing the existing POST /api/build/start dispatch with the recorded feature code. P1: forces-terminal. From the 2026-06-10 UX journey sweep.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "COMP-COCKPIT Wave 2: UX Journey Gaps (2026-06-10 sweep)",
   "created": "2026-06-09",
-  "updated": "2026-06-09",
+  "updated": "2026-06-11",
   "complexity": "S",
   "position": 1,
-  "parent": "COMP-COCKPIT"
+  "parent": "COMP-COCKPIT",
+  "completions": [
+    {
+      "completion_id": "COMP-COCKPIT-7:969106c971d2de977f60523a3cae2ff236625cff",
+      "feature_code": "COMP-COCKPIT-7",
+      "commit_sha": "969106c971d2de977f60523a3cae2ff236625cff",
+      "commit_sha_short": "969106c9",
+      "tests_pass": true,
+      "files_changed": [
+        "src/lib/startBuild.js",
+        "src/components/vision/StartBuildPopover.jsx",
+        "src/components/vision/PastBuildsView.jsx",
+        "test/ui/past-builds-view.test.jsx"
+      ],
+      "recorded_at": "2026-06-11T02:22:43.428Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Retry button on failed/aborted past builds via shared startBuild() helper; full suite + E2E smoke green; Codex review clean."
+    }
+  ],
+  "commit_sha": "969106c971d2de977f60523a3cae2ff236625cff"
 }
