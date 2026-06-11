@@ -1,7 +1,7 @@
 {
   "code": "COMP-MOBILE-REMOTE",
   "description": "Remote-reachable transport for COMP-MOBILE: 0.0.0.0 binding (opt-in), short-lived JWT access tokens with refresh, QR + URL + cockpit pairing modal, BYO tunnel (Tailscale/Cloudflare/ngrok). Server-side auth and pairing UI; tunnel layer left to user.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "created": "2026-05-10",
   "updated": "2026-06-11",
   "group": "COMP-MOBILE",
@@ -14,5 +14,33 @@
     "test_framework": "vitest"
   },
   "phase": "Features",
-  "position": 293
+  "position": 293,
+  "completions": [
+    {
+      "completion_id": "COMP-MOBILE-REMOTE:53d9e883e68ab349502cbae2349d791d52bddacd",
+      "feature_code": "COMP-MOBILE-REMOTE",
+      "commit_sha": "53d9e883e68ab349502cbae2349d791d52bddacd",
+      "commit_sha_short": "53d9e883",
+      "tests_pass": true,
+      "files_changed": [
+        "server/auth-store.js",
+        "server/auth-middleware.js",
+        "server/auth-routes.js",
+        "server/index.js",
+        "server/remote-utils.js",
+        "lib/cli-remote.js",
+        "bin/compose.js",
+        "src/lib/wsUrl.js",
+        "src/lib/wsFetch.js",
+        "src/lib/compose-api.js",
+        "src/components/cockpit/PairDeviceModal.jsx",
+        "src/mobile/pages/PairPage.jsx",
+        "src/mobile/MobileApp.jsx"
+      ],
+      "recorded_at": "2026-06-11T14:04:17.250Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Shipped across d1cd5bd/9d1f0ea/8ee0a46/4cbb0b4/54e39f2/6da2066/83d1386/53d9e88; gates: design 7r/10f (loopback-trust blocker), blueprint 3r/5f, impl 2r REVIEW CLEAN, sweep +39; node 3677, vitest 421; human phone-verification checklist outstanding"
+    }
+  ],
+  "commit_sha": "53d9e883e68ab349502cbae2349d791d52bddacd"
 }
