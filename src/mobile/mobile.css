@@ -1180,3 +1180,277 @@
   display: flex;
   gap: 8px;
 }
+
+/* ── S02: Build steps list ───────────────────────────────────────────────── */
+
+.m-build-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.m-build-steps-phase {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.m-build-steps-phase-header {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--m-text-dim);
+  font-weight: 600;
+  padding: 4px 0 6px;
+  border-bottom: 1px solid var(--m-border);
+  margin-bottom: 4px;
+}
+
+.m-build-steps-phase-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Step row */
+.m-step-row {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  min-height: 36px;
+}
+
+.m-step-row--active {
+  background: rgba(124, 140, 255, 0.07);
+  border-radius: 6px;
+  border-bottom-color: transparent;
+}
+
+.m-step-row--failed {
+  background: rgba(255, 107, 107, 0.07);
+  border-radius: 6px;
+  border-left: 3px solid var(--m-danger);
+  padding-left: 8px;
+  border-bottom-color: transparent;
+}
+
+.m-step-glyph {
+  flex: 0 0 auto;
+  width: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--m-text-dim);
+  text-align: center;
+}
+
+/* Active step pulse animation */
+.m-step-glyph--pulse {
+  color: var(--m-accent);
+  animation: m-step-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes m-step-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.m-step-name {
+  flex: 1 1 auto;
+  font-size: 13px;
+  color: var(--m-text);
+  line-height: 1.5;
+}
+
+.m-step-row--active .m-step-name {
+  color: var(--m-accent);
+  font-weight: 500;
+}
+
+.m-step-row--failed .m-step-name {
+  color: var(--m-danger);
+  font-weight: 500;
+}
+
+.m-step-agent-chip {
+  flex: 0 0 auto;
+  background: var(--m-surface-2);
+  border: 1px solid var(--m-border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  color: var(--m-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.m-step-summary {
+  flex: 0 0 100%;
+  font-size: 12px;
+  color: var(--m-danger);
+  padding-left: 24px;
+  line-height: 1.35;
+  margin-top: 2px;
+}
+
+/* Collapsed done-run row */
+.m-step-collapsed-row {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 4px;
+  cursor: pointer;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+
+.m-step-collapsed-row:hover,
+.m-step-collapsed-row:focus {
+  background: var(--m-surface-2);
+  outline: none;
+}
+
+.m-step-collapsed-label {
+  font-size: 12px;
+  color: var(--m-text-dim);
+  padding: 4px 4px;
+  font-style: italic;
+}
+
+/* ── S02: Build detail Steps/Log toggle tabs ──────────────────────────────── */
+
+.m-build-detail-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--m-border);
+  background: var(--m-surface);
+}
+
+.m-build-detail-tab {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--m-text-dim);
+  padding: 10px 20px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+
+.m-build-detail-tab.is-active,
+.m-build-detail-tab[aria-pressed="true"] {
+  color: var(--m-accent);
+  border-bottom-color: var(--m-accent);
+}
+
+/* ── S02: Build history list ──────────────────────────────────────────────── */
+
+.m-build-history {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--m-surface);
+  border: 1px solid var(--m-border);
+  border-radius: var(--m-radius);
+  overflow: hidden;
+}
+
+.m-build-history-row {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--m-border);
+  cursor: pointer;
+  min-height: var(--m-touch);
+}
+
+.m-build-history-row:last-child {
+  border-bottom: 0;
+}
+
+.m-build-history-row:hover,
+.m-build-history-row:focus {
+  background: var(--m-surface-2);
+  outline: none;
+}
+
+.m-build-history-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.m-build-history-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m-text);
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m-build-history-rel {
+  font-size: 11px;
+  color: var(--m-text-dim);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.m-build-history-reason-trunc {
+  flex: 0 0 100%;
+  font-size: 12px;
+  color: var(--m-danger);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m-build-history-detail {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--m-border);
+}
+
+.m-build-history-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.m-build-history-field--block {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.m-build-history-field-label {
+  flex: 0 0 80px;
+  color: var(--m-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-size: 10px;
+  padding-top: 1px;
+}
+
+.m-build-history-field-value {
+  flex: 1 1 auto;
+  color: var(--m-text);
+  word-break: break-word;
+}
+
+.m-build-history-failure {
+  color: var(--m-danger);
+  white-space: pre-wrap;
+}
