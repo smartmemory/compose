@@ -167,4 +167,23 @@ export function attachAuthRoutes(app, { store, broadcast = null, requireSensitiv
     }
     res.json({ ok: true });
   });
+
+  // -------------------------------------------------------------------------
+  // POST /api/auth/rotate-secret
+  // -------------------------------------------------------------------------
+  /**
+   * Rotate the JWT signing secret.
+   * Invalidates ALL outstanding access tokens immediately.
+   * Device records and refresh tokens are preserved (but re-paired access
+   * tokens must be re-issued under the new secret — clients will get 401s
+   * until they re-pair or refresh, which will now issue tokens signed with
+   * the new secret).
+   *
+   * Deviation note: S01 omitted this route; added in S03 for CLI support.
+   * Requires sensitive token.
+   */
+  app.post('/api/auth/rotate-secret', requireSensitive, (req, res) => {
+    store.rotateSecret();
+    res.json({ ok: true });
+  });
 }
