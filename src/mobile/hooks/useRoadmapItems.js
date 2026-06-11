@@ -30,6 +30,8 @@ export function useRoadmapItems() {
   const itemsRef = useRef(items);
   itemsRef.current = items;
   const pendingOpsRef = useRef(new Map()); // id → patch, for snapshot overlay
+  const pendingCreatesRef = useRef(new Map()); // tmpId → optimistic item, in-flight creates
+  const pendingDeletesRef = useRef(new Set()); // ids with in-flight deletes
   const tmpCounterRef = useRef(0);
 
   const refetch = useCallback(async () => {
@@ -64,15 +66,29 @@ export function useRoadmapItems() {
         if (!msg || typeof msg !== 'object') return;
         const t = msg.type;
         if ((t === 'visionState' || t === 'hydrate') && Array.isArray(msg.items)) {
-          // Server snapshot: replace items wholesale, then re-apply any in-flight
-          // optimistic edits so the UI doesn't flicker back to server state.
+          // Server snapshot: replace items wholesale, then re-apply ALL in-flight
+          // optimistic ops (edits, creates, deletes) so the UI doesn't flicker
+          // back to server state while a mutation is still settling.
           setItems(() => {
-            const pending = pendingOpsRef.current;
-            if (pending.size === 0) return msg.items;
-            return msg.items.map(item => {
-              const patch = pending.get(item.id);
-              return patch ? { ...item, ...patch } : item;
-            });
+            const pendingPatches = pendingOpsRef.current;
+            const pendingCreates = pendingCreatesRef.current;
+            const pendingDeletes = pendingDeletesRef.current;
+            let next = msg.items;
+            if (pendingPatches.size > 0) {
+              next = next.map(item => {
+                const patch = pendingPatches.get(item.id);
+                return patch ? { ...item, ...patch } : item;
+              });
+            }
+            if (pendingDeletes.size > 0) {
+              next = next.filter(item => !pendingDeletes.has(item.id));
+            }
+            if (pendingCreates.size > 0) {
+              const present = new Set(next.map(item => item.id));
+              const missing = [...pendingCreates.values()].filter(it => !present.has(it.id));
+              if (missing.length > 0) next = [...missing, ...next];
+            }
+            return next;
           });
         } else if (t === 'itemUpdated' && msg.item?.id) {
           setItems((prev) => {
@@ -153,6 +169,7 @@ export function useRoadmapItems() {
     if (!fields || typeof fields !== 'object') return { ok: false, error: 'invalid fields' };
     const tmpId = `tmp-${++tmpCounterRef.current}`;
     const optimisticItem = { ...fields, type: 'feature', id: tmpId };
+    pendingCreatesRef.current.set(tmpId, optimisticItem);
     setItems((prev) => [optimisticItem, ...prev]);
     try {
       const res = await wsFetch('/api/vision/items', {
@@ -162,15 +179,24 @@ export function useRoadmapItems() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        pendingCreatesRef.current.delete(tmpId);
         setItems((prev) => prev.filter((it) => it.id !== tmpId));
         return { ok: false, error: data?.error || `HTTP ${res.status}` };
       }
-      const serverItem = data?.item || null;
-      setItems((prev) =>
-        prev.map((it) => it.id === tmpId ? (serverItem ? { ...it, ...serverItem } : it) : it)
-      );
+      // POST /api/vision/items returns the created item object directly
+      // (vision-routes.js:91); tolerate a wrapped { item } shape too.
+      const serverItem = data?.item || (data?.id ? data : null);
+      pendingCreatesRef.current.delete(tmpId);
+      setItems((prev) => {
+        // If the WS snapshot already delivered the server item, just drop the tmp row.
+        if (serverItem && prev.some((it) => it.id === serverItem.id)) {
+          return prev.filter((it) => it.id !== tmpId);
+        }
+        return prev.map((it) => it.id === tmpId ? (serverItem ? { ...it, ...serverItem } : it) : it);
+      });
       return { ok: true, item: serverItem };
     } catch (err) {
+      pendingCreatesRef.current.delete(tmpId);
       setItems((prev) => prev.filter((it) => it.id !== tmpId));
       return { ok: false, error: err?.message || 'Network error' };
     }
@@ -182,6 +208,7 @@ export function useRoadmapItems() {
   const deleteItem = useCallback(async (id) => {
     if (!id) return { ok: false, error: 'id required' };
     const prev = itemsRef.current;
+    pendingDeletesRef.current.add(id);
     setItems((cur) => cur.filter((it) => it.id !== id));
     try {
       const res = await wsFetch(`/api/vision/items/${id}`, {
@@ -190,11 +217,14 @@ export function useRoadmapItems() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        pendingDeletesRef.current.delete(id);
         setItems(prev);
         return { ok: false, error: data?.error || `HTTP ${res.status}` };
       }
+      pendingDeletesRef.current.delete(id);
       return { ok: true };
     } catch (err) {
+      pendingDeletesRef.current.delete(id);
       setItems(prev);
       return { ok: false, error: err?.message || 'Network error' };
     }

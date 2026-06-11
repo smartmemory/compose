@@ -53,34 +53,41 @@ export function useBuildHistory({ active, limit = 20 } = {}) {
   const aliveRef = useRef(true);
   const retryTimerRef = useRef(null);
 
+  // Shared settle path: store the list AND run the corrective health-gate
+  // alert check. Must run on every fetch that lands (initial, terminal-
+  // triggered, and the 2.5s retry) — the downgrade row may only appear on
+  // the retry.
+  const processList = useCallback((list) => {
+    setBuilds(list);
+    setError(null);
+    // Corrective health-gate alert check:
+    // If active-build said "complete" but history says "failed" for same flowId
+    for (const entry of list) {
+      const fid = entry.flowId;
+      if (!fid) continue;
+      const activeTerminal = seenTerminalRef.current.get(fid);
+      if (!activeTerminal) continue;
+      // Only alert if active said complete but history says failed
+      if (
+        ACTIVE_COMPLETE_STATUSES.has(activeTerminal) &&
+        entry.status === 'failed' &&
+        alertedRef.current.get(fid) !== entry.status
+      ) {
+        alertedRef.current.set(fid, entry.status);
+        try {
+          notify(`Build failed post-checks: ${entry.featureCode}`, 'error', 0);
+        } catch { /* notify may not exist in test env */ }
+      }
+    }
+  }, []);
+
   const refetch = useCallback(async ({ pendingFlowId } = {}) => {
     try {
       const data = await apiJSON(`/api/builds?limit=${limit}`);
       if (!aliveRef.current) return;
 
       const list = Array.isArray(data?.builds) ? data.builds : [];
-      setBuilds(list);
-      setError(null);
-
-      // Corrective health-gate alert check:
-      // If active-build said "complete" but history says "failed" for same flowId
-      for (const entry of list) {
-        const fid = entry.flowId;
-        if (!fid) continue;
-        const activeTerminal = seenTerminalRef.current.get(fid);
-        if (!activeTerminal) continue;
-        // Only alert if active said complete but history says failed
-        if (
-          ACTIVE_COMPLETE_STATUSES.has(activeTerminal) &&
-          entry.status === 'failed' &&
-          alertedRef.current.get(fid) !== entry.status
-        ) {
-          alertedRef.current.set(fid, entry.status);
-          try {
-            notify(`Build failed post-checks: ${entry.featureCode}`, 'error', 0);
-          } catch { /* notify may not exist in test env */ }
-        }
-      }
+      processList(list);
 
       // Retry logic: if a terminal-triggered refetch didn't surface the flowId
       if (pendingFlowId) {
@@ -93,8 +100,7 @@ export function useBuildHistory({ active, limit = 20 } = {}) {
               const d2 = await apiJSON(`/api/builds?limit=${limit}`);
               if (!aliveRef.current) return;
               const l2 = Array.isArray(d2?.builds) ? d2.builds : [];
-              setBuilds(l2);
-              setError(null);
+              processList(l2);
             } catch (err2) {
               if (aliveRef.current) setError(err2.message);
             }
@@ -107,7 +113,7 @@ export function useBuildHistory({ active, limit = 20 } = {}) {
     } finally {
       if (aliveRef.current) setLoading(false);
     }
-  }, [limit]);
+  }, [limit, processList]);
 
   // Mount fetch
   useEffect(() => {
