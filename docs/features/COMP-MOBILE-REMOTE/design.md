@@ -1,9 +1,25 @@
 # COMP-MOBILE-REMOTE — Remote transport + auth for the mobile PWA
 
-**Status:** DESIGN
+> **Status: DESIGN DOCUMENT — Phase 1 artifact, nothing here is implemented yet.**
+> Reviewers: evaluate as a design (decisions, scope, contracts), not as shipped code.
+
+**Status:** DESIGN (refreshed 2026-06-11 against post-COMP-MOBILE-1 main — see Reality Check)
 **Created:** 2026-05-10
 **Group:** COMP-MOBILE
-**Predecessor:** [COMP-MOBILE](../COMP-MOBILE/design.md) (foundation: PWA + token plumbing)
+**Predecessor:** [COMP-MOBILE](../COMP-MOBILE/design.md) (foundation: PWA + token plumbing), [COMP-MOBILE-1](../COMP-MOBILE-1/design.md) (monitoring loop; shipped 2026-06-11)
+
+## Reality Check (2026-06-11 verification against main)
+
+Code-verified deltas since this design was written; the sections below are amended accordingly:
+
+1. **The API server does not serve the SPA.** Vite (port **5195**, not 5173) serves the shell in dev and proxies `/api`+`/ws` to 4001; `server/index.js` has no `express.static`. A tunnel exposing only 4001 would never load the PWA. **New scope: 4001 gains static serving of `dist/`** (SPA fallback for `/m/*` → `dist/index.html`; `public/m-sw.js` and `manifest.webmanifest` are copied into `dist/` by Vite). Harmless on localhost; required for remote. `compose remote status` warns if `dist/` is missing (run `npm run build`).
+2. **The agent-server (4002) surface is smaller than this design assumed.** Actual 4002 routes: `GET /api/health`, `GET /api/agent/stream` (SSE, unauth), `POST /api/agent/session`, `POST /api/agent/message`, `POST /api/agent/interrupt` (all three requireSensitiveToken), `GET /api/agent/session/status` (unauth). **`/api/agent/:id` and `/api/agent/:id/stop` are 4001 routes** (`server/agent-spawn.js:212`, attached via vision-server). **Latent bug found:** mobile `AgentCard.jsx:34` / `AgentDetailView.jsx:31` call stop via `agentServerUrl()` → 4002 → 404 — mobile agent-kill is broken today and the fetch-mocked tests can't see it. Fix folded into this feature: those call sites switch to relative `wsFetch('/api/agent/:id/stop')` (4001), which also removes them from the proxy surface. The proxy route table (§ Agent server) is corrected to the real 4002-only set.
+3. **AGENT_PORT consolidation already happened** (COMP-MOBILE-1 S01): `useInteractiveSession.js`, `AgentCard.jsx`, `AgentDetailView.jsx` use `agentServerUrl()`. Remaining raw-`fetch` sites that bypass `wsFetch`: `useInteractiveSession.js:18,:42,:83` and the EventSource in `agentStream.js:121` — exactly the sites that migrate to the proxy paths in this feature.
+4. **WS upgrade is a manual `server.on('upgrade')` handler** (`server/index.js:143-156`) routing `/ws/files` and `/ws/vision`, destroying unknown paths. The remote-auth check for WS mounts there, before `handleUpgrade()`.
+5. **Express surface today: 103 routes (60 mutating) on 4001** — confirms default-deny over route-by-route patching.
+6. **No JWT/QR deps exist; no rate-limiting anywhere.** Decisions in § Security details: minimal hand-assembled HS256 JWT on `node:crypto` primitives (zero new supply-chain surface for the auth component; HMAC is the vetted primitive, the JWT envelope is base64url+JSON), `qrcode` + `qrcode-terminal` as the only new deps, and a ~20-line in-house fixed-window per-IP limiter for the two public auth endpoints.
+7. **Supervisor doesn't thread `COMPOSE_HOST`** — `server/supervisor.js` must pass it through to the api-server child (agent-server stays 127.0.0.1 always).
+8. Threat-model line refs drifted 1–30 lines (routes all still exist, all still unauthenticated beyond the conditional `guardAuth`); current anchors: project switch `server/index.js:70`, file write `file-watcher.js:51`, vision PATCH `vision-routes.js:102`, ideabox `ideabox-routes.js:76`, settings `settings-routes.js:19`.
 
 ---
 
@@ -63,7 +79,8 @@ Refresh tokens are **opaque random strings** (hashed at rest, like passwords). T
       "user_agent": "<truncated UA from pairing time>",
       "paired_at": "2026-05-10T14:00:00Z",
       "last_seen": "2026-05-10T14:23:01Z",
-      "refresh_hash": "<sha256(refresh_token)>",
+      "refresh_hash": "<sha256(random part of current refresh token)>",
+      "refresh_history": [ { "hash": "<sha256(retired)>", "retired_at": "2026-05-10T14:10:00Z" } ],
       "revoked": false
     }
   ]
@@ -103,37 +120,48 @@ The mobile flows hit a SECOND server: `agent-server.js` on port 4002 (default). 
 
 This keeps **only port 4001 exposed remotely**. Agent server stays localhost-only — defense in depth.
 
-**Specific routes to proxy** (mobile-only — verified from code):
-- `GET /api/agent/proxy/agent/stream` → `:4002/api/agent/stream` (SSE)
-- `GET /api/agent/proxy/agent/:id` → `:4002/api/agent/:id` (status)
-- `POST /api/agent/proxy/agent/:id/stop` → `:4002/api/agent/:id/stop` (kill)
-- `GET /api/agent/proxy/agent/session/status` → `:4002/api/agent/session/status`
-- `POST /api/agent/proxy/agent/session/message` → `:4002/api/agent/session/message`
+**Specific routes to proxy** (corrected 2026-06-11 to the real 4002 surface):
+- `GET /api/agent/proxy/stream` → `:4002/api/agent/stream` (SSE — forward `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no`; pipe the response stream unbuffered; 4002 has no SSE heartbeat, so the proxy must not impose idle timeouts shorter than the tunnel's)
+  - **SSE auth transport (round-2 finding #2):** `EventSource` cannot set headers, so the gate accepts `?token=<access JWT>` on this route (same query-param contract as WS upgrades; validated identically, filtered from access logs). The mobile stream URL comes from a function (fresh token per (re)connect — `agentStream.js` already reconnects on error, which naturally picks up refreshed tokens). In legacy/localhost mode the gate isn't mounted and the bare URL keeps working.
+- `POST /api/agent/proxy/session` → `:4002/api/agent/session`
+- `POST /api/agent/proxy/message` → `:4002/api/agent/message`
+- `POST /api/agent/proxy/interrupt` → `:4002/api/agent/interrupt`
+- `GET /api/agent/proxy/session/status` → `:4002/api/agent/session/status`
 
-Mobile hooks (`useInteractiveSession.js:14`, `AgentDetailView.jsx:6`, `agentStream.js:112`) update their URL bases to `/api/agent/proxy/agent/...`. Desktop `AgentStream.jsx` keeps direct `:4002` calls (localhost only).
+**NOT proxied** (they were never 4002 routes): `GET /api/agent/:id` and `POST /api/agent/:id/stop` live on 4001 (`agent-spawn.js:212`). Mobile's `AgentCard.jsx:34`/`AgentDetailView.jsx:31` currently mis-target them at 4002 via `agentServerUrl()` — a live 404 bug fixed in this feature by switching those call sites to relative `wsFetch('/api/agent/...')`.
+
+Mobile call sites that migrate to proxy paths: `useInteractiveSession.js` (:18 session POST, :42 status poll, :83 interrupt) and the SSE URL in `agentStream.js` (mobile entry only — `defaultAgentStreamUrl()` grows a mode switch). Desktop keeps direct `:4002` calls (localhost only). The proxy forwards `x-compose-token`/`Authorization` headers through after auth-gate clearance, since 4002's mutating routes still check the sensitive token.
 
 ### Auth middleware — default-deny for non-localhost
 
 `server/security.js` already has `requireSensitiveToken` (build-time token check). The new model:
 
-**Mounted globally, BEFORE all route handlers** (after `cors`, after `express.json`, before everything else):
+**Trust model (REVISED 2026-06-11 — design-gate blocker).** Loopback source IP is NOT a usable trust signal under the BYO-tunnel model this feature targets: cloudflared/tailscaled/ngrok/ssh -L all run on the same machine, so *tunneled remote traffic arrives from 127.0.0.1* and an IP-based bypass would wave it through unauthenticated. Header heuristics (X-Forwarded-For) fail too — `ssh -L` adds none. Therefore:
+
+- **Remote mode OFF (default, localhost bind):** the auth gate is not mounted at all. Zero behavior change for every existing workflow.
+- **Remote mode ON (`COMPOSE_REMOTE_AUTH=enabled`):** NO IP-based trust. Every request needs a credential — either the sensitive token (`x-compose-token === COMPOSE_API_TOKEN`; cockpit and CLI have it) or a valid pairing JWT — except the bootstrap allowlist.
 
 ```
-authGate(req, res, next):
-  if req is from 127.0.0.1 / ::1:
-    next()  // localhost = trusted, no change to cockpit behavior
-  elif req.path is in PUBLIC_REMOTE_ALLOWLIST:
-    next()  // /api/health, /api/auth/pair/complete, /api/auth/refresh, /m/* static
-  else:
-    requirePairingToken(req, res, next)
+authGate(req, res, next):            // mounted ONLY in remote mode
+  if req.path in PUBLIC_REMOTE_ALLOWLIST: next()
+  elif req has valid sensitive token:  next()   // cockpit / CLI / supervisor children
+  elif req has valid pairing JWT:      req.device = {...}; next()
+  else: 401 (TokenExpired | TokenInvalid)
 ```
+
+Cockpit compatibility in remote mode: `wsFetch` in `'cockpit'` mode attaches `x-compose-token` on **every** request (today only `withComposeToken` callers do) — one change in one place. Desktop WebSocket connects (`useVisionStore`, file-watcher WS) append `?token=<sensitive>` via the same function-URL pattern mobile uses; the WS upgrade handler accepts sensitive token or JWT in the query param. These cockpit changes are inert when remote mode is off.
+
+**Mounted globally, BEFORE all route handlers** (after `cors`, after `express.json`, before everything else — and only when remote mode is on):
 
 `PUBLIC_REMOTE_ALLOWLIST` contains exactly:
 - `GET /api/health`
+- `GET /api/workspace` (design-gate finding #4: `WorkspaceContext.jsx:30` fetches it at app boot, before any route — including `/m/pair` — can render; read-only workspace metadata, accepted leak, documented)
 - `POST /api/auth/pair/complete`
 - `POST /api/auth/refresh`
 - All static `/m/*` and `/manifest.webmanifest`, `/m-sw.js` (PWA shell + pair page must load before auth)
 - Asset paths under `/assets/`
+
+**Static serving prerequisite (2026-06-11):** these static paths are served by Vite today, not by 4001. This feature adds `express.static(dist/)` + SPA fallback (`/m/*` → `dist/index.html`) to `server/index.js`, mounted AFTER the auth gate (the gate allowlists them) so a single tunneled port serves shell + API. Dev workflow on localhost is unchanged (Vite 5195 keeps proxying). Remote always uses the built bundle.
 
 `requirePairingToken`:
 1. Reads `Authorization: Bearer <jwt>` (preferred) or `x-compose-token: <jwt>` (back-compat).
@@ -142,7 +170,10 @@ authGate(req, res, next):
 4. On invalid, returns `401 { error, code: 'TokenInvalid' }`.
 5. On expired, returns `401 { error, code: 'TokenExpired' }` so the client knows to refresh.
 
-The existing `requireSensitiveToken` (build-time token) continues to gate sensitive endpoints **on the localhost path**. On the remote path, `requirePairingToken` is sufficient — the JWT itself carries authority.
+**Sensitive-route compatibility (REVISED 2026-06-11 — design-gate finding #2).** Routes guarded by `requireSensitiveToken` (build start/abort `build-routes.js:39`, agent stop `agent-spawn.js:212`, journal POST, spawn, …) do an exact `x-compose-token === COMPOSE_API_TOKEN` check; a paired device's JWT would be rejected even after passing the gate. Two-part fix:
+
+1. **4001 routes:** new composite `requireSensitiveOrPaired` (in `server/auth-middleware.js`) replaces `requireSensitiveToken` at every existing call site — accepts the exact sensitive token (legacy path, unchanged behavior) OR a valid pairing JWT (sets `req.device`). When remote mode is off, the JWT branch simply never matches anything.
+2. **4002 (proxied) routes:** the proxy, after gate clearance, **injects the real sensitive token server-side** (`x-compose-token: process.env.COMPOSE_API_TOKEN`) into the forwarded request. The agent-server stays completely unchanged — it keeps its exact-match check, and the secret never leaves the server process.
 
 **Important:** the auth gate is mounted at the express app level, so EVERY route — including ones not enumerated in this design (vision routes, file-watcher, settings, design, sessions, ideabox) — is automatically protected from non-localhost access. No route-by-route patching.
 
@@ -225,6 +256,7 @@ QR rendering: `qrcode` npm dep, rendered to a canvas inline (no external service
 - POSTs `/api/auth/pair/complete`
 - On success: stores both tokens (access + refresh + expiry timestamp) in localStorage, calls `setSensitiveToken(access_token)` and `setAuthMode('mobile-paired')`, then redirects to `/m/agents`. Refresh is reactive (driven by `wsFetch`'s `getValidAccessToken()` + retry-on-401), not a proactive timer.
 - On error: shows the error, suggests `compose remote pair` to generate a new code
+- **Codeless state (bare `/m/pair`, no `?code`):** the page is also the "re-pair required" screen — wsFetch redirects here on unrecoverable gate 401s. It renders instructions ("This device is no longer paired. On your desktop, run `compose remote pair` or open Cockpit → Pair mobile, then scan the new QR code.") and a paste-the-pairing-URL input as a camera-less fallback. No API calls are made until a code is present.
 
 ### Token storage + refresh
 
@@ -255,10 +287,17 @@ export async function refreshAccessToken() {
     body: JSON.stringify({ refresh_token: refresh }),
   }).then(async (r) => {
     if (!r.ok) {
-      // Hard fail — needs re-pairing
+      // Clear stored JWT state and drop to legacy mode (dual-mode contract).
+      // Restore the in-memory token to what legacy mode would have: the
+      // legacy ?token= pairing value if this device ever had one, else null
+      // (NOT the stale access JWT). Whether the next request then succeeds
+      // (localhost / legacy server) or gate-401s (remote server → wsFetch's
+      // catch path redirects to /m/pair) is the server's call.
       localStorage.removeItem(ACCESS_KEY);
       localStorage.removeItem(REFRESH_KEY);
       localStorage.removeItem(EXPIRY_KEY);
+      setSensitiveToken(localStorage.getItem('compose:mobile:sensitiveToken') || null);
+      setAuthMode('cockpit'); // legacy
       throw new Error('RefreshFailed');
     }
     const j = await r.json();
@@ -284,8 +323,11 @@ export function setAuthMode(mode) { _mode = mode; }
 
 export async function wsFetch(url, opts = {}) {
   if (_mode === 'mobile-paired') {
-    // Ensure access token is fresh BEFORE the request
-    try { await getValidAccessToken(); } catch { window.location.href = '/m/pair'; throw new Error('NeedsPairing'); }
+    // Ensure access token is fresh BEFORE the request. Refresh failure does
+    // NOT redirect here — refreshAccessToken() has already dropped us to
+    // legacy mode; the request proceeds with the sensitive-token headers and
+    // only a remote-gate 401 below triggers the /m/pair redirect.
+    try { await getValidAccessToken(); } catch { /* now in legacy mode */ }
   }
   const headers = { ...(opts.headers || {}) };
   if (_workspaceId) headers['X-Compose-Workspace-Id'] = _workspaceId;
@@ -295,15 +337,30 @@ export async function wsFetch(url, opts = {}) {
 
   let r = await fetch(url, { ...opts, headers });
 
-  if (_mode === 'mobile-paired' && r.status === 401) {
+  // Keyed off the remote gate's distinctive body codes, NOT _mode — the mode
+  // may have just been dropped to legacy by a failed refresh, but a gate 401
+  // still means this server demands pairing. Localhost (gate unmounted) and
+  // plain requireSensitiveToken 401s carry no `code`, so legacy mode on a
+  // non-remote server can never hit this branch.
+  if (r.status === 401) {
     const body = await r.clone().json().catch(() => ({}));
     if (body.code === 'TokenExpired') {
-      await refreshAccessToken();
+      try {
+        await refreshAccessToken();   // re-enters 'mobile-paired' on success
+      } catch {
+        // Gate demanded a JWT and we can't mint one — re-pair is the only path.
+        window.location.href = '/m/pair';
+        throw new Error('NeedsPairing');
+      }
       r = await fetch(url, { ...opts, headers: { ...headers, Authorization: `Bearer ${getSensitiveToken()}` } });
     }
     if (r.status === 401) {
-      window.location.href = '/m/pair';
-      throw new Error('NeedsPairing');
+      const again = await r.clone().json().catch(() => ({}));
+      if (again.code === 'TokenExpired' || again.code === 'TokenInvalid') {
+        window.location.href = '/m/pair';
+        throw new Error('NeedsPairing');
+      }
+      // 401 without a gate code: legacy sensitive-token failure — surface normally
     }
   }
 
@@ -311,7 +368,14 @@ export async function wsFetch(url, opts = {}) {
 }
 ```
 
-`MobileApp` calls `setAuthMode('mobile-paired')` on mount. Cockpit doesn't call it; default `'cockpit'` mode skips token refresh entirely. **Every existing call site (mobile hooks AND cockpit) keeps working without code changes** — auth handling is now in one place.
+**Dual-mode boot contract (REVISED 2026-06-11 — round-2 finding #1).** `MobileApp` does NOT unconditionally enter paired mode. On mount:
+
+```
+if (localStorage has compose:mobile:refreshToken)  → setAuthMode('mobile-paired')
+else                                                → stay 'cockpit' (legacy) mode
+```
+
+Legacy mode is today's behavior verbatim: `?token=` query pairing → `setSensitiveToken` → `withComposeToken` headers; works on localhost/home-wifi exactly as shipped by COMP-MOBILE. `'mobile-paired'` is entered only after `PairPage` stores a refresh token (or on a later boot that finds one). A failed refresh in paired mode clears the stored tokens and falls back to legacy mode (not a hard redirect) when the server doesn't demand JWT auth; the redirect-to-`/m/pair` path applies only to 401s from the remote gate. Remote auth is therefore strictly additive — with remote mode off, no behavioral change anywhere. Cockpit never calls `setAuthMode`; default `'cockpit'` mode skips token refresh entirely. Auth handling stays in one place (`wsFetch`).
 
 Direct `fetch()` callsites in mobile (e.g. raw URL calls in `useInteractiveSession.js:22`, agent-server URLs in `agentStream.js:112`) get audited and migrated to `wsFetch` as part of M2/M3/M4 hardening — not all today; M2-M4 already migrated the obvious ones via T9. Remaining direct-fetch sites are tracked in the blueprint phase.
 
@@ -327,6 +391,8 @@ const ws = new WebSocket(resolveUrl(url));
 
 Backward-compatible — cockpit code passing a string keeps working. Mobile passes a function that includes the current access token as `?token=...`.
 
+**Raw-WS migration (design-gate finding #4):** only `useRoadmapItems.js:58` uses `createReconnectingWS` today; `usePendingGates.js:46`, `useIdeas.js:75`, `useLiveAgents.js:50`, and `useActiveBuild.js:62` open raw `new WebSocket('/ws/vision')` with their own reconnect loops. **In scope:** all four migrate to `createReconnectingWS(urlFn)` so token injection lives in one place (also deletes four duplicated reconnect implementations — net LOC down). Desktop WS connects gain the same function-URL treatment (token appended only in remote mode).
+
 Server-side `/ws/vision` handshake reads `req.url` query params, validates the JWT, accepts or rejects the upgrade. Filter `?token=` from access logs.
 
 **WS during access-token expiry mid-connection:** server holds the connection open until the next message — JWT is checked only on connection. If a long-lived WS outlives a token (15min → next refresh), the existing socket keeps streaming; refresh happens out of band on the next HTTP request. New WS reconnects (after server restart, network hiccup) get a fresh token via the function-URL pattern. Acceptable tradeoff for v1.
@@ -337,10 +403,11 @@ Server-side `/ws/vision` handshake reads `req.url` query params, validates the J
 
 ## Security details
 
+- **JWT implementation (decision 2026-06-11).** Minimal HS256 JWT assembled in `server/auth-store.js` on `node:crypto` primitives (`createHmac` + `timingSafeEqual`, base64url envelope) — no JWT dependency. Rationale: zero added supply-chain surface on the auth component; HMAC-SHA256 is the vetted primitive and the JWT envelope is just encoding. Only `alg: HS256` is ever accepted on verify (hardcoded; no algorithm negotiation, which removes the classic `alg:none`/RS-confusion attacks).
 - **JWT signing key.** Generated on first start, stored in `.compose/data/remote-auth.json`. Rotation: `compose remote rotate-secret` invalidates ALL tokens (deliberately destructive — used after a leak).
-- **Refresh token rotation.** Each refresh issues a new refresh token; old one is invalidated. Theft detection: if an old refresh token is used after rotation, **revoke the device immediately** (well-known refresh-token-reuse defense).
+- **Refresh token rotation + reuse detection (SPECIFIED 2026-06-11 — design-gate finding #3).** Refresh tokens are structured `<device_id>.<random-32-bytes-base64url>` so the server can map any presented token to its device without scanning. Per device the store keeps `refresh_hash` (current) plus `refresh_history` (bounded ring of the last 5 retired hashes with retirement timestamps). Refresh flow: look up device by the id prefix → hash the random part → matches `refresh_hash` → rotate (retire current into history, issue new) → matches an entry in `refresh_history` → **reuse detected, revoke the device immediately** → matches nothing → generic 401 (indistinguishable from garbage; no oracle). Rotation and the history append are a single atomic file write (temp+rename, same pattern as `writeActiveBuild`).
 - **Pairing-code TTL.** 5 minutes, single use. Stored in-memory; lost on server restart. Pairing must be completed in the same server lifetime as init.
-- **Rate limiting.** `POST /api/auth/pair/init` and `/refresh` rate-limited per source IP (10/min). Pair-complete is naturally rate-limited by the code TTL.
+- **Rate limiting.** `POST /api/auth/pair/complete` and `/api/auth/refresh` (the two PUBLIC endpoints) rate-limited per source IP (10/min) via a ~20-line in-house fixed-window limiter (no dep exists in the codebase; not worth adding one for two endpoints). `pair/init` is already behind the sensitive token.
 - **TLS warning.** When bound to non-localhost without TLS termination upstream, log a warning every 60s. Some tunnels (Cloudflare, Tailscale Funnel) terminate TLS for you; ngrok does too. Self-hosted reverse proxies are user's responsibility.
 - **Origin checks.** Skip — token IS the auth. The token-in-URL pairing concern is mitigated by the 5-minute TTL and single-use nature.
 - **Audit log.** Each pair, refresh, and revoke writes a line to `.compose/data/remote-auth-audit.log` with timestamp, device id, and event.
@@ -381,7 +448,9 @@ Server-side `/ws/vision` handshake reads `req.url` query params, validates the J
 - `test/ui/mobile-pair.test.jsx`
 
 **Modified:**
-- `server/index.js` — bind to configurable host; refuse non-localhost without auth flag; mount auth routes
+- `server/index.js` — bind to configurable host; refuse non-localhost without auth flag; mount auth routes; mount auth gate before all routes; auth check in the manual WS-upgrade handler (:143-156); `express.static(dist/)` + `/m/*` SPA fallback; `/api/agent/proxy/*` forwarder
+- `server/supervisor.js` — thread `COMPOSE_HOST` to the api-server child (agent-server stays 127.0.0.1)
+- `src/mobile/components/AgentCard.jsx`, `AgentDetailView.jsx` — fix latent 404: agent stop/status are 4001 routes; switch from `agentServerUrl()` to relative `wsFetch` paths
 - `server/security.js` — add composite middleware
 - `lib/wsReconnect.js` — accept function URL
 - `src/lib/compose-api.js` — token storage (`getValidAccessToken`, `refreshAccessToken`), localStorage keys, expiry tracking
@@ -391,9 +460,9 @@ Server-side `/ws/vision` handshake reads `req.url` query params, validates the J
 
 **Estimated:** ~25 files, ~1500 LOC.
 
-## Open questions
+## Open questions — RESOLVED (2026-06-11, leans adopted)
 
-1. **Default device name on pairing.** Use `navigator.userAgent` parsing, or just ask the user to type one? Lean: prefill with platform+browser, allow edit.
-2. **Cockpit token also subject to JWT?** Today the cockpit uses build-time `VITE_COMPOSE_API_TOKEN`. Keeping that for the cockpit (it's localhost-only) means the JWT system is mobile-only. Simplest. If we want unified, that's a much bigger refactor — out of scope.
-3. **Tunnel detection for status command.** `compose remote status` does a HEAD request to the public host. If the user hasn't set one, we can't verify reachability. Lean: prompt to run `compose remote pair --public-host=...` first.
-4. **Are there other pair-flow allowlist gaps?** `/m/*` static + `/api/auth/pair/complete` + `/api/auth/refresh` are already in `PUBLIC_REMOTE_ALLOWLIST`. Audit during blueprint phase that no other bootstrap path leaks (e.g., manifest fetches, SW registration).
+1. **Default device name on pairing.** RESOLVED: prefill from platform+browser parsing of `navigator.userAgent`, editable text field.
+2. **Cockpit token also subject to JWT?** RESOLVED: no — cockpit keeps the build-time `VITE_COMPOSE_API_TOKEN` on the localhost path; the JWT system is mobile/remote-only. Unifying is out of scope.
+3. **Tunnel detection for status command.** RESOLVED: `compose remote status` without a configured public host prints bind/devices and prompts to run `compose remote pair --public-host=...`; with one, it HEADs `<public_host>/api/health`. It also warns when `dist/` is missing (remote needs the built bundle).
+4. **Other pair-flow allowlist gaps.** RESOLVED at research: bootstrap fetches are `/m/*` (SPA fallback), `/assets/*`, `/manifest.webmanifest`, `/m-sw.js` (exists in `public/`, copied to `dist/` by Vite), plus the two auth POSTs and `/api/health`. The service worker's `SHELL` list (`public/m-sw.js:4`) caches `/m` and `/manifest.webmanifest` only — covered. Blueprint Phase 5 re-audits against the actual built `dist/`.
