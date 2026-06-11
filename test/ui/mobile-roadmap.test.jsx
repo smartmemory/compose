@@ -1,7 +1,10 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
+import { renderHook, act as hookAct } from '@testing-library/react';
 import RoadmapTab from '../../src/mobile/tabs/RoadmapTab.jsx';
+import { useRoadmapItems } from '../../src/mobile/hooks/useRoadmapItems.js';
+import { setSensitiveToken } from '../../src/lib/compose-api.js';
 
 const ITEMS = [
   {
@@ -89,9 +92,31 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// Helper: create a mock applyOptimisticEdit that calls through to the mock fetch
+function makeMockApplyOptimisticEdit() {
+  return async (id, patch) => {
+    const res = await fetch(`/api/vision/items/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data?.error || `HTTP ${res.status}` };
+    const serverItem = data?.item || null;
+    return { ok: true, item: serverItem };
+  };
+}
+
 async function renderAndHydrate() {
-  const utils = render(<RoadmapTab />);
-  // Wait for initial fetch + state to settle
+  // Items come from props now (RoadmapTab lifted to shell)
+  const utils = render(
+    <RoadmapTab
+      items={ITEMS}
+      loading={false}
+      error={null}
+      applyOptimisticEdit={makeMockApplyOptimisticEdit()}
+    />
+  );
+  // Items are passed directly — no async fetch needed, but wait for render to settle
   await waitFor(() => {
     expect(screen.queryByTestId('mobile-roadmap-list')).toBeTruthy();
   });
@@ -194,5 +219,154 @@ describe('<RoadmapTab>', () => {
       fireEvent.change(screen.getByTestId('mobile-filter-group'), { target: { value: 'group-one' } });
     });
     expect(screen.getByTestId('mobile-item-card-COMP-A')).toBeTruthy();
+  });
+});
+
+// ─── S01: useRoadmapItems WS rewire + PATCH token ─────────────────────────
+
+describe('useRoadmapItems WS rewire (S01)', () => {
+  let capturedSocket;
+
+  class CaptureMockWS {
+    constructor(url) {
+      this.url = url;
+      this.readyState = 0;
+      this.onopen = null;
+      this.onmessage = null;
+      this.onclose = null;
+      this.onerror = null;
+      capturedSocket = this;
+      queueMicrotask(() => {
+        this.readyState = 1;
+        this.onopen?.();
+      });
+    }
+    send() {}
+    close() {
+      this.readyState = 3;
+      this.onclose?.();
+    }
+  }
+
+  const BASE_ITEMS = [
+    { id: 'i1', title: 'Item 1', status: 'planned' },
+    { id: 'i2', title: 'Item 2', status: 'in_progress' },
+  ];
+
+  const UPDATED_ITEMS = [
+    { id: 'i1', title: 'Item 1 updated', status: 'planned' },
+    { id: 'i3', title: 'Item 3', status: 'complete' },
+  ];
+
+  let patchCalls;
+
+  beforeEach(() => {
+    setSensitiveToken('test-token');
+    patchCalls = [];
+    capturedSocket = null;
+    globalThis.WebSocket = CaptureMockWS;
+    globalThis.fetch = vi.fn(async (url, opts = {}) => {
+      const u = String(url);
+      if (u.includes('/api/vision/items') && (!opts.method || opts.method === 'GET')) {
+        return { ok: true, status: 200, json: async () => ({ items: BASE_ITEMS }) };
+      }
+      if (u.includes('/api/vision/items/') && opts.method === 'PATCH') {
+        patchCalls.push({ url: u, opts });
+        return { ok: true, status: 200, json: async () => ({ item: null }) };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+  });
+
+  afterEach(() => {
+    setSensitiveToken(null);
+    vi.restoreAllMocks();
+  });
+
+  it('visionState snapshot replaces items wholesale', async () => {
+    const { result } = renderHook(() => useRoadmapItems());
+
+    await waitFor(() => {
+      expect(result.current.items).toHaveLength(2);
+    });
+
+    await hookAct(async () => {
+      capturedSocket.onmessage?.({
+        data: JSON.stringify({ type: 'visionState', items: UPDATED_ITEMS }),
+      });
+    });
+
+    expect(result.current.items).toHaveLength(2);
+    expect(result.current.items[0].title).toBe('Item 1 updated');
+    expect(result.current.items[1].id).toBe('i3');
+  });
+
+  it('hydrate snapshot replaces items wholesale', async () => {
+    const { result } = renderHook(() => useRoadmapItems());
+
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+
+    await hookAct(async () => {
+      capturedSocket.onmessage?.({
+        data: JSON.stringify({ type: 'hydrate', items: UPDATED_ITEMS }),
+      });
+    });
+
+    expect(result.current.items).toHaveLength(2);
+    expect(result.current.items[1].id).toBe('i3');
+  });
+
+  it('pending optimistic edit survives a visionState snapshot mid-flight', async () => {
+    const { result } = renderHook(() => useRoadmapItems());
+
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+
+    // Set up a stalling PATCH
+    let resolveOptimistic;
+    globalThis.fetch = vi.fn(async (url, opts = {}) => {
+      const u = String(url);
+      if (u.includes('/api/vision/items') && (!opts.method || opts.method === 'GET')) {
+        return { ok: true, status: 200, json: async () => ({ items: BASE_ITEMS }) };
+      }
+      if (u.includes('/api/vision/items/') && opts.method === 'PATCH') {
+        return new Promise(resolve => { resolveOptimistic = resolve; });
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+
+    // Kick off optimistic edit (does not await — in-flight)
+    hookAct(() => {
+      result.current.applyOptimisticEdit('i1', { title: 'Optimistic title' });
+    });
+
+    // Wait a tick for optimistic update to apply
+    await new Promise(r => setTimeout(r, 10));
+
+    // Snapshot arrives while edit is in-flight
+    await hookAct(async () => {
+      capturedSocket.onmessage?.({
+        data: JSON.stringify({ type: 'visionState', items: UPDATED_ITEMS }),
+      });
+    });
+
+    // The item being edited should still show the optimistic title
+    const i1 = result.current.items.find(i => i.id === 'i1');
+    expect(i1?.title).toBe('Optimistic title');
+
+    // Settle the PATCH
+    resolveOptimistic({ ok: true, status: 200, json: async () => ({ item: null }) });
+  });
+
+  it('PATCH carries x-compose-token when setSensitiveToken is set', async () => {
+    const { result } = renderHook(() => useRoadmapItems());
+
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+
+    await hookAct(async () => {
+      await result.current.applyOptimisticEdit('i1', { status: 'complete' });
+    });
+
+    expect(patchCalls.length).toBe(1);
+    expect(patchCalls[0].opts.headers['x-compose-token']).toBe('test-token');
   });
 });

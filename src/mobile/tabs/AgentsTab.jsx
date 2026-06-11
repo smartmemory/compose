@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
 import { useLiveAgents } from '../hooks/useLiveAgents.js';
-import { usePendingGates } from '../hooks/usePendingGates.js';
 import { useInteractiveSession } from '../hooks/useInteractiveSession.js';
 import AgentCard from '../components/AgentCard.jsx';
 import AgentDetailView from '../components/AgentDetailView.jsx';
@@ -8,9 +7,12 @@ import InteractiveSessionCard from '../components/InteractiveSessionCard.jsx';
 import GateCard from '../components/GateCard.jsx';
 import GatePromptSheet from '../components/GatePromptSheet.jsx';
 
-export default function AgentsTab() {
+/**
+ * AgentsTab — receives gates/gatesLoading/resolveGate from the shell (MobileApp).
+ * useLiveAgents and useInteractiveSession remain local.
+ */
+export default function AgentsTab({ gates = [], gatesLoading = false, resolveGate }) {
   const { agents, loading: agentsLoading, refetch: refetchAgents } = useLiveAgents();
-  const { gates, loading: gatesLoading, resolve } = usePendingGates();
   const session = useInteractiveSession();
 
   const [activeAgent, setActiveAgent] = useState(null);
@@ -69,7 +71,7 @@ export default function AgentsTab() {
       {activeGate && (
         <GatePromptSheet
           gate={activeGate}
-          onResolve={resolve}
+          onResolve={resolveGate}
           onClose={() => setActiveGate(null)}
         />
       )}

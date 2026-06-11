@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { wsFetch } from '../../lib/wsFetch.js';
 import { createReconnectingWS } from '../../lib/wsReconnect.js';
+import { withComposeToken } from '../../lib/compose-api.js';
 
 function visionWsUrl() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -28,6 +29,7 @@ export function useRoadmapItems() {
   const [connected, setConnected] = useState(false);
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  const pendingOpsRef = useRef(new Map()); // id → patch, for snapshot overlay
 
   const refetch = useCallback(async () => {
     try {
@@ -60,7 +62,18 @@ export function useRoadmapItems() {
         try { msg = JSON.parse(ev.data); } catch { return; }
         if (!msg || typeof msg !== 'object') return;
         const t = msg.type;
-        if (t === 'itemUpdated' && msg.item?.id) {
+        if ((t === 'visionState' || t === 'hydrate') && Array.isArray(msg.items)) {
+          // Server snapshot: replace items wholesale, then re-apply any in-flight
+          // optimistic edits so the UI doesn't flicker back to server state.
+          setItems(() => {
+            const pending = pendingOpsRef.current;
+            if (pending.size === 0) return msg.items;
+            return msg.items.map(item => {
+              const patch = pending.get(item.id);
+              return patch ? { ...item, ...patch } : item;
+            });
+          });
+        } else if (t === 'itemUpdated' && msg.item?.id) {
           setItems((prev) => {
             const idx = prev.findIndex((it) => it.id === msg.item.id);
             if (idx === -1) return [...prev, msg.item];
@@ -97,27 +110,34 @@ export function useRoadmapItems() {
     const prev = itemsRef.current;
     const beforeItem = prev.find((it) => it.id === id);
     if (!beforeItem) return { ok: false, error: 'item not found' };
+
+    // Register as pending so WS snapshots arriving mid-flight can overlay it
+    pendingOpsRef.current.set(id, patch);
+
     const optimistic = prev.map((it) => it.id === id ? { ...it, ...patch } : it);
     setItems(optimistic);
     try {
       const res = await wsFetch(`/api/vision/items/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: withComposeToken({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(patch),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        // rollback
+        // rollback and clear pending
+        pendingOpsRef.current.delete(id);
         setItems(prev);
         return { ok: false, error: data?.error || `HTTP ${res.status}` };
       }
-      // Merge server response if it returned the canonical item
+      // Settle: clear pending, merge server response if provided
+      pendingOpsRef.current.delete(id);
       const serverItem = data?.item || data?.updated || null;
       if (serverItem && serverItem.id === id) {
         setItems((cur) => cur.map((it) => it.id === id ? { ...it, ...serverItem } : it));
       }
       return { ok: true, item: serverItem || optimistic.find((it) => it.id === id) };
     } catch (err) {
+      pendingOpsRef.current.delete(id);
       setItems(prev);
       return { ok: false, error: err?.message || 'Network error' };
     }

@@ -99,6 +99,80 @@
   letter-spacing: 0.2px;
 }
 
+.m-nav-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Nav badges — pill (with count) or dot (no count) */
+.m-nav-badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 8px;
+  padding: 0 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--m-text-dim);
+  color: var(--m-bg);
+  border: 1px solid var(--m-bg);
+}
+
+.m-nav-badge-info  { background: var(--m-accent); }
+.m-nav-badge-warn  { background: var(--m-warn); }
+.m-nav-badge-error { background: var(--m-danger); }
+
+/* Alert bar — full-width sticky strip between header and main */
+.m-alert-bar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.m-alert {
+  display: flex;
+  align-items: center;
+  gap: var(--m-pad);
+  padding: 8px var(--m-pad-lg);
+  font-size: 13px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--m-border);
+  background: var(--m-surface);
+  color: var(--m-text);
+}
+
+.m-alert-info  { border-left: 3px solid var(--m-accent); }
+.m-alert-warn  { border-left: 3px solid var(--m-warn); }
+.m-alert-error { border-left: 3px solid var(--m-danger); }
+
+.m-alert-msg {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m-alert-dismiss {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--m-text-dim);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px;
+  flex: 0 0 auto;
+}
+
 /* Status pill */
 .m-status-pill {
   display: inline-flex;
