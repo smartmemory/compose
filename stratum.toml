@@ -1,0 +1,11 @@
+# Stratum per-project config (see stratum/src/stratum/project_config.py).
+#
+# [learn.inline_patch] — STRAT-LEARN-INLINE harvester: when a judge verdict
+# fails durably, stage a self-patch candidate to the sidecar (fail-open,
+# MCP-edge). Enabled 2026-06-11 per user request so working-style lessons
+# get harvested automatically instead of requiring manual correction.
+# Env override: STRATUM_LEARN_INLINE_PATCH_ENABLED.
+
+[learn.inline_patch]
+enabled = true
+classifier = "heuristic"
