@@ -1,10 +1,36 @@
 {
   "code": "COMP-MOBILE-1",
   "description": "Mobile monitoring-loop completeness. Mobile handles gates, build start/abort, agents, and ideas well, but cannot complete its core monitoring journeys: (1) no notification badges on BottomNav and no top-level alert bar — gate/build events arrive over WebSocket but the user is never alerted (the alerted-and-able-to-act loop is half-missing); (2) failing builds show only the raw agent log (BuildDetailView.jsx) with no pipeline stage/step breakdown, so which-step-failed requires desktop; (3) no session/build history; (4) roadmap is read-mostly — ItemDetailSheet mutates only status/group/confidence, no create/delete/connections; (5) hygiene: 3 mobile files re-declare AGENT_PORT with a 4002 fallback (AgentCard.jsx:5, AgentDetailView.jsx:6, useInteractiveSession.js:14) instead of the shared agentServerUrl() helper — same drift class COMP-COCKPIT-2 fixed on desktop. P1 cluster from the 2026-06-10 mobile parity sweep.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-COCKPIT Wave 2: UX Journey Gaps (2026-06-10 sweep)",
   "created": "2026-06-09",
-  "updated": "2026-06-09",
+  "updated": "2026-06-11",
   "complexity": "L",
-  "position": 5
+  "position": 5,
+  "completions": [
+    {
+      "completion_id": "COMP-MOBILE-1:ed250598e7c72e622a43aec93410a3ce1dd05911",
+      "feature_code": "COMP-MOBILE-1",
+      "commit_sha": "ed250598e7c72e622a43aec93410a3ce1dd05911",
+      "commit_sha_short": "ed250598",
+      "tests_pass": true,
+      "files_changed": [
+        "src/lib/pipeline-steps.js",
+        "src/mobile/MobileApp.jsx",
+        "src/mobile/components/MobileAlertBar.jsx",
+        "src/mobile/components/BuildStepsList.jsx",
+        "src/mobile/components/BuildHistoryList.jsx",
+        "src/mobile/components/CreateItemSheet.jsx",
+        "src/mobile/components/ItemDetailSheet.jsx",
+        "src/mobile/hooks/useMonitorEvents.js",
+        "src/mobile/hooks/useBuildHistory.js",
+        "src/mobile/hooks/useRoadmapItems.js",
+        "test/ui/mobile-coverage-sweep.test.jsx"
+      ],
+      "recorded_at": "2026-06-11T05:21:44.557Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Shipped across commits 414cced/3919504/2b8c72e/87ecced/ed25059; Codex impl review CLEAN; vitest 329/329, node suite green"
+    }
+  ],
+  "commit_sha": "ed250598e7c72e622a43aec93410a3ce1dd05911"
 }
