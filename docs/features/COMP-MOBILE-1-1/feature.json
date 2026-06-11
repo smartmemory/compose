@@ -1,11 +1,33 @@
 {
   "code": "COMP-MOBILE-1-1",
   "description": "Backend follow-ups from COMP-MOBILE-1: (1) COMP-HEALTH gate downgrade now re-persists active-build.json (identity-guarded by flowId/featureCode against last-writer-wins clobber) so the watcher re-broadcasts buildState with the real failed outcome; healthDowngradeReason threads into the history record's failureReason. (2) build-history.jsonl records gain compact per-step results (projectHistorySteps; shared stepOutcomeToStatus dedupes syncStepHistory's mapping; summary kept only for failed steps); mobile BuildHistoryList renders steps in expanded rows; useBuildHistory tracks rebroadcast status changes so the corrective post-checks alert no longer false-fires.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "COMP-COCKPIT Wave 2: UX Journey Gaps (2026-06-10 sweep)",
   "created": "2026-06-11",
   "updated": "2026-06-11",
   "complexity": "S",
   "position": 6,
-  "parent": "COMP-MOBILE-1"
+  "parent": "COMP-MOBILE-1",
+  "completions": [
+    {
+      "completion_id": "COMP-MOBILE-1-1:627716aae82682540b1d40353b7a5449a78fa49d",
+      "feature_code": "COMP-MOBILE-1-1",
+      "commit_sha": "627716aae82682540b1d40353b7a5449a78fa49d",
+      "commit_sha_short": "627716aa",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/build.js",
+        "lib/build-history.js",
+        "src/mobile/hooks/useBuildHistory.js",
+        "src/mobile/components/BuildHistoryList.jsx",
+        "src/mobile/mobile.css",
+        "test/build-history.test.js",
+        "test/ui/mobile-builds.test.jsx"
+      ],
+      "recorded_at": "2026-06-11T08:09:07.784Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Health-gate buildState re-broadcast (identity-guarded) + per-step build-history records; Codex 3 rounds REVIEW CLEAN; node 3529/3529, vitest 332/332"
+    }
+  ],
+  "commit_sha": "627716aae82682540b1d40353b7a5449a78fa49d"
 }
