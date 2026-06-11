@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { useRoadmapItems } from '../hooks/useRoadmapItems.js';
 import FilterBar from '../components/FilterBar.jsx';
 import ItemCard from '../components/ItemCard.jsx';
 import ItemDetailSheet from '../components/ItemDetailSheet.jsx';
@@ -22,8 +21,10 @@ function matchesKeyword(item, kw) {
   return t.includes(needle) || d.includes(needle);
 }
 
-export default function RoadmapTab() {
-  const { items, loading, error, applyOptimisticEdit } = useRoadmapItems();
+/**
+ * RoadmapTab — receives items/loading/error/applyOptimisticEdit from the shell (MobileApp).
+ */
+export default function RoadmapTab({ items = [], loading = false, error = null, applyOptimisticEdit }) {
 
   const [statuses, setStatuses] = useState([]);
   const [group, setGroup] = useState('');

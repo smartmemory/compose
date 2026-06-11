@@ -79,14 +79,14 @@ describe('<AgentsTab>', () => {
   });
 
   it('renders three sections: spawned, interactive session, pending gates', async () => {
-    render(<AgentsTab />);
+    render(<AgentsTab gates={SAMPLE_GATES} gatesLoading={false} resolveGate={vi.fn(async () => ({ ok: true }))} />);
     expect(screen.getByTestId('mobile-section-spawned')).toBeTruthy();
     expect(screen.getByTestId('mobile-section-session')).toBeTruthy();
     expect(screen.getByTestId('mobile-section-gates')).toBeTruthy();
   });
 
   it('renders an AgentCard per spawned agent and Kill calls /stop with x-compose-token', async () => {
-    render(<AgentsTab />);
+    render(<AgentsTab gates={[]} gatesLoading={false} resolveGate={vi.fn()} />);
     await waitFor(() => screen.getByTestId('mobile-agent-card-agent-1'));
     expect(screen.getByTestId('mobile-agent-card-agent-2')).toBeTruthy();
 
@@ -103,8 +103,9 @@ describe('<AgentsTab>', () => {
     expect(stopCall.opts.headers['x-compose-token']).toBe('test-token');
   });
 
-  it('renders a GateCard per pending gate, opens GatePromptSheet, approve hits /resolve with outcome=approve', async () => {
-    render(<AgentsTab />);
+  it('renders a GateCard per pending gate, opens GatePromptSheet, approve calls resolveGate', async () => {
+    const resolveGate = vi.fn(async () => ({ ok: true, gateId: 'F:s1:1' }));
+    render(<AgentsTab gates={SAMPLE_GATES} gatesLoading={false} resolveGate={resolveGate} />);
     await waitFor(() => screen.getByTestId('mobile-gate-card-F:s1:1'));
 
     fireEvent.click(screen.getByTestId('mobile-gate-card-F:s1:1'));
@@ -115,16 +116,14 @@ describe('<AgentsTab>', () => {
       fireEvent.click(screen.getByTestId('mobile-gate-submit'));
     });
 
-    const resolveCall = fetchCalls.find(c =>
-      c.url.includes('/api/vision/gates/F%3As1%3A1/resolve') && c.opts.method === 'POST'
+    expect(resolveGate).toHaveBeenCalledWith(
+      'F:s1:1',
+      expect.objectContaining({ outcome: 'approve' })
     );
-    expect(resolveCall).toBeTruthy();
-    const body = JSON.parse(resolveCall.opts.body);
-    expect(body.outcome).toBe('approve');
   });
 
   it('InteractiveSessionCard renders and shows the active sessionId', async () => {
-    render(<AgentsTab />);
+    render(<AgentsTab gates={[]} gatesLoading={false} resolveGate={vi.fn()} />);
     expect(screen.getByTestId('mobile-interactive-session')).toBeTruthy();
     await waitFor(() => {
       const node = screen.getByTestId('mobile-interactive-session');

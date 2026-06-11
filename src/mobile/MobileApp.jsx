@@ -1,10 +1,16 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { setSensitiveToken } from '../lib/compose-api';
+import { isGatePending } from '../lib/pipeline-steps.js';
 import BottomNav from './components/BottomNav';
 import AgentsTab from './tabs/AgentsTab';
 import RoadmapTab from './tabs/RoadmapTab';
 import IdeasTab from './tabs/IdeasTab';
 import BuildsTab from './tabs/BuildsTab';
+import MobileAlertBar from './components/MobileAlertBar';
+import { usePendingGates } from './hooks/usePendingGates.js';
+import { useActiveBuild } from './hooks/useActiveBuild.js';
+import { useRoadmapItems } from './hooks/useRoadmapItems.js';
+import useMonitorEvents from './hooks/useMonitorEvents.js';
 import './mobile.css';
 
 const TABS = ['agents', 'roadmap', 'builds', 'ideas'];
@@ -71,21 +77,70 @@ export default function MobileApp() {
     } catch {}
   }, []);
 
+  // ── Lifted monitoring hooks ───────────────────────────────────────────────
+  // Single source of truth for shell-level badge/alert state.
+  // Each tab receives hook values as props so it doesn't open duplicate WS connections.
+  const { gates, loading: gatesLoading, resolve: resolveGate } = usePendingGates();
+  const { active, loading: buildLoading, error: buildError, startBuild, abortBuild } = useActiveBuild();
+  const { items, loading: itemsLoading, error: itemsError, applyOptimisticEdit } = useRoadmapItems();
+
+  // Monitor build + gate transitions → compose:notify alerts (uses lifted data, no extra WS)
+  useMonitorEvents({ active, gates, items });
+
+  // ── Badge computation ─────────────────────────────────────────────────────
+  const badges = {};
+  if (gates.length > 0) {
+    badges.agents = { count: gates.length, level: 'warn' };
+  }
+  if (active?.status === 'failed') {
+    badges.builds = { level: 'error' };
+  } else if (isGatePending(active, gates, items)) {
+    badges.builds = { level: 'warn' };
+  }
+
+  // ── Tab content ───────────────────────────────────────────────────────────
   let content = null;
-  if (tab === 'agents') content = <AgentsTab />;
-  else if (tab === 'roadmap') content = <RoadmapTab />;
-  else if (tab === 'ideas') content = <IdeasTab />;
-  else if (tab === 'builds') content = <BuildsTab />;
+  if (tab === 'agents') {
+    content = (
+      <AgentsTab
+        gates={gates}
+        gatesLoading={gatesLoading}
+        resolveGate={resolveGate}
+      />
+    );
+  } else if (tab === 'roadmap') {
+    content = (
+      <RoadmapTab
+        items={items}
+        loading={itemsLoading}
+        error={itemsError}
+        applyOptimisticEdit={applyOptimisticEdit}
+      />
+    );
+  } else if (tab === 'ideas') {
+    content = <IdeasTab />;
+  } else if (tab === 'builds') {
+    content = (
+      <BuildsTab
+        active={active}
+        loading={buildLoading}
+        error={buildError}
+        startBuild={startBuild}
+        abortBuild={abortBuild}
+      />
+    );
+  }
 
   return (
     <div className="m-root" data-testid="mobile-root">
       <header className="m-header">
         <div className="m-header-title">Compose</div>
       </header>
+      <MobileAlertBar onNavigate={setTabAndUrl} />
       <main className="m-main" data-testid="mobile-main" data-tab={tab}>
         {content}
       </main>
-      <BottomNav active={tab} onSelect={setTabAndUrl} />
+      <BottomNav active={tab} onSelect={setTabAndUrl} badges={badges} />
     </div>
   );
 }

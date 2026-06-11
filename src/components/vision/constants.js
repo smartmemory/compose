@@ -86,32 +86,9 @@ export const WORK_TYPE_COLORS = {
   reviewing: 'bg-emerald-500/10 text-emerald-400',
 };
 
-export const PIPELINE_STEPS = [
-  { id: 'explore_design',      name: 'Explore Design',  agent: 'claude', phase: 'design',         hasGate: false },
-  { id: 'design_review',       name: 'Design Review',   agent: 'codex',  phase: 'design',         hasGate: false },
-  { id: 'design_gate',         name: 'Design Gate',     agent: 'human',  phase: 'design',         hasGate: true  },
-  { id: 'prd',                 name: 'PRD',             agent: 'claude', phase: 'design',         hasGate: false },
-  { id: 'prd_review',          name: 'PRD Review',      agent: 'codex',  phase: 'design',         hasGate: false },
-  { id: 'prd_gate',            name: 'PRD Gate',        agent: 'human',  phase: 'design',         hasGate: true  },
-  { id: 'architecture',        name: 'Architecture',    agent: 'claude', phase: 'design',         hasGate: false },
-  { id: 'architecture_review', name: 'Arch Review',     agent: 'codex',  phase: 'design',         hasGate: false },
-  { id: 'architecture_gate',   name: 'Arch Gate',       agent: 'human',  phase: 'design',         hasGate: true  },
-  { id: 'blueprint',           name: 'Blueprint',       agent: 'claude', phase: 'blueprint',      hasGate: false },
-  { id: 'verification',        name: 'Verification',    agent: 'claude', phase: 'blueprint',      hasGate: false },
-  { id: 'blueprint_review',    name: 'BP Review',       agent: 'codex',  phase: 'blueprint',      hasGate: false },
-  { id: 'plan',                name: 'Plan',            agent: 'claude', phase: 'implementation', hasGate: false },
-  { id: 'plan_review',         name: 'Plan Review',     agent: 'codex',  phase: 'implementation', hasGate: false },
-  { id: 'plan_gate',           name: 'Plan Gate',       agent: 'human',  phase: 'implementation', hasGate: true  },
-  { id: 'execute',             name: 'Execute',         agent: 'claude', phase: 'implementation', hasGate: false },
-  { id: 'review',              name: 'Review Loop',     agent: 'codex',  phase: 'implementation', hasGate: false },
-  { id: 'coverage',            name: 'Coverage Sweep',  agent: 'claude', phase: 'implementation', hasGate: false },
-  { id: 'report',              name: 'Report',          agent: 'claude', phase: 'ship',           hasGate: false },
-  { id: 'report_review',       name: 'Report Review',   agent: 'codex',  phase: 'ship',           hasGate: false },
-  { id: 'report_gate',         name: 'Report Gate',     agent: 'human',  phase: 'ship',           hasGate: true  },
-  { id: 'docs',                name: 'Docs',            agent: 'claude', phase: 'ship',           hasGate: false },
-  { id: 'ship',                name: 'Ship',            agent: 'claude', phase: 'ship',           hasGate: false },
-  { id: 'ship_gate',           name: 'Ship Gate',       agent: 'human',  phase: 'ship',           hasGate: true  },
-];
+// PIPELINE_STEPS moved to src/lib/pipeline-steps.js for desktop/mobile sharing.
+// Re-exported here for back-compat with all existing desktop imports.
+export { PIPELINE_STEPS } from '../../lib/pipeline-steps.js';
 
 /**
  * Human-friendly gate labels keyed by stepId.

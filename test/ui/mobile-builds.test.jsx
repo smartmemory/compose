@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import BuildsTab from '../../src/mobile/tabs/BuildsTab.jsx';
-import { setSensitiveToken } from '../../src/lib/compose-api.js';
+import { setSensitiveToken, withComposeToken } from '../../src/lib/compose-api.js';
 
 // EventSource stub — useAgentStream uses it
 class FakeEventSource {
@@ -69,20 +69,51 @@ describe('<BuildsTab>', () => {
     vi.restoreAllMocks();
   });
 
+  // Helper: create a startBuild function that calls the mock fetch (identical headers/body)
+  function makeStartBuild() {
+    return async ({ featureCode, mode, description }) => {
+      const res = await fetch('/api/build/start', {
+        method: 'POST',
+        headers: withComposeToken({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ featureCode, mode, description }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err = new Error(data?.error || `HTTP ${res.status}`);
+        err.status = res.status;
+        throw err;
+      }
+      return data;
+    };
+  }
+
+  function makeAbortBuild() {
+    return async ({ featureCode }) => {
+      const res = await fetch('/api/build/abort', {
+        method: 'POST',
+        headers: withComposeToken({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ featureCode }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      return data;
+    };
+  }
+
   it('renders empty state with Start button when no active build', async () => {
-    render(<BuildsTab />);
+    render(<BuildsTab active={null} loading={false} error={null} startBuild={makeStartBuild()} abortBuild={makeAbortBuild()} />);
     await waitFor(() => screen.getByTestId('mobile-build-empty'));
     expect(screen.getByTestId('mobile-build-start')).toBeTruthy();
   });
 
   it('renders BuildCard when an active build exists', async () => {
-    buildState = {
+    const active = {
       featureCode: 'COMP-MOBILE',
       mode: 'feature',
       status: 'in_progress',
       startedAt: new Date().toISOString(),
     };
-    render(<BuildsTab />);
+    render(<BuildsTab active={active} loading={false} error={null} startBuild={makeStartBuild()} abortBuild={makeAbortBuild()} />);
     await waitFor(() => screen.getByTestId('mobile-build-card'));
     const card = screen.getByTestId('mobile-build-card');
     expect(card.getAttribute('data-feature')).toBe('COMP-MOBILE');
@@ -90,7 +121,7 @@ describe('<BuildsTab>', () => {
   });
 
   it('StartBuildSheet submits with featureCode + mode + description', async () => {
-    render(<BuildsTab />);
+    render(<BuildsTab active={null} loading={false} error={null} startBuild={makeStartBuild()} abortBuild={makeAbortBuild()} />);
     await waitFor(() => screen.getByTestId('mobile-build-start'));
 
     fireEvent.click(screen.getByTestId('mobile-build-start'));
@@ -120,13 +151,13 @@ describe('<BuildsTab>', () => {
   });
 
   it('Abort button hits /api/build/abort with featureCode and x-compose-token', async () => {
-    buildState = {
+    const active = {
       featureCode: 'COMP-MOBILE',
       mode: 'feature',
       status: 'in_progress',
       startedAt: new Date().toISOString(),
     };
-    render(<BuildsTab />);
+    render(<BuildsTab active={active} loading={false} error={null} startBuild={makeStartBuild()} abortBuild={makeAbortBuild()} />);
     await waitFor(() => screen.getByTestId('mobile-build-card'));
 
     await act(async () => {
@@ -148,7 +179,7 @@ describe('<BuildsTab>', () => {
       status: 409,
       body: { error: 'Build is already active for COMP-MOBILE' },
     };
-    render(<BuildsTab />);
+    render(<BuildsTab active={null} loading={false} error={null} startBuild={makeStartBuild()} abortBuild={makeAbortBuild()} />);
     await waitFor(() => screen.getByTestId('mobile-build-start'));
 
     fireEvent.click(screen.getByTestId('mobile-build-start'));

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowRight, Bot, Cpu, User, ShieldCheck, RefreshCw, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { PIPELINE_STEPS, PIPELINE_PHASE_CONFIG } from './constants.js';
+import { mergePipelineSteps } from '../../lib/pipeline-steps.js';
 import EmptyState from './shared/EmptyState.jsx';
 import TemplateSelector from './TemplateSelector.jsx';
 import { wsFetch } from '../../lib/wsFetch.js';
@@ -175,28 +176,16 @@ export default function PipelineView({ activeBuild, pipelineDraft, onSelectStep,
   }
 
   // ── Mode: Active — existing live pipeline view ────────────────────────
-  // Build a lookup of stepId → live status from activeBuild.steps
+  const currentStepId = activeBuild?.currentStepId ?? null;
+
+  // COMP-UX-2b / COMP-MOBILE-1: Use shared mergePipelineSteps for desktop/mobile parity.
+  const stepSource = mergePipelineSteps(PIPELINE_STEPS, activeBuild?.steps ?? [], currentStepId);
+
+  // liveStatusMap is still needed below (:261) for StepNode connector rendering
+  // (raw live status, without the synthetic 'active' marker added by mergePipelineSteps).
   const liveStatusMap = Array.isArray(activeBuild?.steps)
     ? Object.fromEntries(activeBuild.steps.map(s => [s.id, s.status]))
     : {};
-  const currentStepId = activeBuild?.currentStepId ?? null;
-
-  // COMP-UX-2b: Always show full template; merge live status from activeBuild.steps
-  const liveStepMap = Array.isArray(activeBuild?.steps)
-    ? Object.fromEntries(activeBuild.steps.map(s => [s.id, s]))
-    : {};
-  const stepSource = PIPELINE_STEPS.map(t => {
-    const live = liveStepMap[t.id];
-    return live ? { ...t, ...live } : t;
-  });
-  // Append any dynamic steps not in the template (custom Stratum steps)
-  if (activeBuild?.steps) {
-    for (const s of activeBuild.steps) {
-      if (!PIPELINE_STEPS.find(t => t.id === s.id)) {
-        stepSource.push({ id: s.id, name: s.id.replace(/_/g, ' '), agent: 'claude', phase: 'implementation', ...s });
-      }
-    }
-  }
 
   // Group steps by phase
   const phaseGroups = Object.keys(PIPELINE_PHASE_CONFIG).map(phase => ({

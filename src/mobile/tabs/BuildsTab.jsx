@@ -1,22 +1,21 @@
 import React, { useCallback, useState } from 'react';
-import { useActiveBuild } from '../hooks/useActiveBuild.js';
+import { isTerminalBuildStatus } from '../../lib/pipeline-steps.js';
 import BuildCard from '../components/BuildCard.jsx';
 import BuildDetailView from '../components/BuildDetailView.jsx';
 import StartBuildSheet from '../components/StartBuildSheet.jsx';
 import Toast from '../components/Toast.jsx';
 
-function isTerminal(status) {
-  return status === 'completed' || status === 'aborted' || status === 'failed' || status === 'done';
-}
-
-export default function BuildsTab() {
-  const { active, loading, error, startBuild, abortBuild } = useActiveBuild();
+/**
+ * BuildsTab — receives active/loading/error/startBuild/abortBuild from the shell (MobileApp).
+ * Uses isTerminalBuildStatus from shared lib (covers both 'complete' and 'completed').
+ */
+export default function BuildsTab({ active, loading, error, startBuild, abortBuild }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [aborting, setAborting] = useState(false);
   const [toast, setToast] = useState(null);
 
-  const hasActive = !!(active && active.featureCode && !isTerminal(active.status));
+  const hasActive = !!(active && active.featureCode && !isTerminalBuildStatus(active.status));
 
   const handleStart = useCallback(async ({ featureCode, mode, description }) => {
     try {
@@ -63,7 +62,7 @@ export default function BuildsTab() {
           <div className="m-empty-state" data-testid="mobile-build-empty">
             <div className="m-empty-title">No active build</div>
             <div className="m-empty-body">
-              {active && isTerminal(active.status)
+              {active && isTerminalBuildStatus(active.status)
                 ? `Last build: ${active.featureCode} (${active.status})`
                 : 'Start a build to track progress here.'}
             </div>

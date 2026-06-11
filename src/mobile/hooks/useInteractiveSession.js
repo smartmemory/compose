@@ -11,16 +11,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { withComposeToken } from '../../lib/compose-api.js';
 
-const AGENT_PORT = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_AGENT_PORT) || '4002';
+import { agentServerUrl } from '../../lib/agentServer.js';
 const POLL_MS = 5000;
 
-function agentUrl(path) {
-  if (typeof window === 'undefined' || !window.location) return path;
-  return `${window.location.protocol}//${window.location.hostname}:${AGENT_PORT}${path}`;
-}
-
 async function postSensitive(path, body) {
-  const res = await fetch(agentUrl(path), {
+  const res = await fetch(agentServerUrl(path), {
     method: 'POST',
     headers: withComposeToken({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body || {}),
@@ -44,7 +39,7 @@ export function useInteractiveSession() {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(agentUrl('/api/agent/session/status'));
+      const res = await fetch(agentServerUrl('/api/agent/session/status'));
       const data = await res.json().catch(() => ({}));
       if (!aliveRef.current) return;
       setActive(!!data.active);
