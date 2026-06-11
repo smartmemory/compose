@@ -490,6 +490,18 @@ export function handleVisionMessage(msg, refs, setters) {
       );
     }
 
+  } else if (msg.type === 'devicePaired') {
+    // COMP-MOBILE-REMOTE S04: broadcast to PairDeviceModal (and any other listener)
+    // via a CustomEvent — same pattern as compose:notify in NotificationBar.
+    // No store field needed; the modal manages its own ephemeral pairing state.
+    try {
+      window.dispatchEvent(
+        new CustomEvent('compose:devicePaired', {
+          detail: { device_id: msg.device_id, name: msg.name, timestamp: msg.timestamp },
+        }),
+      );
+    } catch { /* ignore SSR / test env without window */ }
+
   } else if (msg.type === 'snapshotRequest' && msg.requestId) {
     // Collect UI state from provider and DOM, send back
     const { collectDOMSnapshot } = refs;

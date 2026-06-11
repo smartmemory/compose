@@ -12,6 +12,7 @@ import ContextItemDetail from './components/cockpit/ContextItemDetail.jsx';
 import ContextStepDetail from './components/cockpit/ContextStepDetail.jsx';
 import DesignDocPanel from './components/cockpit/DesignDocPanel.jsx';
 import NotificationBar, { notify } from './components/cockpit/NotificationBar.jsx';
+import PairDeviceModal from './components/cockpit/PairDeviceModal.jsx';
 import OpsStrip from './components/cockpit/OpsStrip.jsx';
 
 // Pure state-logic modules
@@ -534,6 +535,7 @@ function AppInner() {
   // COMP-COCKPIT-5: preselected type for the create dialog (empty-state CTA → 'feature').
   const [createInitialType, setCreateInitialType] = useState('task');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pairDeviceOpen, setPairDeviceOpen] = useState(false);
 
   // ── Project info ────────────────────────────────────────────────────────
   const [projectName, setProjectName] = useState('');
@@ -1106,6 +1108,16 @@ function AppInner() {
               </span>
             )}
 
+            {/* Pair mobile device */}
+            <button
+              className="compose-btn-icon"
+              onClick={() => setPairDeviceOpen(true)}
+              title="Pair mobile device"
+              aria-label="Pair mobile device"
+            >
+              {'\u{1F4F1}'}
+            </button>
+
             {/* Theme toggle */}
             <button
               className="compose-btn-icon"
@@ -1435,6 +1447,11 @@ function AppInner() {
           onSettingsChange={updateSettings}
         />
         </PanelErrorBoundary>
+
+        <PairDeviceModal
+          open={pairDeviceOpen}
+          onClose={() => setPairDeviceOpen(false)}
+        />
       </div>
     </VisionChangesContext.Provider>
     </NavigationContext.Provider>
