@@ -534,3 +534,70 @@ describe('Auth routes — broadcast on pair/complete', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// rotate-secret route (deviation: S01 omitted this; added in S03)
+// ---------------------------------------------------------------------------
+
+describe('Auth routes — rotate-secret', () => {
+  let dir;
+  let store;
+  let server;
+  let _origToken;
+
+  before(async () => {
+    dir = mkdtempSync(join(tmpdir(), 'auth-routes-rotate-'));
+    store = createAuthStore(dir);
+    _origToken = process.env.COMPOSE_API_TOKEN;
+    process.env.COMPOSE_API_TOKEN = 'rotate-test-token';
+    server = await listen(makeApp({ store }));
+  });
+
+  after(() => {
+    server.close();
+    rmSync(dir, { recursive: true, force: true });
+    if (_origToken === undefined) delete process.env.COMPOSE_API_TOKEN;
+    else process.env.COMPOSE_API_TOKEN = _origToken;
+  });
+
+  const SENSITIVE = { 'x-compose-token': 'rotate-test-token' };
+
+  test('POST /api/auth/rotate-secret without token → 401/503', async () => {
+    const r = await request(server, '/api/auth/rotate-secret', { method: 'POST', body: {} });
+    assert.ok(r.status === 401 || r.status === 503);
+  });
+
+  test('POST /api/auth/rotate-secret with sensitive token → { ok: true }', async () => {
+    const r = await request(server, '/api/auth/rotate-secret', {
+      method: 'POST',
+      body: {},
+      headers: SENSITIVE,
+    });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.ok, true);
+  });
+
+  test('POST /api/auth/rotate-secret invalidates outstanding JWTs', async () => {
+    // Pair a device to get a valid JWT from this store
+    const initR = await request(server, '/api/auth/pair/init', {
+      method: 'POST', body: {}, headers: SENSITIVE,
+    });
+    const completeR = await request(server, '/api/auth/pair/complete', {
+      method: 'POST', body: { code: initR.body.code, device_name: 'RotatePhone' },
+    });
+    const jwt = completeR.body.access_token;
+
+    // Verify the JWT is valid before rotation
+    const beforeResult = store.verifyAccessToken(jwt);
+    assert.ok(beforeResult.ok === true, `JWT should be valid before rotation: ${JSON.stringify(beforeResult)}`);
+
+    // Rotate the secret
+    await request(server, '/api/auth/rotate-secret', {
+      method: 'POST', body: {}, headers: SENSITIVE,
+    });
+
+    // JWT should now be invalid (signature verified against new secret → mismatch)
+    const afterResult = store.verifyAccessToken(jwt);
+    assert.ok(afterResult.ok === false, 'JWT should be invalid after secret rotation');
+  });
+});

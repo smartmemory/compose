@@ -109,6 +109,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('')
   console.log('Commands:')
   console.log('  start     Start the compose app (UI + API) for this project')
+  console.log('  remote    Manage remote access: pair, list, revoke, status')
   console.log('  new       Kickoff a product (research, brainstorm, roadmap, scaffold)')
   console.log('  import    Scan existing project and generate structured analysis')
   console.log('  feature   Add a single feature (folder, design seed, ROADMAP entry)')
@@ -2345,16 +2346,49 @@ if (cmd === 'build') {
     process.exit(1)
   }
 
+  // --host=<addr> forwards COMPOSE_HOST to the supervisor → api-server child.
+  // supervisor.js already threads COMPOSE_HOST to api-server only; agent-server
+  // stays 127.0.0.1 always (see supervisor.js ~line 146).
+  const hostFlagIdx = args.findIndex((a) => a.startsWith('--host='))
+  const startEnv = { ...process.env, COMPOSE_TARGET: targetRoot }
+  if (hostFlagIdx !== -1) {
+    startEnv.COMPOSE_HOST = args[hostFlagIdx].slice('--host='.length)
+  }
+
   const child = spawn('node', [join(PACKAGE_ROOT, 'server', 'supervisor.js')], {
     stdio: 'inherit',
     cwd: PACKAGE_ROOT,
-    env: { ...process.env, COMPOSE_TARGET: targetRoot },
+    env: startEnv,
   })
   child.on('error', (err) => {
     console.error(`Failed to start compose: ${err.message}`)
     process.exit(1)
   })
   child.on('exit', (code) => process.exit(code ?? 0))
+} else if (cmd === 'remote') {
+  // ---------------------------------------------------------------------------
+  // compose remote — remote access management (COMP-MOBILE-REMOTE S03)
+  // ---------------------------------------------------------------------------
+  const { runRemoteCommand } = await import('../lib/cli-remote.js')
+  const { root: remoteCwd } = resolveCwdWithWorkspace(args)
+
+  await runRemoteCommand(args, {
+    port: resolvePort(),
+    token: process.env.COMPOSE_API_TOKEN,
+    cwd: remoteCwd,
+    lines: { push: (l) => console.log(l) },
+    // qr and poll use defaults (qrcode-terminal + setTimeout)
+  }).catch((err) => {
+    // Errors already printed to output; only exit non-zero
+    if (
+      err.message !== 'COMPOSE_API_TOKEN not set' &&
+      err.message !== '--yes required' &&
+      err.message !== 'Missing device-id'
+    ) {
+      console.error(`remote: ${err.message}`)
+    }
+    process.exit(1)
+  })
 } else if (cmd === 'ideabox') {
   // ---------------------------------------------------------------------------
   // compose ideabox — idea management CLI
