@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { isRemoteMode, streamUrl } from '../lib/wsUrl.js';
 import MessageCard from './agent/MessageCard.jsx';
 import ChatInput from './agent/ChatInput.jsx';
 import {
@@ -264,7 +265,11 @@ function processMessage(msg) {
 
 function connect() {
   if (_state.es) return; // handle already exists
-  const url = `${window.location.protocol}//${window.location.hostname}:${AGENT_PORT}/api/agent/stream`;
+  // Remote mode (cockpit through a tunnel): only 4001 is exposed — use the
+  // authenticated proxy path. Localhost keeps the direct 4002 connection.
+  const url = isRemoteMode()
+    ? streamUrl('/api/agent/proxy/stream')
+    : `${window.location.protocol}//${window.location.hostname}:${AGENT_PORT}/api/agent/stream`;
 
   const handle = createAgentStream({
     url,
@@ -347,8 +352,13 @@ const COMPOSE_TOKEN = import.meta.env.VITE_COMPOSE_API_TOKEN;
 
 async function postAgent(path, body) {
   // TODO COMP-WORKSPACE-AGENT-SVR
+  // Remote mode: only 4001 is exposed — route through the authenticated proxy
+  // (path /api/agent/X → /api/agent/proxy/X, relative). Localhost: direct 4002.
+  const target = isRemoteMode()
+    ? path.replace(/^\/api\/agent\//, '/api/agent/proxy/')
+    : `${window.location.protocol}//${window.location.hostname}:${AGENT_PORT}${path}`;
   const res = await fetch(
-    `${window.location.protocol}//${window.location.hostname}:${AGENT_PORT}${path}`,
+    target,
     {
       method: 'POST',
       headers: {

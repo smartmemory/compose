@@ -19,6 +19,7 @@
  */
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { setWorkspaceId } from '../lib/wsFetch.js';
+import { setRemoteMode } from '../lib/wsUrl.js';
 
 const WorkspaceContext = createContext({
   loading: true,
@@ -43,6 +44,14 @@ export function WorkspaceProvider({ children }) {
       if (cancelledRef.current) return;
       setWorkspaceId(ws?.id ?? null);
       setState({ loading: false, error: null, workspace: ws });
+      // COMP-MOBILE-REMOTE: detect a remote-bound server so WS/SSE URL
+      // builders switch to token-carrying form (desktop served via tunnel).
+      // Best-effort — failures leave remote mode off (localhost default).
+      try {
+        const h = await fetch('/api/health');
+        const hj = await h.json().catch(() => ({}));
+        if (!cancelledRef.current && hj?.remote === true) setRemoteMode(true);
+      } catch { /* gate off / older server — stay local */ }
     } catch (err) {
       if (cancelledRef.current) return;
       setState({ loading: false, error: err, workspace: null });
