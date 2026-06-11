@@ -2,8 +2,10 @@ import React, { useCallback, useState } from 'react';
 import { isTerminalBuildStatus } from '../../lib/pipeline-steps.js';
 import BuildCard from '../components/BuildCard.jsx';
 import BuildDetailView from '../components/BuildDetailView.jsx';
+import BuildHistoryList from '../components/BuildHistoryList.jsx';
 import StartBuildSheet from '../components/StartBuildSheet.jsx';
 import Toast from '../components/Toast.jsx';
+import { useBuildHistory } from '../hooks/useBuildHistory.js';
 
 /**
  * BuildsTab — receives active/loading/error/startBuild/abortBuild from the shell (MobileApp).
@@ -14,6 +16,8 @@ export default function BuildsTab({ active, loading, error, startBuild, abortBui
   const [detailOpen, setDetailOpen] = useState(false);
   const [aborting, setAborting] = useState(false);
   const [toast, setToast] = useState(null);
+
+  const { builds, loading: histLoading, error: histError } = useBuildHistory({ active });
 
   const hasActive = !!(active && active.featureCode && !isTerminalBuildStatus(active.status));
 
@@ -89,6 +93,11 @@ export default function BuildsTab({ active, loading, error, startBuild, abortBui
           >Start another build</button>
         </div>
       )}
+
+      <div className="m-section" data-testid="mobile-build-history-section">
+        <h2 className="m-section-title">History</h2>
+        <BuildHistoryList builds={builds} loading={histLoading} error={histError} />
+      </div>
 
       <StartBuildSheet
         open={sheetOpen}

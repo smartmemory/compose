@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAgentStream } from '../../hooks/useAgentStream.js';
+import BuildStepsList from './BuildStepsList.jsx';
 
 function eventLine(evt, idx) {
   if (typeof evt === 'string') return evt;
@@ -21,6 +22,8 @@ export default function BuildDetailView({ active, onClose, onAbort }) {
   const bottomRef = useRef(null);
   const [aborting, setAborting] = useState(false);
   const [err, setErr] = useState(null);
+  // 'steps' is the default; 'log' shows the SSE stream
+  const [activeTab, setActiveTab] = useState('steps');
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -72,16 +75,44 @@ export default function BuildDetailView({ active, onClose, onAbort }) {
         </div>
       </header>
 
-      <div className="m-overlay-body m-agent-log">
-        {events.length === 0 ? (
-          <div className="m-empty">No live events yet.</div>
-        ) : (
-          events.map((e, i) => (
-            <div key={i} className="m-agent-log-line">{eventLine(e, i)}</div>
-          ))
-        )}
-        <div ref={bottomRef} />
+      {/* Steps / Log toggle */}
+      <div className="m-build-detail-tabs">
+        <button
+          type="button"
+          className={`m-build-detail-tab${activeTab === 'steps' ? ' is-active' : ''}`}
+          data-testid="mobile-build-detail-tab-steps"
+          aria-pressed={activeTab === 'steps'}
+          onClick={() => setActiveTab('steps')}
+        >
+          Steps
+        </button>
+        <button
+          type="button"
+          className={`m-build-detail-tab${activeTab === 'log' ? ' is-active' : ''}`}
+          data-testid="mobile-build-detail-tab-log"
+          aria-pressed={activeTab === 'log'}
+          onClick={() => setActiveTab('log')}
+        >
+          Log
+        </button>
       </div>
+
+      {activeTab === 'steps' ? (
+        <div className="m-overlay-body">
+          <BuildStepsList active={active} />
+        </div>
+      ) : (
+        <div className="m-overlay-body m-agent-log">
+          {events.length === 0 ? (
+            <div className="m-empty">No live events yet.</div>
+          ) : (
+            events.map((e, i) => (
+              <div key={i} className="m-agent-log-line">{eventLine(e, i)}</div>
+            ))
+          )}
+          <div ref={bottomRef} />
+        </div>
+      )}
 
       {err && <div className="m-agent-card-error">{err}</div>}
     </div>
