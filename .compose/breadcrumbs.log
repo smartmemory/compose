@@ -545,3 +545,18 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-10T07:13:30+08:00 | COMP-COCKPIT-8: cross-view entity links — EntityLink primitive + NavigationContext, wire gate/feature links across panels
 2026-06-10T07:20:58+08:00 | COMP-COCKPIT-9 S04: journal & changelog cockpit surface — journal-routes API + JournalView tab
 2026-06-10T07:32:08+08:00 | Wave 2 review fixes: token-gate export save, EntityLink resolvability, openGate stale no-op, stale comments
+2026-06-11T11:34:39+08:00 | COMP-MOBILE-1 Phase 1: write design.md for mobile monitoring-loop completeness
+2026-06-11T11:52:25+08:00 | COMP-MOBILE-1 Phase 4: write blueprint.md with file:line refs, corrections table, boundary map
+2026-06-11T12:03:22+08:00 | COMP-MOBILE-1 Phase 7 S01: shared pipeline-steps lib, AGENT_PORT hygiene, useRoadmapItems WS rewire, shell hook lift, badges + alert bar
+2026-06-11T12:10:55+08:00 | COMP-MOBILE-1 S01: creating shared pipeline-steps.js lib
+2026-06-11T12:12:20+08:00 | COMP-MOBILE-1 S01: desktop swap — constants.js re-export + PipelineView refactor
+2026-06-11T12:13:09+08:00 | COMP-MOBILE-1 S01: AGENT_PORT hygiene — replace local declarations with agentServerUrl import
+2026-06-11T12:13:48+08:00 | COMP-MOBILE-1 S01: useRoadmapItems WS rewire (visionState/hydrate + pending-ops) + PATCH token
+2026-06-11T12:15:16+08:00 | COMP-MOBILE-1 S01: BottomNav badges, MobileAlertBar, useMonitorEvents — write tests first
+2026-06-11T12:19:02+08:00 | COMP-MOBILE-1 S01: lift hooks from tabs to shell — prop-drill AgentsTab, BuildsTab, RoadmapTab
+2026-06-11T12:21:29+08:00 | COMP-MOBILE-1 S01: MobileApp shell lift — wire 3 hooks, MobileAlertBar, useMonitorEvents, badges
+2026-06-11T12:36:07+08:00 | COMP-MOBILE-1 Phase 7 S02: BuildStepsList, BuildDetailView steps/log toggle, useBuildHistory + BuildHistoryList
+2026-06-11T12:37:28+08:00 | S02: build steps list + history hook/list + detail view toggle + CSS
+2026-06-11T12:46:12+08:00 | COMP-MOBILE-1 Phase 7 S03: CreateItemSheet, ItemDetailSheet delete+connections, useRoadmapItems mutations, status/confidence contract fix
+2026-06-11T12:51:57+08:00 | S03 implementation: contract alignment + mutations + CreateItemSheet + FAB + connections
+2026-06-11T13:09:26+08:00 | COMP-MOBILE-1 coverage sweep: writing locking regression tests for 4 review findings + secondary gaps

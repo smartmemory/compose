@@ -2,6 +2,17 @@
 
 ## 2026-06-11
 
+### Added — COMP-MOBILE-1: mobile monitoring-loop completeness
+
+The mobile PWA can now complete its core monitoring journeys end-to-end (alerted → inspect → act), closing the P1 cluster from the 2026-06-10 mobile parity sweep. UI-only; every endpoint already existed.
+
+- **Badges + alert bar.** BottomNav shows a pending-gate count on Agents and failed/gate-pending dots on Builds; a new `MobileAlertBar` (shares the desktop `compose:notify` contract) surfaces gate-created, build-failed (sticky), and build-complete alerts via `useMonitorEvents`, with tap-to-navigate. Monitoring hooks (`usePendingGates`/`useActiveBuild`/`useRoadmapItems`) lifted to the shell so badge state survives tab switches.
+- **Build step breakdown.** `BuildDetailView` gains a Steps/Log toggle; `BuildStepsList` renders the merged pipeline (template + live status + active step from `currentStepId`), grouped by phase with done-run collapsing. The desktop `PipelineView` merge block was extracted to a shared `src/lib/pipeline-steps.js` (`PIPELINE_STEPS`, `mergePipelineSteps`, `isGatePending`, `isTerminalBuildStatus`) consumed by both surfaces.
+- **Build history.** `useBuildHistory` + `BuildHistoryList` on the Builds tab (`GET /api/builds`), with a 2.5s flowId-matched retry for the history-append race and a corrective "Build failed post-checks" alert when the health gate downgrades a build after its terminal `buildState` broadcast.
+- **Roadmap mutations.** Create (FAB → `CreateItemSheet`), delete (two-tap confirm), and connections (list/add/remove with the required server type enum) from the Roadmap tab; all roadmap mutations now send `x-compose-token`.
+- **Fixes folded in:** `useRoadmapItems` WS handler now consumes the server's actual `visionState`/`hydrate` snapshot broadcasts (old granular types were dead code) while preserving in-flight optimistic edits/creates/deletes; `ItemDetailSheet` status options drop the server-invalid `partial` (adds `ready`/`review`) and confidence is corrected to the server's 0–4 range; stale mobile `isTerminal` helpers (missing `complete`) replaced with the shared predicate; three AGENT_PORT re-declarations replaced with shared `agentServerUrl()` (COMP-COCKPIT-2 drift class).
+- Tests: +120 net new assertions (vitest 209→329 across pipeline-steps, notifications, builds, roadmap, coverage-sweep suites).
+
 ### Added — COMP-COCKPIT Wave 2: UX journey gaps (COCKPIT-7/8/9/10)
 
 - **COMP-COCKPIT-7 — failed-build retry.** Past Builds records with status failed/aborted get a Retry button dispatching the recorded `featureCode`+`mode` through a new shared `startBuild()` helper (also adopted by StartBuildPopover); the per-feature 409 surfaces as a warning toast.
