@@ -30,6 +30,7 @@ export function useRoadmapItems() {
   const itemsRef = useRef(items);
   itemsRef.current = items;
   const pendingOpsRef = useRef(new Map()); // id → patch, for snapshot overlay
+  const tmpCounterRef = useRef(0);
 
   const refetch = useCallback(async () => {
     try {
@@ -143,5 +144,112 @@ export function useRoadmapItems() {
     }
   }, []);
 
-  return { items, loading, error, connected, refetch, applyOptimisticEdit };
+  /**
+   * createItem(fields) — POST /api/vision/items with type:'feature' forced.
+   * Optimistically prepends with a tmp-<counter> id, swaps to server id on 2xx,
+   * removes on error.
+   */
+  const createItem = useCallback(async (fields) => {
+    if (!fields || typeof fields !== 'object') return { ok: false, error: 'invalid fields' };
+    const tmpId = `tmp-${++tmpCounterRef.current}`;
+    const optimisticItem = { ...fields, type: 'feature', id: tmpId };
+    setItems((prev) => [optimisticItem, ...prev]);
+    try {
+      const res = await wsFetch('/api/vision/items', {
+        method: 'POST',
+        headers: withComposeToken({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ ...fields, type: 'feature' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setItems((prev) => prev.filter((it) => it.id !== tmpId));
+        return { ok: false, error: data?.error || `HTTP ${res.status}` };
+      }
+      const serverItem = data?.item || null;
+      setItems((prev) =>
+        prev.map((it) => it.id === tmpId ? (serverItem ? { ...it, ...serverItem } : it) : it)
+      );
+      return { ok: true, item: serverItem };
+    } catch (err) {
+      setItems((prev) => prev.filter((it) => it.id !== tmpId));
+      return { ok: false, error: err?.message || 'Network error' };
+    }
+  }, []);
+
+  /**
+   * deleteItem(id) — optimistic removal, DELETE /api/vision/items/:id, rollback on error.
+   */
+  const deleteItem = useCallback(async (id) => {
+    if (!id) return { ok: false, error: 'id required' };
+    const prev = itemsRef.current;
+    setItems((cur) => cur.filter((it) => it.id !== id));
+    try {
+      const res = await wsFetch(`/api/vision/items/${id}`, {
+        method: 'DELETE',
+        headers: withComposeToken({ 'Content-Type': 'application/json' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setItems(prev);
+        return { ok: false, error: data?.error || `HTTP ${res.status}` };
+      }
+      return { ok: true };
+    } catch (err) {
+      setItems(prev);
+      return { ok: false, error: err?.message || 'Network error' };
+    }
+  }, []);
+
+  /**
+   * addConnection({ fromId, toId, type }) — POST /api/vision/connections.
+   * No optimistic item-state change; connections are sheet-local.
+   */
+  const addConnection = useCallback(async ({ fromId, toId, type }) => {
+    try {
+      const res = await wsFetch('/api/vision/connections', {
+        method: 'POST',
+        headers: withComposeToken({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ fromId, toId, type }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data?.error || `HTTP ${res.status}` };
+      return { ok: true, connection: data?.connection || data };
+    } catch (err) {
+      return { ok: false, error: err?.message || 'Network error' };
+    }
+  }, []);
+
+  /**
+   * removeConnection(id) — DELETE /api/vision/connections/:id.
+   */
+  const removeConnection = useCallback(async (id) => {
+    try {
+      const res = await wsFetch(`/api/vision/connections/${id}`, {
+        method: 'DELETE',
+        headers: withComposeToken({ 'Content-Type': 'application/json' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data?.error || `HTTP ${res.status}` };
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err?.message || 'Network error' };
+    }
+  }, []);
+
+  /**
+   * fetchItemDetail(id) — GET /api/vision/items/:id; returns { ok, item | error }.
+   * Used by ItemDetailSheet for lazy connections load.
+   */
+  const fetchItemDetail = useCallback(async (id) => {
+    try {
+      const res = await wsFetch(`/api/vision/items/${id}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data?.error || `HTTP ${res.status}` };
+      return { ok: true, item: data };
+    } catch (err) {
+      return { ok: false, error: err?.message || 'Network error' };
+    }
+  }, []);
+
+  return { items, loading, error, connected, refetch, applyOptimisticEdit, createItem, deleteItem, addConnection, removeConnection, fetchItemDetail };
 }

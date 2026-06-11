@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import FilterBar from '../components/FilterBar.jsx';
 import ItemCard from '../components/ItemCard.jsx';
 import ItemDetailSheet from '../components/ItemDetailSheet.jsx';
+import CreateItemSheet from '../components/CreateItemSheet.jsx';
 import Toast from '../components/Toast.jsx';
 
 function uniqueGroups(items) {
@@ -22,14 +23,26 @@ function matchesKeyword(item, kw) {
 }
 
 /**
- * RoadmapTab — receives items/loading/error/applyOptimisticEdit from the shell (MobileApp).
+ * RoadmapTab — receives items/loading/error/applyOptimisticEdit/createItem/
+ * deleteItem/addConnection/removeConnection/fetchItemDetail from the shell (MobileApp).
  */
-export default function RoadmapTab({ items = [], loading = false, error = null, applyOptimisticEdit }) {
+export default function RoadmapTab({
+  items = [],
+  loading = false,
+  error = null,
+  applyOptimisticEdit,
+  createItem,
+  deleteItem,
+  addConnection,
+  removeConnection,
+  fetchItemDetail,
+}) {
 
   const [statuses, setStatuses] = useState([]);
   const [group, setGroup] = useState('');
   const [keyword, setKeyword] = useState('');
   const [selectedId, setSelectedId] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const [toast, setToast] = useState(null);
 
   const groupOptions = useMemo(() => uniqueGroups(items), [items]);
@@ -58,6 +71,23 @@ export default function RoadmapTab({ items = [], loading = false, error = null, 
       setSelectedId(null);
     } else {
       setToast(result?.error || 'Save failed');
+    }
+  };
+
+  const handleCreate = async (fields) => {
+    const result = await createItem?.(fields);
+    if (!result?.ok) {
+      throw new Error(result?.error || 'Create failed');
+    }
+    // CreateItemSheet calls close() on resolved promise
+  };
+
+  const handleDelete = async (id) => {
+    const result = await deleteItem?.(id);
+    if (result?.ok) {
+      setSelectedId(null);
+    } else {
+      setToast(result?.error || 'Delete failed');
     }
   };
 
@@ -102,8 +132,28 @@ export default function RoadmapTab({ items = [], loading = false, error = null, 
           item={selected}
           onClose={() => setSelectedId(null)}
           onSave={handleSave}
+          onDelete={handleDelete}
+          allItems={items}
+          addConnection={addConnection}
+          removeConnection={removeConnection}
+          fetchItemDetail={fetchItemDetail}
         />
       ) : null}
+
+      <CreateItemSheet
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreate={handleCreate}
+        groupOptions={groupOptions}
+      />
+
+      <button
+        type="button"
+        className="m-fab"
+        data-testid="mobile-roadmap-fab"
+        aria-label="Create new roadmap item"
+        onClick={() => setCreateOpen(true)}
+      >+</button>
 
       <Toast message={toast} onDismiss={() => setToast(null)} />
     </section>
