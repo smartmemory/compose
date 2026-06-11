@@ -1,11 +1,35 @@
 {
   "code": "COMP-COCKPIT-9",
   "description": "Journal and changelog cockpit surface. The MCP tools are complete (write_journal_entry/get_journal_entries, add_changelog_entry/get_changelog_entries) but the cockpit's only trace is a \"journal\" status badge in AgentPanel.jsx:182 — the project's narrative memory cannot be browsed or written from the UI. Add a read surface (journal + changelog browse, filter by feature) and a lightweight write form, backed by thin routes wrapping the existing tool logic. P2 from the 2026-06-10 UX journey sweep.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "COMP-COCKPIT Wave 2: UX Journey Gaps (2026-06-10 sweep)",
   "created": "2026-06-09",
-  "updated": "2026-06-09",
+  "updated": "2026-06-11",
   "complexity": "M",
   "position": 3,
-  "parent": "COMP-COCKPIT"
+  "parent": "COMP-COCKPIT",
+  "completions": [
+    {
+      "completion_id": "COMP-COCKPIT-9:d717efa547123f50fc56bcc4078075d0623bd3ab",
+      "feature_code": "COMP-COCKPIT-9",
+      "commit_sha": "d717efa547123f50fc56bcc4078075d0623bd3ab",
+      "commit_sha_short": "d717efa5",
+      "tests_pass": true,
+      "files_changed": [
+        "server/journal-routes.js",
+        "server/vision-server.js",
+        "src/components/vision/JournalView.jsx",
+        "src/components/cockpit/viewTabsState.js",
+        "src/components/cockpit/ViewTabs.jsx",
+        "src/App.jsx",
+        "test/journal-routes.test.js",
+        "test/ui/journal-view.test.jsx",
+        "test/cockpit-layout.test.js"
+      ],
+      "recorded_at": "2026-06-11T02:23:07.353Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Journal/changelog routes + JournalView tab; review hardening in 6051e72/3b02bb7/8765090/b2bce68 (feature_code, journal-only form, fetch race guards)."
+    }
+  ],
+  "commit_sha": "d717efa547123f50fc56bcc4078075d0623bd3ab"
 }

@@ -10,6 +10,7 @@ Each entry is a dated session log capturing what we tried, what broke, what we l
 
 | Date | Entry | Summary |
 |------|-------|---------|
+| 2026-06-11 | [Session 71: COMP-COCKPIT Wave 2 shipped: build retry, EntityLink cross-view navigation, journal/changelog cockpit surface, orphan routes resolved](2026-06-11-session-71-cockpit-wave-2-ux-journey-gaps.md) | COMP-COCKPIT Wave 2 shipped: build retry, EntityLink cross-view navigation, journal/changelog cockpit surface, orphan routes resolved |
 | 2026-06-10 | [Session 70: get_roadmap gains general filtered rows[] + limit so /roadmap next reads PLANNED structured](2026-06-10-session-70-roadmap-read-rows.md) | get_roadmap gains general filtered rows[] + limit so /roadmap next reads PLANNED structured |
 | 2026-06-09 | [Session 69: get_roadmap read primitive closes the roadmap read-side gap; /roadmap skill rewired to prefer it](2026-06-09-session-69-mcp-roadmap-read.md) | get_roadmap read primitive closes the roadmap read-side gap; /roadmap skill rewired to prefer it |
 | 2026-06-08 | [Session 68: COMP-COCKPIT Slice B — run history, inline gate artifact, first-run empty-state CTAs; umbrella COMPLETE](2026-06-08-session-68-cockpit-slice-b.md) | COMP-COCKPIT Slice B — run history, inline gate artifact, first-run empty-state CTAs; umbrella COMPLETE |
