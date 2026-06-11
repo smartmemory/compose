@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { buildDraftDoc, buildTopicOutline } from './designSessionState.js';
 import { wsFetch } from '../../lib/wsFetch.js';
+import { streamUrl } from '../../lib/wsUrl.js';
 
 /**
  * useDesignStore — Zustand singleton store for design sessions.
@@ -237,7 +238,10 @@ const useDesignStore = create((set, get) => ({
     const { scope, featureCode } = get();
     const params = new URLSearchParams({ scope: scope || 'product' });
     if (featureCode) params.set('featureCode', featureCode);
-    const es = new EventSource(`/api/design/stream?${params}`);
+    const base = streamUrl('/api/design/stream');
+    // streamUrl may already carry ?token= in remote modes — join accordingly.
+    const sep = base.includes('?') ? '&' : '?';
+    const es = new EventSource(`${base}${sep}${params}`);
     _sse.es = es;
 
     // ack — fallback confirmation that server received the message

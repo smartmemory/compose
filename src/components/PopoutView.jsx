@@ -5,6 +5,7 @@ import { ArrowDownToLine } from 'lucide-react';
 import VisionTracker from './vision/VisionTracker.jsx';
 import ProductGraph from './ProductGraph.jsx';
 import { wsFetch } from '../lib/wsFetch.js';
+import { filesWsUrl } from '../lib/wsUrl.js';
 
 /*
  * PopoutView — renders a single tab's content in a standalone browser window.
@@ -117,8 +118,7 @@ export default function PopoutView({ path }) {
   useEffect(() => {
     if (rendererType === 'vision' || rendererType === 'graph') return;
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/files`);
+    const ws = new WebSocket(filesWsUrl());
     wsRef.current = ws;
 
     ws.onmessage = (event) => {

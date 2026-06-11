@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { ExternalLink, FolderOpen } from 'lucide-react';
 import ProductGraph from './ProductGraph.jsx';
 import { wsFetch } from '../lib/wsFetch.js';
+import { filesWsUrl } from '../lib/wsUrl.js';
 
 const POPOUT_CHANNEL = 'compose-popout';
 
@@ -264,8 +265,7 @@ export default function Canvas({ fontSize = 14 }) {
   // WebSocket connection
   useEffect(() => {
     function connect() {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${protocol}//${window.location.host}/ws/files`);
+      const ws = new WebSocket(filesWsUrl());
       wsRef.current = ws;
 
       ws.onopen = () => setConnected(true);

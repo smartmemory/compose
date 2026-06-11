@@ -3,7 +3,6 @@ import { useAgentStream } from '../../hooks/useAgentStream.js';
 import { wsFetch } from '../../lib/wsFetch.js';
 import { withComposeToken } from '../../lib/compose-api.js';
 
-import { agentServerUrl } from '../../lib/agentServer.js';
 
 function eventLine(evt, idx) {
   if (typeof evt === 'string') return evt;
@@ -28,7 +27,7 @@ export default function AgentDetailView({ agent, onClose }) {
     setKilling(true);
     setError(null);
     try {
-      const res = await wsFetch(agentServerUrl(`/api/agent/${encodeURIComponent(id)}/stop`), {
+      const res = await wsFetch(`/api/agent/${encodeURIComponent(id)}/stop`, {
         method: 'POST',
         headers: withComposeToken({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({}),

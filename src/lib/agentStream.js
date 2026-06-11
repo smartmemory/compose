@@ -11,6 +11,8 @@
  */
 
 import { agentServerUrl } from './agentServer.js';
+import { getAuthMode } from './wsFetch.js';
+import { streamUrl } from './wsUrl.js';
 
 const DEFAULT_MAX_BACKOFF_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 5;
@@ -185,5 +187,12 @@ export function createAgentStream({
  */
 export function defaultAgentStreamUrl() {
   if (typeof window === 'undefined' || !window.location) return '';
+  if (getAuthMode() === 'mobile-paired') {
+    // COMP-MOBILE-REMOTE S05: paired mode reaches the agent stream through the
+    // 4001 proxy (?token= carries the access JWT — EventSource can't set
+    // headers). agentStream reconnects on error, which re-invokes this builder
+    // and naturally picks up refreshed tokens.
+    return streamUrl('/api/agent/proxy/stream');
+  }
   return agentServerUrl('/api/agent/stream');
 }

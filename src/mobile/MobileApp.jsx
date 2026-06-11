@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { setSensitiveToken } from '../lib/compose-api';
+import { REFRESH_KEY, setSensitiveToken } from '../lib/compose-api';
+import { setAuthMode } from '../lib/wsFetch.js';
+import { setRemoteMode } from '../lib/wsUrl.js';
+import PairPage from './pages/PairPage.jsx';
 import { isGatePending } from '../lib/pipeline-steps.js';
 import BottomNav from './components/BottomNav';
 import AgentsTab from './tabs/AgentsTab';
@@ -27,7 +30,26 @@ function readTabFromPathname(pathname) {
 }
 
 export default function MobileApp() {
+  // COMP-MOBILE-REMOTE S05: /m/pair renders the pairing page (no BottomNav),
+  // checked BEFORE tab parsing (the tab regex maps unknown segments to the
+  // default tab, which would swallow the pair route).
+  const isPairPage = window.location.pathname === '/m/pair';
+
   const [tab, setTab] = useState(() => readTabFromPathname(window.location.pathname));
+
+  // COMP-MOBILE-REMOTE S05 dual-mode boot contract: a stored refresh token
+  // means this device completed pairing → enter paired mode. Otherwise stay
+  // in legacy ('cockpit') mode — today's behavior verbatim.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(REFRESH_KEY)) {
+        setAuthMode('mobile-paired');
+        setRemoteMode(true);
+      }
+    } catch {
+      // absence of localStorage must not crash the shell
+    }
+  }, []);
 
   // Token pairing: ?token=... → localStorage → setSensitiveToken; strip from URL.
   useEffect(() => {
@@ -106,6 +128,10 @@ export default function MobileApp() {
     badges.builds = { level: 'error' };
   } else if (isGatePending(active, gates, items)) {
     badges.builds = { level: 'warn' };
+  }
+
+  if (isPairPage) {
+    return <PairPage />;
   }
 
   // ── Tab content ───────────────────────────────────────────────────────────

@@ -16,11 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { wsFetch } from '../../lib/wsFetch.js';
 import { createReconnectingWS } from '../../lib/wsReconnect.js';
 import { withComposeToken } from '../../lib/compose-api.js';
-
-function visionWsUrl() {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${window.location.host}/ws/vision`;
-}
+import { visionWsUrl } from '../../lib/wsUrl.js';
 
 export function useRoadmapItems() {
   const [items, setItems] = useState([]);
@@ -56,7 +52,7 @@ export function useRoadmapItems() {
     let disposed = false;
     refetch();
     const handle = createReconnectingWS({
-      url: visionWsUrl(),
+      url: () => visionWsUrl(),
       onOpen: () => { if (!disposed) setConnected(true); },
       onClose: () => { if (!disposed) setConnected(false); },
       onMessage: (ev) => {

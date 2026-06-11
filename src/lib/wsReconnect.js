@@ -5,6 +5,9 @@
  * fixed 2s reconnect delay with exponential backoff capped at maxBackoffMs
  * (default 30s). Single connection identity, idempotent close().
  *
+ * `url` accepts a string or a () => string function (resolved per connect
+ * attempt — COMP-MOBILE-REMOTE S05 token-fresh reconnects).
+ *
  * Behavior parity for desktop: first reconnect attempt is ~1s (2^0 * 1000),
  * mirroring the previous ~2s feel. Subsequent attempts back off: 2s, 4s, 8s,
  * 16s, then capped at maxBackoffMs. The attempt counter resets to 0 on a
@@ -24,10 +27,14 @@ export function createReconnectingWS({
   let stopped = false;
   let reconnectTimer = null;
 
+  // COMP-MOBILE-REMOTE S05: url may be a function — resolved fresh per
+  // connect() attempt so reconnects pick up refreshed auth tokens.
+  function resolveUrl(u) { return typeof u === 'function' ? u() : u; }
+
   function connect() {
     if (stopped) return;
     try {
-      ws = new WebSocket(url);
+      ws = new WebSocket(resolveUrl(url));
     } catch (err) {
       // URL/protocol level failure — schedule retry rather than throw
       onError?.(err);
