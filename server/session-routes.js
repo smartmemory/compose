@@ -11,7 +11,7 @@
 
 import path from 'node:path';
 import { readSessionsByFeature } from './session-store.js';
-import { getTargetRoot, getDataDir } from './project-root.js';
+import { getTargetRoot, getDataDir, resolveProjectPath } from './project-root.js';
 import { appendPhaseHistory } from './lifecycle-phase-history.js';
 import { reconcile } from '../lib/checkpoint/reconciler.js';
 import { checkpointConfig } from '../lib/checkpoint/checkpoint-writer.js';
@@ -140,7 +140,7 @@ export function attachSessionRoutes(app, { sessionManager, scheduleBroadcast, br
         featureCode,
         item,
         cwd: targetRoot,
-        featureDir: path.join(targetRoot, 'docs', 'features', featureCode),
+        featureDir: path.join(resolveProjectPath('features'), featureCode),
         composeDir: path.join(targetRoot, '.compose'),
         dataDir,
         store: cpStore,

@@ -16,6 +16,8 @@ import { randomUUID } from 'node:crypto';
 import { parseDecisionBlocks } from '../src/components/vision/designSessionState.js';
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 import { KNOWN_VERSIONS } from '../lib/build-stream-schema.js';
+import { getTargetRoot, resolveProjectPath } from './project-root.js';
+import { relForDisplay } from '../lib/project-paths.js';
 
 // Lazy singleton — design conversations share one stratum-mcp connection
 // across the server process lifetime. Concurrent runs are correlation-id scoped.
@@ -444,16 +446,19 @@ Output ONLY the Markdown content, no code fences.`;
         return;
       }
 
-      // Determine the output path
-      let designDocPath;
+      // Determine the output path. Resolve the absolute write target first
+      // (features may be relocated outside the root — COMP-PATHS-EXTERNAL),
+      // then derive the display-relative string from it.
+      let absPath, designDocPath;
       if (scope === 'feature' && featureCode) {
-        designDocPath = path.join('docs', 'features', featureCode, 'design.md');
+        absPath = path.join(resolveProjectPath('features'), featureCode, 'design.md');
+        designDocPath = relForDisplay(getTargetRoot(), absPath);
       } else {
         designDocPath = path.join('docs', 'design.md');
+        absPath = path.join(projectRoot, designDocPath);
       }
 
       // Guard: never overwrite an existing doc with empty content
-      const absPath = path.join(projectRoot, designDocPath);
       if (!docContent.trim()) {
         console.error('[design] Generated doc is empty — refusing to overwrite');
         res.status(500).json({ error: 'Doc generation produced empty content' });

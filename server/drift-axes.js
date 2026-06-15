@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { diffContracts } from './contract-diff.js';
+import { resolveFeaturesPath } from '../lib/project-paths.js';
 
 // ── Threshold constants (Decision 2) ─────────────────────────────────────────
 
@@ -353,9 +354,10 @@ export function computeDriftAxes(item, projectRoot, now) {
 
   const ts = now || new Date().toISOString();
 
-  // Resolve the docs/features/<FC> directory
-  // projectRoot/docs/features/<FC>
-  const featurePath = path.join(projectRoot, 'docs', 'features', featureCode);
+  // Resolve the features/<FC> directory against projectRoot's own config
+  // (relocatable artifact paths, COMP-PATHS-EXTERNAL). Byte-identical to
+  // projectRoot/docs/features/<FC> for the in-root default.
+  const featurePath = path.join(resolveFeaturesPath(projectRoot), featureCode);
 
   const pathAxis = computePathDrift(item, projectRoot, featurePath, ts);
   const contractAxis = computeContractDrift(item, projectRoot, featurePath, ts);

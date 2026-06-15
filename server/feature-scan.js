@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { getTargetRoot, resolveProjectPath } from './project-root.js';
+import { relForDisplay } from '../lib/project-paths.js';
 import { assertValidLinkShape } from '../lib/feature-write-guard.js';
 
 // ---------------------------------------------------------------------------
@@ -608,6 +609,11 @@ export function seedFromRoadmapGraph(store) {
 export function seedFeatures(features, store) {
   const seeded = { features: 0, updated: 0, connections: 0 };
   const featureItemMap = new Map(); // featureCode → itemId
+  const root = getTargetRoot();
+  const featuresBase = resolveProjectPath('features');
+  // Root-relative for the in-root default (relForDisplay guarantees byte-identity
+  // there); absolute when the features dir is relocated outside the workspace root.
+  const artifactPath = (feature, a) => relForDisplay(root, path.join(featuresBase, feature.name, a));
 
   // First pass: create/update items
   for (const feature of features) {
@@ -623,7 +629,7 @@ export function seedFeatures(features, store) {
         status: feature.status || 'planned',
         phase: feature.phase || 'planning',
         confidence: feature.confidence,
-        files: feature.artifacts.map(a => `docs/features/${feature.name}/${a}`),
+        files: feature.artifacts.map(a => artifactPath(feature, a)),
         ...(feature.group ? { group: feature.group } : {}),
       });
       try {
@@ -643,7 +649,7 @@ export function seedFeatures(features, store) {
       if (feature.confidence > (featureItem.confidence || 0)) {
         updates.confidence = feature.confidence;
       }
-      const newFiles = feature.artifacts.map(a => `docs/features/${feature.name}/${a}`);
+      const newFiles = feature.artifacts.map(a => artifactPath(feature, a));
       if (JSON.stringify(newFiles) !== JSON.stringify(featureItem.files || [])) {
         updates.files = newFiles;
       }

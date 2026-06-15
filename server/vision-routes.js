@@ -42,7 +42,8 @@ function getSchemaValidator() {
 }
 
 import { randomUUID } from 'node:crypto';
-import { getTargetRoot, resolveProjectPath, loadProjectConfig } from './project-root.js';
+import { getTargetRoot, resolveProjectPath } from './project-root.js';
+import { resolveFeaturesPathFromConfig } from '../lib/project-paths.js';
 import { anchorBoundary } from '../lib/checkpoint/checkpoint-writer.js';
 import { appendGateLogEntry, readGateLog, mapResolveOutcomeToSchema } from './gate-log-store.js';
 import { addOpenLoop, resolveOpenLoop, listOpenLoops } from './open-loops-store.js';
@@ -54,6 +55,20 @@ import {
 import { requireSensitiveOrPaired as requireSensitiveToken } from './security.js';
 
 const PROJECT_ROOT = getTargetRoot();
+
+/**
+ * Read the compose.json config for an ARBITRARY workspace root (not the bound
+ * target). The alternate-root lifecycle branch must resolve `paths.features`
+ * against that root's own config, not the process-global cache
+ * (COMP-PATHS-EXTERNAL, Decision 1 / Codex finding 3).
+ */
+function loadComposeConfig(root) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(root, '.compose', 'compose.json'), 'utf-8'));
+  } catch {
+    return {};
+  }
+}
 
 /**
  * Attach vision CRUD and lifecycle REST routes to an Express app.
@@ -167,7 +182,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
 
   // ── Lifecycle endpoints (simplified — no state machine) ──────────────
   const featuresPath = projectRoot !== PROJECT_ROOT
-    ? path.join(projectRoot, loadProjectConfig().paths?.features || 'docs/features')
+    ? resolveFeaturesPathFromConfig(projectRoot, loadComposeConfig(projectRoot))
     : resolveProjectPath('features');
 
   // Phase graph + SKIPPABLE + TERMINAL are owned by lifecycle-guard.js (single
