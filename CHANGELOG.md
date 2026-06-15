@@ -2,6 +2,27 @@
 
 ## 2026-06-15
 
+### COMP-MIGRATE-UNIFY-VISION — fold the inline vision-state migrations into the shared registry
+
+Consolidates the two legacy vision-state transforms — `featureCode: "feature:X"` →
+`lifecycle.featureCode` and gate-outcome normalization (`approved→approve`, `killed→kill`,
+`revised→revise`) — that were inlined and duplicated across `server/vision-store.js` and
+`lib/vision-writer.js` into a **single implementation** in `lib/state-migrations.js`, reused by both
+the server load-time paths and the eager `runStateMigrations` runner. One `stateVersion` stamp now
+covers feature.json **and** vision-state; the eager runner walks cold `vision-state.json` too (the
+COMP-MIGRATE-ON-UPGRADE follow-up). Consolidation, not a correctness gap — vision-state was already
+migrated on every load; output is byte-identical (locked by a golden + a load-vs-eager parity test).
+
+**Changed:**
+- `lib/state-migrations.js` — registry entries gained a `target` discriminator (`feature` default /
+  `vision`); new `normalize-vision-legacy` entry (version 2); exported `migrateVisionItemFeatureCode`,
+  `normalizeGateOutcome`, `migrateVisionState`; `runStateMigrations` now walks
+  `.compose/data/vision-state.json` for vision-target migrations (absent ⇒ stamp-advancing no-op,
+  corrupt ⇒ reported, never blocks the stamp); `summarizeMigrationReport` is target-aware
+- `lib/vision-writer.js`, `server/vision-store.js` — `_load` paths delegate to the shared transforms
+- Tests: `test/state-migrations.test.js` — vision transform units, byte-identity golden, load-vs-eager
+  parity, eager vision-walk goldens; existing feature goldens made robust to the new latest version
+
 ### COMP-RTK-INTEROP — optional RTK output-compression interop (detect + recommend + wrap the one LLM-bound diff)
 
 Routes compose's single LLM-bound shell-out — the `git diff --no-color HEAD` fed to the Tier-1 Codex review — through [RTK](https://github.com/rtk-ai/rtk) (a lossy output compressor) when it is installed, degrading byte-identically to raw git when absent. Verification narrowed the roadmap row's broad claim ("route git diff/status/npm test"): RTK is lossy, so the many parse-bound git shell-outs (filename lists, SHA/shortstat parsing) and the patch-bound `git diff --cached HEAD` (re-applied via `git apply`) must NOT be wrapped — only one in-code site is genuinely LLM-bound. The larger token win lives in RTK's own Claude Code hook (`rtk init -g`), which compose now detects and recommends via `compose doctor`.
