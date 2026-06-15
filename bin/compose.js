@@ -17,6 +17,7 @@ import { fileURLToPath } from 'url'
 import { findProjectRoot } from '../server/find-root.js'
 import { resolveWorkspace, getWorkspaceFlag } from '../lib/resolve-workspace.js'
 import { resolvePort } from '../lib/resolve-port.js'
+import { resolveRoadmapPath, resolveFeaturesPath } from '../lib/project-paths.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PACKAGE_ROOT = resolve(__dirname, '..')
@@ -412,6 +413,7 @@ async function runInit(flags, cwdOverride) {
     },
     paths: {
       docs: 'docs',
+      roadmap: 'ROADMAP.md',
       features: 'docs/features',
       journal: 'docs/journal',
       context: 'docs/context',
@@ -464,8 +466,8 @@ async function runInit(flags, cwdOverride) {
   }
 
   // 5c. Scaffold docs/product/ideabox.md if absent
-  const ideaboxRel = config.paths.ideabox || 'docs/product/ideabox.md'
-  const ideaboxDest = join(cwd, ideaboxRel)
+  const { resolveIdeaboxPath: _resolveIdeaboxPathInit } = await import('../lib/project-paths.js')
+  const ideaboxDest = _resolveIdeaboxPathInit(cwd)
   if (!existsSync(ideaboxDest)) {
     mkdirSync(dirname(ideaboxDest), { recursive: true })
     const { IDEABOX_TEMPLATE } = await import('../lib/ideabox.js')
@@ -942,10 +944,12 @@ if (cmd === 'feature') {
 
   let config = {}
   try { config = JSON.parse(readFileSync(configPath, 'utf-8')) } catch {}
-  const featuresDir = config.paths?.features || 'docs/features'
+  // COMP-PATHS-EXTERNAL: absolute features dir (may be relocated outside cwd).
+  // Never join(cwd, …) below — that would re-root an absolute/../-escaping override.
+  const featuresDir = resolveFeaturesPath(cwd)
 
   // 1. Create feature folder + seed design doc
-  const featureDir = join(cwd, featuresDir, featureCode)
+  const featureDir = join(featuresDir, featureCode)
   const designPath = join(featureDir, 'design.md')
 
   if (existsSync(designPath)) {
@@ -985,7 +989,7 @@ if (cmd === 'feature') {
   // Count existing features for complexity estimate
   const existingFeatureCount = (() => {
     try {
-      const fdir = join(cwd, featuresDir)
+      const fdir = featuresDir
       if (!existsSync(fdir)) return 0
       return readdirSync(fdir, { withFileTypes: true })
         .filter(e => e.isDirectory() && existsSync(join(fdir, e.name, 'feature.json')))
@@ -1042,7 +1046,7 @@ _This is a seed design doc created by \`compose feature\`. The \`compose build\`
   console.log(`Created ${designPath}`)
 
   // 2. Add entry to ROADMAP.md
-  const roadmapPath = join(cwd, 'ROADMAP.md')
+  const roadmapPath = resolveRoadmapPath(cwd)
   if (existsSync(roadmapPath)) {
     let roadmap = readFileSync(roadmapPath, 'utf-8')
 
@@ -1157,7 +1161,7 @@ if (cmd === 'roadmap') {
     const { checkRoundtrip, describeLossyDiff } = await import('../lib/roadmap-roundtrip.js')
     const { loadExternalPrefixes } = await import('../lib/project-paths.js')
     const { root: cwd } = resolveCwdWithWorkspace(args)
-    const roadmapPath = join(cwd, 'ROADMAP.md')
+    const roadmapPath = resolveRoadmapPath(cwd)
     if (!existsSync(roadmapPath)) {
       console.error('No ROADMAP.md found. Run: compose roadmap generate')
       process.exit(1)
@@ -1350,7 +1354,7 @@ if (cmd === 'roadmap') {
   }
 
   const { root: cwd } = resolveCwdWithWorkspace(args)
-  const roadmapPath = join(cwd, 'ROADMAP.md')
+  const roadmapPath = resolveRoadmapPath(cwd)
 
   if (existsSync(roadmapPath)) {
     // Show cwd roadmap
@@ -2426,7 +2430,11 @@ if (cmd === 'build') {
   } = await import('../lib/ideabox.js')
 
   const ibRelPath = getIdeaboxRelPath(ibCwd)
-  const ibFullPath = join(ibCwd, ibRelPath)
+  // ibFullPath is used for direct file ops (existsSync/mkdirSync/writeFileSync/
+  // display); resolve it absolute-safe. ibRelPath stays relative because the
+  // lib readIdeabox/writeIdeabox readers re-join it under ibCwd.
+  const { resolveIdeaboxPath: _resolveIdeaboxPathCli } = await import('../lib/project-paths.js')
+  const ibFullPath = _resolveIdeaboxPathCli(ibCwd)
 
   if (!ibSubcmd || ibSubcmd === '--help' || ibSubcmd === '-h') {
     console.log('Usage: compose ideabox <subcommand>')

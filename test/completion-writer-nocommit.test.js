@@ -37,7 +37,7 @@ describe('commit-less completion (Decision 6b)', () => {
     });
 
     assert.equal(res.commit_sha, NULL_SHA, 'stamps the null-SHA sentinel');
-    assert.equal(res.completion_id, `EXT-1:${NULL_SHA}`);
+    assert.match(res.completion_id, /^EXT-1:nocommit:/, 'commit-less id is distinct from the sha (no aliasing)');
     assert.deepEqual(res.status_changed, { from: 'IN_PROGRESS', to: 'COMPLETE' });
 
     assert.equal(readFeature(cwd, 'EXT-1').status, 'COMPLETE');
@@ -51,6 +51,17 @@ describe('commit-less completion (Decision 6b)', () => {
     const res = await recordCompletion(cwd, { feature_code: 'EXT-2', commit_sha: null, tests_pass: true, files_changed: [] });
     assert.equal(res.commit_sha, NULL_SHA);
     assert.equal(readFeature(cwd, 'EXT-2').status, 'COMPLETE');
+  });
+
+  test('two commit-less completions of one feature are DISTINCT records (no id collision)', async () => {
+    const cwd = freshCwd();
+    seed(cwd, { code: 'EXT-4', status: 'IN_PROGRESS' });
+    const a = await recordCompletion(cwd, { feature_code: 'EXT-4', tests_pass: true, files_changed: [], set_status: false });
+    const b = await recordCompletion(cwd, { feature_code: 'EXT-4', tests_pass: true, files_changed: [], set_status: false });
+    assert.notEqual(a.completion_id, b.completion_id, 'null-SHA completions must not alias onto one id');
+    assert.notEqual(b.idempotent, true, 'second completion is a real record, not an idempotent no-op');
+    const { count } = getCompletions(cwd, { feature_code: 'EXT-4' });
+    assert.equal(count, 2);
   });
 
   test('a PRESENT but malformed commit_sha is still rejected', async () => {
