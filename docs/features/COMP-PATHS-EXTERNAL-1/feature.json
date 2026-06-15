@@ -1,0 +1,10 @@
+{
+  "code": "COMP-PATHS-EXTERNAL-1",
+  "description": "**Cross-repo auto-commit of external artifacts.** Fast-follow to COMP-PATHS-EXTERNAL. When ROADMAP/features resolve into a separate git repo (e.g. `smart-memory-docs`), the build ship step currently writes them but cannot commit them (git sees only the workspace repo). This ticket teaches ship to commit the external repo via `git -C <external>`, with safety for unrelated dirty files in that repo (stage only Compose-owned paths, never a blanket `git add -A`). Depends on COMP-PATHS-EXTERNAL.",
+  "status": "PLANNED",
+  "phase": "Backlog",
+  "created": "2026-06-15",
+  "updated": "2026-06-15",
+  "complexity": "S",
+  "position": 2
+}
