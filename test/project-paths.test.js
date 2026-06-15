@@ -8,7 +8,13 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { loadFeaturesDir, loadExternalPrefixes, _internals } from '../lib/project-paths.js';
+import {
+  loadFeaturesDir, loadExternalPrefixes, _internals,
+  resolveFeaturesPath, resolveRoadmapPath, resolveJournalPath,
+  resolveContextPath, resolveIdeaboxPath, resolveDocsPath,
+  resolveFeaturesPathFromConfig, resolveJournalPathFromConfig,
+} from '../lib/project-paths.js';
+import { join as pjoin } from 'node:path';
 
 function freshCwd() {
   return mkdtempSync(join(tmpdir(), 'project-paths-'));
@@ -61,6 +67,36 @@ describe('loadFeaturesDir', () => {
     const cwd = freshCwd();
     writeConfig(cwd, { paths: { features: 42 } });
     assert.equal(loadFeaturesDir(cwd), 'docs/features');
+  });
+});
+
+describe('resolve*Path readers (absolute)', () => {
+  test('default-identity: unset config → legacy absolute path per key', () => {
+    const cwd = freshCwd();
+    assert.equal(resolveDocsPath(cwd),    pjoin(cwd, 'docs'));
+    assert.equal(resolveRoadmapPath(cwd), pjoin(cwd, 'ROADMAP.md'));
+    assert.equal(resolveFeaturesPath(cwd),pjoin(cwd, 'docs/features'));
+    assert.equal(resolveJournalPath(cwd), pjoin(cwd, 'docs/journal'));
+    assert.equal(resolveContextPath(cwd), pjoin(cwd, 'docs/context'));
+    assert.equal(resolveIdeaboxPath(cwd), pjoin(cwd, 'docs/product/ideabox.md'));
+  });
+
+  test('honors an absolute override (not re-rooted under cwd)', () => {
+    const cwd = freshCwd();
+    writeConfig(cwd, { paths: { features: '/external/docs/features', roadmap: '/external/ROADMAP.md' } });
+    assert.equal(resolveFeaturesPath(cwd), '/external/docs/features');
+    assert.equal(resolveRoadmapPath(cwd), '/external/ROADMAP.md');
+  });
+
+  test('honors a ../-escaping override', () => {
+    const cwd = freshCwd();
+    writeConfig(cwd, { paths: { features: '../shared-docs/features' } });
+    assert.equal(resolveFeaturesPath(cwd), pjoin(cwd, '../shared-docs/features'));
+  });
+
+  test('*FromConfig resolves against the PASSED root/config (no file read)', () => {
+    assert.equal(resolveFeaturesPathFromConfig('/other/root', { paths: { features: 'specs/f' } }), '/other/root/specs/f');
+    assert.equal(resolveJournalPathFromConfig('/other/root', {}), '/other/root/docs/journal');
   });
 });
 
