@@ -15,6 +15,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { findProjectRoot } from './find-root.js';
+import { DEFAULT_PATHS, resolvePathValue } from '../lib/paths-core.js';
 
 export { findProjectRoot } from './find-root.js';
 
@@ -99,7 +100,7 @@ export function ensureDataDir() {
 const DEFAULT_CONFIG = Object.freeze({
   version: 1,
   capabilities: Object.freeze({ stratum: true, lifecycle: true }),
-  paths: Object.freeze({ docs: 'docs', features: 'docs/features', journal: 'docs/journal' }),
+  paths: DEFAULT_PATHS,                        // single source of truth (COMP-PATHS-EXTERNAL)
 });
 
 function cloneConfig(obj) {
@@ -120,9 +121,11 @@ export function loadProjectConfig() {
 
 export function resolveProjectPath(key) {
   const config = loadProjectConfig();
-  const rel = config.paths?.[key];
-  if (!rel) return path.join(getTargetRoot(), DEFAULT_CONFIG.paths[key] || key);
-  return path.join(getTargetRoot(), rel);
+  // resolvePathValue handles in-root / ../-escaping / absolute overrides.
+  // Preserve the legacy `|| key` fallback for keys absent from DEFAULT_PATHS.
+  // (COMP-PATHS-EXTERNAL)
+  const value = config.paths?.[key] ?? DEFAULT_PATHS[key] ?? key;
+  return resolvePathValue(getTargetRoot(), value, key);
 }
 
 /**
