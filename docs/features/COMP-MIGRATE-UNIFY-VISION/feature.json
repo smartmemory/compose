@@ -1,0 +1,8 @@
+{
+  "code": "COMP-MIGRATE-UNIFY-VISION",
+  "description": "Fold the inline vision-state migrations (legacy featureCode→lifecycle.featureCode + gate-outcome normalize) into the shared state-migration registry as a single implementation reused by both the server load-time paths and the eager runStateMigrations runner. One stateVersion stamp now covers feature.json + vision-state; the eager runner walks cold vision-state too. Consolidation, not a correctness gap (vision-state already migrated on load).",
+  "status": "COMPLETE",
+  "phase": "Standalone",
+  "created": "2026-06-10",
+  "updated": "2026-06-15"
+}

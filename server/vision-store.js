@@ -13,6 +13,7 @@ export const VALID_CONNECTION_TYPES = ['informs', 'blocks', 'supports', 'contrad
 export const VALID_PHASES = ['vision', 'specification', 'planning', 'implementation', 'verification', 'release'];
 
 import { getDataDir as getDefaultDataDir } from './project-root.js';
+import { migrateVisionItemFeatureCode, normalizeGateOutcome } from '../lib/state-migrations.js';
 
 const DATA_FILE = path.join(getDefaultDataDir(), 'vision-state.json');
 
@@ -67,14 +68,8 @@ export class VisionStore {
       let migrated = false;
       if (Array.isArray(data.items)) {
         for (const item of data.items) {
-          // Migration: legacy featureCode → lifecycle.featureCode
-          if (item.featureCode && item.featureCode.startsWith('feature:') && !item.lifecycle?.featureCode) {
-            const bare = item.featureCode.replace(/^feature:/, '');
-            item.lifecycle = item.lifecycle || {};
-            item.lifecycle.featureCode = bare;
-            delete item.featureCode;
-            migrated = true;
-          }
+          // Migration: legacy featureCode → lifecycle.featureCode (shared impl)
+          if (migrateVisionItemFeatureCode(item).changed) migrated = true;
           if (!item.slug && item.title) item.slug = slugify(item.title);
           if (!item.files) item.files = [];
           // Group precedence (most-authoritative first):
@@ -110,10 +105,10 @@ export class VisionStore {
             if (seenPendingKeys.has(key)) { migrated = true; continue; }
             seenPendingKeys.add(key);
           }
-          // Migration: normalize legacy gate outcomes
+          // Migration: normalize legacy gate outcomes (shared impl)
           if (gate.outcome) {
-            const map = { approved: 'approve', killed: 'kill', revised: 'revise' };
-            if (map[gate.outcome]) { gate.outcome = map[gate.outcome]; migrated = true; }
+            const normalized = normalizeGateOutcome(gate.outcome);
+            if (normalized !== gate.outcome) { gate.outcome = normalized; migrated = true; }
           }
           this.gates.set(gate.id, gate);
         }
