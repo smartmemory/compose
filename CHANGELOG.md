@@ -2,6 +2,29 @@
 
 ## 2026-06-15
 
+### Stratum poll is sleep-aware — no cold-start when idle
+
+The vision-store stratum poller (`server/stratum-sync.js`) cold-started a `stratum-mcp` Python
+subprocess every 15s (`queryFlows` → `execFile('stratum-mcp', …)`), unconditionally. That periodic
+process spawn — interpreter spin-up, the expensive part, not the query — generated enough activity to
+keep the host from sleeping even with no flow active. The poller now widens its cadence to 60s and,
+more importantly, **skips the spawn entirely when nothing bound can still change state**, so an
+idle/finished Forge does zero periodic spawning and the host is free to sleep. The gate is a pure
+in-memory scan (`hasLiveFlows`) that holds no power assertion. The loop is now a self-scheduling
+`setTimeout` that also detects a wake-from-sleep gap and resyncs immediately rather than waiting a
+full interval.
+
+**Added:**
+- `hasLiveFlows(items)` (exported) in `server/stratum-sync.js` — true only when some bound vision item
+  is not settled-`complete`; gates the per-tick spawn
+- `COMPOSE_STRATUM_POLL_MS` env override for the poll cadence (default 60000, floor 1000)
+- `test/stratum-sync.test.js` — `hasLiveFlows` truth table (incl. `Map.values()` iterator) + cadence /
+  idle-gating source checks
+
+**Changed:**
+- `StratumSync` poll loop: `setInterval(15s)` → self-scheduling `setTimeout` (default 60s), spawn gated
+  on `hasLiveFlows`, wake-gap logged and resynced; `stop()` is now final
+
 ### FORGE-ROADMAP-RETIRE-STORE — `capabilities.lifecycle:false` retires the MCP vision store
 
 A workspace can now set `capabilities.lifecycle: false` to RETIRE its vision/lifecycle store — used by

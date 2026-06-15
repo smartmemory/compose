@@ -2,13 +2,57 @@
  * stratum-sync.js — Stratum flow poller + route registration.
  *
  * Polls stratum flow state via stratum-client (not direct file reads) and syncs
- * into the vision store every 15 seconds.
+ * into the vision store on a self-scheduling, sleep-aware loop.
+ *
+ * Sleep behavior: each poll cold-starts a `stratum-mcp` subprocess (Python
+ * interpreter spin-up — the expensive part, not the query itself). Doing that
+ * every few seconds generated enough periodic activity to keep the host from
+ * sleeping. Two mitigations:
+ *   1. Cadence widened to 60s (override with COMPOSE_STRATUM_POLL_MS).
+ *   2. The spawn is skipped entirely when no bound flow can still change state
+ *      (`hasLiveFlows`), so an idle/finished Forge does zero periodic spawning
+ *      and the host is free to sleep. The cheap in-memory scan that gates this
+ *      holds no power assertion.
+ * On wake, a tick that fired far later than scheduled is treated as a
+ * post-sleep resync rather than business as usual.
  *
  * Routes: POST /api/stratum/bind, POST /api/stratum/audit/:itemId
  * (Flow/gate query routes are now in stratum-api.js)
  */
 
 import { queryFlows } from './stratum-client.js';
+
+// Poll cadence. 60s is plenty for a flow list (slower than any build step) and
+// keeps periodic process-spawn activity low enough not to fight host sleep.
+const DEFAULT_POLL_MS = 60_000;
+const MIN_POLL_MS = 1_000;
+const POLL_MS = (() => {
+  const raw = parseInt(process.env.COMPOSE_STRATUM_POLL_MS ?? '', 10);
+  return Number.isFinite(raw) && raw >= MIN_POLL_MS ? raw : DEFAULT_POLL_MS;
+})();
+// A tick that fires later than POLL_MS * this factor means the host slept
+// through scheduled ticks — log it and treat the next sync as a wake resync.
+const WAKE_GAP_FACTOR = 1.5;
+
+/**
+ * Sleep-aware poll gate: true only when some bound vision item could still
+ * change state (i.e. is bound to a flow and not settled-`complete`). When this
+ * is false the poller skips the stratum-mcp spawn so an idle host can sleep.
+ *
+ * A bound `complete` item is steady-state (status only advances to `complete`
+ * via the audit route, never back), so polling it changes nothing. Anything
+ * else bound — `in_progress`, `blocked`, or mid-flight — can still transition
+ * and is worth a poll.
+ *
+ * @param {Iterable<{stratumFlowId?: string, status?: string}>} items
+ * @returns {boolean}
+ */
+export function hasLiveFlows(items) {
+  for (const item of items) {
+    if (item.stratumFlowId && item.status !== 'complete') return true;
+  }
+  return false;
+}
 
 // ---------------------------------------------------------------------------
 // StratumSync class
@@ -18,6 +62,8 @@ export class StratumSync {
   #store;
   #scheduleBroadcast;
   #pollTimer = null;
+  #stopped = true;
+  #lastTickAt = 0;
 
   /**
    * @param {object} store — VisionStore instance
@@ -28,21 +74,51 @@ export class StratumSync {
     this.#scheduleBroadcast = scheduleBroadcast;
   }
 
-  /** Start the 15s polling interval. */
+  /** Start the self-scheduling, sleep-aware poll loop (default 60s). */
   start() {
-    this.#pollTimer = setInterval(() => {
-      this.#syncFlows().catch(err => {
-        console.error('[vision] Stratum poll error:', err.message);
-      });
-    }, 15_000);
+    this.#stopped = false;
+    this.#lastTickAt = Date.now();
+    this.#scheduleNext();
   }
 
-  /** Stop the polling interval. */
+  /** Stop the poll loop. */
   stop() {
+    this.#stopped = true;
     if (this.#pollTimer) {
-      clearInterval(this.#pollTimer);
+      clearTimeout(this.#pollTimer);
       this.#pollTimer = null;
     }
+  }
+
+  /** Arm the next tick. No-op once stopped so stop() is final. */
+  #scheduleNext() {
+    if (this.#stopped) return;
+    this.#pollTimer = setTimeout(() => this.#tick(), POLL_MS);
+  }
+
+  /**
+   * One poll tick. Skips the stratum-mcp spawn when nothing is live (lets the
+   * host sleep); on a tick that fired far later than scheduled, notes the
+   * sleep gap before resyncing.
+   */
+  async #tick() {
+    if (this.#stopped) return;
+    const now = Date.now();
+    const gap = now - this.#lastTickAt;
+    this.#lastTickAt = now;
+
+    if (hasLiveFlows(this.#store.items.values())) {
+      if (gap > POLL_MS * WAKE_GAP_FACTOR) {
+        console.log(`[vision] Stratum sync resuming after ${Math.round(gap / 1000)}s gap (host likely slept) — resyncing`);
+      }
+      try {
+        await this.#syncFlows();
+      } catch (err) {
+        console.error('[vision] Stratum poll error:', err.message);
+      }
+    }
+
+    this.#scheduleNext();
   }
 
   /**
