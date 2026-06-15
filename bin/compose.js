@@ -17,7 +17,7 @@ import { fileURLToPath } from 'url'
 import { findProjectRoot } from '../server/find-root.js'
 import { resolveWorkspace, getWorkspaceFlag } from '../lib/resolve-workspace.js'
 import { resolvePort } from '../lib/resolve-port.js'
-import { resolveRoadmapPath, resolveFeaturesPath } from '../lib/project-paths.js'
+import { resolveRoadmapPath, resolveFeaturesPath, resolveContextPathFromConfig, resolveFeaturesPathFromConfig } from '../lib/project-paths.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PACKAGE_ROOT = resolve(__dirname, '..')
@@ -449,8 +449,9 @@ async function runInit(flags, cwdOverride) {
     }
   }
 
-  // 5b. Scaffold docs/context/ with ambient context templates
-  const contextDir = join(cwd, config.paths.context)
+  // 5b. Scaffold docs/context/ with ambient context templates.
+  // COMP-PATHS-EXTERNAL: resolve from the in-memory config (may be relocated).
+  const contextDir = resolveContextPathFromConfig(cwd, config)
   mkdirSync(contextDir, { recursive: true })
   const contextTemplates = {
     'tech-stack.md': '# Tech Stack\n\nDescribe your technology stack here.\n',
@@ -2552,9 +2553,10 @@ if (cmd === 'build') {
       resolvedCode = `IDEA-${idea.num}-${slug}`.toUpperCase()
     }
 
-    // Create feature folder if missing — respect paths.features from compose.json
-    const featuresRel = ibConfig.paths?.features || 'docs/features'
-    const featuresDir = join(ibCwd, featuresRel, resolvedCode)
+    // Create feature folder if missing — respect paths.features (may be
+    // relocated outside ibCwd — COMP-PATHS-EXTERNAL; resolve absolute, no re-root)
+    const featuresBase = resolveFeaturesPathFromConfig(ibCwd, ibConfig)
+    const featuresDir = join(featuresBase, resolvedCode)
     if (!existsSync(featuresDir)) {
       // COMP-MCP-VALIDATE-1: route through the validated writer (schema-guarded)
       // instead of a raw writeFileSync.
@@ -2565,8 +2567,8 @@ if (cmd === 'build') {
         status: 'PLANNED',
         promotedFrom: ideaId,
         createdAt: new Date().toISOString(),
-      }, featuresRel)
-      console.log(`Created feature folder: ${featuresRel}/${resolvedCode}/`)
+      }, featuresBase)
+      console.log(`Created feature folder: ${join(featuresBase, resolvedCode)}/`)
     }
 
     _promoteIdea(parsed, ideaId, resolvedCode)

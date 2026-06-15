@@ -70,7 +70,8 @@ export class FileWatcherServer {
     app.get('/api/files', (_req, res) => {
       const config = loadProjectConfig();
       const docsPrefix = config.paths?.docs || 'docs';
-      const docsDir = path.join(PROJECT_ROOT, docsPrefix);
+      // COMP-PATHS-EXTERNAL: list the RESOLVED docs dir (may be relocated).
+      const docsDir = resolveDocsPathFromConfig(PROJECT_ROOT, config);
       try {
         const files = this.listMarkdownFiles(docsDir, docsPrefix);
         res.json({ files });
