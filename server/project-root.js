@@ -124,3 +124,17 @@ export function resolveProjectPath(key) {
   if (!rel) return path.join(getTargetRoot(), DEFAULT_CONFIG.paths[key] || key);
   return path.join(getTargetRoot(), rel);
 }
+
+/**
+ * Whether the bound workspace runs the lifecycle/vision store.
+ *
+ * FORGE-ROADMAP-RETIRE-STORE: a workspace sets `capabilities.lifecycle: false`
+ * to RETIRE its vision store — used by narrative-owned workspaces (e.g. forge-top)
+ * where the prose ROADMAP is the single source of truth and a second, frozen
+ * `vision-state.json` would only be a drift-prone parallel answer. Default true
+ * (absent ⇒ enabled); only an explicit `false` disables it.
+ * @returns {boolean}
+ */
+export function isLifecycleEnabled() {
+  return loadProjectConfig().capabilities?.lifecycle !== false;
+}

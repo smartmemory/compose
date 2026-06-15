@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { ArtifactManager, ARTIFACT_SCHEMAS } from './artifact-manager.js';
-import { getTargetRoot, getDataDir, resolveProjectPath, switchProject, setCurrentWorkspaceId, loadProjectConfig } from './project-root.js';
+import { getTargetRoot, getDataDir, resolveProjectPath, switchProject, setCurrentWorkspaceId, loadProjectConfig, isLifecycleEnabled } from './project-root.js';
 import { resolveProfile, isToolAllowed } from './mcp-tool-policy.js';
 import { getRoadmap } from '../lib/get-roadmap.js';
 
@@ -125,6 +125,14 @@ export function getSessionsFile() { return path.join(getDataDir(), 'sessions.jso
 // ---------------------------------------------------------------------------
 
 export function loadVisionState() {
+  // FORGE-ROADMAP-RETIRE-STORE: when the bound workspace disables the lifecycle
+  // capability (capabilities.lifecycle:false — e.g. a narrative-owned forge-top),
+  // the vision store is RETIRED. Every MCP vision read funnels through here, so
+  // returning the empty shape guarantees get_vision_items (and every dependent:
+  // phase summary, item detail, pending gates, lifecycle status) can't surface a
+  // second, drift-prone answer beside the prose ROADMAP. Reads stay inert even if
+  // a stray write later recreates the file. get_roadmap (narrative) is unaffected.
+  if (!isLifecycleEnabled()) return { items: [], connections: [], gates: [] };
   try {
     const raw = fs.readFileSync(getVisionFile(), 'utf-8');
     const state = JSON.parse(raw);
