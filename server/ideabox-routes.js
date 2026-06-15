@@ -25,6 +25,7 @@ import {
 } from '../lib/ideabox.js'
 import { writeFeature } from '../lib/feature-json.js'
 import { IdeaboxCache } from './ideabox-cache.js'
+import { resolveIdeaboxPathFromConfig } from '../lib/project-paths.js'
 
 /**
  * @param {object} app              — Express app
@@ -41,8 +42,7 @@ export function attachIdeaboxRoutes(app, { getProjectRoot, getDataDir, broadcast
     const dataDir = getDataDir()
     if (!_cache || _lastProjectRoot !== projectRoot || _lastDataDir !== dataDir) {
       const config = loadConfig(projectRoot)
-      const ideaboxRel = config?.paths?.ideabox || 'docs/product/ideabox.md'
-      const sourceFile = path.join(projectRoot, ideaboxRel)
+      const sourceFile = resolveIdeaboxPathFromConfig(projectRoot, config)
       _cache = new IdeaboxCache(dataDir, sourceFile)
       _lastProjectRoot = projectRoot
       _lastDataDir = dataDir

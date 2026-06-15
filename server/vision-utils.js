@@ -10,9 +10,24 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { getTargetRoot, loadProjectConfig } from './project-root.js';
+import { getTargetRoot } from './project-root.js';
+import { resolveJournalPathFromConfig, relForDisplay } from '../lib/project-paths.js';
 
 const PROJECT_ROOT = getTargetRoot();
+
+/**
+ * Read the compose.json config for an ARBITRARY workspace root (not the bound
+ * target). Routes/agents that serve an alternate `projectRoot` must resolve
+ * artifact paths against that root's own config, not the process-global cache
+ * (COMP-PATHS-EXTERNAL, Decision 1 / Codex finding 3).
+ */
+function loadComposeConfig(root) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(root, '.compose', 'compose.json'), 'utf-8'));
+  } catch {
+    return {};
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Error detection
@@ -71,8 +86,12 @@ export function detectError(tool, input, responseText) {
  * @param {string} [projectRoot] — defaults to PROJECT_ROOT
  */
 export function spawnJournalAgent(session, transcriptPath, projectRoot = PROJECT_ROOT) {
-  const config = loadProjectConfig();
-  const journalRel = config.paths?.journal || 'docs/journal';
+  // Resolve the journal path against the PASSED projectRoot's own config — not
+  // the process-global cached config of the bound target (COMP-PATHS-EXTERNAL).
+  const journalAbs = resolveJournalPathFromConfig(projectRoot, loadComposeConfig(projectRoot));
+  // Display path for the agent prompt: clean relative when in-root (the agent
+  // runs with cwd: projectRoot), absolute when the journal escapes the root.
+  const journalRel = relForDisplay(projectRoot, journalAbs);
 
   const itemSummaries = Object.entries(session.items || {})
     .map(([_id, data]) => `- ${data.title}: ${data.writes} writes, ${data.reads} reads. ${(data.summaries || []).map(s => s.summary || '').filter(Boolean).join('. ')}`)
@@ -88,7 +107,7 @@ export function spawnJournalAgent(session, transcriptPath, projectRoot = PROJECT
   const today = new Date().toISOString().slice(0, 10);
   let sessionNum = 0;
   try {
-    const entries = fs.readdirSync(path.join(projectRoot, journalRel));
+    const entries = fs.readdirSync(journalAbs);
     for (const f of entries) {
       const m = f.match(new RegExp(`^${today}-session-(\\d+)`));
       if (m) sessionNum = Math.max(sessionNum, parseInt(m[1]) + 1);

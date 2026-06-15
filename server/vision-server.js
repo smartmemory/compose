@@ -55,7 +55,8 @@ const SETTINGS_DEFAULTS = {
   policyModes: ['gate', 'flag', 'skip'],
 };
 
-import { getTargetRoot, getDataDir } from './project-root.js';
+import { getTargetRoot, getDataDir, resolveProjectPath } from './project-root.js';
+import { relForDisplay } from '../lib/project-paths.js';
 
 export class VisionServer {
   constructor(store, sessionManager = null, { config } = {}) {
@@ -264,7 +265,7 @@ export class VisionServer {
         const projectsRoot = process.env.CC_PROJECTS_ROOT ||
           path.join(process.env.HOME || process.env.USERPROFILE || '', '.claude', 'projects');
         const sessionsFile = this.sessionManager?.sessionsFile || path.join(getDataDir(), 'sessions.json');
-        const featureRoot = path.join(getTargetRoot(), 'docs', 'features');
+        const featureRoot = resolveProjectPath('features');
 
         const findItemIdByFeatureCode = (fc) => {
           for (const it of this.store.items.values()) {
@@ -457,7 +458,7 @@ export class VisionServer {
   /** Resolve a file path to matching tracker items */
   resolveItems(filePath) {
     const rel = filePath.startsWith(getTargetRoot())
-      ? filePath.slice(getTargetRoot().length + 1)
+      ? relForDisplay(getTargetRoot(), filePath)
       : filePath.replace(/^\.\//, '');
     const matches = [];
     const matchType = new Map();
