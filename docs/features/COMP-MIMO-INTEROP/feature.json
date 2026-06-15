@@ -1,0 +1,10 @@
+{
+  "code": "COMP-MIMO-INTEROP",
+  "description": "**MiMoCode as a second host + neutral benchmark subject.** Promoted from forge-top 2026-06-14 (`MIMO-INTEROP`). MiMoCode (OpenCode fork, 2026-06-10) keeps MCP + the Claude-Code SKILL.md/command/agent format + \"Import from Claude Code\" → interop substrate. Sanity-checked vs source: compose (`@modelcontextprotocol/sdk` StdioServerTransport, `server/compose-mcp.js:820`) + stratum-mcp (FastMCP/`mcp>=1.0`) register/list/call **unchanged** under any stdio-MCP host; full flows need host-surface adapters (host Agent/Skill dispatch, Compose's separate :4001 HTTP server, skill tool-name mapping). Leg (b): MiMo's self-reported \"beats Claude Code at 200+ step tasks\" → first external COMP-BENCH subject. Low urgency. See `docs/features/COMP-MIMO-INTEROP/plan.md`.",
+  "status": "PLANNED",
+  "phase": "Backlog",
+  "created": "2026-06-14",
+  "updated": "2026-06-14",
+  "complexity": "M",
+  "position": 1
+}
