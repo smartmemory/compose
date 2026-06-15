@@ -81,7 +81,7 @@ function resolveCwdWithWorkspace(args) {
 // --team flag (COMP-TEAMS)
 // ---------------------------------------------------------------------------
 import { parseTeamFlag } from '../lib/team-flag.js';
-import { loadDeps, checkExternalSkills, printDepReport, buildDepReport } from '../lib/deps.js';
+import { loadDeps, checkExternalSkills, printDepReport, buildDepReport, checkExternalBinaries, printBinaryReport, buildBinaryReport } from '../lib/deps.js';
 import { checkLatestVersion } from '../lib/version-check.js';
 
 const [,, cmd, ...args] = process.argv
@@ -271,6 +271,7 @@ function syncSkills(agents) {
   if (deps) {
     const result = checkExternalSkills(deps)
     printDepReport(result)
+    printBinaryReport(checkExternalBinaries(deps))
   }
 }
 
@@ -302,7 +303,8 @@ async function runDoctor(flags = []) {
     // Single top-level JSON document — the deps report and the version block share one root
     // so consumers like `JSON.parse(stdout)` work. (Previously two concatenated objects.)
     const report = buildDepReport(result)
-    console.log(JSON.stringify({ ...report, version: versionInfo }, null, 2))
+    const binaries = buildBinaryReport(checkExternalBinaries(deps))
+    console.log(JSON.stringify({ ...report, binaries, version: versionInfo }, null, 2))
     const allRequiredPresent = result.missing.every(d => d.optional)
     if (strict && !allRequiredPresent) process.exit(1)
     return
@@ -323,6 +325,7 @@ async function runDoctor(flags = []) {
   }
 
   const allRequiredPresent = printDepReport(result, { json: false, verbose })
+  printBinaryReport(checkExternalBinaries(deps))
   if (strict && !allRequiredPresent) process.exit(1)
 }
 
