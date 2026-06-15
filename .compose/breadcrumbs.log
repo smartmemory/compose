@@ -576,3 +576,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-15T08:33:14+08:00 | COMP-RTK-INTEROP: rtk.js helper + deps external_binaries + doctor wiring; wrap 1 LLM-bound diff site (build.js:217)
 2026-06-15T10:34:10+08:00 | COMP-MIGRATE-UNIFY-VISION: fold inline vision-state migrations (featureCode→lifecycle, gate-outcome) into the shared state-migrations registry; reuse from both load paths + eager runner
 2026-06-15T10:51:15+08:00 | FORGE-ROADMAP-RETIRE-STORE: capabilities.lifecycle:false retires the MCP vision store (loadVisionState short-circuits empty) so a narrative-owned workspace can't return a second drift-prone answer; flip forge-top config + archive its frozen vision-state.json
+2026-06-15T13:32:27+08:00 | Make stratum poll sleep-aware: widen interval to 60s + skip cold-start spawn when no live bound flows + wake-gap detection
