@@ -27,6 +27,32 @@ test('GOLDEN: resolvers point outside cwd', () => {
   assert.equal(resolveRoadmapPath(cwd), join(docs, 'ROADMAP.md'));
 });
 
+test('GOLDEN S3: MCP-enforcement guard stays in repo-relative space (D6c)', async () => {
+  // The guard matches against repo-relative `git status` output, so its
+  // featuresDir must stay RELATIVE. External artifacts live in another repo and
+  // are out of scope by construction — they never reach this guard. This test
+  // locks that invariant (the design's "make it absolute" idea would break it).
+  const { isGuardedPath } = await import('../../lib/mcp-enforcement.js');
+  assert.equal(isGuardedPath('ROADMAP.md', 'docs/features'), true);
+  assert.equal(isGuardedPath('docs/features/X-1/feature.json', 'docs/features'), true);
+  // An absolute external feature.json is NOT matched by the relative guard —
+  // and that is correct: it belongs to another repo's enforcement, not this one.
+  assert.equal(isGuardedPath('/ext/docs/features/X-1/feature.json', 'docs/features'), false);
+});
+
+test('GOLDEN S3: non-git workspace ship records a commit-less completion + flips status (D6b)', async () => {
+  const { executeShipStep } = await import('../../lib/build.js');
+  const cwd = mkdtempSync(join(tmpdir(), 'pe-nogit-'));   // deliberately NOT a git repo
+  mkdirSync(join(cwd, 'docs/features'), { recursive: true });
+  writeFeature(cwd, { code: 'NG-1', description: 'd', status: 'IN_PROGRESS' });
+
+  const context = { featureCode: 'NG-1', filesChanged: [] };
+  const res = await executeShipStep('NG-1', cwd, cwd, context, 'ship NG-1', null);
+
+  assert.equal(res.outcome, 'complete');
+  assert.equal(readFeature(cwd, 'NG-1').status, 'COMPLETE', 'status flips even with no commit');
+});
+
 test('GOLDEN: validate flags an unreachable external parent, not a not-yet-created leaf', async () => {
   const { validateProject } = await import('../../lib/feature-validator.js');
 
