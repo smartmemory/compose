@@ -25,7 +25,7 @@ import {
 } from '../lib/ideabox.js'
 import { writeFeature } from '../lib/feature-json.js'
 import { IdeaboxCache } from './ideabox-cache.js'
-import { resolveIdeaboxPathFromConfig } from '../lib/project-paths.js'
+import { resolveIdeaboxPathFromConfig, resolveFeaturesPathFromConfig, relForDisplay } from '../lib/project-paths.js'
 
 /**
  * @param {object} app              — Express app
@@ -172,16 +172,17 @@ export function attachIdeaboxRoutes(app, { getProjectRoot, getDataDir, broadcast
         resolvedCode = `IDEA-${sourceIdea.num}-${slug}`.toUpperCase()
       }
 
-      // Create feature folder + feature.json (same logic as CLI promote)
+      // Create feature folder + feature.json (same logic as CLI promote).
+      // COMP-PATHS-EXTERNAL: resolve the ABSOLUTE features base (may be
+      // relocated outside projectRoot). Re-rooting under projectRoot would make
+      // existsSync check the wrong path and risk overwriting external canon.
       const composeJsonPath = path.join(projectRoot, '.compose', 'compose.json')
-      let featuresRel = 'docs/features'
+      let cfg = {}
       if (fs.existsSync(composeJsonPath)) {
-        try {
-          const cfg = JSON.parse(fs.readFileSync(composeJsonPath, 'utf-8'))
-          featuresRel = cfg?.paths?.features || 'docs/features'
-        } catch {}
+        try { cfg = JSON.parse(fs.readFileSync(composeJsonPath, 'utf-8')) } catch {}
       }
-      const featuresDir = path.join(projectRoot, featuresRel, resolvedCode)
+      const featuresBase = resolveFeaturesPathFromConfig(projectRoot, cfg)  // absolute
+      const featuresDir = path.join(featuresBase, resolvedCode)
       if (!fs.existsSync(featuresDir)) {
         // COMP-MCP-VALIDATE-1: route through the validated writer instead of a
         // raw fs.writeFileSync so the promoted feature.json is schema-guarded.
@@ -191,7 +192,7 @@ export function attachIdeaboxRoutes(app, { getProjectRoot, getDataDir, broadcast
           status: 'PLANNED',
           promotedFrom: sourceIdea.id,
           createdAt: new Date().toISOString(),
-        }, featuresRel)
+        }, featuresBase)
       }
 
       promoteIdea(parsed, id, resolvedCode)
@@ -200,7 +201,7 @@ export function attachIdeaboxRoutes(app, { getProjectRoot, getDataDir, broadcast
       broadcastUpdate()
 
       const updated = parsed.ideas.find(i => i.id.toUpperCase() === upper)
-      res.json({ ...(updated || { id }), featureCode: resolvedCode, featurePath: `${featuresRel}/${resolvedCode}` })
+      res.json({ ...(updated || { id }), featureCode: resolvedCode, featurePath: relForDisplay(projectRoot, featuresDir) })
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 500
       res.status(status).json({ error: err.message })

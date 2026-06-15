@@ -32,11 +32,13 @@ test('GOLDEN S3: MCP-enforcement guard stays in repo-relative space (D6c)', asyn
   // featuresDir must stay RELATIVE. External artifacts live in another repo and
   // are out of scope by construction — they never reach this guard. This test
   // locks that invariant (the design's "make it absolute" idea would break it).
+  // NOTE: the out-of-scope-ness is not silent — when enforcement is on AND canon
+  // is relocated, executeShipStep logs a visible "does NOT cover external …"
+  // warning; full external-canon enforcement is COMP-PATHS-EXTERNAL-1.
   const { isGuardedPath } = await import('../../lib/mcp-enforcement.js');
   assert.equal(isGuardedPath('ROADMAP.md', 'docs/features'), true);
   assert.equal(isGuardedPath('docs/features/X-1/feature.json', 'docs/features'), true);
-  // An absolute external feature.json is NOT matched by the relative guard —
-  // and that is correct: it belongs to another repo's enforcement, not this one.
+  // An absolute external feature.json is NOT matched by the relative guard.
   assert.equal(isGuardedPath('/ext/docs/features/X-1/feature.json', 'docs/features'), false);
 });
 

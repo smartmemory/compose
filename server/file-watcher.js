@@ -10,6 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { getTargetRoot, loadProjectConfig, ensureDataDir } from './project-root.js';
+import { resolveDocsPathFromConfig, resolveFeaturesPathFromConfig } from '../lib/project-paths.js';
 
 const PROJECT_ROOT = getTargetRoot();
 
@@ -164,7 +165,10 @@ export class FileWatcherServer {
           if (!filename || !fileFilter(filename)) return;
 
           const relativePath = path.join(prefix, filename);
-          const fullPath = path.join(PROJECT_ROOT, relativePath);
+          // COMP-PATHS-EXTERNAL: derive the real path from the WATCHED dir, not
+          // by re-rooting under PROJECT_ROOT — the dir may be relocated outside
+          // the workspace. Byte-identical to the old form for an in-root dir.
+          const fullPath = path.join(dir, filename);
 
           // Debounce: ignore events within 100ms of each other for the same file
           const now = Date.now();
@@ -180,10 +184,11 @@ export class FileWatcherServer {
       }
     };
 
-    // Watch docs/ — broadcast fileChanged events
+    // Watch docs/ — broadcast fileChanged events. COMP-PATHS-EXTERNAL: watch
+    // the RESOLVED absolute dir (may be relocated outside PROJECT_ROOT).
     const config = loadProjectConfig();
     const docsPrefix = config.paths?.docs || 'docs';
-    watchDir(path.join(PROJECT_ROOT, docsPrefix), docsPrefix, (relativePath, fullPath) => {
+    watchDir(resolveDocsPathFromConfig(PROJECT_ROOT, config), docsPrefix, (relativePath, fullPath) => {
       try {
         if (!fs.existsSync(fullPath)) return;
         const content = fs.readFileSync(fullPath, 'utf-8');
@@ -195,9 +200,9 @@ export class FileWatcherServer {
 
     // Watch features/ — notify for auto-reseed into vision store
     const featuresPrefix = config.paths?.features || 'docs/features';
-    watchDir(path.join(PROJECT_ROOT, featuresPrefix), featuresPrefix, (relativePath) => {
-      // Also broadcast as fileChanged (features are docs)
-      const fullPath = path.join(PROJECT_ROOT, relativePath);
+    watchDir(resolveFeaturesPathFromConfig(PROJECT_ROOT, config), featuresPrefix, (relativePath, fullPath) => {
+      // Also broadcast as fileChanged (features are docs). fullPath comes from
+      // the watched dir (COMP-PATHS-EXTERNAL) — do not re-root under PROJECT_ROOT.
       try {
         if (fs.existsSync(fullPath)) {
           const content = fs.readFileSync(fullPath, 'utf-8');
