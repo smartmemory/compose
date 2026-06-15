@@ -596,6 +596,8 @@ Authoritative list lives in `compose/.compose-deps.json`. Run `compose doctor` t
 
 The manifest declares 12 external skills/commands across `superpowers:*`, `interface-design:*`, `codex:review`, `refactor`, and `update-docs`. Each entry carries `id`, `required_for`, `install`, `fallback` (or null), and `optional`.
 
+The manifest also has an optional `external_binaries` array for CLI tools (not skills). Today it declares `rtk` ([Rust Token Killer](https://github.com/rtk-ai/rtk), COMP-RTK-INTEROP) — a lossy output compressor compose routes its one LLM-bound `git diff` (the Codex review diff) through when present, degrading byte-identically when absent. `compose doctor` reports binaries alongside skills and surfaces each binary's `recommend` (for rtk: `rtk init -g`, which installs RTK's Claude Code hook so the agent's *own* Bash output is compressed too — the larger token win). Binary entries carry `id`, `detect`, `install`, `recommend` (or null), and `optional`; all are optional and never block the lifecycle.
+
 ### Degrade pattern
 
 At lifecycle entry (Phase 1), run `compose doctor --json`. For each missing dep:

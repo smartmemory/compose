@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-06-15
+
+### COMP-RTK-INTEROP — optional RTK output-compression interop (detect + recommend + wrap the one LLM-bound diff)
+
+Routes compose's single LLM-bound shell-out — the `git diff --no-color HEAD` fed to the Tier-1 Codex review — through [RTK](https://github.com/rtk-ai/rtk) (a lossy output compressor) when it is installed, degrading byte-identically to raw git when absent. Verification narrowed the roadmap row's broad claim ("route git diff/status/npm test"): RTK is lossy, so the many parse-bound git shell-outs (filename lists, SHA/shortstat parsing) and the patch-bound `git diff --cached HEAD` (re-applied via `git apply`) must NOT be wrapped — only one in-code site is genuinely LLM-bound. The larger token win lives in RTK's own Claude Code hook (`rtk init -g`), which compose now detects and recommends via `compose doctor`.
+
+**Added:**
+- `lib/rtk.js` — `isRtkAvailable()` (memoized, `COMPOSE_DISABLE_RTK=1` kill-switch) + `rtkPrefix()` helper; wraps an LLM-bound command with `rtk` only when present
+- `external_binaries` array in `.compose-deps.json` (rtk entry: detect/install/recommend/optional) + loader, `checkExternalBinaries`/`buildBinaryReport`/`printBinaryReport` in `lib/deps.js`
+- `compose doctor` now reports external binaries (human + `--json`) and surfaces the `rtk init -g` recommendation
+- Tests: `test/rtk.test.js`, `test/rtk-deps.test.js`
+
+**Changed:**
+- `lib/build.js` (~L221): the Tier-1 Codex-review diff now flows through `rtkPrefix(...)`
+
 ## 2026-06-11
 
 ### Added — COMP-MOBILE-REMOTE: remote transport + auth for the mobile PWA

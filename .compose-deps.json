@@ -85,5 +85,18 @@
       "fallback": "manual TODO surfaced in implementation report",
       "optional": true
     }
+  ],
+  "external_binaries": [
+    {
+      "id": "rtk",
+      "detect": "rtk --version",
+      "required_for": [
+        "LLM-bound git-diff compression (build review)",
+        "agent Bash output compression via `rtk init -g` hook"
+      ],
+      "install": "brew install rtk  (or: cargo install --git https://github.com/rtk-ai/rtk)",
+      "recommend": "rtk init -g",
+      "optional": true
+    }
   ]
 }
