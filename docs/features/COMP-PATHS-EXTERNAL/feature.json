@@ -1,0 +1,10 @@
+{
+  "code": "COMP-PATHS-EXTERNAL",
+  "description": "**Relocatable artifact paths — ROADMAP + features (+ journal/context/ideabox) can live outside the workspace root, e.g. a shared `smart-memory-docs` repo.** `.compose/` (config + state) stays at the root; only artifacts redirect. Centralizes path resolution: one default table + one pure resolver (`resolvePathValue` using `path.resolve`, not `join`, so absolute/`../`-escaping overrides work) and sweeps ~25 hardcoded/`join`-based sites. Adds `paths.roadmap`. Default-identity contract: byte-identical when keys unset. v1 writes external artifacts and logs a 'commit it there' line but does NOT auto-commit a separate repo (cross-repo commit = COMP-PATHS-EXTERNAL-1). See `docs/features/COMP-PATHS-EXTERNAL/design.md`.",
+  "status": "PLANNED",
+  "phase": "Backlog",
+  "created": "2026-06-15",
+  "updated": "2026-06-15",
+  "complexity": "L",
+  "position": 1
+}
