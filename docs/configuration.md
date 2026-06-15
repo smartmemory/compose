@@ -20,11 +20,35 @@ Project-level configuration. Created by `compose init`.
   },
   "paths": {
     "docs": "docs",
+    "roadmap": "ROADMAP.md",
     "features": "docs/features",
-    "journal": "docs/journal"
+    "journal": "docs/journal",
+    "context": "docs/context",
+    "ideabox": "docs/product/ideabox.md"
   }
 }
 ```
+
+### `paths` block
+
+Where Compose reads and writes each **artifact**. Keys: `docs`, `roadmap`, `features`, `journal`,
+`context`, `ideabox`. Each value may be:
+
+- **in-root** (the default), e.g. `"docs/features"` — relative to the workspace root;
+- **`../`-escaping**, e.g. `"../smart-memory-docs/features"` — a sibling folder/repo;
+- **absolute**, e.g. `"/srv/shared/ROADMAP.md"`.
+
+This lets a product whose code lives in many repos keep **one** roadmap + features folder in a
+dedicated docs repo (e.g. `smart-memory-docs`) while you run Compose from any of them. `.compose/`
+(config + state, including `data/vision-state.json`) always stays at the workspace root; only the
+artifacts relocate. Unset/default values resolve byte-identically to the legacy in-root locations.
+
+Caveats for a **relocated** setup (COMP-PATHS-EXTERNAL):
+- If the artifact lives in a **different git repo**, `compose build` writes it but does **not** commit
+  that repo (it logs a "commit it there" notice) — commit the docs repo yourself. Cross-repo
+  auto-commit is tracked as `COMP-PATHS-EXTERNAL-1`.
+- The MCP-enforcement and STRAT-GUARD subsystems match in workspace-relative space, so guarded edits to
+  **relocated** canon are not enforced; this is surfaced with a visible warning at ship.
 
 ### `tracker` block
 

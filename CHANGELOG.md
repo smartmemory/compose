@@ -2,6 +2,44 @@
 
 ## 2026-06-15
 
+### COMP-PATHS-EXTERNAL — relocatable artifact paths
+
+ROADMAP, the features folder, and journal/context/ideabox can now live **outside** the workspace
+root — e.g. a shared `smart-memory-docs` repo — while `.compose/` (config + state) stays at the root.
+Set `paths.roadmap` / `paths.features` / etc. in `.compose/compose.json` to a path that is in-root
+(`docs/features`), `../`-escaping (`../smart-memory-docs/features`), or absolute (`/abs/...`). A single
+pure resolver (`lib/paths-core.js` `resolvePathValue`, using `path.resolve` not `path.join`) backs
+every consumer; values are **byte-identical to before when unset**, so existing workspaces are
+unaffected. `compose build` from a relocated workspace works end-to-end, including the non-git
+(forge-top-shaped) case.
+
+**Added:**
+- `lib/paths-core.js` — pure `DEFAULT_PATHS` (6 artifact keys incl. new `roadmap`) + `resolvePathValue`
+  (absolute / `../`-escaping safe) + `relForDisplay`
+- `lib/project-paths.js` — absolute readers `resolve{Docs,Roadmap,Features,Journal,Context,Ideabox}Path`
+  + `*FromConfig(root, config)` alternate-root forms
+- `paths.roadmap` config key (default `ROADMAP.md`); `compose init` scaffolds it
+- `test/paths-core.test.js`, `test/feature-json-external.test.js`,
+  `test/completion-writer-nocommit.test.js`, `test/integration/paths-external.test.js`
+
+**Changed:**
+- Routed ~25 hardcoded/`join`-based artifact sites through the resolver (roadmap-gen, build-all,
+  feature-writer/validator, get-roadmap, vision-server/utils/routes, drift-axes, session/design routes,
+  checkpoint-writer, gsd, feature-scan, ideabox, journal-writer, file-watcher, bin/compose, …)
+- `feature-json.js` / `feature-write-guard.js` accept an absolute `featuresDir` (D7 API migration);
+  `loadFeaturesDir` callers migrated to the absolute `resolveFeaturesPath`
+- Alternate-root server routes (`vision-routes`, `vision-utils`) resolve against their own root/config
+  rather than the process-global cache
+- `completion-writer.js` accepts a commit-less completion (non-git workspace) — stamps git's null-SHA
+  sentinel with a distinct `completion_id`; the build ship step records completion and flips status to
+  COMPLETE on every exit path (incl. non-git); when canon is relocated into a different repo it logs a
+  "commit it there" notice (v1 does not auto-commit other repos)
+
+**Known v1 limitations (→ `COMP-PATHS-EXTERNAL-1`):**
+- Cross-repo auto-commit of external artifacts is not done — they are written and you commit that repo
+- The MCP-enforcement and STRAT-GUARD subsystems match in workspace-relative space, so relocated canon
+  is out of their scope; this is surfaced with a visible warning at ship
+
 ### Stratum poll is sleep-aware — no cold-start when idle
 
 The vision-store stratum poller (`server/stratum-sync.js`) cold-started a `stratum-mcp` Python

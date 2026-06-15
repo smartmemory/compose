@@ -1,6 +1,11 @@
 # COMP-PATHS-EXTERNAL — Design / Scope
 
-**Status:** PLANNED — design draft 2026-06-15 (Codex design-gate pass 1 applied) · **Complexity:** L (was M; Codex surfaced the featuresDir API contract + ship/completion/enforcement coupling) · Owner: compose.
+**Status:** COMPLETE — shipped 2026-06-15 (S1–S3; Codex design-gate + 4-round impl-review applied) · **Complexity:** L · Owner: compose.
+
+> **Implementation deviations from this design (recorded at ship):**
+> 1. **D6c — the guard stays repo-relative, NOT absolute.** The design imagined making the MCP-enforcement guard resolve guarded paths to absolute. Implementation showed that would *break* the guard's match against repo-relative `git status`. The guard correctly stays workspace-relative; relocated canon is out of its scope by construction and that gap is surfaced with a **visible warning** at ship (full coverage = `COMP-PATHS-EXTERNAL-1`). The real D7 bug was `build.js` `resolveItemDir` re-rooting an absolute config — fixed.
+> 2. **D6b — null-SHA sentinel instead of a nullable field.** A commit-less completion stamps git's null-SHA (40 zeros, schema-valid) rather than a nullable `commit_sha`, avoiding a persisted-schema change. `completion_id` is derived distinctly for the null case (`<code>:nocommit:<ts>-<seq>`) to avoid aliasing.
+> 3. **`files_changed` kept repo-relative** (design said "accept absolute") — absolute is a path-safety hazard and no caller needs it (the commit-less path passes `[]`).
 
 > **Codex design-gate (2026-06-15) — incorporated:** (1) `featuresDir` is a *relative-to-cwd* contract through core helpers (`feature-json.js`, `feature-write-guard.js`) and their callers — absolute bases need an API migration, not wrapper-only (→ Decision 7). (2) Ship/completion are coupled: the non-git early-return (`build.js:2242`) precedes the completion/status-flip (`build.js:2421`), and staging + MCP-enforcement (`build.js:2285`, `mcp-enforcement.js:64,122`, `feature-write-guard.js:87`) assume one repo-relative namespace — external/non-git builds would write artifacts but never flip to COMPLETE (→ revised Decision 6). (3) Some server routes serve an *alternate* root yet read the global cached config (`vision-routes.js:169`, `vision-utils.js:73`) — the resolver needs an explicit `(root, config)` form (→ Decision 1). (4) Sweep list was incomplete: add `feature-scan.js:626`, `feature-write-guard.js:87`. Implementation is sliced (below) so the core ask ships before the heavy ship/enforcement rework.
 
