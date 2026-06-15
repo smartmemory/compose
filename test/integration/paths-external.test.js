@@ -27,6 +27,31 @@ test('GOLDEN: resolvers point outside cwd', () => {
   assert.equal(resolveRoadmapPath(cwd), join(docs, 'ROADMAP.md'));
 });
 
+test('GOLDEN: validate flags an unreachable external parent, not a not-yet-created leaf', async () => {
+  const { validateProject } = await import('../../lib/feature-validator.js');
+
+  // (a) external features dir whose PARENT does not exist → CONFIGURED_PATH_UNREACHABLE
+  const badCwd = mkdtempSync(join(tmpdir(), 'pe-bad-'));
+  mkdirSync(join(badCwd, '.compose'), { recursive: true });
+  writeFileSync(join(badCwd, '.compose/compose.json'), JSON.stringify({
+    paths: { features: '/no/such/root/features' },
+  }));
+  const bad = await validateProject(badCwd);
+  assert.ok(bad.findings.some(f => f.kind === 'CONFIGURED_PATH_UNREACHABLE'),
+    'unreachable external parent should be flagged');
+
+  // (b) external features dir not-yet-created but parent EXISTS → no such finding
+  const okCwd = mkdtempSync(join(tmpdir(), 'pe-ok-'));
+  const docs = mkdtempSync(join(tmpdir(), 'pe-okdocs-'));   // parent exists, leaf does not
+  mkdirSync(join(okCwd, '.compose'), { recursive: true });
+  writeFileSync(join(okCwd, '.compose/compose.json'), JSON.stringify({
+    paths: { features: join(docs, 'features') },
+  }));
+  const ok = await validateProject(okCwd);
+  assert.ok(!ok.findings.some(f => f.kind === 'CONFIGURED_PATH_UNREACHABLE'),
+    'a not-yet-created leaf under an existing parent must NOT be flagged');
+});
+
 test('GOLDEN: scaffold → read → list all land in the external dir, root stays clean', () => {
   const { cwd, docs } = extWorkspace();
   const fdir = resolveFeaturesPath(cwd);
