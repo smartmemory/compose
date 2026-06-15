@@ -17,7 +17,7 @@ import { fileURLToPath } from 'url'
 import { findProjectRoot } from '../server/find-root.js'
 import { resolveWorkspace, getWorkspaceFlag } from '../lib/resolve-workspace.js'
 import { resolvePort } from '../lib/resolve-port.js'
-import { resolveRoadmapPath, resolveFeaturesPath, resolveContextPathFromConfig, resolveFeaturesPathFromConfig } from '../lib/project-paths.js'
+import { resolveRoadmapPath, resolveFeaturesPath, resolveContextPathFromConfig, resolveFeaturesPathFromConfig, resolveRoadmapPathFromConfig } from '../lib/project-paths.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PACKAGE_ROOT = resolve(__dirname, '..')
@@ -516,8 +516,10 @@ async function runInit(flags, cwdOverride) {
     }
   }
 
-  // 7. Scaffold ROADMAP.md from template if absent
-  const roadmapDest = join(cwd, 'ROADMAP.md')
+  // 7. Scaffold ROADMAP.md from template if absent. COMP-PATHS-EXTERNAL:
+  // honor a configured (possibly relocated) paths.roadmap instead of always
+  // seeding <cwd>/ROADMAP.md. Byte-identical for the default.
+  const roadmapDest = resolveRoadmapPathFromConfig(cwd, config)
   if (!existsSync(roadmapDest)) {
     const roadmapSrc = join(PACKAGE_ROOT, 'templates', 'ROADMAP.md')
     if (existsSync(roadmapSrc)) {
