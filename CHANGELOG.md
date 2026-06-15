@@ -2,6 +2,29 @@
 
 ## 2026-06-15
 
+### FORGE-ROADMAP-RETIRE-STORE — `capabilities.lifecycle:false` retires the MCP vision store
+
+A workspace can now set `capabilities.lifecycle: false` to RETIRE its vision/lifecycle store — used by
+narrative-owned workspaces (e.g. forge-top) where the prose ROADMAP is the single source of truth and a
+second, frozen `vision-state.json` would only be a drift-prone parallel answer. `loadVisionState()` —
+the single chokepoint behind every MCP vision-read tool (`get_vision_items`, `get_item_detail`,
+`get_phase_summary`, `get_blocked_items`, `get_pending_gates`, `get_feature_lifecycle`) — returns the
+empty shape when the capability is off, so the whole surface goes inert at once (and stays inert even if
+a stray write recreates the file). `validate_project` is intentionally **not** gated (it's a drift
+detector that must read raw sources). Default is unchanged — only an explicit `false` disables it.
+
+**Added:**
+- `isLifecycleEnabled()` in `server/project-root.js` (`capabilities?.lifecycle !== false`)
+- `test/retire-store.test.js` — default-true matrix, retired-store empties with items on disk,
+  propagation to every dependent vision-read tool vs an enabled control
+
+**Changed:**
+- `server/compose-mcp-tools.js` — `loadVisionState()` short-circuits to empty when lifecycle is disabled
+
+Forge-top ops (in the forge workspace, not this repo): `capabilities.lifecycle:false` set in its
+`compose.json` and the frozen `vision-state.json` archived. Live MCP servers must restart to pick up the
+flag from config cache. Codex review CLEAN.
+
 ### COMP-MIGRATE-UNIFY-VISION — fold the inline vision-state migrations into the shared registry
 
 Consolidates the two legacy vision-state transforms — `featureCode: "feature:X"` →
