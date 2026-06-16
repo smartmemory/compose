@@ -21,7 +21,10 @@ import EnvironmentHealthPanel from '../../src/components/cockpit/EnvironmentHeal
 function healthResponse(overrides = {}) {
   return {
     summary: 'warn',
-    dependencies: { present: [{ id: 'superpowers:tdd' }], missing: [{ id: 'refactor', optional: false }] },
+    dependencies: {
+      present: [{ id: 'superpowers:tdd' }],
+      missing: [{ id: 'refactor', optional: false, install: 'npm i -g refactor' }],
+    },
     binaries: { present: [{ id: 'rtk' }], missing: [] },
     version: { current: '0.2.0', latest: '0.3.0', behind: true, source: 'cache' },
     hooks: {
@@ -121,6 +124,114 @@ describe('EnvironmentHealthPanel', () => {
     resolveStale({ ok: true, json: async () => healthResponse({ summary: 'ok' }) });
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.getByTestId('env-health-dot').getAttribute('title')).toMatch(/error/);
+  });
+
+  it('shows a Repair hooks button (stale/absent present) that POSTs and refetches, no force', async () => {
+    mockHealth(healthResponse()); // post-commit absent, pre-push stale → repairable, no foreign
+    render(<EnvironmentHealthPanel />);
+    await waitFor(() => expect(wsFetch).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId('env-health-dot'));
+
+    const btn = screen.getByTestId('env-health-repair-hooks');
+    fireEvent.click(btn);
+
+    // POSTs to the repair endpoint with force:false (no foreign hook present).
+    await waitFor(() =>
+      expect(wsFetch).toHaveBeenCalledWith(
+        '/api/environment-health/repair-hooks',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+    const postCall = wsFetch.mock.calls.find((c) => c[0] === '/api/environment-health/repair-hooks');
+    expect(JSON.parse(postCall[1].body)).toEqual({ force: false });
+    // Refetches the GET afterward (1 mount + 1 POST + 1 refetch).
+    await waitFor(() =>
+      expect(wsFetch.mock.calls.filter((c) => c[0] === '/api/environment-health').length).toBe(2),
+    );
+  });
+
+  it('foreign hook → Repair gated behind window.confirm; confirming POSTs force:true', async () => {
+    mockHealth(healthResponse({
+      hooks: { 'post-commit': { state: 'installed-current', workspace: 'ws-1' }, 'pre-push': { state: 'foreign' } },
+    }));
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<EnvironmentHealthPanel />);
+    await waitFor(() => expect(wsFetch).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId('env-health-dot'));
+
+    fireEvent.click(screen.getByTestId('env-health-repair-hooks'));
+    expect(confirmSpy).toHaveBeenCalled();
+    await waitFor(() => {
+      const postCall = wsFetch.mock.calls.find((c) => c[0] === '/api/environment-health/repair-hooks');
+      expect(postCall).toBeTruthy();
+      expect(JSON.parse(postCall[1].body)).toEqual({ force: true });
+    });
+  });
+
+  it('foreign hook → declining the confirm does NOT POST', async () => {
+    mockHealth(healthResponse({
+      hooks: { 'post-commit': { state: 'installed-current', workspace: 'ws-1' }, 'pre-push': { state: 'foreign' } },
+    }));
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<EnvironmentHealthPanel />);
+    await waitFor(() => expect(wsFetch).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId('env-health-dot'));
+
+    fireEvent.click(screen.getByTestId('env-health-repair-hooks'));
+    // No repair POST should have been issued.
+    expect(wsFetch.mock.calls.some((c) => c[0] === '/api/environment-health/repair-hooks')).toBe(false);
+  });
+
+  it('surfaces a guarded repair auth failure (HTTP 401) as an error, not a silent success', async () => {
+    // GET → repairable health (post-commit absent, pre-push stale; no foreign → no confirm).
+    // POST repair → 401 with an {error} body and NO `ok` field (wsFetch does not throw).
+    wsFetch.mockImplementation((url) => {
+      if (url === '/api/environment-health/repair-hooks') {
+        return Promise.resolve({ ok: false, status: 401, json: async () => ({ error: 'Unauthorized' }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => healthResponse() });
+    });
+    render(<EnvironmentHealthPanel />);
+    await waitFor(() => expect(wsFetch).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('env-health-dot'));
+    fireEvent.click(screen.getByTestId('env-health-repair-hooks'));
+    await waitFor(() => expect(screen.getByTestId('env-health-panel').textContent).toMatch(/Unauthorized/));
+  });
+
+  it('no Repair button when every managed hook is installed-current', async () => {
+    mockHealth(healthResponse({
+      summary: 'ok',
+      hooks: {
+        'post-commit': { state: 'installed-current', workspace: 'ws-1' },
+        'pre-push': { state: 'installed-current', workspace: 'ws-1' },
+      },
+    }));
+    render(<EnvironmentHealthPanel />);
+    await waitFor(() => expect(wsFetch).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('env-health-dot'));
+    expect(screen.queryByTestId('env-health-repair-hooks')).toBeNull();
+  });
+
+  it('renders copy buttons for a missing dep install command and for compose update', async () => {
+    mockHealth(healthResponse());
+    render(<EnvironmentHealthPanel />);
+    await waitFor(() => expect(wsFetch).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('env-health-dot'));
+
+    expect(screen.getByTestId('env-health-copy-refactor')).toBeTruthy();
+    expect(screen.getByTestId('env-health-copy-version')).toBeTruthy();
+  });
+
+  it('copy button writes the command text to the clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    mockHealth(healthResponse());
+    render(<EnvironmentHealthPanel />);
+    await waitFor(() => expect(wsFetch).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('env-health-dot'));
+
+    fireEvent.click(screen.getByTestId('env-health-copy-version'));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('compose update'));
   });
 
   it('offline version (null) renders "unavailable" and ok summary shows green dot', async () => {

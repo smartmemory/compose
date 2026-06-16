@@ -592,3 +592,5 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-16T20:46:00+08:00 | COMP-PARITY-3 S1: extract lib/hooks-status.js (computeHooksStatus + HOOK_MARKERS + formatHookStatusLines) as shared single-source for CLI hooks-status + /api/environment-health
 2026-06-16T20:50:48+08:00 | COMP-PARITY-3 S3: add server/health-routes.js (GET /api/environment-health) reusing deps/version-check/hooks-status; pure rollupSummary + hookRawToApi; degrade-never-500
 2026-06-16T20:53:47+08:00 | COMP-PARITY-3 S5-6: EnvironmentHealthPanel header dot+popover (fetch on workspace resolve + on {id,root} change + manual refresh) and mount in App.jsx header
+2026-06-16T22:39:02+08:00 | COMP-PARITY-3-1: guarded hook-repair endpoint + panel repair/copy buttons
+2026-06-16T22:39:02+08:00 | COMP-PARITY-3-2: add read-only env-health indicator to mobile PWA header
