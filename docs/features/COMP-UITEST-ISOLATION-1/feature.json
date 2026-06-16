@@ -1,11 +1,28 @@
 {
   "code": "COMP-UITEST-ISOLATION-1",
   "description": "Harden the Vitest UI suite against parallel-execution flakes. A full `npx vitest run` intermittently fails ~79 tests in `test/ui/mobile-*`, `mobile-remote-auth`, and `agent-stream-remote-mode` (hook timeouts under parallel load); the same files pass in isolation and the suite is green on re-run. Investigate shared global/timer/port state, tighten per-file isolation or hook timeouts, so a single full run is deterministic. Surfaced during COMP-PARITY-3 verification (a flaky run produced a false 79-failure report).",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "Backlog",
   "created": "2026-06-16",
   "updated": "2026-06-16",
   "complexity": "M",
   "position": 3,
-  "parent": "COMP-PARITY-3"
+  "parent": "COMP-PARITY-3",
+  "completions": [
+    {
+      "completion_id": "COMP-UITEST-ISOLATION-1:2d571d7ab3cfdb38fe7541de858d60829756d5e2",
+      "feature_code": "COMP-UITEST-ISOLATION-1",
+      "commit_sha": "2d571d7ab3cfdb38fe7541de858d60829756d5e2",
+      "commit_sha_short": "2d571d7a",
+      "tests_pass": true,
+      "files_changed": [
+        "vitest.config.js",
+        "test/ui/setup.js"
+      ],
+      "recorded_at": "2026-06-16T15:22:14.978Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Defensive in-memory localStorage guard (probe in try/catch; no-op on normal path) + explicit isolate:true. Removed an initial wrong opaque-origin url-pin theory after Codex review. Root symptom: Vitest worker-env bridging intermittently left localStorage undefined in beforeEach under contention. Full UI suite green across repeated runs; could not deterministically reproduce the original flake to show before/after."
+    }
+  ],
+  "commit_sha": "2d571d7ab3cfdb38fe7541de858d60829756d5e2"
 }

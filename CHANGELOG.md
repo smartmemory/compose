@@ -2,6 +2,44 @@
 
 ## 2026-06-16
 
+### COMP-PARITY-3-1 — guarded hook-repair remediation from the env-health panel
+
+Closes the read-only loop opened by COMP-PARITY-3. The panel's Git Hooks section now shows a
+**Repair hooks** button (when any hook is stale/absent/foreign) that POSTs to a new guarded
+`POST /api/environment-health/repair-hooks` — gated by `requireSensitiveToken`, it runs `compose
+hooks install --post-commit --pre-push --workspace=<id>` via an injectable, args-array `spawnSync`
+runner (no shell), appending `--force` only to overwrite a foreign hook (UI gates that behind a
+`window.confirm`). It returns the recomputed hook states and never 500s. Dependency installs and
+`compose update` are deliberately NOT executed server-side — the panel surfaces their command text
+with copy buttons. A POST is treated as success only on an explicit `{ ok: true }` (a 401/503 now
+surfaces as an error, not a silent success). Tests: `test/integration/health-repair.test.js` + extended UI.
+
+### COMP-PARITY-3-2 — mobile environment-health indicator
+
+Brings the COMP-PARITY-3 signal to the mobile PWA: a read-only health dot in the mobile header
+(color from the server `summary`) that taps open a compact dep/version/hook summary, consuming the
+same `GET /api/environment-health`. Read-only, degrades gracefully, and reports `unavailable`
+dependency sections as unavailable (never a false "all present"). Tests: `test/ui/mobile-env-health.test.jsx`.
+
+### COMP-MCP-FOLLOWUP-1 — actionable error for stale-server propose_followup
+
+`propose_followup` threw a cryptic `does not provide an export named 'resolveRoadmapPath'` when the
+long-running stdio MCP server cached a stale `project-paths.js` (the on-disk code is correct). Its
+lazy `import('../lib/followup-writer.js')` is now wrapped to rethrow module-skew/missing-export
+errors with a "reconnect /mcp (stale server)" hint. A contract test (`test/followup-writer-import.test.js`)
+guards the import graph + the `resolveRoadmapPath` export so a *genuine* future break is caught in CI.
+(The live error clears on an `/mcp` reconnect; this hardens future server starts.)
+
+### COMP-UITEST-ISOLATION-1 — kill the intermittent localStorage-undefined UI flake
+
+A low-frequency parallel-run flake failed ~140 Vitest UI tests with "Cannot read properties of
+undefined (reading 'clear')" — the `localStorage` global Vitest bridges from jsdom was intermittently
+absent at `beforeEach` time across the mobile/remote-auth suites, cascading into `wsMod`-undefined
+(the aborted hook never reached its `await import(...)`), while every retry passed. `test/ui/setup.js`
+now installs an in-memory `localStorage` only when the real one is missing or inaccessible (probed in
+try/catch — handles `undefined` and an opaque-origin `SecurityError`); a true no-op on the normal path.
+`isolate: true` is now explicit. Full UI suite verified green across repeated runs.
+
 ### COMP-PARITY-3 — cockpit environment-health panel
 
 `compose doctor` (external-dep presence + version drift) and `compose hooks status` (git-hook
