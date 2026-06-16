@@ -1,11 +1,30 @@
 {
   "code": "COMP-PARITY-3-1",
   "description": "Actionable remediation from the environment-health panel: guarded one-click fixes for the read-only drift signals — install a missing dep, run `compose update` when behind, and re-run `compose hooks install` to repair stale/missing hooks (overwriting a foreign hook stays confirm-gated). Reuses existing CLI/endpoint machinery and the same remote-auth posture as COMP-PARITY-3's read endpoint; no new lifecycle. Surfaced by COMP-PARITY-3 (shipped read-only by design).",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-PARITY: UI↔CLI Parity",
   "created": "2026-06-16",
   "updated": "2026-06-16",
   "complexity": "M",
   "position": 11,
-  "parent": "COMP-PARITY-3"
+  "parent": "COMP-PARITY-3",
+  "completions": [
+    {
+      "completion_id": "COMP-PARITY-3-1:e0e0bee85c007552bec29f07b715d1e5ed709084",
+      "feature_code": "COMP-PARITY-3-1",
+      "commit_sha": "e0e0bee85c007552bec29f07b715d1e5ed709084",
+      "commit_sha_short": "e0e0bee8",
+      "tests_pass": true,
+      "files_changed": [
+        "server/health-routes.js",
+        "src/components/cockpit/EnvironmentHealthPanel.jsx",
+        "test/integration/health-repair.test.js",
+        "test/ui/env-health-panel.test.jsx"
+      ],
+      "recorded_at": "2026-06-16T14:58:34.204Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Guarded hook-repair remediation (POST /api/environment-health/repair-hooks) + copy-command buttons. Codex review clean (fixed: POST auth-failure no longer treated as success). Node suite green; UI tests 14/14."
+    }
+  ],
+  "commit_sha": "e0e0bee85c007552bec29f07b715d1e5ed709084"
 }

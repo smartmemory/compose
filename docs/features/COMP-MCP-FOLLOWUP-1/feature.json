@@ -1,10 +1,27 @@
 {
   "code": "COMP-MCP-FOLLOWUP-1",
   "description": "propose_followup throws `module './project-paths.js' does not provide an export named 'resolveRoadmapPath'` at runtime and writes nothing. Root cause: the long-running stdio compose MCP server caches a stale project-paths.js module record (loaded before COMP-PATHS-EXTERNAL added the export); propose_followup lazily `import()`s lib/followup-writer.js only on first call, which links against the stale cached module. On-disk code resolves cleanly (verified). Live fix: reconnect /mcp (reload server). Hardening: wrap the lazy import so a module-skew/missing-export error rethrows with an actionable \"stale MCP server — reconnect /mcp\" hint instead of a cryptic ESM error, and add a contract test asserting the followup-writer import graph resolves. Surfaced filing COMP-PARITY-3 follow-ups (fell back to add_roadmap_entry).",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "Phase 7: MCP Writers",
   "created": "2026-06-16",
   "updated": "2026-06-16",
   "complexity": "S",
-  "position": 15
+  "position": 15,
+  "completions": [
+    {
+      "completion_id": "COMP-MCP-FOLLOWUP-1:7456f97622d6b3eddc2933a41b67ef4952111de2",
+      "feature_code": "COMP-MCP-FOLLOWUP-1",
+      "commit_sha": "7456f97622d6b3eddc2933a41b67ef4952111de2",
+      "commit_sha_short": "7456f976",
+      "tests_pass": true,
+      "files_changed": [
+        "server/compose-mcp-tools.js",
+        "test/followup-writer-import.test.js"
+      ],
+      "recorded_at": "2026-06-16T14:58:50.400Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Actionable stale-server error around propose_followup's lazy import + import-graph contract test. Code deliverable complete; the live error clears on /mcp reconnect (stale running server). Contract test 2/2."
+    }
+  ],
+  "commit_sha": "7456f97622d6b3eddc2933a41b67ef4952111de2"
 }

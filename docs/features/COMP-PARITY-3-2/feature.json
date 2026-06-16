@@ -1,11 +1,30 @@
 {
   "code": "COMP-PARITY-3-2",
   "description": "Mobile-surface environment-health indicator. COMP-PARITY-3 added the health dot to the desktop cockpit header only; the mobile PWA (`src/mobile/`) is a separate surface and got no signal. Add a lightweight health indicator to the mobile shell consuming the same `GET /api/environment-health` endpoint (read-only). Surfaced by COMP-PARITY-3 (mobile was an explicit non-goal).",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-PARITY: UI↔CLI Parity",
   "created": "2026-06-16",
   "updated": "2026-06-16",
   "complexity": "S",
   "position": 12,
-  "parent": "COMP-PARITY-3"
+  "parent": "COMP-PARITY-3",
+  "completions": [
+    {
+      "completion_id": "COMP-PARITY-3-2:e828f72788ce80fe92a22261a3fea21f0fd321bf",
+      "feature_code": "COMP-PARITY-3-2",
+      "commit_sha": "e828f72788ce80fe92a22261a3fea21f0fd321bf",
+      "commit_sha_short": "e828f727",
+      "tests_pass": true,
+      "files_changed": [
+        "src/mobile/components/MobileEnvHealth.jsx",
+        "src/mobile/MobileApp.jsx",
+        "src/mobile/mobile.css",
+        "test/ui/mobile-env-health.test.jsx"
+      ],
+      "recorded_at": "2026-06-16T14:58:44.642Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Read-only mobile environment-health indicator (header dot + tap detail) consuming GET /api/environment-health. Codex review clean (fixed: unavailable sections no longer shown as healthy). UI tests 9/9."
+    }
+  ],
+  "commit_sha": "e828f72788ce80fe92a22261a3fea21f0fd321bf"
 }
