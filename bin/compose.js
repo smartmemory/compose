@@ -128,6 +128,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  items show <id>    Show detail for a specific vision item')
   console.log('  triage    Analyze a feature and recommend build profile')
   console.log('  qa-scope  Show affected routes from a feature\'s changed files')
+  console.log('  context decisions  Show the build decision log (--feature <FC>, --format text|json)')
   console.log('  init      Initialize Compose in the current project')
   console.log('  setup     Install/sync global skills + register stratum-mcp (alias: sync)')
   console.log('  sync      Re-sync global skills from this install (alias of setup)')
@@ -2761,6 +2762,67 @@ if (cmd === 'build') {
     console.error(`qa-scope failed: ${err.message}`)
     process.exit(1)
   })
+
+} else if (cmd === 'context') {
+  // ---------------------------------------------------------------------------
+  // compose context decisions [--feature <FC>] [--format text|json]
+  // COMP-CTX-3: read-side of the decision log. During `compose build` each gate
+  // outcome is auto-appended to docs/context/decisions.md (appendDecisionEntry);
+  // this surfaces it. Read-only; no server.
+  // ---------------------------------------------------------------------------
+  const contextSubcmd = args[0]
+  if (contextSubcmd === 'decisions') {
+    const { existsSync, readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const { resolveContextPath } = await import('../lib/project-paths.js')
+    const flagVal = (flag) => {
+      const i = args.indexOf(flag)
+      return i !== -1 && args[i + 1] ? args[i + 1] : null
+    }
+    const featureFilter = flagVal('--feature')
+    const format = flagVal('--format') || 'text'
+
+    const decisionsPath = join(resolveContextPath(process.cwd()), 'decisions.md')
+    if (!existsSync(decisionsPath)) {
+      console.error(`No decision log at ${decisionsPath} — run \`compose init\` to scaffold docs/context/, then decisions accrue during builds.`)
+      process.exit(1)
+    }
+    const raw = readFileSync(decisionsPath, 'utf-8')
+
+    // Each entry is a "## [YYYY-MM-DD] FEATURE — step" heading + body
+    // (see appendDecisionEntry in lib/build.js). Slice raw on the headings.
+    const heads = []
+    const re = /^## \[(\d{4}-\d{2}-\d{2})\] (\S+) — (.+)$/gm
+    let m
+    while ((m = re.exec(raw)) !== null) {
+      heads.push({ idx: m.index, date: m[1], feature: m[2], step: m[3] })
+    }
+    const blocks = heads.map((h, i) => ({
+      ...h,
+      text: raw.slice(h.idx, i + 1 < heads.length ? heads[i + 1].idx : raw.length).trim(),
+    }))
+    const filtered = featureFilter ? blocks.filter(b => b.feature === featureFilter) : blocks
+
+    if (format === 'json') {
+      const out = filtered.map(b => ({
+        date: b.date,
+        feature: b.feature,
+        step: b.step,
+        outcome: (b.text.match(/\*\*Outcome:\*\* (.+)/) || [])[1] || null,
+        rationale: (b.text.match(/\*\*Rationale:\*\* ([\s\S]+?)(?:\n## |\s*$)/) || [])[1]?.trim() || null,
+      }))
+      console.log(JSON.stringify(out, null, 2))
+    } else if (filtered.length === 0) {
+      console.log(featureFilter ? `No decisions recorded for ${featureFilter}.` : 'No decisions recorded yet.')
+    } else {
+      const label = featureFilter ? ` for ${featureFilter}` : ''
+      console.log(`Decision log${label} — ${filtered.length} entr${filtered.length === 1 ? 'y' : 'ies'}:\n`)
+      for (const b of filtered) console.log(b.text + '\n')
+    }
+  } else {
+    console.error('usage: compose context decisions [--feature <FC>] [--format text|json]')
+    process.exit(1)
+  }
 
 } else if (cmd === 'gates') {
   // ---------------------------------------------------------------------------

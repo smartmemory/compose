@@ -2,6 +2,25 @@
 
 ## 2026-06-16
 
+### COMP-CTX-3 reader + `dev:watch` server restarter + TEST-BOOTSTRAP-4 residual filed
+
+Follow-ups from the stale-row sweep, plus a requested dev convenience:
+
+- **COMP-CTX-3 → COMPLETE.** Added the read-side of the decision log:
+  `compose context decisions [--feature <FC>] [--format text|json]` reads the entries
+  auto-appended to `docs/context/decisions.md` during builds (`bin/compose.js`, honoring
+  `paths.context`). New `test/cli-context.test.js` (5 cases: list, filter, json, absent, usage).
+- **`npm run dev:watch`** (`scripts/watch-server.sh`) — restarts the `:4001` API server on
+  `server/**`/`lib/**` changes via Node's built-in `--watch`. Frees the port first (kills any
+  stale/orphaned `node server/index.js` left by a dead session — the leftover that reds the
+  pre-push suite), and `index.js`'s SIGTERM→`exit(0)` releases the port cleanly between
+  restarts. Scope is `:4001` only; the full stack still uses `npm run dev:server` (the
+  supervisor crash-restarts but does not watch files).
+- **COMP-TEST-BOOTSTRAP-4 stays PARTIAL** — filed `docs/features/COMP-TEST-BOOTSTRAP-4/residual.md`.
+  The test-run wiring shipped, but the gate deliverable (a test-phase `ensure` for
+  `test_count >= 1` / `test_pass_rate == 100%` + an auto-generated-test review lens) needs a
+  per-framework test-summary parser first — design-worthy, not a quick add.
+
 ### Roadmap stale-row sweep — reconcile 24 mislabeled PLANNED rows
 
 A parallel verification sweep over all 93 PLANNED roadmap rows (9 read-only investigator agents,
