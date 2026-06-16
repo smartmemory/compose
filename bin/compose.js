@@ -85,6 +85,7 @@ function resolveCwdWithWorkspace(args) {
 import { parseTeamFlag } from '../lib/team-flag.js';
 import { loadDeps, checkExternalSkills, printDepReport, buildDepReport, checkExternalBinaries, printBinaryReport, buildBinaryReport } from '../lib/deps.js';
 import { checkLatestVersion } from '../lib/version-check.js';
+import { computeHooksStatus, formatHookStatusLines, HOOK_MARKERS } from '../lib/hooks-status.js';
 
 const [,, cmd, ...args] = process.argv
 
@@ -1615,12 +1616,12 @@ if (cmd === 'hooks') {
   const HOOK_TYPES = {
     'post-commit': {
       template: pjoin(presolve(futp(import.meta.url), '..'), 'git-hooks', 'post-commit.template'),
-      marker:   '# Compose post-commit hook —',
+      marker:   HOOK_MARKERS['post-commit'],
       dest:     pjoin(hooksDir, 'post-commit'),
     },
     'pre-push': {
       template: pjoin(presolve(futp(import.meta.url), '..'), 'git-hooks', 'pre-push.template'),
-      marker:   '# Compose pre-push hook —',
+      marker:   HOOK_MARKERS['pre-push'],
       dest:     pjoin(hooksDir, 'pre-push'),
     },
   }
@@ -1689,48 +1690,14 @@ if (cmd === 'hooks') {
     return 0
   }
 
-  function extractBakedWorkspaceId(content) {
-    const m = content.match(/^COMPOSE_WORKSPACE_ID="([^"]*)"$/m)
-    return m ? m[1] : null
-  }
-
-  function statusOne(type) {
-    const { marker, dest } = HOOK_TYPES[type]
-    if (!exSync(dest)) {
-      console.log(`${type}: absent — no hook installed`)
-      return
-    }
-    const content = rfSync(dest, 'utf-8')
-    if (!content.includes(marker)) {
-      console.log(`${type}: foreign — hook exists but is not a Compose hook`)
-      return
-    }
+  // Resolve the expected workspace id once (identical across hook types).
+  // Hook-status detection itself lives in lib/hooks-status.js (shared with the
+  // /api/environment-health endpoint); this just supplies the comparison id.
+  function resolveExpectedWsId() {
     const wsHint = hookFlags['workspace']
-    let expectedWsId = null
-    if (wsHint) {
-      try { expectedWsId = resolveWorkspace({ cwd: projectRoot, workspaceId: wsHint }).id } catch { /* ignore for status */ }
-    } else {
-      try { expectedWsId = resolveWorkspace({ cwd: projectRoot }).id } catch { /* ignore for status */ }
-    }
-    const nodeMatch = content.includes(`COMPOSE_NODE="${composeNode}"`)
-    const binMatch  = content.includes(`COMPOSE_BIN="${composeBin}"`)
-    const hasRawToken = content.includes('__COMPOSE_WORKSPACE_ID__')
-    const wsMatch = hasRawToken ? false
-                  : expectedWsId ? content.includes(`COMPOSE_WORKSPACE_ID="${expectedWsId}"`)
-                  : true
-    if (nodeMatch && binMatch && wsMatch && !hasRawToken) {
-      console.log(`${type}: installed (current)`)
-      const baked = extractBakedWorkspaceId(content)
-      if (baked) console.log(`  workspace: ${baked}`)
-    } else {
-      const reason = hasRawToken ? 'MISSING_WORKSPACE_ID'
-                   : (expectedWsId && !wsMatch) ? 'STALE_WORKSPACE_ID'
-                   : 'stale paths'
-      console.log(`${type}: installed (${reason} — re-run install)`)
-      if (expectedWsId && !wsMatch && !hasRawToken) console.log(`  expected COMPOSE_WORKSPACE_ID="${expectedWsId}"`)
-      if (!nodeMatch) console.log(`  expected COMPOSE_NODE="${composeNode}"`)
-      if (!binMatch)  console.log(`  expected COMPOSE_BIN="${composeBin}"`)
-    }
+    try {
+      return resolveWorkspace(wsHint ? { cwd: projectRoot, workspaceId: wsHint } : { cwd: projectRoot }).id
+    } catch { return null /* ignore for status */ }
   }
 
   if (sub === 'install') {
@@ -1760,7 +1727,17 @@ if (cmd === 'hooks') {
   if (!sub || sub === 'status') {
     // Status reports on ALL known hook types (selection flags ignored), so users
     // see the full picture. Selection only affects install/uninstall.
-    for (const t of Object.keys(HOOK_TYPES)) statusOne(t)
+    const computed = computeHooksStatus({
+      projectRoot,
+      expectedWsId: resolveExpectedWsId(),
+      composeNode,
+      composeBin,
+    })
+    for (const t of Object.keys(HOOK_TYPES)) {
+      for (const line of formatHookStatusLines(t, computed[t], { composeNode, composeBin })) {
+        console.log(line)
+      }
+    }
     process.exit(0)
   }
 

@@ -27,6 +27,7 @@ import { attachSessionRoutes } from './session-routes.js';
 import { attachActivityRoutes } from './activity-routes.js';
 import { SettingsStore } from './settings-store.js';
 import { attachSettingsRoutes } from './settings-routes.js';
+import { attachHealthRoutes } from './health-routes.js';
 import { attachDesignRoutes } from './design-routes.js';
 import { DesignSessionManager } from './design-session.js';
 import { attachPipelineRoutes } from './pipeline-routes.js';
@@ -84,6 +85,11 @@ export class VisionServer {
       settingsStore: this.settingsStore,
       broadcastMessage: (msg) => this.broadcastMessage(msg),
     });
+
+    // ── Environment-health route (COMP-PARITY-3) ──────────────────────────
+    // Read-only GET /api/environment-health; resolves its own compose package
+    // root + composeBin/Node defaults, reads hooks off req.workspace.
+    attachHealthRoutes(app);
 
     // ── Vision CRUD + lifecycle routes ─────────────────────────────────────
     attachVisionRoutes(app, {

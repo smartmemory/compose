@@ -14,6 +14,7 @@ import DesignDocPanel from './components/cockpit/DesignDocPanel.jsx';
 import NotificationBar, { notify } from './components/cockpit/NotificationBar.jsx';
 import PairDeviceModal from './components/cockpit/PairDeviceModal.jsx';
 import OpsStrip from './components/cockpit/OpsStrip.jsx';
+import EnvironmentHealthPanel from './components/cockpit/EnvironmentHealthPanel.jsx';
 
 // Pure state-logic modules
 import {
@@ -1107,6 +1108,9 @@ function AppInner() {
                 disconnected
               </span>
             )}
+
+            {/* Environment health (COMP-PARITY-3) — passive drift signal */}
+            <EnvironmentHealthPanel />
 
             {/* Pair mobile device */}
             <button
