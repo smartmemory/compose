@@ -1,9 +1,9 @@
 {
   "code": "COMP-CTX-3",
   "description": "Decision log accumulation: agent decisions during `compose build` (model choices, architecture trade-offs, rejected approaches) auto-append to `docs/context/decisions.md` with timestamp, feature ref, and rationale. Queryable via `compose context decisions`.",
-  "status": "PLANNED",
+  "status": "PARTIAL",
   "phase": "COMP-CTX: Context Artifacts",
   "position": 127,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-16"
 }

@@ -1,9 +1,26 @@
 {
   "code": "COMP-OBS-STREAM-3",
   "description": "Verbose gating: reuses COMP-OBS-SURFACE's verbose toggle (no separate toggle). Verbose off: summaries filtered, no results visible. Verbose on: summaries consumed by pre-grouping, results render attached to tool_use. `tool_progress` renders standalone dimmed.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-OBS-STREAM: Tool Result Streaming",
   "position": 207,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-16",
+  "completions": [
+    {
+      "completion_id": "COMP-OBS-STREAM-3:6737afc18581d11a334ca3ccd5abac644a52edac",
+      "feature_code": "COMP-OBS-STREAM-3",
+      "commit_sha": "6737afc18581d11a334ca3ccd5abac644a52edac",
+      "commit_sha_short": "6737afc1",
+      "tests_pass": true,
+      "files_changed": [
+        "src/components/agent/MessageCard.jsx",
+        "src/components/agent-stream-helpers.js"
+      ],
+      "recorded_at": "2026-06-16T04:20:57.932Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Stale-row reconcile (sweep 2026-06-16). Verbose gating shipped (6737afc): reuses the COMP-OBS-SURFACE verbose toggle (no separate toggle); tool_use_summary/tool_progress gated on msg.verbose. feature.json never reconciled from PLANNED."
+    }
+  ],
+  "commit_sha": "6737afc18581d11a334ca3ccd5abac644a52edac"
 }

@@ -1,9 +1,26 @@
 {
   "code": "COMP-TUI-2",
   "description": "Gate panel: interactive gate UI with artifact summary, approve/revise/kill as selectable options. Replaces raw readline prompt.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-TUI: CLI Terminal UI",
   "position": 129,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-16",
+  "completions": [
+    {
+      "completion_id": "COMP-TUI-2:b61f1b8eced28630f520c5a1be9d7628bc1821ce",
+      "feature_code": "COMP-TUI-2",
+      "commit_sha": "b61f1b8eced28630f520c5a1be9d7628bc1821ce",
+      "commit_sha_short": "b61f1b8e",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/gate-prompt.js",
+        "lib/build.js"
+      ],
+      "recorded_at": "2026-06-16T04:20:25.746Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Stale-row reconcile (sweep 2026-06-16). Interactive gate panel shipped (b61f1b8): lib/gate-prompt.js drawGatePanel/promptGate with selectable approve/revise/kill, replacing raw readline. feature.json never reconciled from PLANNED."
+    }
+  ],
+  "commit_sha": "b61f1b8eced28630f520c5a1be9d7628bc1821ce"
 }

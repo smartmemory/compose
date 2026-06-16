@@ -1,7 +1,7 @@
 {
   "code": "COMP-CLI-GLOBAL-FLAGS",
   "description": "Pre-subcommand flag parser to enable compose --workspace=X build syntax",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "created": "2026-05-09",
   "profile": {
     "needs_prd": true,
@@ -11,8 +11,25 @@
     "language": "node",
     "test_framework": "vitest"
   },
-  "updated": "2026-06-07",
+  "updated": "2026-06-16",
   "group": "COMP-CLI",
   "phase": "Features",
-  "position": 291
+  "position": 291,
+  "completions": [
+    {
+      "completion_id": "COMP-CLI-GLOBAL-FLAGS:a8db93befe568914971e435252bd8ec7bc4766be",
+      "feature_code": "COMP-CLI-GLOBAL-FLAGS",
+      "commit_sha": "a8db93befe568914971e435252bd8ec7bc4766be",
+      "commit_sha_short": "a8db93be",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/resolve-workspace.js",
+        "bin/compose.js"
+      ],
+      "recorded_at": "2026-06-16T04:19:51.140Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Stale-row reconcile (sweep 2026-06-16). Pre-subcommand --workspace=X/--workspace X parsing shipped within COMP-WORKSPACE-ID (a8db93b): bin/compose.js strips the global flag before subcommand dispatch via getWorkspaceFlag (lib/resolve-workspace.js). The exact deliverable exists; feature.json never reconciled from PLANNED."
+    }
+  ],
+  "commit_sha": "a8db93befe568914971e435252bd8ec7bc4766be"
 }

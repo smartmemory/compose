@@ -1,9 +1,27 @@
 {
   "code": "COMP-OBS-SURFACE-2",
   "description": "Postcondition visibility: `build_step_done` events already carry `violations` array from `response.violations` in `build.js`. Render in MessageCard: check name, pass/fail icon, violation detail (expandable). Currently opaque — user sees \"step done\" but not what was verified.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-OBS-SURFACE: Step Detail Surface",
   "position": 202,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-16",
+  "completions": [
+    {
+      "completion_id": "COMP-OBS-SURFACE-2:6737afc18581d11a334ca3ccd5abac644a52edac",
+      "feature_code": "COMP-OBS-SURFACE-2",
+      "commit_sha": "6737afc18581d11a334ca3ccd5abac644a52edac",
+      "commit_sha_short": "6737afc1",
+      "tests_pass": true,
+      "files_changed": [
+        "src/components/agent/StepOutcome.jsx",
+        "src/components/agent/ViolationDetail.jsx",
+        "src/components/agent/MessageCard.jsx"
+      ],
+      "recorded_at": "2026-06-16T04:20:47.816Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Stale-row reconcile (sweep 2026-06-16). Postcondition visibility shipped (6737afc): build_step_done violations[] rendered via StepOutcome → expandable ViolationDetail. feature.json never reconciled from PLANNED."
+    }
+  ],
+  "commit_sha": "6737afc18581d11a334ca3ccd5abac644a52edac"
 }

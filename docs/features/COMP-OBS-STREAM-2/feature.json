@@ -1,9 +1,26 @@
 {
   "code": "COMP-OBS-STREAM-2",
   "description": "UI rendering: AgentStream pre-groups consecutive `tool_use` → `tool_use_summary` pairs. MessageCard renders `ToolResultBlock` (new component) attached below tool_use blocks. Collapsible: summary one-liner → first 20 lines → full content. Error detection with destructive styling.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-OBS-STREAM: Tool Result Streaming",
   "position": 206,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-16",
+  "completions": [
+    {
+      "completion_id": "COMP-OBS-STREAM-2:6737afc18581d11a334ca3ccd5abac644a52edac",
+      "feature_code": "COMP-OBS-STREAM-2",
+      "commit_sha": "6737afc18581d11a334ca3ccd5abac644a52edac",
+      "commit_sha_short": "6737afc1",
+      "tests_pass": true,
+      "files_changed": [
+        "src/components/agent/ToolResultBlock.jsx",
+        "src/components/agent/MessageCard.jsx"
+      ],
+      "recorded_at": "2026-06-16T04:20:55.827Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Stale-row reconcile (sweep 2026-06-16). UI rendering shipped (6737afc): ToolResultBlock (collapsible, ≤2KB, error styling) attached below tool_use; MessageCard pre-groups tool_use→tool_use_summary. feature.json never reconciled from PLANNED."
+    }
+  ],
+  "commit_sha": "6737afc18581d11a334ca3ccd5abac644a52edac"
 }

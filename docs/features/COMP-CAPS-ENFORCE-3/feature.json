@@ -1,9 +1,27 @@
 {
   "code": "COMP-CAPS-ENFORCE-3",
   "description": "Build audit integration: Violations written to build-stream as `capability_violation` events with step, agent, tool, template, severity. Surface in review findings and context panel audit trail.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-CAPS-ENFORCE: Agent Capability Violation Detection",
   "position": 192,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-16",
+  "completions": [
+    {
+      "completion_id": "COMP-CAPS-ENFORCE-3:03ebfffb946e65c1bc11a260fbb0ce6bd394ef4b",
+      "feature_code": "COMP-CAPS-ENFORCE-3",
+      "commit_sha": "03ebfffb946e65c1bc11a260fbb0ce6bd394ef4b",
+      "commit_sha_short": "03ebfffb",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/build-stream-writer.js",
+        "lib/build-stream-schema.js",
+        "server/build-stream-bridge.js"
+      ],
+      "recorded_at": "2026-06-16T04:20:40.298Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Stale-row reconcile (sweep 2026-06-16). Build audit integration shipped (Wave 3 03ebfff): violations emitted to build-stream as capability_violation events (step/agent/template/severity), surfaced through the bridge to UI. feature.json never reconciled from PLANNED."
+    }
+  ],
+  "commit_sha": "03ebfffb946e65c1bc11a260fbb0ce6bd394ef4b"
 }

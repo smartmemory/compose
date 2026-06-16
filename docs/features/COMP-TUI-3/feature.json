@@ -1,9 +1,26 @@
 {
   "code": "COMP-TUI-3",
   "description": "Violation/findings table: formatted table for review findings (severity, file, line, description) instead of raw JSON output.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-TUI: CLI Terminal UI",
   "position": 130,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-16",
+  "completions": [
+    {
+      "completion_id": "COMP-TUI-3:b61f1b8eced28630f520c5a1be9d7628bc1821ce",
+      "feature_code": "COMP-TUI-3",
+      "commit_sha": "b61f1b8eced28630f520c5a1be9d7628bc1821ce",
+      "commit_sha_short": "b61f1b8e",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/cli-progress.js",
+        "lib/build.js"
+      ],
+      "recorded_at": "2026-06-16T04:20:28.074Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Stale-row reconcile (sweep 2026-06-16). Findings table shipped (b61f1b8): lib/cli-progress.js findings() renders a severity-sorted SEV/FILE/FINDING table replacing raw JSON. feature.json never reconciled from PLANNED."
+    }
+  ],
+  "commit_sha": "b61f1b8eced28630f520c5a1be9d7628bc1821ce"
 }

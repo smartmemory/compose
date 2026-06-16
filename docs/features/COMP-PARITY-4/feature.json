@@ -1,12 +1,30 @@
 {
   "code": "COMP-PARITY-4",
   "description": "Loop create/resolve verbs in the UI. The attention queue already displays open loops but offers no create/resolve action — loop hygiene is terminal-only. Add create/resolve controls wired to the existing POST /api/vision/items/{id}/loops and .../loops/{loopId}/resolve endpoints the CLI already uses.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-PARITY: UI↔CLI Parity",
   "created": "2026-05-16",
-  "updated": "2026-05-16",
+  "updated": "2026-06-16",
   "complexity": "S",
   "position": 5,
   "parent": "COMP-PARITY",
-  "group": "COMP-PARITY"
+  "group": "COMP-PARITY",
+  "completions": [
+    {
+      "completion_id": "COMP-PARITY-4:4efbf34086836575b897cbe22b1fb02bf7dff321",
+      "feature_code": "COMP-PARITY-4",
+      "commit_sha": "4efbf34086836575b897cbe22b1fb02bf7dff321",
+      "commit_sha_short": "4efbf340",
+      "tests_pass": true,
+      "files_changed": [
+        "src/components/vision/OpenLoopsPanel.jsx",
+        "src/App.jsx",
+        "test/ui/open-loops-panel.test.jsx"
+      ],
+      "recorded_at": "2026-06-16T04:19:53.402Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Stale-row reconcile (sweep 2026-06-16). Loop create+resolve verbs shipped in UI (Wave 6, 4efbf34): OpenLoopsPanel exposes onAddLoop modal + onResolveLoop, wired in App.jsx to POST /api/vision/items/{id}/loops and .../loops/{loopId}/resolve. feature.json never reconciled from PLANNED."
+    }
+  ],
+  "commit_sha": "4efbf34086836575b897cbe22b1fb02bf7dff321"
 }
