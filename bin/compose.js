@@ -18,6 +18,7 @@ import { findProjectRoot } from '../server/find-root.js'
 import { resolveWorkspace, getWorkspaceFlag } from '../lib/resolve-workspace.js'
 import { resolvePort } from '../lib/resolve-port.js'
 import { resolveRoadmapPath, resolveFeaturesPath, resolveContextPathFromConfig, resolveFeaturesPathFromConfig, resolveRoadmapPathFromConfig } from '../lib/project-paths.js'
+import { installAgentDefs } from '../lib/install-agent-defs.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PACKAGE_ROOT = resolve(__dirname, '..')
@@ -245,6 +246,17 @@ function syncSkills(agents) {
     const composeSkillDir = join(agentSkillsRoot, 'compose')
     if (existsSync(depsSrc) && existsSync(composeSkillDir)) {
       copyFileSync(depsSrc, join(composeSkillDir, '.compose-deps.json'))
+    }
+
+    // COMP-AGENT-VENDOR-1: install the vendored Claude subagents the compose
+    // SKILL.md depends on (compose-explorer/compose-architect) into the Claude
+    // agents dir — sibling of the skills root. Claude tree only (basename check):
+    // gemini is skipped above and codex shares the claude root.
+    if (basename(dirname(agentSkillsRoot)) === '.claude') {
+      const agentDefsDest = join(dirname(agentSkillsRoot), 'agents')
+      for (const d of installAgentDefs(join(PACKAGE_ROOT, '.claude', 'agents'), agentDefsDest)) {
+        console.log(`  + ${agent.name}/agents/${d}`)
+      }
     }
 
     // Remove skills we previously installed that no longer exist in source

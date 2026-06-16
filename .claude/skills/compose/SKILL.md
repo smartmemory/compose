@@ -580,7 +580,7 @@ After completing a feature OR bug-fix lifecycle, update project memory:
 
 ## Dependencies
 
-`compose setup` (see `bin/compose.js` `syncSkills()`) installs compose-owned skills from `PACKAGE_ROOT/.claude/skills/` and `PACKAGE_ROOT/skills/` to `~/.claude/skills/` and tracks them in `~/.claude/skills/.compose-skills.json`.
+`compose setup` (see `bin/compose.js` `syncSkills()`) installs compose-owned skills from `PACKAGE_ROOT/.claude/skills/` and `PACKAGE_ROOT/skills/` to `~/.claude/skills/` and tracks them in `~/.claude/skills/.compose-skills.json`. It also installs the vendored agent definitions from `PACKAGE_ROOT/.claude/agents/` (`compose-explorer`, `compose-architect`) to `~/.claude/agents/` (COMP-AGENT-VENDOR-1).
 
 ### Vendored (ship with compose)
 

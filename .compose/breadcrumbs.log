@@ -586,3 +586,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-16T12:23:40+08:00 | Stale-row sweep: reconcile 24 mislabeled PLANNED rows (22 COMPLETE via record_completion, 2 PARTIAL via lifecycle) after 9-agent git verification
 2026-06-16T13:22:01+08:00 | CTX-3: add compose context decisions reader (read-side of auto-appended decision log); restart-on-change watch script for :4001
 2026-06-16T17:29:46+08:00 | COMP-PARITY-1: CLI gate list/resolve wrapping vision gate endpoints (full /compose lifecycle, Codex review CLEAN)
+2026-06-16T19:46:10+08:00 | COCKPIT-11 (Discuss button -> live /api/agent/message) + AGENT-VENDOR-1 (vendored compose-explorer/architect agent defs + syncSkills install); Codex CLEAN

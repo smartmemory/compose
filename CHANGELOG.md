@@ -2,6 +2,23 @@
 
 ## 2026-06-16
 
+### COMP-AGENT-VENDOR-1 — ship the vendored compose-explorer / compose-architect agents
+
+The compose SKILL.md depended on `compose-explorer` (Phases 1, 4) and `compose-architect` (Phase 3)
+and claimed they ship under `compose/.claude/agents/`, but no definition existed and `syncSkills()`
+only installed `SKILL.md` files — so those `subagent_type` dispatches silently fell back to
+built-ins. Now: authored `.claude/agents/compose-explorer.md` + `compose-architect.md` (read-only
+research + competing-mandate architecture roles), added `lib/install-agent-defs.js`, and wired
+`syncSkills()` so `compose setup`/`init` install them to `~/.claude/agents/`. Tested in
+`test/install-agent-defs.test.js` + an end-to-end `compose setup` assertion in `test/init.test.js`.
+
+### COMP-COCKPIT-11 — fix the ChallengeModal "Discuss" dead endpoint
+
+`ChallengeRow.handleDiscuss` POSTed to `/api/terminal/inject`, a route that died with the retired
+`terminal-server.js` (404, dead button). Repointed it to the live `POST /api/agent/message`
+(body `{ prompt }`) on the agent server — its modern equivalent (resumes the session and sends the
+prompt to the agent). `ChallengeRow` is now exported; tested in `test/ui/challenge-row-discuss.test.jsx`.
+
 ### COMP-PARITY-1 — CLI gate resolution
 
 Gate resolution is no longer cockpit-only — headless/CI runs can now clear gates from the CLI:
