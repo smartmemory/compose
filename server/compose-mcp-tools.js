@@ -359,7 +359,28 @@ export async function toolProposeFollowup(args) {
   // propose_followup also accepts a caller-supplied `status` and routes to
   // addRoadmapEntry — gate lifecycle-owned terminal statuses the same way.
   assertTerminalStatusAuthorized(args, 'propose_followup');
-  const { proposeFollowup } = await import('../lib/followup-writer.js');
+  let proposeFollowup;
+  try {
+    ({ proposeFollowup } = await import('../lib/followup-writer.js'));
+  } catch (err) {
+    // COMP-MCP-FOLLOWUP-1: a long-running stdio MCP server caches ESM module
+    // records. If lib/ changed under it (e.g. a later commit added an export
+    // this lazily-imported module now depends on), linking fails with a cryptic
+    // "does not provide an export named ..." even though the on-disk code is
+    // correct — the running server just needs to reload. Rethrow with an
+    // actionable hint instead of the raw ESM error.
+    if (/does not provide an export named|Cannot find module/i.test(err?.message || '')) {
+      const hint = new Error(
+        `propose_followup could not load lib/followup-writer.js: ${err.message}. ` +
+        `This usually means the compose MCP server is running stale code (module-cache skew after a ` +
+        `code change) — reconnect the MCP server (/mcp) to reload it. If it persists after reconnecting, ` +
+        `an export is genuinely missing on disk.`,
+      );
+      hint.cause = err;
+      throw hint;
+    }
+    throw err;
+  }
   return proposeFollowup(getTargetRoot(), args);
 }
 
