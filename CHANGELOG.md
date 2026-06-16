@@ -2,6 +2,22 @@
 
 ## 2026-06-16
 
+### COMP-PARITY-1 — CLI gate resolution
+
+Gate resolution is no longer cockpit-only — headless/CI runs can now clear gates from the CLI:
+
+- `compose gate list [--item <id>] [--status pending|all|resolved] [--format text|json]` — wraps
+  `GET /api/vision/gates`. Record-per-gate output (gate ids are long `<uuid>:<step>:<round>`
+  strings); `--item` filters client-side so it works across all statuses (the server only honors
+  `itemId` on the pending path).
+- `compose gate resolve <gateId> (--approve|--revise|--kill) [--comment|--reason <text>]` — wraps
+  `POST /api/vision/gates/:id/resolve` (`resolvedBy: 'cli'`; sends `x-compose-token` when
+  `COMPOSE_API_TOKEN` is set, for guardAuth-enabled installs).
+
+`gate` and `gates` are aliases — `gates report` is unchanged. No server changes. Tested in
+`test/cli-gate.test.js` (16 cases, Express stub). Closes the highest-impact UI↔CLI parity gap
+(gated builds were a hard cockpit dependency).
+
 ### COMP-CTX-3 reader + `dev:watch` server restarter + TEST-BOOTSTRAP-4 residual filed
 
 Follow-ups from the stale-row sweep, plus a requested dev convenience:
