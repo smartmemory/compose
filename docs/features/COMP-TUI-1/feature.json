@@ -1,9 +1,26 @@
 {
   "code": "COMP-TUI-1",
   "description": "Step pipeline bar: horizontal progress visualization showing all build steps with done/active/pending states. Always visible at top of output.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-TUI: CLI Terminal UI",
   "position": 128,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-16",
+  "completions": [
+    {
+      "completion_id": "COMP-TUI-1:b61f1b8eced28630f520c5a1be9d7628bc1821ce",
+      "feature_code": "COMP-TUI-1",
+      "commit_sha": "b61f1b8eced28630f520c5a1be9d7628bc1821ce",
+      "commit_sha_short": "b61f1b8e",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/cli-progress.js",
+        "lib/build.js"
+      ],
+      "recorded_at": "2026-06-16T04:20:22.885Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Stale-row reconcile (sweep 2026-06-16). Step pipeline bar shipped (b61f1b8): lib/cli-progress.js #drawPipelineBar rendered at each step start (build.js). feature.json never reconciled from PLANNED."
+    }
+  ],
+  "commit_sha": "b61f1b8eced28630f520c5a1be9d7628bc1821ce"
 }

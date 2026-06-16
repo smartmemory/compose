@@ -1,9 +1,25 @@
 {
   "code": "COMP-TEST-BOOTSTRAP-3",
   "description": "Golden flow generation: from the implementation diff, generate 1–3 golden flow tests covering the core capability lifecycle. Tests follow the project's testing hierarchy (golden flows > error harness > contract > unit).",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-TEST-BOOTSTRAP: Test Framework Bootstrap",
   "position": 180,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-16",
+  "completions": [
+    {
+      "completion_id": "COMP-TEST-BOOTSTRAP-3:03ebfffb946e65c1bc11a260fbb0ce6bd394ef4b",
+      "feature_code": "COMP-TEST-BOOTSTRAP-3",
+      "commit_sha": "03ebfffb946e65c1bc11a260fbb0ce6bd394ef4b",
+      "commit_sha_short": "03ebfffb",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/build.js"
+      ],
+      "recorded_at": "2026-06-16T04:21:04.780Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Stale-row reconcile (sweep 2026-06-16). Golden flow generation shipped (Wave 3 03ebfff): build instructs the agent to generate 1-3 golden flow tests covering the core capability lifecycle (coverage step). feature.json never reconciled from PLANNED."
+    }
+  ],
+  "commit_sha": "03ebfffb946e65c1bc11a260fbb0ce6bd394ef4b"
 }

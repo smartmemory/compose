@@ -1,10 +1,28 @@
 {
   "code": "COMP-ROADMAP-RT-GENFIX",
   "description": "Generator/parser roundtrip defects surfaced by checkRoundtrip (BLOCKS the full feature.json migration of ~169 historical compose rows): (1) parser SKIP_STATUSES phase-override rewrites sub-item rows, losing mixed item statuses under a rolled-up COMPLETE/PARKED phase; (2) malformed feature codes (e.g. lowercase) cause row duplication + non-convergence; (3) parser accumulates consecutive ### milestone headings into the phaseId ('Phase > M1 > M2 > ...') instead of resetting to the parent ## phase, producing false phase LOSSLESS_CHANGED on milestone-nested rows; (4) generator does not converge on strikethrough/renumbered rows (e.g. ~~COMP-TEAMS~~), breaking the fixed point; (5) unescaped pipes in a description cell (e.g. COMP-PARITY-1 '--approve|--revise|--kill') mis-split the markdown table so the parser reads a description fragment as the status. All pre-existing gen/parse defects, not roadmap drift.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "Phase 6: MCP Writers",
   "created": "2026-05-29",
-  "updated": "2026-05-29",
+  "updated": "2026-06-16",
   "complexity": "L",
-  "position": 3
+  "position": 3,
+  "completions": [
+    {
+      "completion_id": "COMP-ROADMAP-RT-GENFIX:8a37c770f4146c3ae3b883984bd54a3fc64a83f7",
+      "feature_code": "COMP-ROADMAP-RT-GENFIX",
+      "commit_sha": "8a37c770f4146c3ae3b883984bd54a3fc64a83f7",
+      "commit_sha_short": "8a37c770",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/roadmap-parser.js",
+        "lib/roadmap-gen.js",
+        "lib/roadmap-preservers.js"
+      ],
+      "recorded_at": "2026-06-16T04:19:48.169Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Stale-row reconcile (sweep 2026-06-16). All 5 gen/parse roundtrip defects fixed: SKIP_STATUSES empty-only fill, escaped-pipe table split, milestone-heading phaseId reset, strikethrough/renumbered convergence, malformed-code dedup. Surfaced by checkRoundtrip during COMP-ROADMAP-RT. feature.json never reconciled from PLANNED."
+    }
+  ],
+  "commit_sha": "8a37c770f4146c3ae3b883984bd54a3fc64a83f7"
 }

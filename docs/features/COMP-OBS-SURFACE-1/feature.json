@@ -1,9 +1,26 @@
 {
   "code": "COMP-OBS-SURFACE-1",
   "description": "Retry surface: when a Stratum step fails postconditions and retries, show the failure reason and retry count in the message stream. Data already exists: `build.js` tracks `retries` per step, `ItemDetailPanel` shows `step.attempts` in audit trace. Add: retry badge on ops strip entry (\"retry 2/3\"), failure reason inline in build step message. Currently silent retries look like the agent is stuck.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-OBS-SURFACE: Step Detail Surface",
   "position": 201,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-16",
+  "completions": [
+    {
+      "completion_id": "COMP-OBS-SURFACE-1:6737afc18581d11a334ca3ccd5abac644a52edac",
+      "feature_code": "COMP-OBS-SURFACE-1",
+      "commit_sha": "6737afc18581d11a334ca3ccd5abac644a52edac",
+      "commit_sha_short": "6737afc1",
+      "tests_pass": true,
+      "files_changed": [
+        "src/components/agent/StepOutcome.jsx",
+        "src/components/agent/MessageCard.jsx"
+      ],
+      "recorded_at": "2026-06-16T04:20:45.481Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Stale-row reconcile (sweep 2026-06-16). Retry surface shipped (6737afc): build_step_done renders StepOutcome with a retry badge (step-level postcondition retries). feature.json never reconciled from PLANNED."
+    }
+  ],
+  "commit_sha": "6737afc18581d11a334ca3ccd5abac644a52edac"
 }

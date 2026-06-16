@@ -1,9 +1,27 @@
 {
   "code": "COMP-TEST-BOOTSTRAP-1",
   "description": "Framework detection: check for test config files (jest.config, vitest.config, pytest.ini, go test files, etc.). If none found, classify project by language/framework and select appropriate test runner.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-TEST-BOOTSTRAP: Test Framework Bootstrap",
   "position": 178,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-16",
+  "completions": [
+    {
+      "completion_id": "COMP-TEST-BOOTSTRAP-1:03ebfffb946e65c1bc11a260fbb0ce6bd394ef4b",
+      "feature_code": "COMP-TEST-BOOTSTRAP-1",
+      "commit_sha": "03ebfffb946e65c1bc11a260fbb0ce6bd394ef4b",
+      "commit_sha_short": "03ebfffb",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/test-bootstrap.js",
+        "test/test-bootstrap.test.js",
+        "lib/build.js"
+      ],
+      "recorded_at": "2026-06-16T04:21:00.061Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Stale-row reconcile (sweep 2026-06-16). Framework detection shipped (Wave 3 03ebfff): lib/test-bootstrap.js detectTestFramework (vitest/jest/pytest/go/rust) via config + package.json deps. feature.json never reconciled from PLANNED."
+    }
+  ],
+  "commit_sha": "03ebfffb946e65c1bc11a260fbb0ce6bd394ef4b"
 }

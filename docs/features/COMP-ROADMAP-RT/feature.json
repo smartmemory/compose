@@ -1,10 +1,10 @@
 {
   "code": "COMP-ROADMAP-RT",
   "description": "Harden deterministic roadmap roundtripping: prove gen↔parse fixed-point + losslessness, write-time auto-canonicalize-or-block guard, unified feature-code parsing, and hierarchy/drift validation findings.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "Phase 6: MCP Writers",
   "created": "2026-05-29",
-  "updated": "2026-05-29",
+  "updated": "2026-06-16",
   "complexity": "L",
   "position": 1,
   "links": [
@@ -18,5 +18,26 @@
       "to_code": "COMP-ROADMAP-RT-GENFIX",
       "note": "Latent gen/parse lossiness defects surfaced by checkRoundtrip during COMP-ROADMAP-RT impl"
     }
-  ]
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-ROADMAP-RT:653996af0c05446e9d8915889536fa7771c94f87",
+      "feature_code": "COMP-ROADMAP-RT",
+      "commit_sha": "653996af0c05446e9d8915889536fa7771c94f87",
+      "commit_sha_short": "653996af",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/roadmap-roundtrip.js",
+        "lib/feature-writer.js",
+        "lib/feature-code.js",
+        "lib/roadmap-parser.js",
+        "lib/feature-validator.js",
+        "bin/compose.js"
+      ],
+      "recorded_at": "2026-06-16T04:19:12.131Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Stale-row reconcile (sweep 2026-06-16). Shipped via 8-TDD-task implementation (merged e835279; report commit 653996af): checkRoundtrip primitive (lib/roadmap-roundtrip.js) consumed by the write-time pre-commit guard (lib/feature-writer.js roundtripGuard), `compose roadmap check`, and validate_project; canonical isFeatureCode; parser trailing-code fix (recovered 63 codes); 4 validator findings. feature.json was never reconciled from PLANNED."
+    }
+  ],
+  "commit_sha": "653996af0c05446e9d8915889536fa7771c94f87"
 }

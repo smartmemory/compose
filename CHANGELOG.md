@@ -2,6 +2,29 @@
 
 ## 2026-06-16
 
+### Roadmap stale-row sweep — reconcile 24 mislabeled PLANNED rows
+
+A parallel verification sweep over all 93 PLANNED roadmap rows (9 read-only investigator agents,
+each checking git log / CHANGELOG / code for the exact named deliverable) found **24 rows were
+stale** — shipped in code but never reconciled from PLANNED. Compose's ROADMAP does not auto-sync
+with merged work, so completed features drift. Reconciled (evidence-bound, full commit SHA via
+`record_completion`; PARTIALs driven through the lifecycle):
+
+- **22 → COMPLETE:** `COMP-ROADMAP-RT` + `COMP-ROADMAP-RT-GENFIX` (deterministic roundtrip,
+  merged `e835279`/`8a37c77`); `COMP-CLI-GLOBAL-FLAGS` (pre-subcommand `--workspace`, shipped in
+  `a8db93b`); `COMP-PARITY-4` (UI loop verbs, `4efbf34`); `COMP-TUI-1/2/3` (pipeline bar, gate
+  panel, findings table, `b61f1b8`); `COMP-CTX-1/2`, `COMP-CAPS-ENFORCE-1/2/3/4`,
+  `COMP-TEST-BOOTSTRAP-1/2/3` (Wave 3 M-batch `03ebfff`); `COMP-OBS-SURFACE-1/2/3` +
+  `COMP-OBS-STREAM-1/2/3` (agent observability, `6737afc`).
+- **2 → PARTIAL** (real residual remains): `COMP-CTX-3` (auto-append shipped; `compose context
+  decisions` CLI unbuilt); `COMP-TEST-BOOTSTRAP-4` (test-run wiring shipped; the test-phase
+  `ensure` gate + auto-generated-test review lens unbuilt).
+
+The other 69 PLANNED rows were verified genuinely unbuilt (forward-looking epics: BENCH,
+AUTOHARNESS, CONSENSUS, BMAD, SPECFLOW, POLICY-CHECK, PIPE-EDIT, the WORKSPACE-* follow-ups, the
+remaining PARITY/TUI items, etc.). Roadmap counts: complete 231→253, planned 96→72, active 0→2.
+`compose roadmap check` remains a fixed point and lossless. Canon-only; no code behavior change.
+
 ### Roadmap reconcile — close COMP-ROADMAP-XREF-SYNC + COMP-MCP-MIGRATION-2-1 (PARTIAL → COMPLETE)
 
 Two long-standing PARTIAL umbrella rows were closed after verifying their deferred scope had
