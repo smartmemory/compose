@@ -10,6 +10,7 @@ import RoadmapTab from './tabs/RoadmapTab';
 import IdeasTab from './tabs/IdeasTab';
 import BuildsTab from './tabs/BuildsTab';
 import MobileAlertBar from './components/MobileAlertBar';
+import MobileEnvHealth from './components/MobileEnvHealth';
 import { usePendingGates } from './hooks/usePendingGates.js';
 import { useActiveBuild } from './hooks/useActiveBuild.js';
 import { useRoadmapItems } from './hooks/useRoadmapItems.js';
@@ -175,7 +176,10 @@ export default function MobileApp() {
   return (
     <div className="m-root" data-testid="mobile-root">
       <header className="m-header">
-        <div className="m-header-title">Compose</div>
+        <div className="m-header-bar">
+          <div className="m-header-title">Compose</div>
+          <MobileEnvHealth />
+        </div>
       </header>
       <MobileAlertBar onNavigate={setTabAndUrl} />
       <main className="m-main" data-testid="mobile-main" data-tab={tab}>
