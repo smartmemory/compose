@@ -589,3 +589,6 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-16T19:46:10+08:00 | COCKPIT-11 (Discuss button -> live /api/agent/message) + AGENT-VENDOR-1 (vendored compose-explorer/architect agent defs + syncSkills install); Codex CLEAN
 2026-06-16T20:04:09+08:00 | COMP-PARITY-3 Phase 1: writing design.md for cockpit environment-health panel (header dot+popover, /api/health/environment endpoint)
 2026-06-16T20:42:48+08:00 | COMP-PARITY-3 Phase 4-5: blueprint + verification (computeHooksStatus extraction contract, /api/environment-health degrade, refetch on {id,root}, test placement to repo runners)
+2026-06-16T20:46:00+08:00 | COMP-PARITY-3 S1: extract lib/hooks-status.js (computeHooksStatus + HOOK_MARKERS + formatHookStatusLines) as shared single-source for CLI hooks-status + /api/environment-health
+2026-06-16T20:50:48+08:00 | COMP-PARITY-3 S3: add server/health-routes.js (GET /api/environment-health) reusing deps/version-check/hooks-status; pure rollupSummary + hookRawToApi; degrade-never-500
+2026-06-16T20:53:47+08:00 | COMP-PARITY-3 S5-6: EnvironmentHealthPanel header dot+popover (fetch on workspace resolve + on {id,root} change + manual refresh) and mount in App.jsx header
