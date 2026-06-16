@@ -1,12 +1,40 @@
 {
   "code": "COMP-PARITY-3",
   "description": "Cockpit environment-health panel surfacing `compose doctor` (dep/version drift) and `compose hooks status` (stale/foreign/missing git hooks). Silent hook and version drift currently causes mystery build failures with zero UI signal. Read-only panel backed by a thin /api/health endpoint wrapping the existing doctor/hooks-status logic.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "COMP-PARITY: UI↔CLI Parity",
   "created": "2026-05-16",
   "updated": "2026-06-16",
   "complexity": "S",
   "position": 4,
   "parent": "COMP-PARITY",
-  "group": "COMP-PARITY"
+  "group": "COMP-PARITY",
+  "completions": [
+    {
+      "completion_id": "COMP-PARITY-3:618625ae474225837c65ce0627806c2c0ad9e3f1",
+      "feature_code": "COMP-PARITY-3",
+      "commit_sha": "618625ae474225837c65ce0627806c2c0ad9e3f1",
+      "commit_sha_short": "618625ae",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/hooks-status.js",
+        "bin/compose.js",
+        "server/health-routes.js",
+        "server/vision-server.js",
+        "src/components/cockpit/EnvironmentHealthPanel.jsx",
+        "src/App.jsx",
+        "test/hooks-status.test.js",
+        "test/hooks-status-cli.test.js",
+        "test/health-routes.test.js",
+        "test/integration/health-routes.test.js",
+        "test/ui/env-health-panel.test.jsx",
+        "CHANGELOG.md",
+        "docs/cockpit.md"
+      ],
+      "recorded_at": "2026-06-16T13:15:30.753Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Cockpit environment-health panel: read-only /api/environment-health + header dot+popover surfacing compose doctor + hooks status. Full suite green (node 3977, UI 429, tracker 100); Codex review clean."
+    }
+  ],
+  "commit_sha": "618625ae474225837c65ce0627806c2c0ad9e3f1"
 }
