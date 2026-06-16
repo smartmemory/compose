@@ -1,0 +1,11 @@
+{
+  "code": "COMP-PARITY-3-2",
+  "description": "Mobile-surface environment-health indicator. COMP-PARITY-3 added the health dot to the desktop cockpit header only; the mobile PWA (`src/mobile/`) is a separate surface and got no signal. Add a lightweight health indicator to the mobile shell consuming the same `GET /api/environment-health` endpoint (read-only). Surfaced by COMP-PARITY-3 (mobile was an explicit non-goal).",
+  "status": "PLANNED",
+  "phase": "COMP-PARITY: UI↔CLI Parity",
+  "created": "2026-06-16",
+  "updated": "2026-06-16",
+  "complexity": "S",
+  "position": 12,
+  "parent": "COMP-PARITY-3"
+}
