@@ -594,3 +594,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-16T20:53:47+08:00 | COMP-PARITY-3 S5-6: EnvironmentHealthPanel header dot+popover (fetch on workspace resolve + on {id,root} change + manual refresh) and mount in App.jsx header
 2026-06-16T22:39:02+08:00 | COMP-PARITY-3-1: guarded hook-repair endpoint + panel repair/copy buttons
 2026-06-16T22:39:02+08:00 | COMP-PARITY-3-2: add read-only env-health indicator to mobile PWA header
+2026-06-16T23:08:59+08:00 | COMP-UITEST-ISOLATION-1: vitest jsdom url (non-opaque origin for storage) + explicit isolate + localStorage polyfill guard in test/ui/setup.js to kill the intermittent 'localStorage undefined' beforeEach flake
