@@ -1,12 +1,32 @@
 {
   "code": "COMP-PARITY-1",
   "description": "CLI gate resolution. `compose gate list` (pending gates + artifact assessment) and `compose gate resolve <id> --approve|--revise [--comment]|--kill --reason`. Wraps the existing POST /api/vision/gates/{id}/resolve endpoint. Highest-impact gap: today a headless or CI-driven build cannot clear a gate, making the cockpit a hard dependency for any gated pipeline. Ships first; unblocks autonomous/CI runs.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-PARITY: UI↔CLI Parity",
   "created": "2026-05-16",
-  "updated": "2026-05-16",
+  "updated": "2026-06-16",
   "complexity": "M",
   "position": 2,
   "parent": "COMP-PARITY",
-  "group": "COMP-PARITY"
+  "group": "COMP-PARITY",
+  "completions": [
+    {
+      "completion_id": "COMP-PARITY-1:593a3e835a93534c4e63e8554526ed7f8f2cb1f6",
+      "feature_code": "COMP-PARITY-1",
+      "commit_sha": "593a3e835a93534c4e63e8554526ed7f8f2cb1f6",
+      "commit_sha_short": "593a3e83",
+      "tests_pass": true,
+      "files_changed": [
+        "bin/compose.js",
+        "test/cli-gate.test.js",
+        "docs/features/COMP-PARITY-1/design.md",
+        "docs/features/COMP-PARITY-1/blueprint.md",
+        "docs/features/COMP-PARITY-1/report.md"
+      ],
+      "recorded_at": "2026-06-16T09:30:02.119Z",
+      "recorded_by": "mcp:agent",
+      "notes": "CLI gate resolution shipped via /compose lifecycle. `compose gate list` + `compose gate resolve` wrap GET/POST /api/vision/gates[/:id/resolve]; gate≡gates alias, gates report unchanged; no server changes. Unblocks headless/CI gate clearing (highest-impact UI↔CLI parity gap). Codex review CLEAN after fixing --item client-side filter (server only filters itemId on pending path) + --status/--format enum validation. 16 cli-gate tests + 40 existing gate tests green."
+    }
+  ],
+  "commit_sha": "593a3e835a93534c4e63e8554526ed7f8f2cb1f6"
 }
