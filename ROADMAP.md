@@ -447,7 +447,7 @@ Note: cross-artifact consistency (design↔blueprint↔plan alignment) is alread
 |---|---------|-------------|--------|
 | 125 | COMP-CTX-1 | Ambient context layer: `compose init` scaffolds `docs/context/` with `tech-stack.md`, `conventions.md`, `decisions.md`. These are injected into every agent prompt during `compose build` as read-only context. Updated manually or via `compose context update`. | COMPLETE |
 | 126 | COMP-CTX-2 | Artifact staleness detection: track last-modified timestamps and phase at time of writing. When the feature advances past the artifact's phase or code changes touch files referenced in the artifact, flag it as potentially stale. Surface in context panel and gate reviews. | COMPLETE |
-| 127 | COMP-CTX-3 | Decision log accumulation: agent decisions during `compose build` (model choices, architecture trade-offs, rejected approaches) auto-append to `docs/context/decisions.md` with timestamp, feature ref, and rationale. Queryable via `compose context decisions`. | PARTIAL |
+| 127 | COMP-CTX-3 | Decision log accumulation: agent decisions during `compose build` (model choices, architecture trade-offs, rejected approaches) auto-append to `docs/context/decisions.md` with timestamp, feature ref, and rationale. Queryable via `compose context decisions`. | COMPLETE |
 
 **Dependencies:** None — independent of other features. Enhances L2 artifact awareness and L3 policy enforcement.
 

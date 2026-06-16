@@ -1,9 +1,26 @@
 {
   "code": "COMP-CTX-3",
   "description": "Decision log accumulation: agent decisions during `compose build` (model choices, architecture trade-offs, rejected approaches) auto-append to `docs/context/decisions.md` with timestamp, feature ref, and rationale. Queryable via `compose context decisions`.",
-  "status": "PARTIAL",
+  "status": "COMPLETE",
   "phase": "COMP-CTX: Context Artifacts",
   "position": 127,
   "created": "2026-05-29",
-  "updated": "2026-06-16"
+  "updated": "2026-06-16",
+  "completions": [
+    {
+      "completion_id": "COMP-CTX-3:d2bc5fcc85283b4b26cc8a290b4dbf2a4d944dd2",
+      "feature_code": "COMP-CTX-3",
+      "commit_sha": "d2bc5fcc85283b4b26cc8a290b4dbf2a4d944dd2",
+      "commit_sha_short": "d2bc5fcc",
+      "tests_pass": true,
+      "files_changed": [
+        "bin/compose.js",
+        "test/cli-context.test.js"
+      ],
+      "recorded_at": "2026-06-16T05:30:55.373Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Residual completed (was PARTIAL since 2026-06-16 sweep). The auto-append half shipped earlier (Wave 3 03ebfff); this adds the named read-side: `compose context decisions [--feature <FC>] [--format text|json]` reads docs/context/decisions.md (honors paths.context). 5 CLI tests pass (list/filter/json/absent/usage). Row fully delivered."
+    }
+  ],
+  "commit_sha": "d2bc5fcc85283b4b26cc8a290b4dbf2a4d944dd2"
 }
