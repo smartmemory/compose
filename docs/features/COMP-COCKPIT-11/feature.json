@@ -1,11 +1,29 @@
 {
   "code": "COMP-COCKPIT-11",
   "description": "ChallengeModal \"Discuss\" posts to /api/terminal/inject (ChallengeModal.jsx:38 via agentServerUrl) but no such route exists on ANY server — dead endpoint, 404s on localhost too (client-side counterpart of the COMP-COCKPIT-10 orphaned-route sweep). Found by the COMP-MOBILE-REMOTE review gate (flagged as a missing remote proxy; root cause is the endpoint never existing). Fix: wire a real inject path on the agent server + proxy it, or remove/disable the Discuss action.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-COCKPIT Wave 2: UX Journey Gaps (2026-06-10 sweep)",
   "created": "2026-06-11",
-  "updated": "2026-06-11",
+  "updated": "2026-06-16",
   "complexity": "S",
   "position": 7,
-  "parent": "COMP-COCKPIT"
+  "parent": "COMP-COCKPIT",
+  "completions": [
+    {
+      "completion_id": "COMP-COCKPIT-11:c149a4e5fb290c6f43390f1aa1f2f466eb1498e9",
+      "feature_code": "COMP-COCKPIT-11",
+      "commit_sha": "c149a4e5fb290c6f43390f1aa1f2f466eb1498e9",
+      "commit_sha_short": "c149a4e5",
+      "tests_pass": true,
+      "files_changed": [
+        "src/components/vision/ChallengeModal.jsx",
+        "test/ui/challenge-row-discuss.test.jsx",
+        "docs/features/COMP-COCKPIT-11/design.md"
+      ],
+      "recorded_at": "2026-06-16T11:46:30.819Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Fixed the dead ChallengeModal 'Discuss' endpoint: ChallengeRow.handleDiscuss repointed from the retired /api/terminal/inject to the live POST /api/agent/message (body { prompt }) on the agent server. ChallengeRow exported for testing. 2 UI tests (challenge-row-discuss) green, no regression in challenge-modal-host. Codex review CLEAN."
+    }
+  ],
+  "commit_sha": "c149a4e5fb290c6f43390f1aa1f2f466eb1498e9"
 }
