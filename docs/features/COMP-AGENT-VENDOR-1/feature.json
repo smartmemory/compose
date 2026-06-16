@@ -1,10 +1,10 @@
 {
   "code": "COMP-AGENT-VENDOR-1",
   "description": "Ship the compose-explorer/compose-architect subagents the SKILL.md depends on — author the two agent definitions and have `compose setup` install them to ~/.claude/agents/ (or switch the skill to built-in Explore/Plan). Today the skill's \"Vendored\" table references them but no definition file exists anywhere and syncSkills() never installs them, so any `subagent_type: compose-explorer` dispatch fails and the lifecycle silently falls back to built-ins.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "Standalone Tickets",
   "created": "2026-06-07",
-  "updated": "2026-06-07",
+  "updated": "2026-06-16",
   "complexity": "S",
   "position": 5,
   "tags": [
@@ -12,5 +12,27 @@
     "agents",
     "dx",
     "sweep-2026-06-07"
-  ]
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-AGENT-VENDOR-1:c149a4e5fb290c6f43390f1aa1f2f466eb1498e9",
+      "feature_code": "COMP-AGENT-VENDOR-1",
+      "commit_sha": "c149a4e5fb290c6f43390f1aa1f2f466eb1498e9",
+      "commit_sha_short": "c149a4e5",
+      "tests_pass": true,
+      "files_changed": [
+        ".claude/agents/compose-explorer.md",
+        ".claude/agents/compose-architect.md",
+        "lib/install-agent-defs.js",
+        "bin/compose.js",
+        "test/install-agent-defs.test.js",
+        "test/init.test.js",
+        ".claude/skills/compose/SKILL.md"
+      ],
+      "recorded_at": "2026-06-16T11:46:33.865Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Shipped the vendored compose-explorer/compose-architect subagents the SKILL.md depended on (no defs existed; syncSkills only installed SKILL.md → dispatches silently fell back to built-ins). Authored both agent defs, added lib/install-agent-defs.js, wired syncSkills to install them to ~/.claude/agents on setup/init. installAgentDefs unit tests + end-to-end `compose setup` assertion in init.test.js. Codex review CLEAN (closed the wiring-coverage gap it flagged)."
+    }
+  ],
+  "commit_sha": "c149a4e5fb290c6f43390f1aa1f2f466eb1498e9"
 }
