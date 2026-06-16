@@ -9,7 +9,7 @@ import { wsFetch } from '../../lib/wsFetch.js';
 import { agentServerUrl } from '../../lib/agentServer.js';
 import { notify } from '../cockpit/NotificationBar.jsx';
 
-function ChallengeRow({ item, onUpdate }) {
+export function ChallengeRow({ item, onUpdate }) {
   const { newIds, changedIds } = useContext(VisionChangesContext);
   const animClass = newIds.has(item.id) ? 'vision-entering' : changedIds.has(item.id) ? 'vision-updated' : '';
 
@@ -34,11 +34,14 @@ function ChallengeRow({ item, onUpdate }) {
     const desc = item.description || item.title;
     const text = `Be brief. Summarize, give your recommendation, refine the decision wording based on the resolution if needed: ${desc}\n`;
     try {
-      // COMP-COCKPIT-2: hostname-portable agent-server URL (was hardcoded localhost:4002).
-      const res = await wsFetch(agentServerUrl('/api/terminal/inject'), {
+      // COMP-COCKPIT-11: post to the live agent-server message route. The old
+      // /api/terminal/inject route died with terminal-server.js; /api/agent/message
+      // (body { prompt }) is its modern equivalent — it resumes the session and
+      // sends the prompt to the agent. (COMP-COCKPIT-2: hostname-portable URL.)
+      const res = await wsFetch(agentServerUrl('/api/agent/message'), {
         method: 'POST',
         headers: withComposeToken({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ prompt: text }),
       });
       if (!res.ok) {
         notify(`Could not send to terminal (${res.status})`, 'error');

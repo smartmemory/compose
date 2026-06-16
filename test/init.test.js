@@ -229,6 +229,18 @@ describe('compose setup', () => {
     const skillPath = join(home, '.claude', 'skills', 'compose', 'SKILL.md');
     assert.ok(existsSync(skillPath));
   });
+
+  test('installs vendored agent defs to ~/.claude/agents/ (COMP-AGENT-VENDOR-1)', () => {
+    const cwd = tmpDir();
+    const home = tmpDir();
+    // Force claude detection regardless of PATH so the syncSkills wiring is exercised.
+    mkdirSync(join(home, '.claude'), { recursive: true });
+    runCmd('setup', cwd, makeEnv(cwd, home));
+
+    const agentsDir = join(home, '.claude', 'agents');
+    assert.ok(existsSync(join(agentsDir, 'compose-explorer.md')), 'compose-explorer.md installed');
+    assert.ok(existsSync(join(agentsDir, 'compose-architect.md')), 'compose-architect.md installed');
+  });
 });
 
 // ---------------------------------------------------------------------------
