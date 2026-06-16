@@ -2,6 +2,33 @@
 
 ## 2026-06-16
 
+### COMP-PARITY-3 — cockpit environment-health panel
+
+`compose doctor` (external-dep presence + version drift) and `compose hooks status` (git-hook
+drift: absent/foreign/stale) were CLI-only, so UI-first devs got zero signal when a dependency was
+missing, the version was behind, or a git hook was stale/foreign — it surfaced only as a mystery
+build failure. Now the cockpit header carries an always-visible **health dot** (green/amber/red)
+that opens a popover with dependency, version, and per-hook detail.
+
+- **`GET /api/environment-health`** (`server/health-routes.js`) — read-only, wraps the existing
+  `lib/deps.js` + `lib/version-check.js` + the new `lib/hooks-status.js`. Deliberately **not** under
+  `/api/health/*` (that prefix is in the remote auth allowlist and prefix-matched, so nesting there
+  would make local dependency inventory and `?refresh` registry fetches publicly reachable) — it
+  lives at a non-allowlisted path, so remote mode requires a sensitive token / paired JWT. Each
+  section degrades independently (`{unavailable:true}` / `null`); the endpoint never 500s on a
+  sub-check. `scannedPaths` is stripped so no host filesystem paths leak.
+- **`lib/hooks-status.js`** — extracted the previously inline `compose hooks status` logic into a
+  shared, pure `computeHooksStatus()` (+ `HOOK_MARKERS`, `formatHookStatusLines`). The CLI now
+  consumes it and its output is byte-identical; the API derives a `workspace-unverified` state so a
+  null/fallback workspace id never masquerades as a healthy "current" hook.
+- **EnvironmentHealthPanel** (`src/components/cockpit/EnvironmentHealthPanel.jsx`) — fetches on
+  workspace resolve, on resolved-workspace change (in-app project switch, keyed on `{id, root}`),
+  and on manual ↻ refresh. A monotonic request guard discards stale out-of-order responses.
+- Tested: `test/hooks-status.test.js`, `test/hooks-status-cli.test.js` (CLI golden),
+  `test/health-routes.test.js`, `test/integration/health-routes.test.js` (real endpoint),
+  `test/ui/env-health-panel.test.jsx`. Read-only — no UI remediation actions; mobile surface
+  untouched (both deliberate non-goals). Closes the operational-health UI↔CLI parity gap.
+
 ### COMP-AGENT-VENDOR-1 — ship the vendored compose-explorer / compose-architect agents
 
 The compose SKILL.md depended on `compose-explorer` (Phases 1, 4) and `compose-architect` (Phase 3)
