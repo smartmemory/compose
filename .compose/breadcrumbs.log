@@ -588,3 +588,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-16T17:29:46+08:00 | COMP-PARITY-1: CLI gate list/resolve wrapping vision gate endpoints (full /compose lifecycle, Codex review CLEAN)
 2026-06-16T19:46:10+08:00 | COCKPIT-11 (Discuss button -> live /api/agent/message) + AGENT-VENDOR-1 (vendored compose-explorer/architect agent defs + syncSkills install); Codex CLEAN
 2026-06-16T20:04:09+08:00 | COMP-PARITY-3 Phase 1: writing design.md for cockpit environment-health panel (header dot+popover, /api/health/environment endpoint)
+2026-06-16T20:42:48+08:00 | COMP-PARITY-3 Phase 4-5: blueprint + verification (computeHooksStatus extraction contract, /api/environment-health degrade, refetch on {id,root}, test placement to repo runners)
