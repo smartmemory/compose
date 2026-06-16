@@ -1,0 +1,10 @@
+{
+  "code": "COMP-MCP-FOLLOWUP-1",
+  "description": "propose_followup throws `module './project-paths.js' does not provide an export named 'resolveRoadmapPath'` at runtime and writes nothing. Root cause: the long-running stdio compose MCP server caches a stale project-paths.js module record (loaded before COMP-PATHS-EXTERNAL added the export); propose_followup lazily `import()`s lib/followup-writer.js only on first call, which links against the stale cached module. On-disk code resolves cleanly (verified). Live fix: reconnect /mcp (reload server). Hardening: wrap the lazy import so a module-skew/missing-export error rethrows with an actionable \"stale MCP server — reconnect /mcp\" hint instead of a cryptic ESM error, and add a contract test asserting the followup-writer import graph resolves. Surfaced filing COMP-PARITY-3 follow-ups (fell back to add_roadmap_entry).",
+  "status": "PLANNED",
+  "phase": "Phase 7: MCP Writers",
+  "created": "2026-06-16",
+  "updated": "2026-06-16",
+  "complexity": "S",
+  "position": 15
+}
