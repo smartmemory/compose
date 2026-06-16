@@ -1,0 +1,11 @@
+{
+  "code": "COMP-UITEST-ISOLATION-1",
+  "description": "Harden the Vitest UI suite against parallel-execution flakes. A full `npx vitest run` intermittently fails ~79 tests in `test/ui/mobile-*`, `mobile-remote-auth`, and `agent-stream-remote-mode` (hook timeouts under parallel load); the same files pass in isolation and the suite is green on re-run. Investigate shared global/timer/port state, tighten per-file isolation or hook timeouts, so a single full run is deterministic. Surfaced during COMP-PARITY-3 verification (a flaky run produced a false 79-failure report).",
+  "status": "PLANNED",
+  "phase": "Backlog",
+  "created": "2026-06-16",
+  "updated": "2026-06-16",
+  "complexity": "M",
+  "position": 3,
+  "parent": "COMP-PARITY-3"
+}

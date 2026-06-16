@@ -1,0 +1,11 @@
+{
+  "code": "COMP-PARITY-3-1",
+  "description": "Actionable remediation from the environment-health panel: guarded one-click fixes for the read-only drift signals — install a missing dep, run `compose update` when behind, and re-run `compose hooks install` to repair stale/missing hooks (overwriting a foreign hook stays confirm-gated). Reuses existing CLI/endpoint machinery and the same remote-auth posture as COMP-PARITY-3's read endpoint; no new lifecycle. Surfaced by COMP-PARITY-3 (shipped read-only by design).",
+  "status": "PLANNED",
+  "phase": "COMP-PARITY: UI↔CLI Parity",
+  "created": "2026-06-16",
+  "updated": "2026-06-16",
+  "complexity": "M",
+  "position": 11,
+  "parent": "COMP-PARITY-3"
+}
