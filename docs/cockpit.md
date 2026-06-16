@@ -25,7 +25,8 @@ Web UI shell for Compose: layout, zones, navigation, and persistence.
 
 | Zone | Component | Description |
 |------|-----------|-------------|
-| **Header** | `ViewTabs` | Tab switcher for Graph, Tree, Docs, Gates, Pipeline, Sessions. Font/theme controls. |
+| **Header** | `ViewTabs` | Tab switcher for Graph, Tree, Docs, Gates, Pipeline, Sessions. Font/theme controls, pair-device, and the `EnvironmentHealthPanel` health dot. |
+| **Environment health dot** | `EnvironmentHealthPanel` | Always-visible header dot (green/amber/red) backed by `GET /api/environment-health`; click for a popover of `compose doctor` (dep + version drift) and `compose hooks status` (git-hook drift). Read-only; refetches on workspace switch + manual ↻. |
 | **Sidebar** | `AttentionQueueSidebar` | Build status, attention queue (blocked/gate items), search, group filters by feature code prefix. |
 | **Main Area** | driven by active tab | Graph (fcose layout with compound grouping), Tree (search + filters), Docs (file browser + preview), and ops views. |
 | **Context Panel** | `ContextPanel` | Resizable right panel with tabbed detail: Overview, Pipeline dots, Sessions, Errors, Files. Project summary when nothing selected. |
