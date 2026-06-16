@@ -129,6 +129,8 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  triage    Analyze a feature and recommend build profile')
   console.log('  qa-scope  Show affected routes from a feature\'s changed files')
   console.log('  context decisions  Show the build decision log (--feature <FC>, --format text|json)')
+  console.log('  gate list          List pending gates (--item <id>, --status pending|all|resolved)')
+  console.log('  gate resolve <id>  Resolve a gate (--approve|--revise|--kill, --comment <text>)')
   console.log('  init      Initialize Compose in the current project')
   console.log('  setup     Install/sync global skills + register stratum-mcp (alias: sync)')
   console.log('  sync      Re-sync global skills from this install (alias of setup)')
@@ -2824,11 +2826,15 @@ if (cmd === 'build') {
     process.exit(1)
   }
 
-} else if (cmd === 'gates') {
+} else if (cmd === 'gates' || cmd === 'gate') {
   // ---------------------------------------------------------------------------
+  // compose gate list [--item <id>] [--status pending|all|resolved] [--format text|json]
+  // compose gate resolve <gateId> (--approve|--revise|--kill) [--comment <text>] [--reason <text>]
+  //   COMP-PARITY-1: CLI gate resolution — wraps GET/POST /api/vision/gates[/:id/resolve]
   // compose gates report [--since 24h|7d|1h|<ISO>] [--feature <FC>]
   //                       [--format text|json] [--rubber-stamp-ms <N>]
-  // COMP-OBS-GATELOG: audit gate log report (Decision 5)
+  //   COMP-OBS-GATELOG: audit gate log report (Decision 5)
+  // (`gate` and `gates` are aliases.)
   // ---------------------------------------------------------------------------
   const gatesSubcmd = args[0]
 
@@ -2902,8 +2908,132 @@ if (cmd === 'build') {
     process.exit(0)
   }
 
-  console.error(`Unknown gates subcommand: ${gatesSubcmd}`)
-  console.error('Usage: compose gates report [--since 24h] [--feature FC] [--format text|json] [--rubber-stamp-ms N]')
+  if (gatesSubcmd === 'list' || gatesSubcmd === 'resolve') {
+    // --- COMP-PARITY-1: CLI gate list/resolve over the :4001 vision endpoints ---
+    const flagVal = (flag) => { const i = args.indexOf(flag); return i !== -1 && args[i + 1] ? args[i + 1] : null }
+    const hasFlag = (flag) => args.includes(flag)
+    const baseUrl = process.env.COMPOSE_URL || `http://127.0.0.1:${resolvePort()}`
+
+    // Tolerant workspace resolution (mirror `compose loops`): attach the header
+    // when resolvable, otherwise send none (server soft-falls back to boot ws).
+    let _wsId = null
+    try {
+      const wsId = getWorkspaceFlag(args)
+      const ws = resolveWorkspace({ workspaceId: wsId === '__COMPOSE_WORKSPACE_ID__' ? null : wsId })
+      _wsId = ws.id || null
+    } catch { /* no header */ }
+
+    const reqJson = async (method, urlStr, body) => {
+      const { default: http } = await import(urlStr.startsWith('https') ? 'https' : 'http')
+      return new Promise((resolveP, reject) => {
+        const u = new URL(urlStr)
+        const data = body ? JSON.stringify(body) : null
+        const headers = {}
+        if (_wsId) headers['X-Compose-Workspace-Id'] = _wsId
+        if (data) { headers['Content-Type'] = 'application/json'; headers['Content-Length'] = Buffer.byteLength(data) }
+        // Sensitive-token header — only consumed when capabilities.guardAuth is on.
+        if (method === 'POST' && process.env.COMPOSE_API_TOKEN) headers['x-compose-token'] = process.env.COMPOSE_API_TOKEN
+        const r = http.request({
+          hostname: u.hostname,
+          port: u.port || (urlStr.startsWith('https') ? 443 : 80),
+          path: u.pathname + u.search,
+          method,
+          headers,
+        }, (res) => {
+          let buf = ''
+          res.on('data', c => { buf += c })
+          res.on('end', () => { try { resolveP({ status: res.statusCode, body: JSON.parse(buf) }) } catch { resolveP({ status: res.statusCode, body: buf }) } })
+        })
+        r.on('error', reject)
+        if (data) r.end(data); else r.end()
+      })
+    }
+
+    const dieUnreachable = (err) => {
+      if (err && (err.code === 'ECONNREFUSED' || /ECONNREFUSED/.test(err.message || ''))) {
+        console.error(`compose server not reachable on :${resolvePort()} — start it with \`npm run dev:server\` (or \`npm run dev:watch\`)`)
+      } else {
+        console.error(`gate ${gatesSubcmd}: ${err.message}`)
+      }
+      process.exit(1)
+    }
+
+    if (gatesSubcmd === 'list') {
+      const itemId = flagVal('--item')
+      const status = flagVal('--status') || 'pending'
+      const format = flagVal('--format') || 'text'
+      if (!['pending', 'all', 'resolved'].includes(status)) {
+        console.error(`gate list: --status must be one of pending|all|resolved (got '${status}')`)
+        process.exit(1)
+      }
+      if (!['text', 'json'].includes(format)) {
+        console.error(`gate list: --format must be one of text|json (got '${format}')`)
+        process.exit(1)
+      }
+      const params = new URLSearchParams()
+      if (status !== 'pending') params.set('status', status)
+      if (itemId) params.set('itemId', itemId)
+      const qs = params.toString() ? `?${params.toString()}` : ''
+      let resp
+      try { resp = await reqJson('GET', `${baseUrl}/api/vision/gates${qs}`) } catch (e) { dieUnreachable(e) }
+      if (resp.status !== 200) {
+        console.error(`gate list failed (HTTP ${resp.status}): ${resp.body?.error || JSON.stringify(resp.body)}`)
+        process.exit(1)
+      }
+      // The server only honors itemId on the pending path; filter client-side so
+      // --item works uniformly across --status all|resolved too (Codex review).
+      let gates = resp.body.gates || []
+      if (itemId) gates = gates.filter(g => g.itemId === itemId)
+      if (format === 'json') { console.log(JSON.stringify(gates, null, 2)); process.exit(0) }
+      if (gates.length === 0) { console.log(`No ${status} gates.`); process.exit(0) }
+      const ageOf = (iso) => {
+        const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+        if (m < 60) return `${m}m`
+        const h = Math.floor(m / 60)
+        return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`
+      }
+      // Record-per-gate, not a fixed-width table: real gate ids are long
+      // `<uuid>:<step>:<round>` strings, so columns smush together. Keep the full
+      // copy-pasteable id on its own line (it's the arg to `gate resolve`).
+      console.log(`${gates.length} ${status} gate${gates.length === 1 ? '' : 's'}:\n`)
+      for (const g of gates) {
+        console.log(`${g.id}  [${g.status || 'pending'}]`)
+        console.log(`    item ${g.itemId || '·'}   step ${g.stepId || '·'}   ${g.fromPhase || '·'}→${g.toPhase || '·'}   ${ageOf(g.createdAt)}\n`)
+      }
+      process.exit(0)
+    }
+
+    if (gatesSubcmd === 'resolve') {
+      const gateId = args[1] && !args[1].startsWith('-') ? args[1] : null
+      if (!gateId) {
+        console.error('usage: compose gate resolve <gateId> (--approve|--revise|--kill) [--comment <text>] [--reason <text>]')
+        process.exit(1)
+      }
+      const outcomes = ['approve', 'revise', 'kill'].filter(o => hasFlag(`--${o}`))
+      if (outcomes.length !== 1) {
+        console.error('gate resolve: exactly one of --approve | --revise | --kill is required')
+        process.exit(1)
+      }
+      const outcome = outcomes[0]
+      const comment = flagVal('--comment') ?? flagVal('--reason') ?? undefined
+      let resp
+      try {
+        resp = await reqJson('POST', `${baseUrl}/api/vision/gates/${encodeURIComponent(gateId)}/resolve`, { outcome, comment, resolvedBy: 'cli' })
+      } catch (e) { dieUnreachable(e) }
+      if (resp.status < 200 || resp.status >= 300) {
+        console.error(`gate resolve failed (HTTP ${resp.status}): ${resp.body?.error || JSON.stringify(resp.body)}`)
+        process.exit(1)
+      }
+      console.log(`Gate ${gateId} resolved: ${outcome}${comment ? ` — ${comment}` : ''}`)
+      process.exit(0)
+    }
+  }
+
+  console.error(`Unknown gate subcommand: ${gatesSubcmd}`)
+  console.error('Usage:')
+  console.error('  compose gate list [--item <id>] [--status pending|all|resolved] [--format text|json]')
+  console.error('  compose gate resolve <gateId> (--approve|--revise|--kill) [--comment <text>] [--reason <text>]')
+  console.error('  compose gates report [--since 24h] [--feature FC] [--format text|json] [--rubber-stamp-ms N]')
   process.exit(1)
 
 } else if (cmd === 'loops') {
