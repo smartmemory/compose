@@ -10,6 +10,12 @@
  * project switch — keyed on {id, root}, not id alone since two roots can share
  * a basename-derived id), and on manual ↻ refresh (forces a fresh version
  * check). No background polling. Read-only; degrades, never throws.
+ *
+ * Remediation (COMP-PARITY-3-1): the ONLY action executed server-side is the
+ * local, idempotent git-hook repair (POST /api/environment-health/repair-hooks).
+ * Dependency installs and `compose update` are surfaced as copyable command
+ * TEXT only — never executed from the panel. A foreign-hook repair needs
+ * `force:true`, gated behind a window.confirm before the POST.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useWorkspace } from '../../contexts/WorkspaceContext.jsx';
@@ -52,12 +58,52 @@ function depColor(dep) {
   return dep.optional ? 'hsl(var(--warning))' : 'hsl(var(--destructive))';
 }
 
+/** Best-effort clipboard write; degrades silently (panel must never throw). */
+async function copyText(text) {
+  try {
+    await navigator.clipboard?.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Copy-to-clipboard button for a command string. We never execute the command;
+ * dependency installs and `compose update` are user-run, this just copies the
+ * text. Shows a transient "copied" tick. `testid` is the stable data-testid.
+ */
+function CopyButton({ command, testid, label = 'copy' }) {
+  const [copied, setCopied] = useState(false);
+  if (!command) return null;
+  return (
+    <button
+      data-testid={testid}
+      className="text-[10px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+      title={`Copy: ${command}`}
+      aria-label={`Copy command: ${command}`}
+      onClick={async (e) => {
+        e.stopPropagation();
+        const ok = await copyText(command);
+        if (ok) {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1200);
+        }
+      }}
+    >
+      {copied ? '✓ copied' : label}
+    </button>
+  );
+}
+
 export default function EnvironmentHealthPanel() {
   const { loading: wsLoading, workspace } = useWorkspace() || {};
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [open, setOpen] = useState(false);
+  const [repairing, setRepairing] = useState(false);
+  const [repairError, setRepairError] = useState(null);
   const rootRef = useRef(null);
   const reqIdRef = useRef(0);
 
@@ -82,6 +128,34 @@ export default function EnvironmentHealthPanel() {
       if (myId === reqIdRef.current) setLoading(false);
     }
   }, []);
+
+  // Guarded local remediation: POST the hook-repair endpoint, then refetch so
+  // the panel reflects the new on-disk hook state. `force` is required to
+  // overwrite a foreign hook; the caller gates that behind a window.confirm.
+  const repairHooks = useCallback(async (force) => {
+    setRepairing(true);
+    setRepairError(null);
+    try {
+      const r = await wsFetch('/api/environment-health/repair-hooks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: !!force }),
+      });
+      const json = await r.json().catch(() => null);
+      // wsFetch does NOT throw on HTTP 401/503 (guarded route) — treat the POST
+      // as successful ONLY on an explicit { ok: true }. An auth/error body like
+      // { error: 'Unauthorized' } has no `ok` field and must surface as failure.
+      if (!r.ok || json?.ok !== true) {
+        setRepairError(json?.error || `repair failed (${r.status})`);
+      }
+    } catch (e) {
+      setRepairError(e?.message || 'repair failed');
+    } finally {
+      setRepairing(false);
+      // Always refetch — even on failure the on-disk state may have changed.
+      fetchHealth(false);
+    }
+  }, [fetchHealth]);
 
   // Fetch once the workspace has resolved, and re-fetch whenever its identity
   // changes. Not gated on `open` — the dot needs data without being clicked.
@@ -169,9 +243,10 @@ export default function EnvironmentHealthPanel() {
                   ) : data.version.behind ? (
                     <>
                       <Dot color="hsl(var(--warning))" />
-                      <span>
+                      <span className="flex-1">
                         {data.version.current} → {data.version.latest} (behind — run <code>compose update</code>)
                       </span>
+                      <CopyButton command="compose update" testid="env-health-copy-version" />
                     </>
                   ) : (
                     <>
@@ -205,6 +280,40 @@ export default function EnvironmentHealthPanel() {
                     <span className="text-muted-foreground">hook status unavailable</span>
                   </div>
                 )}
+                {(() => {
+                  const entries = Object.entries(data.hooks || {}).filter(([k]) => k !== 'unavailable');
+                  const repairable = ['installed-stale', 'absent', 'foreign'];
+                  const needsRepair = entries.some(([, h]) => repairable.includes(h?.state));
+                  const hasForeign = entries.some(([, h]) => h?.state === 'foreign');
+                  if (!needsRepair) return null;
+                  return (
+                    <div className="mt-1 flex items-center gap-2">
+                      <button
+                        data-testid="env-health-repair-hooks"
+                        className="text-[11px] px-2 py-0.5 rounded border border-border hover:bg-accent/30 transition-colors disabled:opacity-50"
+                        disabled={repairing}
+                        onClick={() => {
+                          // force is needed ONLY to overwrite a foreign hook;
+                          // gate that destructive case behind a confirm.
+                          if (hasForeign) {
+                            if (!window.confirm(
+                              'A foreign git hook exists. Overwrite it with the Compose hook?'
+                            )) return;
+                            repairHooks(true);
+                          } else {
+                            repairHooks(false);
+                          }
+                        }}
+                        title="Install / refresh Compose git hooks for this workspace"
+                      >
+                        {repairing ? 'Repairing…' : 'Repair hooks'}
+                      </button>
+                      {repairError && (
+                        <span className="text-destructive text-[10px]">{repairError}</span>
+                      )}
+                    </div>
+                  );
+                })()}
               </Section>
             </>
           )}
@@ -231,7 +340,8 @@ function renderDeps(section, kind) {
         <div key={d.id} data-testid={`env-health-${kind}-${d.id}`} className="flex items-center gap-1.5">
           <Dot color={depColor(d)} />
           <span className="font-mono truncate">{d.id}</span>
-          <span className="text-muted-foreground">missing{d.optional ? ' (optional)' : ''}</span>
+          <span className="text-muted-foreground flex-1">missing{d.optional ? ' (optional)' : ''}</span>
+          <CopyButton command={d.install} testid={`env-health-copy-${d.id}`} label="copy install" />
         </div>
       ))}
       {missing.length === 0 && (
