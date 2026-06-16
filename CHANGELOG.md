@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-06-16
+
+### Roadmap reconcile — close COMP-ROADMAP-XREF-SYNC + COMP-MCP-MIGRATION-2-1 (PARTIAL → COMPLETE)
+
+Two long-standing PARTIAL umbrella rows were closed after verifying their deferred scope had
+already shipped via child tickets:
+
+- **COMP-ROADMAP-XREF-SYNC** — v1 PULL shipped at `64bd44f`; the deferred external-WRITE half was
+  fully delivered by COMPLETE children **COMP-ROADMAP-XREF-PUSH** (`393074e`) and
+  **COMP-ROADMAP-XREF-PUSH-2** (`e65c920`: `roadmap_xref_push` MCP tool + local-provider push +
+  additive relabel). No deferred scope remained.
+- **COMP-MCP-MIGRATION-2-1** — its own infra fixes shipped at `2a5789c` (migrate-roadmap honors
+  `paths.features`; roadmap-gen drops the 80-char description truncation). The deferred
+  lossless-roundtrip work (anonymous-row parser + phase-status overrides + preserved sections) was
+  delivered by COMPLETE child **COMP-MCP-MIGRATION-2-1-1**. The original "backfill `feature.json`
+  for every legacy row" plan is **superseded** by COMP-ROADMAP-RT's fixed-point + lossless
+  round-trip: unbacked rows now round-trip verbatim without data loss, so per-row backfill is
+  unnecessary and `ROADMAP_PARTIAL_WRITE` no longer fires on normal flips. The optional descendant
+  `-2-1-1-1` (interactive `migrate-anon`) remains PLANNED by design.
+
+Evidence-bound completions recorded via `record_completion`; `compose roadmap check` remains a
+fixed point and lossless after the flips. No code behavior change — roadmap canon only.
+
 ## 2026-06-15
 
 ### COMP-PATHS-EXTERNAL — relocatable artifact paths

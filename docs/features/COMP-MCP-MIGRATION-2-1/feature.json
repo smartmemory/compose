@@ -1,10 +1,10 @@
 {
   "code": "COMP-MCP-MIGRATION-2-1",
   "description": "**Backfill feature.json for legacy ROADMAP phases.** Most of compose/ROADMAP.md (Phase 0-6, INIT-1, STRAT-1, COMP-* historical features) has no backing feature.json files, so any typed writer that calls writeRoadmap() wipes the curated content. Generate feature.json for every legacy ROADMAP row so the typed writers fully own roadmap regen and ROADMAP_PARTIAL_WRITE stops firing during normal flips.",
-  "status": "PARTIAL",
+  "status": "COMPLETE",
   "phase": "Phase 7: MCP Writers",
   "created": "2026-05-04",
-  "updated": "2026-05-04",
+  "updated": "2026-06-16",
   "complexity": "L",
   "position": 12,
   "parent": "COMP-MCP-MIGRATION-2",
@@ -14,5 +14,25 @@
       "to_code": "COMP-MCP-MIGRATION-2"
     }
   ],
-  "group": "COMP-MCP"
+  "group": "COMP-MCP",
+  "completions": [
+    {
+      "completion_id": "COMP-MCP-MIGRATION-2-1:2a5789c599b90f0030825cfc4e7916cab2352e98",
+      "feature_code": "COMP-MCP-MIGRATION-2-1",
+      "commit_sha": "2a5789c599b90f0030825cfc4e7916cab2352e98",
+      "commit_sha_short": "2a5789c5",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/migrate-roadmap.js",
+        "lib/roadmap-gen.js",
+        "docs/features/COMP-MCP-MIGRATION-2-1/design.md",
+        "docs/features/COMP-MCP-MIGRATION-2-1/report.md",
+        "docs/features/COMP-MCP-MIGRATION-2-1/feature.json"
+      ],
+      "recorded_at": "2026-06-16T03:54:02.420Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Umbrella complete. Own infra fixes shipped here (2a5789c): migrate-roadmap honors paths.features; roadmap-gen drops 80-char description truncation. The deferred lossless-roundtrip work — anonymous-row parser + phase-status overrides + preserved sections — was delivered by COMPLETE child COMP-MCP-MIGRATION-2-1-1. Original mass-backfill of every legacy row is SUPERSEDED by lossless verbatim round-trip (COMP-ROADMAP-RT fixed-point guard): unbacked rows now round-trip without data loss, so backfilling each is unnecessary. Live `compose roadmap check`: fixed point, lossless — ROADMAP_PARTIAL_WRITE no longer fires on normal flips. Optional descendant -2-1-1-1 (interactive migrate-anon) remains PLANNED by design."
+    }
+  ],
+  "commit_sha": "2a5789c599b90f0030825cfc4e7916cab2352e98"
 }
