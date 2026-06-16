@@ -577,3 +577,9 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-15T10:34:10+08:00 | COMP-MIGRATE-UNIFY-VISION: fold inline vision-state migrations (featureCode→lifecycle, gate-outcome) into the shared state-migrations registry; reuse from both load paths + eager runner
 2026-06-15T10:51:15+08:00 | FORGE-ROADMAP-RETIRE-STORE: capabilities.lifecycle:false retires the MCP vision store (loadVisionState short-circuits empty) so a narrative-owned workspace can't return a second drift-prone answer; flip forge-top config + archive its frozen vision-state.json
 2026-06-15T13:32:27+08:00 | Make stratum poll sleep-aware: widen interval to 60s + skip cold-start spawn when no live bound flows + wake-gap detection
+2026-06-15T15:35:10+08:00 | COMP-PATHS-EXTERNAL S2 Tasks 8+11: route ROADMAP.md + loadFeaturesDir sites through resolveRoadmapPath/resolveFeaturesPath
+2026-06-15T15:35:48+08:00 | COMP-PATHS-EXTERNAL T9: route checkpoint-writer + gsd docs/features through resolveFeaturesPath
+2026-06-15T15:35:55+08:00 | COMP-PATHS-EXTERNAL T11: migrate loadFeaturesDir callers (xref-sync, triage, xref-push, state-migrations, local-provider) to absolute resolveFeaturesPath
+2026-06-15T15:36:02+08:00 | COMP-PATHS-EXTERNAL T10/12/13: route journal/context/ideabox/roadmap through resolvers; scaffold paths.roadmap
+2026-06-15T15:36:12+08:00 | COMP-PATHS-EXTERNAL Task 9: route docs/features sites in vision-server/feature-scan/drift-axes/session-routes/design-routes through resolveProjectPath/relForDisplay
+2026-06-16T11:53:50+08:00 | Close stale PARTIAL rows XREF-SYNC + MIGRATION-2-1: deferred scope verified shipped via COMPLETE children; record evidence-bound completions

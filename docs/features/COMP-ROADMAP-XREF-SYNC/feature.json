@@ -1,10 +1,30 @@
 {
   "code": "COMP-ROADMAP-XREF-SYNC",
-  "description": "Reconcile external cross-references (GitHub/Jira/Linear issues) against their targets \u2014 turn read-only XREF_DRIFT warnings into verifiable sync. v1 PULL shipped: `compose roadmap xref-sync [--dry-run]` reconciles feature.json external links' expect= to live target state (github/local), never writing external. External-write (push) deferred to a separate ticket.",
-  "status": "PARTIAL",
+  "description": "Reconcile external cross-references (GitHub/Jira/Linear issues) against their targets — turn read-only XREF_DRIFT warnings into verifiable sync. v1 PULL shipped: `compose roadmap xref-sync [--dry-run]` reconciles feature.json external links' expect= to live target state (github/local), never writing external. External-write (push) deferred to a separate ticket.",
+  "status": "COMPLETE",
   "phase": "Phase 6: MCP Writers",
   "created": "2026-05-29",
-  "updated": "2026-05-29",
+  "updated": "2026-06-16",
   "complexity": "M",
-  "position": 2
+  "position": 2,
+  "completions": [
+    {
+      "completion_id": "COMP-ROADMAP-XREF-SYNC:64bd44feff3c6c6e17b2293ae8db8b4c43f698e0",
+      "feature_code": "COMP-ROADMAP-XREF-SYNC",
+      "commit_sha": "64bd44feff3c6c6e17b2293ae8db8b4c43f698e0",
+      "commit_sha_short": "64bd44fe",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/xref-sync.js",
+        "bin/compose.js",
+        "test/xref-sync.test.js",
+        "docs/features/COMP-ROADMAP-XREF-SYNC/design.md",
+        "docs/features/COMP-ROADMAP-XREF-SYNC/feature.json"
+      ],
+      "recorded_at": "2026-06-16T03:53:57.486Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Umbrella complete: v1 PULL shipped (compose roadmap xref-sync, 64bd44f + review fix 8184430). The deferred external-WRITE (push) was fully delivered by COMPLETE children COMP-ROADMAP-XREF-PUSH (393074e) + COMP-ROADMAP-XREF-PUSH-2 (e65c920: MCP tool + local-provider push + additive relabel). No deferred scope remains. Live `compose roadmap check`: fixed point, lossless."
+    }
+  ],
+  "commit_sha": "64bd44feff3c6c6e17b2293ae8db8b4c43f698e0"
 }
