@@ -1,0 +1,17 @@
+{
+  "code": "COMP-ROADMAP-GRAPH-1-3",
+  "description": "Provenance/history mode for the roadmap dependency graph — opt-in flag (e.g. --include-completed) that retains COMPLETE nodes (and the edges terminating on them) so a still-active feature's dependency on a now-completed feature stays visible, instead of being silently dropped.",
+  "status": "PLANNED",
+  "phase": "Standalone",
+  "created": "2026-06-17",
+  "updated": "2026-06-17",
+  "complexity": "S",
+  "position": 4,
+  "parent": "COMP-ROADMAP-GRAPH-1",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-ROADMAP-GRAPH-1"
+    }
+  ]
+}
