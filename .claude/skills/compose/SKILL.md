@@ -23,9 +23,24 @@ Before any phase begins, read project state via the `compose` MCP server (get_vi
 | Verb | Use | Folder |
 |---|---|---|
 | `/compose build <feature-ref>` | New feature, 3+ files, 2+ phases, needs design | `docs/features/<feature-code>/` |
+| `/compose build --quick <feature-ref>` | **Small-but-real** additive work — one flag + a test + changelog entry; well-scoped, single component | `docs/features/<feature-code>/` |
 | `/compose fix <bug-ref>` | Non-trivial bug, test failure, regression, hotfix | `docs/bugs/<bug-code>/` |
 
 **Skip Compose entirely for:** typos, one-line obvious fixes, cosmetic changes — just fix those directly.
+
+### Build Quick path: `/compose build --quick` (COMP-BUILD-QUICK)
+
+`--quick` collapses the build lifecycle to **design → implement → ship** with a *single design gate*. The phases `prd`, `architecture`, `blueprint`, `blueprint-verification`, `plan`, and `report` are **omitted** (not just self-skipping). Use it for small additive work that would otherwise pay full-lifecycle ceremony: a new flag plus its test, a small helper with a golden test, a one-component addition.
+
+This is the symmetric counterpart to fix mode's Quick path. Note the implementation asymmetry: fix's Quick path is a **triage decision** the agent makes at Phase F1, whereas build's `--quick` is a **CLI flag** that selects the trimmed `build-quick` pipeline (headless CLI: `compose build --quick <code>` → `template: 'build-quick'`, the same `--template` mechanism fix uses with `bug-fix`).
+
+**What `--quick` keeps (NOT OpenSpec's no-gates model):**
+- The design gate and ship gate.
+- All Phase-7 enforcement: TDD per task, verification-before-completion, the parallel + Codex review loop, the coverage sweep, and the generated-test review. Only phase *count* shrinks — enforcement is the differentiator and stays.
+
+**Escalation guardrail.** If, during design or decomposition, the work proves multi-file, cross-cutting, or in need of architecture/PRD-level design, **stop and recommend the user re-run with full `/compose build` (no `--quick`)** rather than silently under-scoping. Note the recommendation in the design doc.
+
+`--quick` is single-feature only — it is mutually exclusive with `--template` (it already selects one) and with batch builds (`--all`, prefix, or multiple codes).
 
 ## Partial Execution: `--through <phase>`
 

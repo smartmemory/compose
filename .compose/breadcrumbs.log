@@ -609,3 +609,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-17T14:25:55+08:00 | COMP-TEST-BOOTSTRAP-4 Slice 1: TDD parseTestSummary (6 frameworks, degrade to parsed:false)
 2026-06-17T15:27:42+08:00 | COMP-TEST-BOOTSTRAP-4-1: design approved — post-coverage test_review step, gate on test files in diff, advisory
 2026-06-17T15:50:28+08:00 | COMP-TEST-BOOTSTRAP-4-1: post-coverage test_review step (advisory, diff-scoped, resume-safe, cockpit-surfaced)
+2026-06-17T18:03:53+08:00 | COMP-BUILD-QUICK: add build-quick pipeline + --quick flag + SKILL docs

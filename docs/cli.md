@@ -85,6 +85,7 @@ Run a feature through the headless build lifecycle. Main execution command.
 
 ```bash
 compose build FEAT-1
+compose build FEAT-1 --quick            # trimmed lifecycle (design → implement → ship) for small additive work
 compose build FEAT-1 FEAT-2 FEAT-3      # batch build, multiple codes
 compose build STRAT-COMP                # prefix match — builds all features whose code starts with STRAT-COMP
 compose build --all                     # build all PLANNED features in dependency order
@@ -98,6 +99,7 @@ compose build FEAT-1 --abort            # abort a specific feature's build
 ```
 
 **Flags:**
+- `--quick` — trimmed lifecycle (design → implement → ship, single design gate) for small-but-real additive work; selects the `build-quick` pipeline. Single-feature only; mutually exclusive with `--template` and batch builds. Phase-7 enforcement (review loop, coverage sweep, generated-test review, TDD) is preserved — only phase ceremony shrinks. See COMP-BUILD-QUICK.
 - `--abort` — abort the active build (cannot combine with batch flags)
 - `--all` — build every `PLANNED` roadmap entry in dependency order
 - `--dry-run` — print the build order; valid only with `--all`, multiple codes, or a prefix match (batch mode)
@@ -106,7 +108,7 @@ compose build FEAT-1 --abort            # abort a specific feature's build
 - `--team <name>` — team template (single build only; mutually exclusive with batch builds)
 - `--template <name>` — pipeline template name (single build only)
 
-A "prefix" feature code is one without a trailing digit; it matches every feature whose code begins with that string. Single-code build dispatches via `lib/build.js`; batch dispatches via `lib/build-all.js`. Auto-runs `compose init` if the project lacks `.compose/compose.json` or `pipelines/build.stratum.yaml`. Active build state lives in `.compose/data/active-build.json`.
+A "prefix" feature code is one without a trailing digit; it matches every feature whose code begins with that string. Single-code build dispatches via `lib/build.js`; batch dispatches via `lib/build-all.js`. Auto-runs `compose init` if the project lacks `.compose/compose.json` or `pipelines/build.stratum.yaml` (or, with `--quick`, `pipelines/build-quick.stratum.yaml` — so a workspace initialized before the quick pipeline existed re-seeds it). Active build state lives in `.compose/data/active-build.json`.
 
 ### `compose fix`
 

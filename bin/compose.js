@@ -554,7 +554,7 @@ async function runInit(flags, cwdOverride) {
   // 8. Copy default pipeline specs if absent
   const pipelinesDir = join(cwd, 'pipelines')
   mkdirSync(pipelinesDir, { recursive: true })
-  for (const specName of ['build.stratum.yaml', 'new.stratum.yaml']) {
+  for (const specName of ['build.stratum.yaml', 'build-quick.stratum.yaml', 'new.stratum.yaml']) {
     const dest = join(pipelinesDir, specName)
     if (!existsSync(dest)) {
       const src = join(PACKAGE_ROOT, 'pipelines', specName)
@@ -1970,6 +1970,11 @@ if (cmd === 'build') {
   const all = filteredArgs2.includes('--all')
   const dryRun = filteredArgs2.includes('--dry-run')
   const skipTriage = filteredArgs2.includes('--skip-triage')
+  // COMP-BUILD-QUICK: --quick selects the trimmed build-quick pipeline
+  // (design → implement → ship). Symmetric to fix mode's Quick path; the real
+  // mirror is the existing --template mechanism (fix dispatches template:'bug-fix'),
+  // so --quick is sugar for template:'build-quick'. Single-feature only.
+  const quick = filteredArgs2.includes('--quick')
 
   // Multiple codes: compose build FEAT-1 FEAT-2 FEAT-3
   const isMulti = featureCodes.length > 1
@@ -1982,12 +1987,24 @@ if (cmd === 'build') {
     process.exit(1)
   }
 
+  // COMP-BUILD-QUICK: --quick is a single-feature shortcut for a specific
+  // template, so it conflicts with an explicit --template and with batch builds.
+  if (quick && templateName) {
+    console.error('Error: --quick and --template are mutually exclusive (--quick selects the build-quick template)')
+    process.exit(1)
+  }
+  if (quick && isBatch) {
+    console.error('Error: --quick cannot be combined with --all/prefix/multi (single feature only)')
+    process.exit(1)
+  }
+
   if (!featureCode && !abort && !all) {
     console.error('Usage: compose build <feature-code> [feature-code...]')
     console.error('       compose build STRAT-COMP          (prefix — builds all matching)')
     console.error('       compose build --all               (builds entire roadmap)')
     console.error('')
     console.error('Options:')
+    console.error('  --quick        Trimmed lifecycle (design → implement → ship) for small additive work')
     console.error('  --abort        Abort the active build')
     console.error('  --all          Build all PLANNED features in dependency order')
     console.error('  --dry-run      Print build order without executing')
@@ -1995,11 +2012,23 @@ if (cmd === 'build') {
     process.exit(1)
   }
 
-  // Auto-init if needed
+  // Auto-init if needed. COMP-BUILD-QUICK: a workspace initialized before the
+  // build-quick pipeline existed won't have pipelines/build-quick.stratum.yaml,
+  // and there's no bundled preset fallback — so when --quick is requested and
+  // that file is absent, treat it as init-needed (runInit re-seeds it) rather
+  // than letting runBuild fail later with "Lifecycle spec not found".
   const { root: buildCwd } = resolveCwdWithWorkspace(args)
-  if (!existsSync(join(buildCwd, '.compose', 'compose.json')) || !existsSync(join(buildCwd, 'pipelines', 'build.stratum.yaml'))) {
+  const needsInit =
+    !existsSync(join(buildCwd, '.compose', 'compose.json')) ||
+    !existsSync(join(buildCwd, 'pipelines', 'build.stratum.yaml')) ||
+    (quick && !existsSync(join(buildCwd, 'pipelines', 'build-quick.stratum.yaml')))
+  if (needsInit) {
     console.log('Running compose init...\n')
-    await runInit(args.filter(a => a.startsWith('--')))
+    // Thread the RESOLVED workspace root into runInit. Without it runInit seeds
+    // process.cwd(), which differs from buildCwd when invoked from a subdirectory
+    // — the guard checks buildCwd but the seed would land in the wrong dir, so
+    // runBuild would still fail with the same missing-spec error (Codex review).
+    await runInit(args.filter(a => a.startsWith('--')), buildCwd)
     console.log('')
   }
 
@@ -2030,6 +2059,7 @@ if (cmd === 'build') {
       if (agentWorkDir) singleOpts.workingDirectory = agentWorkDir
       if (skipTriage) singleOpts.skipTriage = true
       if (templateName) singleOpts.template = templateName
+      if (quick) singleOpts.template = 'build-quick'   // COMP-BUILD-QUICK
       runBuild(featureCode, singleOpts).then(() => {
         process.exit(0)
       }).catch((err) => {

@@ -2,6 +2,32 @@
 
 ## 2026-06-17
 
+### COMP-BUILD-QUICK — `compose build --quick` trimmed lifecycle (COMPLETE)
+
+Gives build mode a symmetric quick path so small-but-real additive work (one flag + a test +
+changelog entry) stops paying full 16-step lifecycle tax. Collapses the build lifecycle to
+**design → implement → ship** with a single design gate.
+
+- **New `pipelines/build-quick.stratum.yaml`** — a trimmed `build.stratum.yaml`. The phases
+  `prd`, `architecture`, `blueprint`, `blueprint-verification`, `plan`, `plan_gate`, and `report`
+  are **omitted** (not just self-skipping). `workflow.name` stays `build` so `lib/build.js`
+  (`extractFlowName`, the `execute`/`docs`/`ship` step-id couplings) sees the identical flow —
+  only the step list differs. `decompose` now reads the design doc, and the `review`/`codex_review`/
+  `test_review` blueprint inputs are repointed to the design artifact (no blueprint step exists).
+- **Phase-7 enforcement preserved verbatim:** the parallel + Codex review loop, the coverage sweep,
+  the generated-test review, and per-task TDD all stay. Only phase *count* shrinks — explicitly
+  **not** OpenSpec's no-gates model; the design and ship gates remain.
+- **`compose build --quick <code>`** → selects `template: 'build-quick'` (the same `--template`
+  mechanism fix mode uses with `bug-fix`, since fix's "Quick path" is a triage decision, not a
+  flag). Mutually exclusive with `--template` and with batch builds (`--all`/prefix/multi). Added
+  to the init pipeline-seed list so fresh projects get it.
+- **Escalation guardrail:** if the work proves multi-file or architecture-dependent during design
+  or decomposition, the agent stops and recommends re-running with full `compose build`.
+- SKILL.md Mode Selection documents the `--quick` build path and the fix-mode symmetry/asymmetry.
+- Promoted from ideabox IDEA-18 (carve-out of IDEA-15). Corrected a false premise in the scoping
+  doc (there is no `/compose fix --quick` flag to mirror — fix's Quick path is a SKILL.md triage
+  decision). 14 new tests (pipeline structure, template resolution, CLI conflict guards).
+
 ### COMP-TEST-BOOTSTRAP-4-1 — post-coverage review of generated tests (COMPLETE)
 
 Closes the deliverable COMP-TEST-BOOTSTRAP-4 deferred: a review pass over the tests the
