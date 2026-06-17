@@ -1,31 +1,36 @@
-# COMP-TEST-BOOTSTRAP-4 — Residual (status: PARTIAL)
+# COMP-TEST-BOOTSTRAP-4 — Residual (status: RESOLVED 2026-06-17)
 
-Filed 2026-06-16 during the roadmap stale-row sweep. The row was reconciled
-PLANNED → PARTIAL: part of the gate integration shipped, a specific deliverable did not.
+Filed 2026-06-16 during the roadmap stale-row sweep; resolved 2026-06-17. The gate
+deliverable shipped; the review-lens deliverable was carved into a follow-up after a
+review caught that it is architecturally un-fireable in the current lifecycle order.
 
-## Shipped (Wave 3, `03ebfff`)
-- `coverage_check` child flow runs the detected/scaffolded test command before ship
-  (`lib/build.js` ~1602, 2324); `buildSignals.test_coverage` captures its output.
-- Docs-only diffs skip coverage gracefully (`isDocsOnlyDiff`).
-- Completion attestation carries `tests_pass` (`lib/completion-writer.js`).
+## Shipped 2026-06-17 (this ticket → COMPLETE)
+The "real work" the prior residual identified — a cross-framework test-result signal — plus
+the gate it feeds:
+- **`parseTestSummary(framework, stdout) → { test_count, pass_rate, parsed }`** in
+  `lib/test-bootstrap.js`. Pure and total; parses vitest / jest / mocha / pytest / go-test /
+  cargo-test, degrading to `parsed:false` on any framework/output it can't read.
+- **`deriveTestsPass(summary)`** — the gate: `parsed && test_count >= 1 && pass_rate === 100`,
+  degrading to `true` (never a false block) when unparsed.
+- Wired into `executeShipStep` (`lib/build.js`): the ship-time test run's output (previously
+  captured then discarded) is now parsed, and the completion attestation's `tests_pass` is the
+  derived value instead of a hardcoded `true`.
+- `go test` → `go test -v ./...` so the Go parser can count per-test verdicts.
 
-## Residual (NOT shipped — the actual gate deliverable)
-1. **Test-phase `ensure` requiring `test_count >= 1` and `test_pass_rate == 100%`.**
-   No such ensure vocabulary exists. The blocker is upstream: there is no per-framework
-   parser that extracts a structured `{ test_count, pass_rate }` from test output
-   (vitest / jest / pytest / go test all emit different summaries). That extractor is
-   the real work; the ensure wiring is trivial once the signal exists.
-2. **Review-lens flag for auto-generated tests** — when bootstrap *generated* the tests,
-   a lens should surface "auto-generated tests — verify assertions match intent" for human
-   review. Needs a new lens in `lib/review-lenses.js` + activation tied to a
-   "tests were scaffolded this build" signal.
+## Deferred → COMP-TEST-BOOTSTRAP-4-1 (the review-lens deliverable)
+The original deliverable 2 — a review lens that flags auto-generated tests for human
+verification ("auto-generated tests — verify assertions match intent") — **cannot fire in the
+current build lifecycle.** Order is `execute → review → codex_review → coverage → … → ship`
+(coverage `depends_on: [codex_review]`). The agent *generates* the tests during `coverage`,
+which runs after both review passes — so a review lens has nothing to read in the same build,
+and any "tests scaffolded" signal is written too late to reach review triage. Enabling it
+requires a lifecycle change (run a test-review pass after coverage, or reorder coverage before
+review). Filed as COMP-TEST-BOOTSTRAP-4-1.
 
-## Why this is its own ticket, not a quick fix
-Cross-framework test-result parsing is a design problem (format drift, partial runs,
-flaky-retry semantics). Reliable `test_count`/`pass_rate` extraction should be specced
-before wiring it as a hard gate, or the gate will misfire on frameworks it can't parse.
-
-## Suggested next step
-Scope a small design: a `parseTestSummary(framework, stdout)` contract returning
-`{ test_count, pass_rate, parsed: bool }` with `parsed:false` degrading to the current
-`tests_pass` attestation (never a false block). Then add the `ensure` + the review lens.
+## Why the gate lives in-process, not as a Stratum ensure
+The original residual's literal wording ("test-phase `ensure` requiring `test_count >= 1`")
+was rejected: a Stratum ensure runs in Python on the agent-reported `TestResult {passing,
+summary, failures}` and cannot see the in-process parse; `result.pass_rate == 100` would raise
+`AttributeError` and misfire on every framework the parser can't read. The in-process
+attestation gate delivers the same intent where the signal actually exists, degrading safely.
+See `design.md`.
