@@ -1,0 +1,17 @@
+{
+  "code": "COMP-TEST-BOOTSTRAP-4-1",
+  "description": "Review lens for auto-generated tests ('verify assertions match intent') — requires a post-coverage test-review pass (lens cannot fire in the current execute→review→coverage order).",
+  "status": "PLANNED",
+  "phase": "COMP-TEST-BOOTSTRAP: Test Framework Bootstrap",
+  "created": "2026-06-17",
+  "updated": "2026-06-17",
+  "complexity": "M",
+  "position": 182,
+  "parent": "COMP-TEST-BOOTSTRAP-4",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-TEST-BOOTSTRAP-4"
+    }
+  ]
+}

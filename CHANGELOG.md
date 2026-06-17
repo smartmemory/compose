@@ -2,6 +2,25 @@
 
 ## 2026-06-17
 
+### COMP-TEST-BOOTSTRAP-4 — real test-count/pass-rate ship gate (COMPLETE)
+
+Completes the test-bootstrap gate: the ship-time test run's output (previously captured then
+discarded) is now parsed into a structured signal, and the completion attestation's `tests_pass`
+reflects reality instead of a hardcoded `true`.
+
+- **`parseTestSummary(framework, stdout) → { test_count, pass_rate, parsed }`** (`lib/test-bootstrap.js`):
+  pure, total, cross-framework parser for vitest / jest / mocha / pytest / go-test / cargo-test.
+  Any framework or output it can't read degrades to `parsed:false` rather than guessing.
+- **`deriveTestsPass(summary)`**: the gate — `parsed && test_count >= 1 && pass_rate === 100`,
+  degrading to `true` (never a false block) when unparsed. Wired into `executeShipStep`; the two
+  previously-hardcoded `tests_pass: true` sites now use the derived value.
+- `go test ./...` → `go test -v ./...` so per-test verdicts are countable.
+- **Design note:** the gate lives at the in-process attestation layer, not as a Stratum `ensure`
+  (the parsed signal exists in-process; an ensure runs on the agent-reported result and would
+  misfire on unparseable frameworks). The auto-generated-tests **review lens** (the residual's
+  second deliverable) was found un-fireable in the current `review → coverage` order — generated
+  tests don't exist yet at review time — and carved to **COMP-TEST-BOOTSTRAP-4-1**.
+
 ### COMP-PARITY-2/5/6/8/9/10 — UI↔CLI parity batch (umbrella COMP-PARITY COMPLETE)
 
 Closes the six remaining UI↔CLI parity gaps in one batch — each cockpit surface can now drive a

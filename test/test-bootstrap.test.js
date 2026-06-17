@@ -157,7 +157,7 @@ describe('detectTestFramework', () => {
       const result = detectTestFramework(dir);
       assert.ok(result);
       assert.equal(result.framework, 'go-test');
-      assert.equal(result.command, 'go test ./...');
+      assert.equal(result.command, 'go test -v ./...');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -338,7 +338,7 @@ describe('scaffoldTestFramework', () => {
     try {
       const result = scaffoldTestFramework(dir, 'go');
       assert.equal(result.framework, 'go-test');
-      assert.equal(result.command, 'go test ./...');
+      assert.equal(result.command, 'go test -v ./...');
 
       assert.ok(existsSync(join(dir, 'golden_test.go')), 'golden_test.go created');
     } finally {

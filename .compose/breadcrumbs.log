@@ -605,3 +605,5 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-17T00:19:13+08:00 | COMP-PARITY-10: create qa-scope server route + cockpit view + tests (read-only, wraps qa-scoping mapper)
 2026-06-17T00:19:15+08:00 | COMP-PARITY-9: new-feature scaffold route + dialog + tests (new files only; shared-file edits deferred to integrator)
 2026-06-17T08:24:25+08:00 | COMP-PARITY batch: central integration of 8 shared files (resume)
+2026-06-17T14:23:32+08:00 | COMP-TEST-BOOTSTRAP-4: writing design for residual (parseTestSummary signal + test gate + generated-tests review lens)
+2026-06-17T14:25:55+08:00 | COMP-TEST-BOOTSTRAP-4 Slice 1: TDD parseTestSummary (6 frameworks, degrade to parsed:false)
