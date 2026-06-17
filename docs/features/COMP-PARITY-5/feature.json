@@ -14,5 +14,25 @@
       "to_code": "COMP-PARITY-7"
     }
   ],
-  "group": "COMP-PARITY"
+  "group": "COMP-PARITY",
+  "completions": [
+    {
+      "completion_id": "COMP-PARITY-5:9bcc4b1759eba56067ed44d92020abc62d81d380",
+      "feature_code": "COMP-PARITY-5",
+      "commit_sha": "9bcc4b1759eba56067ed44d92020abc62d81d380",
+      "commit_sha_short": "9bcc4b17",
+      "tests_pass": true,
+      "files_changed": [
+        "server/vision-routes.js",
+        "src/components/vision/shared/CompletionBadge.jsx",
+        "src/components/vision/shared/completionDivergence.js",
+        "src/components/vision/ItemDetailPanel.jsx",
+        "test/completions-route.test.js",
+        "test/ui/completion-badge.test.jsx"
+      ],
+      "recorded_at": "2026-06-17T01:16:30.975Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Recorded-completion divergence badge + read-only GET /api/completions (isFeatureCode guard). Shipped in parity batch."
+    }
+  ]
 }

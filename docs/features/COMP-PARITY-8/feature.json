@@ -12,5 +12,24 @@
     "ux",
     "cockpit",
     "parity"
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-PARITY-8:9bcc4b1759eba56067ed44d92020abc62d81d380",
+      "feature_code": "COMP-PARITY-8",
+      "commit_sha": "9bcc4b1759eba56067ed44d92020abc62d81d380",
+      "commit_sha_short": "9bcc4b17",
+      "tests_pass": true,
+      "files_changed": [
+        "server/build-routes.js",
+        "src/components/cockpit/BuildAllGsdControl.jsx",
+        "src/components/cockpit/buildAllGsdControlState.js",
+        "test/build-all-gsd-routes.test.js",
+        "test/ui/build-all-gsd-control.test.jsx"
+      ],
+      "recorded_at": "2026-06-17T01:16:42.400Z",
+      "recorded_by": "mcp:agent",
+      "notes": "build-all / gsd launchers (mode:'all'/'gsd'); launcher conflicts → 409. Shipped in parity batch."
+    }
   ]
 }

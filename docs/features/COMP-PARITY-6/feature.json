@@ -8,5 +8,26 @@
   "complexity": "S",
   "position": 7,
   "parent": "COMP-PARITY",
-  "group": "COMP-PARITY"
+  "group": "COMP-PARITY",
+  "completions": [
+    {
+      "completion_id": "COMP-PARITY-6:9bcc4b1759eba56067ed44d92020abc62d81d380",
+      "feature_code": "COMP-PARITY-6",
+      "commit_sha": "9bcc4b1759eba56067ed44d92020abc62d81d380",
+      "commit_sha_short": "9bcc4b17",
+      "tests_pass": true,
+      "files_changed": [
+        "server/validate-routes.js",
+        "src/components/vision/ValidateView.jsx",
+        "src/components/cockpit/ViewTabs.jsx",
+        "src/components/cockpit/viewTabsState.js",
+        "test/validate-routes.test.js",
+        "test/integration/validate-routes.test.js",
+        "test/ui/validate-view.test.jsx"
+      ],
+      "recorded_at": "2026-06-17T01:16:35.768Z",
+      "recorded_by": "mcp:agent",
+      "notes": "compose validate findings panel + GET /api/validate. Shipped in parity batch."
+    }
+  ]
 }

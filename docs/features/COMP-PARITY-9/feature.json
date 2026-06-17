@@ -12,5 +12,24 @@
     "ux",
     "cockpit",
     "parity"
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-PARITY-9:9bcc4b1759eba56067ed44d92020abc62d81d380",
+      "feature_code": "COMP-PARITY-9",
+      "commit_sha": "9bcc4b1759eba56067ed44d92020abc62d81d380",
+      "commit_sha_short": "9bcc4b17",
+      "tests_pass": true,
+      "files_changed": [
+        "server/feature-scaffold-routes.js",
+        "src/components/vision/NewFeatureDialog.jsx",
+        "src/App.jsx",
+        "test/feature-scaffold-route.test.js",
+        "test/ui/new-feature-dialog.test.jsx"
+      ],
+      "recorded_at": "2026-06-17T01:16:47.299Z",
+      "recorded_by": "mcp:agent",
+      "notes": "UI feature scaffolding (New Feature dialog) + POST /api/features/scaffold. Shipped in parity batch."
+    }
   ]
 }

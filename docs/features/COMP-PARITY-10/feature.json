@@ -12,5 +12,24 @@
     "ux",
     "cockpit",
     "parity"
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-PARITY-10:9bcc4b1759eba56067ed44d92020abc62d81d380",
+      "feature_code": "COMP-PARITY-10",
+      "commit_sha": "9bcc4b1759eba56067ed44d92020abc62d81d380",
+      "commit_sha_short": "9bcc4b17",
+      "tests_pass": true,
+      "files_changed": [
+        "server/qa-scope-routes.js",
+        "src/components/vision/QaScopeView.jsx",
+        "src/components/cockpit/ViewTabs.jsx",
+        "test/qa-scope-routes.test.js",
+        "test/ui/qa-scope-view.test.jsx"
+      ],
+      "recorded_at": "2026-06-17T01:16:51.838Z",
+      "recorded_by": "mcp:agent",
+      "notes": "qa-scope cockpit panel + GET /api/qa-scope (degraded-error + clear-on-switch). Shipped in parity batch."
+    }
   ]
 }
