@@ -2,6 +2,19 @@
 
 ## 2026-06-17
 
+### COMP-BUILD-QUICK-1 — exempt `--quick` features from MISSING_COMPLETION_REPORT (COMPLETE)
+
+Closes the validator gap COMP-BUILD-QUICK surfaced: the quick lifecycle omits the report phase by
+design, so every quick-built COMPLETE feature would trip `MISSING_COMPLETION_REPORT`.
+
+- `recordCompletion` (lib/completion-writer.js) accepts an optional `built_via` slug and persists it
+  onto feature.json at ship, before the status flip (which re-reads the feature, so the marker
+  survives). `compose build --quick` threads `built_via:'build-quick'` through the build context to
+  both ship paths (git + no-git).
+- `feature-validator.js` skips `MISSING_COMPLETION_REPORT` for features carrying `built_via:'build-quick'`.
+  Only the report check is exempted — a journal entry is still owed regardless of build path.
+- 3 new tests (validator exemption, marker persistence, malformed-slug rejection). Codex review CLEAN.
+
 ### COMP-BUILD-QUICK — `compose build --quick` trimmed lifecycle (COMPLETE)
 
 Gives build mode a symmetric quick path so small-but-real additive work (one flag + a test +

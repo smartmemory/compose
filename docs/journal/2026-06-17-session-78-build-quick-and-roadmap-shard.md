@@ -41,8 +41,8 @@ Commits: 16ef85f (COMP-BUILD-QUICK), ef5d8ab (COMP-ROADMAP-SHARD filed), 6f13d15
 ## Open threads
 
 - [ ] COMP-ROADMAP-SHARD (PLANNED) — implement roadmap sharding so oversized ROADMAP.md files split into LLM-processable shards. SmartMemory (662KB) is the first consumer; compose's own (172KB) will follow.
-- [ ] Validator gap: `--quick`-built features always trip MISSING_COMPLETION_REPORT because the quick lifecycle omits the report phase. Decide between exempting --quick features in feature-validator.js or having --quick's ship step emit a lightweight report. Filed in COMP-BUILD-QUICK/report.md §7.
-- [ ] 122/158 COMPLETE features trip MISSING_COMPLETION_JOURNAL/REPORT respectively — broad advisory debt, not addressed this session beyond COMP-BUILD-QUICK.
+- [x] Validator gap: `--quick`-built features always trip MISSING_COMPLETION_REPORT because the quick lifecycle omits the report phase. **Resolved by COMP-BUILD-QUICK-1** — the quick path stamps `built_via:'build-quick'` onto feature.json at ship (via recordCompletion, before the status flip), and feature-validator exempts marked features from the report check. Only the report check is exempted; a journal entry is still owed. 3 tests, Codex review CLEAN.
+- [ ] 122/158 COMPLETE features trip MISSING_COMPLETION_JOURNAL/REPORT respectively — broad advisory debt, not addressed this session beyond COMP-BUILD-QUICK / COMP-BUILD-QUICK-1.
 
 ---
 

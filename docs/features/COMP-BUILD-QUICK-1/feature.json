@@ -1,0 +1,9 @@
+{
+  "code": "COMP-BUILD-QUICK-1",
+  "description": "Exempt `--quick`-built features from the MISSING_COMPLETION_REPORT validator warning. The quick lifecycle omits the report phase by design, so every quick-built COMPLETE feature would otherwise trip the report-completion check. Ship stamps `built_via:'build-quick'` onto feature.json (via recordCompletion, before the status flip) and feature-validator skips the finding for marked features. Only the report check is exempted — a journal entry is still owed. Follow-up to COMP-BUILD-QUICK.",
+  "status": "COMPLETE",
+  "phase": "Features",
+  "position": 299,
+  "created": "2026-06-17",
+  "updated": "2026-06-17"
+}
