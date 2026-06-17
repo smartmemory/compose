@@ -2,6 +2,27 @@
 
 ## 2026-06-17
 
+### COMP-TEST-BOOTSTRAP-4-1 — post-coverage review of generated tests (COMPLETE)
+
+Closes the deliverable COMP-TEST-BOOTSTRAP-4 deferred: a review pass over the tests the
+`coverage` step generates. The implementation review (`review`/`codex_review`) runs *before*
+`coverage`, so generated tests were never reviewed; this adds a pass that runs after.
+
+- New `test_review` sub-flow + step in the build pipeline, between `coverage` and `report`
+  (`report.depends_on` re-pointed to `test_review`). A Codex reviewer reads the generated test
+  files and flags placeholder/tautological/mock-only tests whose assertions don't exercise the
+  feature.
+- **Scope:** fires on the test files that appear in the post-coverage git diff (snapshot taken
+  before coverage, diffed after) — covers tests generated against an existing framework, not just
+  zero-test bootstraps. Skips cleanly (synthetic result) when coverage produced no test files.
+- **Advisory:** the step has neither `ensure` nor `output_contract`, so a flagged or malformed
+  result can never route into the blocking fix-retry path — it never blocks ship. Findings surface
+  on the build stream (`test_review` event) and through the SSE bridge to the cockpit.
+- **Resume-safe:** the pre-coverage test snapshot is persisted to `.compose/pre_coverage_tests.json`
+  (cleared on fresh start) so a build resuming after coverage keeps the correct baseline.
+- Codex review: REVIEW CLEAN (3 rounds — advisory-leak, resume-scope, and cockpit-surfacing
+  findings all fixed). Full suite green.
+
 ### COMP-TEST-BOOTSTRAP-4 — real test-count/pass-rate ship gate (COMPLETE)
 
 Completes the test-bootstrap gate: the ship-time test run's output (previously captured then

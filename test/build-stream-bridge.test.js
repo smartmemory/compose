@@ -88,6 +88,28 @@ describe('BuildStreamBridge', () => {
     assert.equal(broadcasts[6].status, 'complete');
   });
 
+  it('forwards COMP-TEST-BOOTSTRAP-4-1 test_review events with findings to the cockpit', async () => {
+    const broadcasts = [];
+    const bridge = new BuildStreamBridge(composeDir, (msg) => broadcasts.push(msg));
+
+    bridge.start();
+    await sleep(100);
+
+    const findings = [{ file: 'test/foo.test.js', line: 3, severity: 'should-fix', summary: 'assert true placeholder' }];
+    writeLine(filePath, { type: 'test_review', clean: false, summary: '1 weak test', findings }, 0);
+
+    await sleep(200);
+    bridge.stop();
+
+    assert.equal(broadcasts.length, 1);
+    assert.equal(broadcasts[0].type, 'system');
+    assert.equal(broadcasts[0].subtype, 'test_review');
+    assert.equal(broadcasts[0].clean, false);
+    assert.equal(broadcasts[0].summary, '1 weak test');
+    assert.deepEqual(broadcasts[0].findings, findings);
+    assert.equal(broadcasts[0]._source, 'build');
+  });
+
   it('passes through STRAT-PAR-STREAM build_stream_event envelopes as buildStreamEvent', async () => {
     const broadcasts = [];
     const bridge = new BuildStreamBridge(composeDir, (msg) => broadcasts.push(msg));

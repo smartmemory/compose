@@ -471,6 +471,18 @@ export class BuildStreamBridge {
         };
       }
 
+      // COMP-TEST-BOOTSTRAP-4-1: advisory review of the tests the coverage step
+      // generated this build. Forwarded so the cockpit can surface the findings
+      // for human verification (the step never blocks ship).
+      case 'test_review':
+        return {
+          type: 'system', subtype: 'test_review',
+          clean: event.clean ?? true,
+          summary: event.summary ?? '',
+          findings: event.findings ?? [],
+          _source: 'build',
+        };
+
       // COMP-HEALTH item 118: health score after build completion
       case 'health_score':
         return {
