@@ -687,7 +687,7 @@ Inspired by gstack `/ship` test bootstrap — detects missing framework, install
 | 179 | COMP-TEST-BOOTSTRAP-2 | Scaffold generation: install test runner, create config, generate a minimal test helper with project-specific setup (db connection, server boot, auth fixture). Output as a `test-bootstrap` decompose task in the implementation phase. | COMPLETE |
 | 180 | COMP-TEST-BOOTSTRAP-3 | Golden flow generation: from the implementation diff, generate 1–3 golden flow tests covering the core capability lifecycle. Tests follow the project's testing hierarchy (golden flows > error harness > contract > unit). | COMPLETE |
 | 181 | COMP-TEST-BOOTSTRAP-4 | Gate integration: parse the ship-time test run into a structured signal (parseTestSummary, 6 frameworks) and derive a real tests_pass for the completion attestation (test_count >= 1 && pass_rate == 100), degrading to true when output is unparseable. (Review lens for auto-generated tests carved to COMP-TEST-BOOTSTRAP-4-1 — un-fireable in the current review-before-coverage lifecycle.) | COMPLETE |
-| 182 | COMP-TEST-BOOTSTRAP-4-1 | Review lens for auto-generated tests ('verify assertions match intent') — requires a post-coverage test-review pass (lens cannot fire in the current execute→review→coverage order). | IN_PROGRESS |
+| 182 | COMP-TEST-BOOTSTRAP-4-1 | Review lens for auto-generated tests ('verify assertions match intent') — requires a post-coverage test-review pass (lens cannot fire in the current execute→review→coverage order). | COMPLETE |
 
 **Dependencies:** None — standalone enhancement to the build pipeline test phase.
 
