@@ -15,6 +15,8 @@ import NotificationBar, { notify } from './components/cockpit/NotificationBar.js
 import PairDeviceModal from './components/cockpit/PairDeviceModal.jsx';
 import OpsStrip from './components/cockpit/OpsStrip.jsx';
 import EnvironmentHealthPanel from './components/cockpit/EnvironmentHealthPanel.jsx';
+import LaunchPopover from './components/cockpit/LaunchPopover.jsx';
+import BuildAllGsdControl from './components/cockpit/BuildAllGsdControl.jsx';
 
 // Pure state-logic modules
 import {
@@ -58,6 +60,9 @@ import SessionsView from './components/vision/SessionsView.jsx';
 import PastBuildsView from './components/vision/PastBuildsView.jsx';
 import DashboardView from './components/vision/DashboardView.jsx';
 import IdeaboxView from './components/vision/IdeaboxView.jsx';
+import ValidateView from './components/vision/ValidateView.jsx';
+import QaScopeView from './components/vision/QaScopeView.jsx';
+import NewFeatureDialog from './components/vision/NewFeatureDialog.jsx';
 import JournalView from './components/vision/JournalView.jsx';
 import DesignView from './components/vision/DesignView.jsx';
 import DesignSidebar from './components/vision/DesignSidebar.jsx';
@@ -343,6 +348,8 @@ function CockpitView({
           onFocusHandled={onFocusHandled}
         />
       );
+    case 'validate':
+      return <ValidateView featureCode={featureCode} />;
     case 'docs':
       return (
         <DocsView
@@ -360,6 +367,8 @@ function CockpitView({
       return <DesignView key={projectRoot} />;
     case 'ideabox':
       return <IdeaboxView />;
+    case 'qa-scope':
+      return <QaScopeView featureCode={featureCode} />;
     case 'journal':
       return <JournalView />;
     case 'settings':
@@ -537,6 +546,8 @@ function AppInner() {
   const [createInitialType, setCreateInitialType] = useState('task');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pairDeviceOpen, setPairDeviceOpen] = useState(false);
+  const [launchOpen, setLaunchOpen] = useState(false);       // PARITY-2: launch popover
+  const [newFeatureOpen, setNewFeatureOpen] = useState(false); // PARITY-9: New Feature dialog
 
   // ── Project info ────────────────────────────────────────────────────────
   const [projectName, setProjectName] = useState('');
@@ -1112,6 +1123,37 @@ function AppInner() {
             {/* Environment health (COMP-PARITY-3) — passive drift signal */}
             <EnvironmentHealthPanel />
 
+            {/* Build-all / GSD launchers (PARITY-8) */}
+            <BuildAllGsdControl />
+
+            {/* Launch fix / new / resume lifecycle (PARITY-2) */}
+            <div className="relative">
+              <button
+                className="compose-btn-icon"
+                onClick={() => setLaunchOpen(o => !o)}
+                title="Launch a fix, new feature, or resume"
+                aria-label="Launch lifecycle"
+                aria-expanded={launchOpen}
+                data-testid="launch-popover-toggle"
+              >
+                {'\u{1F680}'}
+              </button>
+              {launchOpen && (
+                <LaunchPopover activeBuild={activeBuild} onClose={() => setLaunchOpen(false)} />
+              )}
+            </div>
+
+            {/* New feature scaffold (PARITY-9) */}
+            <button
+              className="compose-btn-icon"
+              onClick={() => setNewFeatureOpen(true)}
+              title="New feature"
+              aria-label="New feature"
+              data-testid="new-feature-toggle"
+            >
+              {'➕'}
+            </button>
+
             {/* Pair mobile device */}
             <button
               className="compose-btn-icon"
@@ -1455,6 +1497,12 @@ function AppInner() {
         <PairDeviceModal
           open={pairDeviceOpen}
           onClose={() => setPairDeviceOpen(false)}
+        />
+
+        {/* New feature scaffold dialog (PARITY-9) */}
+        <NewFeatureDialog
+          open={newFeatureOpen}
+          onClose={() => setNewFeatureOpen(false)}
         />
       </div>
     </VisionChangesContext.Provider>

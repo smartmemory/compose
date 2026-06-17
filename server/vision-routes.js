@@ -44,6 +44,8 @@ function getSchemaValidator() {
 import { randomUUID } from 'node:crypto';
 import { getTargetRoot, resolveProjectPath } from './project-root.js';
 import { resolveFeaturesPathFromConfig } from '../lib/project-paths.js';
+import { getCompletions } from '../lib/completion-writer.js';
+import { isFeatureCode } from '../lib/feature-code.js';
 import { anchorBoundary } from '../lib/checkpoint/checkpoint-writer.js';
 import { appendGateLogEntry, readGateLog, mapResolveOutcomeToSchema } from './gate-log-store.js';
 import { addOpenLoop, resolveOpenLoop, listOpenLoops } from './open-loops-store.js';
@@ -93,6 +95,33 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
   const guardAuthEnabled = capabilities?.guardAuth === true;
   const guardAuth = (req, res, next) =>
     guardAuthEnabled ? requireSensitiveToken(req, res, next) : next();
+
+  // PARITY-5: GET /api/completions — read-only recorded-completion log for a
+  // feature. Reads are open (not guardAuth-wrapped); wraps the same
+  // getCompletions() the CLI uses so the cockpit and CLI agree byte-for-byte.
+  app.get('/api/completions', (req, res) => {
+    try {
+      const opts = {};
+      const fc = req.query.featureCode;
+      if (typeof fc === 'string' && fc) {
+        // This route is open (no auth) and feature_code is join()'d into a
+        // filesystem path downstream (feature-json.js#readFeature). Reject
+        // anything that isn't a canonical feature code so `../`-style traversal
+        // can't read feature.json outside the features dir.
+        if (!isFeatureCode(fc)) {
+          return res.status(400).json({ error: 'invalid featureCode' });
+        }
+        opts.feature_code = fc;
+      }
+      const rawLimit = parseInt(req.query.limit, 10);
+      if (Number.isFinite(rawLimit)) opts.limit = rawLimit;
+      const result = getCompletions(getTargetRoot(), opts);
+      res.json(result);
+    } catch (err) {
+      res.status(400).json({ error: err.message || String(err) });
+    }
+  });
+
   // GET /api/vision/items — full state (optional ?group= filter)
   app.get('/api/vision/items', (req, res) => {
     let state = store.getState();

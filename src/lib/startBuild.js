@@ -11,14 +11,22 @@ import { withComposeToken } from './compose-api.js';
  * HTTP status so callers can branch (e.g. 409 = build already active for
  * that feature — the conflict model is per-feature, see lib/build.js:916).
  *
- * @param {{ featureCode: string, mode?: string, description?: string }} args
+ * `featureCode` is optional: mode 'all' sweeps every feature and mode 'new'
+ * takes a free-text intent in `description`, so neither carries a code. The
+ * key is omitted from the payload when absent. `resume` (PARITY-2) is only
+ * sent when true, so existing feature/bug callers post an unchanged body.
+ *
+ * @param {{ featureCode?: string, mode?: string, description?: string, resume?: boolean }} args
  * @returns {Promise<Response>} the ok response
  */
-export async function startBuild({ featureCode, mode = 'feature', description = '' }) {
+export async function startBuild({ featureCode, mode = 'feature', description = '', resume = false }) {
+  const payload = { mode, description };
+  if (featureCode) payload.featureCode = featureCode;
+  if (resume) payload.resume = resume;
   const res = await wsFetch('/api/build/start', {
     method: 'POST',
     headers: withComposeToken({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ featureCode, mode, description }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     let data = null;

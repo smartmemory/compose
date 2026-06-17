@@ -1,10 +1,10 @@
 {
   "code": "COMP-PARITY-9",
   "description": "UI feature scaffolding. No cockpit affordance scaffolds a feature folder (equivalent of `compose feature <CODE>`); the only UI path is ideabox promote (COMP-IDEABOX-6), which requires an existing idea as the entry point. Add a New Feature dialog that scaffolds docs/features/<CODE> plus feature.json plus the ROADMAP row directly from the cockpit.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-PARITY: UI↔CLI Parity",
   "created": "2026-06-07",
-  "updated": "2026-06-07",
+  "updated": "2026-06-17",
   "complexity": "M",
   "position": 12,
   "parent": "COMP-PARITY",

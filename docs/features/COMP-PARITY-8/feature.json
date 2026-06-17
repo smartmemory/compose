@@ -1,10 +1,10 @@
 {
   "code": "COMP-PARITY-8",
   "description": "UI launchers for build-all and gsd. The cockpit can start a single build but has no trigger for `compose build --all` (build every PLANNED feature) or `compose gsd <CODE>` (per-task fresh-context dispatch); both are CLI/headless-only. Add cockpit controls reusing the existing build-start dispatch so a UI-first user can run a roadmap-wide or GSD build.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-PARITY: UI↔CLI Parity",
   "created": "2026-06-07",
-  "updated": "2026-06-07",
+  "updated": "2026-06-17",
   "complexity": "M",
   "position": 11,
   "parent": "COMP-PARITY",

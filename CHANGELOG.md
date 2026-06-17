@@ -1,5 +1,45 @@
 # Changelog
 
+## 2026-06-17
+
+### COMP-PARITY-2/5/6/8/9/10 — UI↔CLI parity batch (umbrella COMP-PARITY COMPLETE)
+
+Closes the six remaining UI↔CLI parity gaps in one batch — each cockpit surface can now drive a
+lifecycle or read a verification that was previously terminal-only. The umbrella **COMP-PARITY** is
+COMPLETE. The six features were built as disjoint new files in parallel, then centrally wired into
+eight shared files; an integration-level Codex pass (not per-feature) caught the cross-feature
+contract issues fixed below.
+
+- **COMP-PARITY-2 — fix/new/resume launchers.** A 🚀 launch popover in the cockpit header
+  (`LaunchPopover`) starts `compose fix <bug>`, `compose new "<intent>"`, or resumes an aborted fix.
+  `POST /api/build/start` gains `mode: 'new'` (trims `description` as the intent → `runNew`) and a
+  `resume: true` path for `mode: 'bug'` that reads `active-build.json` and forwards `resumeFlowId`
+  (409 on absent/mismatched/wrong-mode active build).
+- **COMP-PARITY-5 — recorded-completion divergence badge.** `CompletionBadge` next to the item
+  status control surfaces the commit-SHA-bound `record-completion` (feature.json `completions[]`) and
+  flags divergence from the free status dropdown, backed by a new read-only `GET /api/completions`
+  (wraps the CLI's `getCompletions`; `featureCode` validated against the canonical code shape to
+  block path traversal on the open route).
+- **COMP-PARITY-6 — validate findings panel.** A **Validate** cockpit tab (`ValidateView`) renders
+  `compose validate` findings (feature/project scope, severity) via `GET /api/validate`.
+- **COMP-PARITY-8 — build-all / gsd launchers.** `BuildAllGsdControl` in the header triggers
+  `compose build --all` and `compose gsd <CODE>` through `POST /api/build/start` (`mode: 'all'` /
+  `mode: 'gsd'`). Launcher conflicts (already-active / concurrent GSD run) now return 409, not 500.
+- **COMP-PARITY-9 — feature scaffolding.** A ➕ **New Feature** dialog (`NewFeatureDialog`) scaffolds
+  `docs/features/<CODE>` + feature.json + the ROADMAP row from the cockpit via a sensitive
+  `POST /api/features/scaffold`.
+- **COMP-PARITY-10 — qa-scope panel.** A **QA Scope** tab (`QaScopeView`) shows
+  `compose qa-scope <CODE>` affected/adjacent/unmapped routes via `GET /api/qa-scope`; surfaces the
+  degraded `{found:true,error}` response instead of a blank success block and clears stale scope on a
+  feature switch.
+
+Build dispatch (`/api/build/start`) is now bound to the active project root (`cwd: getTargetRoot()`
+into `runNew`/`runBuildAll`/`runGsd`/`runBuild`), fixing a latent post-`switchProject` desync where a
+launched build could target a different workspace than the cockpit. Tests: `launch-routes`,
+`build-all-gsd-routes`, `completions-route`, `validate-routes`, `feature-scaffold-route`,
+`qa-scope-routes` (+ integration) and the matching `test/ui/*` suites. Full suite green
+(node 4067, vitest UI 485, tracker 100).
+
 ## 2026-06-16
 
 ### COMP-PARITY-3-1 — guarded hook-repair remediation from the env-health panel
