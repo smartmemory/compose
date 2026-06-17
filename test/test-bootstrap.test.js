@@ -8,7 +8,7 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync, mkdtempSync, existsSync
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { detectTestFramework, scaffoldTestFramework } from '../lib/test-bootstrap.js';
+import { detectTestFramework, scaffoldTestFramework, isTestFile } from '../lib/test-bootstrap.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -373,5 +373,46 @@ describe('scaffoldTestFramework', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// COMP-TEST-BOOTSTRAP-4-1: isTestFile (test-path predicate for post-coverage review)
+// ---------------------------------------------------------------------------
+
+describe('isTestFile', () => {
+  it('matches test/ tests/ __tests__/ spec/ directory paths', () => {
+    assert.ok(isTestFile('test/foo.js'));
+    assert.ok(isTestFile('tests/foo.py'));
+    assert.ok(isTestFile('src/__tests__/foo.js'));
+    assert.ok(isTestFile('spec/foo_spec.rb'));
+    assert.ok(isTestFile('pkg/tests/thing.rs'));
+  });
+
+  it('matches *.test.* and *.spec.* (js/ts/jsx/tsx/mjs/cjs)', () => {
+    assert.ok(isTestFile('src/foo.test.js'));
+    assert.ok(isTestFile('src/foo.test.tsx'));
+    assert.ok(isTestFile('src/foo.spec.ts'));
+    assert.ok(isTestFile('src/foo.test.mjs'));
+  });
+
+  it('matches go _test.go and pytest test_*.py / *_test.py', () => {
+    assert.ok(isTestFile('pkg/golden_test.go'));
+    assert.ok(isTestFile('app/test_golden.py'));
+    assert.ok(isTestFile('app/golden_test.py'));
+  });
+
+  it('does NOT match non-test source files', () => {
+    assert.ok(!isTestFile('lib/build.js'));
+    assert.ok(!isTestFile('src/components/Foo.jsx'));
+    assert.ok(!isTestFile('README.md'));
+    assert.ok(!isTestFile('contest/latest.js'), 'must not match "contest" as "test"');
+    assert.ok(!isTestFile('src/greatest.py'));
+  });
+
+  it('handles empty/non-string input', () => {
+    assert.ok(!isTestFile(''));
+    assert.ok(!isTestFile(null));
+    assert.ok(!isTestFile(undefined));
   });
 });

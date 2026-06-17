@@ -187,6 +187,40 @@ flows:
           - "result.passing == True"
         retries: 15
 
+  # --- Sub-flow: test_review (COMP-TEST-BOOTSTRAP-4-1) ---
+  # Reviews the test files the coverage step generated this build. The
+  # implementation review (review/codex_review) runs BEFORE coverage, so
+  # generated tests are never otherwise reviewed. build.js injects the exact
+  # generated-test file list into this step's intent, and skips the step
+  # entirely (synthetic clean stepDone) when coverage produced no test files.
+  # ADVISORY: no blocking ensure — findings surface to the human, never fail ship.
+  test_review:
+    input:
+      task:      {type: string}
+      blueprint: {type: string}
+    output: ReviewResult
+    steps:
+      - id: review_generated_tests
+        agent: codex
+        intent: >
+          Review the auto-generated test files listed below (written by the coverage
+          step this build) and verify their assertions match intent. Read each file.
+          Flag tests that are placeholders (assert true / pass with no real assertion),
+          tautological, or assert only on mocks/stubs rather than exercising the
+          feature's behavior. For each weak test, cite file:line and state what real
+          assertion is missing. Do NOT flag hand-written tests or pure style. Output a
+          canonical ReviewResult.
+        inputs:
+          task: "$.input.task"
+          blueprint: "$.input.blueprint"
+          review_mode: "true"
+          confidence_gate: "7"
+        # ADVISORY (COMP-TEST-BOOTSTRAP-4-1): deliberately NO output_contract and NO
+        # ensure. A schema/postcondition failure here would trigger executeChildFlow's
+        # blocking fix-retry path and could block ship (report→docs→ship chain through
+        # test_review). Without either gate the step always completes; build.js captures
+        # whatever the reviewer returns and surfaces it via the test_review stream event.
+
   # --- Main flow: compose feature lifecycle ---
   build:
     input:
@@ -396,6 +430,17 @@ flows:
           - "result.passing == True"
         depends_on: [codex_review]
 
+      # Sub-flow: Test review (COMP-TEST-BOOTSTRAP-4-1) — review the tests the
+      # coverage step generated this build. build.js injects the generated-test
+      # file list into the intent, and reports a synthetic clean result (skip)
+      # when coverage produced no test files. Advisory — never blocks ship.
+      - id: test_review
+        flow: test_review
+        inputs:
+          task: "$.steps.execute.output.outcome"
+          blueprint: "$.steps.blueprint.output.artifact"
+        depends_on: [coverage]
+
       # Phase: Report (skippable)
       - id: report
         agent: claude
@@ -414,7 +459,7 @@ flows:
         retries: 2
         skip_if: "true"
         skip_reason: "Report skipped by default — set skip_if to false to enable"
-        depends_on: [coverage]
+        depends_on: [test_review]
 
       # Phase: Update Docs
       - id: docs
