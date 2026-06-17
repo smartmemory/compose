@@ -595,3 +595,13 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-16T22:39:02+08:00 | COMP-PARITY-3-1: guarded hook-repair endpoint + panel repair/copy buttons
 2026-06-16T22:39:02+08:00 | COMP-PARITY-3-2: add read-only env-health indicator to mobile PWA header
 2026-06-16T23:08:59+08:00 | COMP-UITEST-ISOLATION-1: vitest jsdom url (non-opaque origin for storage) + explicit isolate + localStorage polyfill guard in test/ui/setup.js to kill the intermittent 'localStorage undefined' beforeEach flake
+2026-06-16T23:57:57+08:00 | COMP-PARITY-2: authoring design+blueprint for UI fix/new launch+resume controls (docs only)
+2026-06-16T23:58:05+08:00 | COMP-PARITY-5 design+blueprint: recorded-completion view next to status control (read-only divergence flag)
+2026-06-17T00:01:46+08:00 | COMP-PARITY-6: writing design + verified blueprint for validate findings panel (read-only GET /api/validate + new ValidateView tab)
+2026-06-17T00:13:43+08:00 | COMP-PARITY-2: add header LaunchPopover (fix/new/resume) + pure buildLaunchPayload helper + node test
+2026-06-17T00:13:43+08:00 | COMP-PARITY-5: read-only recorded-completion view + divergence flag (new files only: completionDivergence helper, CompletionBadge, tests)
+2026-06-17T00:13:55+08:00 | COMP-PARITY-6: create validate-routes server + ValidateView + tests (new files only)
+2026-06-17T00:18:57+08:00 | COMP-PARITY-8: new BuildAllGsdControl header control + state helper + vitest UI test (new files only, shared files owned by integrator)
+2026-06-17T00:19:13+08:00 | COMP-PARITY-10: create qa-scope server route + cockpit view + tests (read-only, wraps qa-scoping mapper)
+2026-06-17T00:19:15+08:00 | COMP-PARITY-9: new-feature scaffold route + dialog + tests (new files only; shared-file edits deferred to integrator)
+2026-06-17T08:24:25+08:00 | COMP-PARITY batch: central integration of 8 shared files (resume)

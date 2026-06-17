@@ -12,7 +12,7 @@
  *   onOpenPalette {fn}      called when Cmd+K button is clicked
  */
 import React from 'react';
-import { Network, GitBranch, Activity, ShieldCheck, Search, FileText, Workflow, MessageSquare, LayoutDashboard, Lightbulb, History, BookOpen } from 'lucide-react';
+import { Network, GitBranch, Activity, ShieldCheck, Search, FileText, Workflow, MessageSquare, LayoutDashboard, Lightbulb, History, BookOpen, ListChecks, FileSearch } from 'lucide-react';
 
 const TAB_META = {
   dashboard: { label: 'Dashboard', icon: LayoutDashboard, tip: 'Overview of project status and activity' },
@@ -22,6 +22,8 @@ const TAB_META = {
   sessions:  { label: 'Sessions',  icon: Activity,        tip: 'Active and past agent sessions' },
   'build-history': { label: 'Builds', icon: History,      tip: 'History of past build runs and outcomes' },
   gates:     { label: 'Gates',     icon: ShieldCheck,     tip: 'Quality gates and approval checkpoints' },
+  validate:  { label: 'Validate',  icon: ListChecks,      tip: 'Cross-artifact validation findings (compose validate)' },
+  'qa-scope': { label: 'QA Scope', icon: FileSearch,      tip: 'Affected routes for the active feature (qa-scope)' },
   docs:      { label: 'Docs',      icon: FileText,        tip: 'Project documentation and specs' },
   journal:   { label: 'Journal',   icon: BookOpen,        tip: 'Project journal and changelog' },
   design:    { label: 'Design',    icon: MessageSquare,   tip: 'Design agent conversations and decisions' },

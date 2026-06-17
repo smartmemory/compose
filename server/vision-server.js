@@ -28,11 +28,14 @@ import { attachActivityRoutes } from './activity-routes.js';
 import { SettingsStore } from './settings-store.js';
 import { attachSettingsRoutes } from './settings-routes.js';
 import { attachHealthRoutes } from './health-routes.js';
+import { attachValidateRoutes } from './validate-routes.js';
+import { attachQaScopeRoutes } from './qa-scope-routes.js';
 import { attachDesignRoutes } from './design-routes.js';
 import { DesignSessionManager } from './design-session.js';
 import { attachPipelineRoutes } from './pipeline-routes.js';
 import { attachIdeaboxRoutes } from './ideabox-routes.js';
 import { attachBuildRoutes } from './build-routes.js';
+import { attachFeatureScaffoldRoutes } from './feature-scaffold-routes.js';
 import { attachJournalRoutes } from './journal-routes.js';
 import { CoalescingBuffer } from './coalescing-buffer.js';
 /** Settings defaults (previously derived from contracts/lifecycle.json). */
@@ -90,6 +93,14 @@ export class VisionServer {
     // Read-only GET /api/environment-health; resolves its own compose package
     // root + composeBin/Node defaults, reads hooks off req.workspace.
     attachHealthRoutes(app);
+
+    // ── Cross-artifact validation findings (COMP-PARITY-6) ─────────────────
+    // Read-only GET /api/validate; reads workspace off req.workspace.
+    attachValidateRoutes(app);
+
+    // ── QA-scope affected-routes panel (COMP-PARITY-10) ────────────────────
+    // Read-only GET /api/qa-scope?featureCode=…; reads off req.workspace.
+    attachQaScopeRoutes(app);
 
     // ── Vision CRUD + lifecycle routes ─────────────────────────────────────
     attachVisionRoutes(app, {
@@ -157,6 +168,10 @@ export class VisionServer {
 
     // ── Build start/abort routes (sensitive) ───────────────────────────────
     attachBuildRoutes(app);
+
+    // ── Feature scaffolding (COMP-PARITY-9, sensitive) ─────────────────────
+    // POST /api/features/scaffold — writes feature.json + a ROADMAP row.
+    attachFeatureScaffoldRoutes(app, { getProjectRoot: () => getTargetRoot() });
 
     // ── Build state hydration ─────────────────────────────────────────────
     app.get('/api/build/state', (_req, res) => {

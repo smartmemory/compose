@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area.jsx';
 import { TYPE_COLORS, STATUS_COLORS, PHASES, PHASE_LABELS, STATUSES, CONFIDENCE_LABELS, LIFECYCLE_PHASE_LABELS, LIFECYCLE_PHASE_ARTIFACTS, GATE_STEP_LABELS } from './constants.js';
 import ConnectionGraph from './ConnectionGraph.jsx';
 import ConfidenceBar from './shared/ConfidenceBar.jsx';
+import CompletionBadge from './shared/CompletionBadge.jsx';
 import BranchComparePanel from './BranchComparePanel.jsx';
 import DriftRibbon from './DriftRibbon.jsx';
 import StartBuildPopover from './StartBuildPopover.jsx';
@@ -465,6 +466,9 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
 
           {/* COMP-UI-5: ConfidenceBar — read-only visual display (4-bar with color + label) */}
           <ConfidenceBar level={item.confidence || 0} />
+
+          {/* PARITY-5: recorded-completion vs status divergence badge */}
+          <CompletionBadge featureCode={item.lifecycle?.featureCode} status={item.status} />
 
           {/* Phase selector */}
           <div>
