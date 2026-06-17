@@ -8,5 +8,26 @@
   "complexity": "M",
   "position": 3,
   "parent": "COMP-PARITY",
-  "group": "COMP-PARITY"
+  "group": "COMP-PARITY",
+  "completions": [
+    {
+      "completion_id": "COMP-PARITY-2:9bcc4b1759eba56067ed44d92020abc62d81d380",
+      "feature_code": "COMP-PARITY-2",
+      "commit_sha": "9bcc4b1759eba56067ed44d92020abc62d81d380",
+      "commit_sha_short": "9bcc4b17",
+      "tests_pass": true,
+      "files_changed": [
+        "server/build-routes.js",
+        "src/components/cockpit/LaunchPopover.jsx",
+        "src/components/cockpit/launchPopoverState.js",
+        "src/lib/startBuild.js",
+        "src/App.jsx",
+        "test/launch-routes.test.js",
+        "test/launch-popover.test.js"
+      ],
+      "recorded_at": "2026-06-17T01:16:26.332Z",
+      "recorded_by": "mcp:agent",
+      "notes": "UI launchers for fix/new + resume; mode:'new'/'bug'+resume on /api/build/start. Shipped in parity batch."
+    }
+  ]
 }
