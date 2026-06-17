@@ -1299,6 +1299,7 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 | 295 | COMP-WORKSPACE-ID | Workspace identity detection (parent vs child) across CLI, MCP, and hooks | COMPLETE |
 | 296 | COMP-WORKSPACE-RESUME | Persist MCP workspace binding across restarts via CLAUDE_SESSION_ID env (when injected) | PLANNED |
 | 297 | COMP-WORKSPACE-WATCHERS | Runtime workspace rebinding for long-lived watchers (file-watcher, cc-session-watcher) | PLANNED |
+| 298 | COMP-ROADMAP-SHARD | Decompose oversized ROADMAP.md files into smaller shard files an LLM can process. A single ROADMAP grows unbounded — SmartMemory's is ~662KB, past LLM context limits (compose's own is ~172KB and climbing). Split a roadmap into multiple files (active + archived/COMPLETE shards, or per-phase shards) fronted by a slim index that links them. Parser, generator, deterministic roundtrip (fixed-point + losslessness), `compose validate`, `get_roadmap` MCP read, and roadmap-graph must keep working across shards (read = concatenate-by-index; write = route a row to its owning shard). Idempotent, opt-in (threshold-triggered or explicit `compose roadmap shard`), byte-identical when single-file. Generic across all compose-using projects. Trigger: SmartMemory ROADMAP at 650KB+ too large to process (2026-06-17). | PLANNED |
 
 ---
 
