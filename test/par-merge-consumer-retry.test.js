@@ -68,7 +68,14 @@ describe('startFresh — D5 pre_merge_gate opt-in (T2)', () => {
     await startFresh(stratum, SPEC_YAML, 'FEAT-X', 'do the thing', dataDir, 'build', 'feature');
     assert.equal(stratum.calls.length, 1);
     const { planInputs } = stratum.calls[0];
-    assert.deepEqual(planInputs, { featureCode: 'FEAT-X', description: 'do the thing' });
+    // COMP-CODEX-IMPL: feature flows always carry the role inputs (defaults
+    // claude/codex reproduce today's behavior). pre_merge_gate stays omitted.
+    assert.deepEqual(planInputs, {
+      featureCode: 'FEAT-X',
+      description: 'do the thing',
+      implementer_agent: 'claude',
+      reviewer_agent: 'codex',
+    });
     assert.ok(!('pre_merge_gate' in planInputs), 'pre_merge_gate must be ABSENT, not []');
   });
 
@@ -81,6 +88,9 @@ describe('startFresh — D5 pre_merge_gate opt-in (T2)', () => {
     assert.deepEqual(planInputs, {
       featureCode: 'FEAT-X',
       description: 'do the thing',
+      // COMP-CODEX-IMPL: role inputs are always present on feature flows.
+      implementer_agent: 'claude',
+      reviewer_agent: 'codex',
       pre_merge_gate: ['pnpm lint', 'pnpm build'],
     });
   });
