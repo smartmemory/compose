@@ -1,0 +1,9 @@
+{
+  "code": "STRAT-AGENT-INTERP",
+  "description": "Make Stratum's per-step `agent:` field interpolatable so a flow can select its executor at runtime. Today `Step.agent` is a literal string emitted verbatim by the executor (spec.py:102); `inputs` are rendered (`$.input.*` / `$.steps.*.output.*`) but the agent field is not. Resolve the agent field through the same resolver as inputs before `make_agent_connector`, so `agent: \"$.input.executor\"` or `agent: \"$.steps.route.output.agent\"` (a router/triage step emitting the agent for a later step) works. Stays in the data plane: the resolved value comes from recorded flow state, so audit/resume/result-cache replay identically — no control-plane hook, no non-deterministic external actor in the executor loop. Backward-compatible: literal agent strings (no `$.`) behave exactly as today; a resolved value must validate to a known agent type or the step errors before dispatch. Enables spec-controlled dynamic executor selection (e.g. claude vs codex per task) — the data-plane alternative to a mid-flow orchestrator override, and a natural enabler for COMP-CODEX-IMPL. Owner: Stratum (stratum-mcp executor/IR); compose consumes transparently since build.js already honors response.agent.",
+  "status": "PLANNED",
+  "phase": "Features",
+  "position": 302,
+  "created": "2026-06-19",
+  "updated": "2026-06-19"
+}
