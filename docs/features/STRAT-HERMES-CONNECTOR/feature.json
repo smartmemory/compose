@@ -1,0 +1,9 @@
+{
+  "code": "STRAT-HERMES-CONNECTOR",
+  "description": "Add a Nous Hermes Agent backend to Stratum so compose pipelines can dispatch steps to Hermes (e.g. `agent: hermes`) the way they already do `claude`/`codex`. New `HermesConnector(AgentConnector)` in stratum-mcp/src/stratum_mcp/connectors/ modeled on the existing opencode.py template (spawn-and-translate): drives Hermes headlessly via `hermes -z \"<prompt>\"` (one-shot, final-text-out), scrubs Nous/Hermes key vars into SENSITIVE_ENV_VARS, implements interrupt() (SIGTERM→SIGKILL). Tier A = text-return (usable as a Codex-style reviewer immediately, and as an executor without live tool narration); Tier B = streaming per-tool envelope events for full cockpit narration, GATED on an unverified Hermes structured-event-stream capability (hermes chat -q gives transcript but JSON event stream unconfirmed). DEPENDS ON T2-F5-OPENCODE-DISPATCH: the connector factory currently hard-restricts to {claude, codex} and raises ValueError for any other type, so the multi-connector dispatch path must be finished first (opencode connector exists but is likewise gated). Compose-side follow-on (small): allow agent:hermes in stratum_agent_run type-validation + pipelines; tier→model mapping (model-tiers.js is Claude-centric) and caps profiles need a hermes branch. Connectors are owned by Stratum (stratum-mcp); tracked here in compose's unified roadmap alongside STRAT-PAR/REV/GUARD.",
+  "status": "PLANNED",
+  "phase": "Features",
+  "position": 300,
+  "created": "2026-06-19",
+  "updated": "2026-06-19"
+}
