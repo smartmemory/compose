@@ -1,0 +1,9 @@
+{
+  "code": "COMP-CODEX-IMPL",
+  "description": "Let Codex be the implementation agent (instead of all-Opus), keeping cross-model review. Codex is already a dispatchable backend, so a `build-codex.stratum.yaml` variant (or `--agent codex` flag, mirroring `--quick`) flips implementation steps to `agent: codex`. Must pair Codex-implements with **Claude**-reviews (not codex reviewing its own work). Frictions: role-aware fix-routing (build.js:3124 codex→claude swap would hijack codex fixes), codex Seatbelt vs the execute step's worktree isolation (spike — start non-parallel), Claude-centric caps/tool enforcement, tier→model mapping. All compose-side; no Stratum work.",
+  "status": "PLANNED",
+  "phase": "Features",
+  "position": 301,
+  "created": "2026-06-19",
+  "updated": "2026-06-19"
+}
