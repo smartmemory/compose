@@ -1,5 +1,45 @@
 # Changelog
 
+## 2026-06-19
+
+### COMP-CODEX-IMPL — `compose build --codex`: Codex implements, Claude reviews (COMPLETE)
+
+Flips the implementation agent to Codex while keeping cross-model **Claude** review (Codex never
+reviews its own work). Built on STRAT-AGENT-INTERP (interpolatable per-step `agent:`), so it is a
+single-spec change — no `build-codex.stratum.yaml` duplicate.
+
+- **Flag (`bin/compose.js`):** `--codex` mirrors `--quick`. v1 is full-`build`, single-feature
+  only — rejected with `--quick`, `--template`, and batch (`--all`/prefix/multi).
+- **Role model (`lib/build.js`):** `implementer` (default `claude`; `codex` under `--codex`) and
+  `reviewer` (always ≠ implementer — default `codex`; `claude` under `--codex`). Fresh starts derive
+  roles from the flag; **resumes restore them from active-build state** (the build context is rebuilt
+  each invocation, so a `--codex` build resumed without the flag keeps Codex — restoration fires only
+  on an actual resume, never eagerly, so a completed build's role never bleeds into a later fresh one).
+  Roles persist in `active-build.json` and flow into `context`.
+- **Spec (`pipelines/build.stratum.yaml`):** `execute.agent` and the Codex review sub-flows
+  (`review_check`, `test_review`) resolve their agent from flow inputs `implementer_agent` /
+  `reviewer_agent` (declared in **both** `workflow.input` and `flows.build.input`); main-flow steps
+  thread `reviewer_agent` into the sub-flows (sub-flows have their own `$.input` scope). Defaults
+  reproduce today's behavior (Claude implements, Codex reviews) byte-identically.
+- **Fix routing:** the fixer is now the **implementer** (`fixAgent = context.implementerAgent`),
+  replacing the hardcoded `codex→claude` swap that assumed Codex is always the reviewer.
+- **No Codex self-review:** the `runCrossModelReview` Codex second-opinion pass is suppressed when
+  Codex is the implementer (the Claude lenses already give cross-model coverage).
+- **Preflight worktree probe (`lib/codex-preflight.js`, new):** before any `--codex` work, verifies
+  Codex can write inside a detached git worktree (the `execute` step's isolation primitive — Codex
+  self-applies a Seatbelt sandbox, unverified against worktrees). Bounded by a timeout, unique
+  per-run sentinel file, cached per-repo, skippable via `COMPOSE_SKIP_CODEX_PROBE`. On failure it
+  **aborts fast** with an actionable message (rolling feature.json back to PLANNED and the
+  active-build to a terminal status, identity-guarded) rather than hard-failing mid-`execute`.
+- **No caps/cert change needed:** the `execute` template's allowlist is already null (caps inert),
+  and cert injection is already gated on `agentType.startsWith('claude')` (Codex gets raw intent).
+- **Tests (18, `test/codex-impl.test.js`):** spec interpolation in both input blocks + sub-flow
+  threading; CLI guards; `startFresh` role injection + persistence; probe cache/env-skip/pass/fail
+  + abort message. Design 3 Codex rounds CLEAN, impl 4 rounds CLEAN. Full suite green.
+- **Deferred:** `COMP-CODEX-IMPL-SPIKE` (a Codex `isolation: none` execution path for environments
+  where the worktree probe fails), `build-quick` Codex parity, `lib/new.js` swap role-awareness,
+  a Codex/gpt tier→model map. `docs/features/COMP-CODEX-IMPL/`.
+
 ## 2026-06-17
 
 ### COMP-BUILD-QUICK-1 — exempt `--quick` features from MISSING_COMPLETION_REPORT (COMPLETE)

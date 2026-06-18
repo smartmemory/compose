@@ -21,6 +21,12 @@ workflow:
     pre_merge_gate:
       type: array
       required: false   # COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY: default-OFF per-task gate (lint+build), omitted unless capabilities.preMergeGate
+    implementer_agent:
+      type: string
+      required: false   # COMP-CODEX-IMPL: who writes the code (default claude; codex under --codex). Compose always supplies it.
+    reviewer_agent:
+      type: string
+      required: false   # COMP-CODEX-IMPL: cross-model reviewer, always != implementer (default codex; claude under --codex).
 
 contracts:
   PhaseResult:
@@ -80,10 +86,11 @@ flows:
     input:
       task:      {type: string}
       blueprint: {type: string}
+      reviewer_agent: {type: string}   # COMP-CODEX-IMPL: threaded from the parent build flow (sub-flows have their own $.input scope)
     output: ReviewResult
     steps:
       - id: review
-        agent: codex
+        agent: "$.input.reviewer_agent"   # COMP-CODEX-IMPL: codex by default; claude when codex is the implementer (no self-review)
         intent: >
           Review the implementation against the blueprint and task.
         inputs:
@@ -198,10 +205,11 @@ flows:
     input:
       task:      {type: string}
       blueprint: {type: string}
+      reviewer_agent: {type: string}   # COMP-CODEX-IMPL: threaded from the parent build flow
     output: ReviewResult
     steps:
       - id: review_generated_tests
-        agent: codex
+        agent: "$.input.reviewer_agent"   # COMP-CODEX-IMPL: codex by default; claude when codex implements
         intent: >
           Review the auto-generated test files listed below (written by the coverage
           step this build) and verify their assertions match intent. Read each file.
@@ -227,6 +235,8 @@ flows:
       featureCode: {type: string}
       description: {type: string}
       pre_merge_gate: {type: array}   # COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY: optional per-task pre-merge gate
+      implementer_agent: {type: string}   # COMP-CODEX-IMPL: code-writing executor (default claude; codex under --codex)
+      reviewer_agent: {type: string}      # COMP-CODEX-IMPL: cross-model reviewer, always != implementer
     output: PhaseResult
     max_rounds: 10
     steps:
@@ -378,7 +388,7 @@ flows:
       - id: execute
         type: parallel_dispatch
         source: "$.steps.decompose.output.tasks"
-        agent: claude
+        agent: "$.input.implementer_agent"   # COMP-CODEX-IMPL: claude by default, codex under --codex (resolved via STRAT-AGENT-INTERP)
         max_concurrent: 3
         isolation: worktree
         capture_diff: true
@@ -416,6 +426,7 @@ flows:
         inputs:
           task: "$.steps.execute.output.outcome"
           blueprint: "$.steps.blueprint.output.artifact"
+          reviewer_agent: "$.input.reviewer_agent"   # COMP-CODEX-IMPL: thread the role into the sub-flow
         ensure:
           - "result.clean == True"
         depends_on: [review]
@@ -439,6 +450,7 @@ flows:
         inputs:
           task: "$.steps.execute.output.outcome"
           blueprint: "$.steps.blueprint.output.artifact"
+          reviewer_agent: "$.input.reviewer_agent"   # COMP-CODEX-IMPL: thread the role into the sub-flow
         depends_on: [coverage]
 
       # Phase: Report (skippable)

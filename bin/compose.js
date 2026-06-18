@@ -1975,6 +1975,9 @@ if (cmd === 'build') {
   // mirror is the existing --template mechanism (fix dispatches template:'bug-fix'),
   // so --quick is sugar for template:'build-quick'. Single-feature only.
   const quick = filteredArgs2.includes('--quick')
+  // COMP-CODEX-IMPL: --codex flips the implementer to Codex (Claude reviews). v1 is
+  // full-build, single-feature only — mutually exclusive with --quick and batch.
+  const codex = filteredArgs2.includes('--codex')
 
   // Multiple codes: compose build FEAT-1 FEAT-2 FEAT-3
   const isMulti = featureCodes.length > 1
@@ -1995,6 +1998,20 @@ if (cmd === 'build') {
   }
   if (quick && isBatch) {
     console.error('Error: --quick cannot be combined with --all/prefix/multi (single feature only)')
+    process.exit(1)
+  }
+
+  // COMP-CODEX-IMPL: v1 scopes --codex to the full build, single feature.
+  if (codex && quick) {
+    console.error('Error: --codex and --quick are mutually exclusive in v1 (build-quick Codex parity is a follow-up)')
+    process.exit(1)
+  }
+  if (codex && templateName) {
+    console.error('Error: --codex and --template are mutually exclusive (--codex parameterizes the build template)')
+    process.exit(1)
+  }
+  if (codex && isBatch) {
+    console.error('Error: --codex cannot be combined with --all/prefix/multi (single feature only in v1)')
     process.exit(1)
   }
 
@@ -2060,6 +2077,7 @@ if (cmd === 'build') {
       if (skipTriage) singleOpts.skipTriage = true
       if (templateName) singleOpts.template = templateName
       if (quick) singleOpts.template = 'build-quick'   // COMP-BUILD-QUICK
+      if (codex) singleOpts.codex = true               // COMP-CODEX-IMPL
       runBuild(featureCode, singleOpts).then(() => {
         process.exit(0)
       }).catch((err) => {
