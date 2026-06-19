@@ -26,6 +26,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { writeSync } from 'node:fs';
 import {
   toolGetVisionItems,
   toolGetRoadmap,
@@ -71,6 +72,8 @@ import {
   assertToolPhaseAllowed,
   _getSessionProfile,
   resolveBoundPhase,
+  preloadEagerModules,
+  EAGER_PRELOAD_MODULES,
 } from './compose-mcp-tools.js';
 import { isToolAllowed } from './mcp-tool-policy.js';
 import { switchProject, getTargetRoot, loadProjectConfig } from './project-root.js';
@@ -816,6 +819,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------
+
+// COMP-MCP-FOLLOWUP-1-1: eager-preload lazily-imported hot-path modules so a
+// genuine on-disk break (missing module/export) fails fast at boot instead of
+// on first tool call. COMPOSE_PRELOAD_PROBE is an ops/test seam: comma-separated
+// entries appended to the default set, each `specifier` or `specifier#export`
+// (the `#export` form also exercises the export assertion). Absent → default.
+const probeExtra = (process.env.COMPOSE_PRELOAD_PROBE || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+  .map((entry) => {
+    const hash = entry.indexOf('#');
+    return hash === -1
+      ? { specifier: entry }
+      : { specifier: entry.slice(0, hash), expect: entry.slice(hash + 1) };
+  });
+try {
+  await preloadEagerModules([...EAGER_PRELOAD_MODULES, ...probeExtra]);
+} catch (err) {
+  // writeSync (not stderr.write) so the line is guaranteed flushed before
+  // process.exit — an async pipe write can otherwise be truncated/dropped.
+  writeSync(2, `[compose-mcp] boot aborted: ${err.message}\n`);
+  process.exit(1);
+}
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

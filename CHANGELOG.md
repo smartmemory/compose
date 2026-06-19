@@ -2,6 +2,32 @@
 
 ## 2026-06-19
 
+### COMP-MCP-FOLLOWUP-1-1 — Eager-preload `followup-writer` at MCP boot (COMPLETE)
+
+Fail-fast hardening that complements COMP-MCP-FOLLOWUP-1's runtime stale-server hint + CI
+import-graph test. `toolProposeFollowup` lazily `import()`s `lib/followup-writer.js` only on the
+first `propose_followup` call, so a genuine on-disk break (missing module or missing export) stayed
+invisible until first invocation. The MCP server now eager-imports that module at boot and crashes
+loudly if it is broken.
+
+- **`preloadEagerModules(specs?)` (`server/compose-mcp-tools.js`):** eager-imports each spec and
+  **asserts** its expected export is a function — `await import()` does *not* throw on a
+  loaded-but-missing named export (it yields `undefined`), so the binding check is what turns a
+  missing export into a boot failure. Default set is exactly `lib/followup-writer.js` (its dynamic
+  `artifact-manager.js` import is already statically linked at boot via `compose-mcp-tools.js`, so
+  it needs no preload). `specs` is injectable.
+- **Boot wiring (`server/compose-mcp.js`):** calls `preloadEagerModules()` before
+  `server.connect()`; on failure writes a `[compose-mcp] boot aborted: …` line via `writeSync(2,…)`
+  (guaranteed flush before exit) and `process.exit(1)`. New `COMPOSE_PRELOAD_PROBE` env seam appends
+  `specifier` / `specifier#export` entries to the default set (ops escape hatch + test seam);
+  absent → byte-identical default behavior.
+- **`toolProposeFollowup` unchanged:** keeps its lazy import + actionable stale-server hint, which
+  guards the *different* mid-session module-cache-skew case. After preload the module is cached, so
+  the live `import()` resolves from cache — zero behavior change.
+- **Tests (`test/followup-writer-eager-preload.test.js`):** helper happy path + default-set
+  contract + missing-module + missing-export rejections; boot-level negatives (missing module,
+  missing export via probe → stderr + exit 1) and a positive boot smoke.
+
 ### COMP-CODEX-IMPL — `compose build --codex`: Codex implements, Claude reviews (COMPLETE)
 
 Flips the implementation agent to Codex while keeping cross-model **Claude** review (Codex never

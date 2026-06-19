@@ -385,6 +385,57 @@ export async function toolProposeFollowup(args) {
 }
 
 // ---------------------------------------------------------------------------
+// Eager boot-time module preload — COMP-MCP-FOLLOWUP-1-1
+// ---------------------------------------------------------------------------
+
+/**
+ * Modules reachable only via a lazy `import()` on a hot tool path, which
+ * therefore escape boot-time ESM linking. Eager-importing them at server start
+ * makes a genuine on-disk break (missing module OR missing export) fail fast at
+ * boot instead of surfacing on first tool invocation — complementing the
+ * COMP-MCP-FOLLOWUP-1 CI import-graph test.
+ *
+ * The default set is exactly one module: `lib/followup-writer.js`, lazily
+ * imported by `toolProposeFollowup`. Its own dynamic import
+ * (`server/artifact-manager.js`) is already statically imported at the top of
+ * this file, so it links at boot regardless — no need to list it here.
+ */
+export const EAGER_PRELOAD_MODULES = [
+  { specifier: '../lib/followup-writer.js', expect: 'proposeFollowup' },
+];
+
+/**
+ * Eagerly import each spec and assert its expected export is a function.
+ * Throws (naming the offending module) on a missing module or missing export.
+ *
+ * `await import()` does NOT throw when a module loads but no longer provides the
+ * expected named export — it resolves with that binding `undefined`. So the
+ * binding check, not the import alone, is what turns a missing export into a
+ * boot failure (the exact COMP-MCP-FOLLOWUP-1 failure class).
+ *
+ * `specs` is injectable for testing and for the `COMPOSE_PRELOAD_PROBE` boot
+ * seam; entries without an `expect` are import-only checks.
+ */
+export async function preloadEagerModules(specs = EAGER_PRELOAD_MODULES) {
+  const loaded = {};
+  for (const { specifier, expect } of specs) {
+    let mod;
+    try {
+      mod = await import(specifier);
+    } catch (err) {
+      throw new Error(`eager preload failed for ${specifier}: ${err.message}`, { cause: err });
+    }
+    if (expect && typeof mod[expect] !== 'function') {
+      throw new Error(
+        `eager preload failed for ${specifier}: expected export '${expect}' to be a function, got ${typeof mod[expect]}`,
+      );
+    }
+    loaded[specifier] = mod;
+  }
+  return loaded;
+}
+
+// ---------------------------------------------------------------------------
 // Checkpoints / resume — COMP-RESUME
 // ---------------------------------------------------------------------------
 
