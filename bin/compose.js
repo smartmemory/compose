@@ -126,6 +126,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  roadmap check      Verify feature.json and ROADMAP.md are in sync')
   console.log('  roadmap xref-sync  Pull-reconcile feature.json external links to live state')
   console.log('  roadmap xref-push  Push-write GitHub trackers to match expect= (dry-run; --apply to write)')
+  console.log('  migrate-anon       Promote historical anonymous ROADMAP rows to typed features (interactive)')
   console.log('  items              List vision items from local state (no server)')
   console.log('  items show <id>    Show detail for a specific vision item')
   console.log('  triage    Analyze a feature and recommend build profile')
@@ -774,6 +775,24 @@ if (cmd === 'migrate-state') {
     if (m.touched.length) console.log(`  [${m.id}] v${m.version}: ${m.touched.join(', ')}`)
   }
   for (const e of rep.parseErrors) console.error(`  unparseable: ${e.path} — ${e.message}`)
+  process.exit(0)
+}
+
+if (cmd === 'migrate-anon') {
+  // COMP-MCP-MIGRATION-2-1-1-1 — interactively promote historical anonymous
+  // ROADMAP rows to typed features. The non-TTY guard lives here (where
+  // process.stdin does): piped stdin / --non-interactive / --dry-run → list-only,
+  // never hang waiting for a prompt.
+  const { root: cwd } = resolveCwdWithWorkspace(args)
+  const nonInteractive = args.includes('--non-interactive') || args.includes('--dry-run') || !process.stdin.isTTY
+  const dryRun = args.includes('--dry-run')
+  const { runMigrateAnon } = await import('../lib/migrate-anon.js')
+  try {
+    await runMigrateAnon(cwd, { nonInteractive, dryRun })
+  } catch (err) {
+    console.error(`\nError: ${err.message}`)
+    process.exit(1)
+  }
   process.exit(0)
 }
 

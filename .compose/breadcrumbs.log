@@ -614,3 +614,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-19T01:34:45+08:00 | COMP-CODEX-IMPL design: single-spec role interpolation (implementer/reviewer flow inputs via STRAT-AGENT-INTERP), role-aware fix routing, cross-model-review suppression; defer Seatbelt-in-worktree spike
 2026-06-19T19:04:15+08:00 | COMP-MCP-FOLLOWUP-1-1: eager-preload followup-writer at MCP boot for fail-fast
 2026-06-19T19:14:18+08:00 | COMP-MCP-FOLLOWUP-1-1: implement preloadEagerModules helper + boot wiring + tests (design CLEAN)
+2026-06-19T22:20:30+08:00 | COMP-MCP-MIGRATION-2-1-1-1: compose migrate-anon interactive anon-row promotion shipped

@@ -2,6 +2,34 @@
 
 ## 2026-06-19
 
+### COMP-MCP-MIGRATION-2-1-1-1 — `compose migrate-anon` interactive flow (COMPLETE)
+
+Promotes historical *anonymous* ROADMAP rows (the `| — | Item | Status |` form preserved verbatim by
+COMP-MCP-MIGRATION-2-1-1) to typed features, one at a time, interactively.
+
+- **Spec correction baked in.** The parent's Decision 3 claimed scaffolding a `feature.json` whose
+  *phase + position* matches replaces the anonymous row. It does not — rows anchor by
+  `predecessorCode`, and a row only stops being anonymous when its raw Feature cell becomes a valid
+  code. So scaffolding alone yields a **duplicate**. `migrate-anon` strips the source `rawLine`
+  (phase-scoped, occurrence-specific) **before** scaffold + regen.
+- **`lib/migrate-anon.js`:** `collectAnonRowsFromText` (header-aware per-row cell parse, layout from
+  the nearest preceding header — handles mixed 3-/4-col tables in one phase; status normalized via
+  `parseStatusToken`), `stripAnonLine` (occurrence-specific removal so duplicate row text can't
+  delete the wrong copy), `promoteAnonRow` (strip → `addRoadmapEntry`), and `runMigrateAnon` (the
+  injectable-stream interactive walk: per row → assign code / skip / abort, with status
+  confirm/override).
+- **Transaction-safe.** Promotions apply one at a time; failure handling keys on the error code —
+  pre-commit failures restore the stripped row, while `ROADMAP_PARTIAL_WRITE` (feature.json already
+  committed) does **not** restore (that would recreate the duplicate). Batch index drift across
+  same-phase promotions is compensated via a per-phase live-index offset.
+- **Position** via a string-aware end-of-phase max (`positionSortKey`, not the integer-only
+  `nextPositionInPhase`); features dir is config-aware. Promoted rows sort to phase end
+  (intra-phase order-preservation is a documented v1 non-goal).
+- **CLI:** `compose migrate-anon` (`bin/compose.js`); `--dry-run` / `--non-interactive` / piped
+  stdin list the rows without prompting (non-TTY guard, never hangs). `detectColumnLayout` exported
+  from `lib/roadmap-parser.js`.
+- Codex: 3-round design review + 2-round impl review, all REVIEW CLEAN.
+
 ### COMP-MCP-FOLLOWUP-1-1 — Eager-preload `followup-writer` at MCP boot (COMPLETE)
 
 Fail-fast hardening that complements COMP-MCP-FOLLOWUP-1's runtime stale-server hint + CI
