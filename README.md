@@ -55,7 +55,7 @@ Then in your project:
 
 ```bash
 cd /path/to/your/project
-compose init                 # writes .compose/, registers MCP, scaffolds ROADMAP and pipeline specs
+compose init                 # writes .compose/, registers MCP, scaffolds ROADMAP, pipeline specs, contracts/vocabulary.yaml
 compose new "what you want to build"
 ```
 

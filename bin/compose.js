@@ -493,6 +493,16 @@ async function runInit(flags, cwdOverride) {
     console.log(`Created ${ideaboxDest}`)
   }
 
+  // 5d. STRAT-VOCAB-3: scaffold contracts/vocabulary.yaml (starter is comments-only,
+  // so vocabulary enforcement stays inert until the user fills it in).
+  const { VOCABULARY_FILE, VOCABULARY_TEMPLATE } = await import('../lib/vocabulary-inject.js')
+  const vocabDest = join(cwd, VOCABULARY_FILE)
+  if (!existsSync(vocabDest)) {
+    mkdirSync(dirname(vocabDest), { recursive: true })
+    writeFileSync(vocabDest, VOCABULARY_TEMPLATE)
+    console.log(`Created ${vocabDest}`)
+  }
+
   // 6. Register compose-mcp in .mcp.json
   const mcpPath = join(cwd, '.mcp.json')
   let mcpConfig = {}

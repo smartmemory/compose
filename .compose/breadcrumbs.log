@@ -615,3 +615,5 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-19T19:04:15+08:00 | COMP-MCP-FOLLOWUP-1-1: eager-preload followup-writer at MCP boot for fail-fast
 2026-06-19T19:14:18+08:00 | COMP-MCP-FOLLOWUP-1-1: implement preloadEagerModules helper + boot wiring + tests (design CLEAN)
 2026-06-19T22:20:30+08:00 | COMP-MCP-MIGRATION-2-1-1-1: compose migrate-anon interactive anon-row promotion shipped
+2026-06-19T23:47:08+08:00 | Reconcile STRAT-VOCAB roadmap: VOCAB-1/2 already shipped in stratum-mcp (commits d61d9bb/13d4113/5a33b54, 44 tests green) — mark COMPLETE, umbrella PARTIAL pending VOCAB-3
+2026-06-19T23:52:45+08:00 | STRAT-VOCAB-3 design: wire shipped vocabulary_compliance ensure into compose (init scaffold + build execute-step ensure + must-fix finding surfacing)
