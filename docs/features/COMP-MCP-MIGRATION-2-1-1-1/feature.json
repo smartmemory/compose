@@ -14,5 +14,26 @@
       "to_code": "COMP-MCP-MIGRATION-2-1-1"
     }
   ],
-  "group": "COMP-MCP"
+  "group": "COMP-MCP",
+  "completions": [
+    {
+      "completion_id": "COMP-MCP-MIGRATION-2-1-1-1:5ddb167b82ee51420dce4ad9c56f778f494896a6",
+      "feature_code": "COMP-MCP-MIGRATION-2-1-1-1",
+      "commit_sha": "5ddb167b82ee51420dce4ad9c56f778f494896a6",
+      "commit_sha_short": "5ddb167b",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/migrate-anon.js",
+        "lib/roadmap-parser.js",
+        "bin/compose.js",
+        "test/migrate-anon.test.js",
+        "CHANGELOG.md",
+        "docs/features/COMP-MCP-MIGRATION-2-1-1-1/design.md",
+        "docs/features/COMP-MCP-MIGRATION-2-1-1-1/feature.json"
+      ],
+      "recorded_at": "2026-06-19T14:20:48.401Z",
+      "recorded_by": "mcp:agent",
+      "notes": "compose migrate-anon: interactive promotion of historical anonymous ROADMAP rows to typed features. Corrected the parent's false position-based replacement spec (rows anchor by predecessorCode; scaffolding alone duplicates) — strip rawLine before scaffold+regen. Header-aware parse (nearest preceding header), occurrence-specific strip, error-code-branched rollback (ROADMAP_PARTIAL_WRITE doesn't restore), same-phase batch drift handled, string-aware position. Codex 3-round design + 2-round impl, all CLEAN; 15 tests; full suite green."
+    }
+  ]
 }
