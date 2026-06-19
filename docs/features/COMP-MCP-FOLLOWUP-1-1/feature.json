@@ -1,10 +1,10 @@
 {
   "code": "COMP-MCP-FOLLOWUP-1-1",
   "description": "Eager-import lib/followup-writer.js at compose MCP startup (instead of lazily on first propose_followup call) so a genuine module-skew / missing-export break fails fast at server boot rather than surfacing only when a user first calls the tool.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "Phase 7: MCP Writers",
   "created": "2026-06-16",
-  "updated": "2026-06-16",
+  "updated": "2026-06-19",
   "complexity": "S",
   "position": 16,
   "parent": "COMP-MCP-FOLLOWUP-1",
