@@ -13,5 +13,25 @@
       "kind": "surfaced_by",
       "to_code": "COMP-MCP-FOLLOWUP-1"
     }
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-MCP-FOLLOWUP-1-1:562513ba97a6cbd7840304b0ee0ae71599694e14",
+      "feature_code": "COMP-MCP-FOLLOWUP-1-1",
+      "commit_sha": "562513ba97a6cbd7840304b0ee0ae71599694e14",
+      "commit_sha_short": "562513ba",
+      "tests_pass": true,
+      "files_changed": [
+        "server/compose-mcp-tools.js",
+        "server/compose-mcp.js",
+        "test/followup-writer-eager-preload.test.js",
+        "CHANGELOG.md",
+        "docs/features/COMP-MCP-FOLLOWUP-1-1/design.md",
+        "docs/features/COMP-MCP-FOLLOWUP-1-1/feature.json"
+      ],
+      "recorded_at": "2026-06-19T11:25:36.020Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Eager-preload lib/followup-writer.js at MCP boot (fail-fast on missing module/export). preloadEagerModules() asserts the expected export is a function (await import() doesn't throw on a missing named export); wired before server.connect() with writeSync(2,...)+exit(1) and a COMPOSE_PRELOAD_PROBE env seam. toolProposeFollowup unchanged (cache hit, zero behavior change). 3-round Codex design review + 2-round impl review all CLEAN; full suite green (4140 node + 485 ui + 100 tracker)."
+    }
   ]
 }
