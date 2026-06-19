@@ -15,6 +15,7 @@ iterations that loop across agents, artifacts that are tracked.
 - **Phases** are sequential. **Half-phases** (e.g. 4.5) are parallel tracks that surface between sequential phases.
 - Items are numbered sequentially across all phases — never reuse a number.
 - Cross-reference stable IDs (e.g. `Phase 3`, item 18) not section headings.
+- **Feature-code naming — keep codes flat (max 2 suffix levels).** A code is a *name*, not a version string. `COMP-AREA-N` is the norm; `COMP-AREA-N-M` is the deepest allowed (an `-M` only when it's a true child slice of `-N`). **Do NOT** chain a new `-N` per follow-up — `COMP-MCP-MIGRATION-2-1-1-1` is the anti-pattern. When a review/feature *surfaces* a follow-up, give it the **next flat sibling** under the relevant area (`COMP-MCP-MIGRATION-3`) or a **self-describing code** (`COMP-MIGRATE-ANON`), and record lineage in the feature's `links: [{ kind: "surfaced_by", to_code: … }]` — the link carries the "came out of X" history, so the code doesn't have to.
 
 <!-- /preserved-section -->
 
