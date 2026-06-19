@@ -1,9 +1,28 @@
 {
   "code": "COMP-CODEX-IMPL",
   "description": "Let Codex be the implementation agent (instead of all-Opus), keeping cross-model review. Codex is already a dispatchable backend, so a `build-codex.stratum.yaml` variant (or `--agent codex` flag, mirroring `--quick`) flips implementation steps to `agent: codex`. Must pair Codex-implements with **Claude**-reviews (not codex reviewing its own work). Frictions: role-aware fix-routing (build.js:3124 codex→claude swap would hijack codex fixes), codex Seatbelt vs the execute step's worktree isolation (spike — start non-parallel), Claude-centric caps/tool enforcement, tier→model mapping. All compose-side; no Stratum work.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "Features",
   "position": 301,
   "created": "2026-06-19",
-  "updated": "2026-06-19"
+  "updated": "2026-06-19",
+  "completions": [
+    {
+      "completion_id": "COMP-CODEX-IMPL:ac562317da528c6d4eb55999f020665157f154d6",
+      "feature_code": "COMP-CODEX-IMPL",
+      "commit_sha": "ac562317da528c6d4eb55999f020665157f154d6",
+      "commit_sha_short": "ac562317",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/build.js",
+        "lib/codex-preflight.js",
+        "lib/new.js",
+        "test/codex-impl.test.js"
+      ],
+      "recorded_at": "2026-06-19T07:34:30.274Z",
+      "recorded_by": "mcp:agent",
+      "notes": "COMP-CODEX-IMPL shipped: codex implements, claude reviews (--codex). Full suite green; pushed to main (2b72362). Reconciling feature.json (left PLANNED by preflight-rollback) to match ROADMAP COMPLETE."
+    }
+  ],
+  "commit_sha": "ac562317da528c6d4eb55999f020665157f154d6"
 }
