@@ -115,10 +115,14 @@ describe('JWT sign/verify', () => {
     const device = { id: 'dev_t', name: 'Tamper' };
     const jwt = store.signAccessToken(device);
     const parts = jwt.split('.');
-    // Flip last char of signature
-    const sig = parts[2];
-    const tampered = sig.slice(0, -1) + (sig[sig.length - 1] === 'A' ? 'B' : 'A');
-    const tamperedJwt = [parts[0], parts[1], tampered].join('.');
+    // Tamper at the byte level, not by flipping a base64url char. The final
+    // base64url char of a 32-byte HMAC carries 2 padding bits, so flipping the
+    // last char (e.g. A↔B) can change only padding and decode to identical
+    // bytes — verifyAccessToken compares decoded bytes, so that "tamper" would
+    // (correctly) still verify. Mutating byte 0 always changes the signature.
+    const sigBytes = Buffer.from(parts[2], 'base64url');
+    sigBytes[0] ^= 0xff;
+    const tamperedJwt = [parts[0], parts[1], sigBytes.toString('base64url')].join('.');
     const result = store.verifyAccessToken(tamperedJwt);
     assert.equal(result.ok, false);
     assert.equal(result.code, 'TokenInvalid');
