@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-06-20
+
+### STRAT-VOCAB-3 — Compose integration for vocabulary enforcement (COMPLETE)
+
+Wires the already-shipped Stratum `vocabulary_compliance` ensure (STRAT-VOCAB-1/2, in stratum-mcp)
+into the Compose lifecycle. Also reconciles the roadmap: STRAT-VOCAB-1 and -2 were already shipped,
+committed, and green (44 tests) but still listed PLANNED — now marked COMPLETE, and the STRAT-VOCAB
+umbrella is COMPLETE.
+
+- **`compose init` scaffolds `contracts/vocabulary.yaml`** — a comments-only starter (documents the
+  `canonical: { reject: [...], reason: "..." }` format). Comments-only ⇒ `_load_vocabulary` returns
+  `{}`, so enforcement is **inert until the user fills it in**. Create-if-absent; re-init never
+  overwrites a customized file.
+- **`compose build` / `build --quick` enforce by default** — `lib/build.js` appends
+  `vocabulary_compliance('contracts/vocabulary.yaml', [], True)` to the **`review`** step's `ensure`
+  of the executed flow (resolved via `extractFlowName`). The review step's `ensure_failed` already
+  drives a real code-fix loop, so a rejected alias blocks the build and is fixed in-loop.
+  - **Not** the `execute` step: attaching an aggregate ensure to the parallel `execute` step is
+    destructive (empty failed-subset burns retries, then the terminal path restores the pre-execute
+    snapshot and discards all work). Not a new step either: that would break hard-coded step
+    manifests + order tests. Both caught by the Codex design gate.
+  - Ensure form uses an empty-list literal + `git_fallback=True`: no dependency on a possibly-missing
+    `result.*` field; scans the uncommitted working-tree diff vs `HEAD` (merged-but-not-committed at
+    review time).
+- **Gated** by `capabilities.vocabularyCompliance` (default-ON, opt-out) **and** file existence — so
+  the generated spec is **byte-identical** for any project without a `contracts/vocabulary.yaml`.
+  Injection is idempotent.
+- **Violations surface as must-fix findings** — `tagVocabularyViolations` prefixes the builtin's
+  failure strings (`vocabulary violation: …` and broken-file `vocabulary.yaml malformed:` /
+  `schema error:`) so the findings table classifies them must-fix rather than `nit`.
+- New `lib/vocabulary-inject.js` (template + gate + injector + tagger); tests in
+  `test/vocabulary-inject.test.js` (incl. real-pipeline integration + `review_check` sub-flow
+  coexistence) and `test/vocabulary-scaffold.test.js`. Design: `docs/features/STRAT-VOCAB-3/design.md`.
+
 ## 2026-06-19
 
 ### COMP-MCP-MIGRATION-2-1-1-1 — `compose migrate-anon` interactive flow (COMPLETE)

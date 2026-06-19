@@ -563,7 +563,7 @@ Inspired by [wshobson/agents](https://github.com/wshobson/agents) progressive di
 
 ---
 
-## STRAT-VOCAB: Vocabulary Enforcement — PLANNED
+## STRAT-VOCAB: Vocabulary Enforcement — COMPLETE
 
 Ensure function that checks generated code against a canonical name registry. Prevents naming entropy across sessions — the "is it `user_id`, `uid`, `UserId`?" problem. A `vocabulary.yaml` in the project declares canonical names with rejected aliases. The ensure function greps generated/modified files for rejected names and fails the step if any appear.
 
@@ -571,9 +571,9 @@ Inspired by [SpeQ](https://github.com/speq-ai/speq)'s closed-world VOCABULARY co
 
 | # | Feature | Item | Status |
 |---|---------|------|--------|
-| 107 | STRAT-VOCAB-1 | **Vocabulary file format:** `contracts/vocabulary.yaml` — map of canonical names to rejected aliases, grouped by domain. Example: `auth_token: { reject: [jwt, accessToken, JwtToken, authToken] }`. Optional `scope` field to limit checks to specific directories. | PLANNED |
-| 108 | STRAT-VOCAB-2 | **`vocabulary_compliance` ensure function:** built-in Stratum ensure that greps modified files for rejected aliases. Returns violations with file, line, rejected term, and canonical replacement. Runs on implementation steps. | PLANNED |
-| 109 | STRAT-VOCAB-3 | **Compose integration:** `compose init` scaffolds empty `contracts/vocabulary.yaml`. `compose build` implementation steps include `vocabulary_compliance` ensure by default. Violations surface in review findings. | PLANNED |
+| 107 | STRAT-VOCAB-1 | **Vocabulary file format:** `contracts/vocabulary.yaml` — flat map of canonical names to rejected aliases (`{reject: [...], reason: "..."}`), with strict unknown-field rejection and cross-entry duplicate/self-reject validation. Shipped as `_load_vocabulary()` in `stratum-mcp/src/stratum_mcp/spec.py`. (`scope` field + domain-grouping from the original sketch were dropped as YAGNI; the flat format matches the example.) | COMPLETE |
+| 108 | STRAT-VOCAB-2 | **`vocabulary_compliance` ensure function:** built-in Stratum ensure that scans `result.files_changed` for rejected aliases (whole-word, case-sensitive). Returns violations with file, line, rejected term, canonical replacement, and reason. Registered in `_ENSURE_BUILTINS` (`stratum-mcp/src/stratum_mcp/executor.py`). | COMPLETE |
+| 109 | STRAT-VOCAB-3 | **Compose integration:** `compose init` scaffolds a comments-only `contracts/vocabulary.yaml` (inert until edited). `compose build`/`build --quick` append the `vocabulary_compliance` ensure to the `review` step by default (gated: default-ON via `capabilities.vocabularyCompliance`, file-existence makes it byte-identical when absent). Violations surface as must-fix findings in the review fix loop. See `docs/features/STRAT-VOCAB-3/design.md`. | COMPLETE |
 
 **Dependencies:** None — standalone ensure function.
 
@@ -983,7 +983,7 @@ Multi-agent coordination, production hardening, benchmarking. Enables D4.
 |---------|-------|--------|-----------|
 | ~~COMP-TEAMS~~ | 92–95 | S | **COMPLETE (v1)** — 3 team presets (review, research, feature), --team CLI, two-level template loader, read-only-researcher profile. |
 | COMP-RT | 58–61 | L | Event coalescing, client hydration, connector trait split, session branching. |
-| STRAT-VOCAB | 107–109 | S | Vocabulary enforcement — naming consistency across parallel agents. |
+| ~~STRAT-VOCAB~~ | 107–109 | S | **COMPLETE** — Vocabulary enforcement (naming consistency across sessions/parallel agents). |
 | COMP-BENCH | 62–66 | L | Model benchmark suite. Needs STRAT-REV + STRAT-TIER to be meaningful. |
 | COMP-IDEABOX (scale) | 190–191 | M | Multi-project ideabox aggregation + external source import (GitHub, Linear). Needs workspace manifest. |
 

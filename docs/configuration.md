@@ -29,6 +29,16 @@ Project-level configuration. Created by `compose init`.
 }
 ```
 
+### `capabilities` block
+
+Feature toggles. Absent keys take their default.
+
+| Key | Default | Effect |
+|---|---|---|
+| `stratum` | `true` | Use the Stratum execution kernel; when `false`, fall back to flat prompt chains. |
+| `lifecycle` | `true` | Maintain the per-feature lifecycle projection. |
+| `vocabularyCompliance` | `true` (opt-out) | When a `contracts/vocabulary.yaml` exists, `compose build` appends the `vocabulary_compliance` ensure to the `review` step so rejected naming aliases block the build (STRAT-VOCAB). Set `false` to disable even when a vocabulary file is present. With no vocabulary file the build is byte-identical regardless. |
+
 ### `paths` block
 
 Where Compose reads and writes each **artifact**. Keys: `docs`, `roadmap`, `features`, `journal`,
