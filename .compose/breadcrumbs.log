@@ -630,3 +630,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-20T23:51:22+08:00 | Wave-1 pipeline editor UI: store dep/contract/save-as-template actions (TDD)
 2026-06-21T00:09:36+08:00 | Commit W1 UI (connect-mode wiring, contract editor, save-as-template); Codex-fixed: template validation gate, stale connect-source on rebuild, contract delete-block banner
 2026-06-21T00:13:02+08:00 | Mark COMP-PIPE-EDIT-3/-4/-7 COMPLETE (Wave 1 shipped); surgical ROADMAP edit (restored regen clobber)
+2026-06-21T06:21:19+08:00 | Design Wave 2 (COMP-PIPE-EDIT-6 YAML sync + -5 sub-flow collapse/expand); Docs-view premise corrected, SESE-constrained collapse
