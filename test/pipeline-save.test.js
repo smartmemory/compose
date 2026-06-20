@@ -89,6 +89,19 @@ describe('GET /api/pipeline/specs — filename-based discovery', () => {
     assert.ok(entry.flows.includes('review_check'));
     assert.ok(entry.flows.includes('parallel_review'));
   });
+
+  test('GET /api/pipeline/spec returns raw text by filename (incl. comment-metadata specs)', async () => {
+    const { status, data } = await json('/api/pipeline/spec?file=build.stratum.yaml');
+    assert.equal(status, 200);
+    assert.equal(data.file, 'build.stratum.yaml');
+    assert.ok(data.text.includes('# metadata:'), 'raw text includes the comment metadata header');
+    assert.ok(data.text.includes('flows:'), 'raw text is the full spec');
+  });
+
+  test('GET /api/pipeline/spec rejects a path-traversal filename', async () => {
+    const { status } = await json('/api/pipeline/spec?file=../../../etc/passwd');
+    assert.equal(status, 400);
+  });
 });
 
 describe('POST /api/pipeline/save — golden round-trip on build.stratum.yaml', () => {
