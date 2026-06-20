@@ -1,9 +1,27 @@
 {
   "code": "COMP-PIPE-EDIT-7",
   "description": "Template save: Save the current canvas as a new pipeline template in `pipelines/`. Templates appear in the existing TemplateSelector for future builds.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-PIPE-EDIT: Visual Pipeline Editor",
   "position": 142,
   "created": "2026-05-29",
-  "updated": "2026-06-20"
+  "updated": "2026-06-20",
+  "completions": [
+    {
+      "completion_id": "COMP-PIPE-EDIT-7:abf2b6ac2a9546f9f38689a579b6cf8a6aa08984",
+      "feature_code": "COMP-PIPE-EDIT-7",
+      "commit_sha": "abf2b6ac2a9546f9f38689a579b6cf8a6aa08984",
+      "commit_sha_short": "abf2b6ac",
+      "tests_pass": true,
+      "files_changed": [
+        "server/pipeline-routes.js",
+        "src/components/vision/PipelineEditor.jsx",
+        "src/components/vision/useVisionStore.js"
+      ],
+      "recorded_at": "2026-06-20T16:12:22.428Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Save-as-template: create-only endpoint, metadata.id uniqueness, real metadata key for TemplateSelector, validation-gated dialog."
+    }
+  ],
+  "commit_sha": "abf2b6ac2a9546f9f38689a579b6cf8a6aa08984"
 }
