@@ -25,6 +25,17 @@ const {
   renameStep,
   canDeleteStep,
   deleteStep,
+  addDependency,
+  removeDependency,
+  wouldCreateCycle,
+  addContract,
+  renameContract,
+  deleteContract,
+  canDeleteContract,
+  setContractField,
+  removeContractField,
+  renameContractField,
+  serializeContracts,
 } = await import(`${ROOT}/src/lib/pipeline-model.js`);
 
 const buildSpecText = readFileSync(`${ROOT}/pipelines/build.stratum.yaml`, 'utf-8');
@@ -459,5 +470,317 @@ describe('inputs $.steps.<id> references', () => {
     const res = canDeleteStep(model, 'f', 'producer');
     assert.equal(res.ok, false);
     assert.ok(/producer/.test(res.reason) && /inputs/.test(res.reason));
+  });
+});
+
+// ===========================================================================
+// GROUP A — dependency wiring helpers (COMP-PIPE-EDIT-3)
+// ===========================================================================
+
+describe('addDependency / removeDependency', () => {
+  test('addDependency adds depId to a step depends_on', () => {
+    const model = specToModel(specWithSteps([
+      { id: 'a', agent: 'claude', intent: 'x' },
+      { id: 'b', agent: 'claude', intent: 'y' },
+    ]));
+    assert.equal(addDependency(model, 'f', 'b', 'a'), true);
+    assert.deepEqual(flowSteps(model, 'f').find(s => s.id === 'b').depends_on, ['a']);
+  });
+
+  test('addDependency is a no-op when the edge already exists', () => {
+    const model = specToModel(specWithSteps([
+      { id: 'a', agent: 'claude', intent: 'x' },
+      { id: 'b', agent: 'claude', intent: 'y', depends_on: ['a'] },
+    ]));
+    assert.equal(addDependency(model, 'f', 'b', 'a'), false);
+    assert.deepEqual(flowSteps(model, 'f').find(s => s.id === 'b').depends_on, ['a'], 'no duplicate');
+  });
+
+  test('addDependency rejects a self-edge (returns false, unchanged)', () => {
+    const model = specToModel(specWithSteps([
+      { id: 'a', agent: 'claude', intent: 'x' },
+    ]));
+    assert.equal(addDependency(model, 'f', 'a', 'a'), false);
+    assert.deepEqual(flowSteps(model, 'f').find(s => s.id === 'a').depends_on, []);
+  });
+
+  test('removeDependency removes the edge', () => {
+    const model = specToModel(specWithSteps([
+      { id: 'a', agent: 'claude', intent: 'x' },
+      { id: 'b', agent: 'claude', intent: 'y', depends_on: ['a'] },
+    ]));
+    assert.equal(removeDependency(model, 'f', 'b', 'a'), true);
+    assert.deepEqual(flowSteps(model, 'f').find(s => s.id === 'b').depends_on, []);
+  });
+
+  test('removeDependency is a no-op when the edge is absent', () => {
+    const model = specToModel(specWithSteps([
+      { id: 'a', agent: 'claude', intent: 'x' },
+      { id: 'b', agent: 'claude', intent: 'y' },
+    ]));
+    assert.equal(removeDependency(model, 'f', 'b', 'a'), false);
+  });
+
+  test('addDependency rejects a dangling edge (depId not a real step)', () => {
+    const model = specToModel(specWithSteps([
+      { id: 'a', agent: 'claude', intent: 'x' },
+    ]));
+    assert.equal(addDependency(model, 'f', 'a', 'ghost'), false);
+    assert.deepEqual(flowSteps(model, 'f').find(s => s.id === 'a').depends_on, [], 'no dangling dep added');
+  });
+});
+
+describe('wouldCreateCycle — pure DFS', () => {
+  test('direct cycle: b depends_on a, adding a depends_on b closes it', () => {
+    const model = specToModel(specWithSteps([
+      { id: 'a', agent: 'claude', intent: 'x' },
+      { id: 'b', agent: 'claude', intent: 'y', depends_on: ['a'] },
+    ]));
+    // Add edge a depends_on b → a→b→a cycle.
+    assert.equal(wouldCreateCycle(model, 'f', 'a', 'b'), true);
+  });
+
+  test('transitive cycle: c->b->a, adding a depends_on c closes it', () => {
+    const model = specToModel(specWithSteps([
+      { id: 'a', agent: 'claude', intent: 'x' },
+      { id: 'b', agent: 'claude', intent: 'y', depends_on: ['a'] },
+      { id: 'c', agent: 'claude', intent: 'z', depends_on: ['b'] },
+    ]));
+    // a depends_on c → a→c→b→a cycle.
+    assert.equal(wouldCreateCycle(model, 'f', 'a', 'c'), true);
+  });
+
+  test('no cycle: independent steps', () => {
+    const model = specToModel(specWithSteps([
+      { id: 'a', agent: 'claude', intent: 'x' },
+      { id: 'b', agent: 'claude', intent: 'y' },
+      { id: 'c', agent: 'claude', intent: 'z', depends_on: ['a'] },
+    ]));
+    assert.equal(wouldCreateCycle(model, 'f', 'b', 'a'), false);
+  });
+
+  test('self-edge counts as a cycle', () => {
+    const model = specToModel(specWithSteps([
+      { id: 'a', agent: 'claude', intent: 'x' },
+    ]));
+    assert.equal(wouldCreateCycle(model, 'f', 'a', 'a'), true);
+  });
+
+  test('addDependency does not itself enforce the cycle guard (caller responsibility) — wouldCreateCycle gates it', () => {
+    const model = specToModel(specWithSteps([
+      { id: 'a', agent: 'claude', intent: 'x' },
+      { id: 'b', agent: 'claude', intent: 'y', depends_on: ['a'] },
+    ]));
+    // The store wraps: only add if !wouldCreateCycle.
+    if (!wouldCreateCycle(model, 'f', 'a', 'b')) addDependency(model, 'f', 'a', 'b');
+    assert.deepEqual(flowSteps(model, 'f').find(s => s.id === 'a').depends_on, [], 'cycle-forming edge not added');
+  });
+});
+
+// ===========================================================================
+// GROUP B — contract editing (COMP-PIPE-EDIT-4)
+// ===========================================================================
+
+// A synthetic spec exercising ALL THREE contract-reference sites:
+//   step.output_contract, flows.<name>.output, functions.<name>.output.
+function specWithContracts() {
+  return {
+    version: '0.3',
+    contracts: {
+      Foo: { a: { type: 'string' }, b: { type: 'number', optional: true } },
+      Bar: { x: { type: 'boolean' } },
+      Baz: { y: { type: 'array' } },
+      TaskGraph: { tasks: { type: 'array' } },
+    },
+    functions: {
+      gen: { output: 'Bar' },
+    },
+    flows: {
+      main: {
+        output: 'Foo',
+        steps: [
+          { id: 's1', agent: 'claude', intent: 'x', output_contract: 'Foo' },
+          { id: 's2', agent: 'claude', intent: 'y', output_contract: 'Baz', depends_on: ['s1'] },
+        ],
+      },
+    },
+  };
+}
+
+describe('specToModel — deep-copies contracts (no nested leak)', () => {
+  test('editing a nested field on the model does not mutate the parsed source', () => {
+    const parsed = specWithContracts();
+    const model = specToModel(parsed);
+    // Mutate a nested field on the model's copy.
+    model.contracts.Foo.a.type = 'MUTATED';
+    model.contracts.Foo.newField = { type: 'string' };
+    assert.equal(parsed.contracts.Foo.a.type, 'string', 'nested field on source unchanged');
+    assert.ok(!('newField' in parsed.contracts.Foo), 'added field did not leak to source');
+  });
+});
+
+describe('addContract', () => {
+  test('adds an empty contract', () => {
+    const model = specToModel(specWithContracts());
+    addContract(model, 'Quux');
+    assert.deepEqual(model.contracts.Quux, {});
+  });
+
+  test('rejects a duplicate name', () => {
+    const model = specToModel(specWithContracts());
+    assert.throws(() => addContract(model, 'Foo'), /exist|duplicate/i);
+  });
+
+  test('rejects the reserved name TaskGraph', () => {
+    const model = specToModel({ version: '0.3', contracts: {}, flows: { f: { steps: [] } } });
+    assert.throws(() => addContract(model, 'TaskGraph'), /TaskGraph|reserved/i);
+  });
+});
+
+describe('renameContract — rewrites ALL THREE ref sites', () => {
+  test('rewrites step.output_contract, flows.*.output, functions.*.output', () => {
+    const model = specToModel(specWithContracts());
+    renameContract(model, 'Foo', 'FooRenamed');
+
+    // Key renamed.
+    assert.ok(model.contracts.FooRenamed, 'new key present');
+    assert.ok(!('Foo' in model.contracts), 'old key gone');
+
+    // Site 1: step.output_contract.
+    const s1 = flowSteps(model, 'main').find(s => s.id === 's1');
+    assert.equal(s1.output_contract, 'FooRenamed', 'step output_contract rewritten');
+
+    // Site 2: flows.<name>.output (in _doc).
+    assert.equal(model._doc.flows.main.output, 'FooRenamed', 'flows.*.output rewritten');
+  });
+
+  test('rewrites a contract referenced ONLY by functions.*.output', () => {
+    const model = specToModel(specWithContracts());
+    // Bar is referenced only by functions.gen.output (no step uses it).
+    renameContract(model, 'Bar', 'BarRenamed');
+    assert.equal(model._doc.functions.gen.output, 'BarRenamed', 'functions.*.output rewritten');
+    assert.ok(model.contracts.BarRenamed);
+    assert.ok(!('Bar' in model.contracts));
+  });
+
+  test('rejects renaming to an existing name', () => {
+    const model = specToModel(specWithContracts());
+    assert.throws(() => renameContract(model, 'Foo', 'Bar'), /exist/i);
+  });
+
+  test('rejects renaming to TaskGraph', () => {
+    const model = specToModel(specWithContracts());
+    assert.throws(() => renameContract(model, 'Foo', 'TaskGraph'), /TaskGraph|reserved/i);
+  });
+});
+
+describe('deleteContract / canDeleteContract', () => {
+  test('blocked when referenced by a step output_contract', () => {
+    const model = specToModel(specWithContracts());
+    const res = canDeleteContract(model, 'Foo');
+    assert.equal(res.ok, false);
+    assert.ok(/Foo/.test(res.reason));
+  });
+
+  test('blocked when referenced ONLY by a flows.*.output (not any step)', () => {
+    // Build a spec where a contract is referenced solely by flows.<name>.output.
+    const model = specToModel({
+      version: '0.3',
+      contracts: { OnlyFlowOut: { z: { type: 'string' } } },
+      flows: { main: { output: 'OnlyFlowOut', steps: [{ id: 's', agent: 'claude', intent: 'x' }] } },
+    });
+    const res = canDeleteContract(model, 'OnlyFlowOut');
+    assert.equal(res.ok, false, 'a flows.*.output ref must block delete even with no step ref');
+  });
+
+  test('blocked when referenced ONLY by a functions.*.output', () => {
+    const model = specToModel({
+      version: '0.3',
+      contracts: { OnlyFnOut: { z: { type: 'string' } } },
+      functions: { gen: { output: 'OnlyFnOut' } },
+      flows: { main: { steps: [{ id: 's', agent: 'claude', intent: 'x' }] } },
+    });
+    const res = canDeleteContract(model, 'OnlyFnOut');
+    assert.equal(res.ok, false, 'a functions.*.output ref must block delete');
+  });
+
+  test('deleteContract throws when blocked', () => {
+    const model = specToModel(specWithContracts());
+    assert.throws(() => deleteContract(model, 'Foo'), /Foo|referenc/i);
+    assert.ok(model.contracts.Foo, 'contract still present after blocked delete');
+  });
+
+  test('deleteContract removes an unreferenced contract', () => {
+    // Add an unreferenced contract, then delete it.
+    const model = specToModel(specWithContracts());
+    addContract(model, 'Lonely');
+    assert.equal(canDeleteContract(model, 'Lonely').ok, true);
+    deleteContract(model, 'Lonely');
+    assert.ok(!('Lonely' in model.contracts));
+  });
+});
+
+describe('setContractField / removeContractField / renameContractField', () => {
+  test('setContractField adds/updates a field spec', () => {
+    const model = specToModel(specWithContracts());
+    setContractField(model, 'Foo', 'newField', { type: 'string', optional: true });
+    assert.deepEqual(model.contracts.Foo.newField, { type: 'string', optional: true });
+    // Update existing.
+    setContractField(model, 'Foo', 'a', { type: 'number' });
+    assert.deepEqual(model.contracts.Foo.a, { type: 'number' });
+  });
+
+  test('removeContractField drops a field', () => {
+    const model = specToModel(specWithContracts());
+    removeContractField(model, 'Foo', 'b');
+    assert.ok(!('b' in model.contracts.Foo));
+    assert.ok('a' in model.contracts.Foo, 'other fields intact');
+  });
+
+  test('renameContractField renames a field key preserving its spec', () => {
+    const model = specToModel(specWithContracts());
+    renameContractField(model, 'Foo', 'a', 'alpha');
+    assert.ok(!('a' in model.contracts.Foo));
+    assert.deepEqual(model.contracts.Foo.alpha, { type: 'string' });
+  });
+});
+
+describe('serializeContracts — omits the reserved TaskGraph', () => {
+  test('returns all user contracts but never TaskGraph', () => {
+    const model = specToModel(specWithContracts());
+    const out = serializeContracts(model);
+    assert.ok(out.Foo);
+    assert.ok(out.Bar);
+    assert.ok(out.Baz);
+    assert.ok(!('TaskGraph' in out), 'TaskGraph (built-in) is never re-emitted');
+  });
+
+  test('returns {} when the model has no contracts', () => {
+    const model = specToModel({ version: '0.3', flows: { f: { steps: [] } } });
+    assert.deepEqual(serializeContracts(model), {});
+  });
+});
+
+describe('TaskGraph is fully locked (reserved built-in)', () => {
+  function modelWithTaskGraph() {
+    return specToModel({
+      version: '0.3',
+      contracts: { TaskGraph: { tasks: { type: 'array' } }, Foo: { x: { type: 'string' } } },
+      flows: { f: { steps: [{ id: 'a', agent: 'claude', intent: 'x' }] } },
+    });
+  }
+  test('cannot be renamed (as old or new name)', () => {
+    assert.throws(() => renameContract(modelWithTaskGraph(), 'TaskGraph', 'X'), /reserved/i);
+    assert.throws(() => renameContract(modelWithTaskGraph(), 'Foo', 'TaskGraph'), /reserved/i);
+  });
+  test('cannot be deleted', () => {
+    const model = modelWithTaskGraph();
+    assert.equal(canDeleteContract(model, 'TaskGraph').ok, false);
+    assert.throws(() => deleteContract(model, 'TaskGraph'), /reserved/i);
+  });
+  test('cannot have its fields edited', () => {
+    assert.throws(() => setContractField(modelWithTaskGraph(), 'TaskGraph', 'y', { type: 'string' }), /reserved/i);
+    assert.throws(() => removeContractField(modelWithTaskGraph(), 'TaskGraph', 'tasks'), /reserved/i);
+    assert.throws(() => renameContractField(modelWithTaskGraph(), 'TaskGraph', 'tasks', 'jobs'), /reserved/i);
   });
 });

@@ -127,9 +127,18 @@ export function specToModel(parsedDoc) {
   return {
     version: doc.version,
     flows,
-    contracts: doc.contracts ? { ...doc.contracts } : {},
+    // Deep-copy contracts so nested field edits on the model never leak into the
+    // parsed source object (the backend re-parses disk for serialization, and the
+    // model is meant to be an isolated, freely-editable working copy).
+    contracts: deepCopyContracts(doc.contracts),
     _doc: doc,
   };
+}
+
+/** Structured deep clone of the contracts block (plain JSON-ish data). */
+function deepCopyContracts(contracts) {
+  if (!contracts || typeof contracts !== 'object') return {};
+  return JSON.parse(JSON.stringify(contracts));
 }
 
 /** Return the normalized steps[] for one flow (live reference into the model). */
@@ -378,4 +387,254 @@ export function deleteStep(model, flowName, id) {
   if (!flow) throw new Error(`Unknown flow "${flowName}"`);
   flow.steps = flow.steps.filter(s => s.id !== id);
   return model;
+}
+
+// ===========================================================================
+// COMP-PIPE-EDIT-3 — Dependency wiring (pure)
+// ===========================================================================
+
+/**
+ * Add `depId` to a step's `depends_on`. No-op (returns false) if the edge
+ * already exists, is a self-edge (stepId === depId), or either endpoint is not a
+ * real step in the flow (no dangling edges). Returns true if added.
+ * Does NOT itself reject cycles — the caller gates with `wouldCreateCycle`.
+ */
+export function addDependency(model, flowName, stepId, depId) {
+  if (stepId === depId) return false;
+  const steps = flowSteps(model, flowName);
+  const step = steps.find(s => s.id === stepId);
+  if (!step) return false;
+  // Reject dangling edges: depId must be a real step in the same flow.
+  if (!steps.some(s => s.id === depId)) return false;
+  if (!Array.isArray(step.depends_on)) step.depends_on = [];
+  if (step.depends_on.includes(depId)) return false;
+  step.depends_on.push(depId);
+  return true;
+}
+
+/**
+ * Remove `depId` from a step's `depends_on`. Returns true if removed, false if
+ * the edge was absent.
+ */
+export function removeDependency(model, flowName, stepId, depId) {
+  const step = flowSteps(model, flowName).find(s => s.id === stepId);
+  if (!step || !Array.isArray(step.depends_on)) return false;
+  const idx = step.depends_on.indexOf(depId);
+  if (idx === -1) return false;
+  step.depends_on.splice(idx, 1);
+  return true;
+}
+
+/**
+ * Pure DFS: would adding the edge `stepId depends_on depId` close a cycle?
+ * True iff `depId` already (transitively) depends on `stepId` — i.e. there is a
+ * path from `depId` back to `stepId` along the existing `depends_on` edges. A
+ * self-edge (stepId === depId) is treated as a cycle.
+ */
+export function wouldCreateCycle(model, flowName, stepId, depId) {
+  if (stepId === depId) return true;
+  const steps = flowSteps(model, flowName);
+  const deps = new Map(steps.map(s => [s.id, Array.isArray(s.depends_on) ? s.depends_on : []]));
+  // Walk depId's dependency closure; if we reach stepId, the new edge closes a cycle.
+  const seen = new Set();
+  const stack = [depId];
+  while (stack.length) {
+    const node = stack.pop();
+    if (node === stepId) return true;
+    if (seen.has(node)) continue;
+    seen.add(node);
+    for (const d of (deps.get(node) || [])) stack.push(d);
+  }
+  return false;
+}
+
+// ===========================================================================
+// COMP-PIPE-EDIT-4 — Contract editing (pure)
+// ===========================================================================
+//
+// A contract NAME is referenced in three places across the spec:
+//   1. step.output_contract  — on normalized flow steps (model.flows[].steps[])
+//   2. _doc.flows.<name>.output    — passthrough scalar on each flow
+//   3. _doc.functions.<name>.output — passthrough scalar on each function def
+// Every rename/delete check must honor all three.
+
+const RESERVED_CONTRACT = 'TaskGraph';
+
+/** Collect every (site, ref) that names a contract, across all three sites. */
+function contractRefSites(model, name) {
+  const sites = [];
+  // Site 1: step output_contracts.
+  for (const flow of (model.flows || [])) {
+    for (const step of (flow.steps || [])) {
+      if (step.output_contract === name) {
+        sites.push(`flow "${flow.name}" step "${step.id}" output_contract`);
+      }
+    }
+  }
+  // Site 2: flows.<name>.output (passthrough).
+  const docFlows = model._doc?.flows;
+  if (docFlows && typeof docFlows === 'object') {
+    for (const fname of Object.keys(docFlows)) {
+      if (docFlows[fname] && docFlows[fname].output === name) {
+        sites.push(`flows.${fname}.output`);
+      }
+    }
+  }
+  // Site 3: functions.<name>.output (passthrough).
+  const docFns = model._doc?.functions;
+  if (docFns && typeof docFns === 'object') {
+    for (const fnName of Object.keys(docFns)) {
+      if (docFns[fnName] && docFns[fnName].output === name) {
+        sites.push(`functions.${fnName}.output`);
+      }
+    }
+  }
+  return sites;
+}
+
+/** Add an empty contract. Throws on duplicate or the reserved TaskGraph name. */
+export function addContract(model, name) {
+  if (name === RESERVED_CONTRACT) {
+    throw new Error(`"${RESERVED_CONTRACT}" is a reserved built-in contract and cannot be added`);
+  }
+  if (!model.contracts) model.contracts = {};
+  if (name in model.contracts) {
+    throw new Error(`Contract "${name}" already exists`);
+  }
+  model.contracts[name] = {};
+  return model;
+}
+
+/**
+ * Rename a contract key AND rewrite every reference across all three sites
+ * (step.output_contract, _doc.flows.*.output, _doc.functions.*.output).
+ * Throws if newName already exists or is the reserved TaskGraph.
+ */
+export function renameContract(model, oldName, newName) {
+  if (newName === RESERVED_CONTRACT || oldName === RESERVED_CONTRACT) {
+    throw new Error(`"${RESERVED_CONTRACT}" is a reserved built-in contract and cannot be renamed`);
+  }
+  if (oldName === newName) return model;
+  if (!model.contracts || !(oldName in model.contracts)) {
+    throw new Error(`Contract "${oldName}" does not exist`);
+  }
+  if (newName in model.contracts) {
+    throw new Error(`Contract "${newName}" already exists`);
+  }
+
+  // Rename the key, preserving insertion order.
+  const rebuilt = {};
+  for (const key of Object.keys(model.contracts)) {
+    if (key === oldName) rebuilt[newName] = model.contracts[oldName];
+    else rebuilt[key] = model.contracts[key];
+  }
+  model.contracts = rebuilt;
+
+  // Site 1: step output_contracts.
+  for (const flow of (model.flows || [])) {
+    for (const step of (flow.steps || [])) {
+      if (step.output_contract === oldName) step.output_contract = newName;
+    }
+  }
+  // Site 2 + 3: passthrough flows/functions outputs.
+  const docFlows = model._doc?.flows;
+  if (docFlows && typeof docFlows === 'object') {
+    for (const fname of Object.keys(docFlows)) {
+      if (docFlows[fname] && docFlows[fname].output === oldName) docFlows[fname].output = newName;
+    }
+  }
+  const docFns = model._doc?.functions;
+  if (docFns && typeof docFns === 'object') {
+    for (const fnName of Object.keys(docFns)) {
+      if (docFns[fnName] && docFns[fnName].output === oldName) docFns[fnName].output = newName;
+    }
+  }
+  return model;
+}
+
+/**
+ * Whether a contract can be deleted (no reference at any of the three sites).
+ * @returns {{ ok: boolean, reason?: string }}
+ */
+export function canDeleteContract(model, name) {
+  if (name === RESERVED_CONTRACT) {
+    return { ok: false, reason: `"${RESERVED_CONTRACT}" is a reserved built-in contract and cannot be deleted` };
+  }
+  const sites = contractRefSites(model, name);
+  if (sites.length > 0) {
+    return { ok: false, reason: `Cannot delete contract "${name}": still referenced by ${sites.join(', ')}` };
+  }
+  return { ok: true };
+}
+
+/** Delete a contract; throws if any of the three ref sites still references it. */
+export function deleteContract(model, name) {
+  const check = canDeleteContract(model, name);
+  if (!check.ok) throw new Error(check.reason);
+  if (model.contracts) delete model.contracts[name];
+  return model;
+}
+
+// The reserved built-in is locked against all field-level edits too.
+function assertContractEditable(name) {
+  if (name === RESERVED_CONTRACT) {
+    throw new Error(`"${RESERVED_CONTRACT}" is a reserved built-in contract and cannot be edited`);
+  }
+}
+
+/** Set (add or replace) a field spec `{type, values?, optional?}` on a contract. */
+export function setContractField(model, name, fieldName, fieldSpec) {
+  assertContractEditable(name);
+  if (!model.contracts || !(name in model.contracts)) {
+    throw new Error(`Contract "${name}" does not exist`);
+  }
+  model.contracts[name][fieldName] = fieldSpec;
+  return model;
+}
+
+/** Remove a field from a contract. */
+export function removeContractField(model, name, fieldName) {
+  assertContractEditable(name);
+  if (!model.contracts || !(name in model.contracts)) {
+    throw new Error(`Contract "${name}" does not exist`);
+  }
+  delete model.contracts[name][fieldName];
+  return model;
+}
+
+/** Rename a field key within a contract, preserving its spec and key order. */
+export function renameContractField(model, name, oldField, newField) {
+  assertContractEditable(name);
+  if (!model.contracts || !(name in model.contracts)) {
+    throw new Error(`Contract "${name}" does not exist`);
+  }
+  const contract = model.contracts[name];
+  if (!(oldField in contract)) {
+    throw new Error(`Field "${oldField}" does not exist on contract "${name}"`);
+  }
+  if (oldField === newField) return model;
+  if (newField in contract) {
+    throw new Error(`Field "${newField}" already exists on contract "${name}"`);
+  }
+  const rebuilt = {};
+  for (const key of Object.keys(contract)) {
+    if (key === oldField) rebuilt[newField] = contract[oldField];
+    else rebuilt[key] = contract[key];
+  }
+  model.contracts[name] = rebuilt;
+  return model;
+}
+
+/**
+ * The contracts object to persist — every user contract EXCLUDING the reserved
+ * built-in TaskGraph (never re-emit the built-in as a user contract).
+ */
+export function serializeContracts(model) {
+  const out = {};
+  const contracts = model.contracts || {};
+  for (const key of Object.keys(contracts)) {
+    if (key === RESERVED_CONTRACT) continue;
+    out[key] = contracts[key];
+  }
+  return out;
 }
