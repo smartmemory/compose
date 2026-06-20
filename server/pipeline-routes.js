@@ -8,10 +8,12 @@
  *   GET  /api/pipeline/draft              — get current draft
  *   POST /api/pipeline/draft/approve      — approve and persist current draft
  *   POST /api/pipeline/draft/reject       — reject and discard current draft
+ *   GET  /api/pipeline/specs              — list raw spec files (filename-keyed) [COMP-PIPE-EDIT-1]
+ *   POST /api/pipeline/save               — save an edited model back to its source file [COMP-PIPE-EDIT-1]
  */
 
-import { readdirSync, readFileSync, writeFileSync, unlinkSync, existsSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { readdirSync, readFileSync, writeFileSync, unlinkSync, existsSync, mkdirSync, lstatSync, realpathSync } from 'node:fs';
+import { join, basename, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import YAML from 'yaml';
 
@@ -81,6 +83,127 @@ function extractSteps(parsed) {
   }
 
   return [];
+}
+
+// ---------------------------------------------------------------------------
+// Spec discovery + save helpers (COMP-PIPE-EDIT-1)
+// ---------------------------------------------------------------------------
+
+/**
+ * List raw spec files in the pipelines dir, keyed by filename (NOT metadata).
+ * The shipped specs store `metadata` as a leading `#` comment (or omit it), so
+ * the metadata-based `loadTemplates` never surfaces them. The editor discovers
+ * by filename instead.
+ * @returns {Array<{ file, version, flows: string[] }>}
+ */
+function listSpecFiles(pipelinesDir) {
+  let files;
+  try {
+    files = readdirSync(pipelinesDir).filter(f => f.endsWith('.stratum.yaml'));
+  } catch {
+    return [];
+  }
+  const out = [];
+  for (const file of files) {
+    try {
+      const parsed = YAML.parse(readFileSync(join(pipelinesDir, file), 'utf-8'));
+      out.push({
+        file,
+        version: parsed?.version ?? null,
+        flows: flowNamesOf(parsed),
+      });
+    } catch {
+      out.push({ file, version: null, flows: [] });
+    }
+  }
+  return out;
+}
+
+/** Flow names with a non-empty steps[] (workflow.steps or flows.<name>.steps). */
+function flowNamesOf(parsed) {
+  const names = [];
+  if (Array.isArray(parsed?.workflow?.steps)) {
+    names.push(parsed.workflow.name || 'workflow');
+  }
+  if (parsed?.flows && typeof parsed.flows === 'object') {
+    for (const name of Object.keys(parsed.flows)) {
+      if (Array.isArray(parsed.flows[name]?.steps)) names.push(name);
+    }
+  }
+  return names;
+}
+
+/**
+ * Reconstruct a plain step object from a normalized model step, merging `_extra`
+ * back so nothing the editor never surfaced is lost. Mirrors
+ * src/lib/pipeline-model.js `denormalizeStep` (kept in sync; server cannot import
+ * the frontend module). `id` leads; surfaced fields override `_extra` on clash.
+ */
+function denormalizeModelStep(step) {
+  const out = { id: step.id };
+  if (step._extra && typeof step._extra === 'object') {
+    for (const key of Object.keys(step._extra)) out[key] = step._extra[key];
+  }
+  if (step.agent !== undefined) out.agent = step.agent;
+  if (step.function !== undefined) out.function = step.function;
+  if (step.intent !== undefined) out.intent = step.intent;
+  if (step.inputs && Object.keys(step.inputs).length > 0) out.inputs = { ...step.inputs };
+  if (step.output_contract !== undefined) out.output_contract = step.output_contract;
+  if (Array.isArray(step.ensure) && step.ensure.length > 0) out.ensure = [...step.ensure];
+  if (step.retries !== undefined) out.retries = step.retries;
+  if (Array.isArray(step.depends_on) && step.depends_on.length > 0) out.depends_on = [...step.depends_on];
+  if (step.on_fail !== undefined) out.on_fail = step.on_fail;
+  return out;
+}
+
+/**
+ * Find a model flow by name. The flow-scoped model stores flows as an array of
+ * { name, steps[] }.
+ */
+function modelFlow(model, flowName) {
+  if (!model || !Array.isArray(model.flows)) return null;
+  return model.flows.find(f => f && f.name === flowName) || null;
+}
+
+// Surfaced (editable) step fields, with the same include/omit rules as
+// denormalizeModelStep so an absent/empty value clears the key.
+const SURFACED_STEP_KEYS = ['agent', 'function', 'intent', 'inputs', 'output_contract', 'ensure', 'retries', 'depends_on', 'on_fail'];
+function surfacedValue(step, key) {
+  if (key === 'inputs') {
+    return step.inputs && Object.keys(step.inputs).length > 0
+      ? { present: true, value: { ...step.inputs } } : { present: false };
+  }
+  if (key === 'ensure') {
+    return Array.isArray(step.ensure) && step.ensure.length > 0
+      ? { present: true, value: [...step.ensure] } : { present: false };
+  }
+  if (key === 'depends_on') {
+    return Array.isArray(step.depends_on) && step.depends_on.length > 0
+      ? { present: true, value: [...step.depends_on] } : { present: false };
+  }
+  return step[key] !== undefined ? { present: true, value: step[key] } : { present: false };
+}
+
+/**
+ * Merge a normalized model step onto an EXISTING YAML map node in place.
+ * Surfaced fields are overwritten from the model (or deleted when cleared);
+ * unsurfaced keys already on disk are LEFT untouched (preserving their values
+ * and comments) — so an incomplete client `_extra` can never silently delete a
+ * field that exists on disk. `_extra` keys absent from disk are added.
+ */
+function mergeStepNode(doc, mapNode, step) {
+  if (step._extra && typeof step._extra === 'object') {
+    for (const k of Object.keys(step._extra)) {
+      if (!mapNode.has(k)) mapNode.set(k, doc.createNode(step._extra[k]));
+    }
+  }
+  if (mapNode.get('id') !== step.id) mapNode.set('id', step.id);
+  for (const key of SURFACED_STEP_KEYS) {
+    const { present, value } = surfacedValue(step, key);
+    if (present) mapNode.set(key, doc.createNode(value));
+    else if (mapNode.has(key)) mapNode.delete(key);
+  }
+  return mapNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -284,5 +407,121 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
     });
 
     res.json({ ok: true });
+  });
+
+  // GET /api/pipeline/specs — filename-keyed spec discovery (COMP-PIPE-EDIT-1).
+  app.get('/api/pipeline/specs', (_req, res) => {
+    res.json({ specs: listSpecFiles(getPipelinesDir()) });
+  });
+
+  // POST /api/pipeline/save — save an edited model back to its source file.
+  // Body: { file, model, flowName }. Mutates the on-disk YAML Document in place
+  // so the `# metadata:` comment header, body comments, key ordering, and every
+  // untouched flow/field survive (COMP-PIPE-EDIT-1).
+  app.post('/api/pipeline/save', (req, res) => {
+    const { file, model, flowName } = req.body || {};
+
+    if (!file || typeof file !== 'string') {
+      return res.status(400).json({ error: 'file is required' });
+    }
+    // Path-traversal-safe: reject anything whose basename differs (no slashes / ..).
+    if (basename(file) !== file || !file.endsWith('.stratum.yaml')) {
+      return res.status(400).json({ error: 'file must be a bare *.stratum.yaml filename' });
+    }
+    const pipelinesDir = getPipelinesDir();
+    const filePath = join(pipelinesDir, file);
+    if (!existsSync(filePath)) {
+      return res.status(400).json({ error: `Spec "${file}" not found in pipelines dir` });
+    }
+    // Symlink/containment guard: never write through a symlink or to a resolved
+    // path outside the pipelines dir (basename alone does not stop symlink escape).
+    try {
+      const realDir = realpathSync(pipelinesDir);
+      const realFile = realpathSync(filePath);
+      if (lstatSync(filePath).isSymbolicLink() || dirname(realFile) !== realDir) {
+        return res.status(400).json({ error: 'refusing to write through a symlink or outside the pipelines dir' });
+      }
+    } catch (e) {
+      return res.status(400).json({ error: `Cannot resolve spec path: ${e.message}` });
+    }
+    if (!model || !Array.isArray(model.flows)) {
+      return res.status(400).json({ error: 'model with flows[] is required' });
+    }
+
+    // Determine which flows to write back. If flowName is given, write only that
+    // flow (the editor edits one flow at a time); otherwise write every flow the
+    // model carries that exists in the document.
+    const flowsToWrite = flowName
+      ? [flowName]
+      : model.flows.map(f => f && f.name).filter(Boolean);
+
+    let doc;
+    try {
+      doc = YAML.parseDocument(readFileSync(filePath, 'utf-8'));
+    } catch (e) {
+      return res.status(400).json({ error: `Failed to parse current spec: ${e.message}` });
+    }
+
+    for (const name of flowsToWrite) {
+      const flow = modelFlow(model, name);
+      if (!flow) {
+        return res.status(400).json({ error: `Flow "${name}" not present in model` });
+      }
+
+      // Where do this flow's steps live? Prefer flows.<name>.steps; fall back to
+      // workflow.steps only on an exact name match (or the synthetic 'workflow'
+      // name when the doc omits workflow.name) — never on a blanket null match.
+      let stepsPath = null;
+      if (doc.hasIn(['flows', name, 'steps'])) {
+        stepsPath = ['flows', name, 'steps'];
+      } else if (doc.hasIn(['workflow', 'steps'])) {
+        const wfName = doc.getIn(['workflow', 'name']);
+        if (wfName === name || (wfName == null && name === 'workflow')) {
+          stepsPath = ['workflow', 'steps'];
+        }
+      }
+      if (!stepsPath) {
+        return res.status(400).json({ error: `Flow "${name}" has no steps location in the spec` });
+      }
+
+      // Merge in place: existing steps are mutated by id (preserving disk-only
+      // fields/comments), new steps are created, dropped steps are removed, and
+      // the sequence is reordered to match the model.
+      const seq = doc.getIn(stepsPath, true);
+      const oldById = new Map();
+      for (const item of (seq?.items || [])) {
+        const id = item && typeof item.get === 'function' ? item.get('id') : undefined;
+        if (id != null) oldById.set(id, item);
+      }
+      seq.items = (flow.steps || []).map((step) => {
+        // Match a renamed step to its ORIGINAL disk node via _renamedFrom FIRST
+        // (so a rename chain like A->B, B->C maps each step to its true node),
+        // else by current id. Consume the matched node so it is never claimed
+        // twice. Unmatched steps are created fresh.
+        let existing;
+        if (step._renamedFrom != null && oldById.has(step._renamedFrom)) {
+          existing = oldById.get(step._renamedFrom);
+          oldById.delete(step._renamedFrom);
+        } else if (oldById.has(step.id)) {
+          existing = oldById.get(step.id);
+          oldById.delete(step.id);
+        }
+        return existing
+          ? mergeStepNode(doc, existing, step)
+          : doc.createNode(denormalizeModelStep(step));
+      });
+    }
+
+    const out = String(doc);
+
+    // Validation gate: the serialized text must still parse before we write it.
+    try {
+      YAML.parse(out);
+    } catch (e) {
+      return res.status(400).json({ error: `Refusing to write invalid YAML: ${e.message}` });
+    }
+
+    writeFileSync(filePath, out);
+    res.json({ ok: true, file });
   });
 }
