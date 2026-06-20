@@ -631,3 +631,6 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-21T00:09:36+08:00 | Commit W1 UI (connect-mode wiring, contract editor, save-as-template); Codex-fixed: template validation gate, stale connect-source on rebuild, contract delete-block banner
 2026-06-21T00:13:02+08:00 | Mark COMP-PIPE-EDIT-3/-4/-7 COMPLETE (Wave 1 shipped); surgical ROADMAP edit (restored regen clobber)
 2026-06-21T06:21:19+08:00 | Design Wave 2 (COMP-PIPE-EDIT-6 YAML sync + -5 sub-flow collapse/expand); Docs-view premise corrected, SESE-constrained collapse
+2026-06-21T06:36:12+08:00 | COMP-PIPE-EDIT-5/6 Wave 2 core: collapseToSubflow + new-flow save + conflict hash + specChanged watch + modelToYamlObject (TDD)
+2026-06-21T06:51:42+08:00 | Codex HIGH fixes: collapse port-per-distinct-ref-path (keep .output.field suffix); spec-wide save reconcile flows.input/functions/workflow.name
+2026-06-21T06:59:16+08:00 | Commit W2 core (collapseToSubflow, modelToYamlObject, new-flow+spec-wide save w/ flows.input/functions/workflow.name reconcile, conflict hash, specChanged watcher); 1 Codex round (port-suffix, spec-wide structural persist)

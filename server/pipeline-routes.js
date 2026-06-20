@@ -14,8 +14,13 @@
 
 import { readdirSync, readFileSync, writeFileSync, unlinkSync, existsSync, mkdirSync, lstatSync, realpathSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import YAML from 'yaml';
+
+/** sha-256 hex of a string (COMP-PIPE-EDIT-6 conflict-detection baseline). */
+function sha256(text) {
+  return createHash('sha256').update(text, 'utf-8').digest('hex');
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -282,6 +287,67 @@ function reconcileStepContractRefs(doc, model) {
   }
 }
 
+/**
+ * Reconcile each flow's `input` declaration block (COMP-PIPE-EDIT-5/-6) on a
+ * spec-wide save. A YAML-pane edit (or a collapse minting sub-flow input ports)
+ * lives in model._doc.flows.<name>.input. Per field: setIn only when the model
+ * value DIFFERS from fresh disk (preserving comments on unchanged fields),
+ * deleteIn for fields removed in the model. Only flows that exist in the doc are
+ * touched (a brand-new flow's input was already written by createNewFlowNode).
+ */
+function reconcileFlowInputs(doc, diskParsed, model) {
+  const docFlows = model && model._doc && model._doc.flows;
+  if (!docFlows || typeof docFlows !== 'object') return;
+  for (const name of Object.keys(docFlows)) {
+    if (!doc.hasIn(['flows', name])) continue; // new flows handled elsewhere
+    const modelInput = docFlows[name] && docFlows[name].input;
+    if (!modelInput || typeof modelInput !== 'object') continue;
+    const diskInput = (diskParsed && diskParsed.flows && diskParsed.flows[name] && diskParsed.flows[name].input) || {};
+    // Add / update changed fields (skip unchanged to keep their comments).
+    for (const field of Object.keys(modelInput)) {
+      if (deepEqual(diskInput[field], modelInput[field])) continue;
+      doc.setIn(['flows', name, 'input', field], doc.createNode(modelInput[field]));
+    }
+    // Delete fields present on disk but removed in the model.
+    for (const field of Object.keys(diskInput)) {
+      if (!(field in modelInput)) doc.deleteIn(['flows', name, 'input', field]);
+    }
+  }
+}
+
+/**
+ * Merge the top-level `functions` block (COMP-PIPE-EDIT-6) on a spec-wide save,
+ * mirroring mergeContracts: setIn changed/new functions, deleteIn removed ones,
+ * never replace an unchanged function (keeps its comments). Reads model._doc.functions.
+ */
+function mergeFunctions(doc, diskParsed, model) {
+  const wanted = (model && model._doc && model._doc.functions && typeof model._doc.functions === 'object')
+    ? model._doc.functions : null;
+  if (!wanted) return; // model carries no functions view — leave disk untouched
+  const onDisk = (diskParsed && diskParsed.functions && typeof diskParsed.functions === 'object')
+    ? diskParsed.functions : {};
+  for (const name of Object.keys(wanted)) {
+    if (deepEqual(onDisk[name], wanted[name])) continue;
+    doc.setIn(['functions', name], doc.createNode(wanted[name]));
+  }
+  for (const name of Object.keys(onDisk)) {
+    if (!(name in wanted)) doc.deleteIn(['functions', name]);
+  }
+}
+
+/**
+ * Reconcile `workflow.name` (COMP-PIPE-EDIT-6) on a spec-wide save: write it only
+ * when the model._doc value differs from fresh disk and the node exists.
+ */
+function reconcileWorkflowName(doc, diskParsed, model) {
+  const modelName = model && model._doc && model._doc.workflow && model._doc.workflow.name;
+  if (modelName === undefined) return;
+  const diskName = diskParsed && diskParsed.workflow && diskParsed.workflow.name;
+  if (modelName !== diskName && doc.hasIn(['workflow'])) {
+    doc.setIn(['workflow', 'name'], doc.createNode(modelName));
+  }
+}
+
 // Surfaced (editable) step fields, with the same include/omit rules as
 // denormalizeModelStep so an absent/empty value clears the key.
 const SURFACED_STEP_KEYS = ['agent', 'function', 'intent', 'inputs', 'output_contract', 'ensure', 'retries', 'depends_on', 'on_fail'];
@@ -321,6 +387,41 @@ function mergeStepNode(doc, mapNode, step) {
     else if (mapNode.has(key)) mapNode.delete(key);
   }
   return mapNode;
+}
+
+/**
+ * Create a brand-new `flows.<name>` document node for a flow that exists in the
+ * model but not yet on disk (COMP-PIPE-EDIT-5 — a just-collapsed sub-flow). The
+ * node gets `input` + `output` from `model._doc.flows[name]` (the collapse
+ * injects them there) and an empty `steps` sequence the caller then populates by
+ * the normal per-step merge. Returns true if the node was created, false if the
+ * flow cannot be created here (no model flow, or no flows: container to host it).
+ *
+ * @returns {boolean}
+ */
+function createNewFlowNode(doc, model, name) {
+  const flow = modelFlow(model, name);
+  if (!flow) return false;
+
+  // The collapse injects { input, output, steps:[] } into model._doc.flows[name].
+  const injected = (model._doc && model._doc.flows && typeof model._doc.flows === 'object')
+    ? model._doc.flows[name] : null;
+
+  const node = {};
+  if (injected && injected.input && typeof injected.input === 'object') {
+    node.input = injected.input;
+  }
+  if (injected && injected.output !== undefined && injected.output !== null) {
+    node.output = injected.output;
+  }
+  node.steps = []; // populated by the per-step merge that runs next.
+
+  // Ensure a top-level `flows:` map exists, then set the new flow node.
+  if (!doc.hasIn(['flows'])) {
+    doc.setIn(['flows'], doc.createNode({}));
+  }
+  doc.setIn(['flows', name], doc.createNode(node));
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -543,7 +644,11 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
     if (!existsSync(filePath)) {
       return res.status(404).json({ error: `Spec "${file}" not found` });
     }
-    res.json({ file, text: readFileSync(filePath, 'utf-8') });
+    const text = readFileSync(filePath, 'utf-8');
+    // COMP-PIPE-EDIT-6: sha-256 of the on-disk text as a conflict-detection
+    // baseline. Computed on the file only (never on a serialized model), so it
+    // stays a true disk-divergence signal.
+    res.json({ file, text, hash: sha256(text) });
   });
 
   // POST /api/pipeline/save — save an edited model back to its source file.
@@ -551,7 +656,7 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
   // so the `# metadata:` comment header, body comments, key ordering, and every
   // untouched flow/field survive (COMP-PIPE-EDIT-1).
   app.post('/api/pipeline/save', (req, res) => {
-    const { file, model, flowName } = req.body || {};
+    const { file, model, flowName, baseHash, force } = req.body || {};
 
     if (!file || typeof file !== 'string') {
       return res.status(400).json({ error: 'file is required' });
@@ -589,8 +694,28 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
 
     let doc;
     let diskParsed;
+    let diskText;
     try {
-      const diskText = readFileSync(filePath, 'utf-8');
+      diskText = readFileSync(filePath, 'utf-8');
+    } catch (e) {
+      return res.status(400).json({ error: `Cannot read current spec: ${e.message}` });
+    }
+
+    // COMP-PIPE-EDIT-6 conflict detection: if the client sent a baseHash and the
+    // freshly-read disk text no longer matches it, the file diverged since load
+    // (another writer / external edit). Refuse to write (409) unless force:true.
+    if (baseHash && !force) {
+      const currentHash = sha256(diskText);
+      if (currentHash !== baseHash) {
+        return res.status(409).json({
+          error: 'Spec changed on disk since it was loaded',
+          conflict: true,
+          currentHash,
+        });
+      }
+    }
+
+    try {
       doc = YAML.parseDocument(diskText);
       diskParsed = YAML.parse(diskText);
     } catch (e) {
@@ -616,7 +741,17 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
         }
       }
       if (!stepsPath) {
-        return res.status(400).json({ error: `Flow "${name}" has no steps location in the spec` });
+        // COMP-PIPE-EDIT-5: the flow is not on disk yet (e.g. a just-collapsed
+        // sub-flow that exists only in the model). CREATE the flows.<name> node —
+        // steps + input + output from model._doc.flows — rather than erroring.
+        // ONLY on a SPEC-WIDE save (flowName omitted): an explicit flowName that
+        // doesn't map to a steps location is still a 400 (never auto-create a
+        // flow the caller named by mistake / clobber a workflow.steps spec).
+        const created = !flowName && createNewFlowNode(doc, model, name);
+        if (!created) {
+          return res.status(400).json({ error: `Flow "${name}" has no steps location in the spec` });
+        }
+        stepsPath = ['flows', name, 'steps'];
       }
 
       // Merge in place: existing steps are mutated by id (preserving disk-only
@@ -658,6 +793,20 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
       mergeContracts(doc, diskParsed, model);
     }
 
+    // COMP-PIPE-EDIT-5/-6: a SPEC-WIDE save (flowName omitted) can carry YAML-pane
+    // edits to structural blocks beyond steps/contracts. Reconcile them
+    // comment-preservingly (setIn only when the model._doc value differs from
+    // fresh disk; deleteIn for removed; never replace an unchanged node, to keep
+    // its comments). The flow-SCOPED path is left untouched (edits one flow's
+    // steps only). NOTE: only steps, contracts, the `functions` block,
+    // flows.<name>.input/output, and workflow.name are reconciled — arbitrary
+    // OTHER top-level keys are intentionally out of scope (not pane-editable).
+    if (!flowName) {
+      reconcileFlowInputs(doc, diskParsed, model);
+      mergeFunctions(doc, diskParsed, model);
+      reconcileWorkflowName(doc, diskParsed, model);
+    }
+
     const out = String(doc);
 
     // Validation gate: the serialized text must still parse before we write it.
@@ -668,7 +817,9 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
     }
 
     writeFileSync(filePath, out);
-    res.json({ ok: true, file });
+    // COMP-PIPE-EDIT-6: return the hash of the freshly-written text so the editor
+    // updates its conflict baseline (editorSpecHash) without an extra GET.
+    res.json({ ok: true, file, hash: sha256(out) });
   });
 
   // POST /api/pipeline/save-as-template — write the current model as a NEW
