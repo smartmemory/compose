@@ -2,6 +2,32 @@
 
 ## 2026-06-20
 
+### COMP-PIPE-EDIT-1/-2 — Visual pipeline editor foundation (COMPLETE)
+
+A visual editor for Stratum pipeline specs (`pipelines/*.stratum.yaml`): a
+cytoscape canvas of a flow's steps (-1) plus a step inspector side panel (-2),
+with a save-to-disk round-trip (core of -7, pulled forward by decision). Also
+reconciles the roadmap: COMP-PIPE-EDIT-3..7 were marked COMPLETE with no backing
+implementation (verified absent in code/git/audit) and are now corrected to
+PLANNED.
+
+- **Pure model lib `src/lib/pipeline-model.js`** — flow-scoped model (step
+  identity is `(flowName, id)`, so multi-flow specs with duplicate ids across
+  flows are handled). `specToModel`/`flowSteps`/`validateFlow`/`renameStep`/
+  `deleteStep`. Validation covers cycles, unknown contracts, and every
+  step-reference field (`depends_on`, `on_fail`, gate routes, parallel `source`,
+  and `inputs` `$.steps.<id>` JSONPaths).
+- **Backend** — `GET /api/pipeline/specs` (filename-based discovery),
+  `GET /api/pipeline/spec?file=` (raw text), `POST /api/pipeline/save` (in-place
+  YAML Document mutation preserving the `# metadata:` comment header, untouched
+  flows, and unsurfaced step fields; symlink/path-traversal-safe).
+- **UI** — new `pipeline-editor` view (spec picker, flow picker, toolbar),
+  cytoscape `PipelineEditorCanvas`, and `StepInspector` with live structural
+  validation. v0.1 specs load read-only.
+- **Known limitation** — duplicate step ids within one flow are a save-blocked
+  invalid state; the colliding nodes are not independently selectable until
+  resolved.
+
 ### STRAT-VOCAB-3 — Compose integration for vocabulary enforcement (COMPLETE)
 
 Wires the already-shipped Stratum `vocabulary_compliance` ensure (STRAT-VOCAB-1/2, in stratum-mcp)
