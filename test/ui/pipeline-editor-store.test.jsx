@@ -70,6 +70,8 @@ flows:
 // ── fetch stub keyed by URL ───────────────────────────────────────────────────
 let saveCalls;
 let saveResponse;
+let templateCalls;
+let templateResponse;
 
 function makeResponse(body, ok = true, status = 200) {
   return {
@@ -83,6 +85,8 @@ function makeResponse(body, ok = true, status = 200) {
 function installFetch() {
   saveCalls = [];
   saveResponse = { ok: true, file: 'demo.stratum.yaml' };
+  templateCalls = [];
+  templateResponse = { ok: true, status: 200, body: { ok: true, file: 'pipelines/my-template.stratum.yaml' } };
   globalThis.fetch = vi.fn(async (url, opts = {}) => {
     const u = String(url);
     if (u.includes('/api/pipeline/specs')) {
@@ -95,6 +99,10 @@ function installFetch() {
       const file = decodeURIComponent(u.split('file=')[1] || '');
       const text = file.startsWith('legacy') ? V01_YAML : V03_YAML;
       return makeResponse({ file, text });
+    }
+    if (u.includes('/api/pipeline/save-as-template')) {
+      templateCalls.push({ url: u, body: JSON.parse(opts.body) });
+      return makeResponse(templateResponse.body, templateResponse.ok, templateResponse.status);
     }
     if (u.includes('/api/pipeline/save')) {
       saveCalls.push({ url: u, body: JSON.parse(opts.body) });
@@ -268,5 +276,138 @@ describe('useVisionStore — pipeline editor slice (COMP-PIPE-EDIT-1)', () => {
     const res = await store().saveSpec();
     expect(res.error).toBeTruthy();
     expect(store().editorDirty).toBe(true);
+  });
+
+  // ── COMP-PIPE-EDIT-3: dependency wiring actions ──────────────────────────────
+
+  it('addDependency applies a valid edge and sets dirty', async () => {
+    await loadV03();
+    // design has no deps. Add a direct edge review depends_on design: walking
+    // design's closure (empty) never reaches review, so it is acyclic.
+    const ok = store().addDependency('review', 'design');
+    expect(ok).toBe(true);
+    const review = store().editorModel.flows[0].steps.find(s => s.id === 'review');
+    expect(review.depends_on).toContain('design');
+    expect(store().editorDirty).toBe(true);
+    // Fresh model ref so subscribers re-render.
+    const before = store().editorModel;
+    store().removeDependency('review', 'design');
+    expect(store().editorModel).not.toBe(before);
+  });
+
+  it('addDependency refuses a cycle: no mutation, error surfaced', async () => {
+    await loadV03();
+    // implement depends_on design; review depends_on implement.
+    // Adding design depends_on implement would close design→implement→design.
+    const ok = store().addDependency('design', 'implement');
+    expect(ok).toBe(false);
+    const design = store().editorModel.flows[0].steps.find(s => s.id === 'design');
+    expect(design.depends_on || []).not.toContain('implement');
+    expect(store().editorDirty).toBe(false);
+    expect(store().editorErrors.errors.some(e => /cycle/i.test(e))).toBe(true);
+  });
+
+  it('removeDependency drops an existing edge and sets dirty', async () => {
+    await loadV03();
+    // implement depends_on design.
+    const ok = store().removeDependency('implement', 'design');
+    expect(ok).toBe(true);
+    const implement = store().editorModel.flows[0].steps.find(s => s.id === 'implement');
+    expect(implement.depends_on).not.toContain('design');
+    expect(store().editorDirty).toBe(true);
+  });
+
+  // ── COMP-PIPE-EDIT-4: contract editing actions ───────────────────────────────
+
+  it('addContract adds an empty contract and hands back a fresh model ref', async () => {
+    await loadV03();
+    const before = store().editorModel;
+    store().addContract('Report');
+    expect(store().editorModel).not.toBe(before);
+    expect(store().editorModel.contracts.Report).toBeTruthy();
+    expect(store().editorDirty).toBe(true);
+  });
+
+  it('addContract surfaces a duplicate/reserved error without mutating', async () => {
+    await loadV03();
+    store().addContract('TaskGraph'); // reserved
+    expect(store().editorModel.contracts.TaskGraph).toBeUndefined();
+    expect(store().editorErrors.errors.some(e => /reserved/i.test(e))).toBe(true);
+    expect(store().editorDirty).toBe(false);
+  });
+
+  it('setContractField mutates the contract and hands back a fresh model ref', async () => {
+    await loadV03();
+    store().addContract('Report');
+    const before = store().editorModel;
+    store().setContractField('Report', 'summary', { type: 'string' });
+    expect(store().editorModel).not.toBe(before);
+    expect(store().editorModel.contracts.Report.summary).toEqual({ type: 'string' });
+    expect(store().editorDirty).toBe(true);
+  });
+
+  it('deleteContract blocked-when-referenced surfaces a reason and does not mutate', async () => {
+    await loadV03();
+    // `Plan` is referenced by build/design output_contract.
+    store().deleteContract('Plan');
+    expect(store().editorModel.contracts.Plan).toBeTruthy();
+    expect(store().editorErrors.errors.some(e => /Cannot delete contract "Plan"/.test(e))).toBe(true);
+    expect(store().editorDirty).toBe(false);
+  });
+
+  it('deleteContract removes an unreferenced contract', async () => {
+    await loadV03();
+    store().addContract('Loose');
+    store().deleteContract('Loose');
+    expect(store().editorModel.contracts.Loose).toBeUndefined();
+    expect(store().editorDirty).toBe(true);
+  });
+
+  it('renameContract rewrites step output_contract references', async () => {
+    await loadV03();
+    store().renameContract('Plan', 'PlanV2');
+    expect(store().editorModel.contracts.PlanV2).toBeTruthy();
+    expect(store().editorModel.contracts.Plan).toBeUndefined();
+    const design = store().editorModel.flows[0].steps.find(s => s.id === 'design');
+    expect(design.output_contract).toBe('PlanV2');
+    expect(store().editorDirty).toBe(true);
+  });
+
+  // ── COMP-PIPE-EDIT-7: save-as-template ───────────────────────────────────────
+
+  it('saveAsTemplate posts { filename, model, metadata } and returns the response', async () => {
+    await loadV03();
+    const res = await store().saveAsTemplate({
+      filename: 'my-template.stratum.yaml',
+      metadata: { id: 'my-template', label: 'My Template' },
+    });
+    expect(res.ok).toBe(true);
+    expect(templateCalls).toHaveLength(1);
+    expect(templateCalls[0].body.filename).toBe('my-template.stratum.yaml');
+    expect(templateCalls[0].body.metadata).toEqual({ id: 'my-template', label: 'My Template' });
+    expect(Array.isArray(templateCalls[0].body.model.flows)).toBe(true);
+  });
+
+  it('saveAsTemplate surfaces a 409 id-collision without clearing dirty', async () => {
+    await loadV03();
+    store().updateStep('design', { intent: 'edited' });
+    expect(store().editorDirty).toBe(true);
+    templateResponse = { ok: false, status: 409, body: { error: 'metadata.id "my-template" already in use' } };
+    const res = await store().saveAsTemplate({
+      filename: 'my-template.stratum.yaml',
+      metadata: { id: 'my-template' },
+    });
+    expect(res.error).toBeTruthy();
+    expect(store().editorDirty).toBe(true);
+  });
+
+  it('saveAsTemplate refuses to publish when the model has validation errors (no POST)', async () => {
+    await loadV03();
+    // Introduce a validation error (unknown contract) so editorErrors is non-empty.
+    store().updateStep('design', { output_contract: 'DoesNotExist' });
+    expect(store().editorErrors.errors.length).toBeGreaterThan(0);
+    const res = await store().saveAsTemplate({ filename: 'x.stratum.yaml', metadata: { id: 'x' } });
+    expect(res.error).toMatch(/validation/i);
+    expect(templateCalls).toHaveLength(0);
   });
 });

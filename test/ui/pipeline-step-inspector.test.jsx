@@ -80,6 +80,15 @@ describe('StepInspector (COMP-PIPE-EDIT-2)', () => {
     expect(options).toContain('(none)');
   });
 
+  it('dedups TaskGraph when the spec already defines it', () => {
+    const m = baseModel();
+    m.contracts.TaskGraph = { tasks: { type: 'array' } };
+    setState({ editorModel: m });
+    render(<StepInspector />);
+    const tgOptions = Array.from(document.querySelectorAll('option')).filter(o => o.value === 'TaskGraph');
+    expect(tgOptions).toHaveLength(1);
+  });
+
   it('editing the intent calls updateStep', () => {
     render(<StepInspector />);
     fireEvent.change(screen.getByDisplayValue('Design it'), { target: { value: 'New intent' } });
