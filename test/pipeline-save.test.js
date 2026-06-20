@@ -26,7 +26,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const express = (await import('express')).default;
 const { attachPipelineRoutes } = await import(`${ROOT}/server/pipeline-routes.js`);
-const { specToModel, renameStep } = await import(`${ROOT}/src/lib/pipeline-model.js`);
+const { specToModel, renameStep, renameContract, addContract, setContractField } = await import(`${ROOT}/src/lib/pipeline-model.js`);
 
 const REAL_BUILD = `${ROOT}/pipelines/build.stratum.yaml`;
 
@@ -393,5 +393,283 @@ describe('POST /api/pipeline/save — unsurfaced fields survive an incomplete _e
     } finally {
       await new Promise(r => srv.close(r));
     }
+  });
+});
+
+// ===========================================================================
+// COMP-PIPE-EDIT-4 — save persists contracts + propagates contract renames
+// ===========================================================================
+
+// A synthetic spec that references a contract at ALL THREE sites
+// (step.output_contract, flows.<name>.output, functions.<name>.output) plus an
+// untouched contract carrying a comment we assert survives.
+const MULTIREF_SPEC = `version: "0.3"
+
+contracts:
+  # PhaseResult: this comment must survive an untouched-contract save.
+  PhaseResult:
+    phase:   {type: string}
+    outcome: {type: string, values: [complete, skipped, failed]}
+  Foo:
+    a: {type: string}
+
+functions:
+  gen:
+    mode: function
+    output: Foo
+
+flows:
+  main:
+    output: Foo
+    steps:
+      - id: produce
+        agent: claude
+        intent: make a Foo
+        output_contract: Foo
+      - id: consume
+        agent: claude
+        intent: use it
+        output_contract: PhaseResult
+        depends_on: [produce]
+`;
+
+describe('POST /api/pipeline/save — persists contracts + contract-rename propagation', () => {
+  test('renaming a contract rewrites all three ref sites on disk and preserves untouched-contract comments', async () => {
+    const localDir = mkdtempSync(join(tmpdir(), 'pipeline-contract-'));
+    const localPipelines = join(localDir, 'pipelines');
+    mkdirSync(localPipelines, { recursive: true });
+    const p = join(localPipelines, 'multiref.stratum.yaml');
+    writeFileSync(p, MULTIREF_SPEC);
+
+    const localApp = express();
+    localApp.use(express.json({ limit: '5mb' }));
+    attachPipelineRoutes(localApp, {
+      broadcastMessage: () => {}, scheduleBroadcast: () => {},
+      getDataDir: () => join(localDir, 'data'), getPipelinesDir: () => localPipelines, stratumClient: null,
+    });
+    const srv = createServer(localApp);
+    await new Promise(r => srv.listen(0, r));
+    const url = `http://127.0.0.1:${srv.address().port}`;
+
+    try {
+      const model = specToModel(YAML.parse(readFileSync(p, 'utf-8')));
+      renameContract(model, 'Foo', 'FooV2');
+
+      const r = await fetch(`${url}/api/pipeline/save`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: 'multiref.stratum.yaml', model, flowName: 'main' }),
+      });
+      assert.equal(r.status, 200, `save failed: ${await r.text()}`);
+
+      const savedText = readFileSync(p, 'utf-8');
+      const saved = YAML.parse(savedText);
+
+      // The contracts key was renamed.
+      assert.ok(saved.contracts.FooV2, 'contracts key renamed to FooV2');
+      assert.ok(!('Foo' in saved.contracts), 'old Foo contract key gone');
+
+      // Site 1: step.output_contract.
+      const produce = saved.flows.main.steps.find(s => s.id === 'produce');
+      assert.equal(produce.output_contract, 'FooV2', 'step output_contract rewritten on disk');
+
+      // Site 2: flows.<name>.output.
+      assert.equal(saved.flows.main.output, 'FooV2', 'flows.main.output rewritten on disk');
+
+      // Site 3: functions.<name>.output.
+      assert.equal(saved.functions.gen.output, 'FooV2', 'functions.gen.output rewritten on disk');
+
+      // Untouched contract keeps its comment.
+      assert.ok(
+        savedText.includes('this comment must survive'),
+        'comment on the untouched PhaseResult contract survives',
+      );
+      assert.ok(saved.contracts.PhaseResult, 'untouched contract preserved');
+    } finally {
+      await new Promise(r => srv.close(r));
+    }
+  });
+
+  test('save persists a newly-added contract and a new field', async () => {
+    const localDir = mkdtempSync(join(tmpdir(), 'pipeline-newcontract-'));
+    const localPipelines = join(localDir, 'pipelines');
+    mkdirSync(localPipelines, { recursive: true });
+    const p = join(localPipelines, 'multiref.stratum.yaml');
+    writeFileSync(p, MULTIREF_SPEC);
+
+    const localApp = express();
+    localApp.use(express.json({ limit: '5mb' }));
+    attachPipelineRoutes(localApp, {
+      broadcastMessage: () => {}, scheduleBroadcast: () => {},
+      getDataDir: () => join(localDir, 'data'), getPipelinesDir: () => localPipelines, stratumClient: null,
+    });
+    const srv = createServer(localApp);
+    await new Promise(r => srv.listen(0, r));
+    const url = `http://127.0.0.1:${srv.address().port}`;
+
+    try {
+      const model = specToModel(YAML.parse(readFileSync(p, 'utf-8')));
+      addContract(model, 'NewC');
+      setContractField(model, 'NewC', 'flag', { type: 'boolean' });
+
+      const r = await fetch(`${url}/api/pipeline/save`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: 'multiref.stratum.yaml', model, flowName: 'main' }),
+      });
+      assert.equal(r.status, 200, `save failed: ${await r.text()}`);
+
+      const saved = YAML.parse(readFileSync(p, 'utf-8'));
+      assert.deepEqual(saved.contracts.NewC, { flag: { type: 'boolean' } }, 'new contract persisted');
+      assert.ok(saved.contracts.Foo, 'existing contracts preserved');
+    } finally {
+      await new Promise(r => srv.close(r));
+    }
+  });
+
+  test('contract rename propagates to step.output_contract in a NON-selected flow', async () => {
+    const localDir = mkdtempSync(join(tmpdir(), 'pipeline-xflow-'));
+    const localPipelines = join(localDir, 'pipelines');
+    mkdirSync(localPipelines, { recursive: true });
+    const p = join(localPipelines, 'xflow.stratum.yaml');
+    // Two flows, BOTH with a step whose output_contract is `Old`.
+    writeFileSync(p,
+      'version: "0.3"\ncontracts:\n  Old:\n    x: {type: string}\nflows:\n' +
+      '  a:\n    steps:\n      - id: s1\n        agent: x\n        output_contract: Old\n' +
+      '  b:\n    steps:\n      - id: s2\n        agent: y\n        output_contract: Old\n');
+
+    const localApp = express();
+    localApp.use(express.json({ limit: '5mb' }));
+    attachPipelineRoutes(localApp, {
+      broadcastMessage: () => {}, scheduleBroadcast: () => {},
+      getDataDir: () => join(localDir, 'data'), getPipelinesDir: () => localPipelines, stratumClient: null,
+    });
+    const srv = createServer(localApp);
+    await new Promise(r => srv.listen(0, r));
+    const url = `http://127.0.0.1:${srv.address().port}`;
+
+    try {
+      const model = specToModel(YAML.parse(readFileSync(p, 'utf-8')));
+      renameContract(model, 'Old', 'New');
+      // Save while editing ONLY flow `a`; flow `b` must still get its ref rewritten.
+      const r = await fetch(`${url}/api/pipeline/save`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: 'xflow.stratum.yaml', model, flowName: 'a' }),
+      });
+      assert.equal(r.status, 200, `save failed: ${await r.text()}`);
+
+      const saved = YAML.parse(readFileSync(p, 'utf-8'));
+      assert.ok(saved.contracts.New && !('Old' in saved.contracts), 'contract key renamed');
+      assert.equal(saved.flows.a.steps[0].output_contract, 'New', 'selected flow ref rewritten');
+      assert.equal(saved.flows.b.steps[0].output_contract, 'New', 'NON-selected flow ref also rewritten (no broken ref)');
+    } finally {
+      await new Promise(r => srv.close(r));
+    }
+  });
+});
+
+// ===========================================================================
+// COMP-PIPE-EDIT-7 — POST /api/pipeline/save-as-template
+// ===========================================================================
+
+describe('POST /api/pipeline/save-as-template', () => {
+  let localDir, localPipelines, url, srv;
+
+  before(async () => {
+    localDir = mkdtempSync(join(tmpdir(), 'pipeline-tmpl-'));
+    localPipelines = join(localDir, 'pipelines');
+    mkdirSync(localPipelines, { recursive: true });
+    // Seed an existing template (real metadata key) to test id-collision.
+    writeFileSync(join(localPipelines, 'existing.stratum.yaml'),
+      'metadata:\n  id: existing-tmpl\n  label: Existing\nversion: "0.3"\nflows:\n  f:\n    steps:\n      - id: a\n        agent: x\n');
+
+    const localApp = express();
+    localApp.use(express.json({ limit: '5mb' }));
+    attachPipelineRoutes(localApp, {
+      broadcastMessage: () => {}, scheduleBroadcast: () => {},
+      getDataDir: () => join(localDir, 'data'), getPipelinesDir: () => localPipelines, stratumClient: null,
+    });
+    srv = createServer(localApp);
+    await new Promise(r => srv.listen(0, r));
+    url = `http://127.0.0.1:${srv.address().port}`;
+  });
+  after(async () => { if (srv) await new Promise(r => srv.close(r)); });
+
+  function post(path, body) {
+    return fetch(`${url}${path}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(async r => ({ status: r.status, data: await r.json() }));
+  }
+
+  function modelFor(specText) {
+    return specToModel(YAML.parse(specText));
+  }
+
+  test('writes a new file with a real metadata key that appears via GET /templates', async () => {
+    const model = modelFor(MULTIREF_SPEC);
+    const { status, data } = await post('/api/pipeline/save-as-template', {
+      filename: 'my-template.stratum.yaml',
+      model,
+      metadata: { id: 'my-template', label: 'My Template', description: 'desc', category: 'custom' },
+    });
+    assert.equal(status, 200, `save-as-template failed: ${JSON.stringify(data)}`);
+    assert.equal(data.ok, true);
+    assert.equal(data.file, 'my-template.stratum.yaml');
+
+    // The written file has a REAL metadata: key (not a comment).
+    const written = readFileSync(join(localPipelines, 'my-template.stratum.yaml'), 'utf-8');
+    const parsed = YAML.parse(written);
+    assert.equal(parsed.metadata.id, 'my-template', 'real metadata key present');
+    assert.equal(parsed.metadata.label, 'My Template');
+    // Contracts serialized in (excluding TaskGraph).
+    assert.ok(parsed.contracts.Foo, 'contracts block written');
+    assert.ok(parsed.flows.main, 'flows passthrough written');
+
+    // It shows up via the templates endpoint (which keys on metadata.id).
+    const r = await fetch(`${url}/api/pipeline/templates`);
+    const tdata = await r.json();
+    assert.ok(tdata.templates.find(t => t.id === 'my-template'), 'new template discoverable via /templates');
+  });
+
+  test('refuses to overwrite an existing file (create-only)', async () => {
+    // existing.stratum.yaml is already on disk.
+    const model = modelFor(MULTIREF_SPEC);
+    const { status } = await post('/api/pipeline/save-as-template', {
+      filename: 'existing.stratum.yaml',
+      model,
+      metadata: { id: 'brand-new-id' },
+    });
+    assert.equal(status, 400, 'overwrite of an existing file must be refused');
+  });
+
+  test('refuses a duplicate metadata.id', async () => {
+    const model = modelFor(MULTIREF_SPEC);
+    const { status } = await post('/api/pipeline/save-as-template', {
+      filename: 'fresh-file.stratum.yaml',
+      model,
+      metadata: { id: 'existing-tmpl' },  // collides with the seeded template's id
+    });
+    assert.equal(status, 409, 'duplicate metadata.id must be refused');
+  });
+
+  test('requires metadata.id', async () => {
+    const model = modelFor(MULTIREF_SPEC);
+    const { status } = await post('/api/pipeline/save-as-template', {
+      filename: 'no-id.stratum.yaml',
+      model,
+      metadata: { label: 'no id' },
+    });
+    assert.equal(status, 400, 'missing metadata.id must be refused');
+  });
+
+  test('refuses a non-bare / non-.stratum.yaml filename (traversal-safe)', async () => {
+    const model = modelFor(MULTIREF_SPEC);
+    const a = await post('/api/pipeline/save-as-template', {
+      filename: '../escape.stratum.yaml', model, metadata: { id: 'x1' },
+    });
+    assert.equal(a.status, 400, 'path traversal refused');
+    const b = await post('/api/pipeline/save-as-template', {
+      filename: 'notyaml.txt', model, metadata: { id: 'x2' },
+    });
+    assert.equal(b.status, 400, 'non-.stratum.yaml refused');
   });
 });

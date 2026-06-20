@@ -165,6 +165,123 @@ function modelFlow(model, flowName) {
   return model.flows.find(f => f && f.name === flowName) || null;
 }
 
+// The reserved built-in contract — never written as a user contract (mirrors
+// src/lib/pipeline-model.js serializeContracts; server can't import the FE module).
+const RESERVED_CONTRACT = 'TaskGraph';
+
+/** The contracts object a model wants persisted, excluding the reserved TaskGraph. */
+function serializeModelContracts(model) {
+  const out = {};
+  const contracts = (model && model.contracts && typeof model.contracts === 'object') ? model.contracts : {};
+  for (const key of Object.keys(contracts)) {
+    if (key === RESERVED_CONTRACT) continue;
+    out[key] = contracts[key];
+  }
+  return out;
+}
+
+/** Structural equality over plain JSON-ish data (field specs, contract maps). */
+function deepEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a == null || b == null) return false;
+  const ak = Object.keys(a), bk = Object.keys(b);
+  if (ak.length !== bk.length) return false;
+  for (const k of ak) {
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+    if (!deepEqual(a[k], b[k])) return false;
+  }
+  return true;
+}
+
+/**
+ * Merge a model's contracts into the freshly-parsed Document in place
+ * (COMP-PIPE-EDIT-4). Only contracts that differ from disk or are new get a
+ * `setIn` (preserving comments on unchanged contracts); contracts on disk but
+ * absent from the model get a `deleteIn` (except the reserved TaskGraph).
+ *
+ * @param {YAML.Document} doc
+ * @param {object} diskParsed — the same file's `YAML.parse` output (plain JS)
+ * @param {object} model
+ */
+function mergeContracts(doc, diskParsed, model) {
+  const wanted = serializeModelContracts(model);
+  const onDisk = (diskParsed && diskParsed.contracts && typeof diskParsed.contracts === 'object')
+    ? diskParsed.contracts : {};
+
+  // Add / update changed contracts (skip unchanged to preserve their comments).
+  for (const name of Object.keys(wanted)) {
+    if (deepEqual(onDisk[name], wanted[name])) continue;
+    doc.setIn(['contracts', name], doc.createNode(wanted[name]));
+  }
+  // Delete contracts present on disk but absent from the model (never TaskGraph).
+  for (const name of Object.keys(onDisk)) {
+    if (name === RESERVED_CONTRACT) continue;
+    if (!(name in wanted)) doc.deleteIn(['contracts', name]);
+  }
+}
+
+/**
+ * Reconcile `flows.<name>.output` and `functions.<name>.output` scalar refs
+ * (COMP-PIPE-EDIT-4). A contract rename in the model edits these passthrough
+ * values in `model._doc`; the save re-parses disk and would otherwise miss
+ * them. When the model's `_doc` value differs from the fresh disk value, write
+ * the new value; otherwise leave the node (and its comment) untouched.
+ */
+function reconcileOutputRefs(doc, diskParsed, model) {
+  const docOf = model && model._doc;
+  if (!docOf || typeof docOf !== 'object') return;
+
+  for (const section of ['flows', 'functions']) {
+    const modelSection = docOf[section];
+    const diskSection = diskParsed && diskParsed[section];
+    if (!modelSection || typeof modelSection !== 'object') continue;
+    for (const name of Object.keys(modelSection)) {
+      const modelOut = modelSection[name] && modelSection[name].output;
+      const diskOut = diskSection && diskSection[name] && diskSection[name].output;
+      if (modelOut === undefined) continue;
+      if (modelOut !== diskOut && doc.hasIn([section, name, 'output'])) {
+        doc.setIn([section, name, 'output'], doc.createNode(modelOut));
+      }
+    }
+  }
+}
+
+/** Resolve where a flow's steps live in the doc (flows.<name>.steps or workflow.steps). */
+function stepsPathFor(doc, name) {
+  if (doc.hasIn(['flows', name, 'steps'])) return ['flows', name, 'steps'];
+  if (doc.hasIn(['workflow', 'steps'])) {
+    const wfName = doc.getIn(['workflow', 'name']);
+    if (wfName === name || (wfName == null && name === 'workflow')) return ['workflow', 'steps'];
+  }
+  return null;
+}
+
+/**
+ * Propagate a contract rename to step.output_contract across EVERY flow, not just
+ * the one being saved (COMP-PIPE-EDIT-4). The per-flow step merge only rewrites
+ * the saved flow's steps, but renameContract changes output_contract on steps in
+ * other flows too; without this, a multi-flow spec saved while editing one flow
+ * would leave other flows' steps pointing at the old contract name. Only the
+ * output_contract scalar is touched (matched by step id), so non-saved flows'
+ * other fields/comments are untouched.
+ */
+function reconcileStepContractRefs(doc, model) {
+  for (const flow of (model.flows || [])) {
+    const path = stepsPathFor(doc, flow.name);
+    if (!path) continue;
+    const seq = doc.getIn(path, true);
+    if (!seq || !Array.isArray(seq.items)) continue;
+    for (const step of (flow.steps || [])) {
+      if (step.output_contract === undefined) continue;
+      const node = seq.items.find(it => it && typeof it.get === 'function' && it.get('id') === step.id);
+      if (!node) continue;
+      if (node.get('output_contract') !== step.output_contract) {
+        node.set('output_contract', doc.createNode(step.output_contract));
+      }
+    }
+  }
+}
+
 // Surfaced (editable) step fields, with the same include/omit rules as
 // denormalizeModelStep so an absent/empty value clears the key.
 const SURFACED_STEP_KEYS = ['agent', 'function', 'intent', 'inputs', 'output_contract', 'ensure', 'retries', 'depends_on', 'on_fail'];
@@ -471,8 +588,11 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
       : model.flows.map(f => f && f.name).filter(Boolean);
 
     let doc;
+    let diskParsed;
     try {
-      doc = YAML.parseDocument(readFileSync(filePath, 'utf-8'));
+      const diskText = readFileSync(filePath, 'utf-8');
+      doc = YAML.parseDocument(diskText);
+      diskParsed = YAML.parse(diskText);
     } catch (e) {
       return res.status(400).json({ error: `Failed to parse current spec: ${e.message}` });
     }
@@ -527,6 +647,17 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
       });
     }
 
+    // Persist the top-level contracts block (COMP-PIPE-EDIT-4) — only when the
+    // model carries a contracts field, so step-only saves never touch contracts.
+    // Order matters: reconcile the rename-driven output refs BEFORE the contract
+    // key merge so both the old and new contract values are still observable
+    // (the helpers read model state + fresh disk, not each other's writes).
+    if (model.contracts && typeof model.contracts === 'object') {
+      reconcileOutputRefs(doc, diskParsed, model);
+      reconcileStepContractRefs(doc, model);
+      mergeContracts(doc, diskParsed, model);
+    }
+
     const out = String(doc);
 
     // Validation gate: the serialized text must still parse before we write it.
@@ -539,4 +670,102 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
     writeFileSync(filePath, out);
     res.json({ ok: true, file });
   });
+
+  // POST /api/pipeline/save-as-template — write the current model as a NEW
+  // discoverable template file (COMP-PIPE-EDIT-7). Body:
+  //   { filename, model, metadata: { id, label?, description?, category? } }
+  // Create-only (refuses to overwrite); refuses an id colliding with any existing
+  // spec's metadata.id (the template system keys on metadata.id). Emits a REAL
+  // `metadata:` key so TemplateSelector / loadTemplates surface it.
+  app.post('/api/pipeline/save-as-template', (req, res) => {
+    const { filename, model, metadata } = req.body || {};
+
+    if (!filename || typeof filename !== 'string'
+        || basename(filename) !== filename || !filename.endsWith('.stratum.yaml')) {
+      return res.status(400).json({ error: 'filename must be a bare *.stratum.yaml filename' });
+    }
+    if (!model || !Array.isArray(model.flows)) {
+      return res.status(400).json({ error: 'model with flows[] is required' });
+    }
+    if (!metadata || typeof metadata !== 'object' || !metadata.id || typeof metadata.id !== 'string') {
+      return res.status(400).json({ error: 'metadata.id is required' });
+    }
+
+    const pipelinesDir = getPipelinesDir();
+    const filePath = join(pipelinesDir, filename);
+
+    // Create-only: refuse to overwrite an existing file (editing is /save).
+    if (existsSync(filePath)) {
+      return res.status(400).json({ error: `File "${filename}" already exists (create-only; use /save to edit)` });
+    }
+
+    // Refuse a metadata.id that collides with any existing spec's metadata.id.
+    let existingFiles;
+    try {
+      existingFiles = readdirSync(pipelinesDir).filter(f => f.endsWith('.stratum.yaml'));
+    } catch {
+      existingFiles = [];
+    }
+    for (const f of existingFiles) {
+      try {
+        const parsed = YAML.parse(readFileSync(join(pipelinesDir, f), 'utf-8'));
+        if (parsed?.metadata?.id === metadata.id) {
+          return res.status(409).json({ error: `metadata.id "${metadata.id}" already used by ${f}` });
+        }
+      } catch {
+        // skip unparseable files
+      }
+    }
+
+    // Build the spec object: version/flows passthrough from the model, then a
+    // REAL metadata key + the serialized contracts block.
+    const specObj = buildSpecObjectFromModel(model);
+    const ordered = { metadata, ...specObj };
+    ordered.contracts = serializeModelContracts(model);
+
+    let text;
+    try {
+      text = YAML.stringify(ordered);
+      YAML.parse(text); // parse gate — never write something that won't reload
+    } catch (e) {
+      return res.status(400).json({ error: `Refusing to write invalid YAML: ${e.message}` });
+    }
+
+    writeFileSync(filePath, text);
+    res.json({ ok: true, file: filename });
+  });
+}
+
+/**
+ * Reconstruct a plain spec object from the model for template serialization
+ * (COMP-PIPE-EDIT-7). Mirrors src/lib/pipeline-model.js `modelToSpecObject`:
+ * version/flows/functions passthrough from `_doc`, with each flow's steps
+ * rebuilt from the model. `metadata` and `contracts` are set by the caller.
+ */
+function buildSpecObjectFromModel(model) {
+  const doc = (model && model._doc && typeof model._doc === 'object') ? model._doc : {};
+  const out = { ...doc };
+  // Don't carry a parsed metadata/contracts through — the caller sets fresh ones.
+  delete out.metadata;
+  delete out.contracts;
+
+  const byName = new Map((model.flows || []).map(f => [f.name, f]));
+
+  if (Array.isArray(doc?.workflow?.steps)) {
+    const wfName = doc.workflow.name || 'workflow';
+    const flow = byName.get(wfName);
+    if (flow) out.workflow = { ...doc.workflow, steps: (flow.steps || []).map(denormalizeModelStep) };
+  }
+
+  if (doc?.flows && typeof doc.flows === 'object') {
+    out.flows = {};
+    for (const name of Object.keys(doc.flows)) {
+      const flow = byName.get(name);
+      out.flows[name] = flow
+        ? { ...doc.flows[name], steps: (flow.steps || []).map(denormalizeModelStep) }
+        : doc.flows[name];
+    }
+  }
+
+  return out;
 }
