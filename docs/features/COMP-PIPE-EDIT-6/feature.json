@@ -1,9 +1,9 @@
 {
   "code": "COMP-PIPE-EDIT-6",
   "description": "YAML sync: Bidirectional sync between canvas and YAML. Edit in canvas → YAML updates live. Edit YAML in Docs view → canvas updates. Conflict resolution when both sides change.",
-  "status": "COMPLETE",
+  "status": "PLANNED",
   "phase": "COMP-PIPE-EDIT: Visual Pipeline Editor",
   "position": 141,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-20"
 }
