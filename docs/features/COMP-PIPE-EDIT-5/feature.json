@@ -1,9 +1,29 @@
 {
   "code": "COMP-PIPE-EDIT-5",
   "description": "Sub-flow support: Collapse a group of steps into a named sub-flow. Expand sub-flows to edit internals. Sub-flow inputs/outputs visible as ports on the collapsed node.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-PIPE-EDIT: Visual Pipeline Editor",
   "position": 140,
   "created": "2026-05-29",
-  "updated": "2026-06-20"
+  "updated": "2026-06-20",
+  "completions": [
+    {
+      "completion_id": "COMP-PIPE-EDIT-5:7f88d2e9a5bf2c00576cf4f948531dee6401dea1",
+      "feature_code": "COMP-PIPE-EDIT-5",
+      "commit_sha": "7f88d2e9a5bf2c00576cf4f948531dee6401dea1",
+      "commit_sha_short": "7f88d2e9",
+      "tests_pass": true,
+      "files_changed": [
+        "src/lib/pipeline-model.js",
+        "server/pipeline-routes.js",
+        "src/components/vision/PipelineEditorCanvas.jsx",
+        "src/components/vision/PipelineEditor.jsx",
+        "src/components/vision/useVisionStore.js"
+      ],
+      "recorded_at": "2026-06-20T23:29:47.230Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Sub-flow collapse/expand: SESE collapseToSubflow w/ port-suffix preservation, new-flow save, multi-select + collapse dialog + expand."
+    }
+  ],
+  "commit_sha": "7f88d2e9a5bf2c00576cf4f948531dee6401dea1"
 }

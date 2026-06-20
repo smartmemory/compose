@@ -636,3 +636,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-21T06:59:16+08:00 | Commit W2 core (collapseToSubflow, modelToYamlObject, new-flow+spec-wide save w/ flows.input/functions/workflow.name reconcile, conflict hash, specChanged watcher); 1 Codex round (port-suffix, spec-wide structural persist)
 2026-06-21T07:02:08+08:00 | COMP-PIPE-EDIT-5/-6 Wave-2 UI: store slice (saveScope latch, yaml buffer/flush, conflict, collapse/expand) + YamlPane + conflict banner + multi-select collapse UI
 2026-06-21T07:27:32+08:00 | Commit W2 UI (YAML pane, conflict banner, collapse/expand, save-scope latch, specChanged); Codex-fixed: stranded buffer, specChanged-clobber, banner-clear-on-success, cross-flow warning scoping
+2026-06-21T07:31:19+08:00 | Mark COMP-PIPE-EDIT-5/-6 COMPLETE — epic done (all 7); surgical ROADMAP rows + phase heading -> COMPLETE

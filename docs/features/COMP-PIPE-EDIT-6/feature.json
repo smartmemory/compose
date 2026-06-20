@@ -1,9 +1,31 @@
 {
   "code": "COMP-PIPE-EDIT-6",
   "description": "YAML sync: Bidirectional sync between canvas and YAML. Edit in canvas → YAML updates live. Edit YAML in Docs view → canvas updates. Conflict resolution when both sides change.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-PIPE-EDIT: Visual Pipeline Editor",
   "position": 141,
   "created": "2026-05-29",
-  "updated": "2026-06-20"
+  "updated": "2026-06-20",
+  "completions": [
+    {
+      "completion_id": "COMP-PIPE-EDIT-6:7f88d2e9a5bf2c00576cf4f948531dee6401dea1",
+      "feature_code": "COMP-PIPE-EDIT-6",
+      "commit_sha": "7f88d2e9a5bf2c00576cf4f948531dee6401dea1",
+      "commit_sha_short": "7f88d2e9",
+      "tests_pass": true,
+      "files_changed": [
+        "server/pipeline-routes.js",
+        "server/file-watcher.js",
+        "server/index.js",
+        "src/lib/pipeline-model.js",
+        "src/components/vision/YamlPane.jsx",
+        "src/components/vision/PipelineEditor.jsx",
+        "src/components/vision/useVisionStore.js"
+      ],
+      "recorded_at": "2026-06-20T23:29:54.455Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Bidirectional YAML pane + conflict resolution (content-hash/409/force, specChanged watcher on vision WS, latched spec-wide save, buffer-flush gate)."
+    }
+  ],
+  "commit_sha": "7f88d2e9a5bf2c00576cf4f948531dee6401dea1"
 }
