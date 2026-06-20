@@ -12,6 +12,16 @@ import {
   renameStep as renameStepInModel,
   canDeleteStep,
   deleteStep as deleteStepInModel,
+  addDependency as addDependencyInModel,
+  removeDependency as removeDependencyInModel,
+  wouldCreateCycle,
+  addContract as addContractInModel,
+  renameContract as renameContractInModel,
+  deleteContract as deleteContractInModel,
+  canDeleteContract,
+  setContractField as setContractFieldInModel,
+  removeContractField as removeContractFieldInModel,
+  renameContractField as renameContractFieldInModel,
 } from '../../lib/pipeline-model.js';
 
 // COMP-PIPE-EDIT-1: v0.1 specs are not validated by Stratum (IR_UNKNOWN_VERSION);
@@ -529,6 +539,172 @@ export const useVisionStore = create((set, get) => {
         set({ editorModel: reactiveModel(editorModel), editorDirty: false });
       }
       return data;
+    },
+
+    // ── COMP-PIPE-EDIT-3: dependency wiring ────────────────────────────────
+    // Surface a transient editor error message (prepended; mirrors deleteStep).
+    // The optional stepId pins the message to a node's inline-warning list.
+    _surfaceEditorError: (message, stepId) => {
+      set(s => {
+        const prevWarn = s.editorErrors?.warningsByStepId || {};
+        const warningsByStepId = stepId
+          ? { ...prevWarn, [stepId]: [message, ...(prevWarn[stepId] || [])] }
+          : prevWarn;
+        return {
+          editorErrors: {
+            errors: [message, ...(s.editorErrors?.errors || [])],
+            warningsByStepId,
+          },
+        };
+      });
+    },
+
+    // Add `depId` to a step's depends_on. Guards with wouldCreateCycle FIRST;
+    // if it would cycle (or the lib add returns false — self/dup/dangling) the
+    // model is NOT mutated and a transient message is surfaced. Edge semantics:
+    // the canvas draws source→target as "target depends_on source", so connecting
+    // producer→consumer calls addDependency(consumerId, producerId).
+    addDependency: (stepId, depId) => {
+      const { editorModel, editorSelectedFlow, editorReadOnly } = get();
+      if (!editorModel || !editorSelectedFlow || editorReadOnly) return false;
+      if (wouldCreateCycle(editorModel, editorSelectedFlow, stepId, depId)) {
+        get()._surfaceEditorError(
+          `Cannot add dependency "${stepId}" → "${depId}": would create a cycle`,
+          stepId,
+        );
+        return false;
+      }
+      const added = addDependencyInModel(editorModel, editorSelectedFlow, stepId, depId);
+      if (!added) {
+        get()._surfaceEditorError(
+          `Cannot add dependency "${stepId}" → "${depId}": invalid (self-edge, duplicate, or missing step)`,
+          stepId,
+        );
+        return false;
+      }
+      set({ editorModel: reactiveModel(editorModel), editorDirty: true });
+      get()._revalidateEditor();
+      return true;
+    },
+
+    removeDependency: (stepId, depId) => {
+      const { editorModel, editorSelectedFlow, editorReadOnly } = get();
+      if (!editorModel || !editorSelectedFlow || editorReadOnly) return false;
+      const removed = removeDependencyInModel(editorModel, editorSelectedFlow, stepId, depId);
+      if (!removed) return false;
+      set({ editorModel: reactiveModel(editorModel), editorDirty: true });
+      get()._revalidateEditor();
+      return true;
+    },
+
+    // ── COMP-PIPE-EDIT-4: contract editing ─────────────────────────────────
+    // Each wraps a (throwing) lib helper; on throw the message is surfaced into
+    // editorErrors and nothing mutates, mirroring the deleteStep blocked path.
+    addContract: (name) => {
+      const { editorModel, editorReadOnly } = get();
+      if (!editorModel || editorReadOnly) return false;
+      try {
+        addContractInModel(editorModel, name);
+      } catch (err) {
+        get()._surfaceEditorError(err.message);
+        return false;
+      }
+      set({ editorModel: reactiveModel(editorModel), editorDirty: true });
+      get()._revalidateEditor();
+      return true;
+    },
+
+    renameContract: (oldName, newName) => {
+      const { editorModel, editorReadOnly } = get();
+      if (!editorModel || editorReadOnly) return false;
+      if (!newName || oldName === newName) return false;
+      try {
+        renameContractInModel(editorModel, oldName, newName);
+      } catch (err) {
+        get()._surfaceEditorError(err.message);
+        return false;
+      }
+      set({ editorModel: reactiveModel(editorModel), editorDirty: true });
+      get()._revalidateEditor();
+      return true;
+    },
+
+    // Blocked (surfaced, no mutation) when any of the three ref sites still
+    // names the contract — surfaces canDeleteContract's reason, like deleteStep.
+    deleteContract: (name) => {
+      const { editorModel, editorReadOnly } = get();
+      if (!editorModel || editorReadOnly) return false;
+      const check = canDeleteContract(editorModel, name);
+      if (!check.ok) {
+        get()._surfaceEditorError(check.reason);
+        return false;
+      }
+      deleteContractInModel(editorModel, name);
+      set({ editorModel: reactiveModel(editorModel), editorDirty: true });
+      get()._revalidateEditor();
+      return true;
+    },
+
+    setContractField: (name, fieldName, fieldSpec) => {
+      const { editorModel, editorReadOnly } = get();
+      if (!editorModel || editorReadOnly) return false;
+      try {
+        setContractFieldInModel(editorModel, name, fieldName, fieldSpec);
+      } catch (err) {
+        get()._surfaceEditorError(err.message);
+        return false;
+      }
+      set({ editorModel: reactiveModel(editorModel), editorDirty: true });
+      get()._revalidateEditor();
+      return true;
+    },
+
+    removeContractField: (name, fieldName) => {
+      const { editorModel, editorReadOnly } = get();
+      if (!editorModel || editorReadOnly) return false;
+      try {
+        removeContractFieldInModel(editorModel, name, fieldName);
+      } catch (err) {
+        get()._surfaceEditorError(err.message);
+        return false;
+      }
+      set({ editorModel: reactiveModel(editorModel), editorDirty: true });
+      get()._revalidateEditor();
+      return true;
+    },
+
+    renameContractField: (name, oldField, newField) => {
+      const { editorModel, editorReadOnly } = get();
+      if (!editorModel || editorReadOnly) return false;
+      if (!newField || oldField === newField) return false;
+      try {
+        renameContractFieldInModel(editorModel, name, oldField, newField);
+      } catch (err) {
+        get()._surfaceEditorError(err.message);
+        return false;
+      }
+      set({ editorModel: reactiveModel(editorModel), editorDirty: true });
+      get()._revalidateEditor();
+      return true;
+    },
+
+    // ── COMP-PIPE-EDIT-7: save-as-template ─────────────────────────────────
+    // POST the current model as a NEW pipelines/<file>.stratum.yaml. Returns the
+    // server response (incl. { error } on 409 id-collision / overwrite refusal).
+    // Never clears editorDirty (the source file is unchanged by a template save).
+    saveAsTemplate: async ({ filename, metadata }) => {
+      const { editorModel, editorErrors } = get();
+      if (!editorModel) return { error: 'No spec loaded' };
+      // Never publish a template that fails validation (mirrors the saveSpec gate;
+      // the UI also disables the button, this is the defense-in-depth backstop).
+      if ((editorErrors?.errors?.length || 0) > 0) {
+        return { error: 'Resolve validation errors before saving as a template' };
+      }
+      return apiCall('/api/pipeline/save-as-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename, model: editorModel, metadata }),
+      });
     },
 
     setFeatureTimeline: (updater) => set(s => ({

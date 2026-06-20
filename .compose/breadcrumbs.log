@@ -627,3 +627,5 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-20T23:18:33+08:00 | Design Wave 1 (COMP-PIPE-EDIT-3 wiring + -4 contract editor + -7 template save)
 2026-06-20T23:31:49+08:00 | COMP-PIPE-EDIT-3 W1 core: dep-wiring + contract-editor lib helpers + contracts/template-save backend (TDD)
 2026-06-20T23:49:49+08:00 | Commit W1 core (wiring + contract editor lib + contracts/template-save backend), 1 Codex round (cross-flow output_contract propagation, TaskGraph lock, dangling-edge reject)
+2026-06-20T23:51:22+08:00 | Wave-1 pipeline editor UI: store dep/contract/save-as-template actions (TDD)
+2026-06-21T00:09:36+08:00 | Commit W1 UI (connect-mode wiring, contract editor, save-as-template); Codex-fixed: template validation gate, stale connect-source on rebuild, contract delete-block banner

@@ -10,8 +10,16 @@
  * src/components/GraphRenderer.jsx — `cytoscape.use(cytoscapeDagre)`, dagre
  * layout, rebuild-on-change).
  *
- *   tap on a node    → selectStep(id)
+ *   tap on a node    → selectStep(id)   (normal mode)
  *   cxttap on a node → confirm + deleteStep(id)
+ *   cxttap on an edge→ confirm + removeDependency(target, source)
+ *
+ * COMP-PIPE-EDIT-3 — Connect mode (toolbar-controlled via the `connectMode`
+ * prop): first node tap = source (highlighted), second node tap = target →
+ * addDependency(targetStepId, sourceStepId) (edge source→target means "target
+ * depends_on source", matching the depends_on edge render). Tapping the same
+ * node again cancels. Invalid attempts (cycle/self/dangling) don't mutate; the
+ * store surfaces a message and the pending source is cleared.
  *
  * Steps whose id has a validation warning (editorErrors.warningsByStepId) carry
  * a red badge border so the canvas mirrors the inspector's inline errors.
@@ -63,6 +71,9 @@ function buildStyle(c) {
     },
     { selector: 'node:selected', style: { 'border-width': 2, 'border-opacity': 1, 'border-color': c.accent } },
     { selector: 'node[hasWarning = 1]', style: { 'border-color': c.danger, 'border-width': 2, 'border-opacity': 1 } },
+    // COMP-PIPE-EDIT-3: the pending connect-source node + a transient flash.
+    { selector: 'node.connect-source', style: { 'border-color': c.accent, 'border-width': 3, 'border-opacity': 1, 'background-color': c.overlay } },
+    { selector: '.connect-flash', style: { 'border-color': c.danger, 'border-width': 3, 'border-opacity': 1, 'line-color': c.danger, 'target-arrow-color': c.danger } },
     {
       selector: 'edge',
       style: {
@@ -122,7 +133,7 @@ function toElements(steps, warningsByStepId) {
   return elements;
 }
 
-const PipelineEditorCanvas = forwardRef(function PipelineEditorCanvas(_props, ref) {
+const PipelineEditorCanvas = forwardRef(function PipelineEditorCanvas({ connectMode = false } = {}, ref) {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   const isDark = useTheme();
@@ -134,6 +145,22 @@ const PipelineEditorCanvas = forwardRef(function PipelineEditorCanvas(_props, re
   const errors = useVisionStore(s => s.editorErrors);
   const selectStep = useVisionStore(s => s.selectStep);
   const deleteStep = useVisionStore(s => s.deleteStep);
+  const addDependency = useVisionStore(s => s.addDependency);
+  const removeDependency = useVisionStore(s => s.removeDependency);
+
+  // Live refs so the cytoscape tap handlers (bound once per graph rebuild) read
+  // current connect-mode + pending-source without forcing a graph rebuild.
+  const connectModeRef = useRef(connectMode);
+  useEffect(() => {
+    connectModeRef.current = connectMode;
+    // Leaving connect mode clears any half-finished pending source.
+    if (!connectMode) {
+      pendingSourceRef.current = null;
+      const cy = cyRef.current;
+      if (cy) cy.nodes().removeClass('connect-source');
+    }
+  }, [connectMode]);
+  const pendingSourceRef = useRef(null); // step id of the pending connect source
 
   const steps = model && selectedFlow ? flowSteps(model, selectedFlow) : [];
   // Re-key on flow + ids + labels so the canvas rebuilds on any structural edit.
@@ -142,16 +169,27 @@ const PipelineEditorCanvas = forwardRef(function PipelineEditorCanvas(_props, re
     steps: steps.map(s => ({ id: s.id, l: stepLabel(s), d: s.depends_on, w: errors?.warningsByStepId?.[s.id]?.length || 0 })),
   });
 
-  // Re-layout helper exposed to the toolbar.
-  useImperativeHandle(ref, () => ({
-    relayout: () => {
-      const cy = cyRef.current;
-      if (cy) { cy.layout(LR_LAYOUT).run(); cy.fit(undefined, 40); }
-    },
-  }), []);
+  // Re-layout helper, shared by the toolbar (imperative handle) and the
+  // connect-mode wire success path.
+  const runLayout = () => {
+    const cy = cyRef.current;
+    if (cy) { cy.layout(LR_LAYOUT).run(); cy.fit(undefined, 40); }
+  };
+  useImperativeHandle(ref, () => ({ relayout: runLayout }), []);
+
+  // Flash a node/edge red briefly to signal a rejected connect attempt.
+  const flash = (ele) => {
+    if (!ele || !ele.length) return;
+    ele.addClass('connect-flash');
+    setTimeout(() => { try { ele.removeClass('connect-flash'); } catch { /* destroyed */ } }, 600);
+  };
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
+    // A flow/spec switch (or any structural edit) rebuilds the graph — drop any
+    // half-finished connect source so a second tap can't wire to a step id from
+    // the previous flow (which would hit the dangling-edge reject path).
+    pendingSourceRef.current = null;
     const cy = cytoscape({
       container: containerRef.current,
       elements: toElements(steps, errors?.warningsByStepId),
@@ -161,14 +199,59 @@ const PipelineEditorCanvas = forwardRef(function PipelineEditorCanvas(_props, re
     });
     cyRef.current = cy;
 
-    cy.on('tap', 'node', (evt) => selectStep(evt.target.data('stepId')));
+    cy.on('tap', 'node', (evt) => {
+      const node = evt.target;
+      const stepId = node.data('stepId');
+      // Normal mode: tap = select (existing behavior).
+      if (!connectModeRef.current) { selectStep(stepId); return; }
+
+      // Connect mode. First tap picks the source; second tap on a DIFFERENT node
+      // wires source→target == addDependency(target, source). Re-tapping the same
+      // node cancels.
+      const pending = pendingSourceRef.current;
+      if (!pending) {
+        pendingSourceRef.current = stepId;
+        cy.nodes().removeClass('connect-source');
+        node.addClass('connect-source');
+        return;
+      }
+      if (pending === stepId) {
+        // Cancel the pending source.
+        pendingSourceRef.current = null;
+        cy.nodes().removeClass('connect-source');
+        return;
+      }
+      // Wire: edge pending(source) → stepId(target) means target depends_on source.
+      const ok = addDependency(stepId, pending);
+      pendingSourceRef.current = null;
+      cy.nodes().removeClass('connect-source');
+      if (ok) runLayout();
+      else flash(node);
+    });
+
     cy.on('cxttap', 'node', (evt) => {
+      // Right-click delete is only offered in normal mode (connect mode owns taps).
+      if (connectModeRef.current) return;
       const id = evt.target.data('stepId');
       // eslint-disable-next-line no-alert
       if (typeof window !== 'undefined' && window.confirm(`Delete step "${id}"?`)) {
         deleteStep(id);
       }
     });
+
+    // cxttap on an EDGE → confirm → removeDependency(target, source). The edge's
+    // source/target nodes carry the real step ids in data.stepId.
+    cy.on('cxttap', 'edge', (evt) => {
+      const edge = evt.target;
+      const sourceStepId = cy.getElementById(edge.data('source')).data('stepId');
+      const targetStepId = cy.getElementById(edge.data('target')).data('stepId');
+      // eslint-disable-next-line no-alert
+      if (typeof window !== 'undefined'
+        && window.confirm(`Remove dependency "${targetStepId}" → "${sourceStepId}"?`)) {
+        removeDependency(targetStepId, sourceStepId);
+      }
+    });
+
     cy.on('layoutstop', () => cy.fit(undefined, 40));
 
     return () => { cy.destroy(); cyRef.current = null; };
@@ -205,7 +288,19 @@ const PipelineEditorCanvas = forwardRef(function PipelineEditorCanvas(_props, re
 
   return (
     <div className="w-full h-full relative bg-background">
-      <div ref={containerRef} className="w-full h-full" data-testid="pipeline-editor-canvas" />
+      {connectMode && (
+        <div
+          className="absolute top-2 left-1/2 -translate-x-1/2 z-10 px-2.5 py-1 rounded-full text-[10px] bg-accent/15 text-accent border border-accent/40 pointer-events-none"
+          data-testid="connect-mode-hint"
+        >
+          Connect mode: tap a source step, then a target. Tap the same node to cancel.
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        className={connectMode ? 'w-full h-full cursor-crosshair' : 'w-full h-full'}
+        data-testid="pipeline-editor-canvas"
+      />
     </div>
   );
 });

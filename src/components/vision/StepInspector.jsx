@@ -61,9 +61,12 @@ export default function StepInspector() {
   }
 
   const stepWarnings = errors?.warningsByStepId?.[step.id] || [];
+  // Built-in TaskGraph is always offered, but if the spec already defines a
+  // TaskGraph contract (legacy specs do), don't add a second built-in option.
+  const contractNames = Object.keys(model.contracts || {});
   const contractOptions = [
-    ...Object.keys(model.contracts || {}),
-    'TaskGraph',
+    ...contractNames,
+    ...(contractNames.includes('TaskGraph') ? [] : ['TaskGraph']),
     '(none)',
   ];
   const otherStepIds = steps.filter(s => s.id !== step.id).map(s => s.id);
