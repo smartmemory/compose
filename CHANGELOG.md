@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-06-21
+
+### COMP-PIPE-EDIT-3/-4/-7 — Pipeline editor Wave 1 (COMPLETE)
+
+Wave 1 of the visual pipeline editor's remainder, on top of the -1/-2 foundation.
+
+- **-3 Dependency wiring** — a canvas "Connect" mode: tap a producer then a
+  consumer to add a `depends_on` edge (`addDependency`/`removeDependency`/
+  `wouldCreateCycle`), with self/duplicate/dangling/cycle rejection and a
+  transient flash on invalid attempts; right-click an edge to remove it;
+  auto-relayout after a wire.
+- **-4 Contract editor** — a `ContractEditor` panel to add/rename/delete contracts
+  and edit fields. Contract names are rewritten across all three reference sites
+  (`step.output_contract`, `flows.*.output`, `functions.*.output`) on rename, and
+  delete is blocked (with a surfaced reason) while still referenced. The reserved
+  `TaskGraph` is locked (never editable/renamable/deletable) and deduped in the
+  inspector dropdown. `POST /api/pipeline/save` now persists the `contracts` block
+  in place, preserving comments on untouched contracts.
+- **-7 Template save** — `POST /api/pipeline/save-as-template` writes the current
+  canvas as a new `pipelines/*.stratum.yaml` with a real `metadata:` key (so it
+  appears in `TemplateSelector`), create-only, refusing both filename overwrite
+  and `metadata.id` collision. A "Save as template" toolbar dialog drives it,
+  gated on validation passing.
+
 ## 2026-06-20
 
 ### COMP-PIPE-EDIT-1/-2 — Visual pipeline editor foundation (COMPLETE)
