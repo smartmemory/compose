@@ -619,3 +619,5 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-19T23:52:45+08:00 | STRAT-VOCAB-3 design: wire shipped vocabulary_compliance ensure into compose (init scaffold + build execute-step ensure + must-fix finding surfacing)
 2026-06-20T18:56:35+08:00 | Reconcile corrupt canon: COMP-PIPE-EDIT-3..7 falsely COMPLETE (verified unbuilt, no code/git/audit) -> PLANNED, then re-render ROADMAP
 2026-06-20T19:09:10+08:00 | Design COMP-PIPE-EDIT-1/-2 foundation: cytoscape canvas + step inspector + save-to-disk round-trip (Stratum pipeline YAML editor)
+2026-06-20T19:27:21+08:00 | COMP-PIPE-EDIT-1 T1/T2: pure pipeline-model lib + save endpoint, TDD-first
+2026-06-20T20:01:54+08:00 | Commit COMP-PIPE-EDIT core: pure pipeline-model lib + specs/save endpoints, 4-round Codex-hardened (inputs-refs, _extra preservation, symlink guard, flow matching, rename aliasing)
