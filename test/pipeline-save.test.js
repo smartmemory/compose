@@ -346,4 +346,52 @@ describe('POST /api/pipeline/save — unsurfaced fields survive an incomplete _e
       await new Promise(r => srv.close(r));
     }
   });
+
+  test('save → rename → save preserves disk fields (rename hints reset after save)', async () => {
+    const localDir = mkdtempSync(join(tmpdir(), 'pipeline-resave-'));
+    const localPipelines = join(localDir, 'pipelines');
+    mkdirSync(localPipelines, { recursive: true });
+    const p = join(localPipelines, 'resave.stratum.yaml');
+    writeFileSync(p,
+      'version: "0.3"\nflows:\n  ff:\n    steps:\n      - id: A\n        agent: x\n        marker: alpha\n');
+
+    const localApp = express();
+    localApp.use(express.json({ limit: '5mb' }));
+    attachPipelineRoutes(localApp, {
+      broadcastMessage: () => {}, scheduleBroadcast: () => {},
+      getDataDir: () => join(localDir, 'data'), getPipelinesDir: () => localPipelines, stratumClient: null,
+    });
+    const srv = createServer(localApp);
+    await new Promise(r => srv.listen(0, r));
+    const url = `http://127.0.0.1:${srv.address().port}`;
+    const post = (model) => fetch(`${url}/api/pipeline/save`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file: 'resave.stratum.yaml', model, flowName: 'ff' }),
+    });
+
+    try {
+      // First rename A->B and save.
+      const model = specToModel(YAML.parse(readFileSync(p, 'utf-8')));
+      renameStep(model, 'ff', 'A', 'B');
+      assert.equal((await post(model)).status, 200);
+
+      // Simulate the store's post-save cleanup: drop the rename hint for the
+      // saved flow (so the next rename re-anchors to the now-current disk id).
+      for (const s of model.flows.find(f => f.name === 'ff').steps) delete s._renamedFrom;
+
+      // Second rename B->C, drop the disk-only marker from the payload, save.
+      renameStep(model, 'ff', 'B', 'C');
+      const stepC = model.flows.find(f => f.name === 'ff').steps.find(s => s.id === 'C');
+      assert.equal(stepC._renamedFrom, 'B', 'second rename anchors to the post-save id B');
+      delete stepC._extra.marker;
+      assert.equal((await post(model)).status, 200);
+
+      const saved = YAML.parse(readFileSync(p, 'utf-8'));
+      const node = saved.flows.ff.steps.find(s => s.id === 'C');
+      assert.ok(node, 'final id C present');
+      assert.equal(node.marker, 'alpha', 'disk marker survived save→rename→save');
+    } finally {
+      await new Promise(r => srv.close(r));
+    }
+  });
 });

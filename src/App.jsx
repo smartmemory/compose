@@ -56,6 +56,7 @@ import GateToast from './components/vision/GateToast.jsx';
 import ChallengeModal from './components/vision/ChallengeModal.jsx';
 import SettingsPanel from './components/vision/SettingsPanel.jsx';
 import PipelineView from './components/vision/PipelineView.jsx';
+import PipelineEditor from './components/vision/PipelineEditor.jsx';
 import SessionsView from './components/vision/SessionsView.jsx';
 import PastBuildsView from './components/vision/PastBuildsView.jsx';
 import DashboardView from './components/vision/DashboardView.jsx';
@@ -315,6 +316,8 @@ function CockpitView({
           onRefresh={onRefreshBuild}
         />
       );
+    case 'pipeline-editor':
+      return <PipelineEditor />;
     case 'sessions':
       return (
         <SessionsView

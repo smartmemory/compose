@@ -19,6 +19,7 @@ const TAB_META = {
   tree:      { label: 'Items',     icon: GitBranch,       tip: 'Hierarchical list of all items and features' },
   graph:     { label: 'Graph',     icon: Network,         tip: 'Visual dependency graph of items' },
   pipeline:  { label: 'Pipeline',  icon: Workflow,        tip: 'Build pipeline stages and progress' },
+  'pipeline-editor': { label: 'Pipeline Editor', icon: Network, tip: 'Visually edit Stratum pipeline specs' },
   sessions:  { label: 'Sessions',  icon: Activity,        tip: 'Active and past agent sessions' },
   'build-history': { label: 'Builds', icon: History,      tip: 'History of past build runs and outcomes' },
   gates:     { label: 'Gates',     icon: ShieldCheck,     tip: 'Quality gates and approval checkpoints' },

@@ -1,8 +1,42 @@
 import { create } from 'zustand';
+import YAML from 'yaml';
 import { handleVisionMessage } from './visionMessageHandler.js';
 import { wsFetch } from '../../lib/wsFetch.js';
 import { createReconnectingWS } from '../../lib/wsReconnect.js';
 import { visionWsUrl } from '../../lib/wsUrl.js';
+import {
+  specToModel,
+  flowSteps,
+  listEditableFlows,
+  validateFlow,
+  renameStep as renameStepInModel,
+  canDeleteStep,
+  deleteStep as deleteStepInModel,
+} from '../../lib/pipeline-model.js';
+
+// COMP-PIPE-EDIT-1: v0.1 specs are not validated by Stratum (IR_UNKNOWN_VERSION);
+// they load read-only with a banner. v0.2/v0.3 are fully editable.
+function isReadOnlyVersion(version) {
+  return String(version) === '0.1';
+}
+
+// Pick a unique step id for a newly added step within a flow.
+function uniqueStepId(steps, base = 'new_step') {
+  const taken = new Set((steps || []).map(s => s.id));
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base}_${n}`)) n += 1;
+  return `${base}_${n}`;
+}
+
+// The editor mutates the model in place (single source of truth), but Zustand
+// subscribers compare by reference — so after every mutation we must hand back
+// fresh refs at the levels the canvas/inspector read (model → flows → flow →
+// steps → step) or valid edits won't re-render. _doc/contracts are shared.
+function reactiveModel(m) {
+  if (!m) return m;
+  return { ...m, flows: m.flows.map(f => ({ ...f, steps: f.steps.map(s => ({ ...s })) })) };
+}
 
 /**
  * useVisionStore — Zustand singleton store.
@@ -281,6 +315,19 @@ export const useVisionStore = create((set, get) => {
     // In-memory, populated by WS push + single GET on feature selection.
     statusSnapshots: {},
 
+    // ── COMP-PIPE-EDIT-1/-2: visual pipeline editor slice ──────────────────
+    // All in-memory; the model is the single source of truth, the canvas and
+    // inspector are pure projections of it. saveSpec() persists to disk.
+    editorSpecFile: null,      // selected pipelines/*.stratum.yaml filename
+    editorSpecs: [],           // [{ file, version, flows[] }] from GET /api/pipeline/specs
+    editorModel: null,         // specToModel() output ({ version, flows[], contracts{}, _doc })
+    editorVersion: null,       // spec version string ('0.2' | '0.3' | '0.1' | …)
+    editorSelectedFlow: null,  // name of the flow currently being edited
+    editorSelectedStep: null,  // id of the selected step within the flow
+    editorDirty: false,        // unsaved edits since last load/save
+    editorErrors: { errors: [], warningsByStepId: {} },
+    editorReadOnly: false,     // true for v0.1 specs (Stratum can't validate them)
+
     // Actions
     clearUICommand: () => set({ uiCommand: null }),
 
@@ -324,6 +371,165 @@ export const useVisionStore = create((set, get) => {
     },
 
     setPipelineDraft: (v) => set({ pipelineDraft: v }),
+
+    // ── COMP-PIPE-EDIT-1/-2: pipeline editor actions ───────────────────────
+
+    // Re-run structural validation for the selected flow and store the result.
+    // Internal helper, callable after any mutation; safe when nothing is loaded.
+    _revalidateEditor: () => {
+      const { editorModel, editorSelectedFlow } = get();
+      if (!editorModel || !editorSelectedFlow) {
+        set({ editorErrors: { errors: [], warningsByStepId: {} } });
+        return;
+      }
+      set({ editorErrors: validateFlow(editorModel, editorSelectedFlow) });
+    },
+
+    // List the raw spec files on disk (filename-keyed; metadata-comment specs are
+    // invisible to the template loader, so discovery is by filename).
+    loadSpecList: async () => {
+      const data = await apiCall('/api/pipeline/specs');
+      const specs = Array.isArray(data?.specs) ? data.specs : [];
+      set({ editorSpecs: specs });
+      return specs;
+    },
+
+    // Load a spec's raw YAML, parse it, build the editable model, and select the
+    // first editable flow. v0.1 specs load read-only with editorReadOnly=true.
+    loadSpecForEdit: async (file) => {
+      const data = await apiCall(`/api/pipeline/spec?file=${encodeURIComponent(file)}`);
+      if (data?.error || typeof data?.text !== 'string') {
+        set({ editorErrors: { errors: [data?.error || 'Failed to load spec'], warningsByStepId: {} } });
+        return null;
+      }
+      const parsed = YAML.parse(data.text);
+      const model = specToModel(parsed);
+      const flows = listEditableFlows(parsed);
+      const selectedFlow = flows[0] || null;
+      const readOnly = isReadOnlyVersion(model.version);
+      set({
+        editorSpecFile: file,
+        editorModel: model,
+        editorVersion: model.version ?? null,
+        editorSelectedFlow: selectedFlow,
+        editorSelectedStep: null,
+        editorDirty: false,
+        editorReadOnly: readOnly,
+        editorErrors: selectedFlow
+          ? validateFlow(model, selectedFlow)
+          : { errors: [], warningsByStepId: {} },
+      });
+      return model;
+    },
+
+    selectFlow: (name) => {
+      const { editorModel } = get();
+      set({
+        editorSelectedFlow: name,
+        editorSelectedStep: null,
+        editorErrors: editorModel && name
+          ? validateFlow(editorModel, name)
+          : { errors: [], warningsByStepId: {} },
+      });
+    },
+
+    selectStep: (id) => set({ editorSelectedStep: id }),
+
+    // Patch fields on the selected flow's step. Mutates the model in place
+    // (the model is the single source of truth), marks dirty, revalidates.
+    updateStep: (id, patch) => {
+      const { editorModel, editorSelectedFlow, editorReadOnly } = get();
+      if (!editorModel || !editorSelectedFlow || editorReadOnly) return;
+      const steps = flowSteps(editorModel, editorSelectedFlow);
+      const step = steps.find(s => s.id === id);
+      if (!step) return;
+      Object.assign(step, patch);
+      set({ editorModel: reactiveModel(editorModel), editorDirty: true });
+      get()._revalidateEditor();
+    },
+
+    // Rename a step id via the lib so all reference fields are rewritten and the
+    // _renamedFrom hint is set (the save path needs it to match the disk node).
+    renameStep: (oldId, newId) => {
+      const { editorModel, editorSelectedFlow, editorSelectedStep, editorReadOnly } = get();
+      if (!editorModel || !editorSelectedFlow || editorReadOnly) return;
+      if (!newId || oldId === newId) return;
+      renameStepInModel(editorModel, editorSelectedFlow, oldId, newId);
+      set({
+        editorModel: reactiveModel(editorModel),
+        editorDirty: true,
+        editorSelectedStep: editorSelectedStep === oldId ? newId : editorSelectedStep,
+      });
+      get()._revalidateEditor();
+    },
+
+    // Append a fresh agent step with a unique id to the selected flow.
+    addStep: () => {
+      const { editorModel, editorSelectedFlow, editorReadOnly } = get();
+      if (!editorModel || !editorSelectedFlow || editorReadOnly) return null;
+      const flow = editorModel.flows.find(f => f.name === editorSelectedFlow);
+      if (!flow) return null;
+      const id = uniqueStepId(flow.steps);
+      const newStep = {
+        id, kind: 'agent', agent: '', function: undefined, intent: '',
+        inputs: {}, output_contract: undefined, ensure: [], retries: undefined,
+        depends_on: [], on_fail: undefined, _extra: {},
+      };
+      flow.steps.push(newStep);
+      set({ editorModel: reactiveModel(editorModel), editorDirty: true, editorSelectedStep: id });
+      get()._revalidateEditor();
+      return id;
+    },
+
+    // Delete a step. Blocked (surfaced in editorErrors, no mutation) when another
+    // step still references it via any ref field (depends_on/on_fail/gate/source).
+    deleteStep: (id) => {
+      const { editorModel, editorSelectedFlow, editorSelectedStep, editorReadOnly } = get();
+      if (!editorModel || !editorSelectedFlow || editorReadOnly) return false;
+      const check = canDeleteStep(editorModel, editorSelectedFlow, id);
+      if (!check.ok) {
+        set(s => ({
+          editorErrors: {
+            errors: [check.reason, ...(s.editorErrors?.errors || [])],
+            warningsByStepId: {
+              ...(s.editorErrors?.warningsByStepId || {}),
+              [id]: [check.reason, ...((s.editorErrors?.warningsByStepId || {})[id] || [])],
+            },
+          },
+        }));
+        return false;
+      }
+      deleteStepInModel(editorModel, editorSelectedFlow, id);
+      set({
+        editorModel: reactiveModel(editorModel),
+        editorDirty: true,
+        editorSelectedStep: editorSelectedStep === id ? null : editorSelectedStep,
+      });
+      get()._revalidateEditor();
+      return true;
+    },
+
+    // Persist the model back to its source file. Saves only the selected flow.
+    saveSpec: async () => {
+      const { editorModel, editorSpecFile, editorSelectedFlow, editorReadOnly } = get();
+      if (!editorModel || !editorSpecFile || editorReadOnly) {
+        return { error: 'No editable spec loaded' };
+      }
+      const data = await apiCall('/api/pipeline/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: editorSpecFile, model: editorModel, flowName: editorSelectedFlow }),
+      });
+      if (data && data.ok) {
+        // After persisting, the disk node ids now equal the model ids for the
+        // saved flow, so drop its rename hints — a later rename must re-anchor to
+        // the now-current id (else save→rename→save would miss the disk node).
+        const flow = editorModel.flows.find(f => f.name === editorSelectedFlow);
+        if (flow) for (const s of flow.steps) delete s._renamedFrom;
+        set({ editorModel: reactiveModel(editorModel), editorDirty: false });
+      }
+      return data;
+    },
 
     setFeatureTimeline: (updater) => set(s => ({
       featureTimeline: typeof updater === 'function' ? updater(s.featureTimeline) : updater,
