@@ -618,3 +618,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-19T23:47:08+08:00 | Reconcile STRAT-VOCAB roadmap: VOCAB-1/2 already shipped in stratum-mcp (commits d61d9bb/13d4113/5a33b54, 44 tests green) — mark COMPLETE, umbrella PARTIAL pending VOCAB-3
 2026-06-19T23:52:45+08:00 | STRAT-VOCAB-3 design: wire shipped vocabulary_compliance ensure into compose (init scaffold + build execute-step ensure + must-fix finding surfacing)
 2026-06-20T18:56:35+08:00 | Reconcile corrupt canon: COMP-PIPE-EDIT-3..7 falsely COMPLETE (verified unbuilt, no code/git/audit) -> PLANNED, then re-render ROADMAP
+2026-06-20T19:09:10+08:00 | Design COMP-PIPE-EDIT-1/-2 foundation: cytoscape canvas + step inspector + save-to-disk round-trip (Stratum pipeline YAML editor)
