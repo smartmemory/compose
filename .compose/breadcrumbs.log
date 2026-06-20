@@ -623,3 +623,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-20T20:01:54+08:00 | Commit COMP-PIPE-EDIT core: pure pipeline-model lib + specs/save endpoints, 4-round Codex-hardened (inputs-refs, _extra preservation, symlink guard, flow matching, rename aliasing)
 2026-06-20T20:05:52+08:00 | COMP-PIPE-EDIT T3-T7: build visual pipeline editor frontend (store slice, canvas, inspector, view, registration)
 2026-06-20T20:35:07+08:00 | UI wave: pipeline editor store slice + cytoscape canvas + inspector + view registration; Codex-fixed re-render refs, rename-hint reset, dup-id per-step badge, synthetic canvas ids
+2026-06-20T20:39:18+08:00 | Record COMP-PIPE-EDIT-1/-2 completion; surgical ROADMAP edit (record_completion regen would have downgraded shipped STRAT-AGENT-INTERP/301a from stale canon — reverted that side effect)

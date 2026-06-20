@@ -1,9 +1,28 @@
 {
   "code": "COMP-PIPE-EDIT-2",
   "description": "Step inspector: Click a step node to open a side panel with editable fields: ID, agent, intent (multiline), inputs (key-value), output_contract (dropdown from defined contracts), ensure conditions, retries, on_fail. Live validation as you type.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-PIPE-EDIT: Visual Pipeline Editor",
   "position": 137,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-20",
+  "completions": [
+    {
+      "completion_id": "COMP-PIPE-EDIT-2:7f22190a1f7528c276a867a60f2a8ea73b98940d",
+      "feature_code": "COMP-PIPE-EDIT-2",
+      "commit_sha": "7f22190a1f7528c276a867a60f2a8ea73b98940d",
+      "commit_sha_short": "7f22190a",
+      "tests_pass": true,
+      "files_changed": [
+        "src/components/vision/StepInspector.jsx",
+        "src/components/vision/useVisionStore.js",
+        "src/lib/pipeline-model.js",
+        "test/ui/pipeline-step-inspector.test.jsx"
+      ],
+      "recorded_at": "2026-06-20T12:37:24.586Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Step inspector: editable fields, output_contract dropdown, live structural validation."
+    }
+  ],
+  "commit_sha": "7f22190a1f7528c276a867a60f2a8ea73b98940d"
 }
