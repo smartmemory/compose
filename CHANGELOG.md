@@ -2,6 +2,29 @@
 
 ## 2026-06-21
 
+### COMP-PIPE-EDIT-5/-6 — Pipeline editor Wave 2 (COMPLETE — epic done)
+
+The complex pair, completing the visual pipeline editor epic (all of -1..-7).
+
+- **-6 Bidirectional YAML sync** — an in-editor YAML pane (a third panel mode):
+  canvas/inspector edits render to YAML live; editing the pane re-parses to the
+  model (spec-wide validation, selected-flow reconciliation), with an
+  active-editor guard + buffer that survives a panel toggle and flushes on close.
+  *(The roadmap's "edit in Docs view" premise was false — the Docs view is
+  markdown-only — so the pane lives in the editor.)* **Conflict resolution:**
+  `GET /api/pipeline/spec` returns a content hash; `POST /save` takes a `baseHash`
+  and returns **409** on disk divergence (with `force` to override); a
+  `pipelines/` file-watch emits `specChanged` on the vision WS, so the editor
+  reloads when clean or shows a Reload/Overwrite banner when dirty. A latched
+  spec-wide save scope keeps multi-flow edits whole.
+- **-5 Sub-flow support** — collapse a selected group of steps into a named
+  sub-flow (a `flow:` step), constrained to single-entry/single-exit
+  dependency-contiguous selections with one output (rejecting cuts through
+  `source`/gate-routes or multi-output groups with a clear reason); inbound data
+  refs become sub-flow input ports preserving their `.output.<field>` paths;
+  expand opens the sub-flow via the flow-switcher; ports render as text on the
+  collapsed node. Spec-wide save creates the new flow on disk.
+
 ### COMP-PIPE-EDIT-3/-4/-7 — Pipeline editor Wave 1 (COMPLETE)
 
 Wave 1 of the visual pipeline editor's remainder, on top of the -1/-2 foundation.
