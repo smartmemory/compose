@@ -14,6 +14,24 @@ import { resolveDocsPathFromConfig, resolveFeaturesPathFromConfig } from '../lib
 
 const PROJECT_ROOT = getTargetRoot();
 
+/**
+ * fs.watch fileFilter for the pipelines/ watch (COMP-PIPE-EDIT-6): only
+ * *.stratum.yaml files trigger a specChanged. `filename` is what fs.watch hands
+ * us (a name, possibly with a subdir prefix on recursive watches).
+ */
+export function isStratumSpecFile(filename) {
+  return typeof filename === 'string' && filename.endsWith('.stratum.yaml');
+}
+
+/**
+ * Shape of the vision-WS `specChanged` broadcast (COMP-PIPE-EDIT-6). `file` is a
+ * BASENAME (editorSpecFile is a bare filename, so the store compares on basename);
+ * `path` carries the prefixed relative path for diagnostics.
+ */
+export function buildSpecChangedMessage(file, relativePath) {
+  return { type: 'specChanged', file, path: relativePath };
+}
+
 export class FileWatcherServer {
   constructor() {
     this.clients = new Set();
@@ -214,6 +232,21 @@ export class FileWatcherServer {
         this.onFeatureChanged(relativePath);
       }
     });
+
+    // Watch pipelines/ for *.stratum.yaml changes (COMP-PIPE-EDIT-6). A spec the
+    // pipeline editor has open can be edited externally (another writer, the user
+    // editing the file directly). The editor store lives on the VISION WS, not
+    // /ws/files, so emit a DEDICATED `specChanged` message via the onSpecChanged
+    // callback (wired in server/index.js to visionServer.broadcastMessage), NOT a
+    // `fileChanged` on this server's /ws/files. The payload carries `file` as a
+    // BASENAME because editorSpecFile is a bare filename (a prefixed relative path
+    // would never match the store's compare).
+    const pipelinesDir = path.join(PROJECT_ROOT, 'pipelines');
+    watchDir(pipelinesDir, 'pipelines', (relativePath, fullPath) => {
+      if (typeof this.onSpecChanged === 'function') {
+        this.onSpecChanged(buildSpecChangedMessage(path.basename(fullPath), relativePath));
+      }
+    }, isStratumSpecFile);
 
     // Watch .compose/data/ for active-build.json changes
     const self = this;

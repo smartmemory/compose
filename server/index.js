@@ -231,6 +231,13 @@ fileWatcher.onBuildStateChanged = (state) => {
   }
 };
 
+// Wire pipelines/*.stratum.yaml external changes → broadcast `specChanged` on
+// the VISION WS (COMP-PIPE-EDIT-6 — the channel the pipeline editor store uses,
+// not /ws/files). The message already carries { type:'specChanged', file, path }.
+fileWatcher.onSpecChanged = (message) => {
+  visionServer.broadcastMessage(message);
+};
+
 // ---------------------------------------------------------------------------
 // Static serving + SPA fallback (BOTH modes — additive)
 // Mounted AFTER all API routes so /api/* is never shadowed.

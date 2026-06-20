@@ -201,19 +201,46 @@ export function modelToSpecObject(model) {
   }
 
   // flows.<name>.steps case — preserve each flow's other keys (input/output/...).
-  if (doc?.flows && typeof doc.flows === 'object') {
+  // Emit every flow present in _doc.flows AND every model flow that lacks a _doc
+  // entry (e.g. a just-collapsed sub-flow injected into _doc.flows OR a flow that
+  // only lives on model.flows). A collapse injects into both, so this is belt+braces.
+  const docFlows = (doc?.flows && typeof doc.flows === 'object') ? doc.flows : null;
+  const emittedFromModel = new Set();
+  if (docFlows) {
     out.flows = {};
-    for (const name of Object.keys(doc.flows)) {
+    for (const name of Object.keys(docFlows)) {
       const flow = byName.get(name);
       if (flow) {
-        out.flows[name] = { ...doc.flows[name], steps: flow.steps.map(denormalizeStep) };
+        out.flows[name] = { ...docFlows[name], steps: flow.steps.map(denormalizeStep) };
+        emittedFromModel.add(name);
       } else {
-        out.flows[name] = doc.flows[name];
+        out.flows[name] = docFlows[name];
       }
     }
   }
+  // Any model flow without a _doc.flows entry (defensive — collapse injects one).
+  for (const flow of model.flows) {
+    if (flow.name === (doc?.workflow?.name || 'workflow') && Array.isArray(doc?.workflow?.steps)) continue;
+    if (emittedFromModel.has(flow.name)) continue;
+    if (docFlows && Object.prototype.hasOwnProperty.call(docFlows, flow.name)) continue;
+    out.flows = out.flows || {};
+    out.flows[flow.name] = { steps: flow.steps.map(denormalizeStep) };
+  }
 
   return out;
+}
+
+/**
+ * Convert the model to a FULL plain spec object the YAML pane can stringify:
+ * `modelToSpecObject` (version + flows + passthrough _doc) with the contracts
+ * block replaced by the model's serialized contracts (excludes the reserved
+ * TaskGraph). COMP-PIPE-EDIT-6 — a comment-stripped editing projection, NOT the
+ * persisted artifact (the server's Document merge owns comment-preserving save).
+ */
+export function modelToYamlObject(model) {
+  const obj = modelToSpecObject(model);
+  obj.contracts = serializeContracts(model);
+  return obj;
 }
 
 // Extract a referenced step id from a JSONPath of the form `$.steps.<id>.…`.
@@ -637,4 +664,308 @@ export function serializeContracts(model) {
     out[key] = contracts[key];
   }
   return out;
+}
+
+// ===========================================================================
+// COMP-PIPE-EDIT-5 — Sub-flow collapse (pure, cross-flow rewrite)
+// ===========================================================================
+//
+// `collapseToSubflow` extracts a single-entry/single-exit (SESE),
+// dependency-contiguous group of steps from `flowName` into a brand-new sub-flow
+// `newFlowName` and replaces them in the parent with one `kind:'flow'` step.
+//
+// Ref kinds (mirrors stepRefs): a boundary edge is REWIREABLE only when it is a
+// `depends_on` or an inputs-`$.steps` ref. A boundary edge via parallel `source`
+// or any gate route (on_fail/on_approve/on_revise/on_kill) is REJECTED — the
+// Stratum `source` parser only accepts `$.steps.<id>` (cannot become `$.input.*`)
+// and gate routes are intra-flow control transfer that cannot cross a boundary.
+const REWIREABLE_REF_FIELDS = new Set(['depends_on']); // plus dynamic inputs.<key>
+function isInputsRefField(field) { return typeof field === 'string' && field.startsWith('inputs.'); }
+function isGateRouteField(field) { return SCALAR_REF_FIELDS.includes(field); }
+
+/**
+ * A safe-ish input-port field name derived from a full inbound ref string like
+ * `$.steps.a.output.x`. The base is `in_<producer>_<suffix-tokens>` so two
+ * distinct suffixes from the same producer yield distinct ports (and identical
+ * ref strings reuse the same one — handled by caching on the ref string).
+ */
+function portNameForRef(refString, used) {
+  // Strip the `$.steps.` prefix and turn the remaining dotted path into tokens:
+  //   $.steps.a.output.x -> a.output.x -> in_a_output_x
+  const body = String(refString).replace(/^\$\.steps\./, '');
+  let base = `in_${body.replace(/[^A-Za-z0-9_]/g, '_')}`;
+  // Collapse any accidental double underscores for readability.
+  base = base.replace(/_+/g, '_').replace(/_$/, '');
+  let name = base;
+  let n = 2;
+  while (used.has(name)) { name = `${base}_${n++}`; }
+  used.add(name);
+  return name;
+}
+
+/**
+ * Collapse a contiguous SESE group of steps in `flowName` into a new sub-flow.
+ * @returns {{ ok: boolean, reason?: string }} — model mutated only on ok:true.
+ */
+export function collapseToSubflow(model, flowName, stepIds, newFlowName) {
+  const parent = model.flows.find(f => f.name === flowName);
+  if (!parent) return { ok: false, reason: `Unknown flow "${flowName}"` };
+
+  // newFlowName uniqueness: across model.flows, model._doc.flows, and != flowName.
+  if (!newFlowName || typeof newFlowName !== 'string') {
+    return { ok: false, reason: 'newFlowName is required' };
+  }
+  if (newFlowName === flowName) {
+    return { ok: false, reason: `New flow name "${newFlowName}" must differ from the source flow (no self-reference)` };
+  }
+  if (model.flows.some(f => f.name === newFlowName)) {
+    return { ok: false, reason: `Flow "${newFlowName}" already exists` };
+  }
+  const docFlows = (model._doc && model._doc.flows && typeof model._doc.flows === 'object') ? model._doc.flows : null;
+  if (docFlows && Object.prototype.hasOwnProperty.call(docFlows, newFlowName)) {
+    return { ok: false, reason: `Flow "${newFlowName}" already exists in the spec document` };
+  }
+
+  // All stepIds must be distinct and present in the parent flow.
+  const selected = new Set();
+  for (const id of (stepIds || [])) {
+    if (selected.has(id)) return { ok: false, reason: `Duplicate step "${id}" in selection` };
+    if (!parent.steps.some(s => s.id === id)) {
+      return { ok: false, reason: `Step "${id}" is not in flow "${flowName}"` };
+    }
+    selected.add(id);
+  }
+  if (selected.size === 0) return { ok: false, reason: 'Selection is empty' };
+
+  const stepById = new Map(parent.steps.map(s => [s.id, s]));
+
+  // Compute boundary edges over the FULL ref graph.
+  //   inbound  = ref from a SELECTED step to a NON-selected step.
+  //   outbound = ref from a NON-selected step to a SELECTED step.
+  const inbound = [];   // { consumerId(sel), field, producerId(outside) }
+  const outbound = [];  // { consumerId(outside), field, producerId(sel) }
+  for (const step of parent.steps) {
+    const inSel = selected.has(step.id);
+    for (const { field, id } of stepRefs(step)) {
+      const targetSel = selected.has(id);
+      if (inSel && !targetSel) inbound.push({ consumerId: step.id, field, producerId: id });
+      else if (!inSel && targetSel) outbound.push({ consumerId: step.id, field, producerId: id });
+    }
+  }
+
+  // Reject any boundary edge that is NOT rewireable (source / gate route).
+  for (const e of [...inbound, ...outbound]) {
+    if (isGateRouteField(e.field)) {
+      return { ok: false, reason: `Cannot collapse: gate route "${e.field}" on step "${e.consumerId}" crosses the sub-flow boundary (control transfer cannot cross a flow boundary)` };
+    }
+    if (e.field === 'source') {
+      return { ok: false, reason: `Cannot collapse: parallel "source" on step "${e.consumerId}" references "${e.producerId}" across the boundary (source only accepts $.steps.<id>, cannot become $.input.*)` };
+    }
+    if (!(REWIREABLE_REF_FIELDS.has(e.field) || isInputsRefField(e.field))) {
+      return { ok: false, reason: `Cannot collapse: ref "${e.field}" on step "${e.consumerId}" crosses the boundary and is not rewireable` };
+    }
+  }
+
+  // Contiguity: removing the group must leave a valid DAG with no outside step
+  // "between" two selected steps. Concretely: no NON-selected step may be both
+  // (transitively) reachable from a selected step AND a (transitive) ancestor of
+  // a selected step along depends_on/inputs/source edges — that would mean an
+  // outside step sits inside the selected region.
+  const refEdges = new Map(); // id -> [producerIds it depends on]
+  for (const step of parent.steps) {
+    const deps = [];
+    for (const { id } of stepRefs(step)) deps.push(id);
+    refEdges.set(step.id, deps);
+  }
+  // descendants of the selected set (steps reachable FROM a selected step).
+  const downstream = new Set();
+  {
+    // reverse adjacency: producer -> consumers
+    const consumersOf = new Map(parent.steps.map(s => [s.id, []]));
+    for (const [consumer, deps] of refEdges) {
+      for (const p of deps) { if (consumersOf.has(p)) consumersOf.get(p).push(consumer); }
+    }
+    const stack = [...selected];
+    while (stack.length) {
+      const n = stack.pop();
+      for (const c of (consumersOf.get(n) || [])) {
+        if (!selected.has(c) && !downstream.has(c)) { downstream.add(c); stack.push(c); }
+      }
+    }
+  }
+  // ancestors of the selected set (steps the selected set transitively depends on).
+  const upstream = new Set();
+  {
+    const stack = [...selected];
+    while (stack.length) {
+      const n = stack.pop();
+      for (const p of (refEdges.get(n) || [])) {
+        if (!selected.has(p) && !upstream.has(p)) { upstream.add(p); stack.push(p); }
+      }
+    }
+  }
+  for (const id of downstream) {
+    if (upstream.has(id)) {
+      return { ok: false, reason: `Cannot collapse: step "${id}" sits between selected steps (selection is not dependency-contiguous)` };
+    }
+  }
+
+  // Single output: at most one DISTINCT selected step may be consumed outside.
+  // (Checked after contiguity so a "between" outside step reports as
+  // non-contiguous — the more actionable reason — rather than as multi-output.)
+  const outboundProducers = new Set(outbound.map(e => e.producerId));
+  if (outboundProducers.size > 1) {
+    return { ok: false, reason: `Cannot collapse: a sub-flow has exactly one output, but selected steps [${[...outboundProducers].join(', ')}] are each consumed outside the group` };
+  }
+
+  // ---- All validations passed. Build the sub-flow. ----
+
+  // Order the moved steps in their original parent order.
+  const movedOrder = parent.steps.filter(s => selected.has(s.id)).map(s => s.id);
+  const firstIdx = parent.steps.findIndex(s => selected.has(s.id));
+
+  // Deep-clone the moved steps so the sub-flow owns them.
+  const cloneStep = (s) => JSON.parse(JSON.stringify(s));
+  const movedSteps = movedOrder.map(id => cloneStep(stepById.get(id)));
+  const movedById = new Map(movedSteps.map(s => [s.id, s]));
+
+  // Mint input ports: ONE per DISTINCT inbound ref STRING (producer + full field
+  // path), NOT per producer. This preserves the `.output.<field>` suffix: the
+  // parent flow-step feeds the port from the FULL original path (resolved in
+  // parent scope), and the moved step reads a BARE `$.input.<port>` (the port
+  // value already IS the extracted sub-value). Two distinct suffixes from the
+  // same producer => two ports; identical ref strings => one shared port.
+  const inputDecl = {};
+  const portForRef = new Map(); // full ref string -> port field name
+  const usedNames = new Set();
+  // Walk the MOVED steps' inputs in a stable order so port naming is deterministic.
+  for (const ms of movedSteps) {
+    if (!ms.inputs || typeof ms.inputs !== 'object') continue;
+    for (const key of Object.keys(ms.inputs)) {
+      const refVal = ms.inputs[key];
+      const refId = stepIdFromPath(refVal);
+      // Only inbound inputs refs to an OUTSIDE producer mint a port.
+      if (refId && !selected.has(refId)) {
+        if (!portForRef.has(refVal)) {
+          const port = portNameForRef(refVal, usedNames);
+          portForRef.set(refVal, port);
+          inputDecl[port] = { type: 'string' }; // best-effort type
+        }
+      }
+    }
+  }
+  // Rewrite moved steps: each inbound inputs ref -> a bare `$.input.<port>`.
+  // depends_on entries pointing OUTSIDE the group are dropped (they become the
+  // flow-step's depends_on). source/gate boundary refs were rejected above.
+  // Intra-group refs are preserved (still flow-local in the sub-flow).
+  for (const ms of movedSteps) {
+    if (ms.inputs && typeof ms.inputs === 'object') {
+      for (const key of Object.keys(ms.inputs)) {
+        const refVal = ms.inputs[key];
+        if (portForRef.has(refVal)) {
+          ms.inputs[key] = `$.input.${portForRef.get(refVal)}`;
+        }
+      }
+    }
+    if (Array.isArray(ms.depends_on)) {
+      ms.depends_on = ms.depends_on.filter(d => selected.has(d));
+    }
+  }
+
+  // The single outbound producer's output_contract (if any) is the sub-flow output.
+  const outboundProducerId = outboundProducers.size === 1 ? [...outboundProducers][0] : null;
+  let subOutput = null;
+  if (outboundProducerId) {
+    const oc = movedById.get(outboundProducerId)?.output_contract;
+    subOutput = oc != null ? oc : null;
+  } else {
+    // No outside consumer: fall back to the last moved step's output_contract.
+    const last = movedSteps[movedSteps.length - 1];
+    subOutput = last && last.output_contract != null ? last.output_contract : null;
+  }
+
+  // Inject the sub-flow into model.flows AND model._doc.flows.
+  model.flows.push({ name: newFlowName, steps: movedSteps });
+  if (!model._doc) model._doc = {};
+  if (!model._doc.flows || typeof model._doc.flows !== 'object') model._doc.flows = {};
+  model._doc.flows[newFlowName] = { input: inputDecl, output: subOutput, steps: [] };
+
+  // ---- Replace the selected steps in the parent with one flow-step. ----
+  // flow-step id: prefer newFlowName; ensure unique within the parent (after removal).
+  const remainingIds = new Set(parent.steps.filter(s => !selected.has(s.id)).map(s => s.id));
+  let flowStepId = newFlowName;
+  if (remainingIds.has(flowStepId)) {
+    let n = 2;
+    while (remainingIds.has(`${flowStepId}_${n}`)) n++;
+    flowStepId = `${flowStepId}_${n}`;
+  }
+
+  // flow-step inputs: each minted port <- the FULL original $.steps ref (parent
+  // scope), suffix and all (e.g. `$.steps.a.output.x`). The sub-flow step reads
+  // the bare `$.input.<port>` value, which already IS the extracted sub-value.
+  const flowStepInputs = {};
+  for (const [refString, field] of portForRef) {
+    flowStepInputs[field] = refString;
+  }
+  // flow-step depends_on: the distinct outside producers feeding the group
+  // (both depends_on inbound and inputs inbound producers).
+  const fsDeps = [];
+  for (const e of inbound) {
+    if (!fsDeps.includes(e.producerId)) fsDeps.push(e.producerId);
+  }
+
+  const flowStep = {
+    id: flowStepId,
+    kind: 'flow',
+    agent: undefined,
+    function: undefined,
+    intent: undefined,
+    inputs: flowStepInputs,
+    output_contract: undefined,
+    ensure: [],
+    retries: undefined,
+    depends_on: fsDeps,
+    on_fail: undefined,
+    _extra: { flow: newFlowName },
+  };
+
+  // Build the new parent steps array: keep non-selected, drop selected, insert
+  // the flow-step at the position of the first removed step.
+  const newParentSteps = [];
+  let inserted = false;
+  parent.steps.forEach((s, idx) => {
+    if (selected.has(s.id)) {
+      if (!inserted && idx === firstIdx) { newParentSteps.push(flowStep); inserted = true; }
+      return; // drop the selected step
+    }
+    newParentSteps.push(s);
+  });
+  if (!inserted) newParentSteps.unshift(flowStep);
+
+  // Rewire OUTSIDE consumers of the grouped producer -> the flow-step id.
+  for (const s of newParentSteps) {
+    if (s === flowStep) continue;
+    if (selected.has(s.id)) continue;
+    // inputs-$.steps refs to the outbound producer -> flow-step id.
+    if (s.inputs && typeof s.inputs === 'object') {
+      for (const key of Object.keys(s.inputs)) {
+        const refId = stepIdFromPath(s.inputs[key]);
+        if (refId && selected.has(refId)) {
+          s.inputs[key] = rewriteStepsPath(s.inputs[key], refId, flowStepId);
+        }
+      }
+    }
+    // depends_on into the group -> flow-step id (dedup).
+    if (Array.isArray(s.depends_on)) {
+      const next = [];
+      for (const d of s.depends_on) {
+        const repl = selected.has(d) ? flowStepId : d;
+        if (!next.includes(repl)) next.push(repl);
+      }
+      s.depends_on = next;
+    }
+  }
+
+  parent.steps = newParentSteps;
+  return { ok: true };
 }
