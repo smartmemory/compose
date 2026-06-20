@@ -414,6 +414,21 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
     res.json({ specs: listSpecFiles(getPipelinesDir()) });
   });
 
+  // GET /api/pipeline/spec?file=<name> — raw YAML text for one spec, keyed by
+  // filename (NOT metadata id — the shipped specs carry metadata as a comment
+  // the template loader can't see, so /templates/:id/spec misses them).
+  app.get('/api/pipeline/spec', (req, res) => {
+    const file = req.query?.file;
+    if (!file || typeof file !== 'string' || basename(file) !== file || !file.endsWith('.stratum.yaml')) {
+      return res.status(400).json({ error: 'file must be a bare *.stratum.yaml filename' });
+    }
+    const filePath = join(getPipelinesDir(), file);
+    if (!existsSync(filePath)) {
+      return res.status(404).json({ error: `Spec "${file}" not found` });
+    }
+    res.json({ file, text: readFileSync(filePath, 'utf-8') });
+  });
+
   // POST /api/pipeline/save — save an edited model back to its source file.
   // Body: { file, model, flowName }. Mutates the on-disk YAML Document in place
   // so the `# metadata:` comment header, body comments, key ordering, and every
