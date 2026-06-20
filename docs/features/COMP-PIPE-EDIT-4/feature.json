@@ -1,9 +1,9 @@
 {
   "code": "COMP-PIPE-EDIT-4",
   "description": "Contract editor: Define and edit contracts (LensFinding, ReviewResult, etc.) in a schema form. Contracts available as dropdowns in step inspector. New contracts auto-added to the spec.",
-  "status": "COMPLETE",
+  "status": "PLANNED",
   "phase": "COMP-PIPE-EDIT: Visual Pipeline Editor",
   "position": 139,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-06-20"
 }
