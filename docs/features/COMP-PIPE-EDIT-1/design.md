@@ -272,3 +272,19 @@ assumptions, all folded in above:
    the "v0.1 = functions-as-steps" assumption was wrong (`functions:` is
    definitions; `extractSteps` confirms).
 5. **Save targets the resolved source `_file`**, not an `id`-inferred path.
+
+## Known limitations (accepted for the foundation)
+
+- **Duplicate step ids within one flow are an invalid, save-blocked state**, flagged
+  by `validateFlow` both globally and per-step (node badge + inline error). The
+  canvas no longer crashes on it (synthetic cytoscape element ids), but while the
+  duplicate transiently exists, selection and delete operate on the logical
+  `step.id`, so the two colliding nodes are not independently selectable and a
+  delete removes both. Valid/loaded specs never contain duplicate ids (Stratum
+  enforces uniqueness), and save is blocked until the user resolves it, so this is
+  accepted rather than fixed with a per-step instance-uid refactor of the
+  selection contract (deferred — would touch store, canvas, and inspector).
+- **Concurrent-edit conflict resolution** (two writers) is COMP-PIPE-EDIT-6; the
+  foundation is last-write-wins.
+- **Authoritative Stratum semantic validation** (Python) is not wired; client-side
+  structural validation only.

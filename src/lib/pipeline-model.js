@@ -248,10 +248,14 @@ export function validateFlow(model, flowName) {
   const ids = steps.map(s => s.id);
   const idSet = new Set(ids);
 
-  // Duplicate ids.
+  // Duplicate ids (also flagged per-step so the inspector/canvas can badge it).
   const seen = new Set();
   for (const id of ids) {
-    if (seen.has(id)) errors.push(`Duplicate step id "${id}" in flow "${flowName}"`);
+    if (seen.has(id)) {
+      const msg = `Duplicate step id "${id}" in flow "${flowName}"`;
+      errors.push(msg);
+      (warningsByStepId[id] ||= []).push(msg);
+    }
     seen.add(id);
   }
 

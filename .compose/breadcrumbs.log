@@ -621,3 +621,5 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-20T19:09:10+08:00 | Design COMP-PIPE-EDIT-1/-2 foundation: cytoscape canvas + step inspector + save-to-disk round-trip (Stratum pipeline YAML editor)
 2026-06-20T19:27:21+08:00 | COMP-PIPE-EDIT-1 T1/T2: pure pipeline-model lib + save endpoint, TDD-first
 2026-06-20T20:01:54+08:00 | Commit COMP-PIPE-EDIT core: pure pipeline-model lib + specs/save endpoints, 4-round Codex-hardened (inputs-refs, _extra preservation, symlink guard, flow matching, rename aliasing)
+2026-06-20T20:05:52+08:00 | COMP-PIPE-EDIT T3-T7: build visual pipeline editor frontend (store slice, canvas, inspector, view, registration)
+2026-06-20T20:35:07+08:00 | UI wave: pipeline editor store slice + cytoscape canvas + inspector + view registration; Codex-fixed re-render refs, rename-hint reset, dup-id per-step badge, synthetic canvas ids

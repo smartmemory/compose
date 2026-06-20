@@ -239,13 +239,17 @@ describe('validateFlow — table-driven', () => {
     assert.deepEqual(errors, [], `expected no errors, got ${JSON.stringify(errors)}`);
   });
 
-  test('flags a duplicate step id', () => {
+  test('flags a duplicate step id (top-level AND per-step for the badge)', () => {
     const model = specToModel(specWithSteps([
       { id: 'a', agent: 'claude', intent: 'x' },
       { id: 'a', agent: 'claude', intent: 'y' },
     ]));
-    const { errors } = validateFlow(model, 'f');
+    const { errors, warningsByStepId } = validateFlow(model, 'f');
     assert.ok(errors.some(e => /duplicate/i.test(e) && /\ba\b/.test(e)));
+    assert.ok(
+      (warningsByStepId.a || []).some(e => /duplicate/i.test(e)),
+      'duplicate id must also surface per-step so the inspector/canvas can badge it',
+    );
   });
 
   test('flags a dangling depends_on ref', () => {
