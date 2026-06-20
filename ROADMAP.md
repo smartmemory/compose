@@ -492,11 +492,11 @@ Drag-and-drop pipeline editor in the web UI. Build, modify, and rewire `.stratum
 |---|---------|-------------|--------|
 | 136 | COMP-PIPE-EDIT-1 | Step canvas: Drag-and-drop step nodes on a canvas. Each node shows step ID, agent, intent preview. Dependency edges rendered as arrows. Add step via toolbar or context menu. Delete step via node menu. | COMPLETE |
 | 137 | COMP-PIPE-EDIT-2 | Step inspector: Click a step node to open a side panel with editable fields: ID, agent, intent (multiline), inputs (key-value), output_contract (dropdown from defined contracts), ensure conditions, retries, on_fail. Live validation as you type. | COMPLETE |
-| 138 | COMP-PIPE-EDIT-3 | Dependency wiring: Drag from one node's output port to another's input port to create `depends_on` edges. Visual feedback for invalid connections (cycles, missing refs). Auto-layout via dagre/elk. | PLANNED |
-| 139 | COMP-PIPE-EDIT-4 | Contract editor: Define and edit contracts (LensFinding, ReviewResult, etc.) in a schema form. Contracts available as dropdowns in step inspector. New contracts auto-added to the spec. | PLANNED |
+| 138 | COMP-PIPE-EDIT-3 | Dependency wiring: Drag from one node's output port to another's input port to create `depends_on` edges. Visual feedback for invalid connections (cycles, missing refs). Auto-layout via dagre/elk. | COMPLETE |
+| 139 | COMP-PIPE-EDIT-4 | Contract editor: Define and edit contracts (LensFinding, ReviewResult, etc.) in a schema form. Contracts available as dropdowns in step inspector. New contracts auto-added to the spec. | COMPLETE |
 | 140 | COMP-PIPE-EDIT-5 | Sub-flow support: Collapse a group of steps into a named sub-flow. Expand sub-flows to edit internals. Sub-flow inputs/outputs visible as ports on the collapsed node. | PLANNED |
 | 141 | COMP-PIPE-EDIT-6 | YAML sync: Bidirectional sync between canvas and YAML. Edit in canvas → YAML updates live. Edit YAML in Docs view → canvas updates. Conflict resolution when both sides change. | PLANNED |
-| 142 | COMP-PIPE-EDIT-7 | Template save: Save the current canvas as a new pipeline template in `pipelines/`. Templates appear in the existing TemplateSelector for future builds. | PLANNED |
+| 142 | COMP-PIPE-EDIT-7 | Template save: Save the current canvas as a new pipeline template in `pipelines/`. Templates appear in the existing TemplateSelector for future builds. | COMPLETE |
 
 **Dependencies:** COMP-PIPE (template selector, pipeline routes — complete), COMP-UX-1 (context panel — complete)
 

@@ -1,9 +1,27 @@
 {
   "code": "COMP-PIPE-EDIT-3",
   "description": "Dependency wiring: Drag from one node's output port to another's input port to create `depends_on` edges. Visual feedback for invalid connections (cycles, missing refs). Auto-layout via dagre/elk.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-PIPE-EDIT: Visual Pipeline Editor",
   "position": 138,
   "created": "2026-05-29",
-  "updated": "2026-06-20"
+  "updated": "2026-06-20",
+  "completions": [
+    {
+      "completion_id": "COMP-PIPE-EDIT-3:abf2b6ac2a9546f9f38689a579b6cf8a6aa08984",
+      "feature_code": "COMP-PIPE-EDIT-3",
+      "commit_sha": "abf2b6ac2a9546f9f38689a579b6cf8a6aa08984",
+      "commit_sha_short": "abf2b6ac",
+      "tests_pass": true,
+      "files_changed": [
+        "src/lib/pipeline-model.js",
+        "src/components/vision/PipelineEditorCanvas.jsx",
+        "src/components/vision/useVisionStore.js"
+      ],
+      "recorded_at": "2026-06-20T16:12:09.511Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Dependency wiring: connect-mode canvas, addDependency/removeDependency/wouldCreateCycle, edge delete."
+    }
+  ],
+  "commit_sha": "abf2b6ac2a9546f9f38689a579b6cf8a6aa08984"
 }
