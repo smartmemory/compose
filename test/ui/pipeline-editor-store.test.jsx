@@ -72,6 +72,8 @@ let saveCalls;
 let saveResponse;
 let templateCalls;
 let templateResponse;
+let specHash; // COMP-PIPE-EDIT-6: hash returned by GET /api/pipeline/spec
+let specGetFails; // COMP-PIPE-EDIT-6: make GET /api/pipeline/spec fail (reload failure)
 
 function makeResponse(body, ok = true, status = 200) {
   return {
@@ -84,7 +86,11 @@ function makeResponse(body, ok = true, status = 200) {
 
 function installFetch() {
   saveCalls = [];
-  saveResponse = { ok: true, file: 'demo.stratum.yaml' };
+  specHash = 'hash-v1';
+  specGetFails = false;
+  // COMP-PIPE-EDIT-6: save response is now { ok, status, body } so tests can
+  // simulate a 409 conflict. body.hash lets the store update editorSpecHash.
+  saveResponse = { ok: true, status: 200, body: { ok: true, file: 'demo.stratum.yaml', hash: 'hash-v2' } };
   templateCalls = [];
   templateResponse = { ok: true, status: 200, body: { ok: true, file: 'pipelines/my-template.stratum.yaml' } };
   globalThis.fetch = vi.fn(async (url, opts = {}) => {
@@ -96,9 +102,11 @@ function installFetch() {
       ] });
     }
     if (u.includes('/api/pipeline/spec')) {
+      if (specGetFails) return makeResponse({ error: 'read failed' }, false, 500);
       const file = decodeURIComponent(u.split('file=')[1] || '');
       const text = file.startsWith('legacy') ? V01_YAML : V03_YAML;
-      return makeResponse({ file, text });
+      // COMP-PIPE-EDIT-6: GET /spec also returns a content hash (conflict base).
+      return makeResponse({ file, text, hash: specHash });
     }
     if (u.includes('/api/pipeline/save-as-template')) {
       templateCalls.push({ url: u, body: JSON.parse(opts.body) });
@@ -106,7 +114,7 @@ function installFetch() {
     }
     if (u.includes('/api/pipeline/save')) {
       saveCalls.push({ url: u, body: JSON.parse(opts.body) });
-      return makeResponse(saveResponse);
+      return makeResponse(saveResponse.body, saveResponse.ok, saveResponse.status);
     }
     // Everything else the store hydrates on boot (session/build/draft/agents).
     return makeResponse({});
@@ -133,6 +141,9 @@ describe('useVisionStore — pipeline editor slice (COMP-PIPE-EDIT-1)', () => {
       editorSpecFile: null, editorSpecs: [], editorModel: null, editorVersion: null,
       editorSelectedFlow: null, editorSelectedStep: null, editorDirty: false,
       editorErrors: { errors: [], warningsByStepId: {} }, editorReadOnly: false,
+      // COMP-PIPE-EDIT-6 fields
+      editorSpecHash: null, editorSaveScope: 'flow', editorConflict: null,
+      editorYamlBuffer: null, editorYamlError: null,
     });
   });
 
@@ -272,7 +283,7 @@ describe('useVisionStore — pipeline editor slice (COMP-PIPE-EDIT-1)', () => {
   it('saveSpec leaves dirty true when the server reports an error', async () => {
     await loadV03();
     store().updateStep('design', { intent: 'edited' });
-    saveResponse = { error: 'parse failed' };
+    saveResponse = { ok: false, status: 400, body: { error: 'parse failed' } };
     const res = await store().saveSpec();
     expect(res.error).toBeTruthy();
     expect(store().editorDirty).toBe(true);
@@ -409,5 +420,318 @@ describe('useVisionStore — pipeline editor slice (COMP-PIPE-EDIT-1)', () => {
     const res = await store().saveAsTemplate({ filename: 'x.stratum.yaml', metadata: { id: 'x' } });
     expect(res.error).toMatch(/validation/i);
     expect(templateCalls).toHaveLength(0);
+  });
+
+  // ── COMP-PIPE-EDIT-6: YAML sync + conflict resolution ────────────────────────
+
+  // A spec-wide YAML doc with a 2nd flow renamed so flushYaml must reconcile.
+  const V03_YAML_RENAMED = `version: "0.3"
+contracts:
+  Plan:
+    fields: { summary: string }
+flows:
+  pipeline:
+    steps:
+      - id: design
+        agent: claude:design:opus
+        intent: "Design the thing"
+        output_contract: Plan
+      - id: implement
+        agent: claude:impl:sonnet
+        intent: "Implement it"
+        depends_on: [design]
+`;
+
+  it('loadSpecForEdit captures editorSpecHash and resets scope/conflict', async () => {
+    await loadV03();
+    expect(store().editorSpecHash).toBe('hash-v1');
+    expect(store().editorSaveScope).toBe('flow');
+    expect(store().editorConflict).toBeNull();
+  });
+
+  it('flushYaml replaces the model, reconciles the selected flow, validates spec-wide, latches scope', async () => {
+    await loadV03();
+    expect(store().editorSelectedFlow).toBe('build'); // gone in the new doc
+
+    store().setYamlBuffer(V03_YAML_RENAMED);
+    const ok = store().flushYaml();
+    expect(ok).toBe(true);
+
+    const s = store();
+    // Model replaced from the pane text.
+    expect(s.editorModel.flows.map(f => f.name)).toEqual(['pipeline']);
+    // Selected flow reconciled (the old 'build' vanished → first editable flow).
+    expect(s.editorSelectedFlow).toBe('pipeline');
+    // Spec-wide save scope latched.
+    expect(s.editorSaveScope).toBe('spec');
+    expect(s.editorDirty).toBe(true);
+    // Buffer cleared after a successful flush.
+    expect(s.editorYamlBuffer).toBeNull();
+    expect(s.editorYamlError).toBeNull();
+    // Valid doc → no validation errors.
+    expect(s.editorErrors.errors).toHaveLength(0);
+  });
+
+  it('flushYaml spec-wide validation catches an error in ANY flow', async () => {
+    await loadV03();
+    // Break flow `build` by referencing an unknown contract on a non-selected flow's
+    // perspective; we simply edit the whole doc so design points at a missing contract.
+    const broken = V03_YAML.replace('output_contract: Plan', 'output_contract: Ghost');
+    store().setYamlBuffer(broken);
+    store().flushYaml();
+    expect(store().editorErrors.errors.some(e => /not a known contract/.test(e))).toBe(true);
+  });
+
+  it('flushYaml on a parse error leaves the model intact and surfaces inline', async () => {
+    await loadV03();
+    const before = store().editorModel;
+    store().setYamlBuffer('this: : : not valid yaml: [');
+    const ok = store().flushYaml();
+    expect(ok).toBe(false);
+    // Model untouched.
+    expect(store().editorModel).toBe(before);
+    // Error surfaced + buffer still pending.
+    expect(store().editorYamlError).toMatch(/parse error/i);
+    expect(store().editorErrors.errors.some(e => /parse error/i.test(e))).toBe(true);
+    expect(store().editorYamlBuffer).not.toBeNull();
+  });
+
+  it('saveSpec sends baseHash and the flowName when scope is flow', async () => {
+    await loadV03();
+    store().updateStep('design', { intent: 'edited' });
+    await store().saveSpec();
+    expect(saveCalls).toHaveLength(1);
+    expect(saveCalls[0].body.baseHash).toBe('hash-v1');
+    expect(saveCalls[0].body.flowName).toBe('build');
+    expect(saveCalls[0].body.force).toBeUndefined();
+  });
+
+  it('saveSpec omits flowName and updates the hash + un-latches scope when scope is spec', async () => {
+    await loadV03();
+    store().setYamlBuffer(V03_YAML_RENAMED);
+    store().flushYaml();
+    expect(store().editorSaveScope).toBe('spec');
+
+    const res = await store().saveSpec();
+    expect(res.ok).toBe(true);
+    expect(saveCalls).toHaveLength(1);
+    expect('flowName' in saveCalls[0].body).toBe(false);
+    expect(saveCalls[0].body.baseHash).toBe('hash-v1');
+    // Hash refreshed from the response, scope reset, dirty cleared.
+    expect(store().editorSpecHash).toBe('hash-v2');
+    expect(store().editorSaveScope).toBe('flow');
+    expect(store().editorDirty).toBe(false);
+  });
+
+  it('saveSpec is BLOCKED (no POST) while the YAML buffer is pending', async () => {
+    await loadV03();
+    store().updateStep('design', { intent: 'edited' });
+    store().setYamlBuffer('version: "0.3"\nflows: {}'); // pending, not flushed
+    const res = await store().saveSpec();
+    expect(res.error).toMatch(/yaml pane/i);
+    expect(saveCalls).toHaveLength(0);
+    expect(store().editorDirty).toBe(true);
+  });
+
+  it('saveSpec is BLOCKED while the YAML buffer is unparseable (editorYamlError set)', async () => {
+    await loadV03();
+    store().updateStep('design', { intent: 'edited' });
+    store().setYamlBuffer('not: : valid [');
+    store().flushYaml(); // sets editorYamlError, leaves buffer pending
+    expect(store().editorYamlError).toBeTruthy();
+    const res = await store().saveSpec();
+    expect(res.error).toMatch(/yaml pane/i);
+    expect(saveCalls).toHaveLength(0);
+  });
+
+  it('saveSpec sets editorConflict on a 409 and does NOT clear dirty', async () => {
+    await loadV03();
+    store().updateStep('design', { intent: 'edited' });
+    saveResponse = { ok: false, status: 409, body: { error: 'changed on disk', conflict: true, currentHash: 'hash-other' } };
+    const res = await store().saveSpec();
+    expect(res.conflict).toBe(true);
+    expect(store().editorConflict).toEqual({ currentHash: 'hash-other' });
+    expect(store().editorDirty).toBe(true);
+  });
+
+  it('resolveConflict("reload") re-fetches the spec and discards local edits', async () => {
+    await loadV03();
+    store().updateStep('design', { intent: 'edited' });
+    useVisionStore.setState({ editorConflict: { currentHash: 'x' } });
+    const res = await store().resolveConflict('reload');
+    expect(res).toBeTruthy();
+    expect(store().editorConflict).toBeNull();
+    // Re-loaded → not dirty, intent reverted to the on-disk value.
+    expect(store().editorDirty).toBe(false);
+    const design = store().editorModel.flows[0].steps.find(s => s.id === 'design');
+    expect(design.intent).toBe('Design the thing');
+  });
+
+  it('resolveConflict("overwrite") re-saves with force:true', async () => {
+    await loadV03();
+    store().updateStep('design', { intent: 'edited' });
+    useVisionStore.setState({ editorConflict: { currentHash: 'x' } });
+    const res = await store().resolveConflict('overwrite');
+    expect(res.ok).toBe(true);
+    expect(saveCalls).toHaveLength(1);
+    expect(saveCalls[0].body.force).toBe(true);
+    expect(store().editorConflict).toBeNull();
+  });
+
+  it('handleSpecChanged reloads when the editor is clean', async () => {
+    await loadV03();
+    store().updateStep('design', { intent: 'local but saved away' });
+    useVisionStore.setState({ editorDirty: false }); // pretend clean
+    specHash = 'hash-v3';
+    await store().handleSpecChanged({ currentHash: 'hash-v3' });
+    expect(store().editorSpecHash).toBe('hash-v3');
+    expect(store().editorConflict).toBeNull();
+  });
+
+  it('handleSpecChanged sets a conflict when the editor is dirty', async () => {
+    await loadV03();
+    store().updateStep('design', { intent: 'unsaved' });
+    expect(store().editorDirty).toBe(true);
+    store().handleSpecChanged({ currentHash: 'hash-disk' });
+    expect(store().editorConflict).toEqual({ currentHash: 'hash-disk' });
+    // Dirty edits preserved.
+    expect(store().editorDirty).toBe(true);
+  });
+
+  // FINDING 2: a pane edit is pending (debounce/parse-error window) but not yet
+  // flushed, so editorDirty is still false. A specChanged must NOT auto-reload
+  // and discard the buffer — it must raise a conflict instead.
+  it('handleSpecChanged conflicts (no reload) when a YAML buffer is pending though not dirty', async () => {
+    await loadV03();
+    store().setYamlBuffer('version: "0.3"\nflows: {}\n'); // pending, not flushed
+    expect(store().editorDirty).toBe(false);
+    specHash = 'hash-disk'; // would-be reload target
+    store().handleSpecChanged({ currentHash: 'hash-disk' });
+    // No reload: the pending buffer survives, the original load hash is unchanged,
+    // and a conflict banner is raised instead.
+    expect(store().editorConflict).toEqual({ currentHash: 'hash-disk' });
+    expect(store().editorYamlBuffer).toBe('version: "0.3"\nflows: {}\n');
+    expect(store().editorSpecHash).toBe('hash-v1');
+  });
+
+  it('handleSpecChanged conflicts (no reload) when the YAML buffer is unparseable', async () => {
+    await loadV03();
+    store().setYamlBuffer('not: : valid [');
+    store().flushYaml(); // sets editorYamlError, leaves buffer pending, dirty stays false
+    expect(store().editorDirty).toBe(false);
+    expect(store().editorYamlError).toBeTruthy();
+    store().handleSpecChanged({ currentHash: 'hash-disk' });
+    expect(store().editorConflict).toEqual({ currentHash: 'hash-disk' });
+    expect(store().editorYamlError).toBeTruthy();
+  });
+
+  // FINDING 3: an overwrite blocked by a pending buffer must KEEP the banner.
+  it('resolveConflict("overwrite") keeps the banner when the save is blocked by a pending buffer', async () => {
+    await loadV03();
+    store().updateStep('design', { intent: 'edited' });
+    store().setYamlBuffer('version: "0.3"\nflows: {}\n'); // pending → blocks save
+    useVisionStore.setState({ editorConflict: { currentHash: 'x' } });
+    const res = await store().resolveConflict('overwrite');
+    expect(res.error).toMatch(/yaml pane/i);
+    // Banner preserved (the conflict is unresolved), no POST happened.
+    expect(store().editorConflict).toEqual({ currentHash: 'x' });
+    expect(saveCalls).toHaveLength(0);
+  });
+
+  it('resolveConflict("overwrite") keeps the banner when the save errors', async () => {
+    await loadV03();
+    store().updateStep('design', { intent: 'edited' });
+    saveResponse = { ok: false, status: 500, body: { error: 'disk full' } };
+    useVisionStore.setState({ editorConflict: { currentHash: 'x' } });
+    const res = await store().resolveConflict('overwrite');
+    expect(res.error).toBeTruthy();
+    expect(store().editorConflict).toEqual({ currentHash: 'x' });
+  });
+
+  it('resolveConflict("overwrite") clears the banner on a successful force save', async () => {
+    await loadV03();
+    store().updateStep('design', { intent: 'edited' });
+    useVisionStore.setState({ editorConflict: { currentHash: 'x' } });
+    const res = await store().resolveConflict('overwrite');
+    expect(res.ok).toBe(true);
+    expect(saveCalls[0].body.force).toBe(true);
+    expect(store().editorConflict).toBeNull();
+  });
+
+  it('resolveConflict("reload") keeps the banner if the re-fetch fails', async () => {
+    await loadV03();
+    store().updateStep('design', { intent: 'edited' });
+    useVisionStore.setState({ editorConflict: { currentHash: 'x' } });
+    // Make the spec GET fail so loadSpecForEdit returns null (no model replace).
+    specGetFails = true;
+    const res = await store().resolveConflict('reload');
+    expect(res).toBeNull();
+    expect(store().editorConflict).toEqual({ currentHash: 'x' });
+  });
+
+  // FINDING 4: two flows share a step id ('review'); a validation error on
+  // review in a NON-selected flow must not badge review in the selected flow.
+  it('flushYaml scopes per-step warnings to the selected flow (no cross-flow id bleed)', async () => {
+    await loadV03();
+    // build/review and review_check/review share the id. Break ONLY review_check's
+    // review (unknown contract) and keep `build` selected. The error must count in
+    // errors[] but the per-step warning must NOT appear for the selected flow.
+    const broken = V03_YAML.replace(
+      `  review_check:
+    steps:
+      - id: review
+        agent: claude:review:opus
+        intent: "Subflow review"`,
+      `  review_check:
+    steps:
+      - id: review
+        agent: claude:review:opus
+        intent: "Subflow review"
+        output_contract: Ghost`,
+    );
+    store().setYamlBuffer(broken);
+    store().flushYaml();
+    expect(store().editorSelectedFlow).toBe('build');
+    // Spec-wide errors[] still surfaces the problem (drives the count + banner).
+    expect(store().editorErrors.errors.some(e => /not a known contract/.test(e))).toBe(true);
+    // But the selected flow (build) has no error on its own review step, so no
+    // warning bleeds onto the visible node.
+    expect(store().editorErrors.warningsByStepId.review).toBeFalsy();
+  });
+
+  // ── COMP-PIPE-EDIT-5: collapse / expand sub-flows ────────────────────────────
+
+  it('collapseSelectedToSubflow surfaces a rejection reason without mutating', async () => {
+    await loadV03();
+    const flowCountBefore = store().editorModel.flows.length;
+    // Self-name collision: newFlowName === the source flow is rejected.
+    const ok = store().collapseSelectedToSubflow(['design'], 'build');
+    expect(ok).toBe(false);
+    expect(store().editorModel.flows.length).toBe(flowCountBefore);
+    expect(store().editorErrors.errors.length).toBeGreaterThan(0);
+    expect(store().editorDirty).toBe(false);
+  });
+
+  it('collapseSelectedToSubflow applies on success and latches scope to spec', async () => {
+    await loadV03();
+    // Collapse [design] into a new sub-flow. design is consumed by implement via
+    // depends_on (a rewireable boundary edge); single output, contiguous.
+    // (implement/review carry an on_fail gate route, which cannot cross a boundary.)
+    const ok = store().collapseSelectedToSubflow(['design'], 'prep');
+    expect(ok).toBe(true);
+    const names = store().editorModel.flows.map(f => f.name);
+    expect(names).toContain('prep');
+    // A flow-step replaced the group in the parent flow.
+    const build = store().editorModel.flows.find(f => f.name === 'build');
+    expect(build.steps.some(s => s._extra?.flow === 'prep')).toBe(true);
+    expect(store().editorSaveScope).toBe('spec');
+    expect(store().editorDirty).toBe(true);
+  });
+
+  it('expandSubflow opens the sub-flow for editing (selectFlow)', async () => {
+    await loadV03();
+    store().collapseSelectedToSubflow(['design'], 'prep');
+    store().expandSubflow('prep');
+    expect(store().editorSelectedFlow).toBe('prep');
   });
 });

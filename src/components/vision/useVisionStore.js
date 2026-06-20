@@ -22,7 +22,16 @@ import {
   setContractField as setContractFieldInModel,
   removeContractField as removeContractFieldInModel,
   renameContractField as renameContractFieldInModel,
+  collapseToSubflow,
 } from '../../lib/pipeline-model.js';
+
+// COMP-PIPE-EDIT-6: browser-safe basename (no node:path) for matching a watcher's
+// prefixed path (<prefix>/<file>) against the bare editorSpecFile.
+function basename(p) {
+  const s = String(p || '');
+  const i = Math.max(s.lastIndexOf('/'), s.lastIndexOf('\\'));
+  return i >= 0 ? s.slice(i + 1) : s;
+}
 
 // COMP-PIPE-EDIT-1: v0.1 specs are not validated by Stratum (IR_UNKNOWN_VERSION);
 // they load read-only with a banner. v0.2/v0.3 are fully editable.
@@ -46,6 +55,27 @@ function uniqueStepId(steps, base = 'new_step') {
 function reactiveModel(m) {
   if (!m) return m;
   return { ...m, flows: m.flows.map(f => ({ ...f, steps: f.steps.map(s => ({ ...s })) })) };
+}
+
+// COMP-PIPE-EDIT-6: a YAML-pane edit is spec-wide, so it can break ANY flow, not
+// just the selected one. Validate every editable flow and aggregate into the
+// single editorErrors shape (flat errors[] + per-step warnings keyed by step id).
+//
+// errors[] aggregates across ALL editable flows (it drives the global error count
+// + banner). warningsByStepId, however, is populated ONLY from the currently
+// selected flow: step ids are flow-local but not globally unique (e.g. `review`
+// can exist in two flows), and the canvas/inspector key per-node badges by bare
+// step id while rendering only the selected flow. Merging warnings across flows
+// would bleed a non-selected flow's error onto a same-id node in the visible flow.
+function validateSpecWide(model, flows, selectedFlow) {
+  const errors = [];
+  let warningsByStepId = {};
+  for (const name of (flows || [])) {
+    const r = validateFlow(model, name);
+    for (const e of (r.errors || [])) errors.push(e);
+    if (name === selectedFlow) warningsByStepId = { ...(r.warningsByStepId || {}) };
+  }
+  return { errors, warningsByStepId };
 }
 
 /**
@@ -170,6 +200,20 @@ export const useVisionStore = create((set, get) => {
   function handleMessage(event) {
     try {
       const msg = JSON.parse(event.data);
+      // COMP-PIPE-EDIT-6: the pipelines watcher emits a dedicated specChanged on
+      // the vision WS. The watcher path is prefixed (<prefix>/<file>) while
+      // editorSpecFile is a bare filename — compare on the basename. Routed to the
+      // editor slice (which owns loadSpecForEdit + the conflict state).
+      if (msg.type === 'specChanged') {
+        const open = get().editorSpecFile;
+        if (open) {
+          const changed = basename(msg.file || msg.path || '');
+          if (changed && changed === basename(open)) {
+            get().handleSpecChanged({ currentHash: msg.hash ?? msg.currentHash });
+          }
+        }
+        return;
+      }
       handleVisionMessage(msg, {
           prevItemMapRef: { get current() { return refs.prevItemMap; }, set current(v) { refs.prevItemMap = v; } },
           snapshotProviderRef: { get current() { return refs.snapshotProvider; }, set current(v) { refs.snapshotProvider = v; } },
@@ -338,6 +382,14 @@ export const useVisionStore = create((set, get) => {
     editorErrors: { errors: [], warningsByStepId: {} },
     editorReadOnly: false,     // true for v0.1 specs (Stratum can't validate them)
 
+    // ── COMP-PIPE-EDIT-6: YAML sync + conflict resolution ──────────────────
+    editorSpecHash: null,      // sha-256 of the on-disk text at load (conflict base)
+    editorSaveScope: 'flow',   // 'flow' | 'spec' — latched to 'spec' by any spec-wide
+                               // mutation (YAML-pane edit or collapse); reset on load/save/reload
+    editorConflict: null,      // null | { currentHash } — set on 409 or specChanged-while-dirty
+    editorYamlBuffer: null,    // null when the pane isn't holding pending text; else raw buffer
+    editorYamlError: null,     // last YAML parse error message (pane), or null
+
     // Actions
     clearUICommand: () => set({ uiCommand: null }),
 
@@ -428,6 +480,13 @@ export const useVisionStore = create((set, get) => {
         editorErrors: selectedFlow
           ? validateFlow(model, selectedFlow)
           : { errors: [], warningsByStepId: {} },
+        // COMP-PIPE-EDIT-6: a fresh load is the conflict base; reset the latched
+        // save scope and any buffered/erroring pane text and clear any conflict.
+        editorSpecHash: typeof data.hash === 'string' ? data.hash : null,
+        editorSaveScope: 'flow',
+        editorConflict: null,
+        editorYamlBuffer: null,
+        editorYamlError: null,
       });
       return model;
     },
@@ -519,26 +578,173 @@ export const useVisionStore = create((set, get) => {
       return true;
     },
 
-    // Persist the model back to its source file. Saves only the selected flow.
-    saveSpec: async () => {
-      const { editorModel, editorSpecFile, editorSelectedFlow, editorReadOnly } = get();
+    // Persist the model back to its source file.
+    //  - COMP-PIPE-EDIT-6: sends baseHash for optimistic-concurrency; omits
+    //    flowName when the save scope is latched to 'spec' (server writes every
+    //    flow). force:true bypasses the disk-hash check (overwrite). A pending or
+    //    unparseable YAML-pane buffer BLOCKS the save (no POST) — saving then would
+    //    persist the stale model instead of the visible buffer (data-loss path).
+    //  - On a 409 conflict, dirty is preserved and editorConflict is set.
+    //  - On success, editorSpecHash is updated and the scope is reset to 'flow'.
+    saveSpec: async ({ force = false } = {}) => {
+      const {
+        editorModel, editorSpecFile, editorSelectedFlow, editorReadOnly,
+        editorSaveScope, editorSpecHash, editorYamlBuffer, editorYamlError,
+      } = get();
       if (!editorModel || !editorSpecFile || editorReadOnly) {
         return { error: 'No editable spec loaded' };
       }
-      const data = await apiCall('/api/pipeline/save', {
+      // Block while the YAML pane holds pending/unparseable text — it must flush
+      // to the model first or the save would persist the stale model.
+      if (editorYamlBuffer != null || editorYamlError) {
+        const message = 'Resolve the YAML pane (let it parse) before saving';
+        get()._surfaceEditorError(message);
+        return { error: message };
+      }
+      const body = { file: editorSpecFile, model: editorModel };
+      if (editorSaveScope !== 'spec') body.flowName = editorSelectedFlow;
+      if (editorSpecHash != null) body.baseHash = editorSpecHash;
+      if (force) body.force = true;
+      const res = await wsFetch('/api/pipeline/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file: editorSpecFile, model: editorModel, flowName: editorSelectedFlow }),
+        body: JSON.stringify(body),
       });
+      let data;
+      try { data = await res.json(); } catch { data = {}; }
+      // 409 → disk diverged from baseHash. Keep dirty, record the conflict.
+      if (res.status === 409 || data?.conflict) {
+        set({ editorConflict: { currentHash: data?.currentHash ?? null } });
+        return { error: data?.error || 'Spec changed on disk', conflict: true, currentHash: data?.currentHash };
+      }
+      if (!res.ok) {
+        return { error: data?.error || `HTTP ${res.status}` };
+      }
       if (data && data.ok) {
         // After persisting, the disk node ids now equal the model ids for the
         // saved flow, so drop its rename hints — a later rename must re-anchor to
         // the now-current id (else save→rename→save would miss the disk node).
-        const flow = editorModel.flows.find(f => f.name === editorSelectedFlow);
-        if (flow) for (const s of flow.steps) delete s._renamedFrom;
-        set({ editorModel: reactiveModel(editorModel), editorDirty: false });
+        if (editorSaveScope === 'spec') {
+          for (const f of editorModel.flows) for (const s of f.steps) delete s._renamedFrom;
+        } else {
+          const flow = editorModel.flows.find(f => f.name === editorSelectedFlow);
+          if (flow) for (const s of flow.steps) delete s._renamedFrom;
+        }
+        set({
+          editorModel: reactiveModel(editorModel),
+          editorDirty: false,
+          // A successful write is a new conflict base; un-latch the save scope.
+          editorSpecHash: typeof data.hash === 'string' ? data.hash : get().editorSpecHash,
+          editorSaveScope: 'flow',
+          editorConflict: null,
+        });
       }
       return data;
+    },
+
+    // ── COMP-PIPE-EDIT-6: YAML pane buffer + flush ─────────────────────────
+    // Stash raw pane text as a pending buffer (text may diverge from the model
+    // mid-type / on parse error). flushYaml() reconciles it into the model.
+    setYamlBuffer: (text) => set({ editorYamlBuffer: text, editorYamlError: null }),
+
+    // Parse the pending buffer → model. On success: replace the model, reconcile
+    // the selected flow, validate SPEC-WIDE, latch the save scope to 'spec', and
+    // clear the buffer. On parse error: keep the model, surface the message inline
+    // and record editorYamlError (the buffer stays pending). No-op when nothing is
+    // buffered or the spec is read-only.
+    flushYaml: () => {
+      const { editorModel, editorYamlBuffer, editorReadOnly, editorSelectedFlow } = get();
+      if (editorModel == null || editorReadOnly) return false;
+      if (editorYamlBuffer == null) return false;
+      let parsed;
+      try {
+        parsed = YAML.parse(editorYamlBuffer);
+      } catch (err) {
+        const message = `YAML parse error: ${err?.message || err}`;
+        set({ editorYamlError: message });
+        get()._surfaceEditorError(message);
+        return false;
+      }
+      const model = specToModel(parsed);
+      const editableFlows = listEditableFlows(model._doc);
+      // Reconcile the selected flow: if it vanished, re-point to the first editable.
+      const selectedFlow = editableFlows.includes(editorSelectedFlow)
+        ? editorSelectedFlow
+        : (editableFlows[0] || null);
+      set({
+        editorModel: reactiveModel(model),
+        editorSelectedFlow: selectedFlow,
+        editorDirty: true,
+        editorSaveScope: 'spec',
+        editorYamlBuffer: null,
+        editorYamlError: null,
+        editorErrors: validateSpecWide(model, editableFlows, selectedFlow),
+      });
+      return true;
+    },
+
+    // ── COMP-PIPE-EDIT-6: conflict resolution ──────────────────────────────
+    // 'reload'   → discard local edits, re-fetch the spec from disk.
+    // 'overwrite'→ re-save with force:true (bypass the disk-hash check).
+    // The banner is cleared ONLY after the resolution actually succeeds — a
+    // blocked/failed overwrite (e.g. a pending YAML buffer) or a failed re-fetch
+    // leaves the conflict unresolved, so keep the banner and surface the error.
+    // (loadSpecForEdit resets editorConflict to null itself on a successful load.)
+    resolveConflict: async (mode) => {
+      const { editorSpecFile } = get();
+      if (mode === 'reload') {
+        if (!editorSpecFile) return null;
+        return get().loadSpecForEdit(editorSpecFile); // clears conflict on success
+      }
+      if (mode === 'overwrite') {
+        const res = await get().saveSpec({ force: true }); // clears conflict on ok
+        return res;
+      }
+      return { error: `Unknown conflict resolution "${mode}"` };
+    },
+
+    // ── COMP-PIPE-EDIT-5: collapse / expand sub-flows ──────────────────────
+    // Collapse the given step ids in the selected flow into a new sub-flow.
+    // On reject ({ ok:false }) surface the reason; on success replace the model,
+    // mark dirty, latch the save scope to 'spec' (a collapse touches two flows),
+    // and revalidate. No-op when nothing is loaded or read-only.
+    collapseSelectedToSubflow: (stepIds, newName) => {
+      const { editorModel, editorSelectedFlow, editorReadOnly } = get();
+      if (!editorModel || !editorSelectedFlow || editorReadOnly) return false;
+      const result = collapseToSubflow(editorModel, editorSelectedFlow, stepIds, newName);
+      if (!result.ok) {
+        get()._surfaceEditorError(result.reason || 'Cannot collapse the selected steps');
+        return false;
+      }
+      set({
+        editorModel: reactiveModel(editorModel),
+        editorDirty: true,
+        editorSaveScope: 'spec',
+        editorSelectedStep: null,
+      });
+      get()._revalidateEditor();
+      return true;
+    },
+
+    // Expand a sub-flow == open it for editing (reuse the flow switcher).
+    expandSubflow: (flowName) => { if (flowName) get().selectFlow(flowName); },
+
+    // ── COMP-PIPE-EDIT-6: external on-disk change ──────────────────────────
+    // Reacts to a vision-WS specChanged for the OPEN spec. Auto-reload (refresh
+    // model + hash) ONLY when the editor is truly clean. "Clean" means no model
+    // edits AND no in-flight YAML-pane buffer: a pane edit doesn't set
+    // editorDirty until flushYaml succeeds, so treating editorDirty alone as the
+    // signal would discard a pending/unparseable buffer mid-debounce. Any pending
+    // work (dirty OR a buffer OR a parse error) raises a conflict banner instead.
+    handleSpecChanged: ({ currentHash } = {}) => {
+      const { editorSpecFile, editorDirty, editorYamlBuffer, editorYamlError } = get();
+      if (!editorSpecFile) return undefined;
+      const clean = !editorDirty && editorYamlBuffer == null && !editorYamlError;
+      if (clean) {
+        return get().loadSpecForEdit(editorSpecFile);
+      }
+      set({ editorConflict: { currentHash: currentHash ?? null } });
+      return undefined;
     },
 
     // ── COMP-PIPE-EDIT-3: dependency wiring ────────────────────────────────
