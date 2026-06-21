@@ -8,6 +8,7 @@
  * compose start    — start the compose app (supervisor.js)
  * compose build    — headless feature lifecycle runner
  * compose fix      — headless bug-fix lifecycle runner (pipelines/bug-fix.stratum.yaml)
+ * compose plan     — product-planning lifecycle runner (pipelines/plan.stratum.yaml)
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, rmSync, readdirSync } from 'fs'
 import { resolve, join, basename, dirname, sep } from 'path'

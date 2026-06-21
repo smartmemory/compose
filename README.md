@@ -30,6 +30,17 @@ compose build TODO-1
   -> done: feature implemented, reviewed, tested, documented
 ```
 
+Starting from a fuzzy goal instead of a known feature? Use the planning lifecycle:
+
+```bash
+compose plan "a tool that summarizes my team's standups"
+  -> frame + research + ideate (ideas go to the ideabox) -> [gate]
+  -> converge + estimate -> writes build-ready feature.json + design.md -> [gate]
+  -> handoff: each feature ready for `compose build <CODE>`
+```
+
+`compose build` then picks up a plan-authored feature and ratifies its design rather than rewriting it.
+
 ## Quick install
 
 Prerequisites: Node.js 18+ and `stratum-mcp` on PATH (`pip install stratum-mcp`, requires Python 3.11+). Codex steps additionally need the OpenAI `codex` CLI. Full prereqs in [docs/install.md](docs/install.md).
