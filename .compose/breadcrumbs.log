@@ -641,3 +641,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-21T08:24:55+08:00 | COMP-PIPE-EDIT Codex review fixes: spec/save-as-template symlink guard, workflow.output ref site, flow-step target validation, function-only fallback non-serializable, spec-wide save completeness
 2026-06-21T08:45:01+08:00 | Post-review hardening: epic-wide Codex review (3 parallel + confirms) — security guards on /spec+/save-as-template, complete spec-wide save round-trip, workflow.output refs+reconcile, flow-target validation, scope-aware revalidation, save/template gates moved into store
 2026-06-21T17:04:05+08:00 | COMP-ROADMAP-MODES Phase 1: writing design.md for mode-keyed lifecycle registry (build|fix|plan), grounded in 4-explorer map
+2026-06-21T17:26:37+08:00 | COMP-ROADMAP-MODES Phase 4-5: writing blueprint.md + Boundary Map from verified 5-surface map (46/47 refs verified)
