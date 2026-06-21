@@ -22,6 +22,7 @@ import {
   phaseOrderOf,
   artifactsOf,
   terminalOf,
+  allKnownPhases,
 } from '../lib/lifecycle-modes.js';
 
 // Legacy hard-coded data — the build entry must equal these exactly.
@@ -89,6 +90,19 @@ test('every mode has a coherent graph: genesis is a transition key, terminals ha
     // the completable phase exists as a node
     assert.ok(Object.prototype.hasOwnProperty.call(t, completablePhaseOf(mode)), `${mode} completable phase is a node`);
   }
+});
+
+test('allKnownPhases is a superset of the legacy build vocabulary + terminals + other modes', () => {
+  const known = new Set(allKnownPhases());
+  // every legacy KNOWN_PHASES entry must still be recognized (no regression)
+  for (const p of ['explore_design', 'prd', 'architecture', 'blueprint', 'verification', 'plan', 'execute', 'report', 'docs', 'ship', 'complete', 'killed']) {
+    assert.ok(known.has(p), `legacy phase ${p} stays recognized`);
+  }
+  // terminals MUST be present (the unknown-phase guard runs before terminal branches)
+  assert.ok(known.has('complete') && known.has('killed'));
+  // and non-build-mode phases are now recognized too
+  assert.ok(known.has('diagnose'), 'fix-mode phase recognized');
+  assert.ok(known.has('reproduce'));
 });
 
 test('runner config carries the per-mode behavioral switches', () => {

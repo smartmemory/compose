@@ -756,7 +756,9 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
   });
 
   // ── Artifact endpoints ───────────────────────────────────────────────
-  const artifactManager = new ArtifactManager(featuresPath);
+  // ArtifactManager is constructed per-request from the item's lifecycle mode —
+  // the artifact metadata it assesses/scaffolds is mode-scoped (the root stays
+  // features-rooted; mode-owned root resolution is a deferred follow-up).
 
   app.get('/api/vision/items/:id/artifacts', (req, res) => {
     try {
@@ -765,7 +767,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (!item.lifecycle?.featureCode) {
         return res.status(400).json({ error: 'Item has no lifecycle featureCode' });
       }
-      const assessment = artifactManager.assess(item.lifecycle.featureCode);
+      const assessment = new ArtifactManager(featuresPath, item.lifecycle?.mode).assess(item.lifecycle.featureCode);
       res.json(assessment);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -779,7 +781,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (!item.lifecycle?.featureCode) {
         return res.status(400).json({ error: 'Item has no lifecycle featureCode' });
       }
-      const result = artifactManager.scaffold(item.lifecycle.featureCode, req.body);
+      const result = new ArtifactManager(featuresPath, item.lifecycle?.mode).scaffold(item.lifecycle.featureCode, req.body);
       res.json(result);
     } catch (err) {
       res.status(400).json({ error: err.message });
