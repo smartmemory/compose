@@ -645,3 +645,4 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-21T20:05:21+08:00 | COMP-ROADMAP-MODES S01+S02: registry module + guard mode-threading, all 103 guard/lifecycle tests green
 2026-06-21T20:13:33+08:00 | COMP-ROADMAP-MODES S03+S06: artifact-manager mode-scoping (option b) + KNOWN_PHASES derived from registry
 2026-06-21T20:27:51+08:00 | COMP-ROADMAP-MODES S04+S05: runner MODE_CONFIG + route/creation-seam mode-threading
+2026-06-21T20:30:21+08:00 | COMP-ROADMAP-MODES S07: golden build-surface contract + 4th-mode data-only proof; resolveMode recognizes any registry key
