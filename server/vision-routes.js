@@ -55,7 +55,7 @@ import {
   verifyCompletionEvidence, guardTestCommand,
 } from './lifecycle-guard.js';
 import {
-  genesisOf, transitionsOf, skippableOf, completablePhaseOf,
+  transitionsOf, skippableOf, completablePhaseOf,
 } from '../lib/lifecycle-modes.js';
 import { requireSensitiveOrPaired as requireSensitiveToken } from './security.js';
 
@@ -258,10 +258,12 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (!item) return res.status(404).json({ error: `Item not found: ${req.params.id}` });
       if (item.lifecycle) return res.status(400).json({ error: `Item ${req.params.id} already has a lifecycle` });
 
-      // COMP-ROADMAP-MODES: derive the lifecycle mode from the item type and the
-      // genesis phase from the registry (build → explore_design, byte-identical).
+      // COMP-ROADMAP-MODES: stamp the lifecycle mode (derived from the item type).
+      // The genesis phase stays 'explore_design' — byte-identical to pre-MODES for
+      // build AND bug; per-mode genesis-at-creation is deferred with the fix/plan
+      // UI phase wiring.
       const mode = typeToMode(item.type);
-      const genesis = genesisOf(mode);
+      const genesis = 'explore_design';
       const now = new Date().toISOString();
       const lifecycle = {
         currentPhase: genesis,
