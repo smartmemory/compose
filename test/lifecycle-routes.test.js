@@ -358,8 +358,9 @@ describe('gate REST endpoints', () => {
 });
 
 // ---------------------------------------------------------------------------
-// COMP-ROADMAP-MODES S04 — /lifecycle/start stamps the mode + per-mode genesis
-// derived from the item type. Build items stay byte-identical.
+// COMP-ROADMAP-MODES S04 — /lifecycle/start stamps the lifecycle mode (derived
+// from the item type). Genesis-at-creation stays explore_design (byte-identical
+// for build AND bug); per-mode genesis is deferred with the fix/plan UI wiring.
 // ---------------------------------------------------------------------------
 
 describe('lifecycle/start — mode stamping (COMP-ROADMAP-MODES)', () => {
@@ -374,11 +375,11 @@ describe('lifecycle/start — mode stamping (COMP-ROADMAP-MODES)', () => {
     assert.equal(res.body.currentPhase, 'explore_design');
   });
 
-  test('a bug item starts in fix mode at its genesis (reproduce)', async () => {
+  test('a bug item is stamped fix mode; genesis stays explore_design (byte-identical)', async () => {
     const bug = ctx.store.createItem({ type: 'bug', title: 'A bug' });
     const res = await request(ctx.port, 'POST', `/api/vision/items/${bug.id}/lifecycle/start`, { featureCode: 'BUG-1' });
     assert.equal(res.status, 200);
-    assert.equal(res.body.mode, 'fix', 'bug type → fix lifecycle mode');
-    assert.equal(res.body.currentPhase, 'reproduce', 'fix genesis from the registry');
+    assert.equal(res.body.mode, 'fix', 'bug type → fix lifecycle mode (the new additive field)');
+    assert.equal(res.body.currentPhase, 'explore_design', 'genesis-at-creation unchanged (per-mode genesis deferred)');
   });
 });
