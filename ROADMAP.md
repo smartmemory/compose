@@ -1414,4 +1414,4 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
-| 1 | COMP-ROADMAP-GRAPH-2 | Collapse the three roadmap-graph surfaces onto one: the cockpit vision model is the single source, lib/roadmap-graph the single renderer. Repoint graph-export + MCP + CLI + CI as thin callers; delete the dead SmartMemory seed and the pre-push staleness chore. | PARTIAL |
+| 1 | COMP-ROADMAP-GRAPH-2 | Collapse the three roadmap-graph surfaces onto one: the cockpit vision model is the single source, lib/roadmap-graph the single renderer. Repoint graph-export + MCP + CLI + CI as thin callers; delete the dead SmartMemory seed and the pre-push staleness chore. | COMPLETE |
