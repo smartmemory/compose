@@ -1,0 +1,11 @@
+{
+  "code": "COMP-ROADMAP-RETIRE",
+  "description": "Prohibit narrative roadmap mode — the structured-only end-state. Delete isNarrativeOwned/narrativeOwnedMessage and the 6 narrative gates (feature-writer.js:102, roadmap-gen.js:214/519, bin/compose.js:1164/1221, feature-validator.js:278 NARRATIVE_SUPPRESSED_KINDS). Clean removal (no prod users); structured is already the default for every non-narrative workspace, so removing the gates falls through to it — nothing new to build. MUST land AFTER COMP-ROADMAP-MIGRATE has moved forge-top (the sole narrative workspace) to structured and demonstrated validate-clean parity, else its ROADMAP breaks. Depends on COMP-ROADMAP-MIGRATE. Anchor: docs/plans/2026-06-21-roadmap-planning-model-design.md.",
+  "status": "PLANNED",
+  "phase": "COMP-ROADMAP-MODEL: Structured + Composable Roadmaps",
+  "created": "2026-06-21",
+  "updated": "2026-06-21",
+  "complexity": "S",
+  "position": 6,
+  "parent": "COMP-ROADMAP-MIGRATE"
+}

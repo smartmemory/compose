@@ -1,0 +1,10 @@
+{
+  "code": "COMP-ROADMAP-PROVIDERS",
+  "description": "Integration ports & adapters (post-v1) — keep integrations modular at the domain boundary. TrackerProvider v2: generalize the existing tracker layer (lib/tracker/provider.js, today github-first-class) for Linear/JIRA/GitHub Issues — broaden capability fallback beyond JOURNAL/VISION, tolerate providers that can't natively own ROADMAP.md/CHANGELOG. New seams: DocumentPort (Notion/Confluence for feature docs), DesignPort (Figma/Canva), BuildTargetPort (Base44/Webflow) — none exist today (lifecycle writes local .md, artifacts[] is a local sidecar). Canon stays NATIVE + integration-agnostic; providers are opt-in adapters at REFERENCE/DRIVE/SYNC/SUBSUME depth, never imported by the core lifecycle. v1 ships REFERENCE-only attach (the xref enum reserves jira|linear|notion but they're inert pointers today, feature-validator.js:1044). Anchor: docs/plans/2026-06-21-roadmap-planning-model-design.md.",
+  "status": "PLANNED",
+  "phase": "COMP-ROADMAP-MODEL: Structured + Composable Roadmaps",
+  "created": "2026-06-21",
+  "updated": "2026-06-21",
+  "complexity": "XL",
+  "position": 7
+}
