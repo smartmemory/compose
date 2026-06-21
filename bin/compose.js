@@ -1286,9 +1286,11 @@ if (cmd === 'roadmap') {
   }
 
   // compose roadmap graph — generate a self-contained dependency-graph HTML
-  // from feature.json + deps.yaml + frontmatter (COMP-ROADMAP-GRAPH-1).
+  // from the canonical vision projection (COMP-ROADMAP-GRAPH-2: the vision
+  // model is the single source, deterministically seeded from feature.json +
+  // deps.yaml; renders through the one shared renderer).
   if (subcmd === 'graph') {
-    const { generateRoadmapGraph, checkRoadmapGraph } = await import('../lib/roadmap-graph/index.js')
+    const { generateRoadmapGraph, checkRoadmapGraph } = await import('../server/roadmap-graph-vision.js')
     let cwd
     const projIdx = args.indexOf('--project')
     if (projIdx !== -1 && args[projIdx + 1]) {

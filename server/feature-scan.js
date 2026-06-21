@@ -15,9 +15,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { parse as parseYaml } from 'yaml';
 import { getTargetRoot, resolveProjectPath } from './project-root.js';
 import { relForDisplay } from '../lib/project-paths.js';
 import { assertValidLinkShape } from '../lib/feature-write-guard.js';
+import { depsToEdges } from '../lib/roadmap-graph/model.js';
 
 // ---------------------------------------------------------------------------
 // Metadata extraction
@@ -162,6 +164,9 @@ export function scanFeatures(featuresDir) {
       predecessors: [],
       successors: [],
       group: null,  // explicit group from feature.json overrides derivation
+      priority: null, // track/priority from design.md frontmatter (COMP-ROADMAP-GRAPH-2)
+      deps: null,   // { depends_on?, blocks?, concurrent_with? } from deps.yaml
+      hasFeatureJson: false, // feature.json present = a managed feature (canon)
     };
 
     // Read feature.json if present — supplies optional explicit `group`,
@@ -169,12 +174,47 @@ export function scanFeatures(featuresDir) {
     try {
       const specPath = path.join(featureDir, 'feature.json');
       if (fs.existsSync(specPath)) {
+        feature.hasFeatureJson = true;
         const spec = JSON.parse(fs.readFileSync(specPath, 'utf-8'));
         if (typeof spec.group === 'string' && spec.group.trim()) {
           feature.group = spec.group.trim();
         }
+        // feature.json is canon for status. Set it first (highest precedence) so
+        // the design.md prose loop below cannot override it — the vision store
+        // is a managed projection of feature.json, not a thing that drifts from
+        // it (COMP-ROADMAP-GRAPH-2: kills the feature.json/cockpit status de-sync).
+        if (typeof spec.status === 'string' && spec.status.trim()) {
+          feature.status = normalizeStatus(spec.status);
+        }
       }
     } catch { /* ignore malformed feature.json */ }
+
+    // COMP-ROADMAP-GRAPH-2 (S3): absorb the static collector's edge + track
+    // metadata so a seeded store renders the same canonical graph.
+    // deps.yaml -> typed dependency edges.
+    try {
+      const depsPath = path.join(featureDir, 'deps.yaml');
+      if (fs.existsSync(depsPath)) {
+        const deps = parseYaml(fs.readFileSync(depsPath, 'utf-8')) || {};
+        if (deps && typeof deps === 'object' && !Array.isArray(deps)) feature.deps = deps;
+      }
+    } catch { /* unparseable deps.yaml — skip edges for this feature */ }
+
+    // design.md YAML frontmatter `track`/`priority` (collect.js precedence:
+    // frontmatter track > feature.json group). Rare, but kept faithful.
+    try {
+      const designPath = path.join(featureDir, 'design.md');
+      if (fs.existsSync(designPath)) {
+        const m = fs.readFileSync(designPath, 'utf-8').match(/^---\n([\s\S]*?)\n---/);
+        if (m) {
+          const fm = parseYaml(m[1]) || {};
+          if (fm && typeof fm === 'object' && !Array.isArray(fm)) {
+            if (typeof fm.track === 'string' && fm.track.trim()) feature.group = fm.track.trim();
+            if (typeof fm.priority === 'string' && fm.priority.trim()) feature.priority = fm.priority.trim();
+          }
+        }
+      }
+    } catch { /* invalid frontmatter — ignore */ }
 
     // List artifacts
     try {
@@ -421,179 +461,6 @@ export function writeFeatureGroupToDisk(item, newGroup, featuresDir) {
 }
 
 // ---------------------------------------------------------------------------
-// Roadmap graph import
-// ---------------------------------------------------------------------------
-
-/**
- * Parse a roadmap-graph.html file (Cytoscape-based dependency graph).
- * Extracts the `nodes` and `edges` JS arrays from the <script> block.
- *
- * @param {string} htmlPath — absolute path to roadmap-graph.html
- * @returns {{ nodes: Array, edges: Array }}
- */
-export function parseRoadmapGraph(htmlPath) {
-  if (!fs.existsSync(htmlPath)) return { nodes: [], edges: [] };
-
-  const raw = fs.readFileSync(htmlPath, 'utf-8');
-
-  // Extract nodes array
-  const nodesMatch = raw.match(/const\s+nodes\s*=\s*\[([\s\S]*?)\];\s*\n/);
-  const edgesMatch = raw.match(/const\s+edges\s*=\s*\[([\s\S]*?)\];\s*\n/);
-
-  let nodes = [];
-  let edges = [];
-
-  if (nodesMatch) {
-    try {
-      // Wrap in array brackets and evaluate as JSON-ish JS
-      // The data uses single quotes and unquoted keys, so we need to eval
-      nodes = Function(`"use strict"; return [${nodesMatch[1]}]`)();
-    } catch (e) {
-      console.error('[feature-scan] Failed to parse roadmap-graph nodes:', e.message);
-    }
-  }
-
-  if (edgesMatch) {
-    try {
-      edges = Function(`"use strict"; return [${edgesMatch[1]}]`)();
-    } catch (e) {
-      console.error('[feature-scan] Failed to parse roadmap-graph edges:', e.message);
-    }
-  }
-
-  return { nodes, edges };
-}
-
-/**
- * Find roadmap-graph.html in common locations within a project.
- */
-function findRoadmapGraph() {
-  const root = getTargetRoot();
-  const candidates = [
-    path.join(root, 'docs', 'roadmap-graph.html'),
-    path.join(root, 'roadmap-graph.html'),
-  ];
-
-  // Search one level of subdirs for docs/roadmap-graph.html
-  try {
-    const entries = fs.readdirSync(root, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
-      candidates.push(path.join(root, entry.name, 'docs', 'roadmap-graph.html'));
-      candidates.push(path.join(root, entry.name, 'roadmap-graph.html'));
-    }
-  } catch { /* skip */ }
-
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
-}
-
-const GRAPH_STATUS_MAP = {
-  planned: 'planned',
-  parked: 'parked',
-  partial: 'in_progress',
-  open: 'in_progress',
-  complete: 'complete',
-};
-
-const GRAPH_EDGE_MAP = {
-  dep: 'blocks',
-  concurrent: 'supports',
-};
-
-/**
- * Seed vision store from a roadmap-graph.html file.
- * Creates items for nodes and connections for edges.
- */
-export function seedFromRoadmapGraph(store) {
-  const graphPath = findRoadmapGraph();
-  if (!graphPath) return { items: 0, connections: 0 };
-
-  const { nodes, edges } = parseRoadmapGraph(graphPath);
-  if (nodes.length === 0) return { items: 0, connections: 0 };
-
-  console.log(`[vision] Roadmap graph: ${nodes.length} nodes, ${edges.length} edges from ${graphPath}`);
-
-  const seeded = { items: 0, connections: 0 };
-  const idMap = new Map(); // graphNodeId → visionItemId
-
-  // Create/update items from nodes
-  for (const node of nodes) {
-    // Look for existing item by featureCode or title
-    let item = Array.from(store.items.values()).find(
-      i => i.lifecycle?.featureCode === node.id || i.title === node.id
-    );
-
-    const status = GRAPH_STATUS_MAP[node.status] || 'planned';
-    const description = [
-      node.name || '',
-      node.desc || '',
-      node.track ? `Track: ${node.track}` : '',
-      node.priority ? `Priority: ${node.priority}` : '',
-    ].filter(Boolean).join('\n');
-
-    if (!item) {
-      item = store.createItem({
-        type: 'feature',
-        title: node.id,
-        description,
-        status,
-        phase: 'planning',
-        confidence: status === 'complete' ? 3 : node.priority === 'high' ? 1 : 0,
-      });
-      try {
-        store.updateLifecycle(item.id, { featureCode: node.id });
-      } catch { /* skip */ }
-      item = store.items.get(item.id);
-      seeded.items++;
-    } else {
-      // Update description and status if richer
-      const updates = {};
-      if (description.length > (item.description || '').length) {
-        updates.description = description;
-      }
-      if (status !== item.status && status !== 'planned') {
-        updates.status = status;
-      }
-      if (Object.keys(updates).length > 0) {
-        store.updateItem(item.id, updates);
-      }
-    }
-
-    idMap.set(node.id, item.id);
-  }
-
-  // Create connections from edges
-  for (const edge of edges) {
-    const fromId = idMap.get(edge.source);
-    const toId = idMap.get(edge.target);
-    if (!fromId || !toId) continue;
-
-    const type = GRAPH_EDGE_MAP[edge.type] || 'informs';
-
-    // Check existing
-    const exists = Array.from(store.connections.values()).some(
-      c => (c.fromId === fromId && c.toId === toId) ||
-           (c.fromId === toId && c.toId === fromId)
-    );
-    if (exists) continue;
-
-    try {
-      store.createConnection({ fromId, toId, type });
-      seeded.connections++;
-    } catch { /* skip */ }
-  }
-
-  if (seeded.items || seeded.connections) {
-    console.log(`[vision] Roadmap graph: ${seeded.items} items, ${seeded.connections} connections seeded`);
-  }
-  return seeded;
-}
-
-// ---------------------------------------------------------------------------
 // Seed
 // ---------------------------------------------------------------------------
 
@@ -631,6 +498,7 @@ export function seedFeatures(features, store) {
         confidence: feature.confidence,
         files: feature.artifacts.map(a => artifactPath(feature, a)),
         ...(feature.group ? { group: feature.group } : {}),
+        ...(feature.priority ? { priority: feature.priority } : {}),
       });
       try {
         store.updateLifecycle(featureItem.id, { featureCode: feature.name, currentPhase: 'explore_design' });
@@ -655,6 +523,9 @@ export function seedFeatures(features, store) {
       }
       if (feature.group && feature.group !== featureItem.group) {
         updates.group = feature.group;
+      }
+      if (feature.priority && feature.priority !== featureItem.priority) {
+        updates.priority = feature.priority;
       }
       if (Object.keys(updates).length > 0) {
         store.updateItem(featureItem.id, updates);
@@ -711,6 +582,49 @@ export function seedFeatures(features, store) {
     for (const succCode of feature.successors) {
       addDirectional(thisId, featureItemMap.get(succCode));
     }
+  }
+
+  // Fourth pass (COMP-ROADMAP-GRAPH-2 S3a): deps.yaml dependency edges as typed
+  // connections — `dep` -> blocks (directed), `concurrent` -> supports. These
+  // structural edges are RECONCILED, not appended: deps.yaml is canon, so a
+  // removed/retargeted dep must drop the stale edge from the live store too
+  // (else the cockpit export drifts from the canonical projection). Endpoints
+  // that resolve to no local item (external/missing) are skipped — buildGraph
+  // would drop their edges anyway.
+  const DEP_EDGE_CONN_TYPE = { dep: 'blocks', concurrent: 'supports' };
+  const STRUCTURAL_TYPES = new Set(['blocks', 'supports']);
+  const managedIds = new Set(featureItemMap.values());
+  const desiredStructural = new Set(); // `${fromId}|${toId}|${type}`
+  for (const feature of features) {
+    if (!feature.deps) continue;
+    for (const edge of depsToEdges(feature.name, feature.deps)) {
+      const fromId = featureItemMap.get(edge.from);
+      const toId = featureItemMap.get(edge.to);
+      const connType = DEP_EDGE_CONN_TYPE[edge.type];
+      if (!fromId || !toId || !connType) continue;
+      desiredStructural.add(`${fromId}|${toId}|${connType}`);
+    }
+  }
+  // Remove stale structural edges between two managed features that deps.yaml no
+  // longer declares (feature relationships are source-managed, not hand-edited).
+  for (const c of Array.from(store.connections.values())) {
+    if (!STRUCTURAL_TYPES.has(c.type)) continue;
+    if (!managedIds.has(c.fromId) || !managedIds.has(c.toId)) continue;
+    if (!desiredStructural.has(`${c.fromId}|${c.toId}|${c.type}`)) {
+      store.deleteConnection(c.id);
+    }
+  }
+  // Add any missing desired structural edges.
+  for (const key of desiredStructural) {
+    const [fromId, toId, connType] = key.split('|');
+    const exists = Array.from(store.connections.values()).some(
+      c => c.fromId === fromId && c.toId === toId && c.type === connType
+    );
+    if (exists) continue;
+    try {
+      store.createConnection({ fromId, toId, type: connType });
+      seeded.connections++;
+    } catch { /* skip invalid */ }
   }
 
   if (seeded.features || seeded.updated || seeded.connections) {

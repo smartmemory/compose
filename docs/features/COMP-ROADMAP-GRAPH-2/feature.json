@@ -1,0 +1,11 @@
+{
+  "code": "COMP-ROADMAP-GRAPH-2",
+  "description": "Collapse the three roadmap-graph surfaces onto one: the cockpit vision model is the single source, lib/roadmap-graph the single renderer. Repoint graph-export + MCP + CLI + CI as thin callers; delete the dead SmartMemory seed and the pre-push staleness chore.",
+  "status": "PARTIAL",
+  "phase": "COMP-ROADMAP-GRAPH: Dependency Graph",
+  "created": "2026-06-21",
+  "updated": "2026-06-21",
+  "complexity": "M",
+  "position": 1,
+  "parent": "COMP-ROADMAP-GRAPH-1"
+}

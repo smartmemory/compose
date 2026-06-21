@@ -2,7 +2,34 @@
 
 ## 2026-06-21
 
-### COMP-ROADMAP-GRAPH-2 — One renderer for the roadmap graph (PARTIAL — S1+S2 of 5)
+### COMP-ROADMAP-GRAPH-2 — One graph: vision model is the single source (COMPLETE)
+
+Collapsed compose's three overlapping "roadmap graph" surfaces onto **one
+renderer + one source**. The cockpit live export and the headless CLI/MCP/CI
+generator now both render the vision model through `buildGraph →
+renderGraphHtml`. The static `collect.js` collector is retired.
+
+- **S3 — seed absorbs the static collector** (`server/feature-scan.js`):
+  `scanFeatures`/`seedFeatures` now read `deps.yaml` (→ typed `blocks`/`supports`
+  connections), design.md `track`/`priority`, and — crucially — **`feature.json`
+  status as canon** (highest precedence, overriding design.md prose). This kills
+  the feature.json↔cockpit status de-sync: the vision store is a managed
+  projection of feature.json, not a thing that drifts from it.
+- **S4 — canonical projection** (`server/roadmap-graph-vision.js`, new): builds
+  the graph from a freshly, deterministically seeded throwaway store (committed
+  source only), through the same adapter + renderer. The CLI `compose roadmap
+  graph` and MCP `roadmap_graph`/`_check` are repointed here. A superset diff
+  gate confirmed an exact match with the old collector (57/57 nodes, 33/33
+  edges). The dangling-edge refusal is preserved as an explicit pre-seed lint.
+- **S5 — retire the static path**: deleted `lib/roadmap-graph/collect.js` and the
+  dead, circular `seedFromRoadmapGraph`/`parseRoadmapGraph`/`findRoadmapGraph`
+  (the `Function()`-eval HTML reparse) + their startup/project-switch calls.
+  `lib/roadmap-graph/index.js` is now a source-agnostic render/write/check helper.
+- Documented deltas (intentional, "vision is the source"): node name = vision
+  title (code); `PARTIAL` → `in_progress` (no vision `partial`); track from the
+  vision `group`. Node/edge sets + statuses otherwise match exactly.
+
+#### S1+S2 (shipped earlier the same day)
 
 First increment of collapsing compose's three overlapping "roadmap graph"
 surfaces onto one. Goal: the cockpit's vision model is the single source and
