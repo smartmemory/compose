@@ -55,7 +55,7 @@ import {
   verifyCompletionEvidence, guardTestCommand,
 } from './lifecycle-guard.js';
 import {
-  transitionsOf, skippableOf, completablePhaseOf,
+  transitionsOf, skippableOf, completablePhaseOf, getMode, resolveMode,
 } from '../lib/lifecycle-modes.js';
 import { requireSensitiveOrPaired as requireSensitiveToken } from './security.js';
 
@@ -258,11 +258,13 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (!item) return res.status(404).json({ error: `Item not found: ${req.params.id}` });
       if (item.lifecycle) return res.status(400).json({ error: `Item ${req.params.id} already has a lifecycle` });
 
-      // COMP-ROADMAP-MODES: stamp the lifecycle mode (derived from the item type).
-      // The genesis phase stays 'explore_design' — byte-identical to pre-MODES for
-      // build AND bug; per-mode genesis-at-creation is deferred with the fix/plan
-      // UI phase wiring.
-      const mode = typeToMode(item.type);
+      // COMP-ROADMAP-MODES / COMP-ROADMAP-PLAN: stamp the lifecycle mode. Prefer
+      // an explicit mode on the start payload (the CLI/VisionWriter forwards
+      // `mode` so a plan session is stamped mode='plan'), normalized through
+      // resolveMode (feature→build, bug→fix). Fall back to typeToMode(item.type)
+      // when the caller does not specify one — byte-identical to pre-PLAN for
+      // build AND bug. The genesis phase stays 'explore_design'.
+      const mode = req.body.mode != null ? resolveMode(req.body.mode) : typeToMode(item.type);
       const genesis = 'explore_design';
       const now = new Date().toISOString();
       const lifecycle = {
@@ -286,7 +288,11 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
         catch (e) { console.warn(`[lifecycle/start] guard register for ${featureCode} failed: ${e.message}`); }
         // Slice 2: starting a lifecycle projects the genesis phase → IN_PROGRESS so
         // the first active phase is not left stuck at PLANNED in feature.json.
-        await projectFeatureStatus({ featureCode, phase: genesis, cwd: projectRoot });
+        // COMP-ROADMAP-PLAN: skipped for tracksFeatureJson:false modes (e.g. a
+        // plan session has no feature.json to project onto).
+        if (getMode(mode).runner.tracksFeatureJson) {
+          await projectFeatureStatus({ featureCode, phase: genesis, cwd: projectRoot });
+        }
       }
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleStarted', itemId: req.params.id, phase: genesis, featureCode, timestamp: now });
@@ -358,7 +364,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       store.updateLifecycle(req.params.id, item.lifecycle);
       // COMP-MCP-ENFORCE Slice 2 (lifecycle-as-truth): project the new phase onto
       // feature.json STATUS (best-effort; idempotent — only writes on a real change).
-      if (guardEnabled) await projectFeatureStatus({ featureCode: item.lifecycle.featureCode, phase: targetPhase, cwd: projectRoot });
+      // COMP-ROADMAP-PLAN: skipped for tracksFeatureJson:false modes (no feature.json).
+      if (guardEnabled && getMode(modeOf(item)).runner.tracksFeatureJson) await projectFeatureStatus({ featureCode: item.lifecycle.featureCode, phase: targetPhase, cwd: projectRoot });
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: targetPhase, outcome, timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, outcome, timestamp: now }));
@@ -398,7 +405,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       appendPhaseHistory(item, { from, to: targetPhase, outcome: 'skipped', timestamp: now });
       store.updateLifecycle(req.params.id, item.lifecycle);
       // COMP-MCP-ENFORCE Slice 2 (lifecycle-as-truth): project phase → STATUS.
-      if (guardEnabled) await projectFeatureStatus({ featureCode: item.lifecycle.featureCode, phase: targetPhase, cwd: projectRoot });
+      // COMP-ROADMAP-PLAN: skipped for tracksFeatureJson:false modes (no feature.json).
+      if (guardEnabled && getMode(modeOf(item)).runner.tracksFeatureJson) await projectFeatureStatus({ featureCode: item.lifecycle.featureCode, phase: targetPhase, cwd: projectRoot });
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: targetPhase, outcome: 'skipped', timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, outcome: 'skipped', timestamp: now }));
@@ -442,7 +450,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       store.updateItem(req.params.id, { status: 'killed' });
       // COMP-MCP-ENFORCE Slice 2: project kill → KILLED onto feature.json
       // (closes the COMP-PARITY-7 gap — kill previously wrote vision-state only).
-      if (guardEnabled) await projectFeatureStatus({ featureCode: item.lifecycle.featureCode, phase: 'killed', cwd: projectRoot });
+      // COMP-ROADMAP-PLAN: skipped for tracksFeatureJson:false modes (no feature.json).
+      if (guardEnabled && getMode(modeOf(item)).runner.tracksFeatureJson) await projectFeatureStatus({ featureCode: item.lifecycle.featureCode, phase: 'killed', cwd: projectRoot });
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: 'killed', outcome: 'killed', timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: 'killed', outcome: 'killed', timestamp: now }));
@@ -562,7 +571,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
           } catch { /* decision event emit best-effort */ }
           // No recordCompletion bridge ran — project complete → COMPLETE so
           // lifecycle-as-truth still reaches feature.json (best-effort).
-          if (guardEnabled) await projectFeatureStatus({ featureCode, phase: 'complete', cwd: projectRoot });
+          // COMP-ROADMAP-PLAN: skipped for tracksFeatureJson:false modes (no feature.json).
+          if (guardEnabled && getMode(modeOf(item)).runner.tracksFeatureJson) await projectFeatureStatus({ featureCode, phase: 'complete', cwd: projectRoot });
         }
       }
 
