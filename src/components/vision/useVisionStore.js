@@ -436,12 +436,25 @@ export const useVisionStore = create((set, get) => {
 
     // ── COMP-PIPE-EDIT-1/-2: pipeline editor actions ───────────────────────
 
-    // Re-run structural validation for the selected flow and store the result.
-    // Internal helper, callable after any mutation; safe when nothing is loaded.
+    // Re-run structural validation and store the result. Internal helper,
+    // callable after any mutation; safe when nothing is loaded.
+    //
+    // COMP-PIPE-EDIT-6 (Codex fix): scope-aware. When editorSaveScope is 'spec'
+    // (latched by a YAML-pane flush or a collapse), a single mutation can leave
+    // an error standing in a NON-selected/newly-created flow. Re-validating with
+    // single-flow validateFlow would silently drop those errors and re-enable
+    // Save/Save-as-template. So under scope 'spec' we aggregate spec-wide over
+    // EVERY editable flow (warnings still keyed to the selected flow). Under
+    // scope 'flow' we keep the cheaper single-flow validation.
     _revalidateEditor: () => {
-      const { editorModel, editorSelectedFlow } = get();
+      const { editorModel, editorSelectedFlow, editorSaveScope } = get();
       if (!editorModel || !editorSelectedFlow) {
         set({ editorErrors: { errors: [], warningsByStepId: {} } });
+        return;
+      }
+      if (editorSaveScope === 'spec') {
+        const flows = listEditableFlows(editorModel._doc);
+        set({ editorErrors: validateSpecWide(editorModel, flows, editorSelectedFlow) });
         return;
       }
       set({ editorErrors: validateFlow(editorModel, editorSelectedFlow) });
@@ -491,15 +504,13 @@ export const useVisionStore = create((set, get) => {
       return model;
     },
 
+    // COMP-PIPE-EDIT-6 (Codex fix): set the selection first, then revalidate via
+    // the scope-aware helper. Under scope 'spec' this keeps non-selected flows'
+    // errors instead of clobbering editorErrors with single-flow validateFlow
+    // for only the newly-selected flow (which would re-enable Save/Save-as-template).
     selectFlow: (name) => {
-      const { editorModel } = get();
-      set({
-        editorSelectedFlow: name,
-        editorSelectedStep: null,
-        editorErrors: editorModel && name
-          ? validateFlow(editorModel, name)
-          : { errors: [], warningsByStepId: {} },
-      });
+      set({ editorSelectedFlow: name, editorSelectedStep: null });
+      get()._revalidateEditor();
     },
 
     selectStep: (id) => set({ editorSelectedStep: id }),
@@ -590,6 +601,7 @@ export const useVisionStore = create((set, get) => {
       const {
         editorModel, editorSpecFile, editorSelectedFlow, editorReadOnly,
         editorSaveScope, editorSpecHash, editorYamlBuffer, editorYamlError,
+        editorErrors,
       } = get();
       if (!editorModel || !editorSpecFile || editorReadOnly) {
         return { error: 'No editable spec loaded' };
@@ -600,6 +612,13 @@ export const useVisionStore = create((set, get) => {
         const message = 'Resolve the YAML pane (let it parse) before saving';
         get()._surfaceEditorError(message);
         return { error: message };
+      }
+      // COMP-PIPE-EDIT-6 (Codex fix): gate validation IN the action so all callers
+      // — including force/overwrite via resolveConflict — respect it. The UI Save
+      // button is disabled on errors, but force bypassed that, letting overwrite
+      // persist an invalid spec. No POST when any validation error stands.
+      if ((editorErrors?.errors?.length || 0) > 0) {
+        return { error: 'Resolve validation errors before saving' };
       }
       const body = { file: editorSpecFile, model: editorModel };
       if (editorSaveScope !== 'spec') body.flowName = editorSelectedFlow;
@@ -899,8 +918,15 @@ export const useVisionStore = create((set, get) => {
     // server response (incl. { error } on 409 id-collision / overwrite refusal).
     // Never clears editorDirty (the source file is unchanged by a template save).
     saveAsTemplate: async ({ filename, metadata }) => {
-      const { editorModel, editorErrors } = get();
+      const { editorModel, editorErrors, editorYamlBuffer, editorYamlError } = get();
       if (!editorModel) return { error: 'No spec loaded' };
+      // COMP-PIPE-EDIT-6 (Codex fix): block while the YAML pane holds pending or
+      // unparseable text — publishing then would persist the stale model, not the
+      // visible buffer. Mirrors the saveSpec buffer gate; the action enforces it so
+      // all callers are protected, not just the disabled UI button.
+      if (editorYamlBuffer != null || editorYamlError) {
+        return { error: 'Resolve the YAML pane (let it parse) before saving as a template' };
+      }
       // Never publish a template that fails validation (mirrors the saveSpec gate;
       // the UI also disables the button, this is the defense-in-depth backstop).
       if ((editorErrors?.errors?.length || 0) > 0) {

@@ -153,7 +153,8 @@ export default function PipelineEditor() {
     const id = tplForm.id.trim();
     if (!filename) { setTplError('Filename is required'); return; }
     if (!id) { setTplError('Template id is required'); return; }
-    // Mirror the Save gate: never publish a template that fails validation.
+    // Mirror the Save gate: never publish with a pending pane or validation errors.
+    if (bufferPending) { setTplError('Resolve the YAML pane before saving as a template'); return; }
     if (errorCount > 0) { setTplError('Resolve validation errors before saving as a template'); return; }
     setTplSaving(true);
     setTplError('');
@@ -345,14 +346,20 @@ export default function PipelineEditor() {
         <button
           type="button"
           onClick={openTemplateDialog}
-          disabled={!model || !selectedFlow || readOnly || errorCount > 0}
+          disabled={!model || !selectedFlow || readOnly || errorCount > 0 || bufferPending}
           className={cn(
             'flex items-center gap-1 text-xs px-2 py-1 rounded border border-border transition-colors',
-            (!model || !selectedFlow || readOnly || errorCount > 0)
+            (!model || !selectedFlow || readOnly || errorCount > 0 || bufferPending)
               ? 'opacity-50 cursor-not-allowed text-muted-foreground'
               : 'text-foreground hover:bg-accent',
           )}
-          title={errorCount > 0 ? 'Resolve validation errors before saving as a template' : 'Save as new template'}
+          title={
+            bufferPending
+              ? 'Resolve the YAML pane before saving as a template'
+              : errorCount > 0
+                ? 'Resolve validation errors before saving as a template'
+                : 'Save as new template'
+          }
           data-testid="save-as-template"
         >
           <FileBox className="h-3 w-3" /> Save as template
