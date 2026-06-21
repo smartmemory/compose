@@ -22,6 +22,13 @@ import {
   guardTransition as _guardTransition,
 } from './stratum-client.js';
 import { setFeatureStatus as _setFeatureStatus } from '../lib/feature-writer.js';
+import {
+  resolveMode,
+  transitionsOf,
+  completablePhaseOf,
+  terminalOf,
+  edgeEvidenceOf,
+} from '../lib/lifecycle-modes.js';
 
 // ---------------------------------------------------------------------------
 // Canonical phase graph (compose-owned data — single source of truth)
@@ -54,7 +61,10 @@ export const TERMINAL = new Set(['complete', 'killed']);
  * be a superset of every edge vision-routes will legally request, or the guard
  * would reject a transition the app considers valid.
  */
-export function buildPhaseGraph(transitions = BASE_TRANSITIONS) {
+export function buildPhaseGraph(mode = 'build') {
+  const transitions = transitionsOf(mode);
+  const completable = completablePhaseOf(mode);
+  const terminal = new Set(terminalOf(mode));
   const graph = {};
   const nodes = new Set();
   for (const [from, tos] of Object.entries(transitions)) {
@@ -62,18 +72,18 @@ export function buildPhaseGraph(transitions = BASE_TRANSITIONS) {
     nodes.add(from);
     for (const t of tos) nodes.add(t);
   }
-  // ship → complete (the highest-consequence edge; implemented separately in
-  // vision-routes at /lifecycle/complete, so absent from BASE_TRANSITIONS).
-  graph.ship = [...(graph.ship || []), 'complete'];
+  // <completable phase> → complete (the highest-consequence edge; implemented
+  // separately in vision-routes at /lifecycle/complete, so absent from the mode's
+  // forward transitions). For build this is `ship → complete`.
+  graph[completable] = [...(graph[completable] || []), 'complete'];
   // Every non-terminal phase → killed (vision-routes /lifecycle/kill allows
-  // kill from any non-terminal phase, including ship).
+  // kill from any non-terminal phase, including the completable phase).
   for (const s of nodes) {
-    if (TERMINAL.has(s)) continue;
+    if (terminal.has(s)) continue;
     graph[s] = graph[s] || [];
     if (!graph[s].includes('killed')) graph[s].push('killed');
   }
-  graph.complete = [];
-  graph.killed = [];
+  for (const t of terminal) graph[t] = [];
   return graph;
 }
 
@@ -86,17 +96,19 @@ export function buildPhaseGraph(transitions = BASE_TRANSITIONS) {
  *
  * @param {string} featureRelDir e.g. "docs/features/FEAT-1"
  */
-export function edgePredicates(featureRelDir) {
+export function edgePredicates(featureRelDir, mode = 'build') {
   const det = (id, file) => ({
     id,
     type: 'deterministic',
     statement: `server_file_exists('${featureRelDir}/${file}')`,
   });
-  return {
-    'explore_design->blueprint': [det('design_md', 'design.md')],
-    'blueprint->verification': [det('blueprint_md', 'blueprint.md')],
-    'plan->execute': [det('plan_md', 'plan.md')],
-  };
+  const out = {};
+  // edgeEvidence is `{ 'from->to': 'file.md' }` per mode (build's is the legacy
+  // 3 edges verbatim). The predicate id matches the legacy naming: design.md → design_md.
+  for (const [edge, file] of Object.entries(edgeEvidenceOf(mode))) {
+    out[edge] = [det(file.replace(/\.md$/, '_md'), file)];
+  }
+  return out;
 }
 
 /**
@@ -105,9 +117,15 @@ export function edgePredicates(featureRelDir) {
  * `compose:<FC>` would let two compose projects sharing a feature code collide on
  * one ledger/current-state. The project-path hash prevents that.
  */
-export function resourceId(featureCode, workspaceRoot) {
+export function resourceId(featureCode, workspaceRoot, mode = 'build') {
   const hash = createHash('sha256').update(path.resolve(workspaceRoot)).digest('hex').slice(0, 12);
-  return `compose:${hash}:${featureCode}`;
+  const m = resolveMode(mode);
+  // build keeps the LEGACY id (no mode segment) so in-flight build guards are
+  // never orphaned; non-build modes get a namespaced id so two modes on one
+  // feature can't collide on a single guard ledger/current-state.
+  return m === 'build'
+    ? `compose:${hash}:${featureCode}`
+    : `compose:${hash}:${m}:${featureCode}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -259,18 +277,18 @@ export function guardTestCommand(workspaceRoot) {
  *
  * @returns the register result, or {error} on guard failure.
  */
-export async function ensureGuard(featureCode, currentPhase, workspaceRoot) {
-  const rid = resourceId(featureCode, workspaceRoot);
+export async function ensureGuard(featureCode, currentPhase, workspaceRoot, mode = 'build') {
+  const rid = resourceId(featureCode, workspaceRoot, mode);
   if (_registered.has(rid)) return { guard_id: rid, status: 'cached' };
 
   let res;
   try {
     res = await _client.register({
       resourceId: rid,
-      graph: buildPhaseGraph(),
-      edgePredicates: edgePredicates(_featureRelDir(featureCode, workspaceRoot)),
+      graph: buildPhaseGraph(mode),
+      edgePredicates: edgePredicates(_featureRelDir(featureCode, workspaceRoot), mode),
       initial: currentPhase,
-      terminal: ['complete', 'killed'],
+      terminal: terminalOf(mode),
       stakes: {},
       workspaceRoot,
     });
@@ -293,13 +311,13 @@ export async function ensureGuard(featureCode, currentPhase, workspaceRoot) {
  * @returns {Promise<{applied:boolean, refused?:boolean, verdict?:object,
  *   ledgerRef?:string, currentState?:string, error?:object}>}
  */
-export async function guardedTransition({ featureCode, from, to, workspaceRoot, commitSha, resolvedBy = 'agent' }) {
-  const reg = await ensureGuard(featureCode, from, workspaceRoot);
+export async function guardedTransition({ featureCode, from, to, workspaceRoot, commitSha, resolvedBy = 'agent', mode = 'build' }) {
+  const reg = await ensureGuard(featureCode, from, workspaceRoot, mode);
   if (reg && (reg.error || reg.status === 'error')) {
     return { applied: false, error: reg.error || reg };
   }
 
-  const rid = resourceId(featureCode, workspaceRoot);
+  const rid = resourceId(featureCode, workspaceRoot, mode);
   const artifacts = commitSha ? { commit_sha: commitSha } : {};
   // No idempotency_key: a refuse→fix→retry is a NEW logical attempt that must
   // re-evaluate evidence, but it carries an identical (from,to,artifacts)
