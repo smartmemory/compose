@@ -1,0 +1,11 @@
+{
+  "code": "COMP-ROADMAP-GRAPH-3",
+  "description": "Render external/cross-product nodes in the roadmap dependency graph so it can serve as the live cross-product dashboard (the surface that replaces foreign ROADMAP.md rows under COMP-ROADMAP-MIGRATE option C). Today the vision adapter drops external-prefixed nodes (lib/roadmap-graph/vision-adapter.js:85) — they're known-but-not-rendered. Add an opt-in mode that renders external/owned-elsewhere codes as reference nodes (resolving status read-only from the owning repo's feature.json), so forge-top's graph shows the full cross-product picture. Sibling of COMP-ROADMAP-GRAPH-2. Anchor: docs/plans/2026-06-21-roadmap-planning-model-design.md.",
+  "status": "PLANNED",
+  "phase": "COMP-ROADMAP-GRAPH: Dependency Graph",
+  "created": "2026-06-21",
+  "updated": "2026-06-21",
+  "complexity": "M",
+  "position": 2,
+  "parent": "COMP-ROADMAP-GRAPH-2"
+}

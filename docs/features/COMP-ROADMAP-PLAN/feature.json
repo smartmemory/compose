@@ -1,0 +1,10 @@
+{
+  "code": "COMP-ROADMAP-PLAN",
+  "description": "The `plan` product-planning lifecycle v1, peer to build/fix, WITHIN compose (extractable later). Front half of goal-to-product: framing → research → product-level ideation → interactive discussion → estimation/prioritization → convergence to a build-ready spec, ending in a build-handshake artifact (promoted feature.json + approved spec docs) that `build` resumes from. v1 is native-state-only: ideabox funnel + vision-store types idea/thread/question/decision; NO provider-coupled steps (no Linear/JIRA import, no Notion push) in v1. Absorbs the existing `compose new` kickoff (lib/new.js + pipelines/new.stratum.yaml) — stop maintaining a separate kickoff system. Depends on COMP-ROADMAP-MODES. Anchor: docs/plans/2026-06-21-roadmap-planning-model-design.md.",
+  "status": "PLANNED",
+  "phase": "COMP-ROADMAP-MODEL: Structured + Composable Roadmaps",
+  "created": "2026-06-21",
+  "updated": "2026-06-21",
+  "complexity": "XL",
+  "position": 4
+}

@@ -1,0 +1,10 @@
+{
+  "code": "COMP-ROADMAP-MIGRATE",
+  "description": "Migrate forge-top narrative→structured (precondition for retiring narrative). One-time standalone script. Foreign-owned (compose/stratum) rows leave the live ROADMAP.md (option C — ROADMAP.md becomes forge-OWNED-only; foreign codes declared via externalPrefixes so validate/roundtrip skip them); the live cross-product view is the roadmap dependency graph (COMP-ROADMAP-GRAPH-3). Owned-here rows get a real feature.json. Curated changelog/Roadmap-Model prose extracted to docs/preserved-sections (never dropped). Order: classify → scaffold owned-here + set externalPrefixes → preserve prose → dry-run checkRoundtrip → flip narrative:false → validate clean. NOT link-carriers (option B dropped: xref-sync reconciles links[].expect not top-level status, so they'd render placeholders). Depends on COMP-ROADMAP-GRAPH-3. Design: docs/features/COMP-ROADMAP-MIGRATE/design.md.",
+  "status": "PLANNED",
+  "phase": "COMP-ROADMAP-MODEL: Structured + Composable Roadmaps",
+  "created": "2026-06-21",
+  "updated": "2026-06-21",
+  "complexity": "M",
+  "position": 5
+}

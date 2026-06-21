@@ -1,0 +1,10 @@
+{
+  "code": "COMP-ROADMAP-META",
+  "description": "DEFERRED (not v1). NARROW coordination `.compose/roadmap.json` — workspaces[], sharedMilestones[], integrationItems[] only. Augmentation that no feature.json owns; never repeats per-feature data and is NOT a second tracker (Codex round-1/2: don't put themes/GTM/program-tracking/incubation here — ideation stays in the ideabox, and narrative prose is preserved via COMP-ROADMAP-MIGRATE's preserved-sections/docs, not relocated into roadmap.json). Not a prerequisite for MIGRATE (option C needs no roadmap.json). Build only once a real coordination consumer exists. Anchor: docs/plans/2026-06-21-roadmap-planning-model-design.md.",
+  "status": "PLANNED",
+  "phase": "COMP-ROADMAP-MODEL: Structured + Composable Roadmaps",
+  "created": "2026-06-21",
+  "updated": "2026-06-21",
+  "complexity": "L",
+  "position": 1
+}

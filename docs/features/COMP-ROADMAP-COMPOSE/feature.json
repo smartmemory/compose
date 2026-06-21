@@ -1,0 +1,10 @@
+{
+  "code": "COMP-ROADMAP-COMPOSE",
+  "description": "Composable / nested roadmaps. Each sub-project folder is a self-contained compose workspace (own roadmap.json + feature.json set + ROADMAP.md), runnable standalone. The top-level roadmap holds ONLY integration items + links to sub-project roadmaps (composition, no feature repetition). Gaps found: (1) xref local-provider `resolveSiblingRoot` is SIBLING-only — cannot link a top roadmap to a CHILD sub-folder (e.g. forge/ → forge/compose/); parent→child composition unsupported. (2) No cross-workspace composed view / status rollup (each workspace's roadmap + graph is standalone). (3) No 'integration-only' policy/enforcement for a top roadmap (prose-only in the Roadmap Model). (4) Nested parent+child workspaces force explicit --workspace (WorkspaceAmbiguous by design). Depends on COMP-ROADMAP-META (links live in roadmap.json).",
+  "status": "PLANNED",
+  "phase": "COMP-ROADMAP-MODEL: Structured + Composable Roadmaps",
+  "created": "2026-06-21",
+  "updated": "2026-06-21",
+  "complexity": "L",
+  "position": 2
+}
