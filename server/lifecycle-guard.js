@@ -24,6 +24,7 @@ import {
 import { setFeatureStatus as _setFeatureStatus } from '../lib/feature-writer.js';
 import {
   resolveMode,
+  getMode,
   transitionsOf,
   completablePhaseOf,
   terminalOf,
@@ -242,14 +243,32 @@ export function _testOnly_resetGuardCache() { _registered.clear(); }
  * which is pinned to getTargetRoot() and would drift for a non-current project
  * root). The relative dir is baked into the immutable guard registration, so it
  * must reflect the tree the routes actually serve.
+ *
+ * COMP-ROADMAP-PLAN S7: mode-aware, mirroring `resolveItemDir` (build.js:670-674).
+ * The mode's `artifactRoot` is a token: `'features'` resolves the (override-aware)
+ * config-backed `paths.features` dir — build stays byte-identical; any other token
+ * (`docs/bugs`, `docs/plans`) is a literal repo-relative root used as `<root>/<code>`.
+ * Without this, plan/bug evidence would be looked up under `docs/features` and the
+ * guard would block `advance` (C11).
  */
-function _featureRelDir(featureCode, workspaceRoot) {
+function _featureRelDir(featureCode, workspaceRoot, mode = 'build') {
+  const artifactRoot = getMode(mode).runner.artifactRoot;
+  if (artifactRoot !== 'features') {
+    // Literal repo-relative root (docs/bugs, docs/plans) — no config override.
+    return `${artifactRoot}/${featureCode}`;
+  }
+  // Build: keep the config-backed paths.features resolution.
   let featuresRel = 'docs/features';
   try {
     const cfg = JSON.parse(readFileSync(path.join(workspaceRoot, '.compose', 'compose.json'), 'utf-8'));
     featuresRel = cfg?.paths?.features || 'docs/features';
   } catch { /* missing/invalid config → default */ }
   return `${featuresRel}/${featureCode}`;
+}
+
+/** Test-only seam for the mode-aware feature-dir resolver. */
+export function _testOnly_featureRelDir(featureCode, workspaceRoot, mode = 'build') {
+  return _featureRelDir(featureCode, workspaceRoot, mode);
 }
 
 /**
@@ -286,7 +305,7 @@ export async function ensureGuard(featureCode, currentPhase, workspaceRoot, mode
     res = await _client.register({
       resourceId: rid,
       graph: buildPhaseGraph(mode),
-      edgePredicates: edgePredicates(_featureRelDir(featureCode, workspaceRoot), mode),
+      edgePredicates: edgePredicates(_featureRelDir(featureCode, workspaceRoot, mode), mode),
       initial: currentPhase,
       terminal: terminalOf(mode),
       stakes: {},

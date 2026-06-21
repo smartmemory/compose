@@ -565,7 +565,7 @@ async function runInit(flags, cwdOverride) {
   // 8. Copy default pipeline specs if absent
   const pipelinesDir = join(cwd, 'pipelines')
   mkdirSync(pipelinesDir, { recursive: true })
-  for (const specName of ['build.stratum.yaml', 'build-quick.stratum.yaml', 'new.stratum.yaml']) {
+  for (const specName of ['build.stratum.yaml', 'build-quick.stratum.yaml', 'new.stratum.yaml', 'plan.stratum.yaml']) {
     const dest = join(pipelinesDir, specName)
     if (!existsSync(dest)) {
       const src = join(PACKAGE_ROOT, 'pipelines', specName)
@@ -2226,6 +2226,101 @@ if (cmd === 'build') {
       process.exit(0)
     }).catch((err) => {
       console.error(`Fix failed: ${err.message}`)
+      process.exit(1)
+    })
+  })
+} else if (cmd === 'plan') {
+  // compose plan "<intent>" — runs the plan.stratum.yaml product-planning
+  // lifecycle (explore_design → plan → ship). Thin delegation to runBuild() with
+  // template='plan', mode='plan'. Derives a PLAN-<slug> code from the intent
+  // (override with --code). Always passes opts.description so the dead
+  // descriptionLoader:'plan' branch never runs (it would read a stray design.md).
+  // Emits build-ready docs/features/<code>/{feature.json, design.md} that
+  // `compose build <code>` consumes.
+  let agentWorkDir = null
+  const cwdIdx = args.indexOf('--cwd')
+  if (cwdIdx !== -1) {
+    const cwdValue = args[cwdIdx + 1]
+    if (!cwdValue || cwdValue.startsWith('-')) {
+      console.error('Error: --cwd requires a path argument')
+      process.exit(1)
+    }
+    agentWorkDir = resolve(cwdValue)
+  }
+  const codeIdx = args.indexOf('--code')
+  const explicitCode = codeIdx !== -1 ? args[codeIdx + 1] : null
+  const abort = args.includes('--abort')
+  const resume = args.includes('--resume')
+  // Everything that isn't a flag or a flag-value is the intent.
+  const skip = new Set()
+  if (cwdIdx !== -1) { skip.add(cwdIdx); skip.add(cwdIdx + 1) }
+  if (codeIdx !== -1) { skip.add(codeIdx); skip.add(codeIdx + 1) }
+  const intent = args.filter((a, i) => !a.startsWith('-') && !skip.has(i)).join(' ')
+
+  if (!intent && !abort) {
+    console.error('Usage: compose plan "<what you want to build>" [--code PLAN-X] [--resume] [--abort]')
+    console.error('')
+    console.error('Runs the product-planning lifecycle (frame → research → ideate → converge → handoff).')
+    console.error('Emits build-ready docs/features/<code>/{feature.json, design.md} for `compose build`.')
+    console.error('')
+    console.error('Options:')
+    console.error('  --code <CODE>  Use an explicit plan code instead of a derived PLAN-<slug>')
+    console.error('  --resume       Resume the active plan run')
+    console.error('  --abort        Abort the active plan run')
+    console.error('  --cwd <path>   Agent working directory')
+    process.exit(1)
+  }
+
+  const { root: planCwd } = resolveCwdWithWorkspace(args)
+  if (!existsSync(join(planCwd, '.compose', 'compose.json')) || !existsSync(join(planCwd, 'pipelines', 'plan.stratum.yaml'))) {
+    console.log('Running compose init...\n')
+    await runInit(args.filter(a => a.startsWith('--')))
+    console.log('')
+  }
+
+  // Derive a deterministic PLAN-<slug> code from the intent (dedup if the plan
+  // workspace already exists), mirroring ideabox promote's slug derivation.
+  let planCode = explicitCode
+  if (!planCode) {
+    const rawSlug = intent.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24).replace(/-+$/, '')
+    const slug = rawSlug || 'session'
+    const base = `PLAN-${slug}`.toUpperCase()
+    let candidate = base
+    let n = 2
+    while (existsSync(join(planCwd, 'docs', 'plans', candidate))) {
+      candidate = `${base}-${n}`
+      n++
+    }
+    planCode = candidate
+  }
+
+  // --resume: require a matching active plan build for this code, in plan mode.
+  let resumeFlowId = null
+  if (resume && !abort) {
+    const activeBuildPath = join(planCwd, '.compose', 'data', 'active-build.json')
+    let active = null
+    if (existsSync(activeBuildPath)) {
+      try { active = JSON.parse(readFileSync(activeBuildPath, 'utf-8')) } catch { active = null }
+    }
+    if (!active || active.featureCode !== planCode || !active.flowId) {
+      console.error(`No active plan build to resume for ${planCode}`)
+      process.exit(1)
+    }
+    if (active.mode && active.mode !== 'plan') {
+      console.error(`Cannot --resume: active build for ${planCode} is in ${active.mode} mode, not plan mode.`)
+      process.exit(1)
+    }
+    resumeFlowId = active.flowId
+  }
+
+  import('../lib/build.js').then(({ runBuild }) => {
+    const opts = { abort, template: 'plan', mode: 'plan', description: intent }
+    if (agentWorkDir) opts.workingDirectory = agentWorkDir
+    if (resumeFlowId) opts.resumeFlowId = resumeFlowId
+    runBuild(planCode, opts).then(() => {
+      process.exit(0)
+    }).catch((err) => {
+      console.error(`Plan failed: ${err.message}`)
       process.exit(1)
     })
   })
