@@ -2251,13 +2251,17 @@ if (cmd === 'build') {
   const explicitCode = codeIdx !== -1 ? args[codeIdx + 1] : null
   const abort = args.includes('--abort')
   const resume = args.includes('--resume')
-  // Everything that isn't a flag or a flag-value is the intent.
+  // Everything that isn't a flag or a value-taking flag's argument is the intent.
+  // Skip the values of every value-taking flag so e.g. `--workspace foo` or
+  // `--team t` never pollute the derived intent/slug.
   const skip = new Set()
-  if (cwdIdx !== -1) { skip.add(cwdIdx); skip.add(cwdIdx + 1) }
-  if (codeIdx !== -1) { skip.add(codeIdx); skip.add(codeIdx + 1) }
+  for (const flag of ['--cwd', '--code', '--workspace', '--team']) {
+    const fi = args.indexOf(flag)
+    if (fi !== -1) { skip.add(fi); skip.add(fi + 1) }
+  }
   const intent = args.filter((a, i) => !a.startsWith('-') && !skip.has(i)).join(' ')
 
-  if (!intent && !abort) {
+  if (!intent && !abort && !resume) {
     console.error('Usage: compose plan "<what you want to build>" [--code PLAN-X] [--resume] [--abort]')
     console.error('')
     console.error('Runs the product-planning lifecycle (frame → research → ideate → converge → handoff).')
@@ -2278,10 +2282,40 @@ if (cmd === 'build') {
     console.log('')
   }
 
-  // Derive a deterministic PLAN-<slug> code from the intent (dedup if the plan
-  // workspace already exists), mirroring ideabox promote's slug derivation.
+  // Resolve the plan code. --resume/--abort operate on the ACTIVE build, so they
+  // take the code from active-build.json (never derive a fresh one — that would
+  // mint PLAN-<slug>-2 and miss the live flow). A fresh run derives a
+  // deterministic PLAN-<slug> from the intent, dedup'd against existing workspaces.
   let planCode = explicitCode
-  if (!planCode) {
+  let resumeFlowId = null
+  if (resume || abort) {
+    const activeBuildPath = join(planCwd, '.compose', 'data', 'active-build.json')
+    let active = null
+    if (existsSync(activeBuildPath)) {
+      try { active = JSON.parse(readFileSync(activeBuildPath, 'utf-8')) } catch { active = null }
+    }
+    if (!planCode) planCode = active?.featureCode ?? null
+    if (resume) {
+      if (!active || !active.flowId || (planCode && active.featureCode !== planCode)) {
+        console.error(`No active plan build to resume${planCode ? ` for ${planCode}` : ''}.`)
+        process.exit(1)
+      }
+      if (active.mode && active.mode !== 'plan') {
+        console.error(`Cannot --resume: active build for ${active.featureCode} is in ${active.mode} mode, not plan mode.`)
+        process.exit(1)
+      }
+      planCode = active.featureCode
+      resumeFlowId = active.flowId
+    }
+    // --abort: only abort an active PLAN build — abortBuild does not check mode,
+    // so guard here or `compose plan --abort` could kill a feature/fix run.
+    if (abort && active && active.mode && active.mode !== 'plan') {
+      console.error(`Cannot --abort as plan: the active build for ${active.featureCode} is in ${active.mode} mode, not plan mode.`)
+      process.exit(1)
+    }
+    // planCode is now the active build's code (or an explicit --code);
+    // runBuild(planCode, {abort}) matches it against active-build.json.
+  } else if (!planCode) {
     const rawSlug = intent.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24).replace(/-+$/, '')
     const slug = rawSlug || 'session'
     const base = `PLAN-${slug}`.toUpperCase()
@@ -2292,25 +2326,6 @@ if (cmd === 'build') {
       n++
     }
     planCode = candidate
-  }
-
-  // --resume: require a matching active plan build for this code, in plan mode.
-  let resumeFlowId = null
-  if (resume && !abort) {
-    const activeBuildPath = join(planCwd, '.compose', 'data', 'active-build.json')
-    let active = null
-    if (existsSync(activeBuildPath)) {
-      try { active = JSON.parse(readFileSync(activeBuildPath, 'utf-8')) } catch { active = null }
-    }
-    if (!active || active.featureCode !== planCode || !active.flowId) {
-      console.error(`No active plan build to resume for ${planCode}`)
-      process.exit(1)
-    }
-    if (active.mode && active.mode !== 'plan') {
-      console.error(`Cannot --resume: active build for ${planCode} is in ${active.mode} mode, not plan mode.`)
-      process.exit(1)
-    }
-    resumeFlowId = active.flowId
   }
 
   import('../lib/build.js').then(({ runBuild }) => {
