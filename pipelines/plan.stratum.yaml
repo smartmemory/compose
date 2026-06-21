@@ -97,9 +97,12 @@ flows:
           1. ESTIMATE — assign a complexity (S | M | L | XL) and a triage build
              profile (which lifecycle phases it needs, e.g.
              {{"needs_prd": false, "needs_architecture": false}}).
-          2. SPEC — first write the per-feature design to
-             docs/features/<CODE>/design.md (a real product/feature design the build
-             lifecycle will ratify). THEN create the canonical feature.json by
+          2. SPEC — first write the per-feature design to <CODE>/design.md inside the
+             project features dir (docs/features/<CODE>/design.md by default, or the
+             paths.features root in .compose/compose.json — the SAME root
+             add_roadmap_entry writes feature.json to, so design.md and feature.json
+             stay co-located). This is a real product/feature design the build
+             lifecycle will ratify. THEN create the canonical feature.json by
              calling the `add_roadmap_entry` MCP tool with: code, description,
              status "PLANNED", phase, complexity, profile, plannedBy "{projectName}",
              impact (if known), and triageTimestamp set to the CURRENT ISO 8601 time
@@ -133,16 +136,19 @@ flows:
       - id: ship
         agent: claude
         intent: >
-          Finalize the plan→build handoff. For EACH feature code created in the plan
-          phase, verify docs/features/<CODE>/ has a feature.json (status PLANNED, with
-          plannedBy "{projectName}", complexity, profile, triageTimestamp) and a
-          design.md. Produce a short handoff summary listing each build-ready feature
-          and the exact `compose build <CODE>` command to start it. Do NOT git-commit
-          here — just verify and summarize. Return the verified feature codes in
-          "handed_off".
+          Finalize the plan→build handoff. For EACH feature code in the provided
+          "created" list (the features the plan phase produced), verify its folder
+          under the project features dir (docs/features/<CODE>/ by default, or the
+          paths.features root in .compose/compose.json) has a feature.json (status
+          PLANNED, with plannedBy "{projectName}", complexity, profile,
+          triageTimestamp) and a design.md. Produce a short handoff summary listing
+          each build-ready feature and the exact `compose build <CODE>` command to
+          start it. Do NOT git-commit here — just verify and summarize. Return the
+          verified feature codes in "handed_off".
         inputs:
           projectName: "$.input.projectName"
           intent: "$.input.intent"
+          created: "$.steps.plan.output.created"
         output_contract: PlanHandoffResult
         ensure:
           - "len(result.handed_off) > 0"
