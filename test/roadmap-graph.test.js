@@ -11,9 +11,10 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { buildGraph, depsToEdges, DanglingEdgeError, DROP_STATUSES } from '../lib/roadmap-graph/model.js';
-import { collectGraphInputs } from '../lib/roadmap-graph/collect.js';
 import { renderGraphHtml } from '../lib/roadmap-graph/render.js';
-import { buildRoadmapGraph, generateRoadmapGraph, checkRoadmapGraph } from '../lib/roadmap-graph/index.js';
+// COMP-ROADMAP-GRAPH-2: generate/check now run through the canonical vision
+// projection (collect.js retired). End-to-end behavior is unchanged.
+import { buildRoadmapGraph, generateRoadmapGraph, checkRoadmapGraph } from '../server/roadmap-graph-vision.js';
 
 // ---- fixture helpers -------------------------------------------------------
 
@@ -123,57 +124,19 @@ describe('model.depsToEdges', () => {
   });
 });
 
-// ---- collect ---------------------------------------------------------------
+// ---- external-prefix handling (now via the canonical vision projection) ----
 
-describe('collectGraphInputs', () => {
-  test('feature.json status wins; ROADMAP-only feature falls back with a warning', () => {
-    const roadmap = [
-      '# Test Roadmap', '',
-      '## Phase 0', '',
-      '| # | Feature | Description | Status |',
-      '|---|---------|-------------|--------|',
-      '| 1 | RG-A-1 | folder feature | PLANNED |',
-      '| 2 | RG-ROADONLY-1 | only in roadmap | IN_PROGRESS |',
-      '',
-    ].join('\n');
-    const dir = mkProject({ 'RG-A-1': { status: 'PARTIAL' } }, { roadmap });
-    const { nodes, knownCodes, warnings } = collectGraphInputs(dir);
-    const a = nodes.find(n => n.id === 'RG-A-1');
-    assert.equal(a.status, 'PARTIAL', 'feature.json status wins over ROADMAP row');
-    assert.ok(knownCodes.has('RG-ROADONLY-1'), 'ROADMAP-only feature joins the node universe');
-    assert.ok(warnings.some(w => w.includes('RG-ROADONLY-1')), 'unregistered feature surfaces a warning');
-  });
-
-  test('invalid deps.yaml is skipped with a warning (not fatal)', () => {
-    const dir = mkProject({ A: { status: 'PLANNED', deps: 'depends_on:\n  - "lowercase-bad"\n' } });
-    const { rawEdges, warnings } = collectGraphInputs(dir);
-    assert.equal(rawEdges.length, 0);
-    assert.ok(warnings.some(w => w.includes('invalid deps.yaml')));
-  });
-
-  test('external-prefix codes are known-but-unrendered: dep target absent from ROADMAP does not dangle', () => {
+describe('external-prefix codes are known-but-unrendered', () => {
+  test('external dep target does not dangle; external folder is not rendered', () => {
     const dir = mkProject({
       'RG-A-1': { status: 'PLANNED', deps: 'depends_on:\n  - STRAT-X-1\n' }, // external dep, nowhere local
       'STRAT-OWNED-1': { status: 'PLANNED' }, // external-prefixed folder
     }, { config: { externalPrefixes: ['STRAT-'] } });
-    const { nodes, knownCodes } = collectGraphInputs(dir);
-    assert.ok(!nodes.some(n => n.id === 'STRAT-OWNED-1'), 'external-prefixed folder is not rendered');
-    assert.ok(knownCodes.has('STRAT-X-1'), 'external dep target is known even without a ROADMAP row');
-    assert.ok(knownCodes.has('STRAT-OWNED-1'), 'external folder is a known code');
-    // and the whole pipeline must not refuse on the external edge
+    // The whole pipeline must not refuse on the external edge.
     assert.doesNotThrow(() => generateRoadmapGraph(dir));
-    const a = nodes.find(n => n.id === 'RG-A-1');
-    assert.ok(a, 'local feature still rendered');
-  });
-
-  test('design.md frontmatter overrides feature.json display metadata', () => {
-    const design = '---\nname: Designed Name\ntrack: knowledge\npriority: high\n---\n# body\n';
-    const dir = mkProject({ A: { status: 'PLANNED', name: 'JsonName', track: 'platform', design } });
-    const { nodes } = collectGraphInputs(dir);
-    const a = nodes.find(n => n.id === 'A');
-    assert.equal(a.name, 'Designed Name');
-    assert.equal(a.track, 'knowledge');
-    assert.equal(a.priority, 'high');
+    const built = buildRoadmapGraph(dir);
+    assert.ok(!built.nodes.some(n => n.id === 'STRAT-OWNED-1'), 'external-prefixed folder is not rendered');
+    assert.ok(built.nodes.some(n => n.id === 'RG-A-1'), 'local feature still rendered');
   });
 });
 

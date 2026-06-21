@@ -549,7 +549,7 @@ export async function toolValidateProject(args = {}) {
 // Returns small summaries only (counts + warning/dangling lists) — never the
 // HTML body, which would blow the MCP response token cap.
 export async function toolRoadmapGraph({ project, out } = {}) {
-  const { generateRoadmapGraph } = await import('../lib/roadmap-graph/index.js');
+  const { generateRoadmapGraph } = await import('./roadmap-graph-vision.js');
   const cwd = project || getTargetRoot();
   try {
     const r = generateRoadmapGraph(cwd, { out });
@@ -582,7 +582,7 @@ export async function toolRoadmapXrefPush({ project, apply } = {}) {
 }
 
 export async function toolRoadmapGraphCheck({ project, out } = {}) {
-  const { checkRoadmapGraph } = await import('../lib/roadmap-graph/index.js');
+  const { checkRoadmapGraph } = await import('./roadmap-graph-vision.js');
   const cwd = project || getTargetRoot();
   try {
     const r = checkRoadmapGraph(cwd, { out });

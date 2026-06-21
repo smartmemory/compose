@@ -132,6 +132,25 @@ describe('visionToGraphInputs knownCodes', () => {
     assert.doesNotThrow(() => buildGraph(inputs));
   });
 
+  test('includeProseEdges:false drops informs edges but keeps structural ones (canonical projection)', () => {
+    const a = item('COMP-A');
+    const b = item('COMP-B');
+    const c = item('COMP-C');
+    const connections = [
+      conn(a.id, b.id, 'informs'),   // prose-derived -> dropped when excluded
+      conn(a.id, c.id, 'blocks'),    // deps.yaml-derived -> kept
+      conn(b.id, c.id, 'supports'),  // deps.yaml concurrent -> kept
+    ];
+    const live = visionToGraphInputs([a, b, c], connections, {});
+    assert.equal(live.rawEdges.length, 3); // default keeps prose edges (shipped live behavior)
+
+    const canonical = visionToGraphInputs([a, b, c], connections, { includeProseEdges: false });
+    assert.deepEqual(
+      canonical.rawEdges.map((e) => `${e.from}->${e.to}:${e.type}`).sort(),
+      ['COMP-A->COMP-C:dep', 'COMP-B->COMP-C:concurrent'],
+    );
+  });
+
   test('external-prefixed edge endpoints are known (no dangling) but not rendered', () => {
     // A depends on an external STRAT- code that has no node.
     const a = item('COMP-A');

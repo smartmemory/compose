@@ -1,17 +1,24 @@
-# COMP-ROADMAP-GRAPH-2: Implementation Report (S1+S2 increment)
+# COMP-ROADMAP-GRAPH-2: Implementation Report
 
-**Status:** PARTIAL — S1+S2 of 5 shipped
+**Status:** COMPLETE — S1–S5 shipped
 **Date:** 2026-06-21
 **Design:** [design.md](./design.md) · **Blueprint:** [blueprint.md](./blueprint.md)
 
 ## Summary
 
-First increment of collapsing the three roadmap-graph surfaces onto one renderer.
-Landed the foundational vision→graph adapter (S1) and repointed the cockpit's
-standalone HTML export onto the single canonical renderer (S2). The forked,
-non-deterministic export template is gone. The deeper seed migration and the
-retirement of `collect.js` (S3–S5) are deferred to a follow-up under the same
-feature code, per an explicit stage-it-first decision at the S2 checkpoint.
+Collapsed the three overlapping roadmap-graph surfaces onto **one renderer + one
+source**. The cockpit's live export and the headless CLI/MCP/CI generator now
+both render the vision model through `buildGraph → renderGraphHtml`. The static
+`collect.js` collector is retired; its committed-source collection moved into the
+vision seed, which is now a **managed projection of `feature.json`** (canon).
+
+The work landed in two pushes: S1+S2 (one renderer, shipped first as a low-risk
+increment) then S3–S5 (the seed migration + `collect.js` retirement). A pivotal
+finding mid-S4 reframed the second half: the superset gate proved the vision
+seed produced 233 nodes vs collect.js's 57 because `scanFeatures` read status
+from design.md prose, not `feature.json`. Making `feature.json` status
+authoritative — the user's explicit "feature.json is canon, kill the de-syncs"
+directive — collapsed the gate to an exact match (57/57 nodes, 33/33 edges).
 
 ## Delivered vs planned
 
@@ -19,9 +26,15 @@ feature code, per an explicit stage-it-first decision at the S2 checkpoint.
 |---|---|---|
 | S1 vision adapter | `visionToGraphInputs` → buildGraph input shape | ✅ shipped |
 | S2 live export onto canonical renderer | delete forked template, route through buildGraph→renderGraphHtml | ✅ shipped |
-| S3 seed absorbs collect.js semantics | deps.yaml→connections, track, external, fallback | ⏳ deferred |
-| S4 `buildFromVision` canonical headless | CLI/MCP repoint + superset gate | ⏳ deferred |
-| S5 retire collect.js + dead seed + hook | deletions | ⏳ deferred |
+| S3 seed absorbs collect.js semantics | deps.yaml→connections, track, **feature.json status authoritative**, ROADMAP-fallback | ✅ shipped |
+| S4 canonical headless projection | `server/roadmap-graph-vision.js` + CLI/MCP repoint + superset gate (57/57, 33/33) | ✅ shipped |
+| S5 retire collect.js + dead seed | deleted `collect.js`, `seedFromRoadmapGraph`/parse/find + startup calls | ✅ shipped |
+
+**S5 note:** the pre-push hook template was **retained** (not deleted). It now
+runs `compose roadmap graph --check` against the canonical vision projection, so
+it is the legitimate "committed artifact matches canon" CI gate the design chose
+to keep — no longer a separate-source staleness chore. Its removal, if still
+wanted, is a trivial follow-up.
 
 ## Key implementation decisions
 
@@ -57,17 +70,36 @@ held up against the working tree during verification.
 
 ## Known issues & tech debt
 
-- The static path (`collect.js` + MCP `roadmap_graph` + CLI) still reads
-  feature.json/deps.yaml — it is **not yet** unified onto the vision model. Until
-  S3+S4, there remain two data sources (live store vs feature.json), though now
-  only **one renderer**.
-- The dead `seedFromRoadmapGraph` / pre-push hook are still present (S5).
+- **Documented deltas vs the old static path** (all intentional under "vision is
+  the source"): node `name` is the vision title (= code) rather than design.md
+  frontmatter `name`; `PARTIAL` features render as `in_progress` (the vision
+  vocab has no `partial`); track grouping comes from the vision `group`
+  (auto-derived per epic) rather than a static `standalone` default. The
+  superset gate confirmed node/edge *sets* and statuses match exactly bar these.
+- **`feature.json` status now syncs onto the live cockpit on every seed.** This
+  is the intended de-sync fix (feature.json is canon), but it means manual
+  *feature* status edits in the cockpit are overridden — by design.
+- **Deps-derived structural edges (`blocks`/`supports`) are reconciled on seed**,
+  not appended: removing a `deps.yaml` edge drops the stale connection so the
+  live export can't drift from canonical. Consequence (Codex-flagged, accepted as
+  intended): a hand-drawn `blocks`/`supports` edge between two managed features
+  is indistinguishable from a derived one and is removed on reseed — feature
+  dependencies are `deps.yaml`-managed, not hand-edited (the "managed, no manual"
+  mandate). A provenance flag to preserve manual structural edges was
+  deliberately not added (out of scope).
+- The pre-push hook removal (S5) was deferred as trivial (see S5 note above).
 
 ## Lessons learned
 
+- The superset diff gate was the MVP of this feature: it empirically converted a
+  suspected design risk into a precise root cause (status sourced from prose, not
+  `feature.json`) and then proved the fix exact (57/57, 33/33). Build the gate
+  before trusting the migration.
+- Routing a canonical artifact through a runtime store is lossy by default — the
+  store can't represent an edge to a missing node, so the dangling-edge *lint*
+  had to be re-added explicitly (crash-prevention survived; the loud typo-catch
+  did not, until restored in `collectVisionInputs`).
 - Reading the old `extractGraphData` before deleting it surfaced the
-  `lifecycle.featureCode` precedence that a from-scratch adapter would have
-  missed — delete-after-read, not delete-then-discover.
-- `buildGraph`'s "known but not rendered → drop edge" branch is what makes the
-  external-prefix oracle safe; the adapter only had to put external codes in
-  `knownCodes`, not special-case edge filtering.
+  `lifecycle.featureCode` precedence a from-scratch adapter would have missed.
+- "feature.json is canon" is the unifying principle: it fixes the graph, the
+  cockpit status display, and (per a parallel directive) ROADMAP.md generation.

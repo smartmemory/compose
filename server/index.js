@@ -8,7 +8,7 @@ import { FileWatcherServer } from './file-watcher.js';
 import { VisionStore } from './vision-store.js';
 import { VisionServer } from './vision-server.js';
 import { SessionManager } from './session-manager.js';
-import { scanFeatures, seedFeatures, scanSubPackages, seedSubPackages, seedFromRoadmapGraph } from './feature-scan.js';
+import { scanFeatures, seedFeatures, scanSubPackages, seedSubPackages } from './feature-scan.js';
 import { attachGraphExportRoutes } from './graph-export.js';
 import { attachWorkspaceRoutes } from './workspace-routes.js';
 import { attachGraphLayoutRoutes } from './graph-layout-routes.js';
@@ -168,13 +168,12 @@ app.post('/api/project/switch', (req, res) => {
     ensureDataDir();
     // Reload store from new data directory
     visionStore.reloadFrom(result.dataDir);
-    // Re-scan features, sub-packages, and roadmap graph from new project
+    // Re-scan features and sub-packages from new project
     try {
       const features = scanFeatures();
       if (features.length > 0) seedFeatures(features, visionStore);
       const packages = scanSubPackages();
       if (packages.length > 0) seedSubPackages(packages, visionStore);
-      seedFromRoadmapGraph(visionStore);
     } catch (err) {
       console.error('[compose] Feature scan after switch:', err.message);
     }
@@ -201,13 +200,12 @@ const sessionManager = new SessionManager({
 const visionServer = new VisionServer(visionStore, sessionManager, { config: projectConfig });
 visionServer.attach(server, app);
 
-// Seed feature folders, sub-packages, and roadmap graph into vision store on startup
+// Seed feature folders and sub-packages into vision store on startup
 try {
   const features = scanFeatures();
   if (features.length > 0) seedFeatures(features, visionStore);
   const packages = scanSubPackages();
   if (packages.length > 0) seedSubPackages(packages, visionStore);
-  seedFromRoadmapGraph(visionStore);
 } catch (err) {
   console.error('[compose] Feature scan startup error:', err.message);
 }
