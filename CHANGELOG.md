@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-06-22
+
+### COMP-ROADMAP-PLAN — The `plan` product-planning lifecycle (v1)
+
+A new lifecycle mode, peer to `build`/`fix`, for the front half of goal-to-product.
+`compose plan "<intent>"` runs a gated **frame → research → ideate → converge →
+handoff** flow and emits build-ready `docs/features/<code>/{feature.json, design.md}`
+that `compose build <code>` then ratifies (rather than rewriting). Native-state-only
+in v1 — ideation routes to the existing ideabox, no provider coupling.
+
+- **`compose plan` verb + `pipelines/plan.stratum.yaml`** — phase-named steps
+  (`explore_design`/`plan`/`ship`) aligned to the `plan` mode's phaseOrder so phase
+  tracking works; `projectName`/`intent` inputs matching the plan-input envelope; a
+  `PLAN-<slug>` code derived from the intent (override with `--code`). The MODES
+  `plan` seed's `defaultTemplate` is flipped to `plan` and `runInit` seeds the file.
+- **The build-handshake** — the `spec` step writes a build-ready `feature.json`
+  (`status:PLANNED`, `profile`, `triageTimestamp`, `plannedBy`, `impact`) via the
+  provider-backed `add_roadmap_entry` plus a co-located `design.md`. `build`'s
+  `explore_design` step **ratifies** that design when `plannedBy` is set, instead of
+  clobbering it. `isTriageStale` now excludes `feature.json` from its own scan so a
+  fresh plan-authored feature lets `build` skip triage.
+- **The plan session is not the produced features** — it is a non-`feature.json`
+  vision item (`tracksFeatureJson:false`); `projectFeatureStatus` is skipped for it
+  at all five guard transitions, so plan completing never marks the produced PLANNED
+  features COMPLETE (which would block `build`). The guard's evidence path is
+  mode-aware (plan → `docs/plans`, build keeps its `paths.features` override), and
+  the `ship` git-commit interception is gated off for `plan`.
+- **Tested** — 35 new tests including a real-backends golden flow (produce → consume
+  handshake) and CLI guard-path coverage; full suite green (4369 node + 564 ui + 100
+  tracker). Codex-reviewed to clean across design, blueprint, and implementation.
+- **Open acceptance item** — a live `compose plan` run (agents through the two human
+  gates) is the recommended final smoke; see the feature report.
+
 ## 2026-06-21
 
 ### COMP-ROADMAP-MODES — Mode-generalize the lifecycle data (keystone, COMPLETE)
