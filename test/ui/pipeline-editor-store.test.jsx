@@ -734,4 +734,171 @@ flows:
     store().expandSubflow('prep');
     expect(store().editorSelectedFlow).toBe('prep');
   });
+
+  // ── COMP-PIPE-EDIT-6 Codex review fixes ──────────────────────────────────────
+
+  // FIX 1: spec-wide validation must not be clobbered by single-flow revalidation.
+  // A YAML-pane doc with TWO flows, where the NON-selected flow has a broken step.
+  const V03_YAML_TWO_FLOWS_ONE_BROKEN = `version: "0.3"
+contracts:
+  Plan:
+    fields: { summary: string }
+flows:
+  build:
+    steps:
+      - id: design
+        agent: claude:design:opus
+        intent: "Design the thing"
+        output_contract: Plan
+  other:
+    steps:
+      - id: bad
+        agent: claude:impl:sonnet
+        intent: "Broken"
+        output_contract: Ghost
+`;
+
+  it('FIX1: selectFlow under scope=spec keeps non-selected flows’ errors (no clobber)', async () => {
+    await loadV03();
+    // Flush a spec-wide doc with a broken non-selected flow → scope latches to spec.
+    store().setYamlBuffer(V03_YAML_TWO_FLOWS_ONE_BROKEN);
+    store().flushYaml();
+    expect(store().editorSaveScope).toBe('spec');
+    // Spec-wide errors picked up the broken `other` flow.
+    expect(store().editorErrors.errors.some(e => /not a known contract/.test(e))).toBe(true);
+    const countAfterFlush = store().editorErrors.errors.length;
+    expect(countAfterFlush).toBeGreaterThan(0);
+
+    // selectFlow to the CLEAN flow must NOT drop the broken flow's error.
+    store().selectFlow('build');
+    expect(store().editorSelectedFlow).toBe('build');
+    expect(store().editorErrors.errors.length).toBe(countAfterFlush);
+    expect(store().editorErrors.errors.some(e => /not a known contract/.test(e))).toBe(true);
+  });
+
+  it('FIX1: _revalidateEditor under scope=spec aggregates across all editable flows', async () => {
+    await loadV03();
+    store().setYamlBuffer(V03_YAML_TWO_FLOWS_ONE_BROKEN);
+    store().flushYaml();
+    store().selectFlow('build'); // clean flow selected, scope still spec
+    expect(store().editorErrors.errors.length).toBeGreaterThan(0);
+
+    // A direct revalidation call (e.g. after a mutation) must stay spec-wide.
+    store()._revalidateEditor();
+    expect(store().editorErrors.errors.some(e => /not a known contract/.test(e))).toBe(true);
+  });
+
+  it('FIX1: a collapse that leaves an error in a NON-selected flow keeps Save gated', async () => {
+    await loadV03();
+    // Break the non-selected `review_check` flow so it has a standing error,
+    // then collapse a group in `build` (latches scope to spec).
+    const broken = V03_YAML.replace(
+      `  review_check:
+    steps:
+      - id: review
+        agent: claude:review:opus
+        intent: "Subflow review"`,
+      `  review_check:
+    steps:
+      - id: review
+        agent: claude:review:opus
+        intent: "Subflow review"
+        output_contract: Ghost`,
+    );
+    store().setYamlBuffer(broken);
+    store().flushYaml();
+    store().selectFlow('build'); // select the clean flow; scope stays spec
+    // Sanity: build itself is clean, but spec-wide error from review_check stands.
+    expect(store().editorErrors.errors.length).toBeGreaterThan(0);
+
+    // Collapse a group in build. After the collapse, revalidation runs; it must
+    // remain spec-wide so the review_check error is NOT dropped (Save stays gated).
+    const ok = store().collapseSelectedToSubflow(['design'], 'prep');
+    expect(ok).toBe(true);
+    expect(store().editorSaveScope).toBe('spec');
+    expect(store().editorErrors.errors.length).toBeGreaterThan(0);
+    expect(store().editorErrors.errors.some(e => /not a known contract/.test(e))).toBe(true);
+  });
+
+  it('FIX1: spec-wide warningsByStepId stays keyed to the selected flow after selectFlow', async () => {
+    await loadV03();
+    // Break review_check/review only; keep scope spec.
+    const broken = V03_YAML.replace(
+      `  review_check:
+    steps:
+      - id: review
+        agent: claude:review:opus
+        intent: "Subflow review"`,
+      `  review_check:
+    steps:
+      - id: review
+        agent: claude:review:opus
+        intent: "Subflow review"
+        output_contract: Ghost`,
+    );
+    store().setYamlBuffer(broken);
+    store().flushYaml();
+    // Select build (clean): its `review` step shares the id but is fine, so no
+    // warning should bleed onto it from review_check.
+    store().selectFlow('build');
+    expect(store().editorErrors.errors.some(e => /not a known contract/.test(e))).toBe(true);
+    expect(store().editorErrors.warningsByStepId.review).toBeFalsy();
+    // Selecting the broken flow surfaces the per-step warning for review.
+    store().selectFlow('review_check');
+    expect(store().editorErrors.warningsByStepId.review).toBeTruthy();
+  });
+
+  // FIX 2: validation + buffer gates must live in the store actions so all callers
+  // (overwrite/force, save-as-template) are protected, not just the UI buttons.
+
+  it('FIX2: saveSpec({force:true}) with validation errors returns an error and does NOT POST', async () => {
+    await loadV03();
+    // Introduce a validation error (unknown contract) on the selected flow.
+    store().updateStep('design', { output_contract: 'DoesNotExist' });
+    expect(store().editorErrors.errors.length).toBeGreaterThan(0);
+    const res = await store().saveSpec({ force: true });
+    expect(res.error).toBeTruthy();
+    expect(res.error).toMatch(/validation/i);
+    expect(saveCalls).toHaveLength(0);
+    // Still dirty (nothing persisted).
+    expect(store().editorDirty).toBe(true);
+  });
+
+  it('FIX2: resolveConflict("overwrite") with validation errors keeps the banner and does NOT POST', async () => {
+    await loadV03();
+    store().updateStep('design', { output_contract: 'DoesNotExist' });
+    useVisionStore.setState({ editorConflict: { currentHash: 'x' } });
+    const res = await store().resolveConflict('overwrite');
+    expect(res.error).toMatch(/validation/i);
+    expect(saveCalls).toHaveLength(0);
+    // Conflict unresolved → banner preserved.
+    expect(store().editorConflict).toEqual({ currentHash: 'x' });
+  });
+
+  it('FIX2: saveAsTemplate with a pending YAML buffer returns an error and does NOT POST', async () => {
+    await loadV03();
+    store().setYamlBuffer('version: "0.3"\nflows: {}'); // pending, not flushed
+    const res = await store().saveAsTemplate({ filename: 'x.stratum.yaml', metadata: { id: 'x' } });
+    expect(res.error).toMatch(/yaml pane/i);
+    expect(templateCalls).toHaveLength(0);
+  });
+
+  it('FIX2: saveAsTemplate with an unparseable YAML buffer returns an error and does NOT POST', async () => {
+    await loadV03();
+    store().setYamlBuffer('not: : valid [');
+    store().flushYaml(); // sets editorYamlError, leaves buffer pending
+    expect(store().editorYamlError).toBeTruthy();
+    const res = await store().saveAsTemplate({ filename: 'x.stratum.yaml', metadata: { id: 'x' } });
+    expect(res.error).toMatch(/yaml pane/i);
+    expect(templateCalls).toHaveLength(0);
+  });
+
+  it('FIX2: saveAsTemplate still refuses to publish with validation errors (no POST)', async () => {
+    await loadV03();
+    store().updateStep('design', { output_contract: 'DoesNotExist' });
+    expect(store().editorErrors.errors.length).toBeGreaterThan(0);
+    const res = await store().saveAsTemplate({ filename: 'x.stratum.yaml', metadata: { id: 'x' } });
+    expect(res.error).toMatch(/validation/i);
+    expect(templateCalls).toHaveLength(0);
+  });
 });

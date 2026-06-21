@@ -72,10 +72,14 @@ function extractFlows(parsedDoc) {
     }
   }
 
-  // Fallback: function-only spec with no flow steps at all.
+  // Fallback: function-only spec with no flow steps at all. This synthetic flow is
+  // DISPLAY-ONLY — it lets the editor surface function defs as pseudo-steps, but it
+  // must NOT be serialized as a real `flows.functions` block (that would corrupt a
+  // function-only spec by inventing a flow). Marked `synthetic` so the serializer
+  // skips it (see modelToSpecObject).
   if (flows.length === 0 && parsedDoc?.functions && typeof parsedDoc.functions === 'object') {
     const rawSteps = Object.keys(parsedDoc.functions).map(id => ({ id, function: id }));
-    flows.push({ name: 'functions', rawSteps });
+    flows.push({ name: 'functions', rawSteps, synthetic: true });
   }
 
   return flows;
@@ -119,9 +123,12 @@ function normalizeStep(raw) {
 export function specToModel(parsedDoc) {
   const doc = parsedDoc || {};
   const rawFlows = extractFlows(doc);
-  const flows = rawFlows.map(({ name, rawSteps }) => ({
+  const flows = rawFlows.map(({ name, rawSteps, synthetic }) => ({
     name,
     steps: rawSteps.map(normalizeStep),
+    // Carry the display-only marker so the serializer can skip the synthetic
+    // function-only fallback flow (it has no real flows.<name> entry on disk).
+    ...(synthetic ? { synthetic: true } : {}),
   }));
 
   return {
@@ -220,6 +227,9 @@ export function modelToSpecObject(model) {
   }
   // Any model flow without a _doc.flows entry (defensive — collapse injects one).
   for (const flow of model.flows) {
+    // The synthetic function-only fallback flow is display-only; never serialize it
+    // as a real flows.functions block (it would corrupt a function-only spec).
+    if (flow.synthetic) continue;
     if (flow.name === (doc?.workflow?.name || 'workflow') && Array.isArray(doc?.workflow?.steps)) continue;
     if (emittedFromModel.has(flow.name)) continue;
     if (docFlows && Object.prototype.hasOwnProperty.call(docFlows, flow.name)) continue;
@@ -297,7 +307,22 @@ export function validateFlow(model, flowName) {
 
   // Reference integrity across every ref field.
   const contractNames = new Set([...Object.keys(model.contracts || {}), ...BUILTIN_CONTRACTS]);
+  // Known flow names (for flow-step target resolution). model.flows is the
+  // editable set; the synthetic 'functions' fallback flow is included too, since
+  // a flow-step could legitimately target a flow that lives in the model.
+  const flowNames = new Set((model.flows || []).map(f => f.name));
   for (const step of steps) {
+    // Flow-step target: a kind:'flow' step (carrying _extra.flow) must point at a
+    // flow that exists in the model (or itself / the current flow). Stratum's spec
+    // parser does not check this, so a dangling flow ref would only fail at runtime.
+    if (step.kind === 'flow') {
+      const target = step._extra?.flow;
+      if (typeof target === 'string' && target !== flowName && target !== step.id && !flowNames.has(target)) {
+        const msg = `Step "${step.id}" flow references unknown flow "${target}" in flow "${flowName}"`;
+        errors.push(msg);
+        (warningsByStepId[step.id] ||= []).push(msg);
+      }
+    }
     // Dangling refs.
     for (const { field, id } of stepRefs(step)) {
       if (!idSet.has(id)) {
@@ -479,11 +504,12 @@ export function wouldCreateCycle(model, flowName, stepId, depId) {
 // COMP-PIPE-EDIT-4 — Contract editing (pure)
 // ===========================================================================
 //
-// A contract NAME is referenced in three places across the spec:
+// A contract NAME is referenced in four places across the spec:
 //   1. step.output_contract  — on normalized flow steps (model.flows[].steps[])
 //   2. _doc.flows.<name>.output    — passthrough scalar on each flow
 //   3. _doc.functions.<name>.output — passthrough scalar on each function def
-// Every rename/delete check must honor all three.
+//   4. _doc.workflow.output         — passthrough scalar on the workflow block
+// Every rename/delete check must honor all four.
 
 const RESERVED_CONTRACT = 'TaskGraph';
 
@@ -515,6 +541,11 @@ function contractRefSites(model, name) {
         sites.push(`functions.${fnName}.output`);
       }
     }
+  }
+  // Site 4: workflow.output (passthrough).
+  const docWf = model._doc?.workflow;
+  if (docWf && typeof docWf === 'object' && docWf.output === name) {
+    sites.push('workflow.output');
   }
   return sites;
 }
@@ -575,6 +606,11 @@ export function renameContract(model, oldName, newName) {
     for (const fnName of Object.keys(docFns)) {
       if (docFns[fnName] && docFns[fnName].output === oldName) docFns[fnName].output = newName;
     }
+  }
+  // Site 4: workflow.output passthrough.
+  const docWf = model._doc?.workflow;
+  if (docWf && typeof docWf === 'object' && docWf.output === oldName) {
+    docWf.output = newName;
   }
   return model;
 }

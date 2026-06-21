@@ -22,6 +22,46 @@ function sha256(text) {
   return createHash('sha256').update(text, 'utf-8').digest('hex');
 }
 
+/**
+ * Symlink/realpath containment guard (COMP-PIPE-EDIT — security). A bare-basename
+ * check stops `..`/slashes but NOT a symlink that escapes the pipelines dir. This
+ * resolves real paths and refuses anything that is a symlink or whose resolved
+ * parent is not the (resolved) pipelines dir.
+ *
+ * Two modes:
+ *   - mustExist:true  (read/overwrite an EXISTING file — /spec, /save): realpath
+ *     the file itself, reject if it is a symlink or its real parent ≠ real dir.
+ *   - mustExist:false (CREATE a new file — /save-as-template): the target may not
+ *     exist yet, so realpath the DIR and require real(dirname(target)) === realDir;
+ *     also reject if a node already sits at the target path AS a symlink.
+ *
+ * @returns {{ ok: true } | { ok: false, error: string }}
+ */
+function assertWithinPipelines(pipelinesDir, filePath, { mustExist }) {
+  try {
+    const realDir = realpathSync(pipelinesDir);
+    if (mustExist) {
+      const realFile = realpathSync(filePath);
+      if (lstatSync(filePath).isSymbolicLink() || dirname(realFile) !== realDir) {
+        return { ok: false, error: 'refusing to read or write through a symlink or outside the pipelines dir' };
+      }
+    } else {
+      // Create path: refuse a pre-existing symlink at the target, and require the
+      // resolved parent directory to be the resolved pipelines dir.
+      if (existsSync(filePath) && lstatSync(filePath).isSymbolicLink()) {
+        return { ok: false, error: 'refusing to write through a symlink or outside the pipelines dir' };
+      }
+      const realParent = realpathSync(dirname(filePath));
+      if (realParent !== realDir) {
+        return { ok: false, error: 'refusing to write through a symlink or outside the pipelines dir' };
+      }
+    }
+  } catch (e) {
+    return { ok: false, error: `Cannot resolve spec path: ${e.message}` };
+  }
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -232,7 +272,7 @@ function mergeContracts(doc, diskParsed, model) {
  * them. When the model's `_doc` value differs from the fresh disk value, write
  * the new value; otherwise leave the node (and its comment) untouched.
  */
-function reconcileOutputRefs(doc, diskParsed, model) {
+function reconcileOutputRefs(doc, diskParsed, model, specWide = false) {
   const docOf = model && model._doc;
   if (!docOf || typeof docOf !== 'object') return;
 
@@ -243,10 +283,38 @@ function reconcileOutputRefs(doc, diskParsed, model) {
     for (const name of Object.keys(modelSection)) {
       const modelOut = modelSection[name] && modelSection[name].output;
       const diskOut = diskSection && diskSection[name] && diskSection[name].output;
-      if (modelOut === undefined) continue;
-      if (modelOut !== diskOut && doc.hasIn([section, name, 'output'])) {
+      const hasNode = doc.hasIn([section, name]);
+      if (modelOut === undefined) {
+        // On a spec-wide save, output ABSENT in model._doc but present on disk is a
+        // removal — delete it. (Flow-scoped leaves it; it may be unsurfaced.)
+        if (specWide && hasNode && doc.hasIn([section, name, 'output'])) {
+          doc.deleteIn([section, name, 'output']);
+        }
+        continue;
+      }
+      if (doc.hasIn([section, name, 'output'])) {
+        // Update an existing output node only when the value changed (rename or edit).
+        if (modelOut !== diskOut) doc.setIn([section, name, 'output'], doc.createNode(modelOut));
+      } else if (specWide && hasNode) {
+        // Spec-wide: CREATE an output that the model added but disk lacks.
         doc.setIn([section, name, 'output'], doc.createNode(modelOut));
       }
+    }
+  }
+
+  // workflow.output — a single object (not a name-map). A contract rename also
+  // rewrites _doc.workflow.output, so persist it like the flows/functions case
+  // (rename/edit always; create/delete only on a spec-wide save).
+  const mWf = docOf.workflow;
+  if (mWf && typeof mWf === 'object' && doc.hasIn(['workflow'])) {
+    const modelOut = mWf.output;
+    const diskOut = diskParsed && diskParsed.workflow && diskParsed.workflow.output;
+    if (modelOut === undefined) {
+      if (specWide && doc.hasIn(['workflow', 'output'])) doc.deleteIn(['workflow', 'output']);
+    } else if (doc.hasIn(['workflow', 'output'])) {
+      if (modelOut !== diskOut) doc.setIn(['workflow', 'output'], doc.createNode(modelOut));
+    } else if (specWide) {
+      doc.setIn(['workflow', 'output'], doc.createNode(modelOut));
     }
   }
 }
@@ -301,7 +369,12 @@ function reconcileFlowInputs(doc, diskParsed, model) {
   for (const name of Object.keys(docFlows)) {
     if (!doc.hasIn(['flows', name])) continue; // new flows handled elsewhere
     const modelInput = docFlows[name] && docFlows[name].input;
-    if (!modelInput || typeof modelInput !== 'object') continue;
+    // Whole-block removal: the model dropped this flow's input entirely — delete
+    // the on-disk `input` block (spec-wide save treats model._doc as authoritative).
+    if (!modelInput || typeof modelInput !== 'object') {
+      if (doc.hasIn(['flows', name, 'input'])) doc.deleteIn(['flows', name, 'input']);
+      continue;
+    }
     const diskInput = (diskParsed && diskParsed.flows && diskParsed.flows[name] && diskParsed.flows[name].input) || {};
     // Add / update changed fields (skip unchanged to keep their comments).
     for (const field of Object.keys(modelInput)) {
@@ -321,9 +394,16 @@ function reconcileFlowInputs(doc, diskParsed, model) {
  * never replace an unchanged function (keeps its comments). Reads model._doc.functions.
  */
 function mergeFunctions(doc, diskParsed, model) {
-  const wanted = (model && model._doc && model._doc.functions && typeof model._doc.functions === 'object')
+  // Only called on a SPEC-WIDE save, where model._doc is the authoritative full
+  // document. So `model._doc.functions` ABSENT means the whole functions block was
+  // removed — delete it on disk (not "leave untouched").
+  const hasModelDoc = model && model._doc && typeof model._doc === 'object';
+  const wanted = (hasModelDoc && model._doc.functions && typeof model._doc.functions === 'object')
     ? model._doc.functions : null;
-  if (!wanted) return; // model carries no functions view — leave disk untouched
+  if (!wanted) {
+    if (hasModelDoc && doc.hasIn(['functions'])) doc.deleteIn(['functions']);
+    return;
+  }
   const onDisk = (diskParsed && diskParsed.functions && typeof diskParsed.functions === 'object')
     ? diskParsed.functions : {};
   for (const name of Object.keys(wanted)) {
@@ -340,9 +420,16 @@ function mergeFunctions(doc, diskParsed, model) {
  * when the model._doc value differs from fresh disk and the node exists.
  */
 function reconcileWorkflowName(doc, diskParsed, model) {
-  const modelName = model && model._doc && model._doc.workflow && model._doc.workflow.name;
-  if (modelName === undefined) return;
+  const modelWf = model && model._doc && model._doc.workflow;
+  // Only act when the model actually carries a workflow block (else nothing to do).
+  if (!modelWf || typeof modelWf !== 'object') return;
+  const modelName = modelWf.name;
   const diskName = diskParsed && diskParsed.workflow && diskParsed.workflow.name;
+  if (modelName === undefined) {
+    // workflow.name became undefined in the model — delete it on disk.
+    if (doc.hasIn(['workflow', 'name'])) doc.deleteIn(['workflow', 'name']);
+    return;
+  }
   if (modelName !== diskName && doc.hasIn(['workflow'])) {
     doc.setIn(['workflow', 'name'], doc.createNode(modelName));
   }
@@ -369,15 +456,45 @@ function surfacedValue(step, key) {
 
 /**
  * Merge a normalized model step onto an EXISTING YAML map node in place.
- * Surfaced fields are overwritten from the model (or deleted when cleared);
- * unsurfaced keys already on disk are LEFT untouched (preserving their values
- * and comments) — so an incomplete client `_extra` can never silently delete a
- * field that exists on disk. `_extra` keys absent from disk are added.
+ * Surfaced fields are overwritten from the model (or deleted when cleared).
+ *
+ * `_extra` (unsurfaced) handling depends on the save scope (COMP-PIPE-EDIT-6):
+ *   - flow-scoped (specWide=false): ADDITIVE only — disk `_extra` keys are LEFT
+ *     untouched (preserving values + comments) and absent model `_extra` keys are
+ *     added. An incomplete client `_extra` can never silently delete a disk field.
+ *   - spec-wide (specWide=true): model._doc is the authoritative full document, so
+ *     `_extra` is fully reconciled — changed keys are UPDATED (only when different,
+ *     to keep comments on unchanged nodes) and disk `_extra` keys absent from the
+ *     model step are DELETED. The set of unsurfaced disk keys = all map keys minus
+ *     `id` and the surfaced keys.
  */
-function mergeStepNode(doc, mapNode, step) {
-  if (step._extra && typeof step._extra === 'object') {
-    for (const k of Object.keys(step._extra)) {
-      if (!mapNode.has(k)) mapNode.set(k, doc.createNode(step._extra[k]));
+function mergeStepNode(doc, mapNode, step, specWide = false) {
+  const extra = (step._extra && typeof step._extra === 'object') ? step._extra : {};
+  if (!specWide) {
+    // Additive: add only missing keys.
+    for (const k of Object.keys(extra)) {
+      if (!mapNode.has(k)) mapNode.set(k, doc.createNode(extra[k]));
+    }
+  } else {
+    // Full reconcile of unsurfaced fields.
+    const surfacedSet = new Set(['id', ...SURFACED_STEP_KEYS]);
+    // Add / update changed extra keys (skip unchanged to preserve their comments).
+    for (const k of Object.keys(extra)) {
+      if (!mapNode.has(k)) {
+        mapNode.set(k, doc.createNode(extra[k]));
+      } else {
+        // Compare on plain-JS projections so a scalar OR nested node compares to
+        // the model value; only write (losing the node's comment) when different.
+        const diskNode = mapNode.get(k, true);
+        const diskJs = diskNode && typeof diskNode.toJSON === 'function' ? diskNode.toJSON() : mapNode.get(k);
+        if (!deepEqual(diskJs, extra[k])) mapNode.set(k, doc.createNode(extra[k]));
+      }
+    }
+    // Delete unsurfaced disk keys absent from the model step's _extra.
+    for (const item of [...(mapNode.items || [])]) {
+      const k = item && item.key && item.key.value !== undefined ? item.key.value : (item && item.key);
+      if (k == null || surfacedSet.has(k)) continue;
+      if (!(k in extra)) mapNode.delete(k);
     }
   }
   if (mapNode.get('id') !== step.id) mapNode.set('id', step.id);
@@ -640,9 +757,16 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
     if (!file || typeof file !== 'string' || basename(file) !== file || !file.endsWith('.stratum.yaml')) {
       return res.status(400).json({ error: 'file must be a bare *.stratum.yaml filename' });
     }
-    const filePath = join(getPipelinesDir(), file);
+    const pipelinesDir = getPipelinesDir();
+    const filePath = join(pipelinesDir, file);
     if (!existsSync(filePath)) {
       return res.status(404).json({ error: `Spec "${file}" not found` });
+    }
+    // Symlink/containment guard: never read through a symlink or a resolved path
+    // outside the pipelines dir (basename alone does not stop symlink escape).
+    {
+      const guard = assertWithinPipelines(pipelinesDir, filePath, { mustExist: true });
+      if (!guard.ok) return res.status(400).json({ error: guard.error });
     }
     const text = readFileSync(filePath, 'utf-8');
     // COMP-PIPE-EDIT-6: sha-256 of the on-disk text as a conflict-detection
@@ -672,14 +796,9 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
     }
     // Symlink/containment guard: never write through a symlink or to a resolved
     // path outside the pipelines dir (basename alone does not stop symlink escape).
-    try {
-      const realDir = realpathSync(pipelinesDir);
-      const realFile = realpathSync(filePath);
-      if (lstatSync(filePath).isSymbolicLink() || dirname(realFile) !== realDir) {
-        return res.status(400).json({ error: 'refusing to write through a symlink or outside the pipelines dir' });
-      }
-    } catch (e) {
-      return res.status(400).json({ error: `Cannot resolve spec path: ${e.message}` });
+    {
+      const guard = assertWithinPipelines(pipelinesDir, filePath, { mustExist: true });
+      if (!guard.ok) return res.status(400).json({ error: guard.error });
     }
     if (!model || !Array.isArray(model.flows)) {
       return res.status(400).json({ error: 'model with flows[] is required' });
@@ -691,6 +810,11 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
     const flowsToWrite = flowName
       ? [flowName]
       : model.flows.map(f => f && f.name).filter(Boolean);
+
+    // A SPEC-WIDE save (flowName omitted) treats model._doc as the authoritative
+    // full document: reconcilers update AND delete, not just add. The flow-scoped
+    // path (flowName given) stays additive and never touches other flows/blocks.
+    const specWide = !flowName;
 
     let doc;
     let diskParsed;
@@ -777,7 +901,7 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
           oldById.delete(step.id);
         }
         return existing
-          ? mergeStepNode(doc, existing, step)
+          ? mergeStepNode(doc, existing, step, specWide)
           : doc.createNode(denormalizeModelStep(step));
       });
     }
@@ -788,7 +912,10 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
     // key merge so both the old and new contract values are still observable
     // (the helpers read model state + fresh disk, not each other's writes).
     if (model.contracts && typeof model.contracts === 'object') {
-      reconcileOutputRefs(doc, diskParsed, model);
+      // Flow-scoped: reconcile rename-driven output refs here (update-only). On a
+      // spec-wide save the full output create/update/delete reconcile runs below,
+      // so skip it here to avoid a redundant pass.
+      if (!specWide) reconcileOutputRefs(doc, diskParsed, model, false);
       reconcileStepContractRefs(doc, model);
       mergeContracts(doc, diskParsed, model);
     }
@@ -801,7 +928,8 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
     // steps only). NOTE: only steps, contracts, the `functions` block,
     // flows.<name>.input/output, and workflow.name are reconciled — arbitrary
     // OTHER top-level keys are intentionally out of scope (not pane-editable).
-    if (!flowName) {
+    if (specWide) {
+      reconcileOutputRefs(doc, diskParsed, model, true);
       reconcileFlowInputs(doc, diskParsed, model);
       mergeFunctions(doc, diskParsed, model);
       reconcileWorkflowName(doc, diskParsed, model);
@@ -844,6 +972,14 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
 
     const pipelinesDir = getPipelinesDir();
     const filePath = join(pipelinesDir, filename);
+
+    // Symlink/containment guard FIRST: refuse a target that is a symlink or whose
+    // resolved parent escapes the pipelines dir, before the create-only check (so a
+    // symlink-escape reports as such, not as "already exists").
+    {
+      const guard = assertWithinPipelines(pipelinesDir, filePath, { mustExist: false });
+      if (!guard.ok) return res.status(400).json({ error: guard.error });
+    }
 
     // Create-only: refuse to overwrite an existing file (editing is /save).
     if (existsSync(filePath)) {

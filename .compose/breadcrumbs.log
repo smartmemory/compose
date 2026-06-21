@@ -637,3 +637,6 @@ intent: T4 runBuild bug-mode branch + bin/compose.js fix handler
 2026-06-21T07:02:08+08:00 | COMP-PIPE-EDIT-5/-6 Wave-2 UI: store slice (saveScope latch, yaml buffer/flush, conflict, collapse/expand) + YamlPane + conflict banner + multi-select collapse UI
 2026-06-21T07:27:32+08:00 | Commit W2 UI (YAML pane, conflict banner, collapse/expand, save-scope latch, specChanged); Codex-fixed: stranded buffer, specChanged-clobber, banner-clear-on-success, cross-flow warning scoping
 2026-06-21T07:31:19+08:00 | Mark COMP-PIPE-EDIT-5/-6 COMPLETE — epic done (all 7); surgical ROADMAP rows + phase heading -> COMPLETE
+2026-06-21T08:24:30+08:00 | Fix COMP-PIPE-EDIT-6 Codex findings: spec-wide revalidation + move save gates into store actions
+2026-06-21T08:24:55+08:00 | COMP-PIPE-EDIT Codex review fixes: spec/save-as-template symlink guard, workflow.output ref site, flow-step target validation, function-only fallback non-serializable, spec-wide save completeness
+2026-06-21T08:45:01+08:00 | Post-review hardening: epic-wide Codex review (3 parallel + confirms) — security guards on /spec+/save-as-template, complete spec-wide save round-trip, workflow.output refs+reconcile, flow-target validation, scope-aware revalidation, save/template gates moved into store
