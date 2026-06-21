@@ -196,3 +196,67 @@ test('guardedTransition: commitSha is passed through artifacts', async () => {
   });
   assert.equal(s.calls.transition[0].artifacts.commit_sha, 'abc123');
 });
+
+// ---------------------------------------------------------------------------
+// COMP-ROADMAP-MODES S02 — mode-threading. build stays byte-identical; new
+// modes get a namespaced resource id + their own graph/predicates.
+// ---------------------------------------------------------------------------
+
+test('resourceId: build mode is BYTE-IDENTICAL to the legacy 2-arg id (no mode segment)', () => {
+  const legacy = resourceId('FEAT-1', '/tmp/projA');
+  assert.equal(resourceId('FEAT-1', '/tmp/projA', 'build'), legacy, 'build must not change the id');
+  assert.ok(legacy.endsWith(':FEAT-1'), 'no mode segment for build');
+});
+
+test('resourceId: non-build modes get a namespaced id that cannot collide with build', () => {
+  const build = resourceId('FEAT-1', '/tmp/projA', 'build');
+  const fix = resourceId('FEAT-1', '/tmp/projA', 'fix');
+  const plan = resourceId('FEAT-1', '/tmp/projA', 'plan');
+  assert.notEqual(fix, build);
+  assert.notEqual(plan, build);
+  assert.notEqual(fix, plan);
+  assert.ok(fix.endsWith(':fix:FEAT-1'), 'fix id carries its mode segment');
+  assert.ok(plan.endsWith(':plan:FEAT-1'));
+  // legacy/runtime tokens normalize: bug→fix, feature→build
+  assert.equal(resourceId('FEAT-1', '/tmp/projA', 'bug'), fix);
+  assert.equal(resourceId('FEAT-1', '/tmp/projA', 'feature'), build);
+});
+
+test('buildPhaseGraph(mode): fix/plan graphs come from the registry with the right completion edge', () => {
+  const fix = buildPhaseGraph('fix');
+  assert.ok(fix.reproduce.includes('diagnose'), 'fix forward edges from registry');
+  assert.ok(fix.ship.includes('complete'), 'completable phase → complete');
+  assert.ok(fix.reproduce.includes('killed'), 'non-terminal → killed');
+  assert.deepEqual(fix.complete, []);
+
+  const plan = buildPhaseGraph('plan');
+  assert.ok(plan.explore_design.includes('plan'));
+  assert.ok(plan.ship.includes('complete'));
+  assert.deepEqual(plan.killed, []);
+
+  // build with an explicit mode equals the no-arg (legacy) graph
+  assert.deepEqual(buildPhaseGraph('build'), buildPhaseGraph());
+});
+
+test('edgePredicates(relDir, mode): build unchanged; fix empty; plan has its own edge', () => {
+  const rel = 'docs/features/FEAT-1';
+  assert.deepEqual(edgePredicates(rel, 'build'), edgePredicates(rel), 'build unchanged');
+  assert.deepEqual(edgePredicates(rel, 'fix'), {}, 'fix declares no evidence');
+  const plan = edgePredicates(rel, 'plan');
+  assert.equal(plan['explore_design->plan'][0].statement, "server_file_exists('docs/features/FEAT-1/design.md')");
+});
+
+test('ensureGuard(mode): build registers the legacy rid; fix registers a mode-namespaced rid + fix graph', async () => {
+  _testOnly_resetGuardCache();
+  const s = stubClient();
+  _testOnly_setGuardClient(s.client);
+
+  await ensureGuard('FEAT-9', 'explore_design', '/tmp/projX'); // legacy 3-arg → build
+  await ensureGuard('BUG-3', 'reproduce', '/tmp/projX', 'fix');
+
+  const buildReg = s.calls.register.find(r => r.resourceId.endsWith(':FEAT-9'));
+  const fixReg = s.calls.register.find(r => r.resourceId.includes(':fix:BUG-3'));
+  assert.ok(buildReg, 'build rid has no mode segment');
+  assert.ok(fixReg, 'fix rid is mode-namespaced');
+  assert.ok(fixReg.graph.reproduce.includes('diagnose'), 'fix registered with the fix graph');
+});
