@@ -356,3 +356,29 @@ describe('gate REST endpoints', () => {
     assert.ok(resolveBroadcast.timestamp);
   });
 });
+
+// ---------------------------------------------------------------------------
+// COMP-ROADMAP-MODES S04 — /lifecycle/start stamps the mode + per-mode genesis
+// derived from the item type. Build items stay byte-identical.
+// ---------------------------------------------------------------------------
+
+describe('lifecycle/start — mode stamping (COMP-ROADMAP-MODES)', () => {
+  let ctx;
+  beforeEach(async () => { ctx = await setupServer(); });
+  afterEach(() => { ctx.server.close(); rmSync(ctx.tmpDir, { recursive: true, force: true }); });
+
+  test('a feature item starts in build mode at explore_design (byte-identical)', async () => {
+    const res = await request(ctx.port, 'POST', `/api/vision/items/${ctx.item.id}/lifecycle/start`, { featureCode: 'TEST-1' });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.mode, 'build');
+    assert.equal(res.body.currentPhase, 'explore_design');
+  });
+
+  test('a bug item starts in fix mode at its genesis (reproduce)', async () => {
+    const bug = ctx.store.createItem({ type: 'bug', title: 'A bug' });
+    const res = await request(ctx.port, 'POST', `/api/vision/items/${bug.id}/lifecycle/start`, { featureCode: 'BUG-1' });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.mode, 'fix', 'bug type → fix lifecycle mode');
+    assert.equal(res.body.currentPhase, 'reproduce', 'fix genesis from the registry');
+  });
+});
