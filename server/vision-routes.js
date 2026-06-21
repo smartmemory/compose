@@ -50,10 +50,13 @@ import { anchorBoundary } from '../lib/checkpoint/checkpoint-writer.js';
 import { appendGateLogEntry, readGateLog, mapResolveOutcomeToSchema } from './gate-log-store.js';
 import { addOpenLoop, resolveOpenLoop, listOpenLoops } from './open-loops-store.js';
 import {
-  BASE_TRANSITIONS, SKIPPABLE, TERMINAL,
+  TERMINAL,
   guardedTransition, ensureGuard, projectFeatureStatus,
   verifyCompletionEvidence, guardTestCommand,
 } from './lifecycle-guard.js';
+import {
+  genesisOf, transitionsOf, skippableOf, completablePhaseOf,
+} from '../lib/lifecycle-modes.js';
 import { requireSensitiveOrPaired as requireSensitiveToken } from './security.js';
 
 const PROJECT_ROOT = getTargetRoot();
@@ -214,9 +217,13 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
     ? resolveFeaturesPathFromConfig(projectRoot, loadComposeConfig(projectRoot))
     : resolveProjectPath('features');
 
-  // Phase graph + SKIPPABLE + TERMINAL are owned by lifecycle-guard.js (single
-  // source of truth shared with the STRAT-GUARD graph) — see COMP-MCP-ENFORCE.
-  const TRANSITIONS = BASE_TRANSITIONS;
+  // Phase graph + skippable + terminal are owned by the mode registry (single
+  // source of truth shared with the STRAT-GUARD graph) — see COMP-MCP-ENFORCE /
+  // COMP-ROADMAP-MODES. Legality is resolved PER-ITEM from its lifecycle mode
+  // (build|fix|plan); legacy items with no mode default to build, so build
+  // transitions are byte-identical. typeToMode stamps the mode at creation.
+  const modeOf = (item) => item?.lifecycle?.mode ?? 'build';
+  const typeToMode = (type) => (type === 'bug' ? 'fix' : 'build');
   const ITERATION_TYPES = new Set(['review', 'coverage']);
 
   app.get('/api/vision/items/:id/lifecycle', (req, res) => {
@@ -251,9 +258,14 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (!item) return res.status(404).json({ error: `Item not found: ${req.params.id}` });
       if (item.lifecycle) return res.status(400).json({ error: `Item ${req.params.id} already has a lifecycle` });
 
+      // COMP-ROADMAP-MODES: derive the lifecycle mode from the item type and the
+      // genesis phase from the registry (build → explore_design, byte-identical).
+      const mode = typeToMode(item.type);
+      const genesis = genesisOf(mode);
       const now = new Date().toISOString();
       const lifecycle = {
-        currentPhase: 'explore_design',
+        currentPhase: genesis,
+        mode,
         featureCode,
         startedAt: now,
         completedAt: null,
@@ -261,22 +273,22 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
         killReason: null,
       };
       // COMP-OBS-TIMELINE: populate phaseHistory before storing
-      appendPhaseHistory({ lifecycle }, { from: null, to: 'explore_design', outcome: null, timestamp: now });
+      appendPhaseHistory({ lifecycle }, { from: null, to: genesis, outcome: null, timestamp: now });
       store.updateLifecycle(req.params.id, lifecycle);
       // COMP-MCP-ENFORCE: eager guard registration seeded at the genesis phase
       // (the clean bootstrap path; backfill for pre-rollout items happens lazily
       // on first transition). Best-effort — a registration hiccup must not block
       // starting a lifecycle; the next guarded transition re-attempts ensureGuard.
       if (guardEnabled) {
-        try { await ensureGuard(featureCode, 'explore_design', projectRoot); }
+        try { await ensureGuard(featureCode, genesis, projectRoot, mode); }
         catch (e) { console.warn(`[lifecycle/start] guard register for ${featureCode} failed: ${e.message}`); }
-        // Slice 2: starting a lifecycle projects explore_design → IN_PROGRESS so
+        // Slice 2: starting a lifecycle projects the genesis phase → IN_PROGRESS so
         // the first active phase is not left stuck at PLANNED in feature.json.
-        await projectFeatureStatus({ featureCode, phase: 'explore_design', cwd: projectRoot });
+        await projectFeatureStatus({ featureCode, phase: genesis, cwd: projectRoot });
       }
       scheduleBroadcast();
-      broadcastMessage({ type: 'lifecycleStarted', itemId: req.params.id, phase: 'explore_design', featureCode, timestamp: now });
-      emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode, from: null, to: 'explore_design', outcome: null, timestamp: now }));
+      broadcastMessage({ type: 'lifecycleStarted', itemId: req.params.id, phase: genesis, featureCode, timestamp: now });
+      emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode, from: null, to: genesis, outcome: null, timestamp: now }));
       // COMP-OBS-DRIFT: emit drift axes before status so STATUS reads fresh drift_axes
       const startedItem = store.items.get(req.params.id);
       if (startedItem) emitDriftAxes(broadcastMessage, store, startedItem, projectRoot, now);
@@ -328,12 +340,12 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (!item?.lifecycle) return res.status(404).json({ error: 'No lifecycle on this item' });
       const from = item.lifecycle.currentPhase;
       if (TERMINAL.has(from)) return res.status(400).json({ error: `Cannot advance from terminal state: ${from}` });
-      const valid = TRANSITIONS[from];
+      const valid = transitionsOf(modeOf(item))[from];
       if (!valid?.includes(targetPhase)) return res.status(400).json({ error: `Invalid transition: ${from} → ${targetPhase}` });
 
       // COMP-MCP-ENFORCE: verdict-gate the transition (fail-closed) before mutating.
       if (guardEnabled) {
-        const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, workspaceRoot: projectRoot, resolvedBy: 'agent' });
+        const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, workspaceRoot: projectRoot, resolvedBy: 'agent', mode: modeOf(item) });
         if (!g.applied) return res.status(422).json({ error: 'transition refused by guard', from, to: targetPhase, verdict: g.verdict, guardError: g.error });
       }
 
@@ -368,13 +380,13 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (!item?.lifecycle) return res.status(404).json({ error: 'No lifecycle on this item' });
       const from = item.lifecycle.currentPhase;
       if (TERMINAL.has(from)) return res.status(400).json({ error: `Cannot skip from terminal state: ${from}` });
-      if (!SKIPPABLE.has(from)) return res.status(400).json({ error: `Phase ${from} is not skippable` });
-      const valid = TRANSITIONS[from];
+      if (!skippableOf(modeOf(item)).includes(from)) return res.status(400).json({ error: `Phase ${from} is not skippable` });
+      const valid = transitionsOf(modeOf(item))[from];
       if (!valid?.includes(targetPhase)) return res.status(400).json({ error: `Invalid transition: ${from} → ${targetPhase}` });
 
       // COMP-MCP-ENFORCE: verdict-gate the skip (fail-closed) before mutating.
       if (guardEnabled) {
-        const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, workspaceRoot: projectRoot, resolvedBy: 'agent' });
+        const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, workspaceRoot: projectRoot, resolvedBy: 'agent', mode: modeOf(item) });
         if (!g.applied) return res.status(422).json({ error: 'transition refused by guard', from, to: targetPhase, verdict: g.verdict, guardError: g.error });
       }
 
@@ -414,7 +426,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       // is unreachable — consistent with advance/skip/complete. Authorized
       // bypass remains stratum_guard_override (Slice 3).
       if (guardEnabled) {
-        const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from, to: 'killed', workspaceRoot: projectRoot, resolvedBy: 'agent' });
+        const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from, to: 'killed', workspaceRoot: projectRoot, resolvedBy: 'agent', mode: modeOf(item) });
         if (!g.applied) return res.status(422).json({ error: 'kill refused by guard', from, to: 'killed', verdict: g.verdict, guardError: g.error });
       }
 
@@ -449,8 +461,11 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
     try {
       const item = store.items.get(req.params.id);
       if (!item?.lifecycle) return res.status(404).json({ error: 'No lifecycle on this item' });
-      if (item.lifecycle.currentPhase !== 'ship') {
-        return res.status(400).json({ error: `Can only complete from ship phase, currently in: ${item.lifecycle.currentPhase}` });
+      // COMP-ROADMAP-MODES: the phase that completes is the mode's completable
+      // phase (build → 'ship', byte-identical), not a hard-coded literal.
+      const completable = completablePhaseOf(modeOf(item));
+      if (item.lifecycle.currentPhase !== completable) {
+        return res.status(400).json({ error: `Can only complete from ${completable} phase, currently in: ${item.lifecycle.currentPhase}` });
       }
 
       // COMP-MCP-ENFORCE Slice 3: evidence-bound completion. Under the guard,
@@ -471,15 +486,15 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
         }
         verifiedTestsPass = ev.testsAttested ? true : (req.body?.tests_pass === true);
 
-        const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from: 'ship', to: 'complete', workspaceRoot: projectRoot, commitSha: req.body?.commit_sha, resolvedBy: 'agent' });
-        if (!g.applied) return res.status(422).json({ error: 'completion refused by guard', from: 'ship', to: 'complete', verdict: g.verdict, guardError: g.error });
+        const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from: completable, to: 'complete', workspaceRoot: projectRoot, commitSha: req.body?.commit_sha, resolvedBy: 'agent', mode: modeOf(item) });
+        if (!g.applied) return res.status(422).json({ error: 'completion refused by guard', from: completable, to: 'complete', verdict: g.verdict, guardError: g.error });
       }
 
       const now = new Date().toISOString();
       item.lifecycle.currentPhase = 'complete';
       item.lifecycle.completedAt = now;
       // COMP-OBS-TIMELINE: populate phaseHistory + emit phase_transition DecisionEvent
-      appendPhaseHistory(item, { from: 'ship', to: 'complete', outcome: 'approved', timestamp: now });
+      appendPhaseHistory(item, { from: completable, to: 'complete', outcome: 'approved', timestamp: now });
       store.updateLifecycle(req.params.id, item.lifecycle);
       store.updateItem(req.params.id, { status: 'complete' });
       // COMP-MCP-ENFORCE Slice 2: status projection for the no-commit path is
@@ -487,8 +502,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       // recordCompletion bridge, which is the authority + partial-write reporter
       // on the commit_sha path.
       scheduleBroadcast();
-      broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from: 'ship', to: 'complete', outcome: 'approved', timestamp: now });
-      emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from: 'ship', to: 'complete', outcome: 'approved', timestamp: now }));
+      broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from: completable, to: 'complete', outcome: 'approved', timestamp: now });
+      emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from: completable, to: 'complete', outcome: 'approved', timestamp: now }));
       // COMP-OBS-DRIFT: emit drift axes before status so STATUS reads fresh drift_axes
       emitDriftAxes(broadcastMessage, store, item, projectRoot, now);
       // COMP-OBS-STATUS: emit status snapshot after lifecycle transition (complete)
