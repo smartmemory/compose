@@ -1,10 +1,33 @@
 {
   "code": "COMP-ROADMAP-MODES",
   "description": "KEYSTONE: mode-generalize the lifecycle data so `plan` can be a third lifecycle peer to build/fix. Today transitions/gate-policy/artifact-maps/phase→status are hard-coded to the build graph (lifecycle-guard.js:31, vision-server.js:42, artifact-manager.js:12) and the runner only branches feature-vs-bug (build.js:629,4632). Lift these into mode-scoped data; consolidate the split phase vocabularies (VisionStore.phase vs lifecycle.currentPhase vs feature-scan inference) onto lifecycle.currentPhase. This generalization is also what makes the integration ports pluggable. Unblocks COMP-ROADMAP-PLAN. Anchor: docs/plans/2026-06-21-roadmap-planning-model-design.md.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "COMP-ROADMAP-MODEL: Structured + Composable Roadmaps",
   "created": "2026-06-21",
   "updated": "2026-06-21",
   "complexity": "L",
-  "position": 3
+  "position": 3,
+  "completions": [
+    {
+      "completion_id": "COMP-ROADMAP-MODES:42b482c3be25ae2ccec101544703b2bc75effb28",
+      "feature_code": "COMP-ROADMAP-MODES",
+      "commit_sha": "42b482c3be25ae2ccec101544703b2bc75effb28",
+      "commit_sha_short": "42b482c3",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/lifecycle-modes.js",
+        "server/lifecycle-guard.js",
+        "server/artifact-manager.js",
+        "server/compose-mcp-tools.js",
+        "server/vision-routes.js",
+        "server/status-snapshot.js",
+        "lib/vision-writer.js",
+        "lib/build.js"
+      ],
+      "recorded_at": "2026-06-21T12:55:02.935Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Keystone: mode-keyed lifecycle registry (build|fix|plan); build/fix byte-identical; 4360 tests green; Codex REVIEW CLEAN"
+    }
+  ],
+  "commit_sha": "42b482c3be25ae2ccec101544703b2bc75effb28"
 }
