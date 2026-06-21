@@ -2,6 +2,37 @@
 
 ## 2026-06-21
 
+### COMP-ROADMAP-GRAPH-2 — One renderer for the roadmap graph (PARTIAL — S1+S2 of 5)
+
+First increment of collapsing compose's three overlapping "roadmap graph"
+surfaces onto one. Goal: the cockpit's vision model is the single source and
+`lib/roadmap-graph` the single renderer; the static feature.json/deps.yaml
+generator, the MCP/CLI surfaces, and the cockpit export all share one chain.
+
+- **S1 — vision adapter** (`lib/roadmap-graph/vision-adapter.js`, new):
+  `visionToGraphInputs(items, connections, {externalPrefixes})` converts a
+  VisionStore's items + connections into the exact `{nodes, rawEdges,
+  knownCodes}` shape `buildGraph` already consumes from `collect.js`. Maps the
+  9-value vision status vocab → buildGraph's UPPERCASE statuses, vision
+  connection types → `dep`/`concurrent`, resolves `lifecycle.featureCode`, and
+  treats external-prefixed codes as known-but-not-rendered (no dangling).
+- **S2 — cockpit export shares the canonical renderer** (`server/graph-export.js`):
+  the `GET/POST /api/export/roadmap-graph` routes now render the live store
+  through `visionToGraphInputs → buildGraph → renderGraphHtml` instead of a
+  **forked, non-deterministic inline template**. Deleted ~265 lines (the
+  duplicate template, its own status/edge maps, and `extractGraphData`); the
+  export gains the dangling-edge guard and byte-stable output for free. Routes,
+  token-gate, save path, and the cockpit Export buttons are unchanged.
+- Tests: new `test/roadmap-graph-vision-adapter.test.js` (12); existing
+  `graph-export-routes.test.js` (6) and `roadmap-graph.test.js` (21) stay green.
+
+Deferred to follow-up (same code): **S3** seed absorbs `collect.js` semantics
+(deps.yaml→connections, group-as-track, external-prefix, ROADMAP-fallback);
+**S4** `buildFromVision` canonical headless projection behind the CLI/MCP API +
+superset diff gate; **S5** retire `collect.js`, the dead SmartMemory seed
+(`seedFromRoadmapGraph`), and the pre-push staleness hook. See
+`docs/features/COMP-ROADMAP-GRAPH-2/`.
+
 ### COMP-PIPE-EDIT-5/-6 — Pipeline editor Wave 2 (COMPLETE — epic done)
 
 The complex pair, completing the visual pipeline editor epic (all of -1..-7).
