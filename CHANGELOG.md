@@ -2,6 +2,33 @@
 
 ## 2026-06-21
 
+### COMP-ROADMAP-MODES — Mode-generalize the lifecycle data (keystone, COMPLETE)
+
+The build-locked lifecycle data (phase graph, gate/skippable sets, the completion
+edge, phase→status projection, per-phase artifact maps, and the runner's
+feature-vs-bug branches) is lifted into a single **mode-keyed registry**
+(`lib/lifecycle-modes.js`, keyed `build | fix | plan`). `mode` is threaded through
+the guard, artifact manager, route layer, runner, and the status recognizer. This
+is the keystone of the COMP-ROADMAP epic — it unblocks the `plan` lifecycle
+(COMP-ROADMAP-PLAN) and pluggable integration ports (COMP-ROADMAP-PROVIDERS).
+
+- **The `build` entry is verbatim-legacy** — build (and bug/fix) behavior is
+  byte-identical, pinned by a golden test and proven across the full ~5000-test
+  suite. `resourceId` keeps the legacy `compose:<hash>:<code>` id for build (no
+  mode segment) so in-flight guards are never orphaned; non-build modes get a
+  namespaced id. Resolvers read `lifecycle.mode ?? 'build'`, so legacy items need
+  no migration.
+- **Adding a lifecycle is now a data-only change** — `resolveMode` recognizes any
+  registry key, and a test injects a throwaway `demo` mode that flows through the
+  guard, resource id, artifact manager, and status recognizer with one entry.
+- **Runner:** `getMode(mode).runner` drives the artifact dir, triage gating, the
+  feature.json writes, the description loader, the plan-input envelope, and the
+  default template — replacing the scattered `isBugMode` fall-throughs. The
+  bug-specific machinery (per-bug fix-chains, escalation) is untouched.
+- **Deferred follow-ups** (named in the report): the `compose plan` command +
+  route carrier (COMP-ROADMAP-PLAN), mode-owned artifact root resolution, writer
+  unification (COMP-ROADMAP-MODES-WRITER), and fix/plan UI phase labels.
+
 ### COMP-ROADMAP-GRAPH-2 — One graph: vision model is the single source (COMPLETE)
 
 Collapsed compose's three overlapping "roadmap graph" surfaces onto **one
