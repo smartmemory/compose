@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveMode, artifactsOf } from '../lib/lifecycle-modes.js';
 /** Phases that produce named artifacts (derived from contracts/lifecycle.json). */
 const PHASE_ARTIFACTS = {
   explore_design: 'design.md',
@@ -140,19 +141,45 @@ function _matchSections(foundHeadings, schema) {
 }
 
 // ---------------------------------------------------------------------------
+// Mode-scoped artifact key set (shared by ArtifactManager + the MCP tools so
+// the populated and empty-root paths can never diverge). A mode that declares a
+// non-empty phaseArtifacts is scoped to that subset (global key order preserved);
+// a mode that declares none falls back to ALL keys (today's build/bug behavior).
+// ---------------------------------------------------------------------------
+
+export function artifactKeysForMode(mode = 'build') {
+  const all = Object.keys(ARTIFACT_SCHEMAS);
+  const wanted = artifactsOf(resolveMode(mode));
+  return wanted && wanted.length ? all.filter((k) => wanted.includes(k)) : all;
+}
+
+// ---------------------------------------------------------------------------
 // ArtifactManager
 // ---------------------------------------------------------------------------
 
 export class ArtifactManager {
   #featureRoot;
+  #mode;
 
-  constructor(featureRoot) {
+  constructor(featureRoot, mode = 'build') {
     this.#featureRoot = featureRoot;
+    this.#mode = resolveMode(mode);
+  }
+
+  /**
+   * The artifact filenames this mode assesses/scaffolds. A mode that declares a
+   * non-empty `phaseArtifacts` is scoped to that subset (intersected with the
+   * global schema map, preserving global key order); a mode that declares NONE
+   * (build's full set is explicit; fix declares []) falls back to ALL global
+   * keys — which is exactly today's behavior for build and bug items.
+   */
+  #artifactKeys() {
+    return artifactKeysForMode(this.#mode);
   }
 
   assess(featureCode) {
     const artifacts = {};
-    for (const filename of Object.keys(ARTIFACT_SCHEMAS)) {
+    for (const filename of this.#artifactKeys()) {
       artifacts[filename] = this.assessOne(featureCode, filename);
     }
     return { artifacts };
@@ -214,7 +241,7 @@ export class ArtifactManager {
     fs.mkdirSync(dir, { recursive: true });
     fs.mkdirSync(path.join(dir, 'sessions'), { recursive: true });
 
-    for (const filename of Object.keys(ARTIFACT_SCHEMAS)) {
+    for (const filename of this.#artifactKeys()) {
       if (options?.only && !options.only.includes(filename)) continue;
 
       const filePath = path.join(dir, filename);

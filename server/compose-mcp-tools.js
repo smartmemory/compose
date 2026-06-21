@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { ArtifactManager, ARTIFACT_SCHEMAS } from './artifact-manager.js';
+import { ArtifactManager, artifactKeysForMode } from './artifact-manager.js';
 import { getTargetRoot, getDataDir, resolveProjectPath, switchProject, setCurrentWorkspaceId, loadProjectConfig, isLifecycleEnabled } from './project-root.js';
 import { resolveProfile, isToolAllowed } from './mcp-tool-policy.js';
 import { getRoadmap } from '../lib/get-roadmap.js';
@@ -741,23 +741,25 @@ export async function toolIterationAbort({ id, reason }) {
 // Artifact tools — read/write directly (no REST delegation needed)
 // ---------------------------------------------------------------------------
 
-export function toolAssessFeatureArtifacts({ featureCode }) {
+export function toolAssessFeatureArtifacts({ featureCode, mode = 'build' }) {
   const featureRoot = resolveProjectPath('features');
   if (!fs.existsSync(featureRoot)) {
-    // Return empty assessments — feature root hasn't been created yet
+    // Return empty assessments — feature root hasn't been created yet. Iterate
+    // the SAME mode-scoped key set the populated path would, so the two paths
+    // never return a different artifact key set for the same mode.
     const empty = {};
-    for (const filename of Object.keys(ARTIFACT_SCHEMAS)) {
+    for (const filename of artifactKeysForMode(mode)) {
       empty[filename] = { exists: false, wordCount: 0, meetsMinWordCount: false, sections: { found: [], missing: [], optional: [] }, completeness: 0, lastModified: null };
     }
     return { artifacts: empty };
   }
-  const manager = new ArtifactManager(featureRoot);
+  const manager = new ArtifactManager(featureRoot, mode);
   return manager.assess(featureCode);
 }
 
-export function toolScaffoldFeature({ featureCode, only }) {
+export function toolScaffoldFeature({ featureCode, only, mode = 'build' }) {
   const featureRoot = resolveProjectPath('features');
-  const manager = new ArtifactManager(featureRoot);
+  const manager = new ArtifactManager(featureRoot, mode);
   return manager.scaffold(featureCode, only ? { only } : undefined);
 }
 

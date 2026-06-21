@@ -601,4 +601,18 @@ describe('Branch priority (first-match wins)', () => {
     const snap = computeStatusSnapshot(state, 'COMP-OBS-STATUS', NOW);
     assert.ok(snap.sentence.startsWith('Iterating'), `branch 7 should win: ${snap.sentence}`);
   });
+
+  // COMP-ROADMAP-MODES S06 — KNOWN_PHASES is derived from the mode registry, so
+  // a non-build-mode lifecycle phase is recognized; only truly-unknown strings fall through.
+  test('a fix-mode phase (diagnose) is recognized, not flagged "unrecognized"', () => {
+    const state = makeState({ lifecycle: { currentPhase: 'diagnose' } });
+    const snap = computeStatusSnapshot(state, 'COMP-OBS-STATUS', NOW);
+    assert.ok(!snap.sentence.includes('unrecognized phase'), `diagnose should be known: ${snap.sentence}`);
+  });
+
+  test('a genuinely unknown phase still falls through to "unrecognized"', () => {
+    const state = makeState({ lifecycle: { currentPhase: 'totally_made_up_phase' } });
+    const snap = computeStatusSnapshot(state, 'COMP-OBS-STATUS', NOW);
+    assert.ok(snap.sentence.includes('unrecognized phase'), `unknown phase guard preserved: ${snap.sentence}`);
+  });
 });

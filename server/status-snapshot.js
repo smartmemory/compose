@@ -21,13 +21,14 @@
 
 import { readGateLog } from './gate-log-store.js';
 import { isStaleLoop } from './open-loops-store.js';
+import { allKnownPhases } from '../lib/lifecycle-modes.js';
 
-// Known lifecycle phases — must match LIFECYCLE_PHASE_LABELS in constants.js
-const KNOWN_PHASES = new Set([
-  'explore_design', 'prd', 'architecture', 'blueprint',
-  'verification', 'plan', 'execute', 'report', 'docs', 'ship',
-  'complete', 'killed',
-]);
+// Known lifecycle phases — DERIVED from the mode registry (the union of every
+// mode's phaseOrder ∪ terminal). This is a superset of the legacy build-only
+// list, so non-build-mode phases (e.g. a fix lifecycle's `diagnose`) are no
+// longer flagged "unrecognized". It still includes the terminal phases, which
+// is required because the unknown-phase guard runs BEFORE the terminal branches.
+const KNOWN_PHASES = new Set(allKnownPhases());
 
 const TERMINAL_PHASES = new Set(['complete', 'killed']);
 const MAX_SENTENCE = 280;
