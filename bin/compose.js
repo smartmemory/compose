@@ -1181,6 +1181,125 @@ if (cmd === 'roadmap') {
     process.exit(0)
   }
 
+  // compose roadmap add <CODE> — write a (build-ready) feature via the canonical
+  // typed writer (lib/feature-writer.js addRoadmapEntry). This is the CLI mirror of
+  // the add_roadmap_entry MCP tool, so an agent of ANY runtime (claude, codex, ...)
+  // can emit a build-ready feature.json without the compose MCP. The plan
+  // lifecycle's spec step uses it to write build-ready features (COMP-ROADMAP-PLAN).
+  if (subcmd === 'add') {
+    const { addRoadmapEntry } = await import('../lib/feature-writer.js')
+    const { root: cwd } = resolveCwdWithWorkspace(args)
+    const VALUE_FLAGS = ['--description', '--phase', '--status', '--complexity', '--profile', '--triage-timestamp', '--planned-by', '--impact', '--cwd', '--workspace', '--team']
+    // flagVal returns the value only when it exists and is not itself another flag,
+    // so `--description --phase X` does not silently capture "--phase" as the value.
+    const flagVal = (name) => {
+      const i = args.indexOf(name)
+      if (i === -1) return undefined
+      const v = args[i + 1]
+      return (v === undefined || v.startsWith('-')) ? undefined : v
+    }
+    // The positional <CODE> is the first non-flag token that is NOT a value-taking
+    // flag's argument (so `--planned-by PLAN-X REAL-1` resolves the code to REAL-1).
+    const valueFlagSet = new Set(VALUE_FLAGS)
+    const valueIdx = new Set()
+    for (let i = 1; i < args.length; i++) { if (valueFlagSet.has(args[i])) valueIdx.add(i + 1) }
+    let code
+    for (let i = 1; i < args.length; i++) {
+      if (!args[i].startsWith('-') && !valueIdx.has(i)) { code = args[i]; break }
+    }
+    const description = flagVal('--description')
+    const phase = flagVal('--phase')
+    if (!code || !description || !phase) {
+      console.error('Usage: compose roadmap add <CODE> --description "..." --phase "..." \\')
+      console.error('         [--status PLANNED] [--complexity S|M|L|XL] [--profile <JSON>] \\')
+      console.error('         [--triage-timestamp <ISO>] [--planned-by <CODE>] [--impact low|medium|high]')
+      console.error('')
+      console.error('Writes feature.json via the canonical writer and regenerates ROADMAP.md.')
+      process.exit(1)
+    }
+    const entry = { code, description, phase, status: flagVal('--status') ?? 'PLANNED' }
+    const complexity = flagVal('--complexity'); if (complexity) entry.complexity = complexity
+    const plannedBy = flagVal('--planned-by'); if (plannedBy) entry.plannedBy = plannedBy
+    // --planned-by present but valueless must NOT silently fall through to the
+    // non-handshake path (it would write a non-build-ready feature).
+    if (args.includes('--planned-by') && !plannedBy) {
+      console.error('--planned-by requires a value (the originating plan session code)')
+      process.exit(1)
+    }
+    const impact = flagVal('--impact'); if (impact) entry.impact = impact
+    const profileRaw = flagVal('--profile')
+    if (profileRaw) {
+      let parsed
+      try { parsed = JSON.parse(profileRaw) }
+      catch (e) { console.error(`--profile must be valid JSON: ${e.message}`); process.exit(1) }
+      // A build-ready triage profile must carry the four needs_* booleans build uses
+      // to gate skippable phases — otherwise build skips fresh triage on a cache with
+      // no gating fields (COMP-ROADMAP-PLAN; profile contract in lib/triage.js).
+      const NEEDS = ['needs_prd', 'needs_architecture', 'needs_verification', 'needs_report']
+      const missing = NEEDS.filter((k) => typeof parsed?.[k] !== 'boolean')
+      if (missing.length) {
+        console.error(`--profile must include boolean fields: ${missing.join(', ')} (build triage gating)`)
+        process.exit(1)
+      }
+      entry.profile = parsed
+    }
+    // A plan handshake (--planned-by) must be FULLY build-ready or build won't consume
+    // it as one: profile + complexity + PLANNED status + an existing design.md (build
+    // ratifies it). Enforce the whole contract here (build reuses cached triage only
+    // when feature.profile exists and the cache is fresh — lib/build.js, lib/triage.js).
+    let designMtime = 0
+    if (plannedBy) {
+      if (!entry.profile) {
+        console.error('--planned-by requires --profile (a build-ready plan handshake must carry the triage profile)')
+        process.exit(1)
+      }
+      if (!entry.complexity) {
+        console.error('--planned-by requires --complexity (S|M|L|XL) for a build-ready handshake')
+        process.exit(1)
+      }
+      if (entry.status !== 'PLANNED') {
+        console.error(`--planned-by must be PLANNED (got ${entry.status}) — a plan handshake produces a build-ready PLANNED feature`)
+        process.exit(1)
+      }
+      const { resolveFeaturesPath } = await import('../lib/project-paths.js')
+      // alias the fs import — statSync is re-bound later in this roadmap block
+      const { statSync: statFile } = await import('fs')
+      const designPath = join(resolveFeaturesPath(cwd), code, 'design.md')
+      if (!existsSync(designPath)) {
+        console.error(`--planned-by: ${code}/design.md not found (${designPath}). Write the plan-approved design.md BEFORE creating the feature — build ratifies it.`)
+        process.exit(1)
+      }
+      designMtime = statFile(designPath).mtime.getTime()
+    }
+    // triageTimestamp: explicit (validated, and for a handshake not older than design.md
+    // or build re-triages), else default to now for a plan handshake.
+    const ts = flagVal('--triage-timestamp')
+    if (ts) {
+      const tsMs = new Date(ts).getTime()
+      if (Number.isNaN(tsMs)) {
+        console.error(`--triage-timestamp must be a valid ISO 8601 date (got "${ts}")`)
+        process.exit(1)
+      }
+      if (plannedBy && tsMs < designMtime) {
+        console.error('--triage-timestamp is older than design.md — build would re-triage. Omit it to stamp now, or pass a time at/after the design write.')
+        process.exit(1)
+      }
+      entry.triageTimestamp = ts
+    } else if (plannedBy) {
+      // Stamp now, but never older than design.md (guards a future-dated design.md /
+      // clock skew, which would otherwise read as stale and force a re-triage).
+      entry.triageTimestamp = new Date(Math.max(Date.now(), designMtime)).toISOString()
+    }
+    try {
+      const r = await addRoadmapEntry(cwd, entry)
+      console.log(`Wrote ${r.code} (${entry.status}) and regenerated ROADMAP.md`)
+    } catch (e) {
+      console.error(`roadmap add failed: ${e.message}`)
+      process.exit(1)
+    }
+    process.exit(0)
+  }
+
   // compose roadmap migrate — extract ROADMAP.md entries into feature.json files
   if (subcmd === 'migrate') {
     const { migrateRoadmap } = await import('../lib/migrate-roadmap.js')
