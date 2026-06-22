@@ -1,10 +1,52 @@
 {
   "code": "COMP-ROADMAP-PLAN",
   "description": "The `plan` product-planning lifecycle v1, peer to build/fix, WITHIN compose (extractable later). Front half of goal-to-product: framing → research → product-level ideation → interactive discussion → estimation/prioritization → convergence to a build-ready spec, ending in a build-handshake artifact (promoted feature.json + approved spec docs) that `build` resumes from. v1 is native-state-only: ideabox funnel + vision-store types idea/thread/question/decision; NO provider-coupled steps (no Linear/JIRA import, no Notion push) in v1. Absorbs the existing `compose new` kickoff (lib/new.js + pipelines/new.stratum.yaml) — stop maintaining a separate kickoff system. Depends on COMP-ROADMAP-MODES. Anchor: docs/plans/2026-06-21-roadmap-planning-model-design.md.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-ROADMAP-MODEL: Structured + Composable Roadmaps",
   "created": "2026-06-21",
-  "updated": "2026-06-21",
+  "updated": "2026-06-22",
   "complexity": "XL",
-  "position": 4
+  "position": 4,
+  "completions": [
+    {
+      "completion_id": "COMP-ROADMAP-PLAN:b3f48906c3e909a2fb5f32e453812de7c17ee8c2",
+      "feature_code": "COMP-ROADMAP-PLAN",
+      "commit_sha": "b3f48906c3e909a2fb5f32e453812de7c17ee8c2",
+      "commit_sha_short": "b3f48906",
+      "tests_pass": true,
+      "files_changed": [
+        "bin/compose.js",
+        "lib/build.js",
+        "lib/feature-json.js",
+        "lib/feature-writer.js",
+        "lib/lifecycle-modes.js",
+        "lib/triage.js",
+        "lib/vision-writer.js",
+        "pipelines/plan.stratum.yaml",
+        "server/compose-mcp.js",
+        "server/lifecycle-guard.js",
+        "server/vision-routes.js",
+        "test/build-plannedby-ratify.test.js",
+        "test/build-ship-gate.test.js",
+        "test/feature-writer-plan-fields.test.js",
+        "test/lifecycle-guard-mode-rel-dir.test.js",
+        "test/roadmap-plan-cli.test.js",
+        "test/roadmap-plan-golden.test.js",
+        "test/roadmap-plan-group-a.test.js",
+        "test/triage-stale-feature-json.test.js",
+        "test/vision-routes-plan-mode.test.js",
+        "test/vision-routes-projection-gate.test.js",
+        "CHANGELOG.md",
+        "README.md",
+        "docs/features/COMP-ROADMAP-PLAN/design.md",
+        "docs/features/COMP-ROADMAP-PLAN/blueprint.md",
+        "docs/features/COMP-ROADMAP-PLAN/plan.md",
+        "docs/features/COMP-ROADMAP-PLAN/report.md"
+      ],
+      "recorded_at": "2026-06-22T03:42:07.430Z",
+      "recorded_by": "mcp:agent",
+      "notes": "v1 implemented, full node suite 4414 pass/0 fail, Codex-gated CLEAN (design 4 rounds, blueprint 5, impl 3, roadmap-add CLI 7). Live `compose plan` smoke deferred (cannot run from inside a Claude Code session per agent-subprocess nesting). Slice 2 of COMP-ROADMAP epic."
+    }
+  ],
+  "commit_sha": "b3f48906c3e909a2fb5f32e453812de7c17ee8c2"
 }
