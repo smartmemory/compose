@@ -99,16 +99,21 @@ flows:
              {{"needs_prd": false, "needs_architecture": false}}).
           2. SPEC — first write the per-feature design to <CODE>/design.md inside the
              project features dir (docs/features/<CODE>/design.md by default, or the
-             paths.features root in .compose/compose.json — the SAME root
-             add_roadmap_entry writes feature.json to, so design.md and feature.json
-             stay co-located). This is a real product/feature design the build
-             lifecycle will ratify. THEN create the canonical feature.json by
-             calling the `add_roadmap_entry` MCP tool with: code, description,
-             status "PLANNED", phase, complexity, profile, plannedBy "{projectName}",
-             impact (if known), and triageTimestamp set to the CURRENT ISO 8601 time
-             AFTER design.md is written (so build treats triage as a cached no-op).
-             This writes feature.json via the canonical provider and regenerates
-             ROADMAP.md — do NOT hand-author ROADMAP rows or write feature.json by hand.
+             paths.features root in .compose/compose.json). This is a real
+             product/feature design the build lifecycle will ratify. THEN create the
+             canonical feature.json by RUNNING this command from the project root
+             (it writes feature.json via the canonical writer, regenerates ROADMAP.md,
+             and auto-stamps triageTimestamp — works from any agent runtime, no MCP
+             needed):
+
+               compose roadmap add <CODE> --description "<one-line>" --phase "<phase>" \
+                 --status PLANNED --complexity <S|M|L|XL> \
+                 --profile '{"needs_prd":<bool>,"needs_architecture":<bool>,"needs_verification":<bool>,"needs_report":<bool>}' \
+                 --planned-by "{projectName}" [--impact <low|medium|high>]
+
+             Write design.md BEFORE running it (the command verifies design.md exists
+             and refuses otherwise). Do NOT hand-author ROADMAP rows or write
+             feature.json by hand.
 
           Then write the planning narrative (decisions, estimates, sequencing) to
           docs/plans/{projectName}/plan.md. Return plan.md in "artifact" and the
