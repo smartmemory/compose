@@ -2,6 +2,18 @@
 
 ## 2026-06-22
 
+### Fix — agent steps failed to authenticate (`403 forbidden / "Request not allowed"`)
+
+`compose` spawned `stratum-mcp` through the MCP SDK's `StdioClientTransport`
+without an `env`, so the subprocess received only the SDK's 6-var default
+allowlist (`HOME/LOGNAME/PATH/SHELL/TERM/USER`). Once `claude` credentials moved
+to the macOS keychain, that stripped environment stopped authenticating and
+**every agent step** (build, fix, and plan alike) died at the first turn with
+`403 forbidden / "Request not allowed"`. Fix: pass the parent environment through
+at spawn (`lib/stratum-mcp-client.js`); the stratum connector still scrubs
+`SENSITIVE_ENV_VARS` (API keys, `CLAUDECODE`) before the agent starts, so no
+secrets leak to the subprocess.
+
 ### COMP-ROADMAP-PLAN — The `plan` product-planning lifecycle (v1)
 
 A new lifecycle mode, peer to `build`/`fix`, for the front half of goal-to-product.
