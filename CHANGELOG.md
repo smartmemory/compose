@@ -43,6 +43,31 @@ reached 52) but omits it from the `await_gate` dispatch, so Compose never saw it
   resolves before the deadline.
 - Tests: `test/gate-input-guard.test.js`.
 
+### Fix — gate/dispatch robustness (from an independent bug sweep)
+
+Three issues surfaced by a focused bug hunt over the gate / state-machine subsystem:
+
+- **Stale cross-run gate reuse (MED)** — the secondary gate-dedup arm matched any
+  *pending* gate for the same item+step with no flow check, in both
+  `_directCreateGate` (`lib/vision-writer.js`) and the server's `findPendingGate`
+  (`server/vision-store.js`, scoped via `server/vision-routes.js`). A gate left
+  pending by a crashed/aborted run was reused by the next fresh run for the same
+  feature; that gate is never resolved, so the new run polled it until the 30-min
+  server TTL expired it and then errored. Both arms are now scoped to the same
+  `flowId`, so every run mints its own gate. (Not a forever-hang — the lazy TTL at
+  `GET /api/vision/gates/:id` bounds it — but a wrong, surprising failure.)
+- **`isProcessAlive` EPERM misclassification (MED)** — `process.kill(pid, 0)` raising
+  `EPERM` means the process is alive but owned by another uid; the catch returned
+  `false`, so the concurrent-build guard could treat a live cross-uid build as dead
+  and stomp `active-build.json`. Now returns `err.code === 'EPERM'`, matching the
+  authoritative `pidAlive()` in `gsd-state.js` (which documented the divergence).
+- **Unbounded parallel-dispatch poll (LOW)** — `executeParallelDispatchServer`'s
+  `while (true)` poll loop had no ceiling; if Stratum ever left tasks `running`
+  forever with fresh heartbeats and no error, it hung silently. Added a wall-clock
+  ceiling (`COMPOSE_MAX_PARALLEL_DISPATCH_MS`, default 6h) that throws a diagnostic
+  with the last task states instead of hanging.
+- Tests: `test/gate-round-reentry.test.js` (cross-flow dedup, direct + store paths).
+
 ## 2026-06-22
 
 ### Fix — agent steps failed to authenticate (`403 forbidden / "Request not allowed"`)
