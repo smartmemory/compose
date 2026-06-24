@@ -857,9 +857,11 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (existing) {
         return res.status(200).json(existing); // idempotent
       }
-      // Dedup: if a pending gate already exists for the same item+step, reuse it
+      // Dedup: if a pending gate already exists for the same item+step in THIS
+      // flow, reuse it. Scoped to flowId so a fresh run never inherits a stale
+      // pending gate from a prior crashed/aborted run for the same feature.
       if (itemId) {
-        const dupGate = store.findPendingGate(itemId, stepId);
+        const dupGate = store.findPendingGate(itemId, stepId, flowId);
         if (dupGate) {
           return res.status(200).json(dupGate);
         }

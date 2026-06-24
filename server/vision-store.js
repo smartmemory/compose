@@ -349,10 +349,19 @@ export class VisionStore {
     return this.gates.get(gateId) || null;
   }
 
-  /** Find an existing pending gate for the same item+step */
-  findPendingGate(itemId, stepId) {
+  /**
+   * Find an existing pending gate for the same item+step within the same flow.
+   *
+   * The flowId guard prevents a fresh run (new flowId) from reusing a stale
+   * pending gate left by a prior crashed/aborted run for the same feature — that
+   * gate is never resolved, so reusing it would poll until the server TTL
+   * expires it and then error. A null flowId falls back to the legacy
+   * item+step match (callers that don't track a flow).
+   */
+  findPendingGate(itemId, stepId, flowId = null) {
     for (const gate of this.gates.values()) {
-      if (gate.status === 'pending' && gate.itemId === itemId && gate.stepId === stepId) {
+      if (gate.status === 'pending' && gate.itemId === itemId && gate.stepId === stepId
+          && (flowId == null || gate.flowId === flowId)) {
         return gate;
       }
     }

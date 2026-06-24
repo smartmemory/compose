@@ -17,6 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { VisionWriter } from '../lib/vision-writer.js';
+import { VisionStore } from '../server/vision-store.js';
 import { readFlowRound } from '../lib/flow-state.js';
 import { assertGateReentryWithinCap, MAX_GATE_REENTRIES } from '../lib/build.js';
 
@@ -110,5 +111,40 @@ describe('round-aware gate id breaks the revise replay loop', () => {
     assert.notEqual(g2, g1);
     assert.ok(g2.endsWith(':plan_design_gate:2'));
     assert.equal((await writer.getGate(g2)).status, 'pending');
+  });
+
+  it('a fresh flow does NOT reuse a stale pending gate from a prior crashed flow', async () => {
+    const writer = new VisionWriter(tmpDir, { port: 19990 }); // direct mode
+
+    // A prior run left a pending gate that nobody ever resolved (crash/SIGKILL).
+    const stale = await writer.createGate('flow-old', 'plan_design_gate', 'item-y', { round: 1 });
+    assert.equal((await writer.getGate(stale)).status, 'pending');
+
+    // A fresh run (new flowId), same feature+step, must mint its OWN gate — not
+    // inherit the dead run's gate (which would be polled until the server TTL).
+    const fresh = await writer.createGate('flow-new', 'plan_design_gate', 'item-y', { round: 1 });
+    assert.notEqual(fresh, stale);
+    assert.ok(fresh.endsWith('flow-new:plan_design_gate:1'));
+    assert.equal((await writer.getGate(fresh)).status, 'pending');
+  });
+});
+
+describe('VisionStore.findPendingGate is flow-scoped (server path)', () => {
+  let dir;
+  before(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vision-store-')); });
+  after(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+  it('does not reuse a pending gate from a different flow', () => {
+    const store = new VisionStore(dir);
+    store.createGate({
+      id: 'flow-old:s:1', flowId: 'flow-old', itemId: 'item-z', stepId: 's',
+      status: 'pending', createdAt: new Date().toISOString(),
+    });
+    // Different flow → no match (a fresh run mints its own gate).
+    assert.equal(store.findPendingGate('item-z', 's', 'flow-new'), null);
+    // Same flow → legit within-flow dedup still works.
+    assert.ok(store.findPendingGate('item-z', 's', 'flow-old'));
+    // Legacy null flowId → falls back to item+step match.
+    assert.ok(store.findPendingGate('item-z', 's'));
   });
 });
