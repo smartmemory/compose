@@ -25,10 +25,23 @@ reached 52) but omits it from the `await_gate` dispatch, so Compose never saw it
   unbounded again. 52 silent rounds was a missing safety net.
 - Tests: `test/gate-round-reentry.test.js`.
 
-Known follow-up (not fixed here): in the server-down path the gate falls back to a
-readline prompt that blocks forever on a non-TTY/backgrounded runner. Tracked
-separately — a naive `isTTY` guard would break piped-stdin, so a gate timeout is
-the safer fix.
+### Fix — gate hardening follow-ups (COMP-PLAN-GATE-LOOP)
+
+- **Sibling round-omission fixed** — the child-flow gate (`lib/build.js`) and both
+  `compose new` gates (`lib/new.js`) also created gates without a round. They use
+  `promptGate` (human-blocking), so they could not auto-loop like the main path, but
+  the gate *record* was reused across revise rounds. All now thread the round.
+  `readFlowRound()` moved to a shared `lib/flow-state.js` so both gate paths use one
+  reader.
+- **Non-TTY gate no longer hangs forever** — the server-down path reads the gate
+  decision from stdin via readline; a backgrounded/non-TTY runner blocked forever.
+  `ask()` (`lib/gate-prompt.js`) is now bounded *only* when reading the real stdin
+  with no TTY: it rejects with `GateInputUnavailableError` on EOF or after a deadline
+  (`GATE_NONINTERACTIVE_TIMEOUT_MS`, default 120s), so the build fails fast with an
+  actionable message (flow state preserved → `--resume`). A real TTY (a human who may
+  take their time) and injected/piped input are unaffected — piped input still
+  resolves before the deadline.
+- Tests: `test/gate-input-guard.test.js`.
 
 ## 2026-06-22
 
