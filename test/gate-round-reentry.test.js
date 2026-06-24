@@ -17,7 +17,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { VisionWriter } from '../lib/vision-writer.js';
-import { readFlowRound, assertGateReentryWithinCap, MAX_GATE_REENTRIES } from '../lib/build.js';
+import { readFlowRound } from '../lib/flow-state.js';
+import { assertGateReentryWithinCap, MAX_GATE_REENTRIES } from '../lib/build.js';
 
 describe('readFlowRound', () => {
   const flowsDir = path.join(os.homedir(), '.stratum', 'flows');
