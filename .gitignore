@@ -16,3 +16,10 @@ package-lock.json
 .claude/settings.local.json
 __pycache__/
 *.pyc
+
+# Compose runtime artifacts — rewritten/appended every session, not state.
+# These dirtied the shared checkout on every run; two were tracked.
+.claude/session-context.md
+.claude/session-context.*.md
+.compose/breadcrumbs.log
+.compose/build-stream.jsonl
