@@ -1,0 +1,12 @@
+{
+  "code": "COMP-MCP-ENFORCE-XREPO",
+  "description": "Cross-repo completion evidence for the lifecycle guard. record_completion / set_feature_status cannot complete an externally-owned (cross-repo) feature: verifyCompletionEvidence (server/lifecycle-guard.js) git-verifies commit_sha against the COMPOSE repo only, so a feature whose implementing commit lives in another repo (e.g. a stratum-owned STRAT-* feature tracked in compose's roadmap) fails with COMPLETION_EVIDENCE_REQUIRED even though it shipped + passed tests. Add an external-evidence path: accept external_repo/external_commit (verify in the named repo), or skip git-verify for externalPrefixes-matched features while still requiring attested tests + a provenance note. Surfaced by the STRAT-AGENT-INTERP canon backfill, which had to set status COMPLETE via direct feature.json edit because the guard path was unavailable. Owner: compose.",
+  "status": "PLANNED",
+  "phase": "Backlog",
+  "created": "2026-06-24",
+  "updated": "2026-06-24",
+  "complexity": "M",
+  "position": 3,
+  "parent": "COMP-MCP-ENFORCE",
+  "impact": "medium"
+}
