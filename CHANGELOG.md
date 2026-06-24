@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-06-24
+
+### Fix — `plan` gate `revise` caused an infinite explore→gate loop (COMP-PLAN-GATE-LOOP)
+
+Resolving the first plan gate (`plan_design_gate`) with `revise` looped forever:
+`explore_design → plan_design_gate → explore_design → …`, re-running the agent
+indefinitely (observed 52 rounds) and never reaching `plan`. Root cause: Compose
+mints the gate id as `<flowId>:<stepId>:<round>` but always passed `round` 1, so
+re-entry collided with the prior **resolved** round-1 gate. `pollGateResolution`
+returns immediately for any non-pending gate, replaying the stale `revise` outcome
+and routing `on_revise → explore_design` again. Stratum tracked the real round (it
+reached 52) but omits it from the `await_gate` dispatch, so Compose never saw it.
+
+- **Thread the round into the gate id** (`lib/build.js`) — the round is read from
+  the persisted flow file (`~/.stratum/flows/<flowId>.json`, which Compose already
+  reads elsewhere) via the new `readFlowRound()` and passed to both `createGate`
+  calls. Each `revise` re-entry now mints a fresh, *pending* `…:<round>` gate that
+  blocks for a real decision instead of replaying the resolved one. Fail-open to
+  round 1 if the file is unreadable.
+- **Backstop cap** (`assertGateReentryWithinCap`, `MAX_GATE_REENTRIES = 20`) — a
+  per-step gate re-entry counter aborts the build loudly (the Stratum flow state is
+  preserved, so the gate can be resolved and `--resume`d) if a gate ever re-enters
+  unbounded again. 52 silent rounds was a missing safety net.
+- Tests: `test/gate-round-reentry.test.js`.
+
+Known follow-up (not fixed here): in the server-down path the gate falls back to a
+readline prompt that blocks forever on a non-TTY/backgrounded runner. Tracked
+separately — a naive `isTTY` guard would break piped-stdin, so a gate timeout is
+the safer fix.
+
 ## 2026-06-22
 
 ### Fix — agent steps failed to authenticate (`403 forbidden / "Request not allowed"`)
