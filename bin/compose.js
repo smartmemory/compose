@@ -2121,6 +2121,8 @@ if (cmd === 'build') {
   const all = filteredArgs2.includes('--all')
   const dryRun = filteredArgs2.includes('--dry-run')
   const skipTriage = filteredArgs2.includes('--skip-triage')
+  const resume = filteredArgs2.includes('--resume')
+  const fresh = filteredArgs2.includes('--fresh')
   // COMP-BUILD-QUICK: --quick selects the trimmed build-quick pipeline
   // (design → implement → ship). Symmetric to fix mode's Quick path; the real
   // mirror is the existing --template mechanism (fix dispatches template:'bug-fix'),
@@ -2138,6 +2140,14 @@ if (cmd === 'build') {
 
   if (abort && isBatch) {
     console.error('Error: --abort and --all/prefix/multi are mutually exclusive')
+    process.exit(1)
+  }
+  if (resume && fresh) {
+    console.error('--resume and --fresh are mutually exclusive')
+    process.exit(1)
+  }
+  if ((resume || fresh) && isBatch) {
+    console.error('Error: --resume/--fresh cannot be combined with --all/prefix/multi (single feature only)')
     process.exit(1)
   }
 
@@ -2174,6 +2184,8 @@ if (cmd === 'build') {
     console.error('Options:')
     console.error('  --quick        Trimmed lifecycle (design → implement → ship) for small additive work')
     console.error('  --abort        Abort the active build')
+    console.error('  --resume       Resume the active build for <feature-code>')
+    console.error('  --fresh        Start a fresh build, discarding stale failed/resumable state')
     console.error('  --all          Build all PLANNED features in dependency order')
     console.error('  --dry-run      Print build order without executing')
     console.error('  --cwd <path>   Agent working directory (for cross-repo features)')
@@ -2222,6 +2234,25 @@ if (cmd === 'build') {
       })
     })
   } else {
+    let resumeFlowId = null
+    if (resume && !abort && featureCode) {
+      const activeBuildPath = join(buildCwd, '.compose', 'data', 'active-build.json')
+      let active = null
+      if (existsSync(activeBuildPath)) {
+        try { active = JSON.parse(readFileSync(activeBuildPath, 'utf-8')) } catch { active = null }
+      }
+      if (
+        !active ||
+        active.featureCode !== featureCode ||
+        !active.flowId ||
+        ['complete', 'aborted', 'killed'].includes(active.status)
+      ) {
+        console.error(`Nothing to resume for ${featureCode} (no in-progress or failed build found)`)
+        process.exit(1)
+      }
+      resumeFlowId = active.flowId
+    }
+
     import('../lib/build.js').then(({ runBuild }) => {
       const singleOpts = { abort }
       if (agentWorkDir) singleOpts.workingDirectory = agentWorkDir
@@ -2229,6 +2260,9 @@ if (cmd === 'build') {
       if (templateName) singleOpts.template = templateName
       if (quick) singleOpts.template = 'build-quick'   // COMP-BUILD-QUICK
       if (codex) singleOpts.codex = true               // COMP-CODEX-IMPL
+      if (resume) singleOpts.resume = true
+      if (fresh) singleOpts.fresh = true
+      if (resumeFlowId) singleOpts.resumeFlowId = resumeFlowId
       runBuild(featureCode, singleOpts).then(() => {
         process.exit(0)
       }).catch((err) => {

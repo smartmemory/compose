@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-06-25
+
+### Feature — Explicit `compose build --resume` / `--fresh` + crash-gap fix (COMP-BUILD-RESUME)
+
+`compose build` already auto-resumed an in-progress flow implicitly, but resume was
+non-deterministic and a mid-loop crash stranded `active-build.json` at
+`status:'running'` (the main `try` had no `catch`), blocking clean recovery.
+
+- **`--resume` / `--fresh` flags** (`bin/compose.js`) mirroring the `compose fix`
+  resume wiring. `--resume` is explicit and errors when nothing is resumable;
+  `--fresh` forces a clean restart but still refuses to clobber a *live* build;
+  the two are mutually exclusive and incompatible with batch (`--all`).
+- **`decideBuildStart()`** (`lib/build.js`) — a pure, table-tested decision helper
+  (`resume`/`fresh`/`refuse`/`error`) that centralizes the fresh-vs-resume logic.
+  No-flag keeps auto-resuming a failed/crashed build when safe; a terminal flow that
+  only surfaces at `stratum.resume` time degrades to fresh on the implicit path and
+  errors on explicit `--resume`.
+- **Crash-gap catch** — a thrown build now terminalizes to the same clean state as a
+  graceful failure (`active-build.json`→`failed` with `flowId` preserved,
+  `feature.json`→`PLANNED`, one `build-history` record), then re-throws, so crashed
+  builds are uniformly auto-resumable.
+- **Failure-terminalization robustness** — the shared `writeFailedBuildTerminalState`
+  now writes durable state first and treats the vision `updateItemStatus` as
+  best-effort, fixing a latent bug where the invalid status `'failed'` (not in the
+  vision `VALID_STATUSES`) made the cockpit reject the update and abort
+  terminalization whenever the server was running. Failed builds now project as
+  `blocked`.
+- **Bare `resumeFlowId` preserved** — a programmatic `resumeFlowId` passed without
+  the `--resume` flag (the fix pipeline / crash recovery) remains a self-sufficient
+  "resume this exact flow" target: it bypasses the `active-build.json` precondition
+  and the post-`stratum.resume` terminal re-check, resuming the named flow as-is
+  exactly as before. Only the `--resume` *flag* (and id-less auto-resume) are
+  guard-subject. This keeps `decideBuildStart`'s new explicit-resume guards from
+  breaking the established bare-id contract.
+
 ## 2026-06-24
 
 ### Fix — `plan` gate `revise` caused an infinite explore→gate loop (COMP-PLAN-GATE-LOOP)
