@@ -1,0 +1,11 @@
+{
+  "code": "COMP-BUILD-RESUME",
+  "description": "Explicit `compose build --resume` / `--fresh` flags + crash-gap fix. Build already implicitly auto-resumes off active-build.json, but resume is non-deterministic and the main loop try (build.js:1006) has no catch — a mid-build crash leaves active-build.json stuck at status:'running' with no terminal record, blocking clean recovery. Add: (1) a pure decideBuildStart({active,opts,pidAlive,flowTerminal,sameMode}) helper returning resume|fresh|refuse|error, table-tested; (2) CLI --resume (explicit, errors if nothing resumable) and --fresh (force clean restart, still refuses a live build) mirroring the compose fix/plan resume wiring; (3) a catch that terminalizes a thrown build to status:'failed'+failureReason (flowId preserved), feature.json->PLANNED, build-history append — so crashed builds are uniformly auto-resumable. Reuses the existing opts.resumeFlowId path + startFresh; no new resume mechanics. Single-feature build only (not GSD/checkpoint/--all). Codex-implemented, Claude-reviewed.",
+  "status": "PLANNED",
+  "phase": "Features",
+  "created": "2026-06-25",
+  "updated": "2026-06-25",
+  "complexity": "M",
+  "position": 303,
+  "impact": "medium"
+}
