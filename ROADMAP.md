@@ -1439,4 +1439,4 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
-| 1 | COMP-MODEL-AB | Sandboxed model A/B experiment harness — run the same dev fixture through compose build across implementer/reviewer model configs in isolated sandboxes; capture cost/outcome/process/judge metrics; aggregate to results.json + report.md | IN_PROGRESS |
+| 1 | COMP-MODEL-AB | Sandboxed model A/B experiment harness — run the same dev fixture through compose build across implementer/reviewer model configs in isolated sandboxes; capture cost/outcome/process/judge metrics; aggregate to results.json + report.md | COMPLETE |

@@ -1,11 +1,42 @@
 {
   "code": "COMP-MODEL-AB",
   "description": "Sandboxed model A/B experiment harness — run the same dev fixture through compose build across implementer/reviewer model configs in isolated sandboxes; capture cost/outcome/process/judge metrics; aggregate to results.json + report.md",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "Phase 11: Experimentation",
   "created": "2026-06-26",
   "updated": "2026-06-26",
   "complexity": "L",
   "position": 1,
-  "impact": "high"
+  "impact": "high",
+  "completions": [
+    {
+      "completion_id": "COMP-MODEL-AB:338622afe37dfe25764a7a20e5dbbbd35decdd93",
+      "feature_code": "COMP-MODEL-AB",
+      "commit_sha": "338622afe37dfe25764a7a20e5dbbbd35decdd93",
+      "commit_sha_short": "338622af",
+      "tests_pass": true,
+      "files_changed": [
+        "CHANGELOG.md",
+        "bin/compose.js",
+        "docs/features/COMP-MODEL-AB/design.md",
+        "docs/features/COMP-MODEL-AB/example-experiment.json",
+        "lib/agent-string.js",
+        "lib/build.js",
+        "lib/experiment.js",
+        "lib/experiment-judge.js",
+        "lib/experiment-metrics.js",
+        "lib/experiment-pricing.js",
+        "lib/experiment-report.js",
+        "lib/experiment-sandbox.js",
+        "test/build-history.test.js",
+        "test/experiment-model-ab.test.js",
+        "test/experiment-orchestrator.test.js",
+        "test/experiment-wave2.test.js"
+      ],
+      "recorded_at": "2026-06-26T12:31:36.053Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Sandboxed model A/B experiment harness (Wave 1 model seam + Wave 2 orchestrator). 4 independent Codex review rounds; metric-correctness fixes verified against the real build (baseline diff, real process-axis stream signals, test_count/pass_rate persisted via shared _extractShipTestMetrics on both ship paths, seeded-fixture .compose clean-slate). Full suite 4351/4351 green; pre-push gate green."
+    }
+  ],
+  "commit_sha": "338622afe37dfe25764a7a20e5dbbbd35decdd93"
 }
