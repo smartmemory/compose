@@ -130,4 +130,16 @@
 **Source:** OpenSpec friction comparison — empirical entry-path test, 2026-06-07
 **Idea:** The carve-out of IDEA-15's broad audit into one concrete, shippable change. Compose has three work tiers: **trivial** (typo/`--version` alias — Mode Selection already says "skip Compose entirely, fix directly"), **small-but-real** (one flag + a test + changelog entry), and **non-trivial** (multi-file feature). Only the *middle* tier is underserved: it must walk the full 10-phase `/compose build` lifecycle (design → blueprint → verify → plan → execute → report → docs → ship), paying gate-proposal overhead at every phase even though half self-skip. Fix mode already solved this exact problem — `/compose fix --quick` collapses F1→F3 into one triage step → TDD → ship. **Build mode has no symmetric path** (the SKILL.md admits this verbatim). Add `/compose build --quick`: collapse to **design → implement → ship** (3 phases), single gate, TDD + verification-before-completion preserved (enforcement is NOT what's removed — *phase count* is). This is the home-grown answer to OpenSpec's onboarding-friction advantage: the differentiation stays "enforced correctness," but small additive work stops paying full-lifecycle tax. **Explicitly does NOT** copy OpenSpec's no-gates philosophy — gates remain; only the phase ceremony shrinks. Mirror the fix-mode Quick path implementation (`bin/compose.js` path-selection + a trimmed Stratum flow). Sibling/subset of IDEA-15 — promote this independently; the broader simplicity audit can follow.
 
+---
+
+### Standalone: dogfooding & lifecycle adoption
+
+**Theme:** Whether Compose's own structured lifecycle (ideation → plan → roadmap) is what people — and agents — actually reach for. If the tooling exists but gets bypassed, that's an adoption gap, not a missing feature.
+
+#### IDEA-19 — Ideation/plan tooling isn't the default reach
+**Status:** NEW | **Priority:** — | **Tags:** meta dogfooding ideation ux adoption
+**Source:** compose-lab design session (agent self-observation, user-flagged) — 2026-06-27
+**Idea:** In a Compose-native session, the agent developed a large multi-feature design (the compose-lab eval harness + stage archetypes + memory/workflow variant axes + opencode-dispatch) entirely via conversation + hand-written `design.md` + raw `add_roadmap_entry`, never invoking the ideabox→review→promote lifecycle or `compose plan`, despite repeatedly hitting ideation-trigger phrases ("what if we", "we should consider", "down the road"). If the agent itself bypasses the idea tooling in a native session, that's an adoption/UX gap in Compose, not a one-off. Scrutinize the cause: (a) the ideabox skill should auto-trigger on ideation phrases rather than wait to be invoked; (b) capture friction is higher than just writing a `design.md`; (c) the plan lifecycle is under-discoverable; (d) "ship X" task momentum suppresses the switch into ideation mode. Goal: make idea-capture the path of least resistance, so the structured lifecycle is what gets reached for by default.
+**Maps to:** Umbrella D (cockpit & loop ergonomics); IDEA-15 (operational simplicity / friction audit)
+
 ## Killed Ideas
