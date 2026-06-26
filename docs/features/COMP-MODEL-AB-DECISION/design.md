@@ -24,6 +24,18 @@ Two layers that compose:
 ## Children
 
 - **COMP-STAGE-GRADING** — the model × stage capability matrix: per-stage task definitions + per-stage oracles; emits each model's quality/cost per stage. The core measurement.
+  - **We author our own task archetypes** — aligned to dev-pipeline stages, each a `{context, task, gold, task_type}` unit with a stage-appropriate oracle:
+    - `design` — goal → design doc · calibrated rubric
+    - `plan` — design → implementation plan · plan-completeness rubric
+    - `implement` — spec → code · tests pass + judge
+    - `review` — diff with **seeded** bugs → findings · detection precision/recall (objective)
+    - `test-authoring` — code → tests · mutation/coverage
+    - `debug` — failing repro → fix · repro now passes
+  - **Harness blueprint** — structural patterns borrowed from the SmartMemory benchmarks (the SmartMemory *archetypes themselves were evaluated and rejected* as fixtures — they are memory-recall QA, wrong domain; do not revisit). Reuse the *shape*, author our own content:
+    1. **Registry pattern** — a `registry.json` + contract with a stage-archetype enum, per-row `state` (triaged/measured), and `latest` per-model scores. This IS the matrix's storage shape.
+    2. **Signed two-arm uplift + CI** — score each candidate model *relative to the champion* per stage (signed quality delta with CI), not as an absolute.
+    3. **Canary probe** — verify the stage actually executed (not a no-op) before trusting its score; pairs with champion-calibration.
+    4. **`mechanism_engaged` decoupled gate** — a separate golden assertion that the expected work happened (e.g. the review stage saw the seeded bugs and ran), independent of the headline metric.
 - **COMP-PIPELINE-ASSEMBLY** — turn the matrix into a heterogeneous per-step spec (pick per-stage winners under a cost/quality objective), wired through STRAT-AGENT-INTERP so the output is a runnable pipeline. The headline deliverable.
 - **COMP-REALWORLD-FIXTURE** — one high-fidelity real-world app-creation fixture, reps=1, in the user's idiom (AI-native, agentic, MCP/streaming, real backend, golden-flow tested). Recast as the **end-to-end validation harness** for the assembled pipeline (champion vs heterogeneous). Graded by acceptance criteria for partial credit; calibrated so the champion clears it with headroom (results must spread — all-pass and all-fail both yield no signal).
 - **COMP-JUDGE-CALIBRATION** — multi-judge / human-anchored scoring for the subjective stages (design/plan) so the matrix is trustworthy.
