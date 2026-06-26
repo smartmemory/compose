@@ -1,11 +1,28 @@
 {
   "code": "COMP-TEST-PORT-ISOLATION",
   "description": "Decouple test suite from live :4001: suite-wide dead COMPOSE_PORT so server-down-path tests get deterministic ECONNREFUSED and the dev server can stay up during npm test / pre-push",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "Phase 11: Model A/B",
   "created": "2026-06-26",
   "updated": "2026-06-26",
   "complexity": "S",
   "position": 1,
-  "impact": "medium"
+  "impact": "medium",
+  "completions": [
+    {
+      "completion_id": "COMP-TEST-PORT-ISOLATION:0da7fa0fafd70953d770530207ff29afeb630210",
+      "feature_code": "COMP-TEST-PORT-ISOLATION",
+      "commit_sha": "0da7fa0fafd70953d770530207ff29afeb630210",
+      "commit_sha_short": "0da7fa0f",
+      "tests_pass": true,
+      "files_changed": [
+        "test/suppress-expected-drift.js",
+        "CHANGELOG.md"
+      ],
+      "recorded_at": "2026-06-26T12:50:13.135Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Suite-wide dead COMPOSE_PORT=19997 in test bootstrap; full 4351-test suite green with :4001 UP; pre-push gate passed with dev server running. No takedown required."
+    }
+  ],
+  "commit_sha": "0da7fa0fafd70953d770530207ff29afeb630210"
 }

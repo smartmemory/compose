@@ -1447,4 +1447,4 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
-| 1 | COMP-TEST-PORT-ISOLATION | Decouple test suite from live :4001: suite-wide dead COMPOSE_PORT so server-down-path tests get deterministic ECONNREFUSED and the dev server can stay up during npm test / pre-push | PLANNED |
+| 1 | COMP-TEST-PORT-ISOLATION | Decouple test suite from live :4001: suite-wide dead COMPOSE_PORT so server-down-path tests get deterministic ECONNREFUSED and the dev server can stay up during npm test / pre-push | COMPLETE |
