@@ -66,6 +66,16 @@ Two layers that compose:
 - **COMP-JUDGE-CALIBRATION** — multi-judge / human-anchored scoring for the subjective stages (design/plan) so the matrix is trustworthy.
 - **COMP-EXPERIMENT-DIMS** — make tuning params (effort/temperature) and workflow variants first-class config dimensions alongside the model string, so a stage's "best spec" can include params/workflow, not just a model.
 
+## Generalization (down the road) — variant axis is pluggable
+
+This is not ultimately a *model* evaluator; it is a **pipeline-ingredient evaluator**, and "model" is just the first variant axis. The fixtures, stage archetypes, metric vector, and frontier are all **ingredient-agnostic** (they grade the output, not the means), so other axes slot in without re-architecting. Requirement: the experiment "config" must be an **abstract ingredient set** — `{model(s) per stage, memory backend, workflow template, tuning params}` — not hardcoded to model strings (all v1 varies today).
+
+- **Model axis (v1)** — which model per stage. Current scope.
+- **Memory-system axis (later)** — does giving the dev pipeline memory improve its builds? Lands on the two-arm signed-uplift pattern (treatment = with-memory vs control = none/alt, signed Δ + CI), measured by *our* dev-stage oracles on *our* app-creation fixtures — not SmartMemory's recall archetypes.
+- **Workflow axis (later)** — does pipeline template X beat Y? `COMP-EXPERIMENT-DIMS` promoted from a model sub-dimension to a full variant axis.
+
+Same harness, same metric tuple, same archetypes — a different column held variable.
+
 ## Sequencing
 
 COMP-STAGE-GRADING (matrix) is the foundation — it's what makes per-stage selection possible. COMP-PIPELINE-ASSEMBLY consumes it to emit the heterogeneous spec. COMP-REALWORLD-FIXTURE validates the assembled pipeline end-to-end. Judge calibration and config dimensions raise the trust/coverage of the matrix. Order by what unblocks a first assembled-and-validated heterogeneous pipeline.
