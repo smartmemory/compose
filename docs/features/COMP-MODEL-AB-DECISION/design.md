@@ -47,6 +47,15 @@ Two layers that compose:
   Four of six (implement/review/test/debug) are objective; only design/plan lean on the judge.
 
   **`end-to-end` is special — the integration archetype.** Unlike the six above it has **no fixed canonical input**: the pipeline produces its own design→plan→code→tests from only the goal, so handoff friction, context drift, and coherence (all emergent) are exercised. The whole is not the sum of the bits, so it must be measured directly, never inferred from the matrix. It runs in two modes — **homogeneous** (one model all stages → per-model integration baseline + the whole-model-substitution answer) and **assembled heterogeneous** (per-stage winners → validates that mixing wins). The **gap between predicted (summed per-stage winners) and actual end-to-end score** quantifies how much integration matters — i.e. whether granular optimization pays off at all. Runs on COMP-REALWORLD-FIXTURE.
+
+  **Every cell is a metric vector, not a scalar.** Accuracy alone can't drive selection — the point of a heterogeneous pipeline is tradeoff (a model 3% worse at `review` but half the cost and 2× the speed may still win that stage). Every archetype run (per-stage and end-to-end) emits, captured as it runs:
+    - **accuracy** — the stage oracle score (F1 / %pass / mutation-kill / rubric-fraction / repro-green / graded-AC), normalized 0–1 where possible
+    - **tokens** — input, output, total
+    - **cost** — USD (tokens × model pricing)
+    - **speed** — wall-time latency (and tokens/sec)
+    - **reliability** — completed?, retries, escalations, gate outcomes
+
+  Most of this is already captured by the COMP-MODEL-AB engine (`cost {tokensIn,tokensOut,calls,wallMs,usd}`, `outcome`, `process`) — for isolated stage tests, one run = one stage so build-level metrics *are* the stage's. **Gap to close:** per-step attribution within an end-to-end run (so a heterogeneous pipeline shows each stage's tokens/cost/latency separately — which model in the chain is the hog). The data exists (build-history per-step `durationMs/input_tokens/output_tokens/cost_usd`; stream `step_model`); it needs surfacing into the matrix. Selection (COMP-PIPELINE-ASSEMBLY) then optimizes an explicit objective over the tuple (e.g. max quality subject to latency+cost budget, or max quality-per-dollar), not raw accuracy.
   - **Harness blueprint** — structural patterns borrowed from the SmartMemory benchmarks (the SmartMemory *archetypes themselves were evaluated and rejected* as fixtures — they are memory-recall QA, wrong domain; do not revisit). Reuse the *shape*, author our own content:
     1. **Registry pattern** — a `registry.json` + contract with a stage-archetype enum, per-row `state` (triaged/measured), and `latest` per-model scores. This IS the matrix's storage shape.
     2. **Signed two-arm uplift + CI** — score each candidate model *relative to the champion* per stage (signed quality delta with CI), not as an absolute.
