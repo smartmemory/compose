@@ -1,0 +1,11 @@
+{
+  "code": "COMP-TEST-PORT-ISOLATION",
+  "description": "Decouple test suite from live :4001: suite-wide dead COMPOSE_PORT so server-down-path tests get deterministic ECONNREFUSED and the dev server can stay up during npm test / pre-push",
+  "status": "PLANNED",
+  "phase": "Phase 11: Model A/B",
+  "created": "2026-06-26",
+  "updated": "2026-06-26",
+  "complexity": "S",
+  "position": 1,
+  "impact": "medium"
+}

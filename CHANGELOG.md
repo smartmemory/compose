@@ -2,6 +2,19 @@
 
 ## 2026-06-26
 
+### Fix — Test suite no longer requires taking down the dev server (COMP-TEST-PORT-ISOLATION)
+
+The test bootstrap (`test/suppress-expected-drift.js`, loaded via `--import` for
+`npm test`) now sets `COMPOSE_PORT=19997` if the variable is not already set.
+This pins every test worker to a guaranteed-dead port, so "server is DOWN" probes
+(vision-unification integration tests, feature-writer projection tests, etc.) get
+deterministic ECONNREFUSED and fall back to direct file writes regardless of
+whether the dev server is holding `:4001`. Tests that need a live server
+(compose-mcp-tools-http.test.js) override `COMPOSE_PORT` themselves to their own
+`listen(0)` ephemeral port and are unaffected. The pre-push hook inherits the fix
+automatically because it calls `npm test`. **Result:** the dev server can stay up
+during `npm test` and `git push`.
+
 ### Feature — Sandboxed A/B experiment harness for model comparison (COMP-MODEL-AB)
 
 Enables empirical "which model builds software best through Compose?" experiments.
