@@ -1,27 +1,34 @@
-# COMP-MODEL-AB-DECISION — Substitution Decision Layer
+# COMP-MODEL-AB-DECISION — Heterogeneous Pipeline Assembly
 
 **Status:** PLANNED (umbrella). Parent: COMP-MODEL-AB (the measurement engine, COMPLETE).
 
 ## Goal
 
-Turn the A/B *engine* into a *decision tool*. For each candidate config (cheaper/faster model, different tuning parameters, or different workflow) standing in for a champion config, quantify the **quality delta** and the **cost/speed delta** with known confidence — so we can state: "swap X→Y, save N cost, lose M quality," and know which substitutions are safe and what the tradeoffs are.
+Assemble an **optimal heterogeneous pipeline**: route each pipeline stage to the model that is strongest at *that task type*, and know the cost/quality tradeoff of doing so. The earlier "replace the champion with a cheaper model wholesale" question is just the degenerate case where every stage uses the same model — so this goal subsumes it.
 
-## What the engine (COMP-MODEL-AB) already gives
+The infrastructure to *act* on the answer already exists: STRAT-AGENT-INTERP made each pipeline step's `agent:` independently interpolatable, so a per-stage model map (design→A, implement→B, review→C) plugs straight into a runnable spec. The deliverable of this work is therefore an **assembled, runnable heterogeneous pipeline config**, not a verdict on a page.
 
-Runs the same fixture across configs in isolated sandboxes; captures cost (tokens/usd/calls/wall), outcome (completed/health/tests/files/lines), process (review iters/gate/retries/escalations), and an opt-in LLM-judge quality score; aggregates median+spread with N-completed per cell → results.json + report.md. This is the honest measurement substrate. It is necessary but not sufficient for the decision.
+## Approach — grade granularly to *choose*, validate end-to-end to *trust*
 
-## Gaps to close (each a candidate child feature)
+Two layers that compose:
 
-1. **One realistic fixture (COMP-REALWORLD-FIXTURE).** Not a benchmark matrix and not N reps — a single high-fidelity *real-world application-creation* task, run **once per model config (reps=1)**. Golden-flow philosophy: one comprehensive end-to-end build exercises a model the way real usage does, so the fixture's *realism* (not breadth or repetition) is the signal. Deliverable is the authored fixture itself. The engine already supports `reps`; we simply set `reps=1`.
+1. **Granular per-task-type grading** → a **model × stage capability matrix**. Task types are aligned to real pipeline stages (design/plan, implement, review, test-authoring, debug, ship), not difficulty tiers. Read down each column to pick the per-stage winner. Each stage uses its **strongest available oracle**, which is more trustworthy than one holistic judge over a whole build:
+   - **review** — seed known bugs, score detection precision/recall (objective)
+   - **debug** — failing repro fixed? (near-binary)
+   - **test-authoring** — mutation / coverage score (objective-ish)
+   - **implement** — tests pass + judge
+   - **design/plan** — calibrated rubric (the one genuinely subjective stage)
 
-2. **Workflow + tuning as config dimensions (COMP-EXPERIMENT-DIMS).** The engine varies only the model string (`provider::tier`). It cannot independently vary tuning params (effort/temperature — tier bundles them) or pipeline/workflow variants. "Model A on workflow X vs model B on workflow Y" must become expressible.
+2. **End-to-end validation on one realistic fixture** → run the *assembled* heterogeneous pipeline against the homogeneous champion on a single high-fidelity real-world app-creation build (reps=1). This confirms the assembled pipeline actually wins and captures **handoff effects** that isolated grading cannot see (a strong design from A may be cheaper for B to implement; a weak design poisons everything downstream).
 
-3. **Calibrated judge (COMP-JUDGE-CALIBRATION).** Substitution confidence rests entirely on the judge. v1's judge is opt-in, single-model, single-pass. Needs a multi-judge panel and/or anchoring to human/reference scores, or the deltas are noise.
+## Children
 
-4. **Substitution frontier report (COMP-SUBSTITUTION-FRONTIER).** "Replace the *best* model" implies a champion and Δ-vs-champion. The engine is descriptive (per-config metrics); this adds a baseline designation, Δquality/Δcost, and a Pareto frontier flagging dominated configs and efficient swaps. Headline deliverable.
-
-5. **~~Confidence from reps~~ — dropped.** With one run per model there is no rep-based statistics. Trust in a substitution comes from (a) the fixture being a faithful real-world build (#1) and (b) a calibrated judge (#3), not from N. No separate statistics feature.
+- **COMP-STAGE-GRADING** — the model × stage capability matrix: per-stage task definitions + per-stage oracles; emits each model's quality/cost per stage. The core measurement.
+- **COMP-PIPELINE-ASSEMBLY** — turn the matrix into a heterogeneous per-step spec (pick per-stage winners under a cost/quality objective), wired through STRAT-AGENT-INTERP so the output is a runnable pipeline. The headline deliverable.
+- **COMP-REALWORLD-FIXTURE** — one high-fidelity real-world app-creation fixture, reps=1, in the user's idiom (AI-native, agentic, MCP/streaming, real backend, golden-flow tested). Recast as the **end-to-end validation harness** for the assembled pipeline (champion vs heterogeneous). Graded by acceptance criteria for partial credit; calibrated so the champion clears it with headroom (results must spread — all-pass and all-fail both yield no signal).
+- **COMP-JUDGE-CALIBRATION** — multi-judge / human-anchored scoring for the subjective stages (design/plan) so the matrix is trustworthy.
+- **COMP-EXPERIMENT-DIMS** — make tuning params (effort/temperature) and workflow variants first-class config dimensions alongside the model string, so a stage's "best spec" can include params/workflow, not just a model.
 
 ## Sequencing
 
-Frontier report (4) is the headline and runs against the single realistic fixture. The fixture (1) and config dimensions (2) define what's being compared; judge calibration (3) makes the quality numbers trustworthy enough to act on. Order by what unblocks a first real substitution recommendation.
+COMP-STAGE-GRADING (matrix) is the foundation — it's what makes per-stage selection possible. COMP-PIPELINE-ASSEMBLY consumes it to emit the heterogeneous spec. COMP-REALWORLD-FIXTURE validates the assembled pipeline end-to-end. Judge calibration and config dimensions raise the trust/coverage of the matrix. Order by what unblocks a first assembled-and-validated heterogeneous pipeline.
