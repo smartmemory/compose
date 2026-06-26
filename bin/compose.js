@@ -20,6 +20,7 @@ import { resolveWorkspace, getWorkspaceFlag } from '../lib/resolve-workspace.js'
 import { resolvePort } from '../lib/resolve-port.js'
 import { resolveRoadmapPath, resolveFeaturesPath, resolveContextPathFromConfig, resolveFeaturesPathFromConfig, resolveRoadmapPathFromConfig } from '../lib/project-paths.js'
 import { installAgentDefs } from '../lib/install-agent-defs.js'
+import { validateAgentString } from '../lib/agent-string.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PACKAGE_ROOT = resolve(__dirname, '..')
@@ -2074,6 +2075,34 @@ if (cmd === 'pipeline') {
   process.exit(0)
 }
 
+// COMP-MODEL-AB: compose experiment <spec.json> [--prune-workspaces]
+if (cmd === 'experiment') {
+  const specArg = args[0]
+  if (!specArg || specArg.startsWith('-')) {
+    console.error('Usage: compose experiment <spec.json> [--prune-workspaces]')
+    console.error('')
+    console.error('Runs a sandboxed A/B experiment across model configs.')
+    console.error('Writes results.json + report.md next to the spec file.')
+    process.exit(1)
+  }
+  const pruneWorkspaces = args.includes('--prune-workspaces')
+  const specPath = resolve(specArg)
+  if (!existsSync(specPath)) {
+    console.error(`Error: spec file not found: ${specPath}`)
+    process.exit(1)
+  }
+  const { runExperiment } = await import('../lib/experiment.js')
+  try {
+    const result = await runExperiment(specPath, { pruneWorkspaces })
+    console.log(`Results: ${result.resultsPath}`)
+    console.log(`Report:  ${result.reportPath}`)
+  } catch (err) {
+    console.error(`Error: ${err.message}`)
+    process.exit(1)
+  }
+  process.exit(0)
+}
+
 if (cmd === 'build') {
   // Parse --cwd <path> for cross-repo builds
   let agentWorkDir = null
@@ -2132,6 +2161,28 @@ if (cmd === 'build') {
   // full-build, single-feature only — mutually exclusive with --quick and batch.
   const codex = filteredArgs2.includes('--codex')
 
+  // COMP-MODEL-AB: --implementer=<agentStr> / --reviewer=<agentStr> override the
+  // --codex-derived defaults. Format: --implementer=claude::critical (= operator).
+  // Mutual exclusion applies when the explicit value conflicts with --codex's implicit
+  // assignment; identical values (e.g. --codex --implementer=codex) are allowed.
+  const implementerFlagMatch = filteredArgs2.find(a => a.startsWith('--implementer='))
+  const implementerArg = implementerFlagMatch ? implementerFlagMatch.slice('--implementer='.length) : null
+  const reviewerFlagMatch = filteredArgs2.find(a => a.startsWith('--reviewer='))
+  const reviewerArg = reviewerFlagMatch ? reviewerFlagMatch.slice('--reviewer='.length) : null
+
+  if (implementerArg) {
+    try { validateAgentString(implementerArg) } catch (err) {
+      console.error(`Error: --implementer: ${err.message}`)
+      process.exit(1)
+    }
+  }
+  if (reviewerArg) {
+    try { validateAgentString(reviewerArg) } catch (err) {
+      console.error(`Error: --reviewer: ${err.message}`)
+      process.exit(1)
+    }
+  }
+
   // Multiple codes: compose build FEAT-1 FEAT-2 FEAT-3
   const isMulti = featureCodes.length > 1
   // Single prefix: compose build STRAT-COMP (no trailing digit)
@@ -2173,6 +2224,17 @@ if (cmd === 'build') {
   }
   if (codex && isBatch) {
     console.error('Error: --codex cannot be combined with --all/prefix/multi (single feature only in v1)')
+    process.exit(1)
+  }
+
+  // COMP-MODEL-AB: mutual exclusion — conflict only when the explicit value differs
+  // from what --codex would set (--codex sets implementer=codex, reviewer=claude).
+  if (codex && implementerArg && implementerArg !== 'codex') {
+    console.error(`Error: --implementer=${implementerArg} conflicts with --codex (--codex sets implementer=codex); omit --codex or use --implementer=codex`)
+    process.exit(1)
+  }
+  if (codex && reviewerArg && reviewerArg !== 'claude') {
+    console.error(`Error: --reviewer=${reviewerArg} conflicts with --codex (--codex sets reviewer=claude); omit --codex or use --reviewer=claude`)
     process.exit(1)
   }
 
@@ -2260,6 +2322,8 @@ if (cmd === 'build') {
       if (templateName) singleOpts.template = templateName
       if (quick) singleOpts.template = 'build-quick'   // COMP-BUILD-QUICK
       if (codex) singleOpts.codex = true               // COMP-CODEX-IMPL
+      if (implementerArg) singleOpts.implementer = implementerArg   // COMP-MODEL-AB
+      if (reviewerArg) singleOpts.reviewer = reviewerArg             // COMP-MODEL-AB
       if (resume) singleOpts.resume = true
       if (fresh) singleOpts.fresh = true
       if (resumeFlowId) singleOpts.resumeFlowId = resumeFlowId

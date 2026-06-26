@@ -98,10 +98,12 @@ Add to `compose build` (in `bin/compose.js`, threaded into `runBuild` opts):
 - `--implementer=<agent-string>` — sets the implementer role agent string.
 - `--reviewer=<agent-string>` — sets the reviewer role agent string.
 
-`--codex` becomes sugar for `--implementer=codex --reviewer=claude::critical`
+`--codex` becomes sugar for `--implementer=codex --reviewer=claude`
 (keep `--codex` working byte-identically — it is exercised across the suite).
 Precedence: explicit `--implementer`/`--reviewer` override `--codex`; mutual-
 exclusion error only if both `--codex` and a *conflicting* explicit flag are given.
+Note: the reviewer default for `--codex` is plain `claude` (not `claude::critical`);
+the mutual-exclusion check in `bin/compose.js` uses `reviewer !== 'claude'`.
 Absent → today's defaults (`claude` implementer, `codex` reviewer). The strings
 flow through the existing `implementerAgent`/`reviewerAgent` → pipeline
 interpolation → `resolveAgentConfig` → `model-tiers` path unchanged.
@@ -181,6 +183,12 @@ partial cost/process data exists. Failed runs are first-class data, not gaps.
 YAGNI for v1: no live cockpit visualization, no distributed/remote runners, no
 auto-tuning/hill-climb over configs, no statistical significance testing beyond
 median + spread.
+
+**v1 known limitations:**
+- `testsTotal`/`testsPass` in `outcome` are `null` on failed, aborted, or thrown
+  builds even if tests ran before the failure. `_extractShipTestMetrics` only fires
+  on the success path (ship completes + `testSummary.parsed=true`). Callers should
+  treat null test metrics on `completed=false` runs as expected, not a data gap.
 
 ## Testing (per testing hierarchy)
 

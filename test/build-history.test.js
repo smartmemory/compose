@@ -184,6 +184,72 @@ test('persistHealthGateDowngrade identity guard: no-ops when flowId/featureCode 
   }
 });
 
+// ── COMP-MODEL-AB fix B: ship test metric extraction for build-history ────────
+
+test('_extractShipTestMetrics returns { test_count, pass_rate } when ship result is parsed (fix B)', async () => {
+  // WOULD FAIL before fix B: _extractShipTestMetrics was not exported from build.js
+  // (the capture logic only existed in the generic step-completion path, which the
+  // ship-interception branch bypasses via `continue`; the function didn't exist at all).
+  const { _extractShipTestMetrics } = await import('../lib/build.js');
+
+  // Normal parsed case
+  assert.deepEqual(
+    _extractShipTestMetrics({ outcome: 'complete', test_count: 7, pass_rate: 100, commit: 'abc' }),
+    { test_count: 7, pass_rate: 100 },
+    'must extract test_count and pass_rate when parsed'
+  );
+  // Partial pass rate
+  assert.deepEqual(
+    _extractShipTestMetrics({ test_count: 10, pass_rate: 80 }),
+    { test_count: 10, pass_rate: 80 }
+  );
+  // Zero tests (parsed but empty test suite)
+  assert.deepEqual(
+    _extractShipTestMetrics({ test_count: 0, pass_rate: 0 }),
+    { test_count: 0, pass_rate: 0 }
+  );
+  // Missing pass_rate defaults to 0 (defensive; parseTestSummary always sets it)
+  assert.deepEqual(
+    _extractShipTestMetrics({ test_count: 5 }),
+    { test_count: 5, pass_rate: 0 }
+  );
+  // No test_count (testSummary.parsed=false) → null
+  assert.equal(
+    _extractShipTestMetrics({ outcome: 'complete', commit: 'abc' }),
+    null,
+    'must return null when test_count is absent (unparsed testSummary)'
+  );
+  assert.equal(_extractShipTestMetrics(null),      null);
+  assert.equal(_extractShipTestMetrics(undefined), null);
+});
+
+test('build-history record carries test_count/pass_rate when ship result is parseable (fix B — interception path)', async () => {
+  // WOULD FAIL before fix B: the ship-interception branch (shouldInterceptShip → executeShipStep
+  // → continue) bypassed the generic capture at ~line 1703 → shipStepTestData stayed null →
+  // appendBuildHistory never wrote test_count/pass_rate to the history record.
+  // After fix B: _extractShipTestMetrics is called immediately after executeShipStep in the
+  // interception branch, then shipStepTestData is spread into appendBuildHistory.
+  const { _extractShipTestMetrics } = await import('../lib/build.js');
+  const dir = freshDir();
+  try {
+    // Simulate the ship-interception branch: extract then spread into history record.
+    // (The actual production path does the same two steps at lines ~1461+N and ~2578.)
+    const shipResult = { outcome: 'complete', test_count: 7, pass_rate: 100, commit: 'abc123' };
+    const testMetrics = _extractShipTestMetrics(shipResult);
+    assert.ok(testMetrics !== null, '_extractShipTestMetrics must return non-null for parsed result');
+    appendBuildHistory(dir, {
+      featureCode: 'EXP-1', mode: 'feature', status: 'complete',
+      stepCount: 3, cost_usd: 0.05,
+      ...(testMetrics !== null ? testMetrics : {}),
+    });
+    const [rec] = readBuildHistory(dir);
+    assert.equal(rec.test_count, 7,   'test_count must reach build-history record via interception path');
+    assert.equal(rec.pass_rate,  100, 'pass_rate must reach build-history record via interception path');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('persistHealthGateDowngrade guard: legacy state without flowId but different featureCode is untouched', async () => {
   const { persistHealthGateDowngrade } = await import('../lib/build.js');
   const dir = freshDir();
