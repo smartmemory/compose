@@ -1,0 +1,27 @@
+{
+  "id": "impl-model-shootout",
+  "fixture": {
+    "goal": "Write an add(a, b) function in a new file add.js and export it. Add a test file add.test.js that imports add and asserts add(2, 3) === 5.",
+    "seedRepo": null,
+    "seedRef": null
+  },
+  "configs": [
+    {
+      "label": "sonnet-impl",
+      "implementer": "claude::standard",
+      "reviewer": "codex"
+    },
+    {
+      "label": "opus-impl",
+      "implementer": "claude::critical",
+      "reviewer": "codex"
+    }
+  ],
+  "reps": 1,
+  "judge": {
+    "enabled": false,
+    "model": "claude::critical"
+  },
+  "parallelism": 1,
+  "buildTimeoutMs": 1800000
+}

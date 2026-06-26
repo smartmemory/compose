@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-06-26
+
+### Feature — Sandboxed A/B experiment harness for model comparison (COMP-MODEL-AB)
+
+Enables empirical "which model builds software best through Compose?" experiments.
+Runs the same fixture through the full Compose build pipeline with different model
+configs in isolated sandboxes and aggregates metrics for comparison.
+
+- **`--implementer=<agentStr>` / `--reviewer=<agentStr>` flags** (`bin/compose.js`,
+  `lib/build.js`) — thread explicit agent-string overrides into `runBuild` opts,
+  overriding the `--codex`-derived defaults. `--codex` keeps its existing behavior
+  byte-identically. Format: `provider[:template[:tier]]` (e.g. `claude::critical`).
+  Validated via `validateAgentString` with fail-closed provider + tier checks.
+- **`compose experiment <spec.json>` CLI verb** (`bin/compose.js`) — load a spec,
+  run the matrix, and write `results.json` + `report.md` next to the spec.
+- **`lib/experiment.js`** — orchestrator: validates spec, expands run matrix
+  (configs × reps → stable `runId`s), runs with bounded concurrency, provisions an
+  isolated sandbox per run, invokes a headless build, collects metrics, optionally
+  judges, writes per-run records. One failed run records `completed=false` without
+  aborting the experiment.
+- **`lib/experiment-sandbox.js`** — provisions isolated workspaces: `git init`
+  (greenfield) or clone (seeded); sets `COMPOSE_TARGET=<workspace>` +
+  `COMPOSE_PORT=19997` (dead port) so VisionWriter falls back to direct file writes
+  inside the sandbox — the live `:4001` server is never contacted.
+- **`lib/experiment-metrics.js`** — collects four metric axes (cost, outcome,
+  process, quality) from sandbox artifacts only; no LLM calls.
+- **`lib/experiment-pricing.js`** — static model pricing table for USD derivation;
+  unknown model degrades to `usd:null`.
+- **`lib/experiment-judge.js`** — LLM judge over `(goal, diff)` on three rubric
+  axes; degrades to `null` on any failure.
+- **`lib/experiment-report.js`** — pure aggregation (`aggregate`) and Markdown
+  rendering (`render`) of configs × metrics table with winner-per-metric and caveats.
+- **62 tests** across two test files (Wave 1 + Wave 2) covering CLI parsing,
+  sandbox provision, metrics math, pricing, judge degrade-path, spec validation,
+  matrix expansion, aggregation, render, and the sandbox isolation acceptance gate.
+
 ## 2026-06-25
 
 ### Feature — Explicit `compose build --resume` / `--fresh` + crash-gap fix (COMP-BUILD-RESUME)
