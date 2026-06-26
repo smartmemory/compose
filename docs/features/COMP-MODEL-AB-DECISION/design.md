@@ -31,6 +31,22 @@ Two layers that compose:
     - `review` — diff with **seeded** bugs → findings · detection precision/recall (objective)
     - `test-authoring` — code → tests · mutation/coverage
     - `debug` — failing repro → fix · repro now passes
+    - `end-to-end` — **goal → whole app** (the integration archetype; see below) · graded acceptance criteria + build + hidden tests + judge
+
+  **Concrete tests** — all six isolated stages anchor to one shared scenario (a mini MCP notes server: write/search/recall over SQLite) so fixtures are coherent and chainable. Two rules: **fixed canonical input per stage** (every model gets the same upstream artifact → isolates the one skill) and **hidden oracles** the model never sees (golden tests, planted bugs, mutants → un-gameable):
+
+  | Stage | Fixed input | Task | Oracle → score |
+  |---|---|---|---|
+  | design | goal + constraints | design doc | rubric of must-address decisions → fraction (multi-judge) |
+  | plan | canonical design | impl plan | coverage + sequencing validity + checkable AC → fraction |
+  | implement | canonical design+plan+skeleton | code | hidden golden suite → % pass, + quality judge |
+  | review | diff with N planted bugs + M correct changes | find bugs | precision/recall vs planted set → F1 (objective) |
+  | test-authoring | canonical correct code | tests | mutation kill rate + coverage (objective) |
+  | debug | code + failing repro (red) | fix | repro green AND full suite green (objective) |
+
+  Four of six (implement/review/test/debug) are objective; only design/plan lean on the judge.
+
+  **`end-to-end` is special — the integration archetype.** Unlike the six above it has **no fixed canonical input**: the pipeline produces its own design→plan→code→tests from only the goal, so handoff friction, context drift, and coherence (all emergent) are exercised. The whole is not the sum of the bits, so it must be measured directly, never inferred from the matrix. It runs in two modes — **homogeneous** (one model all stages → per-model integration baseline + the whole-model-substitution answer) and **assembled heterogeneous** (per-stage winners → validates that mixing wins). The **gap between predicted (summed per-stage winners) and actual end-to-end score** quantifies how much integration matters — i.e. whether granular optimization pays off at all. Runs on COMP-REALWORLD-FIXTURE.
   - **Harness blueprint** — structural patterns borrowed from the SmartMemory benchmarks (the SmartMemory *archetypes themselves were evaluated and rejected* as fixtures — they are memory-recall QA, wrong domain; do not revisit). Reuse the *shape*, author our own content:
     1. **Registry pattern** — a `registry.json` + contract with a stage-archetype enum, per-row `state` (triaged/measured), and `latest` per-model scores. This IS the matrix's storage shape.
     2. **Signed two-arm uplift + CI** — score each candidate model *relative to the champion* per stage (signed quality delta with CI), not as an absolute.
