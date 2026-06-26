@@ -1448,3 +1448,4 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
 | 1 | COMP-TEST-PORT-ISOLATION | Decouple test suite from live :4001: suite-wide dead COMPOSE_PORT so server-down-path tests get deterministic ECONNREFUSED and the dev server can stay up during npm test / pre-push | COMPLETE |
+| 2 | COMP-MODEL-AB-DECISION | Substitution-decision layer on the A/B engine: fixture suite, workflow/tuning config dimensions, calibrated judge, baseline-relative tradeoff/Pareto frontier report, and confidence — to answer which models/params/workflows can replace the champion and at what cost/quality tradeoff | PLANNED |
