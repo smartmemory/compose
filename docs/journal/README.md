@@ -10,6 +10,7 @@ Each entry is a dated session log capturing what we tried, what broke, what we l
 
 | Date | Entry | Summary |
 |------|-------|---------|
+| 2026-06-26 | [Session 83: COMP-MODEL-AB shipped — sandboxed model A/B harness; 4 review rounds caught metric bugs the fake-runner tests hid](2026-06-26-session-83-model-ab-harness-review-rounds.md) | COMP-MODEL-AB shipped — sandboxed model A/B harness; 4 review rounds caught metric bugs the fake-runner tests hid |
 | 2026-06-21 | [Session 82: Pipeline editor Wave 2 (COMP-PIPE-EDIT-5/-6): YAML sync + sub-flow collapse/expand; the COMP-PIPE-EDIT epic (all 7) is COMPLETE](2026-06-21-session-82-pipeline-editor-wave-2-epic-complete.md) | Pipeline editor Wave 2 (COMP-PIPE-EDIT-5/-6): YAML sync + sub-flow collapse/expand; the COMP-PIPE-EDIT epic (all 7) is COMPLETE |
 | 2026-06-21 | [Session 81: Pipeline editor Wave 1 (COMP-PIPE-EDIT-3/-4/-7): dependency wiring, contract editor, save-as-template; two-wave batch sequencing](2026-06-21-session-81-pipeline-editor-wave-1.md) | Pipeline editor Wave 1 (COMP-PIPE-EDIT-3/-4/-7): dependency wiring, contract editor, save-as-template; two-wave batch sequencing |
 | 2026-06-20 | [Session 80: Visual pipeline editor foundation (COMP-PIPE-EDIT-1/-2): cytoscape canvas + step inspector + metadata-preserving save round-trip; roadmap drift reconciled](2026-06-20-session-80-pipeline-editor-foundation.md) | Visual pipeline editor foundation (COMP-PIPE-EDIT-1/-2): cytoscape canvas + step inspector + metadata-preserving save round-trip; roadmap drift reconciled |
