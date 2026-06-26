@@ -1,0 +1,11 @@
+{
+  "code": "COMP-MODEL-AB",
+  "description": "Sandboxed model A/B experiment harness — run the same dev fixture through compose build across implementer/reviewer model configs in isolated sandboxes; capture cost/outcome/process/judge metrics; aggregate to results.json + report.md",
+  "status": "IN_PROGRESS",
+  "phase": "Phase 11: Experimentation",
+  "created": "2026-06-26",
+  "updated": "2026-06-26",
+  "complexity": "L",
+  "position": 1,
+  "impact": "high"
+}
