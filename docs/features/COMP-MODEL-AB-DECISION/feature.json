@@ -1,0 +1,12 @@
+{
+  "code": "COMP-MODEL-AB-DECISION",
+  "description": "Substitution-decision layer on the A/B engine: fixture suite, workflow/tuning config dimensions, calibrated judge, baseline-relative tradeoff/Pareto frontier report, and confidence — to answer which models/params/workflows can replace the champion and at what cost/quality tradeoff",
+  "status": "PLANNED",
+  "phase": "Phase 11: Model A/B",
+  "created": "2026-06-26",
+  "updated": "2026-06-26",
+  "complexity": "L",
+  "position": 2,
+  "parent": "COMP-MODEL-AB",
+  "impact": "high"
+}
