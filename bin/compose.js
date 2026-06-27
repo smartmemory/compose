@@ -2160,6 +2160,7 @@ if (cmd === 'build') {
   // COMP-CODEX-IMPL: --codex flips the implementer to Codex (Claude reviews). v1 is
   // full-build, single-feature only — mutually exclusive with --quick and batch.
   const codex = filteredArgs2.includes('--codex')
+  const nonInteractiveBuild = filteredArgs2.includes('--non-interactive')
 
   // COMP-MODEL-AB: --implementer=<agentStr> / --reviewer=<agentStr> override the
   // --codex-derived defaults. Format: --implementer=claude::critical (= operator).
@@ -2326,6 +2327,7 @@ if (cmd === 'build') {
       if (reviewerArg) singleOpts.reviewer = reviewerArg             // COMP-MODEL-AB
       if (resume) singleOpts.resume = true
       if (fresh) singleOpts.fresh = true
+      if (nonInteractiveBuild) singleOpts.gateOpts = { nonInteractive: true }
       if (resumeFlowId) singleOpts.resumeFlowId = resumeFlowId
       runBuild(featureCode, singleOpts).then(() => {
         process.exit(0)
