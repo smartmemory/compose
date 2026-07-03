@@ -1,11 +1,36 @@
 {
   "code": "COMP-SMARTMEMORY-RECALL",
   "description": "Cockpit recall via SmartMemory (opt-in, default OFF): on feature-folder open, auto-issue activation-based recall and surface ranked prior context (decisions, gates, journal mentions) in a cockpit panel; augments the Attention Queue. Depends on COMP-SMARTMEMORY-INGEST. Unparked from forge-top 2026-07-03.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-SMARTMEMORY: SmartMemory Coupling (opt-in)",
   "created": "2026-07-03",
   "updated": "2026-07-03",
   "complexity": "L",
   "position": 2,
-  "parent": "COMP-SMARTMEMORY-INGEST"
+  "parent": "COMP-SMARTMEMORY-INGEST",
+  "completions": [
+    {
+      "completion_id": "COMP-SMARTMEMORY-RECALL:fbe0de02a4817c4329daf4bd8e7d0026d9674613",
+      "feature_code": "COMP-SMARTMEMORY-RECALL",
+      "commit_sha": "fbe0de02a4817c4329daf4bd8e7d0026d9674613",
+      "commit_sha_short": "fbe0de02",
+      "tests_pass": true,
+      "files_changed": [
+        "server/smartmemory-routes.js",
+        "server/vision-server.js",
+        "src/components/cockpit/RecallTab.jsx",
+        "src/components/cockpit/useRecallEnabled.js",
+        "src/components/cockpit/ContextItemDetail.jsx",
+        "src/components/cockpit/DetailTabs.jsx",
+        "src/components/cockpit/contextPanelState.js",
+        "test/smartmemory-recall-route.test.js",
+        "test/ui/smartmemory-recall.test.jsx",
+        "test/context-panel-state.test.js"
+      ],
+      "recorded_at": "2026-07-03T09:46:30.233Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Cockpit Recall tab via degrade-never-fail /api/smartmemory/recall; workspace-keyed probe, hidden until enabled, feature items only. Ships with COMP-SMARTMEMORY-INGEST in the same commit."
+    }
+  ],
+  "commit_sha": "fbe0de02a4817c4329daf4bd8e7d0026d9674613"
 }
