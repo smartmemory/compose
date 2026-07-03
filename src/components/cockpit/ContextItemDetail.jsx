@@ -10,15 +10,19 @@
  *   onClose  {fn}      called to clear contextSelection
  *   onOpenFile {fn}    called when user clicks a file (navigates to DocsView)
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useVisionStore } from '../vision/useVisionStore.js';
 import { useShallow } from 'zustand/react/shallow';
+import { useWorkspace } from '../../contexts/WorkspaceContext.jsx';
 import ItemDetailPanel from '../vision/ItemDetailPanel.jsx';
 import DetailTabs from './DetailTabs.jsx';
 import ContextPipelineDots from '../vision/ContextPipelineDots.jsx';
 import ContextSessionsTable from '../vision/ContextSessionsTable.jsx';
 import ContextErrorLog from '../vision/ContextErrorLog.jsx';
 import ContextFilesTab from '../vision/ContextFilesTab.jsx';
+import RecallTab from './RecallTab.jsx';
+import useRecallEnabled from './useRecallEnabled.js';
+import { DETAIL_TABS } from './contextPanelState.js';
 
 export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFile, onViewInGraph, onViewInTree }) {
   const {
@@ -46,6 +50,26 @@ export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFil
     );
   }, [agentErrors, featureCode]);
 
+  // COMP-SMARTMEMORY-RECALL: Recall tab is gated on a workspace-keyed
+  // memoized `enabled` probe AND a resolvable feature code (non-feature
+  // items never grow a Recall tab).
+  const { workspace } = useWorkspace();
+  const workspaceId = workspace?.id ?? workspace?.root ?? null;
+  const recallEnabled = useRecallEnabled(workspaceId);
+  const showRecall = recallEnabled === true && !!featureCode;
+  const visibleTabs = useMemo(
+    () => (showRecall ? DETAIL_TABS : DETAIL_TABS.filter(t => t.id !== 'recall')),
+    [showRecall],
+  );
+  // Active-tab reset rule: whenever the visible-tab set is computed and the
+  // active tab is not in it, reset to overview — derived at render so a
+  // hidden tab never renders its body for even one frame, and persisted into
+  // state so it survives further re-renders.
+  const effectiveTab = visibleTabs.some(t => t.id === activeDetailTab) ? activeDetailTab : 'overview';
+  useEffect(() => {
+    if (effectiveTab !== activeDetailTab) setActiveDetailTab('overview');
+  }, [effectiveTab, activeDetailTab]);
+
   if (!item) {
     return (
       <div className="p-3 text-[11px] text-muted-foreground italic">
@@ -57,12 +81,13 @@ export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFil
   return (
     <div className="h-full flex flex-col">
       <DetailTabs
-        activeTab={activeDetailTab}
+        activeTab={effectiveTab}
+        tabs={visibleTabs}
         onTabChange={setActiveDetailTab}
         errorCount={featureErrors.length}
       />
       <div className="flex-1 min-h-0 overflow-auto">
-        {activeDetailTab === 'overview' && (
+        {effectiveTab === 'overview' && (
           <>
             <ItemDetailPanel
               item={item}
@@ -105,17 +130,20 @@ export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFil
             </div>
           </>
         )}
-        {activeDetailTab === 'pipeline' && (
+        {effectiveTab === 'pipeline' && (
           <ContextPipelineDots item={item} activeBuild={activeBuild} />
         )}
-        {activeDetailTab === 'sessions' && (
+        {effectiveTab === 'sessions' && (
           <ContextSessionsTable featureCode={featureCode} sessions={sessions} items={items} />
         )}
-        {activeDetailTab === 'errors' && (
+        {effectiveTab === 'errors' && (
           <ContextErrorLog featureCode={featureCode} errors={agentErrors} items={items} />
         )}
-        {activeDetailTab === 'files' && (
+        {effectiveTab === 'files' && (
           <ContextFilesTab featureCode={featureCode} onOpenFile={onOpenFile} />
+        )}
+        {effectiveTab === 'recall' && (
+          <RecallTab featureCode={featureCode} workspaceId={workspaceId} />
         )}
       </div>
     </div>

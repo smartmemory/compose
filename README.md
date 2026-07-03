@@ -161,6 +161,34 @@ Tunnel layer is yours: Tailscale (serve/funnel), Cloudflare Tunnel, or a reverse
 
 `compose remote rotate-secret --yes` invalidates every paired device (post-leak hammer).
 
+## SmartMemory coupling (opt-in)
+
+Compose can feed its own lifecycle history (feature events, gate decisions, journal entries,
+artifacts) into [SmartMemory](https://github.com/smartmemory) for relevance-ranked recall,
+via a `smartmemory` block in `.compose/compose.json`:
+
+```json
+{
+  "smartmemory": {
+    "enabled": true,
+    "baseUrl": "http://localhost:9001",
+    "apiKeyEnv": "SMARTMEMORY_API_KEY",
+    "timeoutMs": 3000
+  }
+}
+```
+
+`smartmemory` is absent by default, which means the coupling is fully off: no probes, no
+network calls, no new log lines. With `enabled: true` and a reachable SmartMemory service,
+compose ingests lifecycle events live (fail-open) and the cockpit gains a Recall tab on each
+feature's detail panel.
+
+```bash
+compose smartmemory sync                 # idempotent backfill of events, journal, artifacts
+compose smartmemory sync --dry-run       # preview counts without ingesting
+compose smartmemory sync --feature CODE  # scope the sync to one feature
+```
+
 ## Documentation
 
 Topic-scoped reference:

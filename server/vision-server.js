@@ -30,6 +30,7 @@ import { attachSettingsRoutes } from './settings-routes.js';
 import { attachHealthRoutes } from './health-routes.js';
 import { attachValidateRoutes } from './validate-routes.js';
 import { attachQaScopeRoutes } from './qa-scope-routes.js';
+import { attachSmartmemoryRoutes } from './smartmemory-routes.js';
 import { attachDesignRoutes } from './design-routes.js';
 import { DesignSessionManager } from './design-session.js';
 import { attachPipelineRoutes } from './pipeline-routes.js';
@@ -101,6 +102,11 @@ export class VisionServer {
     // ── QA-scope affected-routes panel (COMP-PARITY-10) ────────────────────
     // Read-only GET /api/qa-scope?featureCode=…; reads off req.workspace.
     attachQaScopeRoutes(app);
+
+    // ── SmartMemory recall (COMP-SMARTMEMORY-RECALL, opt-in) ───────────────
+    // Read-only GET /api/smartmemory/recall?featureCode=…; degrade-never-fail,
+    // answers {enabled:false} from config alone when the flag is OFF.
+    attachSmartmemoryRoutes(app);
 
     // ── Vision CRUD + lifecycle routes ─────────────────────────────────────
     attachVisionRoutes(app, {

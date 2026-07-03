@@ -71,6 +71,7 @@ export const DETAIL_TABS = [
   { id: 'sessions', label: 'Sessions' },
   { id: 'errors', label: 'Errors' },
   { id: 'files', label: 'Files' },
+  { id: 'recall', label: 'Recall' },
 ];
 
 export const DETAIL_TAB_IDS = DETAIL_TABS.map(t => t.id);

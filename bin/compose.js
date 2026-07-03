@@ -3778,6 +3778,49 @@ if (cmd === 'build') {
     process.exit(1)
   }
 
+} else if (cmd === 'smartmemory') {
+  // ---------------------------------------------------------------------------
+  // compose smartmemory sync [--dry-run] [--feature <CODE>]
+  //   COMP-SMARTMEMORY-INGEST: idempotent backfill/re-sync of feature-events,
+  //   gate-log, journal entries, and per-feature artifacts into SmartMemory.
+  // ---------------------------------------------------------------------------
+  const sub = args[0]
+
+  if (sub === 'sync') {
+    const { runSync } = await import('../lib/smartmemory-sync.js')
+    const { flushPending } = await import('../lib/smartmemory-ingest.js')
+    const flagIdx = (flag) => args.indexOf(flag)
+    const flagVal = (flag) => {
+      const i = flagIdx(flag)
+      return i !== -1 && args[i + 1] ? args[i + 1] : null
+    }
+    const dryRun = args.includes('--dry-run')
+    const feature = flagVal('--feature')
+
+    const { root: cwd } = resolveCwdWithWorkspace(args)
+
+    let result
+    try {
+      result = await runSync({ cwd, dryRun, feature })
+    } catch (err) {
+      console.error(`smartmemory sync failed: ${err.message}`)
+      process.exit(1)
+    }
+
+    console.log(
+      `smartmemory sync: ingested=${result.ingested} unchanged=${result.unchanged} ` +
+      `skipped=${result.skipped} failed=${result.failed}` +
+      (result.stoppedOnQuota ? ' (stopped: workspace quota reached)' : '')
+    )
+    await flushPending()
+    process.exit(0)
+  }
+
+  console.error(`Unknown smartmemory subcommand: ${sub}`)
+  console.error('Usage:')
+  console.error('  compose smartmemory sync [--dry-run] [--feature <CODE>]')
+  process.exit(1)
+
 } else {
   console.error(`Unknown command: ${cmd}`)
   process.exit(1)

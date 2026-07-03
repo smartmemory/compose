@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-07-03
+
+### Feature — Opt-in SmartMemory coupling: live ingest + backfill sync + cockpit Recall tab (COMP-SMARTMEMORY-INGEST, COMP-SMARTMEMORY-RECALL)
+
+Couples compose to [SmartMemory](https://github.com/smartmemory) behind a new `smartmemory`
+block in `.compose/compose.json`, **default OFF** — absent block means zero behavior
+change (no probe, no fetch, no new log lines).
+
+- **`smartmemory` config block** — `{enabled, baseUrl, apiKeyEnv, timeoutMs}`. Strict-truthy
+  gate (`enabled === true`); the API key itself never lives in config, only the name of the
+  env var to read it from.
+- **Live fail-open ingestion** (`lib/smartmemory-ingest.js`) — feature-mutation events
+  (`lib/feature-events.js`) and gate decisions (`server/gate-log-store.js`) are ingested into
+  SmartMemory as they happen. Ingest errors are swallowed (one `console.warn` on first
+  failure) and never affect the local write; a circuit breaker disables the emitter after 3
+  consecutive failures for the life of the process.
+- **`compose smartmemory sync [--dry-run] [--feature CODE]`** (`lib/smartmemory-sync.js`) —
+  idempotent backfill/re-sync over feature-events, gate-log, journal entries, and per-feature
+  artifacts (design/blueprint/plan/report/audit). Content-hash dedupe for events, source-path
+  replace-in-place dedupe for files, so re-running is always safe.
+- **Cockpit Recall tab** (`src/components/cockpit/RecallTab.jsx`) — a new tab in the feature
+  detail panel showing ranked prior context from SmartMemory, gated on the same flag and
+  probe-hidden until confirmed enabled. The backing route (`GET /api/smartmemory/recall`) is
+  degrade-never-fail: unreachable or misconfigured SmartMemory renders a quiet state instead
+  of an error.
+- **`lib/smartmemory-client.js`** — one raw-HTTP client (`health`/`ingest`/`search`) shared by
+  ingest and recall, no new npm dependency.
+
 ## 2026-06-26
 
 ### Fix — Test suite no longer requires taking down the dev server (COMP-TEST-PORT-ISOLATION)

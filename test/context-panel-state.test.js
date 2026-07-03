@@ -99,12 +99,12 @@ describe('contextPanelState — clampFraction', () => {
 // ---------------------------------------------------------------------------
 
 describe('contextPanelState — detail tabs', () => {
-  it('defines 5 tabs', () => {
-    assert.equal(DETAIL_TABS.length, 5);
+  it('defines 6 tabs', () => {
+    assert.equal(DETAIL_TABS.length, 6);
   });
 
   it('tab ids match expected set', () => {
-    assert.deepEqual(DETAIL_TAB_IDS, ['overview', 'pipeline', 'sessions', 'errors', 'files']);
+    assert.deepEqual(DETAIL_TAB_IDS, ['overview', 'pipeline', 'sessions', 'errors', 'files', 'recall']);
   });
 
   it('isValidDetailTab accepts known tabs', () => {

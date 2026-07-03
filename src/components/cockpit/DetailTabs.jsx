@@ -10,7 +10,7 @@
  *   errorCount  {number}  badge count for the errors tab (0 = hidden)
  */
 import React from 'react';
-import { FileText, GitBranch, Clock, AlertTriangle, Folder } from 'lucide-react';
+import { FileText, GitBranch, Clock, AlertTriangle, Folder, Brain } from 'lucide-react';
 import { DETAIL_TABS } from './contextPanelState.js';
 
 const ICONS = {
@@ -19,9 +19,10 @@ const ICONS = {
   sessions: Clock,
   errors: AlertTriangle,
   files: Folder,
+  recall: Brain,
 };
 
-export default function DetailTabs({ activeTab = 'overview', onTabChange, errorCount = 0 }) {
+export default function DetailTabs({ activeTab = 'overview', onTabChange, errorCount = 0, tabs = DETAIL_TABS }) {
   return (
     <div
       className="flex items-center gap-0 shrink-0"
@@ -33,7 +34,7 @@ export default function DetailTabs({ activeTab = 'overview', onTabChange, errorC
       role="tablist"
       aria-label="Detail sections"
     >
-      {DETAIL_TABS.map(({ id, label }) => {
+      {tabs.map(({ id, label }) => {
         const Icon = ICONS[id];
         const isActive = id === activeTab;
         const badge = id === 'errors' ? errorCount : 0;

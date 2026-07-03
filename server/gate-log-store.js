@@ -21,7 +21,8 @@
 
 import { appendFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { getDataDir } from './project-root.js';
+import { getDataDir, getTargetRoot } from './project-root.js';
+import { getSmartmemoryConfig } from '../lib/smartmemory-config.js';
 
 // Gate log is project-scoped (mirrors sessions.json, active-build.json etc).
 // COMPOSE_GATE_LOG env var overrides the path — read dynamically so tests can inject it.
@@ -65,6 +66,15 @@ export function appendGateLogEntry(entry) {
   }
 
   appendFileSync(filePath, JSON.stringify(entry) + '\n', 'utf8');
+  // COMP-SMARTMEMORY-INGEST: fail-open live emit after the durable append.
+  try {
+    const cwd = getTargetRoot();
+    if (getSmartmemoryConfig(cwd).enabled === true) {
+      import('../lib/smartmemory-ingest.js')
+        .then((m) => m.emitGateLogEntry(cwd, entry))
+        .catch(() => {});
+    }
+  } catch { /* fail-open */ }
 }
 
 /**
