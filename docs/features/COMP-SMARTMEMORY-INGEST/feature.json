@@ -1,0 +1,10 @@
+{
+  "code": "COMP-SMARTMEMORY-INGEST",
+  "description": "SmartMemory ingestion behind opt-in flag (default OFF): compose decision events, gate-log, audit traces, journal entries, and feature artifacts → SmartMemory items with origin=cli:compose + per-project workspace_id; backfill from append-only logs; byte-identical degrade when OFF/unreachable. Unparked from forge-top 2026-07-03.",
+  "status": "IN_PROGRESS",
+  "phase": "COMP-SMARTMEMORY: SmartMemory Coupling (opt-in)",
+  "created": "2026-07-03",
+  "updated": "2026-07-03",
+  "complexity": "L",
+  "position": 1
+}

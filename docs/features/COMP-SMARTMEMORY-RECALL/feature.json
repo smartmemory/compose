@@ -1,0 +1,11 @@
+{
+  "code": "COMP-SMARTMEMORY-RECALL",
+  "description": "Cockpit recall via SmartMemory (opt-in, default OFF): on feature-folder open, auto-issue activation-based recall and surface ranked prior context (decisions, gates, journal mentions) in a cockpit panel; augments the Attention Queue. Depends on COMP-SMARTMEMORY-INGEST. Unparked from forge-top 2026-07-03.",
+  "status": "PLANNED",
+  "phase": "COMP-SMARTMEMORY: SmartMemory Coupling (opt-in)",
+  "created": "2026-07-03",
+  "updated": "2026-07-03",
+  "complexity": "L",
+  "position": 2,
+  "parent": "COMP-SMARTMEMORY-INGEST"
+}

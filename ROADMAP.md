@@ -1449,3 +1449,12 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 |---|---------|-------------|--------|
 | 1 | COMP-TEST-PORT-ISOLATION | Decouple test suite from live :4001: suite-wide dead COMPOSE_PORT so server-down-path tests get deterministic ECONNREFUSED and the dev server can stay up during npm test / pre-push | COMPLETE |
 | 2 | COMP-MODEL-AB-DECISION | Substitution-decision layer on the A/B engine: fixture suite, workflow/tuning config dimensions, calibrated judge, baseline-relative tradeoff/Pareto frontier report, and confidence — to answer which models/params/workflows can replace the champion and at what cost/quality tradeoff | PLANNED |
+
+---
+
+## COMP-SMARTMEMORY: SmartMemory Coupling (opt-in) — IN_PROGRESS
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 1 | COMP-SMARTMEMORY-INGEST | SmartMemory ingestion behind opt-in flag (default OFF): compose decision events, gate-log, audit traces, journal entries, and feature artifacts → SmartMemory items with origin=cli:compose + per-project workspace_id; backfill from append-only logs; byte-identical degrade when OFF/unreachable. Unparked from forge-top 2026-07-03. | IN_PROGRESS |
+| 2 | COMP-SMARTMEMORY-RECALL | Cockpit recall via SmartMemory (opt-in, default OFF): on feature-folder open, auto-issue activation-based recall and surface ranked prior context (decisions, gates, journal mentions) in a cockpit panel; augments the Attention Queue. Depends on COMP-SMARTMEMORY-INGEST. Unparked from forge-top 2026-07-03. | PLANNED |
