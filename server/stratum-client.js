@@ -15,6 +15,7 @@
  */
 
 import { execFile as _execFileDefault } from 'node:child_process';
+import { loadProjectConfig } from './project-root.js';
 
 const STRATUM_BIN = 'stratum-mcp';
 
@@ -25,38 +26,93 @@ const QUERY_TIMEOUT_MS = 5_000;
 const MUTATION_TIMEOUT_MS = 10_000;
 
 // ---------------------------------------------------------------------------
+// Engine selection (COMP-STRATUM-TS)
+//
+// The flow/gate seam is engine-selectable: Python `stratum-mcp` (default) or
+// the TS engine's `stratum` CLI, which emits the same JSON projections and
+// exit codes. Guard calls are PINNED to Python — STRAT-GUARD is not part of
+// the TS port. Resolution order: COMPOSE_STRATUM_ENGINE env override, then
+// capabilities.stratumEngine in .compose/compose.json, then "python".
+// Unknown values fail loudly; never a silent fallback.
+// ---------------------------------------------------------------------------
+
+/** @returns {'python'|'ts'} */
+export function resolveStratumEngine() {
+  let value = process.env.COMPOSE_STRATUM_ENGINE;
+  if (value === undefined || value === '') {
+    try { value = loadProjectConfig()?.capabilities?.stratumEngine; } catch { value = undefined; }
+  }
+  if (value === undefined || value === '') return 'python';
+  if (value !== 'python' && value !== 'ts') {
+    throw new Error(`stratumEngine must be "python" or "ts", got ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+/** Binary for flow/gate query+mutation calls under the selected engine. */
+function flowGateBin() {
+  if (resolveStratumEngine() === 'ts') return process.env.COMPOSE_STRATUM_TS_BIN || 'stratum';
+  return STRATUM_BIN;
+}
+
+// ---------------------------------------------------------------------------
 // Core subprocess runner
 // ---------------------------------------------------------------------------
 
 /**
- * Spawn stratum-mcp with args. Returns a Promise resolving to { stdout, code }.
+ * Spawn a stratum binary with args. Returns a Promise resolving to { stdout, code }.
  * Rejects only on spawn failure (binary not found).
  *
  * @param {string[]} args
  * @param {number}   timeoutMs
+ * @param {string}   [bin] — defaults to the Python stratum-mcp binary
  * @returns {Promise<{ stdout: string, stderr: string, code: number }>}
  */
-function spawnStratum(args, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    let stdout = '';
-    let stderr = '';
-
-    const proc = _execFile(STRATUM_BIN, args, { timeout: timeoutMs }, (err, out, err2) => {
-      stdout = out || '';
-      stderr = err2 || '';
-      const code = err?.code === 'ETIMEDOUT' ? -1
-        : (typeof err?.code === 'number' ? err.code : 0);
-      resolve({ stdout, stderr, code });
+function spawnStratum(args, timeoutMs, bin = STRATUM_BIN) {
+  return new Promise((resolve) => {
+    const proc = _execFile(bin, args, { timeout: timeoutMs }, (err, out, err2) => {
+      resolve(_spawnResult(bin, err, out, err2));
     });
-
+    // Node delivers spawn failures through BOTH the callback and the child
+    // 'error' event, in racy order. Both paths settle through the same
+    // mapping — the promise keeps whichever fires first, never an unhandled
+    // rejection, and only genuine spawn codes become SPAWN.
     proc.on('error', (err) => {
-      if (err.code === 'ENOENT') {
-        reject(new Error(`stratum-mcp not found. Install with: pip install stratum-mcp`));
-      } else {
-        reject(err);
-      }
+      resolve(_spawnResult(bin, err ?? new Error('child process error'), '', ''));
     });
   });
+}
+
+// Genuine spawn-level failures; other string codes (e.g. maxbuffer overruns)
+// are execution failures and must not be reported as "install stratum".
+const _SPAWN_CODES = new Set(['ENOENT', 'EACCES', 'EPERM', 'ENOTDIR']);
+
+/** Map an execFile callback settle into the { stdout, stderr, code } contract. */
+function _spawnResult(bin, err, out, err2) {
+  const stdout = out || '';
+  let stderr = err2 || '';
+  let code;
+  if (err?.code === 'ETIMEDOUT') code = -1;
+  else if (typeof err?.code === 'number') code = err.code;
+  else if (typeof err?.code === 'string' && _SPAWN_CODES.has(err.code)) {
+    code = -2;
+    stderr = _spawnRemedy(bin, err.code);
+  } else if (err) {
+    // Non-spawn string codes (ERR_CHILD_PROCESS_STDIO_MAXBUFFER, ...) and
+    // codeless errors: a generic failure with the real message preserved.
+    code = 1;
+    stderr = stderr || err.message || String(err);
+  } else {
+    code = 0;
+  }
+  return { stdout, stderr, code };
+}
+
+/** Binary-specific spawn-failure message with the install/path remedy. */
+function _spawnRemedy(bin, code) {
+  return bin === STRATUM_BIN
+    ? `stratum-mcp failed to spawn (${code}). Install with: pip install stratum-mcp`
+    : `${bin} (TS stratum engine) failed to spawn (${code}). Install @smartmemory/stratum or set COMPOSE_STRATUM_TS_BIN`;
 }
 
 /**
@@ -65,14 +121,20 @@ function spawnStratum(args, timeoutMs) {
  * @returns {Promise<any>} parsed JSON result, or throws StratumError
  */
 async function runQuery(args) {
-  let result = await spawnStratum(args, QUERY_TIMEOUT_MS);
+  const bin = flowGateBin();
+  let result = await spawnStratum(args, QUERY_TIMEOUT_MS, bin);
 
   if (result.code === -1) {
     // Retry once on timeout
-    result = await spawnStratum(args, QUERY_TIMEOUT_MS);
+    result = await spawnStratum(args, QUERY_TIMEOUT_MS, bin);
     if (result.code === -1) {
       return { error: { code: 'TIMEOUT', message: 'stratum-mcp query timed out', detail: '' } };
     }
+  }
+
+  if (result.code === -2) {
+    console.error('[stratum-client] query spawn failure:', result.stderr);
+    return { error: { code: 'SPAWN', message: result.stderr, detail: '' } };
   }
 
   if (result.code !== 0) {
@@ -97,10 +159,15 @@ async function runQuery(args) {
  * @returns {Promise<any>} parsed JSON result, or { conflict }, or { error }
  */
 async function runMutation(args) {
-  const result = await spawnStratum(args, MUTATION_TIMEOUT_MS);
+  const result = await spawnStratum(args, MUTATION_TIMEOUT_MS, flowGateBin());
 
   if (result.code === -1) {
     return { error: { code: 'TIMEOUT', message: 'stratum-mcp gate timed out', detail: '' } };
+  }
+
+  if (result.code === -2) {
+    console.error('[stratum-client] mutation spawn failure:', result.stderr);
+    return { error: { code: 'SPAWN', message: result.stderr, detail: '' } };
   }
 
   if (result.code === 2) {
@@ -130,7 +197,8 @@ async function runMutation(args) {
 /**
  * Spawn stratum-mcp with args and pipe `inputJson` (a string) on stdin.
  * Used by the STRAT-GUARD adapter, whose CLI reads one JSON kwargs object from
- * stdin. Same resolve contract as spawnStratum.
+ * stdin. Same resolve contract as spawnStratum. PINNED to the Python binary —
+ * STRAT-GUARD is not part of the TS port and ignores the engine flag.
  *
  * @param {string[]} args
  * @param {string}   inputJson
@@ -138,19 +206,13 @@ async function runMutation(args) {
  * @returns {Promise<{ stdout: string, stderr: string, code: number }>}
  */
 function spawnStratumStdin(args, inputJson, timeoutMs) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const proc = _execFile(STRATUM_BIN, args, { timeout: timeoutMs }, (err, out, err2) => {
-      const code = err?.code === 'ETIMEDOUT' ? -1
-        : (typeof err?.code === 'number' ? err.code : 0);
-      resolve({ stdout: out || '', stderr: err2 || '', code });
+      resolve(_spawnResult(STRATUM_BIN, err, out, err2));
     });
-
+    // Same both-paths-settle-identically contract as spawnStratum.
     proc.on('error', (err) => {
-      if (err.code === 'ENOENT') {
-        reject(new Error(`stratum-mcp not found. Install with: pip install stratum-mcp`));
-      } else {
-        reject(err);
-      }
+      resolve(_spawnResult(STRATUM_BIN, err ?? new Error('child process error'), '', ''));
     });
 
     // Feed the JSON kwargs on stdin. The test mock supplies a fake stdin; a
@@ -176,6 +238,10 @@ async function runGuard(action, kwargs, timeoutMs = MUTATION_TIMEOUT_MS) {
 
   if (result.code === -1) {
     return { error: { code: 'TIMEOUT', message: 'stratum-mcp guard timed out', detail: '' } };
+  }
+  if (result.code === -2) {
+    console.error('[stratum-client] guard spawn failure:', result.stderr);
+    return { error: { code: 'SPAWN', message: result.stderr, detail: '' } };
   }
   if (result.code !== 0) {
     console.error('[stratum-client] guard error stderr:', result.stderr);

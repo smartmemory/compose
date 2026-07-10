@@ -195,3 +195,148 @@ test('gateApprove omits --resolved-by when default human', async () => {
   await gateApprove('f1', 's1');
   assert.ok(!m.lastArgs.includes('--resolved-by'), 'must not pass --resolved-by for default human');
 });
+
+// ---------------------------------------------------------------------------
+// Engine selection (COMP-STRATUM-TS): python default, ts flag, guard pinned
+// ---------------------------------------------------------------------------
+
+const { resolveStratumEngine, guardHistory } = await import(`${SERVER_DIR}/stratum-client.js`);
+
+/** Mock that also records which binary was spawned. */
+function makeBinMock(responses) {
+  const base = makeMock(responses);
+  let lastBin = '';
+  function exec(bin, args, opts, callback) {
+    lastBin = bin;
+    return base.exec(bin, args, opts, callback);
+  }
+  return { exec, get lastBin() { return lastBin; }, get lastArgs() { return base.lastArgs; } };
+}
+
+async function withEnv(vars, fn) {
+  const saved = {};
+  for (const [k, v] of Object.entries(vars)) {
+    saved[k] = process.env[k];
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+  try { return await fn(); } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
+
+test('engine defaults to python: queries spawn stratum-mcp', async () => {
+  await withEnv({ COMPOSE_STRATUM_ENGINE: undefined }, async () => {
+    assert.equal(resolveStratumEngine(), 'python');
+    const m = makeBinMock([{ exitCode: 0, stdout: '[]' }]);
+    _testOnly_setExecFile(m.exec);
+    await queryFlows();
+    assert.equal(m.lastBin, 'stratum-mcp');
+  });
+});
+
+test('COMPOSE_STRATUM_ENGINE=ts routes queries and gates to the stratum bin', async () => {
+  await withEnv({ COMPOSE_STRATUM_ENGINE: 'ts', COMPOSE_STRATUM_TS_BIN: undefined }, async () => {
+    assert.equal(resolveStratumEngine(), 'ts');
+    const m = makeBinMock([{ exitCode: 0, stdout: '[]' }, { exitCode: 0, stdout: '{"ok":true}' }]);
+    _testOnly_setExecFile(m.exec);
+    await queryGates();
+    assert.equal(m.lastBin, 'stratum');
+    await gateApprove('f1', 's1');
+    assert.equal(m.lastBin, 'stratum');
+  });
+});
+
+test('COMPOSE_STRATUM_TS_BIN overrides the ts binary path', async () => {
+  await withEnv({ COMPOSE_STRATUM_ENGINE: 'ts', COMPOSE_STRATUM_TS_BIN: '/opt/stratum-ts/bin/stratum' }, async () => {
+    const m = makeBinMock([{ exitCode: 0, stdout: '[]' }]);
+    _testOnly_setExecFile(m.exec);
+    await queryFlows();
+    assert.equal(m.lastBin, '/opt/stratum-ts/bin/stratum');
+  });
+});
+
+test('guard calls stay pinned to python under engine=ts', async () => {
+  await withEnv({ COMPOSE_STRATUM_ENGINE: 'ts' }, async () => {
+    const m = makeBinMock([{ exitCode: 0, stdout: '{"resource_id":"r","current_state":"a","ledger":[]}' }]);
+    _testOnly_setExecFile(m.exec);
+    await guardHistory('r');
+    assert.equal(m.lastBin, 'stratum-mcp');
+  });
+});
+
+test('unknown engine fails loudly, never silently falls back', async () => {
+  await withEnv({ COMPOSE_STRATUM_ENGINE: 'gemini' }, async () => {
+    assert.throws(() => resolveStratumEngine(), /stratumEngine must be "python" or "ts"/);
+    const m = makeBinMock([{ exitCode: 0, stdout: '[]' }]);
+    _testOnly_setExecFile(m.exec);
+    await assert.rejects(() => queryFlows(), /stratumEngine must be/);
+  });
+});
+
+test('spawn failures with string codes surface as SPAWN errors, never PARSE_ERROR', async () => {
+  function eaccesExec(_bin, _args, _opts, callback) {
+    const err = new Error('spawn EACCES');
+    err.code = 'EACCES';
+    callback(err, '', '');
+    return { on: () => {} };
+  }
+  _testOnly_setExecFile(eaccesExec);
+  const query = await queryFlows();
+  assert.equal(query.error.code, 'SPAWN');
+  assert.match(query.error.message, /EACCES/);
+  const mutation = await gateApprove('f1', 's1');
+  assert.equal(mutation.error.code, 'SPAWN');
+  const guard = await guardHistory('r');
+  assert.equal(guard.error.code, 'SPAWN');
+  assert.match(guard.error.message, /pip install stratum-mcp/);
+});
+
+test('capabilities.stratumEngine drives selection and env overrides config', async (t) => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { switchProject, getTargetRoot } = await import(`${SERVER_DIR}/project-root.js`);
+  const original = getTargetRoot();
+  const root = mkdtempSync(join(tmpdir(), 'compose-engine-config-'));
+  mkdirSync(join(root, '.compose'), { recursive: true });
+  writeFileSync(join(root, '.compose', 'compose.json'), JSON.stringify({
+    version: 1, capabilities: { stratum: true, stratumEngine: 'ts' },
+  }));
+  t.after(() => switchProject(original));
+
+  await withEnv({ COMPOSE_STRATUM_ENGINE: undefined }, async () => {
+    switchProject(root);
+    assert.equal(resolveStratumEngine(), 'ts', 'config value selects the engine');
+  });
+  await withEnv({ COMPOSE_STRATUM_ENGINE: 'python' }, async () => {
+    assert.equal(resolveStratumEngine(), 'python', 'env wins over config');
+  });
+});
+
+test('spawn failure via the child error event settles as SPAWN, never an unhandled rejection', async () => {
+  function eventErrorExec(_bin, _args, _opts, _callback) {
+    return { on: (name, handler) => { if (name === 'error') { const err = new Error('spawn ENOENT'); err.code = 'ENOENT'; handler(err); } } };
+  }
+  _testOnly_setExecFile(eventErrorExec);
+  const result = await queryFlows();
+  assert.equal(result.error.code, 'SPAWN');
+  assert.match(result.error.message, /pip install stratum-mcp/);
+});
+
+test('non-spawn string codes are generic failures, not SPAWN remedies', async () => {
+  function maxbufferExec(_bin, _args, _opts, callback) {
+    const err = new Error('stdout maxBuffer length exceeded');
+    err.code = 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
+    callback(err, '', '');
+    return { on: () => {} };
+  }
+  _testOnly_setExecFile(maxbufferExec);
+  const result = await queryFlows();
+  assert.ok(result.error, 'must be an error result');
+  assert.notEqual(result.error.code, 'SPAWN');
+  assert.ok(!/pip install/.test(result.error.message ?? ''), 'must not suggest installing stratum');
+});

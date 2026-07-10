@@ -89,6 +89,7 @@ function _errorStatus(code) {
   switch (code) {
     case 'NOT_FOUND':  return 404;
     case 'TIMEOUT':    return 504;
+    case 'SPAWN':      return 503;
     case 'INVALID':    return 400;
     default:           return 500;
   }

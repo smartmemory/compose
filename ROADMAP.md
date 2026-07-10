@@ -1458,3 +1458,12 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 |---|---------|-------------|--------|
 | 1 | COMP-SMARTMEMORY-INGEST | SmartMemory ingestion behind opt-in flag (default OFF): compose decision events, gate-log, audit traces, journal entries, and feature artifacts → SmartMemory items with origin=cli:compose + per-project workspace_id; backfill from append-only logs; byte-identical degrade when OFF/unreachable. Unparked from forge-top 2026-07-03. | COMPLETE |
 | 2 | COMP-SMARTMEMORY-RECALL | Cockpit recall via SmartMemory (opt-in, default OFF): on feature-folder open, auto-issue activation-based recall and surface ranked prior context (decisions, gates, journal mentions) in a cockpit panel; augments the Attention Queue. Depends on COMP-SMARTMEMORY-INGEST. Unparked from forge-top 2026-07-03. | COMPLETE |
+
+---
+
+## Phase 7: Stratum TS Cutover — IN_PROGRESS
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 1 | COMP-STRATUM-TS | Flag-gated cutover of compose's stratum flow/gate monitor seam to the TS engine (STRAT-TS-PORT P7): engine-selectable stratum-client; guard stays on Python (STRAT-GUARD not ported); agent-authoring cutover deferred to COMP-STRATUM-TS-2 | IN_PROGRESS |
+| 2 | COMP-STRATUM-TS-2 | Post-soak follow-up to COMP-STRATUM-TS: agent-side execution-model cutover to the TS engine — v1 spec authoring, TS stdio MCP server registration in compose init (confronting the stratum-mcp bin-name collision), and default engine flip after the soak week; then PyPI deprecation notes (stratum repo) | PLANNED |

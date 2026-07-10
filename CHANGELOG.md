@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-07-11
+
+### Feature — Flag-gated stratum engine selection: python or TS (COMP-STRATUM-TS)
+
+The flow/gate monitor seam (`server/stratum-client.js`) is now
+engine-selectable — Python `stratum-mcp` (default, unchanged) or the
+STRAT-TS-PORT engine's `stratum` CLI, which emits the same JSON projections
+and exit-code contract (shipped stratum 32a36b4).
+
+- **Selection**: `COMPOSE_STRATUM_ENGINE` env override →
+  `capabilities.stratumEngine` in `.compose/compose.json` → `"python"`.
+  Unknown values throw (startup exits loudly); no silent fallback. TS binary
+  resolves as `stratum` on PATH or `COMPOSE_STRATUM_TS_BIN`.
+- **Guard pinned to Python** — STRAT-GUARD is not part of the TS port;
+  `guard*` calls ignore the engine flag. Agent-side spec authoring cutover is
+  COMP-STRATUM-TS-2 (post-soak).
+- **Startup probe follows the selected engine** (`server/index.js`): under
+  `ts` it probes the TS binary (executable regular file for paths, `which`
+  for names) instead of demanding a Python install — the packaging point of
+  the port.
+- **Spawn failures surfaced honestly**: execFile string codes
+  (ENOENT/EACCES/EPERM/ENOTDIR) from either the callback or the child error
+  event settle to one `{error:{code:'SPAWN'}}` result with a binary-specific
+  remedy (previously masked as `PARSE_ERROR` or a racy throw); non-spawn
+  string codes (maxbuffer) stay generic failures; `SPAWN` → HTTP 503.
+- **Tests**: 9 new stratum-client cases (engine selection incl. real
+  config-file precedence, guard pinning, TS bin override, SPAWN mapping
+  across all three runners, event-path settle, maxbuffer discrimination).
+- **Live-verified** end to end against a real TS-engine flow through the
+  monitor HTTP routes (awaiting_gate → approve → execute_step → 409
+  conflict) — recorded in `docs/features/COMP-STRATUM-TS/design.md`.
+- **Soak**: default stays `python`; flip condition = one clean week of
+  TS-engine use in the forge workspace.
+
 ## 2026-07-10
 
 ### Chore — GPT-5.6 Sol/Terra price rows; corrected stale GPT pricing

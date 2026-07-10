@@ -1,0 +1,16 @@
+{
+  "code": "COMP-STRATUM-TS-2",
+  "description": "Post-soak follow-up to COMP-STRATUM-TS: agent-side execution-model cutover to the TS engine — v1 spec authoring, TS stdio MCP server registration in compose init (confronting the stratum-mcp bin-name collision), and default engine flip after the soak week; then PyPI deprecation notes (stratum repo)",
+  "status": "PLANNED",
+  "phase": "Phase 7: Stratum TS Cutover",
+  "created": "2026-07-10",
+  "updated": "2026-07-10",
+  "complexity": "L",
+  "position": 2,
+  "parent": "COMP-STRATUM-TS",
+  "tags": [
+    "stratum",
+    "cutover"
+  ],
+  "impact": "high"
+}

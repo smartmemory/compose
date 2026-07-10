@@ -3,7 +3,7 @@ import cors from 'cors';
 import http from 'node:http';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { existsSync, statSync, readFileSync } from 'node:fs';
+import { existsSync, statSync, readFileSync, accessSync, constants as fsConstants } from 'node:fs';
 import { FileWatcherServer } from './file-watcher.js';
 import { VisionStore } from './vision-store.js';
 import { VisionServer } from './vision-server.js';
@@ -14,6 +14,7 @@ import { attachWorkspaceRoutes } from './workspace-routes.js';
 import { attachGraphLayoutRoutes } from './graph-layout-routes.js';
 import { createWorkspaceMiddleware } from './workspace-middleware.js';
 import { getTargetRoot, getDataDir, ensureDataDir, loadProjectConfig, resolveProjectPath, switchProject, COMPOSE_HOME } from './project-root.js';
+import { resolveStratumEngine } from './stratum-client.js';
 import { createAuthStore } from './auth-store.js';
 import { createAuthGate, wsUpgradeTokenOk } from './auth-middleware.js';
 import { attachAuthRoutes } from './auth-routes.js';
@@ -37,14 +38,35 @@ if (remoteMode && process.env.COMPOSE_REMOTE_AUTH !== 'enabled') {
   process.exit(1);
 }
 
-// Load project config and verify stratum capability matches reality
+// Load project config and verify stratum capability matches reality.
+// The probe targets the SELECTED engine's binary (COMP-STRATUM-TS): under
+// engine=ts the flow/gate seam runs without any Python install.
 const projectConfig = loadProjectConfig();
 if (projectConfig.capabilities.stratum) {
+  let stratumEngine;
   try {
-    execFileSync('which', ['stratum-mcp'], { stdio: 'ignore' });
+    stratumEngine = resolveStratumEngine();
+  } catch (err) {
+    console.error(`[compose] ${err.message}`);
+    process.exit(1);
+  }
+  const stratumBin = stratumEngine === 'ts'
+    ? (process.env.COMPOSE_STRATUM_TS_BIN || 'stratum')
+    : 'stratum-mcp';
+  try {
+    if (stratumBin.includes('/')) {
+      // A configured path must be an executable regular file — a directory or
+      // mode-644 file would pass a bare stat and fail later at spawn time.
+      if (!statSync(stratumBin).isFile()) throw new Error('not a regular file');
+      accessSync(stratumBin, fsConstants.X_OK);
+    } else {
+      execFileSync('which', [stratumBin], { stdio: 'ignore' });
+    }
   } catch {
-    console.error('[compose] stratum-mcp not found but capabilities.stratum=true');
-    console.error('[compose] Run: compose init (will auto-install) or compose init --no-stratum');
+    console.error(`[compose] ${stratumBin} (engine=${stratumEngine}) not found but capabilities.stratum=true`);
+    console.error(stratumEngine === 'ts'
+      ? '[compose] Install @smartmemory/stratum or set COMPOSE_STRATUM_TS_BIN'
+      : '[compose] Run: compose init (will auto-install) or compose init --no-stratum');
     projectConfig.capabilities.stratum = false;
   }
 }

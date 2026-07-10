@@ -1,0 +1,15 @@
+{
+  "code": "COMP-STRATUM-TS",
+  "description": "Flag-gated cutover of compose's stratum flow/gate monitor seam to the TS engine (STRAT-TS-PORT P7): engine-selectable stratum-client; guard stays on Python (STRAT-GUARD not ported); agent-authoring cutover deferred to COMP-STRATUM-TS-2",
+  "status": "IN_PROGRESS",
+  "phase": "Phase 7: Stratum TS Cutover",
+  "created": "2026-07-10",
+  "updated": "2026-07-10",
+  "complexity": "L",
+  "position": 1,
+  "tags": [
+    "stratum",
+    "cutover"
+  ],
+  "impact": "high"
+}
