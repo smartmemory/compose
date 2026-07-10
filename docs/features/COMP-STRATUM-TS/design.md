@@ -144,6 +144,25 @@ that cannot map are omitted, never fabricated.
       monitor UI calls.
 - [ ] Soak: default stays `python`; flip condition = one week of TS-engine
       use in the forge workspace with no client-visible defects
+      — **Soak STARTED 2026-07-11**, amended mechanism: the forge workspace
+      keeps `python` during v1 (agent-side flows are still Python-engine and
+      the state stores are separate — flipping forge would blind the monitor
+      to real pending gates, which is harm, not soak). Signal instead comes
+      from a daily cron (forge `scripts/stratum-ts-soak.mjs`, 09:31, log at
+      `.compose/data/stratum-ts-soak.log`) that drives compose's REAL
+      `stratum-client` module against the TS engine end to end: seed gated
+      flow → query flows/gates → approve (`execute_step`) → double-approve
+      conflict → post-approve state. Run 1: PASS. Flip condition restated:
+      7 consecutive PASS days (≈2026-07-18), then flip
+      `capabilities.stratumEngine` here and start COMP-STRATUM-TS-2.
+      Environment findings while arming the soak (both carried into TS-2
+      packaging + stratum issue #6): bare `stratum` is shadowed by
+      miniconda's Python stratum-py bin (use absolute
+      COMPOSE_STRATUM_TS_BIN — soak uses a node-22-pinned wrapper
+      `~/bin/stratum-ts`), and the TS bins fail on node >= 26
+      (`--experimental-transform-types` removed; engines `>=22.7` has no
+      cap). compose-lab was NOT flipped: it carries no compose.json, so
+      there is nothing real to soak there.
 - [x] Post-flip follow-ups filed: COMP-STRATUM-TS-2 (execution-model/agent
       authoring cutover to v1 specs + TS stdio server), PyPI deprecation
       notes (stratum repo, after BOTH cutovers)
