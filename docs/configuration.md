@@ -162,7 +162,7 @@ Scaffolded from `templates/ROADMAP.md` with project name, date, and placeholder 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `CLAUDE_MODEL` | `claude-sonnet-4-6` | Default model for ClaudeSDKConnector |
-| `CODEX_MODEL` | `gpt-5.6-sol/high` | Default model for CodexConnector. Canonical source: `stratum/src/stratum/judge/codex_models.py` (see its docstring for how to change this or add a model) |
+| `CODEX_MODEL` | `gpt-5.6-terra/high` | Default model for CodexConnector. Canonical source: `stratum/src/stratum/judge/codex_models.py` (see its docstring for how to change this or add a model) |
 | `COMPOSE_DEBUG` | (unset) | Enable verbose event logging to stderr |
 | `COMPOSE_TARGET` | (unset) | Override project root for `compose start` |
 | `COMPOSE_SERVER_DISPATCH` | unset | Set to `1` to route `parallel_dispatch` steps through Stratum's server-side executor. Covers `isolation: "none"` unconditionally, and `isolation: "worktree"` steps that declare `capture_diff: true` (Compose consumes diffs from poll response and merges them client-side). When the step also declares `defer_advance: true`, Compose reports merge_status back via `stratum_parallel_advance` — client-side merge conflicts surface as `{status: 'complete', output: {merge_status: 'conflict'}}` and Compose sets `buildStatus='failed'` (non-zero CI exit). Worktree steps without `defer_advance` use the legacy throw-on-conflict path. |

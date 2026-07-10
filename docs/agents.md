@@ -30,7 +30,7 @@ Key behaviors:
 
 Spawns the official OpenAI `codex` CLI (`codex exec --json --skip-git-repo-check --sandbox read-only`), locked to OpenAI Codex models. Install via `npm i -g @openai/codex` (or `brew install codex`). Auth via `codex login` (ChatGPT OAuth) or `OPENAI_API_KEY` env var. Reasoning effort is passed via `-c model_reasoning_effort=<effort>` when the model ID carries a `/low|medium|high|xhigh` suffix.
 
-Supported models: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.5`, `gpt-5.4`, `gpt-5.3-codex-spark`, `gpt-5.2-codex`, `gpt-5.1-codex-max`, `gpt-5.1-codex`, `gpt-5.1-codex-mini` (with `/low`, `/medium`, `/high`, `/xhigh` effort suffixes). Default: `gpt-5.6-sol/high` (override via `CODEX_MODEL` env var). Canonical allowlist + default live in `stratum/src/stratum/judge/codex_models.py`.
+Supported models: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.5`, `gpt-5.4`, `gpt-5.3-codex-spark`, `gpt-5.2-codex`, `gpt-5.1-codex-max`, `gpt-5.1-codex`, `gpt-5.1-codex-mini` (with `/low`, `/medium`, `/high`, `/xhigh` effort suffixes). Default: `gpt-5.6-terra/high` (override via `CODEX_MODEL` env var). Canonical allowlist + default live in `stratum/src/stratum/judge/codex_models.py`.
 
 ## OpencodeConnector
 

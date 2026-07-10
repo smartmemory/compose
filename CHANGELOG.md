@@ -9,7 +9,7 @@ Adds `gpt-5.6-sol` ($5/$30 per MTok) and `gpt-5.6-terra` ($2.50/$15) to
 effort-suffixed IDs resolve correctly. Corrects stale rows that had all GPT
 models at o3's $10/$40: gpt-5.5 → $5/$30, gpt-5.4 → $2.50/$15,
 gpt-5.3-codex-spark → $1.75/$14 (verified against published OpenAI pricing,
-2026-07). Docs updated for the new CodexConnector default `gpt-5.6-sol/high`
+2026-07). Docs updated for the new CodexConnector default `gpt-5.6-terra/high`
 (canonical source unchanged: `stratum/src/stratum/judge/codex_models.py`).
 `compose-lab/lib/pricing.py` mirrors the same rows. A monthly cron (forge root
 `scripts/model-pricing-refresh.sh`) now re-verifies models + pricing.
