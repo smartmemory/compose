@@ -9,6 +9,7 @@
 - Upstream design: `/Users/ruze/reg/my/forge/stratum/docs/features/STRAT-TS-PORT/design.md` (P7 section + acceptance record)
 - Compose seam under change: `server/stratum-client.js`, `server/stratum-api.js`, `server/stratum-sync.js`, `server/lifecycle-guard.js`
 - ROADMAP row: COMP-STRATUM-TS (Phase 7: Stratum TS Cutover)
+- Retirement epic: `/Users/ruze/reg/my/forge/stratum/docs/plans/2026-07-11-strat-py-retire-roadmap.md` (STRAT-PY-RETIRE — this cutover is its Phase 0, COMP-STRATUM-TS-2 its Phase 1)
 
 ---
 
