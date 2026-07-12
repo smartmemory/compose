@@ -1,0 +1,16 @@
+{
+  "code": "COMP-AUDIT-9",
+  "description": "Cockpit completion marks the vision item complete (vision-routes.js:505) but without a commit SHA only projects to feature.json in guarded mode \u2014 a cockpit-completed feature can show done in the UI while feature.json/ROADMAP stay stale.",
+  "status": "PLANNED",
+  "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
+  "created": "2026-07-12",
+  "updated": "2026-07-12",
+  "complexity": "M",
+  "position": 9,
+  "tags": [
+    "audit-2026-07",
+    "product-gap",
+    "state-drift"
+  ],
+  "impact": "medium"
+}

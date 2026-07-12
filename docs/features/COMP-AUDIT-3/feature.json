@@ -1,0 +1,17 @@
+{
+  "code": "COMP-AUDIT-3",
+  "description": "Gate surface trust bugs: nav 'GATES' badge counts resolved+pending (shows 9 when 1 is actually pending); the pending gate plus one historical gate render the phase transition as 'null -> null'. Undermines the approval surface the product is built around.",
+  "status": "PLANNED",
+  "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
+  "created": "2026-07-12",
+  "updated": "2026-07-12",
+  "complexity": "S",
+  "position": 3,
+  "tags": [
+    "audit-2026-07",
+    "p0",
+    "trust-bug",
+    "gates"
+  ],
+  "impact": "high"
+}

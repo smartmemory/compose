@@ -1,0 +1,16 @@
+{
+  "code": "COMP-AUDIT-12",
+  "description": "Persisted settings with no runtime effect (models.agentRun, models.summarizer, health.enabled, thinking) and decorative/never-written fields (assignedTo, item-level governance, session commits[], semanticId). Wire each to real behavior or remove so saved config is not a lie.",
+  "status": "PLANNED",
+  "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
+  "created": "2026-07-12",
+  "updated": "2026-07-12",
+  "complexity": "M",
+  "position": 12,
+  "tags": [
+    "audit-2026-07",
+    "product-gap",
+    "dead-config"
+  ],
+  "impact": "medium"
+}

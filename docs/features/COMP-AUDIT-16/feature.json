@@ -1,0 +1,17 @@
+{
+  "code": "COMP-AUDIT-16",
+  "description": "Dead WS protocol: desktop vision handler retains never-emitted branches (decisionEventsSnapshot, visionUI, gatePending); mobile keeps 10 legacy handlers; lifecycleReconciled is emitted but unhandled; desktop interrupt failures are swallowed with no user feedback. Prune the dead branches and surface interrupt errors.",
+  "status": "PLANNED",
+  "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
+  "created": "2026-07-12",
+  "updated": "2026-07-12",
+  "complexity": "S",
+  "position": 16,
+  "tags": [
+    "audit-2026-07",
+    "p2",
+    "cleanup",
+    "event-wiring"
+  ],
+  "impact": "low"
+}

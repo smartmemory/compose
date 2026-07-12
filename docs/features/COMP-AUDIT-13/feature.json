@@ -1,0 +1,15 @@
+{
+  "code": "COMP-AUDIT-13",
+  "description": "docs/cli.md and `compose --help` omit shipped subcommands (plan, gsd, validate, experiment, remote, tracker, items, context, smartmemory) \u2014 installed capability is invisible unless users read source. Regenerate the reference and help from the real command table.",
+  "status": "PLANNED",
+  "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
+  "created": "2026-07-12",
+  "updated": "2026-07-12",
+  "complexity": "S",
+  "position": 13,
+  "tags": [
+    "audit-2026-07",
+    "docs"
+  ],
+  "impact": "medium"
+}

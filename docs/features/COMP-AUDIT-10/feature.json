@@ -1,0 +1,16 @@
+{
+  "code": "COMP-AUDIT-10",
+  "description": "`compose new` (lib/new.js, new.stratum.yaml) still ships alongside `compose plan` despite COMP-ROADMAP-PLAN saying to retire the old kickoff lifecycle \u2014 two goal-to-feature journeys with different artifacts and behavior. Retire or reconcile.",
+  "status": "PLANNED",
+  "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
+  "created": "2026-07-12",
+  "updated": "2026-07-12",
+  "complexity": "M",
+  "position": 10,
+  "tags": [
+    "audit-2026-07",
+    "product-gap",
+    "cleanup"
+  ],
+  "impact": "medium"
+}
