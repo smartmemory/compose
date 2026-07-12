@@ -1,0 +1,15 @@
+{
+  "code": "COMP-AUDIT-14",
+  "description": "docs/mcp.md omits 9 registered MCP tools (set_workspace, get_workspace, get_roadmap, validate_feature, validate_project, roadmap_graph, roadmap_graph_check, roadmap_xref_push, propose_followup) \u2014 MCP clients and agents cannot discover them.",
+  "status": "PLANNED",
+  "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
+  "created": "2026-07-12",
+  "updated": "2026-07-12",
+  "complexity": "S",
+  "position": 14,
+  "tags": [
+    "audit-2026-07",
+    "docs"
+  ],
+  "impact": "medium"
+}

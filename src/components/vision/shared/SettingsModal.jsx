@@ -52,13 +52,25 @@ function getPhasePolicy(settings, phase) {
 
 export default function SettingsModal({ open, onClose, settings, onSettingsChange }) {
   const [savedFlash, setSavedFlash] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const flashTimer = useRef(null);
 
-  const handleToggle = useCallback((phase, value) => {
-    onSettingsChange?.({ governance: { phases: { [phase]: value } } });
+  const handleToggle = useCallback(async (phase, value) => {
+    if (!onSettingsChange) return;
     clearTimeout(flashTimer.current);
-    setSavedFlash(true);
-    flashTimer.current = setTimeout(() => setSavedFlash(false), 1500);
+    setSavedFlash(false);
+    setSaveError(false);
+    try {
+      const result = await onSettingsChange({ governance: { phases: { [phase]: value } } });
+      if (result?.error) {
+        setSaveError(true);
+        return;
+      }
+      setSavedFlash(true);
+      flashTimer.current = setTimeout(() => setSavedFlash(false), 1500);
+    } catch {
+      setSaveError(true);
+    }
   }, [onSettingsChange]);
 
   return (
@@ -69,6 +81,9 @@ export default function SettingsModal({ open, onClose, settings, onSettingsChang
             <DialogTitle>Governance Settings</DialogTitle>
             {savedFlash && (
               <span className="text-[11px] text-emerald-400 font-medium">Saved ✓</span>
+            )}
+            {saveError && (
+              <span className="text-[11px] text-destructive font-medium">Save failed</span>
             )}
           </div>
         </DialogHeader>

@@ -3,7 +3,7 @@ import { ChevronRight, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { LIFECYCLE_PHASE_LABELS, LIFECYCLE_PHASE_ARTIFACTS, GATE_STEP_LABELS } from './constants.js';
+import { LIFECYCLE_PHASE_LABELS, LIFECYCLE_PHASE_ARTIFACTS, gateLabel } from './constants.js';
 import FeatureFocusToggle from '../shared/FeatureFocusToggle.jsx';
 import ArtifactDiff from '../shared/ArtifactDiff.jsx';
 import MarkdownViewer from './shared/MarkdownViewer.jsx';
@@ -148,7 +148,7 @@ function PendingGateRow({ gate, item, priorRevision, isExpanded, expandedAction,
             {item?.title ?? 'Unknown'}
           </button>
           <p className="text-[10px] text-muted-foreground">
-            {GATE_STEP_LABELS[gate.stepId] ?? `${LIFECYCLE_PHASE_LABELS[gate.fromPhase] ?? gate.fromPhase} → ${LIFECYCLE_PHASE_LABELS[gate.toPhase] ?? gate.toPhase}`}
+            {gateLabel(gate)}
           </p>
           <ArtifactAssessment gate={gate} />
           {gate.artifactSnapshot ? (
@@ -308,7 +308,7 @@ function ResolvedGateRow({ gate, item }) {
         </span>
       </div>
       <p className="text-[10px] text-muted-foreground mt-0.5">
-        {GATE_STEP_LABELS[gate.stepId] ?? `${LIFECYCLE_PHASE_LABELS[gate.fromPhase] ?? gate.fromPhase} → ${LIFECYCLE_PHASE_LABELS[gate.toPhase] ?? gate.toPhase}`}
+        {gateLabel(gate)}
       </p>
       {gate.comment && (
         <p className="text-[10px] text-muted-foreground mt-0.5 truncate italic">

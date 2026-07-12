@@ -1,0 +1,17 @@
+{
+  "code": "COMP-AUDIT-15",
+  "description": "~20 uncalled server routes (Canvas subsystem + Canvas.jsx unreachable from App.jsx, 5 lifecycle/artifact routes, feature scan/seed, stratum bind/audit, agent gc/list, duplicate settings/summary reads) plus the legacy vision-track CLI defaulting to port 3001 while the server runs on 4001. Delete or consciously keep before the TS port carries the dead surface forward.",
+  "status": "PLANNED",
+  "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
+  "created": "2026-07-12",
+  "updated": "2026-07-12",
+  "complexity": "M",
+  "position": 15,
+  "tags": [
+    "audit-2026-07",
+    "p2",
+    "cleanup",
+    "dead-surface"
+  ],
+  "impact": "medium"
+}

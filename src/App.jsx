@@ -1110,7 +1110,7 @@ function AppInner() {
               activeTab={activeTab}
               onTabChange={setActiveTab}
               onOpenPalette={() => setPaletteOpen(v => !v)}
-              badges={{ gates: gates.filter(g => !g.resolvedAt).length }}
+              badges={{ gates: gates.filter(g => g.status === 'pending').length }}
             />
           </div>
 

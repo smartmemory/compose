@@ -1,0 +1,16 @@
+{
+  "code": "COMP-AUDIT-11",
+  "description": "Split phase model: VisionStore keeps a legacy phase enum (vision-store.js:13) and the cockpit filters on item.phase (App.jsx:689) while COMP-ROADMAP-MODES promised consolidation on lifecycle.currentPhase \u2014 lifecycle phase and UI filter state can disagree. Collapse during the stratum TS cutover rather than porting both.",
+  "status": "PLANNED",
+  "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
+  "created": "2026-07-12",
+  "updated": "2026-07-12",
+  "complexity": "L",
+  "position": 11,
+  "tags": [
+    "audit-2026-07",
+    "product-gap",
+    "phase-model"
+  ],
+  "impact": "medium"
+}

@@ -35,11 +35,23 @@ export class SettingsStore {
   }
 
   _save() {
+    // AUDIT-2: atomic write (temp + rename) so a partial/failed write can never
+    // truncate the live settings.json — the real file is only ever replaced by an
+    // atomic rename of a fully-written temp file. On failure the live file is left
+    // untouched (last-good), which keeps disk consistent with the in-memory
+    // rollback performed by update()/reset().
+    const tmp = `${this._file}.tmp-${process.pid}`;
     try {
       fs.mkdirSync(path.dirname(this._file), { recursive: true });
-      fs.writeFileSync(this._file, JSON.stringify(this._userSettings, null, 2), 'utf-8');
+      fs.writeFileSync(tmp, JSON.stringify(this._userSettings, null, 2), 'utf-8');
+      fs.renameSync(tmp, this._file);
     } catch (err) {
+      try { fs.rmSync(tmp, { force: true }); } catch { /* ignore cleanup failure */ }
       console.error('[settings] Failed to save settings:', err.message);
+      // Never report a save as successful when it did not reach disk. update()/
+      // reset() roll back in-memory state and rethrow; the routes surface it as an
+      // error response so the modal shows "Save failed" instead of "Saved".
+      throw new Error(`Failed to persist settings: ${err.message}`);
     }
   }
 
@@ -63,6 +75,7 @@ export class SettingsStore {
         gate_threshold: null, // null = off, number = min_score required
         weights: {},          // dimension weight overrides (must sum to 1.0 ± 0.01)
       },
+      governance: { phases: {} },
       // Claude thinking/effort controls. mode='tier' inherits the tier default
       // (critical → adaptive+xhigh, standard → adaptive+high, fast → off).
       // effort=null likewise inherits the tier default.
@@ -93,37 +106,61 @@ export class SettingsStore {
         weights: { ...defaults.health.weights, ...user.health?.weights },
       },
       thinking: { ...defaults.thinking, ...user.thinking },
+      governance: {
+        ...defaults.governance,
+        ...user.governance,
+        phases: { ...defaults.governance.phases, ...user.governance?.phases },
+      },
     };
   }
 
   /** Validate and apply a partial settings update. */
   update(patch) {
     this._validate(patch);
+    // AUDIT-2: transactional apply — if the persist below fails, roll memory
+    // back so the store never reports a failed save while holding the change.
+    const prev = JSON.parse(JSON.stringify(this._userSettings));
     // Deep merge into user settings
-    for (const section of ['policies', 'iterations', 'models', 'ui', 'capabilities', 'health', 'thinking']) {
+    for (const section of ['policies', 'iterations', 'models', 'ui', 'capabilities', 'health', 'thinking', 'governance']) {
       if (patch[section]) {
         if (!this._userSettings[section]) this._userSettings[section] = {};
         if (section === 'iterations') {
           for (const [key, val] of Object.entries(patch.iterations)) {
             this._userSettings.iterations[key] = { ...this._userSettings.iterations[key], ...val };
           }
+        } else if (section === 'governance') {
+          this._userSettings.governance.phases = {
+            ...this._userSettings.governance.phases,
+            ...patch.governance.phases,
+          };
         } else {
           Object.assign(this._userSettings[section], patch[section]);
         }
       }
     }
-    this._save();
+    try {
+      this._save();
+    } catch (err) {
+      this._userSettings = prev;
+      throw err;
+    }
     return this.get();
   }
 
   /** Reset user overrides. If section given, reset only that section. */
   reset(section) {
+    const prev = JSON.parse(JSON.stringify(this._userSettings));
     if (section) {
       delete this._userSettings[section];
     } else {
       this._userSettings = {};
     }
-    this._save();
+    try {
+      this._save();
+    } catch (err) {
+      this._userSettings = prev;
+      throw err;
+    }
     return this.get();
   }
 
@@ -132,7 +169,7 @@ export class SettingsStore {
 
     // Reject unknown top-level keys
     for (const key of Object.keys(patch)) {
-      if (!['policies', 'iterations', 'models', 'ui', 'capabilities', 'health', 'thinking'].includes(key)) {
+      if (!['policies', 'iterations', 'models', 'ui', 'capabilities', 'health', 'thinking', 'governance'].includes(key)) {
         throw new Error(`Unknown settings section: ${key}`);
       }
     }
@@ -141,6 +178,17 @@ export class SettingsStore {
       for (const [phase, mode] of Object.entries(patch.policies)) {
         if (mode !== null && !validModes.has(mode)) {
           throw new Error(`Invalid policy mode for ${phase}: ${mode}`);
+        }
+      }
+    }
+
+    if (patch.governance) {
+      if (!patch.governance.phases || typeof patch.governance.phases !== 'object' || Array.isArray(patch.governance.phases)) {
+        throw new Error('Invalid governance.phases: must be an object');
+      }
+      for (const [phase, mode] of Object.entries(patch.governance.phases)) {
+        if (mode !== null && !validModes.has(mode)) {
+          throw new Error(`Invalid governance policy mode for ${phase}: ${mode}`);
         }
       }
     }

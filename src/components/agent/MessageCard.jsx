@@ -15,6 +15,7 @@ import ToolResultBlock from './ToolResultBlock.jsx';
  *   error             → error banner
  *   tool_progress     → live tool execution ticker (collapsed by default)
  *   stream_event      → skipped (partial streaming events, too noisy)
+ *   build telemetry   → compact labeled stream entries
  */
 
 const TOOL_CATEGORIES = {
@@ -290,6 +291,98 @@ export default function MessageCard({ msg }) {
       <div className="text-[10px] uppercase tracking-wider py-1"
         style={{ color }}>
         build {msg.status} -- {msg.featureCode}
+      </div>
+    );
+  }
+
+  // Build telemetry events
+  if (msg.type === 'system' && msg.subtype === 'step_usage') {
+    const tokens = (msg.input_tokens ?? 0) + (msg.output_tokens ?? 0);
+    return (
+      <div className="text-[10px] py-0.5 flex gap-2 flex-wrap" style={{ color: 'hsl(var(--muted-foreground))' }}>
+        <span className="uppercase tracking-wider">usage</span>
+        <span className="font-mono">{msg.stepId}</span>
+        <span>{tokens.toLocaleString()} tokens · {formatCost(msg.cost_usd)}</span>
+        {msg.model && <span style={{ opacity: 0.6 }}>{msg.model}</span>}
+      </div>
+    );
+  }
+
+  if (msg.type === 'system' && msg.subtype === 'idea_suggestion') {
+    return (
+      <div className="text-[10px] py-0.5" style={{ color: 'hsl(var(--muted-foreground))' }}>
+        <span className="uppercase tracking-wider">idea</span> -- {msg.text}
+      </div>
+    );
+  }
+
+  if (msg.type === 'system' && (msg.subtype === 'gate_tier_result' || msg.subtype === 'gate_tier_failed')) {
+    const passed = msg.subtype === 'gate_tier_result' && msg.passed;
+    const color = passed ? 'hsl(var(--success, 142 60% 50%))' : 'hsl(var(--destructive))';
+    return (
+      <div className="text-[10px] py-0.5" style={{ color }}>
+        tier {msg.tierId} {passed ? 'passed' : 'failed'} -- {msg.stepId}
+        {(msg.details || msg.summary) ? ` · ${msg.details || msg.summary}` : ''}
+      </div>
+    );
+  }
+
+  if (msg.type === 'system' && msg.subtype === 'gate_tier_summary') {
+    const color = msg.passed ? 'hsl(var(--success, 142 60% 50%))' : 'hsl(var(--destructive))';
+    return (
+      <div className="text-[10px] py-0.5" style={{ color }}>
+        gate tiers {msg.passed ? 'passed' : `failed at ${msg.tierThatFailed || 'unknown'}`}
+        {' · '}{(msg.tiersRun || []).length} run
+        {msg.costSaved > 0 ? ` · ${formatCost(msg.costSaved)} saved` : ''}
+      </div>
+    );
+  }
+
+  if (msg.type === 'system' && msg.subtype === 'qa_scope') {
+    return (
+      <div className="text-[10px] py-0.5" style={{ color: 'hsl(var(--muted-foreground))' }}>
+        <span className="uppercase tracking-wider">QA scope</span>
+        {' -- '}{(msg.affectedRoutes || []).length} affected · {(msg.adjacentRoutes || []).length} adjacent · {(msg.unmappedFiles || []).length} unmapped
+        {msg.docsOnly ? ' · docs-only' : ''}
+        {msg.reason ? ` · ${msg.reason}` : ''}
+      </div>
+    );
+  }
+
+  if (msg.type === 'system' && msg.subtype === 'test_review') {
+    const color = msg.clean ? 'hsl(var(--success, 142 60% 50%))' : 'hsl(38 90% 60%)';
+    return (
+      <div className="text-[10px] py-0.5" style={{ color }}>
+        test review {msg.clean ? 'clean' : `${(msg.findings || []).length} finding${(msg.findings || []).length === 1 ? '' : 's'}`}
+        {msg.summary ? ` -- ${msg.summary}` : ''}
+      </div>
+    );
+  }
+
+  if (msg.type === 'system' && msg.subtype === 'health_score') {
+    const color = msg.score >= 80 ? 'hsl(var(--success, 142 60% 50%))' : msg.score >= 60 ? 'hsl(38 90% 60%)' : 'hsl(var(--destructive))';
+    return (
+      <div className="text-[10px] py-0.5" style={{ color }}>
+        health {msg.score}/100{(msg.missing || []).length > 0 ? ` · ${(msg.missing || []).length} signal${msg.missing.length === 1 ? '' : 's'} missing` : ''}
+      </div>
+    );
+  }
+
+  if (msg.type === 'system' && msg.subtype === 'capability_violation') {
+    const color = msg.severity === 'warning' ? 'hsl(38 90% 60%)' : 'hsl(var(--destructive))';
+    return (
+      <div className="text-[10px] py-0.5" style={{ color }}>
+        capability {msg.severity || 'violation'} -- {msg.stepId} · {msg.agent}: {msg.detail}
+      </div>
+    );
+  }
+
+  if (msg.type === 'buildStreamEvent' && msg.event) {
+    return (
+      <div className="text-[10px] py-0.5 flex gap-2 flex-wrap" style={{ color: 'hsl(var(--muted-foreground))' }}>
+        <span className="uppercase tracking-wider">{msg.event.kind}</span>
+        <span className="font-mono">{msg.event.step_id}</span>
+        {msg.event.metadata?.detail && <span>{msg.event.metadata.detail}</span>}
       </div>
     );
   }

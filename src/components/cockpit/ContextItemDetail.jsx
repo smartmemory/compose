@@ -15,6 +15,7 @@ import { useVisionStore } from '../vision/useVisionStore.js';
 import { useShallow } from 'zustand/react/shallow';
 import { useWorkspace } from '../../contexts/WorkspaceContext.jsx';
 import ItemDetailPanel from '../vision/ItemDetailPanel.jsx';
+import ChallengeModal from '../vision/ChallengeModal.jsx';
 import DetailTabs from './DetailTabs.jsx';
 import ContextPipelineDots from '../vision/ContextPipelineDots.jsx';
 import ContextSessionsTable from '../vision/ContextSessionsTable.jsx';
@@ -39,6 +40,7 @@ export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFil
 
   const item = items.find(i => i.id === itemId) || null;
   const [activeDetailTab, setActiveDetailTab] = useState('overview');
+  const [challengeOpen, setChallengeOpen] = useState(false);
 
   // Resolve canonical feature code — lifecycle is the authoritative source
   const featureCode = item?.lifecycle?.featureCode || item?.featureCode || item?.feature_code || '';
@@ -103,9 +105,18 @@ export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFil
               onDeleteConnection={deleteConnection}
               onSelect={onSelect}
               onClose={onClose}
-              onPressureTest={() => {}}
+              onPressureTest={() => setChallengeOpen(true)}
               onResolveGate={resolveGate}
             />
+            {challengeOpen && (
+              <ChallengeModal
+                item={item}
+                items={items}
+                connections={connections}
+                onUpdate={updateItem}
+                onClose={() => setChallengeOpen(false)}
+              />
+            )}
             {/* COMP-UX-1e: View in Graph / View in Tree navigation links */}
             <div
               className="flex items-center gap-3 px-4 py-2 mt-1"

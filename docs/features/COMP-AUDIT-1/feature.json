@@ -1,0 +1,17 @@
+{
+  "code": "COMP-AUDIT-1",
+  "description": "Fix ContractEditor infinite re-render crash: Pipeline Editor → step → Contracts throws \"Maximum update depth exceeded\" (uncached useSyncExternalStore snapshot returns a fresh ref each call). Reproducible 100%; recoverable only via PanelErrorBoundary retry.",
+  "status": "PLANNED",
+  "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
+  "created": "2026-07-12",
+  "updated": "2026-07-12",
+  "complexity": "S",
+  "position": 1,
+  "tags": [
+    "audit-2026-07",
+    "p0",
+    "crash",
+    "ui-wiring"
+  ],
+  "impact": "high"
+}

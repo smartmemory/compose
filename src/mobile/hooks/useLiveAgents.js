@@ -60,9 +60,8 @@ export function useLiveAgents() {
           // Refetch on agent-tree-affecting events
           if (
             msg.type === 'agentSpawned' ||
-            msg.type === 'agentStopped' ||
-            msg.type === 'agentStatusChanged' ||
-            msg.type === 'agentTreeUpdated'
+            msg.type === 'agentComplete' ||
+            msg.type === 'agentKilled'
           ) {
             refetch();
           }

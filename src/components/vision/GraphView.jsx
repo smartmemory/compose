@@ -8,6 +8,7 @@ import { useIdeaboxStore } from './useIdeaboxStore.js';
 import { wsFetch } from '../../lib/wsFetch.js';
 import { notify } from '../cockpit/NotificationBar.jsx';
 import { withComposeToken } from '../../lib/compose-api.js';
+import { useConfirmWithReason } from '../ui/DialogProvider.jsx';
 
 try { cytoscape.use(cytoscapeDagre); } catch (e) { /* already registered */ }
 try { cytoscape.use(cytoscapeFcose); } catch (e) { /* already registered */ }
@@ -521,6 +522,7 @@ function BuildBadge({ badge, onClick }) {
 }
 
 function GatePopover({ featureCode, gates, items, badgePositions, onResolve, onClose }) {
+  const confirmWithReason = useConfirmWithReason();
   const badge = badgePositions.find(b => b.featureCode === featureCode);
   if (!badge) return null;
   const item = items.find(i => i.lifecycle?.featureCode === featureCode || i.featureCode === featureCode || i.title === featureCode);
@@ -543,7 +545,10 @@ function GatePopover({ featureCode, gates, items, badgePositions, onResolve, onC
         <div style={{ display: 'flex', gap: 4 }}>
           <button onClick={() => onResolve(gate.id, 'approve')} style={{ flex: 1, padding: '4px 0', fontSize: 10, fontWeight: 600, borderRadius: 4, background: '#22c55e20', color: '#22c55e', border: '1px solid #22c55e40', cursor: 'pointer' }}>Approve</button>
           <button onClick={() => onResolve(gate.id, 'revise')} style={{ flex: 1, padding: '4px 0', fontSize: 10, fontWeight: 600, borderRadius: 4, background: '#f59e0b20', color: '#f59e0b', border: '1px solid #f59e0b40', cursor: 'pointer' }}>Revise</button>
-          <button onClick={() => onResolve(gate.id, 'kill')} style={{ flex: 1, padding: '4px 0', fontSize: 10, fontWeight: 600, borderRadius: 4, background: '#ef444420', color: '#ef4444', border: '1px solid #ef444440', cursor: 'pointer' }}>Kill</button>
+          <button onClick={async () => {
+            const reason = await confirmWithReason({ title: 'Kill this gate?', label: 'Reason (required)', destructive: true });
+            if (reason) onResolve(gate.id, 'kill', reason);
+          }} style={{ flex: 1, padding: '4px 0', fontSize: 10, fontWeight: 600, borderRadius: 4, background: '#ef444420', color: '#ef4444', border: '1px solid #ef444440', cursor: 'pointer' }}>Kill</button>
         </div>
       </div>
     </>
@@ -1174,8 +1179,8 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
             gates={gates}
             items={items}
             badgePositions={badgePositions}
-            onResolve={(gateId, outcome) => {
-              if (resolveGate) resolveGate(gateId, outcome);
+            onResolve={(gateId, outcome, comment) => {
+              if (resolveGate) resolveGate(gateId, outcome, comment);
               setGatePopoverNodeId(null);
             }}
             onClose={() => setGatePopoverNodeId(null)}

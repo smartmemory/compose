@@ -29,20 +29,53 @@ function RouteList({ testid, label, routes, empty }) {
 }
 
 export default function QaScopeView({ featureCode }) {
+  const [activeFeatureCode, setActiveFeatureCode] = useState(null);
+  const [resolvingBuild, setResolvingBuild] = useState(!featureCode);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const reqIdRef = useRef(0);
+  const scopeFeatureCode = featureCode || activeFeatureCode;
+
+  // A QA Scope view can be opened without selecting a roadmap item. Resolve
+  // the active build so the existing read-only route still has a feature code.
+  useEffect(() => {
+    if (featureCode) {
+      setActiveFeatureCode(null);
+      setResolvingBuild(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setResolvingBuild(true);
+    const timer = setTimeout(() => {
+      Promise.resolve(wsFetch('/api/build/state'))
+        .then(r => r?.json?.())
+        .then(json => {
+          if (!cancelled) setActiveFeatureCode(json?.state?.featureCode || null);
+        })
+        .catch(() => {
+          if (!cancelled) setActiveFeatureCode(null);
+        })
+        .finally(() => {
+          if (!cancelled) setResolvingBuild(false);
+        });
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [featureCode]);
 
   const fetchScope = useCallback(async () => {
-    if (!featureCode) return;
+    if (!scopeFeatureCode) return;
     // Monotonic request token: ignore any response that is not the latest
     // in-flight request, so a slow older fetch (e.g. a feature switch overlapping
     // an in-flight load) can't overwrite newer state with stale data.
     const myId = ++reqIdRef.current;
     setLoading(true);
     try {
-      const r = await wsFetch(`/api/qa-scope?featureCode=${encodeURIComponent(featureCode)}`);
+      const r = await wsFetch(`/api/qa-scope?featureCode=${encodeURIComponent(scopeFeatureCode)}`);
       const json = await r.json();
       if (myId !== reqIdRef.current) return;
       setData(json);
@@ -54,20 +87,20 @@ export default function QaScopeView({ featureCode }) {
     } finally {
       if (myId === reqIdRef.current) setLoading(false);
     }
-  }, [featureCode]);
+  }, [scopeFeatureCode]);
 
   // Clear stale scope when the active feature changes so the old payload does
   // not keep rendering under the new feature's header while its fetch is in
   // flight. Keyed on featureCode (not fetchScope) so a manual ↻ refresh does
   // not blank the panel.
-  useEffect(() => { setData(null); setError(null); }, [featureCode]);
+  useEffect(() => { setData(null); setError(null); }, [scopeFeatureCode]);
 
   useEffect(() => { fetchScope(); }, [fetchScope]);
 
-  if (!featureCode) {
+  if (!scopeFeatureCode) {
     return (
       <div data-testid="qa-scope-empty" className="flex-1 flex items-center justify-center text-[12px] text-muted-foreground italic">
-        Select a feature to see its QA scope.
+        {resolvingBuild ? 'Finding active build…' : 'No active build. Select a feature to see its QA scope.'}
       </div>
     );
   }
@@ -75,7 +108,7 @@ export default function QaScopeView({ featureCode }) {
   return (
     <div data-testid="qa-scope-view" className="flex-1 overflow-auto p-4 text-foreground">
       <div className="flex items-center justify-between gap-2 mb-3">
-        <h2 className="text-sm font-semibold">QA Scope · <span className="font-mono">{featureCode}</span></h2>
+        <h2 className="text-sm font-semibold">QA Scope · <span className="font-mono">{scopeFeatureCode}</span></h2>
         <button
           data-testid="qa-scope-refresh"
           className="text-[11px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
@@ -92,7 +125,7 @@ export default function QaScopeView({ featureCode }) {
 
       {data && data.found === false && (
         <div data-testid="qa-scope-not-found" className="text-muted-foreground text-[12px]">
-          No feature found for <span className="font-mono">{featureCode}</span>.
+          No feature found for <span className="font-mono">{scopeFeatureCode}</span>.
         </div>
       )}
 
@@ -104,7 +137,7 @@ export default function QaScopeView({ featureCode }) {
 
       {data && data.found && !data.error && data.emptyDiff && (
         <div data-testid="qa-scope-empty-diff" className="text-muted-foreground text-[12px]">
-          No filesChanged recorded for {featureCode}. Run a build first so the pipeline tracks touched files.
+          No filesChanged recorded for {scopeFeatureCode}. Run a build first so the pipeline tracks touched files.
         </div>
       )}
 

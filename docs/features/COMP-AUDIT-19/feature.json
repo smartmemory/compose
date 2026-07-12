@@ -1,0 +1,18 @@
+{
+  "code": "COMP-AUDIT-19",
+  "description": "Roadmap-writer MCP tools return the full rendered ROADMAP (~190KB) in the tool result, exceeding the MCP token cap on EVERY call \u2014 add_roadmap_entry blew 193,821 chars while filing COMP-AUDIT-1 this session; per reference notes set_feature_status/propose_followup/roadmap generate|status likely do too. addRoadmapEntry's declared return is small ({code, roadmap_path:<path string>} \u2014 writeRoadmap returns a path, not content), so the full markdown is injected somewhere in the MCP result path (compose-mcp.js dispatch / result wrapper). The blessed 'use this instead of editing ROADMAP.md by hand' surface is thus unusable at any batch scale and forces direct feature.json + `roadmap generate` workarounds (used for AUDIT-1..18). Fix: writers return only {code, roadmap_path, row} (never full markdown; cap any preview) and emit a small success signal so callers can tell success from a serialization overflow. Secondary: the roundtrip guard runs BEFORE the feature.json write, so concurrent fan-out can drop a feature \u2014 document as sequential-only or make write+guard atomic. Complements COMP-ROADMAP-SHARD (that shrinks the FILE; this shrinks the TOOL RETURN).",
+  "status": "PLANNED",
+  "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
+  "created": "2026-07-12",
+  "updated": "2026-07-12",
+  "complexity": "S",
+  "position": 19,
+  "tags": [
+    "audit-2026-07",
+    "p1",
+    "mcp",
+    "dx",
+    "dogfood"
+  ],
+  "impact": "high"
+}

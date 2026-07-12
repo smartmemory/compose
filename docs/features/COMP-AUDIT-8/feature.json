@@ -1,0 +1,16 @@
+{
+  "code": "COMP-AUDIT-8",
+  "description": "Empty-cockpit 'create your first feature' CTA opens the generic vision-item dialog (App.jsx:933), not the scaffold flow (NewFeatureDialog.jsx) \u2014 the created 'feature' has no feature.json/design/ROADMAP entry and cannot enter `compose build`. Contradicts COMP-COCKPIT-5 (COMPLETE). Worst flow to have broken: it is the first one a new user touches.",
+  "status": "PLANNED",
+  "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
+  "created": "2026-07-12",
+  "updated": "2026-07-12",
+  "complexity": "M",
+  "position": 8,
+  "tags": [
+    "audit-2026-07",
+    "product-gap",
+    "first-run"
+  ],
+  "impact": "high"
+}

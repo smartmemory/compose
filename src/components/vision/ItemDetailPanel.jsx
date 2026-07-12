@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Separator } from '@/components/ui/separator.jsx';
 import { ScrollArea } from '@/components/ui/scroll-area.jsx';
-import { TYPE_COLORS, STATUS_COLORS, PHASES, PHASE_LABELS, STATUSES, CONFIDENCE_LABELS, LIFECYCLE_PHASE_LABELS, LIFECYCLE_PHASE_ARTIFACTS, GATE_STEP_LABELS } from './constants.js';
+import { TYPE_COLORS, STATUS_COLORS, PHASES, PHASE_LABELS, STATUSES, CONFIDENCE_LABELS, LIFECYCLE_PHASE_LABELS, LIFECYCLE_PHASE_ARTIFACTS, gateLabel } from './constants.js';
 import ConnectionGraph from './ConnectionGraph.jsx';
 import ConfidenceBar from './shared/ConfidenceBar.jsx';
 import CompletionBadge from './shared/CompletionBadge.jsx';
@@ -609,7 +609,7 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
                           <EntityLink
                             kind="gate"
                             id={gate.id}
-                            label={GATE_STEP_LABELS[gate.stepId] ?? `${LIFECYCLE_PHASE_LABELS[gate.fromPhase] ?? gate.fromPhase} → ${LIFECYCLE_PHASE_LABELS[gate.toPhase] ?? gate.toPhase}`}
+                            label={gateLabel(gate)}
                             className="text-[10px]"
                           />
                         </p>
@@ -642,7 +642,7 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
                     return (
                       <div key={gate.id} className="flex items-center gap-2 px-2 py-1 rounded bg-muted/30">
                         <span className="text-[10px] text-muted-foreground">
-                          {GATE_STEP_LABELS[gate.stepId] ?? `${LIFECYCLE_PHASE_LABELS[gate.fromPhase] ?? gate.fromPhase} → ${LIFECYCLE_PHASE_LABELS[gate.toPhase] ?? gate.toPhase}`}
+                          {gateLabel(gate)}
                         </span>
                         <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0 h-4 ml-auto', outcomeColors[gate.outcome] || '')}>
                           {gate.outcome}

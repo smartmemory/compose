@@ -1,0 +1,17 @@
+{
+  "code": "COMP-AUDIT-2",
+  "description": "Governance Settings modal fake-saves: SettingsModal.jsx writes settings.governance.phases but settings-store.js:134 rejects `governance` as an unknown top-level key, and the modal flashes 'Saved' without awaiting the result. Governance toggles never persist.",
+  "status": "PLANNED",
+  "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
+  "created": "2026-07-12",
+  "updated": "2026-07-12",
+  "complexity": "S",
+  "position": 2,
+  "tags": [
+    "audit-2026-07",
+    "p0",
+    "trust-bug",
+    "settings"
+  ],
+  "impact": "high"
+}
