@@ -16,6 +16,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { Plus, X, Lock } from 'lucide-react';
+import { useShallow } from 'zustand/shallow';
 import { cn } from '@/lib/utils.js';
 import { useVisionStore } from './useVisionStore.js';
 
@@ -160,14 +161,14 @@ export default function ContractEditor() {
   const readOnly = useVisionStore(s => s.editorReadOnly);
   const editorErrors = useVisionStore(s => s.editorErrors);
   // Pull the contract actions once; pass them down (avoids many selector calls).
-  const store = useVisionStore(s => ({
+  const store = useVisionStore(useShallow(s => ({
     addContract: s.addContract,
     renameContract: s.renameContract,
     deleteContract: s.deleteContract,
     setContractField: s.setContractField,
     removeContractField: s.removeContractField,
     renameContractField: s.renameContractField,
-  }));
+  })));
 
   const [newName, setNewName] = useState('');
 

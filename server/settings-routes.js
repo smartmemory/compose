@@ -27,9 +27,16 @@ export function attachSettingsRoutes(app, { settingsStore, broadcastMessage }) {
   });
 
   app.post('/api/settings/reset', (req, res) => {
-    const section = req.body?.section || undefined;
-    const updated = settingsStore.reset(section);
-    broadcastMessage({ type: 'settingsUpdated', settings: updated });
-    res.json(updated);
+    try {
+      const section = req.body?.section || undefined;
+      const updated = settingsStore.reset(section);
+      broadcastMessage({ type: 'settingsUpdated', settings: updated });
+      res.json(updated);
+    } catch (err) {
+      // AUDIT-2: reset() can now throw if the write fails; surface it as JSON
+      // {error} (mirrors PATCH) so the client sees a failure instead of an
+      // unhandled 500 that apiCall's res.json() cannot parse.
+      res.status(500).json({ error: err.message });
+    }
   });
 }

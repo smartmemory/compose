@@ -1,5 +1,52 @@
 # Changelog
 
+## 2026-07-12
+
+### Fix — COMP-AUDIT P0 wave: cockpit trust bugs, dead telemetry, roadmap-writer return
+
+Eight fixes from the 2026-07-12 cockpit audit (COMP-AUDIT-1..7, -19), on branch
+`fix/audit-p0-wave` (based on `main`, independent of the stratum TS cutover):
+
+- **COMP-AUDIT-1** — ContractEditor infinite re-render crash: the contract-actions
+  selector returned a fresh object every render (uncached `useSyncExternalStore`
+  snapshot). Wrapped in `useShallow`. Pipeline Editor → step → Contracts no longer
+  crashes with "Maximum update depth exceeded".
+- **COMP-AUDIT-2** — Governance settings fake-save: `settings-store` rejected
+  `governance` as an unknown section while the modal flashed "Saved". Governance is
+  now an accepted, validated, persisted section, and the modal only shows "Saved" on
+  a real success ("Save failed" otherwise). Persistence hardened: `_save()` is an
+  atomic temp-file write + rename that throws on failure; `update()`/`reset()`
+  snapshot and roll back in-memory state if the write fails; the reset route surfaces
+  failures as JSON `{error}`.
+- **COMP-AUDIT-3** — Gate surface: the nav GATES badge counted resolved gates too
+  (showed 9 for 1 pending) — now counts only `status === 'pending'`; gates with a null
+  from/to phase rendered "null → null" — now use `gateLabel()` for a sensible fallback
+  (Gates view + item detail panel).
+- **COMP-AUDIT-4** — "Pressure Test" button was a no-op; now opens the existing
+  ChallengeModal.
+- **COMP-AUDIT-5** — Mobile agent list never cleared finished/killed agents (listened
+  for never-emitted event names); now refetches on the real `agentComplete` /
+  `agentKilled` events.
+- **COMP-AUDIT-6** — Graph gate-popover Kill resolved with no reason in one click; the
+  Graph popover now prompts for a required reason (recorded as the gate comment),
+  consistent with the other cockpit kill surfaces. The server contract is unchanged —
+  commentless programmatic/autonomous kills remain valid (the gate-log golden test
+  relies on it), so this is a client-side UX fix only.
+- **COMP-AUDIT-7** — Ten build-stream events (`qa_scope`, `gate_tier_*`,
+  `health_score`, `capability_violation`, `step_usage`, `test_review`,
+  `idea_suggestion`, `build_stream_event`) were produced by the bridge but dropped by
+  the desktop renderer; `MessageCard` now renders them, and the QA Scope view resolves
+  the active build's feature code instead of a permanent placeholder.
+- **COMP-AUDIT-19** — Roadmap-writer MCP tools returned the full ~190KB ROADMAP
+  (`roundtripGuard` returned `rt.canonical`, embedded as `roundtrip` in the writer
+  result), blowing the token cap. The guard now returns only small diagnostic fields
+  and `maybeIdempotent` re-sanitizes cache-hit results, so no writer path (fresh or
+  replayed idempotency key) returns the full markdown.
+
+Codex-written, Opus-reviewed. Independent Codex review (3 adjudication rounds) drove
+the settings-persistence hardening; one `fsync`-durability finding was deliberately
+declined as disproportionate for a config file.
+
 ## 2026-07-11
 
 ### Feature — Flag-gated stratum engine selection: python or TS (COMP-STRATUM-TS)
