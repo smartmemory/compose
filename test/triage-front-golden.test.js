@@ -4,6 +4,9 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { applyFrontTriage } from '../lib/lane-gate.js';
 
 function fakeProvider(initial = null) {
@@ -68,5 +71,56 @@ describe('COMP-TRIAGE-5 front-seam golden', () => {
     await applyFrontTriage({ featureCode: 'BAZ-1', request: 'add a flag to src/x.js', provider, cachedFeature: existing });
     const saved = provider._get();
     assert.ok(!/^[0-4]$/.test(String(saved.complexity)), `complexity must not be a bare tier string, got "${saved.complexity}"`);
+  });
+});
+
+describe('COMP-TRIAGE-5 refinement (narrow-only, doc-gated)', () => {
+  test('narrows a clamped lane when docs confirm smaller scope → estimateSource=refined', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'triage-ref-'));
+    try {
+      const featuresDir = join(root, 'docs', 'features');
+      const fdir = join(featuresDir, 'REF-1');
+      mkdirSync(fdir, { recursive: true });
+      // A design doc with NO file references → runTriage sees tier 0 → 'trivial'.
+      writeFileSync(join(fdir, 'design.md'), '# Design\nA tiny, well-understood change. No file references here.\n');
+      const provider = fakeProvider({ code: 'REF-1', status: 'PLANNED', description: 'improve the thing' });
+      // Vague request → front clamps to standard; docs confirm trivial → narrow.
+      const front = await applyFrontTriage({
+        featureCode: 'REF-1',
+        request: 'improve the thing',
+        provider,
+        cachedFeature: provider._get(),
+        cwd: root,
+        featuresDir,
+      });
+      assert.equal(front.lane, 'trivial');
+      assert.equal(provider._get().estimateSource, 'refined');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('never widens: docs showing MORE scope do not raise the front lane', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'triage-ref-'));
+    try {
+      const featuresDir = join(root, 'docs', 'features');
+      const fdir = join(featuresDir, 'REF-2');
+      mkdirSync(fdir, { recursive: true });
+      writeFileSync(join(fdir, 'design.md'), '# Design\nTouches src/a.js src/b.js src/c.js lib/core.js server/x.js and more.\n');
+      const provider = fakeProvider({ code: 'REF-2', status: 'PLANNED', description: 'fix typo in src/utils/format.js' });
+      // Clean one-line request → front trivial; docs say bigger → must NOT widen.
+      const front = await applyFrontTriage({
+        featureCode: 'REF-2',
+        request: 'fix typo in src/utils/format.js',
+        provider,
+        cachedFeature: provider._get(),
+        cwd: root,
+        featuresDir,
+      });
+      assert.equal(front.lane, 'trivial');
+      assert.equal(provider._get().estimateSource, 'front');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
