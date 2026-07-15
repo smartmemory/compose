@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-07-15
+
+### Feat — Phase-1 Stratum epoch fencing on the TS path (STRAT-PY-RETIRE)
+
+Every `stepDone` on the live TS-native build path now echoes the engine-issued
+ready-entry `epoch` (`StratumMcpClient.stepDone` 4th arg → wire `epoch` key,
+stratum surface 7), so a stale report after a gate revise is rejected by the
+engine instead of silently satisfying post-revision readiness. build.js threads
+`readyStep?.epoch` at both live call sites (generic dispatch + ship
+interception). Golden: `test/ts-cutover-epoch-echo-golden.test.js` — a full
+runBuild revise round records echoes work@0 → work@1 → finish@1 (revise bumps
+every descendant's epoch), and compose's own client against the real TS bin
+proves stale-epoch rejection on the wire. Unported Python-era call sites
+(subflow/parallel/GSD/new.js) are deliberately not threaded — they receive
+per-issuance dispatchToken fencing when ported (STRAT-TS-FANOUT-CONSUMER
+Phase 2).
+
 ## 2026-07-12
 
 ### Fix — COMP-AUDIT P0 wave: cockpit trust bugs, dead telemetry, roadmap-writer return
