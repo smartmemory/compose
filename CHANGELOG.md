@@ -2,6 +2,13 @@
 
 ## 2026-07-15
 
+### Change — report.md is optional: MISSING_COMPLETION_REPORT downgraded warning → info
+
+The report phase is skippable by design (small features legitimately never write a
+`report.md`), so a missing report is no longer a validation *warning* — it is now
+`info` level (`lib/feature-validator.js`). Pre-push and validate no longer surface it
+in the warning tally. The `--quick` exemption (no finding at all) is unchanged.
+
 ### Feature — COMP-TRIAGE-5: front-of-pipeline scope estimation + verification-gated escalation (E3)
 
 Moves the complexity estimate (COMP-TRIAGE-1/3) to the **front** of the build and adds
