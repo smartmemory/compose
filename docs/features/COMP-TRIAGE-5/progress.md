@@ -19,7 +19,17 @@ Recovery map: this file + `git log` in `/Users/ruze/reg/my/forge/compose`.
 | 4 Blueprint | DONE | blueprint.md; corrections table + boundary map (validates clean) |
 | 5 Blueprint Verification | DONE | all anchors verified vs real code; boundary-map validator ok:true, 0 violations |
 | 6 Plan | DONE | plan.md — 4 TDD slices S01–S04 |
-| 7 Execute (TDD+E2E+review+sweep) | IN_PROGRESS | S01-S04 done, full suite 4490/4490; E2E via proof-run; codex review next |
+| 7 Execute (TDD+E2E+review+sweep) | DONE | S01-S04; full suite 4494/4494; E2E via proof-run; Codex 4 rounds → REVIEW CLEAN |
+| 8 Report | IN_PROGRESS | |
+| 9 Docs | PENDING | CHANGELOG + ROADMAP status |
+| 10 Ship | PENDING | |
+
+## Codex review — converged after 4 rounds (each caught real defects)
+
+- R1: P1-c CLI description, P2-a full-profile-on-standard, P2-b staleness — fixed.
+- R2: escalation still staled by audit.json (honor estimateSource==='escalated' in cache-read), checkpoint path relative — fixed.
+- R3: refinement pass unwired (narrowerLane no caller) — wired doc-gated narrow-only refinement.
+- R4: REVIEW CLEAN.
 
 ## S01-S04 landed
 

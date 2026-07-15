@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-07-15
+
+### Feature — COMP-TRIAGE-5: front-of-pipeline scope estimation + verification-gated escalation (E3)
+
+Moves the complexity estimate (COMP-TRIAGE-1/3) to the **front** of the build and adds
+a bounded escalation net, implementing the E3 (Estimate → Execute → Expand) model.
+Previously triage read the already-written design/plan/blueprint docs to decide which
+phases to skip — so the pipeline paid for the design audit before learning it wasn't
+needed. Now the lane is estimated from the **raw request** before any doc is read.
+
+- **Estimate (front seam).** `estimateScope(request, repoSignals)` (`lib/triage.js`) derives
+  `{tier, profile, lane, confidence}` doc-free. Low confidence (no named paths, no clear
+  verb) clamps up to at least `standard` — under-scoping is the only dangerous error.
+  Wired into `runBuild` before spec load (`lib/lane-gate.js` `applyFrontTriage`).
+- **Execute.** The lane drives the existing per-phase `profile` (`needs_prd`/`architecture`/
+  `verification`/`report`), so it is finer than the manual `--quick` flag and chosen
+  automatically. `--quick`/`--skip-triage`/`--template` remain as manual overrides.
+- **Expand.** On a failed ship-time test gate, `maybeEscalateLane` escalates the lane one
+  rung (bounded at 2 → human handoff), widens the profile, and writes a resume checkpoint
+  the next build honors (`lib/escalation.js`).
+- **Refinement (narrow-only).** Once design/plan/blueprint exist, a doc-reading pass may
+  only *narrow* the front lane, never widen it.
+- **Fixes** the `complexity: String(tier)` bypass: `triageTier` (0–4) is a distinct field,
+  and `complexity` is written as `{S,M,L,XL}` through the shared `validateFeatureFields`
+  guard (`lib/feature-writer.js`). New feature.json fields: `lane`, `triageTier`,
+  `estimateSource`.
+
+v1 boundaries (follow-ups): automatic in-build re-entry, review-gate escalation, and the
+ACRR audit metric are deferred; the advisory ship-time test gate is pre-existing behavior.
+
 ## 2026-07-12
 
 ### Fix — COMP-AUDIT P0 wave: cockpit trust bugs, dead telemetry, roadmap-writer return
