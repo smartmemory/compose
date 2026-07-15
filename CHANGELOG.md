@@ -2,6 +2,17 @@
 
 ## 2026-07-15
 
+### Chore — trim session rules to the ones that still earn their load
+
+Retired three `.claude/rules/`: `breadcrumbs.md` (write-only log nothing ever
+read — recovery now lives in epic ledgers, flush docs, and small commits),
+`compose-loop.md` (blanket "3+ files → delegate" superseded by the global
+subagent-routing rules and contradicted by actual practice), and
+`incremental-builds.md` (its premise — the developer terminal running inside
+the app — died with the embedded xterm; no pty dependency remains).
+`journaling.md` demoted from every-code-session to milestone sessions only;
+CHANGELOG + ledgers carry the routine record.
+
 ### Feat — Phase-1 Stratum epoch fencing on the TS path (STRAT-PY-RETIRE)
 
 Every `stepDone` on the live TS-native build path now echoes the engine-issued

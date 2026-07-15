@@ -1,10 +1,20 @@
 # Journaling Rule
 
-Compose's developer journal (`docs/journal/`) tells the story of how Compose was built from beginning to end. Every session contributes a chapter.
+Compose's developer journal (`docs/journal/`) tells the story of how Compose was built. Milestone sessions contribute a chapter.
+
+**DEMOTED (2026-07-15):** every-code-session → milestone sessions only. The routine working record lives in CHANGELOG.md, epic ledgers (`docs/plans/*-progress.md`), and git history; the journal is the curated narrative layer on top.
 
 ## When to journal
 
-After every session that produces code changes, doc updates, or significant decisions — before the session ends:
+Journal only on milestone sessions — before the session ends:
+
+- A feature, epic phase, or migration slice reaches COMPLETE (or is killed/superseded)
+- A decision-heavy session: an adjudication, reversal, or architecture decision future sessions must not re-litigate
+- A session whose lessons would otherwise be lost — a novel failure mode, a postmortem-worthy debugging arc, a wrong turn worth remembering
+
+Routine code sessions do NOT journal. If a session is borderline, fold its story into the next milestone entry instead of writing a thin chapter now.
+
+When journaling:
 
 1. **Write or update a journal entry** in `docs/journal/YYYY-MM-DD-session-N-<slug>.md`
 2. **Update the journal index** in `docs/journal/README.md` with the new entry
@@ -31,4 +41,4 @@ Sessions are numbered **globally and monotonically** across the entire journal �
 
 ## Why this matters
 
-This journal is both the story of Compose and a test case for what Compose will automate. Every entry is raw material for conversation distillation. Write entries that a future version of Compose could learn to generate from session transcripts.
+The journal is both the story of Compose and a distillation corpus — entries a future version of Compose could learn to generate from session transcripts. Milestone entries keep that corpus high-signal: the chapters worth learning from are the ones with a real arc, not routine status.
