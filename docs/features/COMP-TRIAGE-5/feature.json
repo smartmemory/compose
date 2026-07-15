@@ -1,0 +1,17 @@
+{
+  "code": "COMP-TRIAGE-5",
+  "description": "Front-of-pipeline scope estimation + verification-gated escalation (E3): estimate tier/profile from the raw request before design, and auto-escalate the lane when a downstream gate fails.",
+  "status": "IN_PROGRESS",
+  "phase": "COMP-TRIAGE: Task Tier Classification",
+  "created": "2026-07-15",
+  "updated": "2026-07-15",
+  "complexity": "L",
+  "position": 186,
+  "tags": [
+    "e3",
+    "triage",
+    "front-seam",
+    "escalation"
+  ],
+  "impact": "medium"
+}

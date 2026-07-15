@@ -708,6 +708,7 @@ Inspired by [Hub3r7/claude-code-orchestration-template](https://github.com/Hub3r
 | 183 | COMP-TRIAGE-2 | `compose triage` CLI command: standalone command prints tier, profile flags, signal counts, rationale. Persists to feature.json. | COMPLETE |
 | 184 | COMP-TRIAGE-3 | Build integration: `compose build` runs triage before `stratum_plan()`. Profile toggles `skip_if` on existing pipeline steps — no new templates needed. `--skip-triage` and `--template` flags. Cache invalidation via mtime comparison. Creates feature.json if missing. | COMPLETE |
 | 185 | COMP-TRIAGE-4 | Tier history: deferred — triage results persist in feature.json per feature. Cross-feature history log is a one-liner addition when needed. | PARKED |
+| 186 | COMP-TRIAGE-5 | Front-of-pipeline scope estimation + verification-gated escalation (E3): estimate tier/profile from the raw request before design, and auto-escalate the lane when a downstream gate fails. | IN_PROGRESS |
 
 **Dependencies:** None — standalone, enhances `compose build` entry point.
 
