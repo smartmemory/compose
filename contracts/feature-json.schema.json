@@ -29,6 +29,22 @@
       ],
       "description": "S/M/L/XL on new files; numeric on legacy files (e.g. COMP-DEBUG-1). Convergence deferred to COMP-MCP-VALIDATE-SCHEMA-TIGHTEN."
     },
+    "lane": {
+      "type": "string",
+      "enum": ["trivial", "standard", "complex"],
+      "description": "COMP-TRIAGE-5: front-of-pipeline scope-estimation lane. Drives which build phases are skipped."
+    },
+    "triageTier": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4,
+      "description": "COMP-TRIAGE-5: raw machine tier (0-4) from the front estimator/refinement. Maps to `complexity` via tierToComplexity."
+    },
+    "estimateSource": {
+      "type": "string",
+      "enum": ["front", "refined", "escalated"],
+      "description": "COMP-TRIAGE-5: provenance of `lane`/`triageTier` — the front estimator, the doc-reading refinement pass, or an escalation bump."
+    },
     "position": { "type": ["integer", "string"] },
     "parent": { "type": "string" },
     "depends_on": {
