@@ -42,13 +42,37 @@ describe('COMP-TRIAGE-5 escalation golden', () => {
       assert.equal(saved.lane, 'standard');
       assert.equal(saved.estimateSource, 'escalated');
       assert.equal(saved.escalationCount, 1);
-      // profile widened so the NEXT build runs the heavy phases
-      assert.equal(saved.profile.needs_architecture, true);
-      assert.equal(saved.profile.needs_prd, true);
+      // profile widened to match the ESCALATED lane (standard), not a full profile:
+      // verification comes back on, but prd/architecture stay skipped.
+      assert.equal(saved.profile.needs_verification, true);
+      assert.equal(saved.profile.needs_architecture, false);
+      assert.equal(saved.profile.needs_prd, false);
 
       const cp = join(dir, 'escalation-checkpoint.md');
       assert.ok(existsSync(cp), 'checkpoint written');
       assert.match(readFileSync(cp, 'utf8'), /escalate/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('standard→complex escalation widens the profile to full (all phases)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'triage-esc-'));
+    try {
+      const provider = fakeProvider({
+        code: 'FOO-4',
+        lane: 'standard',
+        escalationCount: 1,
+        profile: { needs_prd: false, needs_architecture: false, needs_verification: true, needs_report: false },
+      });
+      const res = await maybeEscalateLane({ featureCode: 'FOO-4', provider, featureDir: dir });
+      assert.equal(res.to, 'complex');
+      const saved = provider._get();
+      assert.equal(saved.lane, 'complex');
+      assert.equal(saved.profile.needs_prd, true);
+      assert.equal(saved.profile.needs_architecture, true);
+      assert.equal(saved.profile.needs_verification, true);
+      assert.equal(saved.profile.needs_report, true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

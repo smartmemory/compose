@@ -63,6 +63,15 @@ Escalation re-entry is achieved by **persisting the escalated lane/profile + bou
 
 S04 split: **S04a** front-seam (estimateScope on raw request → lane before genesis → validated persist, closing the `:997/:1006` bypass); **S04b** ship-time test-gate observer → `escalate()` → persist escalated lane + checkpoint / STOP→human.
 
+## Codex review gate (round 1) — adjudicated
+
+- P1-c CLI passes no description → estimator classified the code string. **FIXED**: fall back to `cachedFeature.description`.
+- P2-a `standard` escalation persisted full profile → lane/profile mismatch. **FIXED**: widen via `floorProfileToLane(profile, nextLane)`, exported from triage.js.
+- P2-b escalation self-invalidated via staleness (timestamp before checkpoint write). **FIXED**: write checkpoint before stamping `triageTimestamp`.
+- P1-a review-gate escalation not wired → INTENTIONAL v1 scope (fast-follow); documented.
+- P1-b failing test still ships COMPLETE, no auto-re-entry → REAL v1 limitation. Test gate is advisory (pre-existing); v1 escalation = detect+persist+checkpoint for re-run. Design deferred-list updated; auto-re-entry is a follow-up.
+- 56/56 feature tests after fixes.
+
 ## Decisions log
 
 - 2026-07-15: Reframed from "build a triage gate" to "move estimate to front + escalation" after finding COMP-TRIAGE-1/3 already ship the classifier + skip enforcement, positioned post-design.

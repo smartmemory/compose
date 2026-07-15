@@ -42,6 +42,8 @@ Today `--quick` is a **binary decision a human types** (`build-quick` template, 
 - ACRR as a Stratum audit metric (`files_inspected / files_needed`). Filed, not built.
 - Fix-mode front estimate. v1 is build mode only, matching the existing `runsTriage:true` for build / `false` for fix (`lib/lifecycle-modes.js:66,103`).
 - Cross-feature tier history (already parked as COMP-TRIAGE-4).
+- **Automatic in-build re-entry.** The ship-time test gate is *advisory* today (a failing test already ships — pre-existing COMP-TEST-BOOTSTRAP-4 behavior). So v1 escalation is **detect + persist escalated lane/profile + write a resume checkpoint**, surfaced for a re-run — it does NOT block completion or auto-un-skip mid-build. Blocking completion / re-selecting the feature automatically is a follow-up (needs surgery in the ship/completion path).
+- **Review-gate escalation.** The observer triggers on the test gate only; wiring the same `escalate()` fn to the review verdict (`.clean`) is a fast-follow.
 
 ## 3. Design overview — E3 mapping
 

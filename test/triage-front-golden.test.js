@@ -51,6 +51,17 @@ describe('COMP-TRIAGE-5 front-seam golden', () => {
     assert.notEqual(front.lane, 'trivial');
   });
 
+  test('no explicit request → falls back to the feature description, not the bare code', async () => {
+    // The CLI build path does not thread a description; applyFrontTriage must use
+    // the persisted feature.json description so the estimate has real signal.
+    const existing = { code: 'QUX-1', status: 'PLANNED', description: 'fix typo in src/utils/format.js' };
+    const provider = fakeProvider(existing);
+    const front = await applyFrontTriage({ featureCode: 'QUX-1', request: undefined, provider, cachedFeature: existing });
+    // The description is a clean one-line edit → trivial, proving the description
+    // (not the signal-free code "QUX-1") drove the estimate.
+    assert.equal(front.lane, 'trivial');
+  });
+
   test('regression: never persists a bare tier string into complexity (build.js:997/1006 bypass)', async () => {
     const existing = { code: 'BAZ-1', status: 'PLANNED', description: 'x' };
     const provider = fakeProvider(existing);
