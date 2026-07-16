@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-07-16
+
+### Feat — Phase-2 Stratum issuance-token fencing on the TS path
+
+Every TS-native `stepDone` now echoes its ready entry's opaque `dispatchToken`,
+and every TS-native `gateResolve` echoes the waiting round's `gateToken` read
+from `stratum_audit`. This closes stale retry and stale gate-decision races ahead
+of the coordinated engine flag-day while retaining optional transmission for
+Python-era callers. The old `parallelStart`/`parallelPoll`/`parallelAdvance`/
+`parallelDone` lifecycle remains available to Python servers, but now fails with
+an explicit unsupported-on-TS error when the connected MCP surface does not
+advertise those tools, and fails closed with an explicit discovery-failure error
+when `tools/list` itself errors at connect (review finding: the guard previously
+failed open to an opaque unknown-tool protocol error). Golden coverage lives in
+`test/ts-cutover-token-echo-golden.test.js` and exercises a full gated build,
+stale/current dispatch tokens, stale/current gate rounds, and all four parallel
+guards against the real TS MCP binary.
+
 ## 2026-07-15
 
 ### Chore — trim session rules to the ones that still earn their load

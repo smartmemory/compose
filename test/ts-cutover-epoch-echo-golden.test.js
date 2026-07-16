@@ -139,9 +139,9 @@ describe('Phase-1 epoch fencing over the TS engine', () => {
 
       // Record what build.js hands the wire layer, then delegate for real.
       const realStepDone = client.stepDone.bind(client);
-      client.stepDone = async (flowId, stepId, result, epoch) => {
+      client.stepDone = async (flowId, stepId, result, epoch, dispatchToken) => {
         reported.push({ stepId, epoch });
-        return realStepDone(flowId, stepId, result, epoch);
+        return realStepDone(flowId, stepId, result, epoch, dispatchToken);
       };
 
       installFactoryShim(client, stubAgentFactory(() => {}), workspace);
