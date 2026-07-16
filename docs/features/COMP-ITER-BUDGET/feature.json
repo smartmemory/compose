@@ -1,0 +1,15 @@
+{
+  "code": "COMP-ITER-BUDGET",
+  "description": "Budget ceilings on iteration loops: configurable max iterations / wall-clock / action-count caps on start_iteration_loop with auto-abort + structured failure report (promoted from idea_budget_ceilings; validated by Claude Code Workflow token-budget runtime, 2026-07)",
+  "status": "PLANNED",
+  "phase": "Backlog",
+  "created": "2026-07-16",
+  "updated": "2026-07-16",
+  "complexity": "M",
+  "position": 4,
+  "tags": [
+    "infra",
+    "safety"
+  ],
+  "impact": "medium"
+}
