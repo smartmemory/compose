@@ -83,6 +83,55 @@ flows:
           max_rounds: 3
 `;
 
+const CONSUMER_SINGLE_STAGE_SPEC = `
+version: 1
+contracts:
+  Batch:
+    items: string[]
+  Result:
+    value: string
+flows:
+  entry: main
+  main:
+    max_rounds: 3
+    input:
+      featureCode: string
+      description: string
+      implementer_agent: string
+      reviewer_agent: string
+    output:
+      from: \${fan.output[0]}
+      contract: Result
+    steps:
+      - id: enumerate
+        do: "enumerate the consumer items"
+        out: Batch
+      - id: fan
+        after: [enumerate]
+        fanout:
+          over: \${enumerate.output.items}
+          dispatch: consumer
+          concurrency: 3
+          isolation: worktree
+          require: all
+          merge: sequential
+          steps:
+            - do: "work \${item}"
+              out: Result
+      - id: merge
+        after: [fan]
+        gate:
+          on_approve: null
+          on_revise: fan
+          on_kill: null
+          max_rounds: 3
+`;
+
+const CONSUMER_FIVE_ITEM_SPEC = CONSUMER_SINGLE_STAGE_SPEC.replace(
+  '          concurrency: 3',
+  '          concurrency: 5',
+);
+
 // Same fanout as CONSUMER_BUILD_SPEC, but the merge gate's on_revise routes to
 // an ordinary repair step that is a strict ancestor of the gate — NOT back to
 // the fanout. A revise here must NOT re-enumerate the fanout, so the succeeded
@@ -410,6 +459,60 @@ flows:
           max_rounds: 3
 `;
 
+// A consumer fanout AND an ordinary step both become ready after enumerate
+// (mixed readiness). The ordinary sidestep is processed on the serial path while
+// the consumer items are still in flight — used to exercise the pump's fatal
+// drain (C2) when the ordinary agent throws.
+const CONSUMER_MIXED_READY_SPEC = `
+version: 1
+contracts:
+  Batch:
+    items: string[]
+  Result:
+    value: string
+  SideResult:
+    note: string
+flows:
+  entry: main
+  main:
+    max_rounds: 3
+    input:
+      featureCode: string
+      description: string
+      implementer_agent: string
+      reviewer_agent: string
+    output:
+      from: \${fan.output[0]}
+      contract: Result
+    steps:
+      - id: enumerate
+        do: "enumerate the consumer items"
+        out: Batch
+      - id: fan
+        after: [enumerate]
+        fanout:
+          over: \${enumerate.output.items}
+          dispatch: consumer
+          concurrency: 2
+          isolation: worktree
+          require: all
+          merge: sequential
+          steps:
+            - do: "seed \${item}"
+              out: Result
+      - id: sidestep
+        after: [enumerate]
+        do: "do the sidestep work"
+        out: SideResult
+      - id: merge
+        after: [fan]
+        gate:
+          on_approve: null
+          on_revise: fan
+          on_kill: null
+          max_rounds: 3
+`;
+
 function git(cwd, args) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' }).trim();
 }
@@ -505,6 +608,168 @@ function writingAgentFactory(invocationLog) {
       get isRunning() { return false; },
     };
   };
+}
+
+function overlapProbeAgentFactory(invocationLog, probe, items = ['a', 'b', 'c']) {
+  return function factory(_agentType, { cwd }) {
+    return {
+      async *run(prompt) {
+        const intent = prompt.match(/## Intent\n([^\n]+)/)?.[1] ?? prompt;
+        if (intent.includes('enumerate the consumer items')) {
+          yield { type: 'assistant', content: JSON.stringify({ items }) };
+          yield { type: 'system', subtype: 'complete', agent: 'stub' };
+          return;
+        }
+
+        const item = intent.match(/\bwork ([a-z])\b/)?.[1] ?? null;
+        assert.ok(item, `stub must recognize the consumer item in prompt: ${prompt.slice(0, 240)}`);
+        probe.current += 1;
+        probe.max = Math.max(probe.max, probe.current);
+        try {
+          // Yield one event-loop turn while remaining in flight. A concurrent
+          // pump starts sibling issuances before this one exits; the serial pump
+          // cannot raise the counter above one.
+          await new Promise((resolve) => setImmediate(resolve));
+          await mkdir(join(cwd, 'items'), { recursive: true });
+          await writeFile(join(cwd, 'items', `${item}.txt`), `work:${item}\n`);
+          await appendFile(invocationLog, `${JSON.stringify({ kind: 'work', item, cwd, intent })}\n`);
+          yield { type: 'assistant', content: JSON.stringify({ value: `done-${item}` }) };
+          yield { type: 'system', subtype: 'complete', agent: 'stub' };
+        } finally {
+          probe.current -= 1;
+        }
+      },
+      interrupt() {},
+      get isRunning() { return false; },
+    };
+  };
+}
+
+function multiStageProbeAgentFactory(invocationLog, probe) {
+  return function factory(_agentType, { cwd }) {
+    return {
+      async *run(prompt) {
+        const intent = prompt.match(/## Intent\n([^\n]+)/)?.[1] ?? prompt;
+        if (intent.includes('enumerate the consumer items')) {
+          yield { type: 'assistant', content: JSON.stringify({ items: ['a', 'b'] }) };
+          yield { type: 'system', subtype: 'complete', agent: 'stub' };
+          return;
+        }
+
+        const finish = intent.match(/\bfinish ([ab]) from /);
+        const seed = intent.match(/\bseed ([ab])\b/);
+        const item = finish?.[1] ?? seed?.[1] ?? null;
+        const kind = finish ? 'finish' : 'seed';
+        assert.ok(item, `stub must recognize the consumer item in prompt: ${prompt.slice(0, 240)}`);
+        if (finish) assert.ok(probe.completed.has(`seed:${item}`), `${item} stage 2 started before stage 1 completed`);
+        probe.events.push(`enter:${kind}:${item}`);
+        probe.current += 1;
+        probe.max = Math.max(probe.max, probe.current);
+        try {
+          await new Promise((resolve) => setImmediate(resolve));
+          await mkdir(join(cwd, 'items'), { recursive: true });
+          if (finish) {
+            await appendFile(join(cwd, 'items', `${item}.txt`), `finish:${item}\n`);
+            await writeFile(join(cwd, 'items', `${item}-extra.txt`), `extra:${item}\n`);
+          } else {
+            await appendFile(join(cwd, 'items', `${item}.txt`), `seed:${item}\n`);
+          }
+          await appendFile(invocationLog, `${JSON.stringify({ kind, item, cwd, intent })}\n`);
+          probe.completed.add(`${kind}:${item}`);
+          probe.events.push(`exit:${kind}:${item}`);
+          yield { type: 'assistant', content: JSON.stringify({ value: `${kind}-${item}` }) };
+          yield { type: 'system', subtype: 'complete', agent: 'stub' };
+        } finally {
+          probe.current -= 1;
+        }
+      },
+      interrupt() {},
+      get isRunning() { return false; },
+    };
+  };
+}
+
+function drainingCrashAgentFactory(invocationLog, probe) {
+  return function factory(_agentType, { cwd }) {
+    return {
+      async *run(prompt) {
+        const intent = prompt.match(/## Intent\n([^\n]+)/)?.[1] ?? prompt;
+        if (intent.includes('enumerate the consumer items')) {
+          yield { type: 'assistant', content: JSON.stringify({ items: ['a', 'b', 'c'] }) };
+          yield { type: 'system', subtype: 'complete', agent: 'stub' };
+          return;
+        }
+
+        const item = intent.match(/\bwork ([abc])\b/)?.[1] ?? null;
+        assert.ok(item, `stub must recognize the consumer item in prompt: ${prompt.slice(0, 240)}`);
+        probe.active += 1;
+        if (probe.active === 3) probe.allEnteredResolve();
+        await appendFile(invocationLog, `${JSON.stringify({ kind: 'work', item, cwd, intent })}\n`);
+        try {
+          await probe.allEntered;
+          if (item !== 'a') await probe.release;
+          await mkdir(join(cwd, 'items'), { recursive: true });
+          await writeFile(join(cwd, 'items', `${item}.txt`), `work:${item}\n`);
+          yield { type: 'assistant', content: JSON.stringify({ value: `done-${item}` }) };
+          yield { type: 'system', subtype: 'complete', agent: 'stub' };
+        } finally {
+          probe.active -= 1;
+        }
+      },
+      interrupt() {},
+      get isRunning() { return false; },
+    };
+  };
+}
+
+function retryIsolationAgentFactory(invocationLog, probe) {
+  const attempts = new Map();
+  return function factory(_agentType, { cwd }) {
+    return {
+      async *run(prompt) {
+        const intent = prompt.match(/## Intent\n([^\n]+)/)?.[1] ?? prompt;
+        if (intent.includes('enumerate the consumer items')) {
+          yield { type: 'assistant', content: JSON.stringify({ items: ['a', 'b', 'c'] }) };
+          yield { type: 'system', subtype: 'complete', agent: 'stub' };
+          return;
+        }
+
+        const item = intent.match(/\bwork ([abc])\b/)?.[1] ?? null;
+        assert.ok(item, `stub must recognize the consumer item in prompt: ${prompt.slice(0, 240)}`);
+        const attempt = (attempts.get(item) ?? 0) + 1;
+        attempts.set(item, attempt);
+        await appendFile(invocationLog, `${JSON.stringify({ kind: 'work', item, attempt, cwd, intent })}\n`);
+        if (item === 'b' && attempt === 1) {
+          yield { type: 'assistant', content: JSON.stringify({ outcome: 'failed', summary: 'retry b once' }) };
+          yield { type: 'system', subtype: 'complete', agent: 'stub' };
+          return;
+        }
+        if (item === 'b') {
+          probe.retryStartedResolve();
+          await probe.othersCompleted;
+        } else {
+          await probe.retryStarted;
+        }
+        await mkdir(join(cwd, 'items'), { recursive: true });
+        await writeFile(join(cwd, 'items', `${item}.txt`), `work:${item}\n`);
+        if (item !== 'b') {
+          probe.completedOthers.push(item);
+          if (probe.completedOthers.length === 2) probe.othersCompletedResolve();
+        }
+        probe.completionOrder.push(item);
+        yield { type: 'assistant', content: JSON.stringify({ value: `done-${item}` }) };
+        yield { type: 'system', subtype: 'complete', agent: 'stub' };
+      },
+      interrupt() {},
+      get isRunning() { return false; },
+    };
+  };
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
 }
 
 // Writing agent whose FIRST attempt at one item's stage is faulted, then
@@ -829,6 +1094,142 @@ function mixedIsolationAgentFactory(invocationLog) {
   };
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Item a's SEED blocks until item b has fully settled, so a's post-seed
+// reconciliation runs after b advanced to its finish token — the window where a
+// stale per-item snapshot (showing b at its seed token) could wrongly supersede
+// b's newer finish issuance. `gate.releaseA` is resolved by the audit override.
+function staleAuditRaceFactory(invocationLog, gate) {
+  return function factory(_agentType, { cwd }) {
+    return {
+      async *run(prompt) {
+        const intent = prompt.match(/## Intent\n([^\n]+)/)?.[1] ?? prompt;
+        let kind = 'unknown';
+        let item = null;
+        let payload;
+
+        if (intent.includes('enumerate the consumer items')) {
+          kind = 'enumerate';
+          payload = { items: ['a', 'b'] };
+        } else {
+          const finish = intent.match(/\bfinish ([ab]) from /);
+          const seed = intent.match(/\bseed ([ab])\b/);
+          item = finish?.[1] ?? seed?.[1] ?? null;
+          assert.ok(item, `stub must recognize the consumer item in prompt: ${prompt.slice(0, 240)}`);
+          if (item === 'a' && seed) await gate.releaseAPromise;
+          await mkdir(join(cwd, 'items'), { recursive: true });
+          if (finish) {
+            kind = 'finish';
+            await appendFile(join(cwd, 'items', `${item}.txt`), `finish:${item}\n`);
+            await writeFile(join(cwd, 'items', `${item}-extra.txt`), `extra:${item}\n`);
+            payload = { value: `done-${item}` };
+          } else {
+            kind = 'seed';
+            await appendFile(join(cwd, 'items', `${item}.txt`), `seed:${item}\n`);
+            payload = { value: `seed-${item}` };
+          }
+        }
+
+        await appendFile(invocationLog, `${JSON.stringify({ kind, item, cwd, intent })}\n`);
+        yield { type: 'assistant', content: JSON.stringify(payload) };
+        yield { type: 'system', subtype: 'complete', agent: 'stub' };
+      },
+      interrupt() {},
+      get isRunning() { return false; },
+    };
+  };
+}
+
+// Freeze the pre-advance audit (both items at their seed tokens) and re-deliver
+// it once, LATE — for item a's post-seed reconcile, after item b has advanced to
+// its finish token and succeeded. Also releases item a once b has settled.
+function installStaleAuditRace(client, gate) {
+  const realAudit = client.audit.bind(client);
+  let staleSnapshot = null;
+  let staleSeedTokenA = null;
+  let staleServed = false;
+  let released = false;
+  client.audit = async (flowId) => {
+    const fresh = await realAudit(flowId);
+    const items = fresh?.steps?.fan?.fanout?.items ?? [];
+    if (!staleSnapshot && items.length === 2
+      && items.every((it) => it?.status === 'ready' && !it?.acceptedDispatchToken)) {
+      staleSnapshot = structuredClone(fresh);
+      staleSeedTokenA = items[0]?.dispatchToken ?? null;
+    }
+    const bSucceeded = items[1]?.status === 'succeeded';
+    if (!released && bSucceeded) {
+      released = true;
+      gate.releaseA();
+    }
+    if (!staleServed && staleSnapshot && bSucceeded
+      && items[0]?.dispatchToken && items[0].dispatchToken !== staleSeedTokenA) {
+      staleServed = true;
+      return structuredClone(staleSnapshot);
+    }
+    return fresh;
+  };
+}
+
+// Mixed-readiness fatal-drain agent: fan (consumer) items delay so they are
+// in flight when the ordinary `sidestep` agent throws on its first attempt.
+// `state` persists the sidestep attempt count across the crash + resume.
+function mixedFatalAgentFactory(invocationLog, { fanDelayMs, state }) {
+  return function factory(_agentType, { cwd }) {
+    return {
+      async *run(prompt) {
+        const intent = prompt.match(/## Intent\n([^\n]+)/)?.[1] ?? prompt;
+        let kind = 'unknown';
+        let item = null;
+        let payload;
+
+        if (intent.includes('enumerate the consumer items')) {
+          kind = 'enumerate';
+          payload = { items: ['a', 'b'] };
+        } else if (intent.includes('do the sidestep work')) {
+          kind = 'sidestep';
+          state.sidestepAttempts += 1;
+          if (state.sidestepAttempts === 1) {
+            await appendFile(invocationLog, `${JSON.stringify({ kind, faulted: true })}\n`);
+            throw new Error('sidestep boom');
+          }
+          payload = { note: 'sidestep recovered' };
+        } else {
+          item = intent.match(/\bseed ([ab])\b/)?.[1] ?? null;
+          assert.ok(item, `stub must recognize the consumer item in prompt: ${prompt.slice(0, 240)}`);
+          kind = 'seed';
+          if (fanDelayMs) await sleep(fanDelayMs);
+          await mkdir(join(cwd, 'items'), { recursive: true });
+          await writeFile(join(cwd, 'items', `${item}.txt`), `seed:${item}\n`);
+          payload = { value: `seed-${item}` };
+        }
+
+        await appendFile(invocationLog, `${JSON.stringify({ kind, item, cwd, intent })}\n`);
+        yield { type: 'assistant', content: JSON.stringify(payload) };
+        yield { type: 'system', subtype: 'complete', agent: 'stub' };
+      },
+      interrupt() {},
+      get isRunning() { return false; },
+    };
+  };
+}
+
+// Capture a real, git-apply-able binary diff that adds one file (relative to
+// HEAD), then remove the file so the workspace baseline stays clean. Mirrors the
+// journal's own cumulativeDiff so prepareMerge/applyMerge accept it.
+async function captureAddFileDiff(cwd, relPath, content) {
+  await writeFile(join(cwd, relPath), content);
+  const indexPath = join(tmpdir(), `compose-c5-index-${process.pid}-${Date.now()}-${Math.random()}`);
+  const env = { ...process.env, GIT_INDEX_FILE: indexPath };
+  execSync('git read-tree HEAD', { cwd, env, stdio: 'pipe' });
+  execSync('git add -A', { cwd, env, stdio: 'pipe' });
+  const diff = execSync('git diff --cached --binary HEAD --', { cwd, env, encoding: 'utf8', stdio: 'pipe' });
+  execFileSync('rm', ['-f', indexPath]);
+  await rm(join(cwd, relPath), { force: true });
+  return diff;
+}
+
 async function journalPathOf(scenario) {
   const children = await readdir(scenario.artifactRoot, { withFileTypes: true });
   const runDirs = children.filter((entry) => entry.isDirectory());
@@ -925,6 +1326,15 @@ async function assertMergedFiles(scenario) {
   }
 }
 
+async function assertSingleStageMerged(scenario, items) {
+  for (const item of items) {
+    assert.equal(
+      await readFile(join(scenario.workspace, 'items', `${item}.txt`), 'utf8'),
+      `work:${item}\n`,
+    );
+  }
+}
+
 function currentWorkingTreeId(cwd) {
   const indexPath = join(tmpdir(), `compose-consumer-test-index-${process.pid}-${Date.now()}-${Math.random()}`);
   const env = { ...process.env, GIT_INDEX_FILE: indexPath };
@@ -966,6 +1376,127 @@ function scriptedGateIO(script) {
 }
 
 describe('TS-native consumer fanout journal and merge recovery', () => {
+  test('consumer pump overlaps ready issuances', async (t) => {
+    const scenario = await setupScenario(t, 'overlap-red', CONSUMER_SINGLE_STAGE_SPEC);
+    const probe = { current: 0, max: 0 };
+    await runAttempt(scenario, {
+      agentFactory: overlapProbeAgentFactory(scenario.invocationLog, probe),
+    });
+
+    assert.ok(probe.max > 1, `expected overlapping consumer execution, saw max ${probe.max}`);
+    await assertSingleStageMerged(scenario, ['a', 'b', 'c']);
+  });
+
+  test('consumer pool respects COMPOSE_FANOUT_CONCURRENCY', async (t) => {
+    const scenario = await setupScenario(t, 'pool-bound', CONSUMER_FIVE_ITEM_SPEC);
+    const prior = process.env.COMPOSE_FANOUT_CONCURRENCY;
+    process.env.COMPOSE_FANOUT_CONCURRENCY = '2';
+    t.after(() => {
+      if (prior === undefined) delete process.env.COMPOSE_FANOUT_CONCURRENCY;
+      else process.env.COMPOSE_FANOUT_CONCURRENCY = prior;
+    });
+    const probe = { current: 0, max: 0 };
+    const items = ['a', 'b', 'c', 'd', 'e'];
+    await runAttempt(scenario, {
+      agentFactory: overlapProbeAgentFactory(scenario.invocationLog, probe, items),
+    });
+
+    assert.ok(probe.max > 1, 'the bound test must exercise overlapping work');
+    assert.ok(probe.max <= 2, `pool cap 2 was exceeded: ${probe.max}`);
+    await assertSingleStageMerged(scenario, items);
+  });
+
+  test('two items interleave across two ordered stages and merge once each', async (t) => {
+    const scenario = await setupScenario(t, 'multi-stage-interleave', CONSUMER_BUILD_SPEC);
+    const probe = { current: 0, max: 0, completed: new Set(), events: [] };
+    await runAttempt(scenario, {
+      agentFactory: multiStageProbeAgentFactory(scenario.invocationLog, probe),
+    });
+
+    assert.ok(probe.max > 1, `expected cross-item overlap, saw max ${probe.max}`);
+    for (const item of ['a', 'b']) {
+      assert.ok(probe.events.indexOf(`exit:seed:${item}`) < probe.events.indexOf(`enter:finish:${item}`));
+      assert.equal(await readFile(join(scenario.workspace, 'items', `${item}.txt`), 'utf8'), `seed:${item}\nfinish:${item}\n`);
+    }
+    const journal = await readJournal(scenario);
+    assert.equal(journal.issuances.filter((entry) => entry.state === 'merged').length, 2);
+    assert.deepEqual(journal.mergeTransactions.at(-1).orderedDiffs.map((entry) => entry.itemIndex), [0, 1]);
+  });
+
+  test('fatal crash drains concurrent issuances and resume does not duplicate witnessed work', async (t) => {
+    const scenario = await setupScenario(t, 'concurrent-crash', CONSUMER_SINGLE_STAGE_SPEC);
+    const allEntered = deferred();
+    const release = deferred();
+    const probe = {
+      active: 0,
+      allEntered: allEntered.promise,
+      allEnteredResolve: allEntered.resolve,
+      release: release.promise,
+      releaseResolve: release.resolve,
+      crashedWithActive: 0,
+    };
+    let crashed = false;
+    await assert.rejects(
+      () => runAttempt(scenario, {
+        agentFactory: drainingCrashAgentFactory(scenario.invocationLog, probe),
+        crashHooks: {
+          afterStepDone({ descriptor }) {
+            if (!crashed && descriptor.itemIndex === 0) {
+              crashed = true;
+              probe.crashedWithActive = probe.active;
+              probe.releaseResolve();
+              throw injectedCrash('concurrent pool drain');
+            }
+          },
+        },
+      }),
+      /concurrent pool drain/,
+    );
+    assert.ok(probe.crashedWithActive >= 2, `crash did not observe concurrent peers: ${probe.crashedWithActive}`);
+    const flowId = await flowIdFromActive(scenario);
+    const before = await invocations(scenario);
+    assert.equal(before.filter((row) => row.kind === 'work').length, 3);
+    const crashedJournal = await readJournal(scenario);
+    assert.equal(crashedJournal.witnesses.length, 3);
+    assert.equal(crashedJournal.issuances.length, 3);
+    assert.deepEqual(
+      new Set(crashedJournal.witnesses.map((entry) => entry.dispatchToken)),
+      new Set(crashedJournal.issuances.map((entry) => entry.dispatchToken)),
+    );
+
+    await runAttempt(scenario, { resumeFlowId: flowId });
+    assert.deepEqual(await invocations(scenario), before, 'resume must not invoke any witnessed issuance again');
+    await assertSingleStageMerged(scenario, ['a', 'b', 'c']);
+    const journal = await readJournal(scenario);
+    assert.equal(journal.issuances.filter((entry) => entry.state === 'merged').length, 3);
+    assert.equal(journal.mergeTransactions.at(-1).orderedDiffs.length, 3);
+  });
+
+  test('one item retry does not starve concurrent peers', async (t) => {
+    const scenario = await setupScenario(t, 'retry-isolation-concurrent', CONSUMER_SINGLE_STAGE_SPEC);
+    const retryStarted = deferred();
+    const othersCompleted = deferred();
+    const probe = {
+      retryStarted: retryStarted.promise,
+      retryStartedResolve: retryStarted.resolve,
+      othersCompleted: othersCompleted.promise,
+      othersCompletedResolve: othersCompleted.resolve,
+      completedOthers: [],
+      completionOrder: [],
+    };
+    await runAttempt(scenario, {
+      agentFactory: retryIsolationAgentFactory(scenario.invocationLog, probe),
+    });
+
+    const rows = await invocations(scenario);
+    assert.equal(rows.filter((row) => row.kind === 'work' && row.item === 'b').length, 2);
+    assert.equal(rows.filter((row) => row.kind === 'work' && row.item === 'a').length, 1);
+    assert.equal(rows.filter((row) => row.kind === 'work' && row.item === 'c').length, 1);
+    assert.deepEqual(new Set(probe.completionOrder.slice(0, 2)), new Set(['a', 'c']));
+    assert.equal(probe.completionOrder.at(-1), 'b');
+    await assertSingleStageMerged(scenario, ['a', 'b', 'c']);
+  });
+
   test('happy path merges one cumulative diff per terminal item through a unique witness chain', async (t) => {
     const scenario = await setupScenario(t, 'happy');
     await runAttempt(scenario);
@@ -1893,6 +2424,203 @@ describe('TS-native consumer fanout journal and merge recovery', () => {
       agentFactory: emptyInputAgentFactory(scenario.invocationLog),
     });
     assert.equal((await auditFlow(scenario, flowId)).status, 'completed');
+  });
+
+  test('a stale per-item audit snapshot cannot supersede a concurrent item\'s newer diff', async (t) => {
+    const scenario = await setupScenario(t, 'stale-audit', CONSUMER_BUILD_SPEC);
+    const gate = {};
+    gate.releaseAPromise = new Promise((resolve) => { gate.releaseA = resolve; });
+
+    await runAttempt(scenario, {
+      agentFactory: staleAuditRaceFactory(scenario.invocationLog, gate),
+      onClient(client) { installStaleAuditRace(client, gate); },
+    });
+
+    const flowId = await flowIdFromActive(scenario);
+    assert.equal((await auditFlow(scenario, flowId)).status, 'completed');
+    // Item b's newer finish diff survived item a's stale snapshot: b merged and
+    // ran exactly once (a global reconcile would have superseded b's diff, forcing
+    // an ACCEPTED_ARTIFACTS_INCOMPLETE revise that re-runs the whole fanout).
+    const rows = await invocations(scenario);
+    assert.equal(countInvocation(rows, 'finish', 'a'), 1, 'item a ran once (no revise-driven re-run)');
+    assert.equal(countInvocation(rows, 'finish', 'b'), 1, 'item b ran once (its diff was not superseded)');
+    assert.equal(
+      await readFile(join(scenario.workspace, 'items', 'b.txt'), 'utf8'),
+      'seed:b\nfinish:b\n',
+    );
+    const journal = await readJournal(scenario);
+    assert.equal(journal.issuances.filter((entry) => entry.state === 'merged').length, 2);
+  });
+
+  test('an ordinary-path fatal error drains in-flight consumers before propagating', async (t) => {
+    const scenario = await setupScenario(t, 'mixed-fatal', CONSUMER_MIXED_READY_SPEC);
+    const state = { sidestepAttempts: 0 };
+    await assert.rejects(
+      () => runAttempt(scenario, {
+        agentFactory: mixedFatalAgentFactory(scenario.invocationLog, { fanDelayMs: 800, state }),
+      }),
+      /sidestep boom/,
+    );
+    // The fix drained the in-flight consumers before the ordinary error escaped:
+    // both fan items are durably journaled (witness + final issuance), not
+    // orphaned mid-flight. On the buggy code the error escapes immediately and
+    // these issuances do not exist yet.
+    const journal = await readJournal(scenario);
+    const finals = journal.issuances.filter((entry) => entry.stage === 0);
+    assert.equal(finals.length, 2, 'both in-flight consumer items were drained to a journaled issuance');
+    assert.ok(finals.every((entry) => entry.diff), 'each drained item captured its cumulative diff');
+    assert.equal(journal.witnesses.length, 2, 'each in-flight item journaled its pre-stage witness');
+
+    // Resume: the ordinary step succeeds and the drained consumers are re-reported
+    // from the journal, not re-executed.
+    await runAttempt(scenario, {
+      resumeFlowId: await flowIdFromActive(scenario),
+      agentFactory: mixedFatalAgentFactory(scenario.invocationLog, { fanDelayMs: 0, state }),
+    });
+    assert.equal((await auditFlow(scenario, await flowIdFromActive(scenario))).status, 'completed');
+    const rows = await invocations(scenario);
+    assert.equal(countInvocation(rows, 'seed', 'a'), 1, 'drained item a is not re-executed on resume');
+    assert.equal(countInvocation(rows, 'seed', 'b'), 1, 'drained item b is not re-executed on resume');
+  });
+
+  test('two managers on one journal do not lose each other\'s entries', async (t) => {
+    const scenario = await setupScenario(t, 'one-writer');
+    const opts = {
+      runId: 'one-writer-run',
+      targetCwd: scenario.workspace,
+      artifactRoot: scenario.artifactRoot,
+    };
+    // Both instances load the SAME (empty) snapshot, then write different entries.
+    // Without a reconciling write, the second write clobbers the first.
+    const m1 = new ConsumerFanoutArtifacts(opts);
+    const m2 = new ConsumerFanoutArtifacts(opts);
+    m1.recordGateBinding({ gateStepId: 'gate_a', fanoutStepId: 'fan' });
+    m2.recordGateBinding({ gateStepId: 'gate_b', fanoutStepId: 'fan' });
+
+    const journalPath = await journalPathOf(scenario);
+    const disk = JSON.parse(await readFile(journalPath, 'utf8'));
+    assert.deepEqual(disk.gateBinding, { gate_a: 'fan', gate_b: 'fan' });
+  });
+
+  test('a stale writer cannot revert a same-key rollback or resurrect a redacted diff', async (t) => {
+    const scenario = await setupScenario(t, 'same-key-conflict');
+    const opts = {
+      runId: 'same-key-run',
+      targetCwd: scenario.workspace,
+      artifactRoot: scenario.artifactRoot,
+    };
+    // Seed a merged issuance + a complete transaction on disk (as if a merge had
+    // applied), then hand both A and B that same pre-rollback snapshot.
+    new ConsumerFanoutArtifacts(opts);
+    const journalPath = await journalPathOf(scenario);
+    const tree = currentWorkingTreeId(scenario.workspace);
+    const seeded = JSON.parse(await readFile(journalPath, 'utf8'));
+    seeded.revisionDigest = 'rev-x';
+    seeded.specDigest = 'spec-x';
+    seeded.issuances = [{
+      dispatchToken: 'tok-a', scopedId: 'fan/0', fanoutStepId: 'fan', itemIndex: 0,
+      generation: 1, stage: 0, attempt: 1, isolation: 'worktree',
+      state: 'merged', mergedAt: '2026-01-01T00:00:00.000Z',
+      diff: 'DIFF-PAYLOAD', hadCumulativeDiff: true, diffDigest: 'digest',
+    }];
+    seeded.mergeTransactions = [{
+      gateStepId: 'merge', gateToken: 'gt-1', fanoutStepId: 'fan', state: 'complete',
+      baselineTree: tree, witnessChain: [tree],
+      orderedDiffs: [{ dispatchToken: 'tok-a', scopedId: 'fan/0', itemIndex: 0, generation: 1, digest: 'digest', diff: null }],
+      recovery: { baselineRestores: 0 }, preparedAt: '2026-01-01T00:00:00.000Z',
+    }];
+    await writeFile(journalPath, `${JSON.stringify(seeded, null, 2)}\n`);
+
+    const a = new ConsumerFanoutArtifacts(opts); // holds the merged pre-rollback snapshot
+    const b = new ConsumerFanoutArtifacts(opts);
+    // B rolls the merge back (merged -> accepted, mergedAt dropped), resolves a
+    // revise, and redacts the diff payload.
+    b.restoreMergeBaseline(b.journal.mergeTransactions[0], undefined);
+    b.markGateResolved(b.journal.mergeTransactions[0], 'revise');
+    b.cleanupWorktrees('rolled back');
+    // A, still holding the pre-rollback snapshot, writes an UNRELATED mutation.
+    a.recordGateBinding({ gateStepId: 'other-gate', fanoutStepId: 'fan' });
+
+    const disk = JSON.parse(await readFile(journalPath, 'utf8'));
+    const issuance = disk.issuances.find((entry) => entry.dispatchToken === 'tok-a');
+    assert.equal(issuance.state, 'accepted', 'rollback survived — not reverted to merged');
+    assert.equal(issuance.mergedAt, undefined, 'mergedAt was not resurrected');
+    assert.equal(issuance.diff, null, 'redacted diff payload was not resurrected');
+    const tx = disk.mergeTransactions.find((entry) => entry.gateToken === 'gt-1');
+    assert.equal(tx.gateOutcome, 'revise', 'gate outcome preserved');
+    assert.equal(disk.gateBinding?.['other-gate'], 'fan', 'A\'s own mutation still landed');
+  });
+
+  test('applyMerge stops rather than record a merge over a concurrently-decided round', async (t) => {
+    const scenario = await setupScenario(t, 'apply-merge-decided');
+    const opts = {
+      runId: 'apply-decided-run',
+      targetCwd: scenario.workspace,
+      artifactRoot: scenario.artifactRoot,
+    };
+    const diff = await captureAddFileDiff(scenario.workspace, 'merge-target.txt', 'hello\n');
+
+    // Seed one accepted worktree issuance, then let a real prepareMerge compute
+    // the baseline + witness chain into a prepared transaction.
+    new ConsumerFanoutArtifacts(opts);
+    const journalPath = await journalPathOf(scenario);
+    const seeded = JSON.parse(await readFile(journalPath, 'utf8'));
+    seeded.revisionDigest = 'rev-x';
+    seeded.specDigest = 'spec-x';
+    seeded.issuances = [{
+      dispatchToken: 'tok-x', scopedId: 'fan/0', fanoutStepId: 'fan', itemIndex: 0,
+      generation: 1, stage: 0, attempt: 1, isolation: 'worktree',
+      state: 'accepted', diff, hadCumulativeDiff: true, diffDigest: 'digest',
+    }];
+    await writeFile(journalPath, `${JSON.stringify(seeded, null, 2)}\n`);
+    const audit = { steps: { fan: { fanout: { items: [{ status: 'succeeded', generation: 1, acceptedDispatchToken: 'tok-x' }] } } } };
+    const prepared = new ConsumerFanoutArtifacts(opts)
+      .prepareMerge({ gateStepId: 'merge', gateToken: 'gt-1', fanoutStepId: 'fan', audit });
+    assert.equal(prepared.state, 'prepared');
+    assert.equal(prepared.orderedDiffs.length, 1);
+
+    // A applies the merge but pauses at the insideDiffApply seam.
+    let signalPaused;
+    const paused = new Promise((resolve) => { signalPaused = resolve; });
+    let releaseA;
+    const releasePromise = new Promise((resolve) => { releaseA = resolve; });
+    const a = new ConsumerFanoutArtifacts({
+      ...opts,
+      hooks: { async insideDiffApply() { signalPaused(); await releasePromise; } },
+    });
+    let applyError = null;
+    const applyPromise = a
+      .applyMerge(a.journal.mergeTransactions.find((entry) => entry.gateToken === 'gt-1'))
+      .catch((error) => { applyError = error; });
+
+    await paused;
+    // While A is paused mid-merge, B (a second manager on the same journal) rolls
+    // the round back and resolves a revise.
+    const b = new ConsumerFanoutArtifacts(opts);
+    const bTx = b.journal.mergeTransactions.find((entry) => entry.gateToken === 'gt-1');
+    b.restoreMergeBaseline(bTx, undefined);
+    b.markGateResolved(bTx, 'revise');
+    releaseA();
+    await applyPromise;
+
+    // A stopped instead of recording a merge, and B's decision survives intact.
+    assert.ok(applyError, 'applyMerge stopped instead of completing');
+    assert.equal(applyError.code, 'MERGE_TRANSACTION_DECIDED');
+    // A must also NOT have mutated the target tree with the stale diff — the
+    // pre-apply DECIDED check throws before `git apply` touches the working tree,
+    // so no leftover partial merge is left for the gate rollback to clobber.
+    await assert.rejects(
+      readFile(join(scenario.workspace, 'merge-target.txt')),
+      { code: 'ENOENT' },
+      'A must not apply a stale diff to the tree over a decided round',
+    );
+    const disk = JSON.parse(await readFile(journalPath, 'utf8'));
+    const issuance = disk.issuances.find((entry) => entry.dispatchToken === 'tok-x');
+    assert.equal(issuance.state, 'accepted', 'issuance was not flipped to merged over the rollback');
+    assert.equal(issuance.mergedAt, undefined);
+    const tx = disk.mergeTransactions.find((entry) => entry.gateToken === 'gt-1');
+    assert.equal(tx.gateOutcome, 'revise', 'gate outcome preserved');
+    assert.equal(tx.state, 'rolled_back', 'rollback preserved');
   });
 
   test('artifact roots inside the merge target are rejected before journal creation', async (t) => {

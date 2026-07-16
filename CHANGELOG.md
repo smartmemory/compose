@@ -85,6 +85,87 @@ so the next resume no longer fails closed on a work-bearing-but-unpinned journal
 An already-pinned journal keeps its pins; a differing constructor pin is a real
 revision-drift error.
 
+Slice E2b makes the TS consumer-descriptor pump honor the engine's concurrent
+`ready[]` scheduling. Compose now keeps a `dispatchToken`-keyed working set,
+launches every unseen consumer issuance through a bounded pool, folds each
+`step_done` response's new ready descriptors back into that set, and waits for
+the pool to drain before gate/status handling. Ordinary ready entries retain the
+existing serial path and are handled after consumer launches. The frozen surface
+8 descriptor policy does not expose the authored fanout concurrency, so the pool
+uses Python-parity default `3`, overridable with
+`COMPOSE_FANOUT_CONCURRENCY`; future descriptor policy concurrency fields take
+precedence when present. Fatal control-flow stops new launches and drains already
+started journal/report work before propagating, while item-local failures continue
+through the existing retry envelope. Consumer journal writes now pass through a
+single in-process fsync+rename writer mutex. Golden coverage proves real overlap,
+cap enforcement, per-item multi-stage ordering, concurrent crash/resume without
+duplicate witnessed execution, and retry isolation.
+
+Review round 1 (three accepted concurrency races, RED-first): (C1, P1) a per-item
+settlement now reconciles ONLY its own item's records against its (possibly stale)
+audit snapshot — `reconcileAudit` takes a `{ fanoutStepId, itemIndex }` scope, and
+`reconcileDescriptor` plus the post-`step_done` reconciles pass it. An unordered
+stale snapshot from one item can no longer supersede another item's newer issuance
+(which silently excluded that diff from the merge); global cross-issuance
+reconciliation still runs, unscoped, only at the ordered single-threaded points
+(merge-gate discovery, resume recovery) with a fresh audit. (C2, P1) the TS pump
+now has a fatal boundary: ANY error out of the loop — ordinary step, gate,
+interrupt, or consumer origin — stops queued launches and awaits every started
+consumer issuance's journal/report path before propagating to shutdown, so an
+ordinary-path error can no longer orphan in-flight consumers that mutate
+worktrees/journals after terminalization and overlap an immediate resume. (C3, P2)
+journal writes are now a read-reconcile-write under a module-level journal-path-keyed
+one-writer guard: an existing on-disk entry another `ConsumerFanoutArtifacts`
+instance appended is folded in before writing, so two managers on the same journal
+(same-process resume/build overlap) can no longer clobber each other's witnesses or
+prepared entries via last-writer-wins.
+
+Review round 2 (one accepted P1, RED-first): (C4) the round-1 reconciling fold was
+itself last-writer-wins toward the STALE side — for a key present on both sides it
+kept the in-memory entry, so a stale writer's later, unrelated write could rewrite
+`merged`/`mergedAt` over another instance's `restoreMergeBaseline` rollback (re-opening
+the T1 class), lose a `gateOutcome`, or resurrect a redacted diff payload; lifecycle
+rank can't order this because rollback legitimately runs `merged`→`accepted`. The fold
+is deleted and every journal mutation is now single-source-of-truth: a re-entrant
+`#mutate` primitive, under the module-level path guard, reloads the CURRENT on-disk
+journal, applies the change as a synchronous function of THAT fresh state, durably
+writes, and leaves the in-memory model as exactly what was written (a read cache, never
+a write base). Twelve mutation sites were converted; the merge-transaction methods
+re-find their transaction by `gateToken` against the fresh journal, and recovery's
+gate-advance is expressed the same way. No write is ever based on a stale snapshot, so
+neither loss (C3) nor stale-side clobber (C4) is possible.
+
+Review round 3 (one accepted P1, RED-first): (C5) applyMerge was the one exception
+still writing from its cached model — it mutated the passed transaction and issuances
+and persisted the whole cache at four save points without reloading, so a second party
+(a bare-`resumeFlowId` resume that bypasses the live-PID guard, or an in-process
+manager acting during applyMerge's awaited `insideDiffApply` seam) could
+`restoreMergeBaseline` + record a `gateOutcome` mid-merge, and applyMerge would then
+rewrite that decision. Its four journal writes are now `#mutate` primitives that re-find
+the transaction by `gateToken` against the fresh journal and apply only their specific
+delta (per-diff recovery metadata, the terminal `complete` flip and `accepted`→`merged`
+marks); the working-tree diff applications are unchanged. A stop guard checks the fresh
+transaction at every write and before each diff: if another party has recorded a
+`gateOutcome` or rolled the baseline back, applyMerge throws `MERGE_TRANSACTION_DECIDED`
+rather than applying or recording over a decided round — so issuances stay `accepted` and
+the recorded outcome is preserved. The mergeable set also tightened to `accepted`→`merged`
+only (never resurrecting a superseded entry). No journal write in the module now uses a
+stale base.
+
+Review round 4 (one accepted edge, RED-first): (C6) the round-3 DECIDED guard covered
+applyMerge's journal writes but not the working-tree mutation — the guard sat before the
+awaited `insideDiffApply` seam, so another manager deciding during that await let A resume
+straight into `git apply`, mutating the target with a stale diff; the terminal journal write
+then correctly threw `MERGE_TRANSACTION_DECIDED`, but the gate rollback that follows could
+clobber repair work the other party had already begun in the target. A fresh DECIDED
+re-read now runs immediately BEFORE each `git apply`, positioned after the await, so a stale
+diff is never applied over a decided round; the diff-apply catch propagates a
+`ConsumerMergeDecisionError` as-is rather than mislabeling it an apply failure. Documented at
+the check: in-process is fully sealed (production applyMerge has no awaits between the check
+and the apply), while two truly concurrent PROCESSES retain an inherent TOCTOU window there —
+cross-process concurrent merge relies on the run's single-owner assumption, not a lockfile in
+this slice.
+
 ### Feat — Phase-2 Stratum issuance-token fencing on the TS path
 
 Every TS-native `stepDone` now echoes its ready entry's opaque `dispatchToken`,
