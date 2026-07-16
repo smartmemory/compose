@@ -2,6 +2,89 @@
 
 ## 2026-07-16
 
+### Feat — TS-native consumer fanout execution and crash-safe merge journal
+
+Compose now routes Stratum surface-8 consumer descriptors from the generic TS
+`ready[]` pump into generation-keyed, out-of-tree item worktrees. Every issuance
+records a pre-stage tree witness and a durable prepared result envelope; final
+stages additionally record one cumulative item diff, with terminal acceptance
+reconciled exclusively through audit `acceptedDispatchToken` evidence. The
+downstream merge gate pre-journals a deterministic, unique temporary-index tree
+witness chain before applying any diff, resumes from matched prefixes after a
+restart, and restores the verified baseline before replaying an unmatched
+partial apply. New real-TS-bin golden coverage exercises the happy path plus
+crashes before prepare, before report, after acceptance, and inside a multi-file
+apply. Python `parallel_dispatch` execution is unchanged.
+
+Review fixes (five accepted findings, each landed RED-first with new golden
+coverage; no Stratum change): (F1) a merge-gate `revise` no longer supersedes
+accepted issuances wholesale — supersession is now driven only by
+re-enumeration (`reconcileAudit`/`ensureWorktree`), so a revise routed to an
+ordinary repair step keeps every accepted diff for the next approval instead of
+stranding them. (F2) resume verifies the run revision before trusting the
+mutable local spec: the journal pins the engine `revisionDigest` and a
+finalized-spec fingerprint at the first issuance, and `verifyConsumerRunRevision`
+fails loudly (never resolving a gate) if the pipeline file was edited between
+crash and resume, with the fanout→gate binding also journaled and cross-checked.
+(F3) a retried item's `previousFailure` reason is now rendered into its prompt,
+and a non-timeout agent/connector error is enveloped as a per-item failure
+(restoring the pre-stage witness first) so only that item retries while the
+fanout keeps running. (F4) the descriptor's full contract closure is threaded to
+the agent schema and normalizer, so nested named records and typed arrays render
+their real shapes instead of degrading to `{}`. (F5) the shared git wrapper sets
+a 512 MiB `maxBuffer`, so a cumulative diff over 1 MiB no longer throws ENOBUFS
+at capture and permanently wedges recovery.
+
+Review round 2 (three accepted edges in the round-1 fixes, RED-first): (R1)
+the run-revision pins are now written into the journal's FIRST durable write
+(constructor), not a later bind — closing the window where a crash between
+journal creation and bind left an unpinned journal a drifted spec could re-pin
+as truth; `verifyConsumerRunRevision` additionally fails closed on a
+work-bearing journal that is missing its pins. (R2) rolling back a
+completed-but-unresolved merge (a crash between `applyMerge` and the gate
+decision, then a revise) now restores merge eligibility (`merged` → `accepted`)
+for the transaction's issuances, so the repair round can re-merge them instead
+of hitting `ACCEPTED_ARTIFACTS_INCOMPLETE`. (R3) structured-output extraction is
+gated on a declared contract (closure present), not on the root having fields,
+so a valid empty output contract (`{}`) is accepted instead of wedging the item
+until its attempts exhaust.
+
+Review round 3 (four accepted edges, RED-first; unifying principle: recovery and
+rollback are scoped to the CURRENT transaction round with the engine audit as
+ground truth, never replaying/restoring across resolved historical rounds from
+journal state alone): (T1, critical) crash recovery no longer re-rolls-back an
+already-resolved earlier round — it acts only on the unresolved (latest)
+transaction, so a revise→approve sequence that crashes before cleanup keeps the
+approved merge instead of restoring round 1's stale baseline over it and dropping
+the diffs. (T2) the merge-gate path now pins the journal from the response's
+run-revision digest + local spec digest, so an EMPTY-input fanout (which issues
+no descriptor to pin from) produces a pinned journal and resumes cleanly instead
+of failing closed on the round-2 work-bearing-but-unpinned check. (T3) the R2
+eligibility restore and `reconcileAudit` now reconcile against the current audit:
+an issuance whose item index no longer exists in the current generation (a revise
+that re-enumerated to fewer items) is superseded, not resurrected as an accepted
+diff — closing an `ACCEPTED_ARTIFACTS_INCOMPLETE` wedge on the rollback path.
+(T4) consumer crash hooks are a test-only seam, honored only under
+`NODE_ENV=test` (mirrors the `_testClient` gate), so production can never execute
+an injected hook against the live target.
+
+Review round 4 (two accepted edges, RED-first): (U1, P1) `dispatch: consumer`
+fanouts with `isolation: none` now run their items IN THE TARGET CWD with
+Python-parity semantics — no worktree, no pre-stage witness, no diff capture, no
+merge participation (envelope journaling still guards the prepare→step_done seam
+and a mid-item crash falls back to the normal failure/retry path). Previously
+every consumer item got a detached worktree that terminal cleanup discarded, so a
+`none` item's filesystem changes were silently lost. The merge gate's
+artifacts-complete check is now isolation-aware: only worktree items owe a diff,
+so a pure-`none` fanout reaches the gate with zero expected artifacts and approves
+as a trivially clean merge, and a flow mixing `none` and `worktree` fanouts merges
+exactly the worktree diffs. (U2, P2) an existing UNPINNED journal now adopts
+constructor-supplied revision pins at load (one atomic write) — a legacy or
+gate-first-created journal is pinned before `prepareMerge` makes it work-bearing,
+so the next resume no longer fails closed on a work-bearing-but-unpinned journal.
+An already-pinned journal keeps its pins; a differing constructor pin is a real
+revision-drift error.
+
 ### Feat — Phase-2 Stratum issuance-token fencing on the TS path
 
 Every TS-native `stepDone` now echoes its ready entry's opaque `dispatchToken`,
