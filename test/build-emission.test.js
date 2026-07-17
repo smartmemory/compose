@@ -14,6 +14,10 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
+import { runConsumerIssuance } from '../lib/build.js';
+
+process.env.NODE_ENV = 'test';
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -209,103 +213,93 @@ describe('Site 2: child-flow build_step_done emission', () => {
   });
 });
 
-describe('Site 3: parallel task build_step_done emission', () => {
-  it('includes retries:0 and violations:[] defaults', () => {
+// ---------------------------------------------------------------------------
+// Sites 3/4 — REAL consumer-fanout emission (H6).
+//
+// Previously these asserted hand-fabricated `parallel: true` events, which
+// masked the production bug: runConsumerIssuance emitted `consumer: true` with a
+// `?` stepNum and NO `parallel: true`, so the cockpit (which keys its
+// parallel-task progress on `parallel === true` + a `∥`-prefixed stepNum) never
+// saw the fanout. These drive the ACTUAL runConsumerIssuance emission and assert
+// the UI contract directly — no fabrication.
+// ---------------------------------------------------------------------------
+
+const TASK_CLOSURE = {
+  root: 'TaskResult',
+  contracts: { TaskResult: { outcome: 'string', summary: 'string' } },
+};
+
+function stubProgress() {
+  return { stepStart() {}, stepDone() {}, info() {}, debug() {}, warn() {}, toolUse() {}, toolSummary() {}, findings() {} };
+}
+
+function successQuery() {
+  return function () {
+    return (async function* () {
+      yield { type: 'system', subtype: 'init', model: 'claude-test' };
+      yield {
+        type: 'result', subtype: 'success',
+        result: JSON.stringify({ outcome: 'complete', summary: 'did the thing' }),
+        total_cost_usd: 0, usage: { input_tokens: 1, output_tokens: 1 }, duration_ms: 1,
+      };
+    })();
+  };
+}
+
+async function driveConsumerItem(writer, itemIndex) {
+  const descriptor = {
+    id: `execute_tasks/${itemIndex}`, step: 'execute_tasks', flow: 'build',
+    itemIndex, stage: 0, generation: 1, attempt: 1, epoch: 1,
+    dispatchToken: `tok-${itemIndex}`,
+    agent: 'claude', do: `Run task ${itemIndex}`,
+    item: { id: `t${itemIndex}` }, policy: { isolation: 'none' }, contract: TASK_CLOSURE,
+  };
+  const artifacts = {
+    hooks: {},
+    reconcileDescriptor: () => ({ action: 'execute', worktree: process.cwd() }),
+    prepareIssuance: () => ({ diff: null }),
+    reconcileAudit: () => {},
+    restoreToPreStageWitness: () => {},
+  };
+  const stratum = {
+    _localQuery: successQuery(),
+    onEvent: () => () => {},
+    stepDone: async () => ({ status: 'completed' }),
+    audit: async () => ({}),
+    agentRun: async () => ({ text: '' }),
+    cancelAgentRun: async () => {},
+  };
+  const localSpec = {
+    flows: { build: { steps: [{ id: 'execute_tasks', fanout: { steps: [{ agent: 'claude', do: 'x', out: 'TaskResult' }] } }] } },
+  };
+  await runConsumerIssuance({
+    descriptor, flowId: 'flow-1', stratum, artifacts, localSpec,
+    context: { cwd: process.cwd() },
+    progress: stubProgress(), streamWriter: writer,
+  });
+  return descriptor;
+}
+
+describe('Sites 3/4: real consumer-fanout parallel emission', () => {
+  it('build_step_start carries parallel:true and a ∥-prefixed stepNum (drives the UI parallel-task init)', async () => {
     const writer = new FakeStreamWriter();
-    const taskId = 'task-parallel-1';
-    const taskResult = { result: { summary: 'Parallel task done' } };
-    const dispFlowId = 'dispatch-flow-123';
-    const parentFlowId = 'parent-flow-abc';
-
-    // Reproduce the fixed Site 3 emission
-    writer.write({
-      type: 'build_step_done', stepId: taskId,
-      summary: (taskResult.result ?? {}).summary ?? 'Task complete',
-      retries: 0,
-      violations: [],
-      flowId: dispFlowId, parallel: true,
-      ...(parentFlowId ? { parentFlowId } : {}),
-    });
-
-    const event = writer.events[0];
-    assert.equal(event.type, 'build_step_done');
-    assert.equal(event.stepId, 'task-parallel-1');
-    assert.equal(event.retries, 0, 'parallel task emission must include retries:0');
-    assert.deepEqual(event.violations, [], 'parallel task emission must include violations:[]');
-    assert.equal(event.parallel, true);
-    assert.equal(event.parentFlowId, parentFlowId);
+    const descriptor = await driveConsumerItem(writer, 0);
+    const start = writer.events.find(e => e.type === 'build_step_start');
+    assert.ok(start, 'a build_step_start must be emitted for the consumer item');
+    assert.equal(start.parallel, true, 'the fanout item start must carry parallel:true');
+    assert.equal(start.stepNum, '∥0', 'the stepNum must be ∥-prefixed with the item index');
+    assert.ok(start.stepNum.toString().startsWith('∥'), 'UI keys parallel init on a ∥-prefixed stepNum');
+    assert.equal(start.stepId, descriptor.id, 'stepId is the per-item scoped id');
   });
 
-  it('omits parentFlowId when not provided', () => {
+  it('build_step_done carries parallel:true + retries:0/violations:[] with the matching stepId', async () => {
     const writer = new FakeStreamWriter();
-    const taskId = 'task-2';
-    const parentFlowId = null;
-
-    writer.write({
-      type: 'build_step_done', stepId: taskId,
-      summary: 'Task complete',
-      retries: 0,
-      violations: [],
-      flowId: 'dispatch-flow-456', parallel: true,
-      ...(parentFlowId ? { parentFlowId } : {}),
-    });
-
-    const event = writer.events[0];
-    assert.equal(event.retries, 0);
-    assert.deepEqual(event.violations, []);
-    assert.equal(event.parentFlowId, undefined);
-  });
-});
-
-describe('Site 4: parallel dispatch build_step_done emission', () => {
-  it('includes retries:0 and violations:[] defaults', () => {
-    const writer = new FakeStreamWriter();
-    const dispStepId = 'parallel_dispatch';
-    const taskResults = [
-      { status: 'complete' },
-      { status: 'complete' },
-      { status: 'failed' },
-    ];
-    const nComplete = taskResults.filter(r => r.status === 'complete').length;
-    const mergeStatus = 'clean';
-    const dispFlowId = 'dispatch-flow-789';
-    const parentFlowId = 'parent-flow-abc';
-
-    // Reproduce the fixed Site 4 emission
-    writer.write({
-      type: 'build_step_done', stepId: dispStepId,
-      summary: `parallel_dispatch: ${nComplete}/${taskResults.length} tasks ${mergeStatus === 'clean' ? 'merged' : 'conflict'}`,
-      retries: 0,
-      violations: [],
-      flowId: dispFlowId, parallel: true,
-      ...(parentFlowId ? { parentFlowId } : {}),
-    });
-
-    const event = writer.events[0];
-    assert.equal(event.type, 'build_step_done');
-    assert.equal(event.stepId, 'parallel_dispatch');
-    assert.equal(event.summary, 'parallel_dispatch: 2/3 tasks merged');
-    assert.equal(event.retries, 0, 'parallel dispatch emission must include retries:0');
-    assert.deepEqual(event.violations, [], 'parallel dispatch emission must include violations:[]');
-    assert.equal(event.parallel, true);
-  });
-
-  it('omits parentFlowId when not provided', () => {
-    const writer = new FakeStreamWriter();
-    const parentFlowId = undefined;
-
-    writer.write({
-      type: 'build_step_done', stepId: 'parallel_dispatch',
-      summary: 'parallel_dispatch: 1/1 tasks merged',
-      retries: 0,
-      violations: [],
-      flowId: 'dispatch-flow-xyz', parallel: true,
-      ...(parentFlowId ? { parentFlowId } : {}),
-    });
-
-    const event = writer.events[0];
-    assert.equal(event.retries, 0);
-    assert.deepEqual(event.violations, []);
-    assert.equal(event.parentFlowId, undefined);
+    const descriptor = await driveConsumerItem(writer, 2);
+    const done = writer.events.find(e => e.type === 'build_step_done');
+    assert.ok(done, 'a build_step_done must be emitted for the consumer item');
+    assert.equal(done.parallel, true, 'the fanout item done must carry parallel:true');
+    assert.equal(done.stepId, descriptor.id, 'done stepId matches the start so the UI decrements the same task');
+    assert.equal(done.retries, 0, 'parallel emission must include retries:0');
+    assert.deepEqual(done.violations, [], 'parallel emission must include violations:[]');
   });
 });

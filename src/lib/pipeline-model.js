@@ -30,7 +30,7 @@
  *
  * `_extra` carries every field this milestone does not surface for editing
  * (skip_if, skip_reason, type, gate routes on_approve/on_revise/on_kill,
- * parallel-dispatch source/max_concurrent/isolation/require/merge/intent_template,
+ * TS fanout configuration, gate routing, and validation metadata,
  * reasoning_template, flow, validate, …) so they survive round-trip untouched.
  */
 
@@ -106,7 +106,7 @@ function normalizeStep(raw, version) {
   // `kind` classifies the step for the canvas: agent | function | flow | parallel.
   let kind = 'agent';
   if (raw.flow) kind = 'flow';
-  else if (raw.type === 'parallel_dispatch') kind = 'parallel';
+  else if (raw.fanout) kind = 'parallel';
   else if (raw.function && raw.agent === undefined) kind = 'function';
   else if (raw.agent !== undefined) kind = 'agent';
   else if (raw.function) kind = 'function';

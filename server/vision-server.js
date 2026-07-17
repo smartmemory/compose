@@ -275,7 +275,7 @@ export class VisionServer {
       console.log('[vision] Stratum sync enabled');
     } else {
       app.use('/api/stratum', (_req, res) => {
-        res.status(503).json({ error: 'Stratum not enabled', hint: 'pip install stratum && compose init' });
+        res.status(503).json({ error: 'Stratum not enabled', hint: 'compose init (TS engine; python retired — see python-legacy branch)' });
       });
     }
 

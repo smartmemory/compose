@@ -243,8 +243,9 @@ flows:
           clean.
 
           FIRST RUN PATH — If .compose/prior_dirty_lenses.json does not exist, always
-          include diff-quality and contract-compliance. Add security for auth, crypto,
-          SQL, or HTTP-handler changes, and add framework for detected framework files.
+          include diff-quality, contract-compliance, and debug-discipline. Add security
+          for auth, crypto, SQL, or HTTP-handler changes, and add framework for detected
+          framework files.
 
           Return {tasks}; each task must include id, lens_name, lens_focus,
           confidence_gate, and exclusions.
@@ -282,12 +283,23 @@ flows:
           deduplicate findings by file+line+lens, keep the highest confidence, recompute
           clean, set lenses_run to dirty lens ids, and classify auto_fixes and asks.
         out: ReviewResult
-        ensure:
-          - expr: "result.clean == true"
-        attempts: 5
+
+      # I1: dirty-review recovery is engine-native. review_merge cannot converge on
+      # its own (re-running the reducer re-merges the SAME frozen lens outputs), so
+      # the cleanliness decision is a GATE. Compose resolves it by policy: a clean
+      # merge approves; a dirty merge runs the corrective fixer, persists the dirty
+      # lens ids, and REVISES — the engine reroutes to review_triage, whose RETRY
+      # PATH reads the sidecar and re-runs only the dirty lenses on the fixed code.
+      - id: review_gate
+        after: [review_merge]
+        gate:
+          on_approve: codex_review
+          on_revise: review_triage
+          on_kill: null
+          max_rounds: 10
 
       - id: codex_review
-        after: [review_merge]
+        after: [review_gate]
         run: review_check
         with:
           task: "${review_merge.output.summary}"

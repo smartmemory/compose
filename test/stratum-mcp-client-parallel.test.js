@@ -1,8 +1,8 @@
 /**
- * Tests for StratumMcpClient.parallelStart and .parallelPoll (T2-F5-COMPOSE-MIGRATE).
+ * Tests for the TS StratumMcpClient workflow and progress-event surface.
  *
  * Uses a lightweight mock client injected via `_testClient` to avoid requiring
- * a live stratum-mcp subprocess.
+ * a live Stratum subprocess.
  */
 
 // Enable the _testClient injection hook (gated on NODE_ENV=test).
@@ -10,7 +10,7 @@ process.env.NODE_ENV = 'test';
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
+import { StratumMcpClient, StratumError } from '../lib/stratum-mcp-client.js';
 
 function makeMockClient(responses) {
   const calls = [];
@@ -26,48 +26,42 @@ function makeMockClient(responses) {
   };
 }
 
-describe('StratumMcpClient.parallelStart', () => {
-  it('calls stratum_parallel_start with snake_case args and returns parsed JSON', async () => {
+describe('StratumMcpClient.plan', () => {
+  it('calls stratum_plan with the TS spec/input shape and returns parsed JSON', async () => {
     const { calls, mock } = makeMockClient([
-      { status: 'started', flow_id: 'f1', step_id: 's1', task_count: 3, tasks: ['a', 'b', 'c'] },
+      { status: 'ready', runId: 'f1', ready: [{ id: 's1', dispatchToken: 'tok-1' }] },
     ]);
     const client = new StratumMcpClient();
     Object.defineProperty(client, '_testClient', { value: mock, writable: true });
 
-    const result = await client.parallelStart('flow-xyz', 'step-abc');
+    const spec = { version: 1, flows: { entry: 'main', main: { steps: [] } } };
+    const result = await client.plan(spec, 'main', { task: 'x' });
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].name, 'stratum_parallel_start');
-    assert.deepEqual(calls[0].args, { flow_id: 'flow-xyz', step_id: 'step-abc' });
-    assert.equal(result.status, 'started');
-    assert.equal(result.task_count, 3);
+    assert.equal(calls[0].name, 'stratum_plan');
+    assert.deepEqual(calls[0].args, { spec, input: { task: 'x' } });
+    assert.equal(result.status, 'ready');
+    assert.equal(result.ready[0].dispatchToken, 'tok-1');
   });
 });
 
-describe('StratumMcpClient.parallelPoll', () => {
-  it('calls stratum_parallel_poll with snake_case args and returns parsed JSON', async () => {
-    const { calls, mock } = makeMockClient([{
-      flow_id: 'f1',
-      step_id: 's1',
-      summary: { pending: 0, running: 0, complete: 3, failed: 0, cancelled: 0 },
-      tasks: {},
-      require_satisfied: true,
-      can_advance: true,
-      outcome: { status: 'execute_step', step_id: 'next' },
-    }]);
+describe('StratumMcpClient.stepDone', () => {
+  it('calls stratum_step_done with the TS run and dispatch-token shape', async () => {
+    const { calls, mock } = makeMockClient([{ status: 'completed', runId: 'f1' }]);
     const client = new StratumMcpClient();
     Object.defineProperty(client, '_testClient', { value: mock, writable: true });
 
-    const result = await client.parallelPoll('flow-xyz', 'step-abc');
+    const result = await client.stepDone('flow-xyz', 'step-abc', { output: { ok: true } }, 'tok-1');
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].name, 'stratum_parallel_poll');
-    assert.deepEqual(calls[0].args, { flow_id: 'flow-xyz', step_id: 'step-abc' });
-    assert.equal(result.can_advance, true);
-    assert.equal(result.outcome.status, 'execute_step');
+    assert.equal(calls[0].name, 'stratum_step_done');
+    assert.deepEqual(calls[0].args, {
+      runId: 'flow-xyz', stepId: 'step-abc', result: { output: { ok: true } }, dispatchToken: 'tok-1',
+    });
+    assert.equal(result.status, 'completed');
   });
 });
 
 describe('StratumMcpClient.onEvent (STRAT-PAR-STREAM)', () => {
-  it('routes BuildStreamEvents from progress callback to subscribed handlers by (flowId, stepId)', async () => {
+  it('routes BuildStreamEvents from agentRun progress to the subscribed correlation id', async () => {
     // Mock client that captures the onprogress callback and lets us drive it manually.
     let capturedOnProgress = null;
     const mock = {
@@ -79,7 +73,7 @@ describe('StratumMcpClient.onEvent (STRAT-PAR-STREAM)', () => {
             progress: 1,
             message: JSON.stringify({
               schema_version: '0.2.5',
-              flow_id: 'f1', step_id: 's1', task_id: 't1',
+              step_id: '_agent_run', task_id: 't1',
               seq: 0, ts: '2026-04-26T00:00:00Z',
               kind: 'agent_started',
               metadata: { agent: 'claude', model: 'opus', prompt_chars: 5 },
@@ -89,7 +83,7 @@ describe('StratumMcpClient.onEvent (STRAT-PAR-STREAM)', () => {
             progress: 2,
             message: JSON.stringify({
               schema_version: '0.2.5',
-              flow_id: 'f1', step_id: 's1', task_id: 't1',
+              step_id: '_agent_run', task_id: 't1',
               seq: 1, ts: '2026-04-26T00:00:01Z',
               kind: 'agent_relay',
               metadata: { text: 'hello', role: 'assistant' },
@@ -98,10 +92,7 @@ describe('StratumMcpClient.onEvent (STRAT-PAR-STREAM)', () => {
         }
         return {
           content: [{ type: 'text', text: JSON.stringify({
-            flow_id: 'f1', step_id: 's1',
-            summary: { pending: 0, running: 0, complete: 1, failed: 0, cancelled: 0 },
-            tasks: {}, require_satisfied: true, can_advance: true,
-            outcome: { status: 'execute_step', step_id: 'next' },
+            text: 'ok',
           }) }],
         };
       },
@@ -111,10 +102,10 @@ describe('StratumMcpClient.onEvent (STRAT-PAR-STREAM)', () => {
     Object.defineProperty(client, '_testClient', { value: mock, writable: true });
 
     const got = [];
-    const unsub = client.onEvent('f1', 's1', (ev) => got.push(ev));
+    const unsub = client.onEvent('f1', '_agent_run', (ev) => got.push(ev));
 
-    const result = await client.parallelPoll('f1', 's1');
-    assert.equal(result.outcome.status, 'execute_step');
+    const result = await client.agentRun('claude', 'prompt', { correlationId: 'f1', cwd: '/tmp' });
+    assert.equal(result.text, 'ok');
     assert.equal(got.length, 2);
     assert.equal(got[0].kind, 'agent_started');
     assert.equal(got[1].kind, 'agent_relay');
@@ -132,9 +123,7 @@ describe('StratumMcpClient.onEvent (STRAT-PAR-STREAM)', () => {
         }
         return {
           content: [{ type: 'text', text: JSON.stringify({
-            flow_id: 'f1', step_id: 's1',
-            summary: {}, tasks: {}, require_satisfied: true, can_advance: true,
-            outcome: { status: 'execute_step' },
+            text: 'ok',
           }) }],
         };
       },
@@ -143,8 +132,8 @@ describe('StratumMcpClient.onEvent (STRAT-PAR-STREAM)', () => {
     Object.defineProperty(client, '_testClient', { value: mock, writable: true });
 
     const got = [];
-    client.onEvent('f1', 's1', (ev) => got.push(ev));
-    await client.parallelPoll('f1', 's1');
+    client.onEvent('f1', '_agent_run', (ev) => got.push(ev));
+    await client.agentRun('claude', 'prompt', { correlationId: 'f1', cwd: '/tmp' });
     assert.equal(got.length, 0);
   });
 
@@ -153,14 +142,13 @@ describe('StratumMcpClient.onEvent (STRAT-PAR-STREAM)', () => {
       callTool: async (_p, _s, opts) => {
         if (opts?.onprogress) {
           opts.onprogress({ progress: 1, message: JSON.stringify({
-            schema_version: '0.2.5', flow_id: 'f1', step_id: 's1',
+            schema_version: '0.2.5', step_id: '_agent_run',
             seq: 0, ts: '2026-04-26T00:00:00Z',
             kind: 'agent_relay', metadata: { text: 'x', role: 'assistant' },
           }) });
         }
         return { content: [{ type: 'text', text: JSON.stringify({
-          flow_id: 'f1', step_id: 's1', summary: {}, tasks: {},
-          require_satisfied: true, can_advance: true, outcome: { status: 'execute_step' },
+          text: 'ok',
         }) }] };
       },
     };
@@ -168,28 +156,24 @@ describe('StratumMcpClient.onEvent (STRAT-PAR-STREAM)', () => {
     Object.defineProperty(client, '_testClient', { value: mock, writable: true });
 
     const got = [];
-    const unsub = client.onEvent('f1', 's1', (ev) => got.push(ev));
+    const unsub = client.onEvent('f1', '_agent_run', (ev) => got.push(ev));
     unsub();
-    await client.parallelPoll('f1', 's1');
+    await client.agentRun('claude', 'prompt', { correlationId: 'f1', cwd: '/tmp' });
     assert.equal(got.length, 0);
   });
 });
 
-describe('StratumMcpClient.parallelAdvance', () => {
-  it('calls stratum_parallel_advance with snake_case args and returns parsed JSON', async () => {
-    const { calls, mock } = makeMockClient([{
-      status: 'complete',
-      output: { outcome: 'failed', merge_status: 'conflict' },
-    }]);
+describe('StratumMcpClient.resume', () => {
+  it('calls stratum_resume with the TS runId shape', async () => {
+    const { calls, mock } = makeMockClient([{ status: 'ready', runId: 'flow-xyz', ready: [] }]);
     const client = new StratumMcpClient();
     Object.defineProperty(client, '_testClient', { value: mock, writable: true });
 
-    const result = await client.parallelAdvance('flow-xyz', 'step-abc', 'conflict');
+    const result = await client.resume('flow-xyz');
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].name, 'stratum_parallel_advance');
-    assert.deepEqual(calls[0].args, { flow_id: 'flow-xyz', step_id: 'step-abc', merge_status: 'conflict' });
-    assert.equal(result.status, 'complete');
-    assert.equal(result.output.merge_status, 'conflict');
+    assert.equal(calls[0].name, 'stratum_resume');
+    assert.deepEqual(calls[0].args, { runId: 'flow-xyz' });
+    assert.equal(result.status, 'ready');
   });
 });
 
@@ -198,7 +182,7 @@ describe('StratumMcpClient.parallelAdvance', () => {
 // ---------------------------------------------------------------------------
 
 describe('StratumMcpClient.agentRun', () => {
-  it('calls stratum_agent_run with the TS wire shape and returns {text, correlation_id}', async () => {
+  it('calls stratum_agent_run with the TS wire shape and returns the TS result', async () => {
     let captured = null;
     const mock = {
       callTool: async ({ name, arguments: args }, _s, _opts) => {
@@ -233,15 +217,13 @@ describe('StratumMcpClient.agentRun', () => {
     assert.ok(!('thinking' in captured.args), 'thinking is compose-side, not on the wire');
     assert.ok(!('correlation_id' in captured.args), 'correlation_id is not on the TS wire');
     assert.equal(out.text, 'hi');
-    // The client still attaches the correlation id to the RESULT for the
-    // onEvent/cancel seam even though it never travels on the wire.
-    assert.equal(out.correlation_id, 'corr-1');
+    assert.deepEqual(out, { text: 'hi' });
   });
 
   it('subscribed onEvent receives BuildStreamEvents emitted via progress during agentRun', async () => {
     const mock = {
-      callTool: async ({ arguments: args }, _s, opts) => {
-        const correlationId = args.correlation_id;
+      callTool: async ({ arguments: _args }, _s, opts) => {
+        const correlationId = 'cor-2';
         opts.onprogress({
           progress: 1,
           message: JSON.stringify({
@@ -263,7 +245,7 @@ describe('StratumMcpClient.agentRun', () => {
             metadata: { stepId: '_agent_run', input_tokens: 5, output_tokens: 3, cost_usd: 0, model: 'claude-sonnet-4-6' },
           }),
         });
-        return { content: [{ type: 'text', text: JSON.stringify({ text: 'hello', correlation_id: correlationId }) }] };
+        return { content: [{ type: 'text', text: JSON.stringify({ text: 'hello' }) }] };
       },
     };
     const client = new StratumMcpClient();
@@ -304,7 +286,7 @@ describe('StratumMcpClient.agentRun', () => {
           await new Promise((r) => { resolveB = r; });
           emit('agent_relay', 'b');
         }
-        return { content: [{ type: 'text', text: JSON.stringify({ text: correlationId, correlation_id: correlationId }) }] };
+        return { content: [{ type: 'text', text: JSON.stringify({ text: correlationId }) }] };
       },
     };
     const client = new StratumMcpClient();
@@ -371,8 +353,8 @@ describe('StratumMcpClient consumer validation wiring', () => {
     console.warn = (...args) => warnings.push(args.join(' '));
 
     const mock = {
-      callTool: async ({ arguments: args }, _s, opts) => {
-        const correlationId = args.correlation_id;
+      callTool: async ({ arguments: _args }, _s, opts) => {
+        const correlationId = 'v-1';
         // Emit an invalid envelope: schema_version missing
         opts.onprogress({
           progress: 1,
@@ -384,7 +366,7 @@ describe('StratumMcpClient consumer validation wiring', () => {
             metadata: { role: 'assistant', text: 'should not arrive' },
           }),
         });
-        return { content: [{ type: 'text', text: JSON.stringify({ text: 'ok', correlation_id: correlationId }) }] };
+        return { content: [{ type: 'text', text: JSON.stringify({ text: 'ok' }) }] };
       },
     };
 
@@ -407,8 +389,8 @@ describe('StratumMcpClient consumer validation wiring', () => {
     console.warn = (...args) => warnings.push(args.join(' '));
 
     const mock = {
-      callTool: async ({ arguments: args }, _s, opts) => {
-        const correlationId = args.correlation_id;
+      callTool: async ({ arguments: _args }, _s, opts) => {
+        const correlationId = 'v-2';
         opts.onprogress({
           progress: 1,
           message: JSON.stringify({
@@ -419,7 +401,7 @@ describe('StratumMcpClient consumer validation wiring', () => {
             metadata: { role: 'assistant', text: 'should not arrive' },
           }),
         });
-        return { content: [{ type: 'text', text: JSON.stringify({ text: 'ok', correlation_id: correlationId }) }] };
+        return { content: [{ type: 'text', text: JSON.stringify({ text: 'ok' }) }] };
       },
     };
 
@@ -438,8 +420,8 @@ describe('StratumMcpClient consumer validation wiring', () => {
 
   it('forwards valid v0.2.6 envelope to onEvent subscriber', async () => {
     const mock = {
-      callTool: async ({ arguments: args }, _s, opts) => {
-        const correlationId = args.correlation_id;
+      callTool: async ({ arguments: _args }, _s, opts) => {
+        const correlationId = 'v-3';
         opts.onprogress({
           progress: 1,
           message: JSON.stringify({
@@ -450,7 +432,7 @@ describe('StratumMcpClient consumer validation wiring', () => {
             metadata: { role: 'assistant', text: 'valid event' },
           }),
         });
-        return { content: [{ type: 'text', text: JSON.stringify({ text: 'ok', correlation_id: correlationId }) }] };
+        return { content: [{ type: 'text', text: JSON.stringify({ text: 'ok' }) }] };
       },
     };
 
@@ -466,7 +448,7 @@ describe('StratumMcpClient consumer validation wiring', () => {
     assert.equal(received[0].metadata.text, 'valid event');
   });
 
-  it('delivers a python-echo envelope whose flow_id equals the call correlationId (V6)', async () => {
+  it('delivers a producer-echo envelope whose flow_id equals the call correlationId (V6)', async () => {
     const mock = {
       callTool: async ({ arguments: _args }, _s, opts) => {
         // Python-parity: the producer echoed the correlation id as flow_id.
@@ -553,4 +535,39 @@ describe('StratumMcpClient consumer validation wiring', () => {
       assert.ok(warnings.some((w) => w.includes('misrouted')), `expected a misroute warning; got: ${warnings}`);
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// H7(a): client lifecycle edges (re-expressed from the deleted
+// stratum-mcp-client.test.js:179-196,245). The python-era originals drove a live
+// python MCP; these exercise the same client-side guards against the TS client
+// via the mock-injection seam (no live subprocess).
+// ---------------------------------------------------------------------------
+describe('StratumMcpClient lifecycle edges', () => {
+  it('a tool call before connect throws "not connected"', async () => {
+    const client = new StratumMcpClient(); // no _testClient, never connected
+    await assert.rejects(
+      () => client.plan({ version: 1, flows: { entry: 'main', main: { steps: [] } } }, 'main', {}),
+      /not connected/i,
+    );
+  });
+
+  it('close on a never-connected client is a safe no-op (double-close guard)', async () => {
+    const client = new StratumMcpClient();
+    await client.close();
+    await client.close(); // must not throw
+    assert.ok(true);
+  });
+
+  it('resume propagates a StratumError when the engine reports an unknown run', async () => {
+    const { mock } = makeMockClient([
+      { status: 'error', error: { code: 'NOT_FOUND', message: "run 'nonexistent' not found" } },
+    ]);
+    const client = new StratumMcpClient();
+    Object.defineProperty(client, '_testClient', { value: mock, writable: true });
+    await assert.rejects(
+      () => client.resume('nonexistent'),
+      (err) => err instanceof StratumError,
+    );
+  });
 });

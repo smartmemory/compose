@@ -2,6 +2,104 @@
 
 ## 2026-07-17
 
+### STRAT-PY-ENDGAME — Delete the Python execution path
+
+Compose now has one Stratum runtime path: the strict TypeScript ready-loop.
+The Python response dispatcher, parallel RPC vocabulary, CLI spawn path, and
+legacy GSD decomposition loop have been deleted. Selecting
+`COMPOSE_STRATUM_ENGINE=python` or `capabilities.stratumEngine=python` fails
+immediately with an error pointing to the `python-legacy` archive branch.
+
+The MCP client no longer discovers or advertises Python-only parallel tools,
+and initialization registers the adjacent TypeScript MCP server directly.
+The runtime `connectorFactory` compatibility adapter is gone; TS agent stubbing
+now lives in a test-only harness.
+Python-era dispatch tests were removed or replaced by TS issuance, token,
+fanout, retry, resume, and audit coverage.
+
+**Endgame restoration (H1–H8) — live behavior recovered on the TS path.** A
+two-lens review found the deletion had removed live behavior together with the
+Python path, not only redundant coverage. The following was restored on the TS
+ready-loop (RED-first, each re-expressed from the deleted test as the behavioral
+spec):
+
+- **Dirty-review recovery (H1).** A dirty top-level `review_merge` reducer now
+  routes back through the fix pass and persists `.compose/prior_dirty_lenses.json`
+  so the retry's `review_triage` re-runs only the dirty lenses (RETRY PATH); the
+  sidecar is cleared on a clean build. The triage prompt's selective-retry rules
+  and the `debug-discipline` first-run baseline were restored.
+- **Design-conversation engine resolution (H2).** The design Stratum client now
+  resolves the engine from the target project root and keys its connection cache
+  on that root, so a python-pinned project surfaces the python-legacy error
+  instead of silently reusing another project's cached TS client.
+- **GSD milestone instrumentation (H3).** The TS consumer path records per-item
+  timing (`gsd/<feature>/timing.json`) and diff snapshots (`diffs/<id>.diff`) in
+  GSD mode; build-mode fanout writes nothing.
+- **Bug-mode recovery checkpoints (H4).** A terminal build failure on a bug-mode
+  `{test,fix,diagnose}` step writes `docs/bugs/<code>/checkpoint.md` and
+  regenerates the bug index.
+- **Diagnose retry context (H5).** A bug-mode diagnose (re)attempt again surfaces
+  previously rejected hypotheses from the per-bug ledger at the top of the prompt.
+- **Consumer fanout → cockpit (H6).** Consumer-fanout items emit `parallel: true`
+  with a `∥`-prefixed stepNum, so the parallel-task progress UI initializes and
+  advances (the emission test now asserts the real `runConsumerIssuance` output,
+  not a fabricated event).
+- **Reducer prompt/normalization (H8).** An integration test pins that
+  `review_merge`'s prompt is the base reducer prompt (no reviewer scaffold) and
+  its output goes through ReviewResult normalization.
+
+Recovered coverage (H7): TS StratumMcpClient lifecycle edges and the compose-side
+GSD budget wiring (unbudgeted identity, v1 flow-budget injection, cumulative
+pre-plan refusal). The GSD dispatch-path resume/budget-terminal re-expression and
+the port of three still-passing python-era survivor suites remain tracked as
+follow-ups.
+
+**Round 2 (I1–I4) — the restorations now fire on the REAL paths.** A follow-up
+review found the H1–H8 restorations passed against proxies (helpers, injected
+flags, fabricated history) while the production wiring did not engage. Corrected
+and re-tested over the live TS engine (ts-cutover golden pattern / real driver
+seams — no injected context, no fabricated state):
+
+- **Dirty-review recovery is engine-native (I1).** The H1 corrective pass could
+  never converge — re-running the top-level `review_merge` reducer re-merged the
+  same frozen lens outputs. `review_merge` LOST its `result.clean == true` ensure +
+  attempts loop; a new `review_gate` follows it. Compose resolves the gate by
+  policy: a clean merge approves; a dirty merge derives the dirty lenses from the
+  reducer's surviving findings (ReviewResult normalization resets `lenses_run`),
+  persists them, runs the corrective fixer, and REVISES — the engine reroutes to
+  `review_triage`, whose RETRY PATH re-runs only the dirty lenses (+ baselines).
+  A golden proves convergence over the real engine (audit shows review_gate
+  revise→approve; only the dirty lens re-issues).
+- **Dirty-lenses sidecar cleared at fresh-build start (I2)**, not only on clean
+  completion — a killed dirty build no longer makes an unrelated fresh build take
+  the RETRY PATH.
+- **GSD instrumentation fires for real (I3).** `context.gsd` (and the resolved
+  task id) are threaded at the real `runGsd` consumer call site; the H3 test had
+  injected the flag AND a synthetic `item.id`, masking that the engine's GSD
+  descriptor carries neither, so `timing.json`/`diffs` were written under the wrong
+  key and the milestone report showed "No diff captured".
+- **Bug checkpoint uses the exhausted step id (I4).** The terminal-failure path
+  passes the exhausted step id directly instead of scanning history for an
+  outcome:'failed' entry a `test`/`diagnose` contract (no `outcome` field) never
+  produces.
+
+**Round 3 (J1–J2) — review_gate resume + dirty-lens fidelity (closing pass).**
+
+- **review_gate re-derives the review result on resume (J1).** The reducer result
+  is stashed process-locally, so a build RESUMED at the waiting review_gate had a
+  null stash and would treat a clean review as dirty (empty fixer, a wasted revise,
+  and at max_rounds a clean review terminalizing as exhaustion). When the stash is
+  empty the gate now re-derives from the engine audit (`steps.review_merge.output`,
+  which is retained). A golden interrupts at the waiting gate, resumes in a fresh
+  runBuild, and asserts the clean review approves with no phantom revise round.
+- **The true dirty lens is captured PRE-normalization (J2).** ReviewResult
+  normalization resets `lenses_run` to [] and stamps a missing finding lens as
+  'general', so deriving the dirty lenses from post-normalization findings could
+  persist the wrong lens and skip the real one on the corrective round. Compose now
+  captures the dirty-lens identities from the reducer's raw (pre-normalization)
+  output at stepDone and persists from that; post-normalization findings are a
+  last-resort fallback.
+
 ### STRAT-TS-FLAG-DAY — Adopt Surface 9 tokens and make TS the Compose default
 
 Compose now speaks the strict Stratum Surface 9 request contract: step and gate

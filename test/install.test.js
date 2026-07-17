@@ -4,7 +4,7 @@
  * Each test runs `node bin/compose.js install` in a real subprocess with:
  *   - a temp CWD  (isolated from the real project)
  *   - a temp HOME (prevents touching ~/.claude)
- *   - a fake `stratum-mcp` binary on PATH that exits 0
+ *   - the adjacent Stratum TS runtime used by the develop checkout
  *
  * No mocking frameworks needed — node:test + node:assert only.
  */
@@ -19,25 +19,15 @@ import { fileURLToPath } from 'node:url'
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const COMPOSE_BIN = join(REPO_ROOT, 'bin', 'compose.js')
 
-// Fake stratum-mcp: always succeeds, writes nothing
-const FAKE_STRATUM_MCP = `#!/bin/sh\nexit 0\n`
-
 function makeEnv(cwd, home) {
-  // Prepend a bin dir containing our fake stratum-mcp to PATH
-  const fakeBin = join(home, 'bin')
-  mkdirSync(fakeBin, { recursive: true })
-  const fakeExe = join(fakeBin, 'stratum-mcp')
-  writeFileSync(fakeExe, FAKE_STRATUM_MCP, { mode: 0o755 })
-
   return {
     ...process.env,
     HOME: home,
-    PATH: `${fakeBin}:${process.env.PATH}`,
   }
 }
 
 function runInstall(cwd, env) {
-  return execFileSync('node', [COMPOSE_BIN, 'install'], {
+  return execFileSync(process.execPath, [COMPOSE_BIN, 'install'], {
     cwd,
     env,
     encoding: 'utf-8',
@@ -157,16 +147,12 @@ test('is idempotent: running install twice produces the same .mcp.json', () => {
   assert.equal(first, second, '.mcp.json should be identical after two installs')
 })
 
-test('exits non-zero when stratum-mcp is not on PATH', () => {
+test('does not depend on a Python Stratum binary on PATH', () => {
   const cwd = tmpDir()
   const home = tmpDir()
-
-  // PATH with no stratum-mcp
   const env = { ...process.env, HOME: home, PATH: '/usr/bin:/bin' }
-
-  assert.throws(
-    () => execFileSync('node', [COMPOSE_BIN, 'install'], { cwd, env, encoding: 'utf-8' }),
-    (err) => err.status !== 0,
-    'should exit non-zero when stratum-mcp is missing'
-  )
+  execFileSync(process.execPath, [COMPOSE_BIN, 'install'], { cwd, env, encoding: 'utf-8' })
+  const config = JSON.parse(readFileSync(join(cwd, '.mcp.json'), 'utf-8'))
+  assert.equal(config.mcpServers.stratum.command, process.execPath)
+  assert.match(config.mcpServers.stratum.args[0], /stratum\/ts\/src\/mcp\/bin\.mjs$/)
 })

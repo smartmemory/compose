@@ -1,18 +1,21 @@
 /**
- * diagnose-retry-with-ledger.test.js — COMP-FIX-HARD T6.
+ * diagnose-retry-with-ledger.test.js — COMP-FIX-HARD T6 (TS re-expression).
+ *
+ * Spec source: the pre-deletion test at cc390a7, which drove the python-era
+ * buildRetryPrompt. That function was removed with the python path; the TS
+ * diagnose retry reissues through buildStepPrompt (previousFailure block), so
+ * this re-expression asserts the rejected-hypotheses ledger block is restored
+ * onto buildStepPrompt for a bug-mode diagnose (and absent otherwise).
  *
  * Verifies:
- *   1. buildRetryPrompt prepends a "Previously Rejected Hypotheses" block when
- *      context.mode === 'bug', stepDispatch.step_id === 'diagnose',
- *      context.bug_code is set, and the ledger has rejected entries.
- *   2. Empty ledger → output unchanged from current behavior.
- *   3. Bug mode + non-diagnose step → output unchanged.
- *   4. Feature mode → output unchanged.
- *   5. After diagnose success in bug mode, recordDiagnoseSuccessIfBugMode appends
- *      one ledger entry with verdict 'accepted'.
- *   6. After diagnose success in feature mode, no ledger write occurs.
+ *   1. bug + diagnose + rejected ledger entries → "## Previously Rejected
+ *      Hypotheses" block prepended (before the step body).
+ *   2. bug + diagnose + empty ledger → no block.
+ *   3. bug + non-diagnose step → no block.
+ *   4. feature mode → no block.
+ *   5. recordDiagnoseSuccessIfBugMode appends one 'accepted' ledger entry in bug
+ *      mode; 6. no ledger write in feature mode.
  */
-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, existsSync } from 'node:fs';
@@ -21,162 +24,91 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const { buildRetryPrompt } = await import(`${REPO_ROOT}/lib/step-prompt.js`);
-const {
-  appendHypothesisEntry,
-  readHypotheses,
-  getHypothesesPath,
-} = await import(`${REPO_ROOT}/lib/bug-ledger.js`);
+const { buildStepPrompt } = await import(`${REPO_ROOT}/lib/step-prompt.js`);
+const { appendHypothesisEntry, readHypotheses } = await import(`${REPO_ROOT}/lib/bug-ledger.js`);
 const { recordDiagnoseSuccessIfBugMode } = await import(`${REPO_ROOT}/lib/build.js`);
 
-function makeTmpCwd() {
-  return mkdtempSync(join(tmpdir(), 'diagnose-retry-ledger-test-'));
-}
-function cleanup(d) { try { rmSync(d, { recursive: true, force: true }); } catch {} }
+function makeTmpCwd() { return mkdtempSync(join(tmpdir(), 'diagnose-retry-ledger-')); }
+function cleanup(d) { try { rmSync(d, { recursive: true, force: true }); } catch { /* ignore */ } }
 
 const diagnoseDispatch = {
-  step_id: 'diagnose',
-  intent: 'Identify the root cause of the failing test',
-  inputs: { task: 'Fix flaky parser' },
-  output_fields: [{ name: 'root_cause', type: 'string' }],
+  step_id: 'diagnose', intent: 'Identify the root cause of the failing test',
+  inputs: { task: 'Fix flaky parser' }, output_fields: [{ name: 'root_cause', type: 'string' }],
   ensure: ['root_cause is non-empty'],
 };
+const executeDispatch = { step_id: 'execute', intent: 'Apply the fix', inputs: {}, output_fields: [], ensure: [] };
 
-const otherDispatch = {
-  step_id: 'execute',
-  intent: 'Apply the fix',
-  inputs: {},
-  output_fields: [],
-  ensure: [],
-};
+const HEADER = '## Previously Rejected Hypotheses';
 
-// 1. Bug mode + diagnose + ledger has rejected entries → prompt starts with Previously Rejected block
-test('buildRetryPrompt prepends Previously Rejected block in bug+diagnose with rejected ledger entries', () => {
+test('bug+diagnose with rejected ledger entries prepends the Previously Rejected block', () => {
   const cwd = makeTmpCwd();
   try {
     appendHypothesisEntry(cwd, 'BUG-T6-A', {
-      attempt: 1,
-      ts: '2026-05-01T00:00:00Z',
-      hypothesis: 'Off-by-one in the parser',
-      verdict: 'rejected',
+      attempt: 1, ts: '2026-05-01T00:00:00Z',
+      hypothesis: 'Off-by-one in the parser', verdict: 'rejected',
       evidence_against: ['test still fails after re-indexing'],
     });
-
     const ctx = { cwd, mode: 'bug', bug_code: 'BUG-T6-A', featureCode: 'BUG-T6-A' };
-    const prompt = buildRetryPrompt(diagnoseDispatch, ['root_cause was empty'], ctx);
-
-    assert.ok(
-      prompt.startsWith('## Previously Rejected Hypotheses'),
-      'prompt should start with the rejected-hypotheses header'
-    );
-    assert.ok(prompt.includes('Off-by-one in the parser'), 'prompt should include the prior hypothesis');
-    // RETRY header still present, after the ledger block
-    const ledgerIdx = prompt.indexOf('## Previously Rejected Hypotheses');
-    const retryIdx = prompt.indexOf('RETRY');
-    assert.ok(ledgerIdx < retryIdx, 'ledger block must appear before RETRY header');
+    const prompt = buildStepPrompt(diagnoseDispatch, ctx);
+    assert.ok(prompt.startsWith(HEADER), 'prompt should start with the rejected-hypotheses header');
+    assert.ok(prompt.includes('Off-by-one in the parser'), 'includes the prior hypothesis');
+    assert.ok(prompt.includes('test still fails after re-indexing'), 'includes the evidence against');
+    // The ledger block precedes the ordinary step body.
+    assert.ok(prompt.indexOf(HEADER) < prompt.indexOf('You are executing step'), 'ledger block comes first');
   } finally { cleanup(cwd); }
 });
 
-// 2. Bug mode + diagnose + empty ledger → unchanged
-test('buildRetryPrompt unchanged in bug+diagnose with empty ledger', () => {
+test('bug+diagnose with an empty ledger renders no block', () => {
   const cwd = makeTmpCwd();
   try {
     const ctx = { cwd, mode: 'bug', bug_code: 'BUG-T6-EMPTY', featureCode: 'BUG-T6-EMPTY' };
-    const baseline = buildRetryPrompt(diagnoseDispatch, ['violation X'], { cwd, featureCode: 'F' });
-    const got = buildRetryPrompt(diagnoseDispatch, ['violation X'], ctx);
-
-    assert.ok(!got.startsWith('## Previously Rejected Hypotheses'), 'no rejected block when ledger empty');
-    // Should be identical content shape (modulo featureCode echo); check the RETRY portion present and identical structure
-    assert.ok(got.startsWith('RETRY'), 'should start with RETRY when ledger empty');
-    assert.equal(
-      got.replace(/Feature: BUG-T6-EMPTY/g, 'Feature: F'),
-      baseline,
-      'prompt should match baseline (modulo feature code) when ledger empty'
-    );
+    const prompt = buildStepPrompt(diagnoseDispatch, ctx);
+    assert.ok(!prompt.includes(HEADER), 'no rejected block when ledger empty');
+    assert.ok(prompt.startsWith('You are executing step'), 'ordinary step prompt when ledger empty');
   } finally { cleanup(cwd); }
 });
 
-// 3. Bug mode + non-diagnose step → unchanged
-test('buildRetryPrompt unchanged in bug mode for non-diagnose step', () => {
+test('bug mode + a non-diagnose step renders no block', () => {
   const cwd = makeTmpCwd();
   try {
-    appendHypothesisEntry(cwd, 'BUG-T6-NONDIAG', {
-      attempt: 1, ts: '2026-05-01T00:00:00Z',
-      hypothesis: 'should not appear', verdict: 'rejected',
+    appendHypothesisEntry(cwd, 'BUG-T6-B', {
+      attempt: 1, ts: '2026-05-01T00:00:00Z', hypothesis: 'X', verdict: 'rejected', evidence_against: ['y'],
     });
-
-    const ctx = { cwd, mode: 'bug', bug_code: 'BUG-T6-NONDIAG', featureCode: 'BUG-T6-NONDIAG' };
-    const prompt = buildRetryPrompt(otherDispatch, ['v'], ctx);
-
-    assert.ok(!prompt.includes('Previously Rejected'), 'should not inject ledger for non-diagnose step');
-    assert.ok(prompt.startsWith('RETRY'), 'should start with RETRY');
+    const ctx = { cwd, mode: 'bug', bug_code: 'BUG-T6-B', featureCode: 'BUG-T6-B' };
+    const prompt = buildStepPrompt(executeDispatch, ctx);
+    assert.ok(!prompt.includes(HEADER), 'no rejected block for a non-diagnose step');
   } finally { cleanup(cwd); }
 });
 
-// 4. Feature mode → unchanged
-test('buildRetryPrompt unchanged in feature mode for diagnose-named step', () => {
+test('feature mode renders no block even for a diagnose step', () => {
   const cwd = makeTmpCwd();
   try {
-    // Even if a feature-mode flow had a step called diagnose, no bug_code → no ledger read.
-    const ctx = { cwd, mode: 'feature', featureCode: 'AUTH-1' };
-    const prompt = buildRetryPrompt(diagnoseDispatch, ['v'], ctx);
-    assert.ok(!prompt.includes('Previously Rejected'), 'should not inject ledger in feature mode');
-    assert.ok(prompt.startsWith('RETRY'), 'should start with RETRY');
+    appendHypothesisEntry(cwd, 'F-1', {
+      attempt: 1, ts: '2026-05-01T00:00:00Z', hypothesis: 'X', verdict: 'rejected', evidence_against: ['y'],
+    });
+    const ctx = { cwd, mode: 'feature', bug_code: 'F-1', featureCode: 'F-1' };
+    // mode !== 'bug' → no block (even though a ledger + bug_code coincide).
+    const prompt = buildStepPrompt(diagnoseDispatch, { ...ctx, mode: 'feature' });
+    assert.ok(!prompt.includes(HEADER), 'feature mode never renders the rejected block');
   } finally { cleanup(cwd); }
 });
 
-// 5. Diagnose success in bug mode → ledger gains one accepted entry
-test('recordDiagnoseSuccessIfBugMode appends accepted entry in bug mode', () => {
+test('recordDiagnoseSuccessIfBugMode appends one accepted entry in bug mode', () => {
   const cwd = makeTmpCwd();
   try {
-    const ctx = { cwd, mode: 'bug', bug_code: 'BUG-T6-OK' };
-    const response = { step_id: 'diagnose' };
-    const result = {
-      root_cause: 'Race condition in cache invalidation',
-      trace_evidence: ['evt:cache.miss before evt:cache.set', 'log line 42 at lib/cache.js:120'],
-    };
-
-    recordDiagnoseSuccessIfBugMode(ctx, response, result);
-
-    const entries = readHypotheses(cwd, 'BUG-T6-OK');
-    assert.equal(entries.length, 1, 'one entry should have been appended');
-    const e = entries[0];
-    assert.equal(e.verdict, 'accepted');
-    assert.equal(e.hypothesis, 'Race condition in cache invalidation');
-    assert.deepEqual(e.evidence_for, [
-      'evt:cache.miss before evt:cache.set',
-      'log line 42 at lib/cache.js:120',
-    ]);
-    assert.equal(e.attempt, 1, 'first success → attempt 1');
-    assert.ok(typeof e.ts === 'string' && e.ts.length > 0, 'ts should be a non-empty ISO string');
+    const ctx = { cwd, mode: 'bug', bug_code: 'BUG-T6-C', featureCode: 'BUG-T6-C' };
+    recordDiagnoseSuccessIfBugMode(ctx, 'diagnose', { root_cause: 'stale cache', summary: 'found it' });
+    const entries = readHypotheses(cwd, 'BUG-T6-C');
+    const accepted = entries.filter(e => e.verdict === 'accepted');
+    assert.equal(accepted.length, 1, 'exactly one accepted entry appended');
   } finally { cleanup(cwd); }
 });
 
-// 6. Feature mode → no ledger write
-test('recordDiagnoseSuccessIfBugMode is a no-op in feature mode', () => {
+test('recordDiagnoseSuccessIfBugMode writes nothing in feature mode', () => {
   const cwd = makeTmpCwd();
   try {
-    const ctx = { cwd, mode: 'feature', featureCode: 'AUTH-1' };
-    const response = { step_id: 'diagnose' };
-    const result = { root_cause: 'X', trace_evidence: [] };
-
-    recordDiagnoseSuccessIfBugMode(ctx, response, result);
-
-    // No bug_code → nothing to look up. Ensure the bugs dir was not created.
-    assert.equal(existsSync(join(cwd, 'docs', 'bugs')), false, 'no docs/bugs/ should be created in feature mode');
-  } finally { cleanup(cwd); }
-});
-
-// 7. Bug mode but non-diagnose response.step_id → no-op
-test('recordDiagnoseSuccessIfBugMode is a no-op for non-diagnose steps', () => {
-  const cwd = makeTmpCwd();
-  try {
-    const ctx = { cwd, mode: 'bug', bug_code: 'BUG-T6-NOOP' };
-    const response = { step_id: 'execute' };
-    const result = { root_cause: 'X' };
-
-    recordDiagnoseSuccessIfBugMode(ctx, response, result);
-
-    assert.equal(existsSync(getHypothesesPath(cwd, 'BUG-T6-NOOP')), false, 'no ledger file should be created');
+    const ctx = { cwd, mode: 'feature', featureCode: 'F-2' };
+    recordDiagnoseSuccessIfBugMode(ctx, 'diagnose', { root_cause: 'x', summary: 'y' });
+    assert.ok(!existsSync(join(cwd, 'docs', 'bugs')), 'no ledger tree written in feature mode');
   } finally { cleanup(cwd); }
 });

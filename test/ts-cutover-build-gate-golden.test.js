@@ -7,7 +7,7 @@
  * auto-approval path.
  *
  * RED until build.js discovers a TS gate from the `running` dispatch instead
- * of waiting for the retired Python `await_gate` gate envelope.
+ * instead of waiting for the retired gate envelope.
  */
 
 import { describe, test } from 'node:test';
@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { runBuild } from '../lib/build.js';
-import { installFactoryShim } from '../lib/connector-factory-shim.js';
+import { installAgentHarness } from './helpers/ts-agent-harness.js';
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 
 const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
@@ -99,7 +99,7 @@ describe('build.js consumes the TS-native gate lifecycle', () => {
         env: { ...process.env, STRATUM_STATE_ROOT: stateRoot },
       });
 
-      installFactoryShim(
+      installAgentHarness(
         client,
         stubAgentFactory((prompt) => {
           const match = prompt.match(/step "([^"]+)"/);

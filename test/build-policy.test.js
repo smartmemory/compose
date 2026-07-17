@@ -14,7 +14,10 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { runBuild } from '../lib/build.js';
+import { runBuild as runBuildRuntime } from '../lib/build.js';
+import { runBuildWithAgentFactory } from './helpers/ts-agent-harness.js';
+
+const runBuild = (featureCode, options) => runBuildWithAgentFactory(runBuildRuntime, featureCode, options);
 
 // ---------------------------------------------------------------------------
 // Skip guard

@@ -3,7 +3,7 @@
  * compose CLI
  *
  * compose init     — initialize Compose in the current project (project-local)
- * compose setup    — install global skill + register stratum-mcp (user-global)
+ * compose setup    — install global Compose skills
  * compose install  — run init + setup (backwards-compat alias)
  * compose start    — start the compose app (supervisor.js)
  * compose build    — headless feature lifecycle runner
@@ -21,6 +21,7 @@ import { resolvePort } from '../lib/resolve-port.js'
 import { resolveRoadmapPath, resolveFeaturesPath, resolveContextPathFromConfig, resolveFeaturesPathFromConfig, resolveRoadmapPathFromConfig } from '../lib/project-paths.js'
 import { installAgentDefs } from '../lib/install-agent-defs.js'
 import { validateAgentString } from '../lib/agent-string.js'
+import { LIVE_STRATUM_TS_MCP_BIN } from '../lib/stratum-engine.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PACKAGE_ROOT = resolve(__dirname, '..')
@@ -137,7 +138,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  gate list          List pending gates (--item <id>, --status pending|all|resolved)')
   console.log('  gate resolve <id>  Resolve a gate (--approve|--revise|--kill, --comment <text>)')
   console.log('  init      Initialize Compose in the current project')
-  console.log('  setup     Install/sync global skills + register stratum-mcp (alias: sync)')
+  console.log('  setup     Install/sync global Compose skills (alias: sync)')
   console.log('  sync      Re-sync global skills from this install (alias of setup)')
   console.log('  update    Pull latest compose, reinstall deps, refresh global skill')
   console.log('  doctor    Check external skill dependencies')
@@ -368,28 +369,10 @@ async function runInit(flags, cwdOverride) {
   const composeDir = join(cwd, '.compose')
   mkdirSync(composeDir, { recursive: true })
 
-  // 2. Detect / auto-install stratum
-  let hasStratum = !noStratum && spawnSync('which', ['stratum-mcp'], { encoding: 'utf-8' }).status === 0
+  // 2. The TS runtime is a checked-in adjacent dependency in this develop tree.
+  const hasStratum = !noStratum && existsSync(LIVE_STRATUM_TS_MCP_BIN)
   if (!noStratum && !hasStratum) {
-    console.log('stratum-mcp not found — installing via pip...')
-    const pipResult = spawnSync('pip', ['install', 'stratum-mcp'], {
-      stdio: 'inherit',
-      encoding: 'utf-8',
-    })
-    if (pipResult.status === 0) {
-      // Verify the binary is now on PATH
-      hasStratum = spawnSync('which', ['stratum-mcp'], { encoding: 'utf-8' }).status === 0
-      if (hasStratum) {
-        console.log('stratum-mcp installed successfully')
-      } else {
-        console.warn('Warning: pip install stratum-mcp succeeded but stratum-mcp not found on PATH')
-        console.warn('  The binary may live in a pyenv version dir not on $PATH.')
-        console.warn('  Try: ln -sf "$(python -c \'import sys,os; print(os.path.join(sys.prefix, "bin", "stratum-mcp"))\')" ~/.local/bin/stratum-mcp')
-      }
-    } else {
-      console.warn('Warning: pip install stratum-mcp failed — Stratum will be disabled')
-      console.warn('  Install manually: pip install stratum-mcp  (requires Python >= 3.11)')
-    }
+    console.warn(`Warning: Stratum TS MCP entrypoint not found at ${LIVE_STRATUM_TS_MCP_BIN}`)
   }
   const hasLifecycle = !noLifecycle
 
@@ -519,31 +502,21 @@ async function runInit(flags, cwdOverride) {
   // T2-F5 retirement: remove legacy 'agents' entry. The file it points to is
   // now a retirement shim that exits non-zero with a migration message;
   // removing the entry prevents Claude Code from spawning the shim on session start.
-  // The agent_run capability lives on stratum-mcp as stratum_agent_run.
+  // The agent_run capability lives on the Stratum TS MCP server.
   if (mcpConfig.mcpServers.agents) {
     delete mcpConfig.mcpServers.agents
     console.log('Removed retired agents MCP server from .mcp.json (T2-F5). '
       + 'Use stratum_agent_run on the stratum MCP server instead.')
   }
-  if (hasStratum && !mcpConfig.mcpServers.stratum) {
-    // Use absolute path — miniconda/pip binaries may not be on Claude Code's PATH
-    const stratumPath = spawnSync('which', ['stratum-mcp'], { encoding: 'utf-8' }).stdout.trim()
+  if (hasStratum) {
     mcpConfig.mcpServers.stratum = {
-      command: stratumPath || 'stratum-mcp',
+      command: process.execPath,
+      args: [LIVE_STRATUM_TS_MCP_BIN],
     }
-    console.log('Registered stratum-mcp in .mcp.json')
+    console.log('Registered the Stratum TS MCP server in .mcp.json')
   }
   writeFileSync(mcpPath, JSON.stringify(mcpConfig, null, 2))
   console.log(`Registered compose-mcp in ${mcpPath}`)
-
-  // 6b. Run stratum-mcp install to register hooks + CLAUDE.md in this project
-  if (hasStratum) {
-    console.log('Running stratum-mcp install for hooks...')
-    const stratumResult = spawnSync('stratum-mcp', ['install'], { cwd, stdio: 'inherit' })
-    if (stratumResult.status !== 0) {
-      console.warn('Warning: stratum-mcp install failed (hooks may not be registered)')
-    }
-  }
 
   // 7. Scaffold ROADMAP.md from template if absent. COMP-PATHS-EXTERNAL:
   // honor a configured (possibly relocated) paths.roadmap instead of always
@@ -590,7 +563,7 @@ async function runInit(flags, cwdOverride) {
 }
 
 // ---------------------------------------------------------------------------
-// compose setup — user-global setup
+// compose setup — user-global skill setup
 // ---------------------------------------------------------------------------
 
 function runSetup() {
@@ -603,18 +576,6 @@ function runSetup() {
   }
   syncSkills(agents)
 
-  // 2. Register stratum-mcp if available
-  const hasStratum = spawnSync('which', ['stratum-mcp'], { encoding: 'utf-8' }).status === 0
-  if (hasStratum) {
-    console.log('Registering stratum-mcp with Claude Code...')
-    const result = spawnSync('stratum-mcp', ['install'], { stdio: 'inherit' })
-    if (result.status !== 0) {
-      console.warn('Warning: stratum-mcp install failed (non-fatal)')
-    }
-  } else {
-    console.log('stratum-mcp not found — skipping global registration')
-    console.log('  Install later: pip install stratum && compose setup')
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -723,7 +684,7 @@ async function runUpdate(flags) {
     if (ni.status !== 0) { process.exit(ni.status || 1) }
   }
 
-  // Refresh global skill + stratum-mcp registration
+  // Refresh global skills.
   console.log('')
   console.log('Refreshing global skill installation...')
   runSetup()
@@ -754,7 +715,7 @@ if (cmd === 'init') {
 
 if (cmd === 'setup' || cmd === 'sync') {
   // `sync` is an alias for `setup` — both mirror compose-owned skills into the
-  // agent skill dirs and register stratum-mcp. The name `sync` better signals
+  // agent skill dirs. The name `sync` better signals
   // the idempotent "reconcile local skills with this install" job (run it after
   // editing skills locally, when there's no new version to `update` to).
   runSetup()

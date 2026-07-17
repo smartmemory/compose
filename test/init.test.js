@@ -1,7 +1,7 @@
 /**
  * init.test.js — Tests for compose init, compose setup, compose start.
  *
- * Uses real subprocesses with temp dirs and fake stratum-mcp.
+ * Uses real subprocesses with temp dirs and the adjacent Stratum TS runtime.
  */
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,7 +15,6 @@ import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const COMPOSE_BIN = join(REPO_ROOT, 'bin', 'compose.js');
-const FAKE_STRATUM_MCP = `#!/bin/sh\nexit 0\n`;
 
 const temps = [];
 after(() => {
@@ -28,18 +27,15 @@ function tmpDir() {
 }
 
 function makeEnv(cwd, home, extraPath) {
-  const fakeBin = join(home, 'bin');
-  mkdirSync(fakeBin, { recursive: true });
-  writeFileSync(join(fakeBin, 'stratum-mcp'), FAKE_STRATUM_MCP, { mode: 0o755 });
   return {
     ...process.env,
     HOME: home,
-    PATH: `${fakeBin}${extraPath ? ':' + extraPath : ''}:${process.env.PATH}`,
+    PATH: `${extraPath ? extraPath + ':' : ''}${process.env.PATH}`,
   };
 }
 
 function runCmd(cmd, cwd, env) {
-  return execFileSync('node', [COMPOSE_BIN, cmd], {
+  return execFileSync(process.execPath, [COMPOSE_BIN, cmd], {
     cwd,
     env,
     encoding: 'utf-8',
@@ -120,13 +116,13 @@ describe('compose init', () => {
     }
   });
 
-  test('detects stratum capability from PATH', () => {
+  test('enables the adjacent Stratum TS runtime', () => {
     const cwd = tmpDir();
     const home = tmpDir();
     runCmd('init', cwd, makeEnv(cwd, home));
 
     const config = JSON.parse(readFileSync(join(cwd, '.compose', 'compose.json'), 'utf-8'));
-    assert.equal(config.capabilities.stratum, true, 'stratum should be true when stratum-mcp is on PATH');
+    assert.equal(config.capabilities.stratum, true);
   });
 
   test('--no-stratum sets capabilities.stratum: false', () => {

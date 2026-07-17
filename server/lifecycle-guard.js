@@ -312,7 +312,7 @@ export async function ensureGuard(featureCode, currentPhase, workspaceRoot, mode
       workspaceRoot,
     });
   } catch (e) {
-    // A thrown spawn failure (e.g. stratum-mcp not installed) must NOT escape as
+    // A thrown Stratum CLI failure must NOT escape as
     // a generic 500/400 — normalise to a fail-closed error result.
     return { error: { code: 'GUARD_UNREACHABLE', message: e.message } };
   }

@@ -214,7 +214,7 @@ function processMessage(msg) {
       _state.parallelTasks.completed++;
       _state.parallelTasks.tasks[msg.stepId] = 'complete';
     } else if (msg.subtype === 'build_step_done' && _state.parallelTasks && !msg.stepNum?.toString().startsWith('∥')) {
-      // Batch-level parallel_dispatch done — clear parallel state
+      // Batch-level consumer fanout done — clear parallel state
       _state.parallelTasks = null;
     }
   }

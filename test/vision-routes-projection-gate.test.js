@@ -7,7 +7,7 @@
  * projection for tracksFeatureJson:false modes, and still project for build.
  *
  * The guard client and the status writer are stubbed (test seams) so no
- * stratum-mcp subprocess and no real feature.json write occurs — we assert
+ * Stratum subprocess and no real feature.json write occurs — we assert
  * purely on whether projectFeatureStatus reached the status writer.
  */
 import { test, describe, before, after, beforeEach } from 'node:test';

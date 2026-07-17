@@ -201,7 +201,7 @@ describe('stratum-sync readFlows — unit tests with mock', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Sleep-aware poll gate (hasLiveFlows): skip the stratum-mcp cold-start when
+// Sleep-aware poll gate (hasLiveFlows): skip the Stratum CLI cold-start when
 // nothing bound can still change, so an idle host is free to sleep.
 // ---------------------------------------------------------------------------
 

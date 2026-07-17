@@ -338,18 +338,15 @@ describe('child-flow writeViolation severity propagation', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 5: COMP-AGENT-CAPS-6 — child-flow block mode enforcement
-// Mirrors the inline runEnforcementBlock pattern to test the child-flow path.
-// The actual fix is in build.js:executeChildFlow; this test drives the same
-// logic pattern to confirm child-flow block throws and log-mode does not.
+// Test 5: COMP-AGENT-CAPS-6 — scoped consumer block mode enforcement
+// Mirrors the inline runEnforcementBlock pattern for TS consumer steps.
 // ---------------------------------------------------------------------------
 
 /**
- * Child-flow enforcement block — extracted from build.js:executeChildFlow
- * (post-CAPS-6 fix). Same logic as runEnforcementBlock above but named
- * distinctly to document the child-flow code path.
+ * Scoped-consumer enforcement block. Same logic as runEnforcementBlock above,
+ * named distinctly to document the TS consumer-step path.
  */
-async function runChildFlowEnforcementBlock({ observedTools, agentType, stepId, settingsPath, streamWriter }) {
+async function runConsumerEnforcementBlock({ observedTools, agentType, stepId, settingsPath, streamWriter }) {
   const childTemplate = agentType?.split(':')[1] ?? 'unknown';
 
   const childCapViolations = [];
@@ -376,20 +373,20 @@ async function runChildFlowEnforcementBlock({ observedTools, agentType, stepId, 
   if (childEnforcement === 'block' && childCapViolations.length > 0) {
     const tools = childCapViolations.map(v => v.tool).join(', ');
     throw new StratumError('CAPABILITY_VIOLATION',
-      `Child step "${stepId}" used disallowed tools: ${tools}`, stepId);
+      `Consumer step "${stepId}" used disallowed tools: ${tools}`, stepId);
   }
 
   return { childCapViolations, childEnforcement };
 }
 
-describe('COMP-AGENT-CAPS-6: child-flow block mode enforcement', () => {
-  it('throws StratumError(CAPABILITY_VIOLATION) in block mode for child-flow disallowed tool', async () => {
+describe('COMP-AGENT-CAPS-6: scoped consumer block mode enforcement', () => {
+  it('throws StratumError(CAPABILITY_VIOLATION) in block mode for a consumer disallowed tool', async () => {
     writeFileSync(settingsPath, JSON.stringify({ capabilities: { enforcement: 'block' } }), 'utf-8');
 
     const sw = makeStreamWriter();
 
     await assert.rejects(
-      () => runChildFlowEnforcementBlock({
+      () => runConsumerEnforcementBlock({
         observedTools: [{ tool: 'Edit' }],
         agentType: 'claude:read-only-reviewer',
         stepId: 'review',
@@ -399,19 +396,19 @@ describe('COMP-AGENT-CAPS-6: child-flow block mode enforcement', () => {
       (err) => {
         assert.ok(err instanceof StratumError, 'must be StratumError');
         assert.equal(err.code, 'CAPABILITY_VIOLATION');
-        assert.match(err.message, /Child step/, 'error must identify child-flow path');
+        assert.match(err.message, /Consumer step/, 'error must identify the scoped consumer path');
         assert.match(err.message, /Edit/);
         return true;
       }
     );
   });
 
-  it('does NOT throw in log mode for child-flow disallowed tool (pre-CAPS-6 behavior preserved)', async () => {
+  it('does NOT throw in log mode for a consumer disallowed tool', async () => {
     writeFileSync(settingsPath, JSON.stringify({ capabilities: { enforcement: 'log' } }), 'utf-8');
 
     const sw = makeStreamWriter();
 
-    const result = await runChildFlowEnforcementBlock({
+    const result = await runConsumerEnforcementBlock({
       observedTools: [{ tool: 'Edit' }],
       agentType: 'claude:read-only-reviewer',
       stepId: 'review',
@@ -424,13 +421,13 @@ describe('COMP-AGENT-CAPS-6: child-flow block mode enforcement', () => {
     assert.equal(sw.getEventsOfType('capability_violation').length, 1, 'violation event emitted');
   });
 
-  it('emits violation event to stream before throwing in child-flow block mode', async () => {
+  it('emits violation event before throwing in consumer block mode', async () => {
     writeFileSync(settingsPath, JSON.stringify({ capabilities: { enforcement: 'block' } }), 'utf-8');
 
     const sw = makeStreamWriter();
 
     await assert.rejects(
-      () => runChildFlowEnforcementBlock({
+      () => runConsumerEnforcementBlock({
         observedTools: [{ tool: 'Write' }],
         agentType: 'claude:read-only-reviewer',
         stepId: 'review',
@@ -444,12 +441,12 @@ describe('COMP-AGENT-CAPS-6: child-flow block mode enforcement', () => {
     assert.equal(violations[0].stepId, 'review');
   });
 
-  it('does not throw in child-flow block mode when no violations', async () => {
+  it('does not throw in consumer block mode when no violations', async () => {
     writeFileSync(settingsPath, JSON.stringify({ capabilities: { enforcement: 'block' } }), 'utf-8');
 
     const sw = makeStreamWriter();
 
-    const result = await runChildFlowEnforcementBlock({
+    const result = await runConsumerEnforcementBlock({
       observedTools: [{ tool: 'Read' }],   // Read is allowed for read-only-reviewer
       agentType: 'claude:read-only-reviewer',
       stepId: 'review',

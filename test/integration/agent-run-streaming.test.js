@@ -115,7 +115,6 @@ describe('STRAT-DEDUP-AGENTRUN-V3 consumer integration', () => {
     const result = await client.agentRun('claude', 'do thing', { correlationId });
 
     assert.equal(result.text, 'final answer');
-    assert.equal(result.correlation_id, correlationId);
     assert.equal(received.length, 3);
     assert.equal(received[0].kind, 'agent_started');
     assert.equal(received[1].kind, 'tool_use_summary');
@@ -136,8 +135,8 @@ describe('STRAT-DEDUP-AGENTRUN-V3 consumer integration', () => {
       client.agentRun('claude', 'B', { correlationId: 'corr-B' }),
     ]);
 
-    assert.equal(resA.correlation_id, 'corr-A');
-    assert.equal(resB.correlation_id, 'corr-B');
+    assert.equal(resA.text, 'final answer');
+    assert.equal(resB.text, 'final answer');
     assert.equal(aGot.length, 3);
     assert.equal(bGot.length, 3);
     for (const ev of aGot) assert.equal(ev.flow_id, 'corr-A');

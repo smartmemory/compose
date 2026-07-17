@@ -4,8 +4,7 @@
  * Polls stratum flow state via stratum-client (not direct file reads) and syncs
  * into the vision store on a self-scheduling, sleep-aware loop.
  *
- * Sleep behavior: each poll cold-starts a `stratum-mcp` subprocess (Python
- * interpreter spin-up — the expensive part, not the query itself). Doing that
+ * Sleep behavior: each poll cold-starts the Stratum TS CLI. Doing that
  * every few seconds generated enough periodic activity to keep the host from
  * sleeping. Two mitigations:
  *   1. Cadence widened to 60s (override with COMPOSE_STRATUM_POLL_MS).
@@ -37,7 +36,7 @@ const WAKE_GAP_FACTOR = 1.5;
 /**
  * Sleep-aware poll gate: true only when some bound vision item could still
  * change state (i.e. is bound to a flow and not settled-`complete`). When this
- * is false the poller skips the stratum-mcp spawn so an idle host can sleep.
+ * is false the poller skips the CLI spawn so an idle host can sleep.
  *
  * A bound `complete` item is steady-state (status only advances to `complete`
  * via the audit route, never back), so polling it changes nothing. Anything
@@ -97,7 +96,7 @@ export class StratumSync {
   }
 
   /**
-   * One poll tick. Skips the stratum-mcp spawn when nothing is live (lets the
+   * One poll tick. Skips the Stratum CLI spawn when nothing is live (lets the
    * host sleep); on a tick that fired far later than scheduled, notes the
    * sleep gap before resyncing.
    */

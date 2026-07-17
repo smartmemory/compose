@@ -241,29 +241,6 @@ describe('collapseToSubflow — rejections', () => {
     assert.ok(!model.flows.find(f => f.name === 'sub'));
   });
 
-  test('rejects a boundary edge that crosses via parallel `source`', () => {
-    // a (decompose) -> b ; outside `disp` is a parallel_dispatch with source on b.
-    const spec = {
-      version: '0.3',
-      contracts: { O: { x: { type: 'string' } }, TaskGraph: { tasks: { type: 'array' } } },
-      flows: {
-        main: {
-          steps: [
-            { id: 'a', agent: 'claude', intent: 'a', output_contract: 'O' },
-            { id: 'b', type: 'decompose', agent: 'claude', intent: 'b', inputs: { i: '$.steps.a.output.x' }, output_contract: 'TaskGraph', depends_on: ['a'] },
-            { id: 'disp', type: 'parallel_dispatch', agent: 'claude', source: '$.steps.b.output.tasks', intent_template: 't', depends_on: ['b'] },
-          ],
-        },
-      },
-    };
-    const model = specToModel(spec);
-    // Selecting {b}: b is consumed by `disp` via a parallel `source` boundary edge → reject.
-    const r = collapseToSubflow(model, 'main', ['b'], 'sub');
-    assert.equal(r.ok, false);
-    assert.match(r.reason, /source/i);
-    assert.ok(!model.flows.find(f => f.name === 'sub'));
-  });
-
   test('rejects a boundary edge that crosses via a gate route (on_fail)', () => {
     // a -> b ; outside `g` references b via on_fail (a gate route / control transfer).
     const spec = {

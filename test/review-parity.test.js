@@ -34,7 +34,7 @@ function fakeStratumCapture(responseText = '') {
     },
     async agentRun(agentType, prompt, opts) {
       calls.push({ agentType, prompt, opts });
-      return { text: responseText, correlation_id: opts?.correlationId ?? 'test' };
+      return { text: responseText };
     },
     async cancelAgentRun() { return {}; },
     _calls: calls,
@@ -477,109 +477,6 @@ describe('review-parity: review scaffold wired into runAndNormalize prompt', () 
     const scaffold = buildReviewPrompt({ agentType: 'codex', lens: 'general', confidenceGate: 7 });
     assert.ok(scaffold.includes('code-fence'), 'codex scaffold must include code-fence instruction');
     assert.ok(scaffold.includes('Output Instruction'), 'codex scaffold must have output instruction section');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// SF-NEW-1: merge step (reduce_mode) — normalizer runs, scaffold does NOT prepend
-//
-// build.js main loop: isReviewMain=true (output_contract=ReviewResult) but
-// isReduceMain=true → isReviewScaffoldMain=false → buildReviewPrompt is skipped.
-// runAndNormalize still receives reviewMode: isReviewMain (true).
-// ---------------------------------------------------------------------------
-
-describe('review-parity: SF-NEW-1 — reduce_mode skips scaffold, keeps normalizer', () => {
-  it('reduce_mode=true: prompt is NOT prepended with review scaffold', async () => {
-    // Simulate build.js main-loop logic for a merge step with reduce_mode
-    const fakeResponse = {
-      output_contract: 'ReviewResult',
-      inputs: { reduce_mode: 'true', task: 'merge task', blueprint: 'bp' },
-    };
-    const agentType = 'claude:orchestrator';
-    const basePrompt = 'Merge all lens results into one ReviewResult.';
-
-    const isReviewMain = fakeResponse.output_contract === 'ReviewResult';
-    const isReduceMain = fakeResponse.inputs?.reduce_mode === 'true';
-    const isReviewScaffoldMain = isReviewMain && !isReduceMain;
-
-    let prompt = basePrompt;
-    if (isReviewScaffoldMain) {
-      prompt = buildReviewPrompt({
-        agentType,
-        lens: 'general',
-        lensFocus: '',
-        exclusions: '',
-        confidenceGate: 7,
-        taskDescription: fakeResponse.inputs?.task ?? '',
-        blueprint: fakeResponse.inputs?.blueprint ?? '',
-      }) + '\n\n' + basePrompt;
-    }
-
-    // Scaffold must NOT be prepended for reduce_mode steps
-    assert.equal(isReviewMain, true, 'isReviewMain must be true (normalizer should run)');
-    assert.equal(isReduceMain, true, 'isReduceMain must be true');
-    assert.equal(isReviewScaffoldMain, false, 'scaffold must be skipped for reduce steps');
-    assert.equal(prompt, basePrompt, 'prompt must be the base prompt without scaffold');
-    assert.ok(!prompt.includes('Severity Vocabulary'), 'scaffold Severity Vocabulary must not appear in merge prompt');
-    assert.ok(!prompt.includes('Confidence Scale'), 'scaffold Confidence Scale must not appear in merge prompt');
-  });
-
-  it('reduce_mode=true: runAndNormalize receives reviewMode=true so normalizer runs', async () => {
-    const cleanMergeResponse = JSON.stringify({
-      summary: 'Merged: no findings.',
-      findings: [],
-      clean: true,
-      lenses_run: [],
-      auto_fixes: [],
-      asks: [],
-      meta: {},
-    });
-    const stratum = fakeStratumCapture(cleanMergeResponse);
-    const fakeDispatch = {
-      step_id: 'merge',
-      agent: 'claude:orchestrator',
-      inputs: { reduce_mode: 'true' },
-      output_fields: {},
-    };
-
-    // reviewMode must be true so normalizeReviewResult is invoked on output
-    const result = await runAndNormalize(null, 'Merge all lens results.', fakeDispatch, {
-      stratum,
-      reviewMode: true,   // reduce steps still pass reviewMode=true (isReviewMain)
-      confidenceGate: 7,
-      lens: 'general',
-    });
-
-    assert.ok(typeof result.result?.clean === 'boolean', 'normalizer must produce clean boolean');
-    assert.ok(Array.isArray(result.result?.findings), 'normalizer must produce findings array');
-  });
-
-  it('non-reduce review step IS prepended with scaffold', () => {
-    const fakeResponse = {
-      output_contract: 'ReviewResult',
-      inputs: { task: 'review this', blueprint: 'bp' },
-      // no reduce_mode
-    };
-    const agentType = 'codex';
-    const basePrompt = 'Review the implementation.';
-
-    const isReviewMain = fakeResponse.output_contract === 'ReviewResult';
-    const isReduceMain = fakeResponse.inputs?.reduce_mode === 'true';
-    const isReviewScaffoldMain = isReviewMain && !isReduceMain;
-
-    let prompt = basePrompt;
-    if (isReviewScaffoldMain) {
-      prompt = buildReviewPrompt({
-        agentType, lens: 'general', lensFocus: '', exclusions: '',
-        confidenceGate: 7,
-        taskDescription: fakeResponse.inputs?.task ?? '',
-        blueprint: fakeResponse.inputs?.blueprint ?? '',
-      }) + '\n\n' + basePrompt;
-    }
-
-    assert.equal(isReviewScaffoldMain, true, 'non-reduce review step must use scaffold');
-    assert.ok(prompt.includes('Severity Vocabulary'), 'scaffold must be prepended for non-reduce review steps');
-    assert.ok(prompt.includes(basePrompt), 'base prompt must follow scaffold');
   });
 });
 

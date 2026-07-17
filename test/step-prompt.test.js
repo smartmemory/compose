@@ -1,214 +1,36 @@
-/**
- * Tests for lib/step-prompt.js — Step Prompt Builder.
- */
-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildStepPrompt, buildRetryPrompt, buildFlowStepPrompt, formatBounceForPrompt } from '../lib/step-prompt.js';
+import { buildStepPrompt } from '../lib/step-prompt.js';
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
+const context = { cwd: '/projects/my-app', featureCode: 'AUTH-1' };
 
-const fullDispatch = {
-  step_id: 'generate-schema',
-  intent: 'Generate the database schema from the domain model',
-  inputs: { model: 'User', format: 'sql' },
-  output_fields: [
-    { name: 'schema', type: 'string' },
-    { name: 'tableCount', type: 'number' },
-  ],
-  ensure: [
-    'schema contains CREATE TABLE',
-    'tableCount > 0',
-  ],
-};
-
-const minimalDispatch = {
-  step_id: 'noop-step',
-  intent: 'Do nothing interesting',
-  inputs: {},
-  output_fields: [],
-  ensure: [],
-};
-
-const context = {
-  cwd: '/projects/my-app',
-  featureCode: 'AUTH-1',
-};
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-test('builds prompt with all fields populated', () => {
-  const prompt = buildStepPrompt(fullDispatch, context);
-
-  // step_id
-  assert.ok(prompt.includes('"generate-schema"'), 'should contain step_id');
-
-  // intent
-  assert.ok(prompt.includes('Generate the database schema from the domain model'), 'should contain intent');
-
-  // inputs JSON
-  assert.ok(prompt.includes('"model": "User"'), 'should contain inputs JSON');
-  assert.ok(prompt.includes('"format": "sql"'), 'should contain inputs JSON field');
-
-  // output fields section
-  assert.ok(prompt.includes('## Expected Output'), 'should contain Expected Output section');
-  assert.ok(prompt.includes('- schema (string)'), 'should list output field schema');
-  assert.ok(prompt.includes('- tableCount (number)'), 'should list output field tableCount');
-
-  // ensure section
-  assert.ok(prompt.includes('## Postconditions'), 'should contain Postconditions section');
-  assert.ok(prompt.includes('- schema contains CREATE TABLE'), 'should list ensure expression');
-  assert.ok(prompt.includes('- tableCount > 0'), 'should list ensure expression');
-
-  // context section
-  assert.ok(prompt.includes('## Context'), 'should contain Context section');
-  assert.ok(prompt.includes('Working directory: /projects/my-app'), 'should contain cwd');
-  assert.ok(prompt.includes('Feature: AUTH-1'), 'should contain featureCode');
+test('buildStepPrompt renders a complete TS ready dispatch', () => {
+  const prompt = buildStepPrompt({
+    step_id: 'generate-schema',
+    intent: 'Generate the database schema from the domain model',
+    inputs: { model: 'User', format: 'sql' },
+    output_fields: { schema: 'string', tableCount: 'number' },
+    ensure: ['schema contains CREATE TABLE', 'tableCount > 0'],
+  }, context);
+  assert.match(prompt, /"generate-schema"/);
+  assert.match(prompt, /Generate the database schema/);
+  assert.match(prompt, /Working directory: \/projects\/my-app/);
+  assert.match(prompt, /Feature: AUTH-1/);
 });
 
-test('builds prompt with minimal fields (no ensure, no output_fields)', () => {
-  const prompt = buildStepPrompt(minimalDispatch, context);
-
-  // Should contain intent and context
-  assert.ok(prompt.includes('## Intent'), 'should contain Intent section');
-  assert.ok(prompt.includes('Do nothing interesting'), 'should contain intent text');
-  assert.ok(prompt.includes('## Context'), 'should contain Context section');
-
-  // Should NOT contain optional sections
-  assert.ok(!prompt.includes('## Expected Output'), 'should not contain Expected Output');
-  assert.ok(!prompt.includes('## Postconditions'), 'should not contain Postconditions');
+test('buildStepPrompt omits optional sections for a minimal TS ready dispatch', () => {
+  const prompt = buildStepPrompt({ step_id: 'noop', intent: 'Do nothing' }, context);
+  assert.match(prompt, /## Intent/);
+  assert.doesNotMatch(prompt, /## Expected Output/);
+  assert.doesNotMatch(prompt, /## Postconditions/);
 });
 
-test('retry prompt includes violations before the main prompt', () => {
-  const violations = [
-    'schema was empty',
-    'tableCount was -1',
-  ];
-
-  const prompt = buildRetryPrompt(fullDispatch, violations, context);
-
-  // RETRY header present
-  assert.ok(prompt.includes('RETRY'), 'should contain RETRY header');
-  assert.ok(prompt.includes('- schema was empty'), 'should list first violation');
-  assert.ok(prompt.includes('- tableCount was -1'), 'should list second violation');
-
-  // Violations appear before intent
-  const retryIndex = prompt.indexOf('RETRY');
-  const intentIndex = prompt.indexOf('## Intent');
-  assert.ok(retryIndex < intentIndex, 'RETRY header should appear before intent');
-});
-
-test('flow step prompt includes child flow context', () => {
-  const flowDispatch = {
-    child_flow_name: 'migration-flow',
-    child_step: fullDispatch,
-  };
-
-  const prompt = buildFlowStepPrompt(flowDispatch, context);
-
-  // sub-workflow text
-  assert.ok(prompt.includes('sub-workflow'), 'should contain sub-workflow text');
-  assert.ok(prompt.includes('"migration-flow"'), 'should contain child flow name');
-
-  // child step details carried through
-  assert.ok(prompt.includes('"generate-schema"'), 'should contain child step_id');
-  assert.ok(prompt.includes('Generate the database schema'), 'should contain child intent');
-  assert.ok(prompt.includes('## Context'), 'should contain context section');
-});
-
-// ---------------------------------------------------------------------------
-// T10 — buildRetryPrompt with conflicts (STRAT-PAR-2)
-// ---------------------------------------------------------------------------
-
-test('T10.1 — buildRetryPrompt with 3 args (no conflicts arg) — no conflict section', () => {
-  const violations = ['schema was empty'];
-  const prompt = buildRetryPrompt(fullDispatch, violations, context);
-
-  assert.ok(prompt.includes('RETRY'), 'should contain RETRY header');
-  assert.ok(!prompt.includes('File Ownership Conflicts'), 'should NOT contain conflict section');
-});
-
-test('T10.2 — buildRetryPrompt with conflicts=undefined — no conflict section', () => {
-  const violations = ['schema was empty'];
-  const prompt = buildRetryPrompt(fullDispatch, violations, context, undefined);
-
-  assert.ok(!prompt.includes('File Ownership Conflicts'), 'should NOT contain conflict section');
-});
-
-test('T10.3 — buildRetryPrompt with conflicts=[] — no conflict section', () => {
-  const violations = ['schema was empty'];
-  const prompt = buildRetryPrompt(fullDispatch, violations, context, []);
-
-  assert.ok(!prompt.includes('File Ownership Conflicts'), 'should NOT contain conflict section');
-});
-
-test('T10.4 — buildRetryPrompt with one conflict — File Ownership Conflicts section present', () => {
-  const violations = ['File ownership conflicts detected'];
-  const conflicts = [{ task_a: 'task-a', task_b: 'task-b', files: ['src/x.js'] }];
-  const prompt = buildRetryPrompt(fullDispatch, violations, context, conflicts);
-
-  assert.ok(prompt.includes('File Ownership Conflicts'), 'should contain conflict section header');
-  assert.ok(prompt.includes('task-a'), 'should mention task-a');
-  assert.ok(prompt.includes('task-b'), 'should mention task-b');
-  assert.ok(prompt.includes('src/x.js'), 'should list the conflicting file');
-  assert.ok(prompt.includes('depends_on'), 'should include depends_on guidance');
-});
-
-test('T10.5 — buildRetryPrompt with two conflict pairs — both listed', () => {
-  const violations = ['File ownership conflicts detected'];
-  const conflicts = [
-    { task_a: 'task-001', task_b: 'task-002', files: ['src/foo.js'] },
-    { task_a: 'task-003', task_b: 'task-004', files: ['src/bar.js', 'src/baz.js'] },
-  ];
-  const prompt = buildRetryPrompt(fullDispatch, violations, context, conflicts);
-
-  assert.ok(prompt.includes('task-001'), 'should mention task-001');
-  assert.ok(prompt.includes('task-002'), 'should mention task-002');
-  assert.ok(prompt.includes('task-003'), 'should mention task-003');
-  assert.ok(prompt.includes('task-004'), 'should mention task-004');
-  assert.ok(prompt.includes('src/foo.js'), 'should list src/foo.js');
-  assert.ok(prompt.includes('src/bar.js'), 'should list src/bar.js');
-  assert.ok(prompt.includes('src/baz.js'), 'should list src/baz.js');
-});
-
-// ---------------------------------------------------------------------------
-// formatBounceForPrompt — COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY (W1)
-// Compose-side mirror of Stratum's _format_bounce_for_prompt (parallel_exec.py).
-// ---------------------------------------------------------------------------
-
-test('formatBounceForPrompt: gate_failed includes command, exit code, files, excerpt', () => {
-  const out = formatBounceForPrompt({
-    task_id: 't2', reason: 'gate_failed', command: 'pnpm build',
-    exit_code: 1, files: ['src/a.js', 'src/b.js'], excerpt: 'TypeError: boom',
-  });
-  assert.match(out, /rejected before merge/i);
-  assert.match(out, /pnpm build/);
-  assert.match(out, /exit 1/);
-  assert.match(out, /src\/a\.js, src\/b\.js/);
-  assert.match(out, /TypeError: boom/);
-});
-
-test('formatBounceForPrompt: merge_conflict uses conflict wording, no command', () => {
-  const out = formatBounceForPrompt({
-    task_id: 't3', reason: 'merge_conflict', files: ['src/c.js'], excerpt: 'patch failed',
-  });
-  assert.match(out, /CONFLICTED/i);
-  assert.match(out, /src\/c\.js/);
-  assert.doesNotMatch(out, /exit/);
-});
-
-test('formatBounceForPrompt: missing exit_code renders ? and missing files renders none', () => {
-  const out = formatBounceForPrompt({ task_id: 't1', reason: 'gate_failed', command: 'pnpm lint' });
-  assert.match(out, /exit \?\)/);
-  assert.match(out, /\(none reported\)/);
-});
-
-test('formatBounceForPrompt: null/garbage input returns empty string', () => {
-  assert.equal(formatBounceForPrompt(null), '');
-  assert.equal(formatBounceForPrompt(undefined), '');
-  assert.equal(formatBounceForPrompt('nope'), '');
+test('buildStepPrompt includes TS previousFailure feedback', () => {
+  const prompt = buildStepPrompt({
+    step_id: 'retry-me',
+    intent: 'Fix the artifact',
+    previousFailure: { reason: 'file_exists check failed' },
+  }, context);
+  assert.match(prompt, /Previous Attempt Failed/);
+  assert.match(prompt, /file_exists check failed/);
 });

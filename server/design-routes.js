@@ -17,29 +17,45 @@ import { parseDecisionBlocks } from '../src/components/vision/designSessionState
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 import { KNOWN_VERSIONS } from '../lib/build-stream-schema.js';
 import { getTargetRoot, resolveProjectPath } from './project-root.js';
+import { resolveStratumMcpConnection } from '../lib/stratum-engine.js';
 import { relForDisplay } from '../lib/project-paths.js';
 
-// Lazy singleton — design conversations share one stratum-mcp connection
-// across the server process lifetime. Concurrent runs are correlation-id scoped.
-let _stratumClient = null;
-let _stratumConnectPromise = null;
-async function _getStratum() {
-  if (_stratumClient) return _stratumClient;
-  if (!_stratumConnectPromise) {
-    const c = new StratumMcpClient();
-    _stratumConnectPromise = c.connect()
-      .then(() => { _stratumClient = c; return c; })
-      .catch((err) => { _stratumConnectPromise = null; throw err; });
+// Lazy per-project-root singletons — design conversations share one Stratum TS
+// MCP connection PER target project root. H2: keying on root (and threading the
+// root into the connection) is load-bearing. `resolveStratumMcpConnection(root)`
+// reads the project's `.compose/compose.json` engine pin and THROWS the
+// python-legacy error for a python-pinned project; connecting without a cwd (the
+// old behaviour) resolved the process cwd and silently handed a python project a
+// TS engine, and the single cached client leaked across project switches. Keying
+// the cache on root re-resolves the engine on every project switch.
+const _stratumClients = new Map();         // root key -> connected client
+const _stratumConnectPromises = new Map(); // root key -> in-flight connect promise
+
+async function _getStratum(root = getTargetRoot(), { factory } = {}) {
+  const key = root || '';
+  if (_stratumClients.has(key)) return _stratumClients.get(key);
+  if (!_stratumConnectPromises.has(key)) {
+    // Throws synchronously for a python-pinned (or otherwise invalid) root, before
+    // any subprocess is spawned — the caller sees a rejected promise.
+    const connection = resolveStratumMcpConnection(root);
+    const c = factory ? factory() : new StratumMcpClient();
+    const p = c.connect(connection)
+      .then(() => { _stratumClients.set(key, c); return c; })
+      .catch((err) => { _stratumConnectPromises.delete(key); throw err; });
+    _stratumConnectPromises.set(key, p);
   }
-  return _stratumConnectPromise;
+  return _stratumConnectPromises.get(key);
 }
 
-/** Tear down the cached stratum-mcp connection. Tests should call this in after(). */
+// Test-only export: exercise the root-keyed connect/cache without a live server.
+export { _getStratum as _getDesignStratumForTest };
+
+/** Tear down every cached Stratum connection. Tests should call this in after(). */
 export async function closeDesignStratum() {
-  const c = _stratumClient;
-  _stratumClient = null;
-  _stratumConnectPromise = null;
-  if (c) {
+  const clients = [..._stratumClients.values()];
+  _stratumClients.clear();
+  _stratumConnectPromises.clear();
+  for (const c of clients) {
     try { await c.close(); } catch { /* ignore */ }
   }
 }
@@ -95,7 +111,7 @@ async function dispatchDesignAgent(sessionManager, projectRoot, scope, featureCo
   const key = sessionKey(scope, featureCode, projectRoot);
   if (_inFlight.has(key)) return; // already running
   // Tests assert on the HTTP response only — skip the LLM round-trip to avoid
-  // keeping a stratum-mcp subprocess alive past the test lifetime.
+  // keeping a Stratum subprocess alive past the test lifetime.
   if (process.env.NODE_ENV === 'test' || process.env.COMPOSE_DESIGN_DISPATCH === '0') return;
   _inFlight.add(key);
   // Snapshot message count so we can detect new messages arriving during the run
@@ -142,7 +158,7 @@ ${formattedMessages}`;
     let fullContent = '';
     let toolUseCounter = 0;
 
-    const stratum = await _getStratum();
+    const stratum = await _getStratum(projectRoot);
     const correlationId = randomUUID();
     const subStepId = '_agent_run';
 
@@ -432,11 +448,11 @@ Write the design document in Markdown format. Include:
 
 Output ONLY the Markdown content, no code fences.`;
 
-      // Generate the design doc via the persistent stratum-mcp client.
+      // Generate the design doc via the persistent Stratum TS client.
       // No streaming needed for the one-shot doc generation.
       let docContent = '';
       try {
-        const stratum = await _getStratum();
+        const stratum = await _getStratum(projectRoot);
         const result = await stratum.runAgentText('claude', docPrompt, { cwd: projectRoot });
         docContent = result || '';
       } catch (err) {

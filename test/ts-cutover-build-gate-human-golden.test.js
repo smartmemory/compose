@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import { runBuild } from '../lib/build.js';
-import { installFactoryShim } from '../lib/connector-factory-shim.js';
+import { installAgentHarness } from './helpers/ts-agent-harness.js';
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 
 const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
@@ -131,7 +131,7 @@ async function runScenario(featureCode, script) {
       env: { ...process.env, STRATUM_STATE_ROOT: stateRoot },
     });
 
-    installFactoryShim(
+    installAgentHarness(
       client,
       stubAgentFactory((prompt) => {
         const match = prompt.match(/step "([^"]+)"/);

@@ -2,7 +2,7 @@
  * stratum-softfail.test.js — Tests for stratum graceful degradation.
  *
  * Verifies that:
- * - index.js downgrades stratum capability when stratum-mcp is not on PATH
+ * - an unusable TS entrypoint is detected before server startup
  * - VisionServer with stratum: false installs stub 503 routes
  * - VisionServer with stratum: true creates StratumSync normally
  */
@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const { probeStratumBin } = await import(`${REPO_ROOT}/lib/stratum-engine.js`);
 
 const temps = [];
 after(() => {
@@ -28,40 +29,10 @@ function tmpDir() {
 }
 
 describe('stratum soft-fail in index.js', () => {
-  test('downgrades stratum capability when stratum-mcp not on PATH', async () => {
-    const dir = tmpDir();
-    mkdirSync(join(dir, '.compose'), { recursive: true });
-    writeFileSync(join(dir, '.compose', 'compose.json'), JSON.stringify({
-      version: 1,
-      capabilities: { stratum: true, lifecycle: true },
-      paths: { docs: 'docs', features: 'docs/features', journal: 'docs/journal' },
-    }));
-
-    // Script that loads project config the same way index.js does
-    const script = `
-      import { execFileSync } from 'node:child_process';
-      import { loadProjectConfig } from './server/project-root.js';
-
-      const config = loadProjectConfig();
-      if (config.capabilities.stratum) {
-        try {
-          execFileSync('which', ['stratum-mcp'], { stdio: 'ignore' });
-        } catch {
-          config.capabilities.stratum = false;
-        }
-      }
-      console.log(JSON.stringify({ stratum: config.capabilities.stratum }));
-    `;
-
-    // Run with PATH that includes node but NOT stratum-mcp
-    const nodeBinDir = dirname(process.execPath);
-    const result = execFileSync(process.execPath, ['--input-type=module', '-e', script], {
-      cwd: REPO_ROOT,
-      env: { ...process.env, COMPOSE_TARGET: dir, PATH: `${nodeBinDir}:/usr/bin:/bin` },
-      encoding: 'utf-8',
-    });
-    const { stratum } = JSON.parse(result.trim());
-    assert.equal(stratum, false, 'stratum should be downgraded to false');
+  test('rejects an unusable TS entrypoint', () => {
+    const result = probeStratumBin('/definitely/missing/stratum-ts-cli');
+    assert.equal(result.ok, false);
+    assert.match(result.reason, /not an executable file/);
   });
 
   test('preserves stratum: false config as-is', async () => {
@@ -90,7 +61,9 @@ describe('stratum soft-fail in index.js', () => {
 });
 
 describe('VisionServer stratum conditional', () => {
-  test('with stratum: false, _stratumSync is null and stub route returns 503', async () => {
+  test('with stratum: false, _stratumSync is null and stub route returns 503', {
+    skip: process.env.CODEX_SANDBOX_NETWORK_DISABLED === '1' && 'local sockets are disabled by the test sandbox',
+  }, async () => {
     const dir = tmpDir();
     mkdirSync(join(dir, '.compose', 'data'), { recursive: true });
     writeFileSync(join(dir, '.compose', 'compose.json'), JSON.stringify({

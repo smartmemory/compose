@@ -23,9 +23,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 
+import { existsSync } from 'node:fs';
 import { runBuild } from '../lib/build.js';
 import { ConsumerFanoutArtifacts } from '../lib/consumer-fanout.js';
-import { installFactoryShim } from '../lib/connector-factory-shim.js';
+import { installAgentHarness } from './helpers/ts-agent-harness.js';
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 
 // Consumer crash hooks are a test-only seam, honored only under NODE_ENV=test
@@ -1249,7 +1250,7 @@ async function connectClient(stateRoot) {
 
 async function runAttempt(scenario, { resumeFlowId, crashHooks, onClient, gateOpts, agentFactory } = {}) {
   const client = await connectClient(scenario.stateRoot);
-  installFactoryShim(client, agentFactory ?? writingAgentFactory(scenario.invocationLog), scenario.workspace);
+  installAgentHarness(client, agentFactory ?? writingAgentFactory(scenario.invocationLog), scenario.workspace);
   if (onClient) onClient(client);
   try {
     await runBuild('TS-CONSUMER', {
@@ -1536,6 +1537,11 @@ describe('TS-native consumer fanout journal and merge recovery', () => {
     assert.equal(new Set(transaction.witnessChain).size, transaction.witnessChain.length);
     assert.ok(!scenario.artifactRoot.startsWith(`${scenario.workspace}/`));
     assert.ok(journal.worktrees.every((entry) => !entry.path.startsWith(`${scenario.workspace}/`)));
+    // I3 (build-mode negative): a BUILD consumer fanout runs through the same
+    // runConsumerIssuance seam but sets no gsd marker, so it must write NO GSD
+    // milestone sidecars — even though its items produced real cumulative diffs.
+    assert.ok(!existsSync(join(scenario.workspace, '.compose', 'gsd')),
+      'build-mode fanout must not write any .compose/gsd instrumentation');
   });
 
   test('crash A restores the pre-stage witness before rerunning a mutated issuance', async (t) => {

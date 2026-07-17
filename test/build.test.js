@@ -11,14 +11,12 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-// We need to mock the StratumMcpClient before importing build.js
-// Since build.js imports it, we use a connectorFactory override and
-// test the orchestration logic through the public API.
+// These tests use a test-only TS agent harness while exercising the public
+// build API and the live TS engine.
+import { runBuild as runBuildRuntime } from '../lib/build.js';
+import { runBuildWithAgentFactory } from './helpers/ts-agent-harness.js';
 
-// For these tests we create a minimal project structure and mock
-// the connector to create expected files.
-
-import { runBuild } from '../lib/build.js';
+const runBuild = (featureCode, options) => runBuildWithAgentFactory(runBuildRuntime, featureCode, options);
 
 // ---------------------------------------------------------------------------
 // Test helpers

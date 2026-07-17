@@ -17,8 +17,9 @@ import { PassThrough } from 'node:stream';
 import { runBuild, filesOwnedConflict, loadPipelineProfiles } from '../lib/build.js';
 import { validateAndRepairTaskGraph, runGsd } from '../lib/gsd.js';
 import { checkGsdCumulativeBudget } from '../lib/budget-ledger.js';
+import { assembleReportModel, renderReportHtml } from '../lib/gsd-milestone-report.js';
 import { runAndNormalize, AgentTimeoutError, AgentAbortedError } from '../lib/result-normalizer.js';
-import { installFactoryShim } from '../lib/connector-factory-shim.js';
+import { installAgentHarness } from './helpers/ts-agent-harness.js';
 import { resolvePlanSpecValues, resolveStepProfile, StratumMcpClient } from '../lib/stratum-mcp-client.js';
 import { resolveAgentConfig } from '../lib/agent-string.js';
 import { budgetStateFromLedger } from '../lib/gsd-budget.js';
@@ -218,7 +219,7 @@ describe('GSD end-to-end on the TS route (D7b)', () => {
       cwd: workspace,
       env: { ...process.env, STRATUM_STATE_ROOT: stateRoot },
     });
-    installFactoryShim(client, gsdAgentFactory(invocations), workspace);
+    installAgentHarness(client, gsdAgentFactory(invocations), workspace);
 
     const result = await runGsd('GSD-E2E', {
       cwd: workspace,
@@ -243,6 +244,69 @@ describe('GSD end-to-end on the TS route (D7b)', () => {
     const usage = checkGsdCumulativeBudget(join(workspace, '.compose'), 'GSD-E2E', {}).usage;
     assert.ok(usage.totalTokens >= 60, `cumulative ledger must debit both items' tokens, got ${usage.totalTokens}`);
     assert.ok(usage.totalCostUsd > 0, 'cumulative ledger must debit cost');
+  });
+
+  // I3: the real runGsd consumer dispatch (gsd.js threads context.gsd) must write
+  // the milestone instrumentation — timing.json + diffs/<id>.diff — and the
+  // milestone report must render the captured diffs (not 'No diff captured').
+  // The round-1 test injected gsd:true; this drives the REAL runGsd seam.
+  test('real GSD consumer dispatch writes timing.json + diffs and the report renders them', async (t) => {
+    const workspace = await mkdtemp(join(tmpdir(), 'compose-ts-gsd-instr-'));
+    const stateRoot = await mkdtemp(join(tmpdir(), 'compose-ts-gsd-instr-state-'));
+    const client = new StratumMcpClient();
+    t.after(async () => {
+      await client.close();
+      await rm(workspace, { recursive: true, force: true });
+      await rm(stateRoot, { recursive: true, force: true });
+    });
+
+    await mkdir(join(workspace, '.compose', 'data'), { recursive: true });
+    await mkdir(join(workspace, 'docs', 'features', 'GSD-E2E'), { recursive: true });
+    await writeFile(join(workspace, 'docs', 'features', 'GSD-E2E', 'blueprint.md'), GSD_BLUEPRINT);
+    await writeFile(join(workspace, '.compose', 'compose.json'), JSON.stringify({
+      version: 2, gsd: { budget: { per_task_ms: 60000, cumulative: { max_total_tokens: 100000 } } },
+    }));
+    await writeFile(join(workspace, '.gitignore'), '.compose/data/locks/\n');
+    git(workspace, ['init']);
+    git(workspace, ['config', 'user.email', 'test@example.com']);
+    git(workspace, ['config', 'user.name', 'Test']);
+    git(workspace, ['add', '.']);
+    git(workspace, ['commit', '-m', 'baseline']);
+
+    await client.connect({
+      command: process.env.COMPOSE_STRATUM_TS_NODE || process.execPath,
+      args: [TS_MCP_BIN], cwd: workspace,
+      env: { ...process.env, STRATUM_STATE_ROOT: stateRoot },
+    });
+    installAgentHarness(client, gsdAgentFactory([]), workspace);
+
+    const result = await runGsd('GSD-E2E', {
+      cwd: workspace, stratum: client, gateCommands: ['true'], preMergeGate: ['true'],
+    });
+    assert.equal(result.status, 'complete', `runGsd should complete: ${JSON.stringify(result)}`);
+
+    // timing.json — per-task startedAt + numeric durationMs for BOTH items.
+    const timing = JSON.parse(await readFile(join(workspace, '.compose', 'gsd', 'GSD-E2E', 'timing.json'), 'utf8'));
+    for (const id of ['T01', 'T02']) {
+      assert.ok(timing[id]?.startedAt, `timing.json must carry ${id}.startedAt`);
+      assert.equal(typeof timing[id].durationMs, 'number', `timing.json must carry ${id}.durationMs`);
+    }
+    // diffs/<id>.diff — the captured worktree diff naming each owned file.
+    const diffA = await readFile(join(workspace, '.compose', 'gsd', 'GSD-E2E', 'diffs', 'T01.diff'), 'utf8');
+    const diffB = await readFile(join(workspace, '.compose', 'gsd', 'GSD-E2E', 'diffs', 'T02.diff'), 'utf8');
+    assert.match(diffA, /foo\.json/, 'T01 diff must show its owned file');
+    assert.match(diffB, /bar\.js/, 'T02 diff must show its owned file');
+
+    // The milestone report consumes them: model.tasks carry hasDiff + durationMs,
+    // and the rendered HTML inlines the diffs instead of 'No diff captured'.
+    const model = assembleReportModel('GSD-E2E', workspace);
+    const t01 = model.tasks.find((task) => task.id === 'T01');
+    const t02 = model.tasks.find((task) => task.id === 'T02');
+    assert.ok(t01?.hasDiff && t02?.hasDiff, 'both report tasks must carry a captured diff');
+    assert.equal(typeof t01.durationMs, 'number', 'report task carries per-task timing');
+    const html = renderReportHtml(model);
+    assert.match(html, /foo\.json/, 'the report inlines the captured T01 diff');
+    assert.ok(!/No diff captured\.<\/p>\s*<p class="muted">No diff captured/.test(html), 'the report is not all "No diff captured"');
   });
 });
 
@@ -353,7 +417,7 @@ describe('usage reaches the engine ledger (V1)', () => {
       cwd: workspace,
       env: { ...process.env, STRATUM_STATE_ROOT: stateRoot },
     });
-    installFactoryShim(client, gsdAgentFactory([]), workspace);
+    installAgentHarness(client, gsdAgentFactory([]), workspace);
 
     const result = await runGsd('GSD-E2E', {
       cwd: workspace, stratum: client, gateCommands: ['true'], preMergeGate: ['true'],
@@ -839,7 +903,7 @@ describe('production pipelines plan on the TS engine', () => {
       cwd: workspace,
       env: { ...process.env, STRATUM_STATE_ROOT: stateRoot },
     });
-    installFactoryShim(client, productionAgentFactory(invocations), workspace);
+    installAgentHarness(client, productionAgentFactory(invocations), workspace);
     const io = scriptedGateIO([
       { prompt: '\n> ', line: 'r' },
       { prompt: 'Rationale: ', line: 'rerun the production fanout' },

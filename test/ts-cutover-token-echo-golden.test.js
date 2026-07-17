@@ -16,7 +16,7 @@ import { PassThrough } from 'node:stream';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 
 import { runBuild } from '../lib/build.js';
-import { installFactoryShim } from '../lib/connector-factory-shim.js';
+import { installAgentHarness } from './helpers/ts-agent-harness.js';
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 
 const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
@@ -185,7 +185,7 @@ describe('Phase-2 issuance-token fencing over the TS engine', () => {
         return realGateResolve(flowId, stepId, outcome, rationale, resolvedBy, gateToken);
       };
 
-      installFactoryShim(client, stubAgentFactory(), workspace);
+      installAgentHarness(client, stubAgentFactory(), workspace);
 
       await runBuild('TS-TOKEN-ECHO', {
         cwd: workspace,
@@ -345,38 +345,25 @@ describe('Phase-2 issuance-token fencing over the TS engine', () => {
     }
   });
 
-  test('python-era parallel lifecycle methods fail explicitly against the TS surface', async () => {
-    const stateRoot = await mkdtemp(join(tmpdir(), 'compose-ts-state-parallel-guard-'));
-    const client = new StratumMcpClient();
-    const unsupported = /python-era parallel lifecycle is not supported on the TS path/;
-
-    try {
-      await connectTsClient(client, stateRoot);
-      await assert.rejects(client.parallelStart('run', 'step'), unsupported);
-      await assert.rejects(client.parallelPoll('run', 'step'), unsupported);
-      await assert.rejects(client.parallelAdvance('run', 'step', 'clean'), unsupported);
-      await assert.rejects(client.parallelDone('run', 'step', [], 'clean'), unsupported);
-    } finally {
-      await client.close();
-      await rm(stateRoot, { recursive: true, force: true });
-    }
+  test('the client prototype exposes no legacy parallel lifecycle surface', () => {
+    const methods = Object.getOwnPropertyNames(StratumMcpClient.prototype)
+      .filter((name) => name.startsWith('parallel'));
+    assert.deepEqual(methods, []);
   });
 
-  test('parallel lifecycle fails closed when tool discovery errors at connect', async () => {
-    const stateRoot = await mkdtemp(join(tmpdir(), 'compose-ts-state-parallel-noscout-'));
+  test('TS connection does not perform advertised-tool discovery', async () => {
+    const stateRoot = await mkdtemp(join(tmpdir(), 'compose-ts-state-no-discovery-'));
     const client = new StratumMcpClient();
-    const discoveryFailed = /tool discovery failed at connect/;
     const originalListTools = Client.prototype.listTools;
+    let discoveryCalls = 0;
     Client.prototype.listTools = async () => {
-      throw new Error('simulated tools/list failure');
+      discoveryCalls += 1;
+      throw new Error('tool discovery must be dead');
     };
 
     try {
       await connectTsClient(client, stateRoot);
-      await assert.rejects(client.parallelStart('run', 'step'), discoveryFailed);
-      await assert.rejects(client.parallelPoll('run', 'step'), discoveryFailed);
-      await assert.rejects(client.parallelAdvance('run', 'step', 'clean'), discoveryFailed);
-      await assert.rejects(client.parallelDone('run', 'step', [], 'clean'), discoveryFailed);
+      assert.equal(discoveryCalls, 0);
     } finally {
       Client.prototype.listTools = originalListTools;
       await client.close();

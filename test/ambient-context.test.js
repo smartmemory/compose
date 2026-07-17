@@ -24,7 +24,6 @@ import {
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const COMPOSE_BIN = join(REPO_ROOT, 'bin', 'compose.js');
-const FAKE_STRATUM_MCP = `#!/bin/sh\nexit 0\n`;
 
 const temps = [];
 after(() => {
@@ -36,17 +35,10 @@ function tmpDir() {
   return d;
 }
 function makeEnv(cwd, home) {
-  const fakeBin = join(home, 'bin');
-  mkdirSync(fakeBin, { recursive: true });
-  writeFileSync(join(fakeBin, 'stratum-mcp'), FAKE_STRATUM_MCP, { mode: 0o755 });
-  return {
-    ...process.env,
-    HOME: home,
-    PATH: `${fakeBin}:${process.env.PATH}`,
-  };
+  return { ...process.env, HOME: home };
 }
 function runCmd(cmd, cwd, env, extraArgs = []) {
-  return execFileSync('node', [COMPOSE_BIN, cmd, ...extraArgs], {
+  return execFileSync(process.execPath, [COMPOSE_BIN, cmd, ...extraArgs], {
     cwd, env, encoding: 'utf-8',
   });
 }

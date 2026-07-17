@@ -1,28 +1,24 @@
 /**
- * connector-factory-shim.js — Backward-compatibility adapter for tests that
- * pass a legacy `connectorFactory(agentType, opts)` returning an object with
+ * ts-agent-harness.js — Test-only agent harness for TS runtime goldens.
+ * Accepts an `agentFactory(agentType, opts)` returning an object with
  * an async-generator `run(prompt)` that yields `{type: 'assistant'|'tool_use'
  * |'tool_use_summary'|'usage'|'error'|'result', ...}` events.
  *
- * After STRAT-DEDUP-AGENTRUN-V3 the consumer pipeline calls
- * `stratum.agentRun(...)` and consumes BuildStreamEvent envelopes via
- * `stratum.onEvent(correlationId, '_agent_run', handler)`. This shim adapts
- * the legacy factory to dispatch envelopes through the StratumMcpClient's
- * onEvent pathway so existing tests continue to assert wire-level behavior.
- *
- * Used only when `opts.stratum` is NOT injected directly. Production paths
- * never instantiate this shim.
+ * It dispatches test events through StratumMcpClient's TS onEvent pathway.
  */
+
+import { StratumMcpClient } from '../../lib/stratum-mcp-client.js';
+import { resolveStratumMcpConnection } from '../../lib/stratum-engine.js';
 
 /**
  * Install fake `agentRun`, `runAgentText`, `cancelAgentRun` methods on a
- * StratumMcpClient instance backed by a legacy connector factory.
+ * StratumMcpClient instance backed by a test agent factory.
  *
  * @param {object} stratum         - StratumMcpClient (uses its #dispatchEvent path indirectly via internal subscribers).
- * @param {Function} factory       - legacy `factory(agentType, opts)` returning {run(prompt), interrupt(), isRunning}
+ * @param {Function} factory       - `factory(agentType, opts)` returning {run(prompt), interrupt(), isRunning}
  * @param {string}   defaultCwd
  */
-export function installFactoryShim(stratum, factory, defaultCwd) {
+export function installAgentHarness(stratum, factory, defaultCwd) {
   // We dispatch via the public onEvent subscribers map. There's no public
   // emit method, so we synthesize the same JSON-string-via-progress path the
   // real client uses by directly invoking subscribed handlers.
@@ -200,4 +196,18 @@ export function installFactoryShim(stratum, factory, defaultCwd) {
       };
     })();
   };
+}
+
+/** Run build code with a live TS engine and a test-only agent implementation. */
+export async function runBuildWithAgentFactory(runBuild, featureCode, options) {
+  const { connectorFactory, ...runtimeOptions } = options;
+  if (!connectorFactory) return runBuild(featureCode, runtimeOptions);
+  const stratum = new StratumMcpClient();
+  await stratum.connect(resolveStratumMcpConnection(runtimeOptions.cwd));
+  installAgentHarness(stratum, connectorFactory, runtimeOptions.cwd);
+  try {
+    return await runBuild(featureCode, { ...runtimeOptions, stratum });
+  } finally {
+    await stratum.close();
+  }
 }

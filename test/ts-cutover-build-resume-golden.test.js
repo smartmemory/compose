@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { runBuild } from '../lib/build.js';
-import { installFactoryShim } from '../lib/connector-factory-shim.js';
+import { installAgentHarness } from './helpers/ts-agent-harness.js';
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 
 const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
@@ -100,7 +100,7 @@ describe('build.js resumes a non-terminal TS-native Stratum run', () => {
         env: { ...process.env, STRATUM_STATE_ROOT: stateRoot },
       });
 
-      installFactoryShim(
+      installAgentHarness(
         firstClient,
         throwingAgentFactory(() => { firstAgentRuns += 1; }),
         workspace,
@@ -143,7 +143,7 @@ describe('build.js resumes a non-terminal TS-native Stratum run', () => {
         resumeCalls += 1;
         return realResume(flowId);
       };
-      installFactoryShim(
+      installAgentHarness(
         resumeClient,
         completingAgentFactory(() => { resumedAgentRuns += 1; }),
         workspace,

@@ -159,14 +159,14 @@ test('POST .../reject → 409 on conflict', async () => {
 // ---------------------------------------------------------------------------
 
 test('GET /api/stratum/flows → 503 when stratum-client throws', async () => {
-  const app = makeApp({ queryFlows: async () => { throw new Error('stratum-mcp not found'); } });
+  const app = makeApp({ queryFlows: async () => { throw new Error('Stratum TS CLI not found'); } });
   const res = await request(app, 'GET', '/api/stratum/flows');
   assert.equal(res.status, 503);
   assert.equal(res.body.error.code, 'UNAVAILABLE');
 });
 
 test('POST .../approve → 503 when stratum-client throws', async () => {
-  const app = makeApp({ gateApprove: async () => { throw new Error('stratum-mcp not found'); } });
+  const app = makeApp({ gateApprove: async () => { throw new Error('Stratum TS CLI not found'); } });
   const res = await request(app, 'POST', '/api/stratum/gates/f1/s2/approve', {});
   assert.equal(res.status, 503);
   assert.equal(res.body.error.code, 'UNAVAILABLE');

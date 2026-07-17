@@ -1,9 +1,9 @@
 /**
- * stratum-client.js — Single adapter for all stratum-mcp subprocess calls.
+ * stratum-client.js — Single adapter for all Stratum TS CLI subprocess calls.
  *
- * This is the ONLY module in compose that spawns stratum-mcp processes.
+ * This is the ONLY module in compose that spawns Stratum CLI processes.
  * All query and mutation calls go through the exported functions below.
- * No other file may call execFile/spawn with 'stratum-mcp' as the command.
+ * No other file may spawn the Stratum CLI directly.
  *
  * Contract:
  *   - Query calls:   5s timeout, 1 retry on timeout, no retry on error
@@ -18,8 +18,6 @@ import { execFile as _execFileDefault } from 'node:child_process';
 import { getTargetRoot } from './project-root.js';
 import { resolveStratumEngine as resolveEngine, LIVE_STRATUM_TS_CLI_BIN } from '../lib/stratum-engine.js';
 
-const STRATUM_BIN = 'stratum-mcp';
-
 // Injected executor — replaced by tests only. Production code never calls this setter.
 let _execFile = _execFileDefault;
 export function _testOnly_setExecFile(fn) { _execFile = fn; }
@@ -29,26 +27,20 @@ const MUTATION_TIMEOUT_MS = 10_000;
 // ---------------------------------------------------------------------------
 // Engine selection (COMP-STRATUM-TS)
 //
-// The flow/gate seam is engine-selectable: the TS engine's `stratum` CLI
-// (default) or Python `stratum-mcp`, with the same JSON projections and
-// exit codes. Guard calls are PINNED to Python — STRAT-GUARD is not part of
-// the TS port. Resolution order: COMPOSE_STRATUM_ENGINE env override, then
-// capabilities.stratumEngine in .compose/compose.json, then "ts".
-// Unknown values fail loudly; never a silent fallback.
+// All flow, gate, and guard calls use the TS CLI. The shared resolver still
+// reads the environment/project capability so a retired Python selection fails
+// loudly before any subprocess is spawned.
 // ---------------------------------------------------------------------------
 
-/** @returns {'python'|'ts'} */
+/** @returns {'ts'} */
 export function resolveStratumEngine() {
   return resolveEngine(getTargetRoot());
 }
 
 /** Binary for flow/gate query+mutation calls under the selected engine. */
 function flowGateBin() {
-  // C1: the TS default is the live checkout's query/gate CLI, NOT a bare
-  // `stratum` (which resolves to whatever is on $PATH — e.g. miniconda's
-  // incompatible python CLI). The COMPOSE_STRATUM_TS_BIN override is retained.
-  if (resolveStratumEngine() === 'ts') return process.env.COMPOSE_STRATUM_TS_BIN || LIVE_STRATUM_TS_CLI_BIN;
-  return STRATUM_BIN;
+  resolveStratumEngine();
+  return process.env.COMPOSE_STRATUM_TS_BIN || LIVE_STRATUM_TS_CLI_BIN;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,7 +56,7 @@ function flowGateBin() {
  * @param {string}   [bin] — explicit binary selected by the calling seam
  * @returns {Promise<{ stdout: string, stderr: string, code: number }>}
  */
-function spawnStratum(args, timeoutMs, bin = STRATUM_BIN) {
+function spawnStratum(args, timeoutMs, bin) {
   return new Promise((resolve) => {
     const proc = _execFile(bin, args, { timeout: timeoutMs }, (err, out, err2) => {
       resolve(_spawnResult(bin, err, out, err2));
@@ -106,9 +98,7 @@ function _spawnResult(bin, err, out, err2) {
 
 /** Binary-specific spawn-failure message with the install/path remedy. */
 function _spawnRemedy(bin, code) {
-  return bin === STRATUM_BIN
-    ? `stratum-mcp failed to spawn (${code}). Install with: pip install stratum-mcp`
-    : `${bin} (TS stratum engine) failed to spawn (${code}). Install @smartmemory/stratum or set COMPOSE_STRATUM_TS_BIN`;
+  return `${bin} (TS stratum engine) failed to spawn (${code}). Install @smartmemory/stratum or set COMPOSE_STRATUM_TS_BIN`;
 }
 
 /**
@@ -124,7 +114,7 @@ async function runQuery(args) {
     // Retry once on timeout
     result = await spawnStratum(args, QUERY_TIMEOUT_MS, bin);
     if (result.code === -1) {
-      return { error: { code: 'TIMEOUT', message: 'stratum-mcp query timed out', detail: '' } };
+      return { error: { code: 'TIMEOUT', message: 'Stratum query timed out', detail: '' } };
     }
   }
 
@@ -138,14 +128,14 @@ async function runQuery(args) {
     try {
       return JSON.parse(result.stdout);
     } catch {
-      return { error: { code: 'UNKNOWN', message: 'stratum-mcp query failed', detail: '' } };
+      return { error: { code: 'UNKNOWN', message: 'Stratum query failed', detail: '' } };
     }
   }
 
   try {
     return JSON.parse(result.stdout);
   } catch {
-    return { error: { code: 'PARSE_ERROR', message: 'stratum-mcp returned invalid JSON', detail: '' } };
+    return { error: { code: 'PARSE_ERROR', message: 'Stratum returned invalid JSON', detail: '' } };
   }
 }
 
@@ -158,7 +148,7 @@ async function runMutation(args) {
   const result = await spawnStratum(args, MUTATION_TIMEOUT_MS, flowGateBin());
 
   if (result.code === -1) {
-    return { error: { code: 'TIMEOUT', message: 'stratum-mcp gate timed out', detail: '' } };
+    return { error: { code: 'TIMEOUT', message: 'Stratum gate timed out', detail: '' } };
   }
 
   if (result.code === -2) {
@@ -179,36 +169,35 @@ async function runMutation(args) {
     try {
       return JSON.parse(result.stdout);
     } catch {
-      return { error: { code: 'UNKNOWN', message: 'stratum-mcp gate failed', detail: '' } };
+      return { error: { code: 'UNKNOWN', message: 'Stratum gate failed', detail: '' } };
     }
   }
 
   try {
     return JSON.parse(result.stdout);
   } catch {
-    return { error: { code: 'PARSE_ERROR', message: 'stratum-mcp returned invalid JSON', detail: '' } };
+    return { error: { code: 'PARSE_ERROR', message: 'Stratum returned invalid JSON', detail: '' } };
   }
 }
 
 /**
- * Spawn stratum-mcp with args and pipe `inputJson` (a string) on stdin.
+ * Spawn the TS Stratum CLI with args and pipe `inputJson` on stdin.
  * Used by the STRAT-GUARD adapter, whose CLI reads one JSON kwargs object from
- * stdin. Same resolve contract as spawnStratum. PINNED to the Python binary —
- * STRAT-GUARD is not part of the TS port and ignores the engine flag.
+ * stdin. Same resolve contract as spawnStratum.
  *
  * @param {string[]} args
  * @param {string}   inputJson
  * @param {number}   timeoutMs
  * @returns {Promise<{ stdout: string, stderr: string, code: number }>}
  */
-function spawnStratumStdin(args, inputJson, timeoutMs) {
+function spawnStratumStdin(args, inputJson, timeoutMs, bin) {
   return new Promise((resolve) => {
-    const proc = _execFile(STRATUM_BIN, args, { timeout: timeoutMs }, (err, out, err2) => {
-      resolve(_spawnResult(STRATUM_BIN, err, out, err2));
+    const proc = _execFile(bin, args, { timeout: timeoutMs }, (err, out, err2) => {
+      resolve(_spawnResult(bin, err, out, err2));
     });
     // Same both-paths-settle-identically contract as spawnStratum.
     proc.on('error', (err) => {
-      resolve(_spawnResult(STRATUM_BIN, err ?? new Error('child process error'), '', ''));
+      resolve(_spawnResult(bin, err ?? new Error('child process error'), '', ''));
     });
 
     // Feed the JSON kwargs on stdin. The test mock supplies a fake stdin; a
@@ -230,10 +219,10 @@ function spawnStratumStdin(args, inputJson, timeoutMs) {
  * @returns {Promise<any>} parsed JSON result or { error }
  */
 async function runGuard(action, kwargs, timeoutMs = MUTATION_TIMEOUT_MS) {
-  const result = await spawnStratumStdin(['guard', action], JSON.stringify(kwargs), timeoutMs);
+  const result = await spawnStratumStdin(['guard', action], JSON.stringify(kwargs), timeoutMs, flowGateBin());
 
   if (result.code === -1) {
-    return { error: { code: 'TIMEOUT', message: 'stratum-mcp guard timed out', detail: '' } };
+    return { error: { code: 'TIMEOUT', message: 'Stratum guard timed out', detail: '' } };
   }
   if (result.code === -2) {
     console.error('[stratum-client] guard spawn failure:', result.stderr);
@@ -244,13 +233,13 @@ async function runGuard(action, kwargs, timeoutMs = MUTATION_TIMEOUT_MS) {
     try {
       return JSON.parse(result.stdout);   // canonical { status:"error", ... }
     } catch {
-      return { error: { code: 'UNKNOWN', message: 'stratum-mcp guard failed', detail: '' } };
+      return { error: { code: 'UNKNOWN', message: 'Stratum guard failed', detail: '' } };
     }
   }
   try {
     return JSON.parse(result.stdout);
   } catch {
-    return { error: { code: 'PARSE_ERROR', message: 'stratum-mcp returned invalid JSON', detail: '' } };
+    return { error: { code: 'PARSE_ERROR', message: 'Stratum returned invalid JSON', detail: '' } };
   }
 }
 
@@ -330,7 +319,7 @@ export async function gateRevise(flowId, stepId, note = '', resolvedBy = 'human'
 //
 // Reaches stratum's guarded-transition primitive over the same CLI-subprocess
 // seam. Each function translates camelCase params into the snake_case JSON
-// kwargs the `stratum-mcp guard <action>` CLI forwards verbatim to the guard
+// kwargs the `stratum guard <action>` CLI forwards verbatim to the guard
 // library, and pipes them on stdin.
 // ---------------------------------------------------------------------------
 

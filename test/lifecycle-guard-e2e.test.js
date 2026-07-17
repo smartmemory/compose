@@ -1,5 +1,5 @@
 /**
- * COMP-MCP-ENFORCE Slice 1 — golden-flow E2E with the REAL `stratum-mcp guard`
+ * COMP-MCP-ENFORCE Slice 1 — golden-flow E2E with the real Stratum TS guard
  * CLI behind the REST lifecycle endpoints (capabilities.guard = true).
  *
  * Proves the end-to-end guarantee: a guard-enabled feature can only advance
@@ -7,28 +7,19 @@
  * in the tamper-evident ledger. State is isolated by pointing $HOME at a temp
  * dir (the guard persists under $HOME/.stratum/guards).
  *
- * Skips (loudly) only if stratum-mcp is not installed — real backend required.
+ * The adjacent TS backend is required by the develop checkout.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import express from 'express';
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-
-let STRATUM_AVAILABLE = true;
-try {
-  execFileSync('stratum-mcp', ['--help'], { stdio: 'ignore' });
-} catch {
-  STRATUM_AVAILABLE = false;
-  // eslint-disable-next-line no-console
-  console.warn('[lifecycle-guard-e2e] SKIPPED: stratum-mcp not on PATH — real-backend guard flow not exercised.');
-}
+const NO_LOCAL_LISTEN = process.env.CODEX_SANDBOX_NETWORK_DISABLED === '1';
 
 const { VisionStore } = await import(`${REPO_ROOT}/server/vision-store.js`);
 const { attachVisionRoutes } = await import(`${REPO_ROOT}/server/vision-routes.js`);
@@ -59,7 +50,7 @@ let ctx = null;
 let originalHome = null;
 
 before(async () => {
-  if (!STRATUM_AVAILABLE) return;
+  if (NO_LOCAL_LISTEN) return;
   const tmpDir = mkdtempSync(join(tmpdir(), 'lg-e2e-'));
   originalHome = process.env.HOME;
   process.env.HOME = join(tmpDir, 'home');   // isolate ~/.stratum/guards
@@ -95,7 +86,9 @@ after(() => {
   if (ctx?.tmpDir) { try { rmSync(ctx.tmpDir, { recursive: true, force: true }); } catch { /* best-effort */ } }
 });
 
-test('guarded lifecycle: refuses transitions whose server-read evidence is missing', { skip: !STRATUM_AVAILABLE }, async () => {
+test('guarded lifecycle: refuses transitions whose server-read evidence is missing', {
+  skip: NO_LOCAL_LISTEN && 'local sockets are disabled by the test sandbox',
+}, async () => {
   const { port, item, tmpDir } = ctx;
   const featureDir = join(tmpDir, 'docs', 'features', 'GUARD-E2E');
 

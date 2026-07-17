@@ -1,5 +1,5 @@
 /**
- * Tests for stratum-client.js — single stratum-mcp adapter.
+ * Tests for stratum-client.js — single Stratum TS CLI adapter.
  *
  * Covers:
  *   - Single spawn module rule (static analysis)
@@ -19,15 +19,14 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SERVER_DIR = `${REPO_ROOT}/server`;
 
 // ---------------------------------------------------------------------------
-// Static guard: only stratum-client.js may spawn stratum-mcp
+// Static guard: no server module may spawn the retired Python binary.
 // ---------------------------------------------------------------------------
 
-test('only stratum-client.js references execFile/spawn with stratum-mcp', () => {
+test('server modules never spawn stratum-mcp', () => {
   const files = readdirSync(SERVER_DIR).filter(f => f.endsWith('.js'));
   const violations = [];
 
   for (const file of files) {
-    if (file === 'stratum-client.js') continue;
     const src = readFileSync(`${SERVER_DIR}/${file}`, 'utf-8');
     // Match execFile/spawn calls where stratum-mcp is the command (first arg), not just mentioned
     if (/(?:execFile|execFileSync|spawnSync|spawn)\s*\(\s*['"`]stratum-mcp['"`]/.test(src)) {
@@ -36,7 +35,7 @@ test('only stratum-client.js references execFile/spawn with stratum-mcp', () => 
   }
 
   assert.deepEqual(violations, [],
-    `These files spawn stratum-mcp directly (must go through stratum-client.js): ${violations.join(', ')}`
+    `These files still spawn the retired Python binary: ${violations.join(', ')}`
   );
 });
 
@@ -182,7 +181,7 @@ test('gateReject passes correct args including --note', async () => {
 });
 
 test('gateRevise passes --resolved-by agent', async () => {
-  const payload = { _schema_version: '1', ok: true, flow_id: 'f1', step_id: 's1', outcome: 'revise', result: 'execute_step' };
+  const payload = { _schema_version: '1', ok: true, flow_id: 'f1', step_id: 's1', outcome: 'revise', result: 'ready' };
   const m = makeMock([{ exitCode: 0, stdout: JSON.stringify(payload) }]);
   _testOnly_setExecFile(m.exec);
   await gateRevise('f1', 's1', '', 'agent');
@@ -198,7 +197,7 @@ test('gateApprove omits --resolved-by when default human', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Engine selection (COMP-STRATUM-TS): TS default, python flag, guard pinned
+// Engine selection (COMP-STRATUM-TS): TS only; Python selections fail loudly.
 // ---------------------------------------------------------------------------
 
 const { resolveStratumEngine, guardHistory } = await import(`${SERVER_DIR}/stratum-client.js`);
@@ -241,13 +240,10 @@ test('engine defaults to TS: queries spawn stratum', async () => {
   });
 });
 
-test('COMPOSE_STRATUM_ENGINE=python keeps the legacy query path selectable', async () => {
+test('COMPOSE_STRATUM_ENGINE=python fails loudly and names the archive branch', async () => {
   await withEnv({ COMPOSE_STRATUM_ENGINE: 'python' }, async () => {
-    assert.equal(resolveStratumEngine(), 'python');
-    const m = makeBinMock([{ exitCode: 0, stdout: '[]' }]);
-    _testOnly_setExecFile(m.exec);
-    await queryFlows();
-    assert.equal(m.lastBin, 'stratum-mcp');
+    assert.throws(() => resolveStratumEngine(), /python-legacy branch/);
+    await assert.rejects(() => queryFlows(), /python-legacy branch/);
   });
 });
 
@@ -272,18 +268,18 @@ test('COMPOSE_STRATUM_TS_BIN overrides the ts binary path', async () => {
   });
 });
 
-test('guard calls stay pinned to python under engine=ts', async () => {
+test('guard calls use the TS CLI under engine=ts', async () => {
   await withEnv({ COMPOSE_STRATUM_ENGINE: 'ts' }, async () => {
     const m = makeBinMock([{ exitCode: 0, stdout: '{"resource_id":"r","current_state":"a","ledger":[]}' }]);
     _testOnly_setExecFile(m.exec);
     await guardHistory('r');
-    assert.equal(m.lastBin, 'stratum-mcp');
+    assert.equal(m.lastBin, LIVE_STRATUM_TS_CLI_BIN);
   });
 });
 
 test('unknown engine fails loudly, never silently falls back', async () => {
   await withEnv({ COMPOSE_STRATUM_ENGINE: 'gemini' }, async () => {
-    assert.throws(() => resolveStratumEngine(), /stratumEngine must be "python" or "ts"/);
+    assert.throws(() => resolveStratumEngine(), /stratumEngine must be "ts"/);
     const m = makeBinMock([{ exitCode: 0, stdout: '[]' }]);
     _testOnly_setExecFile(m.exec);
     await assert.rejects(() => queryFlows(), /stratumEngine must be/);
@@ -305,10 +301,10 @@ test('spawn failures with string codes surface as SPAWN errors, never PARSE_ERRO
   assert.equal(mutation.error.code, 'SPAWN');
   const guard = await guardHistory('r');
   assert.equal(guard.error.code, 'SPAWN');
-  assert.match(guard.error.message, /pip install stratum-mcp/);
+  assert.match(guard.error.message, /TS stratum engine/);
 });
 
-test('capabilities.stratumEngine drives selection and env overrides config', async (t) => {
+test('capabilities.stratumEngine rejects Python and a TS env override wins', async (t) => {
   const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
@@ -317,16 +313,16 @@ test('capabilities.stratumEngine drives selection and env overrides config', asy
   const root = mkdtempSync(join(tmpdir(), 'compose-engine-config-'));
   mkdirSync(join(root, '.compose'), { recursive: true });
   writeFileSync(join(root, '.compose', 'compose.json'), JSON.stringify({
-    version: 1, capabilities: { stratum: true, stratumEngine: 'ts' },
+    version: 1, capabilities: { stratum: true, stratumEngine: 'python' },
   }));
   t.after(() => switchProject(original));
 
   await withEnv({ COMPOSE_STRATUM_ENGINE: undefined }, async () => {
     switchProject(root);
-    assert.equal(resolveStratumEngine(), 'ts', 'config value selects the engine');
+    assert.throws(() => resolveStratumEngine(), /python-legacy branch/);
   });
-  await withEnv({ COMPOSE_STRATUM_ENGINE: 'python' }, async () => {
-    assert.equal(resolveStratumEngine(), 'python', 'env wins over config');
+  await withEnv({ COMPOSE_STRATUM_ENGINE: 'ts' }, async () => {
+    assert.equal(resolveStratumEngine(), 'ts', 'TS env override wins over retired config value');
   });
 });
 

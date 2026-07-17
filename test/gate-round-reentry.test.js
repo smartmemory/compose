@@ -15,53 +15,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { VisionWriter } from '../lib/vision-writer.js';
 import { VisionStore } from '../server/vision-store.js';
-import { readFlowRound } from '../lib/flow-state.js';
 import { assertGateReentryWithinCap, MAX_GATE_REENTRIES } from '../lib/build.js';
-
-describe('readFlowRound', () => {
-  const flowsDir = path.join(os.homedir(), '.stratum', 'flows');
-  const written = [];
-
-  function writeFlow(contents) {
-    fs.mkdirSync(flowsDir, { recursive: true });
-    const flowId = `comp-test-${randomUUID()}`;
-    const file = path.join(flowsDir, `${flowId}.json`);
-    fs.writeFileSync(file, contents);
-    written.push(file);
-    return flowId;
-  }
-
-  after(() => {
-    for (const f of written) fs.rmSync(f, { force: true });
-  });
-
-  it('reads the top-level round from the persisted flow file', () => {
-    const flowId = writeFlow(JSON.stringify({ flow_id: 'x', round: 7, rounds: [] }));
-    assert.equal(readFlowRound(flowId), 7);
-  });
-
-  it('treats round 0 (initial round) as valid', () => {
-    const flowId = writeFlow(JSON.stringify({ round: 0 }));
-    assert.equal(readFlowRound(flowId), 0);
-  });
-
-  it('fails open to 1 when the flow file is missing', () => {
-    assert.equal(readFlowRound(`comp-test-missing-${randomUUID()}`), 1);
-  });
-
-  it('fails open to 1 when the flow file is corrupt', () => {
-    const flowId = writeFlow('not valid json {{{');
-    assert.equal(readFlowRound(flowId), 1);
-  });
-
-  it('fails open to 1 when round is absent or non-integer', () => {
-    assert.equal(readFlowRound(writeFlow(JSON.stringify({}))), 1);
-    assert.equal(readFlowRound(writeFlow(JSON.stringify({ round: 'five' }))), 1);
-  });
-});
 
 describe('assertGateReentryWithinCap', () => {
   it('does not throw at or under the cap', () => {

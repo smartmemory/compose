@@ -80,9 +80,9 @@ describe('specToModel — multi-flow document', () => {
     assert.ok(model.contracts.TaskGraph);
   });
 
-  test('workflow.steps single-flow spec is treated as one synthetic flow (new)', () => {
+  test('v1 new spec is treated as one editable flow', () => {
     const model = specToModel(parseNew());
-    assert.equal(model.version, '0.2');
+    assert.equal(model.version, 1);
     const names = model.flows.map(f => f.name);
     // `new` uses flows.new.steps; one editable flow.
     assert.ok(names.includes('new'));
@@ -304,23 +304,6 @@ describe('validateFlow — table-driven', () => {
     assert.ok(errors.some(e => /ghost/.test(e) && /on_kill/.test(e)));
   });
 
-  test('flags a dangling parallel `source` ref', () => {
-    // `source` referencing a step uses the $.steps.<id>.output... form.
-    const model = specToModel(specWithSteps([
-      { id: 'a', type: 'parallel_dispatch', agent: 'claude', source: '$.steps.ghost.output.tasks' },
-    ]));
-    const { errors } = validateFlow(model, 'f');
-    assert.ok(errors.some(e => /ghost/.test(e) && /source/.test(e)));
-  });
-
-  test('does NOT flag a `source` that points at $.input (not a step ref)', () => {
-    const model = specToModel(specWithSteps([
-      { id: 'a', type: 'parallel_dispatch', agent: 'claude', source: '$.input.tasks' },
-    ]));
-    const { errors } = validateFlow(model, 'f');
-    assert.ok(!errors.some(e => /source/.test(e)), `unexpected source error: ${JSON.stringify(errors)}`);
-  });
-
   test('flags an unknown output_contract (TaskGraph and none are allowed)', () => {
     const model = specToModel(specWithSteps([
       { id: 'a', agent: 'claude', intent: 'x', output_contract: 'Nonexistent' },
@@ -365,7 +348,7 @@ describe('renameStep', () => {
       { id: 'old', agent: 'claude', intent: 'x' },
       { id: 'b', agent: 'claude', intent: 'y', depends_on: ['old'], on_fail: 'old' },
       { id: 'g', function: 'gate', on_approve: 'old', on_revise: 'old', on_kill: 'old' },
-      { id: 'p', type: 'parallel_dispatch', agent: 'claude', source: '$.steps.old.output.tasks' },
+      { id: 'p', fanout: { over: '${old.output.tasks}', dispatch: 'consumer', steps: [] } },
     ]));
     renameStep(model, 'f', 'old', 'renamed');
     const steps = flowSteps(model, 'f');
@@ -383,7 +366,7 @@ describe('renameStep', () => {
     assert.equal(g._extra.on_kill, 'renamed');
 
     const p = steps.find(s => s.id === 'p');
-    assert.equal(p._extra.source, '$.steps.renamed.output.tasks');
+    assert.equal(p._extra.fanout.over, '${renamed.output.tasks}');
 
     // The rename is flow-scoped: validation stays clean.
     const { errors } = validateFlow(model, 'f');

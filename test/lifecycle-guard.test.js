@@ -1,7 +1,7 @@
 /**
  * Tests for server/lifecycle-guard.js — compose-owned STRAT-GUARD policy
  * (COMP-MCP-ENFORCE Slice 1). The guard client is stubbed; the real
- * stratum-mcp subprocess is exercised by the golden-flow integration test.
+ * Stratum TS subprocess is exercised by the golden-flow integration test.
  */
 
 import { test } from 'node:test';
@@ -139,11 +139,11 @@ test('guardedTransition: status:error dict from guard → fail-closed', async ()
   assert.ok(r.error);
 });
 
-test('guardedTransition: a THROWN client failure (e.g. stratum-mcp absent) fails closed', async () => {
+test('guardedTransition: a thrown Stratum client failure fails closed', async () => {
   _testOnly_resetGuardCache();
   const s = stubClient();
   // register succeeds, transition throws like a real ENOENT spawn rejection
-  s.client.transition = async () => { throw new Error('stratum-mcp not found'); };
+  s.client.transition = async () => { throw new Error('Stratum TS CLI not found'); };
   _testOnly_setGuardClient(s.client);
 
   const r = await guardedTransition({

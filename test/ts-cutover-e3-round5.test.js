@@ -19,6 +19,8 @@ import {
   loadPipelineProfiles,
   runConsumerIssuance,
 } from '../lib/build.js';
+import { buildStepPrompt } from '../lib/step-prompt.js';
+import { buildReviewPrompt } from '../lib/review-prompt.js';
 import { runAndNormalize, AgentTimeoutError } from '../lib/result-normalizer.js';
 
 process.env.NODE_ENV = 'test';
@@ -39,7 +41,7 @@ describe('H1 review_merge is a reducer, not a reviewer', () => {
 
   it('review_merge: review for normalization but scaffold ABSENT', () => {
     const contractName = resolveStepOutputContract(BUILD_SPEC, 'build', 'review_merge').contractName;
-    const r = deriveOrdinaryReviewScaffold({ response: {}, contractName, stepId: 'review_merge', reduceSteps: REDUCE_STEPS });
+    const r = deriveOrdinaryReviewScaffold({ contractName, stepId: 'review_merge', reduceSteps: REDUCE_STEPS });
     assert.equal(r.isReviewMain, true, 'review_merge must still be review (normalization stays)');
     assert.equal(r.isReduceMain, true, 'review_merge is a reducer');
     assert.equal(r.isReviewScaffoldMain, false, 'a reducer must NOT get the reviewer scaffold');
@@ -47,7 +49,7 @@ describe('H1 review_merge is a reducer, not a reviewer', () => {
 
   it('codex_review/review: reviewer scaffold PRESENT (G1 regression guard)', () => {
     const contractName = resolveStepOutputContract(BUILD_SPEC, 'build', 'codex_review/review').contractName;
-    const r = deriveOrdinaryReviewScaffold({ response: {}, contractName, stepId: 'codex_review/review', reduceSteps: REDUCE_STEPS });
+    const r = deriveOrdinaryReviewScaffold({ contractName, stepId: 'codex_review/review', reduceSteps: REDUCE_STEPS });
     assert.equal(r.isReviewMain, true);
     assert.equal(r.isReduceMain, false);
     assert.equal(r.isReviewScaffoldMain, true, 'a real reviewer must get the scaffold');
@@ -55,18 +57,112 @@ describe('H1 review_merge is a reducer, not a reviewer', () => {
 
   it('a non-review step is neither review nor reduce', () => {
     const contractName = resolveStepOutputContract(BUILD_SPEC, 'build', 'blueprint').contractName;
-    const r = deriveOrdinaryReviewScaffold({ response: {}, contractName, stepId: 'blueprint', reduceSteps: REDUCE_STEPS });
+    const r = deriveOrdinaryReviewScaffold({ contractName, stepId: 'blueprint', reduceSteps: REDUCE_STEPS });
     assert.equal(r.isReviewMain, false);
     assert.equal(r.isReviewScaffoldMain, false);
   });
 
-  it('the python-era reduce_mode input still marks a reducer (legacy path)', () => {
+  it('a scoped TS ready id resolves reducer policy by its bare step id', () => {
     const r = deriveOrdinaryReviewScaffold({
-      response: { output_contract: 'ReviewResult', inputs: { reduce_mode: 'true' } },
-      contractName: null, stepId: 'legacy_merge', reduceSteps: new Set(),
+      contractName: 'ReviewResult',
+      stepId: 'review/review_merge',
+      reduceSteps: REDUCE_STEPS,
     });
     assert.equal(r.isReviewMain, true);
+    assert.equal(r.isReduceMain, true);
     assert.equal(r.isReviewScaffoldMain, false);
+  });
+
+});
+
+// ---------------------------------------------------------------------------
+// H8 — INTEGRATION: review_merge's actual prompt is the base reducer prompt
+// (no reviewer scaffold), and its output goes through ReviewResult
+// normalization. The pure-boolean test above only checks the classifier; this
+// composes the SAME real functions the main dispatch loop composes for an
+// ordinary step (buildStepPrompt → deriveOrdinaryReviewScaffold → conditional
+// buildReviewPrompt scaffold → runAndNormalize with reviewMode) so a regression
+// that dropped normalization or leaked the scaffold onto the reducer is caught.
+// ---------------------------------------------------------------------------
+const SCAFFOLD_MARKERS = ['You are a senior code reviewer', '## Severity Vocabulary'];
+
+function reviewMergeDispatch() {
+  const step = BUILD_SPEC.flows.build.steps.find(s => s.id === 'review_merge');
+  return {
+    step_id: 'review_merge', agent: 'claude', flow_id: 'f',
+    intent: step.do, inputs: {}, output_fields: [],
+    ensure: Array.isArray(step.ensure) ? step.ensure.map(e => e.expr ?? e) : [],
+  };
+}
+
+// Mirrors the main dispatch loop's ordinary-step prompt construction exactly.
+function composeMainStepPrompt(spec, flow, stepId, dispatch, context) {
+  const basePrompt = buildStepPrompt(dispatch, context);
+  const contractName = resolveStepOutputContract(spec, flow, stepId).contractName;
+  const { isReviewMain, isReviewScaffoldMain } =
+    deriveOrdinaryReviewScaffold({ contractName, stepId, reduceSteps: REDUCE_STEPS });
+  let prompt = basePrompt;
+  if (isReviewScaffoldMain) {
+    prompt = buildReviewPrompt({
+      agentType: 'claude', lens: 'general', lensFocus: '', exclusions: '',
+      confidenceGate: 7, taskDescription: '', blueprint: '',
+    }) + '\n\n' + basePrompt;
+  }
+  return { prompt, basePrompt, isReviewMain, isReviewScaffoldMain };
+}
+
+describe('H8 review_merge integration — base reducer prompt + ReviewResult normalization', () => {
+  it("review_merge's prompt is the base reducer prompt with NO reviewer scaffold", () => {
+    const dispatch = reviewMergeDispatch();
+    const { prompt, basePrompt, isReviewMain, isReviewScaffoldMain } =
+      composeMainStepPrompt(BUILD_SPEC, 'build', 'review_merge', dispatch, { cwd: process.cwd(), featureCode: 'F-1' });
+    assert.equal(isReviewMain, true, 'review_merge still normalizes as review');
+    assert.equal(isReviewScaffoldMain, false, 'review_merge must NOT be scaffolded');
+    assert.equal(prompt, basePrompt, 'the reducer prompt is exactly the base step prompt (no scaffold prepended)');
+    for (const marker of SCAFFOLD_MARKERS) {
+      assert.ok(!prompt.includes(marker), `reducer prompt must not contain the reviewer scaffold marker: ${marker}`);
+    }
+    assert.ok(prompt.includes('review_merge'), 'the base prompt names the step');
+    assert.ok(/merge/i.test(prompt), 'the base prompt carries the reducer (merge) intent');
+  });
+
+  it('a real reviewer (codex_review/review) DOES get the scaffold (contrast guard)', () => {
+    const dispatch = { step_id: 'codex_review/review', agent: 'claude', flow_id: 'f', intent: 'review the work', inputs: {}, output_fields: [], ensure: [] };
+    const { prompt, isReviewScaffoldMain } =
+      composeMainStepPrompt(BUILD_SPEC, 'build', 'codex_review/review', dispatch, { cwd: process.cwd(), featureCode: 'F-1' });
+    assert.equal(isReviewScaffoldMain, true, 'a real reviewer is scaffolded');
+    assert.ok(SCAFFOLD_MARKERS.every(m => prompt.includes(m)), 'the reviewer prompt carries the scaffold');
+  });
+
+  it("review_merge's output is normalized to the canonical ReviewResult shape (reviewMode wiring)", async () => {
+    const dispatch = reviewMergeDispatch();
+    // The reducer emits a raw merge missing the canonical carrier fields; only
+    // ReviewResult normalization (reviewMode:true — the value the loop derives
+    // from isReviewMain) fills lenses_run / auto_fixes / asks / meta and stamps
+    // findings.
+    const rawMerge = JSON.stringify({
+      clean: false, summary: 'merged findings',
+      findings: [{ file: 'a.js', line: 3, severity: 'should-fix', finding: 'bad name', confidence: 9 }],
+    });
+    const stratum = {
+      _localQuery: () => (async function* () {
+        yield { type: 'system', subtype: 'init', model: 'claude-test' };
+        yield { type: 'result', subtype: 'success', result: rawMerge, total_cost_usd: 0, usage: { input_tokens: 1, output_tokens: 1 }, duration_ms: 1 };
+      })(),
+      onEvent: () => () => {}, agentRun: async () => ({ text: '' }), cancelAgentRun: async () => {},
+    };
+    const out = await runAndNormalize(null, 'p', dispatch, {
+      stratum, cwd: process.cwd(), localExecution: true, maxDurationMs: 5000,
+      reviewMode: true, confidenceGate: 7, lens: 'general',
+    });
+    const result = out.result;
+    assert.ok(result && typeof result === 'object', 'a structured result is produced');
+    // Canonical ReviewResult carrier fields added by normalization.
+    for (const field of ['clean', 'summary', 'findings', 'lenses_run', 'auto_fixes', 'asks', 'meta']) {
+      assert.ok(field in result, `normalized ReviewResult must carry '${field}'`);
+    }
+    // Normalization stamps the applied confidence gate onto findings.
+    assert.equal(result.findings[0].applied_gate, 7, 'review normalization stamped the confidence gate');
   });
 });
 

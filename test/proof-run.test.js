@@ -19,7 +19,10 @@ import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { PassThrough } from 'node:stream';
 
-import { runBuild } from '../lib/build.js';
+import { runBuild as runBuildRuntime } from '../lib/build.js';
+import { runBuildWithAgentFactory } from './helpers/ts-agent-harness.js';
+
+const runBuild = (featureCode, options) => runBuildWithAgentFactory(runBuildRuntime, featureCode, options);
 
 const ROOT = resolve(dirname(import.meta.url.replace('file://', '')));
 
@@ -289,7 +292,7 @@ describe('proof run: full pipeline', { skip: !stratumAvailable && 'TS stratum MC
 
     // These steps should execute (not skipped).
     // v0.3: explore_design, blueprint, verification, plan, decompose are agent-dispatched.
-    // execute is parallel_dispatch — its tasks are dispatched individually (not as "execute").
+    // execute is TS consumer fanout — its tasks are dispatched individually.
     for (const step of ['explore_design', 'blueprint', 'verification', 'plan', 'decompose']) {
       assert.ok(bareStepIds.includes(step), `Step "${step}" should have been dispatched`);
     }
@@ -305,7 +308,7 @@ describe('proof run: full pipeline', { skip: !stratumAvailable && 'TS stratum MC
 
     // Parallel dispatch tasks should have dispatched (task-1 from mock decompose)
     assert.ok(dispatches.some(d => d.stepId.startsWith('execute/')),
-      'parallel_dispatch should dispatch decomposed tasks');
+      'TS consumer fanout should dispatch decomposed tasks');
 
     // --- Verify cross-agent dispatch ---
     const reviewDispatch = dispatches.find(d => d.stepId.endsWith('/review') && d.agentType === 'codex');

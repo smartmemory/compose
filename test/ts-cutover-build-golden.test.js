@@ -8,7 +8,7 @@
  * RED until build.js consumes TS-native dispatches:
  *   { status: ready|running|completed, runId, ready: [{ id }] }
  * instead of Python dispatch vocabulary:
- *   { status: execute_step|await_gate|complete, flow_id, step_id }.
+ *   the retired single-dispatch response vocabulary.
  */
 
 import { describe, test } from 'node:test';
@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { runBuild } from '../lib/build.js';
-import { installFactoryShim } from '../lib/connector-factory-shim.js';
+import { installAgentHarness } from './helpers/ts-agent-harness.js';
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 
 const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
@@ -157,7 +157,7 @@ describe('build.js consumes TS-native Stratum responses', () => {
         env: { ...process.env, STRATUM_STATE_ROOT: stateRoot },
       });
 
-      installFactoryShim(client, stubAgentFactory(() => { agentRuns += 1; }), workspace);
+      installAgentHarness(client, stubAgentFactory(() => { agentRuns += 1; }), workspace);
 
       await runBuild('TS-BUILD-1', {
         cwd: workspace,
@@ -211,7 +211,7 @@ describe('build.js consumes TS-native Stratum responses', () => {
         env: { ...process.env, STRATUM_STATE_ROOT: stateRoot },
       });
 
-      installFactoryShim(client, stubAgentFactory(() => { agentRuns += 1; }), workspace);
+      installAgentHarness(client, stubAgentFactory(() => { agentRuns += 1; }), workspace);
 
       await runBuild('TS-BUILD-NO-OUT', {
         cwd: workspace,
@@ -259,7 +259,7 @@ describe('build.js consumes TS-native Stratum responses', () => {
         env: { ...process.env, STRATUM_STATE_ROOT: stateRoot },
       });
 
-      installFactoryShim(
+      installAgentHarness(
         client,
         stubAgentFactory(() => { agentRuns += 1; }, { wrong: true }),
         workspace,
@@ -317,7 +317,7 @@ describe('build.js consumes TS-native Stratum responses', () => {
         env: { ...process.env, STRATUM_STATE_ROOT: stateRoot },
       });
 
-      installFactoryShim(client, stubAgentFactory(() => { agentRuns += 1; }), workspace);
+      installAgentHarness(client, stubAgentFactory(() => { agentRuns += 1; }), workspace);
 
       await runBuild('TS-BUILD-POINTER', {
         cwd: workspace,

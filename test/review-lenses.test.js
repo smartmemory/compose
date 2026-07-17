@@ -100,35 +100,6 @@ describe('shouldRunCrossModel', () => {
   });
 });
 
-// STRAT-REV-FU-1: shortstat parser regression tests
-describe('parseShortstat (STRAT-REV-FU-1)', () => {
-  it('parses insertions+deletions', async () => {
-    const { parseShortstat } = await import('../lib/build.js');
-    assert.equal(parseShortstat(' 3 files changed, 10 insertions(+), 5 deletions(-)\n'), 15);
-  });
-
-  it('parses insertions-only (no deletions)', async () => {
-    const { parseShortstat } = await import('../lib/build.js');
-    assert.equal(parseShortstat(' 1 file changed, 250 insertions(+)\n'), 250);
-  });
-
-  it('parses deletions-only — must-fix from Codex review', async () => {
-    const { parseShortstat } = await import('../lib/build.js');
-    assert.equal(parseShortstat(' 1 file changed, 250 deletions(-)\n'), 250);
-  });
-
-  it('returns 0 for empty stdout (no changes)', async () => {
-    const { parseShortstat } = await import('../lib/build.js');
-    assert.equal(parseShortstat(''), 0);
-    assert.equal(parseShortstat('   \n'), 0);
-  });
-
-  it('returns null for unrecognized shape (preserves file-count-only fallback)', async () => {
-    const { parseShortstat } = await import('../lib/build.js');
-    assert.equal(parseShortstat('garbage output\n'), null);
-  });
-});
-
 describe('triageLenses', () => {
   it('returns baseline lenses for any file list', () => {
     const tasks = triageLenses(['README.md']);
