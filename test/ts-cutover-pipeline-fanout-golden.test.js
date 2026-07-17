@@ -531,7 +531,7 @@ describe('deterministic file_exists ensures on ordinary steps (D4)', () => {
     // The agent claims a complete artifact that was never written to disk.
     const res = await client.stepDone(
       planned.runId, 's', { output: { artifact: 'docs/never-written.md', outcome: 'complete' } },
-      ready.epoch, ready.dispatchToken,
+      ready.dispatchToken,
     );
     assert.notEqual(res.status, 'completed', 'a missing artifact must NOT satisfy file_exists');
     assert.notEqual(res.status, 'ready', 'the step must not advance on a failed deterministic ensure');
@@ -569,7 +569,7 @@ describe('deterministic file_exists ensures on ordinary steps (D4)', () => {
     const ready = planned.ready[0];
     const res = await client.stepDone(
       planned.runId, 's', { output: { artifact: 'docs/written.md', outcome: 'complete' } },
-      ready.epoch, ready.dispatchToken,
+      ready.dispatchToken,
     );
     assert.equal(res.status, 'completed', 'a written artifact must satisfy file_exists');
   });

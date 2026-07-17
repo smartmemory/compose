@@ -49,6 +49,7 @@ const {
   queryFlows, queryFlow, queryGates,
   gateApprove, gateReject, gateRevise,
 } = await import(`${SERVER_DIR}/stratum-client.js`);
+const { LIVE_STRATUM_TS_CLI_BIN, probeStratumBin } = await import(`${REPO_ROOT}/lib/stratum-engine.js`);
 
 /**
  * Build a mock execFile that replays the given response sequence.
@@ -197,7 +198,7 @@ test('gateApprove omits --resolved-by when default human', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Engine selection (COMP-STRATUM-TS): python default, ts flag, guard pinned
+// Engine selection (COMP-STRATUM-TS): TS default, python flag, guard pinned
 // ---------------------------------------------------------------------------
 
 const { resolveStratumEngine, guardHistory } = await import(`${SERVER_DIR}/stratum-client.js`);
@@ -228,8 +229,20 @@ async function withEnv(vars, fn) {
   }
 }
 
-test('engine defaults to python: queries spawn stratum-mcp', async () => {
+test('engine defaults to TS: queries spawn stratum', async () => {
   await withEnv({ COMPOSE_STRATUM_ENGINE: undefined }, async () => {
+    assert.equal(resolveStratumEngine(), 'ts');
+    const m = makeBinMock([{ exitCode: 0, stdout: '[]' }]);
+    _testOnly_setExecFile(m.exec);
+    await queryFlows();
+    // C1: the TS default is the live checkout's query/gate CLI, not a bare
+    // `stratum` (which resolves to whatever is on $PATH).
+    assert.equal(m.lastBin, LIVE_STRATUM_TS_CLI_BIN);
+  });
+});
+
+test('COMPOSE_STRATUM_ENGINE=python keeps the legacy query path selectable', async () => {
+  await withEnv({ COMPOSE_STRATUM_ENGINE: 'python' }, async () => {
     assert.equal(resolveStratumEngine(), 'python');
     const m = makeBinMock([{ exitCode: 0, stdout: '[]' }]);
     _testOnly_setExecFile(m.exec);
@@ -244,9 +257,9 @@ test('COMPOSE_STRATUM_ENGINE=ts routes queries and gates to the stratum bin', as
     const m = makeBinMock([{ exitCode: 0, stdout: '[]' }, { exitCode: 0, stdout: '{"ok":true}' }]);
     _testOnly_setExecFile(m.exec);
     await queryGates();
-    assert.equal(m.lastBin, 'stratum');
+    assert.equal(m.lastBin, LIVE_STRATUM_TS_CLI_BIN);
     await gateApprove('f1', 's1');
-    assert.equal(m.lastBin, 'stratum');
+    assert.equal(m.lastBin, LIVE_STRATUM_TS_CLI_BIN);
   });
 });
 
@@ -324,7 +337,7 @@ test('spawn failure via the child error event settles as SPAWN, never an unhandl
   _testOnly_setExecFile(eventErrorExec);
   const result = await queryFlows();
   assert.equal(result.error.code, 'SPAWN');
-  assert.match(result.error.message, /pip install stratum-mcp/);
+  assert.match(result.error.message, /TS stratum engine/);
 });
 
 test('non-spawn string codes are generic failures, not SPAWN remedies', async () => {
@@ -339,4 +352,125 @@ test('non-spawn string codes are generic failures, not SPAWN remedies', async ()
   assert.ok(result.error, 'must be an error result');
   assert.notEqual(result.error.code, 'SPAWN');
   assert.ok(!/pip install/.test(result.error.message ?? ''), 'must not suggest installing stratum');
+});
+
+// ---------------------------------------------------------------------------
+// C1/D1: probeStratumBin must POSITIVELY identify the stratum query contract, not
+// just check "output parses as an array" (which adversarial stubs emitting `[]` or
+// `[{...}]` pass, and which a legitimately-empty fresh store also produces). It
+// queries a nonexistent-but-valid run id and requires the NOT_FOUND projection
+// echoing the sentinel — data-independent, unspoofable by an array stub.
+// ---------------------------------------------------------------------------
+
+const NOT_FOUND_FOR = (bin, args) => {
+  assert.deepEqual(args.slice(0, 2), ['query', 'flow']);
+  const sentinel = args[2];
+  return JSON.stringify({ error: { code: 'NOT_FOUND', message: `Flow '${sentinel}' not found` } });
+};
+
+test('probeStratumBin accepts a binary that returns the NOT_FOUND projection (echoing the sentinel)', () => {
+  assert.deepEqual(probeStratumBin('stratum', { execFileSync: NOT_FOUND_FOR }), { ok: true });
+});
+
+test('probeStratumBin REJECTS an incompatible binary (Unknown command / non-JSON)', () => {
+  // Mirrors miniconda `stratum query …`: prints an error to stdout, exit 0.
+  const execFileSync = () => "Unknown command: query\nRun 'stratum --help' for usage.\n";
+  const result = probeStratumBin('stratum', { execFileSync });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /does not speak the stratum query contract|non-JSON/);
+});
+
+// D1 (adversarial stubs from the review): "output parses as an array" is not
+// enough — these must be REJECTED.
+test('probeStratumBin REJECTS an adversarial binary that returns an empty array', () => {
+  const execFileSync = () => '[]';
+  const result = probeStratumBin('stratum', { execFileSync });
+  assert.equal(result.ok, false, 'a bare `[]` (adversarial OR legitimate-empty) must not identify the binary');
+  assert.match(result.reason, /NOT_FOUND projection|query contract/);
+});
+
+test('probeStratumBin REJECTS an adversarial binary that returns a bogus array of objects', () => {
+  const execFileSync = () => '[{"foo":"bar"}]';
+  const result = probeStratumBin('stratum', { execFileSync });
+  assert.equal(result.ok, false, 'an array of arbitrary objects must not pass');
+  assert.match(result.reason, /NOT_FOUND projection|query contract/);
+});
+
+test('probeStratumBin REJECTS a binary whose response lacks the NOT_FOUND code', () => {
+  const execFileSync = () => '{"error":{"code":"INVALID","message":"nope"}}';
+  const result = probeStratumBin('stratum', { execFileSync });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /NOT_FOUND projection|query contract/);
+});
+
+test('probeStratumBin accepts the NOT_FOUND projection even when the CLI exits non-zero', () => {
+  // The real CLI exits non-zero for NOT_FOUND (execFileSync throws) but writes the
+  // JSON to stdout — the probe must read err.stdout, not treat it as a failure.
+  const execFileSync = (bin, args) => {
+    const err = new Error('Command failed');
+    err.status = 1;
+    err.stdout = JSON.stringify({ error: { code: 'NOT_FOUND', message: `Flow '${args[2]}' not found` } });
+    throw err;
+  };
+  assert.deepEqual(probeStratumBin('stratum', { execFileSync }), { ok: true });
+});
+
+test('probeStratumBin REJECTS a binary that fails to run', () => {
+  const execFileSync = () => { throw new Error('spawn ENOENT'); };
+  const result = probeStratumBin('/no/such/stratum-cli', { execFileSync });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /not an executable file|failed to run/);
+});
+
+test('probeStratumBin accepts the live TS CLI bin against the real query contract', () => {
+  // No execFileSync injection — exercises the real live checkout CLI.
+  const result = probeStratumBin(LIVE_STRATUM_TS_CLI_BIN);
+  assert.equal(result.ok, true, `live CLI probe should pass: ${result.reason ?? ''}`);
+});
+
+// E2: a JSON argument-parrot that echoes the whole invocation inside a NOT_FOUND
+// envelope must NOT pass — the message must EQUAL the exact projection format.
+test('probeStratumBin REJECTS an argument-parrot echoing the sentinel in a bogus message', () => {
+  const execFileSync = (bin, args) => JSON.stringify({
+    error: { code: 'NOT_FOUND', message: `echo query flow ${args[2]}` },
+  });
+  const result = probeStratumBin('parrot', { execFileSync });
+  assert.equal(result.ok, false, 'a message merely CONTAINING the sentinel must not pass');
+  assert.match(result.reason, /exact NOT_FOUND projection|query contract/);
+});
+
+test('probeStratumBin REJECTS a NOT_FOUND whose message differs from the exact projection', () => {
+  const execFileSync = (bin, args) => JSON.stringify({
+    error: { code: 'NOT_FOUND', message: `flow ${args[2]} does not exist` },
+  });
+  const result = probeStratumBin('stratum', { execFileSync });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /exact NOT_FOUND projection|query contract/);
+});
+
+// E3: a TIMEOUT / signal-terminated run with populated stdout must be a probe
+// FAILURE, never trusted as a legitimate non-zero exit.
+test('probeStratumBin REJECTS an ETIMEDOUT that still flushed parseable stdout', () => {
+  const execFileSync = (bin, args) => {
+    const err = new Error('spawnSync ETIMEDOUT');
+    err.code = 'ETIMEDOUT';
+    err.stdout = JSON.stringify({ error: { code: 'NOT_FOUND', message: `Flow '${args[2]}' not found` } });
+    throw err;
+  };
+  const result = probeStratumBin('stratum', { execFileSync });
+  assert.equal(result.ok, false, 'a timed-out run must fail even if its stdout parses to the NOT_FOUND projection');
+  assert.match(result.reason, /timed out or was terminated/);
+});
+
+test('probeStratumBin REJECTS a signal-killed run with populated stdout', () => {
+  const execFileSync = (bin, args) => {
+    const err = new Error('killed');
+    err.killed = true;
+    err.signal = 'SIGKILL';
+    err.stdout = JSON.stringify({ error: { code: 'NOT_FOUND', message: `Flow '${args[2]}' not found` } });
+    throw err;
+  };
+  const result = probeStratumBin('stratum', { execFileSync });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /timed out or was terminated/);
 });

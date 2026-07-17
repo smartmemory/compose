@@ -1,10 +1,10 @@
 /**
  * Integration test for the build runner.
  *
- * Uses a real stratum-mcp subprocess with a mock agent connector.
+ * Uses the live TS Stratum MCP bin with a mock agent connector.
  * The test validates the runner orchestration, not agent inference.
  *
- * Skip if stratum-mcp is not installed.
+ * Skip if the live TS MCP bin is unavailable.
  */
 
 import { test, before, after, describe } from 'node:test';
@@ -14,56 +14,62 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execFileSync } from 'node:child_process';
-
 import { runBuild } from '../lib/build.js';
 
 // ---------------------------------------------------------------------------
 // Skip guard
 // ---------------------------------------------------------------------------
 
-let stratumAvailable = false;
-try {
-  execFileSync('stratum-mcp', ['--help'], { timeout: 5000, stdio: 'pipe' });
-  stratumAvailable = true;
-} catch { /* not installed */ }
+const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
+const stratumAvailable = existsSync(TS_MCP_BIN);
+const stratumStateRoot = mkdtempSync(join(tmpdir(), 'build-integ-stratum-state-'));
+const previousStateRoot = process.env.STRATUM_STATE_ROOT;
+
+before(() => { process.env.STRATUM_STATE_ROOT = stratumStateRoot; });
+after(() => {
+  if (previousStateRoot === undefined) delete process.env.STRATUM_STATE_ROOT;
+  else process.env.STRATUM_STATE_ROOT = previousStateRoot;
+  rmSync(stratumStateRoot, { recursive: true, force: true });
+});
 
 // ---------------------------------------------------------------------------
 // Spec: 2-step inline flow with no gates (for fast testing)
 // ---------------------------------------------------------------------------
 
 const TWO_STEP_SPEC = `\
-version: "0.2"
+version: 1
 
 contracts:
   PhaseResult:
-    phase: { type: string }
-    artifact: { type: string }
-    outcome: { type: string }
+    phase: string
+    artifact: string
+    outcome: string
 
 flows:
+  entry: build
   build:
     input:
-      featureCode: { type: string }
-      description: { type: string }
-    output: PhaseResult
+      featureCode: string
+      description: string
+      pre_merge_gate: string[]?
+      implementer_agent: string
+      reviewer_agent: string
+    output:
+      from: "\${implement.output}"
+      contract: PhaseResult
     steps:
       - id: design
         agent: claude
-        intent: "Write the design doc for the feature."
-        inputs:
-          featureCode: "$.input.featureCode"
-        output_contract: PhaseResult
-        retries: 1
+        do: "Write the design doc for \${input.featureCode}."
+        out: PhaseResult
+        attempts: 1
 
       - id: implement
+        after: [design]
         agent: claude
-        intent: "Implement the feature based on the design."
-        inputs:
-          featureCode: "$.input.featureCode"
-        output_contract: PhaseResult
-        retries: 1
-        depends_on: [design]
+        do: "Implement \${input.featureCode} based on the design."
+        out: PhaseResult
+        attempts: 1
 `;
 
 // ---------------------------------------------------------------------------
@@ -71,69 +77,65 @@ flows:
 // ---------------------------------------------------------------------------
 
 const SUBFLOW_SPEC = `\
-version: "0.2"
+version: 1
 
 contracts:
   PhaseResult:
-    phase: { type: string }
-    artifact: { type: string }
-    outcome: { type: string }
-
-  ReviewResult:
-    clean: { type: boolean }
-    summary: { type: string }
+    phase: string
+    artifact: string
+    outcome: string
 
 flows:
+  entry: build
   review_fix:
     input:
-      task: { type: string }
-    output: ReviewResult
+      task: string
+    output:
+      from: "\${fix.output}"
+      contract: PhaseResult
     steps:
       - id: review
         agent: claude
-        intent: "Review the implementation. Return clean=true if no issues."
-        inputs:
-          task: "$.input.task"
-        output_contract: ReviewResult
-        retries: 1
+        do: "Review \${input.task}. Return clean=true if no issues."
+        out: PhaseResult
+        attempts: 1
 
       - id: fix
+        after: [review]
         agent: claude
-        intent: "Fix any issues found during review."
-        inputs:
-          task: "$.input.task"
-        output_contract: ReviewResult
-        retries: 1
-        depends_on: [review]
+        do: "Fix any issues found while reviewing \${input.task}."
+        out: PhaseResult
+        attempts: 1
 
   build:
     input:
-      featureCode: { type: string }
-      description: { type: string }
-    output: PhaseResult
+      featureCode: string
+      description: string
+      pre_merge_gate: string[]?
+      implementer_agent: string
+      reviewer_agent: string
+    output:
+      from: "\${finish.output}"
+      contract: PhaseResult
     steps:
       - id: implement
         agent: claude
-        intent: "Implement the feature."
-        inputs:
-          featureCode: "$.input.featureCode"
-        output_contract: PhaseResult
-        retries: 1
+        do: "Implement \${input.featureCode}."
+        out: PhaseResult
+        attempts: 1
 
       - id: review
-        flow: review_fix
-        inputs:
-          task: "$.input.description"
-        depends_on: [implement]
+        after: [implement]
+        run: review_fix
+        with:
+          task: "\${input.description}"
 
-      - id: ship
+      - id: finish
+        after: [review]
         agent: claude
-        intent: "Ship the feature."
-        inputs:
-          featureCode: "$.input.featureCode"
-        output_contract: PhaseResult
-        retries: 1
-        depends_on: [review]
+        do: "Finish \${input.featureCode}."
+        out: PhaseResult
+        attempts: 1
 `;
 
 // ---------------------------------------------------------------------------
@@ -150,8 +152,8 @@ function mockConnectorFactory(tmpDir, contractMap = {}) {
     return {
       async *run(prompt, _runOpts) {
         // Extract step_id from prompt to determine what to return
-        const stepMatch = prompt.match(/step "(\w+)"/);
-        const stepId = stepMatch?.[1] ?? 'unknown';
+        const stepMatch = prompt.match(/step "([^"]+)"/);
+        const stepId = (stepMatch?.[1] ?? 'unknown').split('/').at(-1);
 
         // Create a file to prove the connector ran
         const markerDir = join(tmpDir, '.compose', 'data', 'markers');
@@ -203,7 +205,7 @@ function setupProject(tmpDir) {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('build integration', { skip: !stratumAvailable && 'stratum-mcp not installed' }, () => {
+describe('build integration', { skip: !stratumAvailable && 'TS stratum MCP bin not found' }, () => {
   let tmpDir;
 
   before(() => {
@@ -235,9 +237,9 @@ describe('build integration', { skip: !stratumAvailable && 'stratum-mcp not inst
     const auditPath = join(tmpDir, 'docs', 'features', 'TEST-1', 'audit.json');
     assert.ok(existsSync(auditPath), 'audit.json should be written');
     const audit = JSON.parse(readFileSync(auditPath, 'utf-8'));
-    assert.ok(audit.flow_id, 'audit must have flow_id');
-    assert.equal(audit.status, 'complete', 'audit must show complete status');
-    assert.ok(Array.isArray(audit.trace), 'audit must have trace array');
+    assert.ok(audit.runId, 'audit must identify the run');
+    assert.equal(audit.status, 'completed', 'audit must show completed status');
+    assert.ok(Array.isArray(audit.events), 'audit must have an event trail');
 
     // vision-state.json should have the feature item
     const visionPath = join(tmpDir, '.compose', 'data', 'vision-state.json');
@@ -258,7 +260,7 @@ describe('build integration', { skip: !stratumAvailable && 'stratum-mcp not inst
 // Sub-flow (execute_flow) integration test
 // ---------------------------------------------------------------------------
 
-describe('build integration: sub-flow dispatch', { skip: !stratumAvailable && 'stratum-mcp not installed' }, () => {
+describe('build integration: sub-flow dispatch', { skip: !stratumAvailable && 'TS stratum MCP bin not found' }, () => {
   let tmpDir;
 
   before(() => {
@@ -288,15 +290,9 @@ describe('build integration: sub-flow dispatch', { skip: !stratumAvailable && 's
   });
 
   test('flow with sub-flow: parent completes after child flow finishes', async () => {
-    // The review_fix sub-flow steps need ReviewResult-shaped output
-    const contractMap = {
-      review: { clean: true, summary: 'All clear' },
-      fix: { clean: true, summary: 'Fixed' },
-    };
-
     await runBuild('SUB-1', {
       cwd: tmpDir,
-      connectorFactory: mockConnectorFactory(tmpDir, contractMap),
+      connectorFactory: mockConnectorFactory(tmpDir),
       description: 'Sub-flow integration test',
     });
 
@@ -312,20 +308,19 @@ describe('build integration: sub-flow dispatch', { skip: !stratumAvailable && 's
     const auditPath = join(tmpDir, 'docs', 'features', 'SUB-1', 'audit.json');
     assert.ok(existsSync(auditPath), 'audit.json should be written');
     const audit = JSON.parse(readFileSync(auditPath, 'utf-8'));
-    assert.equal(audit.status, 'complete', 'parent flow must complete');
-    assert.ok(Array.isArray(audit.trace), 'audit must have trace array');
+    assert.equal(audit.status, 'completed', 'parent flow must complete');
+    assert.ok(Array.isArray(audit.events), 'audit must have an event trail');
 
     // The parent flow's steps should all have run:
-    // implement (direct step), review (sub-flow), ship (in-process step after sub-flow)
+    // implement (direct step), review (sub-flow), finish (after sub-flow)
     const markerDir = join(tmpDir, '.compose', 'data', 'markers');
     assert.ok(existsSync(join(markerDir, 'implement.done')),
       'implement step (before sub-flow) should have run');
 
-    // Ship step runs in-process (executeShipStep) — no connector dispatch, so no marker file.
-    // Verify via audit trace instead.
-    const shipTrace = audit.trace.find(t => t.step_id === 'ship' || t.stepId === 'ship');
-    assert.ok(shipTrace,
-      'ship step (after sub-flow) should appear in audit trace — proves parent continued after child completed');
+    assert.equal(audit.steps.finish.status, 'succeeded',
+      'finish should succeed after the child scope completes');
+    assert.ok(existsSync(join(markerDir, 'finish.done')),
+      'finish step should dispatch after the child scope completes');
 
     // Sub-flow's own steps should also have run
     assert.ok(existsSync(join(markerDir, 'review.done')),
@@ -348,8 +343,8 @@ function interruptingConnectorFactory(tmpDir) {
   return function factory(_agentType, _opts) {
     return {
       async *run(prompt, _runOpts) {
-        const stepMatch = prompt.match(/step "(\w+)"/);
-        const stepId = stepMatch?.[1] ?? 'unknown';
+        const stepMatch = prompt.match(/step "([^"]+)"/);
+        const stepId = (stepMatch?.[1] ?? 'unknown').split('/').at(-1);
 
         if (stepId === 'implement') {
           throw new Error('simulated crash');
@@ -370,7 +365,7 @@ function interruptingConnectorFactory(tmpDir) {
   };
 }
 
-describe('build integration: resume', { skip: !stratumAvailable && 'stratum-mcp not installed' }, () => {
+describe('build integration: resume', { skip: !stratumAvailable && 'TS stratum MCP bin not found' }, () => {
 
   // -------------------------------------------------------------------------
   // Test 1: resume continues from correct step after interruption
@@ -444,7 +439,7 @@ describe('build integration: resume', { skip: !stratumAvailable && 'stratum-mcp 
       const auditPath = join(tmpDir, 'docs', 'features', 'TEST-1', 'audit.json');
       assert.ok(existsSync(auditPath), 'audit.json should be written');
       const audit = JSON.parse(readFileSync(auditPath, 'utf-8'));
-      assert.equal(audit.status, 'complete', 'audit must show complete status');
+      assert.equal(audit.status, 'completed', 'audit must show completed status');
     });
   });
 
@@ -509,7 +504,7 @@ describe('build integration: resume', { skip: !stratumAvailable && 'stratum-mcp 
       const auditPath = join(tmpDir, 'docs', 'features', 'TEST-1', 'audit.json');
       assert.ok(existsSync(auditPath), 'audit.json should be written');
       const audit = JSON.parse(readFileSync(auditPath, 'utf-8'));
-      assert.equal(audit.status, 'complete', 'audit must show complete status');
+      assert.equal(audit.status, 'completed', 'audit must show completed status');
     });
   });
 });

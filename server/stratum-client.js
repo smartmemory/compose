@@ -15,7 +15,8 @@
  */
 
 import { execFile as _execFileDefault } from 'node:child_process';
-import { loadProjectConfig } from './project-root.js';
+import { getTargetRoot } from './project-root.js';
+import { resolveStratumEngine as resolveEngine, LIVE_STRATUM_TS_CLI_BIN } from '../lib/stratum-engine.js';
 
 const STRATUM_BIN = 'stratum-mcp';
 
@@ -28,30 +29,25 @@ const MUTATION_TIMEOUT_MS = 10_000;
 // ---------------------------------------------------------------------------
 // Engine selection (COMP-STRATUM-TS)
 //
-// The flow/gate seam is engine-selectable: Python `stratum-mcp` (default) or
-// the TS engine's `stratum` CLI, which emits the same JSON projections and
+// The flow/gate seam is engine-selectable: the TS engine's `stratum` CLI
+// (default) or Python `stratum-mcp`, with the same JSON projections and
 // exit codes. Guard calls are PINNED to Python — STRAT-GUARD is not part of
 // the TS port. Resolution order: COMPOSE_STRATUM_ENGINE env override, then
-// capabilities.stratumEngine in .compose/compose.json, then "python".
+// capabilities.stratumEngine in .compose/compose.json, then "ts".
 // Unknown values fail loudly; never a silent fallback.
 // ---------------------------------------------------------------------------
 
 /** @returns {'python'|'ts'} */
 export function resolveStratumEngine() {
-  let value = process.env.COMPOSE_STRATUM_ENGINE;
-  if (value === undefined || value === '') {
-    try { value = loadProjectConfig()?.capabilities?.stratumEngine; } catch { value = undefined; }
-  }
-  if (value === undefined || value === '') return 'python';
-  if (value !== 'python' && value !== 'ts') {
-    throw new Error(`stratumEngine must be "python" or "ts", got ${JSON.stringify(value)}`);
-  }
-  return value;
+  return resolveEngine(getTargetRoot());
 }
 
 /** Binary for flow/gate query+mutation calls under the selected engine. */
 function flowGateBin() {
-  if (resolveStratumEngine() === 'ts') return process.env.COMPOSE_STRATUM_TS_BIN || 'stratum';
+  // C1: the TS default is the live checkout's query/gate CLI, NOT a bare
+  // `stratum` (which resolves to whatever is on $PATH — e.g. miniconda's
+  // incompatible python CLI). The COMPOSE_STRATUM_TS_BIN override is retained.
+  if (resolveStratumEngine() === 'ts') return process.env.COMPOSE_STRATUM_TS_BIN || LIVE_STRATUM_TS_CLI_BIN;
   return STRATUM_BIN;
 }
 
@@ -65,7 +61,7 @@ function flowGateBin() {
  *
  * @param {string[]} args
  * @param {number}   timeoutMs
- * @param {string}   [bin] — defaults to the Python stratum-mcp binary
+ * @param {string}   [bin] — explicit binary selected by the calling seam
  * @returns {Promise<{ stdout: string, stderr: string, code: number }>}
  */
 function spawnStratum(args, timeoutMs, bin = STRATUM_BIN) {

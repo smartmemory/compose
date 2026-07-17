@@ -86,10 +86,21 @@ function extractFlows(parsedDoc) {
 }
 
 /** Normalize one raw step object into the internal shape. */
-function normalizeStep(raw) {
+function normalizeStep(raw, version) {
+  // C3/D2: the step instruction is `do` in TS v1 specs and `intent` in v0.3.
+  // Surface it uniformly as `intent`, remembering the PHYSICAL key so the round-trip
+  // writes it back to the correct field (writing `intent` into a v1 step yields an
+  // undeclared, schema-invalid field). The key is VERSION-derived, never
+  // presence-derived: a v1 step carrying BOTH `do` and `intent` must round-trip to
+  // `do` (and the stray `intent` is dropped on save), not silently keep `intent`.
+  const intentKey = version === 1 ? 'do' : 'intent';
+  const otherKey = intentKey === 'do' ? 'intent' : 'do';
+
   const _extra = {};
   for (const key of Object.keys(raw)) {
-    if (!SURFACED_KEYS.has(key)) _extra[key] = raw[key];
+    // Both `do` and `intent` are surfaced as `intent` (above), so neither lands in
+    // _extra — the wrong-version sibling is dropped by the save's cleanup.
+    if (!SURFACED_KEYS.has(key) && key !== 'do') _extra[key] = raw[key];
   }
 
   // `kind` classifies the step for the canvas: agent | function | flow | parallel.
@@ -105,7 +116,10 @@ function normalizeStep(raw) {
     kind,
     agent: raw.agent,
     function: raw.function,
-    intent: raw.intent,
+    // Prefer the version-correct field's value; fall back to the sibling so a step
+    // authored with only the wrong-version field still surfaces its instruction.
+    intent: raw[intentKey] ?? raw[otherKey],
+    _intentKey: intentKey,
     inputs: raw.inputs ? { ...raw.inputs } : {},
     output_contract: raw.output_contract,
     ensure: Array.isArray(raw.ensure) ? [...raw.ensure] : [],
@@ -125,7 +139,7 @@ export function specToModel(parsedDoc) {
   const rawFlows = extractFlows(doc);
   const flows = rawFlows.map(({ name, rawSteps, synthetic }) => ({
     name,
-    steps: rawSteps.map(normalizeStep),
+    steps: rawSteps.map(s => normalizeStep(s, doc.version)),
     // Carry the display-only marker so the serializer can skip the synthetic
     // function-only fallback flow (it has no real flows.<name> entry on disk).
     ...(synthetic ? { synthetic: true } : {}),
@@ -175,7 +189,9 @@ function denormalizeStep(step) {
 
   if (step.agent !== undefined) out.agent = step.agent;
   if (step.function !== undefined) out.function = step.function;
-  if (step.intent !== undefined) out.intent = step.intent;
+  // C3: write the instruction back to its physical field (`do` for v1, `intent`
+  // for v0.3) so the serialized step stays schema-valid.
+  if (step.intent !== undefined) out[step._intentKey || 'intent'] = step.intent;
   if (step.inputs && Object.keys(step.inputs).length > 0) out.inputs = { ...step.inputs };
   if (step.output_contract !== undefined) out.output_contract = step.output_contract;
   if (Array.isArray(step.ensure) && step.ensure.length > 0) out.ensure = [...step.ensure];
@@ -376,6 +392,35 @@ function rewriteStepsPath(value, oldId, newId) {
 }
 
 /**
+ * C4: rewrite EMBEDDED step references in a string — the v1 `${<id>.output…}` /
+ * `${<id>}` template form AND the `$.steps.<id>…` JSONPath form — anywhere in the
+ * string (do/with/fanout.over templates carry them mid-text, not anchored). The
+ * negative lookahead keeps `execute` from matching inside `execute_merge`.
+ */
+function rewriteEmbeddedRefString(value, oldId, newId) {
+  if (typeof value !== 'string') return value;
+  const escaped = oldId.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
+  return value
+    .replace(new RegExp(`(\\$\\.steps\\.)${escaped}(?![A-Za-z0-9_-])`, 'g'), `$1${newId}`)
+    .replace(new RegExp(`(\\$\\{\\s*)${escaped}(?=[.}\\s|])`, 'g'), `$1${newId}`);
+}
+
+/** In-place deep rewrite of embedded template/JSONPath refs in every string. */
+function rewriteEmbeddedRefsDeep(node, oldId, newId) {
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i += 1) {
+      if (typeof node[i] === 'string') node[i] = rewriteEmbeddedRefString(node[i], oldId, newId);
+      else rewriteEmbeddedRefsDeep(node[i], oldId, newId);
+    }
+  } else if (node && typeof node === 'object') {
+    for (const key of Object.keys(node)) {
+      if (typeof node[key] === 'string') node[key] = rewriteEmbeddedRefString(node[key], oldId, newId);
+      else rewriteEmbeddedRefsDeep(node[key], oldId, newId);
+    }
+  }
+}
+
+/**
  * Rename a step id within a flow, rewriting ALL reference fields
  * (depends_on, on_fail, on_approve/on_revise/on_kill, inputs JSONPaths,
  * parallel source).
@@ -406,6 +451,28 @@ export function renameStep(model, flowName, oldId, newId) {
     }
     if (step._extra && typeof step._extra.source === 'string') {
       step._extra.source = rewriteStepsPath(step._extra.source, oldId, newId);
+    }
+
+    // C4: v1 references live in _extra and use different shapes than v0.3.
+    if (step._extra && typeof step._extra === 'object') {
+      // v1 `after: [ids]` dependency list (the v1 analog of depends_on).
+      if (Array.isArray(step._extra.after)) {
+        step._extra.after = step._extra.after.map(d => rewriteScalar(d, oldId, newId));
+      }
+      // v1 NESTED gate routes (`gate.on_approve/on_revise/on_kill`).
+      const gate = step._extra.gate;
+      if (gate && typeof gate === 'object') {
+        for (const field of ['on_approve', 'on_revise', 'on_kill']) {
+          if (gate[field] !== undefined) gate[field] = rewriteScalar(gate[field], oldId, newId);
+        }
+      }
+      // `${<id>.output…}` / `$.steps.<id>…` template refs in ANY _extra string
+      // (with, fanout.over, nested do, …).
+      rewriteEmbeddedRefsDeep(step._extra, oldId, newId);
+    }
+    // The surfaced instruction (`do` in v1) may template-reference the step.
+    if (typeof step.intent === 'string') {
+      step.intent = rewriteEmbeddedRefString(step.intent, oldId, newId);
     }
   }
   return model;

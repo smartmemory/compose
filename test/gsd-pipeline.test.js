@@ -1,141 +1,145 @@
 /**
- * COMP-GSD-2 T5: pipelines/gsd.stratum.yaml structural validation.
- *
- * Asserts the YAML parses, has the three steps GSD-2 specifies, and uses
- * ONLY Stratum-supported intent_template tokens per
- * stratum-mcp/src/stratum_mcp/spec.py:567-590.
+ * pipelines/gsd.stratum.yaml v1 structural contract over the live TS engine.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { resolve, dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import YAML from 'yaml';
+
+import { resolvePlanSpecValues, StratumMcpClient } from '../lib/stratum-mcp-client.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const YAML = await import('yaml');
-
 const SPEC_PATH = join(REPO_ROOT, 'pipelines', 'gsd.stratum.yaml');
+const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
 const text = readFileSync(SPEC_PATH, 'utf-8');
 const spec = YAML.parse(text);
+const steps = spec.flows.gsd.steps;
 
-test('YAML parses', () => {
-  assert.ok(spec, 'spec should parse');
-  assert.equal(spec.version, '0.3');
-  assert.equal(spec.workflow.name, 'gsd');
+test('YAML parses as the v1 gsd entry flow', () => {
+  assert.ok(spec);
+  assert.equal(spec.version, 1);
+  assert.equal(spec.flows.entry, 'gsd');
 });
 
-test('Stratum parse_and_validate accepts the spec (real validator)', () => {
-  // Invokes the real Stratum validator via python subprocess. This is the
-  // canonical schema check per plan.md T5 acceptance.
-  const code = `import sys
-sys.path.insert(0, 'stratum-mcp/src')
-from stratum_mcp.spec import parse_and_validate
-parse_and_validate(sys.stdin.read())
-print('OK')
-`;
-  const r = spawnSync('python3', ['-c', code], {
-    input: text,
-    encoding: 'utf-8',
-    cwd: REPO_ROOT,
+test('the live TS MCP bin validates and accepts the spec', async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'compose-gsd-spec-state-'));
+  const client = new StratumMcpClient();
+  try {
+    await client.connect({
+      command: process.env.COMPOSE_STRATUM_TS_NODE || process.execPath,
+      args: [TS_MCP_BIN],
+      env: { ...process.env, STRATUM_STATE_ROOT: stateRoot },
+    });
+    const input = {
+      featureCode: 'GSD-TEST',
+      gateCommands: [],
+      pre_merge_gate: [],
+    };
+    const validation = await client.validate(resolvePlanSpecValues(spec, input));
+    assert.deepEqual(validation, { status: 'valid' });
+    const planned = await client.plan(spec, 'gsd', input);
+    assert.equal(planned.status, 'ready');
+    assert.equal(planned.ready[0].id, 'decompose_gsd');
+  } finally {
+    await client.close();
+    await rm(stateRoot, { recursive: true, force: true });
+  }
+});
+
+test('flow has the four authored v1 steps with expected ids', () => {
+  assert.deepEqual(
+    steps.map((step) => step.id),
+    ['decompose_gsd', 'execute', 'execute_merge', 'ship_gsd'],
+  );
+});
+
+test('flow inputs use the v1 scalar contract grammar', () => {
+  assert.equal(spec.flows.gsd.input.featureCode, 'string');
+  assert.equal(spec.flows.gsd.input.gateCommands, 'string[]');
+  assert.equal(spec.flows.gsd.input.pre_merge_gate, 'string[]?');
+});
+
+test('decompose_gsd declares the TaskGraph contract and deterministic postcondition', () => {
+  const step = steps.find(({ id }) => id === 'decompose_gsd');
+  assert.equal(step.agent, 'claude');
+  assert.equal(step.out, 'TaskGraph');
+  assert.equal(step.attempts, 2);
+  // The REAL v1 postcondition (the enforced invariant): at least one task.
+  assert.deepEqual(step.ensure, [{ expr: 'len(result.tasks) >= 1' }]);
+  // ADVISORY ONLY: the prompt asks the agent to reject file-ownership conflicts,
+  // but this prompt text is NOT the enforcement mechanism. File-ownership
+  // enforcement is deterministic and consumer-side since E3/F6 (a typed
+  // TaskGraphOwnershipError → failure step_done envelope, so the engine's
+  // attempts loop governs) — covered in test/gsd.test.js ("F6: decompose_gsd
+  // files_owned conflict yields a failure envelope"). The dead python
+  // `no_file_conflicts` ensure builtin is intentionally NOT resurrected here.
+  assert.match(step.do, /Reject file ownership conflicts/);
+});
+
+test('execute carries the v1 consumer-fanout dispatch policy', () => {
+  const step = steps.find(({ id }) => id === 'execute');
+  assert.deepEqual(step.after, ['decompose_gsd']);
+  assert.equal(step.attempts, 2);
+  assert.equal(step.fanout.dispatch, 'consumer');
+  assert.equal(step.fanout.concurrency, 1);
+  assert.equal(step.fanout.isolation, 'worktree');
+  assert.equal(step.fanout.require, 'all');
+  assert.equal(step.fanout.merge, 'sequential');
+  assert.equal(step.fanout.steps[0].agent, 'claude');
+  assert.equal(step.fanout.steps[0].out, 'TaskResult');
+});
+
+test('execute fanout prompt uses only v1 item/input references', () => {
+  const prompt = steps.find(({ id }) => id === 'execute').fanout.steps[0].do;
+  const refs = [...prompt.matchAll(/\$\{([^{}]+)\}/g)].map((match) => match[1]);
+  for (const ref of refs) {
+    assert.ok(ref === 'item' || /^input\.[A-Za-z_][A-Za-z0-9_]*$/.test(ref),
+      `unsupported v1 fanout reference: \${${ref}}`);
+  }
+});
+
+test('ship_gsd declares the deterministic completion postcondition', () => {
+  // The REAL v1 invariant on ship_gsd: the ship result must report outcome
+  // 'complete' (a deterministic expr ensure, not a judged predicate).
+  const step = steps.find(({ id }) => id === 'ship_gsd');
+  assert.deepEqual(step.ensure, [{ expr: "result.outcome == 'complete'" }]);
+});
+
+test('ship_gsd enumerates docs, verification, commit, and no push', () => {
+  const step = steps.find(({ id }) => id === 'ship_gsd');
+  assert.match(step.do, /ROADMAP\.md/);
+  assert.match(step.do, /CHANGELOG\.md/);
+  assert.match(step.do, /CLAUDE\.md/);
+  assert.match(step.do, /[Cc]ommit/);
+  assert.match(step.do, /Do not push/);
+});
+
+test('ship_gsd does not precondition on plan.md or report.md', () => {
+  const step = steps.find(({ id }) => id === 'ship_gsd');
+  assert.doesNotMatch(step.do, /plan\.md/);
+  assert.doesNotMatch(step.do, /report\.md/);
+});
+
+test('pre-merge commands are single-sourced into instruction and enforcement', () => {
+  const decompose = steps.find(({ id }) => id === 'decompose_gsd');
+  const execute = steps.find(({ id }) => id === 'execute');
+  const ship = steps.find(({ id }) => id === 'ship_gsd');
+  assert.match(decompose.do, /\$\{input\.pre_merge_gate\}/);
+  assert.equal(execute.fanout.pre_merge, '$.input.pre_merge_gate');
+  assert.match(ship.do, /\$\{input\.gateCommands\}/);
+});
+
+test('execute_merge preserves the deferred consumer merge decision', () => {
+  const gate = steps.find(({ id }) => id === 'execute_merge');
+  assert.deepEqual(gate.after, ['execute']);
+  assert.deepEqual(gate.gate, {
+    on_approve: 'ship_gsd',
+    on_revise: 'execute',
+    on_kill: null,
+    max_rounds: 10,
   });
-  if (r.status !== 0) {
-    assert.fail(`Stratum validator rejected the spec:\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
-  }
-  assert.match(r.stdout, /OK/);
-});
-
-test('flow has three steps with expected ids', () => {
-  const steps = spec.flows.gsd.steps;
-  assert.equal(steps.length, 3);
-  const ids = steps.map((s) => s.id);
-  assert.deepEqual(ids, ['decompose_gsd', 'execute', 'ship_gsd']);
-});
-
-test('flow inputs include featureCode, gateCommands, and pre_merge_gate', () => {
-  const inputs = spec.flows.gsd.input;
-  assert.ok(inputs.featureCode);
-  assert.ok(inputs.gateCommands);
-  assert.equal(inputs.gateCommands.type, 'array');
-  // COMP-PAR-MERGE-QUEUE: the fast per-task enforced gate.
-  assert.ok(inputs.pre_merge_gate);
-  assert.equal(inputs.pre_merge_gate.type, 'array');
-});
-
-test('decompose_gsd has correct ensure postconditions', () => {
-  const step = spec.flows.gsd.steps.find((s) => s.id === 'decompose_gsd');
-  assert.equal(step.type, 'decompose');
-  // Stratum v0.3 reserves TaskGraph and requires it as the decompose output_contract.
-  // Per-task produces/consumes (the GSD-specific shape) is enforced post-step by
-  // lib/gsd-decompose-enrich.js against contracts/taskgraph-gsd.json.
-  assert.equal(step.output_contract, 'TaskGraph');
-  assert.ok(step.ensure.includes('no_file_conflicts(result.tasks)'));
-  assert.ok(step.ensure.includes('len(result.tasks) >= 1'));
-});
-
-test('execute has GSD-2 v1 dispatch params', () => {
-  const step = spec.flows.gsd.steps.find((s) => s.id === 'execute');
-  assert.equal(step.type, 'parallel_dispatch');
-  assert.equal(step.max_concurrent, 1, 'sequential by default');
-  assert.equal(step.isolation, 'worktree');
-  assert.equal(step.capture_diff, true);
-  assert.equal(step.merge, 'sequential_apply');
-  assert.equal(step.require, 'all');
-  assert.equal(step.retries, 2);
-});
-
-test('execute intent_template uses ONLY supported tokens', () => {
-  const step = spec.flows.gsd.steps.find((s) => s.id === 'execute');
-  const tpl = step.intent_template;
-  // Stratum supports: {task.id}, {task.description}, {task.files_owned},
-  // {task.files_read}, {task.depends_on}, {task.index}, {input.<field>}.
-  // Find every {token} and check.
-  const tokens = [...tpl.matchAll(/\{([^{}]+)\}/g)].map((m) => m[1]);
-  const allowed = new Set([
-    'task.id',
-    'task.description',
-    'task.files_owned',
-    'task.files_read',
-    'task.depends_on',
-    'task.index',
-  ]);
-  const inputAllowed = /^input\.[a-zA-Z_][a-zA-Z0-9_]*$/;
-  for (const tok of tokens) {
-    const ok = allowed.has(tok) || inputAllowed.test(tok);
-    assert.ok(ok, `unsupported intent_template token: {${tok}}`);
-  }
-});
-
-test('ship_gsd intent enumerates ROADMAP, CHANGELOG, optional CLAUDE.md, commit (push deferred to user)', () => {
-  const step = spec.flows.gsd.steps.find((s) => s.id === 'ship_gsd');
-  assert.match(step.intent, /ROADMAP\.md/);
-  assert.match(step.intent, /CHANGELOG\.md/);
-  assert.match(step.intent, /CLAUDE\.md/);
-  assert.match(step.intent, /COMPLETE/);
-  assert.match(step.intent, /[Cc]ommit/);
-  // Push is intentionally NOT auto-performed in v1 — runBuild's ship doesn't
-  // auto-push either, and runGsd's executeShipStep delegate doesn't push.
-});
-
-test('ship_gsd does NOT precondition on plan.md or report.md', () => {
-  const step = spec.flows.gsd.steps.find((s) => s.id === 'ship_gsd');
-  // The build pipeline's ship checks for plan.md to extract acceptance items.
-  // GSD must not have that — it doesn't produce plan.md.
-  assert.doesNotMatch(step.intent, /plan\.md/);
-  assert.doesNotMatch(step.intent, /report\.md/);
-});
-
-test('decompose_gsd intent embeds the fast pre_merge_gate (single-sourced with the enforced gate)', () => {
-  const step = spec.flows.gsd.steps.find((s) => s.id === 'decompose_gsd');
-  // COMP-PAR-MERGE-QUEUE: the per-task instructed gate == the enforced gate.
-  assert.match(step.intent, /\{input\.pre_merge_gate\}/);
-  assert.equal(step.inputs.pre_merge_gate, '$.input.pre_merge_gate');
-  // gateCommands input is still mapped (retained for the full ship-time suite).
-  assert.equal(step.inputs.gateCommands, '$.input.gateCommands');
-});
-
-test('execute enforces the pre-merge gate and defers advance (COMP-PAR-MERGE-QUEUE)', () => {
-  const step = spec.flows.gsd.steps.find((s) => s.id === 'execute');
-  assert.equal(step.defer_advance, true, 'defer_advance enables consumer merge + conflict-bounce');
-  assert.equal(step.pre_merge_verify, '$.input.pre_merge_gate', 'enforced fast gate per task worktree');
 });

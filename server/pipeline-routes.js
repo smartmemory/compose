@@ -184,14 +184,23 @@ function flowNamesOf(parsed) {
  * src/lib/pipeline-model.js `denormalizeStep` (kept in sync; server cannot import
  * the frontend module). `id` leads; surfaced fields override `_extra` on clash.
  */
-function denormalizeModelStep(step) {
+// D2/D3: the physical instruction key is VERSION-derived — `do` for TS v1,
+// `intent` for v0.3 — never presence-derived. Mirrors src/lib/pipeline-model.js.
+function intentKeyForVersion(version) {
+  return version === 1 ? 'do' : 'intent';
+}
+
+function denormalizeModelStep(step, version) {
   const out = { id: step.id };
   if (step._extra && typeof step._extra === 'object') {
     for (const key of Object.keys(step._extra)) out[key] = step._extra[key];
   }
   if (step.agent !== undefined) out.agent = step.agent;
   if (step.function !== undefined) out.function = step.function;
-  if (step.intent !== undefined) out.intent = step.intent;
+  // C3/D2/D3: write the instruction to its physical field so a serialized v1 step
+  // never carries an undeclared `intent`. A NEW step (no `_intentKey`) defaults to
+  // the spec version's key, not `intent`.
+  if (step.intent !== undefined) out[step._intentKey || intentKeyForVersion(version)] = step.intent;
   if (step.inputs && Object.keys(step.inputs).length > 0) out.inputs = { ...step.inputs };
   if (step.output_contract !== undefined) out.output_contract = step.output_contract;
   if (Array.isArray(step.ensure) && step.ensure.length > 0) out.ensure = [...step.ensure];
@@ -208,6 +217,33 @@ function denormalizeModelStep(step) {
 function modelFlow(model, flowName) {
   if (!model || !Array.isArray(model.flows)) return null;
   return model.flows.find(f => f && f.name === flowName) || null;
+}
+
+/**
+ * F2: is this a GENUINE full-document (spec-wide) save? An omitted `flowName` is
+ * NOT sufficient — a partial model (e.g. `{flows:[oneFlow]}`) with no flowName would
+ * otherwise perform a one-flow write through the hash-OPTIONAL spec-wide branch,
+ * bypassing E1's staleness guard. A true spec-wide save carries the authoritative
+ * full document (`model._doc`) AND covers EVERY flow present on disk (flows with a
+ * steps[] array, plus a workflow.steps single flow). Anything missing a disk flow
+ * is a flow-scoped write in disguise → classified flow-scoped (baseHash required).
+ */
+function coversFullDocument(model, diskParsed) {
+  if (!model || !model._doc || typeof model._doc !== 'object') return false;
+  const diskFlowNames = new Set();
+  if (diskParsed && diskParsed.flows && typeof diskParsed.flows === 'object') {
+    for (const n of Object.keys(diskParsed.flows)) {
+      if (Array.isArray(diskParsed.flows[n]?.steps)) diskFlowNames.add(n);
+    }
+  }
+  if (Array.isArray(diskParsed?.workflow?.steps)) {
+    diskFlowNames.add(diskParsed.workflow.name || 'workflow');
+  }
+  const modelFlowNames = new Set((model.flows || []).map(f => f && f.name).filter(Boolean));
+  for (const n of diskFlowNames) {
+    if (!modelFlowNames.has(n)) return false;
+  }
+  return true;
 }
 
 // The reserved built-in contract — never written as a user contract (mirrors
@@ -470,14 +506,32 @@ function surfacedValue(step, key) {
  */
 function mergeStepNode(doc, mapNode, step, specWide = false) {
   const extra = (step._extra && typeof step._extra === 'object') ? step._extra : {};
+  // C3/D2: the surfaced `intent` is written to its PHYSICAL field — `do` for TS v1,
+  // `intent` for v0.3. Prefer the model's remembered key; fall back to the spec
+  // VERSION (never the disk node's presence — a v1 step carrying both fields must
+  // resolve to `do`, and the stray `intent` is cleaned up below).
+  const intentKey = step._intentKey || (intentKeyForVersion(doc.get('version')));
   if (!specWide) {
-    // Additive: add only missing keys.
+    // D4: DIFF-DRIVEN, and NEVER delete. A key absent from an incomplete client
+    // _extra is preserved (finding 2); a key PRESENT and CHANGED is written back —
+    // whatever it is. This persists every field a renameStep rewrote (C4: after[],
+    // nested gate routes, AND `when`/`set`/fanout.over/with templates) without an
+    // allowlist, so new template-bearing fields are future-proofed. Unchanged keys
+    // are left untouched, preserving their comments.
     for (const k of Object.keys(extra)) {
-      if (!mapNode.has(k)) mapNode.set(k, doc.createNode(extra[k]));
+      if (!mapNode.has(k)) {
+        mapNode.set(k, doc.createNode(extra[k]));
+      } else {
+        const diskNode = mapNode.get(k, true);
+        const diskJs = diskNode && typeof diskNode.toJSON === 'function' ? diskNode.toJSON() : mapNode.get(k);
+        if (!deepEqual(diskJs, extra[k])) mapNode.set(k, doc.createNode(extra[k]));
+      }
     }
   } else {
-    // Full reconcile of unsurfaced fields.
-    const surfacedSet = new Set(['id', ...SURFACED_STEP_KEYS]);
+    // Full reconcile of unsurfaced fields. The physical intent key is surfaced
+    // (below), so it must be treated as surfaced here too — never deleted as an
+    // unknown extra.
+    const surfacedSet = new Set(['id', ...SURFACED_STEP_KEYS, intentKey]);
     // Add / update changed extra keys (skip unchanged to preserve their comments).
     for (const k of Object.keys(extra)) {
       if (!mapNode.has(k)) {
@@ -500,8 +554,15 @@ function mergeStepNode(doc, mapNode, step, specWide = false) {
   if (mapNode.get('id') !== step.id) mapNode.set('id', step.id);
   for (const key of SURFACED_STEP_KEYS) {
     const { present, value } = surfacedValue(step, key);
-    if (present) mapNode.set(key, doc.createNode(value));
-    else if (mapNode.has(key)) mapNode.delete(key);
+    // C3: the `intent` surfaced key maps to its physical field (`do`/`intent`).
+    const diskKey = key === 'intent' ? intentKey : key;
+    if (present) mapNode.set(diskKey, doc.createNode(value));
+    else if (mapNode.has(diskKey)) mapNode.delete(diskKey);
+    // Never leave the stale sibling — e.g. a python-era `intent` on a v1 step.
+    if (key === 'intent') {
+      const stray = intentKey === 'do' ? 'intent' : 'do';
+      if (mapNode.has(stray)) mapNode.delete(stray);
+    }
   }
   return mapNode;
 }
@@ -804,18 +865,6 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
       return res.status(400).json({ error: 'model with flows[] is required' });
     }
 
-    // Determine which flows to write back. If flowName is given, write only that
-    // flow (the editor edits one flow at a time); otherwise write every flow the
-    // model carries that exists in the document.
-    const flowsToWrite = flowName
-      ? [flowName]
-      : model.flows.map(f => f && f.name).filter(Boolean);
-
-    // A SPEC-WIDE save (flowName omitted) treats model._doc as the authoritative
-    // full document: reconcilers update AND delete, not just add. The flow-scoped
-    // path (flowName given) stays additive and never touches other flows/blocks.
-    const specWide = !flowName;
-
     let doc;
     let diskParsed;
     let diskText;
@@ -825,10 +874,24 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
       return res.status(400).json({ error: `Cannot read current spec: ${e.message}` });
     }
 
-    // COMP-PIPE-EDIT-6 conflict detection: if the client sent a baseHash and the
-    // freshly-read disk text no longer matches it, the file diverged since load
-    // (another writer / external edit). Refuse to write (409) unless force:true.
-    if (baseHash && !force) {
+    // Conflict detection (COMP-PIPE-EDIT-6 + E1/G1). ANY save of an existing file
+    // resubmits a model derived from a snapshot of disk; a stale editor (loaded old,
+    // another writer saved new, this client resubmits its stale value) would SILENTLY
+    // resurrect the old value on merge. G1: proving "full-document-ness" from request
+    // shape is spoofable (an empty `_doc` + stub flow bodies covering every disk flow
+    // NAME would slip through a hash-optional spec-wide branch and destructively
+    // delete real steps), so the guard NO LONGER keys on classification: a baseHash
+    // is REQUIRED on EVERY save of an existing file — spec-wide and flow-scoped alike.
+    // Missing → 400, stale → 409. F1: ONLY strict `force === true` bypasses — a
+    // truthy-but-non-boolean `force` ("false", 1, {}) must NOT authorize the bypass.
+    // G3: this check runs on the RAW disk bytes BEFORE parsing, so a stale baseHash
+    // is a 409 even when the on-disk YAML is malformed (parse-independent semantics).
+    if (force !== true) {
+      if (typeof baseHash !== 'string' || baseHash.length === 0) {
+        return res.status(400).json({
+          error: 'baseHash is required to save an existing spec (reload the spec, or pass force:true to override)',
+        });
+      }
       const currentHash = sha256(diskText);
       if (currentHash !== baseHash) {
         return res.status(409).json({
@@ -845,6 +908,22 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
     } catch (e) {
       return res.status(400).json({ error: `Failed to parse current spec: ${e.message}` });
     }
+
+    // A SPEC-WIDE save treats model._doc as the authoritative full document:
+    // reconcilers update AND delete, not just add. The flow-scoped path stays
+    // additive and never touches other flows/blocks. This classification now drives
+    // MERGE BEHAVIOR ONLY (full replace vs additive) — it never relaxes the baseHash
+    // guard above (G1). An omitted `flowName` alone does NOT make a save spec-wide:
+    // the model must genuinely cover the full document (model._doc + every disk flow),
+    // else a partial model writes additively as a flow-scoped save.
+    const specWide = !flowName && coversFullDocument(model, diskParsed);
+
+    // Determine which flows to write back. If flowName is given, write only that
+    // flow (the editor edits one flow at a time); otherwise write every flow the
+    // model carries that exists in the document.
+    const flowsToWrite = flowName
+      ? [flowName]
+      : model.flows.map(f => f && f.name).filter(Boolean);
 
     for (const name of flowsToWrite) {
       const flow = modelFlow(model, name);
@@ -868,10 +947,13 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
         // COMP-PIPE-EDIT-5: the flow is not on disk yet (e.g. a just-collapsed
         // sub-flow that exists only in the model). CREATE the flows.<name> node —
         // steps + input + output from model._doc.flows — rather than erroring.
-        // ONLY on a SPEC-WIDE save (flowName omitted): an explicit flowName that
-        // doesn't map to a steps location is still a 400 (never auto-create a
-        // flow the caller named by mistake / clobber a workflow.steps spec).
-        const created = !flowName && createNewFlowNode(doc, model, name);
+        // ONLY on a genuine SPEC-WIDE save: G2 — gate on the computed `specWide`
+        // classification, not a bare `!flowName`. A flow-scoped-classified request
+        // (no flowName but a partial model that does NOT cover the full document)
+        // must NOT perform this documented spec-wide-only flow creation; an explicit
+        // flowName that doesn't map to a steps location is likewise a 400 (never
+        // auto-create a flow the caller named by mistake / clobber a workflow.steps).
+        const created = specWide && createNewFlowNode(doc, model, name);
         if (!created) {
           return res.status(400).json({ error: `Flow "${name}" has no steps location in the spec` });
         }
@@ -902,7 +984,7 @@ export function attachPipelineRoutes(app, { broadcastMessage, scheduleBroadcast,
         }
         return existing
           ? mergeStepNode(doc, existing, step, specWide)
-          : doc.createNode(denormalizeModelStep(step));
+          : doc.createNode(denormalizeModelStep(step, doc.get('version')));
       });
     }
 
@@ -1041,7 +1123,7 @@ function buildSpecObjectFromModel(model) {
   if (Array.isArray(doc?.workflow?.steps)) {
     const wfName = doc.workflow.name || 'workflow';
     const flow = byName.get(wfName);
-    if (flow) out.workflow = { ...doc.workflow, steps: (flow.steps || []).map(denormalizeModelStep) };
+    if (flow) out.workflow = { ...doc.workflow, steps: (flow.steps || []).map(s => denormalizeModelStep(s, doc.version)) };
   }
 
   if (doc?.flows && typeof doc.flows === 'object') {
@@ -1049,7 +1131,7 @@ function buildSpecObjectFromModel(model) {
     for (const name of Object.keys(doc.flows)) {
       const flow = byName.get(name);
       out.flows[name] = flow
-        ? { ...doc.flows[name], steps: (flow.steps || []).map(denormalizeModelStep) }
+        ? { ...doc.flows[name], steps: (flow.steps || []).map(s => denormalizeModelStep(s, doc.version)) }
         : doc.flows[name];
     }
   }

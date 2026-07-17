@@ -109,16 +109,19 @@ describe('flowSteps — normalized shape', () => {
     const exploreDesign = flowSteps(model, 'build').find(s => s.id === 'explore_design');
     const keys = Object.keys(exploreDesign).sort();
     assert.deepEqual(keys, [
-      '_extra', 'agent', 'depends_on', 'ensure', 'function',
+      '_extra', '_intentKey', 'agent', 'depends_on', 'ensure', 'function',
       'id', 'inputs', 'intent', 'kind', 'on_fail', 'output_contract', 'retries',
     ].sort());
     assert.equal(exploreDesign.agent, 'claude');
     assert.equal(exploreDesign._extra.out, 'PhaseResult');
     assert.ok(Array.isArray(exploreDesign.ensure));
     assert.ok(Array.isArray(exploreDesign.depends_on));
-    assert.ok(exploreDesign._extra.do.includes('Explore the codebase'));
+    // C3: the v1 `do` instruction is surfaced as `intent` (backed by `do`), NOT
+    // left in _extra — so editing it round-trips to `do`, never a stray `intent`.
+    assert.equal(exploreDesign._intentKey, 'do');
+    assert.ok(exploreDesign.intent.includes('Explore the codebase'));
+    assert.equal(exploreDesign._extra.do, undefined, '`do` is surfaced, not duplicated in _extra');
     assert.equal(exploreDesign._extra.attempts, 2);
-    assert.equal(exploreDesign.intent, undefined);
     assert.equal(exploreDesign.retries, undefined);
   });
 

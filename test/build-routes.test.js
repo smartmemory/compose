@@ -25,10 +25,10 @@ const { attachBuildRoutes } = await import(`${REPO_ROOT}/server/build-routes.js`
 
 const TOKEN = 'test-build-token';
 
-function makeApp({ runBuild, abortBuild, getDataDir }) {
+function makeApp({ runBuild, abortBuild, getDataDir, getTargetRoot }) {
   const app = express();
   app.use(express.json());
-  attachBuildRoutes(app, { runBuild, abortBuild, getDataDir });
+  attachBuildRoutes(app, { runBuild, abortBuild, getDataDir, getTargetRoot });
   return app;
 }
 
@@ -218,22 +218,25 @@ describe('Build routes', () => {
     assert.equal(res.status, 401);
   });
 
-  test('POST /api/build/abort calls abortBuild(dataDir, featureCode)', async () => {
+  test('POST /api/build/abort calls abortBuild(dataDir, featureCode, projectRoot)', async () => {
     let captured = null;
     server = await listen(makeApp({
       runBuild: async () => ({ ok: true }),
-      abortBuild: async (dataDir, featureCode) => {
-        captured = { dataDir, featureCode };
+      // C2: the route must thread the ACTIVE PROJECT ROOT into abortBuild so the
+      // engine is resolved from the project's capabilities, not process.cwd().
+      abortBuild: async (dataDir, featureCode, cwd) => {
+        captured = { dataDir, featureCode, cwd };
         return { aborted: true, featureCode };
       },
       getDataDir: () => '/tmp/test-data-dir',
+      getTargetRoot: () => '/tmp/test-project-root',
     }));
     const res = await request(server, '/api/build/abort', {
       headers: { 'x-compose-token': TOKEN },
       body: { featureCode: 'F-2' },
     });
     assert.equal(res.status, 200);
-    assert.deepEqual(captured, { dataDir: '/tmp/test-data-dir', featureCode: 'F-2' });
+    assert.deepEqual(captured, { dataDir: '/tmp/test-data-dir', featureCode: 'F-2', cwd: '/tmp/test-project-root' });
     assert.equal(res.body.aborted, true);
   });
 

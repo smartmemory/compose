@@ -4,9 +4,10 @@
  * GROUP B: a spec-wide save (no flowName) CREATES a brand-new flows.<name> node
  *          for a just-collapsed sub-flow (steps + input + output), keeps the
  *          parent flow-step's reference, and preserves untouched flows + header.
- * GROUP C: GET /spec returns a stable sha-256 `hash`; POST /save honors an
- *          optional `baseHash` (409 + no-write on mismatch, force bypass, new
- *          hash on success, back-compat when omitted).
+ * GROUP C: GET /spec returns a stable sha-256 `hash`; POST /save REQUIRES a
+ *          `baseHash` on every save of an existing file (G1) — 400 when missing,
+ *          409 + no-write on mismatch, force:true the only bypass, new hash on
+ *          success.
  */
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -40,6 +41,9 @@ function json(url, opts = {}) {
 }
 
 function sha256(text) { return createHash('sha256').update(text, 'utf-8').digest('hex'); }
+// G1: every save of an existing file (spec-wide included) requires the fresh
+// on-disk baseHash. These tests write the file then save immediately.
+function baseHashOf(file) { return sha256(readFileSync(join(pipelinesDir, file), 'utf-8')); }
 
 before(() => new Promise(res => {
   const tmpRoot = mkdtempSync(join(tmpdir(), 'pipeline-save-wave2-'));
@@ -133,7 +137,7 @@ describe('GROUP B — spec-wide save creates a new collapsed sub-flow', () => {
     // the brand-new `sub` flow that does not yet exist on disk.
     const { status, data } = await json('/api/pipeline/save', {
       method: 'POST',
-      body: { file, model }, // flowName omitted
+      body: { file, model, baseHash: baseHashOf(file) }, // flowName omitted
     });
     assert.equal(status, 200, `save failed: ${JSON.stringify(data)}`);
 
@@ -214,7 +218,7 @@ describe('GROUP B2 — spec-wide save reconciles structural edits (input/functio
 
     // Spec-wide save (NO flowName).
     const { status, data } = await json('/api/pipeline/save', {
-      method: 'POST', body: { file, model },
+      method: 'POST', body: { file, model, baseHash: baseHashOf(file) },
     });
     assert.equal(status, 200, `save failed: ${JSON.stringify(data)}`);
 
@@ -246,7 +250,7 @@ describe('GROUP B2 — spec-wide save reconciles structural edits (input/functio
     model._doc.workflow.name = 'renamed';
 
     const { status, data } = await json('/api/pipeline/save', {
-      method: 'POST', body: { file, model },
+      method: 'POST', body: { file, model, baseHash: baseHashOf(file) },
     });
     assert.equal(status, 200, `save failed: ${JSON.stringify(data)}`);
     const saved = YAML.parse(readFileSync(join(pipelinesDir, file), 'utf-8'));
@@ -323,19 +327,21 @@ describe('GROUP C — conflict hash on GET /spec + POST /save baseHash', () => {
     assert.notEqual(data.hash, baseHash, 'hash changed after the write');
   });
 
-  test('save WITHOUT baseHash still works (back-compat)', async () => {
+  // G1: the former "back-compat when omitted" allowance is REMOVED — a save of an
+  // existing file WITHOUT a baseHash is a 400 (missing), spec-wide or not, and
+  // nothing is written. force:true remains the only bypass (covered above).
+  test('save WITHOUT baseHash is refused (400) and does NOT write', async () => {
     const file = 'sese-c4.stratum.yaml';
     writeFileSync(join(pipelinesDir, file), seseSpecText());
+    const before = readFileSync(join(pipelinesDir, file), 'utf-8');
     const model = specToModel(YAML.parse(seseSpecText()));
     collapseToSubflow(model, 'main', ['b', 'c'], 'sub');
 
-    const { status, data } = await json('/api/pipeline/save', {
+    const { status } = await json('/api/pipeline/save', {
       method: 'POST',
       body: { file, model }, // no baseHash
     });
-    assert.equal(status, 200, `save failed: ${JSON.stringify(data)}`);
-    assert.ok(typeof data.hash === 'string', 'still returns a hash');
-    const saved = YAML.parse(readFileSync(join(pipelinesDir, file), 'utf-8'));
-    assert.ok(saved.flows.sub, 'wrote without baseHash');
+    assert.equal(status, 400, 'missing baseHash is refused under the always-require contract');
+    assert.equal(readFileSync(join(pipelinesDir, file), 'utf-8'), before, 'nothing written');
   });
 });

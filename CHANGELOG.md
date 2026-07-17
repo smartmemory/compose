@@ -1,5 +1,167 @@
 # Changelog
 
+## 2026-07-17
+
+### STRAT-TS-FLAG-DAY — Adopt Surface 9 tokens and make TS the Compose default
+
+Compose now speaks the strict Stratum Surface 9 request contract: step and gate
+completions echo their issuance tokens, while the rejected python-era `epoch`
+request field is no longer sent. Build and GSD select the live adjacent TS MCP
+engine by default, with Python retained only as an explicit compatibility
+selection through `COMPOSE_STRATUM_ENGINE=python` or project capabilities.
+
+**Changed**
+
+- Removed `epoch` from the MCP client completion API and every build/GSD call
+  site, and made the former epoch golden assert strict-schema rejection.
+- Updated TS cutover goldens to echo `dispatchToken` and `gateToken`, including
+  negative coverage for a missing ordinary-step dispatch token.
+- Ported build integration, policy, stream-writer, proof-run, and GSD pipeline
+  fixtures from python request/spec shapes to v1 specs executed by the live TS
+  MCP bin while preserving their behavioral assertions.
+- Centralized Stratum engine selection and changed the build/GSD stdio default
+  to TS; explicit Python selection remains available for endgame compatibility.
+
+**Fixed**
+
+- Adapted strict TS ship results at the Compose boundary and preserved scoped
+  subflow fix/retry behavior from Surface 9 `previousFailure` issuances.
+- Treat a missing persisted TS run as stale active-build state during resume.
+- Re-expressed the pipeline-editor API tests for the v1 build spec. The editor
+  endpoints already handled v1 correctly — `GET /api/pipeline/specs` discovery
+  reports `version: 1` and the real flow keys (excluding the `entry:` pointer),
+  and `POST /api/pipeline/save` round-trips a v1 spec faithfully (all flows,
+  fanout blocks, nested gate routes, contracts, version, and the `# metadata:`
+  comment header preserved, with the sibling `build.profiles.json` left
+  untouched). The three failing tests asserted the pre-E3 v0.3 shape
+  (`version: '0.3'`, a `parallel_review` flow, flat `source`/`isolation`/
+  `on_approve` fields, and iterating the string `flows.entry` as a flow). They
+  now assert the v1 shape (version-keyed, like the vocabulary-inject fix),
+  preserving every behavioral assertion including round-trip fidelity and the
+  incomplete-`_extra` disk-field survival guarantee (now exercised via the v1
+  `_extra.fanout` block).
+
+**Review round 1 (C1–C6, whole-slice)**
+
+- **C1 (blocker)** The server adapter's TS default spawned a bare `stratum`,
+  which resolved to whatever was on `$PATH` (e.g. miniconda's incompatible python
+  CLI, whose `query flows` answers "Unknown command" and even exits 0) — and the
+  startup probe accepted it, half-enabling Stratum with every flow/gate call
+  broken. The flow/gate TS default is now the live checkout's query/gate CLI
+  (`lib/stratum-engine.js` `LIVE_STRATUM_TS_CLI_BIN`, env override retained), and
+  the startup probe was hardened (`probeStratumBin`) to VERIFY the binary speaks
+  the query contract (returns a JSON flows array) — an incompatible binary fails
+  the probe and disables Stratum with a clear health message.
+- **C2** `abortBuild` resolved the stratum engine from `process.cwd()`, so a
+  python-pinned project switched at runtime by the server route was audited
+  through the TS engine (abort missed). It now takes the project root (threaded by
+  both callers) and resolves the engine from the project's capabilities.
+- **C3 (product)** The pipeline editor wrote the python-era `intent` field
+  verbatim into v1 steps (undeclared → schema-invalid). The model now surfaces the
+  step instruction uniformly (backed by `do` for v1, `intent` for v0.3, via a
+  remembered `_intentKey`) and the save writes it back to the correct physical
+  field — a v1 step never carries a stray `intent`.
+- **C4 (product)** `renameStep` left dangling v1 references (a renamed step's
+  `_extra.after[]`, nested `gate.on_*`, and `${step…}`/`$.steps.step…` template
+  refs were not rewritten). It now rewrites all of them, and the flow-scoped save
+  updates present-but-changed reference fields (`after`/`gate`/`fanout`/`with`) so
+  the rewrite reaches disk without a dangling on-disk reference.
+- **C5 — ship judged ensure removed (production kill).** The `judged:` ensure on
+  the build `ship` step is deleted from `pipelines/build.stratum.yaml`: it is
+  unevaluable from the `{result, input}` the judge receives (the judge fails
+  closed even on evidenced results — empirically the live codex judge returns
+  holds:false across runs, so real TS-default builds would plausibly die at ship).
+  This was E3 over-authoring — the v0.3 ship step had no such ensure. Same class as
+  the F5 vocabulary ruling (unevaluable judged statement). Ship keeps `out:
+  PhaseResult` + `attempts` and remains gated by `ship_gate`; revisit when a
+  deterministic/tunable judge backend exists (a stratum follow-up — a deterministic
+  test-judge backend for the MCP bin — folded into the pending stratum issue). It
+  was the only `judged:` ensure in any pipeline (build-quick/gsd swept clean). With
+  the ensure gone, proof-run now runs the production `build.stratum.yaml` TRULY
+  unmodified, and HEAD's duration assertion is restored via the TS audit's
+  `flowSpent.ms`.
+- **C6** gsd-pipeline asserts the REAL v1 invariants (`ship_gsd` ensure
+  `result.outcome == 'complete'`; `decompose_gsd` ensure `len(result.tasks) >= 1`).
+  The advisory "reject file ownership conflicts" prompt-text check is relabeled as
+  advisory (not the enforcement test) and points at the consumer-side ownership
+  enforcement coverage (E3/F6, `test/gsd.test.js`); the dead python
+  `no_file_conflicts` builtin is intentionally not resurrected.
+
+**Review round 2 (D1–D4, hardening the round-1 fixes)**
+
+- **D1** `probeStratumBin` no longer accepts any binary whose output merely parses
+  as an array (adversarial stubs emitting `[]` or `[{…}]` passed, and a fresh
+  store legitimately returns `[]`). It now POSITIVELY identifies the query
+  contract, data-independently: `query flow <nonexistent-but-valid run id>` must
+  return the exact NOT_FOUND projection echoing the sentinel
+  (`{error:{code:"NOT_FOUND", message:"Flow '<id>' not found"}}`) — which the TS
+  CLI and python `stratum-mcp` both emit (with a non-zero exit whose stdout the
+  probe reads) and no incompatible/adversarial binary reproduces.
+- **D2** The editor's intent↔do key is now VERSION-derived (`spec.version === 1 →
+  do`, else `intent`), never presence-derived. A v1 step authored with BOTH `do`
+  and `intent` previously round-tripped to `{intent}` only (losing `do`, invalid
+  v1); it now resolves to `do` and the stray `intent` is dropped on save.
+- **D3** A NEW step created in the editor now defaults its physical instruction
+  key by spec version at BOTH sites (`useVisionStore.addStep` tags `_intentKey`;
+  `denormalizeModelStep` defaults version-derived), so adding a step to a v1
+  pipeline serializes `do`, never an undeclared `intent`.
+- **D4** The flow-scoped save now persists rewritten `_extra` references
+  DIFF-DRIVEN (every field the client changed) rather than an `after`/`gate`/
+  `fanout`/`with`/`next` allowlist — so a `renameStep` that rewrites `when`/`set`
+  templates (or any future template-bearing field) reaches disk. Absent keys are
+  still never deleted (the incomplete-`_extra` guarantee) and unchanged keys keep
+  their comments.
+
+**Review round 3 (E1–E3, tightening the round-2 fixes)**
+
+- **E1** D4's diff-driven merge uses fresh disk as the change baseline, so a stale
+  editor (loaded key=old, another writer saved key=new, this client resubmits its
+  unchanged old value) would SILENTLY resurrect the old value. A flow-scoped save
+  now REQUIRES a `baseHash`; a mismatch is a 409 (reload). `force:true` remains the
+  explicit last-writer-wins override, where resurrection is user intent. (The
+  editor already sends its loaded hash; spec-wide saves keep `baseHash` optional.)
+- **E2** The probe accepted any NOT_FOUND message merely CONTAINING the sentinel,
+  so a JSON argument-parrot echoing the invocation inside a NOT_FOUND envelope
+  passed. It now requires an EXACT match to the literal projection both CLIs emit
+  (`Flow '<sentinel>' not found`).
+- **E3** A timeout / signal-terminated run that flushed parseable stdout was
+  treated as a legitimate non-zero exit. The probe now detects termination
+  (`err.killed`, `err.signal`, `err.code === 'ETIMEDOUT'`) BEFORE trusting any
+  captured stdout — such a run is a probe failure (Stratum disabled with a message).
+
+**Review round 4 (F1–F2, closing E1 guard bypasses)**
+
+- **F1** Any truthy `force` bypassed E1's stale-baseline guard (`force: "false"`,
+  `1`, `{}` all skipped the 400/409 checks). Only strict `force === true` now
+  authorizes the last-writer-wins override; anything else falls through to the
+  normal guard.
+- **F2** Omitting `flowName` classified even a PARTIAL model as spec-wide
+  (hash-optional), so `{flows:[oneFlow]}` with no flowName performed a one-flow
+  write through the hash-optional branch. The spec-wide branch now proves it is a
+  genuine full-document save — the model must carry the authoritative `_doc` AND
+  cover every flow present on disk; a model missing any disk flow is classified
+  flow-scoped, so E1's baseHash requirement (400/409) applies.
+
+**Review round 5 (G1–G3, simplifying to an always-require-baseHash contract)**
+
+- **G1** Round 4's `coversFullDocument` full-document proof was spoofable: a
+  request carrying a non-empty `_doc` plus stub flow bodies that cover every disk
+  flow *name* (with empty steps) classified spec-wide and slipped through the
+  hash-OPTIONAL branch, destructively deleting real steps with no baseHash.
+  Removed the hash-optionality it guarded: a `baseHash` is now REQUIRED on EVERY
+  save of an existing file — spec-wide and flow-scoped alike (missing → 400,
+  stale → 409, `force === true` the only bypass). `coversFullDocument` is retained
+  only to classify MERGE behavior (full replace vs additive); it never relaxes the
+  guard. Both editor save paths already send a baseHash, so no editor regression.
+- **G2** The spec-wide-only flow-creation path keyed on a bare `!flowName` instead
+  of the computed `specWide` classification, so a flow-scoped-classified request
+  (no flowName, partial model) could still auto-create a model-only flow. Gated
+  flow creation on `specWide`.
+- **G3** Round 4's parse-before-classify reorder made a stale baseHash on
+  malformed on-disk YAML return 400 (parse threw first) instead of 409. The hash
+  check now runs on the RAW disk bytes BEFORE parsing, so a stale baseHash is a
+  409 regardless of disk parseability.
+
 ## 2026-07-16
 
 ### STRAT-TS-FANOUT-CONSUMER — Port production build and GSD pipelines to TS v1 consumer fanout

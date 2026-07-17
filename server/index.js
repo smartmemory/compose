@@ -2,8 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import http from 'node:http';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
-import { existsSync, statSync, readFileSync, accessSync, constants as fsConstants } from 'node:fs';
+import { existsSync, statSync, readFileSync } from 'node:fs';
 import { FileWatcherServer } from './file-watcher.js';
 import { VisionStore } from './vision-store.js';
 import { VisionServer } from './vision-server.js';
@@ -15,6 +14,7 @@ import { attachGraphLayoutRoutes } from './graph-layout-routes.js';
 import { createWorkspaceMiddleware } from './workspace-middleware.js';
 import { getTargetRoot, getDataDir, ensureDataDir, loadProjectConfig, resolveProjectPath, switchProject, COMPOSE_HOME } from './project-root.js';
 import { resolveStratumEngine } from './stratum-client.js';
+import { probeStratumBin, LIVE_STRATUM_TS_CLI_BIN } from '../lib/stratum-engine.js';
 import { createAuthStore } from './auth-store.js';
 import { createAuthGate, wsUpgradeTokenOk } from './auth-middleware.js';
 import { attachAuthRoutes } from './auth-routes.js';
@@ -51,21 +51,17 @@ if (projectConfig.capabilities.stratum) {
     process.exit(1);
   }
   const stratumBin = stratumEngine === 'ts'
-    ? (process.env.COMPOSE_STRATUM_TS_BIN || 'stratum')
+    ? (process.env.COMPOSE_STRATUM_TS_BIN || LIVE_STRATUM_TS_CLI_BIN)
     : 'stratum-mcp';
-  try {
-    if (stratumBin.includes('/')) {
-      // A configured path must be an executable regular file — a directory or
-      // mode-644 file would pass a bare stat and fail later at spawn time.
-      if (!statSync(stratumBin).isFile()) throw new Error('not a regular file');
-      accessSync(stratumBin, fsConstants.X_OK);
-    } else {
-      execFileSync('which', [stratumBin], { stdio: 'ignore' });
-    }
-  } catch {
-    console.error(`[compose] ${stratumBin} (engine=${stratumEngine}) not found but capabilities.stratum=true`);
+  // C1: existence alone is not enough — a bare `stratum` on $PATH can EXIST yet
+  // not speak the query contract (miniconda's CLI answers "Unknown command" and
+  // even exits 0), which used to half-enable the adapter with every call broken.
+  // The probe now verifies the binary actually returns the flows projection.
+  const probe = probeStratumBin(stratumBin);
+  if (!probe.ok) {
+    console.error(`[compose] stratum ${stratumEngine} binary is unusable but capabilities.stratum=true: ${probe.reason}`);
     console.error(stratumEngine === 'ts'
-      ? '[compose] Install @smartmemory/stratum or set COMPOSE_STRATUM_TS_BIN'
+      ? '[compose] Install @smartmemory/stratum or set COMPOSE_STRATUM_TS_BIN to the live query/gate CLI'
       : '[compose] Run: compose init (will auto-install) or compose init --no-stratum');
     projectConfig.capabilities.stratum = false;
   }

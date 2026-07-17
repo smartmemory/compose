@@ -4,7 +4,7 @@
  * Runs a mock build via runBuild() and verifies the JSONL output
  * has correct event order, monotonic _seq, and valid _ts values.
  *
- * Skip if stratum-mcp is not installed.
+ * Skip if the live TS MCP bin is unavailable.
  */
 
 import { test, describe, before, after } from 'node:test';
@@ -14,56 +14,62 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execFileSync } from 'node:child_process';
-
 import { runBuild } from '../lib/build.js';
 
 // ---------------------------------------------------------------------------
 // Skip guard
 // ---------------------------------------------------------------------------
 
-let stratumAvailable = false;
-try {
-  execFileSync('stratum-mcp', ['--help'], { timeout: 5000, stdio: 'pipe' });
-  stratumAvailable = true;
-} catch { /* not installed */ }
+const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
+const stratumAvailable = existsSync(TS_MCP_BIN);
+const stratumStateRoot = mkdtempSync(join(tmpdir(), 'jsonl-stratum-state-'));
+const previousStateRoot = process.env.STRATUM_STATE_ROOT;
+
+before(() => { process.env.STRATUM_STATE_ROOT = stratumStateRoot; });
+after(() => {
+  if (previousStateRoot === undefined) delete process.env.STRATUM_STATE_ROOT;
+  else process.env.STRATUM_STATE_ROOT = previousStateRoot;
+  rmSync(stratumStateRoot, { recursive: true, force: true });
+});
 
 // ---------------------------------------------------------------------------
 // Spec: 2-step flow (no gates) for JSONL verification
 // ---------------------------------------------------------------------------
 
 const TWO_STEP_SPEC = `\
-version: "0.2"
+version: 1
 
 contracts:
   PhaseResult:
-    phase: { type: string }
-    artifact: { type: string }
-    outcome: { type: string }
+    phase: string
+    artifact: string
+    outcome: string
 
 flows:
+  entry: build
   build:
     input:
-      featureCode: { type: string }
-      description: { type: string }
-    output: PhaseResult
+      featureCode: string
+      description: string
+      pre_merge_gate: string[]?
+      implementer_agent: string
+      reviewer_agent: string
+    output:
+      from: "\${implement.output}"
+      contract: PhaseResult
     steps:
       - id: design
         agent: claude
-        intent: "Write the design doc for the feature."
-        inputs:
-          featureCode: "$.input.featureCode"
-        output_contract: PhaseResult
-        retries: 1
+        do: "Write the design doc for \${input.featureCode}."
+        out: PhaseResult
+        attempts: 1
 
       - id: implement
+        after: [design]
         agent: claude
-        intent: "Implement the feature based on the design."
-        inputs:
-          featureCode: "$.input.featureCode"
-        output_contract: PhaseResult
-        retries: 1
-        depends_on: [design]
+        do: "Implement \${input.featureCode} based on the design."
+        out: PhaseResult
+        attempts: 1
 `;
 
 // ---------------------------------------------------------------------------
@@ -150,7 +156,7 @@ function setupProject(tmpDir, spec = TWO_STEP_SPEC, featureCode = 'JSONL-1') {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('JSONL output integration', { skip: !stratumAvailable && 'stratum-mcp not installed' }, () => {
+describe('JSONL output integration', { skip: !stratumAvailable && 'TS stratum MCP bin not found' }, () => {
   let tmpDir;
   let jsonlPath;
 
@@ -259,7 +265,7 @@ describe('JSONL output integration', { skip: !stratumAvailable && 'stratum-mcp n
   });
 });
 
-describe('JSONL build_error integration', { skip: !stratumAvailable && 'stratum-mcp not installed' }, () => {
+describe('JSONL build_error integration', { skip: !stratumAvailable && 'TS stratum MCP bin not found' }, () => {
   let tmpDir;
   let jsonlPath;
 
@@ -297,7 +303,7 @@ describe('JSONL build_error integration', { skip: !stratumAvailable && 'stratum-
   });
 });
 
-describe('JSONL writer not created before plan succeeds', { skip: !stratumAvailable && 'stratum-mcp not installed' }, () => {
+describe('JSONL writer not created before plan succeeds', { skip: !stratumAvailable && 'TS stratum MCP bin not found' }, () => {
   test('rejected build does not truncate existing JSONL', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'jsonl-notrunc-'));
 

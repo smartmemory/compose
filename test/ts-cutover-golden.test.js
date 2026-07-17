@@ -66,22 +66,31 @@ describe('compose runs a golden build over the TS stratum engine', () => {
       assert.equal(planned.status, 'ready', 'plan should return a ready dispatch');
       const flowId = planned.runId;
       assert.ok(flowId, 'plan should return a runId');
+      const work = planned.ready.find((s) => s.id === 'work');
       assert.ok(
-        planned.ready.some((s) => s.id === 'work'),
+        work,
         'first ready step should be "work"',
       );
 
       // 2. Complete "work" → the review gate becomes pending (running).
-      const afterWork = await client.stepDone(flowId, 'work', { output: { value: 'drafted' } });
+      const afterWork = await client.stepDone(
+        flowId, 'work', { output: { value: 'drafted' } }, work.dispatchToken,
+      );
       assert.equal(afterWork.status, 'running', 'after work, the flow waits at the gate');
 
       // 3. Approve the gate → "finish" becomes ready.
-      const afterGate = await client.gateResolve(flowId, 'review', 'approve', 'looks good');
+      const gateToken = (await client.audit(flowId)).steps.review.gateToken;
+      const afterGate = await client.gateResolve(
+        flowId, 'review', 'approve', 'looks good', 'human', gateToken,
+      );
       assert.equal(afterGate.status, 'ready', 'approving the gate readies the next step');
-      assert.ok(afterGate.ready.some((s) => s.id === 'finish'), 'finish should be ready');
+      const finish = afterGate.ready.find((s) => s.id === 'finish');
+      assert.ok(finish, 'finish should be ready');
 
       // 4. Complete "finish" → the flow completes.
-      const done = await client.stepDone(flowId, 'finish', { output: { value: 'published' } });
+      const done = await client.stepDone(
+        flowId, 'finish', { output: { value: 'published' } }, finish.dispatchToken,
+      );
       assert.equal(done.status, 'completed', 'completing finish completes the flow');
 
       // 5. Audit reflects the terminal state.

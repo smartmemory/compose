@@ -47,12 +47,11 @@ function buildFakeServer() {
     const progressToken = req.params._meta?.progressToken;
 
     if (name === 'stratum_agent_run') {
-      const correlationId = args.correlation_id ?? 'srv-gen-corr';
       if (progressToken !== undefined && extra?.sendNotification) {
         const events = [
-          makeEvent(correlationId, 0, 'agent_started',    { agent: args.type ?? 'claude', model: 'opus', prompt_chars: (args.prompt ?? '').length }),
-          makeEvent(correlationId, 1, 'tool_use_summary', { tool: 'Read', summary: 'README.md', ok: true, duration_ms: 8 }),
-          makeEvent(correlationId, 2, 'agent_relay',      { text: 'final answer', role: 'assistant' }),
+          makeEvent(undefined, 0, 'agent_started',    { agent: args.agent ?? 'claude', model: 'opus', prompt_chars: (args.prompt ?? '').length }),
+          makeEvent(undefined, 1, 'tool_use_summary', { tool: 'Read', summary: 'README.md', ok: true, duration_ms: 8 }),
+          makeEvent(undefined, 2, 'agent_relay',      { text: 'final answer', role: 'assistant' }),
         ];
         for (let i = 0; i < events.length; i++) {
           await extra.sendNotification({
@@ -69,14 +68,14 @@ function buildFakeServer() {
       return {
         content: [{
           type: 'text',
-          text: JSON.stringify({ text: 'final answer', correlation_id: correlationId }),
+          text: JSON.stringify({ text: 'final answer' }),
         }],
       };
     }
 
     if (name === 'stratum_cancel_agent_run') {
       return {
-        content: [{ type: 'text', text: JSON.stringify({ status: 'cancelled', correlation_id: args.correlation_id }) }],
+        content: [{ type: 'text', text: JSON.stringify({ status: 'cancelled', runId: args.runId }) }],
       };
     }
 
@@ -156,6 +155,6 @@ describe('STRAT-DEDUP-AGENTRUN-V3 consumer integration', () => {
   test('cancelAgentRun round-trips and returns the producer status', async () => {
     const out = await client.cancelAgentRun('any-corr');
     assert.equal(out.status, 'cancelled');
-    assert.equal(out.correlation_id, 'any-corr');
+    assert.equal(out.runId, 'any-corr');
   });
 });

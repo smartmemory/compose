@@ -5,7 +5,7 @@
  * controls whether the build waits for human approval (gate), auto-approves
  * (flag/skip), or defaults to gate when settings are missing.
  *
- * Skip if stratum-mcp is not installed.
+ * Skip if the live TS MCP bin is unavailable.
  */
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,68 +14,70 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execFileSync } from 'node:child_process';
-
 import { runBuild } from '../lib/build.js';
 
 // ---------------------------------------------------------------------------
 // Skip guard
 // ---------------------------------------------------------------------------
 
-let stratumAvailable = false;
-try {
-  execFileSync('stratum-mcp', ['--help'], { timeout: 5000, stdio: 'pipe' });
-  stratumAvailable = true;
-} catch { /* not installed */ }
+const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
+const stratumAvailable = existsSync(TS_MCP_BIN);
+const stratumStateRoot = mkdtempSync(join(tmpdir(), 'build-policy-stratum-state-'));
+const previousStateRoot = process.env.STRATUM_STATE_ROOT;
+
+before(() => { process.env.STRATUM_STATE_ROOT = stratumStateRoot; });
+after(() => {
+  if (previousStateRoot === undefined) delete process.env.STRATUM_STATE_ROOT;
+  else process.env.STRATUM_STATE_ROOT = previousStateRoot;
+  rmSync(stratumStateRoot, { recursive: true, force: true });
+});
 
 // ---------------------------------------------------------------------------
 // Spec with a gate between design and implement
 // ---------------------------------------------------------------------------
 
 const GATED_SPEC = `\
-version: "0.3"
+version: 1
 
 contracts:
   PhaseResult:
-    phase: { type: string }
-    artifact: { type: string }
-    outcome: { type: string }
-
-functions:
-  design_gate:
-    mode: gate
-    timeout: 60
+    phase: string
+    artifact: string
+    outcome: string
 
 flows:
+  entry: build
   build:
     input:
-      featureCode: { type: string }
-      description: { type: string }
-    output: PhaseResult
+      featureCode: string
+      description: string
+      pre_merge_gate: string[]?
+      implementer_agent: string
+      reviewer_agent: string
+    output:
+      from: "\${implement.output}"
+      contract: PhaseResult
+    max_rounds: 2
     steps:
       - id: design
         agent: claude
-        intent: "Write the design doc."
-        inputs:
-          featureCode: "$.input.featureCode"
-        output_contract: PhaseResult
-        retries: 1
+        do: "Write the design doc for \${input.featureCode}."
+        out: PhaseResult
+        attempts: 1
 
       - id: design_gate
-        function: design_gate
-        on_approve: implement
-        on_revise: design
-        on_kill: null
-        depends_on: [design]
+        after: [design]
+        gate:
+          on_approve: implement
+          on_revise: design
+          on_kill: null
 
       - id: implement
+        after: [design_gate]
         agent: claude
-        intent: "Implement the feature."
-        inputs:
-          featureCode: "$.input.featureCode"
-        output_contract: PhaseResult
-        retries: 1
-        depends_on: [design_gate]
+        do: "Implement \${input.featureCode}."
+        out: PhaseResult
+        attempts: 1
 `;
 
 // ---------------------------------------------------------------------------
@@ -143,7 +145,7 @@ function readStreamLog(dir) {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('build policy enforcement — skip', { skip: !stratumAvailable && 'stratum-mcp not installed' }, () => {
+describe('build policy enforcement — skip', { skip: !stratumAvailable && 'TS stratum MCP bin not found' }, () => {
   let tmpDir;
 
   before(() => {
@@ -184,7 +186,7 @@ describe('build policy enforcement — skip', { skip: !stratumAvailable && 'stra
   });
 });
 
-describe('build policy enforcement — flag', { skip: !stratumAvailable && 'stratum-mcp not installed' }, () => {
+describe('build policy enforcement — flag', { skip: !stratumAvailable && 'TS stratum MCP bin not found' }, () => {
   let tmpDir;
 
   before(() => {

@@ -550,8 +550,12 @@ export const useVisionStore = create((set, get) => {
       const flow = editorModel.flows.find(f => f.name === editorSelectedFlow);
       if (!flow) return null;
       const id = uniqueStepId(flow.steps);
+      // D3: a new step's instruction is written to its physical field on save —
+      // `do` for a TS v1 pipeline, `intent` for v0.3 — so tag its intent key by the
+      // spec version, never defaulting to the python-era `intent` on a v1 spec.
+      const _intentKey = editorModel.version === 1 ? 'do' : 'intent';
       const newStep = {
-        id, kind: 'agent', agent: '', function: undefined, intent: '',
+        id, kind: 'agent', agent: '', function: undefined, intent: '', _intentKey,
         inputs: {}, output_contract: undefined, ensure: [], retries: undefined,
         depends_on: [], on_fail: undefined, _extra: {},
       };

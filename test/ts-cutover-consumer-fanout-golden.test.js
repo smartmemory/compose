@@ -1602,11 +1602,11 @@ describe('TS-native consumer fanout journal and merge recovery', () => {
       resumeFlowId: flowId,
       onClient(client) {
         const realStepDone = client.stepDone.bind(client);
-        client.stepDone = async (reportedFlowId, stepId, envelope, epoch, dispatchToken) => {
+        client.stepDone = async (reportedFlowId, stepId, envelope, dispatchToken) => {
           if (dispatchToken === prepared.dispatchToken) {
-            recoveryReport = { reportedFlowId, stepId, envelope, epoch, dispatchToken };
+            recoveryReport = { reportedFlowId, stepId, envelope, dispatchToken };
           }
-          return realStepDone(reportedFlowId, stepId, envelope, epoch, dispatchToken);
+          return realStepDone(reportedFlowId, stepId, envelope, dispatchToken);
         };
       },
     });
@@ -1617,7 +1617,6 @@ describe('TS-native consumer fanout journal and merge recovery', () => {
       reportedFlowId: flowId,
       stepId: prepared.scopedId,
       envelope: prepared.envelope,
-      epoch: 0,
       dispatchToken: prepared.dispatchToken,
     });
   });

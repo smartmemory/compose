@@ -169,9 +169,9 @@ describe('Phase-2 issuance-token fencing over the TS engine', () => {
       };
 
       const realStepDone = client.stepDone.bind(client);
-      client.stepDone = async (flowId, stepId, result, epoch, dispatchToken) => {
+      client.stepDone = async (flowId, stepId, result, dispatchToken) => {
         reportedSteps.push({ stepId, dispatchToken });
-        return realStepDone(flowId, stepId, result, epoch, dispatchToken);
+        return realStepDone(flowId, stepId, result, dispatchToken);
       };
 
       const realGateResolve = client.gateResolve.bind(client);
@@ -251,7 +251,6 @@ describe('Phase-2 issuance-token fencing over the TS engine', () => {
         flowId,
         'work',
         { failure: 'retry' },
-        first.epoch,
         first.dispatchToken,
       );
       const current = retried.ready[0];
@@ -262,7 +261,6 @@ describe('Phase-2 issuance-token fencing over the TS engine', () => {
           flowId,
           'work',
           { output: { value: 'stale' } },
-          current.epoch,
           first.dispatchToken,
         ),
         /superseded issuance/,
@@ -271,10 +269,38 @@ describe('Phase-2 issuance-token fencing over the TS engine', () => {
         flowId,
         'work',
         { output: { value: 'fresh' } },
-        current.epoch,
         current.dispatchToken,
       );
       assert.equal(accepted.status, 'completed');
+    } finally {
+      await client.close();
+      await rm(stateRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('the engine rejects a missing dispatchToken for an ordinary step id', async () => {
+    const stateRoot = await mkdtemp(join(tmpdir(), 'compose-ts-state-missing-dispatch-token-'));
+    const client = new StratumMcpClient();
+    const spec = {
+      version: 1,
+      contracts: { Result: { value: 'string' } },
+      flows: {
+        entry: 'main',
+        main: {
+          input: { name: 'string' },
+          output: { from: '${work.output}', contract: 'Result' },
+          steps: [{ id: 'work', do: 'work ${input.name}', out: 'Result' }],
+        },
+      },
+    };
+
+    try {
+      await connectTsClient(client, stateRoot);
+      const planned = await client.plan(spec, 'main', { name: 'Ada' });
+      await assert.rejects(
+        client.stepDone(planned.runId, 'work', { output: { value: 'missing echo' } }),
+        /stratum_step_done\.request\.dispatchToken is required/,
+      );
     } finally {
       await client.close();
       await rm(stateRoot, { recursive: true, force: true });
@@ -290,12 +316,12 @@ describe('Phase-2 issuance-token fencing over the TS engine', () => {
       const planned = await client.plan(GATE_SPEC, 'main', { name: 'Ada' });
       const flowId = planned.runId;
       const first = planned.ready[0];
-      await client.stepDone(flowId, 'work', { output: { value: 'one' } }, first.epoch, first.dispatchToken);
+      await client.stepDone(flowId, 'work', { output: { value: 'one' } }, first.dispatchToken);
       const firstGateToken = (await client.audit(flowId)).steps.review.gateToken;
       const revised = await client.gateResolve(flowId, 'review', 'revise', 'rework', 'human', firstGateToken);
 
       const second = revised.ready[0];
-      await client.stepDone(flowId, 'work', { output: { value: 'two' } }, second.epoch, second.dispatchToken);
+      await client.stepDone(flowId, 'work', { output: { value: 'two' } }, second.dispatchToken);
       const secondGateToken = (await client.audit(flowId)).steps.review.gateToken;
       assert.notEqual(secondGateToken, firstGateToken);
 

@@ -144,7 +144,10 @@ export function attachBuildRoutes(app, deps = {}) {
       return res.status(400).json({ error: 'featureCode required' });
     }
     try {
-      const result = await abortBuild(getDataDir(), featureCode);
+      // C2: thread the ACTIVE PROJECT ROOT so abortBuild resolves the stratum
+      // engine from the project's capabilities (the route may have switched
+      // projects at runtime; process.cwd() is not the project root).
+      const result = await abortBuild(getDataDir(), featureCode, getTargetRoot());
       res.json(result ?? { ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message || String(err) });

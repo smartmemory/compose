@@ -20,7 +20,14 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, syml
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import YAML from 'yaml';
+
+// E1: a flow-scoped save requires the loaded file's baseHash (server sha256). A
+// real editor sends the hash it got from GET /spec; these round-trip tests load
+// the file immediately before saving, so the current on-disk hash is the baseline.
+const sha256 = (text) => createHash('sha256').update(text, 'utf-8').digest('hex');
+const baseHashOf = (filePath) => sha256(readFileSync(filePath, 'utf-8'));
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -84,10 +91,14 @@ describe('GET /api/pipeline/specs — filename-based discovery', () => {
     assert.equal(status, 200);
     const entry = data.specs.find(s => s.file === 'build.stratum.yaml');
     assert.ok(entry, 'build.stratum.yaml discovered by filename');
-    assert.equal(entry.version, '0.3');
+    // E3 converted build.stratum.yaml to a TS v1 spec. Version-keyed discovery:
+    // v1 → version 1, and the flow list is the real flow keys (those with steps[]),
+    // which for v1 excludes the `entry:` pointer (a string, not a flow object).
+    assert.equal(entry.version, 1);
     assert.ok(entry.flows.includes('build'));
     assert.ok(entry.flows.includes('review_check'));
-    assert.ok(entry.flows.includes('parallel_review'));
+    assert.ok(entry.flows.includes('coverage_check'));
+    assert.ok(!entry.flows.includes('entry'), 'the `entry:` pointer is not surfaced as a flow');
   });
 
   test('GET /api/pipeline/spec returns raw text by filename (incl. comment-metadata specs)', async () => {
@@ -117,7 +128,7 @@ describe('POST /api/pipeline/save — golden round-trip on build.stratum.yaml', 
 
     const { status, data } = await json('/api/pipeline/save', {
       method: 'POST',
-      body: { file: 'build.stratum.yaml', model, flowName: 'build' },
+      body: { file: 'build.stratum.yaml', model, flowName: 'build', baseHash: sha256(originalText) },
     });
     assert.equal(status, 200, `save failed: ${JSON.stringify(data)}`);
     assert.equal(data.ok, true);
@@ -126,6 +137,10 @@ describe('POST /api/pipeline/save — golden round-trip on build.stratum.yaml', 
     const savedText = readFileSync(filePath, 'utf-8');
     const savedParsed = YAML.parse(savedText);
 
+    // build.stratum.yaml is a TS v1 spec (E3). Assert the v1 shape explicitly so a
+    // future revert (or a v0.3 fixture swap) fails loudly instead of mis-asserting.
+    assert.equal(originalParsed.version, 1, 'fixture is the v1 build pipeline');
+
     // --- The `# metadata:` comment header survives in the file text. ---
     assert.ok(
       savedText.includes('# metadata:'),
@@ -133,44 +148,51 @@ describe('POST /api/pipeline/save — golden round-trip on build.stratum.yaml', 
     );
     assert.ok(savedText.includes('#   id: build'), 'metadata id comment line survives');
 
-    // --- Every flow + subflow is unchanged (counts + ids). ---
+    // --- Every flow + subflow is unchanged (counts + ids). The v1 `flows.entry`
+    // key is a STRING pointer, not a flow object, so step comparison iterates only
+    // real flow keys (those with a steps[] array). ---
     assert.deepEqual(
       Object.keys(savedParsed.flows).sort(),
       Object.keys(originalParsed.flows).sort(),
-      'all flows preserved',
+      'all flow keys preserved (including the entry pointer)',
     );
-    for (const name of Object.keys(originalParsed.flows)) {
+    const flowKeysWithSteps = (parsed) =>
+      Object.keys(parsed.flows).filter(name => Array.isArray(parsed.flows[name]?.steps));
+    for (const name of flowKeysWithSteps(originalParsed)) {
       const before = originalParsed.flows[name].steps.map(s => s.id);
       const afterIds = savedParsed.flows[name].steps.map(s => s.id);
       assert.deepEqual(afterIds, before, `flow "${name}" step ids unchanged`);
     }
+    assert.equal(savedParsed.flows.entry, 'build', 'the entry flow pointer is preserved');
 
-    // --- The duplicated `review` id stays correctly in BOTH its flows. ---
+    // --- The `review` id in the review_check subflow is preserved (v1 keeps the
+    // cross-model review as a subflow; the build flow's review is now the
+    // review_lenses fanout + review_merge reducer, not a `flow:` ref step). ---
     const reviewCheckReview = savedParsed.flows.review_check.steps.find(s => s.id === 'review');
-    const buildReview = savedParsed.flows.build.steps.find(s => s.id === 'review');
     assert.ok(reviewCheckReview, 'review_check.review preserved');
-    assert.ok(buildReview, 'build.review preserved');
     assert.equal(reviewCheckReview.agent, '$.input.reviewer_agent', 'review_check.review is the agent step');
-    assert.equal(buildReview.flow, 'parallel_review', 'build.review is the sub-flow ref step');
+    assert.equal(reviewCheckReview.out, 'ReviewResult', 'review_check.review keeps its ReviewResult contract');
+    const reviewMerge = savedParsed.flows.build.steps.find(s => s.id === 'review_merge');
+    assert.ok(reviewMerge, 'build.review_merge preserved');
+    assert.equal(reviewMerge.out, 'ReviewResult', 'review_merge reduces to ReviewResult');
 
-    // --- Untouched fields byte-preserved (gate routes, parallel source, isolation: none). ---
+    // --- Untouched fields preserved (v1 nested gate routes, fanout over/isolation). ---
     const designGate = savedParsed.flows.build.steps.find(s => s.id === 'design_gate');
-    assert.equal(designGate.on_approve, 'prd');
-    assert.equal(designGate.on_revise, 'explore_design');
-    assert.equal(designGate.function, 'design_gate');
+    assert.equal(designGate.gate.on_approve, 'prd');
+    assert.equal(designGate.gate.on_revise, 'explore_design');
 
     const execute = savedParsed.flows.build.steps.find(s => s.id === 'execute');
-    assert.equal(execute.source, '$.steps.decompose.output.tasks');
-    assert.equal(execute.isolation, 'worktree');
+    assert.equal(execute.fanout.over, '${decompose.output.tasks}');
+    assert.equal(execute.fanout.isolation, 'worktree');
 
-    const reviewLenses = savedParsed.flows.parallel_review.steps.find(s => s.id === 'review_lenses');
-    assert.equal(reviewLenses.isolation, 'none', 'isolation: none preserved');
-    assert.equal(reviewLenses.source, '$.steps.triage.output.tasks');
+    const reviewLenses = savedParsed.flows.build.steps.find(s => s.id === 'review_lenses');
+    assert.equal(reviewLenses.fanout.isolation, 'none', 'isolation: none preserved');
+    assert.equal(reviewLenses.fanout.over, '${review_triage.output.tasks}');
 
     // --- Body comment preservation: an in-flow comment line survives. ---
     assert.ok(
-      savedText.includes('--- Main flow: compose feature lifecycle ---') ||
-      savedText.includes('Sub-flow: review'),
+      savedText.includes('Task-only subflow: cross-model implementation review') ||
+      savedText.includes('consumer fanout'),
       'body comments survive the Document-mutate save',
     );
 
@@ -218,7 +240,7 @@ describe('POST /api/pipeline/save — workflow.steps flow location (finding 4)',
 
     // Saving the synthetic "workflow" flow succeeds and writes workflow.steps.
     const ok = await json('/api/pipeline/save', {
-      method: 'POST', body: { file: 'syn.stratum.yaml', model, flowName: 'workflow' },
+      method: 'POST', body: { file: 'syn.stratum.yaml', model, flowName: 'workflow', baseHash: baseHashOf(synPath) },
     });
     assert.equal(ok.status, 200, `save failed: ${JSON.stringify(ok.data)}`);
     const after = YAML.parse(readFileSync(synPath, 'utf-8'));
@@ -227,7 +249,7 @@ describe('POST /api/pipeline/save — workflow.steps flow location (finding 4)',
     // Saving a non-matching flow name must 400 — NOT silently overwrite workflow.steps.
     const bad = await json('/api/pipeline/save', {
       method: 'POST',
-      body: { file: 'syn.stratum.yaml', model: { flows: [{ name: 'ghost', steps: [{ id: 'z' }] }] }, flowName: 'ghost' },
+      body: { file: 'syn.stratum.yaml', model: { flows: [{ name: 'ghost', steps: [{ id: 'z' }] }] }, flowName: 'ghost', baseHash: baseHashOf(synPath) },
     });
     assert.equal(bad.status, 400, 'unknown flow name must not clobber workflow.steps');
     const untouched = YAML.parse(readFileSync(synPath, 'utf-8'));
@@ -236,29 +258,45 @@ describe('POST /api/pipeline/save — workflow.steps flow location (finding 4)',
 });
 
 describe('POST /api/pipeline/save — unsurfaced fields survive an incomplete _extra (finding 2)', () => {
-  test('a stale client that drops _extra.isolation does not delete it from disk', async () => {
+  test('a stale client that drops _extra.fanout does not delete it from disk (+ C3 intent→do)', async () => {
     const filePath = join(pipelinesDir, 'build.stratum.yaml');
     const model = specToModel(YAML.parse(readFileSync(filePath, 'utf-8')));
 
     const buildFlow = model.flows.find(f => f.name === 'build');
     const execute = buildFlow.steps.find(s => s.id === 'execute');
-    assert.equal(execute._extra.isolation, 'worktree', 'precondition: isolation is in _extra');
+    // v1: execute is a consumer fanout; its disk-only structure lives in
+    // _extra.fanout (the v1 analog of v0.3's top-level isolation/source fields).
+    assert.equal(execute._extra.fanout.isolation, 'worktree', 'precondition: fanout is in _extra');
 
-    // Simulate a buggy/stale client: edit a surfaced field, but DROP isolation
-    // from the payload's _extra entirely.
-    execute.intent = 'EDITED INTENT FOR TEST';
-    delete execute._extra.isolation;
+    // C3: the surfaced instruction ("intent") of a v1 step is backed by the `do`
+    // field, not the python-era `intent`. review_merge is a regular v1 step with a
+    // `do` — the editor surfaces it as `intent` and must write it back to `do`.
+    const reviewMerge = buildFlow.steps.find(s => s.id === 'review_merge');
+    assert.equal(reviewMerge._intentKey, 'do', 'precondition: v1 instruction is backed by `do`');
+    assert.ok(/Merge/.test(reviewMerge.intent), 'precondition: the do text is surfaced as intent');
+    reviewMerge.intent = 'EDITED review-merge instruction';
+
+    // Simulate a buggy/stale client: DROP the fanout block from execute's _extra.
+    delete execute._extra.fanout;
 
     const { status } = await json('/api/pipeline/save', {
-      method: 'POST', body: { file: 'build.stratum.yaml', model, flowName: 'build' },
+      method: 'POST', body: { file: 'build.stratum.yaml', model, flowName: 'build', baseHash: baseHashOf(filePath) },
     });
     assert.equal(status, 200);
 
     const saved = YAML.parse(readFileSync(filePath, 'utf-8'));
     const savedExecute = saved.flows.build.steps.find(s => s.id === 'execute');
-    assert.equal(savedExecute.isolation, 'worktree', 'disk-only field preserved despite incomplete _extra');
-    assert.equal(savedExecute.intent, 'EDITED INTENT FOR TEST', 'the surfaced edit was applied');
-    assert.equal(savedExecute.source, '$.steps.decompose.output.tasks', 'other unsurfaced fields intact');
+    // finding 2: the dropped disk-only field survives.
+    assert.equal(savedExecute.fanout.isolation, 'worktree', 'disk-only field preserved despite incomplete _extra');
+    assert.equal(savedExecute.fanout.over, '${decompose.output.tasks}', 'other unsurfaced fields intact');
+
+    // C3: the surfaced edit landed on `do`, NOT `intent`, and the saved v1 spec is
+    // schema-valid (no v1 build-flow step carries an undeclared `intent` field).
+    const savedReviewMerge = saved.flows.build.steps.find(s => s.id === 'review_merge');
+    assert.equal(savedReviewMerge.do, 'EDITED review-merge instruction', 'the surfaced edit was written to `do`');
+    assert.equal(savedReviewMerge.intent, undefined, 'no python-era `intent` field on a v1 step');
+    const withIntent = saved.flows.build.steps.filter(s => 'intent' in s).map(s => s.id);
+    assert.deepEqual(withIntent, [], 'no v1 build-flow step carries an undeclared `intent` field');
   });
 
   test('a RENAMED step still preserves disk-only fields when the client drops _extra', async () => {
@@ -281,23 +319,40 @@ describe('POST /api/pipeline/save — unsurfaced fields survive an incomplete _e
     try {
       const fp = join(localPipelines, 'build.stratum.yaml');
       const model = specToModel(YAML.parse(readFileSync(fp, 'utf-8')));
-      // Rename through the lib (sets the _renamedFrom hint) then drop _extra.isolation.
+      // Rename through the lib (sets the _renamedFrom hint) then drop _extra.fanout
+      // (v1 disk-only structure — the analog of v0.3's isolation field).
       renameStep(model, 'build', 'execute', 'execute2');
       const renamed = model.flows.find(f => f.name === 'build').steps.find(s => s.id === 'execute2');
       assert.equal(renamed._renamedFrom, 'execute', 'precondition: rename hint recorded');
-      delete renamed._extra.isolation;
+      delete renamed._extra.fanout;
 
       const r = await fetch(`${url}/api/pipeline/save`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file: 'build.stratum.yaml', model, flowName: 'build' }),
+        body: JSON.stringify({ file: 'build.stratum.yaml', model, flowName: 'build', baseHash: baseHashOf(fp) }),
       });
       assert.equal(r.status, 200, `save failed: ${await r.text()}`);
 
-      const saved = YAML.parse(readFileSync(fp, 'utf-8'));
+      const savedText = readFileSync(fp, 'utf-8');
+      const saved = YAML.parse(savedText);
       const node = saved.flows.build.steps.find(s => s.id === 'execute2');
       assert.ok(node, 'renamed step present under new id');
       assert.ok(!saved.flows.build.steps.find(s => s.id === 'execute'), 'old id gone');
-      assert.equal(node.isolation, 'worktree', 'disk-only field preserved across rename despite dropped _extra');
+      assert.equal(node.fanout.isolation, 'worktree', 'disk-only field preserved across rename despite dropped _extra');
+
+      // C4: referential integrity — no v1 reference (after[]/nested gate route)
+      // may still point at the ghost `execute` id after the rename reaches disk.
+      const stale = [];
+      for (const s of saved.flows.build.steps) {
+        if (Array.isArray(s.after) && s.after.includes('execute')) stale.push(`${s.id}.after`);
+        if (s.gate) for (const k of ['on_approve', 'on_revise', 'on_kill']) {
+          if (s.gate[k] === 'execute') stale.push(`${s.id}.gate.${k}`);
+        }
+      }
+      assert.deepEqual(stale, [], 'no dangling `execute` reference survives the rename');
+      // execute_merge (the gate that followed execute) now points at execute2.
+      const execMerge = saved.flows.build.steps.find(s => s.id === 'execute_merge');
+      assert.ok(execMerge.after.includes('execute2'), 'execute_merge.after rewritten to execute2');
+      assert.equal(execMerge.gate.on_revise, 'execute2', 'execute_merge gate.on_revise rewritten to execute2');
     } finally {
       await new Promise(r => srv.close(r));
     }
@@ -332,7 +387,7 @@ describe('POST /api/pipeline/save — unsurfaced fields survive an incomplete _e
 
       const r = await fetch(`${url}/api/pipeline/save`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file: 'chain.stratum.yaml', model, flowName: 'ff' }),
+        body: JSON.stringify({ file: 'chain.stratum.yaml', model, flowName: 'ff', baseHash: baseHashOf(synPath) }),
       });
       assert.equal(r.status, 200, `save failed: ${await r.text()}`);
 
@@ -366,7 +421,7 @@ describe('POST /api/pipeline/save — unsurfaced fields survive an incomplete _e
     const url = `http://127.0.0.1:${srv.address().port}`;
     const post = (model) => fetch(`${url}/api/pipeline/save`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file: 'resave.stratum.yaml', model, flowName: 'ff' }),
+      body: JSON.stringify({ file: 'resave.stratum.yaml', model, flowName: 'ff', baseHash: baseHashOf(p) }),
     });
 
     try {
@@ -457,7 +512,7 @@ describe('POST /api/pipeline/save — persists contracts + contract-rename propa
 
       const r = await fetch(`${url}/api/pipeline/save`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file: 'multiref.stratum.yaml', model, flowName: 'main' }),
+        body: JSON.stringify({ file: 'multiref.stratum.yaml', model, flowName: 'main', baseHash: baseHashOf(p) }),
       });
       assert.equal(r.status, 200, `save failed: ${await r.text()}`);
 
@@ -513,7 +568,7 @@ describe('POST /api/pipeline/save — persists contracts + contract-rename propa
 
       const r = await fetch(`${url}/api/pipeline/save`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file: 'multiref.stratum.yaml', model, flowName: 'main' }),
+        body: JSON.stringify({ file: 'multiref.stratum.yaml', model, flowName: 'main', baseHash: baseHashOf(p) }),
       });
       assert.equal(r.status, 200, `save failed: ${await r.text()}`);
 
@@ -552,7 +607,7 @@ describe('POST /api/pipeline/save — persists contracts + contract-rename propa
       // Save while editing ONLY flow `a`; flow `b` must still get its ref rewritten.
       const r = await fetch(`${url}/api/pipeline/save`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file: 'xflow.stratum.yaml', model, flowName: 'a' }),
+        body: JSON.stringify({ file: 'xflow.stratum.yaml', model, flowName: 'a', baseHash: baseHashOf(p) }),
       });
       assert.equal(r.status, 200, `save failed: ${await r.text()}`);
 
@@ -563,6 +618,367 @@ describe('POST /api/pipeline/save — persists contracts + contract-rename propa
     } finally {
       await new Promise(r => srv.close(r));
     }
+  });
+});
+
+// ===========================================================================
+// Flag-day round 2 — D2 (version-derived intent key), D3 (new-step default),
+// D4 (diff-driven _extra ref persistence)
+// ===========================================================================
+
+describe('POST /api/pipeline/save — flag-day round 2 (D2/D3/D4)', () => {
+  async function saveIn(spec, file, mutate) {
+    const localDir = mkdtempSync(join(tmpdir(), 'pipeline-d234-'));
+    const localPipelines = join(localDir, 'pipelines');
+    mkdirSync(localPipelines, { recursive: true });
+    const fp = join(localPipelines, file);
+    writeFileSync(fp, spec);
+    const app = express();
+    app.use(express.json({ limit: '5mb' }));
+    attachPipelineRoutes(app, {
+      broadcastMessage: () => {}, scheduleBroadcast: () => {},
+      getDataDir: () => join(localDir, 'data'), getPipelinesDir: () => localPipelines, stratumClient: null,
+    });
+    const srv = createServer(app);
+    await new Promise(r => srv.listen(0, r));
+    const url = `http://127.0.0.1:${srv.address().port}`;
+    try {
+      const model = specToModel(YAML.parse(readFileSync(fp, 'utf-8')));
+      const flowName = mutate(model);
+      const r = await fetch(`${url}/api/pipeline/save`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file, model, flowName, baseHash: baseHashOf(fp) }),
+      });
+      assert.equal(r.status, 200, `save failed: ${await r.text()}`);
+      return { saved: YAML.parse(readFileSync(fp, 'utf-8')), model };
+    } finally {
+      await new Promise(r => srv.close(r));
+    }
+  }
+
+  // D2: the intent key is VERSION-derived, not presence-derived. A v1 step
+  // carrying BOTH `do` and `intent` must round-trip to `do` only.
+  test('D2: a v1 step with both do and intent round-trips to `do` only', async () => {
+    const spec = 'version: 1\nflows:\n  entry: f\n  f:\n    steps:\n'
+      + '      - id: s1\n        agent: claude\n        do: "real v1 instruction"\n        intent: "stray python-era intent"\n';
+    const { saved, model } = await saveIn(spec, 'd2.stratum.yaml', () => 'f');
+    const s1model = model.flows.find(f => f.name === 'f').steps.find(s => s.id === 's1');
+    assert.equal(s1model._intentKey, 'do', 'intent key is version-derived (v1 → do)');
+    assert.equal(s1model.intent, 'real v1 instruction', 'surfaced value comes from the version-correct field');
+    const s1 = saved.flows.f.steps.find(s => s.id === 's1');
+    assert.equal(s1.do, 'real v1 instruction', 'do preserved');
+    assert.equal(s1.intent, undefined, 'stray python-era intent dropped — v1 stays schema-valid');
+  });
+
+  // D3: a NEW step created in the editor (no _intentKey) defaults to the version's
+  // physical field, not `intent`.
+  test('D3: a new step added to a v1 pipeline serializes `do`, never `intent`', async () => {
+    const spec = 'version: 1\nflows:\n  entry: f\n  f:\n    steps:\n      - id: s1\n        agent: claude\n        do: "x"\n';
+    const { saved } = await saveIn(spec, 'd3.stratum.yaml', (model) => {
+      // A brand-new step object as the add-step path produces it, minus _intentKey
+      // (proves the SERVER default is version-derived even for an old client).
+      model.flows.find(f => f.name === 'f').steps.push({
+        id: 's2', kind: 'agent', agent: 'claude', intent: 'new step instruction',
+        inputs: {}, ensure: [], depends_on: [], _extra: {},
+      });
+      return 'f';
+    });
+    const s2 = saved.flows.f.steps.find(s => s.id === 's2');
+    assert.equal(s2.do, 'new step instruction', 'new v1 step writes `do`');
+    assert.equal(s2.intent, undefined, 'new v1 step carries no undeclared `intent`');
+    // No step in the flow carries a stray intent.
+    assert.deepEqual(saved.flows.f.steps.filter(s => 'intent' in s).map(s => s.id), []);
+  });
+
+  // D4: the flow-scoped save persists EVERY rewritten _extra field (diff-driven),
+  // not an allowlist — a rename rewrites `when` templates on other steps too.
+  test('D4: rename persists a rewritten `when` template on another step', async () => {
+    const spec = 'version: 1\nflows:\n  entry: f\n  f:\n    steps:\n'
+      + '      - id: execute\n        agent: claude\n        do: "run"\n        out: R\n'
+      + '      - id: guard\n        agent: claude\n        do: "check"\n        when: "${execute.output.ok}"\n';
+    const { saved } = await saveIn(spec, 'd4.stratum.yaml', (model) => {
+      renameStep(model, 'f', 'execute', 'execute2');
+      return 'f';
+    });
+    assert.ok(saved.flows.f.steps.find(s => s.id === 'execute2'), 'step renamed on disk');
+    const guard = saved.flows.f.steps.find(s => s.id === 'guard');
+    assert.equal(guard.when, '${execute2.output.ok}', 'the rewritten `when` template reached disk');
+    // No dangling reference to the old id anywhere in the saved text.
+    const text = JSON.stringify(saved);
+    assert.ok(!/\$\{execute\.output/.test(text), 'no `${execute.output...}` reference survives');
+  });
+});
+
+// ===========================================================================
+// Flag-day round 3 — E1: the diff-driven flow-scoped merge must not silently
+// resurrect a stale editor's value against a disk another writer moved.
+// ===========================================================================
+
+describe('POST /api/pipeline/save — flag-day round 3 (E1 stale-baseline guard)', () => {
+  test('E1: flow-scoped save requires baseHash; a stale hash 409s (no resurrection); force overrides', async () => {
+    const localDir = mkdtempSync(join(tmpdir(), 'pipeline-e1-'));
+    const localPipelines = join(localDir, 'pipelines');
+    mkdirSync(localPipelines, { recursive: true });
+    const fp = join(localPipelines, 'e1.stratum.yaml');
+    writeFileSync(fp,
+      'version: 1\nflows:\n  entry: f\n  f:\n    steps:\n      - id: s1\n        agent: claude\n        do: "x"\n        marker: v1\n');
+    const app = express();
+    app.use(express.json({ limit: '5mb' }));
+    attachPipelineRoutes(app, {
+      broadcastMessage: () => {}, scheduleBroadcast: () => {},
+      getDataDir: () => join(localDir, 'data'), getPipelinesDir: () => localPipelines, stratumClient: null,
+    });
+    const srv = createServer(app);
+    await new Promise(r => srv.listen(0, r));
+    const url = `http://127.0.0.1:${srv.address().port}`;
+    const save = (body) => fetch(`${url}/api/pipeline/save`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const markerOf = () => YAML.parse(readFileSync(fp, 'utf-8')).flows.f.steps[0].marker;
+
+    try {
+      // Client A loads the spec (marker=v1) → captures baseHash H1.
+      const staleText = readFileSync(fp, 'utf-8');
+      const H1 = sha256(staleText);
+      const staleModel = specToModel(YAML.parse(staleText)); // s1._extra.marker === 'v1'
+
+      // (a) A flow-scoped save WITHOUT baseHash is refused (400) — the diff-driven
+      // merge has no baseline to detect staleness.
+      const noHash = await save({ file: 'e1.stratum.yaml', model: staleModel, flowName: 'f' });
+      assert.equal(noHash.status, 400, 'flow-scoped save requires baseHash');
+      assert.equal(markerOf(), 'v1', 'nothing written');
+
+      // Writer B moves marker to v2 on disk (a legitimate concurrent save).
+      const bModel = specToModel(YAML.parse(readFileSync(fp, 'utf-8')));
+      bModel.flows.find(f => f.name === 'f').steps.find(s => s.id === 's1')._extra.marker = 'v2';
+      const bSave = await save({ file: 'e1.stratum.yaml', model: bModel, flowName: 'f', baseHash: H1 });
+      assert.equal(bSave.status, 200);
+      assert.equal(markerOf(), 'v2', 'writer B landed v2');
+
+      // (b) Client A (STALE, still marker=v1) resubmits with its old H1 → 409, and
+      // the diff-driven merge does NOT resurrect v1.
+      const stale = await save({ file: 'e1.stratum.yaml', model: staleModel, flowName: 'f', baseHash: H1 });
+      assert.equal(stale.status, 409, 'a stale baseHash is a conflict');
+      assert.equal(markerOf(), 'v2', 'stale save must NOT resurrect v1');
+
+      // (c) force:true is the explicit last-writer-wins override — resurrection is
+      // then user intent, not a silent hazard.
+      const forced = await save({ file: 'e1.stratum.yaml', model: staleModel, flowName: 'f', force: true });
+      assert.equal(forced.status, 200);
+      assert.equal(markerOf(), 'v1', 'force resurrects v1 (explicit last-writer-wins)');
+    } finally {
+      await new Promise(r => srv.close(r));
+    }
+  });
+});
+
+// ===========================================================================
+// Flag-day round 4 — F1 (strict force===true) + F2 (partial-model bypass)
+// ===========================================================================
+
+describe('POST /api/pipeline/save — flag-day round 4 (E1 guard bypasses)', () => {
+  async function withServer(fn) {
+    const localDir = mkdtempSync(join(tmpdir(), 'pipeline-f12-'));
+    const localPipelines = join(localDir, 'pipelines');
+    mkdirSync(localPipelines, { recursive: true });
+    const app = express();
+    app.use(express.json({ limit: '5mb' }));
+    attachPipelineRoutes(app, {
+      broadcastMessage: () => {}, scheduleBroadcast: () => {},
+      getDataDir: () => join(localDir, 'data'), getPipelinesDir: () => localPipelines, stratumClient: null,
+    });
+    const srv = createServer(app);
+    await new Promise(r => srv.listen(0, r));
+    const url = `http://127.0.0.1:${srv.address().port}`;
+    const save = (body) => fetch(`${url}/api/pipeline/save`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    try { await fn({ localPipelines, save }); } finally { await new Promise(r => srv.close(r)); }
+  }
+
+  // F1: only a STRICT boolean `force === true` may bypass the E1 guard — a
+  // truthy-but-non-boolean force ("false", 1, {}) must fall through to the guard.
+  test('F1: a truthy-but-non-boolean `force` does NOT bypass the stale-baseline guard', async () => {
+    await withServer(async ({ localPipelines, save }) => {
+      const fp = join(localPipelines, 'f1.stratum.yaml');
+      writeFileSync(fp,
+        'version: 1\nflows:\n  entry: f\n  f:\n    steps:\n      - id: s1\n        agent: claude\n        do: "x"\n        marker: v1\n');
+      const H1 = sha256(readFileSync(fp, 'utf-8'));
+      const staleModel = specToModel(YAML.parse(readFileSync(fp, 'utf-8')));
+      const markerOf = () => YAML.parse(readFileSync(fp, 'utf-8')).flows.f.steps[0].marker;
+
+      // Writer B moves marker to v2 (disk now diverges from H1).
+      const bModel = specToModel(YAML.parse(readFileSync(fp, 'utf-8')));
+      bModel.flows.find(f => f.name === 'f').steps.find(s => s.id === 's1')._extra.marker = 'v2';
+      assert.equal((await save({ file: 'f1.stratum.yaml', model: bModel, flowName: 'f', baseHash: H1 })).status, 200);
+      assert.equal(markerOf(), 'v2');
+
+      // A stale save with a NON-strict-boolean force must 409 (not bypass), no write.
+      for (const badForce of ['false', 1, {}, 'true', 0.0]) {
+        const r = await save({ file: 'f1.stratum.yaml', model: staleModel, flowName: 'f', baseHash: H1, force: badForce });
+        assert.equal(r.status, 409, `force:${JSON.stringify(badForce)} must not bypass the guard`);
+        assert.equal(markerOf(), 'v2', 'no resurrection under a non-strict force');
+      }
+
+      // Only strict force===true overrides.
+      assert.equal((await save({ file: 'f1.stratum.yaml', model: staleModel, flowName: 'f', force: true })).status, 200);
+      assert.equal(markerOf(), 'v1', 'strict force===true resurrects (explicit last-writer-wins)');
+    });
+  });
+
+  // F2: an omitted `flowName` does NOT make a PARTIAL model a spec-wide save.
+  test('F2: a partial model without flowName is flow-scoped (baseHash required), not spec-wide', async () => {
+    await withServer(async ({ localPipelines, save }) => {
+      const fp = join(localPipelines, 'f2.stratum.yaml');
+      // TWO flows on disk.
+      writeFileSync(fp,
+        'version: 1\nflows:\n  entry: a\n  a:\n    steps:\n      - id: s1\n        agent: claude\n        do: "x"\n        marker: keep\n  b:\n    steps:\n      - id: s2\n        agent: claude\n        do: "y"\n');
+      const before = readFileSync(fp, 'utf-8');
+
+      // A PARTIAL model (only flow `a`, no _doc) with NO flowName and NO baseHash
+      // must NOT slip through the hash-optional spec-wide branch → 400.
+      const partial = { flows: [{ name: 'a', steps: [{ id: 's1', kind: 'agent', agent: 'claude', intent: 'sneaky edit', _intentKey: 'do', inputs: {}, ensure: [], depends_on: [], _extra: {} }] }] };
+      const r = await save({ file: 'f2.stratum.yaml', model: partial });
+      assert.equal(r.status, 400, 'partial model without flowName is flow-scoped → baseHash required');
+      assert.equal(readFileSync(fp, 'utf-8'), before, 'nothing written for the rejected partial save');
+
+      // A GENUINE full-document save (covers BOTH disk flows, carries _doc) still
+      // requires a baseHash under G1 (always-require contract), but stays spec-wide
+      // for MERGE behavior — the untouched flow `b` survives.
+      const full = specToModel(YAML.parse(readFileSync(fp, 'utf-8')));
+      full.flows.find(f => f.name === 'a').steps.find(s => s.id === 's1').intent = 'genuine edit';
+      const g = await save({ file: 'f2.stratum.yaml', model: full, baseHash: sha256(readFileSync(fp, 'utf-8')) });
+      assert.equal(g.status, 200, 'genuine full-document save (covers all disk flows) succeeds with baseHash');
+      const saved = YAML.parse(readFileSync(fp, 'utf-8'));
+      assert.equal(saved.flows.a.steps[0].do, 'genuine edit');
+      assert.ok(saved.flows.b, 'the untouched flow `b` survives the spec-wide save');
+    });
+  });
+});
+
+// ===========================================================================
+// Flag-day round 5 — G1 (always-require baseHash), G2 (creation gate on
+// classification), G3 (hash check before parse)
+// ===========================================================================
+
+describe('POST /api/pipeline/save — flag-day round 5 (G1/G2/G3)', () => {
+  async function withServer(fn) {
+    const localDir = mkdtempSync(join(tmpdir(), 'pipeline-g-'));
+    const localPipelines = join(localDir, 'pipelines');
+    mkdirSync(localPipelines, { recursive: true });
+    const app = express();
+    app.use(express.json({ limit: '5mb' }));
+    attachPipelineRoutes(app, {
+      broadcastMessage: () => {}, scheduleBroadcast: () => {},
+      getDataDir: () => join(localDir, 'data'), getPipelinesDir: () => localPipelines, stratumClient: null,
+    });
+    const srv = createServer(app);
+    await new Promise(r => srv.listen(0, r));
+    const url = `http://127.0.0.1:${srv.address().port}`;
+    const save = (body) => fetch(`${url}/api/pipeline/save`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    try { await fn({ localPipelines, save }); } finally { await new Promise(r => srv.close(r)); }
+  }
+
+  // G1: the coversFullDocument spoof — an empty `_doc` object + stub flow bodies
+  // that cover every disk flow NAME (but with empty steps) previously classified
+  // spec-wide and slipped through the HASH-OPTIONAL branch, destructively deleting
+  // real steps with no baseHash. Under the always-require contract that spoof is a
+  // 400 (missing baseHash), the stale variant is a 409, and disk is untouched.
+  test('G1: the coversFullDocument spoof is refused without a fresh baseHash (no destructive save)', async () => {
+    await withServer(async ({ localPipelines, save }) => {
+      const fp = join(localPipelines, 'g1.stratum.yaml');
+      writeFileSync(fp,
+        'version: 1\nflows:\n  entry: a\n  a:\n    steps:\n      - id: s1\n        agent: claude\n        do: "real a work"\n  b:\n    steps:\n      - id: s2\n        agent: claude\n        do: "real b work"\n');
+      const before = readFileSync(fp, 'utf-8');
+      const H1 = sha256(before);
+
+      // The spoof: a NON-empty `_doc` + stub flow bodies covering BOTH disk flow
+      // NAMES with EMPTY steps. coversFullDocument() → true (classifies spec-wide),
+      // so under the old hash-optional spec-wide branch this would replace/delete
+      // every real step. No flowName, no baseHash.
+      const spoof = {
+        _doc: { version: 1, flows: { entry: 'a', a: { steps: [] }, b: { steps: [] } } },
+        flows: [{ name: 'a', steps: [] }, { name: 'b', steps: [] }],
+      };
+      const noHash = await save({ file: 'g1.stratum.yaml', model: spoof });
+      assert.equal(noHash.status, 400, 'spec-wide spoof without baseHash is refused (always-require)');
+      assert.equal(readFileSync(fp, 'utf-8'), before, 'nothing written for the hash-free spoof');
+
+      // Same spoof with a STALE hash (disk moved on) is a 409, still no write.
+      writeFileSync(fp, before.replace('real a work', 'moved on'));
+      const moved = readFileSync(fp, 'utf-8');
+      const stale = await save({ file: 'g1.stratum.yaml', model: spoof, baseHash: H1 });
+      assert.equal(stale.status, 409, 'a stale baseHash is a conflict even for a spec-wide save');
+      assert.equal(readFileSync(fp, 'utf-8'), moved, 'nothing written for the stale spec-wide save');
+
+      // A GENUINE spec-wide save WITH the fresh baseHash is unchanged (200), and the
+      // spec-wide merge still preserves the untouched flow.
+      const full = specToModel(YAML.parse(moved));
+      full.flows.find(f => f.name === 'a').steps.find(s => s.id === 's1').intent = 'edited a';
+      const ok = await save({ file: 'g1.stratum.yaml', model: full, baseHash: sha256(moved) });
+      assert.equal(ok.status, 200, 'genuine spec-wide save with a fresh baseHash succeeds');
+      const saved = YAML.parse(readFileSync(fp, 'utf-8'));
+      assert.equal(saved.flows.a.steps[0].do, 'edited a');
+      assert.equal(saved.flows.b.steps[0].do, 'real b work', 'the untouched flow b survives');
+    });
+  });
+
+  // G2: the spec-wide-ONLY flow-creation path must gate on the computed `specWide`
+  // classification, not a bare `!flowName`. A request with no flowName but a partial
+  // model that does NOT cover the full document is flow-scoped-classified — it must
+  // NOT auto-create a model-only flow (the documented spec-wide-only behavior).
+  test('G2: a flow-scoped-classified request cannot perform spec-wide-only flow creation', async () => {
+    await withServer(async ({ localPipelines, save }) => {
+      const fp = join(localPipelines, 'g2.stratum.yaml');
+      // TWO flows on disk: a and b.
+      writeFileSync(fp,
+        'version: 1\nflows:\n  entry: a\n  a:\n    steps:\n      - id: s1\n        agent: claude\n        do: "x"\n  b:\n    steps:\n      - id: s2\n        agent: claude\n        do: "y"\n');
+      const before = readFileSync(fp, 'utf-8');
+
+      // A model that carries a `_doc` but MISSES disk flow `b` (so coversFullDocument
+      // → false → flow-scoped-classified), no flowName, valid baseHash, and a NEW
+      // model-only flow `newflow` not on disk. Old code (`!flowName`) would create
+      // `newflow`; the classification gate (`specWide`) must block it → 400.
+      const model = {
+        _doc: { version: 1, flows: { entry: 'a', a: { steps: [{ id: 's1', agent: 'claude', do: 'x' }] }, newflow: { steps: [{ id: 'n1', agent: 'claude', do: 'z' }] } } },
+        flows: [
+          { name: 'a', steps: [{ id: 's1', kind: 'agent', agent: 'claude', intent: 'x', _intentKey: 'do', inputs: {}, ensure: [], depends_on: [], _extra: {} }] },
+          { name: 'newflow', steps: [{ id: 'n1', kind: 'agent', agent: 'claude', intent: 'z', _intentKey: 'do', inputs: {}, ensure: [], depends_on: [], _extra: {} }] },
+        ],
+      };
+      const r = await save({ file: 'g2.stratum.yaml', model, baseHash: sha256(before) });
+      assert.equal(r.status, 400, 'flow-scoped-classified request cannot create a model-only flow');
+      assert.equal(readFileSync(fp, 'utf-8'), before, 'nothing written; the model-only flow was not created');
+      assert.ok(!YAML.parse(readFileSync(fp, 'utf-8')).flows.newflow, 'newflow never landed on disk');
+    });
+  });
+
+  // G3: the hash check evaluates RAW disk bytes BEFORE parsing, so a stale baseHash
+  // is a 409 even when the on-disk YAML is malformed (round 4's parse-before-classify
+  // reorder regressed this to a 400 — parse threw first). Restore HEAD's 409.
+  test('G3: a stale baseHash on malformed disk YAML is a 409, not a 400', async () => {
+    await withServer(async ({ localPipelines, save }) => {
+      const fp = join(localPipelines, 'g3.stratum.yaml');
+      // Malformed YAML on disk (unterminated flow sequence): YAML.parse throws.
+      writeFileSync(fp, 'version: 1\nflows: [unterminated\n');
+      const before = readFileSync(fp, 'utf-8');
+      assert.throws(() => YAML.parse(before), 'precondition: disk YAML is genuinely unparseable');
+
+      const model = { flows: [{ name: 'a', steps: [] }] };
+
+      // A STALE (non-matching) baseHash must 409 on the raw bytes BEFORE the parse
+      // is attempted — parseability is irrelevant to the staleness verdict.
+      const stale = await save({ file: 'g3.stratum.yaml', model, baseHash: 'deadbeefstalehash' });
+      assert.equal(stale.status, 409, 'stale hash → 409 regardless of disk parseability');
+      assert.equal(readFileSync(fp, 'utf-8'), before, 'nothing written');
+
+      // A MATCHING baseHash passes the guard, then the parse legitimately fails → 400.
+      const matched = await save({ file: 'g3.stratum.yaml', model, baseHash: sha256(before) });
+      assert.equal(matched.status, 400, 'a matching hash on malformed disk falls through to the parse 400');
+      assert.equal(readFileSync(fp, 'utf-8'), before, 'still nothing written');
+    });
   });
 });
 

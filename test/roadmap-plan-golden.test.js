@@ -85,9 +85,9 @@ describe('golden: produce → consume handshake', () => {
     const mutated = applyPlannedByRatify(buildSpec, 'build', feature.plannedBy);
     assert.equal(mutated, true);
     const exploreStep = buildSpec.flows.build.steps.find((s) => s.id === 'explore_design');
-    assert.match(exploreStep.intent, /RATIFY/);
-    assert.match(exploreStep.intent, /PLAN-BUILD-A-WIDGET/);
-    assert.match(exploreStep.intent, /\{featureCode\}/); // interpolation preserved
+    assert.match(exploreStep.do, /RATIFY/);
+    assert.match(exploreStep.do, /PLAN-BUILD-A-WIDGET/);
+    assert.match(exploreStep.do, /\$\{input\.featureCode\}/); // v1 interpolation preserved
   });
 });
 

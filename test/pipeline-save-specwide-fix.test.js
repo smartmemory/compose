@@ -21,7 +21,11 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import YAML from 'yaml';
+
+// E1: a flow-scoped save requires the loaded file's baseHash (server sha256).
+const sha256 = (t) => createHash('sha256').update(t, 'utf-8').digest('hex');
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const express = (await import('express')).default;
@@ -111,6 +115,12 @@ function readSaved(file) {
   const text = readFileSync(join(pipelinesDir, file), 'utf-8');
   return { text, parsed: YAML.parse(text) };
 }
+// G1: every save of an existing file (spec-wide included) requires the fresh
+// on-disk baseHash. These tests write the file then save immediately, so the
+// current on-disk hash is the baseline a real editor would carry.
+function baseHashOf(file) {
+  return sha256(readFileSync(join(pipelinesDir, file), 'utf-8'));
+}
 
 describe('FIX 5a — spec-wide save updates AND deletes unsurfaced (_extra) step fields', () => {
   test('changed on_approve + isolation persist; a removed _extra key (skip_if) is deleted', async () => {
@@ -129,7 +139,7 @@ describe('FIX 5a — spec-wide save updates AND deletes unsurfaced (_extra) step
     delete work._extra.skip_if;           // REMOVED
 
     const { status, data } = await json('/api/pipeline/save', {
-      method: 'POST', body: { file, model }, // spec-wide (no flowName)
+      method: 'POST', body: { file, model, baseHash: baseHashOf(file) }, // spec-wide (no flowName)
     });
     assert.equal(status, 200, `save failed: ${JSON.stringify(data)}`);
 
@@ -175,7 +185,7 @@ describe('FIX 5b — spec-wide save creates AND deletes flows.<name>.output', ()
     model._doc.flows.noout.output = 'Bar';
 
     const { status, data } = await json('/api/pipeline/save', {
-      method: 'POST', body: { file, model },
+      method: 'POST', body: { file, model, baseHash: baseHashOf(file) },
     });
     assert.equal(status, 200, `save failed: ${JSON.stringify(data)}`);
 
@@ -195,7 +205,7 @@ describe('FIX 5c — spec-wide save deletes whole blocks (flow input / functions
     delete model._doc.functions;           // remove the whole functions block
 
     const { status, data } = await json('/api/pipeline/save', {
-      method: 'POST', body: { file, model },
+      method: 'POST', body: { file, model, baseHash: baseHashOf(file) },
     });
     assert.equal(status, 200, `save failed: ${JSON.stringify(data)}`);
 
@@ -212,7 +222,7 @@ describe('FIX 5c — spec-wide save deletes whole blocks (flow input / functions
     delete model._doc.workflow.name;
 
     const { status, data } = await json('/api/pipeline/save', {
-      method: 'POST', body: { file, model },
+      method: 'POST', body: { file, model, baseHash: baseHashOf(file) },
     });
     assert.equal(status, 200, `save failed: ${JSON.stringify(data)}`);
     const { parsed } = readSaved(file);
@@ -230,7 +240,7 @@ describe('FIX 5 (iv) — comments on genuinely-unchanged nodes survive a spec-wi
     model._doc.flows.main.input.seed = { type: 'number' };
 
     const { status } = await json('/api/pipeline/save', {
-      method: 'POST', body: { file, model },
+      method: 'POST', body: { file, model, baseHash: baseHashOf(file) },
     });
     assert.equal(status, 200);
     const { text } = readSaved(file);
@@ -248,7 +258,7 @@ describe('FIX 5a — FLOW-SCOPED save stays additive for _extra (regression guar
     delete work._extra.skip_if;
 
     const { status, data } = await json('/api/pipeline/save', {
-      method: 'POST', body: { file, model, flowName: 'main' }, // FLOW-SCOPED
+      method: 'POST', body: { file, model, flowName: 'main', baseHash: sha256(readSaved(file).text) }, // FLOW-SCOPED
     });
     assert.equal(status, 200, `save failed: ${JSON.stringify(data)}`);
     const { parsed } = readSaved(file);
@@ -282,7 +292,7 @@ describe('FIX 2 (server) — workflow.output is reconciled to disk', () => {
     const model = specToModel(YAML.parse(readFileSync(join(pipelinesDir, file), 'utf-8')));
     // Simulate a contract rename's effect on the workflow output ref.
     model._doc.workflow.output = 'Renamed';
-    const { status } = await json('/api/pipeline/save', { method: 'POST', body: { file, model } });
+    const { status } = await json('/api/pipeline/save', { method: 'POST', body: { file, model, baseHash: baseHashOf(file) } });
     assert.equal(status, 200);
     assert.equal(readSaved(file).parsed.workflow.output, 'Renamed', 'workflow.output rename persisted');
   });
@@ -292,7 +302,7 @@ describe('FIX 2 (server) — workflow.output is reconciled to disk', () => {
     writeWorkflowSpec(file);
     const model = specToModel(YAML.parse(readFileSync(join(pipelinesDir, file), 'utf-8')));
     delete model._doc.workflow.output;
-    const { status } = await json('/api/pipeline/save', { method: 'POST', body: { file, model } });
+    const { status } = await json('/api/pipeline/save', { method: 'POST', body: { file, model, baseHash: baseHashOf(file) } });
     assert.equal(status, 200);
     assert.equal('output' in (readSaved(file).parsed.workflow), false, 'workflow.output deleted');
   });

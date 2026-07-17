@@ -342,10 +342,11 @@ flows:
           Parse plan acceptance criteria with lib/plan-parser.js and return PhaseResult
           including plan_items, files_changed, and commit_hash.
         out: PhaseResult
-        ensure:
-          - judged:
-              statement: "Every critical plan item is evidenced by the reported changed files."
-              stakes: paranoid
+        # C5: the judged ship ensure was removed — it is unevaluable from the
+        # {result, input} the judge receives (it fails closed even on evidenced
+        # results, so real TS-default builds would plausibly die at ship). Same
+        # class as the F5 vocabulary ruling. Ship stays gated by ship_gate; revisit
+        # when a deterministic/tunable judge backend exists (stratum follow-up).
         attempts: 2
 
       - id: ship_gate
