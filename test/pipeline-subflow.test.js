@@ -314,7 +314,7 @@ describe('modelToYamlObject — full plain spec for the YAML pane', () => {
     const model = specToModel(parsed);
     const obj = modelToYamlObject(model);
     // Has version + contracts + flows.
-    assert.equal(obj.version, '0.3');
+    assert.equal(obj.version, 1);
     assert.ok(obj.contracts && obj.contracts.PhaseResult, 'contracts present');
     assert.ok(obj.flows && obj.flows.build, 'flows present');
     // Re-parse via specToModel: same flow set + step ids per flow.

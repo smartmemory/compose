@@ -2,6 +2,219 @@
 
 ## 2026-07-16
 
+### STRAT-TS-FANOUT-CONSUMER — Port production build and GSD pipelines to TS v1 consumer fanout
+
+The production build and GSD specifications now plan on the Stratum TS v1
+engine, with Compose resolving runtime-selected agents and pre-merge commands
+into literal fanout descriptors before transmission.
+
+**Added**
+
+- Real-production TS-bin golden coverage for build and GSD planning plus a
+  worktree consumer fanout revise → repair → approve cycle.
+
+**Changed**
+
+- Converted `build.stratum.yaml` and `gsd.stratum.yaml` from v0.3 to v1 tagged
+  contracts, task and gate vocabulary, and native consumer fanouts.
+- Flattened the read-only review-lens fanout into the build entry flow and
+  routed GSD TS responses through the shared consumer-ready and merge-gate pump.
+- Updated vocabulary injection, budget mapping, pipeline-model fixtures, and
+  role-wiring guards for v1 shapes.
+
+**Fixed**
+
+- Resolve dynamic implementer-agent and pre-merge input references in the
+  parsed spec object so TS receives only literal fanout values.
+
+**Review fixes (E3 round 1 — D1–D7)**
+
+- **D1** `agentRun`/`runAgentText` now send the TS `stratum_agent_run` wire shape
+  (`{agent, prompt, cwd, model?, sandboxMode?}`) instead of the python-era
+  `{type, allowed_tools, correlation_id, …}` the engine rejected with
+  `request.type is undeclared`. The rich compose-side opts survive; the wire
+  request is built by `buildAgentRunRequest`. Because `correlation_id` no longer
+  travels on the wire, the client stamps each call's correlation id onto
+  BuildStreamEvents whose producer did not echo a `flow_id`, so the v0.2.6
+  envelope validation/forwarding contract (python parity) keeps working —
+  `#makeProgressHandler` is per-call, so this is the reliable association.
+- **D2** GSD budgets on the TS route: `runAndNormalize` folds the TS complete
+  envelope's `usage` (the synchronous path streams no `step_usage` events), the
+  consumer loop and ordinary GSD step debit it into the cumulative ledger via
+  `onUsage`/`recordTsAgentUsage`, `per_task_ms` is enforced compose-side as a
+  per-item wall-clock (not a dishonest engine step budget on the fanout), and the
+  exhaustion/complete handlers read the TS `ledger` via `budgetStateFromLedger`.
+- **D3** The GSD stuck detector is wired into the TS consumer path:
+  `runAndNormalize` takes an `onAgentEvent` observer that can abort a spinning
+  run (`AgentAbortedError`), which the loop surfaces as `ConsumerStuckError` →
+  `status: stuck` + stuck.json/pause.json, mirroring the legacy halt.
+- **D4** Restored the deterministic `file_exists(result.artifact)` ensures on the
+  six artifact-producing ordinary steps, and threaded a `workspaceRoot` through
+  `plan()` so the engine's file-predicate jail is configured (without it the
+  ensure fails closed with "file function requires a workspace root"). Empirical
+  probe: backward `on_fail: blueprint` is rejected as `ROUTING_CYCLE` in v1;
+  verification keeps `attempts` self-retry and the existing design/plan gate
+  revise loops as the nearest equivalent (delta recorded).
+- **D5** Deterministic pairwise `files_owned` disjointness enforcement at the
+  decompose output seam on both paths (`filesOwnedConflict`), failing the step
+  with a clear reason on overlap instead of trusting a prompt instruction.
+- **D6** Compose-owned agent-profile sidecar (`build.profiles.json`) restores the
+  tool restrictions + model tiers the v0.3→v1 conversion stripped to bare
+  `claude`; applied at invocation on the ordinary and consumer paths so the
+  isolation:none review fanout binds `read-only-reviewer` (and a read-only sandbox
+  for codex reviewers). The engine keeps the literal `claude|codex`.
+- **D7** The exact TaskResult filename is rendered into each GSD execute item's
+  prompt compose-side (`buildStepPrompt` + `gsdTaskResultPath`), since the engine
+  cannot interpolate `${item.id}` (`REF_INVALID`). Added a GSD end-to-end golden
+  on the real TS bin (decompose → 2-item consumer fanout → merge approve → ship)
+  that also debits budget usage — this caught and fixed an incomplete headless
+  progress stub (`progress.debug is not a function`).
+
+**Review fixes (E3 round 2 — V1–V6, real-surface gaps)**
+
+The theme: the real TS `stratum_agent_run` surface is synchronous and minimal
+(no progress notifications, no pre-completion cancel handle, `sandboxMode` binds
+only codex), so the round-1 fixes that leaned on mock-granted capabilities are
+made to work against the real surface.
+
+- **V1** Consumer + ordinary GSD step_done envelopes now carry `usage`
+  (`toEngineUsage` → the engine Budget shape), so the ENGINE debits its own
+  token/USD ledger and a per-item overrun trips the flow budget. Compose's
+  cumulative ledger stays as separate accounting.
+- **V2/V3 (architecture).** Empirical probe: the engine background agent mode
+  exists but is **codex-only + read-only-only** with no tool allowlist, and the
+  sync `agent_run` returns no runId (no cancel) and streams no events. So there
+  is no engine seam that can interrupt a claude run or enforce claude tool
+  restrictions. Decision: CONTROLLED claude executions (the isolation:none review
+  fanout) run via a new compose-**local** claude connector
+  (`lib/local-claude-connector.js`, `@anthropic-ai/claude-agent-sdk`) that
+  enforces `allowedTools`/`disallowedTools` (V3: the review fanout can no longer
+  Edit/Write/Bash), streams real tool events (D3 stuck detection), and aborts via
+  an `AbortController` (V2: per-item timeout / stuck actually interrupt the run).
+  `cancelAgentRun` now sends the TS `{runId}` shape. **Delta:** write (worktree)
+  items and codex review items keep the sync engine seam — their per-item timeout
+  fails the item but cannot interrupt an in-flight workspace-write run; that needs
+  a stratum follow-up (workspace-write background mode).
+- **V4** `resolvePlanSpecValues` records the tier/template stripped from a
+  `$.input.*` agent (e.g. `--implementer=claude::critical`) into a runtime profile
+  map merged over the static sidecar; `resolveStepProfile` normalizes scoped
+  subflow ready ids (`coverage_check/run_tests`) to the bare step id.
+- **V5** `filesOwnedConflict` normalizes each path (posix separators, strip `./`,
+  resolve segments) before comparison, so `src/x.js` / `./src/x.js` /
+  `src/../src/x.js` collapse to one file.
+- **V6** The per-call progress handler drops a BuildStreamEvent whose producer-set
+  `flow_id` targets a DIFFERENT call (adversarial cross-call leak), while still
+  stamping a missing flow_id and delivering the python-echo case.
+
+**Review fixes (E3 round 3 — F1–F8)**
+
+The theme: correctness gaps the earlier rounds left in the real-surface seams —
+contract resolution across subflow boundaries, tool restriction that actually
+binds, honest failure accounting, and enforcement that is evaluable.
+
+- **F1** `resolveStepOutputContract` follows scoped subflow ready ids
+  (`<parent>/<child>`, the TS engine's `scopedId` join). A scoped id resolves via
+  the parent step's `run:` subflow (recursively), so `codex_review/review` →
+  `ReviewResult` and `coverage/run_tests` → `TestResult` instead of resolving to
+  no contract (which sent `{}` and wedged full builds at those steps).
+- **F2** The local claude connector now sets `sdkOptions.tools` to the allowlist
+  (not just `allowedTools`). Per the SDK, `allowedTools` only auto-allows-without-
+  prompting; `tools` is what restricts AVAILABILITY. A read-only review fanout can
+  now genuinely not Edit/Write/Bash under `permissionMode: 'acceptEdits'`.
+- **F3** A failed local claude run (`subtype !== 'success'`) captures
+  `usage`/`total_cost_usd` before throwing and attaches them to the error;
+  `runAndNormalize` and the consumer failure path forward that usage into the
+  step_done envelope so the engine/GSD ledgers debit failed attempts — repeated
+  failures can no longer evade budget exhaustion.
+- **F4** The consumer review fanout threads review normalization: review-ness is
+  derived structurally (contract closure root === `ReviewResult`, via
+  `deriveConsumerReviewOptions`), and the lens + confidence gate come from the
+  fanned-out item, so review items run through `normalizeReviewResult` + the
+  confidence gate exactly like the ordinary review path. Non-review items are
+  unaffected.
+- **F5** The v1 vocabulary guard was an unevaluable `judged:` ensure (the judge
+  sees only `{result, input}`, never the changed files or the vocabulary, so it
+  fails every merge once a project has a real vocabulary). It is dropped;
+  enforcement moves consumer-side and deterministic: `lib/vocabulary-compliance.js`
+  ports the python `vocabulary_compliance` semantics (inert when
+  `contracts/vocabulary.yaml` is missing/empty/comments-only), evaluated over the
+  actual changed files at `review_merge`; a violation becomes a FAILURE step_done
+  envelope so the engine's attempts/retry lifecycle governs. `injectVocabularyEnsure`
+  is now a no-op for v1 (the v0.3 python path is byte-identical).
+- **F6** A `decompose_gsd` `files_owned` conflict on the TS path is now a typed
+  `TaskGraphOwnershipError` caught at the decompose site and reported as a FAILURE
+  step_done envelope (not a bare throw that aborted `runGsdPipeline`), so the
+  engine retries per the step's declared `attempts` with `previousFailure`
+  feedback. Genuinely unexpected errors still propagate.
+- **F7** The per-call progress handler only stamps an ABSENT (`undefined`)
+  `flow_id`; a present-but-falsy `flow_id` (`''` / `null` / `0`) is malformed
+  producer output and is dropped+warned, not laundered into a valid
+  locally-attributed event.
+- **F8** The vocabulary-inject test asserts the exact version-keyed clean-ensure
+  form (v1 `{expr}` object, v0.3 python string) instead of accepting either, and
+  asserts a v1 spec receives NO vocab ensure (coordinated with F5).
+
+**Review fixes (E3 round 4 — G1–G5, G6 divergence note)**
+
+The theme: the review recognition / usage-accounting seams the round-3 fixes
+introduced had residual gaps on the TS path.
+
+- **G1** `resolveStepOutputContract` now also returns the contract NAME, and the
+  ordinary step handler recognizes a review step by `contractName === 'ReviewResult'`
+  (in addition to the python-era markers). The scoped `codex_review/review`
+  subflow step (out: ReviewResult) now gets the review scaffold, normalization,
+  confidence filtering, and `applied_gate` stamping instead of being treated as a
+  plain step.
+- **G2** Consumer review fanout items are now wrapped with compose's
+  `buildReviewPrompt` operational scaffold (lens focus, exclusions, confidence-gate
+  + severity vocabulary, canonical ReviewResult shape) plus the claude-family lens
+  cert reasoning-template injection — the same wrapper the legacy parallel path
+  used. The thin v1 item intent no longer reaches the agent unframed. This is
+  compose-side dispatch infrastructure, not spec re-authoring (the yaml is unchanged).
+- **G3** The timeout and abort throw paths in `runAndNormalize` now copy the failed
+  run's `usage` onto `AgentTimeoutError`/`AgentAbortedError` (round-3 F3 only
+  covered the generic error path). The consumer timeout failure envelope includes
+  that usage, and the stuck/abort path (which sends no envelope) records the usage
+  into compose's cumulative ledger before converting to `ConsumerStuckError`, so a
+  timed-out or stuck attempt is still billed.
+- **G4** TS GSD usage is no longer double-debited. Per-invocation
+  `recordTsAgentUsage` (crash-safe incremental) AND the terminal/budget-halt
+  `recordGsdUsageFromState` fold both wrote to the same cumulative store, and the
+  engine ledger now includes those same envelope-reported invocations. The fold
+  now records only the engine-only DELTA (`max(0, engine − already_recorded)` per
+  axis), tracked run-locally in `ctx.recordedUsage`. The engine ledger stays
+  ground truth, so engine-only debits (judged predicates) still land exactly once.
+- **G5** The vocabulary compliance scanner emits one violation per OCCURRENCE
+  (`matchAll` with a global matcher), matching the python builtin's `finditer`,
+  instead of one per line.
+- **G6 (deliberate divergence, no code change)** Vocabulary YAML is parsed under
+  YAML 1.2 (JS `yaml`) on the TS path, not YAML 1.1 (`python safe_load`). Under
+  1.1, bare `yes`/`no`/`on`/`off` scalars coerce to booleans (a schema violation);
+  under 1.2 they stay strings. This means a vocabulary file may legitimately use
+  YAML-1.1-reserved words like `yes`/`no` as identifiers under the TS path. This
+  is intentional — 1.1's boolean coercion is a wart, and the python path is retired
+  at endgame — so 1.1 parsing is NOT forced.
+
+**Review fixes (E3 round 5 — H1, H2: two round-4 regressions)**
+
+- **H1** G1 correctly made `review_merge` (out: ReviewResult) review for
+  NORMALIZATION, but `isReduceMain` still read only the python-era `reduce_mode`
+  input (gone on TS v1), so the reducer ALSO got the reviewer scaffold prepended —
+  wrong, since reducers merge/deduplicate rather than review. The reducer marker
+  now lives in the profile sidecar (`build.profiles.json` `_reduceSteps:
+  ["review_merge"]`, the established home for compose-owned per-step metadata the
+  v0.3→v1 conversion stripped); the ready-loop reads it (scoped-id normalized, via
+  the new `deriveOrdinaryReviewScaffold` helper) so a reducer keeps normalization
+  but gets NO scaffold, while `codex_review/review` still gets it. Swept both v1
+  pipelines: only build's `review_merge` is a ReviewResult-out reducer (gsd has
+  none; build-quick is v0.3).
+- **H2** G3 billed timeout/abort usage only when the run REJECTED. When the
+  underlying run RESOLVES late (after the timeout/abort fired), the post-try guards
+  threw `AgentTimeoutError`/`AgentAbortedError` and discarded `runResult.usage`.
+  The guards now copy `runResult.usage` onto the thrown error — the same single
+  channel the rejection path uses (no double count) — so the consumer timeout
+  envelope / stuck-ledger accounting bill the attempt identically.
+
 ### Feat — TS-native consumer fanout execution and crash-safe merge journal
 
 Compose now routes Stratum surface-8 consumer descriptors from the generic TS

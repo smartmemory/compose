@@ -1,149 +1,97 @@
 # metadata:
 #   id: gsd
 #   label: "GSD — Per-Task Fresh-Context Dispatch"
-#   description: "Long-run autonomous mode. Decompose blueprint+Boundary Map into tasks, dispatch each as a fresh-context worktree-isolated agent, sequential by default. Reads existing blueprint.md."
+#   description: "Decompose a blueprint and dispatch each task in a fresh worktree context"
 #   category: development
-#   steps: 3
+#   steps: 4
 #   estimated_minutes: 60
 
-version: "0.3"
-
-workflow:
-  name: gsd
-  description: "Per-task fresh-context dispatch from existing blueprint+Boundary Map (COMP-GSD-2)"
-  input:
-    featureCode:
-      type: string
-      required: true
-    gateCommands:
-      type: array
-      required: true   # injected by runGsd from loadProjectConfig() with default fallback
-    pre_merge_gate:
-      type: array
-      required: false  # COMP-PAR-MERGE-QUEUE: fast per-task enforced gate (lint+build); injected by runGsd
+version: 1
 
 contracts:
   PhaseResult:
-    phase:    {type: string}
-    artifact: {type: string}
-    outcome:  {type: string, values: [complete, skipped, failed]}
-    summary:  {type: string}
+    phase: string
+    artifact: string
+    outcome: complete|skipped|failed
+    summary: string
+    files_changed: string[]?
+    commit_hash: string?
 
-# TaskGraph is a v0.3 built-in contract — must NOT be redeclared.
-# The richer TaskGraphGsd shape (per-task produces/consumes) is enforced
-# post-decompose by lib/gsd-decompose-enrich.js + contracts/taskgraph-gsd.json
-# rather than via Stratum's contract layer.
+  TaskGraph:
+    tasks: object[]
+
+  TaskResult:
+    outcome: string
+    summary: string
+    files_changed: string[]?
 
 flows:
+  entry: gsd
   gsd:
     input:
-      featureCode: {type: string}
-      gateCommands: {type: array}
-      pre_merge_gate: {type: array}   # COMP-PAR-MERGE-QUEUE
-    output: PhaseResult
+      featureCode: string
+      gateCommands: string[]
+      pre_merge_gate: string[]?
+    output:
+      from: "${ship_gsd.output}"
+      contract: PhaseResult
     max_rounds: 10
     steps:
-      # Phase: Decompose blueprint + Boundary Map into TaskGraphGsd
       - id: decompose_gsd
-        type: decompose
         agent: claude
-        intent: >
-          Read docs/features/{input.featureCode}/blueprint.md including its
-          ## Boundary Map section. Decompose into independent tasks.
-
-          For each task emit: id, files_owned, files_read, depends_on, AND a
-          rich `description` string that bundles all the spec context Stratum's
-          parallel_dispatch interpolation cannot carry on its own.
-
-          Each task's `description` MUST include these labeled sections:
-            - "Symbols you must produce:" + the matching Boundary Map slice's
-              produces entries (file → symbols (kind))
-            - "Symbols you may consume from upstream tasks:" + the slice's
-              consumes entries
-            - "Boundary Map slice (the contract for this task):" + the verbatim
-              slice block from blueprint.md
-            - "Upstream tasks (spec-level summary; their code lands at end-of-step
-              merge):" + one line per upstream task listing its declared produces
-            - "GATES — you MUST run each command and they MUST pass before
-              declaring done:" + each command from the pre_merge_gate array
-            - "Fix and re-run within this invocation. Do NOT declare done while
-              gates are red."
-
-          Stratum's parallel_dispatch only interpolates {task.id},
-          {task.description}, {task.files_owned}, {task.files_read},
-          {task.depends_on}, {task.index}, {input.<field>}. Pack everything else
-          into description.
-
-          Each Boundary Map slice maps to exactly one task whose files_owned ⊇
-          the slice's File Plan files. The decomposition is invalid if a slice
-          has no matching task or its File Plan files are split across
-          multiple tasks.
-
-          pre_merge_gate commands to embed (the fast per-task gate; the full
-          test suite runs once at ship): {input.pre_merge_gate}
-        inputs:
-          featureCode:    "$.input.featureCode"
-          gateCommands:   "$.input.gateCommands"
-          pre_merge_gate: "$.input.pre_merge_gate"
-        output_contract: TaskGraph
+        do: >
+          Read docs/features/${input.featureCode}/blueprint.md including its Boundary
+          Map. Decompose it into independent tasks. Each task must contain id,
+          description, files_owned, files_read, and depends_on. Put the matching
+          produces/consumes entries, verbatim Boundary Map slice, upstream summaries,
+          and required pre-merge commands ${input.pre_merge_gate} into description.
+          Each slice maps to exactly one task and its File Plan is owned by that task.
+          Reject file ownership conflicts and return {tasks}.
+        out: TaskGraph
         ensure:
-          - "no_file_conflicts(result.tasks)"
-          - "len(result.tasks) >= 1"
-        retries: 2
+          - expr: "len(result.tasks) >= 1"
+        attempts: 2
 
-      # Phase: Execute — sequential per-task fresh-context dispatch
+      # v0.3 parallel_dispatch -> TS v1 consumer fanout. Each item writes code,
+      # so Compose supplies an isolated worktree and retains its cumulative diff.
       - id: execute
-        type: parallel_dispatch
-        source: "$.steps.decompose_gsd.output.tasks"
-        agent: claude
-        max_concurrent: 1
-        isolation: worktree
-        capture_diff: true
-        defer_advance: true   # COMP-PAR-MERGE-QUEUE: consumer merges + reports status, enabling conflict-bounce
-        pre_merge_verify: "$.input.pre_merge_gate"   # COMP-PAR-MERGE-QUEUE: enforced fast gate per task worktree
-        require: all
-        merge: sequential_apply
-        retries: 2
-        intent_template: >
-          Implement task {task.id} using TDD.
+        after: [decompose_gsd]
+        attempts: 2
+        fanout:
+          over: "${decompose_gsd.output.tasks}"
+          dispatch: consumer
+          concurrency: 1
+          isolation: worktree
+          require: all
+          merge: sequential
+          pre_merge: "$.input.pre_merge_gate"
+          steps:
+            - agent: claude
+              do: >
+                Implement the task described by ${item} using TDD. Honor its id,
+                files_owned, files_read, depends_on, and description fields. Write the
+                TaskResult JSON under .compose/gsd/${input.featureCode}/results/ using
+                the task id as its filename, and include it in your diff. Return
+                {outcome, summary, files_changed}.
+              out: TaskResult
 
-          Files you own (write): {task.files_owned}
-          Files you may read: {task.files_read}
-          Depends on: {task.depends_on}
+      - id: execute_merge
+        after: [execute]
+        gate:
+          on_approve: ship_gsd
+          on_revise: execute
+          on_kill: null
+          max_rounds: 10
 
-          {task.description}
-
-          When done, write TaskResult JSON to
-          .compose/gsd/{input.featureCode}/results/{task.id}.json
-          (schema: contracts/task-result.json) and INCLUDE that file in your diff.
-        depends_on: [decompose_gsd]
-
-      # Phase: Ship — verify, update docs, commit, push
       - id: ship_gsd
-        agent: "claude::critical"
-        intent: >
-          Final verification and ship for feature {input.featureCode}.
-
-          You MUST:
-            1. Run the project test suite. If tests fail, fix them.
-            2. Run the project build. Must pass.
-            3. Update ROADMAP.md — find COMP-GSD-2's row and mark it COMPLETE.
-               If this completes a parent feature, update the parent header.
-            4. Update CHANGELOG.md — add an entry under today's date with
-               COMP-GSD-2 and a bullet list of what was built. Read the
-               existing format first.
-            5. Update CLAUDE.md ONLY if a new convention/command/architecture
-               surface emerged. Skip otherwise.
-            6. Stage changed files explicitly (no worktrees, pycache, build
-               artifacts). Commit with message:
-               "feat(COMP-GSD-2): per-task fresh-context dispatch"
-               (Note: push is deferred to the user — `compose gsd` does not
-                auto-push, mirroring `compose build`'s ship behavior.)
-            7. Report commit hash and files_changed in result JSON.
-        inputs:
-          featureCode: "$.input.featureCode"
-        output_contract: PhaseResult
+        agent: claude
+        do: >
+          Final verification and ship for ${input.featureCode}. Run all gate commands
+          ${input.gateCommands}; fix failures. Update ROADMAP.md and CHANGELOG.md, update
+          CLAUDE.md only for a new convention, stage only GSD-produced files, and commit
+          with message "feat(COMP-GSD-2): per-task fresh-context dispatch". Do not push.
+          Return PhaseResult with files_changed and commit_hash.
+        out: PhaseResult
         ensure:
-          - "result.outcome == 'complete'"
-        retries: 2
-        depends_on: [execute]
+          - expr: "result.outcome == 'complete'"
+        attempts: 2

@@ -67,7 +67,7 @@ function simulateBuildComplete(composeDir) {
 function loadParallelReviewTriageIntent() {
   const pipelinePath = join(process.cwd(), 'pipelines', 'build.stratum.yaml');
   const pipeline = YAML.parse(readFileSync(pipelinePath, 'utf-8'));
-  return pipeline.flows.parallel_review.steps.find(step => step.id === 'triage').intent;
+  return pipeline.flows.build.steps.find(step => step.id === 'review_triage').do;
 }
 
 function selectRetryLenses(priorDirtyLenses) {

@@ -198,12 +198,12 @@ describe('StratumMcpClient.parallelAdvance', () => {
 // ---------------------------------------------------------------------------
 
 describe('StratumMcpClient.agentRun', () => {
-  it('calls stratum_agent_run with snake_case kwargs and returns {text, correlation_id}', async () => {
+  it('calls stratum_agent_run with the TS wire shape and returns {text, correlation_id}', async () => {
     let captured = null;
     const mock = {
       callTool: async ({ name, arguments: args }, _s, _opts) => {
         captured = { name, args };
-        return { content: [{ type: 'text', text: JSON.stringify({ text: 'hi', correlation_id: args.correlation_id }) }] };
+        return { content: [{ type: 'text', text: JSON.stringify({ text: 'hi' }) }] };
       },
     };
     const client = new StratumMcpClient();
@@ -220,17 +220,21 @@ describe('StratumMcpClient.agentRun', () => {
       cwd: '/tmp',
     });
 
+    // D1: the TS surface accepts only {agent, prompt, cwd, model?, sandboxMode?}
+    // and rejects any other key. The python-era knobs (type/allowed_tools/
+    // thinking/effort/correlation_id) are compose-side concerns and are NOT sent.
     assert.equal(captured.name, 'stratum_agent_run');
-    assert.equal(captured.args.type, 'claude');
+    assert.equal(captured.args.agent, 'claude');
     assert.equal(captured.args.prompt, 'do thing');
-    assert.deepEqual(captured.args.allowed_tools, ['Read']);
-    assert.deepEqual(captured.args.disallowed_tools, ['Bash']);
-    assert.deepEqual(captured.args.thinking, { type: 'enabled' });
-    assert.equal(captured.args.effort, 'high');
-    assert.equal(captured.args.modelID, 'claude-sonnet-4-6');
     assert.equal(captured.args.cwd, '/tmp');
-    assert.equal(captured.args.correlation_id, 'corr-1');
+    assert.equal(captured.args.model, 'claude-sonnet-4-6');
+    assert.ok(!('type' in captured.args), 'python-era `type` must not be on the wire');
+    assert.ok(!('allowed_tools' in captured.args), 'allowed_tools is compose-side, not on the wire');
+    assert.ok(!('thinking' in captured.args), 'thinking is compose-side, not on the wire');
+    assert.ok(!('correlation_id' in captured.args), 'correlation_id is not on the TS wire');
     assert.equal(out.text, 'hi');
+    // The client still attaches the correlation id to the RESULT for the
+    // onEvent/cancel seam even though it never travels on the wire.
     assert.equal(out.correlation_id, 'corr-1');
   });
 
@@ -279,7 +283,10 @@ describe('StratumMcpClient.agentRun', () => {
     let resolveA, resolveB;
     const mock = {
       callTool: async ({ arguments: args }, _s, opts) => {
-        const correlationId = args.correlation_id;
+        // Two concurrent calls: distinguish them by their on-wire prompt (the
+        // client no longer sends correlation_id — see buildAgentRunRequest) to
+        // drive the interleaved release order and tag each envelope's flow_id.
+        const correlationId = args.prompt === 'pa' ? 'A' : 'B';
         const emit = (kind, text) => opts.onprogress({
           progress: 1,
           message: JSON.stringify({
@@ -338,14 +345,16 @@ describe('StratumMcpClient.runAgentText', () => {
 });
 
 describe('StratumMcpClient.cancelAgentRun', () => {
-  it('calls stratum_cancel_agent_run with correlation_id', async () => {
-    const { calls, mock } = makeMockClient([{ status: 'cancelled', correlation_id: 'c1' }]);
+  it('calls stratum_cancel_agent_run with the TS {runId} shape (V2)', async () => {
+    const { calls, mock } = makeMockClient([{ status: 'cancelled', runId: 'c1' }]);
     const client = new StratumMcpClient();
     Object.defineProperty(client, '_testClient', { value: mock, writable: true });
 
     const out = await client.cancelAgentRun('c1');
     assert.equal(calls[0].name, 'stratum_cancel_agent_run');
-    assert.deepEqual(calls[0].args, { correlation_id: 'c1' });
+    // The engine rejects the python-era {correlation_id}; the wire shape is {runId}.
+    assert.deepEqual(calls[0].args, { runId: 'c1' });
+    assert.ok(!('correlation_id' in calls[0].args), 'python-era correlation_id must not be sent');
     assert.equal(out.status, 'cancelled');
   });
 });
@@ -456,4 +465,92 @@ describe('StratumMcpClient consumer validation wiring', () => {
     assert.equal(received[0].kind, 'agent_relay');
     assert.equal(received[0].metadata.text, 'valid event');
   });
+
+  it('delivers a python-echo envelope whose flow_id equals the call correlationId (V6)', async () => {
+    const mock = {
+      callTool: async ({ arguments: _args }, _s, opts) => {
+        // Python-parity: the producer echoed the correlation id as flow_id.
+        opts.onprogress({
+          progress: 1,
+          message: JSON.stringify({
+            schema_version: '0.2.6', flow_id: 'echo-call', step_id: '_agent_run',
+            seq: 0, ts: '2026-04-29T00:00:00Z', kind: 'agent_relay',
+            metadata: { role: 'assistant', text: 'echoed' },
+          }),
+        });
+        return { content: [{ type: 'text', text: JSON.stringify({ text: 'ok' }) }] };
+      },
+    };
+    const client = new StratumMcpClient();
+    Object.defineProperty(client, '_testClient', { value: mock, writable: true });
+    const received = [];
+    client.onEvent('echo-call', '_agent_run', (ev) => received.push(ev));
+    await client.agentRun('claude', 'p', { correlationId: 'echo-call' });
+    assert.equal(received.length, 1, 'a producer-echoed flow_id matching the call must deliver');
+    assert.equal(received[0].metadata.text, 'echoed');
+  });
+
+  it('drops a misrouted envelope whose flow_id targets a different call (V6)', async () => {
+    const warnings = [];
+    const origWarn = console.warn;
+    console.warn = (...a) => warnings.push(a.join(' '));
+    const mock = {
+      callTool: async ({ arguments: _args }, _s, opts) => {
+        // Adversarial: this call ('A') emits an envelope stamped for another
+        // call ('B'). It must not leak into B's stream (or A's).
+        opts.onprogress({
+          progress: 1,
+          message: JSON.stringify({
+            schema_version: '0.2.6', flow_id: 'B', step_id: '_agent_run',
+            seq: 0, ts: '2026-04-29T00:00:00Z', kind: 'agent_relay',
+            metadata: { role: 'assistant', text: 'leak' },
+          }),
+        });
+        return { content: [{ type: 'text', text: JSON.stringify({ text: 'ok' }) }] };
+      },
+    };
+    const client = new StratumMcpClient();
+    Object.defineProperty(client, '_testClient', { value: mock, writable: true });
+    const aGot = [], bGot = [];
+    client.onEvent('A', '_agent_run', (ev) => aGot.push(ev));
+    client.onEvent('B', '_agent_run', (ev) => bGot.push(ev));
+    await client.agentRun('claude', 'p', { correlationId: 'A' });
+    console.warn = origWarn;
+    assert.equal(bGot.length, 0, 'a misrouted flow_id must not leak into another call\'s subscriber');
+    assert.equal(aGot.length, 0, 'the misrouted envelope is dropped, not delivered');
+    assert.ok(warnings.some((w) => w.includes('misrouted')), `expected a misroute warning; got: ${warnings}`);
+  });
+
+  // F7: only an ABSENT flow_id (undefined) is stamped with the call correlation
+  // id. A present-but-falsy flow_id ('' / null / 0) is malformed producer output
+  // — it must be dropped+warned, NOT laundered into a valid locally-attributed
+  // event by the truthiness check.
+  for (const bad of [{ label: 'empty-string', flow_id: '' }, { label: 'null', flow_id: null }]) {
+    it(`drops a present-but-falsy flow_id (${bad.label}) instead of stamping it (F7)`, async () => {
+      const warnings = [];
+      const origWarn = console.warn;
+      console.warn = (...a) => warnings.push(a.join(' '));
+      const mock = {
+        callTool: async ({ arguments: _args }, _s, opts) => {
+          opts.onprogress({
+            progress: 1,
+            message: JSON.stringify({
+              schema_version: '0.2.6', flow_id: bad.flow_id, step_id: '_agent_run',
+              seq: 0, ts: '2026-04-29T00:00:00Z', kind: 'agent_relay',
+              metadata: { role: 'assistant', text: 'malformed' },
+            }),
+          });
+          return { content: [{ type: 'text', text: JSON.stringify({ text: 'ok' }) }] };
+        },
+      };
+      const client = new StratumMcpClient();
+      Object.defineProperty(client, '_testClient', { value: mock, writable: true });
+      const got = [];
+      client.onEvent('A', '_agent_run', (ev) => got.push(ev));
+      await client.agentRun('claude', 'p', { correlationId: 'A' });
+      console.warn = origWarn;
+      assert.equal(got.length, 0, 'a present-but-falsy flow_id must not be stamped and delivered');
+      assert.ok(warnings.some((w) => w.includes('misrouted')), `expected a misroute warning; got: ${warnings}`);
+    });
+  }
 });

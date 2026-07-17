@@ -139,7 +139,9 @@ describe('runGsd budget wiring (COMP-GSD-4)', () => {
       await runGsd(FEATURE, { cwd, allowDirtyWorkspace: true, stratum: makeBudgetStub({ captured }) });
       assert.notEqual(captured.specYaml, RAW_SPEC);
       const parsed = YAML.parse(captured.specYaml);
-      assert.deepEqual(parsed.flows.gsd.budget, { max_tokens: 1000, ms: 600000 });
+      // v1 flow budget uses the engine Budget keys (tokens/dispatches/usd/ms),
+      // not the python-era gsd.budget.* config keys.
+      assert.deepEqual(parsed.flows.gsd.budget, { tokens: 1000, ms: 600000 });
     } finally { rmSync(cwd, { recursive: true, force: true }); }
   });
 

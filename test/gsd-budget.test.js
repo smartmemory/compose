@@ -81,17 +81,21 @@ describe('injectBudget', () => {
     assert.equal(injectBudget(GSD_SPEC, {}), GSD_SPEC);
     assert.equal(injectBudget(GSD_SPEC, { cumulative: { max_total_tokens: 9 } }), GSD_SPEC); // cumulative-only is compose-side, not a flow block
   });
-  test('injects flow budget block when axes configured', () => {
+  test('injects a v1 flow budget block when axes configured', () => {
     const out = injectBudget(GSD_SPEC, { max_tokens: 500000, per_run_ms: 600000 });
     assert.notEqual(out, GSD_SPEC);
     const parsed = YAML.parse(out);
-    assert.deepEqual(parsed.flows.gsd.budget, { max_tokens: 500000, ms: 600000 });
+    assert.deepEqual(parsed.flows.gsd.budget, { tokens: 500000, ms: 600000 });
   });
-  test('injects task_timeout (seconds) on the execute step when per_task_ms set', () => {
+  test('does NOT inject a per-item engine step budget for per_task_ms (D2a: enforced compose-side)', () => {
+    // A per-item wall-clock ceiling cannot be an engine step budget on a fanout
+    // (the engine can't know N). per_task_ms is threaded to the consumer loop and
+    // enforced per item in runConsumerIssuance, so the spec is left untouched.
     const out = injectBudget(GSD_SPEC, { per_task_ms: 120000 });
+    assert.equal(out, GSD_SPEC, 'per_task_ms alone must not mutate the spec');
     const parsed = YAML.parse(out);
     const execute = parsed.flows.gsd.steps.find((s) => s.id === 'execute');
-    assert.equal(execute.task_timeout, 120);
+    assert.equal(execute.budget, undefined, 'no engine step budget faked on the fanout');
   });
 });
 

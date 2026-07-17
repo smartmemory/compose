@@ -1,0 +1,11 @@
+{
+  "_comment": "D6 (STRAT-TS-FANOUT-CONSUMER): compose-owned agent profiles for build.stratum.yaml. The TS engine accepts only the literal claude|codex agent, so the full profile strings (tool restrictions + model tier) that the v0.3->v1 conversion stripped live here, keyed by step id, and are applied compose-side at invocation (lib/build.js loadPipelineProfiles). The isolation:none review_lenses fanout MUST bind the read-only-reviewer restriction.",
+  "_reduceSteps": ["review_merge"],
+  "_reduceSteps_comment": "H1: ReviewResult-out steps that MERGE/deduplicate rather than review. They get review normalization (confidence handling) but NOT the reviewer scaffold. This is python's stripped reduce_mode input, restored compose-side.",
+  "blueprint": "claude::critical",
+  "review_triage": "claude:orchestrator",
+  "review_lenses": "claude:read-only-reviewer",
+  "review_merge": "claude:orchestrator",
+  "run_tests": "claude::fast",
+  "ship": "claude::critical"
+}

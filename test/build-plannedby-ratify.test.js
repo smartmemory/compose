@@ -59,3 +59,17 @@ test('T12e: keeps the {featureCode} token so build interpolation still resolves'
   applyPlannedByRatify(spec, 'build', 'PLAN-Z');
   assert.match(spec.flows.build.steps[0].intent, /\{featureCode\}/);
 });
+
+test('T12f: writes v1 ratification into do with TS input interpolation', () => {
+  const spec = {
+    version: 1,
+    flows: {
+      entry: 'build',
+      build: { steps: [{ id: 'explore_design', agent: 'claude', do: 'Explore.' }] },
+    },
+  };
+  assert.equal(applyPlannedByRatify(spec, 'build', 'PLAN-V1'), true);
+  assert.match(spec.flows.build.steps[0].do, /PLAN-V1/);
+  assert.match(spec.flows.build.steps[0].do, /\$\{input\.featureCode\}/);
+  assert.equal(spec.flows.build.steps[0].intent, undefined);
+});

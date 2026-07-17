@@ -2,9 +2,9 @@
  * COMP-CODEX-IMPL — `compose build --codex`: Codex implements, Claude reviews.
  *
  * Concerns:
- *  1. Spec wiring (STRAT-AGENT-INTERP): execute.agent + the codex sub-flow review
- *     agents are interpolated from flow inputs; both input declarations carry the
- *     role fields; the main-flow steps thread reviewer_agent into the sub-flows.
+ *  1. Spec wiring (STRAT-AGENT-INTERP): the execute fanout + review tasks
+ *     interpolate agents from the entry-flow inputs, and run steps thread
+ *     reviewer_agent into review subflows.
  *  2. CLI guards: --codex is single-feature, full-build only (rejects --quick,
  *     --template, batch).
  *  3. startFresh injects implementer_agent/reviewer_agent into the plan inputs and
@@ -42,34 +42,32 @@ describe('COMP-CODEX-IMPL build.stratum.yaml role interpolation', () => {
   const buildFlow = spec.flows.build;
   const step = (id) => buildFlow.steps.find((s) => s.id === id);
 
-  it('declares implementer_agent/reviewer_agent in BOTH input blocks', () => {
+  it('declares implementer_agent/reviewer_agent in the entry-flow input', () => {
     for (const key of ['implementer_agent', 'reviewer_agent']) {
-      assert.ok(spec.workflow.input[key], `workflow.input must declare ${key}`);
       assert.ok(buildFlow.input[key], `flows.build.input must declare ${key}`);
     }
   });
 
-  it('execute step resolves its agent from the implementer_agent input', () => {
-    assert.equal(step('execute').agent, '$.input.implementer_agent');
+  it('execute fanout resolves its agent from the implementer_agent input', () => {
+    assert.equal(step('execute').fanout.steps[0].agent, '$.input.implementer_agent');
   });
 
-  it('codex review sub-flows resolve their reviewer from reviewer_agent', () => {
+  it('review tasks resolve their reviewer from reviewer_agent', () => {
     assert.equal(spec.flows.review_check.steps[0].agent, '$.input.reviewer_agent');
-    assert.equal(spec.flows.test_review.steps[0].agent, '$.input.reviewer_agent');
+    assert.equal(step('test_review').agent, '$.input.reviewer_agent');
     assert.ok(spec.flows.review_check.input.reviewer_agent, 'review_check must declare reviewer_agent input');
-    assert.ok(spec.flows.test_review.input.reviewer_agent, 'test_review must declare reviewer_agent input');
   });
 
-  it('main-flow steps thread reviewer_agent into the codex sub-flows', () => {
-    assert.equal(step('codex_review').inputs.reviewer_agent, '$.input.reviewer_agent');
-    assert.equal(step('test_review').inputs.reviewer_agent, '$.input.reviewer_agent');
+  it('main-flow run step threads reviewer_agent into the codex review subflow', () => {
+    assert.equal(step('codex_review').with.reviewer_agent, '${input.reviewer_agent}');
   });
 
-  it('parallel_review lenses stay Claude (the always-on primary review)', () => {
+  it('flattened review lenses stay Claude (the always-on primary review)', () => {
     // Lens reviewers are claude:* templates regardless of implementer — they are
     // cross-model whenever Codex implements.
-    const lensAgents = JSON.stringify(spec.flows.parallel_review);
-    assert.ok(/claude/.test(lensAgents), 'parallel_review must keep Claude reviewers');
+    const reviewLenses = step('review_lenses');
+    assert.equal(reviewLenses.fanout.isolation, 'none');
+    assert.equal(reviewLenses.fanout.steps[0].agent, 'claude');
   });
 });
 

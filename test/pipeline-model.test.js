@@ -3,9 +3,8 @@
  *
  * The module is framework-free: it receives an already-parsed JS object (from
  * `YAML.parse`) and returns/manipulates a flow-scoped in-memory model. Step
- * identity is (flowName, id), so the duplicate `review` id that lives in BOTH
- * the `review_check` subflow and the main `build` flow of build.stratum.yaml
- * must be kept distinct per flow.
+ * identity is (flowName, id), including after the v1 conversion flattened the
+ * production review fanout into the entry flow.
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -53,29 +52,25 @@ function parseNew() { return YAML.parse(newSpecText); }
 describe('specToModel — multi-flow document', () => {
   test('returns multiple flows from build.stratum.yaml', () => {
     const model = specToModel(parseBuild());
-    assert.equal(model.version, '0.3');
+    assert.equal(model.version, 1);
     const names = model.flows.map(f => f.name);
-    // All flow keys under `flows:` should appear.
+    // `flows.entry` is metadata; all actual flow objects should appear.
     assert.ok(names.includes('build'));
     assert.ok(names.includes('review_check'));
-    assert.ok(names.includes('parallel_review'));
     assert.ok(names.includes('coverage_check'));
-    assert.ok(names.includes('test_review'));
-    assert.ok(model.flows.length >= 5);
+    assert.equal(model.flows.length, 3);
   });
 
-  test('keeps the duplicate `review` id distinct per flow ((flowName,id) identity)', () => {
+  test('keeps flattened entry review steps distinct from the review subflow', () => {
     const model = specToModel(parseBuild());
     const reviewCheckReview = flowSteps(model, 'review_check').find(s => s.id === 'review');
-    const buildReview = flowSteps(model, 'build').find(s => s.id === 'review');
-    // Both flows have a step whose id is `review`...
+    const buildReviewMerge = flowSteps(model, 'build').find(s => s.id === 'review_merge');
     assert.ok(reviewCheckReview, 'review_check has a step id `review`');
-    assert.ok(buildReview, 'build has a step id `review`');
-    // ...but they are different steps: review_check's is an agent step, build's is a sub-flow ref.
+    assert.ok(buildReviewMerge, 'build has the flattened review_merge step');
     assert.equal(reviewCheckReview.kind, 'agent');
     assert.notEqual(reviewCheckReview.agent, undefined);
-    // build's `review` is a flow-ref step (no agent, carries `flow` in _extra).
-    assert.equal(buildReview._extra.flow, 'parallel_review');
+    assert.equal(buildReviewMerge.agent, 'claude');
+    assert.notEqual(reviewCheckReview.id, buildReviewMerge.id);
   });
 
   test('contracts are exposed on the model', () => {
@@ -118,41 +113,41 @@ describe('flowSteps — normalized shape', () => {
       'id', 'inputs', 'intent', 'kind', 'on_fail', 'output_contract', 'retries',
     ].sort());
     assert.equal(exploreDesign.agent, 'claude');
-    assert.equal(exploreDesign.output_contract, 'PhaseResult');
+    assert.equal(exploreDesign._extra.out, 'PhaseResult');
     assert.ok(Array.isArray(exploreDesign.ensure));
     assert.ok(Array.isArray(exploreDesign.depends_on));
-    assert.ok(exploreDesign.intent.includes('Explore the codebase'));
-    assert.equal(exploreDesign.retries, 2);
+    assert.ok(exploreDesign._extra.do.includes('Explore the codebase'));
+    assert.equal(exploreDesign._extra.attempts, 2);
+    assert.equal(exploreDesign.intent, undefined);
+    assert.equal(exploreDesign.retries, undefined);
   });
 
-  test('_extra carries skip_if, gate routes, parallel fields, type, reasoning_template', () => {
+  test('_extra carries v1 when, gate, and fanout fields', () => {
     const model = specToModel(parseBuild());
     const steps = flowSteps(model, 'build');
 
-    // skip_if survives in _extra (prd step).
+    // v1 condition survives in _extra (prd step).
     const prd = steps.find(s => s.id === 'prd');
-    assert.equal(prd._extra.skip_if, 'true');
-    assert.equal(prd._extra.skip_reason, 'PRD skipped by default — set skip_if to false to enable');
+    assert.equal(prd._extra.when, 'false');
 
     // gate routes survive in _extra (design_gate step).
     const designGate = steps.find(s => s.id === 'design_gate');
-    assert.equal(designGate._extra.on_approve, 'prd');
-    assert.equal(designGate._extra.on_revise, 'explore_design');
-    assert.ok('on_kill' in designGate._extra);
-    // `function` is a surfaced field, not _extra.
-    assert.equal(designGate.function, 'design_gate');
+    assert.equal(designGate._extra.gate.on_approve, 'prd');
+    assert.equal(designGate._extra.gate.on_revise, 'explore_design');
+    assert.ok('on_kill' in designGate._extra.gate);
+    assert.equal(designGate.function, undefined);
 
-    // parallel-dispatch fields survive in _extra (execute step).
+    // Native fanout fields survive in _extra (execute step).
     const execute = steps.find(s => s.id === 'execute');
-    assert.equal(execute._extra.type, 'parallel_dispatch');
-    assert.equal(execute._extra.source, '$.steps.decompose.output.tasks');
-    assert.equal(execute._extra.isolation, 'worktree');
-    assert.equal(execute._extra.max_concurrent, 3);
+    assert.equal(execute._extra.fanout.dispatch, 'consumer');
+    assert.equal(execute._extra.fanout.over, '${decompose.output.tasks}');
+    assert.equal(execute._extra.fanout.isolation, 'worktree');
+    assert.equal(execute._extra.fanout.concurrency, 3);
 
-    // isolation: none preserved in _extra (review_lenses in parallel_review).
-    const reviewLenses = flowSteps(model, 'parallel_review').find(s => s.id === 'review_lenses');
-    assert.equal(reviewLenses._extra.isolation, 'none');
-    assert.equal(reviewLenses._extra.source, '$.steps.triage.output.tasks');
+    // The read-only review fanout is now flattened into the entry flow.
+    const reviewLenses = flowSteps(model, 'build').find(s => s.id === 'review_lenses');
+    assert.equal(reviewLenses._extra.fanout.isolation, 'none');
+    assert.equal(reviewLenses._extra.fanout.over, '${review_triage.output.tasks}');
   });
 });
 
@@ -170,24 +165,23 @@ describe('modelToSpecObject ∘ specToModel — shape preserving', () => {
     assert.deepEqual(Object.keys(out.flows).sort(), Object.keys(parsed.flows).sort());
     assert.equal(out.version, parsed.version);
 
-    // Both `review` steps preserved in their own flows.
+    // Review subflow and flattened entry-flow merge both survive.
     const outReviewCheck = out.flows.review_check.steps.find(s => s.id === 'review');
-    const outBuildReview = out.flows.build.steps.find(s => s.id === 'review');
+    const outBuildReview = out.flows.build.steps.find(s => s.id === 'review_merge');
     assert.ok(outReviewCheck);
     assert.ok(outBuildReview);
-    assert.equal(outBuildReview.flow, 'parallel_review');
 
-    // Gate routes + parallel source + isolation survive.
+    // Gate routes + fanout source + isolation survive.
     const outDesignGate = out.flows.build.steps.find(s => s.id === 'design_gate');
-    assert.equal(outDesignGate.on_approve, 'prd');
+    assert.equal(outDesignGate.gate.on_approve, 'prd');
     const outExecute = out.flows.build.steps.find(s => s.id === 'execute');
-    assert.equal(outExecute.source, '$.steps.decompose.output.tasks');
-    assert.equal(outExecute.isolation, 'worktree');
-    const outLenses = out.flows.parallel_review.steps.find(s => s.id === 'review_lenses');
-    assert.equal(outLenses.isolation, 'none');
+    assert.equal(outExecute.fanout.over, '${decompose.output.tasks}');
+    assert.equal(outExecute.fanout.isolation, 'worktree');
+    const outLenses = out.flows.build.steps.find(s => s.id === 'review_lenses');
+    assert.equal(outLenses.fanout.isolation, 'none');
 
     // Step counts match per flow.
-    for (const name of Object.keys(parsed.flows)) {
+    for (const name of Object.keys(parsed.flows).filter(name => Array.isArray(parsed.flows[name]?.steps))) {
       assert.equal(
         out.flows[name].steps.length,
         parsed.flows[name].steps.length,
@@ -216,7 +210,8 @@ describe('listEditableFlows', () => {
     const flows = listEditableFlows(parseBuild());
     assert.ok(flows.includes('build'));
     assert.ok(flows.includes('review_check'));
-    assert.ok(flows.includes('parallel_review'));
+    assert.ok(flows.includes('coverage_check'));
+    assert.ok(!flows.includes('entry'));
   });
 
   test('returns the synthetic flow for workflow.steps specs', () => {

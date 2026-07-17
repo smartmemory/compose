@@ -68,6 +68,17 @@ describe('vocabularyEnabled', () => {
 });
 
 describe('injectVocabularyEnsure', () => {
+  it('is a no-op on a v1 spec — no unevaluable ensure injected (F5)', () => {
+    // v1 vocabulary enforcement is deterministic + compose-side (review_merge),
+    // so the spec must gain NO vocab ensure — the review_merge ensure is unchanged.
+    const spec = {
+      version: 1,
+      flows: { entry: 'build', build: { steps: [{ id: 'review_merge', ensure: [{ expr: 'result.clean == true' }] }] } },
+    };
+    injectVocabularyEnsure(spec, 'build');
+    assert.deepEqual(spec.flows.build.steps[0].ensure, [{ expr: 'result.clean == true' }]);
+  });
+
   it('appends the vocab ensure to the build flow review step', () => {
     const spec = injectVocabularyEnsure(buildSpec());
     const review = spec.flows.build.steps.find((s) => s.id === 'review');
@@ -174,21 +185,41 @@ describe('injectVocabularyEnsure on the real build pipelines', () => {
       const { readFileSync } = await import('node:fs');
       const raw = readFileSync(join(REPO_ROOT, 'pipelines', file), 'utf-8');
       const spec = YAML.parse(raw);
-      const review = spec.flows.build.steps.find((s) => s.id === 'review');
+      const v1 = spec.version === 1;
+      const reviewId = v1 ? 'review_merge' : 'review';
+      const review = spec.flows.build.steps.find((s) => s.id === reviewId);
       assert.ok(review, `${file}: build flow must have a review step`);
-      assert.ok(
-        (review.ensure ?? []).includes('result.clean == True'),
-        `${file}: review's first ensure should be result.clean == True`
-      );
+      // F8: assert the exact version-keyed form of the clean requirement — v1 uses
+      // the {expr} object, v0.3 uses the python string. No "either/or".
+      if (v1) {
+        assert.ok(
+          (review.ensure ?? []).some((entry) => entry?.expr === 'result.clean == true'),
+          `${file}: v1 review's ensure should require {expr: 'result.clean == true'}`
+        );
+      } else {
+        assert.ok(
+          (review.ensure ?? []).some((entry) => entry === 'result.clean == True'),
+          `${file}: v0.3 review's ensure should require 'result.clean == True'`
+        );
+      }
 
+      const ensureBefore = structuredClone(review.ensure ?? []);
       const idsBefore = spec.flows.build.steps.map((s) => s.id);
       injectVocabularyEnsure(spec);
       const idsAfter = spec.flows.build.steps.map((s) => s.id);
 
-      // Step list/order unchanged — only the review step's ensure grows.
+      // Step list/order unchanged.
       assert.deepEqual(idsAfter, idsBefore, `${file}: step list/order must not change`);
-      const reviewAfter = spec.flows.build.steps.find((s) => s.id === 'review');
-      assert.ok(reviewAfter.ensure.includes(VOCABULARY_ENSURE), `${file}: review ensure should include the vocab ensure`);
+      const reviewAfter = spec.flows.build.steps.find((s) => s.id === reviewId);
+      if (v1) {
+        // F5: v1 gets NO vocab ensure (enforcement is deterministic, compose-side).
+        assert.deepEqual(reviewAfter.ensure, ensureBefore, `${file}: v1 review ensure must be unchanged (no vocab ensure injected)`);
+      } else {
+        assert.ok(
+          reviewAfter.ensure.some((entry) => entry === VOCABULARY_ENSURE),
+          `${file}: v0.3 review ensure should include the vocab ensure`
+        );
+      }
     });
   }
 });

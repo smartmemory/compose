@@ -18,8 +18,19 @@ One mixed-cutover chain, not nine broken behaviors: the client's `plan()` was mi
 
 **C = ordering artifact, no product change.** File-level `test/stratum-mcp-client.test.js` 120s timeout: isolated rerun finishes in 22.4s (with the same 5 A failures, no timeout); failed tests skip their per-test `client.close()`, making the file load-sensitive. Dies with the A deletions; alternatively make teardown unconditional.
 
+## E3 delta (added 2026-07-17, Slice E3 review pass 3 adjudication)
+
+**`test/gsd-pipeline.test.js` (11 tests) joins class B.** E3's full v0.3→v1 conversion of
+`pipelines/gsd.stratum.yaml` invalidated this contract test wholesale: it asserts
+`spec.version === '0.3'` and validates via the python `stratum_mcp.spec.parse_and_validate`
+subprocess, both python-era by construction. The behavior it pins (pipeline structural contract:
+step ids, ensure postconditions, intent-template tokens) must survive — re-express it against the
+TS validation surface at flag-day (task #6). Runtime behavior of the v1 gsd pipeline is covered
+meanwhile by the E3 gsd e2e golden over the real TS bin.
+
 ## Flag-day checklist deltas
 
 - Add: port B fixtures (build-integration ×3, build-policy ×2, JSONL ×2 + 10 leaves, proof-run ×2) to the TS bin.
+- Add (E3): re-express `test/gsd-pipeline.test.js` ×11 against TS validation (v1 shape, no python subprocess).
 - Add: endgame (#11) deletes the 7 A subtests with the python branches/server support.
 - No change to the E1-era items (token-less golden calls, compat assertion reversals).

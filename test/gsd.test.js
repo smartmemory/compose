@@ -29,7 +29,9 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const { runGsd } = await import(`${REPO_ROOT}/lib/gsd.js`);
+const { runGsd, gsdTaskResultPath, recordTsAgentUsage, recordGsdUsageFromState } = await import(`${REPO_ROOT}/lib/gsd.js`);
+const { buildStepPrompt } = await import(`${REPO_ROOT}/lib/step-prompt.js`);
+const { readLedger } = await import(`${REPO_ROOT}/lib/budget-ledger.js`);
 
 const FIXTURE_BLUEPRINT = `# COMP-GSD-2-FIX: Blueprint
 
@@ -307,12 +309,12 @@ test('runGsd writes blackboard.json with one validated entry per task after exec
   }
 });
 
-// Mirror of Stratum's parallel_dispatch interpolation rules
-// (stratum-mcp/src/stratum_mcp/spec.py:567-590). Used to simulate what each
-// task agent's prompt actually looks like during execute step dispatch.
+// Mirror the TS v1 fanout's self-contained `${item}` interpolation. The task's
+// rich description carries the dependency handoff and gate instructions.
 function interpolateIntent(template, task, flowInputs) {
   const listToStr = (v) => Array.isArray(v) ? v.join(', ') : String(v ?? '');
   let out = template
+    .replaceAll('${item}', JSON.stringify(task))
     .replaceAll('{task.id}', String(task.id ?? ''))
     .replaceAll('{task.description}', String(task.description ?? ''))
     .replaceAll('{task.files_owned}', listToStr(task.files_owned))
@@ -320,6 +322,7 @@ function interpolateIntent(template, task, flowInputs) {
     .replaceAll('{task.depends_on}', listToStr(task.depends_on))
     .replaceAll('{task.index}', String(task._index ?? 0));
   for (const [k, v] of Object.entries(flowInputs ?? {})) {
+    out = out.replaceAll(`\${input.${k}}`, String(v));
     out = out.replaceAll(`{input.${k}}`, String(v));
   }
   return out;
@@ -334,7 +337,7 @@ test('execute-step prompt contract: task 2 prompt includes upstream T01 symbols 
   const YAML = await import('yaml');
   const spec = YAML.parse(readFileSync(join(REPO_ROOT, 'pipelines', 'gsd.stratum.yaml'), 'utf-8'));
   const executeStep = spec.flows.gsd.steps.find((s) => s.id === 'execute');
-  const template = executeStep.intent_template;
+  const template = executeStep.fanout.steps[0].do;
 
   // Re-run to capture a fresh TaskGraph (the first test's runGsd was invoked
   // against the shared cwd and state may have advanced).
@@ -373,7 +376,20 @@ test('execute-step prompt contract: task 2 prompt includes upstream T01 symbols 
     assert.match(t02Intent, /pnpm lint/, 'T02 prompt must list the fast gate commands (default fallback)');
     assert.match(t02Intent, /pnpm build/, 'T02 prompt must list the fast gate commands (default fallback)');
     assert.doesNotMatch(t02Intent, /pnpm test/, 'per-task gate is fast (no full test suite; that runs at ship)');
-    assert.match(t02Intent, /\.compose\/gsd\/COMP-GSD-2-FIX\/results\/T02\.json/, 'T02 prompt must include the per-task TaskResult path');
+    // D7(a): the EXACT TaskResult filename is rendered into the item prompt
+    // compose-side (buildStepPrompt), single-sourced with the blackboard reader.
+    // The engine cannot render ${item.id}, so compose derives it from the task id.
+    const taskResultPath = gsdTaskResultPath('COMP-GSD-2-FIX', 'T02');
+    assert.equal(taskResultPath, '.compose/gsd/COMP-GSD-2-FIX/results/T02.json');
+    const t02Prompt = buildStepPrompt(
+      { step_id: 'execute', intent: t02Intent },
+      { cwd: subCwd, featureCode: 'COMP-GSD-2-FIX', taskResultPath },
+    );
+    assert.ok(
+      t02Prompt.includes('.compose/gsd/COMP-GSD-2-FIX/results/T02.json'),
+      'the exact TaskResult path (not just the directory) must be rendered into the item prompt',
+    );
+    assert.match(t02Prompt, /Write your TaskResult JSON to EXACTLY this path/);
   } finally {
     rmSync(subCwd, { recursive: true, force: true });
   }
@@ -407,5 +423,108 @@ test('runGsd uses default fast pre-merge gate when project config lacks the fiel
     assert.doesNotMatch(t01.description, /pnpm test/);
   } finally {
     rmSync(subCwd, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// F6: a decompose_gsd files_owned conflict must NOT abort runGsdPipeline. The
+// TS engine's decompose_gsd declares `attempts`; a bare throw from
+// validateAndRepairTaskGraph bypasses that lifecycle and leaves no completion
+// event. The conflict must instead become a failure step_done envelope so the
+// engine retries per attempts (with previousFailure feedback).
+// ---------------------------------------------------------------------------
+
+const CONFLICT_TASKGRAPH = {
+  tasks: [
+    { id: 'A01', files_owned: ['lib/shared.js'], files_read: [], depends_on: [] },
+    { id: 'A02', files_owned: ['lib/shared.js'], files_read: [], depends_on: [] },
+  ],
+};
+
+function makeConflictTsStub({ agentRunCalls, stepDoneEnvelopes }) {
+  const readyDecompose = (epoch, token) => ({
+    status: 'ready', runId: 'F1',
+    ready: [{ id: 'decompose_gsd', agent: 'claude', do: 'decompose', epoch, dispatchToken: token }],
+  });
+  return {
+    connect: async () => {},
+    disconnect: async () => {},
+    plan: async () => readyDecompose(1, 'tok-1'),
+    audit: async () => ({}),
+    agentRun: async (agentType) => {
+      agentRunCalls.push({ agentType });
+      return { text: JSON.stringify(CONFLICT_TASKGRAPH) };
+    },
+    stepDone: async (flowId, stepId, envelope) => {
+      stepDoneEnvelopes.push({ stepId, envelope });
+      // The engine retries decompose per its declared attempts, then terminalizes.
+      return stepDoneEnvelopes.length === 1
+        ? readyDecompose(2, 'tok-2')
+        : { status: 'failed', runId: 'F1', flow_id: 'F1' };
+    },
+  };
+}
+
+test('F6: decompose_gsd files_owned conflict yields a failure envelope, not a thrown abort', async () => {
+  const subCwd = mkdtempSync(join(tmpdir(), 'gsd-f6-'));
+  try {
+    execSync('git init -q', { cwd: subCwd });
+    execSync('git config user.email test@example.com', { cwd: subCwd });
+    execSync('git config user.name test', { cwd: subCwd });
+    writeFileSync(join(subCwd, '.gitignore'), '.compose/data/locks/\n');
+    execSync('git add .gitignore && git commit -q -m initial', { cwd: subCwd });
+    const featureDir = join(subCwd, 'docs', 'features', 'COMP-GSD-2-FIX');
+    mkdirSync(featureDir, { recursive: true });
+    writeFileSync(join(featureDir, 'blueprint.md'), FIXTURE_BLUEPRINT);
+    execSync('git add . && git commit -q -m scaffold', { cwd: subCwd });
+
+    const agentRunCalls = [];
+    const stepDoneEnvelopes = [];
+    const stub = makeConflictTsStub({ agentRunCalls, stepDoneEnvelopes });
+
+    // Must NOT throw — the conflict is handled inside the engine lifecycle.
+    await runGsd('COMP-GSD-2-FIX', { cwd: subCwd, stratum: stub });
+
+    // First decompose attempt: a FAILURE envelope was sent (not a thrown abort).
+    const first = stepDoneEnvelopes.find((e) => e.stepId === 'decompose_gsd');
+    assert.ok(first, 'a decompose_gsd step_done must have been sent');
+    assert.ok(first.envelope.failure, 'the conflict must be reported as a failure envelope');
+    assert.match(first.envelope.failure, /conflict/i);
+    // A second attempt proceeded (the engine retried per attempts).
+    assert.equal(agentRunCalls.length, 2, 'a second decompose attempt must proceed after the failure');
+  } finally {
+    rmSync(subCwd, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// G4: TS GSD usage must be single-counted. Each invocation is recorded
+// incrementally (crash-safe) into the cumulative store; the engine ledger now
+// ALSO includes those same invocations (compose reports usage in step_done
+// envelopes). The terminal/budget-halt fold must therefore record only the
+// engine-only DELTA, not the full engine total on top of the incremental sum.
+// ---------------------------------------------------------------------------
+
+test('G4: terminal fold records only the engine-only delta (no double-count)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gsd-g4-'));
+  const composeDir = join(dir, '.compose');
+  try {
+    const ctx = { cwd: dir, featureCode: 'F-G4' };
+    // Three TS agent invocations, recorded incrementally as the run proceeds.
+    for (let i = 0; i < 3; i += 1) {
+      recordTsAgentUsage(ctx, { input_tokens: 100, output_tokens: 0, cost_usd: 0.1, duration_ms: 1000 });
+    }
+    // Engine ledger (ground truth) includes those 3 invocations PLUS an
+    // engine-only judged-predicate debit (50 tokens / $0.05 / 1 dispatch).
+    const budgetState = { consumed: { tokens: 350, dollars: 0.35, dispatches: 4, wall_s: 3 } };
+    recordGsdUsageFromState(dir, 'F-G4', budgetState, ctx.recordedUsage);
+
+    const feat = readLedger(composeDir).features['F-G4'];
+    assert.equal(feat.totalTokens, 350, 'store total must equal the engine total, not the doubled sum (650)');
+    assert.ok(Math.abs(feat.totalCostUsd - 0.35) < 1e-9, `cost must equal engine total; got ${feat.totalCostUsd}`);
+    const dispatches = feat.sessions.reduce((s, x) => s + (x.dispatches ?? 0), 0);
+    assert.equal(dispatches, 4, 'dispatches = 3 incremental + 1 engine-only delta');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
