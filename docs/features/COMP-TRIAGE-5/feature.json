@@ -1,0 +1,43 @@
+{
+  "code": "COMP-TRIAGE-5",
+  "description": "Front-of-pipeline scope estimation + verification-gated escalation (E3): estimate tier/profile from the raw request before design, and auto-escalate the lane when a downstream gate fails.",
+  "status": "COMPLETE",
+  "phase": "COMP-TRIAGE: Task Tier Classification",
+  "created": "2026-07-15",
+  "updated": "2026-07-15",
+  "complexity": "L",
+  "position": 186,
+  "tags": [
+    "e3",
+    "triage",
+    "front-seam",
+    "escalation"
+  ],
+  "impact": "medium",
+  "completions": [
+    {
+      "completion_id": "COMP-TRIAGE-5:51988521fad6352423db5d5d288097280d220ae9",
+      "feature_code": "COMP-TRIAGE-5",
+      "commit_sha": "51988521fad6352423db5d5d288097280d220ae9",
+      "commit_sha_short": "51988521",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/triage.js",
+        "lib/feature-writer.js",
+        "lib/escalation.js",
+        "lib/lane-gate.js",
+        "lib/build.js",
+        "contracts/feature-json.schema.json",
+        "test/estimate-scope.test.js",
+        "test/feature-fields.test.js",
+        "test/escalation.test.js",
+        "test/triage-front-golden.test.js",
+        "test/triage-escalation-golden.test.js"
+      ],
+      "recorded_at": "2026-07-15T14:03:38.349Z",
+      "recorded_by": "mcp:agent",
+      "notes": "E3 front-seam estimate + verification-gated escalation. Full suite 4494/4494; Codex review clean (4 rounds)."
+    }
+  ],
+  "commit_sha": "51988521fad6352423db5d5d288097280d220ae9"
+}

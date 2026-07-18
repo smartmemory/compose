@@ -259,7 +259,7 @@ test('MISSING_DESIGN_ARTIFACT (error, IN_PROGRESS)', async () => {
   assert.equal(f.severity, 'error');
 });
 
-test('MISSING_COMPLETION_REPORT (warning, COMPLETE)', async () => {
+test('MISSING_COMPLETION_REPORT (info, COMPLETE) — report.md is optional, not warning-level', async () => {
   const root = newFixture();
   writeRoadmap(root, [{ code: 'FEAT-1', status: 'COMPLETE' }]);
   writeFeatureFolder(root, 'FEAT-1', { 'design.md': 'x' }, {
@@ -268,7 +268,7 @@ test('MISSING_COMPLETION_REPORT (warning, COMPLETE)', async () => {
   const r = await validateFeature(root, 'FEAT-1');
   const f = r.findings.find((x) => x.kind === 'MISSING_COMPLETION_REPORT');
   assert.ok(f);
-  assert.equal(f.severity, 'warning');
+  assert.equal(f.severity, 'info');
 });
 
 test('DANGLING_ARTIFACT_LINK (error)', async () => {
