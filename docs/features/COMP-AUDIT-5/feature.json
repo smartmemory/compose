@@ -1,10 +1,10 @@
 {
   "code": "COMP-AUDIT-5",
   "description": "Mobile agent list never clears finished/killed agents: useLiveAgents.js:61 listens for agentSpawned plus 3 never-emitted names while the server emits agentComplete/agentKilled. A done or killed agent shows as running forever on mobile.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
   "created": "2026-07-12",
-  "updated": "2026-07-12",
+  "updated": "2026-07-18",
   "complexity": "S",
   "position": 5,
   "tags": [

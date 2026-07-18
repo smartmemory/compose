@@ -1,10 +1,10 @@
 {
   "code": "COMP-AUDIT-7",
   "description": "Ten build-stream events (qa_scope, step_usage, gate_tier_result/failed/summary, test_review, health_score, capability_violation, idea_suggestion, buildStreamEvent) are broadcast to the agent SSE stream but dropped by the desktop renderer (build-stream-bridge -> MessageCard.jsx:318). Route them to a canonical consumer: this alone revives the dead QA Scope view and surfaces build cost/health/test telemetry.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
   "created": "2026-07-12",
-  "updated": "2026-07-12",
+  "updated": "2026-07-18",
   "complexity": "L",
   "position": 7,
   "tags": [

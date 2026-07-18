@@ -1,10 +1,10 @@
 {
   "code": "COMP-AUDIT-4",
   "description": "'Pressure Test' button in the item detail panel is a no-op (ContextItemDetail.jsx:106 onPressureTest={() => {}}). Wire it to a real endpoint or remove the control.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
   "created": "2026-07-12",
-  "updated": "2026-07-12",
+  "updated": "2026-07-18",
   "complexity": "S",
   "position": 4,
   "tags": [

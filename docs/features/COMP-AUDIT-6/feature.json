@@ -1,10 +1,10 @@
 {
   "code": "COMP-AUDIT-6",
-  "description": "Graph gate popover Kill resolves with no reason (GraphView.jsx:544) \u2014 one-click irreversible kill with no rationale, bypassing the kill-reason guard. Contradicts COMP-COCKPIT-6 (COMPLETE).",
-  "status": "PLANNED",
+  "description": "Graph gate popover Kill resolves with no reason (GraphView.jsx:544) — one-click irreversible kill with no rationale, bypassing the kill-reason guard. Contradicts COMP-COCKPIT-6 (COMPLETE).",
+  "status": "COMPLETE",
   "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
   "created": "2026-07-12",
-  "updated": "2026-07-12",
+  "updated": "2026-07-18",
   "complexity": "S",
   "position": 6,
   "tags": [
