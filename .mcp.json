@@ -1,7 +1,10 @@
 {
   "mcpServers": {
     "stratum": {
-      "command": "/Users/ruze/miniconda3/bin/stratum-mcp"
+      "command": "node",
+      "args": [
+        "/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs"
+      ]
     },
     "compose": {
       "command": "node",
