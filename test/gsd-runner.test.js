@@ -12,7 +12,7 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const { runGsd, resolveGateCommands, validateAndRepairTaskGraph } =
+const { runGsd, resolveGateCommands, validateAndRepairTaskGraph, TaskGraphDuplicateIdError } =
   await import(`${REPO_ROOT}/lib/gsd.js`);
 
 let cwd;
@@ -231,5 +231,23 @@ test('validateAndRepairTaskGraph throws on structural mismatch (orphan task)', (
   assert.throws(
     () => validateAndRepairTaskGraph(tg, VALID_BLUEPRINT, ['pnpm test']),
     /T_ORPHAN|orphan/i,
+  );
+});
+
+test('validateAndRepairTaskGraph rejects duplicate task ids (id-keyed systems assume uniqueness)', () => {
+  // Two tasks share id T01 but own DIFFERENT files — no ownership conflict, so the
+  // rejection must come from the dedicated unique-id guard. A duplicate id would
+  // cross-contaminate the blackboard, results/<id>.json, milestone instrumentation,
+  // and the stuck detector's per-task state.
+  const tg = {
+    tasks: [
+      { id: 'T01', files_owned: ['a.js'], files_read: [], depends_on: [], description: 'first task, long enough description' },
+      { id: 'T01', files_owned: ['b.js'], files_read: [], depends_on: [], description: 'second task with a colliding id' },
+    ],
+  };
+  assert.throws(
+    () => validateAndRepairTaskGraph(tg, VALID_BLUEPRINT, ['pnpm test']),
+    (err) => err instanceof TaskGraphDuplicateIdError && /duplicate task id: T01/.test(err.message),
+    'a duplicate task id must throw TaskGraphDuplicateIdError',
   );
 });

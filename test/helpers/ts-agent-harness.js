@@ -211,3 +211,32 @@ export async function runBuildWithAgentFactory(runBuild, featureCode, options) {
     await stratum.close();
   }
 }
+
+/**
+ * Run GSD code with a live TS engine and a test-only agent implementation.
+ *
+ * Mirror of runBuildWithAgentFactory for the `runGsd` entry point. runGsd shares
+ * the same `opts.stratum` injection seam (lib/gsd.js: `const stratum = opts.stratum
+ * ?? new StratumMcpClient()`), so a single injected, harnessed client drives the
+ * real TS ready-loop — the same consumer-dispatch fanout the build path uses.
+ * Only agent inference is faked; the engine, decompose, dispatch, and terminal
+ * normalization all run for real.
+ *
+ * @param {Function} runGsd        - lib/gsd.js runGsd
+ * @param {string}   featureCode
+ * @param {object}   options       - runGsd opts, plus `connectorFactory(agentType,{cwd})`.
+ *                                    When connectorFactory is omitted, runGsd is
+ *                                    invoked as-is (it owns its own client).
+ */
+export async function runGsdWithAgentFactory(runGsd, featureCode, options) {
+  const { connectorFactory, ...runtimeOptions } = options;
+  if (!connectorFactory) return runGsd(featureCode, runtimeOptions);
+  const stratum = new StratumMcpClient();
+  await stratum.connect(resolveStratumMcpConnection(runtimeOptions.cwd));
+  installAgentHarness(stratum, connectorFactory, runtimeOptions.cwd);
+  try {
+    return await runGsd(featureCode, { ...runtimeOptions, stratum });
+  } finally {
+    await stratum.close();
+  }
+}

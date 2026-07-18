@@ -62,36 +62,31 @@ flows:
   );
 }
 
-function makeMockStratum() {
+// Surface-9 spy over stratum's plan/resume/stepDone contract (immediately-terminal
+// flow). It speaks the CURRENT engine envelope (`{status:'completed', runId}`), not
+// the retired v0.x shape (`{status:'complete', flow_id, step_id, step_number}`), so
+// runBuild's real runId reads (active-build.flowId ← response.runId) are exercised.
+// The full resume envelope PROCESSING over the live engine is covered by
+// test/ts-cutover-build-resume-golden.test.js; here we isolate the cheap
+// plan-vs-resume DISPATCH decision via a spy.
+function makeSpyStratum() {
   const captured = { plan: null, resume: null, stepDoneCalls: [] };
   return {
     captured,
     async connect() {},
     async plan(spec, flow, inputs) {
       captured.plan = { spec, flow, inputs };
-      return {
-        status: 'complete',
-        flow_id: 'mock-flow-fresh',
-        step_id: 'design',
-        step_number: 1,
-        total_steps: 1,
-      };
+      return { status: 'completed', runId: 'mock-flow-fresh' };
     },
-    async resume(flowId) {
-      captured.resume = { flowId };
-      return {
-        status: 'complete',
-        flow_id: flowId,
-        step_id: 'design',
-        step_number: 1,
-        total_steps: 1,
-      };
+    async resume(runId) {
+      captured.resume = { flowId: runId };
+      return { status: 'completed', runId };
     },
-    async stepDone(flowId, stepId, result) {
-      captured.stepDoneCalls.push({ flowId, stepId, result });
-      return { status: 'complete', flow_id: flowId };
+    async stepDone(runId, stepId, result) {
+      captured.stepDoneCalls.push({ flowId: runId, stepId, result });
+      return { status: 'completed', runId };
     },
-    async audit() { return { status: 'complete' }; },
+    async audit() { return { status: 'completed' }; },
     async runAgentText() { return { text: '', tokens: { input: 0, output: 0 } }; },
     async close() {},
   };
@@ -110,7 +105,7 @@ describe('runBuild — resume branch (T8)', () => {
       mkdirSync(bugDir, { recursive: true });
       writeFileSync(join(bugDir, 'description.md'), '# BUG-A\n');
 
-      const stratum = makeMockStratum();
+      const stratum = makeSpyStratum();
       await runBuild('BUG-A', {
         cwd: tmpDir,
         stratum,
@@ -135,7 +130,7 @@ describe('runBuild — resume branch (T8)', () => {
       mkdirSync(bugDir, { recursive: true });
       writeFileSync(join(bugDir, 'description.md'), '# BUG-B\n');
 
-      const stratum = makeMockStratum();
+      const stratum = makeSpyStratum();
       await runBuild('BUG-B', {
         cwd: tmpDir,
         stratum,
@@ -163,7 +158,7 @@ describe('runBuild — resume branch (T8)', () => {
       mkdirSync(bugDir, { recursive: true });
       writeFileSync(join(bugDir, 'description.md'), '# BUG-C\n');
 
-      const stratum = makeMockStratum();
+      const stratum = makeSpyStratum();
       await runBuild('BUG-C', {
         cwd: tmpDir,
         stratum,

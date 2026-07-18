@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-07-18
+
+### STRAT-PY-RETIRE task #14 — GSD real-path harness follow-up
+
+Closed the remaining TS-cutover test-fidelity debt: the GSD stuck/resume and
+budget-terminal paths (whose deleted tests drove the retired Python dispatch
+protocol) are re-expressed over the live TS engine, and three survivor suites
+are moved off dead v0.x mock envelopes. Driving the real path surfaced and fixed
+two production defects.
+
+- **`runGsdWithAgentFactory` harness.** A `runGsd` mirror of
+  `runBuildWithAgentFactory` (test/helpers/ts-agent-harness.js) — drives the real
+  TS ready-loop with a test agent factory via `opts.stratum`.
+- **GSD stuck fidelity (fix).** When a GSD run halted on the stuck detector, the
+  operator-facing `stuck.json`/`pause.json`/`stuck.md` named the fanout index
+  (`execute:0`) instead of the decompose task id (`T01`). The stuck-detector key
+  now threads `context.gsdTaskId` (same precedence as the milestone
+  instrumentation); build-mode fanout is byte-identical.
+- **Duplicate decompose-id rejection (fix).** `validateAndRepairTaskGraph` now
+  rejects a task graph with duplicate task ids (`TaskGraphDuplicateIdError`, a
+  retryable malformed-decompose rejection). Task ids are the primary key for the
+  blackboard, `results/<id>.json`, milestone instrumentation, and the stuck
+  detector; a duplicate silently cross-contaminated all of them.
+- **New/ported real-path coverage.** `gsd-stuck-resume-golden` (stuck halt +
+  resume guards over the real detector/engine), `gsd-budget-terminal-golden`
+  (`max_agent_dispatches` mid-fanout terminal), and `build-modes` /
+  `compose-fix-resume` / `comp-fix-hard-gaps` moved to the surface-9 envelope
+  (the old `flow_id`-only mock silently wrote `undefined` to `active-build.flowId`;
+  the port adds the guard that catches it).
+
 ## 2026-07-17
 
 ### STRAT-PY-ENDGAME — Delete the Python execution path

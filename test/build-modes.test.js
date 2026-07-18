@@ -45,18 +45,25 @@ flows:
 `);
 }
 
-function makeMockStratum() {
+// Surface-9 spy: plan/resume/stepDone speak the CURRENT engine envelope
+// (`{status:'completed', runId}` — an immediately-terminal flow), NOT the retired
+// v0.x shape (`{status:'complete', flow_id, step_id, step_number}`). This matters
+// because runBuild persists active-build.flowId from `response.runId`: the old
+// `flow_id`-only mock silently wrote `undefined` there, masking the real
+// runId → active-build wiring. The tests assert the captured plan INPUTS (compose's
+// per-mode planInputs contract) AND the persisted runId.
+function makeSpyStratum() {
   const captured = { plan: null };
   return {
     captured,
     async connect() {},
     async plan(spec, flow, inputs) {
       captured.plan = { spec, flow, inputs };
-      return { status: 'complete', flow_id: 'mock-flow', step_id: 'design', step_number: 1, total_steps: 1 };
+      return { status: 'completed', runId: 'mock-flow' };
     },
-    async resume(flowId) { return { status: 'complete', flow_id: flowId, step_id: 'design', step_number: 1, total_steps: 1 }; },
-    async stepDone(flowId, stepId, result) { return { status: 'complete', flow_id: flowId }; },
-    async audit() { return { status: 'complete' }; },
+    async resume(runId) { return { status: 'completed', runId }; },
+    async stepDone(runId) { return { status: 'completed', runId }; },
+    async audit() { return { status: 'completed' }; },
     async runAgentText() { return { text: '', tokens: { input: 0, output: 0 } }; },
     async close() {},
   };
@@ -72,13 +79,14 @@ test('plan mode: {projectName, intent} envelope, active-build mode=plan, no feat
     makeProject(tmpDir, 'new', 'new');
     const planDir = join(tmpDir, 'docs', 'plans', 'PLAN-A');
     mkdirSync(planDir, { recursive: true });
-    const stratum = makeMockStratum();
+    const stratum = makeSpyStratum();
 
     await runBuild('PLAN-A', { cwd: tmpDir, stratum, mode: 'plan', template: 'new', description: 'an idea', skipTriage: true });
 
     assert.deepEqual(stratum.captured.plan.inputs, { projectName: 'PLAN-A', intent: 'an idea' },
       'plan threads the new.stratum.yaml {projectName, intent} shape');
     assert.equal(readActiveBuild(tmpDir).mode, 'plan', 'active-build persists mode=plan');
+    assert.equal(readActiveBuild(tmpDir).flowId, 'mock-flow', 'active-build persists the engine runId (not undefined)');
     assert.ok(!existsSync(join(planDir, 'feature.json')), 'plan does not write feature.json (tracksFeatureJson:false)');
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
@@ -90,12 +98,13 @@ test('bug mode: { task } envelope (regression guard for the planInputs lift)', a
   try {
     makeProject(tmpDir, 'bug-fix', 'bug_fix');
     mkdirSync(join(tmpDir, 'docs', 'bugs', 'BUG-A'), { recursive: true });
-    const stratum = makeMockStratum();
+    const stratum = makeSpyStratum();
 
     await runBuild('BUG-A', { cwd: tmpDir, stratum, mode: 'bug', template: 'bug-fix', description: 'a bug', skipTriage: true });
 
     assert.deepEqual(stratum.captured.plan.inputs, { task: 'a bug' }, 'bug threads { task }');
     assert.equal(readActiveBuild(tmpDir).mode, 'bug');
+    assert.equal(readActiveBuild(tmpDir).flowId, 'mock-flow', 'active-build persists the engine runId');
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -107,7 +116,7 @@ test('feature mode: full feature envelope (regression guard)', async () => {
     makeProject(tmpDir, 'build', 'build');
     const featDir = join(tmpDir, 'docs', 'features', 'FEAT-A');
     mkdirSync(featDir, { recursive: true });
-    const stratum = makeMockStratum();
+    const stratum = makeSpyStratum();
 
     await runBuild('FEAT-A', { cwd: tmpDir, stratum, mode: 'feature', template: 'build', description: 'a feature', skipTriage: true });
 
@@ -117,6 +126,7 @@ test('feature mode: full feature envelope (regression guard)', async () => {
     assert.equal(inputs.implementer_agent, 'claude');
     assert.equal(inputs.reviewer_agent, 'codex');
     assert.equal(readActiveBuild(tmpDir).mode, 'feature');
+    assert.equal(readActiveBuild(tmpDir).flowId, 'mock-flow', 'active-build persists the engine runId');
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
   }
