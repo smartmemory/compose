@@ -2,6 +2,14 @@
 
 ## 2026-07-18
 
+### Docs — install story updated for the post-cutover TS-only engine
+
+Merge day retired the python `stratum-mcp` PyPI package, so README.md and
+docs/install.md no longer tell users to `pip install stratum-mcp`: the
+prerequisite is a Stratum checkout as a sibling directory (compose init/setup
+already registered the TS MCP entrypoint — code was ahead of the docs).
+`stratum-mcp doctor` reference replaced with `compose doctor`.
+
 ### STRAT-PY-RETIRE task #14 — GSD real-path harness follow-up
 
 Closed the remaining TS-cutover test-fidelity debt: the GSD stuck/resume and

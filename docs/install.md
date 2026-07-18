@@ -5,7 +5,7 @@ How to install Compose, initialize a project, and register the global skill.
 ## Prerequisites
 
 - Node.js 18+
-- Python 3.11+ and `stratum-mcp` on PATH (`pip install stratum-mcp`). Run `stratum-mcp doctor` to diagnose install/PATH issues.
+- A [Stratum](https://github.com/smartmemory/stratum) checkout as a **sibling directory** of the compose checkout (the TS engine runs from source — `compose init` looks for its MCP entrypoint at `../stratum/ts/src/mcp/bin.mjs` relative to the compose package root). The python `stratum-mcp` PyPI package is retired (2026-07-18) and no longer used. Run `compose doctor` to diagnose environment issues.
 - For Codex steps: the official OpenAI `codex` CLI (`npm i -g @openai/codex` or `brew install codex`), authenticated via `codex login` (ChatGPT OAuth) or `OPENAI_API_KEY`. Optional: install the Claude Code plugin for interactive slash commands: `/plugin marketplace add openai/codex-plugin-cc` then `/plugin install codex@openai-codex`.
 
 ## Install Compose
@@ -56,7 +56,7 @@ Flags:
 
 ## Global setup (`compose setup`, alias `compose sync`)
 
-Installs all compose-owned skills globally and registers `stratum-mcp`:
+Installs all compose-owned skills globally and registers the Stratum MCP server:
 
 ```bash
 compose setup     # or: compose sync
@@ -65,7 +65,7 @@ compose setup     # or: compose sync
 This:
 1. Copies every bundled skill to `~/.claude/skills/` (`/compose`, `/context-budget`, …)
 2. Installs the Stratum skill to all detected agents
-3. Registers `stratum-mcp` with Claude Code (if available)
+3. Registers the Stratum TS MCP server with Claude Code (if the sibling checkout is present)
 
 It's idempotent — re-run it (or `compose sync`) after adding/editing skills locally to re-sync them. `sync` is just a clearer-named alias; it does **not** fetch a new version (that's `compose update`).
 

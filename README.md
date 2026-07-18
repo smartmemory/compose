@@ -43,7 +43,7 @@ compose plan "a tool that summarizes my team's standups"
 
 ## Quick install
 
-Prerequisites: Node.js 18+ and `stratum-mcp` on PATH (`pip install stratum-mcp`, requires Python 3.11+). Codex steps additionally need the OpenAI `codex` CLI. Full prereqs in [docs/install.md](docs/install.md).
+Prerequisites: Node.js 18+ and a [Stratum](https://github.com/smartmemory/stratum) checkout as a sibling directory (the TS engine runs from source; `compose init` detects its MCP entrypoint automatically — the python `stratum-mcp` PyPI package is retired). Codex steps additionally need the OpenAI `codex` CLI. Full prereqs in [docs/install.md](docs/install.md).
 
 The package is published to npm as `@smartmemory/compose`. Pick one install style:
 
@@ -51,7 +51,7 @@ The package is published to npm as `@smartmemory/compose`. Pick one install styl
 
 ```bash
 npm install -g @smartmemory/compose
-compose setup                # install bundled skills + register stratum-mcp (alias: compose sync)
+compose setup                # install bundled skills + register the Stratum MCP server (alias: compose sync)
 ```
 
 **Option B — git clone (for development):**
