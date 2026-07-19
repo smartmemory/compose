@@ -60,7 +60,7 @@ test('C2: a TS-pinned project resolves the TS engine connection (node + mcp bin)
     await abortBuild(dataDir, 'F-1', root, { stratum: fakeStratum(record) });
     assert.ok(record.conn, 'abortBuild must connect the stratum client');
     assert.equal(record.conn.command, process.execPath, 'TS-pinned project → node MCP launcher');
-    assert.match(record.conn.args?.[0] ?? '', /mcp[\/\\]bin\.mjs$/, 'TS connection points at the mcp bin');
+    assert.match(record.conn.args?.[0] ?? '', /mcp[\/\\](bin\.mjs|main\.js)$/, 'TS connection points at the mcp bin (source or compiled)');
   } finally {
     if (savedEnv === undefined) delete process.env.COMPOSE_STRATUM_ENGINE;
     else process.env.COMPOSE_STRATUM_ENGINE = savedEnv;

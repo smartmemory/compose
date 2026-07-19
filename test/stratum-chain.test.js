@@ -67,13 +67,20 @@ test('installed @smartmemory/stratum MCP bin wins over the sibling checkout', (t
   assert.notEqual(connection.args[0], LIVE_STRATUM_TS_MCP_BIN);
 });
 
-test('missing installed dependency falls back to the sibling checkout', () => {
+test('missing installed dependency falls back to the sibling checkout', (t) => {
+  // Inject a real (existing) sibling bin so the test is deterministic in CI, where
+  // the actual monorepo sibling path does not exist. resolveStratumBin only returns
+  // a sibling candidate that exists on disk.
+  const root = fixture(t, 'compose-stratum-sibling-');
+  const fakeSibling = join(root, 'bin.mjs');
+  writeFileSync(fakeSibling, '');
   const connection = resolveStratumMcpConnection(REPO_ROOT, {
     env: {},
     requireResolve: noInstalledDependency,
+    siblingBins: { mcp: fakeSibling },
   });
 
-  assert.equal(connection.args[0], LIVE_STRATUM_TS_MCP_BIN);
+  assert.equal(connection.args[0], fakeSibling);
 });
 
 test('explicit env override wins over installed dependency and sibling checkout', (t) => {

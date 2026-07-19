@@ -154,5 +154,7 @@ test('does not depend on a Python Stratum binary on PATH', () => {
   execFileSync(process.execPath, [COMPOSE_BIN, 'install'], { cwd, env, encoding: 'utf-8' })
   const config = JSON.parse(readFileSync(join(cwd, '.mcp.json'), 'utf-8'))
   assert.equal(config.mcpServers.stratum.command, process.execPath)
-  assert.match(config.mcpServers.stratum.args[0], /stratum\/ts\/src\/mcp\/bin\.mjs$/)
+  // The wired bin is either the adjacent stratum source (monorepo) or the installed
+  // @smartmemory/stratum compiled bin (CI) — both are the TS engine, not python.
+  assert.match(config.mcpServers.stratum.args[0], /(ts\/src\/mcp\/bin\.mjs|dist\/mcp\/main\.js)$/)
 })

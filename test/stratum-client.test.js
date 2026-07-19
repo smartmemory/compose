@@ -48,7 +48,12 @@ const {
   queryFlows, queryFlow, queryGates,
   gateApprove, gateReject, gateRevise,
 } = await import(`${SERVER_DIR}/stratum-client.js`);
-const { LIVE_STRATUM_TS_CLI_BIN, probeStratumBin } = await import(`${REPO_ROOT}/lib/stratum-engine.js`);
+const { resolveStratumBin, probeStratumBin } = await import(`${REPO_ROOT}/lib/stratum-engine.js`);
+// The flow/gate CLI production code resolves via resolveStratumBin('cli'): env ->
+// installed @smartmemory/stratum dep -> sibling checkout. Assert against that same
+// resolution (dep on a CI runner, sibling in the monorepo) instead of hardcoding the
+// sibling path, which doesn't exist in CI.
+const RESOLVED_CLI_BIN = resolveStratumBin('cli');
 
 /**
  * Build a mock execFile that replays the given response sequence.
@@ -236,7 +241,7 @@ test('engine defaults to TS: queries spawn stratum', async () => {
     await queryFlows();
     // C1: the TS default is the live checkout's query/gate CLI, not a bare
     // `stratum` (which resolves to whatever is on $PATH).
-    assert.equal(m.lastBin, LIVE_STRATUM_TS_CLI_BIN);
+    assert.equal(m.lastBin, RESOLVED_CLI_BIN);
   });
 });
 
@@ -253,9 +258,9 @@ test('COMPOSE_STRATUM_ENGINE=ts routes queries and gates to the stratum bin', as
     const m = makeBinMock([{ exitCode: 0, stdout: '[]' }, { exitCode: 0, stdout: '{"ok":true}' }]);
     _testOnly_setExecFile(m.exec);
     await queryGates();
-    assert.equal(m.lastBin, LIVE_STRATUM_TS_CLI_BIN);
+    assert.equal(m.lastBin, RESOLVED_CLI_BIN);
     await gateApprove('f1', 's1');
-    assert.equal(m.lastBin, LIVE_STRATUM_TS_CLI_BIN);
+    assert.equal(m.lastBin, RESOLVED_CLI_BIN);
   });
 });
 
@@ -274,7 +279,7 @@ test('guard calls use the TS CLI under engine=ts', async () => {
     const m = makeBinMock([{ exitCode: 0, stdout: '{"resource_id":"r","current_state":"a","ledger":[]}' }]);
     _testOnly_setExecFile(m.exec);
     await guardHistory('r');
-    assert.equal(m.lastBin, LIVE_STRATUM_TS_CLI_BIN);
+    assert.equal(m.lastBin, RESOLVED_CLI_BIN);
   });
 });
 
@@ -421,7 +426,7 @@ test('probeStratumBin REJECTS a binary that fails to run', () => {
 
 test('probeStratumBin accepts the live TS CLI bin against the real query contract', () => {
   // No execFileSync injection — exercises the real live checkout CLI.
-  const result = probeStratumBin(LIVE_STRATUM_TS_CLI_BIN);
+  const result = probeStratumBin(RESOLVED_CLI_BIN);
   assert.equal(result.ok, true, `live CLI probe should pass: ${result.reason ?? ''}`);
 });
 
