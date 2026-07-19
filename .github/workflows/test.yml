@@ -1,0 +1,28 @@
+name: Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # git identity for tests that make real commits in temp dirs
+      - name: Configure git
+        run: |
+          git config --global user.email "ci@smartmemory.ai"
+          git config --global user.name "compose-ci"
+
+      - name: Install
+        run: npm install
+
+      - name: Test
+        run: npm test
