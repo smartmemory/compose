@@ -259,12 +259,13 @@ test('COMPOSE_STRATUM_ENGINE=ts routes queries and gates to the stratum bin', as
   });
 });
 
-test('COMPOSE_STRATUM_TS_BIN overrides the ts binary path', async () => {
-  await withEnv({ COMPOSE_STRATUM_ENGINE: 'ts', COMPOSE_STRATUM_TS_BIN: '/opt/stratum-ts/bin/stratum' }, async () => {
+test('legacy COMPOSE_STRATUM_TS_BIN still overrides the ts binary path', async () => {
+  const override = fileURLToPath(import.meta.url);
+  await withEnv({ COMPOSE_STRATUM_ENGINE: 'ts', COMPOSE_STRATUM_TS_BIN: override }, async () => {
     const m = makeBinMock([{ exitCode: 0, stdout: '[]' }]);
     _testOnly_setExecFile(m.exec);
     await queryFlows();
-    assert.equal(m.lastBin, '/opt/stratum-ts/bin/stratum');
+    assert.equal(m.lastBin, override);
   });
 });
 

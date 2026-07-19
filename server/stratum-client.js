@@ -16,7 +16,7 @@
 
 import { execFile as _execFileDefault } from 'node:child_process';
 import { getTargetRoot } from './project-root.js';
-import { resolveStratumEngine as resolveEngine, LIVE_STRATUM_TS_CLI_BIN } from '../lib/stratum-engine.js';
+import { resolveStratumBin, resolveStratumEngine as resolveEngine } from '../lib/stratum-engine.js';
 
 // Injected executor — replaced by tests only. Production code never calls this setter.
 let _execFile = _execFileDefault;
@@ -39,8 +39,9 @@ export function resolveStratumEngine() {
 
 /** Binary for flow/gate query+mutation calls under the selected engine. */
 function flowGateBin() {
-  resolveStratumEngine();
-  return process.env.COMPOSE_STRATUM_TS_BIN || LIVE_STRATUM_TS_CLI_BIN;
+  const cwd = getTargetRoot();
+  resolveEngine(cwd);
+  return resolveStratumBin('cli', cwd);
 }
 
 // ---------------------------------------------------------------------------
@@ -98,7 +99,7 @@ function _spawnResult(bin, err, out, err2) {
 
 /** Binary-specific spawn-failure message with the install/path remedy. */
 function _spawnRemedy(bin, code) {
-  return `${bin} (TS stratum engine) failed to spawn (${code}). Install @smartmemory/stratum or set COMPOSE_STRATUM_TS_BIN`;
+  return `${bin} (TS stratum engine) failed to spawn (${code}). Install @smartmemory/stratum or set COMPOSE_STRATUM_TS_CLI_BIN`;
 }
 
 /**

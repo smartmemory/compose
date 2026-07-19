@@ -21,7 +21,11 @@ import { resolvePort } from '../lib/resolve-port.js'
 import { resolveRoadmapPath, resolveFeaturesPath, resolveContextPathFromConfig, resolveFeaturesPathFromConfig, resolveRoadmapPathFromConfig } from '../lib/project-paths.js'
 import { installAgentDefs } from '../lib/install-agent-defs.js'
 import { validateAgentString } from '../lib/agent-string.js'
-import { LIVE_STRATUM_TS_MCP_BIN } from '../lib/stratum-engine.js'
+import {
+  checkStratumWiring,
+  healStratumWiring,
+  resolveStratumMcpConnection,
+} from '../lib/stratum-engine.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PACKAGE_ROOT = resolve(__dirname, '..')
@@ -306,6 +310,17 @@ async function runDoctor(flags = []) {
   const verbose = flags.includes('--verbose') || flags.includes('-v')
   const refresh = flags.includes('--refresh-versions')
 
+  const wsId = getWorkspaceFlag(flags)
+  let cwd
+  try {
+    cwd = resolveWorkspace({ workspaceId: wsId }).root
+  } catch (err) {
+    if (err.code !== 'WorkspaceUnset') dieOnWorkspaceError(err)
+    cwd = process.cwd()
+  }
+  // Read-only: `compose doctor` reports stale wiring but never repairs it.
+  const stratumWiring = checkStratumWiring(cwd)
+
   const deps = loadDeps(PACKAGE_ROOT)
   if (!deps) {
     console.error('Error: .compose-deps.json missing or invalid at package root')
@@ -325,7 +340,7 @@ async function runDoctor(flags = []) {
     // so consumers like `JSON.parse(stdout)` work. (Previously two concatenated objects.)
     const report = buildDepReport(result)
     const binaries = buildBinaryReport(checkExternalBinaries(deps))
-    console.log(JSON.stringify({ ...report, binaries, version: versionInfo }, null, 2))
+    console.log(JSON.stringify({ ...report, binaries, version: versionInfo, stratumWiring }, null, 2))
     const allRequiredPresent = result.missing.every(d => d.optional)
     if (strict && !allRequiredPresent) process.exit(1)
     return
@@ -347,6 +362,14 @@ async function runDoctor(flags = []) {
 
   const allRequiredPresent = printDepReport(result, { json: false, verbose })
   printBinaryReport(checkExternalBinaries(deps))
+  console.log('Stratum wiring:')
+  if (stratumWiring.skipped) {
+    console.log(`  - skipped — ${stratumWiring.skipped}`)
+  } else if (stratumWiring.stale) {
+    console.log('  ⚠ stale — run `compose update` to repair it')
+  } else {
+    console.log('  ✓ ok')
+  }
   if (strict && !allRequiredPresent) process.exit(1)
 }
 
@@ -369,11 +392,17 @@ async function runInit(flags, cwdOverride) {
   const composeDir = join(cwd, '.compose')
   mkdirSync(composeDir, { recursive: true })
 
-  // 2. The TS runtime is a checked-in adjacent dependency in this develop tree.
-  const hasStratum = !noStratum && existsSync(LIVE_STRATUM_TS_MCP_BIN)
-  if (!noStratum && !hasStratum) {
-    console.warn(`Warning: Stratum TS MCP entrypoint not found at ${LIVE_STRATUM_TS_MCP_BIN}`)
+  // 2. Resolve the TS runtime through the same installed-package -> sibling
+  // chain used by the runtime client.
+  let stratumConnection
+  if (!noStratum) {
+    try {
+      stratumConnection = resolveStratumMcpConnection(cwd)
+    } catch (error) {
+      console.warn(`Warning: ${error.message}`)
+    }
   }
+  const hasStratum = Boolean(stratumConnection)
   const hasLifecycle = !noLifecycle
 
   // 3. Detect agents
@@ -510,8 +539,8 @@ async function runInit(flags, cwdOverride) {
   }
   if (hasStratum) {
     mcpConfig.mcpServers.stratum = {
-      command: process.execPath,
-      args: [LIVE_STRATUM_TS_MCP_BIN],
+      command: stratumConnection.command,
+      args: stratumConnection.args,
     }
     console.log('Registered the Stratum TS MCP server in .mcp.json')
   }
@@ -698,6 +727,17 @@ async function runUpdate(flags) {
     // makes all of init's refresh — including its state-migration step — target
     // the right workspace (COMP-MIGRATE-ON-UPGRADE finding 6).
     await runInit([], cwd)
+
+    // State migrations have completed; now best-effort repair stale Stratum MCP
+    // wiring without making an otherwise successful update fail.
+    const wiring = healStratumWiring(cwd)
+    if (wiring.skipped) {
+      console.log(`Stratum wiring repair skipped: ${wiring.skipped}`)
+    } else if (wiring.healed) {
+      console.log('Healed Stratum MCP wiring in .mcp.json')
+    } else {
+      console.log('Stratum MCP wiring already current')
+    }
   }
 
   console.log('')
