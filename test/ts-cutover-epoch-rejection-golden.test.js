@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
-const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
+import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
 
 const SPEC = {
   version: 1,

@@ -22,7 +22,7 @@ import { installAgentHarness } from './helpers/ts-agent-harness.js';
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 import { __setRegenerateBugIndexForTest } from '../lib/bug-checkpoint.js';
 
-const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
+import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
 
 // A single-step pipeline whose step exhausts an ensure. CRUCIALLY the out
 // contract has NO `outcome` field — exactly like the real test/diagnose

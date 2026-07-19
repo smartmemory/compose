@@ -30,7 +30,7 @@ const ROOT = resolve(dirname(import.meta.url.replace('file://', '')));
 // Live TS fixture
 // ---------------------------------------------------------------------------
 
-const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
+import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
 const stratumAvailable = existsSync(TS_MCP_BIN);
 const stratumStateRoot = mkdtempSync(join(tmpdir(), 'proof-run-stratum-state-'));
 const previousStateRoot = process.env.STRATUM_STATE_ROOT;

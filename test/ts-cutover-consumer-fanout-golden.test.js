@@ -34,7 +34,7 @@ import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 // test below relies on them, so pin the env for this file's process.
 process.env.NODE_ENV = 'test';
 
-const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
+import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
 
 const CONSUMER_BUILD_SPEC = `
 version: 1

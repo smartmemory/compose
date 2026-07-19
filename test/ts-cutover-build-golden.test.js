@@ -21,7 +21,7 @@ import { runBuild } from '../lib/build.js';
 import { installAgentHarness } from './helpers/ts-agent-harness.js';
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 
-const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
+import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
 
 const SIMPLE_BUILD_SPEC = `
 version: 1

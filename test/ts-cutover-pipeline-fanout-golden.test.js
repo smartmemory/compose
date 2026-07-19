@@ -25,7 +25,7 @@ import { resolveAgentConfig } from '../lib/agent-string.js';
 import { budgetStateFromLedger } from '../lib/gsd-budget.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
-const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
+import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
 process.env.NODE_ENV = 'test';
 
 function git(cwd, args) {

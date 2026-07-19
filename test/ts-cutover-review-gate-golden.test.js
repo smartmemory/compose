@@ -28,7 +28,7 @@ import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 // stratum._localQuery (the harness stub) only under NODE_ENV=test.
 process.env.NODE_ENV = 'test';
 
-const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
+import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
 
 // A minimal review-recovery flow: triage → lens fanout → lenses_gate → merge →
 // review_gate. Mirrors the production review sub-sequence (same step ids + the

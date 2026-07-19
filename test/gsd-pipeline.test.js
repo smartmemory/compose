@@ -14,7 +14,7 @@ import { resolvePlanSpecValues, StratumMcpClient } from '../lib/stratum-mcp-clie
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SPEC_PATH = join(REPO_ROOT, 'pipelines', 'gsd.stratum.yaml');
-const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
+import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
 const text = readFileSync(SPEC_PATH, 'utf-8');
 const spec = YAML.parse(text);
 const steps = spec.flows.gsd.steps;

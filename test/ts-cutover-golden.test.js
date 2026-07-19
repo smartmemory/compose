@@ -23,7 +23,7 @@ import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 
 // The TS engine's MCP stdio bin. Spawned directly (bypasses .mcp.json), with an
 // isolated state root so the test never touches real ~/.stratum state.
-const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
+import { TS_MCP_BIN, TS_CLI_BIN } from './helpers/stratum-test-bin.js';
 
 // Node ≥22 (the TS engine's runtime pin). Fall back to the current node.
 function tsNode() {
@@ -102,7 +102,7 @@ describe('compose runs a golden build over the TS stratum engine', () => {
       const listed = execFileSync(
         tsNode(),
         [
-          '/Users/ruze/reg/my/forge/stratum/ts/src/cli/bin.mjs',
+          TS_CLI_BIN,
           'query',
           'flows',
         ],

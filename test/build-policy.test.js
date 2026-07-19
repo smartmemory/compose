@@ -23,7 +23,7 @@ const runBuild = (featureCode, options) => runBuildWithAgentFactory(runBuildRunt
 // Skip guard
 // ---------------------------------------------------------------------------
 
-const TS_MCP_BIN = '/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs';
+import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
 const stratumAvailable = existsSync(TS_MCP_BIN);
 const stratumStateRoot = mkdtempSync(join(tmpdir(), 'build-policy-stratum-state-'));
 const previousStateRoot = process.env.STRATUM_STATE_ROOT;
