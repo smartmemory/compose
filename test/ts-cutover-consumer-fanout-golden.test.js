@@ -1998,6 +1998,75 @@ describe('TS-native consumer fanout journal and merge recovery', () => {
     assert.equal(journal.issuances.filter((entry) => entry.state === 'merged').length, 3);
   });
 
+  test('a stale/duplicate consumer step_done rejection is skipped per item and the build completes', async (t) => {
+    const scenario = await setupScenario(t, 'duplicate-step-done', CONSUMER_SINGLE_STAGE_SPEC);
+    let duplicateError = null;
+
+    await runAttempt(scenario, {
+      agentFactory: overlapProbeAgentFactory(scenario.invocationLog, { current: 0, max: 0 }),
+      onClient(client) {
+        const realStepDone = client.stepDone.bind(client);
+        let duplicated = false;
+        client.stepDone = async (...args) => {
+          const response = await realStepDone(...args);
+          const stepId = args[1];
+          if (!duplicated && stepId.startsWith('fan/')) {
+            duplicated = true;
+            try {
+              // The first call was accepted. Repeating the same fenced report
+              // produces the real MCP -32603 stale/duplicate rejection.
+              return await realStepDone(...args);
+            } catch (error) {
+              duplicateError = error;
+              throw error;
+            }
+          }
+          return response;
+        };
+      },
+    });
+
+    assert.equal(duplicateError?.code, -32603, 'the reproduction must exercise the JSON-RPC code');
+    assert.match(
+      duplicateError?.message ?? '',
+      /step (?:result is stale|is not awaiting a client result)/i,
+    );
+    const flowId = await flowIdFromActive(scenario);
+    assert.equal((await auditFlow(scenario, flowId)).status, 'completed');
+    await assertSingleStageMerged(scenario, ['a', 'b', 'c']);
+
+    const events = (await readFile(join(scenario.workspace, '.compose', 'build-stream.jsonl'), 'utf8'))
+      .trim().split('\n').map((line) => JSON.parse(line));
+    const skipped = events.find((event) => event.type === 'build_step_done'
+      && event.status === 'skipped' && event.error_code === -32603);
+    assert.ok(skipped, 'the stale/duplicate report is logged as a skipped consumer item');
+    assert.match(skipped.summary, /fan\/\d+.*-32603.*stale/i);
+  });
+
+  test('an unrelated -32603 consumer step_done rejection remains build-fatal', async (t) => {
+    const scenario = await setupScenario(t, 'genuine-step-done-error', CONSUMER_SINGLE_STAGE_SPEC);
+
+    await assert.rejects(
+      () => runAttempt(scenario, {
+        agentFactory: overlapProbeAgentFactory(scenario.invocationLog, { current: 0, max: 0 }),
+        onClient(client) {
+          const realStepDone = client.stepDone.bind(client);
+          let injected = false;
+          client.stepDone = async (...args) => {
+            if (!injected && args[1].startsWith('fan/')) {
+              injected = true;
+              const error = new Error('MCP error -32603: engine persistence failed');
+              error.code = -32603;
+              throw error;
+            }
+            return realStepDone(...args);
+          };
+        },
+      }),
+      (error) => error?.code === -32603 && /engine persistence failed/.test(error.message),
+    );
+  });
+
   test('a nested contract closure reaches the agent schema and the engine accepts the output', async (t) => {
     const scenario = await setupScenario(t, 'nested-closure', CONSUMER_NESTED_SPEC);
     const prompts = [];

@@ -1,6 +1,19 @@
 # Changelog
 
-## 2026-07-18
+## 2026-07-19
+
+### Fix — stale/duplicate consumer `step_done` no longer aborts the whole build (#49)
+
+In the parallel consumer-fanout path a consumer report can lose a race with
+another response that already advanced the same fenced issuance; the engine
+rejects the late report with JSON-RPC `-32603`. That rejection propagated into
+`consumerFatalError` and killed the entire `compose build`. It is now handled
+item-locally: `reportConsumerStepDone()` catches only the narrow
+stale/duplicate signature (code `-32603` **and** a matching message), logs and
+marks that one item skipped, reconciles audit state, resumes the flow for a
+current pump response, and lets the rest of the fanout continue. Unrelated
+`-32603` errors (and every other engine failure) stay build-fatal. Covered by
+two new real-engine regression tests (skip-and-continue vs. genuine-error-still-fatal).
 
 ### Docs — install story updated for the post-cutover TS-only engine
 
