@@ -122,10 +122,12 @@ test('healStratumWiring replaces stale Stratum wiring and preserves sibling serv
   const result = healStratumWiring(workspace);
   const healed = JSON.parse(readFileSync(mcpPath, 'utf8'));
 
-  // Compose heals to its OWN resolved entry (direct dep/sibling bin), NOT the
-  // npx-pinned form that stratum doctor writes — that form is broken until
-  // @smartmemory/stratum is published. Regression guard for that interaction.
-  const expected = { command: process.execPath, args: [LIVE_STRATUM_TS_MCP_BIN] };
+  // Compose heals to its OWN resolved entry (installed dep OR sibling bin,
+  // whichever the resolver picks — NOT hardcoded, so this holds whether or not
+  // @smartmemory/stratum is installed), and NEVER the npx-pinned form that
+  // stratum doctor writes (broken until published). Regression guard.
+  const conn = resolveStratumMcpConnection(workspace);
+  const expected = { command: conn.command, args: conn.args };
   assert.equal(result.healed, true);
   assert.deepEqual(result.before, { command: 'stratum-mcp', args: [] });
   assert.deepEqual(result.after, expected);
