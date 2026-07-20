@@ -153,6 +153,34 @@ build", not "what to build".
 
 ---
 
+## Agent calibration
+
+### calibrate: self-grading-ran-generous — 2026-07-20
+**Prediction (recorded before the result):** of 10 review findings, 1 remediated,
+1 partial, 8 not.
+**Actual:** **0 remediated, 10 not**, plus 2 new defects introduced.
+**The specific error:** claimed finding 10 fixed because `LEDGER.md` gained
+rejected-alternatives and conviction fields. But P1–P6 never *require* populating
+them for ordinary decisions. **Artifact changed, procedure didn't** — having a
+column is not filling it.
+**Direction of error:** generous. The agent graded its own work in its own favour
+and only an independent pass caught it.
+**Bearing:** first hard datapoint for `JOINT: joint-is-non-obvious` and the
+agent-audit claims (`AGENT-IS-A-POSITION`, `WHO-CHECKS-THE-CHECKER`). Evidence
+*for* requiring an independent pass and *against* trusting agent self-report.
+
+### calibrate: review-precision-scales-with-concreteness — 2026-07-20
+Three adversarial passes, same reviewer, same day:
+| Artifact | Result |
+|---|---|
+| Strategy/vision doc | 9 of 10 graded FATAL; ~half survived adjudication — mostly noise |
+| Process manual (concrete procedures) | 10 findings, nearly all valid |
+| Re-review against named prior findings | 10 valid + 2 new defects found |
+**Implication:** adversarial review sharpens as the artifact gets more concrete.
+Spend the call on procedures and specs; discount it heavily on visions.
+
+---
+
 ## Process failures (recorded, per `RECORD-ALWAYS`)
 
 - **Stratum not used** despite `capabilities.stratum: true` and an explicit CLAUDE.md
