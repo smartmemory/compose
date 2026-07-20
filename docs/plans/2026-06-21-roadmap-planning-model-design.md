@@ -8,6 +8,7 @@
 
 - Constituent features (all under the COMP-ROADMAP umbrella): COMP-ROADMAP-MODES, COMP-ROADMAP-PLAN, COMP-ROADMAP-MIGRATE, COMP-ROADMAP-RETIRE, COMP-ROADMAP-PROVIDERS, COMP-ROADMAP-META, COMP-ROADMAP-COMPOSE, COMP-ROADMAP-GRAPH-3.
 - Prior art this builds on: COMP-ROADMAP-GRAPH-2 (vision-store canonical projection), COMP-ROADMAP-RT (roundtrip), the `compose new` kickoff (`lib/new.js` + `pipelines/new.stratum.yaml`), the tracker-provider layer (`lib/tracker/`).
+- Downstream: [tracker-provider & reconciliation design (2026-07-19)](../design/2026-07-19-tracker-provider-and-reconciliation-design.md) — the COMP-ROADMAP-PROVIDERS tracker-half design; its §3.4 maps this doc's REFERENCE→DRIVE→SYNC→SUBSUME ladder onto a per-field role taxonomy (Store/Projection/Publisher/Authority/Resolver) and supersedes the ladder for the tracker seam.
 - Converged via 3 independent Codex architecture rounds (2026-06-21).
 
 ## Problem / framing

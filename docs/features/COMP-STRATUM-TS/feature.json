@@ -1,15 +1,36 @@
 {
   "code": "COMP-STRATUM-TS",
   "description": "Flag-gated cutover of compose's stratum flow/gate monitor seam to the TS engine (STRAT-TS-PORT P7): engine-selectable stratum-client; guard stays on Python (STRAT-GUARD not ported); agent-authoring cutover deferred to COMP-STRATUM-TS-2",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "Phase 7: Stratum TS Cutover",
   "created": "2026-07-10",
-  "updated": "2026-07-10",
+  "updated": "2026-07-20",
   "complexity": "L",
   "position": 1,
   "tags": [
     "stratum",
     "cutover"
   ],
-  "impact": "high"
+  "impact": "high",
+  "completions": [
+    {
+      "completion_id": "COMP-STRATUM-TS:cc390a7e3f26c776a2ce4aa7fa9806e6e6edca5b",
+      "feature_code": "COMP-STRATUM-TS",
+      "commit_sha": "cc390a7e3f26c776a2ce4aa7fa9806e6e6edca5b",
+      "commit_sha_short": "cc390a7e",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/stratum-engine.js",
+        "lib/stratum-mcp-client.js",
+        "server/stratum-client.js",
+        "pipelines/build.stratum.yaml",
+        "test/stratum-client.test.js",
+        "test/abort-build-engine.test.js"
+      ],
+      "recorded_at": "2026-07-20T07:57:16.344Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Flow/gate monitor seam engine-selectable, default flipped to TS after soak (STRAT-TS-FLAG-DAY). Verified: lib/stratum-engine.js:117-124 default \"ts\", server/stratum-client.js:40-45/110-149 route through resolved TS CLI, test/stratum-client.test.js green. Guard-on-Python + agent-authoring out of scope (COMP-STRATUM-TS-2)."
+    }
+  ],
+  "commit_sha": "cc390a7e3f26c776a2ce4aa7fa9806e6e6edca5b"
 }
