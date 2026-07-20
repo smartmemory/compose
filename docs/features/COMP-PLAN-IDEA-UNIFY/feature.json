@@ -1,0 +1,17 @@
+{
+  "code": "COMP-PLAN-IDEA-UNIFY",
+  "description": "Unify ideation storage: vision idea-type items become canon; ideabox.md becomes a read-only generated view (ROADMAP.md<-feature.json pattern). Ideabox stays the funnel/UI/CLI; backing store swaps to the vision graph so ideas can hold evidence/scores/links for the Discovery Loop. Honors COMP-ROADMAP Decision 4 (funnel interface pinned, not storage). One-time markdown->store migration; no bidirectional sync. Rung 1 (keystone) of COMP-PLAN-RIGOR. Anchor: docs/design/2026-07-20-front-funnel-rigor-design.md; vision: docs/product/2026-07-20-discovery-loop-vision.md.",
+  "status": "PLANNED",
+  "phase": "COMP-PLAN-RIGOR: Front-of-Funnel Rigor + Parity",
+  "created": "2026-07-20",
+  "updated": "2026-07-20",
+  "complexity": "L",
+  "position": 1,
+  "profile": {
+    "needs_prd": false,
+    "needs_architecture": false,
+    "needs_verification": true,
+    "needs_report": false
+  },
+  "impact": "high"
+}

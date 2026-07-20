@@ -1,0 +1,17 @@
+{
+  "code": "COMP-ROADMAP-EPIC",
+  "description": "First-class epic/umbrella entity. Today an epic is a free-text phase string on each feature.json PLUS a status override smuggled into the ROADMAP.md heading (roadmap-gen.js:62); the override fights the computed rollup (phaseStatus, :33) and emits perpetual drift WARNs. Provenance (anchor doc, north-star, ordered constituents) lives in prose. The 'track' vision type (vision-store.js:10) exists but is stranded/unused. Promote the epic to a tracked node (likely by wiring 'track'): code+description+status(rollup-derived, authored-override as an entity field)+anchorDoc+northStar+ordered constituents; constituents ref epic by code (retiring the phase string); retire the heading-override hack and its drift path. Sibling of COMP-ROADMAP-COMPOSE. Anchor: docs/plans/2026-06-21-roadmap-planning-model-design.md.",
+  "status": "PLANNED",
+  "phase": "COMP-ROADMAP-MODEL: Structured + Composable Roadmaps",
+  "created": "2026-07-20",
+  "updated": "2026-07-20",
+  "complexity": "L",
+  "position": 8,
+  "profile": {
+    "needs_prd": false,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": false
+  },
+  "impact": "medium"
+}
