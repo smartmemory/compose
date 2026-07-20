@@ -203,6 +203,86 @@ Spend the call on procedures and specs; discount it heavily on visions.
 
 ---
 
+## 2026-07-20 — Session 2 (external signal, read half)
+
+Design: [External Signal — Acquisition Design](../design/2026-07-20-external-signal-design.md)
+
+### decide: internet-is-all — The public web is the entire reachable surface today
+**Decided by owner** ("the internet right now, that's all we have isn't it"), in place of
+the question actually asked (`commercial-intent`). The sell-vs-own fork was **dropped as
+not yet load-bearing**: either way the reachable surface today is identical. `commercial-intent`
+stays open in the register, undiminished.
+**Rejected:** designing acquisition against users, telemetry, or a market panel — none exist.
+**Conviction:** high *(owner's own words, offered unprompted against a different question)*
+
+### decide: read-then-poke — The web is two instruments; read now, poke second
+Reading is observational and free; poking (publish, contact, ship-and-watch) is
+interventional and is the only thing that can answer a question nobody has answered in
+public. Owner chose read-designed-in-full-now, poke-bolted-on-after, with provenance
+carried from day one so the seam exists before it is needed.
+**Rejected:** read-only permanently (leaves the deepest premise unreachable with no plan);
+both-halves-now (slowest, and the poke half is an exposure decision, not a design one).
+**Conviction:** high *(explicit selection between three stated options)*
+
+### decide: two-machines — Two ingestion machines with separate budgets, not one filtered pipe
+An Answerer keyed to the joint register, and a Wanderer with no key at all. A wall between
+them: the Wanderer may not conclude, the Answerer may not add joints.
+**Origin:** not a preference — a **collision between two already-settled claims**.
+`JOINTS-ARE-WATCHLIST` makes open joints the ingest filter; `OPPOSITE-FAILURE-MODES` says
+generation fails by narrowness. One pipe cannot satisfy both, and the register-keyed version
+wins by default under load, leaving a machine that reads the world to confirm its own agenda.
+**Rejected:** one narrow pipe with the ceiling recorded as a known hole; one pipe with
+"standing curiosity" alongside the joints — rejected because the joints and the hobbies share
+a budget, and the joints always win when busy, arriving back at option one unnoticed.
+**Conviction:** high *(owner selected after the collision was named)*
+
+### decide: sharpen-first — A joint may not be dispatched to `EXT` until a fact could settle it
+Three things written before anything is fetched: a restatement a fact can falsify, the bar,
+and what result would mean NO. Where a joint genuinely cannot be sharpened it still dispatches,
+but the bar is written anyway and the result is stamped `JUDGMENT-NOT-EVIDENCE`, permanently
+and visibly, wherever it is later cited.
+**Rejected:** register stays loose and the machine shows its work (puts the judgment call on
+the owner every time — does not scale); no gate at all (status quo).
+**Conviction:** high *(owner chose the "both" option explicitly)*
+
+### correct: not-bias-but-threshold — The reading machine is not biased; it is handed unanswerable questions
+**The agent's framing was wrong and the owner caught it.** Agent claimed the Answerer would
+be a flattery engine. Owner: *"how does it know what I want to hear? isn't it doing a purely
+factual analysis?"* Correct. Fetching and extraction are factual; there is no wanting.
+**The real defect is structural and upstream:** *"are we differentiated"* has no fact-shaped
+answer, so the machine must supply a threshold nobody wrote down, and that supplied threshold
+is invisible in the output. Three aggravating factors survive even a scrupulously honest run:
+the sample is self-selected by the answerer; our own position doc is read as evidence about us
+while a competitor's marketing page is read as evidence about them; and silence reads as support.
+**Why this entry matters:** the wrong framing would have produced a bias-detector bolted to an
+honest machine — real work, wrong target. The correction produced `SHARPEN-FIRST`, which is
+upstream of the machine entirely. **This is an `OVERRIDES-ARE-GOLD`-class entry: the owner's
+challenge, not the agent's analysis, located the defect.**
+
+### open: ingest-continuous — dissolved by decomposition, not resolved
+`JOINT: ingest-continuous` asked *continuous or invoked?* as one global choice. Under
+`TWO-MACHINES` it has two different correct answers: the Answerer is invoked by nature
+(nothing to answer when nothing is asked), the Wanderer is continuous or it is pointless.
+Recorded as **dissolved**, not asserted. A joint that stopped being one question is a
+distinct outcome from a joint that got an answer.
+
+### open: reading-ceiling — Two joints are permanently unreachable by reading
+`already-knew` (nobody publishes an honest account of building something they knew was
+unfounded — what is publishable is a tidy retrospective, worse than silence because it is
+confidently wrong in a consistent direction) and `joint-is-non-obvious` (needs a person in a
+room, at the time). Both marked `EXT-UNREACHABLE` in the register. Neither may be resolved by
+proxy. `already-knew` is the deepest premise in the stack and the entire reachable surface
+today cannot touch it.
+
+### escalate: differentiated-is-not-ext — the live joint is not currently an `EXT` question
+`differentiated` sits `UNDER TEST` tagged `EXT` on the grounds that it is the only joint
+resolvable by external evidence at hours-scale. Under `SHARPEN-FIRST` it fails the gate in its
+present wording: *"distinct from Productboard / Aha! / Dovetail?"* has no bar and no stated NO.
+**Not a kill.** It is reachable once sharpened. But it cannot be dispatched as written, and the
+"hours" cost estimate was made against the unsharpened version.
+
+---
+
 ## Process failures (recorded, per `RECORD-ALWAYS`)
 
 - **Stratum not used** despite `capabilities.stratum: true` and an explicit CLAUDE.md
@@ -211,3 +291,11 @@ Spend the call on procedures and specs; discount it heavily on visions.
   self-contradictions — the class postcondition checks exist to catch.
 - **Codex probe lost** (~27k tokens) to a dead job handle. Now documented in memory.
 - **Boundary decision recorded as settled when it was not.** Caught by the owner.
+- **Stratum not used, session 2 — plumbing, not classification.** Re-evaluated correctly at the
+  conversation→artifact transition this time (per the memory rule written after session 1), and
+  `stratum_plan` / `stratum_validate` both rejected the spec at the MCP boundary with
+  `SCHEMA_INVALID` / `Expected object, received string` at path `""`. The `spec` parameter is
+  declared untyped (`{}`) in the tool schema and the bridge passes the value through as a raw
+  string without parsing, so the server's object check fails before it sees a single step.
+  Reproduced with both YAML and compact valid JSON. **Not a spec-authoring error** — worth a
+  stratum-side issue, and it means the mandate is currently unfollowable from this client.

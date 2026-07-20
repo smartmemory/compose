@@ -11,6 +11,7 @@
 - [Front-of-Funnel Rigor + Parity](../design/2026-07-20-front-funnel-rigor-design.md) (COMP-PLAN-RIGOR) — supporting infrastructure.
 - [COMP-ROADMAP planning-model design](../plans/2026-06-21-roadmap-planning-model-design.md) — shipped spine below all of this.
 - **Operationalization:** [Judgment Layer — Process Manual](../design/2026-07-20-judgment-layer-process-manual.md) — the six processes (P1–P6) written to be run by hand, so the friction points become the automation spec.
+- **Acquisition (read half):** [External Signal — Acquisition Design](../design/2026-07-20-external-signal-design.md) — how signal actually gets in the door. Splits ingestion into two machines with a wall between them (`TWO-MACHINES`, `WALL-BETWEEN`), scopes `JOINTS-ARE-WATCHLIST` to the judgment machine only, dissolves `JOINT: ingest-continuous` by decomposition, and states the joints reading can never reach (`READING-CEILING`).
 
 **Grounding key:** `[EXT]` external evidence · `[INT]` internal/build history · `[ASSERT]` owner assertion, unvalidated · `[DERIVED]` follows from other claims · `[owner-locked]` decided by owner this session
 

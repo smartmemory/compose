@@ -22,12 +22,18 @@ dressed up.
 *Chosen because it is the only joint resolvable by external evidence at hours-scale,
 and the only external evidence anyone has produced. Everything else is asserted.*
 
+> **BLOCKED ON SHARPENING (2026-07-20).** As worded this is not an `EXT` question: "distinct"
+> has no bar and no stated NO, so any lookup returns a threshold the answerer supplied itself.
+> Per `SHARPEN-FIRST` ([external signal design](../design/2026-07-20-external-signal-design.md) §2)
+> it must be restated as something a fact can falsify before dispatch. Reachable once sharpened —
+> not a kill. The "hours" estimate was made against the unsharpened wording.
+
 ## Open — high
 
 | Joint | Question | If TRUE | If FALSE | Resolve by | Cost |
 |---|---|---|---|---|---|
-| **already-knew** | Do bad build decisions come from unexamined reasoning, or do people know and build anyway? | Judgment layer is the product | Value is recovery, not foresight | `INT` — own decision history | days |
-| **joint-is-non-obvious** | Can it surface a joint the owner hadn't noticed? | Day one is valuable with an empty ledger | It reformats what you already said | `CONSTRUCT` — manual mode | days |
+| **already-knew** | Do bad build decisions come from unexamined reasoning, or do people know and build anyway? | Judgment layer is the product | Value is recovery, not foresight | `INT` — own decision history · **`EXT-UNREACHABLE`** | days |
+| **joint-is-non-obvious** | Can it surface a joint the owner hadn't noticed? | Day one is valuable with an empty ledger | It reformats what you already said | `CONSTRUCT` — manual mode · **`EXT-UNREACHABLE`** | days |
 | **valuation-exists** | How is worth established at all? | Advisor product works | Arrive-with-nothing cannot ship | `CONSTRUCT` | weeks |
 | **elicitation-works** | Can context + objective be elicited in one conversation? | Day-one works, no accumulation needed | Only serves users who already have a candidate | `CONSTRUCT` | days |
 | **external-reachable** | Can external signal be acquired at useful quality? | Generation is real; straddling works | Asserted-only; flattery risk returns | `CONSTRUCT` | weeks |
@@ -44,10 +50,35 @@ and the only external evidence anyone has produced. Everything else is asserted.
 | **conviction-inferred** | Does auto-capture infer conviction accurately? | Ledger is trustworthy | Timestamped fiction; needs confirmation UX | `CONSTRUCT` — **live test running: LEDGER conviction fields are agent-inferred and awaiting owner correction** | hours |
 | **entry-threshold** | What earns a ledger entry? | Threshold holds, volume stays usable | Volume rot, faster than manual | `CONSTRUCT` | days |
 | **calibration-timely** | Is calibration signal obtainable in useful time? | Self-grading is real | Substitute the 6-week usage proxy permanently | `INT` — own history | days |
-| **ingest-continuous** | Continuous or invoked ingestion? | Watchlist model works | Degrades to on-demand research (commodity) | `ASSERT` — owner | minutes |
+| ~~**ingest-continuous**~~ | ~~Continuous or invoked ingestion?~~ | — | — | **DISSOLVED 2026-07-20** | — |
 | **ledger-used** | Does an **auto-captured** ledger get used? | Byproduct model works | Dies to the decision-journal abandonment curve | `CONSTRUCT` — **NOT closable in manual mode**; the claim is about auto-capture | weeks |
 | **horizon** | Over what period must this pay off? | — ranking gains a time dimension | — ranking stays timeless and probably wrong | `ASSERT` — owner | minutes |
 | **success-criteria** | What observable outcome means this worked? | Closable joints get criteria | Nothing can be marked resolved honestly | `ASSERT` — owner | minutes |
+
+## Dissolved
+
+A joint that stopped being one question is a distinct outcome from a joint that got an answer.
+Recorded here so it cannot later be misread as resolved.
+
+- **`ingest-continuous`** — dissolved by decomposition 2026-07-20, not asserted. Under
+  `TWO-MACHINES` ([external signal design](../design/2026-07-20-external-signal-design.md) §1a)
+  it has two different correct answers: the Answerer is invoked by nature (nothing to answer
+  when nothing is asked, and the invocation is register-driven rather than person-driven, so it
+  does not degrade to on-demand research), the Wanderer is continuous or it is pointless.
+
+## Reading ceiling
+
+Two joints are marked **`EXT-UNREACHABLE`**: reading the public web cannot touch them at any
+level of quality, so no `EXT` finding may be accepted against them and neither may be resolved
+by proxy. See [external signal design](../design/2026-07-20-external-signal-design.md) §7.
+
+- **`already-knew`** — nobody publishes an honest account of building something they knew was
+  unfounded. What is publishable is a tidy retrospective, which is worse than silence because it
+  is confidently wrong in a consistent direction. This is the deepest premise in the stack and
+  the entire reachable surface today cannot reach it.
+- **`joint-is-non-obvious`** — needs a person, in a room, confirming at the time.
+
+Both wait on the poke half.
 
 ## Resolution methods
 

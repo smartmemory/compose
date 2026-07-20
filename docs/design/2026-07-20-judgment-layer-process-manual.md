@@ -8,6 +8,7 @@
 
 - Source of the claims this operationalizes: [What To Build — The Judgment Layer](../product/2026-07-20-what-to-build-vision.md)
 - Context: [The Discovery Loop](../product/2026-07-20-discovery-loop-vision.md), [COMP-FOH](../features/COMP-FOH/design.md)
+- **Amends this manual:** [External Signal — Acquisition Design](2026-07-20-external-signal-design.md) §8 — adds a precondition to P2 step 3 (`EXT` may not be tagged until the joint is sharpened), changes the P3 `EXT` disposition to return a package rather than a finding, and rules that a joint resolved on silence alone is Inconclusive.
 
 ## Why manual first
 
