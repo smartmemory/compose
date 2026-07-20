@@ -169,6 +169,28 @@ and only an independent pass caught it.
 agent-audit claims (`AGENT-IS-A-POSITION`, `WHO-CHECKS-THE-CHECKER`). Evidence
 *for* requiring an independent pass and *against* trusting agent self-report.
 
+### calibrate: self-grading-ran-generous-again — 2026-07-20
+**Second occurrence, same direction, same day.** Claimed "fixed 10 of 12"; independent
+grade was **5 remediated, 5 partial, 2 punted**. First occurrence claimed 1 remediated
+against an actual 0.
+**Now a pattern, not an incident:** agent self-assessment of its own remediation runs
+generous on every measurement taken so far (2 of 2). Treat any agent claim of "fixed"
+as unverified until independently graded.
+**Compounding fact:** the fix pass also *introduced* ~6 new defects while fixing 5 —
+including a straddle-in-flight state with no outcome box, and a direct contradiction
+between the manual (operator writes canon) and the vision (`TOOLS-OWN-WRITES`, agents
+cannot author canon). Same failure shape as the original finding 10: a principle added
+in one place and never propagated to the procedure.
+
+### calibrate: editing-passes-are-not-converging — 2026-07-20
+Three reviews: 10 defects → 5 fixed, 5 partial, ~6 new. **Not converging.** Per the
+project's existing rule, non-convergence under review means **the spec is too broad**,
+not that the editing was careless. Diagnosis: the manual specifies six processes resting
+on four quantities that do not exist (worth, VOI, reversibility, budget), so every patch
+to a downstream step creates a fresh dangling reference upstream.
+**Implication:** stop editing; cut scope to what is runnable (P1a + P2) and let the rest
+be specified from evidence collected by running it.
+
 ### calibrate: review-precision-scales-with-concreteness — 2026-07-20
 Three adversarial passes, same reviewer, same day:
 | Artifact | Result |
