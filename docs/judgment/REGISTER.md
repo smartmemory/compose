@@ -1,5 +1,11 @@
 # JOINT REGISTER
 
+> **CANON for joint state.** The vision doc (`docs/product/2026-07-20-what-to-build-vision.md` §9) points here and does not duplicate. Split is by kind: stable named reasoning lives there, live operational state lives here.
+>
+> **DISPOSABLE SCAFFOLDING.** This markdown store is a manual-mode learning substrate, **not** a fourth canon alongside `ideabox.md`, the vision store, and `feature.json`. Migration target: the vision store's existing types — joint → `question`, decision/kill → `decision`, deliberation → `thread`, position → `idea` *or a new type (undecided — see below)*. Do not build tooling against these files; tooling is what turned the ideabox from a surface into a second source.
+>
+> **OPEN MODELLING QUESTION — do not answer by drift:** is a *position* a new vision-store type, or an `idea` with joints attached? This is the same question WS-A asks about ideas, and answering it by accretion is how the current fragmentation happened.
+
 **Last ranked:** 2026-07-20 · **Under test:** `differentiated` (exactly one, per `ONE-UNDER-TEST`)
 
 Backfilled from the 2026-07-20 design session. Ranking is by value of information

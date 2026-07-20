@@ -372,30 +372,16 @@ Previously missing. What was recorded is **horizontal** (the world contradicts a
 
 ---
 
-## 9. JOINT REGISTER
+## 9. JOINT REGISTER — moved
 
-The live surface. Every danger sits here as a testable question, ranked by value of information.
-
-| Joint | The question | If TRUE → | If FALSE → | Resolve by | VOI | Status |
-|---|---|---|---|---|---|---|
-| **already-knew** | Do bad build decisions come from *unexamined reasoning*, or do people already know and build anyway? | Judgment layer is the product | Pivot to ledger + branching: value is **recovery**, not foresight | `INT` — own decision history, known outcomes | High | Open. Partly defused by `PREPARED-RECOVERY` |
-| **ledger-used** | If auto-captured, does the ledger actually get used? | Byproduct model works | Dies to the decision-journal abandonment curve | `CONSTRUCT` — build capture, observe 6 weeks | High | Open |
-| **sensitivity-computable** | Can "which claim flips the conclusion" be computed reliably? | Branching engine works | Multiplies garbage; fall back to human-marked joints | `CONSTRUCT` — run over real past decisions | High | Open |
-| **valuation-exists** | How is worth established at all? Four framings tried, three dead | Constructed-with-help works → advisor product | No workable framing → the arrive-with-nothing case cannot ship | `CONSTRUCT` | High | Open — **critical path**. Killed: computable, elicited, revealed-by-choices |
-| **self-report-reliable** | Where does *this* owner sit on the self-knowledge spectrum? | Trust stated objective function; act as executor | Work constructively; don't take the statement at face value | `INT` — running consistency tally, drift vs update | High | Open — dials the whole posture |
-| **external-reachable** | Can external signal be acquired at useful quality? | Generation is real; straddling works | Asserted-only system; flattery risk returns | `CONSTRUCT` — attempt one real pipe | High | Open — now blocks three others |
-| **differentiated** | Is this distinct from Productboard / Aha! / Dovetail? | Proceed | Reposition or kill | `EXT` — hours of work | High | **Nominated for test** — cheapest, only external evidence available |
-| **candidates-generatable** | Can candidates be generated, or must the owner always supply them? | Generation layer is real | Evaluation-only system; `GENERATION-DOMINATES` leverage unclaimed | `CONSTRUCT` | High | Open |
-| **straddle-reaches-trunk** | Can *strategy-level* branches be built in parallel cheaply enough? | Straddling reaches decisions that matter | Leaf-level tool only; trunk commitments still forced early | `CONSTRUCT` | High | Open |
-| **conviction-inferred** | Does auto-capture infer *conviction* accurately? | Ledger is trustworthy | Timestamped fiction; needs confirmation UX | `CONSTRUCT` | Med | Open |
-| **entry-threshold** | What earns a ledger entry? | Threshold holds | Volume rot, faster than manual | `CONSTRUCT` | Med | Open |
-| **construction-discipline** | Does construction resolve joints, or degrade into "build it and see"? | Execution-as-instrument works | Most expensive failure mode in this doc | `CONSTRUCT` — observe own discipline | Med-High | Open |
-| **calibration-timely** | Is calibration signal obtainable in useful time? | Self-grading is real | Substitute the 6-week usage proxy permanently | `INT` | Med | Partly resolved |
-| **ingest-continuous** | Continuous or invoked ingestion? | Watchlist model works | Degrades to on-demand research (commodity) | `ASSERT` | Med | Open — argued, unconfirmed |
-| **elicitation-works** | Can context + objective function be elicited well in one conversation? | Arrive-with-nothing works day one; no accumulation needed | Product only serves users who already have a candidate | `CONSTRUCT` — run it on a real person | High | Open — **gates the arrive-with-nothing case** |
-| **joint-is-non-obvious** | Can it surface a joint the owner had *not* noticed? | Day one is valuable with an empty ledger | Day one is a form that reformats what you already said | `CONSTRUCT` | High | Open — cold start reduces to this |
-
-**Queue discipline:** 8 High VOI, one depth-1 slot, nothing under test yet.
+> **The register lives in [`docs/judgment/REGISTER.md`](../judgment/REGISTER.md).** It is not duplicated here.
+>
+> **Why (2026-07-20):** it *was* duplicated here, and within an hour of the judgment store being created the same 17 joints existed in two files with no sync — reproducing precisely the ideabox↔vision-store fragmentation this project spent an epic eliminating. Split is now by **kind, not convenience**:
+> - **Stable named reasoning** (the claims in §1–§8) → this document. Canon.
+> - **Live operational state** (joints, their status, positions, dated decisions) → `docs/judgment/`. Canon.
+> - **Nothing appears in both.**
+>
+> Applies Decision 3's projection pattern (one canonical store; surfaces are projections; never a second source).
 
 ---
 
@@ -416,14 +402,11 @@ The live surface. Every danger sits here as a testable question, ranked by value
 
 ---
 
-## 11. Killed, with reasons
+## 11. Killed, with reasons — moved
 
-- **"Research + idea management" as the framing.** Two write-heavy, read-poor stores. Both already exist here; neither produces judgment.
-- **Build exhaust as the *source* of ideas.** Closed loop — reveals how you build, never whether anyone wants it. Demoted to one evidence type; rescued narrowly as `AGENT-IN-THE-ROOM` and `MOAT-FINAL-FORM`.
-- **"Only tool in the room" as organizing premise.** Anchoring on the sole inward-facing input *produced* the pile-management design.
-- **Goal-derived scope ("the front half does not source the goal").** Killed by owner: goal→execution is the mechanical part that already ships. Sourcing the goal *is* the product.
-- **"Ship rung 1 and let contact answer the hard questions."** Rejected as bottom-up drift. Method is top-down: lock the highest level, then decompose.
-- **`LADDER-CORRECTION`** — the claim that "every rung of the Discovery Loop is inbox management". Wrong. Rungs 4–6 are temporal calibration; the reframe demoted a real mechanism before its replacement existed.
+> **Kills live in [`docs/judgment/LEDGER.md`](../judgment/LEDGER.md).** A kill is a *dated event with a reason and a conviction* — ledger-shaped, not narrative-shaped — so it belongs with the operational state, not here. Same de-duplication as §9.
+>
+> One exception retained as reasoning rather than event: **`LADDER-CORRECTION`** is a named claim (§ Killed within the claim set) because other claims reference it. Its *event* record is in the ledger.
 
 ---
 

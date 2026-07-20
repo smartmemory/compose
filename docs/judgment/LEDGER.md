@@ -41,6 +41,21 @@ worth is elicited then applied. Both also dead.
 **Now:** `WORTH-IS-CONSTRUCTED-WITH-HELP`.
 **Conviction:** high. This was the sharpest correction of the session.
 
+### D-4b · KILL — three further framings (migrated from the vision doc §11)
+- **"Research + idea management" as the product framing.** Two write-heavy,
+  read-poor stores; both already exist here; neither produces judgment.
+- **"Only tool in the room" as the organizing premise.** Anchoring on the sole
+  inward-facing input is *what produced* the pile-management design. Survives only
+  as `AGENT-IN-THE-ROOM` and `MOAT-FINAL-FORM`.
+- **Goal-derived scope** ("the front half does not source the goal"). Killed by
+  owner: goal→execution is the mechanical part that already ships; sourcing the
+  goal *is* the product.
+- **"Ship rung 1 and let contact answer the hard questions."** Rejected as bottom-up
+  drift; method is top-down.
+- **"Every rung of the Discovery Loop is inbox management"** (`LADDER-CORRECTION`).
+  Wrong — rungs 4–6 are temporal calibration. Agent overreach, corrected same day.
+**Conviction:** high on all five.
+
 ### D-5 · Joints are branch points; straddling is a fourth disposition
 **Owner-originated.** Don't resolve the joint — build all its branches, let reality
 pick. Requires no foresight.
