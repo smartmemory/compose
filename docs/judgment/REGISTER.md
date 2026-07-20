@@ -34,19 +34,24 @@ and the only external evidence anyone has produced. Everything else is asserted.
 | **sensitivity-computable** | Can "which claim flips the conclusion" be computed reliably? | Branching engine works | Multiplies garbage | `CONSTRUCT` | weeks |
 | **candidates-generatable** | Can candidates be generated, or must the owner supply them? | Generation layer is real | Evaluation-only system | `CONSTRUCT` | weeks |
 | **straddle-reaches-trunk** | Can strategy-level branches be built in parallel cheaply? | Straddling reaches decisions that matter | Leaf-level tool only | `CONSTRUCT` | weeks |
-| **commercial-intent** | Product to sell, or instrument for own building? | — | — | `ASSERT` — owner | minutes |
+| **commercial-intent** | Product to sell, or instrument for own building? | Sell → differentiation, onboarding, cold start and the arrive-with-nothing case all become load-bearing | Own instrument → cold start and differentiation stop mattering; optimise purely for this operator | `ASSERT` — owner | minutes |
 
 ## Open — medium
 
-| Joint | Question | Resolve by |
-|---|---|---|
-| **construction-discipline** | Does construction resolve joints, or degrade into "build it and see"? | `CONSTRUCT` |
-| **conviction-inferred** | Does auto-capture infer conviction accurately? | `CONSTRUCT` — **live test: see LEDGER** |
-| **entry-threshold** | What earns a ledger entry? | `CONSTRUCT` |
-| **calibration-timely** | Is calibration signal obtainable in useful time? | `INT` |
-| **ingest-continuous** | Continuous or invoked ingestion? | `ASSERT` |
-| **ledger-used** | Does an auto-captured ledger get used? | `CONSTRUCT` — **NOT testable in manual mode** (Codex finding 9) |
-| **horizon / success-criteria** | See `OBJECTIVE.md` | `ASSERT` |
+| Joint | Question | If TRUE | If FALSE | Resolve by | Cost |
+|---|---|---|---|---|---|
+| **construction-discipline** | Does construction resolve joints, or degrade into "build it and see"? | Execution-as-instrument works | Most expensive failure mode in the design | `CONSTRUCT` — observe own discipline | days |
+| **conviction-inferred** | Does auto-capture infer conviction accurately? | Ledger is trustworthy | Timestamped fiction; needs confirmation UX | `CONSTRUCT` — **live test running: LEDGER conviction fields are agent-inferred and awaiting owner correction** | hours |
+| **entry-threshold** | What earns a ledger entry? | Threshold holds, volume stays usable | Volume rot, faster than manual | `CONSTRUCT` | days |
+| **calibration-timely** | Is calibration signal obtainable in useful time? | Self-grading is real | Substitute the 6-week usage proxy permanently | `INT` — own history | days |
+| **ingest-continuous** | Continuous or invoked ingestion? | Watchlist model works | Degrades to on-demand research (commodity) | `ASSERT` — owner | minutes |
+| **ledger-used** | Does an **auto-captured** ledger get used? | Byproduct model works | Dies to the decision-journal abandonment curve | `CONSTRUCT` — **NOT closable in manual mode**; the claim is about auto-capture | weeks |
+| **horizon** | Over what period must this pay off? | — ranking gains a time dimension | — ranking stays timeless and probably wrong | `ASSERT` — owner | minutes |
+| **success-criteria** | What observable outcome means this worked? | Closable joints get criteria | Nothing can be marked resolved honestly | `ASSERT` — owner | minutes |
+
+## Resolution methods
+
+Five, matching P2 step 3 exactly: `EXT` (look it up in the world) · `INT` (check our own history and records) · `CONSTRUCT` (build the test) · `ASSERT` (owner's call) · `STRADDLE` (build all branches). `INT` was in use here before being defined in the manual — now defined in both.
 
 ## Notes
 
