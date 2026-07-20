@@ -285,6 +285,92 @@ Sensors run constantly; investigations run rarely and on trigger. This is a moni
 
 ---
 
+## 8g. Multiple stakeholders (agenda item 6 — resolved)
+
+**`FACT-DISPUTE-VS-VALUES-DISPUTE`** `[owner-locked]` — The core contribution here. The two look identical in the room and **resolve completely differently**: world-uncertainty yields to evidence, preference-disagreement does not — two people can agree on every fact and still want different things. Most unproductive strategy arguments are values disputes fought with studies: everyone brings data, nobody moves, because the data was never the disagreement. **The system must name which kind of argument is happening.** Cheap, immediately useful, and nothing does it today.
+
+**`NEVER-MERGE-OBJECTIVE-FUNCTIONS`** `[DERIVED]` — Averaging priorities produces something neither party holds and nobody will defend: an **unowned preference**. Hold them separately, surface divergence, and make choosing between them an explicit decision with an owner rather than a silent blend.
+
+**`AUTHORITY-IS-EXPLICIT`** `[DERIVED]` — The commit button needs a person attached. **Contributing evidence, dissenting, and committing are three distinct rights**; conflating them is how teams end up with decisions nobody made.
+
+**`RECORDED-DISSENT-BEATS-THE-SOLO-LEDGER`** `[DERIVED]` — What actually goes wrong on teams is not bad decisions but that decisions are **remembered differently afterward** by each person. "I disagreed, here is why, on this date" protects the dissenter, ends re-litigation, and is **gradeable later** — you can see who was right when they disagreed.
+
+**`CALIBRATING-PEOPLE-IS-THE-MOST-DANGEROUS-FEATURE-HERE`** — Comparing individuals' track records is technically trivial (the per-person dial from `JOINT: self-report-reliable` generalises directly) and **changes what the product is**. A system that scores who was right alters behaviour: dissent dries up once it is graded, or the record becomes a weapon in a performance review. Not a tuning problem — a category change. Flagged as more dangerous than anything else in this document.
+
+**`PEOPLE-CALIBRATION-DEFERRED-TO-A-SEPARATE-PRODUCT`** `[owner-locked]` — Scoring individuals is **punted entirely**; it belongs to a different product, not this one. What survives into v1: calibration is **scoped to the question type, not the person** ("our integration-effort estimates are wrong 70% of the time, always the same direction") — more useful anyway, because a systematic bias is actionable where "Bob is bad at this" is not. Solo, self-directed and private is both the safest shape and exactly v1, so nothing is lost by deferring.
+*Honest limit:* the technical part is easy and the social part is not controllable by design. Aggregate stats de-anonymise on a team of three; domain-scoped stats trace to whoever owns the domain. Safety here is a matter of **defaults**, not capabilities — anything shipped as an option is eventually switched on by someone with a reason.
+
+**`ATTRIBUTION-NOW-EVEN-IF-TEAMS-LATER`** `[owner-locked]` — v1's user is a solo owner, so most of this can wait. But **the data model must not foreclose it**: attribution on claims, dissent and commits costs nothing today and is close to impossible to retrofit.
+
+---
+
+## 8h. Auditing the agent (agenda item 7 — resolved)
+
+**`THE-RIGOR-POINTS-ONLY-OUTWARD`** — The asymmetry: this is a rigor machine aimed entirely at the owner — challenging assumptions, grading grounding, tracking consistency — and **nothing aims it at the system**. Its inferences arrive wearing structure and confidence, the packaging that makes error hardest to see.
+
+**`AGENT-INFERENCES-ARE-POSITIONS-TOO`** `[DERIVED]` — "This is the load-bearing joint", "you believed X at strength Y", "this evidence is reliable" are all claims with grounding, and get the same treatment as any other position. Same recursion as `THE-GOAL-IS-A-POSITION`. **Floor to stop infinite regress:** audit only inferences that are load-bearing *and* cheap to check — `VALUE-OF-INFORMATION` again.
+
+**`AGENT-CALIBRATION-IS-FREE`** `[DERIVED]` — The agent's judgments are falsifiable by outcome, and outcomes are already collected: did the failure land on the joint it named? Was the captured conviction right (owner corrects on the spot)? Was the evidence later contradicted? Calibration therefore comes from the same ledger at no extra cost, and per `PEOPLE-CALIBRATION-DEFERRED-TO-A-SEPARATE-PRODUCT` it is **scoped to inference type** — "joint identification is wrong 40% of the time on architecture decisions" says exactly where to distrust it.
+
+**`WHO-CHECKS-THE-CHECKER`** — Ranked: **reality** (outcomes are external to the agent's reasoning — not self-assessment, and by far the strongest); **the owner**, for immediately verifiable captures; **an independent adversarial pass** — *high recall, poor precision*, demonstrated in this very session, where an outside review caught the missing generation layer and missing objective function that self-review walked past, while grading 9 of 10 findings FATAL; **the owner again**, adjudicating. It bottoms out at a human, which is acceptable, but makes owner attention the scarce resource — it must not be spent sifting noise.
+
+**`ADVERSARIAL-REVIEW-ALREADY-EXISTS`** `[EXT]` — Verified in-repo: Codex review is a live gate in `pipelines/build.stratum.yaml`, `build-quick`, `refactor`, and `review-fix`, with a structured `ReviewResult` schema and a review→fix→re-review loop (`pipelines/review-fix.stratum.yaml:15`). **Auditing the judgment layer is a reuse, not a build** — materially cheaper than assumed. Two carried problems:
+- *Reviews against a reference, and judgments have none.* In `build`, Codex checks code against the blueprint. **The joint register is the missing reference:** review a position against its own claimed grounding — does the evidence support the claim, is the named joint really load-bearing, what is absent. Same shape as blueprint-conformance.
+- *Category error on non-code artifacts is documented.* Pointed at a design doc it reviews it as shipped code. Even when told explicitly to judge the argument, this session's pass returned 9 of 10 findings graded FATAL. The reuse needs its own lens **and its own grading contract**, not just a different input.
+- The `review-fix` loop is already the adjudication loop **minus the human**, and today showed the human cannot be removed: precision is too low to act on unsorted findings.
+
+**`JOINT-RECALL-IS-THE-NUMBER`** `[DERIVED]` — **The one that matters.** Everything surfaced gets scrutinised; what the system **never mentions is invisible**, producing no artifact to audit. Same silent-failure class as `BROKEN-SENSORS-READ-AS-CALM`, and undetectable by inspection. The only detector is postmortem: *when something broke, was the cause on the list?* **Joint recall — the fraction of things that actually went wrong which were named beforehand — is the single most important metric about this system.** Everything else is decoration by comparison.
+
+---
+
+## 8i. Product boundary: separate product or a layer in Compose?
+
+Decision criterion (owner): how much is reusable, and from Compose vs Stratum.
+
+**Reuse map.** Construction-as-resolution and straddle (parallel branches) → **Compose** build lifecycle + parallel merge machinery. Adversarial review loop → **Compose/Stratum**, verified live in four pipelines. Agent dispatch, flows, background runs → **Stratum**. Crystallization target (`feature.json`, roadmap) → **Compose**. Memory, conversation, profiling → **SmartMemory/Maya**. World ingestion, compiled sensors, valuation → **nothing; genuinely new.** Roughly two-thirds reuse, and **the new third is almost entirely the generation half** — the same part that is least designed.
+
+> **STATUS: OPEN — NOT DECIDED.** Recorded as decided in error; owner reopened. The argument below is one side only, and is materially weakened by `TRANSFER-LINE-IS-CONSTRUCTABILITY` and `MONOLITHS-ARE-HARD-TO-SPLIT` below.
+
+**`BUILD-IT-INSIDE-EXTRACT-LATER`** *(proposed, contested)* — Build as a layer within Compose with a clean seam; extract only if a reason appears.
+1. **The differentiators span the boundary.** Construction-as-resolution requires the build engine (`THREE-WAYS-TO-RESOLVE`, `MOAT-FINAL-FORM`). Split them and what remains is a judgment tool the incumbents already approximate (`JOINT: differentiated`) plus a build tool. **The value is the join**, so a seam through it destroys the thing being built.
+2. **The dependency is already one-way and clean.** Judgment depends on execution; execution does not depend on judgment (Compose builds fine without any of this). That is what layering-within-a-product is for — the structure is obtained without paying for a boundary.
+3. **Precedent, twice.** COMP-FOH settled the identical shape for Maya: part of Compose, a layer over the core, extractable later, opt-in at the boundary and all-in inside it.
+
+**`PRODUCT-BOUNDARY-IS-NOT-DEPENDENCY-STRUCTURE`** — Conflation worth separating: building directly on Stratum's dispatch and flows **does not require being a separate product**. Compose already depends on Stratum; a layer inside Compose can depend on Stratum just as directly. Independence of substrate ≠ independence of packaging.
+
+**`TRANSFER-LINE-IS-CONSTRUCTABILITY`** `[owner-locked]` — *Supersedes the earlier "non-software users would flip it" condition, which was wrong.* The transfer boundary is **not** product-vs-non-product. It is **whether the joint's experiment can be built**:
+- **Pricing** — the experiment *is* software (price tests, paywall variants, checkout flows). Construction-as-resolution works fully; straddling is just an A/B test. **Sweet spot.**
+- **Market entry** — landing pages, ad tests, per-segment waitlists. Also software. **Sweet spot.**
+- **Hiring** — the experiment cannot be built; straddling means actually hiring both. Ledger, joints, branches and evidence still work, but the differentiator does not. **Commodity version.**
+
+Pricing and market entry are *software decisions that are not product decisions*, and they retain the entire differentiator — so the line runs through the middle of "non-product", not around it.
+
+**`MONOLITHS-ARE-HARD-TO-SPLIT`** `[owner]` — Counter-argument to `BUILD-IT-INSIDE-EXTRACT-LATER`, largely conceded. Packaging and architecture are independent: two interoperating components can ship as **one product with the integration hidden**, so "sell it as one thing" is not an argument for building it as one thing. "Extract later" is a promise codebases rarely keep. The opposing cost — a boundary drawn before it is felt is worse than none, and its tax compounds — **only holds when the seam is unknowable in advance.** If the domain hands you the seam (**judgment engine** vs **construction resolver**, per `TRANSFER-LINE-IS-CONSTRUCTABILITY`), it is not unknowable and the objection largely dissolves.
+
+**`CHECK-BEFORE-DECIDING`** — Load-bearing fact, unverified: **has this codebase ever actually extracted something it called "extractable later"?** COMP-FOH used the phrase for Maya, citing a COMP-ROADMAP pattern. If nothing has ever been extracted, "extract later" is a story and `MONOLITHS-ARE-HARD-TO-SPLIT` wins outright. Verify before deciding the boundary.
+
+**`LEAN-ON-SMARTMEMORY-MAXIMALLY`** `[owner-locked]` — Maximize reuse of SmartMemory as the substrate rather than rebuilding storage, typing, evolvers, or challenge machinery. *Constraint preserved from COMP-FOH:* the kitchen still runs headless — maximal leaning applies to the judgment/front-of-house layer, not to Compose's portable core.
+
+---
+
+## 8j. Escalation — the vertical loop
+
+Previously missing. What was recorded is **horizontal** (the world contradicts a position). This is **vertical**: scoping, design, spikes and build all feed back up — into the feature premise, the product position, and ultimately the objective function.
+
+**`EXHAUST-IS-EVIDENCE-INTO-THE-SAME-GRAPH`** `[DERIVED]` — Not a new mechanism. Downstream work emits evidence bearing on upstream claims, and invalidation propagates by walking the same evidence links as `STALENESS-IS-RE-DERIVATION-NOT-AGE` — world-sourced and build-sourced evidence enter the identical graph. This is the **targeted** form of build exhaust salvaged in `MOAT-FINAL-FORM`, not the ambient form that was killed. It also supplies the mechanism the Discovery Loop's "dissolution" always lacked.
+
+**`THE-ESCALATION-LADDER`** `[owner-locked]` — implementation detail → feature design → feature premise → product position → objective function. **How far a contradiction propagates is computed by walking links, not judged by feel.**
+
+**`REVERSIBILITY-GOVERNS-ESCALATION`** `[DERIVED]` — The valuation protocol: escalate when *the cost of continuing on a false premise exceeds the cost of stopping.* Near a one-way door, escalate readily; where the work is cheap to undo, note and continue. `REVERSIBILITY-IS-A-METER` is already the correct governor — no new rule needed.
+
+**`DIFFICULTY-IS-NOT-WRONGNESS`** — The critical discrimination. *"This is 5× harder than we thought"* is the most common escalation trigger and is usually **not** evidence the premise is wrong. *"We discovered users don't do X"* is. Conflating them means every hard sprint re-opens the strategy.
+
+**`BOTH-ESCALATION-FAILURES-ARE-FATAL`** — They pull opposite ways. **Under-escalation** is sunk cost: the premise is known dead and the work finishes anyway (`UNEXAMINED-OR-UNWILLING` in another guise). **Over-escalation** is thrash: nothing ships because every setback reopens the goal. A naive "always escalate" rule produces the second while trying to cure the first.
+
+**`RECORD-ALWAYS-ACT-BY-COST`** `[owner-locked]` — Resolution. Noting a contradiction is **free and unconditional** (it goes in the ledger); *acting* on it runs the cost comparison. Preserves signal without thrash, and enables **`WEAK-SIGNALS-ACCUMULATE`**: three difficulty-surprises may jointly indicate a wrong premise where none does alone — possible only because all three were recorded.
+
+---
+
 ## 9. JOINT REGISTER
 
 The live surface. Every danger sits here as a testable question, ranked by value of information.
@@ -320,8 +406,10 @@ The live surface. Every danger sits here as a testable question, ranked by value
 3b. **VALUATION** — **framing settled, design open.** `WORTH-IS-CONSTRUCTED-WITH-HELP` plus the elicitation mechanics (§8d) give a defensible framing and a measurable posture dial; there is still no design. Critical path for the arrive-with-nothing case.
 4. ~~**Cost alongside value of information**~~ — **RESOLVED** (§8e): three dispositions collapse to one cost comparison, which also completes the stopping rule; cost observed from history, bucketed coarsely, opportunity cost included.
 5. ~~**Staleness**~~ — **RESOLVED** (§8f): re-derivation not age; the timer schedules the ranking, not the check; tiered instruments (event-driven / sensors / dispatched agents); volatility learned; separate visible maintenance budget.
-6. **More than one person** — single owner, single objective function assumed throughout. Disagreement between people ≠ uncertainty about the world. **In progress.**
-7. **Who audits the agent** — the system infers which joint is load-bearing and what you believed. Its own calibration is unchecked.
+6. ~~**More than one person**~~ — **RESOLVED** (§8g): name the dispute type; never merge objective functions; explicit authority; recorded dissent; attribution now even though teams are later. Flags the most dangerous feature in the doc.
+7. ~~**Who audits the agent**~~ — **RESOLVED** (§8h): agent inferences are positions; calibration is free from outcomes and scoped to inference type; reality is the strongest auditor; **joint recall is the number that matters**.
+
+**Agenda complete.** Six resolved, one punted to a separate product, one parked (extract the design phase from this session). Next: design and build.
 
 **PARKED — extract the shape of the design phase from this session.** This session *is* an instance of the design phase being run, and a usable corpus for distilling its shape. Load-bearing observation not to lose: **we entered at the design layer directly, skipping elicitation and generation, because the context already existed.** Implies the stack has **multiple entry points**, not one start — the system should detect where the owner already is from what context is present, rather than walking everyone from the top. Connects to cold start (§8d): arrive-with-nothing and arrive-mid-stack are different entries to the same machine. To be taken up later.
 
