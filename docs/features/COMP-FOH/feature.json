@@ -1,0 +1,17 @@
+{
+  "code": "COMP-FOH",
+  "description": "Front of House: Maya (colleague) + SmartMemory (typed memory OS) as Compose's memory & interaction layer. Restaurant model: front-of-house = Maya+SmartMemory (fluid ideation/deliberation/conviction/challenge/calibration/worldview, workspace-per-product); back-of-house = Compose delivery + git feature.json (committed roadmap). Promotion=crystallization (fluid->git), completion=dissolution (exhaust->memory). Discovery Loop is ~80% prebuilt in SmartMemory (challenge_assertion, EvaluationEvolver calibration, decay/strength conviction, decision/plan/opinion types). Hybrid canon clarifies (not violates) COMP-ROADMAP Decision 2. Gaps: no cross-workspace/portfolio, no relational/ACID. Maya drive-vs-follow = gate/flag/skip dial. Anchor: docs/features/COMP-FOH/design.md; vision: docs/product/2026-07-20-discovery-loop-vision.md.",
+  "status": "PLANNED",
+  "phase": "COMP-FOH: Front of House (Maya + SmartMemory)",
+  "created": "2026-07-20",
+  "updated": "2026-07-20",
+  "complexity": "XL",
+  "position": 1,
+  "profile": {
+    "needs_prd": false,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true
+  },
+  "impact": "high"
+}

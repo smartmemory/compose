@@ -7,6 +7,7 @@
 ## Related Documents
 
 - Near-term slice / first rungs: [Front-of-Funnel Rigor + Parity design (2026-07-20)](../design/2026-07-20-front-funnel-rigor-design.md) — rungs 1–3 of the ladder below, built minimal-first.
+- Substrate / memory & colleague layer: [COMP-FOH — Front of House (Maya + SmartMemory)](../features/COMP-FOH/design.md) — the memory OS that makes the loop real; ~80% of the ladder's hard rungs (calibration, adversary, conviction) are prebuilt SmartMemory primitives.
 - Spine already shipped: [COMP-ROADMAP planning-model design (2026-06-21)](../plans/2026-06-21-roadmap-planning-model-design.md) — COMP-ROADMAP-MODES + COMP-ROADMAP-PLAN (both COMPLETE) gave `compose plan` a mode-generic peer lifecycle. This vision is the *ambition* that lifecycle exists to grow into.
 - Early instinct this revives: `docs/decisions/2026-02-11-deliberation-as-work.md` (deliberation as first-class work — dropped early, vindicated here).
 

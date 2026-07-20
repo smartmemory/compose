@@ -1504,3 +1504,11 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
 | 1 | COMP-PLAN-IDEA-UNIFY | Unify ideation storage: vision idea-type items become canon; ideabox.md becomes a read-only generated view (ROADMAP.md<-feature.json pattern). Ideabox stays the funnel/UI/CLI; backing store swaps to the vision graph so ideas can hold evidence/scores/links for the Discovery Loop. Honors COMP-ROADMAP Decision 4 (funnel interface pinned, not storage). One-time markdown->store migration; no bidirectional sync. Rung 1 (keystone) of COMP-PLAN-RIGOR. Anchor: docs/design/2026-07-20-front-funnel-rigor-design.md; vision: docs/product/2026-07-20-discovery-loop-vision.md. | PLANNED |
+
+---
+
+## COMP-FOH: Front of House (Maya + SmartMemory) — PLANNED
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 1 | COMP-FOH | Front of House: Maya (colleague) + SmartMemory (typed memory OS) as Compose's memory & interaction layer. Restaurant model: front-of-house = Maya+SmartMemory (fluid ideation/deliberation/conviction/challenge/calibration/worldview, workspace-per-product); back-of-house = Compose delivery + git feature.json (committed roadmap). Promotion=crystallization (fluid->git), completion=dissolution (exhaust->memory). Discovery Loop is ~80% prebuilt in SmartMemory (challenge_assertion, EvaluationEvolver calibration, decay/strength conviction, decision/plan/opinion types). Hybrid canon clarifies (not violates) COMP-ROADMAP Decision 2. Gaps: no cross-workspace/portfolio, no relational/ACID. Maya drive-vs-follow = gate/flag/skip dial. Anchor: docs/features/COMP-FOH/design.md; vision: docs/product/2026-07-20-discovery-loop-vision.md. | PLANNED |
