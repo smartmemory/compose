@@ -9,7 +9,7 @@
 ## Health warning
 
 This was **not elicited** — it is back-inferred from one session's conversation.
-Per `WORTH-IS-CONSTRUCTED-WITH-HELP`, an objective function assembled by the agent
+Per `WORTH-IS-CONSTRUCTED`, an objective function assembled by the agent
 from observed remarks is precisely the failure mode we named (the agent handing
 the owner a tidied version of his own asides and calling it a goal). **Treat every
 line below as a question, not a record.** First run of P1b should replace it.
@@ -49,4 +49,4 @@ Too early. One session. Note for the record: within this session, stated
 priorities and observed choices **did not diverge** — top-down framing was
 asserted and then consistently enforced, including against the agent's own
 proposals. That is one datapoint toward the reliable end of
-`SELF-KNOWLEDGE-IS-A-SPECTRUM`, not a verdict.
+`SELF-KNOWLEDGE-DIAL`, not a verdict.

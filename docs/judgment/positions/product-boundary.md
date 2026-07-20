@@ -2,7 +2,7 @@
 
 **Status:** OPEN — deliberately unresolved
 **Conviction:** low and *contested*. Recorded as settled 2026-07-20, **reopened by
-the owner the same day.** That error is itself in the ledger (D-9).
+the owner the same day.** That error is itself in the ledger (`open: product-boundary`).
 
 ## The question
 
@@ -19,7 +19,7 @@ or one repo with separate packages?
 
 ## The joint that decides it
 
-**`TRANSFER-LINE-IS-CONSTRUCTABILITY`** — the boundary follows whether a joint's
+**`CONSTRUCTABILITY-LINE`** — the boundary follows whether a joint's
 experiment can be built, not product-vs-non-product:
 
 - **Pricing** — experiment *is* software. Full differentiator. Sweet spot.

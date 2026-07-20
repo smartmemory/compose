@@ -13,35 +13,35 @@ it stand.
 
 ## 2026-07-20 — Session 1 (backfilled)
 
-### D-1 · The layer above execution is what to build next
+### decide: layer-above-execution — The layer above execution is what to build next
 **Decided.** Compose's goal→execution half works and is mechanical; the unclaimed
 ground is deciding what the goal should be.
 **Rejected:** treating the front half as idea storage and sorting.
 **Conviction:** high *(inferred — asserted early and never revisited)*
 
-### D-2 · The product's output is a testable ledger, not a decision aid
+### decide: ledger-is-the-output — The product's output is a testable ledger, not a decision aid
 **Rejected:** "research + idea management" framing (two write-heavy read-poor
 stores, both already exist here); the reasoning-aid framing (dies to `already-knew`).
 **Conviction:** high *(inferred — owner reframed it himself as "a ledger that can be
 tested independently")*
 
-### D-3 · KILL — build exhaust as the source of ideas
+### kill: exhaust-as-idea-source — build exhaust as the source of ideas
 **Reason:** closed loop. Exhaust reveals how you build, never whether anyone wants
 it. No path to market truth.
 **Survives as:** one evidence type; `AGENT-IN-THE-ROOM`; `MOAT-FINAL-FORM`.
 **Conviction:** high, and owner-initiated — he parked the moat claim before the
 argument was made.
 
-### D-4 · KILL — worth is revealed by the owner's choices
+### kill: revealed-preference — worth is revealed by the owner's choices
 **Reason (owner):** contradicts the product's own premise. If people decide badly
 under uncertainty, their choices encode guessing, not preference. Fitting a model
 to that and returning it as "your taste" is the flattery engine wearing statistics.
 **Rejected alternatives in this thread:** worth is computable from goal+constraints;
 worth is elicited then applied. Both also dead.
-**Now:** `WORTH-IS-CONSTRUCTED-WITH-HELP`.
+**Now:** `WORTH-IS-CONSTRUCTED`.
 **Conviction:** high. This was the sharpest correction of the session.
 
-### D-4b · KILL — three further framings (migrated from the vision doc §11)
+### kill: four-more-framings — three further framings (migrated from the vision doc §11)
 - **"Research + idea management" as the product framing.** Two write-heavy,
   read-poor stores; both already exist here; neither produces judgment.
 - **"Only tool in the room" as the organizing premise.** Anchoring on the sole
@@ -56,27 +56,27 @@ worth is elicited then applied. Both also dead.
   Wrong — rungs 4–6 are temporal calibration. Agent overreach, corrected same day.
 **Conviction:** high on all five.
 
-### D-5 · Joints are branch points; straddling is a fourth disposition
+### decide: straddle — Joints are branch points; straddling is a fourth disposition
 **Owner-originated.** Don't resolve the joint — build all its branches, let reality
 pick. Requires no foresight.
 **Conviction:** high.
 
-### D-6 · One joint under test at a time
+### decide: one-under-test — One joint under test at a time
 **Owner-originated** ("we limit N to 1?"). Refined to: many joints open, experiment
 queue depth 1.
 **Conviction:** high.
 
-### D-7 · Execution is an instrument for resolving decisions
+### decide: execution-as-instrument — Execution is an instrument for resolving decisions
 Construction is a third resolution method alongside evidence and assertion, and the
 one nothing else can offer.
 **Conviction:** high.
 
-### D-8 · Lean on SmartMemory maximally
+### decide: max-smartmemory — Lean on SmartMemory maximally
 **Rejected:** rebuilding storage/typing/evolvers. **Constraint kept:** kitchen stays
 headless.
 **Conviction:** high — stated flatly ("I'd say maximize").
 
-### D-9 · OPEN — product boundary
+### open: product-boundary — product boundary
 Not decided. Reopened by owner after being recorded as settled.
 **Positions on the table:** layer inside Compose · two interoperating products ·
 one repo, separate packages (evidenced by `compose-mcp`).
@@ -84,47 +84,76 @@ one repo, separate packages (evidenced by `compose-mcp`).
 independent of architecture.
 **Conviction:** deliberately unresolved. See `positions/product-boundary.md`.
 
-### D-10 · Manual mode before building
+### decide: manual-mode-first — Manual mode before building
 Run the six processes by hand; the friction is the automation spec.
 **Conviction:** high, owner-originated.
+
+### decide: unguarded-writes — Freeform markdown as the agent's write path is the defect
+**Owner-originated** ("how can compose/stratum enforce you if your primary mode is
+freeform markdown?"). Enforcement the agent can route around is not enforcement.
+**Evidence:** this session's four structural failures all arrived through unguarded
+direct writes.
+**Decided:** tools own the canonical write path; markdown is emitted as a
+projection; a PreToolUse hook blocks direct writes to canonical paths.
+**Rejected:** markdown-primary with advisory guard (enforcement theatre).
+**Conviction:** high. Strongest correction of the session's second half.
+
+### decide: lifecycle-vs-semantics — Guard owns lifecycle, SmartMemory owns semantics
+**Decided.** Stratum guard = where a position sits, enforced, domain-agnostic.
+SmartMemory = claims, evidence, reasoning, supersession, contradiction.
+Transitions write into SmartMemory one-way as an artifact side-effect.
+**Rejected:** storing lifecycle state in both (the ideabox failure a third time);
+bidirectional sync.
+**Conviction:** high.
+
+### decide: stratum-agnostic — Stratum stays domain-agnostic; one exception goes upstream
+**Decided.** No judgment primitives inside Stratum — it must not learn what a joint
+is. **Exception:** `ONE-UNDER-TEST` is a population invariant and is generic
+(deploys, migrations want it too) → contribute upstream.
+**Rejected:** building position/joint/conviction primitives into Stratum itself.
+**Conviction:** high, argued from encapsulation.
+
+### note: okf-set-aside — OKF set aside
+Google Open Knowledge Format — postdates the agent's knowledge cutoff; owner
+directed it as secondary. **Not evaluated.** Recorded so it is not silently dropped.
 
 ---
 
 ## Overrides
 
-### O-1 · 2026-07-20 — Owner waived `nobody-maintains-structured-reasoning`
+### override: maintenance-objection — 2026-07-20 — Owner waived `nobody-maintains-structured-reasoning`
 The strongest empirical objection to the whole product (argument mapping, decision
 journals, premortems — all correct, all abandoned). **Waived by fiat**, recorded as
 an owner assertion of latent demand.
 **Open joints at time of override:** the objection itself, plus the then-unaddressed
 maintenance-burden question.
 **Flips if:** real users refuse to maintain it. Partially answered later by
-`AUTOMATION-MAKES-IT-FREE` (byproduct, not chore).
-**Per `OVERRIDE-IS-THE-BEST-ENTRY`, this is the highest-value entry in this file.**
+`AUTOMATION-IS-FREE` (byproduct, not chore).
+**Per `OVERRIDES-ARE-GOLD`, this is the highest-value entry in this file.**
 
 ---
 
 ## Escalations
 
-### E-1 · 2026-07-20 — Design work invalidated the layer above it
+### escalate: output-unit-was-wrong — 2026-07-20 — Design work invalidated the layer above it
 **Trigger:** owner observation that the four proposed output-units were all "how to
 build", not "what to build".
 **Propagated to:** product position. Forced restatement of the entire top level.
 **Classification:** wrongness, not difficulty.
 
-### E-2 · 2026-07-20 — Adversarial review invalidated the stated scope
+### escalate: two-layers-missing — 2026-07-20 — Adversarial review invalidated the stated scope
 **Trigger:** independent review found no option generation and no objective function.
 **Propagated to:** product position → the three-layer stack.
 **Classification:** wrongness.
 
-### E-3 · 2026-07-20 — Owner objection invalidated a just-recorded claim
+### escalate: revealed-preference-killed — 2026-07-20 — Owner objection invalidated a just-recorded claim
 **Trigger:** revealed-preference argument contradicted the product premise.
 **Propagated to:** the valuation approach (killed and replaced).
 **Classification:** wrongness. Note the interval: recorded and killed within minutes.
 
 ---
 
-## Process failures (recorded, per `RECORD-ALWAYS-ACT-BY-COST`)
+## Process failures (recorded, per `RECORD-ALWAYS`)
 
 - **Stratum not used** despite `capabilities.stratum: true` and an explicit CLAUDE.md
   mandate. Classification made once at session start and never re-evaluated when the
