@@ -54,6 +54,8 @@ Separate **funnel** (settled: the ideabox owns it, Decision 4) from **storage** 
 
 **Recommendation: A1**, contingent on the owner blessing the Decision-4 reinterpretation. It's the only option that removes the fragmentation rather than managing it, and it's consistent with the projection philosophy Decision 3 already set (one canonical store, surfaces are projections — never a second source). If the owner reads Decision 4 as binding on *storage*, fall back to **A2** and accept the sync seam. **A3 is not recommended** — it leaves the keystone defect in place.
 
+> **RULED (2026-07-21) — A1 confirmed, refined by `PROVIDER-SEAM`** ([what-to-build §8k substrate ruling](../product/2026-07-20-what-to-build-vision.md#substrate-ruling-2026-07-21--where-the-fluid-layer-lives), the ruling's single home). Canon for ideas is the **fluid-store provider**: the local zero-install floor is expected to implement over the vision store's `idea` type (A1's substrate, now behind a seam), with SmartMemory as the capability-rich provider backing the same records (recall/challenge/conviction/calibration light up via capability discovery — never abstracted into the seam). The ideabox re-backing therefore lands *behind the provider interface*, making COMP-PLAN-IDEA-UNIFY the seam's **pilot workload**. Decision-4 reinterpretation blessed as part of the same ruling: ideabox = funnel + projection, provider = store.
+
 ### WS-B — Structured convergence (the rigor)
 
 Give the `plan` phase the deliberation machinery the `build` phase already has for lesser decisions.
@@ -76,7 +78,7 @@ Make the convergence engine observable and launchable, and promote planning-nati
 
 | # | Feature | Slice | Depends on |
 |---|---|---|---|
-| 1 | **COMP-PLAN-IDEA-UNIFY** | WS-A1: vision `idea` canon; ideabox markdown → projection; promote as graph transition | — (keystone) |
+| 1 | **COMP-PLAN-IDEA-UNIFY** | WS-A1 under `PROVIDER-SEAM` (ruled 2026-07-21): ideabox → fluid-store provider (local floor over vision `idea` types); markdown → projection; promote as graph transition | — (keystone; provider-seam pilot) |
 | 2 | **COMP-PLAN-CONVERGE** | WS-B1+B2+B3: strategist fan-out, decision cards, frame-as-north-star + convergence check | 1 (deliberation types must be canonical first) |
 | 3 | **COMP-PLAN-UI** | WS-C1+C2+C3: launch plan, label gates, ideation types first-class | 1 (renders the unified substrate) |
 | 4 | **COMP-PLAN-MCP** | WS-C4: ideabox + plan-launch MCP tools | 3 |

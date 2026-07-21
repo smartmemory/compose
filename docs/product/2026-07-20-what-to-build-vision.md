@@ -13,7 +13,9 @@
 - **Operationalization:** [Judgment Layer — Process Manual](../design/2026-07-20-judgment-layer-process-manual.md) — the six processes (P1–P6) written to be run by hand, so the friction points become the automation spec.
 - **Acquisition (read half):** [External Signal — Acquisition Design](../design/2026-07-20-external-signal-design.md) — how signal actually gets in the door. Splits ingestion into two machines with a wall between them (`TWO-MACHINES`, `WALL-BETWEEN`), scopes `JOINTS-ARE-WATCHLIST` to the judgment machine only, dissolves `JOINT: ingest-continuous` by decomposition, and states the joints reading can never reach (`READING-CEILING`).
 
-**Grounding key:** `[EXT]` external evidence · `[INT]` internal/build history · `[ASSERT]` owner assertion, unvalidated · `[DERIVED]` follows from other claims · `[owner-locked]` decided by owner this session
+**Grounding key:** `[EXT]` external evidence · `[INT]` internal/build history · `[ASSERT]` owner assertion, unvalidated · `[AGENT]` agent-generated claim, unvalidated · `[DERIVED]` follows from other claims · `[owner-locked]` decided by owner this session
+
+> **`[AGENT]` added 2026-07-21 — the key had no way to say "a machine claimed this."** With no such tag, claims produced by the adversarial review pass were filed as `[ASSERT]` (which reads as *the owner said so*) or `[DERIVED]` (which reads as *this follows logically*). Both launder an agent's guess into something with more standing than it earned. §12 lists which claims came from that pass; they are being re-tagged. **The labels are the trust system — a misfiled label is not cosmetic, it is a false statement about who is on the hook.**
 
 *(Renamed from C-n / J-n numbering 2026-07-20 — the numbers were unreadable. Names are stable from here.)*
 
@@ -29,11 +31,52 @@ JUDGMENT      is this candidate well-grounded       ← specified below
 EXECUTION     goal → plan → build → ship            ← Compose today, works
 ```
 
-**`MIDDLE-NOT-TOP`** `[DERIVED]` — The first draft locked the middle layer and called it the top. Deciding requires generating options, valuing them, and judging the evidence. Only the third was specified.
+**`MIDDLE-NOT-TOP`** `[AGENT]` *(re-tagged 2026-07-21 — from the review pass, per §12; was `[DERIVED]`)* — The first draft locked the middle layer and called it the top. Deciding requires generating options, valuing them, and judging the evidence. Only the third was specified.
 
-**`GENERATION-DOMINATES`** `[DERIVED]` — **Decision quality is capped by the best option considered.** Perfect judgment over three mediocre candidates yields a mediocre outcome. Generation therefore has strictly more leverage than evaluation, and we built the evaluation half first.
+**`GENERATION-DOMINATES`** `[AGENT]` *(re-tagged 2026-07-21 — from the review pass, per §12; was `[DERIVED]`. Never tested. Has since been quoted back at the owner as if it were their own commitment — exactly the laundering the `[AGENT]` tag exists to stop.)* — **Decision quality is capped by the best option considered.** Perfect judgment over three mediocre candidates yields a mediocre outcome. Generation therefore has strictly more leverage than evaluation, and we built the evaluation half first.
 
-**`NO-VALUATION`** `[ASSERT]` — Worth cannot be derived from evidence. Evidence establishes what is *true*, not what is *worth doing*. Ranking requires an objective function: target customer, opportunity cost, capital, time horizon, risk appetite, what you are not doing instead. Proving onboarding costs 20% of signups does not establish that fixing onboarding beats fixing pricing. **Largest structural hole.** → `JOINT: valuation-exists`
+**`NO-VALUATION`** `[AGENT]` — **CORRECTED 2026-07-21 (owner). Was mislabelled `[ASSERT]`, i.e. filed as the owner's assertion when §12 records it as a finding from the AI review pass. Overstated as written, and treated as a wall for a full day of work.**
+
+*As written:* Worth cannot be derived from evidence. Evidence establishes what is *true*, not what is *worth doing*. Ranking requires an objective function: target customer, opportunity cost, capital, time horizon, risk appetite, what you are not doing instead. Proving onboarding costs 20% of signups does not establish that fixing onboarding beats fixing pricing.
+
+*What survives:* the narrow half — a **personal** ordering between two otherwise-comparable candidates does require an objective function, and facts will not supply it.
+
+*What was wrong:* it welded two questions into one and made the answerable one look impossible. See `VIABILITY-VS-PREFERENCE`. → `JOINT: valuation-exists` (reopened, now partly a research task rather than a design problem)
+
+**`VIABILITY-VS-PREFERENCE`** `[owner-locked]` — The correction. Two distinct questions were fused:
+- **Will this sell?** — Largely *knowable*, evidence-shaped, and mostly independent of what the owner wants. Decades of study exist. See `DEMAND-HAS-KNOWN-SIGNALS`.
+- **Do I want to build it?** — Genuine preference, not derivable from facts. This is the half `WORTH-IS-CONSTRUCTED` (§8d) addresses.
+
+**Most candidates die on the first question, which needs no objective function at all.** The objective function binds only among the survivors — a far smaller problem than ranking fifty things.
+
+**`DEMAND-HAS-KNOWN-SIGNALS`** `[AGENT — recited from model knowledge; STILL UNSOURCED, see note]` — The material that was missing when valuation was declared impossible.
+
+> **Sourcing status (2026-07-21).** A ten-job web-research pass was run and is kept raw at [`docs/research/2026-07-21-demand-and-distribution/`](../research/2026-07-21-demand-and-distribution/README.md). **It does not source the list below.** It researched how demand is *measured* (the methods), not the predictors themselves. The bullets here remain agent recall and are the next sourcing task. Do not make one load-bearing before checking it — that is exactly how `NO-VALUATION` happened. Patterns, not laws; they skew toward business tools over consumer, and outliers break them routinely (nobody was paying for a search engine before there was one):
+
+- **Market pull dominates.** In a market that wants the thing, a mediocre product gets pulled out of the company; in one that does not, an excellent product dies. Team and execution are second order.
+- **"No market need" is the top killer.** Post-mortems of failed startups put it first, consistently around a third of cases — ahead of running out of money, wrong team, and competition.
+- **Intensity beats breadth.** A few people with an urgent, frequent, expensive problem beat many who mildly agree it is annoying. Strongest tell: people already solving it badly by hand.
+- **Existing spend is the highest-grade signal.** A worse tool, a consultant, an agency, or someone's manual labour means the budget line already exists. Capturing a budget is far easier than creating one.
+- **Frequency and urgency.** Daily beats quarterly (drives retention). Deadline-attached beats ambient (drives willingness to pay *now*).
+- **Distribution usually decides it.** Most products fail unheard, not disliked. Builders systematically under-weight this because building feels like progress and telling people does not.
+- **Time to first value.** Minutes spread. Three-week setup plus organisational change mostly does not.
+- **Marginal improvement does not move people.** Switching costs eat a 20% gain. You need a step change on one dimension, or a gap where nothing exists.
+- **Pain-holder must be budget-holder.** In business sales, when the person suffering is not the person paying, the sale gets much harder.
+
+**Why this belongs at the top of the stack:** every line above is a *researchable question about a candidate* — is anyone already paying, are people hacking around it today, how often does it bite, is there a reachable channel, who holds the budget. That makes viability reachable by the read-half acquisition machinery, which had been given nothing useful to do on this question. **Candidate ranking is substantially a research task, and nobody did the research.**
+
+*Candidate ranking mechanisms that need no objective function* (proposed 2026-07-21, undesigned): prune by stated constraints before ranking anything; order by cost-of-being-wrong rather than size-of-upside; order by how many other candidates a thing unblocks; order by how fast it produces a real signal; forced pairwise choice with the reason captured, once few enough survive.
+
+**`TESTING-IS-ASYMMETRIC`** `[EXT]` — **The most operationally useful finding of the 2026-07-21 research pass** ([corpus](../research/2026-07-21-demand-and-distribution/README.md); statistics in `smoke-tests.md` and `paid-as-instrument.md`). Killing a candidate is roughly an order of magnitude cheaper than confirming one:
+- **Disproof is cheap.** Zero conversions across 300 qualified visitors puts the 95% upper bound near 1%. Zero acceptances from 30 qualified buyers caps the true rate near 10% (rule of three). Both are affordable and fast.
+- **Confirmation is expensive.** ~456 qualified visitors to pin a 5% rate to ±2 points; ~500 for a usable read. At observed B2B search costs of $5.48–$18/click that is **$3,000–$9,900 per experiment**; LinkedIn ~$5,760–$8,650; a proper two-arm A/B test $24,000–$120,000.
+
+**Design consequence, and it is a strong one:** the machine should be built as a **disproof engine**, not a validation engine. This is not a stylistic preference — it is where the cost curve is, and it independently converges with `PRUNE-BEFORE-RANK` reasoning and with `VALUE-OF-INFORMATION`. It also sets a real price on the top question: an unbuilt candidate's *will-it-sell* is not blocked, it is **priced at low four figures per question**.
+
+*Second-order corollaries from the same pass, all `[EXT]`:*
+- **Small tests prove nothing when the base rate is tiny.** Median cold-email senders book meetings from 0.3% of sends (85m-email dataset), so 100 contacts has a ~74% chance of zero **regardless of the idea's merit**. A null result below ~1,000 touches is uninformative, not negative. Same shape for launches: across 41,301 Show HN posts, median 0 comments and 61.7% received none.
+- **Stated interest is not evidence.** No stable multiplier from signup to payment exists; intention/behaviour correlation is 0.53 across a 0.15–0.92 range, and hypothetical willingness-to-pay runs ~21% above real. Money or costly effort is the only clean signal.
+- **The automatable corpus is legally bounded.** GitHub (5,000 req/hr authenticated), Hacker News (no limit), Stack Exchange (10k/day) and some job boards are usable. Review sites are gated or expressly prohibit automated collection. Build mining on the former.
 
 ---
 
@@ -53,6 +96,18 @@ Everything below is an organ of this cycle.
 
 ## 3. What the product actually is
 
+**`WHAT-IT-DOES`** `[owner-locked]` *(stated plainly 2026-07-21; confirmed by owner. Written down because the doc never said it in one place, and every reconstruction from the named claims below came back as mechanics instead of purpose.)*
+
+**It stops you spending a year building the wrong thing.** Five things, in order:
+
+1. Helps you work out what to build, starting from your situation rather than a blank page.
+2. Finds the assumption underneath it that would sink the whole thing, and says it out loud before you commit.
+3. Goes and finds out whether that assumption is true — by looking at the world, or by building something small and cheap that makes the answer visible.
+4. Builds the real thing once you decide.
+5. Remembers what you believed and why, so when it works or fails you learn something instead of just moving on.
+
+**The differentiator, stated the same way:** it can end an argument by building something, because it is already a builder. Consultants and planning tools can only do step 1–2; build tools can only do step 4.
+
 **`PROCESS-IS-PRODUCT`** `[owner-locked]` — The ideas in this doc are not the product. Everything here is derivable; anyone reasoning carefully arrives at it. The product is letting a human plus agents execute it **repeatably**, instead of re-deriving it under pressure and stabbing intuitively.
 
 **`CONSTRAINTS-ARE-THE-UX`** `[owner-locked]` — Constraints are what convert this from advice into a process, and they drive the interface. "Think rigorously" is not enforceable. *One joint under test*, *kill criteria before building*, *prediction before construction* are. **What the UI permits and refuses is the methodology.**
@@ -61,13 +116,64 @@ Everything below is an organ of this cycle.
 
 ---
 
+## 3b. Audit of the spine against the head (2026-07-21)
+
+`WHAT-IT-DOES` (§3) restated the north star as **finding what sells, or validating that a candidate sells.** Every claim below was re-checked against it. Verdicts: **KEPT** (unaffected), **PROMOTED** (now load-bearing where it wasn't), **DEMOTED** (still true, no longer central), **DISSOLVED** (the risk it guarded against stops mattering), **AMENDED**.
+
+**The stack itself — RESHAPED.** Three layers over execution becomes: *find candidates → check they sell → build → learn*. Viability is not a layer above judgment; it is **what judgment is judging**. Personal preference drops out of the stack and becomes a tiebreak among survivors (`VIABILITY-VS-PREFERENCE`).
+
+**PROMOTED — the neglected half is now the engine**
+- All of §7 (generation): `SIGNAL-NOT-IDEAS`, `INTERPRETATION-ASSET`, `KEEP-THE-RAW`, `LOW-YIELD-BY-DESIGN`, `CONTINUOUS-INGEST`, `THE-WORLD-CAN-ARGUE`, `OPPOSITE-FAILURE-MODES`. Marked "mechanism undesigned" at the top of this document; under the head it *is* the product. `INTERPRETATION-ASSET` sharpens: interpretation now means **does this signal indicate real demand**, not just relevance.
+- `TAG-BY-RESOLUTION` — was a caveat, now **the central obstacle**. It already states that *"will anyone pay"* is not constructible absent distribution: you ship, learn nothing, and read the silence as a result. That is now the top question in the system.
+- `GENERATION-DOMINATES` — load-bearing under this head. Still `[AGENT]` and still never tested.
+- §8f staleness / `TIERED-INSTRUMENTS` / `COMPILE-INSTRUMENTS` — market facts rot fastest (competitor pricing in weeks), so the sensor architecture now serves the north star directly rather than being hygiene.
+
+**DEMOTED — heavily-worked sections that are no longer the point**
+- `LEDGER-IS-THE-VALUE` — **demoted as stated, then rescued on a different argument.** The output is a candidate shown to sell, or killed cheaply; the record is not the product. **But see `LEDGER-IS-THE-EVIDENCE-BASE` (§4, added later the same day):** the research pass found the entire demand-validation field is unmeasured, which makes a prediction-and-grading record the first real evidence base in it — an argument that serves the new head directly rather than surviving beside it. **Verdict revised: DEMOTED as "the product's output", PROMOTED as the compounding asset and the defensible moat.**
+- `AGENT-IN-THE-ROOM` / `NEVER-CAPTURED-BEFORE` — demoted **as the moat**. Under this head the moat is being able to *build the test*, not being able to record the belief.
+- `LEDGER-SURVIVES` — it was a defence against a premise that no longer carries weight (below).
+- All of §8d's preference-construction machinery (`WORTH-IS-CONSTRUCTED`, `SELF-KNOWLEDGE-DIAL`, `CONSISTENT-NOT-RIGHT`, `DRIFT-VS-UPDATE`, `TALLY-OVER-PSYCHE`, `QUIZ-*`) — demoted to **tiebreak**. Elicitation is still needed, but for **constraints and assets** (which prune candidates cheaply), not for constructing an objective function up front.
+- `PROCESS-IS-PRODUCT` — **AMENDED, weakened.** It held while the content was careful reasoning, which anyone can derive. It does not hold for market knowledge, which most people simply do not have. **The product now has content, not only discipline.**
+
+**DISSOLVED — a risk that stops mattering**
+- `KNOWN-OR-UNEXAMINED` and `JOINT: already-knew` — the deepest premise and the scariest unchecked joint. Under this head it barely binds: someone can be entirely clear-eyed about their own reasoning and still not know whether a budget line exists for what they are building. **This is the single largest robustness gain from the change** — the thesis stops depending on a disputed claim about human psychology, and stops depending on a joint that reading can never reach.
+
+**AMENDED**
+- `EVIDENCE-BY-SOURCE` — "external is worth far more but **must never block**" was written when external evidence was optional enrichment. Under this head external evidence is the substance of the top question. The no-degraded-mode principle stands; the never-block clause needs restating.
+- `THE-CYCLE` — kept as machinery, with one new requirement: **the register should ship pre-populated with the known demand questions rather than starting empty.** Most viability joints are known in advance (`DEMAND-HAS-KNOWN-SIGNALS`); only the candidate-specific ones need surfacing.
+- `JOINT-RECALL` — kept and sharpened. The metric becomes *did we correctly call what would and would not sell*, which is more measurable than the generic form.
+
+**KEPT, unaffected** — §6 branching in full (`JOINTS-ARE-BRANCHES`, `VALUE-OF-INFORMATION`, `ONE-UNDER-TEST`, `TREE-OF-FUTURES`, `BRANCHING-FAILURES`); `THREE-WAYS-TO-RESOLVE` and `MOAT-FINAL-FORM` (construction becomes the primary validation instrument); `CONSTRUCTION-TRAP` (more urgent, not less); the straddle family; §8b reversibility; §8c stopping rule; §8e cost; §8g stakeholders; §8h agent auditing; §8j escalation; §8k substrate; `CONSTRAINTS-ARE-THE-UX`; `AUTOMATION-IS-FREE`.
+
+**Two gaps the head creates, neither designed:**
+1. **Distribution.** The top question cannot be answered without people to ask. Getting in front of them stops being marketing and becomes *instrumentation*.
+2. **The viability rubric.** `DEMAND-HAS-KNOWN-SIGNALS` is a list, not yet a per-candidate check the acquisition machinery can run, and its sources are not attached.
+
+---
+
 ## 4. The unit of value: the ledger
 
-**`LEDGER-IS-THE-VALUE`** `[DERIVED]` — The product's output is a **testable record**, not a decision aid: what was claimed, what was rejected, how strongly it was held, when. *Rejected:* the reasoning-aid framing.
+**`LEDGER-IS-THE-EVIDENCE-BASE`** `[EXT]` `[owner-locked]` — **Added 2026-07-21. This replaces the ledger's stated reason for existing, and it is a better one.**
+
+The 3b audit demoted the ledger under the new head: if the north star is finding what sells, a record of what you believed is not the output. That demotion was right about the *old* justification and wrong about the ledger's value, and the research pass is why.
+
+**All ten research reports converged on the same gap: this entire field is unmeasured.** There is no validated threshold for any demand-validation method. No developer-tool-specific benchmark exists anywhere — everything collapses into "B2B SaaS." No study isolates zero-audience founders. No controlled study shows pain-mined ideas convert better than un-mined ones. No public proxy (stars, downloads, reviews, traffic estimates, funding, hiring, changelog velocity, pricing) has a validated mapping to revenue. Every number in circulation is vendor marketing, survivorship anecdote, or a practitioner heuristic wearing the costume of a law. ([corpus](../research/2026-07-21-demand-and-distribution/README.md) — see the "WHAT I COULD NOT FIND" section of every file.)
+
+**A system that records a prediction before a test and grades it afterwards is therefore generating the first real evidence base in an unmeasured field.** That is the ledger's actual job:
+- It is **not a diary** — the framing that correctly lost its status in the audit.
+- It **compounds**, and it is the one asset a competitor cannot copy, because they would have had to be recording all along (this is the defensible form of `AGENT-IN-THE-ROOM`, relocated from "we captured your beliefs" to "we captured what predicted outcomes").
+- It **serves the new head directly** rather than sitting beside it: better calibration about what predicts demand is literally better answers to *will this sell*.
+- It gives `JOINT-RECALL` a subject worth measuring and makes `TESTING-IS-ASYMMETRIC`'s thresholds improvable from observation instead of borrowed heuristics — the same self-tuning mechanism as `COST-OBSERVED` and `VOLATILITY-IS-LEARNED`, pointed at demand.
+
+**Provenance note, which is the point:** this claim came from going and reading the world. The claim it supersedes came from an agent reasoning about the product in a closed loop, and survived a full day of work unchallenged.
+
+---
+
+**`LEDGER-IS-THE-VALUE`** `[DERIVED]` — *Superseded as the ledger's justification by `LEDGER-IS-THE-EVIDENCE-BASE` (2026-07-21); retained because the description of the artifact is still accurate.* The product's output is a **testable record**, not a decision aid: what was claimed, what was rejected, how strongly it was held, when. *Rejected:* the reasoning-aid framing.
 
 **`LEDGER-SURVIVES`** `[DERIVED]` — Recording that you *knew* and proceeded is more valuable than recording that you didn't know. The decision-aid framing dies to `KNOWN-OR-UNEXAMINED`; the ledger does not.
 
-**`LEDGER-IS-FALSIFIABLE`** `[DERIVED]` — A dated claim with named alternatives and stated conviction *is* the timestamped prediction that makes the system checkable. One artifact, two jobs.
+**`LEDGER-IS-FALSIFIABLE`** `[AGENT]` *(re-tagged 2026-07-21 — from the review pass, per §12)* — A dated claim with named alternatives and stated conviction *is* the timestamped prediction that makes the system checkable. One artifact, two jobs.
 
 **`NEVER-CAPTURED-BEFORE`** `[ASSERT]` — The two fields that matter have never been capturable: **rejected alternatives** and **conviction at the time**. Hindsight rewrites both — people recall more certainty than they had, and forget options dismissed in seconds.
 
@@ -394,6 +500,22 @@ Previously missing. What was recorded is **horizontal** (the world contradicts a
 
 **`CANON-IS-GATED`** `[owner-locked]` — Manual mode exists to find friction and friction-finding needs freedom. The line is drawn at *canonical* artifacts: explore freely in scratch, but anything that becomes the record goes through the tool. Enforcing before knowing what to enforce is the mistake in the other direction.
 
+### Substrate ruling (2026-07-21) — where the fluid layer lives
+
+Owner ruling closing the substrate fork (four competing canon claims: vision store, SmartMemory, markdown-in-git, unnamed tool-owned store). **This subsection is the single home of the ruling; other docs cite it, never restate it.**
+
+**`PROVIDER-SEAM`** `[owner-locked]` — Canonical fluid-layer records (ideas, positions, joints, decisions, ledger entries) live behind a **fluid-store provider interface**. The floor is a zero-install local provider (typed records under `.compose/`); **SmartMemory is the reference, capability-rich provider**. The interface is drawn at *records + lifecycle events + capability discovery* — semantic machinery (recall, challenge, conviction/decay, calibration, contradiction) are **capabilities that light up** when the configured provider declares them, and are never abstracted into the interface itself. Abstracting semantics into the seam is the lowest-common-denominator failure and is prohibited: a provider without a capability lacks it visibly; nothing fakes it. Precedent, proven in-repo: the tracker-provider `capabilities()` seam. Corollaries:
+- The **vision store is not a competing canon** — its existing typed items (`idea/decision/question/thread`) are the *expected implementation substrate of the local floor provider* (build-time confirm), not a second source beside it.
+- **Switching or upgrading providers is a one-time import, never a live sync** (per `ONE-WAY-WRITES`' spirit: one writer, one direction).
+- `TOOLS-OWN-WRITES` tools front the provider — callers never know which provider is configured. `LIFECYCLE-VS-SEMANTICS` is unchanged: guard owns lifecycle regardless of provider. `MARKDOWN-EMITTED` projections emit from whichever provider is configured.
+- Refines `MAX-SMARTMEMORY`, does not violate it: maximize SmartMemory reuse *where present*; never rebuild its semantics in the floor.
+
+**`BUNDLE-IS-SUGAR`** `[owner-locked]` — Bundling SmartMemory (a docker-compose profile / `compose memory up`) is packaging convenience for users who want the full stack — never an architectural assumption. Hard-requiring SmartMemory at install is rejected: it raises the floor for every user to serve an opt-in layer, and couples releases.
+
+**`COLLEAGUE-ALL-IN`** `[DERIVED]` — Refines COMP-FOH's coupling posture. The thing that must not run degraded is the **colleague** (Maya; conviction, challenge, calibration — rungs 3–6), which hard-requires SmartMemory capabilities. The thing that must run everywhere is the **judgment record system**, which needs only the floor. The opt-in boundary moves from "the whole front of house" to "the intelligence, not the filing cabinet." A missing capability surfaces as visibly unavailable ("challenge: connect SmartMemory") — a funnel, not a fake.
+
+*Sequencing rider (same ruling):* `COMP-PLAN-IDEA-UNIFY` is re-aimed as the provider seam's **pilot workload** (ideabox → fluid-store provider, local floor first) and goes first; IDEA-20's GitHub-tracker dogfood is re-aimed at stratum/committed work — ideas never enter the tracker seam. *Parked riders:* Compose↔SmartMemory transport (HTTP client vs MCP vs in-proc), backup cadence for a SmartMemory-backed judgment corpus, portfolio rollup (unchanged: build-above).
+
 ---
 
 ## 9. JOINT REGISTER — moved
@@ -414,7 +536,9 @@ Previously missing. What was recorded is **horizontal** (the world contradicts a
 1. ~~**Reversibility as a gate**~~ — **RESOLVED** (§8b): ledger always on, deliberation scales, reversibility tracked as a decaying meter and observed rather than asked.
 2. ~~**The stopping rule**~~ — **RESOLVED** (§8c): stop when nothing is left worth learning; commit button surfaced by the condition; override always available and recorded; three triggers distinguished.
 3. ~~**Cold start**~~ — **RESOLVED** (§8d): "nothing" means no candidate, not no context; elicit → generate → value → hand off. Surfaced that **valuation blocks the arrive-with-nothing case**, promoting it from hole to blocker.
-3b. **VALUATION** — **framing settled, design open.** `WORTH-IS-CONSTRUCTED` plus the elicitation mechanics (§8d) give a defensible framing and a measurable posture dial; there is still no design. Critical path for the arrive-with-nothing case.
+3b. **VALUATION** — **REOPENED AND RESCOPED 2026-07-21.** Was recorded as "framing settled, design open," resting on `NO-VALUATION`, which turns out to be a mislabelled AI claim that overstated the problem. Per `VIABILITY-VS-PREFERENCE` this is now **two** items, and the larger one is not a design problem:
+   - **(a) Will it sell — mostly research, not invention.** `DEMAND-HAS-KNOWN-SIGNALS` (§1) lists the known predictors; none of them were in this document, and no one went looking. First task is attaching real sources to that list, then turning it into a rubric the read-half acquisition machinery can actually answer per candidate. **Most candidates are expected to die here, with no objective function involved.**
+   - **(b) Which of the survivors do I want — genuine preference, design open.** This is the original problem, now much smaller: an ordering over the few that survive (a). `WORTH-IS-CONSTRUCTED` plus the §8d elicitation mechanics remain the framing. Candidate objective-function-free mechanisms are listed under `DEMAND-HAS-KNOWN-SIGNALS`.
 4. ~~**Cost alongside value of information**~~ — **RESOLVED** (§8e): three dispositions collapse to one cost comparison, which also completes the stopping rule; cost observed from history, bucketed coarsely, opportunity cost included.
 5. ~~**Staleness**~~ — **RESOLVED** (§8f): re-derivation not age; the timer schedules the ranking, not the check; tiered instruments (event-driven / sensors / dispatched agents); volatility learned; separate visible maintenance budget.
 6. ~~**More than one person**~~ — **RESOLVED** (§8g): name the dispute type; never merge objective functions; explicit authority; recorded dissent; attribution now even though teams are later. Flags the most dangerous feature in the doc.
@@ -439,3 +563,7 @@ Previously missing. What was recorded is **horizontal** (the world contradicts a
 An independent adversarial pass returned 9 of 10 findings graded FATAL. That distribution is not credible; grades were discarded and findings adjudicated individually, with roughly half surviving. Accepted findings became `MIDDLE-NOT-TOP`, `GENERATION-DOMINATES`, `NO-VALUATION`, the `GROUNDING-PER-STEP` amendment, `LEDGER-IS-FALSIFIABLE`, the `EVIDENCE-BY-SOURCE` amendment, and `LADDER-CORRECTION`. Unresolved findings became `JOINT: external-reachable` and `JOINT: differentiated`.
 
 Everything tagged `[ASSERT]` is owner assertion or agent inference, unvalidated. By this doc's own standard, **the thesis is grounded exactly as well as `already-knew` and `differentiated`** — and neither has been checked.
+
+> **THE LABELS FAILED (2026-07-21).** The sentence directly above admits `[ASSERT]` covers *both* owner assertion and agent inference — while the grounding key at the top of the document defines it as "owner assertion" alone. The ambiguity was disclosed in a footnote and invisible at every point of use. Consequence, observed rather than argued: `NO-VALUATION` — an AI finding from the review pass — was read as the owner's own position, treated as a wall, and quoted back at the owner four times in one session as their own constraint. It blocked the most important question in the stack for a day. **`[AGENT]` now exists precisely so this cannot recur, and the claims listed in this section have been re-tagged.**
+>
+> Two things this implies, neither yet done: (1) every remaining `[ASSERT]` and `[DERIVED]` in this document needs its origin checked, because if one was misfiled others may be; (2) provenance must be captured at write time by the tool, never assigned by the writer after the fact — the same argument as `FOUND-OR-PROVOKED`, and for the same reason: provenance is never retrofitted successfully.

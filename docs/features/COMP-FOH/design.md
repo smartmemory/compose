@@ -92,7 +92,9 @@ Raw item R/W → structured typed-entity (canon) → full ingest pipeline → co
 
 ## Canon resolution (hybrid — Decision 2 clarified)
 
-- **Fluid → SmartMemory** (front of house): ideas, deliberation, conviction, challenge, calibration, exhaust, the colleague's worldview, conversational learning. Workspace-per-product. All 8 levels live here.
+> **AMENDED (2026-07-21) by `PROVIDER-SEAM`** ([what-to-build §8k substrate ruling](../../product/2026-07-20-what-to-build-vision.md#substrate-ruling-2026-07-21--where-the-fluid-layer-lives) — the ruling's single home). The fluid bullet below is refined: canonical fluid **records** live behind a fluid-store provider interface with a zero-install local floor; SmartMemory is the **reference, capability-rich provider**, not a hard install requirement. Everything this doc says about SmartMemory's semantics (challenge, calibration, conviction, recall) holds as *capabilities that light up* when the SmartMemory provider is configured. Bundling (`compose memory up` / docker-compose) is packaging sugar per `BUNDLE-IS-SUGAR`.
+
+- **Fluid → SmartMemory** (front of house): ideas, deliberation, conviction, challenge, calibration, exhaust, the colleague's worldview, conversational learning. Workspace-per-product. All 8 levels live here. *(Refined per the amendment above: records on the provider seam; SmartMemory as reference provider.)*
 - **Committed → git `feature.json`** (back of house): the promoted feature + roadmap stay git-native — diffable, PR-reviewable, offline. A signed-off record of *what you agreed to build* is a real asset.
 - **Execution memory → SmartMemory** (the kitchen's procedural slice): how-we-build, failures, procedures, per-agent calibration. Not git canon — it is *learning*, not commitment. Feeds front-of-house via the dissolution step.
 - **Promotion = crystallization** (fluid → committed); **completion = dissolution** (exhaust → fluid learning).
@@ -111,6 +113,7 @@ Only #1 is load-bearing for the Discovery Loop.
 
 - **Maya specialize vs general → BOTH.** Shared domain-agnostic core + additive skill-pack "hats" + distinct interaction modes + a `provisional → promote` hat ladder (see Maya's hats above). One brain, many hats, worn one at a time.
 - **Coupling posture → opt-in at the front-of-house boundary, all-in inside it.** The kitchen runs headless — no memory required (the portable/CI floor) — and draws the *procedural* slice when memory is present. Front of house (colleague + loop) is the opt-in unit; once enabled it *requires* SmartMemory (no degraded half-memory colleague — a maître d' with amnesia is not a maître d'). Core/kitchen imports no vendor (Decision 2 preserved); the front-of-house module depends on SmartMemory as its substrate.
+  *Refined (2026-07-21, `COLLEAGUE-ALL-IN` in the §8k ruling):* the opt-in boundary moves from "the whole front of house" to **the intelligence, not the filing cabinet**. The judgment *record system* runs everywhere on the local floor provider; the *colleague* (Maya — conviction, challenge, calibration) is what hard-requires SmartMemory and never runs degraded. Missing capabilities surface as visibly unavailable, not faked.
 
 ## Open questions (build-time)
 

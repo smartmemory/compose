@@ -46,12 +46,13 @@ VISION`), and a `withFallback()` Proxy that routes JOURNAL/VISION to a `local` p
 active provider lacks them.
 
 **W1 — one fat interface with throwing defaults, and nobody checks the flags (ACTIVE, not
-latent).** Interface-segregation failure. `github` implements ~16 methods; `deleteFeature` and
-`addRoadmapEntry` are *unimplemented on both providers* (inherit the throw). "Implements the
-interface" is not true for any non-local provider, and nothing enforces completeness. The
-`capabilities()` Set was meant as the runtime mitigation, but the audit (formerly D1, now closed)
-found **no production consumer ever consults it** — the only `capabilities()` callers in the
-codebase belong to the separate checkpoint-store abstraction. Worse, callers have reinvented
+latent).** Interface-segregation failure. `github` implements ~16 methods; `deleteFeature` is
+*unimplemented on both providers* and `addRoadmapEntry` on `github` (local implements it,
+`local-provider.js:96`). "Implements the interface" is not true for any non-local provider, and
+nothing enforces completeness. The `capabilities()` Set was meant as the runtime mitigation, but
+the audit (formerly D1, now closed) found **no consumer outside `lib/tracker` ever consults it**
+— the factory's `withFallback` reads it to route JOURNAL/VISION, and the only other
+`capabilities()` callers in the codebase belong to the separate checkpoint-store abstraction. Worse, callers have reinvented
 capability detection as provider-identity sniffing: `isLocalProvider()` guards at
 `feature-writer.js:240`, `feature-writer.js:438`, and `feature-reconciler.js:279` branch on
 `provider.name() === 'local'` — the textbook symptom of an interface that does not carry its
@@ -339,12 +340,15 @@ existing write paths, not greenfield.
     `build.js` mutates lifecycle via `persistFeatureRaw()` directly (e.g. `build.js:1892`,
     `build.js:3425`), deliberately skipping events and roadmap render — under github that path
     silently diverges cache from remote projection.
-  - **Sequencing:** ideabox (1 file, staleness-tolerant, no atomic coupling — see §3.2) → stratum
-    (1 record) → compose (291 records). Ideation is both the lowest-risk first workload *and* the
-    in-house proving ground for §4's field-ownership discipline (idea = discovered work; triage
-    priority and promote/kill = manager-owned fields) — dogfood the discipline there before any
-    external transport exists. Filed as
-    [IDEA-20](../product/ideabox.md) in the ideabox.
+  - **Sequencing *(re-ruled 2026-07-21)*:** stratum (1 record) → compose (291 records). The
+    ideabox **leaves the tracker seam entirely**: per the `PROVIDER-SEAM` substrate ruling
+    ([what-to-build §8k](../product/2026-07-20-what-to-build-vision.md#substrate-ruling-2026-07-21--where-the-fluid-layer-lives)),
+    ideas are fluid-layer records on the fluid-store provider, never tracker workloads —
+    pre-commitment judgment material doesn't belong on the committed/execution plane.
+    [IDEA-20](../product/ideabox.md) is re-aimed accordingly (GitHub dogfood starts at stratum).
+    The field-ownership observations the original sequencing made about ideas (triage/promote as
+    manager-owned fields) remain valid *inside the fluid seam* and carry over to §4's discipline
+    when the reconciler is built.
 - **Vision layer (larger, separate):** Projection + Authorities + Publishers
   (notion/miro/linear/jira), and the manager/engineer reconciliation engine — built against
   Compose's own F4/F5 streams first (see §4 reframe). This reopens the no-bidirectional-sync
@@ -374,9 +378,13 @@ existing write paths, not greenfield.
   hydrated features live? Materialized into canonical `docs/features/` files (recommended — keeps
   the ~20 direct readers working, deletes the private cache, dissolves most of W3), or a private
   cache with every reader routed through the provider (unaffordable)? See §5.
-- **D8 (new):** which store is canonical for ideas — the ideabox (epic Decision 4) or the vision
-  store's `idea` item type? A promote currently implies a three-store walk (ideabox + feature +
-  vision item). See §3.2.
+- **D8 — DECIDED (2026-07-21):** neither, as posed. Canon for ideas is the **fluid-store
+  provider** (`PROVIDER-SEAM`,
+  [what-to-build §8k](../product/2026-07-20-what-to-build-vision.md#substrate-ruling-2026-07-21--where-the-fluid-layer-lives)):
+  a zero-install local floor expected to implement over the vision store's `idea` type, with
+  SmartMemory as the capability-rich reference provider. The ideabox stays the funnel/UI and its
+  markdown becomes a projection (COMP-PLAN-IDEA-UNIFY, the seam's pilot workload). The three-store
+  walk collapses to provider-record + `feature.json` at promote.
 - **D9 (new):** the disposition/execution-state split (§4.1) amends `taxonomy.md`'s
   single-status-lifecycle invariant. Define its projection into the existing roadmap/vision
   status vocabularies (extend `status-projection.js`, or a separate field) before the reconciler
