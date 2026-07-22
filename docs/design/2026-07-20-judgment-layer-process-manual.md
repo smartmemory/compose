@@ -165,6 +165,43 @@ frequently?" — grounded in a literature pass, ledger seq 109):
 > goal-level twin of `joint-is-non-obvious`. Whether oscillation-to-joint ever fires in
 > practice.
 
+### Resolutions box — level-2 sketch (added 2026-07-22, ledger seq 111; research-grounded)
+
+The evidence package that settles a tested claim — one per joint put under test, a
+record behind the Writer, linked from the register. P3 keeps the dispositions and
+outcomes; this defines what a resolution *is* as an artifact.
+
+| Sub-box | Holds |
+|---|---|
+| Question | the sharpened joint: a restatement a fact can falsify, the bar, and what NO looks like |
+| Prediction | what we expect to find — written before any evidence is gathered |
+| Evidence | items, each carrying source, reliability, date, and which branch it points at |
+| Verdict | one of P3's four outcomes, plus who adjudicated (owner or agent) |
+
+**Rules** (grounded in decision analysis, ACH, sequential analysis, preregistration):
+
+- **Sharpen-first gates every disposition, not just `EXT`.** Our own records (`INT`) are
+  as cherry-pickable as the web, and an owner call (`ASSERT`) records what was asked
+  before the answer shapes it. The bar is written first, always; grading against a moved
+  bar is open science's named failure (outcome switching).
+- **Diagnosticity** (Heuer, Analysis of Competing Hypotheses): every evidence item is
+  scored against *both* branches. Evidence consistent with both **carries zero weight
+  regardless of volume** — confirmation-by-pile resolves nothing. Extends
+  `STRADDLE-NEEDS-SIGNAL`'s logic to all evidence.
+- **The VOI cap:** information's value is bounded by the decision change it could cause.
+  The resolution spend ceiling is the branch difference, compared in the existing coarse
+  buckets — `ONE-COST-COMPARISON` gets its missing comparator without inventing numbers.
+- **Sequential stopping:** evidence accumulates until it crosses the pre-written bar or
+  the budget dies — no fixed sample. *Inconclusive → re-dispose* is thereby normal
+  operation, which P3's queue-freeing rule wanted but could not justify.
+- Practitioner convergence, recorded not imported: riskiest-assumption-test cards
+  (hypothesis / test / metric / criteria) are this package shape independently evolved;
+  the register is an assumption map with better bookkeeping.
+
+> **WATCH FOR:** how often the diagnosticity test zeroes out evidence that felt
+> persuasive — that count is the measure of confirmation-by-pile in the wild. Whether
+> the VOI cap ever actually stops a resolution that momentum would have continued.
+
 Do not add structure until a process demands it. If a field is never used by hand, it is not needed in the build.
 
 ---
@@ -287,6 +324,11 @@ not the only doors (`NOTHING-MEANS-NO-IDEA`).
 ## P3 — Resolution
 
 **Trigger:** a joint is `UNDER TEST`.
+
+*Amended 2026-07-22 (Resolutions box, seq 111):* sharpen-first now gates **every**
+disposition, not just `EXT`; every evidence item carries diagnosticity (which branch it
+points at — both-branch evidence weighs zero); and the spend ceiling on any resolution is
+the branch difference, in coarse buckets.
 
 Pick the cheapest disposition that yields an acceptable outcome (`ONE-COST-COMPARISON`):
 
