@@ -318,4 +318,26 @@ What began as *"add a PreToolUse hook"* is now: three enforcement points, a regi
 
 The last two rows are the two most consequential findings of the whole review, now demonstrated rather than reasoned. **This is the standard the remaining slices should be re-specced to.**
 
-**What the log collects next:** which paths get dirtied without a matching event, in what proportion, from which surfaces (CLI / MCP / build / manual). That distribution is the input S1–S6 are missing.
+**Correction, same day: `'log'` mode does not collect this.** Three defects in the instrument, found by reading its path instead of assuming it — the exact failure this document keeps recording:
+1. It fires **only at ship inside a build**, so writes made outside builds are never sampled.
+2. It only sees `featureFiles`, so `docs/judgment/**` is skipped (probe D above).
+3. **Its output is discarded.** `build.js:3999` calls `emitDecisionEvent(() => {}, …)` — the first argument is the broadcast sink, and it is a **no-op**. The only durable trace is a `console.warn` in build output. There is no queryable log.
+
+**The data did not need collecting — it already existed.** `.compose/data/feature-events.jsonl` holds **777 durable typed-tool events spanning 2026-05-02 → 2026-07-22**, each with `ts`, `actor`, `build_id`, `tool`, `code`. Correlated against `git log` over guarded paths (±15 min window):
+
+| Path | Commits | With a typed event nearby | **Unaccounted** |
+|---|---|---|---|
+| `ROADMAP.md` | 112 | 96 | 16 (14%) |
+| `CHANGELOG.md` | 101 | 67 | 34 (34%) |
+| `docs/features/**` | 204 | 142 | 62 (30%) |
+| **`docs/judgment/**`** | 8 | 1 | **7 (88%)** |
+
+*The ±15 min proximity heuristic proves only that a tool ran near a commit, not that it produced the content — the interleaved-bypass problem again. So these are **lower bounds** on the unaccounted rate.*
+
+### Two findings that change the plan
+
+**A. `'block'` is not gated on an inventory — it is impossible as currently designed.** `by build correlation: {"OUTSIDE-build": 777}` — **every one of the 777 events carries `build_id: null`.** Not most: all, across 2.5 months. Since `scanGuarded` only considers `events.filter(e => e.build_id === buildId)`, **the ship gate has never once been satisfiable by real traffic**, and `'block'` would fail 100% of ships. S2b cannot proceed by inventorying write surfaces; the build-correlation model itself has to change. **This retires S2b as written.**
+
+**B. `actor` is `mcp:agent` for all 777 events — there is no owner-write traffic at all.** Decision 3's `actor: owner` path (OQ1) has zero precedent and zero usage to design against. Either owner attribution is genuinely new surface, or the distinction should be reconsidered before it is built.
+
+**And the thesis is confirmed where it matters most:** `docs/judgment/**` is ~88% hand-written, the highest unaccounted rate by a wide margin, on the smallest volume (8 commits). **The judgment writer is the highest-value, lowest-risk slice** — which is the opposite of the ordering the original design implied.
