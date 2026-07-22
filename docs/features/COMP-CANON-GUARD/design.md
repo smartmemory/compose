@@ -1,7 +1,7 @@
 # COMP-CANON-GUARD — The Write-Guard for Canonical Artifacts (design)
 
 **Status:** EPIC — **S0 SHIPPED 2026-07-22**; S1–S6 deliberately un-specced pending log data (see *Scope verdict*)
-**Date:** 2026-07-22 (rev 6 — five Codex gate rounds, eleven confirmed P1s. **Gate NOT clean at the cap — see Scope verdict.**)
+**Date:** 2026-07-22 (rev 6 — five Codex gate rounds, eleven confirmed P1s. **Gate NOT clean at the cap — see Scope verdict.** Same-day owner rulings folded in: OQ1 resolved v1-agent-only; S3 substrate = provider records; S2b retirement now reflected in the sequencing table. `LEDGER.md` session 3.)
 **Implements:** `TOOLS-OWN-WRITES`, `BLOCK-THE-BYPASS`, `MARKDOWN-EMITTED` (partial)
 
 ## Related Documents
@@ -150,7 +150,9 @@ Every record written through `judgment-writer.js` carries, set by the writer, ne
 - `origin_session`, `written_at` — ambient.
 - `grounding` — **constrained by `actor`**: a record with `actor: agent` cannot be persisted with `[ASSERT]` or `[owner-locked]`. `[owner-locked]` requires an owner-attributed call.
 
-That rule makes the 2026-07-21 failure *unrepresentable* rather than discouraged. It rests entirely on Open Question 1 (how a call proves `actor: owner`), which therefore gates S2.
+That rule makes the 2026-07-21 failure *unrepresentable* rather than discouraged. ~~It rests entirely on Open Question 1 (how a call proves `actor: owner`), which therefore gates S2.~~
+
+**Amended 2026-07-22 (OQ1 resolved — v1 agent-only):** the writer stamps `actor: agent` unconditionally in v1. No call can carry `[ASSERT]` or `[owner-locked]` at all; owner-attributed claims enter only through the Decision 4 override path, which is ledgered. The grounding constraint above becomes trivially enforced (there is nothing to constrain), and the owner-proof mechanism is deferred until owner-write traffic actually exists to design against.
 
 ## Decision 4: The override — grant-then-write, ledger-first
 
@@ -180,15 +182,17 @@ rev 1 specified the override's semantics and none of its mechanism. A PreToolUse
 
 ## Sequencing
 
-`TOOLS-OWN-WRITES` says the judgment tools front the fluid-store provider (`PROVIDER-SEAM`), pilot COMP-PLAN-IDEA-UNIFY. That is not a blocking dependency: the ruling designates a **zero-install local floor**, and manual mode already runs on markdown-in-git, which *is* that floor. `MARKDOWN-EMITTED` makes markdown a projection later; writing it now through **one writer** is exactly what makes that a one-time import rather than a rewrite. Building this first **reduces** IDEA-UNIFY's risk, because the seam's first consumer will exist and be exercised.
+~~`TOOLS-OWN-WRITES` says the judgment tools front the fluid-store provider (`PROVIDER-SEAM`), pilot COMP-PLAN-IDEA-UNIFY. That is not a blocking dependency: the ruling designates a **zero-install local floor**, and manual mode already runs on markdown-in-git, which *is* that floor. `MARKDOWN-EMITTED` makes markdown a projection later; writing it now through **one writer** is exactly what makes that a one-time import rather than a rewrite.~~
+
+**OVERRULED 2026-07-22 (owner, `LEDGER.md` → `decide: judgment-writer-provider-records`).** The markdown-as-floor argument above lost to `REGISTER.md`'s banner ("do not build tooling against these files" — tooling against disposable scaffolding is the ideabox failure). **S3's writer fronts the local-floor provider directly from v1** (records over the vision store's existing types: joint → `question`, decision/kill → `decision`, deliberation → `thread`); `docs/judgment/**` markdown becomes a generated projection per `MARKDOWN-EMITTED`. Consequence: S3 now depends on at least the minimal record-write slice of the local floor existing — either COMP-PLAN-IDEA-UNIFY's seam lands first, or S3 carves that slice itself, making the judgment writer (not ideabox) the seam's first real consumer. That sequencing call is flagged in the ledger entry, not yet made. The position-type modelling question (new vision-store type vs `idea` with joints) remains open and must not be answered by drift.
 
 | Slice | Content | Gate |
 |---|---|---|
 | **S0** | Set `enforcement.mcpForFeatureMgmt: **'log'**`. **No code. `'block'` is NOT part of S0** — see below. | Ship-time scan emits decisions; a hand-edited `ROADMAP.md` is flagged in the log |
 | S1 | `canon-registry.js` (path → writer → tools → operations); `mcp-enforcement.js` refactored to consume it | **Contract test: hook and ship enforcement resolve identical mappings.** Lockout invariant unit-tested with a synthetic unwritten path |
 | S2 | **Full write-surface inventory** (Decision 2) — not just the two missing operations but *every existing path that mutates canon*: CLI (`compose feature`, `compose roadmap generate`), server routes, migration scripts. Each is routed through a typed tool, retired, or declared `override_only`. Plus `update_feature_fields` and roadmap `open_preserved_section` | Every registered path has a tool for every legal mutation, or an explicit override-only declaration; no known CLI/server/migration surface writes canon unaccounted |
-| **S2b** | **Promote to `'block'`.** Gated on S2 complete **and** the override existing (S4) | A full `compose build` run completes with `block` on, using only normal workflows |
-| S3 | `judgment-*.schema.json`, `judgment-write-guard.js`, `judgment-writer.js`, 4 `judgment_*` tools; provenance per Decision 3. **OQ1 gates this slice.** | A record with `actor: agent` and `[ASSERT]` is refused |
+| **S2b** | ~~**Promote to `'block'`.** Gated on S2 complete **and** the override existing (S4)~~ **RETIRED 2026-07-22** — see *Two findings that change the plan*, finding A: all 777 real events carry `build_id: null`, so the gate as built has never been satisfiable; the build-correlation model must change before any `'block'` promotion can be re-specced | — |
+| S3 | `judgment-*.schema.json`, `judgment-write-guard.js`, `judgment-writer.js`, 4 `judgment_*` tools; provenance per Decision 3 (**v1 agent-only** — OQ1 resolved 2026-07-22); **writer fronts the local-floor provider, markdown is a projection** (substrate ruling 2026-07-22, see Sequencing) | A record carrying `[ASSERT]` or `[owner-locked]` cannot be written through any tool; markdown projections regenerate byte-stable from records |
 | S4 | `.claude/hooks/canon-guard.mjs`; `compose guard install\|status\|uninstall`; `canon_override_grant` + ledger-first token protocol | Direct `Write` to every registered path denied, denial names the tool; empty reason refused; token single-use and path-scoped; no unledgered bypass |
 | S5 | **Non-feature-scoped guard scan** in `lib/build.js` covering `docs/judgment/**` (and any registered path outside `featureFiles`), plus staging; **and the pre-commit git hook + build-independent attestation for manually-produced canon** (Decision 1) | A Bash edit to judgment canon with no attestation fails commit; *manual typed write → later ship passes*; *manual raw write, no attestation → verification fails*. **Judgment paths register only now** |
 | S6 | **Content attestation** — writers record a hash of what they produced; ship compares each dirty guarded path against the last attested hash | An interleaved tool-call-plus-hand-edit is detected. Only at this point is the `Bash` bypass genuinely closed |
@@ -213,7 +217,7 @@ rev 1 specified the override's semantics and none of its mechanism. A PreToolUse
 | `lib/mcp-enforcement.js` | modify | Drop literal sets; consume the registry; content attestation (S6) |
 | `lib/build.js` | modify | S5 — non-feature-scoped guard scan + staging for registered paths outside `featureFiles` (currently filtered out at `3942–3950`) |
 | `lib/judgment-write-guard.js` | new | Pure leaf validator for judgment records |
-| `lib/judgment-writer.js` | new | The missing writer; stamps provenance |
+| `lib/judgment-writer.js` | new | The missing writer; stamps provenance; fronts the local-floor provider (records, not markdown — 2026-07-22 ruling), emits `docs/judgment/**` as projections |
 | `contracts/judgment-record.schema.json` | new | Record shapes (claim, joint, position, ledger entry) |
 | `.claude/hooks/canon-guard.mjs` | new | PreToolUse refusal; set derived from registry |
 | `server/compose-mcp.js` | modify | Declare + dispatch `judgment_*`, `update_feature_fields`, `canon_override_grant` |
@@ -233,7 +237,7 @@ rev 1 specified the override's semantics and none of its mechanism. A PreToolUse
 - [ ] An interleaved tool-call-plus-hand-edit to a guarded path is detected (S6); **until S6 this is a known, documented gap**
 - [ ] `update_feature_fields` can change description/phase/tags/profile on an existing feature
 - [ ] `judgment_*` tools stamp `actor`/`origin_session`/`written_at`; none is caller-writable
-- [ ] A record with `actor: agent` carrying `[ASSERT]` or `[owner-locked]` is rejected
+- [ ] No tool call can persist a record carrying `[ASSERT]` or `[owner-locked]` (v1 agent-only, OQ1 ruling 2026-07-22); the only path to an owner-attributed record is the ledgered override
 - [ ] Direct `Write`/`Edit` to a guarded path is denied, and the denial names the tool to use
 - [ ] `canon_override_grant` refuses an empty reason; the token is single-use and path-scoped; the ledger entry is written before the token is minted
 - [ ] `compose guard status` reports installed/missing/drifted, mirroring `compose hooks status`
@@ -243,7 +247,7 @@ rev 1 specified the override's semantics and none of its mechanism. A PreToolUse
 
 ## Open Questions
 
-1. **Owner-attributed calls.** How does a tool call prove `actor: owner`? A distinct MCP surface, a session flag set at bind time, or explicit confirmation. **Gates S3** — without it Decision 3 degrades to honour-system tagging, the exact failure it exists to fix.
+1. ~~**Owner-attributed calls.** How does a tool call prove `actor: owner`? A distinct MCP surface, a session flag set at bind time, or explicit confirmation. **Gates S3** — without it Decision 3 degrades to honour-system tagging, the exact failure it exists to fix.~~ **RESOLVED 2026-07-22 (owner, `LEDGER.md` → `decide: oq1-agent-only-v1`): v1 is agent-only.** Every tool write stamps `actor: agent`; `[ASSERT]`/`[owner-locked]` are unrepresentable through the tools — owner-attributed claims land only via the logged override path. Chosen against the data: all 777 recorded events are agent writes; there is no owner traffic to design a proof mechanism for. S3 is no longer gated on this question.
 2. **Guard scope: this repo or every compose workspace?** If the hook ships to users the registry must be workspace-relative. Likely yes; changes the install story.
 3. **`positions/*.md` granularity.** Whole-file upsert, or field-level? Field-level is required before `SHAKE-GROUNDING` can downgrade grounding without touching conviction.
 4. **Append-only enforcement for the ledger** — filesystem-level, or writer convention? An override holder can still rewrite history.

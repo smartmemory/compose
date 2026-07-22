@@ -299,3 +299,87 @@ present wording: *"distinct from Productboard / Aha! / Dovetail?"* has no bar an
   string without parsing, so the server's object check fails before it sees a single step.
   Reproduced with both YAML and compact valid JSON. **Not a spec-authoring error** — worth a
   stratum-side issue, and it means the mandate is currently unfollowable from this client.
+
+---
+
+## 2026-07-22 — Session 3 (owner rulings: five elicited decisions)
+
+Context: a top-down review found the register's three cheapest joints (all `ASSERT` — owner,
+all costed at minutes) unresolved since 2026-07-20, plus two decisions gating the judgment
+writer (COMP-CANON-GUARD OQ1; the writer-substrate contradiction between that feature's
+design.md and this register's banner). All five were put to the owner as explicit structured
+questions and answered in one sitting. Decisions are the owner's; prose is agent-recorded.
+
+### decide: instrument-now-product-later — resolves `JOINT: commercial-intent`
+**Decided (owner, elicited):** the judgment layer is an instrument for the owner's own
+building first; product-ization is a later, separate decision. Build for this operator now,
+but record decisions so the sell path is not foreclosed.
+**Consequence:** differentiation, onboarding, cold start, and arrive-with-nothing are
+**parked, not killed** — they stop driving ranking until the product decision reopens.
+`differentiated` loses its claim to the `UNDER TEST` slot (it was also blocked on sharpening).
+**Rejected:** product-to-sell now (would keep differentiation load-bearing); pure own-instrument
+with no recorded sell-path optionality.
+**Conviction:** high *(inferred — chose the sequenced option over both poles without hedging)*
+
+### decide: horizon-months — resolves `JOINT: horizon`
+**Decided (owner, elicited):** the payoff horizon is **months — within 2026**. Ranking gains
+a time dimension: cheap, fast-resolving joints and quick wins outrank patient infrastructure.
+**Rejected:** 1–2 years; open-ended/compounding.
+**Conviction:** medium-high *(inferred — single-choice answer, no elaboration offered)*
+
+### decide: success-criteria-all-four — resolves `JOINT: success-criteria`
+**Decided (owner, elicited):** all four offered outcomes count, and they tier by timescale:
+1. **Changed a real build decision** — the register/ledger attributably kills, reverses, or
+   reshapes something that would otherwise have been built (nearest-term, testable first);
+2. **Survives real use 6+ weeks** — the loop beats the decision-journal abandonment curve;
+3. **`JOINT-RECALL` proves out** — when things go wrong, the cause was on the list beforehand;
+4. **A product ships and sells** — end-to-end vindication (farthest, gated on the product
+   decision above).
+**Consequence:** joints can now be honestly marked resolved against stated criteria; (1) is
+the criterion manual mode should chase first, consistent with the months horizon.
+**Rejected:** nothing — the owner selected every option, which is itself signal: no single
+proxy is accepted as sufficient.
+**Conviction:** high *(inferred — selected all four without qualification)*
+
+### decide: oq1-agent-only-v1 — resolves COMP-CANON-GUARD Open Question 1
+**Decided (owner, elicited):** v1 of the judgment writer is **agent-only**. Every tool write
+stamps `actor: agent`; `[ASSERT]` and `[owner-locked]` are unrepresentable through the tools
+in v1 — owner-attributed claims land only via the logged override path. No owner-proof
+mechanism is built against zero observed owner-write traffic (all 777 recorded events are
+agent writes).
+**Rejected:** session flag at bind (agent in the session inherits the tag — weakest guarantee);
+per-write confirmation (most friction); a separate owner-only MCP surface (new surface with no
+traffic to justify it).
+**Consequence:** Decision 3 in COMP-CANON-GUARD design.md is amended; S3 is no longer gated
+on OQ1. The 2026-07-21 failure class (agent claim wearing the owner's tag) becomes
+unrepresentable by construction rather than by attribution mechanism.
+**Conviction:** high *(inferred — took the data-backed recommendation)*
+
+### decide: judgment-writer-provider-records — the substrate tie-break (was a live
+contradiction between COMP-CANON-GUARD design.md S3 and this register's banner)
+**Decided (owner, elicited):** the judgment writer fronts the **local-floor fluid-store
+provider** (records over the vision store's existing types: joint → `question`,
+decision/kill → `decision`, deliberation → `thread`); the markdown under `docs/judgment/`
+becomes a generated projection per `MARKDOWN-EMITTED`. The register banner's "do not build
+tooling against these files" is **upheld**; design.md's "write the markdown directly, migrate
+later" argument is overruled.
+**Rejected:** markdown-as-floor (faster, but builds tooling against disposable scaffolding —
+the exact ideabox failure); deferring the writer until COMP-PLAN-IDEA-UNIFY lands (leaves the
+88%-unaccounted failure mode live every session).
+**Sequencing consequence, flagged not decided:** S3 now depends on at least the minimal
+record-write slice of the local floor existing. Either IDEA-UNIFY's seam lands first, or S3
+carves that slice itself — which would make the judgment writer, not ideabox, the seam's first
+real consumer. Needs a sequencing call when S3 is specced.
+**Still open (unchanged):** whether a *position* is a new vision-store type or an `idea` with
+joints attached — the register's standing modelling question. Do not answer by drift.
+**Conviction:** high *(inferred — chose the more-work-up-front option knowingly)*
+
+### rank: joint-is-non-obvious takes the UNDER TEST slot `[AGENT]` — flagged for owner veto
+Per P3, resolving three joints forces a re-rank and the marker must move; `differentiated`
+also could not hold the slot (blocked on sharpening — P3 forbids a stuck item holding the
+queue). **Picked:** `joint-is-non-obvious` (CONSTRUCT via manual mode, days). **Nearly
+picked:** `already-knew` via `INT` over our own decision history — it is the deeper premise.
+**What decided it:** `joint-is-non-obvious` is exercised for free in every working session,
+its criterion is already defined with the owner as adjudicator, and it directly serves the
+nearest-term success criterion (changed a real build decision) under the months horizon.
+`already-knew` needs a deliberate INT excavation — worth queueing next.
