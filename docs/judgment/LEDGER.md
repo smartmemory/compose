@@ -374,6 +374,23 @@ real consumer. Needs a sequencing call when S3 is specced.
 joints attached — the register's standing modelling question. Do not answer by drift.
 **Conviction:** high *(inferred — chose the more-work-up-front option knowingly)*
 
+### decide: okf-adopted-for-projections — reverses `note: okf-set-aside` (2026-07-20)
+**Decided (owner, elicited 2026-07-22):** judgment markdown projections standardize on
+**OKF v0.1** (Google Open Knowledge Format), the dialect SmartMemory's Obsidian bridge
+already implements. Per-item projections carry OKF frontmatter with a `resource` URI
+naming their canonical record; `docs/judgment/` becomes an OKF bundle with a generated
+`index.md`. OKF was evaluated against the shipped codec
+(`smartmemory-obsidian/src/bridge/okf.ts`), closing the "set aside, not evaluated" note.
+**Boundary:** projections only. Records stay JSON canon; ROADMAP/CHANGELOG aggregates and
+prose design docs are out of scope — OKF's one-item-per-file shape does not fit them.
+**Two-source guard:** the `resource` URI is the record's identity — OKF-aware ingest
+upserts, never duplicates; frontmatter stamps `origin: compose-projection`.
+**Rejected:** OKF as the record/canon format (frontmatter parsing as enforcement is weaker
+than JSON schema); forcing OKF onto aggregate surfaces.
+**Conviction:** medium-high *(inferred — quick, unhesitating yes after the two-source
+guard was shown; the risk case was addressed before commitment)*
+**Design home:** COMP-JUDGMENT-WRITER design.md Decision 8.
+
 ### rank: joint-is-non-obvious takes the UNDER TEST slot `[AGENT]` — flagged for owner veto
 Per P3, resolving three joints forces a re-rank and the marker must move; `differentiated`
 also could not hold the slot (blocked on sharpening — P3 forbids a stuck item holding the

@@ -1,0 +1,11 @@
+{
+  "code": "COMP-JUDGMENT-WRITER",
+  "description": "Typed writer + provider seam for judgment canon (COMP-CANON-GUARD S3): git-tracked records under docs/judgment/records/, markdown as fixed-point projections, 4 owner-locked judgment_* tools + read tool, v1 agent-only provenance, SmartMemory as enrichment layer (fast-follow) + two-part ontology RFC. Anchor: docs/features/COMP-JUDGMENT-WRITER/design.md",
+  "status": "PLANNED",
+  "phase": "Judgment Layer",
+  "created": "2026-07-22",
+  "updated": "2026-07-22",
+  "complexity": "M",
+  "position": 2,
+  "impact": "high"
+}
