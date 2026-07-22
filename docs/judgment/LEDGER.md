@@ -1326,3 +1326,13 @@ Resolutions box fleshed one level, research-grounded (VOI/decision analysis; Heu
 - conviction: {"level":"high","source":"stated"}
 
 *2026-07-22T15:32:38.085Z*
+
+## 112. decide: writer-box-level-2 — the only door: new record kinds, generated projections, enforced invariants
+
+Writer box fleshed one level, executing the owner's day-one tool-owned ruling (seq 106). The Writer grows from owning three files (ledger, register, positions) to the only door for every store. New record kinds: person (create, add-fact with channel, correct-with-trace, open-field, edge, load-link), situation (entity, fact with channel and entity tag, owed, load-link, correct), goal (version-cut owner-ratified only, clause ops with provenance, provocation stored per cut), resolution package (create with question and prediction first, evidence-append with diagnosticity, verdict). All projections generated, never hand-edited: people/*.md, SITUATION.md, OBJECTIVE.md, packages. The payoff — the session's rules become rejected writes instead of promised habits: a load-link from a secondhand or inferred fact is rejected (stub rule + inferred-clause rule made mechanical); a package cannot accept evidence before its prediction exists (CONSTRUCTION-TRAP enforced); a goal version without owner ratification does not cut; corrections keep their trace automatically; the PreToolUse guard extends to all new canonical paths; ONE-UNDER-TEST stays as today. Research pass: short by design — the shape is event sourcing / CQRS convergence (records are the event log, markdown files are read models), engineering prior art the writer already embodies; idempotency keys already exist in the tool schema. Nothing to import, only extend. Owner accepted.
+
+- refs: ["docs/design/2026-07-20-judgment-layer-process-manual.md","lib/judgment-writer.js"]
+- rejected: [{"what":"keeping new stores hand-markdown during manual mode","why":"already overruled at seq 106 — unguarded freeform writes are the defect; this entry executes that ruling"},{"what":"advisory validation (warn but write)","why":"enforcement the agent can route around is not enforcement — the unguarded-writes ruling verbatim; invariants reject, not warn"},{"what":"a separate writer per store","why":"one write path, one guard surface, one replay mechanism; per-store writers re-create the multi-door problem being closed"}]
+- conviction: {"level":"high","source":"stated"}
+
+*2026-07-22T15:36:02.042Z*

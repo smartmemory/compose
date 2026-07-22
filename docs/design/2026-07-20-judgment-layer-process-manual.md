@@ -202,6 +202,28 @@ outcomes; this defines what a resolution *is* as an artifact.
 > persuasive — that count is the measure of confirmation-by-pile in the wild. Whether
 > the VOI cap ever actually stops a resolution that momentum would have continued.
 
+### Writer box — level-2 sketch (added 2026-07-22, ledger seq 112)
+
+Executes the day-one tool-owned ruling (seq 106): the Writer grows from owning three
+files to **the only door** for every store. Shape is event-sourcing convergence — records
+are the event log, the markdown files above are read models; nothing imported, only
+extended.
+
+| Record kinds | Operations |
+|---|---|
+| Person | create · add-fact (with channel) · correct-with-trace · open-field · edge · load-link |
+| Situation | entity · fact (channel + entity tag) · owed · load-link · correct |
+| Goal | version-cut (owner-ratified only) · clause ops with provenance · provocation per cut |
+| Resolution package | create (question + prediction *first*) · evidence-append (with diagnosticity) · verdict |
+
+All projections (`people/*.md`, `SITUATION.md`, `OBJECTIVE.md`, packages) are generated,
+never hand-edited. **Enforced invariants** — this session's rules as rejected writes, not
+promised habits: a load-link from a secondhand or inferred fact is rejected (stub rule
+and inferred-clause rule made mechanical); a package cannot accept evidence before its
+prediction exists (`CONSTRUCTION-TRAP` enforced); a goal version without owner
+ratification does not cut; corrections keep their trace automatically; the PreToolUse
+guard extends to every new canonical path; `ONE-UNDER-TEST` stays enforced as today.
+
 Do not add structure until a process demands it. If a field is never used by hand, it is not needed in the build.
 
 ---
