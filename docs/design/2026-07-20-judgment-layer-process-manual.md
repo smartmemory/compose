@@ -111,6 +111,57 @@ no volatility metric invented at the desk. Corrections fix in place with the old
 traced. Like the person files, the record is never complete — no maneuver may treat the
 situation as fully known (P0.1).
 
+### Goal box — level-2 sketch (added 2026-07-22, ledger seq 109; research-grounded)
+
+Already ruled: `OBJECTIVE.md` is a position, opened as a v1 draft, re-versioned on every
+owner correction, never captured at intake. This adds the mechanics.
+
+| Sub-box | Holds |
+|---|---|
+| Current version | the goal as it stands, in clauses — each clause a fact with provenance |
+| Trajectory | every prior version: the diff, and the provocation in the owner's words |
+| Joints | the goal's own uncertainties, in the register like any position's |
+
+**Rules.** Clauses are facts under the shared four-channel grammar, and **an inferred
+clause may not carry a commit** — the stub rule's twin at the goal level. Only the
+owner's voice cuts a version: the agent drafts, the owner ratifies; meaning changes
+version, wording does not. Every version stores its **provocation** — the trajectory of
+provoked corrections is `WORTH-IS-CONSTRUCTED`'s first real content (with the
+assert-to-elicit kill intact: drafts after listening, never strategic wrong verdicts).
+No schema is imposed on the goal; the live run's horizon / "enough" threshold /
+optionality clauses stay observations, not required fields.
+
+**Churn handling** (owner-prompted: "what about someone who changes goals just because,
+frequently?" — grounded in a literature pass, ledger seq 109):
+
+- **Invariant projection.** After enough versions, project what never moved. Goal
+  hierarchies (Carver & Scheier) treat subordinate *means* churning under stable
+  superordinate ends as normal self-regulation, and value-focused thinking (Keeney)
+  finds most stated objectives are means — fundamentals surface via the *"why is that
+  important?"* ladder, which joins the instrument banks. A flip that ladders to the same
+  fundamental is means churn, recorded as such. Fundamental-vs-means tags emerge from
+  running the ladder — never required fields.
+- **Oscillation converts to a joint.** A→B→A on the same goal is the action-crisis
+  signature (Brandstätter; Wrosch): persist-vs-disengage becomes an explicit register
+  joint with branches and kill criteria, instead of endless versioning. Adaptive
+  disengagement followed by reengagement is healthy — it gets the bill and prepared
+  branches, never stigma.
+- **Show the bill, never block.** Load links price every flip; refusing the change is
+  not the system's call.
+- **Commit guard.** An irreversible commit may not quietly rest on a recently flipped
+  clause — permitted, but presented as *forced* with open joints and clause stability
+  listed.
+- **Aspiration drift is expected.** "Enough" thresholds adapt with attainment
+  (satisficing); threshold drift is normal versioning with its provocation recorded.
+- **Elicitation constructs the answer** (Lichtenstein & Slovic: procedure invariance
+  fails — external validation of `WORTH-IS-CONSTRUCTED`). Record which instrument or
+  question produced each clause; a clause that survives two different elicitation shapes
+  outranks a single-method clause. Instruments are not neutral.
+
+> **WATCH FOR:** whether the invariant projection ever surprises the owner — the
+> goal-level twin of `joint-is-non-obvious`. Whether oscillation-to-joint ever fires in
+> practice.
+
 Do not add structure until a process demands it. If a field is never used by hand, it is not needed in the build.
 
 ---
