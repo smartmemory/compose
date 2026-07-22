@@ -82,11 +82,11 @@ All tracked. Per-record JSON files keep diffs reviewable and match the `feature.
 | `under_test → inconclusive` | `resolution { outcome: inconclusive, learned, would_have_settled }` |
 | `under_test → open` | ONLY via `resolution { outcome: failed_to_run, reason }` — a free return edge does not exist |
 | `open \| under_test → superseded` | `resolution { outcome: superseded, why }` (terminal) |
-| `open \| under_test → dissolved` | `resolution { outcome: dissolved, decomposed_into[] }` (terminal; `dissolved` added to the outcome enum) |
+| `open \| under_test → dissolved` | `dissolution { decomposed_into[] }` — its own artifact kind, NOT a resolution: the manual's P3 outcome list is exhaustive at four, and the register already treats "dissolved by decomposition" as a distinct fact from "got an answer" (terminal) |
 | `resolved → open` | reopen `{ shaken_evidence_ref }` (P6) |
 | `inconclusive → under_test \| open` | **re-dispose** `{ new_resolve_by, new method package }` — audited transition input, atomically emits its ledger note *(round 3, finding 3 — P3 explicitly allows retrying with a different method; this is the operation)* |
 
-Outcome enum: `resolved | inconclusive | failed_to_run | superseded | dissolved`. Any edge not listed is refused.
+Resolution outcome enum stays exactly the ruled four: `resolved | inconclusive | failed_to_run | superseded` *(round 4, finding 1 — round 3 had wrongly widened it; dissolution carries its own `dissolution` artifact instead)*. Any edge not listed is refused.
 
 ## Decision 3: Record shapes (the contract)
 
@@ -101,7 +101,7 @@ provenance: { actor: 'agent',            // v1 constant (OQ1 ruling); 'owner' on
 
 *(Shapes reworked after gate round 1, findings 4–7 and 9.)*
 
-- **position** — `slug`, `claims[] { id, text, grounding: EXT|INT|ASSERT|DERIVED|AGENT, supports[] }` (**claims are individually addressable with per-claim grounding and upward links** — P1a steps 3/6; P5 walks these, P6 downgrades one grounding without touching siblings), `conviction { level: high|medium|low, source: stated|inferred }`, `rejected_alternatives[] { what, why }`, `supersedes?: <slug@rev>`, `status: live|superseded|retracted`.
+- **position** — `slug`, `claims[] { id, text, grounding: EXT|INT|ASSERT|DERIVED|AGENT, supports[] }` (**claims are individually addressable with per-claim grounding and upward links** — P1a steps 3/6; P5 walks these, P6 downgrades one grounding without touching siblings), `conviction { level: high|medium|low, source: stated|inferred }`, `rejected_alternatives[] { what, why }`, `supersedes?: <slug>#r<N>`, `retracted?: true` (tombstone revision). **Status is derived, never stored** *(round 4, finding 2 — a stored status would force mutating an immutable revision at supersession)*: a chain is `superseded` iff a live revision elsewhere names it in `supersedes`; `retracted` iff its own latest revision is a tombstone; `live` otherwise. Readers and projections compute it; the reference form is `<slug>#r<N>` everywhere.
 - **joint** — `slug`, `question`, `branch_true`, `branch_false` (both REQUIRED), `resolve_by: EXT|INT|CONSTRUCT|ASSERT|STRADDLE`, `cost: hours|days|weeks|months` (**exactly the ruled `COARSE-BUCKETS` — no `minutes`**; the import maps the register's existing `minutes` entries to `hours` with a note), `rank: high|medium`, `state` (graph below), `resolution`, `flags[]`. **Method-specific gates, now structural** *(round 2, finding 4 — the full ruled P3/external-signal contract, not a subset)*:
   - `EXT` requires, before `under_test`, EITHER `ext { sharpened_question, bar, falsifier }` OR the ruled `BAR-OR-JUDGMENT` exception *(round 3, finding 4)*: `ext { judgment_dispatch: true, reason }` for joints that cannot honestly be sharpened — the stamp propagates permanently into any resolution built on it. An `EXT` resolution carries the ruled result package `{ outcome: FOUND|CONTRARY|SILENT|UNREACHABLE, sources[] (addresses into records/evidence/), search_record, found_or_provoked, judgment_not_evidence }`; `SILENT` may only yield the joint outcome `inconclusive`. **Sequenced dependency, stated plainly** *(round 3, finding 5)*: `sources[]` must address immutable `records/evidence/` packages (raw fetched content + search record, per the external-signal contract), and the evidence-package writer ships with the Answerer slice of the external-signal design — not here. Until the Answerer exists no `EXT` resolution can occur at all (nothing produces one), so its write path being absent from W1 is sequencing, not a gap; the schema fields and refusal rules ship now so the first Answerer write lands validated.
   - `STRADDLE` requires `straddle { discriminating_signal, kill_criteria }` before `under_test` (`STRADDLE-NEEDS-SIGNAL`, `KILL-CRITERIA-FIRST`).
@@ -125,7 +125,7 @@ Derived from the process manual's write inventory (P1–P7), not invented; names
 
 | Tool | Covers (manual) | Notes |
 |---|---|---|
-| `judgment_position_create` | P1a 1–7, P1b 3 | Also position update via explicit `supersedes` (new record, old marked superseded — no in-place mutation of claims) |
+| `judgment_position_create` | P1a 1–7, P1b 3 | Also position supersession via explicit `supersedes: <slug>#r<N>` on the new revision — the old chain is never touched; its superseded status is derived by readers (round 4, finding 2) |
 | `judgment_joint_add` | P1a 7, P2 1–4 | Validator enforces both branches + cost |
 | `judgment_transition` | P2 6, P3 outcomes, P6 reopen | Joint state machine — **single lifecycle authority, selected by config, never two** (round 1, finding 2): where `capabilities.guard` is true (it is here; adapter `server/lifecycle-guard.js` is fail-closed), the Stratum guard IS the authority — graph `guard_register`ed, `judgment_transition` calls `guard_transition`, record `state` is the transition's artifact. **Guard/record split handled by intent-first write + replaying reconciler** (round 2 finding 2; hardened by round 3 finding 1 — repairing `state` alone would resurrect a resolved joint without its resolution package, rank event, or prediction): the writer persists the COMPLETE mutation as a `pending-intent` record (atomic tmp+rename) BEFORE calling `guard_transition`; on verdict it applies the mutation and clears the intent; the reconciler, on every judgment write and on `get_judgment_state`, replays any incomplete intent idempotently — guard state authoritative for the edge, the intent authoritative for the payload — so recovery restores the whole mutation, never a bare state flip. Divergence is surfaced in the result either way. Only where guard is absent does the writer's own identical state machine enforce — kept deliberately (a hard Stratum requirement would raise the floor for every user, the `BUNDLE-IS-SUGAR` argument; flagged as a scoped limit, not silent drift). ONE-UNDER-TEST: guard predicate if expressible, else writer under advisory lock, and the population-invariant contribution is filed upstream in Stratum's tracker either way. **Rank changes are transition inputs and atomically emit the required `rank` ledger event in the same locked operation** (round 2, finding 7 — closes former OQ3: P2.5's "record what decided it" cannot be bypassable) |
 | `judgment_position_amend` | P6 5 (`SHAKE-GROUNDING`) | Scoped amendment: may downgrade a single claim's `grounding` or update `conviction` — may never touch claim text, branches, or rejected alternatives (those are supersession). Added on gate round 1, finding 5: the sweep needs grounding-downgrade *now*, not after supersession proves too heavy (this closes former OQ2) |
@@ -217,7 +217,7 @@ Scope line: OKF applies to judgment *projections* only. Records stay JSON (canon
 - [ ] Ledger has no update/delete surface; `LEDGER.md` is a projection of `ledger.jsonl`
 - [ ] Golden flow: P1→P7 of the process manual executed end-to-end against a real temp workspace, all judgment-canon writes through the six judgment tools only; P4.5 crystallization asserted as a handoff to the existing feature writer (anti-lockout)
 - [ ] Import round-trip: current hand-written canon → records → projections, human-approved diff, single cutover commit
-- [ ] With `judgment.backend` unset, behavior is floor-only and byte-identical to no-seam; `'smartmemory'` unimplemented in W1–W3 throws `NOT_IMPLEMENTED` (checkpoint-store precedent)
+- [ ] With `judgment.provider` unset, behavior is floor-only and byte-identical to no-seam; `judgment.provider` is the ONLY canon-selector key (round 4, finding 3); `'smartmemory'` as provider throws `NOT_IMPLEMENTED` (checkpoint-store precedent)
 - [ ] Writer results are small typed objects (AUDIT-19); errors carry `code`/`cause` through the MCP boundary
 - [ ] A failure mid-write (record persisted, projection regen fails) rolls back via the journal-writer compensating pattern and surfaces `JUDGMENT_PARTIAL_WRITE` with `cause`
 - [ ] Reviewer profile: write tools denied, `get_judgment_state` allowed (policy test)
@@ -269,6 +269,12 @@ Scope line: OKF applies to judgment *projections* only. Records stay JSON (canon
 8. P1 OKF exclusion fallback doesn't exist in the bridge → **accepted**; enforcement is a sibling `smartmemory-obsidian` change (RFC item 3); until then the limitation is documented, and no repo-side claim depends on bridge behavior.
 9. P2 workspace name vs identity → **accepted**; persist and use the service-returned `team_id` everywhere; the project tag is a display name.
 10. P2 commit predictions had no inputs/home → **accepted**; commit `decide` carries `prediction { text, outcome_criteria }`, `records/predictions/` added to the layout.
+
+**Gate round 4 (2026-07-22, same reviewer/config, P1-only verification bar): 3 findings, all P1, all coherence defects introduced by the round-3 edits themselves — no new conceptual ground. All accepted. Convergence achieved: 9 → 9 → 10 → 3, with round 4's items purely editorial.**
+
+1. `dissolved` wrongly widened the ruled four-outcome enum → dissolution is its own terminal artifact (`dissolution { decomposed_into[] }`), outcomes stay exactly four.
+2. Stored `status` contradicted revision immutability → status is derived (supersedes-references / tombstone / live), never stored; reference form unified to `<slug>#r<N>`.
+3. Stale `judgment.backend` key alongside `judgment.provider` → single canon-selector key, `judgment.provider`.
 
 ## Explicitly out of scope
 
