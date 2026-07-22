@@ -312,13 +312,13 @@ The 3b audit demoted the ledger under the new head: if the north star is finding
 
 ## 8d. Cold start and "arrive with nothing" (agenda item 3)
 
-**`NOTHING-MEANS-NO-IDEA`** `[owner-locked]` — "Arrive with nothing" means no *candidate*, not no *context*. Everyone has a domain, a dissatisfaction, an ambition, constraints, and unfair advantages. That context is **un-elicited, not absent**. *Corrects* the earlier claim that day-one generation is impossible for want of accumulated context — elicitation and accumulation are two sources of the same thing, and a good advisor gets most of it in the first hour.
+**`NOTHING-MEANS-NO-IDEA`** `[owner-locked]` — "Arrive with nothing" means no *candidate*, not no *context*. Everyone has a domain, a dissatisfaction, an ambition, constraints, and unfair advantages. That context is **un-elicited, not absent**. *Corrects* the earlier claim that day-one generation is impossible for want of accumulated context — elicitation and accumulation are two sources of the same thing. *Amended 2026-07-22 (first live run):* "a good advisor gets most of it in the first hour" overstated — the first hour **opens** the file, it does not fill it. Load-bearing facts surfaced for hours, several only as corrections to wrong drafts, and the goal itself went through three versions in one sitting. Elicitation is a beginning, not a capture; see the manual's P0 and the crumbs flow.
 
 **`ELICIT-GENERATE-VALUE`** `[owner-locked]` — The layer before "I'm thinking of building X":
 ```
 ELICIT   situation, constraints, assets, dissatisfactions, and what you are optimizing for
 GENERATE candidates from: gap to goal · unfair advantage · world signal · inverted constraint
-VALUE    rank against the elicited objective function
+VALUE    rank against the objective function as constructed so far (versioned, never final)
          → hand off to the judgment layer as a candidate with joints
 ```
 

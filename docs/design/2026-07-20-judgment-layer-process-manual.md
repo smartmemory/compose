@@ -24,11 +24,20 @@ Deliberately minimal. Three things, all markdown, all in git.
 
 ```
 docs/judgment/
-  OBJECTIVE.md          the objective function — itself a position (THE-GOAL-IS-A-POSITION)
+  OBJECTIVE.md          the objective function — itself a position (THE-GOAL-IS-A-POSITION),
+                        versioned: every owner correction is a new version, never a rewrite
   REGISTER.md           the joint register: all open joints, ranked, one marked UNDER TEST
   LEDGER.md             append-only log: decisions, overrides, escalations, dated
   positions/<slug>.md   one file per position: claim, argument, joints, branches
+  people/<name>.md      one per human in the cast (P0.0) — the full cast, not just the owner
 ```
+
+**Person-file rules** (added 2026-07-22): stated and revealed are recorded separately and
+never merged. Secondhand facts are marked secondhand. **A stub may not carry load** — a
+plan resting on what someone else reported about a person ("she can run it") is unsafe
+until that person has spoken into their own file. Open fields are listed explicitly, to be
+filled by interview, never by inference. Person files hold a *user's* cast in a *user's*
+project — they are never authored in this repo, whose only cast is the process itself.
 
 Do not add structure until a process demands it. If a field is never used by hand, it is not needed in the build.
 
@@ -62,17 +71,46 @@ ranking, resolution), not a script for the encounter.
 
 ---
 
+## The flow — breadcrumbs, end to end (added 2026-07-22)
+
+The spine everything below serves. The processes are maneuvers *on* this trail, and the
+trail is where any encounter is located before any maneuver is chosen.
+
+> person → situation → **goal takes shape** (constructed, research woven in throughout) →
+> claims under it → the few that matter → settle / test / straddle → **commit**, open items
+> named ∥ build → learnings flow back → the world keeps watching → revise, or switch to the
+> prepared branch
+
+| Crumb | Artifact | Maneuver |
+|---|---|---|
+| person | `people/<name>.md` — full cast, stated vs revealed | P0.0 |
+| situation | facts records, owner-corrected, provenance marked | P1 listening |
+| goal | `OBJECTIVE.md`, **versioned** — every correction is a version | P0.3, opened in P1b |
+| claims | `positions/<slug>.md` | P1a decomposition |
+| the few that matter | `REGISTER.md`, one under test | P2 |
+| settle / test / straddle | resolution packages | P3 (+ external-signal design) |
+| commit | crystallize → `feature.json` + `design.md` | P4 |
+| build | Compose's execution half | outside this manual |
+| learnings flow back | escalation records | P5 |
+| world keeps watching | sweep + (when built) the Wanderer | P6 |
+| revise / recover | reopened joints, prepared branches | P5/P6 outcomes |
+
+Everything up to **commit** is the judgment layer — the part that decides what is worth
+doing. Build onward already ships. The last three crumbs are loops, not steps.
+
+---
+
 ## P1 — Intake
 
-**Trigger:** a new question arrives ("should we build X?", "what should we do about Y?", or nothing at all).
+**Trigger:** a new question arrives ("should we build X?", "what should we do about Y?", "which of these should I focus on?", or nothing at all).
 
-**Two entry points** (`NOTHING-MEANS-NO-IDEA`). Detect which; do not force the top.
-
-> **Entry detection amended (2026-07-22, live run):** check for the *goal* first, not the
-> candidate. Arriving with candidates does not mean arriving with a goal — the live run
-> arrived with five candidates and no goal, a mix neither entry point names. When
-> candidates exist but no goal does, the job is P0.3 goal-construction, with the
-> candidates as raw material — not P1a decomposition of any single one.
+**Entry detection (re-ruled 2026-07-22): locate the person on the trail, then enter there.**
+The question asked is rarely the trail position. Check in order: is the *person* known
+(P0.0)? Is the *situation* known? Does a *goal* exist? Candidates can arrive at any
+position — arriving with five candidates and no goal (the first live run's exact shape)
+routes to goal-construction with the candidates as raw material, **not** to P1a
+decomposition of any one of them. P1a and P1b below are maneuvers for two common shapes,
+not the only doors (`NOTHING-MEANS-NO-IDEA`).
 
 ### P1a — Arrives with a candidate
 1. Ask what they want to build and why. Let them talk (`LISTENING-BEATS-ASKING`).
@@ -84,9 +122,9 @@ ranking, resolution), not a script for the encounter.
 7. Write `positions/<slug>.md`. Add joints to `REGISTER.md` — each with branches and a cost, per P2, or it is not a register entry.
 
 ### P1b — Arrives with nothing
-1. **Elicit** — situation, constraints, assets, dissatisfactions, and what they are optimizing for. Rules: forced trade-offs over stated preferences; concrete past over abstract future; never ask what you can observe; every answer returns something visible.
+1. **Elicit** — situation, constraints, assets, dissatisfactions, and what they are optimizing for. Rules: forced trade-offs over stated preferences; concrete past over abstract future; never ask what you can observe; every answer returns something visible. *Amended 2026-07-22 (live run):* elicitation **opens** the file; it does not fill it. Load-bearing facts keep surfacing for the entire run — several only ever surface as corrections — so no maneuver downstream may treat the situation as fully known (P0.1).
 2. Ask for **stated principles and recent real decisions in the same sitting**, then compare (`READ-IN-ONE-SITTING`). This is the first read on how much to trust their self-report.
-3. Write `OBJECTIVE.md` as a position with its own joints.
+3. Open `OBJECTIVE.md` as a **version 1 draft** — a position with its own joints. *Amended 2026-07-22:* the goal is constructed over the whole run and re-versioned on every owner correction (P0.3); a first-sitting objective is a draft to be stressed, never a capture — most people cannot state their goal, and the live run produced three versions in one afternoon. Research is picked up whenever the forming goal needs it (P0.2), not held for a later stage.
 4. **Generate** candidates: gap-to-goal · unfair advantage · world signal · inverted constraint.
 5. **Value them — NO PROCEDURE EXISTS. This step is a collection point.**
    > `NO-VALUATION` is an acknowledged open hole on the critical path, and `WORTH-IS-CONSTRUCTED` is a framing, not a method. **Do not invent a procedure at the desk** — that is how the first draft of this manual acquired five self-contradictions.

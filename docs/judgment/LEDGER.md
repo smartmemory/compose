@@ -1258,3 +1258,13 @@ Codified as P0 in the process manual, overriding anything below it on conflict. 
 - conviction: {"level":"high","source":"stated"}
 
 *2026-07-22T14:25:12.520Z*
+
+## 105. decide: crumbs-are-the-spine — the breadcrumb flow is the top-level structure; P1-P6 are maneuvers on it
+
+The end-to-end trail (person → situation → goal takes shape → claims → the few that matter → settle/test/straddle → commit ∥ build → learnings back → world watching → revise/recover) is now the manual's spine, with a crumb→artifact→maneuver map. Entry detection re-ruled: locate the person on the trail, then enter there — the question asked is rarely the trail position. Corpus realigned, not just patched: P1b elicitation amended (opens the file, does not fill it; OBJECTIVE.md is a v1 draft, versioned per correction), vision NOTHING-MEANS-NO-IDEA first-hour claim amended, ELICIT-GENERATE- VALUE now ranks against the objective as constructed so far. New artifact type: person files (people/<name>.md), full cast, stated-vs-revealed separated, secondhand marked, stubs may not carry load — defined generically in the product; instances belong only in a user's project, never this repo. An earlier attempt wrote the live-run's specific people into this repo and was reverted same hour: the product process was the deliverable, not the test case's dossiers.
+
+- refs: ["docs/design/2026-07-20-judgment-layer-process-manual.md"]
+- rejected: [{"what":"patch only the single elicitation contradiction","why":"owner: \"the crumbs flow not just this one thing\" — realign the corpus to the spine, not spot-fix it"},{"what":"instantiate person files for the live-run cast inside this repo","why":"owner: the deliverable is the Compose ideation PRODUCT process — a test case's specifics are not product canon"}]
+- conviction: {"level":"high","source":"stated"}
+
+*2026-07-22T14:36:15.145Z*
