@@ -32,12 +32,59 @@ docs/judgment/
   people/<name>.md      one per human in the cast (P0.0) — the full cast, not just the owner
 ```
 
-**Person-file rules** (added 2026-07-22): stated and revealed are recorded separately and
-never merged. Secondhand facts are marked secondhand. **A stub may not carry load** — a
-plan resting on what someone else reported about a person ("she can run it") is unsafe
-until that person has spoken into their own file. Open fields are listed explicitly, to be
-filled by interview, never by inference. Person files hold a *user's* cast in a *user's*
-project — they are never authored in this repo, whose only cast is the process itself.
+**Write path** (ruled 2026-07-22): every store is written through the judgment-writer
+from day one — the Writer is the only door, and the markdown above is a projection.
+Extends the `unguarded-writes` ruling from ledger/register/positions to all stores,
+person files and situation included (ledger seq 106).
+
+### People box — level-2 sketch (added 2026-07-22, ledger seq 107)
+
+One file per human in the cast, owner included. Seven sub-boxes:
+
+| Sub-box | Holds |
+|---|---|
+| Role & unit | who they are to this decision, and their edges to others (married-to, sells-for, customer-of). **Person files own their edges**; the whole-cast map is a rendered projection, never a second source. |
+| Life situation | strengths, aversions, constraints, what they are carrying (P0.0's list) |
+| Stated | what they said, dated, their words where possible |
+| Revealed | what they did — recent real decisions, observed behavior |
+| Open fields | named unknowns, filled by interview, never by inference |
+| Load | what currently rests on this person — the stub rule made checkable |
+| Instruments | opt-in structured elicitation feeding the file (rules below) |
+
+**Provenance grammar** (cross-cutting — situation will share it): every fact carries
+how-we-know plus when. Four channels: *said · observed · secondhand-via-X · inferred*.
+Secondhand is a **tag on a fact, not a section** — a stated-fact-at-one-remove ("partner
+says she said yes") stays load-banned until the person speaks into their own file.
+Corrections fix the fact in place with the old value visibly traced (ledger seq 106).
+
+**Rules:** stated and revealed are recorded separately and never merged; divergences
+between them are recorded as **pairs, never scores** (`PEOPLE-SCORING-PUNTED` extended
+from postmortems to the file itself). **A stub may not carry load** — a plan resting on
+what someone else reported about a person ("she can run it") is unsafe until that person
+has spoken into their own file. Lifecycle is binary — *stub → spoken* — until a process
+demands more. Person files hold a *user's* cast in a *user's* project — they are never
+authored in this repo, whose only cast is the process itself.
+
+**Instruments** — one elicitation engine, two surfaces: delivered live it is the
+interview; delivered async and self-paced it is the quiz. The quiz is the cheap path from
+stub to spoken for cast members an interview would be awkward to arrange with, and paired
+instruments surface stated-vs-secondhand divergence automatically. Sequencing spends the
+**fatigue budget on load, not coverage** — highest-load open field first, re-ranked after
+every answer; ranking is a collection point (no computation exists — record the judgment).
+Validated psychometric blocks are dropped in **verbatim or not at all**; the instrument is
+dynamic between blocks only. Consent ladder: full instrument → highest-load basics woven
+into normal contact (plus an optional short validated form) → silence leaves the stub a
+stub. Coarse profiles are **never load-bearing alone** — they shape how the next question
+is asked, never substitute for its answer. Question banks are composite (intents, goals,
+situation, relationships); personality is one bank among several. In-house prior art and
+first instrument candidates: cofounder-fit, couples.team.
+
+Open joint, parked (product question, not box shape): dossier consent/privacy — what may
+be written, shown, or exported about non-consenting cast members.
+
+> **WATCH FOR:** the whole instrument design is calibrated on one atypical, introspective
+> owner. Whether mainstream users need something simpler — or richer — is empirical.
+> Watch, don't design.
 
 Do not add structure until a process demands it. If a field is never used by hand, it is not needed in the build.
 
