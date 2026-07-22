@@ -1,7 +1,7 @@
 # COMP-CANON-GUARD — The Write-Guard for Canonical Artifacts (design)
 
-**Status:** DESIGN (Phase 1 — review as a design doc, not shipped code)
-**Date:** 2026-07-22 (rev 3 — two Codex gate rounds, six confirmed P1s; see *Review history*)
+**Status:** DESIGN — **BLOCKED ON SCOPE DECISION** (Phase 1; review gate hit its 5-round cap without clearing)
+**Date:** 2026-07-22 (rev 6 — five Codex gate rounds, eleven confirmed P1s. **Gate NOT clean at the cap — see Scope verdict.**)
 **Implements:** `TOOLS-OWN-WRITES`, `BLOCK-THE-BYPASS`, `MARKDOWN-EMITTED` (partial)
 
 ## Related Documents
@@ -83,20 +83,29 @@ Gaps:
 
 ---
 
-## Decision 1: One registry, two enforcement points
+## Decision 1: One registry, three enforcement points
 
 The existing ship-time gate and the proposed hook must never disagree about what is canon. Two hard-coded lists that drift is worse than one list that is occasionally wrong.
 
 `lib/canon-registry.js` becomes the single declaration — path pattern → writer → tools → **operations** — and is consumed by *both* `lib/mcp-enforcement.js` (which loses its literal sets) and the hook. **A contract test asserts both resolve identical path→operation mappings**; that test is the whole point of the extraction and is an S1 exit criterion.
 
-The two points are complementary, not redundant:
+The three points are complementary, not redundant — each matched to how the artifact is actually produced:
 
-| | Write-time hook | Ship-time scan |
-|---|---|---|
-| Catches | `Write` / `Edit` / `NotebookEdit` | Dirty guarded paths **with no matching tool event at all** |
-| Feedback | Immediate, at the mistake | At commit, after the work |
-| Blind to | `Bash` (`sed -i`, heredoc, `git checkout`) | **Interleaved edits** (see below); anything outside `featureFiles` |
-| Role | **Prevention** | **Partial backstop** |
+| | Write-time hook | Pre-commit git hook | Ship-time scan |
+|---|---|---|---|
+| Catches | `Write` / `Edit` / `NotebookEdit` | Any staged guarded path, however written | Dirty guarded paths **with no matching tool event at all** |
+| Feedback | Immediate, at the mistake | At commit | At ship |
+| Covers canon produced by | Agent tool calls | **Manual / by-hand work, humans, `Bash`** | Builds |
+| Blind to | `Bash` (`sed -i`, heredoc, `git checkout`) | Uncommitted work | **Interleaved edits** (below); anything outside `featureFiles`; **anything written outside a build** |
+| Role | **Prevention** | **Backstop for manual canon** | Backstop for build canon |
+
+> **Three points, because canon is produced three different ways (rev 4).** rev 3 had two, and that left a hole the review found: **the judgment layer is run by hand.** The process manual is explicitly *"written to be run by hand, not built"* — so P1–P7 writes happen **outside any build**. But `feature-events.js:56` stamps `build_id: null` outside a build runner, and `scanGuarded` only considers `events.filter(e => e.build_id === buildId)`. **A perfectly legitimate `judgment_ledger_append` therefore produces an event that no future ship scan can ever accept**, and a direct `git commit` skips the ship scan entirely.
+>
+> That is a worse failure than a missing tool: the tool exists, is used correctly, and the gate still rejects it — which would make the anti-lockout acceptance criterion unsatisfiable the moment S5 registers judgment paths.
+>
+> **Root cause: `build_id` correlation encodes an assumption that canon is written during builds.** True for `feature.json`/`ROADMAP.md`/`CHANGELOG.md`; false for `docs/judgment/**`. So manual canon needs **build-independent attestation** — validity established by the S6 hash chain rather than by membership in a build. The natural enforcement point is **pre-commit**, and Compose already installs and drift-checks git hooks (`bin/git-hooks`, `lib/hooks-status.js:22–33`), so the install machinery exists.
+>
+> Required tests, named now: *manual typed write → later ship passes*; *manual raw write with no attestation → verification fails*.
 
 > **CORRECTION (rev 3). rev 2 claimed the ship scan closes the `Bash` bypass. It does not, and the error mattered enough to record rather than quietly fix.**
 >
@@ -104,7 +113,9 @@ The two points are complementary, not redundant:
 >
 > **The interleaved case is not exotic — it is exactly the observed failure mode.** Every session in the Problem table involved real tool calls *and* hand-authoring. So the scan would have caught approximately none of them on content grounds.
 >
-> Closing it requires **content attestation**: writers record a hash of what they produced; ship compares each dirty guarded path against the last attested hash and flags any divergence. Coherent only if *every* legitimate writer attests, including regeneration paths like `roadmap generate`. Scoped as S6 and **not claimed as covered until then.**
+> Closing it requires content attestation — but **a hash of the post-write file does not work**, and rev 3 originally proposed exactly that. Compose's writers are **read-modify-write**: `setFeatureStatus` spreads the on-disk object (`feature-writer.js:434`), and `roadmap-gen.js:56` / `changelog-writer.js:344` take current file content as input. So a hand-edit to `description`, followed by a legitimate status call, is *read back in, re-written, and then attested by the writer itself*. Snapshot hashing certifies the tampering.
+>
+> **What works is a hash chain.** Each writer records `(prior_hash, operation, post_hash)`. Ship walks the chain for every guarded path from the last known-good state; an unaccounted write shows up as a **broken link** — call N's `post_hash` ≠ call N+1's `prior_hash` — regardless of what the file looks like at the end. Requires every legitimate writer to participate, including regeneration paths. Scoped as S6 and **not claimed as covered until then.**
 
 ### The lockout invariant
 
@@ -158,6 +169,8 @@ rev 1 specified the override's semantics and none of its mechanism. A PreToolUse
 
 - **`STRUCTURE-NOT-TRUTH` still binds.** This catches duplicates, unattributed claims, schema violations, skipped tools. It does **not** catch a well-formed, correctly-attributed, internally-contradictory document — one of the six demonstrated failures. That needs the review gate.
 - **The hook governs agent tool calls only.** A human in an editor is unaffected, which is correct (`CANON-IS-GATED` gates the agent, not the owner) — but it means the guard is not a filesystem ACL.
+- **The write-time hook is Claude-only.** It installs under `.claude/hooks` and intercepts Claude's `Write`/`Edit`. **Compose also dispatches Codex**, which runs as a separate `codex` CLI (`docs/agents.md:19,29`) that a Claude `PreToolUse` hook cannot touch. This session used Codex five times. Enforcement point 1 is therefore **a Claude-runtime convenience, not a guarantee** — its acceptance criterion must say so. Runtime-neutral coverage comes only from points 2 and 3, which operate on the filesystem and git rather than on tool calls. **State the guarantee as runtime-scoped or it is false on arrival.**
+- **A committed bypass is invisible to a dirty-tree check.** `git commit --no-verify` skips the pre-commit hook; afterwards the tree is clean, ship gathers `git diff … HEAD` (`build.js:3933`) and returns early when no eligible files remain (`build.js:3954`). No writer follows, so no broken chain link is ever observed. **Closing this needs a durable verified baseline** — verification across all registered canon or a commit range, not only what is currently dirty — plus a regression for *raw edit → `--no-verify` commit → later clean build*.
 - **`Bash`-shaped writes remain uncovered until S6.** `sed -i`, heredocs and `git checkout` bypass the hook, and the ship scan only catches them when *no* tool event exists for that path in the build (see the rev 3 correction in Decision 1). Until content attestation lands, an interleaved tool-call-plus-hand-edit is undetected.
 - **The ship scan does not see `docs/judgment/**` at all.** `lib/build.js:3942–3950` filters dirty files to `featureDir` plus `CHANGELOG.md` / `ROADMAP.md` / `README.md` / `CLAUDE.md` and `context.filesChanged`, then passes only that set to `scanGuarded` (`build.js:3990`). Judgment canon matches none of those, so it is neither scanned **nor staged** by a normal feature ship. The code already warns about analogous uncovered paths at `build.js:3985`. **Judgment paths must not be registered before S5 adds a non-feature-scoped guard scan** — registering them earlier would produce a guard that looks enabled and enforces nothing.
 - **Authored docs are not canon.** `design.md`, `blueprint.md`, `plan.md`, `docs/design/**`, `docs/product/**` are hand-authored artifacts, not generated projections, and must never be registered. `CANON-IS-GATED` draws exactly this line. Registering them would block the design phase.
@@ -171,15 +184,23 @@ rev 1 specified the override's semantics and none of its mechanism. A PreToolUse
 
 | Slice | Content | Gate |
 |---|---|---|
-| **S0** | Set `enforcement.mcpForFeatureMgmt: 'log'`; observe one real build; then `'block'`. **No code.** | Ship-time scan emits decisions; a hand-edited `ROADMAP.md` is flagged |
+| **S0** | Set `enforcement.mcpForFeatureMgmt: **'log'**`. **No code. `'block'` is NOT part of S0** — see below. | Ship-time scan emits decisions; a hand-edited `ROADMAP.md` is flagged in the log |
 | S1 | `canon-registry.js` (path → writer → tools → operations); `mcp-enforcement.js` refactored to consume it | **Contract test: hook and ship enforcement resolve identical mappings.** Lockout invariant unit-tested with a synthetic unwritten path |
-| S2 | Operation inventory per path (Decision 2); `update_feature_fields`; roadmap `open_preserved_section` | Every registered path has a tool for every legal mutation, or an explicit override-only declaration |
+| S2 | **Full write-surface inventory** (Decision 2) — not just the two missing operations but *every existing path that mutates canon*: CLI (`compose feature`, `compose roadmap generate`), server routes, migration scripts. Each is routed through a typed tool, retired, or declared `override_only`. Plus `update_feature_fields` and roadmap `open_preserved_section` | Every registered path has a tool for every legal mutation, or an explicit override-only declaration; no known CLI/server/migration surface writes canon unaccounted |
+| **S2b** | **Promote to `'block'`.** Gated on S2 complete **and** the override existing (S4) | A full `compose build` run completes with `block` on, using only normal workflows |
 | S3 | `judgment-*.schema.json`, `judgment-write-guard.js`, `judgment-writer.js`, 4 `judgment_*` tools; provenance per Decision 3. **OQ1 gates this slice.** | A record with `actor: agent` and `[ASSERT]` is refused |
 | S4 | `.claude/hooks/canon-guard.mjs`; `compose guard install\|status\|uninstall`; `canon_override_grant` + ledger-first token protocol | Direct `Write` to every registered path denied, denial names the tool; empty reason refused; token single-use and path-scoped; no unledgered bypass |
-| S5 | **Non-feature-scoped guard scan** in `lib/build.js` covering `docs/judgment/**` (and any registered path outside `featureFiles`), plus staging | A Bash edit to judgment canon with no tool event fails ship. **Judgment paths register only now** |
+| S5 | **Non-feature-scoped guard scan** in `lib/build.js` covering `docs/judgment/**` (and any registered path outside `featureFiles`), plus staging; **and the pre-commit git hook + build-independent attestation for manually-produced canon** (Decision 1) | A Bash edit to judgment canon with no attestation fails commit; *manual typed write → later ship passes*; *manual raw write, no attestation → verification fails*. **Judgment paths register only now** |
 | S6 | **Content attestation** — writers record a hash of what they produced; ship compares each dirty guarded path against the last attested hash | An interleaved tool-call-plus-hand-edit is detected. Only at this point is the `Bash` bypass genuinely closed |
 
-**S0 is the highest value-per-effort item in the feature and costs one settings key.** It is deliberately first so the rest is built against observed enforcement behaviour rather than assumed.
+**S0 costs one settings key — but only in `'log'` mode.** rev 3 originally folded the promotion to `'block'` into S0 and called it nearly free. That was wrong and would have broken normal workflows on day one:
+
+- `compose feature` writes `feature.json` **and** `ROADMAP.md` directly (`bin/compose.js:1066,1131`); `compose roadmap generate` writes `ROADMAP.md` directly (`bin/compose.js:1154,1178`). Neither emits a typed-tool event.
+- Worse, events emitted **outside a build runner carry `build_id: null`** (`lib/feature-events.js:56` — *"Null outside of a build (manual CLI/MCP invocations)"*), while `scanGuarded` only considers `events.filter(e => e.build_id === buildId)`. **So even a properly typed MCP write made outside a build never satisfies the gate.** Most of this design session's own canonical writes are in that category.
+
+`'log'` is therefore the genuinely free step and is deliberately first, so the rest is built against **observed** enforcement behaviour rather than assumed. `'block'` is a *later, gated* step (S2b) that lands only once every real write surface is accounted for and the override exists.
+
+> *Note for S3/G4:* the event log already stamps an `actor` (`feature-events.js`). That is provenance of the **tool call**, not of the **claim**, so it does not satisfy Decision 3 — but it is prior art worth reusing for how actor is resolved.
 
 ---
 
@@ -196,12 +217,14 @@ rev 1 specified the override's semantics and none of its mechanism. A PreToolUse
 | `contracts/judgment-record.schema.json` | new | Record shapes (claim, joint, position, ledger entry) |
 | `.claude/hooks/canon-guard.mjs` | new | PreToolUse refusal; set derived from registry |
 | `server/compose-mcp.js` | modify | Declare + dispatch `judgment_*`, `update_feature_fields`, `canon_override_grant` |
-| `bin/compose.js` | modify | `compose guard install\|status\|uninstall` |
+| `bin/compose.js` | modify | `compose guard install\|status\|uninstall\|verify` |
+| `bin/git-hooks` | modify | S5 — pre-commit guard hook for manually-produced canon (existing install + drift machinery) |
 | `test/canon-registry-contract.test.js` | new | Hook and ship enforcement resolve identically |
 
 ## Acceptance criteria
 
-- [ ] `enforcement.mcpForFeatureMgmt` is `block` in this repo, and a hand-edited guarded file fails ship
+- [ ] `enforcement.mcpForFeatureMgmt` is `log` (S0), then `block` (S2b), and a hand-edited guarded file fails ship
+- [ ] With `block` on, a full `compose build` completes using only normal workflows — no CLI/server/migration surface writes canon unaccounted
 - [ ] `lib/canon-registry.js` is the only place a canonical path is declared; `mcp-enforcement.js` has no literal path set
 - [ ] Contract test proves hook and ship enforcement resolve identical path→operation mappings
 - [ ] An **unregistered** path is never blocked (lockout invariant, unit-tested with a synthetic path)
@@ -215,6 +238,8 @@ rev 1 specified the override's semantics and none of its mechanism. A PreToolUse
 - [ ] `canon_override_grant` refuses an empty reason; the token is single-use and path-scoped; the ledger entry is written before the token is minted
 - [ ] `compose guard status` reports installed/missing/drifted, mirroring `compose hooks status`
 - [ ] Manual mode P1–P7 remain runnable end-to-end with the guard installed (the anti-lockout test)
+- [ ] A manual typed judgment write, made outside any build, passes a later ship
+- [ ] A manual raw write to judgment canon with no attestation fails verification at commit
 
 ## Open Questions
 
@@ -248,4 +273,30 @@ A prior self-adversary pass had independently found the `ROADMAP.md` preserved-s
 2. *The ship gate proves event-presence, not content provenance* — `scanGuarded` matches tool name + `build_id` (+ code for `feature.json`) and never compares content; `test/mcp-enforcement.test.js:201` codifies this. **Confirmed, and it retracts a rev 2 claim.** rev 2 asserted the ship scan closed the `Bash` bypass; it closes only the *lazy* bypass, not the *interleaved* one — which is the observed failure mode. Produced the correction in Decision 1 and slice S6.
 3. *The hook cannot enforce an operation-sensitive invariant* — a `PreToolUse` hook sees a raw write to a path, not a semantic operation, so rev 2's invariant was unenforceable and contradicted its own acceptance criteria. **Confirmed by inspection.** Produced the corrected always-deny invariant and path-only override matching.
 
-**Note on the review loop itself:** six confirmed P1s across two rounds, and two of them overturned claims the design was actively asserting (the guard exists; the scan closes the Bash gap). Both errors were of the same kind — *asserting coverage without reading the enforcement path end to end*. That is the `feedback_verify_before_claims` failure, twice, inside the very feature meant to stop unverified writes.
+**rev 3 → rev 4 (2026-07-22), third Codex gate, two further P1 findings, both confirmed against code and both accepted:**
+
+1. *S0's promotion to `block` would lock out existing workflows* — `compose feature` and `compose roadmap generate` write canon directly without typed events (`bin/compose.js:1066,1131,1154,1178`), and events emitted outside a build runner carry `build_id: null` (`feature-events.js:56`) which `scanGuarded` can never match. **Confirmed.** Split S0 into `log` (free, first) and S2b (`block`, gated on a full write-surface inventory plus the override). Widened S2 from "two missing operations" to *every* existing surface that mutates canon.
+2. *S6's post-write content hash cannot detect the interleaved bypass* — Compose's writers are read-modify-write (`feature-writer.js:434` spreads the on-disk object; `roadmap-gen.js:56`, `changelog-writer.js:344` consume current file content), so a hand-edit is read back in and **attested by the writer itself**. **Confirmed.** Replaced snapshot hashing with a `(prior_hash, operation, post_hash)` **chain**, where an unaccounted write appears as a broken link.
+
+**rev 4 → rev 5 (2026-07-22), fourth Codex gate, one further P1, confirmed and accepted:**
+
+1. *Manual judgment writes have no valid path through the ship gate* — the judgment layer is run **by hand, outside any build**, so its tool events carry `build_id: null` (`feature-events.js:56`) and `scanGuarded` can never accept them; a direct `git commit` skips the ship scan entirely. **Confirmed.** The tool would exist, be used correctly, and still be rejected — making the anti-lockout criterion unsatisfiable once S5 registers judgment paths. Root cause: `build_id` correlation assumes canon is written during builds, which is false for `docs/judgment/**`. Produced the **third enforcement point** (pre-commit git hook, reusing `bin/git-hooks` + `lib/hooks-status.js`) and build-independent attestation in S5.
+
+**rev 5 → rev 6 (2026-07-22), fifth Codex gate — did NOT clear. Two further P1s, both confirmed, both folded in as scoped limits rather than solved:**
+
+1. *The write-time guard is Claude-only* — Compose dispatches Codex as a separate CLI (`docs/agents.md:19,29`) that a Claude `PreToolUse` hook cannot intercept. **Confirmed.** The prevention guarantee is runtime-scoped, not absolute.
+2. *S6 does not close a persisted Bash bypass* — `--no-verify` commits leave a clean tree, and ship returns early on no eligible dirty files (`build.js:3933,3954`), so the broken chain link is never observed. **Confirmed.** Needs a durable verified baseline over all registered canon.
+
+**Note on the review loop itself:** eleven confirmed P1s across five rounds, and four of them overturned claims the design was actively asserting — the guard exists; the scan closes the Bash gap; S0 is nearly free; a content hash detects tampering. Every one failed the same way: *asserting a property of the enforcement path without reading that path end to end*. That is the `feedback_verify_before_claims` failure four times, inside the very feature meant to stop unverified writes. **The correct read is not "the reviewer was useful" but "design-by-assertion about an existing subsystem is unreliable at a rate of roughly one error per claim."** Build slices should carry the same suspicion: verify the mechanism, then state the coverage.
+
+---
+
+## Scope verdict — this is an epic, not a feature
+
+**Finding count per round: 3, 3, 2, 1, 2.** It converged for four rounds and then turned back up at the cap. The last findings are not defects in the argument; they are the **tail of an unbounded adversarial space** — *what if a different runtime writes it, what if the commit skips the hook, what if the baseline itself is forged*. Each is true, each is cheap to state, and there is no visible end to the sequence. That is the signature of a scope problem, not a quality problem.
+
+What began as *"add a PreToolUse hook"* is now: three enforcement points, a registry extraction from a live subsystem, a full inventory of every write surface in the CLI/server/migration paths, a new writer plus four MCP tools, a provenance model, an override protocol with token semantics, a hash chain, a durable verified baseline, and multi-runtime coverage. **That is an epic.**
+
+**Recommendation: split, and ship the narrow thing first.** `COMP-CANON-GUARD` becomes the umbrella. The first feature is S0 alone — set `enforcement.mcpForFeatureMgmt: 'log'`, change no code, and **collect a week of real data on what actually writes canon unaccounted.** Every remaining slice is currently specified against assumptions about that traffic; four of the eleven findings were exactly such assumptions being wrong. The log is the cheapest instrument that replaces guesses with observations, and it costs one settings key.
+
+**Do not build S1–S6 against the current assumptions.** Re-spec them from the log.
