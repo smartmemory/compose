@@ -63,11 +63,23 @@ PORTS (seams)                         ADAPTERS (opt-in integrations)
 | # | Feature | Slice | When |
 |---|---|---|---|
 | 1 | **COMP-ROADMAP-MODES** | Mode-generalize lifecycle data (transitions/gates/artifact-maps/phase→status) out of build-only globals (`server/lifecycle-guard.js:31`, `server/vision-server.js:42`, `server/artifact-manager.js:12`, `lib/build.js:629`). Keystone — unblocks `plan` AND pluggable ports. | v1 |
-| 2 | **COMP-ROADMAP-PLAN** | `plan` lifecycle v1 on native state: ideabox→vision items→estimate/converge→build-handshake artifact (promoted `feature.json` + spec docs). Absorb `compose new`. | v1 |
+| 2 | **COMP-ROADMAP-PLAN** | `plan` lifecycle v1 on native state: ideabox→vision items→estimate/converge→build-handshake artifact (promoted `feature.json` + spec docs). ~~Absorb `compose new`.~~ **NOT DONE — see note below.** | v1 |
 | 3 | **COMP-ROADMAP-GRAPH-3** | Graph renders external/cross-product nodes — the cross-product dashboard MIGRATE's option C cuts over to. Lands **before** MIGRATE's cutover. | v1 (prereq for MIGRATE cutover) |
 | 4 | **COMP-ROADMAP-MIGRATE** | forge-top narrative→structured (option C: ROADMAP.md forge-owned-only; one-time standalone script; prose→docs/preserved-sections). May be **prepared** in parallel but **cut over only after GRAPH-3** lands (else foreign items have no live surface). | v1 |
 | 5 | **COMP-ROADMAP-RETIRE** | Prohibit narrative mode (delete `isNarrativeOwned` + the 6 gates). Gated on MIGRATE parity. | after MIGRATE |
 | 6 | **COMP-ROADMAP-PROVIDERS** | TrackerProvider v2 (Linear/JIRA/GH-Issues) + new DocumentPort/DesignPort/BuildTargetPort seams. REFERENCE-only attach in v1; live integration here. | post-v1 |
+
+> **Correction (2026-07-22) — `compose new` was not absorbed.** COMP-ROADMAP-PLAN is COMPLETE, but
+> the "Absorb `compose new`" clause in slice 2 never shipped. `mode:'new'` is still a live,
+> first-class lifecycle alongside `plan`: `/api/build/start` whitelists it and dispatches to
+> `runNew()` (`server/build-routes.js:69–80`), backed by `lib/new.js` + `pipelines/new.stratum.yaml`.
+> Two entry points into the front half therefore coexist, which is a real open question, not an
+> oversight to quietly close: `new` takes free-text intent with no feature code, `plan` operates on
+> native vision state. Whether `plan` should absorb `new`, or the two should be declared distinct
+> entry points, is **undecided** — and it connects directly to the multiple-entry-points observation
+> parked in [what-to-build §10](../product/2026-07-20-what-to-build-vision.md#10-open-agenda-queued-one-at-a-time)
+> ("we entered at the design layer directly, skipping elicitation and generation, because the
+> context already existed").
 | 7 | **COMP-ROADMAP-META** | Narrow coordination `roadmap.json` (workspaces[]/sharedMilestones[]/integrationItems[] only). | deferred |
 | 8 | **COMP-ROADMAP-COMPOSE** | Composable nested workspaces (workspaceId-based parent→child refs, cross-workspace rollup). | deferred |
 

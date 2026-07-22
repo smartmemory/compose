@@ -229,6 +229,28 @@ two internal streams first (dogfoodable immediately, no external transport); Jir
 later *bindings* of the manager stream. This also corrects the framing of §5: the core of the
 reconciliation engine generalizes what the pipeline already does between planning and execution.
 
+> **Not the same thing as judgment-layer escalation `[AGENT]` — cross-reference added 2026-07-22.**
+> Compose now has **two** mechanisms that both run bottom-up work into top-down intent, and they
+> read as duplicates until you look closely. They are not. Recording the distinction here because a
+> future session that notices the overlap will otherwise try to merge them, and merging them loses
+> both.
+>
+> | | **This layer (§4)** | **Judgment escalation** ([§8j](../product/2026-07-20-what-to-build-vision.md), [P5](2026-07-20-judgment-layer-process-manual.md)) |
+> |---|---|---|
+> | Resolves | **Who owns a field** when two streams disagree about an item's state | **Whether an upstream belief is still true** |
+> | Trigger | A write collision on a contested field | Something learned in scoping/design/spike/build bears on an upstream claim |
+> | Travels along | Field ownership rules + the 3-mode dial (§4.3.3) | Recorded evidence links, walked: implementation → design → feature premise → product position → objective function |
+> | Failure if absent | Last-writer-wins corruption | Building on a dead premise (`KNOWN-OR-UNEXAMINED`) |
+> | Terminates at | An owner for the field | A claim that survives or gets reopened |
+>
+> **The one-line version: this layer reconciles *state*, judgment escalation reconciles *belief*.**
+> An item can be perfectly reconciled here and rest on a premise that died last week; a premise can
+> be freshly re-validated while the item's status is contested. They are orthogonal and both are needed.
+>
+> Where they *do* touch: an escalation that reaches "this feature's premise is dead" produces a
+> **status change** that this layer must then reconcile like any other manager-stream event. That is
+> a hand-off, not a shared mechanism.
+
 ### 4.1 Field ownership (the discipline)
 
 | | Manager (top-down: F4 / human gates / Jira, Linear) | Engineer (bottom-up: F5 / code, GitHub) |

@@ -76,4 +76,8 @@ It's the structured process between "I want X" and "X is built correctly."
 
 ## Current state
 
-Vision phase. Conceptual model validated through 6 sessions of discovery. No implementation beyond terminal embed and crash resilience from bootstrap. Next: requirements for the core pipeline (F0, F3, F4, F5).
+**Updated 2026-07-22.** Shipping. Compose is at npm `0.3.0` with the build / fix / plan / new lifecycles live, a Stratum-backed pipeline engine, an MCP server, a tracker-provider layer, and a generated `ROADMAP.md` carrying 367 COMPLETE features against 113 PLANNED. The back half (goal → design → blueprint → implement → ship) works and is dogfooded daily.
+
+The live frontier is the **front half** — what to build, and how to know. See [The Discovery Loop](product/2026-07-20-discovery-loop-vision.md) (the ladder), [What To Build — The Judgment Layer](product/2026-07-20-what-to-build-vision.md) (the spine), and [COMP-PLAN-RIGOR](design/2026-07-20-front-funnel-rigor-design.md) (the near-term slice).
+
+> **Everything above this section is the founding vision and is preserved as written.** It was accurate as a statement of intent and remains the reference for what Compose is *for*. This section is the only part that tracks reality, and it had rotted five months before being caught — cluster docs were citing the "Vision phase" line as current. If you are citing this document for Compose's *state*, cite this section only.

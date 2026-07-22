@@ -64,6 +64,29 @@ Give the `plan` phase the deliberation machinery the `build` phase already has f
 - **B2 — Decision cards as first-class objects.** Convergence emits `decision` + `question` vision items (the types already exist), not just `plan.md` prose — each recording the option chosen, the options rejected, and why (killed-at-origin provenance). The narrative `plan.md` becomes a *render* of these, not the system of record.
 - **B3 — Frame as a durable north-star + convergence check.** `explore_design`'s FRAME becomes a durable `thread`/`spec` vision item carrying the goal + success criteria. The `plan_converge_gate` gains one check: **does the chosen shortlist satisfy the frame's success criteria?** Today nothing tests convergence against the original intent.
 
+> **The frame IS the objective function `[AGENT]` — added 2026-07-22, flagged for owner sign-off.**
+> WS-B as originally written never references an objective function anywhere, while the judgment
+> layer treats the objective function as the thing without which ranking is impossible
+> (`VIABILITY-VS-PREFERENCE`, `ELICIT-GENERATE-VALUE`, agenda 3b(b)). Those are the same object
+> under two names, and leaving them unconnected is how the front half ends up with two ranking
+> stories.
+>
+> **Proposed binding:** B3's durable frame item **is** the elicited objective function — goal,
+> success criteria, constraints and assets — and therefore inherits `THE-GOAL-IS-A-POSITION`: it
+> is a position with its own joints, it can be wrong, and evidence can contradict it. Consequences,
+> all of which are edits to B3 rather than new machinery:
+> - The frame must record **what it is optimizing for**, not only what success looks like. A
+>   success criterion without an objective function cannot rank two candidates that both meet it.
+> - `plan_converge_gate` gets a **second** check beside satisfies-the-criteria: *did anything in
+>   this convergence contradict the frame itself?* That is `THE-GOAL-IS-A-POSITION` and Discovery
+>   Loop rung 6 ("doubt the goal") with a real trigger, rather than a meta-capability nobody can build.
+> - B1's competing mandates (*minimal-viable / maximum-ambition / risk-first*) are currently
+>   arbitrary. Under this binding they should be **derived from the frame's stated trade-offs**,
+>   which is what makes them competing rather than merely different.
+>
+> Sequencing note: the viability half (`DEMAND-HAS-KNOWN-SIGNALS` → a per-candidate rubric) prunes
+> *before* any of this runs, and needs no objective function. The frame binds only among survivors.
+
 ### WS-C — Plan lifecycle UI / wiring parity
 
 Make the convergence engine observable and launchable, and promote planning-native types to first-class. (Direct answer to the parity audit.)

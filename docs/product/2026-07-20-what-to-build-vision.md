@@ -10,7 +10,7 @@
 - [COMP-FOH — Front of House (Maya + SmartMemory)](../features/COMP-FOH/design.md) — candidate substrate.
 - [Front-of-Funnel Rigor + Parity](../design/2026-07-20-front-funnel-rigor-design.md) (COMP-PLAN-RIGOR) — supporting infrastructure.
 - [COMP-ROADMAP planning-model design](../plans/2026-06-21-roadmap-planning-model-design.md) — shipped spine below all of this.
-- **Operationalization:** [Judgment Layer — Process Manual](../design/2026-07-20-judgment-layer-process-manual.md) — the six processes (P1–P6) written to be run by hand, so the friction points become the automation spec.
+- **Operationalization:** [Judgment Layer — Process Manual](../design/2026-07-20-judgment-layer-process-manual.md) — the seven processes (P1–P7) written to be run by hand, so the friction points become the automation spec. **P7 (postmortem) added 2026-07-22** — it is what makes `JOINT-RECALL` computable at all.
 - **Acquisition (read half):** [External Signal — Acquisition Design](../design/2026-07-20-external-signal-design.md) — how signal actually gets in the door. Splits ingestion into two machines with a wall between them (`TWO-MACHINES`, `WALL-BETWEEN`), scopes `JOINTS-ARE-WATCHLIST` to the judgment machine only, dissolves `JOINT: ingest-continuous` by decomposition, and states the joints reading can never reach (`READING-CEILING`).
 
 **Grounding key:** `[EXT]` external evidence · `[INT]` internal/build history · `[ASSERT]` owner assertion, unvalidated · `[AGENT]` agent-generated claim, unvalidated · `[DERIVED]` follows from other claims · `[owner-locked]` decided by owner this session
@@ -86,11 +86,21 @@ EXECUTION     goal → plan → build → ship            ← Compose today, wor
 
 ```
 positions → joints → rank by value of information → ONE under test
-  → resolve by (external evidence | construction | marked assertion | straddle)
+  → resolve by (external evidence | internal evidence | construction
+                | marked assertion | straddle)
   → update positions + branches → repeat
 ```
 
 Everything below is an organ of this cycle.
+
+> **`INT` added to the cycle 2026-07-22 `[AGENT]`.** It was missing here, from
+> `THREE-WAYS-TO-RESOLVE` (§8) and from `ONE-COST-COMPARISON` (§8e), while
+> `EVIDENCE-BY-SOURCE` (§5) has always typed it and the process manual has always listed it as
+> one of five resolution methods — the manual self-flagged the omission at the time
+> (["`INT` was used in the register before being defined here — a real gap"](../design/2026-07-20-judgment-layer-process-manual.md)).
+> The gap is not cosmetic: **`INT` is the one resolution method Compose has structurally more of
+> than any competitor**, because it is the thing in the room while the building happens. A spine
+> that omits it understates the moat in the three places the moat is supposed to be derived.
 
 ---
 
@@ -235,6 +245,8 @@ The 3b audit demoted the ledger under the new head: if the north star is finding
 
 **`THREE-WAYS-TO-RESOLVE`** `[owner-locked]` — **(a) external evidence** — look at the world. **(b) assertion** — owner decides, marked unproven. **(c) construction** — build the cheapest thing that makes the answer observable. Most decision tools offer only (a). Compose can do (c) because it is already an execution engine: **execution becomes an instrument for resolving decisions**, not only post-decision delivery.
 
+> **PROPOSED AMENDMENT 2026-07-22 `[AGENT]` — flagged for owner sign-off; the claim is owner-locked and its *name* encodes the count, so it is not amended unilaterally.** There are **five** resolution methods in live use, not three: the process manual has tagged `EXT / INT / CONSTRUCT / ASSERT / STRADDLE` since it was written, `STRADDLE` is already called "the fourth disposition" immediately below, and `INT` is defined in `EVIDENCE-BY-SOURCE` (§5) but appears in no spine claim. **(d) internal evidence** — check our own build history, ledger and records; the evidence already exists and is ours, so it is neither external lookup nor new construction. Proposed rename: `WAYS-TO-RESOLVE`, listing five. The count in the name is the only reason this needs a decision rather than an edit.
+
 **`MOAT-FINAL-FORM`** `[DERIVED]` — Ambient build exhaust is worthless for "what to build" (killed — closed loop). Exhaust from a **targeted experiment against a named joint** is high-grade evidence. The difference is intent and targeting, not the data.
 
 **`CONSTRUCTION-TRAP`** — **Severe; expect erosion here first.** "Build it and find out" is what everyone already does and the most expensive way to be wrong. Construction-as-evidence and self-deception are indistinguishable from outside. The **only** separator is that the joint and its outcome criteria were recorded *before* building. Without a recorded prediction, "building to test the hypothesis" is just building with better vocabulary. → `JOINT: construction-discipline`
@@ -261,7 +273,18 @@ The 3b audit demoted the ledger under the new head: if the north star is finding
 
 **`TRIVIAL-IS-TRAINING`** `[DERIVED]` — Cheap reversible decisions **resolve in days, not months**, so recording them supplies the fast calibration corpus that strategic outcomes cannot. Partially unblocks `JOINT: calibration-timely`: the signal comes from the decisions that "didn't need" the process, which is why the ledger must not switch off for them.
 
-**`REVERSIBILITY-METER`** `[owner-locked]` — Not a one-and-done gate but a **tracked quantity that only decays**. Every dependency added, user onboarded, schema written to, and public statement made lowers it. The valuable output is the *derivative*: this is calcifying faster than expected, or a one-way door is about to close. Nobody notices the moment a door stops being two-way — that is the thing worth surfacing.
+**`REVERSIBILITY-METER`** `[owner-locked]` — Not a one-and-done gate but a **tracked quantity whose derivative is the signal**. Every dependency added, user onboarded, schema written to, and public statement made lowers it. The valuable output is the *rate*: this is calcifying faster than expected, or a one-way door is about to close. Nobody notices the moment a door stops being two-way — that is the thing worth surfacing.
+
+> **AMENDED 2026-07-22 `[AGENT]` — flagged for owner sign-off, since the claim is owner-locked.**
+> As written the meter "only decays," which is **false**: removing a dependency, rolling back a
+> schema, sunsetting a surface, or retracting a public statement all restore reversibility. The
+> monotonic framing was doing no work — the claim's own payload is already the derivative, and a
+> quantity that can only fall makes the *rate* less informative, not more, because a recovery is
+> then unrepresentable. Everything the claim actually uses survives the change: the one-way-door
+> alarm fires on the derivative crossing a threshold, not on monotonicity. `DELAY-IS-PRICED`
+> (§8c) is unaffected — deliberation still typically decays the meter; it just is not guaranteed
+> to. `MISCALLS-GRADE-YOU` gains slightly: "called it reversible, turned out not to be" is now
+> checkable in both directions.
 
 **`REVERSIBILITY-SEEN`** `[DERIVED]` — Measurable from the work itself (accumulating dependencies, data written, surface exposed) rather than polled from the owner. Same automation argument as the ledger, and same in-the-room advantage.
 
@@ -350,7 +373,7 @@ VALUE    rank against the elicited objective function
 
 ## 8e. Cost (agenda item 4 — resolved)
 
-**`ONE-COST-COMPARISON`** `[DERIVED]` — For any joint: **resolve** (pay the test cost), **straddle** (pay the build-both cost), or **assert** (pay the expected cost of being wrong). Choose the cheapest path to an acceptable outcome. A single comparison, not three mechanisms. **Completes the stopping rule**: you stop when *asserting is cheaper than resolving or straddling* — computable, where "nothing left worth learning" was not.
+**`ONE-COST-COMPARISON`** `[DERIVED]` — For any joint: **resolve externally** (pay the lookup cost), **resolve internally** (pay the cost of searching our own records — usually the cheapest option on the board, and the one most often skipped because it does not feel like work), **construct** (pay the build cost), **straddle** (pay the build-both cost), or **assert** (pay the expected cost of being wrong). Choose the cheapest path to an acceptable outcome. *(`INT` added 2026-07-22 `[AGENT]` — see `THE-CYCLE` §2.)* A single comparison, not three mechanisms. **Completes the stopping rule**: you stop when *asserting is cheaper than resolving or straddling* — computable, where "nothing left worth learning" was not.
 
 **`QUEUE-COSTS`** `[DERIVED]` — With one slot (`ONE-UNDER-TEST`), testing joint A means not testing joint B. A naive cost model misses this and will spend the slot on something cheap and unimportant. **The cost of a test includes the queue it blocks.**
 
@@ -554,7 +577,9 @@ Owner ruling closing the substrate fork (four competing canon claims: vision sto
 
 > **Kills live in [`docs/judgment/LEDGER.md`](../judgment/LEDGER.md).** A kill is a *dated event with a reason and a conviction* — ledger-shaped, not narrative-shaped — so it belongs with the operational state, not here. Same de-duplication as §9.
 >
-> One exception retained as reasoning rather than event: **`LADDER-CORRECTION`** is a named claim (§ Killed within the claim set) because other claims reference it. Its *event* record is in the ledger.
+> One exception retained as reasoning rather than event: **`LADDER-CORRECTION`** is a named claim, kept here because other claims reference it. Its *event* record is in the ledger.
+>
+> **`LADDER-CORRECTION`** `[owner-locked]` — *Definition restored 2026-07-22; it had been referenced three times in this document with no definition anywhere in it, having left with the §11 kills-move.* An earlier draft of this document dismissed **every rung of the Discovery Loop as "inbox management."** That was wrong and was corrected the same day: **rungs 4–6 are temporal calibration**, a real mechanism the ladder contributes and this spine does not replace. Recorded as agent overreach. Ledger event: [`LEDGER.md`](../judgment/LEDGER.md) → *decide: the ladder stands*.
 
 ---
 

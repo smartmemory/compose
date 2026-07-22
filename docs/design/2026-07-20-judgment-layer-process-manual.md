@@ -162,8 +162,39 @@ Pick the cheapest disposition that yields an acceptable outcome (`ONE-COST-COMPA
    - **Revisit** commitments resting on it — this may raise a P5 escalation.
    - **Revive** candidates killed for a reason that has now become false (`KEEP-THE-RAW` applied to candidates; a kill reason that expired should return the candidate to the pile).
    Leaving downstream work resting on a known-stale premise is the failure `STALENESS-IS-SILENT` names.
+7. **Sweep for due predictions and run P7 on them.** Any prediction written before a build (`CONSTRUCTION-TRAP`) or conviction recorded at a commit (P4.4) that can now be graded. **This is P7's trigger 3, and it is the one with no natural prompt** — nothing in the world arrives to tell you a prediction came due, so if the sweep does not look for them, they are never graded and `JOINT-RECALL` stays uncomputed forever.
 
 > **WATCH FOR:** Whether re-checking ever found anything. Which claim types actually rot (this calibrates volatility empirically). Whether the sweep felt worth doing or became a chore skipped after week two — that answer is load-bearing for `JOINT: ledger-used`.
+
+---
+
+## P7 — Postmortem `[AGENT]` *(added 2026-07-22 — flagged for owner sign-off)*
+
+**Why this exists.** `JOINT-RECALL` is named in the spine as **"the single most important metric about this system"** and *"everything else is decoration by comparison."* It is unmeasurable without a postmortem, and there was no postmortem procedure — so the most important metric had no way to be computed, and the honesty table below correctly marked `sensitivity-computable` as **No**. Rung 6 of the Discovery Loop ("the loop grades its own judgment") and `AGENT-CALIBRATION` have the same dependency. This is the smallest procedure that unblocks all three. **It is deliberately thin** — per the manual's own rule, do not add structure until a process demands it.
+
+**Trigger — the hard part, and the reason this was missing.** Postmortems are conventionally triggered by *failure*, and failure in this system is often silent, late, or never labelled as such. Three triggers, and the third is the one that matters:
+
+1. **Something broke** — a build went badly wrong, a feature shipped and did not land, a decision was reversed.
+2. **A joint resolved** — any joint leaving `UNDER TEST` with a Resolved outcome. Cheap, frequent, and the fast-calibration corpus `TRIVIAL-IS-TRAINING` argues for.
+3. **A prediction came due** — the one nobody remembers to run. Every `CONSTRUCT` disposition writes a prediction before building (`CONSTRUCTION-TRAP`); every commit records conviction (P4.4). **Those are dated claims with no scheduled reckoning.** Sweep for them in P6 and run P7 on any that can now be graded.
+
+**Procedure.** Five steps, all against records that already exist:
+
+1. **State what happened**, in one sentence, before looking at the register. Order matters: reading the register first contaminates the recall answer, which is the entire measurement.
+2. **Was the cause on the list?** Check the register *as it stood at the time* (git history — this is why the register is in git). Exactly one of:
+   - **NAMED** — the cause was a joint in the register.
+   - **NAMED-BUT-MISRANKED** — it was there, ranked too low to reach the queue. A distinct and more actionable failure than not seeing it: the seeing worked, the ranking did not.
+   - **MISSED** — not there at all. **These are the entries that matter.** Record what would have surfaced it, since that is the only specification anyone will ever get for a better generator.
+   - **UNKNOWABLE** — no available method would have surfaced it in advance. Use sparingly and with an argument; it is the escape hatch that makes the metric flattering.
+3. **Grade the prediction, if there was one.** Compare what was written before to what happened. Do not rewrite the prediction. Record whether it was *right*, *right for the wrong reason* (which is not a success and is where overconfidence hides), or *wrong*.
+4. **Attribute, scoped to the question type — never to a person** (`PEOPLE-SCORING-PUNTED`). *"Integration-effort estimates run low, consistently"* is actionable. *"Bob is bad at this"* is not, and changes what the product is. Agent inferences get the same treatment scoped to inference type (`AGENT-CALIBRATION`).
+5. **Append to `LEDGER.md`** with the date, the trigger, the four-way recall verdict, and the attribution. **Never edit the original entry** — the ledger is append-only, and a corrected prediction is a destroyed measurement.
+
+**The metric.** `JOINT-RECALL` = NAMED ÷ (NAMED + NAMED-BUT-MISRANKED + MISSED), with UNKNOWABLE excluded from both terms and **reported alongside**, because a rising UNKNOWABLE rate is how this metric gets quietly gamed.
+
+> **HONESTY — what P7 cannot do yet, stated so it is not later assumed.** The sample will be tiny for months, so early numbers are anecdote, not a rate; report the raw counts, never a percentage, until there are enough to mean anything. P7 also **cannot distinguish "the method worked" from "a human filled the gap"** — the same limit already recorded against `sensitivity-computable`, and it does not go away just because a procedure now exists. And P7 is run by the same agent whose recall it measures, which is precisely the `WHO-CHECKS-THE-CHECKER` problem: **step 2's verdict should be adjudicated by the owner**, as with `joint-is-non-obvious`, or it inherits the self-grading miscalibration already recorded twice in the ledger.
+
+> **WATCH FOR:** Whether trigger 3 ever actually fires, or whether due predictions are simply never noticed — that is the load-bearing observation, because a prediction nobody grades is a prediction nobody made. Whether MISSED entries produced anything specific enough to change the generator, or only regret. How often UNKNOWABLE was reached for. Whether the postmortem felt like learning or like paperwork — if paperwork, it will be skipped by week three and `JOINT-RECALL` dies with it.
 
 ---
 
@@ -177,10 +208,10 @@ Pick the cheapest disposition that yields an acceptable outcome (`ONE-COST-COMPA
 | `construction-discipline` | P3 | Was the prediction in `LEDGER.md` before the build, timestamped? Binary, checkable from git. | **Yes** |
 | `candidates-generatable` | P1b | Owner confirms a generated candidate was not already in their head. | **Yes** |
 | `elicitation-works` | P1b | *No criterion defined* — "usable objective function" is unscored. **Define the criterion before claiming this, or record observations only.** | **Partial** |
-| `sensitivity-computable` | P2 | Requires a postmortem: when something went wrong, was the cause a named joint? **No postmortem trigger or procedure exists yet.** Also cannot distinguish "the method works" from "a human filled the gap". | **No** |
+| `sensitivity-computable` | P2, **P7** | Requires a postmortem: when something went wrong, was the cause a named joint? ~~No postmortem trigger or procedure exists yet.~~ **P7 now supplies the trigger and procedure (2026-07-22).** Still cannot distinguish "the method works" from "a human filled the gap", and the sample will be too small to mean anything for months. | **Partial** — P7 collects the raw material; the criterion is still unmet |
 | `ledger-used` | — | The claim is about an **auto-captured** ledger (`AUTOMATION-IS-FREE`). Hand-running a labour-intensive practice cannot test it. Six-week survival of manual mode is a *different* fact. | **No — do not close** |
 
-**Primary metric throughout:** `JOINT-RECALL` — when something later went wrong, was the cause on the list beforehand? **Requires a postmortem procedure that does not exist.** Until one is written, record the raw material: when something goes wrong, check the register history and note whether the cause was listed.
+**Primary metric throughout:** `JOINT-RECALL` — when something later went wrong, was the cause on the list beforehand? ~~Requires a postmortem procedure that does not exist.~~ **Procedure written 2026-07-22: see P7 above.** Report raw counts, never a percentage, until the sample is large enough to carry one.
 
 ## Explicitly not in manual mode
 

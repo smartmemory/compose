@@ -201,6 +201,25 @@ Phase is where it sits in the lifecycle. Type is what kind of work it is. These 
 
 Standard labels are suggested defaults, not enforced. Users can create their own labels. The taxonomy provides a shared vocabulary, not a straitjacket.
 
+### Phase vocabularies do not currently line up `[AGENT]` *(added 2026-07-22 — mapping note, not a decision)*
+
+There are **three** phase vocabularies in Compose and no mapping between them. This is the phase-level analogue of tracker design D9 (which found the same problem for *status*), and it is recorded here rather than fixed because picking a winner is an owner call.
+
+| Where | Vocabulary |
+|---|---|
+| This doc (above) | `vision · requirements · design · planning · implementation · verification · release` (**7**) |
+| Vision store, in code (`server/vision-store.js:11`, `VALID_PHASES`) | `vision · specification · planning · implementation · verification · release` (**6**) |
+| Plan lifecycle, in pipelines | `explore_design → plan → ship` (**3**) |
+
+Two concrete mismatches, both live:
+
+1. **The code has six, this doc has seven.** `specification` in the store spans `requirements` + `design` here. So a Work item labelled `design` in this taxonomy has no distinct home in the store, and anything grouping by phase silently merges two stages the taxonomy deliberately separated.
+2. **The plan lifecycle's three do not nest cleanly in either.** `explore_design` straddles `vision`/`requirements`/`design`; `ship` is not `release` (it verifies build-readiness and hands off, rather than releasing anything).
+
+**Not decided:** whether the taxonomy's seven are canonical and the store is a coarsening of them, or the store's six are canonical and this doc is aspirational. Until that is ruled, **do not build a mapping table into code** — a mapping asserted before the canon is chosen becomes the third source of truth, which is precisely how the idea-store fragmentation happened.
+
+**Related open modelling question, same shape:** the judgment layer's [`REGISTER.md`](judgment/REGISTER.md) holds *"is a position a new vision-store type, or an `idea` with joints attached?"* — explicitly flagged as **not to be answered by drift**. Beside it sits a third lifecycle vocabulary nobody has reconciled: the ideabox's `NEW · DISCUSSING · PROMOTED · KILLED` (`lib/ideabox.js:31`) against the vision store's nine statuses (`server/vision-store.js:10`). The substrate ruling (`PROVIDER-SEAM`) settled *where records live*; it did not settle *what states they move through*. Same class of question, same instruction: rule it, don't accrete it.
+
 ---
 
 ## How This Maps to Compose UI

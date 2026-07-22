@@ -1,7 +1,20 @@
-# Compose Roadmap
+# Compose Roadmap — SUPERSEDED
+
+> **SUPERSEDED (2026-07-22). Do not read this as current. Do not edit it.**
+>
+> The live roadmap is the repo-root [`ROADMAP.md`](../ROADMAP.md), which is **generated** from
+> `docs/features/<CODE>/feature.json` and must never be hand-edited. This file is a March 2026
+> snapshot that was left behind when the roadmap moved to generated form, and it has been
+> mistaken for the current one.
+>
+> **Feature status truth is `docs/features/<CODE>/feature.json`.** Nothing in this file should be
+> used to establish whether anything is complete.
+>
+> Preserved, not deleted, because it records the Phase 1–6 framing the project actually ran on
+> through March and several plans still reference it.
 
 **Project:** Compose — structured implementation pipeline for AI-driven development
-**Last updated:** 2026-03-28
+**Last updated:** 2026-03-28 (frozen)
 
 ## Related Documents
 

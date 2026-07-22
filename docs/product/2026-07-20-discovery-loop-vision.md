@@ -29,13 +29,33 @@ The front-of-funnel is not a line you walk once (frame → ideate → converge �
 | Rung | The mind... | Organ |
 |---|---|---|
 | 1 | **stops losing ideas** | One idea-memory. Merge the two idea-stores (markdown ideabox ↔ vision `idea` type) into one substrate. The keystone — nothing above runs on a split brain. |
-| 2 | **fills its own pile** | Close the loop: build exhaust (shipped / killed / postmortem / review) flows back in as idea-fuel. |
-| 3 | **sorts its own pile** | Ideas compete on a market: evidence-weighted conviction scores that move as signal accrues. Roadmap = top of the book, not a hand-curated list. |
+| 2 | **fills its own pile** | Close the loop: build exhaust (shipped / killed / postmortem / review) flows back in — **as two different things, see rung 2 note below.** |
+| 3 | **sorts its own pile** | Ideas compete on a market: **viability-sorted** — evidence-weighted, moving as signal accrues. Roadmap = top of the book, not a hand-curated list. **See rung 3 note below: this sorts on "will it sell", not on worth.** |
 | 4 | **filters its own pile** | Pressure-test before promotion: standing adversaries (bull / bear / skeptic red-teaming the direction) + a wind tunnel (cheap spike / prototype / evaluator predicting effort·impact·risk). |
 | 5 | **chooses well** | Roadmap as a tree of futures: branch "ambitious" vs "minimal", weigh side by side, diff them, commit to a *seen* option instead of leaping. |
 | 6 | **gets wiser** | The meta rung (last on purpose — needs a track record to grade): the loop doubts its own goal ("what you keep building says you want Y, not the X you declared") and grades its own judgment (which promotions shipped-and-mattered, which kills a competitor later validated), recalibrating over time. This is the part that compounds. |
 
 Read bottom to top: **fills itself → sorts itself → filters itself → chooses well → gets wiser.**
+
+### Rung 2 note — build exhaust is two things, not one `[AGENT]` *(added 2026-07-22)*
+
+Rung 2 originally read *all* build exhaust as idea-fuel. The spine splits it, and the split is load-bearing because the whole moat argument rests on which half you mean:
+
+- **Raw retained signal** (`KEEP-THE-RAW`) — keep everything, unfiltered, because the interpretation function changes as the goal changes and filtering at ingest permanently loses whatever was merely early. This is **recall material**. It is not evidence and must never be scored as evidence.
+- **Admissible evidence** (`EXHAUST-IS-EVIDENCE`, and only in the form `MOAT-FINAL-FORM` salvaged) — exhaust from a **targeted experiment against a named joint, with the prediction recorded before the build**. This is the high-grade half.
+
+`MOAT-FINAL-FORM` **killed** the ambient reading: build exhaust generated without a named joint is a closed loop — the system reading its own output and calling it evidence about the world. *"The difference is intent and targeting, not the data."* Rung 2 stands as an organ; it just fills two piles with different rules, and only one of them is allowed to move a conviction.
+
+### Rung 3 note — what it sorts on `[AGENT]` *(added 2026-07-22)*
+
+Rung 3 sells a single ranking. The judgment layer showed a single ranking is **two questions wearing one label** (`VIABILITY-VS-PREFERENCE`), and this rung reaches only the first:
+
+- **Will it sell** — largely knowable, evidence-shaped, and independent of what the owner wants. `DEMAND-HAS-KNOWN-SIGNALS` lists the predictors. **This is what rung 3's market actually sorts**, and it needs no objective function at all. Most candidates die here.
+- **Which survivor do I want** — genuine preference, not derivable from facts. This **does** require an elicited objective function, and no evidence-weighting will supply it.
+
+So rung 3 is a **viability sort, not a worth ranking** — a distinction the original wording erased by calling the output "conviction." The residual preference ordering over survivors is a far smaller problem, and it is [what-to-build agenda 3b(b)](2026-07-20-what-to-build-vision.md#10-open-agenda-queued-one-at-a-time), still open.
+
+**This was previously recorded as a contradiction between rung 3 and `NO-VALUATION`.** It was not: `NO-VALUATION` was itself an overstated agent claim, corrected 2026-07-21. Rung 3 was closer to right than the spine was. What it needs is the label, not a demotion.
 
 ## The ceiling — tool → colleague
 

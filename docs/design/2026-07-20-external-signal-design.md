@@ -214,6 +214,36 @@ Nothing gets killed after it exists.
 This makes the Wanderer itself a `CONSTRUCT` resolution of `candidates-generatable`, with a
 criterion stated in advance — which is the standard the manual's own honesty table demands.
 
+**`META-EXPERIMENT-LANE`** `[AGENT]` *(added 2026-07-22 — flagged for owner sign-off, since it
+carves an exception to an `[owner-locked]` claim.)* The line above creates a collision that was
+not addressed: `ONE-UNDER-TEST` says the experiment queue has **depth 1**, `differentiated` holds
+that slot today, and `WANDERER-KILL` nonetheless commits to a six-week / twenty-run standing
+construction against `candidates-generatable`. Two constructions, one slot.
+
+`STRADDLE` does not cover this — it explicitly parallelises *within* one joint, and these are two
+different joints. So the exception has to be declared or the Wanderer silently violates the rule
+that is supposed to be enforceable.
+
+**Proposed rule: the depth-1 queue governs *foreground* joints — the ones whose resolution the
+owner is waiting on to decide something.** A second lane exists for **standing background
+experiments**, admitted only against all four of:
+
+1. **It is machinery under test, not a question under test.** The subject is whether an *organ of
+   the system* earns its place, not what to build. `candidates-generatable` qualifies; `differentiated`
+   does not.
+2. **It runs unattended.** No owner attention per cycle, or it is competing for the real scarce
+   resource (`WHO-CHECKS-THE-CHECKER`: owner attention, not compute).
+3. **Kill criteria written before it starts**, per `KILL-CRITERIA-FIRST` — which `WANDERER-KILL`
+   already satisfies, and is the reason this lane is safe to open at all.
+4. **A hard bar with a kill-not-tune failure action.** Unbounded background experiments are how
+   useless machinery survives indefinitely.
+
+**Lane capacity is also 1**, for the same reason the foreground queue is: serial results re-rank
+what follows. The Wanderer occupies it on admission. The lane is **not** a loophole for
+"important, so it shouldn't have to queue" — that reasoning applied to a foreground joint is
+exactly the pressure `ONE-UNDER-TEST` exists to refuse, and it should be recorded as a finding if
+it is ever felt.
+
 ---
 
 ## 7. The reading ceiling — what this can never do
