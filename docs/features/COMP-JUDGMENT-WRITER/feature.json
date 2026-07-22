@@ -1,11 +1,41 @@
 {
   "code": "COMP-JUDGMENT-WRITER",
   "description": "Typed writer + provider seam for judgment canon (COMP-CANON-GUARD S3): git-tracked records under docs/judgment/records/, markdown as fixed-point projections, 4 owner-locked judgment_* tools + read tool, v1 agent-only provenance, SmartMemory as enrichment layer (fast-follow) + two-part ontology RFC. Anchor: docs/features/COMP-JUDGMENT-WRITER/design.md",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "Judgment Layer",
   "created": "2026-07-22",
   "updated": "2026-07-22",
   "complexity": "M",
   "position": 2,
-  "impact": "high"
+  "impact": "high",
+  "completions": [
+    {
+      "completion_id": "COMP-JUDGMENT-WRITER:751cc96afd8889ab5dfda4cea1dd8279b52fa744",
+      "feature_code": "COMP-JUDGMENT-WRITER",
+      "commit_sha": "751cc96afd8889ab5dfda4cea1dd8279b52fa744",
+      "commit_sha_short": "751cc96a",
+      "tests_pass": true,
+      "files_changed": [
+        "contracts/judgment-record.schema.json",
+        "lib/judgment/schema.js",
+        "lib/judgment/store/records.js",
+        "lib/judgment/store/index.js",
+        "lib/judgment-write-guard.js",
+        "lib/judgment-gen.js",
+        "lib/judgment-writer.js",
+        "lib/lifecycle-modes.js",
+        "lib/idempotency.js",
+        "server/compose-mcp.js",
+        "server/compose-mcp-tools.js",
+        "server/mcp-tool-policy.js",
+        "bin/judgment-import.js",
+        "docs/judgment/records",
+        "CHANGELOG.md"
+      ],
+      "recorded_at": "2026-07-22T11:59:11.144Z",
+      "recorded_by": "mcp:agent",
+      "notes": "W1–W3 shipped; 4-round Codex loop REVIEW CLEAN (11→7→4→0); cutover import owner-approved; suite 4781+681 green"
+    }
+  ],
+  "commit_sha": "751cc96afd8889ab5dfda4cea1dd8279b52fa744"
 }
