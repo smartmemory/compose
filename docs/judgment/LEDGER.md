@@ -1232,3 +1232,11 @@ SmartMemory’s /competitors skill is a ~1-year-old running instance of the read
 - conviction: {"level":"high","source":"stated"}
 
 *2026-07-22T12:11:10.990Z*
+
+## 102. correct: retire-not-gated-on-parity — switching off the old /competitors skill is not gated
+
+Amends skill-is-first-consumer (seq 101) / external-signal-design §8c. The agent had gated retirement of the hand /competitors skill on weeks of parallel running until the machine matched-or-beat it. Owner overruled: "it’s ok to switch off the old one it’s not sacred." The skill is a convenience, not canon; running both in parallel was unwarranted caution. What survives the correction: the skill’s year of hand-judged dossiers is the cheapest ground-truth for testing external-reachable, and it is separable from keeping the skill alive — take a one-time snapshot at switch-off and diff the machine against that frozen baseline. Switch off whenever; just grab the snapshot first, because that is the only real cost of doing it carelessly and it costs nothing.
+
+- refs: ["docs/design/2026-07-20-external-signal-design.md#8c"]
+
+*2026-07-22T12:14:38.786Z*

@@ -343,8 +343,10 @@ only add to the pile, the Answerer may only write against a question it was give
 ## 8c. Migration target — the judgment layer replaces the `/competitors` skill
 
 **`SKILL-IS-FIRST-CONSUMER`** `[owner-directed 2026-07-22]` — When the read-half is built, the
-`/competitors` skill becomes its **first real consumer** and is then retired in its favour. This is
-not a nice-to-have; it is the cheapest available honesty test of the whole design.
+`/competitors` skill becomes its **first real consumer** and is then retired — freely, whenever it
+stops earning its maintenance (owner: the skill is not sacred). The retirement is not the point; the
+*baseline it leaves behind* is. Its year of hand-judged dossiers is the cheapest available honesty
+test of the whole design (§8c sequencing), and it survives the skill as a static snapshot.
 
 **Why this is the right dogfood, specifically:**
 
@@ -364,10 +366,17 @@ not a nice-to-have; it is the cheapest available honesty test of the whole desig
 those questions for that instance; the judgment layer's own joints are the questions for ours. Same
 machine, two registers.
 
-**Sequencing (unbuilt, recorded so it is not lost):** parity-first, then retire. Run both in
-parallel over the same weeks, diff the outputs, and only decommission the hand skill once the
-machine matches or beats it on the baseline. Retiring the skill before parity is the same "kill it
-and hope" pattern `WANDERER-KILL` refuses, pointed at the wrong target.
+**Sequencing (unbuilt, recorded so it is not lost).** *Amended 2026-07-22 (owner: "it's ok to
+switch off the old one it's not sacred").* Retirement is **not** gated on parity — the hand skill
+is a convenience, not canon, and running both in parallel for weeks was unwarranted caution. Switch
+it off whenever it stops being worth maintaining.
+
+The one thing to preserve is **cheap and separable from keeping the skill alive**: take a *one-time
+snapshot* of the current dossiers at switch-off and keep it as a static baseline. Its value is not
+protecting the skill; it is the only ground-truth we get for free to test `external-reachable`
+against — a year of hand-judged output to diff the machine's first runs against. Diff against a
+frozen snapshot, not a live parallel skill. Losing the snapshot is the only real cost of switching
+off carelessly, and it costs nothing to grab.
 
 **Open:** this couples the judgment-layer read-half to SmartMemory's docs repo and its daily cron
 (`scripts/competitors-scan.py` via launchd). The coupling direction and where the machine runs are
