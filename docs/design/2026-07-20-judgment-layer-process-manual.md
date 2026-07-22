@@ -280,6 +280,32 @@ audience, not machinery.
 > it is the expensive step and the one that makes silence mean something. Whether any
 > probe ships without its package (the marketing-in-a-lab-coat failure).
 
+### Integrations — the adapter layer (added 2026-07-22, ledger seq 114; cross-cutting)
+
+External integrations are **not a new box** — they are channel adapters on doors the DAG
+already has. Five classes:
+
+| Class | Examples | Feeds |
+|---|---|---|
+| Observed feeders | Stripe, PostHog, calendar, CRM | Situation — the *observed* channel at scale; facts that sync instead of rot |
+| Instrument delivery | email, web forms on owned properties, Slack | the quiz engine's doors to the cast |
+| Read-half sources | Reddit, X, HN, newsletters | the Answerer/Wanderer — social listening under the two-machine wall and budgets |
+| Poke executors | outreach tooling, Buffer/schedulers, ad platforms | probes — the tool fires, the package governs |
+| Ruled seams | SmartMemory beneath (one-way writes), MCP outward | the Writer's record kinds *are* the API |
+
+**Disciplines.** Every integrated fact arrives provenance-typed — channel *observed*,
+source named, date automatic — so an integration can never launder a guess into a fact;
+it only makes *observed* cheap. The inside-out gate holds: your own Stripe is Situation,
+a competitor feed is read-half, and social listening never writes straight into
+Situation. No executor fires without its package (question, prediction, bar — before
+launch). And **auto-observed facts can disagree with owner-said facts** ("Stripe says
+$1.8K, you said $2.5K"): record the pair, never silently prefer either — stated-vs-
+revealed extended to the situation level. Divergences are signal.
+
+> **WATCH FOR:** which adapter class gets used first in anger — that reveals where the
+> real demand is. Whether observed/said disagreements surface facts the owner did not
+> know about their own business (the situation-level twin of `joint-is-non-obvious`).
+
 Do not add structure until a process demands it. If a field is never used by hand, it is not needed in the build.
 
 ---
