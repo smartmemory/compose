@@ -1222,3 +1222,13 @@ format handles disagreement rather than just accumulation.
 - anchor: position:product-boundary
 
 *2026-07-20T12:00:00Z · via import*
+
+## 101. decide: skill-is-first-consumer — the /competitors skill is the read-half’s first consumer, then retired
+
+SmartMemory’s /competitors skill is a ~1-year-old running instance of the read-half, for a different product. Checked the paper design against it (external-signal-design §8b): it confirms TWO-MACHINES by being the one-machine failure the design avoids (wander demoted to leftover budget inside the scan); it runs the §2a unsharpened-threshold defect live (CRITICAL/HIGH with a machine-supplied bar; “went quiet” read as threat-reduction = SILENCE-NOT-SUPPORT violated); its GEO-audit is a poke mislabelled as a read, proving FOUND-OR-PROVOKED must be a field from day one; and it supplies the write-path the design left open (wander→idea pile, scan→action item mapped to a tracked claim). Owner directive: when the read-half is built, the skill becomes its first consumer and is retired in its favour — parity-first, run both in parallel, diff against the year of hand-maintained dossiers, retire only once the machine matches or beats the baseline. This is the cheapest honesty test of external-reachable, because it is a real market with fresh water (the one condition under which the Wanderer can be judged rather than assumed) and it has a ground-truth baseline.
+
+- refs: ["docs/design/2026-07-20-external-signal-design.md#8c","~/.claude/skills/competitors/SKILL.md","smart-memory-docs/docs/product/competitors.md"]
+- rejected: [{"what":"retire the hand skill before parity","why":"same kill-and-hope pattern WANDERER-KILL refuses, pointed at the wrong target"},{"what":"treat competitor tracking as a scope expansion of the judgment layer","why":"it is one instance of pointing the read-half at a register; SmartMemory’s competitors are that instance’s questions, not a new domain the layer learns"}]
+- conviction: {"level":"high","source":"stated"}
+
+*2026-07-22T12:11:10.990Z*

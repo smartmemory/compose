@@ -280,6 +280,101 @@ visible.
 
 ---
 
+## 8b. Prior art — the `/competitors` skill is this design, already running
+
+*(Added 2026-07-22. The owner pointed at SmartMemory's `/competitors` skill; it is a
+hand-built, ~1-year-old, in-daily-use instance of this exact read-half, for a different product.
+A paper design checked against a running one. Skill: `~/.claude/skills/competitors/SKILL.md`;
+output: `smart-memory-docs/docs/product/competitors.md` + `competitors/*.md` dossiers.)*
+
+**It confirms `TWO-MACHINES` by being the one-machine failure this design exists to avoid.**
+The skill maintains a fixed list of ~25 known competitors and refreshes known fields (stars,
+funding, pricing) on a schedule — that is the Answerer. A single sub-step inside its scan searches
+for competitors *not* on the list — that is the Wanderer, with no separate budget, gated behind
+finishing all 25 dossiers first. This is precisely the collision §1b names: fused into one run, the
+shopping-list half is structurally prioritised and the wander runs only on leftover budget.
+**Real-world evidence for separate budgets, not a filtered single pipe.**
+
+- *Caveat, the other way:* the skill's wander has demonstrably worked — the tracked list grew
+  (claude-mem, cipher, ensue were found before they were tracked). A wanderer is not hypothetical;
+  it earns its place **in a market with fresh water flowing.** SmartMemory's market produces new
+  entrants monthly. A judgment-layer register may not. So the running skill *weakens*
+  `WANDERER-KILL`'s pessimism for a busy domain and *leaves it intact* for a quiet one — the kill
+  bar should be read as domain-relative, not absolute.
+
+**It is running the §2a unsharpened-threshold defect in production.** Every competitor carries a
+threat level — `CRITICAL` / `HIGH` / `MEDIUM` — and the skill instructs the machine to *compute the
+threshold itself* ("threat = max(tech, biz), weighted toward business"). Nobody wrote down what
+`CRITICAL` means in falsifiable terms. This is a judgment call presented as a reading — exactly what
+`SHARPEN-FIRST` and `JUDGMENT-NOT-EVIDENCE` are for. It even manifests the silence bug: its rule
+says a competitor that "went quiet" *moves down* the threat list, treating `SILENT` as
+threat-reduction when heads-down-building is indistinguishable from gone-away from the outside
+(`SILENCE-NOT-SUPPORT`, violated live). *Partial credit:* the skill does force tech-threat and
+biz-threat apart with a written "why" on each — the seed of a bar, just unenforced.
+
+**It proves `FOUND-OR-PROVOKED` must be a field from day one.** The skill's GEO-audit —
+probing ChatGPT/Perplexity with fixed prompts and recording whether SmartMemory appears — **is not
+reading, it is poking.** A question put *into* the world, where the answer is partly a function of
+having asked. It already sits inside a "read" skill with no marker separating it from observational
+scans. The moment any of this is built, both evidence kinds are already in the same store. The field
+is not future-proofing; it is already needed.
+
+**It fills the write-path hole this design left open.** §1 said the Wanderer outputs "a candidate"
+and did not say where it goes. The skill answers concretely, and this design adopts it:
+
+| Lane | Source | Destination | Discipline |
+|---|---|---|---|
+| Wander | untargeted search | the **idea pile** (`ideabox`) | file liberally, triage later, not a commitment |
+| Scan | a tracked question | an **action item mapped to a specific tracked claim/feature** | tied to a decision, `[tech]`/`[biz]` tagged |
+
+This is exactly the Wanderer/Answerer wall expressed as two write destinations: the Wanderer may
+only add to the pile, the Answerer may only write against a question it was given.
+
+**What the skill lacks that this design supplies** (i.e. what migration would fix):
+
+- No `THREE-SILENCES`: "Last Checked" cannot distinguish *looked, nothing there* from *couldn't
+  look*. A competitor behind a new paywall and one who shipped nothing read identically.
+- No `KEEP-THE-RAW`: fields are overwritten in place with today's value. Last quarter's pricing
+  page is gone, so signal can never be re-interpreted as the goal changes (`KEEP-THE-RAW`'s whole
+  purpose). Its one append-only store (the GEO log) is the exception that shows the rule.
+
+---
+
+## 8c. Migration target — the judgment layer replaces the `/competitors` skill
+
+**`SKILL-IS-FIRST-CONSUMER`** `[owner-directed 2026-07-22]` — When the read-half is built, the
+`/competitors` skill becomes its **first real consumer** and is then retired in its favour. This is
+not a nice-to-have; it is the cheapest available honesty test of the whole design.
+
+**Why this is the right dogfood, specifically:**
+
+- It is a **real market with fresh water** — the one condition under which the Wanderer can actually
+  be judged rather than assumed. `candidates-generatable` gets exercised against a domain that
+  genuinely emits new entrants, not against a register that might be a closed pond.
+- It already has a **ground-truth baseline**: a year of hand-maintained dossiers to compare the
+  machine's output against. The migration is falsifiable — if the judgment-layer read-half produces
+  a worse competitor tracker than the hand skill, that is a `CONSTRUCT` result against
+  `external-reachable`, recorded, not explained away.
+- It forces every gap in §8b to be closed to reach parity: silence typing, raw retention, the
+  found-vs-provoked split (the GEO-audit poke has to be labelled honestly), and the sharpening gate
+  (threat levels must be restated as bars or stamped `JUDGMENT-NOT-EVIDENCE`).
+
+**Not a scope expansion of the judgment layer into "competitor tracking."** The skill is one
+*instance* of pointing the read-half at a set of tracked questions. SmartMemory's competitors are
+those questions for that instance; the judgment layer's own joints are the questions for ours. Same
+machine, two registers.
+
+**Sequencing (unbuilt, recorded so it is not lost):** parity-first, then retire. Run both in
+parallel over the same weeks, diff the outputs, and only decommission the hand skill once the
+machine matches or beats it on the baseline. Retiring the skill before parity is the same "kill it
+and hope" pattern `WANDERER-KILL` refuses, pointed at the wrong target.
+
+**Open:** this couples the judgment-layer read-half to SmartMemory's docs repo and its daily cron
+(`scripts/competitors-scan.py` via launchd). The coupling direction and where the machine runs are
+undesigned — flagged, not answered.
+
+---
+
 ## 9. Open
 
 - **`external-reachable` is not closed by this document.** This is a design for acquisition; the
@@ -289,6 +384,9 @@ visible.
   that requires the owner to expose something publicly. That is a decision, not a build.
 - **Wanderer source selection is unspecified.** Deliberately. Choosing sources before the wall and
   the kill criterion exist is how a feed reader gets built by accident (`SIGNAL-NOT-IDEAS`).
+- **`/competitors` migration is a target, not a plan** (§8c). The coupling to SmartMemory's docs
+  repo and cron, and where the machine runs, are undesigned. Parity-before-retire is the only part
+  committed.
 
 ## Provenance
 
