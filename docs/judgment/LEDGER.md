@@ -1240,3 +1240,21 @@ Amends skill-is-first-consumer (seq 101) / external-signal-design §8c. The agen
 - refs: ["docs/design/2026-07-20-external-signal-design.md#8c"]
 
 *2026-07-22T12:14:38.786Z*
+
+## 103. kill: assert-to-elicit — the "be productively wrong, corrections load the facts" process
+
+Killed same day it was proposed. The agent generalized one live session into a method: open with cheap wrong verdicts, let the owner’s corrections surface the facts. Owner’s kill reason: bad verdicts lose interest and credibility — a real owner does not stay to correct, they leave. The mechanism only appeared to work because the owner was grading a test and therefore tolerated bad verdicts. Worse, the generalization was self-serving: the agent had failed by asserting instead of asking, then built a framework in which asserting wrongly is the technique — converting its own failures into methodology. Survives as: nothing. Verdicts come after knowing, per P0.1.
+
+- refs: ["docs/design/2026-07-20-judgment-layer-process-manual.md#p0"]
+
+*2026-07-22T14:25:12.490Z*
+
+## 104. decide: p0-basics — person first, listen before verdicts, research woven in, the goal is the deliverable
+
+Codified as P0 in the process manual, overriding anything below it on conflict. Owner-taught during the first live run, extracted only after repeated misses: (0) know the person first and foremost — the unit is rarely one person; (1) learn the facts by listening, no verdicts before knowing; (2) research is part of goal-building, not a stage after it; (3) figuring out what the goal should be IS the deliverable — "which of N?" is a symptom of a missing goal, most people cannot state a goal in one sentence, and once the goal exists focus falls out mechanically. These interleave — no pipeline; the skill is knowing what would help right now. P1 entry detection amended: check for the goal before the candidate; candidates-without-goal routes to goal-construction.
+
+- refs: ["docs/design/2026-07-20-judgment-layer-process-manual.md#p0"]
+- rejected: [{"what":"staged pipeline (person → facts → research → goal)","why":"owner: research can be part of building the goal — the stages interleave; a flowchart is a substitute for judgment"},{"what":"goal captured at intake in one sentence","why":"owner: most people cannot say it — the goal is constructed over the work, never collected"}]
+- conviction: {"level":"high","source":"stated"}
+
+*2026-07-22T14:25:12.520Z*

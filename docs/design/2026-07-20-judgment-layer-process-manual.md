@@ -34,11 +34,45 @@ Do not add structure until a process demands it. If a field is never used by han
 
 ---
 
+## P0 — The basics (added 2026-07-22, after the first live run)
+
+Learned by running P1/P2 on a real portfolio decision and failing at it. Owner-taught,
+not derived. **When anything below conflicts with these, these win.**
+
+0. **Know the person first and foremost.** Strengths, aversions, life situation, and who
+   is around them — spouse, partners, sellers. The unit is rarely one person. Nothing can
+   be evaluated except through who will live it.
+1. **Learn the facts by listening — no verdicts before knowing.** In the live run, every
+   load-bearing fact (the only paying customer, the spouse who could operate, the partner
+   already out selling, the scheduled demos) was absent from every artifact and existed
+   only in the owner's head. A verdict issued before the facts costs credibility, and a
+   real owner does not stay to correct it — they leave.
+2. **Research is part of goal-building, not a stage after it.** Pick up the world whenever
+   the forming goal needs it. Reasoning from the chair is not diligence.
+3. **Figuring out what the goal should be IS the deliverable.** "Which of N should I focus
+   on?" is a symptom of a missing goal, not a selection problem. Most people cannot state
+   their goal in a sentence — it is constructed over the course of the work, never
+   collected at intake. Once the goal exists, focus and ranking fall out mechanically.
+   This is the product's founding premise (`layer-above-execution`), and the first live
+   run still managed to answer like the layer below.
+
+These are not pipeline stages. They interleave — the skill is knowing what would help
+*right now*. The processes below are checklists for specific maneuvers (decomposition,
+ranking, resolution), not a script for the encounter.
+
+---
+
 ## P1 — Intake
 
 **Trigger:** a new question arrives ("should we build X?", "what should we do about Y?", or nothing at all).
 
 **Two entry points** (`NOTHING-MEANS-NO-IDEA`). Detect which; do not force the top.
+
+> **Entry detection amended (2026-07-22, live run):** check for the *goal* first, not the
+> candidate. Arriving with candidates does not mean arriving with a goal — the live run
+> arrived with five candidates and no goal, a mix neither entry point names. When
+> candidates exist but no goal does, the job is P0.3 goal-construction, with the
+> candidates as raw material — not P1a decomposition of any single one.
 
 ### P1a — Arrives with a candidate
 1. Ask what they want to build and why. Let them talk (`LISTENING-BEATS-ASKING`).
