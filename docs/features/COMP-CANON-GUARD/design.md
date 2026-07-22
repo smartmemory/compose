@@ -1,6 +1,6 @@
 # COMP-CANON-GUARD — The Write-Guard for Canonical Artifacts (design)
 
-**Status:** DESIGN — **BLOCKED ON SCOPE DECISION** (Phase 1; review gate hit its 5-round cap without clearing)
+**Status:** EPIC — **S0 SHIPPED 2026-07-22**; S1–S6 deliberately un-specced pending log data (see *Scope verdict*)
 **Date:** 2026-07-22 (rev 6 — five Codex gate rounds, eleven confirmed P1s. **Gate NOT clean at the cap — see Scope verdict.**)
 **Implements:** `TOOLS-OWN-WRITES`, `BLOCK-THE-BYPASS`, `MARKDOWN-EMITTED` (partial)
 
@@ -300,3 +300,22 @@ What began as *"add a PreToolUse hook"* is now: three enforcement points, a regi
 **Recommendation: split, and ship the narrow thing first.** `COMP-CANON-GUARD` becomes the umbrella. The first feature is S0 alone — set `enforcement.mcpForFeatureMgmt: 'log'`, change no code, and **collect a week of real data on what actually writes canon unaccounted.** Every remaining slice is currently specified against assumptions about that traffic; four of the eleven findings were exactly such assumptions being wrong. The log is the cheapest instrument that replaces guesses with observations, and it costs one settings key.
 
 **Do not build S1–S6 against the current assumptions.** Re-spec them from the log.
+
+### S0 — SHIPPED 2026-07-22
+
+`enforcement.mcpForFeatureMgmt: 'log'` is set and live; `readEnforcementMode()` returns `log`. No code changed.
+
+**New finding, from doing it:** `.compose/data/` is **gitignored** (`.gitignore:3`), so `settings.json` — the only file `readEnforcementMode` reads — is **machine-local and cannot be committed**. Enabling enforcement is therefore a per-machine act, not a project default that others inherit. A project-wide default would need a tracked home (`.compose/compose.json` is tracked; `readEnforcementMode` does not consult it). **Add this to the S2 inventory** — it is the same class of defect as the rest: an enforcement property assumed rather than checked.
+
+**Empirical probes against the live scan** (`scanGuarded`), run rather than argued:
+
+| Case | Result | Confirms |
+|---|---|---|
+| `ROADMAP.md` dirty, no tool event | **violation** | the existing guard does work when enabled |
+| `ROADMAP.md` dirty, matching in-build event | pass | correct behaviour |
+| `ROADMAP.md` dirty, event with `build_id: null` (manual CLI/MCP write) | **violation** | the rev-4 finding, reproduced — legitimate manual typed writes are rejected, which is why `'block'` would break workflows |
+| `docs/judgment/LEDGER.md` dirty | **no violation, silently skipped** | the rev-3 finding, reproduced — judgment canon is not a guarded shape, so the guard is blind to exactly the paths that matter most |
+
+The last two rows are the two most consequential findings of the whole review, now demonstrated rather than reasoned. **This is the standard the remaining slices should be re-specced to.**
+
+**What the log collects next:** which paths get dirtied without a matching event, in what proportion, from which surfaces (CLI / MCP / build / manual). That distribution is the input S1–S6 are missing.
