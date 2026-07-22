@@ -1288,3 +1288,13 @@ People box fleshed one level, breadth-first. Sub-boxes: role-and-unit (person fi
 - conviction: {"level":"high","source":"stated"}
 
 *2026-07-22T15:02:39.208Z*
+
+## 108. decide: situation-box-level-2 — inside-out facts: entities, four-channel provenance, owed, load
+
+Situation box fleshed one level, breadth-first. Sub-boxes: entities (named fact clusters — businesses, products, deals), facts (four-channel provenance + when, same grammar as person files), owed (named missing load-bearing facts — the situation-level twin of a person file's open fields; the live run's "partner's pipeline story, TrustFlow's monthly number"), load (which facts carry plans or claims, so a broken fact names what shakes). Boundary with People: facts about a person live in their person file; facts about shared things live in Situation — written once, cross-referenced, never duplicated. Boundary with the world: inside-out only. Situation holds what the cast owns, owes, and has committed to; outside-in facts (markets, competitors) arrive through the read-half as resolution evidence, per the DAG — the world feeds the Answerer and Wanderer, never Situation. A competitor's launch never becomes a situation fact; their own booked demos do. Storage: entity-tagged records behind the Writer; SITUATION.md is a projection grouped by entity — per-entity files vs one page is a rendering choice, not design. Staleness: facts carry dates, the P6 sweep ranks by judgment; no volatility metric invented at the desk. Corrections per seq 106 (fix-in-place with trace). Owner: accept and try; modify on evidence.
+
+- refs: ["docs/design/2026-07-20-judgment-layer-process-manual.md"]
+- rejected: [{"what":"admitting competitor/market facts as situation facts","why":"breaks the DAG — the outside world enters only through the read-half, which carries its own provenance and sharpening discipline"},{"what":"per-entity files as canonical storage","why":"records are canonical behind the Writer; grouping is a projection choice"},{"what":"a volatility score for staleness","why":"desk-invented quantity; dates plus sweep judgment collect the evidence a real rule would need — same collection-point discipline as ranking"}]
+- conviction: {"level":"medium","source":"stated"}
+
+*2026-07-22T15:06:39.504Z*

@@ -86,6 +86,31 @@ be written, shown, or exported about non-consenting cast members.
 > owner. Whether mainstream users need something simpler — or richer — is empirical.
 > Watch, don't design.
 
+### Situation box — level-2 sketch (added 2026-07-22, ledger seq 108; accepted tentatively)
+
+The card about *what's on the table*: businesses, money, commitments, pipeline. Inherits
+the People box's provenance grammar wholesale. Four sub-boxes:
+
+| Sub-box | Holds |
+|---|---|
+| Entities | the things in their world — businesses, products, deals — each a named cluster of facts |
+| Facts | what's true, each carrying the four channels (said · observed · secondhand · inferred) + when |
+| Owed | facts known to be missing and load-bearing, listed by name — the situation-level twin of a person file's open fields |
+| Load | which facts carry plans or claims, so a broken fact names what shakes |
+
+**Boundaries.** With People: facts about a person live in their person file; facts about
+shared things live here — written once, cross-referenced, never duplicated. With the
+world: **inside-out only**. Situation holds what the cast owns, owes, and has committed
+to. Outside-in facts (markets, competitors) arrive through the read-half as resolution
+evidence — the world feeds the Answerer and Wanderer, never Situation. A competitor's
+launch never becomes a situation fact; their own booked demos do.
+
+**Storage:** entity-tagged records behind the Writer; `SITUATION.md` is a projection
+grouped by entity. **Staleness:** facts carry dates and the P6 sweep ranks by judgment —
+no volatility metric invented at the desk. Corrections fix in place with the old value
+traced. Like the person files, the record is never complete — no maneuver may treat the
+situation as fully known (P0.1).
+
 Do not add structure until a process demands it. If a field is never used by hand, it is not needed in the build.
 
 ---
