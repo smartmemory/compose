@@ -76,8 +76,11 @@ dynamic between blocks only. Consent ladder: full instrument → highest-load ba
 into normal contact (plus an optional short validated form) → silence leaves the stub a
 stub. Coarse profiles are **never load-bearing alone** — they shape how the next question
 is asked, never substitute for its answer. Question banks are composite (intents, goals,
-situation, relationships); personality is one bank among several. In-house prior art and
-first instrument candidates: cofounder-fit, couples.team.
+situation, relationships, and the *"why is that important?"* ladder from the Goal box —
+Keeney's fundamentals-finder); personality is one bank among several. A clause that
+survives two different elicitation shapes outranks a single-method one (see Goal box:
+elicitation constructs the answer). In-house prior art and first instrument candidates:
+cofounder-fit, couples.team.
 
 Open joint, parked (product question, not box shape): dossier consent/privacy — what may
 be written, shown, or exported about non-consenting cast members.
