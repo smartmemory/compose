@@ -1,8 +1,8 @@
 # COMP-JUDGMENT-WRITER — phase status
 
-**Phase reached:** design (complete, gate-clean)
+**Phase reached:** plan (Phase 6 complete; blueprint Phase 4+5 verified, corrections binding)
 **Date:** 2026-07-22
-**Resume point:** blueprint (Phase 4) — on owner go-ahead
+**Resume point:** execute (Phase 7) — T1 in plan.md, TDD, slices S01→S07
 
 ## State
 
@@ -12,5 +12,6 @@
 
 ## Next phase inputs
 
-- Blueprint verifies the design's file:line claims against code (Phase 5 table) and decomposes W1–W3 (W4 fast-follow separate).
-- SmartMemory-side RFC (3 items) files in the SmartMemory repo — not a Compose blueprint item.
+- `plan.md` T1–T7 (TDD per task); `blueprint.md` Corrections Table is BINDING (real symbol: `guardedTransition`, feature-json atomic idiom, four-site MCP registration, NOT_IMPLEMENTED at selection).
+- Exit gates: full suite, Codex review loop (sol/xhigh) to REVIEW CLEAN, coverage sweep, MCP e2e. Cutover commit is human-gated (owner approves generated-vs-hand-written diff).
+- SmartMemory-side RFC (3 items) files in the SmartMemory repo when W4 starts — not part of W1–W3.
