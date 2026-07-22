@@ -1,28 +1,4 @@
----
-type: position
-title: product-boundary
-timestamp: "2026-07-20T12:00:00Z"
-smartmemory:
-  reference: true
-  origin: compose-projection
----
-
-# product-boundary
-
-**Status:** live · **Conviction:** low (inferred)
-
-## Claims (r1)
-
-- **c1** `[EXT]` No extraction precedent in this repo — only function-level refactors.
-- **c2** `[EXT]` compose-mcp demonstrates born-separate packaging inside one repo works.
-- **c3** `[ASSERT]` Owner: harder to split a monolith; packaging ≠ architecture.
-  - elicitation: asked "Owner: harder to split a monolith; packaging ≠ architecture." (answered 2026-07-20T12:00:00Z, ref import:docs/judgment/positions/product-boundary.md)
-
-## History
-
-- r1 — 2026-07-20T12:00:00Z
-
-> **product-boundary.md (imported prose)** — # POSITION — Product boundary: separate product, or a layer in Compose?
+# POSITION — Product boundary: separate product, or a layer in Compose?
 
 **Status:** OPEN — deliberately unresolved
 **Conviction:** low and *contested*. Recorded as settled 2026-07-20, **reopened by

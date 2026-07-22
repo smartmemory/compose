@@ -1,0 +1,19 @@
+{
+  "slug": "construction-discipline",
+  "question": "Does construction resolve joints, or degrade into \"build it and see\"?",
+  "branch_true": "Execution-as-instrument works",
+  "branch_false": "Most expensive failure mode in the design",
+  "resolve_by": "CONSTRUCT",
+  "cost": "days",
+  "rank": "medium",
+  "state": "open",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "flags": [
+    "method-note: observe own discipline"
+  ]
+}

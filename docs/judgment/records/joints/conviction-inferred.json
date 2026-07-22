@@ -1,0 +1,19 @@
+{
+  "slug": "conviction-inferred",
+  "question": "Does auto-capture infer conviction accurately?",
+  "branch_true": "Ledger is trustworthy",
+  "branch_false": "Timestamped fiction; needs confirmation UX",
+  "resolve_by": "CONSTRUCT",
+  "cost": "hours",
+  "rank": "medium",
+  "state": "open",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "flags": [
+    "method-note: live test running: LEDGER conviction fields are agent-inferred and awaiting owner correction"
+  ]
+}

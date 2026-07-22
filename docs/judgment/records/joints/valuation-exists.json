@@ -1,0 +1,17 @@
+{
+  "slug": "valuation-exists",
+  "question": "How is worth established at all?",
+  "branch_true": "Advisor product works",
+  "branch_false": "Arrive-with-nothing cannot ship",
+  "resolve_by": "CONSTRUCT",
+  "cost": "weeks",
+  "rank": "high",
+  "state": "open",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "flags": []
+}

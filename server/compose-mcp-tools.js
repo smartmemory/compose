@@ -807,6 +807,40 @@ export function toolGetWorkspace() {
 export function _getBinding() { return _binding?.id ?? null; }
 
 // ---------------------------------------------------------------------------
+// Judgment writer — COMP-JUDGMENT-WRITER (S06)
+// ---------------------------------------------------------------------------
+
+export async function toolJudgmentPositionCreate(args) {
+  const { judgmentPositionCreate } = await import('../lib/judgment-writer.js');
+  return judgmentPositionCreate(getTargetRoot(), args);
+}
+
+export async function toolJudgmentPositionAmend(args) {
+  const { judgmentPositionAmend } = await import('../lib/judgment-writer.js');
+  return judgmentPositionAmend(getTargetRoot(), args);
+}
+
+export async function toolJudgmentJointAdd(args) {
+  const { judgmentJointAdd } = await import('../lib/judgment-writer.js');
+  return judgmentJointAdd(getTargetRoot(), args);
+}
+
+export async function toolJudgmentTransition(args) {
+  const { judgmentTransition } = await import('../lib/judgment-writer.js');
+  return judgmentTransition(getTargetRoot(), args);
+}
+
+export async function toolJudgmentLedgerAppend(args) {
+  const { judgmentLedgerAppend } = await import('../lib/judgment-writer.js');
+  return judgmentLedgerAppend(getTargetRoot(), args);
+}
+
+export async function toolGetJudgmentState() {
+  const { getJudgmentState } = await import('../lib/judgment-writer.js');
+  return getJudgmentState(getTargetRoot());
+}
+
+// ---------------------------------------------------------------------------
 // COMP-MCP-ENFORCE-1 — phase-scoped MCP tool gate (profile × phase)
 //
 // Trusted profile = spawn-injected COMPOSE_SESSION_PROFILE (the agent cannot

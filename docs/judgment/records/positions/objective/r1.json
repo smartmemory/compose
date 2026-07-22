@@ -1,0 +1,27 @@
+{
+  "slug": "objective",
+  "claims": [
+    {
+      "id": "c1",
+      "text": "build Compose into a system that decides *what to build* well, not just one that builds well. The back half (goal → shipped) works; the front half is the unclaimed ground.",
+      "grounding": "ASSERT",
+      "supports": [],
+      "elicitation": {
+        "asked": "What are we optimizing for?",
+        "answered_at": "2026-07-20T12:00:00Z",
+        "answer_ref": "import:docs/judgment/OBJECTIVE.md (back-inferred draft — NOT owner-confirmed, see health warning)"
+      }
+    }
+  ],
+  "conviction": {
+    "level": "low",
+    "source": "inferred"
+  },
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "rev": 1
+}

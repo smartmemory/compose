@@ -1,0 +1,28 @@
+{
+  "slug": "success-criteria",
+  "question": "What observable outcome would mean this worked?",
+  "branch_true": "(not recorded at import)",
+  "branch_false": "(not recorded at import)",
+  "resolve_by": "ASSERT",
+  "cost": "hours",
+  "rank": "medium",
+  "state": "resolved",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-22T12:00:00Z",
+    "via": "import"
+  },
+  "flags": [
+    "import: cost \"minutes\" mapped to \"hours\" (COARSE-BUCKETS)"
+  ],
+  "resolution": {
+    "outcome": "resolved",
+    "evidence": "All four criteria count, tiered by timescale; \"changed a real build decision\" is nearest-term (decide: success-criteria-all-four)",
+    "elicitation": {
+      "asked": "What observable outcome would mean this worked?",
+      "answered_at": "2026-07-22T12:00:00Z",
+      "answer_ref": "decide: success-criteria-all-four"
+    }
+  }
+}

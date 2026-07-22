@@ -1,0 +1,39 @@
+{
+  "slug": "product-boundary",
+  "claims": [
+    {
+      "id": "c1",
+      "text": "No extraction precedent in this repo — only function-level refactors.",
+      "grounding": "EXT",
+      "supports": []
+    },
+    {
+      "id": "c2",
+      "text": "compose-mcp demonstrates born-separate packaging inside one repo works.",
+      "grounding": "EXT",
+      "supports": []
+    },
+    {
+      "id": "c3",
+      "text": "Owner: harder to split a monolith; packaging ≠ architecture.",
+      "grounding": "ASSERT",
+      "supports": [],
+      "elicitation": {
+        "asked": "Owner: harder to split a monolith; packaging ≠ architecture.",
+        "answered_at": "2026-07-20T12:00:00Z",
+        "answer_ref": "import:docs/judgment/positions/product-boundary.md"
+      }
+    }
+  ],
+  "conviction": {
+    "level": "low",
+    "source": "inferred"
+  },
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "rev": 1
+}

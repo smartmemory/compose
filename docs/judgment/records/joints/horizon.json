@@ -1,0 +1,28 @@
+{
+  "slug": "horizon",
+  "question": "Over what period does this need to pay off?",
+  "branch_true": "(not recorded at import)",
+  "branch_false": "(not recorded at import)",
+  "resolve_by": "ASSERT",
+  "cost": "hours",
+  "rank": "medium",
+  "state": "resolved",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-22T12:00:00Z",
+    "via": "import"
+  },
+  "flags": [
+    "import: cost \"minutes\" mapped to \"hours\" (COARSE-BUCKETS)"
+  ],
+  "resolution": {
+    "outcome": "resolved",
+    "evidence": "Months — payoff within 2026; ranking favors cheap fast-resolving joints (decide: horizon-months)",
+    "elicitation": {
+      "asked": "Over what period does this need to pay off?",
+      "answered_at": "2026-07-22T12:00:00Z",
+      "answer_ref": "decide: horizon-months"
+    }
+  }
+}

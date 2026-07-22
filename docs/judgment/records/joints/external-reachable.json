@@ -1,0 +1,17 @@
+{
+  "slug": "external-reachable",
+  "question": "Can external signal be acquired at useful quality?",
+  "branch_true": "Generation is real; straddling works",
+  "branch_false": "Asserted-only; flattery risk returns",
+  "resolve_by": "CONSTRUCT",
+  "cost": "weeks",
+  "rank": "high",
+  "state": "open",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "flags": []
+}

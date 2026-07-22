@@ -1,0 +1,400 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://compose.smartmemory.dev/contracts/judgment-record.schema.json",
+  "title": "judgment-record",
+  "version": "0.1.0",
+  "description": "Record shapes for judgment canon under docs/judgment/records/ (COMP-JUDGMENT-WRITER, design.md rev 5). Records are canonical JSON; markdown is projection. Every record carries a writer-stamped provenance block the caller can never set. Definitions: position_revision (append-only chain member), joint (state lives here), prediction, ledger_event (kind-specific required fields), pending_intent (intent-first transitions).",
+  "_source": "docs/features/COMP-JUDGMENT-WRITER/design.md",
+  "_roadmap": "COMP-JUDGMENT-WRITER",
+  "type": "object",
+
+  "definitions": {
+
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+
+    "revision_ref": {
+      "type": "string",
+      "description": "Address of a specific position revision: <slug>#r<N>.",
+      "pattern": "^[a-z0-9][a-z0-9-]*#r[1-9][0-9]*$"
+    },
+
+    "provenance": {
+      "type": "object",
+      "description": "Writer-stamped, never caller-set. actor is a v1 constant (oq1-agent-only-v1); session is best-effort diagnostic garnish and nothing may depend on it; via: 'import' marks historical transcription.",
+      "required": ["actor", "written_at"],
+      "additionalProperties": false,
+      "properties": {
+        "actor": { "const": "agent" },
+        "session": { "type": ["string", "null"] },
+        "written_at": { "type": "string", "format": "date-time" },
+        "via": { "enum": ["import"] }
+      }
+    },
+
+    "elicitation": {
+      "type": "object",
+      "description": "Required companion of ASSERT grounding (assert-elicitation-amendment, ratified 2026-07-22): what question was put to the owner, when, and where the answer is recorded.",
+      "required": ["asked", "answered_at", "answer_ref"],
+      "additionalProperties": false,
+      "properties": {
+        "asked": { "type": "string", "minLength": 1 },
+        "answered_at": { "type": "string", "format": "date-time" },
+        "answer_ref": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "conviction": {
+      "type": "object",
+      "required": ["level", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "level": { "enum": ["high", "medium", "low"] },
+        "source": { "enum": ["stated", "inferred"] }
+      }
+    },
+
+    "rejected_alternative": {
+      "type": "object",
+      "required": ["what", "why"],
+      "additionalProperties": false,
+      "properties": {
+        "what": { "type": "string", "minLength": 1 },
+        "why": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "claim": {
+      "type": "object",
+      "description": "Individually addressable claim with per-claim grounding and upward links (P1a). owner_locked is structurally representable ONLY for import fidelity — the write guard refuses it through tools (lib/judgment-write-guard.js).",
+      "required": ["id", "text", "grounding"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/definitions/slug" },
+        "text": { "type": "string", "minLength": 1 },
+        "grounding": { "enum": ["EXT", "INT", "ASSERT", "DERIVED", "AGENT"] },
+        "supports": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "owner_locked": { "type": "boolean" },
+        "elicitation": { "$ref": "#/definitions/elicitation" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "grounding": { "const": "ASSERT" } }, "required": ["grounding"] },
+          "then": { "required": ["elicitation"] }
+        }
+      ]
+    },
+
+    "position_revision": {
+      "type": "object",
+      "description": "One immutable member of an append-only revision chain at records/positions/<slug>/r<N>.json. Status (live|superseded|retracted) is DERIVED by readers, never stored. A tombstone revision carries retracted: true and may have empty claims.",
+      "required": ["slug", "claims", "conviction", "provenance"],
+      "additionalProperties": false,
+      "properties": {
+        "slug": { "$ref": "#/definitions/slug" },
+        "rev": { "type": "integer", "minimum": 1 },
+        "claims": { "type": "array", "items": { "$ref": "#/definitions/claim" } },
+        "conviction": { "$ref": "#/definitions/conviction" },
+        "rejected_alternatives": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/rejected_alternative" },
+          "default": []
+        },
+        "supersedes": { "$ref": "#/definitions/revision_ref" },
+        "retracted": { "const": true },
+        "provider_ids": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "smartmemory": { "type": "string" } }
+        },
+        "provenance": { "$ref": "#/definitions/provenance" }
+      },
+      "allOf": [
+        {
+          "if": { "not": { "required": ["retracted"] } },
+          "then": { "properties": { "claims": { "minItems": 1 } } }
+        }
+      ]
+    },
+
+    "ext_package": {
+      "description": "EXT method gate: sharpened question package OR the BAR-OR-JUDGMENT judgment-dispatch exception. Exactly one form.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["sharpened_question", "bar", "falsifier"],
+          "additionalProperties": false,
+          "properties": {
+            "sharpened_question": { "type": "string", "minLength": 1 },
+            "bar": { "type": "string", "minLength": 1 },
+            "falsifier": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["judgment_dispatch", "reason"],
+          "additionalProperties": false,
+          "properties": {
+            "judgment_dispatch": { "const": true },
+            "reason": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+
+    "straddle_package": {
+      "type": "object",
+      "required": ["discriminating_signal", "kill_criteria"],
+      "additionalProperties": false,
+      "properties": {
+        "discriminating_signal": { "type": "string", "minLength": 1 },
+        "kill_criteria": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "ext_result": {
+      "type": "object",
+      "description": "Ruled external-signal result package. sources[] address immutable records/evidence/ packages (written by the Answerer slice — not this feature). judgment_dispatch: true propagates the BAR-OR-JUDGMENT stamp permanently.",
+      "required": ["outcome", "sources", "search_record", "found_or_provoked", "judgment_not_evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "outcome": { "enum": ["FOUND", "CONTRARY", "SILENT", "UNREACHABLE"] },
+        "sources": { "type": "array", "items": { "type": "string" } },
+        "search_record": { "type": "string", "minLength": 1 },
+        "found_or_provoked": { "enum": ["found", "provoked"] },
+        "judgment_not_evidence": { "type": "boolean" },
+        "judgment_dispatch": { "const": true }
+      }
+    },
+
+    "resolution": {
+      "type": "object",
+      "description": "Exactly the ruled four outcomes — dissolution is its OWN artifact on the joint, not an outcome. Per-outcome required fields per the edge→artifact table (design Decision 2).",
+      "required": ["outcome"],
+      "additionalProperties": false,
+      "properties": {
+        "outcome": { "enum": ["resolved", "inconclusive", "failed_to_run", "superseded"] },
+        "evidence": { "type": ["string", "object"] },
+        "learned": { "type": "string" },
+        "would_have_settled": { "type": "string" },
+        "reason": { "type": "string" },
+        "why": { "type": "string" },
+        "elicitation": { "$ref": "#/definitions/elicitation" },
+        "ext_result": { "$ref": "#/definitions/ext_result" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "outcome": { "const": "resolved" } } },
+          "then": { "required": ["evidence"] }
+        },
+        {
+          "if": { "properties": { "outcome": { "const": "inconclusive" } } },
+          "then": { "required": ["learned", "would_have_settled"] }
+        },
+        {
+          "if": { "properties": { "outcome": { "const": "failed_to_run" } } },
+          "then": { "required": ["reason"] }
+        },
+        {
+          "if": { "properties": { "outcome": { "const": "superseded" } } },
+          "then": { "required": ["why"] }
+        }
+      ]
+    },
+
+    "dissolution": {
+      "type": "object",
+      "description": "Terminal decomposition artifact — 'dissolved by decomposition' is a distinct fact from 'got an answer'.",
+      "required": ["decomposed_into"],
+      "additionalProperties": false,
+      "properties": {
+        "decomposed_into": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        }
+      }
+    },
+
+    "joint": {
+      "type": "object",
+      "description": "One file per joint at records/joints/<slug>.json; state lives here and is written only as a transition's artifact. Both branches REQUIRED; cost is exactly the ruled COARSE-BUCKETS (no minutes — import maps minutes to hours with a note).",
+      "required": ["slug", "question", "branch_true", "branch_false", "resolve_by", "cost", "rank", "state", "provenance"],
+      "additionalProperties": false,
+      "properties": {
+        "slug": { "$ref": "#/definitions/slug" },
+        "question": { "type": "string", "minLength": 1 },
+        "branch_true": { "type": "string", "minLength": 1 },
+        "branch_false": { "type": "string", "minLength": 1 },
+        "resolve_by": { "enum": ["EXT", "INT", "CONSTRUCT", "ASSERT", "STRADDLE"] },
+        "cost": { "enum": ["hours", "days", "weeks", "months"] },
+        "rank": { "enum": ["high", "medium"] },
+        "state": { "enum": ["open", "under_test", "resolved", "inconclusive", "superseded", "dissolved"] },
+        "ext": { "$ref": "#/definitions/ext_package" },
+        "straddle": { "$ref": "#/definitions/straddle_package" },
+        "resolution": { "$ref": "#/definitions/resolution" },
+        "dissolution": { "$ref": "#/definitions/dissolution" },
+        "flags": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "provider_ids": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "smartmemory": { "type": "string" } }
+        },
+        "provenance": { "$ref": "#/definitions/provenance" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "resolve_by": { "const": "ASSERT" } },
+            "required": ["resolve_by", "resolution"]
+          },
+          "then": {
+            "properties": { "resolution": { "required": ["elicitation"] } }
+          }
+        }
+      ]
+    },
+
+    "prediction": {
+      "type": "object",
+      "description": "Spawned by CONSTRUCT/commit ledger events at records/predictions/<id>.json; the P6 sweep queries status: open. A postmortem grade flips it to graded.",
+      "required": ["id", "text", "outcome_criteria", "made_at", "context", "status", "provenance"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "text": { "type": "string", "minLength": 1 },
+        "outcome_criteria": { "type": "string", "minLength": 1 },
+        "made_at": { "type": "string", "format": "date-time" },
+        "context": { "enum": ["construct", "commit"] },
+        "refs": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "status": { "enum": ["open", "graded"] },
+        "grade": { "enum": ["right", "right-wrong-reason", "wrong"] },
+        "provenance": { "$ref": "#/definitions/provenance" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "graded" } } },
+          "then": { "required": ["grade"] }
+        }
+      ]
+    },
+
+    "embedded_prediction": {
+      "type": "object",
+      "description": "Prediction inputs carried by a commit-decide or CONSTRUCT-disposition event; the writer spawns the prediction record from these.",
+      "required": ["text", "outcome_criteria"],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "outcome_criteria": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "ledger_event": {
+      "type": "object",
+      "description": "Append-only events in records/ledger.jsonl. The validating-writer premise is the kind-specific REQUIRED fields, not the common envelope. A decide carrying trigger is a commit-moment decide (P4). disposition: CONSTRUCT marks a CONSTRUCT-disposition event and requires its embedded prediction.",
+      "required": ["kind", "title", "provenance"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["decide", "kill", "override", "escalate", "calibrate", "postmortem", "rank", "note", "correct", "open"] },
+        "title": { "type": "string", "minLength": 1 },
+        "body": { "type": "string" },
+        "refs": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "rejected": { "type": "array", "items": { "$ref": "#/definitions/rejected_alternative" } },
+        "conviction": { "$ref": "#/definitions/conviction" },
+        "trigger": { "type": "string", "minLength": 1 },
+        "open_joints": { "type": "array", "items": { "type": "string" } },
+        "prediction": { "$ref": "#/definitions/embedded_prediction" },
+        "disposition": { "enum": ["EXT", "INT", "CONSTRUCT", "ASSERT", "STRADDLE"] },
+        "recall_verdict": { "enum": ["NAMED", "NAMED-BUT-MISRANKED", "MISSED", "UNKNOWABLE"] },
+        "attribution": { "type": "string", "minLength": 1 },
+        "prediction_ref": { "type": "string", "minLength": 1 },
+        "prediction_grade": { "enum": ["right", "right-wrong-reason", "wrong"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "anchor": { "type": "string", "minLength": 1 },
+        "rank_change": {
+          "type": "object",
+          "required": ["joint", "from", "to"],
+          "additionalProperties": false,
+          "properties": {
+            "joint": { "$ref": "#/definitions/slug" },
+            "from": { "enum": ["high", "medium"] },
+            "to": { "enum": ["high", "medium"] }
+          }
+        },
+        "elicitation": { "$ref": "#/definitions/elicitation" },
+        "provenance": { "$ref": "#/definitions/provenance" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "decide" } } },
+          "then": { "required": ["rejected", "conviction"] }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "decide" } },
+            "required": ["trigger"]
+          },
+          "then": {
+            "required": ["open_joints", "prediction"],
+            "properties": { "trigger": { "enum": ["earned", "forced", "exhausted"] } }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": { "const": "decide" },
+              "trigger": { "enum": ["forced", "exhausted"] }
+            },
+            "required": ["trigger"]
+          },
+          "then": {
+            "properties": { "open_joints": { "minItems": 1 } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "postmortem" } } },
+          "then": { "required": ["trigger", "recall_verdict", "attribution"] }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "postmortem" } },
+            "required": ["prediction_ref"]
+          },
+          "then": { "required": ["prediction_grade"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "override" } } },
+          "then": { "required": ["reason"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "note" } } },
+          "then": { "required": ["anchor"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "rank" } } },
+          "then": { "required": ["rank_change"] }
+        },
+        {
+          "if": { "required": ["disposition"], "properties": { "disposition": { "const": "CONSTRUCT" } } },
+          "then": { "required": ["prediction"] }
+        }
+      ]
+    },
+
+    "pending_intent": {
+      "type": "object",
+      "description": "Intent-first transition record: the COMPLETE mutation persisted atomically BEFORE the guard call, replayed idempotently by the reconciler — guard state authoritative for the edge, the intent authoritative for the payload.",
+      "required": ["id", "op", "payload", "created_at"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "op": { "type": "string", "minLength": 1 },
+        "payload": { "type": "object" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

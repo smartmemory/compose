@@ -1,0 +1,19 @@
+{
+  "slug": "ledger-used",
+  "question": "Does an auto-captured ledger get used?",
+  "branch_true": "Byproduct model works",
+  "branch_false": "Dies to the decision-journal abandonment curve",
+  "resolve_by": "CONSTRUCT",
+  "cost": "weeks",
+  "rank": "medium",
+  "state": "open",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "flags": [
+    "method-note: NOT closable in manual mode; the claim is about auto-capture"
+  ]
+}

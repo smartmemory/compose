@@ -1,0 +1,17 @@
+{
+  "slug": "elicitation-works",
+  "question": "Can context + objective be elicited in one conversation?",
+  "branch_true": "Day-one works, no accumulation needed",
+  "branch_false": "Only serves users who already have a candidate",
+  "resolve_by": "CONSTRUCT",
+  "cost": "days",
+  "rank": "medium",
+  "state": "open",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "flags": []
+}

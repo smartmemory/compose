@@ -1,5 +1,46 @@
 # Changelog
 
+## 2026-07-22
+
+### COMP-JUDGMENT-WRITER — typed writer + provider seam for judgment canon (W1–W3)
+
+Judgment canon (`docs/judgment/**`) gets its validating writer: records are now
+canonical git-tracked JSON under `docs/judgment/records/` and the markdown
+files humans read are generated projections — the only legitimate write path
+is the six new MCP tools.
+
+- **Contract.** `contracts/judgment-record.schema.json`: position revisions
+  (append-only chains, derived status), joints (both branches required, cost
+  exactly hours|days|weeks|months, resolution outcomes exactly
+  resolved|inconclusive|failed_to_run|superseded with dissolution as its own
+  artifact), predictions, kind-typed ledger events, pending intents.
+  `grounding: ASSERT` requires a structured elicitation block; `[owner-locked]`
+  is unrepresentable through tools (import/override only).
+- **Store + seam.** `lib/judgment/store/` — tracked-floor RecordsStore (atomic
+  tmp+pid writes) behind `createJudgmentStore`; `judgment.provider` is the only
+  canon selector (default `records`; `smartmemory` throws NOT_IMPLEMENTED at
+  selection — W4 SmartMemory is enrichment, never a second canon).
+- **Guard-backed state machine.** `lib/judgment-write-guard.js` enforces the
+  design's edge→artifact table and method gates (EXT sharpened-or-dispatch,
+  STRADDLE signal+kill, SILENT⇒inconclusive); a new data-only `judgment`
+  lifecycle mode lets the untouched Stratum `guardedTransition` adapter be the
+  transition authority where `capabilities.guard` is on (graph parity is
+  contract-tested). Transitions are intent-first with an idempotent replaying
+  reconciler; ONE-UNDER-TEST is enforced under the writer's advisory lock.
+- **Writer + projections.** `lib/judgment-writer.js` (six ops, journal-writer
+  lock/rollback/audit template; rank changes atomically emit their ledger
+  event; commit-decide/CONSTRUCT events spawn prediction records; postmortems
+  grade them). `lib/judgment-gen.js` regenerates REGISTER/LEDGER/OBJECTIVE/
+  positions/index.md as pure output (fixed-point roundtrip guard; OKF v0.1
+  frontmatter per design Decision 8, `resource` only with a real provider id).
+- **MCP surface.** Six tools registered in compose-mcp (`judgment_*` writes +
+  `get_judgment_state`); reviewer profile may read state, never write canon.
+- **Importer + cutover.** `bin/judgment-import.js` transcribes the hand-written
+  canon through the writer (`via: 'import'`, dates preserved, minutes→hours
+  with a note, banners → anchored note records; pre-schema entries fall back
+  to notes keeping their original heading). One-time; kept for provider
+  migrations.
+
 ## 2026-07-19
 
 ### Fix — stale/duplicate consumer `step_done` no longer aborts the whole build (#49)

@@ -1,0 +1,19 @@
+{
+  "slug": "differentiated",
+  "question": "Distinct from Productboard / Aha! / Dovetail?",
+  "branch_true": "Proceed",
+  "branch_false": "Reposition or kill",
+  "resolve_by": "EXT",
+  "cost": "hours",
+  "rank": "medium",
+  "state": "open",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "flags": [
+    "blocked-on-sharpening"
+  ]
+}

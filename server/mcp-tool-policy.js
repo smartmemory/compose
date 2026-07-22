@@ -36,6 +36,7 @@ const REVIEWER_ALLOW = [
   'get_pending_gates', 'get_changelog_entries', 'get_journal_entries', 'get_completions',
   'validate_feature', 'validate_project', 'roadmap_diff', 'get_roadmap', 'roadmap_graph_check', 'assess_feature_artifacts',
   'set_workspace', 'get_workspace', 'bind_session',
+  'get_judgment_state', // COMP-JUDGMENT-WRITER: read-only; the five judgment write tools stay reviewer-denied
 ];
 
 export const PROFILE_POLICY = {

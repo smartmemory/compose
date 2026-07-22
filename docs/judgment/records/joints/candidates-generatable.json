@@ -1,0 +1,17 @@
+{
+  "slug": "candidates-generatable",
+  "question": "Can candidates be generated, or must the owner supply them?",
+  "branch_true": "Generation layer is real",
+  "branch_false": "Evaluation-only system",
+  "resolve_by": "CONSTRUCT",
+  "cost": "weeks",
+  "rank": "medium",
+  "state": "open",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "flags": []
+}

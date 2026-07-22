@@ -1,0 +1,79 @@
+{
+  "slug": "judgment-layer",
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Deciding what to build is high-stakes and often goes badly",
+      "grounding": "ASSERT",
+      "supports": [],
+      "elicitation": {
+        "asked": "Deciding what to build is high-stakes and often goes badly",
+        "answered_at": "2026-07-20T12:00:00Z",
+        "answer_ref": "import:docs/judgment/positions/judgment-layer.md"
+      }
+    },
+    {
+      "id": "c2",
+      "text": "It goes badly because the load-bearing assumption goes unchecked",
+      "grounding": "ASSERT",
+      "supports": [],
+      "elicitation": {
+        "asked": "It goes badly because the load-bearing assumption goes unchecked",
+        "answered_at": "2026-07-20T12:00:00Z",
+        "answer_ref": "import:docs/judgment/positions/judgment-layer.md"
+      }
+    },
+    {
+      "id": "c3",
+      "text": "Surfacing that assumption therefore improves the outcome",
+      "grounding": "DERIVED",
+      "supports": [
+        "c2"
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "A human + agent pair can surface it reliably",
+      "grounding": "ASSERT",
+      "supports": [],
+      "elicitation": {
+        "asked": "A human + agent pair can surface it reliably",
+        "answered_at": "2026-07-20T12:00:00Z",
+        "answer_ref": "import:docs/judgment/positions/judgment-layer.md"
+      }
+    },
+    {
+      "id": "c5",
+      "text": "Recording it changes what happens next",
+      "grounding": "ASSERT",
+      "supports": [],
+      "elicitation": {
+        "asked": "Recording it changes what happens next",
+        "answered_at": "2026-07-20T12:00:00Z",
+        "answer_ref": "import:docs/judgment/positions/judgment-layer.md"
+      }
+    },
+    {
+      "id": "c6",
+      "text": "Compose is uniquely placed to do this",
+      "grounding": "ASSERT",
+      "supports": [],
+      "elicitation": {
+        "asked": "Compose is uniquely placed to do this",
+        "answered_at": "2026-07-20T12:00:00Z",
+        "answer_ref": "import:docs/judgment/positions/judgment-layer.md"
+      }
+    }
+  ],
+  "conviction": {
+    "level": "high",
+    "source": "inferred"
+  },
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "rev": 1
+}

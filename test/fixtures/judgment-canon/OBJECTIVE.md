@@ -1,26 +1,4 @@
----
-type: position
-title: objective
-timestamp: "2026-07-20T12:00:00Z"
-smartmemory:
-  reference: true
-  origin: compose-projection
----
-
-# objective
-
-**Status:** live · **Conviction:** low (inferred)
-
-## Claims (r1)
-
-- **c1** `[ASSERT]` build Compose into a system that decides *what to build* well, not just one that builds well. The back half (goal → shipped) works; the front half is the unclaimed ground.
-  - elicitation: asked "What are we optimizing for?" (answered 2026-07-20T12:00:00Z, ref import:docs/judgment/OBJECTIVE.md (back-inferred draft — NOT owner-confirmed, see health warning))
-
-## History
-
-- r1 — 2026-07-20T12:00:00Z
-
-> **OBJECTIVE.md (imported prose)** — # OBJECTIVE — what we are optimizing for
+# OBJECTIVE — what we are optimizing for
 
 **Status:** DRAFT — `[ASSERT]`, inferred by the agent, **NOT confirmed by the owner**
 **Last reviewed:** 2026-07-20

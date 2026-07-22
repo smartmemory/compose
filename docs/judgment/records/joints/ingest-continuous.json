@@ -1,0 +1,25 @@
+{
+  "slug": "ingest-continuous",
+  "question": "Continuous or invoked ingestion?",
+  "branch_true": "(not recorded at import)",
+  "branch_false": "(not recorded at import)",
+  "resolve_by": "CONSTRUCT",
+  "cost": "hours",
+  "rank": "medium",
+  "state": "dissolved",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "flags": [
+    "import: resolve_by/cost not recorded on the dissolved row — defaulted"
+  ],
+  "dissolution": {
+    "decomposed_into": [
+      "answerer",
+      "wanderer"
+    ]
+  }
+}

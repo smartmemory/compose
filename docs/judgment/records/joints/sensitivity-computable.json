@@ -1,0 +1,17 @@
+{
+  "slug": "sensitivity-computable",
+  "question": "Can \"which claim flips the conclusion\" be computed reliably?",
+  "branch_true": "Branching engine works",
+  "branch_false": "Multiplies garbage",
+  "resolve_by": "CONSTRUCT",
+  "cost": "weeks",
+  "rank": "high",
+  "state": "open",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "flags": []
+}

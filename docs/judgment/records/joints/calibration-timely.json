@@ -1,0 +1,19 @@
+{
+  "slug": "calibration-timely",
+  "question": "Is calibration signal obtainable in useful time?",
+  "branch_true": "Self-grading is real",
+  "branch_false": "Substitute the 6-week usage proxy permanently",
+  "resolve_by": "INT",
+  "cost": "days",
+  "rank": "medium",
+  "state": "open",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "flags": [
+    "method-note: own history"
+  ]
+}

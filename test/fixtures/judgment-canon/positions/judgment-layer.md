@@ -1,36 +1,4 @@
----
-type: position
-title: judgment-layer
-timestamp: "2026-07-20T12:00:00Z"
-smartmemory:
-  reference: true
-  origin: compose-projection
----
-
-# judgment-layer
-
-**Status:** live · **Conviction:** high (inferred)
-
-## Claims (r1)
-
-- **c1** `[ASSERT]` Deciding what to build is high-stakes and often goes badly
-  - elicitation: asked "Deciding what to build is high-stakes and often goes badly" (answered 2026-07-20T12:00:00Z, ref import:docs/judgment/positions/judgment-layer.md)
-- **c2** `[ASSERT]` It goes badly because the load-bearing assumption goes unchecked
-  - elicitation: asked "It goes badly because the load-bearing assumption goes unchecked" (answered 2026-07-20T12:00:00Z, ref import:docs/judgment/positions/judgment-layer.md)
-- **c3** `[DERIVED]` Surfacing that assumption therefore improves the outcome
-  - supports: c2
-- **c4** `[ASSERT]` A human + agent pair can surface it reliably
-  - elicitation: asked "A human + agent pair can surface it reliably" (answered 2026-07-20T12:00:00Z, ref import:docs/judgment/positions/judgment-layer.md)
-- **c5** `[ASSERT]` Recording it changes what happens next
-  - elicitation: asked "Recording it changes what happens next" (answered 2026-07-20T12:00:00Z, ref import:docs/judgment/positions/judgment-layer.md)
-- **c6** `[ASSERT]` Compose is uniquely placed to do this
-  - elicitation: asked "Compose is uniquely placed to do this" (answered 2026-07-20T12:00:00Z, ref import:docs/judgment/positions/judgment-layer.md)
-
-## History
-
-- r1 — 2026-07-20T12:00:00Z
-
-> **judgment-layer.md (imported prose)** — # POSITION — Build the judgment layer
+# POSITION — Build the judgment layer
 
 **Held since:** 2026-07-20 · **Conviction:** high *(agent-inferred, unconfirmed)*
 **Status:** not committed — no `feature.json`, deliberately

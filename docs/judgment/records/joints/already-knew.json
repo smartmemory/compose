@@ -1,0 +1,20 @@
+{
+  "slug": "already-knew",
+  "question": "Do bad build decisions come from unexamined reasoning, or do people know and build anyway?",
+  "branch_true": "Judgment layer is the product",
+  "branch_false": "Value is recovery, not foresight",
+  "resolve_by": "INT",
+  "cost": "days",
+  "rank": "high",
+  "state": "open",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "flags": [
+    "EXT-UNREACHABLE",
+    "method-note: own decision history"
+  ]
+}

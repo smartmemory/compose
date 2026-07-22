@@ -1,0 +1,17 @@
+{
+  "slug": "straddle-reaches-trunk",
+  "question": "Can strategy-level branches be built in parallel cheaply?",
+  "branch_true": "Straddling reaches decisions that matter",
+  "branch_false": "Leaf-level tool only",
+  "resolve_by": "CONSTRUCT",
+  "cost": "weeks",
+  "rank": "high",
+  "state": "open",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "flags": []
+}

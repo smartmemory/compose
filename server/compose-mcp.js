@@ -68,6 +68,12 @@ import {
   toolGetWorkspace,
   toolWriteCheckpoint,
   toolComposeResume,
+  toolJudgmentPositionCreate,
+  toolJudgmentPositionAmend,
+  toolJudgmentJointAdd,
+  toolJudgmentTransition,
+  toolJudgmentLedgerAppend,
+  toolGetJudgmentState,
   _getBinding,
   assertToolPhaseAllowed,
   _getSessionProfile,
@@ -681,6 +687,119 @@ const TOOLS = [
       },
     },
   },
+
+  // -------------------------------------------------------------------------
+  // Judgment writer — COMP-JUDGMENT-WRITER (the only legitimate write path to
+  // docs/judgment canon; records canonical, markdown generated). Terse
+  // schemas by design (token budget); the writer self-validates against
+  // contracts/judgment-record.schema.json — inputSchema is advisory.
+  // -------------------------------------------------------------------------
+  {
+    name: 'judgment_position_create',
+    description: 'Create a judgment position revision (new chain, update, supersession via supersedes, or tombstone via retracted). ASSERT grounding requires an elicitation block. Provenance is writer-stamped.',
+    inputSchema: {
+      type: 'object',
+      required: ['slug', 'claims', 'conviction'],
+      properties: {
+        slug: { type: 'string' },
+        claims: { type: 'array', description: 'Claims: {id, text, grounding EXT|INT|ASSERT|DERIVED|AGENT, supports[], elicitation?}.' },
+        conviction: { type: 'object', description: '{level high|medium|low, source stated|inferred}' },
+        rejected_alternatives: { type: 'array', description: '{what, why}[]' },
+        supersedes: { type: 'string', description: '<slug>#r<N> being superseded.' },
+        retracted: { type: 'boolean', description: 'true → tombstone revision.' },
+        idempotency_key: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'judgment_position_amend',
+    description: 'Scoped amendment (P6): new revision changing ONE claim\'s grounding and/or the conviction block. Anything else is supersession via judgment_position_create.',
+    inputSchema: {
+      type: 'object',
+      required: ['slug'],
+      properties: {
+        slug: { type: 'string' },
+        claim_id: { type: 'string' },
+        grounding: { type: 'string', description: 'New grounding for claim_id.' },
+        elicitation: { type: 'object', description: 'Required if new grounding is ASSERT.' },
+        conviction: { type: 'object' },
+        idempotency_key: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'judgment_joint_add',
+    description: 'Add a judgment joint (born open). Both branches and a coarse cost bucket are required; EXT/STRADDLE method packages may be attached now or at dispose time.',
+    inputSchema: {
+      type: 'object',
+      required: ['slug', 'question', 'branch_true', 'branch_false', 'resolve_by', 'cost', 'rank'],
+      properties: {
+        slug: { type: 'string' },
+        question: { type: 'string' },
+        branch_true: { type: 'string' },
+        branch_false: { type: 'string' },
+        resolve_by: { type: 'string', description: 'EXT|INT|CONSTRUCT|ASSERT|STRADDLE' },
+        cost: { type: 'string', description: 'hours|days|weeks|months' },
+        rank: { type: 'string', description: 'high|medium' },
+        ext: { type: 'object', description: 'EXT package: {sharpened_question, bar, falsifier} or {judgment_dispatch: true, reason}.' },
+        straddle: { type: 'object', description: '{discriminating_signal, kill_criteria}' },
+        flags: { type: 'array' },
+        idempotency_key: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'judgment_transition',
+    description: 'Joint state machine (edge→artifact table enforced; Stratum-guarded where capabilities.guard). Provide the target state plus its required artifact (resolution/dissolution/reopen/redispose), and/or a rank change (atomic rank ledger event).',
+    inputSchema: {
+      type: 'object',
+      required: ['slug'],
+      properties: {
+        slug: { type: 'string' },
+        to: { type: 'string', description: 'open|under_test|resolved|inconclusive|superseded|dissolved' },
+        resolution: { type: 'object', description: '{outcome resolved|inconclusive|failed_to_run|superseded, …outcome-specific fields, ext_result?, elicitation?}' },
+        dissolution: { type: 'object', description: '{decomposed_into[]}' },
+        reopen: { type: 'object', description: '{shaken_evidence_ref} (P6)' },
+        redispose: { type: 'object', description: '{new_resolve_by, ext?, straddle?} (retry inconclusive with a different method)' },
+        ext: { type: 'object', description: 'EXT package attached at dispose time.' },
+        straddle: { type: 'object' },
+        rank: { type: 'object', description: '{to: high|medium}' },
+        idempotency_key: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'judgment_ledger_append',
+    description: 'Append a judgment ledger event (kind-specific required fields enforced: commit-decide needs trigger+open_joints+prediction; postmortem needs recall_verdict+attribution and grades prediction_ref; override needs reason). Commit/CONSTRUCT events spawn prediction records.',
+    inputSchema: {
+      type: 'object',
+      required: ['kind', 'title'],
+      properties: {
+        kind: { type: 'string', description: 'decide|kill|override|escalate|calibrate|postmortem|rank|note|correct|open' },
+        title: { type: 'string' },
+        body: { type: 'string' },
+        refs: { type: 'array' },
+        rejected: { type: 'array' },
+        conviction: { type: 'object' },
+        trigger: { type: 'string', description: 'On decide: earned|forced|exhausted (marks a commit-moment decide).' },
+        open_joints: { type: 'array' },
+        prediction: { type: 'object', description: '{text, outcome_criteria}' },
+        disposition: { type: 'string', description: 'Method disposed with; CONSTRUCT requires prediction.' },
+        recall_verdict: { type: 'string' },
+        attribution: { type: 'string' },
+        prediction_ref: { type: 'string' },
+        prediction_grade: { type: 'string', description: 'right|right-wrong-reason|wrong' },
+        reason: { type: 'string' },
+        anchor: { type: 'string', description: 'On note: projection anchor (register-header, joint:<slug>, …).' },
+        idempotency_key: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'get_judgment_state',
+    description: 'Judgment canon snapshot: positions (derived status), joints, under-test, open predictions, recent ledger. Replays pending transition intents first.',
+    inputSchema: { type: 'object', properties: {} },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -774,6 +893,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'propose_followup':         result = await toolProposeFollowup(args); break;
       case 'write_checkpoint':         result = await toolWriteCheckpoint(args); break;
       case 'compose_resume':           result = await toolComposeResume(args); break;
+      case 'judgment_position_create': result = await toolJudgmentPositionCreate(args); break;
+      case 'judgment_position_amend':  result = await toolJudgmentPositionAmend(args); break;
+      case 'judgment_joint_add':       result = await toolJudgmentJointAdd(args); break;
+      case 'judgment_transition':      result = await toolJudgmentTransition(args); break;
+      case 'judgment_ledger_append':   result = await toolJudgmentLedgerAppend(args); break;
+      case 'get_judgment_state':       result = await toolGetJudgmentState(args); break;
       // agent_run removed — STRAT-DEDUP-AGENTRUN v1. Use mcp__stratum__stratum_agent_run.
       default:
         return {

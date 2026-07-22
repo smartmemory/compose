@@ -1,0 +1,19 @@
+{
+  "slug": "joint-is-non-obvious",
+  "question": "Can it surface a joint the owner hadn't noticed?",
+  "branch_true": "Day one is valuable with an empty ledger",
+  "branch_false": "It reformats what you already said",
+  "resolve_by": "CONSTRUCT",
+  "cost": "days",
+  "rank": "high",
+  "state": "under_test",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-20T12:00:00Z",
+    "via": "import"
+  },
+  "flags": [
+    "method-note: manual mode"
+  ]
+}

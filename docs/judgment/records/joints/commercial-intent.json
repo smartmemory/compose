@@ -1,0 +1,28 @@
+{
+  "slug": "commercial-intent",
+  "question": "Product to sell, or instrument for own building? Changes almost everything downstream",
+  "branch_true": "(not recorded at import)",
+  "branch_false": "(not recorded at import)",
+  "resolve_by": "ASSERT",
+  "cost": "hours",
+  "rank": "medium",
+  "state": "resolved",
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-22T12:00:00Z",
+    "via": "import"
+  },
+  "flags": [
+    "import: cost \"minutes\" mapped to \"hours\" (COARSE-BUCKETS)"
+  ],
+  "resolution": {
+    "outcome": "resolved",
+    "evidence": "Instrument now, product later; sell-path concerns parked, not killed (decide: instrument-now-product-later)",
+    "elicitation": {
+      "asked": "Product to sell, or instrument for own building? Changes almost everything downstream",
+      "answered_at": "2026-07-22T12:00:00Z",
+      "answer_ref": "decide: instrument-now-product-later"
+    }
+  }
+}
