@@ -391,6 +391,31 @@ than JSON schema); forcing OKF onto aggregate surfaces.
 guard was shown; the risk case was addressed before commitment)*
 **Design home:** COMP-JUDGMENT-WRITER design.md Decision 8.
 
+### decide: judgment-records-under-docs — floor home ratified by delegation (2026-07-22)
+**Owner delegated the call ("your judgement about docs"); agent ruled, and owns the
+reasoning `[AGENT]`:** canonical judgment records live at `docs/judgment/records/`
+(tracked JSON + JSONL), NOT the vision store. Evidence: P7 postmortems require register
+state at past commits via git history; `.compose/data/**` (vision store, feature-events,
+checkpoints) is blanket-gitignored; `docs/features/<CODE>/feature.json` is the shipped
+precedent for tracked records under `docs/`; `lib/experiment.js` gitignores `.compose/`
+wholesale in sandbox workspaces, which would blind sandboxed runs to canon.
+**Rejected:** vision-store substrate (gitignored — the substrate ruling's stated
+expectation, deviated from on this evidence); tracked top-level `.compose/*.json`
+(sandbox-invisible); changing the gitignore convention (touches every existing store).
+**Conviction:** high on the evidence; the delegation itself is the owner's recorded act.
+
+### decide: assert-elicitation-amendment — owner ratified 2026-07-22 (amends `oq1-agent-only-v1`)
+**Decided (owner, elicited):** `grounding: ASSERT` becomes tool-writable **only** with a
+required structured `elicitation` block `{ asked, answered_at, answer_ref }` —
+transcription-with-citation. `[owner-locked]` remains unrepresentable through tools
+(import or future S4 override only). `actor` stays `agent` on every tool write.
+**Why the amendment:** the original encoding made manual mode unrunnable — the agent
+could not lawfully record an owner decision made in-session, which is what the entire
+existing ledger is (COMP-JUDGMENT-WRITER gate round 1, finding 3).
+**Rejected:** total ASSERT ban until S4 (breaks P1a step 3 and the golden flow);
+uncited ASSERT (honour-system tagging — the 2026-07-21 failure class).
+**Conviction:** high *(inferred — ruled "yes" with both branches specified and costed)*
+
 ### rank: joint-is-non-obvious takes the UNDER TEST slot `[AGENT]` — flagged for owner veto
 Per P3, resolving three joints forces a re-rank and the marker must move; `differentiated`
 also could not hold the slot (blocked on sharpening — P3 forbids a stuck item holding the

@@ -197,10 +197,13 @@ Scope line: OKF applies to judgment *projections* only. Records stay JSON (canon
 - [ ] A failure mid-write (record persisted, projection regen fails) rolls back via the journal-writer compensating pattern and surfaces `JUDGMENT_PARTIAL_WRITE` with `cause`
 - [ ] Reviewer profile: write tools denied, `get_judgment_state` allowed (policy test)
 
-## Open questions — all owner-gate items
+## Open questions
 
-1. **Ratify: floor = tracked `docs/judgment/records/`**, not the gitignored vision store (gitignore evidence in Grounding). Decision 1 is now deliberately narrow — v1 canon is the floor provider; provider-primary canon later stays an open owner call under `PROVIDER-SEAM`.
-2. **Ratify: the ASSERT amendment** (Decision 3) — cited transcription of owner assertions becomes tool-writable; `[owner-locked]` stays locked out. Amends the letter of `oq1-agent-only-v1`; without it, manual mode cannot run through the tools at all (gate round 1, finding 3).
+**None. Both gate questions were ruled 2026-07-22** (`LEDGER.md` session 3):
+
+1. ~~Floor home~~ — **RATIFIED by delegation** (`decide: judgment-records-under-docs`): `docs/judgment/records/`, on the git-history/precedent/sandbox evidence.
+2. ~~ASSERT amendment~~ — **RATIFIED** (`decide: assert-elicitation-amendment`): elicitation-cited `ASSERT` ships in W1; `[owner-locked]` stays locked out; the declined-branch scoping is moot.
+
 *(Former OQ2 — scoped position amendment — closed by gate round 1, finding 5: `judgment_position_amend` is in scope. Former OQ3 — automatic rank events — closed by gate round 2, finding 7: rank mutation and its ledger event are one atomic operation.)*
 
 ## Review history
