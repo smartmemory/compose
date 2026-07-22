@@ -20,6 +20,16 @@
 
 ## Storage layout (manual mode)
 
+**Box map** (level-1, accepted 2026-07-22, seq 106; all boxes sketched to level 2 as of
+seq 113 — design proceeds top-down BFS, DAGs where needed):
+
+> Stores: people · situation · goal · positions · register · resolutions · commit ·
+> ledger. Machines: answerer · wanderer · poke · sweep+postmortem · writer.
+> Feeds: people + situation + research → goal → positions → register → resolutions
+> (→ back); register + positions → commit → build → learnings walk back up; the world
+> enters only through answerer/wanderer (read) and poke (intervene); the sweep ticks on
+> a timer and can reopen anything upstream.
+
 Deliberately minimal. Three things, all markdown, all in git.
 
 ```
@@ -223,6 +233,52 @@ and inferred-clause rule made mechanical); a package cannot accept evidence befo
 prediction exists (`CONSTRUCTION-TRAP` enforced); a goal version without owner
 ratification does not cut; corrections keep their trace automatically; the PreToolUse
 guard extends to every new canonical path; `ONE-UNDER-TEST` stays enforced as today.
+
+### Poke box — level-2 sketch (added 2026-07-22, ledger seq 113; research-grounded)
+
+Asking the world on purpose — publish, contact, ship-and-watch. The exposure-decision
+ruling, `FOUND-OR-PROVOKED` provenance, and the two `EXT-UNREACHABLE` joints
+(`already-knew`, `joint-is-non-obvious`) all land here. Grounded in fake-door/demand
+practice and survey-nonresponse research.
+
+| Sub-box | Holds |
+|---|---|
+| Probe | the intervention — published, sent, or shipped — keyed to a sharpened joint |
+| Exposure record | what the poke reveals *about us*, incl. what it teaches observers — written before launch, owner-approved |
+| Audience | who is touched, size, selection method (self-selection recorded) |
+| Returns | responses **and** silences, both as evidence with diagnosticity |
+
+**Rules.** Every poke is a resolution package first — question, prediction, bar before
+launch; a probe without a pre-written bar is marketing, not measurement. Exposure is a
+priced, gated cost (poking changes the market it measures). Fake doors only under the
+ethics that legitimize them: immediate honesty after the click, never on critical
+workflows, never claiming live what is not. **Silence verdicts are per-question**
+(refines `THREE-SILENCES`: nonresponse bias is variable-specific), and before
+interpreting silence, chase a small random sample of the silent, hard; silence alone
+stays Inconclusive. Small-N honesty: raw counts, never percentages (per P7).
+
+**The probe bank** — six rungs, laddered by exposure and evidence strength
+(clicks < words < money < behavior). Rung rule: buy the **cheapest rung that can produce
+the evidence the sharpened joint needs** — the VOI cap applied to poking.
+
+| Rung | Probe | Answers | Exposure |
+|---|---|---|---|
+| 1 | Publish & watch (page, post, changelog + analytics) | does anyone care enough to click | low |
+| 2 | List & see (npm, MCP registry, directories) | does anyone find and pull it | low, permanent |
+| 3 | Fake door (honest disclosure after the click) | would existing users want the next thing | medium — spends trust |
+| 4 | Ask directly (outreach, communities, the quiz outward) | *why* — the fact behind the click | medium — burns warm contacts |
+| 5 | Sell before build (priced waitlist, preorder, LOI, paid pilot) | will anyone pay | high — a price is a public claim |
+| 6 | Ship a sliver (one real instrumented feature) | do they actually use it | high — live and must not embarrass |
+
+Rungs 1–2 are partly audience-building for rungs 3–5; that compounding is recorded in
+the exposure record as a benefit. Rails already in-house: live web properties, npm + MCP
+registry (every release is quietly a probe), PostHog, email/Slack, Stripe, the quiz
+engine. The Poke half aims machinery we own under package discipline — the gap is
+audience, not machinery.
+
+> **WATCH FOR:** whether chase-the-silent is ever actually done or silently skipped —
+> it is the expensive step and the one that makes silence mean something. Whether any
+> probe ships without its package (the marketing-in-a-lab-coat failure).
 
 Do not add structure until a process demands it. If a field is never used by hand, it is not needed in the build.
 
