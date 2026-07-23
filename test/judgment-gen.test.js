@@ -800,6 +800,32 @@ describe('OKF frontmatter', () => {
     }
   });
 
+  test('frontmatter titles with YAML-hostile punctuation are quoted, safe titles stay plain', () => {
+    const cwd = seededCwd();
+    const store = new RecordsStore(cwd);
+    store.writePerson({
+      slug: 'jane',
+      display_name: 'Jane: CEO, "the' + ' #1"',
+      facts: [],
+      edges: [],
+      open_fields: [],
+      load_links: [],
+      provenance: {
+        actor: 'seed', session: 'seed', written_at: '2026-07-23T09:00:00Z',
+      },
+    });
+    regenerateProjections(cwd);
+    const text = readFileSync(join(cwd, 'docs', 'judgment', 'people', 'jane.md'), 'utf8');
+    const fm = text.split('---\n')[1];
+    // JSON-quoted (valid YAML double-quote style) — a raw `title: Jane: CEO`
+    // line would fail YAML parsing.
+    assert.match(fm, /^title: "Jane: CEO, \\"the #1\\""$/m);
+    // Safe titles remain unquoted plain scalars.
+    const maya = readFileSync(join(cwd, 'docs', 'judgment', 'people', 'maya.md'), 'utf8')
+      .split('---\n')[1];
+    assert.match(maya, /^title: [^"]/m);
+  });
+
   test('post-cutover OBJECTIVE is a goal item with no invented provider resource', () => {
     const cwd = postCutoverCwd();
     regenerateProjections(cwd);
