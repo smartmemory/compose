@@ -2,6 +2,25 @@
 
 ## 2026-07-23
 
+### COMP-TRIAGE-6-2 — Execute effort on claude routes + keep tests out of the live ledger
+
+Two follow-ups to COMP-TRIAGE-6. (1) The local Claude dispatch route now
+forwards its configured reasoning-effort tier into the `@anthropic-ai/
+claude-agent-sdk` `query()` `effort` option (previously only `thinking` was
+passed and `effort_executed` was hardcoded null), so claude runs contribute
+real executed-effort data to the model×effort curve instead of being
+intended-only. Effort is forwarded only when a tier is configured (untiered
+routes keep SDK defaults), and `effort_executed` is recorded only once a model
+run is confirmed — a transport/startup failure before any model spoke stays
+null, mirroring the codex route's telemetry-derived value. (2) Full-suite runs
+no longer accrete fixture rows in the real `.compose/data/dispatch-ledger.jsonl`.
+`test/suppress-expected-drift.js` now marks the run with `NODE_TEST_CONTEXT`, and
+`resolveDispatchLedgerCwd()` redirects any ledger write addressed at the live
+checkout (the process cwd, whether via an unattributed fallback or a test that
+roots a build there) to a hermetic tmpdir; tests that thread their own tmpdir
+project root are unchanged, and production paths never set the flag. Independent
+codex review (sol/high) drove the pre-execution-failure effort gate.
+
 ### COMP-TRIAGE-6 — Dispatch scorekeeping (ledger, ACRR, compose metrics)
 
 Compose now keeps the receipts for every agent dispatch instead of throwing

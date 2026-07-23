@@ -232,6 +232,60 @@ describe('connector-owned dispatch capture', () => {
     }
   });
 
+  test('local Claude forwards opts.effort to the SDK and records it as effort_executed', async () => {
+    const project = tempDir('dispatch-effort-');
+    const worktree = tempDir('dispatch-effort-worktree-');
+    let seenEffort = 'UNSET';
+    const capturingQuery = ({ options }) => {
+      seenEffort = options?.effort ?? null;
+      return (async function* () {
+        yield { type: 'system', subtype: 'init', model: 'returned-model' };
+        yield {
+          type: 'result', subtype: 'success', result: '{}',
+          total_cost_usd: 0.01, usage: { input_tokens: 1, output_tokens: 1 }, duration_ms: 5,
+        };
+      })();
+    };
+    try {
+      await runLocalClaudeAgent('prompt', {
+        cwd: worktree,
+        effort: 'high',
+        telemetry: { project_cwd: project, site: 'consumer', effort_intended: 'high' },
+        query: capturingQuery,
+      });
+      // The effort tier reached the SDK query (executed, not merely intended)...
+      assert.equal(seenEffort, 'high');
+      const rows = readEvents(project);
+      assert.equal(rows.length, 1);
+      // ...and is recorded as effort_executed, distinct from effort_intended.
+      assert.equal(rows[0].effort_intended, 'high');
+      assert.equal(rows[0].effort_executed, 'high');
+    } finally {
+      cleanup(project, worktree);
+    }
+  });
+
+  test('a pre-execution failure records effort_executed null even when opts.effort is set', async () => {
+    const project = tempDir('dispatch-effort-fail-');
+    // The SDK throws before emitting any message: no model ran, so the requested
+    // effort tier must not land in the executed-effort curve.
+    const throwingQuery = async function* throwingQuery() { throw new Error('sdk startup failed'); };
+    try {
+      await assert.rejects(runLocalClaudeAgent('prompt', {
+        effort: 'high',
+        telemetry: { project_cwd: project, site: 'consumer', effort_intended: 'high' },
+        query: throwingQuery,
+      }));
+      const rows = readEvents(project);
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].outcome, 'error');
+      assert.equal(rows[0].effort_intended, 'high');
+      assert.equal(rows[0].effort_executed, null);
+    } finally {
+      cleanup(project);
+    }
+  });
+
   test('missing site is recorded as unattributed', async () => {
     const project = tempDir('dispatch-unattributed-');
     try {

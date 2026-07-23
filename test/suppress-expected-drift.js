@@ -22,6 +22,15 @@
 // the de-facto convention for "no compose server here".
 if (!process.env.COMPOSE_PORT) process.env.COMPOSE_PORT = '19997';
 
+// COMP-TRIAGE-6-2: mark the whole test run as a hermetic test context. Modules
+// that would otherwise fall back to a shared, process-global path when no
+// explicit project root is threaded (the dispatch-ledger connectors →
+// process.cwd() = the live repo; codex-preflight/bug-escalation worktree bases →
+// ~/.stratum/worktrees) redirect to a tmpdir under this flag. Without it, every
+// full-suite run writes ~hundreds of fixture dispatch rows into the live
+// .compose/data/dispatch-ledger.jsonl. Production paths never set this var.
+if (!process.env.NODE_TEST_CONTEXT) process.env.NODE_TEST_CONTEXT = '1';
+
 const _origStderrWrite = process.stderr.write.bind(process.stderr);
 process.stderr.write = (chunk, ...rest) =>
   (typeof chunk === 'string' && chunk.includes('diverges from rollup'))
