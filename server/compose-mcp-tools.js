@@ -835,6 +835,21 @@ export async function toolJudgmentLedgerAppend(args) {
   return judgmentLedgerAppend(getTargetRoot(), args);
 }
 
+export async function toolJudgmentPersonWrite(args) {
+  const { judgmentPersonWrite } = await import('../lib/judgment-writer.js');
+  return judgmentPersonWrite(getTargetRoot(), args);
+}
+
+export async function toolJudgmentSituationWrite(args) {
+  const { judgmentSituationWrite } = await import('../lib/judgment-writer.js');
+  return judgmentSituationWrite(getTargetRoot(), args);
+}
+
+export async function toolJudgmentGoalWrite(args) {
+  const { judgmentGoalWrite } = await import('../lib/judgment-writer.js');
+  return judgmentGoalWrite(getTargetRoot(), args);
+}
+
 export async function toolGetJudgmentState() {
   const { getJudgmentState } = await import('../lib/judgment-writer.js');
   return getJudgmentState(getTargetRoot());
@@ -931,4 +946,3 @@ export function assertToolPhaseAllowed(tool, args = {}, _testCtx) {
     throw e;
   }
 }
-

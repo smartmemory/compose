@@ -7,7 +7,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -90,8 +90,17 @@ const JUDGMENT_TOOLS = [
   'judgment_joint_add',
   'judgment_transition',
   'judgment_ledger_append',
+  'judgment_person_write',
+  'judgment_situation_write',
+  'judgment_goal_write',
   'get_judgment_state',
 ];
+
+const NEW_JUDGMENT_TOOL_OPS = {
+  judgment_person_write: ['create', 'add_fact', 'correct', 'open_field', 'edge', 'load_link'],
+  judgment_situation_write: ['create', 'add_fact', 'correct', 'owed', 'load_link'],
+  judgment_goal_write: ['cut', 'correct', 'joint_link', 'load_link'],
+};
 
 const elicitation = {
   asked: 'Do we ship the writer?',
@@ -99,14 +108,68 @@ const elicitation = {
   answer_ref: 'session quote',
 };
 
+const ratifiedGoalCut = {
+  op: 'cut',
+  clauses: [{
+    text: 'Ship the complete judgment-store family.',
+    channel: 'said',
+    elicitation,
+  }],
+  provocation: {
+    quote: 'What must the final slice prove?',
+    at: '2026-07-23T12:00:00Z',
+  },
+  ratification: {
+    ...elicitation,
+    quote: 'Ship the complete judgment-store family.',
+  },
+  diff_note: 'Initial ratified goal cut.',
+};
+
+describe('compose-mcp judgment registry parity', () => {
+  test('has 49 tool definitions, 49 dispatch cases, and nine exact judgment names', () => {
+    const source = readFileSync(MCP_SERVER, 'utf8');
+    const toolsStart = source.indexOf('const TOOLS = [');
+    const toolsEnd = source.indexOf('\n];\n\n// ---------------------------------------------------------------------------\n// MCP Server setup', toolsStart);
+    const switchStart = source.indexOf('    switch (name) {');
+    const switchEnd = source.indexOf('      // agent_run removed', switchStart);
+    assert.ok(toolsStart >= 0 && toolsEnd > toolsStart, 'TOOLS array anchors must resolve');
+    assert.ok(switchStart >= 0 && switchEnd > switchStart, 'dispatch switch anchors must resolve');
+
+    const definitionNames = [
+      ...source.slice(toolsStart, toolsEnd).matchAll(/^    name: '([^']+)',/gm),
+    ].map((match) => match[1]);
+    const dispatchNames = [
+      ...source.slice(switchStart, switchEnd).matchAll(/^      case '([^']+)'/gm),
+    ].map((match) => match[1]);
+
+    assert.equal(definitionNames.length, 49, 'TOOLS definition count');
+    assert.equal(dispatchNames.length, 49, 'dispatch case count');
+    assert.deepEqual(
+      [...definitionNames].sort(),
+      [...dispatchNames].sort(),
+      'every listed tool has exactly one dispatch case',
+    );
+    assert.deepEqual(
+      definitionNames.filter((name) => name.startsWith('judgment_') || name === 'get_judgment_state').sort(),
+      [...JUDGMENT_TOOLS].sort(),
+    );
+  });
+});
+
 describe('compose-mcp judgment writer (end-to-end)', () => {
-  test('tools/list includes the six judgment tools', async () => {
+  test('tools/list includes the nine judgment tools with exact new op enums', async () => {
     const client = new McpClient(freshCwd());
     try {
       const result = await client.request('tools/list', {});
       const names = result.tools.map((t) => t.name);
       for (const tool of JUDGMENT_TOOLS) {
         assert.ok(names.includes(tool), `${tool} should be listed`);
+      }
+      for (const [name, ops] of Object.entries(NEW_JUDGMENT_TOOL_OPS)) {
+        const definition = result.tools.find((tool) => tool.name === name);
+        assert.deepEqual(definition.inputSchema.required, ['op'], `${name} requires only its discriminant`);
+        assert.deepEqual(definition.inputSchema.properties.op.enum, ops, `${name} op enum`);
       }
     } finally {
       client.close();
@@ -167,6 +230,59 @@ describe('compose-mcp judgment writer (end-to-end)', () => {
     }
   });
 
+  test('golden family flow: person, situation, ratified goal, and typed counts through tools', async () => {
+    const client = new McpClient(freshCwd());
+    try {
+      const person = parseToolText(await client.callTool('judgment_person_write', {
+        op: 'create',
+        slug: 'maya',
+        display_name: 'Maya',
+      }));
+      assert.deepEqual(person, { op: 'create', slug: 'maya' });
+      const personFact = parseToolText(await client.callTool('judgment_person_write', {
+        op: 'add_fact',
+        slug: 'maya',
+        section: 'stated',
+        text: 'I ratified the final slice.',
+        channel: 'said',
+        at: '2026-07-23',
+      }));
+      assert.equal(personFact.id, 'f1');
+
+      const situation = parseToolText(await client.callTool('judgment_situation_write', {
+        op: 'create',
+        slug: 'launch-window',
+        display_name: 'Launch Window',
+      }));
+      assert.deepEqual(situation, { op: 'create', slug: 'launch-window' });
+      const situationFact = parseToolText(await client.callTool('judgment_situation_write', {
+        op: 'add_fact',
+        slug: 'launch-window',
+        text: 'The full judgment family is green.',
+        channel: 'observed',
+        at: '2026-07-23',
+      }));
+      assert.equal(situationFact.id, 'f1');
+
+      const goal = parseToolText(await client.callTool('judgment_goal_write', ratifiedGoalCut));
+      assert.deepEqual(goal, {
+        op: 'cut',
+        version: 1,
+        ref: 'goal:v1',
+        ratified: true,
+      });
+
+      const state = parseToolText(await client.callTool('get_judgment_state', {}));
+      assert.deepEqual(state.counts, {
+        people: { spoken: 1, stub: 0 },
+        entities: 1,
+        goal: { version: 1, ratified: true },
+      });
+    } finally {
+      client.close();
+    }
+  });
+
   test('forbidden owner tag through tools names the import/override paths', async () => {
     const client = new McpClient(freshCwd());
     try {
@@ -202,6 +318,54 @@ describe('compose-mcp judgment writer (end-to-end)', () => {
       client.close();
     }
   });
+
+  test('new writer error codes survive the MCP boundary', async () => {
+    const client = new McpClient(freshCwd());
+    try {
+      const input = errorText(await client.callTool('judgment_person_write', {
+        op: 'not_an_op',
+      }));
+      assert.match(input, /Error \[JUDGMENT_INPUT\]/);
+
+      parseToolText(await client.callTool('judgment_person_write', {
+        op: 'create',
+        slug: 'load-stub',
+        display_name: 'Load Stub',
+      }));
+      parseToolText(await client.callTool('judgment_person_write', {
+        op: 'add_fact',
+        slug: 'load-stub',
+        section: 'role',
+        text: 'Carries a secondhand observation.',
+        channel: 'observed',
+        at: '2026-07-23',
+      }));
+      const loadChannel = errorText(await client.callTool('judgment_person_write', {
+        op: 'load_link',
+        slug: 'load-stub',
+        fact: 'f1',
+        carries: 'launch decision',
+      }));
+      assert.match(loadChannel, /Error \[JUDGMENT_LOAD_CHANNEL\]/);
+
+      const unratified = errorText(await client.callTool('judgment_goal_write', {
+        op: 'cut',
+        clauses: [],
+        diff_note: 'Not ratified.',
+      }));
+      assert.match(unratified, /Error \[JUDGMENT_UNRATIFIED_CUT\]/);
+
+      parseToolText(await client.callTool('judgment_position_create', {
+        slug: 'objective',
+        claims: [{ id: 'c1', text: 'Legacy live objective.', grounding: 'INT' }],
+        conviction: { level: 'high', source: 'stated' },
+      }));
+      const migration = errorText(await client.callTool('judgment_goal_write', ratifiedGoalCut));
+      assert.match(migration, /Error \[JUDGMENT_MIGRATION_REQUIRED\]/);
+    } finally {
+      client.close();
+    }
+  });
 });
 
 describe('reviewer gate enforced end-to-end (phaseScopedTools workspace)', () => {
@@ -220,6 +384,11 @@ describe('reviewer gate enforced end-to-end (phaseScopedTools workspace)', () =>
         conviction: { level: 'low', source: 'inferred' },
       }));
       assert.match(denied, /PHASE_TOOL_DENIED/);
+      for (const tool of Object.keys(NEW_JUDGMENT_TOOL_OPS)) {
+        const newDenied = errorText(await client.callTool(tool, {}));
+        assert.match(newDenied, /PHASE_TOOL_DENIED/, `${tool} must be denied before writer validation`);
+        assert.doesNotMatch(newDenied, /JUDGMENT_INPUT/, `${tool} must not reach writer validation`);
+      }
       const state = parseToolText(await client.callTool('get_judgment_state', {}));
       assert.deepEqual(state.positions, []);
     } finally {

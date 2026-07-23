@@ -1,5 +1,42 @@
 # Changelog
 
+## 2026-07-23
+
+### COMP-JUDGMENT-STORES — person/situation/goal stores + crash-safe intent publication (T1–T6)
+
+The judgment canon grows three record families and hardens the write path.
+Design gated at r12; blueprint Corrections C1–C15 binding throughout.
+
+- **Contracts.** `person`, `situation_entity`, `goal_version`, `goal_state`
+  roots; two closed fact schemas (no allOf) with base-field parity; universal
+  stable sub-entry IDs (`f/e/of/o/l/c/gj/gl`), unified correction traces,
+  in-place `removed` retirement; intents require `{kind, tool, op}`;
+  writer-reserved attestation ledger events; strict `goal:v<N>#c<N>`
+  `rests_on` refs; `provenance.via: migration` + `intent_id`.
+- **Store.** People/situation aggregates, parameterized revision-chain
+  primitive (goal `v<N>` beside positions `r<N>`), `goal/state.json` sidecar,
+  `effectiveStore` pending-intent read adapter + `goalCutoverComplete`,
+  `clearIntent` idempotent for ENOENT only.
+- **Writers.** Op-discriminated `judgment_person_write` /
+  `judgment_situation_write` / `judgment_goal_write`; writer-owned high-water
+  ID allocator (no reuse, corruption refuses); UndoLog `capture`/`created`
+  compensation; semantic precheck codes before schema validation; goal fences
+  `JUDGMENT_INTENT_PENDING` > `JUDGMENT_MIGRATION_REQUIRED` — the goal store
+  ships locked until COMP-JUDGMENT-GOAL-MIGRATE runs migration.
+- **Intent publication redesign.** `publishIntentLocked` is the single
+  inline+replay success path: apply → deduped `{intent_id, tool, op}`
+  attestation → durable clear (the publication point) → regenerate; post-clear
+  regen failure is projection-stale, never rollback. Typed `INTENT_APPLIERS`
+  dispatch fails closed on unknown kinds; reserved child kinds block in place.
+- **Projections.** `people/<slug>.md`, `SITUATION.md`, dual-read
+  `OBJECTIVE.md` (legacy position until goal cutover), full per-fact audit
+  surface, deterministic orphan pruning shared with roundtrip;
+  `get_judgment_state` holds the lock through replay + unconditional regen
+  (repairs the clear→regen crash window) and returns typed `counts`.
+- **MCP surface.** Three new op-discriminated tools; 49/49
+  definition/dispatch parity, nine judgment tools; reviewer policy unchanged
+  (deny-by-default covers the new writes); stdio e2e golden flow.
+
 ## 2026-07-22
 
 ### COMP-JUDGMENT-WRITER — typed writer + provider seam for judgment canon (W1–W3)
