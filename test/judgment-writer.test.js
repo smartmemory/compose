@@ -8,7 +8,13 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -18,6 +24,9 @@ import {
   judgmentJointAdd,
   judgmentTransition,
   judgmentLedgerAppend,
+  judgmentPersonWrite,
+  judgmentSituationWrite,
+  allocateStableEntryId,
   getJudgmentState,
   replayPendingIntents,
 } from '../lib/judgment-writer.js';
@@ -41,12 +50,13 @@ function fixedPoint(cwd, label) {
   assert.equal(check.fixedPoint, true, `${label}: projections must be fixed-point (${JSON.stringify(check.diffs)})`);
 }
 
-async function refusedWith(promise, kind) {
+async function refusedWith(promise, kind, messageFragment) {
   try {
     await promise;
     assert.fail(`expected refusal ${kind}`);
   } catch (err) {
     assert.equal(err.kind ?? err.code, kind, `expected ${kind}, got ${err.kind ?? err.code}: ${err.message}`);
+    if (messageFragment) assert.match(err.message, messageFragment);
     return err;
   }
 }
@@ -538,5 +548,1183 @@ describe('kill-between-steps — intent replay recovers the WHOLE mutation', () 
     const state = await getJudgmentState(cwd);
     assert.equal(state.joints.find((j) => j.slug === 'stale').state, 'under_test', 'read path replays intents');
     assert.deepEqual(store.readIntents(), []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// COMP-JUDGMENT-STORES T3 / S3 — person + situation family writers
+// ---------------------------------------------------------------------------
+
+const personWrite = (...args) => judgmentPersonWrite(...args);
+const situationWrite = (...args) => judgmentSituationWrite(...args);
+
+const FACT_AT_1 = '2026-07-20';
+const FACT_AT_2 = '2026-07-21';
+
+describe('T3 person writer — golden flow', () => {
+  test('stub → sourced fact → spoken → filled field → load → traced correction', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+
+    const created = await personWrite(cwd, {
+      op: 'create',
+      slug: 'maya',
+      display_name: 'Maya',
+    });
+    assert.deepEqual(created, { op: 'create', slug: 'maya' });
+    fixedPoint(cwd, 'person create');
+
+    const secondhand = await personWrite(cwd, {
+      op: 'add_fact',
+      slug: 'maya',
+      section: 'role',
+      text: 'Maya owns the review loop.',
+      channel: 'secondhand',
+      via: 'project lead',
+      at: FACT_AT_1,
+      id: 'f999',
+      diverges_with: 'f999',
+      trace: [{ poisoned: true }],
+      nested: { provenance: { actor: 'caller' } },
+    });
+    assert.equal(secondhand.id, 'f1', 'caller-supplied IDs are never canonical');
+    fixedPoint(cwd, 'person secondhand fact');
+
+    await refusedWith(
+      personWrite(cwd, {
+        op: 'load_link',
+        slug: 'maya',
+        fact: 'f1',
+        carries: 'review ownership',
+      }),
+      'JUDGMENT_LOAD_CHANNEL',
+      /stub.*cannot carry load/i,
+    );
+
+    const said = await personWrite(cwd, {
+      op: 'add_fact',
+      slug: 'maya',
+      section: 'stated',
+      text: 'I own the review loop.',
+      channel: 'said',
+      at: FACT_AT_1,
+    });
+    assert.equal(said.id, 'f2');
+    fixedPoint(cwd, 'person said fact');
+
+    const opened = await personWrite(cwd, {
+      op: 'open_field',
+      slug: 'maya',
+      name: 'What makes the review complete?',
+    });
+    assert.equal(opened.id, 'of1');
+    fixedPoint(cwd, 'person open field');
+
+    const filled = await personWrite(cwd, {
+      op: 'open_field',
+      slug: 'maya',
+      open_field_id: 'of1',
+      filled_by: 'f2',
+    });
+    assert.equal(filled.status, 'filled');
+    fixedPoint(cwd, 'person field fill');
+
+    const linked = await personWrite(cwd, {
+      op: 'load_link',
+      slug: 'maya',
+      fact: 'f2',
+      carries: 'review ownership',
+    });
+    assert.equal(linked.id, 'l1');
+    fixedPoint(cwd, 'person load link');
+
+    await personWrite(cwd, {
+      op: 'correct',
+      slug: 'maya',
+      fact_id: 'f2',
+      text: 'I own the final review loop.',
+      at: FACT_AT_2,
+    });
+    fixedPoint(cwd, 'person correction');
+
+    const person = store.readPerson('maya');
+    assert.equal(person.display_name, 'Maya');
+    assert.equal(person.facts[0].via, 'project lead');
+    assert.equal(person.facts[0].id, 'f1');
+    assert.equal(person.facts[0].trace.length, 0);
+    assert.equal(person.facts[0].diverges_with, undefined);
+    assert.equal(person.facts[0].nested, undefined, 'caller objects are not spread into canonical JSON');
+    assert.equal(person.facts[1].text, 'I own the final review loop.');
+    assert.equal(person.facts[1].at, FACT_AT_2);
+    assert.deepEqual(person.facts[1].trace[0].prior, {
+      text: 'I own the review loop.',
+      at: FACT_AT_1,
+    });
+    assert.equal(person.open_fields[0].filled_by, 'f2');
+    assert.equal(person.open_fields[0].trace[0].prior.status, 'open');
+    assert.equal(person.load_links[0].removed, null);
+    assert.equal(person.provenance.actor, 'agent');
+    assert.notEqual(person.facts[0].provenance.actor, 'caller');
+  });
+});
+
+describe('T3 situation writer — golden flow', () => {
+  test('entity → varied facts → owed give/reopen → load matrix → correction after removal', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+
+    await situationWrite(cwd, {
+      op: 'create',
+      slug: 'launch-window',
+      display_name: 'Launch window',
+    });
+    fixedPoint(cwd, 'situation create');
+
+    const secondhand = await situationWrite(cwd, {
+      op: 'add_fact',
+      slug: 'launch-window',
+      text: 'A partner expects Friday.',
+      channel: 'secondhand',
+      via: 'account owner',
+      at: FACT_AT_1,
+    });
+    const observed = await situationWrite(cwd, {
+      op: 'add_fact',
+      slug: 'launch-window',
+      text: 'The release branch is green.',
+      channel: 'observed',
+      at: FACT_AT_1,
+    });
+    const inferred = await situationWrite(cwd, {
+      op: 'add_fact',
+      slug: 'launch-window',
+      text: 'Friday is still achievable.',
+      channel: 'inferred',
+      at: FACT_AT_1,
+    });
+    assert.deepEqual([secondhand.id, observed.id, inferred.id], ['f1', 'f2', 'f3']);
+    fixedPoint(cwd, 'situation facts');
+
+    const owed = await situationWrite(cwd, {
+      op: 'owed',
+      slug: 'launch-window',
+      name: 'Confirm the real deadline.',
+      why_load_bearing: 'It determines the launch decision.',
+    });
+    assert.equal(owed.id, 'o1');
+    await situationWrite(cwd, {
+      op: 'owed',
+      slug: 'launch-window',
+      owed_id: 'o1',
+      filled_by: 'f1',
+    });
+    await situationWrite(cwd, {
+      op: 'owed',
+      slug: 'launch-window',
+      owed_id: 'o1',
+      reopen: true,
+      reason: 'The partner changed the date.',
+    });
+    fixedPoint(cwd, 'situation owed reopen');
+
+    await refusedWith(
+      situationWrite(cwd, {
+        op: 'load_link',
+        slug: 'launch-window',
+        fact: 'f1',
+        carries: 'deadline',
+      }),
+      'JUDGMENT_LOAD_CHANNEL',
+      /f1.*secondhand/i,
+    );
+    await refusedWith(
+      situationWrite(cwd, {
+        op: 'load_link',
+        slug: 'launch-window',
+        fact: 'f3',
+        carries: 'confidence',
+      }),
+      'JUDGMENT_LOAD_CHANNEL',
+      /f3.*inferred/i,
+    );
+
+    const link = await situationWrite(cwd, {
+      op: 'load_link',
+      slug: 'launch-window',
+      fact: 'f2',
+      carries: 'release readiness',
+    });
+    assert.equal(link.id, 'l1');
+    await refusedWith(
+      situationWrite(cwd, {
+        op: 'correct',
+        slug: 'launch-window',
+        fact_id: 'f2',
+        channel: 'inferred',
+      }),
+      'JUDGMENT_LOAD_CHANNEL',
+      /l1/,
+    );
+    await situationWrite(cwd, {
+      op: 'load_link',
+      slug: 'launch-window',
+      load_link_id: 'l1',
+      remove: true,
+      reason: 'No longer decision-bearing.',
+    });
+    await situationWrite(cwd, {
+      op: 'correct',
+      slug: 'launch-window',
+      fact_id: 'f2',
+      channel: 'secondhand',
+      via: 'release manager',
+    });
+    fixedPoint(cwd, 'situation correction after removal');
+
+    const situation = store.readSituationEntity('launch-window');
+    assert.equal(situation.owed[0].status, 'open');
+    assert.equal(situation.owed[0].filled_by, undefined);
+    assert.deepEqual(situation.owed[0].trace.map((entry) => entry.prior), [
+      { status: 'open', filled_by: null },
+      { status: 'given', filled_by: 'f1' },
+    ]);
+    assert.equal(situation.load_links[0].removed.reason, 'No longer decision-bearing.');
+    assert.equal(situation.facts[1].channel, 'secondhand');
+    assert.equal(situation.facts[1].via, 'release manager');
+    assert.deepEqual(situation.facts[1].trace[0].prior, {
+      channel: 'observed',
+      via: null,
+    });
+  });
+});
+
+describe('T3 rejection matrix — code and message are part of the contract', () => {
+  test('argument-shape failures precede idempotency and pin secondhand/via rules', async () => {
+    const cwd = freshCwd();
+    await personWrite(cwd, {
+      op: 'create',
+      slug: 'shape',
+      display_name: 'Shape',
+      idempotency_key: 'shape-key',
+    });
+
+    await refusedWith(
+      personWrite(cwd, {
+        op: 'unknown-op',
+        slug: 'shape',
+        idempotency_key: 'shape-key',
+      }),
+      'JUDGMENT_INPUT',
+      /unknown op/i,
+    );
+    await refusedWith(
+      personWrite(cwd, {
+        op: 'add_fact',
+        slug: 'shape',
+        section: 'role',
+        text: 'Sourced.',
+        channel: 'secondhand',
+        at: FACT_AT_1,
+      }),
+      'JUDGMENT_INPUT',
+      /secondhand.*non-empty via/i,
+    );
+    await refusedWith(
+      situationWrite(cwd, {
+        op: 'add_fact',
+        slug: 'missing-does-not-matter',
+        text: 'Direct.',
+        channel: 'said',
+        via: 'stale source',
+        at: FACT_AT_1,
+      }),
+      'JUDGMENT_INPUT',
+      /via.*only.*secondhand/i,
+    );
+    await refusedWith(
+      personWrite(cwd, {
+        op: 'open_field',
+        slug: 'shape',
+        name: 'both',
+        open_field_id: 'of1',
+        filled_by: 'f1',
+      }),
+      'JUDGMENT_INPUT',
+      /exactly one.*create.*fill.*reopen/i,
+    );
+  });
+
+  test('load rejects stubs and disallowed source channels', async () => {
+    const cwd = freshCwd();
+    await personWrite(cwd, { op: 'create', slug: 'stub', display_name: 'Stub' });
+    await personWrite(cwd, {
+      op: 'add_fact',
+      slug: 'stub',
+      section: 'role',
+      text: 'Observed but silent.',
+      channel: 'observed',
+      at: FACT_AT_1,
+    });
+    await refusedWith(
+      personWrite(cwd, {
+        op: 'load_link',
+        slug: 'stub',
+        fact: 'f1',
+        carries: 'load',
+      }),
+      'JUDGMENT_LOAD_CHANNEL',
+      /stub.*cannot carry load/i,
+    );
+
+    await personWrite(cwd, {
+      op: 'add_fact',
+      slug: 'stub',
+      section: 'stated',
+      text: 'Now spoken.',
+      channel: 'said',
+      at: FACT_AT_1,
+    });
+    await personWrite(cwd, {
+      op: 'add_fact',
+      slug: 'stub',
+      section: 'life',
+      text: 'A conclusion.',
+      channel: 'inferred',
+      at: FACT_AT_1,
+    });
+    await refusedWith(
+      personWrite(cwd, {
+        op: 'load_link',
+        slug: 'stub',
+        fact: 'f3',
+        carries: 'load',
+      }),
+      'JUDGMENT_LOAD_CHANNEL',
+      /f3.*inferred/i,
+    );
+  });
+
+  test('missing aggregates and entries are JUDGMENT_NOT_FOUND', async () => {
+    const cwd = freshCwd();
+    await refusedWith(
+      personWrite(cwd, {
+        op: 'add_fact',
+        slug: 'ghost',
+        section: 'role',
+        text: 'No aggregate.',
+        channel: 'said',
+        at: FACT_AT_1,
+      }),
+      'JUDGMENT_NOT_FOUND',
+      /person ghost does not exist/i,
+    );
+    await situationWrite(cwd, {
+      op: 'create',
+      slug: 'known',
+      display_name: 'Known',
+    });
+    await refusedWith(
+      situationWrite(cwd, {
+        op: 'correct',
+        slug: 'known',
+        fact_id: 'f999',
+        text: 'Missing.',
+      }),
+      'JUDGMENT_NOT_FOUND',
+      /fact f999.*not found/i,
+    );
+  });
+
+  test('broken fill, edge, pair, and active load references are JUDGMENT_REF', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+    await personWrite(cwd, { op: 'create', slug: 'a', display_name: 'A' });
+    await personWrite(cwd, {
+      op: 'add_fact',
+      slug: 'a',
+      section: 'stated',
+      text: 'A statement.',
+      channel: 'said',
+      at: FACT_AT_1,
+    });
+    await personWrite(cwd, { op: 'open_field', slug: 'a', name: 'Open?' });
+
+    await refusedWith(
+      personWrite(cwd, {
+        op: 'open_field',
+        slug: 'a',
+        open_field_id: 'of1',
+        filled_by: 'f999',
+      }),
+      'JUDGMENT_REF',
+      /filled_by f999.*does not resolve/i,
+    );
+    await refusedWith(
+      personWrite(cwd, {
+        op: 'edge',
+        slug: 'a',
+        to: 'ghost',
+        kind: 'reports-to',
+      }),
+      'JUDGMENT_REF',
+      /target person ghost.*does not exist/i,
+    );
+    await refusedWith(
+      personWrite(cwd, {
+        op: 'correct',
+        slug: 'a',
+        fact_id: 'f1',
+        pair_with: 'f999',
+      }),
+      'JUDGMENT_REF',
+      /pair endpoint f999.*does not resolve/i,
+    );
+
+    const corrupt = store.readPerson('a');
+    corrupt.load_links.push({
+      id: 'l1',
+      fact: 'f999',
+      carries: 'broken',
+      provenance: corrupt.provenance,
+      removed: null,
+    });
+    store.writePerson(corrupt);
+    await refusedWith(
+      personWrite(cwd, {
+        op: 'correct',
+        slug: 'a',
+        fact_id: 'f1',
+        text: 'Still a statement.',
+      }),
+      'JUDGMENT_REF',
+      /load link l1.*fact f999.*does not resolve/i,
+    );
+  });
+
+  test('duplicate aggregates, invalid transitions, paired endpoints, and repeat removal conflict', async () => {
+    const cwd = freshCwd();
+    await personWrite(cwd, { op: 'create', slug: 'a', display_name: 'A' });
+    await personWrite(cwd, { op: 'create', slug: 'b', display_name: 'B' });
+    await refusedWith(
+      personWrite(cwd, { op: 'create', slug: 'a', display_name: 'Again' }),
+      'JUDGMENT_CONFLICT',
+      /person a already exists/i,
+    );
+
+    await personWrite(cwd, {
+      op: 'add_fact',
+      slug: 'a',
+      section: 'stated',
+      text: 'Stated.',
+      channel: 'said',
+      at: FACT_AT_1,
+    });
+    await personWrite(cwd, {
+      op: 'add_fact',
+      slug: 'a',
+      section: 'revealed',
+      text: 'Revealed.',
+      channel: 'observed',
+      at: FACT_AT_1,
+    });
+    await personWrite(cwd, {
+      op: 'correct',
+      slug: 'a',
+      fact_id: 'f1',
+      pair_with: 'f2',
+    });
+    await refusedWith(
+      personWrite(cwd, {
+        op: 'correct',
+        slug: 'a',
+        fact_id: 'f1',
+        pair_with: 'f2',
+      }),
+      'JUDGMENT_CONFLICT',
+      /f1.*already paired/i,
+    );
+
+    await personWrite(cwd, { op: 'open_field', slug: 'a', name: 'Question?' });
+    await personWrite(cwd, {
+      op: 'open_field',
+      slug: 'a',
+      open_field_id: 'of1',
+      filled_by: 'f1',
+    });
+    await refusedWith(
+      personWrite(cwd, {
+        op: 'open_field',
+        slug: 'a',
+        open_field_id: 'of1',
+        filled_by: 'f1',
+      }),
+      'JUDGMENT_CONFLICT',
+      /open field of1.*already filled/i,
+    );
+
+    await personWrite(cwd, {
+      op: 'edge',
+      slug: 'a',
+      to: 'b',
+      kind: 'reports-to',
+    });
+    await personWrite(cwd, {
+      op: 'edge',
+      slug: 'a',
+      edge_id: 'e1',
+      remove: true,
+      reason: 'Changed roles.',
+    });
+    await refusedWith(
+      personWrite(cwd, {
+        op: 'edge',
+        slug: 'a',
+        edge_id: 'e1',
+        remove: true,
+        reason: 'Again.',
+      }),
+      'JUDGMENT_CONFLICT',
+      /edge e1.*already removed/i,
+    );
+  });
+});
+
+describe('T3 corrections — every mutable fact field is traced', () => {
+  test('text, at, channel/via, section, reciprocal pair, and reciprocal clear share one trace shape', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+    await personWrite(cwd, { op: 'create', slug: 'trace', display_name: 'Trace' });
+    await personWrite(cwd, {
+      op: 'add_fact',
+      slug: 'trace',
+      section: 'stated',
+      text: 'Old text.',
+      channel: 'secondhand',
+      via: 'old source',
+      at: FACT_AT_1,
+    });
+    await personWrite(cwd, {
+      op: 'add_fact',
+      slug: 'trace',
+      section: 'revealed',
+      text: 'Counter-signal.',
+      channel: 'observed',
+      at: FACT_AT_1,
+    });
+
+    await personWrite(cwd, {
+      op: 'correct',
+      slug: 'trace',
+      fact_id: 'f1',
+      text: 'New text.',
+      at: FACT_AT_2,
+      channel: 'said',
+      section: 'role',
+    });
+    let person = store.readPerson('trace');
+    assert.deepEqual(person.facts[0].trace[0].prior, {
+      text: 'Old text.',
+      at: FACT_AT_1,
+      channel: 'secondhand',
+      via: 'old source',
+      section: 'stated',
+    });
+    assert.equal(person.facts[0].via, undefined, 'secondhand → said clears via atomically');
+
+    await personWrite(cwd, {
+      op: 'correct',
+      slug: 'trace',
+      fact_id: 'f1',
+      channel: 'secondhand',
+      via: 'new source',
+      section: 'stated',
+    });
+    person = store.readPerson('trace');
+    assert.deepEqual(person.facts[0].trace[1].prior, {
+      channel: 'said',
+      via: null,
+      section: 'role',
+    });
+    assert.equal(person.facts[0].via, 'new source');
+
+    await personWrite(cwd, {
+      op: 'correct',
+      slug: 'trace',
+      fact_id: 'f1',
+      via: 'replacement source',
+    });
+    person = store.readPerson('trace');
+    assert.deepEqual(person.facts[0].trace[2].prior, { via: 'new source' });
+
+    await personWrite(cwd, {
+      op: 'correct',
+      slug: 'trace',
+      fact_id: 'f1',
+      pair_with: 'f2',
+    });
+    person = store.readPerson('trace');
+    assert.equal(person.facts[0].diverges_with, 'f2');
+    assert.equal(person.facts[1].diverges_with, 'f1');
+    assert.deepEqual(person.facts[0].trace[3].prior, { diverges_with: null });
+    assert.deepEqual(person.facts[1].trace[0].prior, { diverges_with: null });
+
+    await personWrite(cwd, {
+      op: 'correct',
+      slug: 'trace',
+      fact_id: 'f1',
+      clear: ['diverges_with'],
+    });
+    person = store.readPerson('trace');
+    assert.equal(person.facts[0].diverges_with, undefined);
+    assert.equal(person.facts[1].diverges_with, undefined);
+    assert.deepEqual(person.facts[0].trace[4].prior, { diverges_with: 'f2' });
+    assert.deepEqual(person.facts[1].trace[1].prior, { diverges_with: 'f1' });
+
+    for (const fact of person.facts) {
+      for (const entry of fact.trace) {
+        assert.equal(typeof entry.corrected_at, 'string');
+        assert.equal(entry.provenance.actor, 'agent');
+        assert.ok(Object.keys(entry.prior).length > 0);
+      }
+    }
+  });
+
+  test('pair setup requires stated↔revealed endpoints', async () => {
+    const cwd = freshCwd();
+    await personWrite(cwd, { op: 'create', slug: 'pair', display_name: 'Pair' });
+    for (const text of ['First.', 'Second.']) {
+      await personWrite(cwd, {
+        op: 'add_fact',
+        slug: 'pair',
+        section: 'stated',
+        text,
+        channel: 'said',
+        at: FACT_AT_1,
+      });
+    }
+    await refusedWith(
+      personWrite(cwd, {
+        op: 'correct',
+        slug: 'pair',
+        fact_id: 'f1',
+        pair_with: 'f2',
+      }),
+      'JUDGMENT_REF',
+      /stated.*revealed/i,
+    );
+  });
+});
+
+describe('T3 dependency closure', () => {
+  test('person correction names every open-field, pair, direct-load, and only-said lifecycle blocker', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+    await personWrite(cwd, { op: 'create', slug: 'closure', display_name: 'Closure' });
+    await personWrite(cwd, {
+      op: 'add_fact',
+      slug: 'closure',
+      section: 'stated',
+      text: 'The only spoken fact.',
+      channel: 'said',
+      at: FACT_AT_1,
+    });
+    await personWrite(cwd, {
+      op: 'add_fact',
+      slug: 'closure',
+      section: 'life',
+      text: 'Observed load source.',
+      channel: 'observed',
+      at: FACT_AT_1,
+    });
+    await personWrite(cwd, {
+      op: 'add_fact',
+      slug: 'closure',
+      section: 'revealed',
+      text: 'A revealed counter-signal.',
+      channel: 'observed',
+      at: FACT_AT_1,
+    });
+    await personWrite(cwd, { op: 'open_field', slug: 'closure', name: 'Why?' });
+    await personWrite(cwd, {
+      op: 'open_field',
+      slug: 'closure',
+      open_field_id: 'of1',
+      filled_by: 'f1',
+    });
+    await personWrite(cwd, {
+      op: 'correct',
+      slug: 'closure',
+      fact_id: 'f1',
+      pair_with: 'f3',
+    });
+    await personWrite(cwd, {
+      op: 'load_link',
+      slug: 'closure',
+      fact: 'f1',
+      carries: 'direct',
+    });
+    await personWrite(cwd, {
+      op: 'load_link',
+      slug: 'closure',
+      fact: 'f2',
+      carries: 'lifecycle-dependent',
+    });
+
+    const before = JSON.stringify(store.readPerson('closure'));
+    const blocked = await refusedWith(
+      personWrite(cwd, {
+        op: 'correct',
+        slug: 'closure',
+        fact_id: 'f1',
+        channel: 'inferred',
+        section: 'role',
+      }),
+      'JUDGMENT_REF',
+      /blocked/i,
+    );
+    for (const id of ['of1', 'f3', 'l1', 'l2']) {
+      assert.match(blocked.message, new RegExp(`\\b${id}\\b`), `blocker ${id} must be named`);
+    }
+    assert.equal(JSON.stringify(store.readPerson('closure')), before, 'refused correction is non-mutating');
+
+    await personWrite(cwd, {
+      op: 'open_field',
+      slug: 'closure',
+      open_field_id: 'of1',
+      reopen: true,
+      reason: 'Answer needs re-elicitation.',
+    });
+    for (const id of ['l1', 'l2']) {
+      await personWrite(cwd, {
+        op: 'load_link',
+        slug: 'closure',
+        load_link_id: id,
+        remove: true,
+        reason: 'Unblock channel correction.',
+      });
+    }
+    await personWrite(cwd, {
+      op: 'correct',
+      slug: 'closure',
+      fact_id: 'f1',
+      clear: ['diverges_with'],
+    });
+    await personWrite(cwd, {
+      op: 'correct',
+      slug: 'closure',
+      fact_id: 'f1',
+      channel: 'inferred',
+      section: 'role',
+    });
+
+    const person = store.readPerson('closure');
+    assert.equal(person.facts[0].channel, 'inferred');
+    assert.equal(person.facts[0].section, 'role');
+    assert.equal(person.open_fields[0].status, 'open');
+    assert.ok(person.load_links.every((entry) => entry.removed !== null));
+  });
+
+  test('situation correction rejects active load dependents, then succeeds after retirement', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+    await situationWrite(cwd, { op: 'create', slug: 'closure', display_name: 'Closure' });
+    await situationWrite(cwd, {
+      op: 'add_fact',
+      slug: 'closure',
+      text: 'Observed.',
+      channel: 'observed',
+      at: FACT_AT_1,
+    });
+    await situationWrite(cwd, {
+      op: 'load_link',
+      slug: 'closure',
+      fact: 'f1',
+      carries: 'decision',
+    });
+    await refusedWith(
+      situationWrite(cwd, {
+        op: 'correct',
+        slug: 'closure',
+        fact_id: 'f1',
+        channel: 'inferred',
+      }),
+      'JUDGMENT_LOAD_CHANNEL',
+      /l1/,
+    );
+    await situationWrite(cwd, {
+      op: 'load_link',
+      slug: 'closure',
+      load_link_id: 'l1',
+      remove: true,
+      reason: 'Unblock correction.',
+    });
+    await situationWrite(cwd, {
+      op: 'correct',
+      slug: 'closure',
+      fact_id: 'f1',
+      channel: 'inferred',
+    });
+    assert.equal(store.readSituationEntity('closure').facts[0].channel, 'inferred');
+  });
+
+  test('remove, reopen, and clear remain callable when their referenced target is stale', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+    await personWrite(cwd, { op: 'create', slug: 'cleanup', display_name: 'Cleanup' });
+    await personWrite(cwd, { op: 'create', slug: 'stale-target', display_name: 'Stale Target' });
+    await personWrite(cwd, {
+      op: 'add_fact',
+      slug: 'cleanup',
+      section: 'stated',
+      text: 'Spoken.',
+      channel: 'said',
+      at: FACT_AT_1,
+    });
+    await personWrite(cwd, {
+      op: 'add_fact',
+      slug: 'cleanup',
+      section: 'revealed',
+      text: 'Revealed.',
+      channel: 'observed',
+      at: FACT_AT_1,
+    });
+    await personWrite(cwd, { op: 'edge', slug: 'cleanup', to: 'stale-target', kind: 'knows' });
+    rmSync(store._personPath('stale-target'));
+    await personWrite(cwd, {
+      op: 'edge',
+      slug: 'cleanup',
+      edge_id: 'e1',
+      remove: true,
+      reason: 'Target vanished.',
+    });
+
+    await personWrite(cwd, { op: 'load_link', slug: 'cleanup', fact: 'f1', carries: 'load' });
+    let person = store.readPerson('cleanup');
+    person.load_links[0].fact = 'f999';
+    store.writePerson(person);
+    await personWrite(cwd, {
+      op: 'load_link',
+      slug: 'cleanup',
+      load_link_id: 'l1',
+      remove: true,
+      reason: 'Source vanished.',
+    });
+
+    await personWrite(cwd, { op: 'open_field', slug: 'cleanup', name: 'Question?' });
+    await personWrite(cwd, {
+      op: 'open_field',
+      slug: 'cleanup',
+      open_field_id: 'of1',
+      filled_by: 'f1',
+    });
+    person = store.readPerson('cleanup');
+    person.open_fields[0].filled_by = 'f999';
+    store.writePerson(person);
+    await personWrite(cwd, {
+      op: 'open_field',
+      slug: 'cleanup',
+      open_field_id: 'of1',
+      reopen: true,
+      reason: 'Filling fact vanished.',
+    });
+
+    await personWrite(cwd, {
+      op: 'correct',
+      slug: 'cleanup',
+      fact_id: 'f1',
+      pair_with: 'f2',
+    });
+    person = store.readPerson('cleanup');
+    person.facts[0].diverges_with = 'f999';
+    delete person.facts[1].diverges_with;
+    store.writePerson(person);
+    await personWrite(cwd, {
+      op: 'correct',
+      slug: 'cleanup',
+      fact_id: 'f1',
+      clear: ['diverges_with'],
+    });
+
+    person = store.readPerson('cleanup');
+    assert.notEqual(person.edges[0].removed, null);
+    assert.notEqual(person.load_links[0].removed, null);
+    assert.equal(person.open_fields[0].status, 'open');
+    assert.equal(person.facts[0].diverges_with, undefined);
+  });
+});
+
+describe('T3 stable entry IDs', () => {
+  test('allocator scans the high-water mark, including retired entries, and rejects corruption', () => {
+    assert.equal(
+      allocateStableEntryId({
+        slug: 'high-water',
+        edges: [
+          { id: 'e2', removed: null },
+          { id: 'e9', removed: { reason: 'retired' } },
+        ],
+      }, 'edges', 'e'),
+      'e10',
+    );
+    assert.throws(
+      () => allocateStableEntryId({
+        slug: 'duplicate',
+        facts: [{ id: 'f1' }, { id: 'f1' }],
+      }, 'facts', 'f'),
+      (err) => err.code === 'JUDGMENT_CONFLICT' && /duplicate id f1/i.test(err.message),
+    );
+    assert.throws(
+      () => allocateStableEntryId({
+        slug: 'malformed',
+        owed: [{ id: 'owed-1' }],
+      }, 'owed', 'o'),
+      (err) => err.code === 'JUDGMENT_CONFLICT' && /malformed id owed-1/i.test(err.message),
+    );
+  });
+
+  test('create/reopen-or-retire/create never reuses IDs for every S3 prefix', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+    await personWrite(cwd, { op: 'create', slug: 'ids', display_name: 'IDs' });
+    await personWrite(cwd, { op: 'create', slug: 'target', display_name: 'Target' });
+    for (const text of ['One.', 'Two.']) {
+      await personWrite(cwd, {
+        op: 'add_fact',
+        slug: 'ids',
+        section: 'stated',
+        text,
+        channel: 'said',
+        at: FACT_AT_1,
+      });
+    }
+    await personWrite(cwd, { op: 'open_field', slug: 'ids', name: 'First?' });
+    await personWrite(cwd, {
+      op: 'open_field',
+      slug: 'ids',
+      open_field_id: 'of1',
+      filled_by: 'f1',
+    });
+    await personWrite(cwd, {
+      op: 'open_field',
+      slug: 'ids',
+      open_field_id: 'of1',
+      reopen: true,
+      reason: 'Reopen.',
+    });
+    await personWrite(cwd, { op: 'open_field', slug: 'ids', name: 'Second?' });
+    await personWrite(cwd, { op: 'edge', slug: 'ids', to: 'target', kind: 'knows' });
+    await personWrite(cwd, {
+      op: 'edge',
+      slug: 'ids',
+      edge_id: 'e1',
+      remove: true,
+      reason: 'Retired.',
+    });
+    await personWrite(cwd, { op: 'edge', slug: 'ids', to: 'target', kind: 'reports-to' });
+    await personWrite(cwd, { op: 'load_link', slug: 'ids', fact: 'f1', carries: 'first' });
+    await personWrite(cwd, {
+      op: 'load_link',
+      slug: 'ids',
+      load_link_id: 'l1',
+      remove: true,
+      reason: 'Retired.',
+    });
+    await personWrite(cwd, { op: 'load_link', slug: 'ids', fact: 'f2', carries: 'second' });
+
+    const person = store.readPerson('ids');
+    assert.deepEqual(person.facts.map((entry) => entry.id), ['f1', 'f2']);
+    assert.deepEqual(person.open_fields.map((entry) => entry.id), ['of1', 'of2']);
+    assert.deepEqual(person.edges.map((entry) => entry.id), ['e1', 'e2']);
+    assert.deepEqual(person.load_links.map((entry) => entry.id), ['l1', 'l2']);
+
+    await situationWrite(cwd, { op: 'create', slug: 'owed-ids', display_name: 'Owed IDs' });
+    await situationWrite(cwd, {
+      op: 'add_fact',
+      slug: 'owed-ids',
+      text: 'Evidence.',
+      channel: 'observed',
+      at: FACT_AT_1,
+    });
+    await situationWrite(cwd, {
+      op: 'owed',
+      slug: 'owed-ids',
+      name: 'First?',
+      why_load_bearing: 'First.',
+    });
+    await situationWrite(cwd, {
+      op: 'owed',
+      slug: 'owed-ids',
+      owed_id: 'o1',
+      filled_by: 'f1',
+    });
+    await situationWrite(cwd, {
+      op: 'owed',
+      slug: 'owed-ids',
+      owed_id: 'o1',
+      reopen: true,
+      reason: 'Reopen.',
+    });
+    await situationWrite(cwd, {
+      op: 'owed',
+      slug: 'owed-ids',
+      name: 'Second?',
+      why_load_bearing: 'Second.',
+    });
+    assert.deepEqual(store.readSituationEntity('owed-ids').owed.map((entry) => entry.id), ['o1', 'o2']);
+  });
+
+  test('on-disk duplicate or malformed IDs refuse before schema collapse', async () => {
+    const duplicateCwd = freshCwd();
+    const duplicateStore = new RecordsStore(duplicateCwd);
+    await personWrite(duplicateCwd, { op: 'create', slug: 'dup', display_name: 'Dup' });
+    await personWrite(duplicateCwd, {
+      op: 'add_fact',
+      slug: 'dup',
+      section: 'role',
+      text: 'One.',
+      channel: 'said',
+      at: FACT_AT_1,
+    });
+    const duplicate = duplicateStore.readPerson('dup');
+    duplicate.facts.push({ ...duplicate.facts[0] });
+    duplicateStore.writePerson(duplicate);
+    await refusedWith(
+      personWrite(duplicateCwd, {
+        op: 'add_fact',
+        slug: 'dup',
+        section: 'life',
+        text: 'Two.',
+        channel: 'said',
+        at: FACT_AT_1,
+      }),
+      'JUDGMENT_CONFLICT',
+      /duplicate id f1/i,
+    );
+
+    const malformedCwd = freshCwd();
+    const malformedStore = new RecordsStore(malformedCwd);
+    await situationWrite(malformedCwd, {
+      op: 'create',
+      slug: 'malformed',
+      display_name: 'Malformed',
+    });
+    const malformed = malformedStore.readSituationEntity('malformed');
+    malformed.owed.push({
+      id: 'owed-1',
+      name: 'Bad',
+      why_load_bearing: 'Bad',
+      status: 'open',
+      provenance: malformed.provenance,
+      trace: [],
+    });
+    malformedStore.writeSituationEntity(malformed);
+    await refusedWith(
+      situationWrite(malformedCwd, {
+        op: 'add_fact',
+        slug: 'malformed',
+        text: 'Cannot pass corruption.',
+        channel: 'observed',
+        at: FACT_AT_1,
+      }),
+      'JUDGMENT_CONFLICT',
+      /malformed id owed-1/i,
+    );
+  });
+});
+
+describe('T3 compensation and idempotency', () => {
+  test('mutable aggregate overwrite restores the exact preimage when projection regeneration fails', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+    await personWrite(cwd, { op: 'create', slug: 'rollback', display_name: 'Rollback' });
+    const personPath = store._personPath('rollback');
+    const before = readFileSync(personPath, 'utf8');
+
+    const obstruction = join(cwd, 'docs', 'judgment', 'REGISTER.md');
+    rmSync(obstruction);
+    mkdirSync(obstruction);
+    await refusedWith(
+      personWrite(cwd, {
+        op: 'add_fact',
+        slug: 'rollback',
+        section: 'role',
+        text: 'Must roll back.',
+        channel: 'said',
+        at: FACT_AT_1,
+      }),
+      'JUDGMENT_PARTIAL_WRITE',
+      /rolled back/i,
+    );
+    assert.equal(readFileSync(personPath, 'utf8'), before);
+  });
+
+  test('new aggregate file is deleted when projection regeneration fails after create', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+    mkdirSync(join(cwd, 'docs', 'judgment', 'REGISTER.md'), { recursive: true });
+    await refusedWith(
+      situationWrite(cwd, {
+        op: 'create',
+        slug: 'rollback-create',
+        display_name: 'Rollback Create',
+      }),
+      'JUDGMENT_PARTIAL_WRITE',
+      /rolled back/i,
+    );
+    assert.equal(existsSync(store._situationEntityPath('rollback-create')), false);
+  });
+
+  test('repeated keyed family calls create one entry and one correction trace', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+    await personWrite(cwd, { op: 'create', slug: 'idem-person', display_name: 'Idem Person' });
+    const factArgs = {
+      op: 'add_fact',
+      slug: 'idem-person',
+      section: 'role',
+      text: 'Once.',
+      channel: 'said',
+      at: FACT_AT_1,
+      idempotency_key: 'person-fact-once',
+    };
+    assert.deepEqual(await personWrite(cwd, factArgs), await personWrite(cwd, factArgs));
+    const correctArgs = {
+      op: 'correct',
+      slug: 'idem-person',
+      fact_id: 'f1',
+      text: 'Corrected once.',
+      idempotency_key: 'person-correct-once',
+    };
+    assert.deepEqual(await personWrite(cwd, correctArgs), await personWrite(cwd, correctArgs));
+    const person = store.readPerson('idem-person');
+    assert.equal(person.facts.length, 1);
+    assert.equal(person.facts[0].trace.length, 1);
+
+    await situationWrite(cwd, { op: 'create', slug: 'idem-situation', display_name: 'Idem Situation' });
+    const situationFactArgs = {
+      op: 'add_fact',
+      slug: 'idem-situation',
+      text: 'Once.',
+      channel: 'observed',
+      at: FACT_AT_1,
+      idempotency_key: 'situation-fact-once',
+    };
+    assert.deepEqual(
+      await situationWrite(cwd, situationFactArgs),
+      await situationWrite(cwd, situationFactArgs),
+    );
+    const situationCorrectArgs = {
+      op: 'correct',
+      slug: 'idem-situation',
+      fact_id: 'f1',
+      text: 'Corrected once.',
+      idempotency_key: 'situation-correct-once',
+    };
+    assert.deepEqual(
+      await situationWrite(cwd, situationCorrectArgs),
+      await situationWrite(cwd, situationCorrectArgs),
+    );
+    const situation = store.readSituationEntity('idem-situation');
+    assert.equal(situation.facts.length, 1);
+    assert.equal(situation.facts[0].trace.length, 1);
   });
 });
