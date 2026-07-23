@@ -1,13 +1,14 @@
 # COMP-JUDGMENT-STORES — Writer extensions: person, situation, and goal stores
 
-**Status:** DRAFT r7 — NARROWED at gate round 5 (2026-07-23, owner ruling). Five
-sol/xhigh gate rounds (finding curve 9 → 8 → 7 → 6 → 6) showed the simple stores went
-quiet by round 2 while every late finding clustered in resolution-package/transition
-coupling and migration. Those split out:
+**Status:** GATED r12 — design gate CLOSED 2026-07-23. Narrowed-scope curve
+7 → 6 → 6 → 6 → 2, where the final verification round's two findings were stale-text
+inconsistencies from the round-4 fold (removed-xref residue; error-code precedence),
+both fixed in this revision — no new design substance remained. Wide-scope history:
+five sol/xhigh rounds (9 → 8 → 7 → 6 → 6), split at round 5 by owner ruling —
+packages/coupling and migration carved out to
 [`COMP-JUDGMENT-PACKAGES`](../COMP-JUDGMENT-PACKAGES/design.md) and
 [`COMP-JUDGMENT-GOAL-MIGRATE`](../COMP-JUDGMENT-GOAL-MIGRATE/design.md), each seeded
-with the r6 material (all 30 adjudicated findings folded) and each getting its own
-gate. THIS doc now covers only the narrowed scope.
+with the r6 material and gated separately. THIS doc covers only the narrowed scope.
 **Date:** 2026-07-23
 
 ## Related Documents
@@ -38,7 +39,7 @@ the whole point of seq 112 is to make them **rejected writes**.
    *honestly unenforceable* remainder listed as such, never presented as enforced.
 4. The shared plumbing the children build on: `migration` provenance class,
    `provenance.intent_id` field, `goalCutoverComplete` dual-read helper,
-   parameterized chain accessor, intent-aware effective snapshot hook,
+   parameterized chain accessor, new-record snapshot exclusion hook,
    `JUDGMENT_MIGRATION_REQUIRED` guard on first cut.
 5. A canon-guard registration manifest for the new paths (children merge their rows).
 
@@ -83,16 +84,33 @@ passed through at any depth (`runOp` only strips the top level; new ops own the 
     "at": "2026-07-23",                          // when the fact was true/heard
     "diverges_with": "f3",                       // stated↔revealed pair; writer keeps it reciprocal
     "provenance": { /* writer-stamped */ },
-    "trace": [ { "prior_text": "…", "corrected_at": "…", "provenance": {} } ]
+    "trace": [ { "prior": { "text": "…" }, "corrected_at": "…", "provenance": {} } ]
   } ],
-  "edges": [ { "to": "<person-slug>", "kind": "married-to", "provenance": {} } ],
+  "edges": [ { "id": "e1", "to": "<person-slug>", "kind": "married-to",
+               "provenance": {}, "removed": null } ],
   "open_fields": [ { "id": "of1", "name": "her actual yes", "status": "open|filled",
-                     "filled_by": "f9" } ],
+                     "filled_by": "f9",
+                     "trace": [ /* fill/reopen history, unified trace shape */ ] } ],
   "load_links": [ { "id": "l1", "fact": "f1", "carries": "plan/claim text or ref",
-                    "provenance": {} } ],
+                    "provenance": {}, "removed": null } ],
   "provenance": { /* record-level, writer-stamped */ }
 }
 ```
+
+**Sub-entry shapes are DECLARED, not implied** (narrowed gate round 3, finding 1):
+EVERY sub-entry (facts, edges, open_fields, owed, load_links, goal-state entries)
+carries a stable `id`. Removable entries (`edges`, `load_links`, goal-state
+associations) carry `removed: null | { at, reason, provenance }` — retired in
+place, never deleted. Transitioning entries (`open_fields`, `owed`) carry the
+unified `trace[]` recording every fill/reopen with prior values. All shapes land
+in S1's closed schemas.
+
+**IDs are writer-allocated, unique, and never reused** (narrowed gate round 4,
+finding 4): the writer owns allocation (monotonic per-record counters — `f<N>`,
+`e<N>`, …); callers never supply ids on create. Uniqueness within a record is a
+writer invariant checked on every write (Draft-07 cannot express it) — a duplicate
+id is `JUDGMENT_CONFLICT`; a retired id is never reallocated, so historical traces
+and removed entries keep their identity forever.
 
 - **Lifecycle is DERIVED, never stored:** `spoken` iff ≥1 fact with `channel: "said"`
   (first person — secondhand is a channel, not a section, so "partner says she said
@@ -119,6 +137,20 @@ passed through at any depth (`runOp` only strips the top level; new ops own the 
 
 - Entities are the aggregate; `SITUATION.md` groups by entity. Facts about a person go
   in their person file; shared things live here, cross-referenced, never duplicated.
+- **The People↔Situation written-once boundary is RECORDED PROCESS DEBT, not a
+  typed mechanism** (narrowed gate round 4, finding 3 — reversing round 3's typed
+  xref): a typed cross-store reference needs terminal-target/acyclicity rules,
+  consumer semantics (a `said` fact dereferenced from another store must not make a
+  person "spoken"), repair paths, and rendering rules — a whole contract that is
+  disproportionate while this repo's cast files start EMPTY and user projects have
+  no duplication pressure yet. v1 rule: cross-references are prose mentions in fact
+  text ("see trustflow"); "written once" is agent discipline, listed in the
+  not-enforced block. Revisit trigger: the first real duplicated fact observed in
+  practice.
+- Situation facts are `situation_fact` — NO `section` field (that is a People-only
+  specialization; entity grouping is the situation's structure, seq 108). Two closed
+  schemas sharing per-property definitions, base-field parity contract-tested — see
+  S1 (Draft-07 realizability, narrowed gate round 2, finding 2).
 - **Inside-out only is UNENFORCED DEBT** (gate round 1, finding 9): the writer cannot
   distinguish what the cast owns from world facts — provenance stamping records who
   and when, not scope. Recorded here so it is never mistaken for enforced; the
@@ -141,11 +173,35 @@ passed through at any depth (`runOp` only strips the top level; new ops own the 
                   // null legal ONLY under via: migration|import
   "ratification": { "asked": "…", "answered_at": "…", "answer_ref": "…", "quote": "…" },
                   // REQUIRED for new cuts — an ATTESTATION CITATION (see below), migration/import exempt
-  "load_links": [ { "id": "l1", "clause": "c1", "carries": "…", "provenance": {} } ],
   "diff_note": "what changed vs v2 and why",
   "provenance": {}
 }
 ```
+
+### Goal state — `records/goal/state.json` (mutable sidecar, traced)
+
+**Mutable associations live OFF the meaning-version chain** (narrowed gate round 3,
+finding 4): a newly discovered goal joint or a new plan resting on a clause must not
+require a fake owner-ratified meaning cut, and must not leave `OBJECTIVE.md` stale.
+
+```jsonc
+{
+  "joints": [ { "id": "gj1", "joint": "<joint-slug>",   // the goal's own uncertainties —
+                "provenance": {}, "removed": null } ],   // the JOINTS LIVE IN THE REGISTER
+                                                         // (seq 109); this is only the
+                                                         // association (refs validated,
+                                                         // JUDGMENT_REF)
+  "load_links": [ { "id": "gl1", "clause": "v3#c1", "carries": "…",
+                    "provenance": {}, "removed": null } ],
+  "provenance": {}
+}
+```
+
+Maintained by `judgment_goal_write` ops `joint_link` / `load_link` (each with the
+traced `remove` variant). Clause refs are version-qualified; a cut does NOT clear
+load-links — that is exactly the "bill" (seq 109: load links price every flip), and
+the projection renders links whose clause belongs to a superseded version as part
+of the flip's cost.
 
 - Versions are immutable in MEANING once cut; a meaning change is a new cut.
   **Wording-only fixes get a legal path**: `correct` amends clause text on the
@@ -161,11 +217,21 @@ passed through at any depth (`runOp` only strips the top level; new ops own the 
   !ratification` → the projection renders the imported-draft health warning. No
   stored draft field. (`migration` ships here as a first-class provenance class —
   schema, writer exemption, and projection rule all name both.)
-- **The store ships LOCKED:** while a live (un-tombstoned) legacy `objective`
-  position chain exists and the goal chain is empty, `op=cut` rejects with
-  `JUDGMENT_MIGRATION_REQUIRED` (gate round 5, finding 2) — otherwise a
-  pre-migration ratified cut would satisfy the cutover predicate and strand the
-  legacy position unretired forever. COMP-JUDGMENT-GOAL-MIGRATE unlocks it.
+- **The store ships LOCKED — on the EFFECTIVE predicate** (wide gate round 5
+  finding 2; narrowed round 3, finding 2): `op=cut` rejects with
+  `JUDGMENT_MIGRATION_REQUIRED` while EITHER the legacy `objective` chain is live
+  (un-tombstoned) in the effective view with an effectively-empty goal chain, OR
+  **any goal-migration intent is pending**. The raw goal chain being non-empty
+  cannot unlock cuts — a crashed migration leaves goal v1 on disk but hidden by
+  `effectiveStore`, and the writer guard reads the same effective view the
+  renderer does, never the raw store. COMP-JUDGMENT-GOAL-MIGRATE unlocks it.
+- **The effective view is the writer-wide read contract for goal artifacts**
+  (narrowed gate round 4, finding 2): EVERY op consuming goal state — goal
+  `load_link`, `rests_on` channel checks, the cut guard — reads through
+  `effectiveStore`; additionally, while a goal-migration intent survives replay
+  (guard-unreachable case), goal-consuming ops reject with
+  `JUDGMENT_INTENT_PENDING` (the same fencing pattern the packages feature uses
+  for joints). A raw-but-hidden migration artifact can never satisfy a reference.
 - **A separate record kind, not a special-cased position.** The objective is
   philosophically a position (`THE-GOAL-IS-A-POSITION`) but its lifecycle differs:
   cuts are owner-ratified, clauses carry the four-channel grammar + elicitation refs,
@@ -182,7 +248,7 @@ constraint (CLAUDE.md), and these ops share validation + locking. (The fourth,
 |---|---|
 | `judgment_person_write` | `create` · `add_fact` · `correct` · `open_field` · `edge` · `load_link` |
 | `judgment_situation_write` | `create` · `add_fact` · `correct` · `owed` · `load_link` |
-| `judgment_goal_write` | `cut` (ratified version cut) · `correct` (wording-only, traced, current version) |
+| `judgment_goal_write` | `cut` (ratified version cut) · `correct` (wording-only, traced, current version) · `joint_link` · `load_link` (state sidecar, each with traced `remove`) |
 
 - All route through the existing `runOp` wrapper (sync validation before idempotency,
   advisory lock, intent replay, audit event). Each op's `execute` explicitly uses
@@ -195,8 +261,37 @@ constraint (CLAUDE.md), and these ops share validation + locking. (The fourth,
   prechecks; pure JSON-Schema conditionals would surface as
   `JUDGMENT_SCHEMA_VIOLATION` (grounding pass, correction 19). Blueprint assigns
   precheck-vs-schema per invariant.
-- `correct` ops take `(fact_id, new_text, …)`; the writer moves the old value into
-  `trace` itself — there is structurally no overwrite-without-trace path.
+- **`correct` covers the whole fact contract, not just text** (narrowed gate
+  round 1, finding 6): correctable fields are `text`, `at`, `channel` (+`via`), and
+  — person facts only — `section`. One trace shape EVERYWHERE (facts, clauses):
+  `{ prior: { <field>: <old> }, corrected_at, provenance }` — the writer builds it
+  itself; there is structurally no overwrite-without-trace path. **Removal
+  semantics** (narrowed gate round 2, finding 5): a transition that obsoletes a
+  field removes it atomically with the old value in `prior` (`secondhand → said`
+  clears `via`; the iff constraint never breaks mid-record).
+- **No correction dead-ends — every dependent has a traced removal path** (narrowed
+  gate round 2, finding 1): a correction that would break a dependent invariant
+  (e.g. `said → secondhand` on a fact carrying a load-link) REJECTS naming the
+  dependents — and each dependent is removable through the same door:
+  `load_link`/`edge` ops accept `{<id>, remove: true, reason}` (the entry is
+  retired in place with a traced `removed` block, never deleted); `open_field` /
+  `owed` accept `{<id>, reopen: true, reason}` (filled/given → open, traced);
+  `correct` accepts `clear: ["diverges_with"]` for same-fact pair fields (both
+  sides cleared, traced) — and the symmetric **`pair_with: <fact_id>`** SETS a
+  divergence pair after both facts exist (the normal case: divergence is
+  discovered later), reciprocally, traced on both sides, validating the
+  stated↔revealed constraint. **`pair_with` rejects if either endpoint already has
+  a partner** (`JUDGMENT_CONFLICT`) — clear first, then set; no four-endpoint
+  replacement transaction exists (narrowed gate round 4, finding 6: simpler rule,
+  no dangling reciprocal claims possible). Records can never reach an illegal
+  state through a side door, and never become uncorrectable through the only
+  legal one.
+- **`open_field` and `owed` are two-phase ops** (narrowed gate round 1, finding 5):
+  `open_field` with `{name}` creates an `open` field; with
+  `{open_field_id, filled_by}` transitions `open → filled` (invariant 6 validates
+  the filling fact). `owed` with `{name, why_load_bearing}` creates `open`; with
+  `{owed_id, filled_by}` transitions `open → given`. Plus the traced `reopen`
+  above. No other transitions exist.
 - Reads: projections are the read surface. `get_judgment_state` gains a typed
   `counts` field: `{ people: { spoken, stub }, entities, goal: { version, ratified } }`
   — exact JSON, no prose lines. (`packages_open` joins with the packages feature.)
@@ -217,7 +312,7 @@ constraint (CLAUDE.md), and these ops share validation + locking. (The fourth,
 | 4 | An inferred clause may not carry a commit (109) — **partially enforceable**: commit-moment `decide` events gain an optional typed `rests_on: ["goal:v<N>#c<id>"]`; any listed clause is channel-checked in `execute` (inferred → reject). That commits DECLARE what they rest on is P4 process discipline, honestly listed below as not writer-enforceable (gate round 1, finding 5) | precheck in `judgmentLedgerAppend.execute` under lock | `JUDGMENT_INFERRED_COMMIT` |
 | 5 | Corrections fix in place with the old value traced (106) | structural: `correct` is the only mutation op and always writes `trace` | — |
 | 6 | **Referential integrity** (gate round 1, finding 8): every intra-record id ref resolves (`fact`, `filled_by`, `diverges_with`, `clause`); `diverges_with` joins stated↔revealed and the writer writes both sides; `open_field` fill requires a `said`-channel fact ("filled by interview, never by inference", 107); `owed` → `given` requires `filled_by`; `edge.to` names an existing person file | prechecks | `JUDGMENT_REF` |
-| 7 | First cut cannot bypass migration (gate round 5, finding 2) | `op=cut` rejects while the legacy objective chain is live and the goal chain empty | `JUDGMENT_MIGRATION_REQUIRED` |
+| 7 | First cut cannot bypass migration (wide round 5 finding 2; effective predicate per narrowed round 4, finding 2) | Precedence: while a goal-migration intent survives replay, the fence rejects FIRST (`JUDGMENT_INTENT_PENDING`, invariant-fencing rule); with no pending intent, `op=cut` rejects while (legacy objective chain live ∧ goal chain empty) in the effective view | `JUDGMENT_MIGRATION_REQUIRED` (no-intent case) / `JUDGMENT_INTENT_PENDING` (pending-intent case) |
 | 8 | ONE-UNDER-TEST, provenance stamping, projection purity | unchanged — inherited | — |
 
 Deliberately NOT writer-enforced (process rules, listed so the gate doesn't re-add
@@ -230,18 +325,32 @@ meaning-vs-wording version calls.
 
 | Projection | Source | Notes |
 |---|---|---|
-| `docs/judgment/people/<slug>.md` | person record | sections in sub-box order; stub/spoken banner; divergence pairs rendered adjacent; load-links listed with their facts |
-| `docs/judgment/SITUATION.md` | all situation entities | grouped by entity; owed facts get a prominent block (they are the sweep's feedstock) |
-| `docs/judgment/OBJECTIVE.md` | goal chain via `goalCutoverComplete(store)` dual-read: goal chain iff (non-empty ∧ no pending migration intent), else legacy `objective` position — the helper ships HERE, evaluated inside the renderer itself (public entry point), consumed by all three surfaces (source selection, `positions/objective.md` removal, index visibility) | current version + clause channels + trajectory table (version, date, provocation quote — "unknown (migrated)" when null); draft health warning until first ratified cut |
+| `docs/judgment/people/<slug>.md` | person record | sections in sub-box order; stub/spoken banner; **every fact renders its channel (+`via`), its `at`, and its trace as visible "corrected from …" lines** — the visibly-traced prior value is a binding operational fact, not JSON metadata (narrowed gate round 2, finding 4); divergence pairs rendered adjacent; COMPLETE edge / open-field / owed / load-link state incl. traced removals |
+| `docs/judgment/SITUATION.md` | all situation entities | grouped by entity; same per-fact audit rendering as person files (channel, `via`, `at`, traces); owed facts get a prominent block (they are the sweep's feedstock) incl. given/reopened history |
+| `docs/judgment/OBJECTIVE.md` | goal chain via `goalCutoverComplete(store)` dual-read: goal chain iff (non-empty ∧ no pending migration intent), else legacy `objective` position — the helper ships HERE, evaluated inside the renderer itself (public entry point), consumed by all three surfaces (source selection, `positions/objective.md` removal, index visibility) | FULL audit surface (narrowed gate rounds 1–2, findings 4/4): current version with clause channels, **per-clause elicitation citations** (which question constructed each clause — binding, seq 109), collapsed wording-fix traces; **the ratification citation** for the current version; the goal's `joints` linked to their register rows; the load-link "bill"; trajectory table (version, date, provocation quote — "unknown (migrated)" when null — AND `diff_note`, with wording-fix marks); draft health warning until first ratified cut |
 
 Pure output, regenerated on every write, hand-edits overwritten — no marker blocks.
 The gen's **orphan scan extends to `people/`** (today it only knows `positions/*.md`;
 `resolutions/` joins with the packages feature). The chain accessor generalizes:
 positions hardcode `r<N>`; goal (`v<N>`) shares a parameterized chain reader (the
 packages feature reuses it for `p<N>`). The generator's snapshot gains the
-**intent-aware exclusion hook** (records whose `provenance.intent_id` matches a
-pending intent are excluded) — inert until the children write attributed records,
-but the seam ships here so both children plug into it.
+**new-record exclusion hook** (narrowed gate round 1, finding 1 — the seam is
+honest about what it can carry): whole record FILES and ledger LINES whose
+top-level `provenance.intent_id` matches a pending intent are excluded. That is
+sufficient for the MIGRATE child, whose intent writes only NEW artifacts (goal v1,
+tombstone revision, note line). It is NOT sufficient for in-place mutations — a
+package seal mutates an existing file and attributes only the nested
+`seal.provenance` — so the PACKAGES feature specifies its own
+preimage/effective-snapshot contract at its own gate; this seam explicitly does
+not claim to cover it.
+
+**The exclusion is an EFFECTIVE STORE VIEW, not a spot filter** (narrowed gate
+round 2, finding 3): filtering chains alone is insufficient when derived state
+reads the raw store — `derivePositionStatus` on the raw store would mark the
+legacy objective `retracted` from a pending (excluded!) tombstone. The hook is
+therefore a store adapter (`effectiveStore(store)`) through which the generator
+reads EVERYTHING — chains, joints, status derivation, cutover predicate, index
+visibility. No renderer decision may touch the raw store.
 
 ## Canon-guard registration manifest
 
@@ -252,21 +361,49 @@ the architecture that feature exists to kill (gate round 1, finding 7). This fea
 contributes what its lockout invariant needs — **every legitimate mutation of every
 new path has a covering tool** (children merge their rows):
 
-| Path | Legitimate mutations | Physical mutation surfaces |
-|---|---|---|
-| `records/people/**` | create/add_fact/correct/open_field/edge/load_link | `judgment_person_write` |
-| `records/situation/**` | create/add_fact/correct/owed/load_link | `judgment_situation_write` |
-| `records/goal/**` | version cut; wording correct | `judgment_goal_write` (migration row joins via COMP-JUDGMENT-GOAL-MIGRATE) |
-| ALL projections — existing `REGISTER.md`, `LEDGER.md`, `OBJECTIVE.md`, `index.md`, `positions/*.md` AND new `people/*.md`, `SITUATION.md` | regeneration only — `regenerateProjections` rewrites the FULL set on every invocation | `regenerateProjections` — invoked by every writer op, the reconciler (incl. on read), and code-path CLIs |
+The registry maps **path → authorizing outer tools → operations** (never internal
+functions — narrowed gate round 1, finding 3). The concrete rows this feature hands
+over:
 
-**Replay attribution — structurally representable:** the shared provenance schema
-gains an optional `intent_id` (ships here; the children stamp it). **Outer
-authorizing surfaces:** replay and regeneration are only ever caused by a closed set
-of outer entries — the judgment MCP tools (five existing + three new here + one with
-packages), `get_judgment_state`, and the code-path CLIs (`bin/judgment-import.js`;
-`--migrate-goal` when it lands). The registry rows name THOSE, never internal
-functions. Any direct maintenance entry point to `regenerateProjections` outside
-that set either gets a registered typed surface or is closed — no anonymous regen.
+| Path (repo-relative — the registry's base; narrowed gate round 2, finding 6) | Operations | Authorizing outer tools |
+|---|---|---|
+| `docs/judgment/records/people/**` | create / add_fact / correct / open_field / edge / load_link (+ traced remove/reopen) | `judgment_person_write` |
+| `docs/judgment/records/situation/**` | create / add_fact / correct / owed / load_link (+ traced remove/reopen) | `judgment_situation_write` |
+| `docs/judgment/records/goal/**` | cut / correct (wording) / joint_link / load_link (+ traced remove) — versions AND `state.json` (narrowed round 4, finding 5) | `judgment_goal_write` (COMP-JUDGMENT-GOAL-MIGRATE adds its migration row) |
+| `docs/judgment/people/*.md`, `docs/judgment/SITUATION.md` (new projections) | regeneration (side-effect) | every judgment write tool (`judgment_person_write`, `judgment_situation_write`, `judgment_goal_write`, `judgment_position_create`, `judgment_position_amend`, `judgment_joint_add`, `judgment_transition`, `judgment_ledger_append`), `get_judgment_state` (reconciler-on-read) |
+| `docs/judgment/REGISTER.md`, `docs/judgment/LEDGER.md`, `docs/judgment/OBJECTIVE.md`, `docs/judgment/index.md`, `docs/judgment/positions/*.md` (existing projections) | regeneration (side-effect) — `regenerateProjections` rewrites the FULL set on every invocation; the same authorizer list above gains the three new tools | same list |
+
+**Importer classification** (narrowed gate round 2, finding 6): `bin/judgment-import.js`
+is a one-time pre-cutover CLI that REFUSES to run once `records/` exists — this repo
+is post-cutover, so it is a **retired path**, not an authorizing tool; it appears in
+no registry row. (Fresh-workspace first imports predate any registry registration.)
+
+**Direct-entry closure:** `regenerateProjections` and `replayPendingIntents` are
+exported module functions with no CLI or MCP surface of their own today — the
+blueprint VERIFIES that remains true, and any direct maintenance entry point found
+(or added later) either gets a registered typed surface or is closed. No anonymous
+regen.
+
+**Replay attribution — structurally representable AND durable** (narrowed gate
+round 3, finding 3): the shared provenance schema gains an optional `intent_id`
+(ships here; the children stamp it). An opaque id alone is not attribution —
+clearing the intent would destroy the op/tool linkage, and an interrupted original
+`runOp` never reaches its post-success audit append. So intent records carry their
+authorizing `{tool, op}`, and **applying any intent (inline or replayed) appends a
+deduped attestation event `{intent_id, tool, op}` BEFORE the intent is cleared**
+(the `dropIntentDurably` pattern generalized to the success path). The artifact's
+`intent_id` then always resolves against a durable attestation, no matter which
+op's reconciler pass physically performed the write.
+
+**Publication point and the clear→regen window** (narrowed gate round 4,
+finding 1): for intent-attributed artifacts the ordering is apply effects →
+attestation → **clear intent (= publication)** → regenerate projections. A crash
+between clear and regen leaves projections exactly one regeneration behind the
+records — which is ALREADY this writer's recovery contract ("projections follow
+restored records on next regen", the compensating-rollback rule): records are
+canonical, projections are pure output, and the very next op or read regenerates.
+No dirty-state machinery is added; the transient staleness is documented,
+self-healing, and bounded at one regen.
 
 Blueprint carries this table forward; registration itself lands in COMP-CANON-GUARD
 S1/S4. Until then: regen-overwrite + roundtrip guard, stated as the actual protection.
@@ -275,11 +412,11 @@ S1/S4. Until then: regen-overwrite + roundtrip guard, stated as the actual prote
 
 | Slice | Contents | Gate |
 |---|---|---|
-| S1 | `contracts/judgment-record.schema.json`: person / situation_entity / goal_version defs + shared fact/clause sub-schemas; `migration` provenance class; `intent_id` field; validation tests | schema tests green |
-| S2 | `RecordsStore`: people/situation aggregates, parameterized chain accessor (`v<N>`); store tests | store tests green |
+| S1 | `contracts/judgment-record.schema.json`: person / situation_entity / goal_version defs; **two fully-declared CLOSED fact schemas** — `person_fact` (base fields + `section` + `diverges_with`) and `situation_fact` (base fields only), each with its own complete property whitelist and `additionalProperties: false`, sharing per-property `definitions` refs (`fact_text`, `fact_channel`, …). Draft-07 cannot merge closed schemas via `allOf` (narrowed gate round 2, finding 2), so "one contract" is held by construction: a contract test asserts base-field parity between the two. Clause sub-schema; `goal_state` def; universal sub-entry ids + `removed` blocks + fill/reopen traces; `migration` provenance class; `intent_id` field + attestation event shape; unified trace shape; validation tests | schema tests green |
+| S2 | `RecordsStore`: people/situation aggregates, parameterized chain accessor (`v<N>`), `goal/state.json` sidecar persistence; store tests | store tests green |
 | S3 | Writer ops: person + situation (+ invariants 1, 2, 5, 6); writer tests | writer tests green |
-| S4 | Writer ops: goal cut + wording correct (+ invariants 3, 4, 7); writer tests | writer tests green |
-| S5 | Projections (people, SITUATION, OBJECTIVE dual-read helper) + orphan-scan extension + intent-aware snapshot hook + `get_judgment_state.counts`; gen tests | fixed-point + overwrite tests green |
+| S4 | Writer ops: goal cut + wording correct + joint_link/load_link sidecar writers with their referential invariant (+ invariants 3, 4, 7); effective-view read contract + migration-intent fencing; writer tests | writer tests green |
+| S5 | Projections (people, SITUATION, OBJECTIVE full audit surface + dual-read helper) + orphan-scan extension + new-record snapshot exclusion hook + `get_judgment_state.counts`; gen tests | fixed-point + overwrite tests green |
 | S6 | MCP registration (3 tools) + policy test list + MCP e2e | e2e green |
 
 ## Decisions
@@ -315,7 +452,14 @@ S1/S4. Until then: regen-overwrite + roundtrip guard, stated as the actual prote
 - [ ] Person golden flow: create stub → add secondhand fact (+`via`) → load-link rejects → person speaks (`said` fact) → open_field filled by that fact → load-link on it succeeds → correct traces
 - [ ] Situation golden flow: entity → facts (channels) → owed → given via filled_by → load-link channel rules hold
 - [ ] `diverges_with` reciprocity + stated↔revealed constraint enforced; `edge.to` to a missing person rejects (`JUDGMENT_REF`)
-- [ ] `OBJECTIVE.md` renders from the legacy position until migration (dual-read helper test with a synthetic goal chain)
+- [ ] `OBJECTIVE.md` renders from the legacy position until migration (dual-read helper test with a synthetic goal chain); post-cutover it renders diff_note, wording-fix marks, the load-link bill, and goal joints linked to register rows
+- [ ] Goal `joints` refs to a missing joint reject (`JUDGMENT_REF`); correcting a fact's channel out from under a load-link rejects naming the dependent
+- [ ] `open_field`/`owed` two-phase transitions: create-then-fill flows pass; filling with a non-`said` fact rejects (open_field) and a missing `filled_by` rejects (owed → given)
+- [ ] Correction-dead-end closure: after `remove`-ing a dependent load-link (traced), the previously-rejected channel correction succeeds; `secondhand → said` clears `via` atomically with `via` in the trace's `prior`
+- [ ] Person/situation projections render channel, `via`, `at`, and visible correction lines for every fact; OBJECTIVE.md renders per-clause elicitation + the ratification citation (audit-surface tests)
+- [ ] A pending-intent tombstone does NOT flip the legacy objective's derived status (effective-store view test); with a pending migration intent AND goal v1 physically on disk, `op=cut` rejects `JUDGMENT_INTENT_PENDING` (fence precedence); with no intent and the legacy chain live, it rejects `JUDGMENT_MIGRATION_REQUIRED`
+- [ ] `pair_with` sets a reciprocal traced divergence after both facts exist; a stated↔stated pair rejects; `joint_link`/goal `load_link` maintain `goal/state.json` without a version cut, and a superseded-version load-link renders in the bill
+- [ ] Replayed writes resolve to a durable attestation `{intent_id, tool, op}`
 - [ ] Full suite green; MCP e2e exercises all three tools; policy test asserts reviewer denial for all three
 - [ ] `get_judgment_state.counts` matches the typed shape and stays small (AUDIT-19)
 
