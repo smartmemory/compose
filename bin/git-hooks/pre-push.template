@@ -20,6 +20,18 @@ COMPOSE_WORKSPACE_ID="__COMPOSE_WORKSPACE_ID__"
 LOG="${COMPOSE_HOOK_LOG:-.compose/data/pre-push.log}"
 mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
 
+# EAGAIN guard: git can hand hooks nonblocking stdout/stderr fds; a large echo
+# (the validate output below) then dies mid-write with "echo: write error:
+# Resource temporarily unavailable" and makes a successful push look failed.
+# O_NONBLOCK lives on the open file description (shared across processes), so a
+# child clearing it fixes the shell's own fds too.
+command -v perl >/dev/null 2>&1 && perl -MFcntl -e '
+  for my $fd (1, 2) {
+    open(my $fh, ">&=", $fd) or next;
+    my $flags = fcntl($fh, F_GETFL, 0) // next;
+    fcntl($fh, F_SETFL, $flags & ~O_NONBLOCK);
+  }' 2>/dev/null || true
+
 # ── Docs-only detection ──────────────────────────────────────────────────────
 # Parse the ref updates git feeds on stdin (this MUST run before anything else
 # touches stdin). If every pushed commit touches only docs/** or *.md, the test

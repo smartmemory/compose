@@ -2,6 +2,17 @@
 
 ## 2026-07-23
 
+### fix(hooks): clear O_NONBLOCK on pre-push stdout/stderr (EAGAIN echo failures)
+
+Git can hand hooks nonblocking stdout/stderr fds; the pre-push hook's large
+`echo "$OUTPUT"` of the validate report then died mid-write with `echo: write
+error: Resource temporarily unavailable`, making a successful push look
+failed (observed twice on 2026-07-23). The hook template now clears
+O_NONBLOCK on fds 1/2 at startup via a perl fcntl child — the flag lives on
+the shared open file description, so the child's clear fixes the shell's own
+writes. Re-install with `compose hooks install --pre-push` (this repo's
+installed hook was patched in place).
+
 ### COMP-JUDGMENT-STORES — person/situation/goal stores + crash-safe intent publication (T1–T6)
 
 The judgment canon grows three record families and hardens the write path.
