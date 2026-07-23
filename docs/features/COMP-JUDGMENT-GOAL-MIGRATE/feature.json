@@ -1,0 +1,11 @@
+{
+  "code": "COMP-JUDGMENT-GOAL-MIGRATE",
+  "description": "Intent-backed objective→goal migration: replay-durable compound op, dual-read cutover, intent-aware snapshot, position retirement. Split from COMP-JUDGMENT-STORES at gate round 5; depends on the goal store shipping first",
+  "status": "PLANNED",
+  "phase": "Judgment Layer",
+  "created": "2026-07-23",
+  "updated": "2026-07-23",
+  "complexity": "M",
+  "position": 5,
+  "parent": "COMP-JUDGMENT-STORES"
+}

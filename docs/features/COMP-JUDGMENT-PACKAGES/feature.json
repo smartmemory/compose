@@ -1,0 +1,11 @@
+{
+  "code": "COMP-JUDGMENT-PACKAGES",
+  "description": "Resolution packages + transition coupling — seal-via-transition, joint-state×op matrix, intent fencing, method binding, prediction lifecycle (open→graded|void). Split from COMP-JUDGMENT-STORES at gate round 5 (the finding-dense corner gets its own gate)",
+  "status": "PLANNED",
+  "phase": "Judgment Layer",
+  "created": "2026-07-23",
+  "updated": "2026-07-23",
+  "complexity": "L",
+  "position": 4,
+  "parent": "COMP-JUDGMENT-STORES"
+}
