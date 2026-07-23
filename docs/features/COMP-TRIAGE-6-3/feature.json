@@ -1,0 +1,17 @@
+{
+  "code": "COMP-TRIAGE-6-3",
+  "description": "Routing integration: feed the measured model×effort curve into resolveAgentConfig defaults",
+  "status": "PARKED",
+  "phase": "COMP-TRIAGE: Task Tier Classification",
+  "created": "2026-07-23",
+  "updated": "2026-07-23",
+  "complexity": "M",
+  "position": 190,
+  "parent": "COMP-TRIAGE-6",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-TRIAGE-6"
+    }
+  ]
+}

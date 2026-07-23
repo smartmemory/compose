@@ -1,0 +1,17 @@
+{
+  "code": "COMP-TRIAGE-6-2",
+  "description": "Execute effort on claude routes (SDK effort param) + keep test runs out of the live dispatch ledger",
+  "status": "PLANNED",
+  "phase": "COMP-TRIAGE: Task Tier Classification",
+  "created": "2026-07-23",
+  "updated": "2026-07-23",
+  "complexity": "S",
+  "position": 189,
+  "parent": "COMP-TRIAGE-6",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-TRIAGE-6"
+    }
+  ]
+}

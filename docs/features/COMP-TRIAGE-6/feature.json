@@ -1,7 +1,7 @@
 {
   "code": "COMP-TRIAGE-6",
   "description": "Dispatch scorekeeping: persist per-dispatch telemetry (model, effort, tokens, duration, retries, review findings, test outcome) for every subagent/Codex run + ACRR triage-accuracy metric; aggregate the measured model×effort cost curve so routing replaces guesses with data. Owner-directed 2026-07-23 (\"we don't know till we have adequate measurement over time\"); next item after COMP-JUDGMENT-STORES.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-TRIAGE: Task Tier Classification",
   "created": "2026-07-23",
   "updated": "2026-07-23",
@@ -13,5 +13,35 @@
     "routing",
     "cost"
   ],
-  "impact": "high"
+  "impact": "high",
+  "completions": [
+    {
+      "completion_id": "COMP-TRIAGE-6:b6ecbd5ddf5320523dca8da1c8746780719b6c4e",
+      "feature_code": "COMP-TRIAGE-6",
+      "commit_sha": "b6ecbd5ddf5320523dca8da1c8746780719b6c4e",
+      "commit_sha_short": "b6ecbd5d",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/dispatch-ledger.js",
+        "lib/dispatch-metrics.js",
+        "lib/stratum-mcp-client.js",
+        "lib/local-claude-connector.js",
+        "lib/result-normalizer.js",
+        "lib/review-normalize.js",
+        "lib/build.js",
+        "lib/experiment-judge.js",
+        "lib/codex-preflight.js",
+        "lib/bug-escalation.js",
+        "lib/gsd.js",
+        "lib/lane-gate.js",
+        "lib/feature-writer.js",
+        "contracts/feature-json.schema.json",
+        "bin/compose.js"
+      ],
+      "recorded_at": "2026-07-23T10:49:31.455Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Dispatch scorekeeping: 4-kind ledger, connector-owned capture, resume-durable build_id ACRR pairing, compose metrics CLI. 3-round design gate + 2-round impl review, all findings fixed. Commits 7e1da89..b6ecbd5, full suite 4928 green."
+    }
+  ],
+  "commit_sha": "b6ecbd5ddf5320523dca8da1c8746780719b6c4e"
 }

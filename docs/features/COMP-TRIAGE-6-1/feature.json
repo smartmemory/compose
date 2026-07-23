@@ -1,0 +1,17 @@
+{
+  "code": "COMP-TRIAGE-6-1",
+  "description": "Instrument GSD stepDone settlements so GSD dispatches gain acceptance outcomes",
+  "status": "PLANNED",
+  "phase": "COMP-TRIAGE: Task Tier Classification",
+  "created": "2026-07-23",
+  "updated": "2026-07-23",
+  "complexity": "S",
+  "position": 188,
+  "parent": "COMP-TRIAGE-6",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-TRIAGE-6"
+    }
+  ]
+}
