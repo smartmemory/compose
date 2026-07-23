@@ -1,0 +1,11 @@
+{
+  "code": "COMP-JUDGMENT-STORES",
+  "description": "Writer extensions — person/situation/goal/resolution-package record kinds, generated projections, invariants as rejected writes (the only door for every store; manual Writer box + ledger seq 112)",
+  "status": "IN_PROGRESS",
+  "phase": "Judgment Layer",
+  "created": "2026-07-22",
+  "updated": "2026-07-22",
+  "complexity": "L",
+  "position": 3,
+  "parent": "COMP-JUDGMENT-WRITER"
+}
