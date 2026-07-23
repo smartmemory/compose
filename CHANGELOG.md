@@ -2,6 +2,28 @@
 
 ## 2026-07-23
 
+### COMP-TRIAGE-6 — Dispatch scorekeeping (ledger, ACRR, compose metrics)
+
+Compose now keeps the receipts for every agent dispatch instead of throwing
+them away. A closed, append-only JSONL ledger (`.compose/data/
+dispatch-ledger.jsonl`) records four event kinds: `dispatch` (one per agent
+run, captured fail-open at the two connector seams every dispatch flows
+through — StratumMcpClient's shared helper and runLocalClaudeAgent — with
+intended vs executed effort never conflated), `settlement` (engine-adjudicated
+acceptance per dispatch, ensure-retry reissues and repair-replaced primaries
+handled; GSD excluded in v1), `triage-estimate` and `build-actuals` (paired by
+a resume-durable build_id from an atomic per-feature accumulator sidecar;
+last-terminal-wins ACRR pairing, fresh-over-failed starts rotate identity).
+`compose metrics [--since|--feature|--json]` renders the model×executed-effort
+curve, completion vs acceptance rates, per-site coverage, and ACRR with
+attrition and escalated cohorts. Triage confidence now persists to
+feature.json (`triageConfidence`). Design gate: 3 codex sol/high rounds;
+implementation review: 2 rounds, all findings fixed (attempt ownership
+deferred past the start verdict so refused/errored invocations leave no
+sidecar writes and no orphan estimates; failed repairs bill usage but never
+absorb settlements; failure-path usage folds into terminal actuals).
+Spec: docs/features/COMP-TRIAGE-6/{design,blueprint}.md.
+
 ### fix(hooks): clear O_NONBLOCK on pre-push stdout/stderr (EAGAIN echo failures)
 
 Git can hand hooks nonblocking stdout/stderr fds; the pre-push hook's large

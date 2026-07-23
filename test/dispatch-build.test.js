@@ -24,6 +24,7 @@ import {
   selectBuildAccumulator,
   settleDispatches,
   updateBuildAccumulator,
+  writeBuildAccumulator,
 } from '../lib/build.js';
 import { readEvents } from '../lib/dispatch-ledger.js';
 
@@ -96,6 +97,11 @@ describe('build accumulator lifecycle', () => {
     try {
       const created = selectBuildAccumulator(cwd, 'COMP-X');
       assert.equal(created.isNew, true);
+      // Selection is side-effect-free: nothing persists until the caller owns
+      // the attempt (review r2 — a refused --fresh must not clobber a live
+      // build's sidecar).
+      assert.equal(readBuildAccumulator(cwd, 'COMP-X'), null);
+      writeBuildAccumulator(cwd, created.accumulator);
       const buildId = created.accumulator.build_id;
 
       updateBuildAccumulator(cwd, 'COMP-X', (acc) => ({
