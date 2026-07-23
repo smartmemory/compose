@@ -711,7 +711,7 @@ Inspired by [Hub3r7/claude-code-orchestration-template](https://github.com/Hub3r
 | 186 | COMP-TRIAGE-5 | Front-of-pipeline scope estimation + verification-gated escalation (E3): estimate tier/profile from the raw request before design, and auto-escalate the lane when a downstream gate fails. | COMPLETE |
 | 187 | COMP-TRIAGE-6 | Dispatch scorekeeping: persist per-dispatch telemetry (model, effort, tokens, duration, retries, review findings, test outcome) for every subagent/Codex run + ACRR triage-accuracy metric; aggregate the measured model×effort cost curve so routing replaces guesses with data. Owner-directed 2026-07-23 ("we don't know till we have adequate measurement over time"); next item after COMP-JUDGMENT-STORES. | COMPLETE |
 | 188 | COMP-TRIAGE-6-1 | Instrument GSD stepDone settlements so GSD dispatches gain acceptance outcomes | PLANNED |
-| 189 | COMP-TRIAGE-6-2 | Execute effort on claude routes (SDK effort param) + keep test runs out of the live dispatch ledger | PLANNED |
+| 189 | COMP-TRIAGE-6-2 | Execute effort on claude routes (SDK effort param) + keep test runs out of the live dispatch ledger | COMPLETE |
 | 190 | COMP-TRIAGE-6-3 | Routing integration: feed the measured model×effort curve into resolveAgentConfig defaults | PARKED |
 
 **Dependencies:** None — standalone, enhances `compose build` entry point.

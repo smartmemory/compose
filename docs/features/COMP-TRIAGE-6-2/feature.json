@@ -1,7 +1,7 @@
 {
   "code": "COMP-TRIAGE-6-2",
   "description": "Execute effort on claude routes (SDK effort param) + keep test runs out of the live dispatch ledger",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-TRIAGE: Task Tier Classification",
   "created": "2026-07-23",
   "updated": "2026-07-23",
@@ -13,5 +13,27 @@
       "kind": "surfaced_by",
       "to_code": "COMP-TRIAGE-6"
     }
-  ]
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-TRIAGE-6-2:38c09062b8320ee6afcd092dd8777374ce1ccb8d",
+      "feature_code": "COMP-TRIAGE-6-2",
+      "commit_sha": "38c09062b8320ee6afcd092dd8777374ce1ccb8d",
+      "commit_sha_short": "38c09062",
+      "tests_pass": true,
+      "files_changed": [
+        "CHANGELOG.md",
+        "lib/dispatch-ledger.js",
+        "lib/local-claude-connector.js",
+        "lib/result-normalizer.js",
+        "lib/stratum-mcp-client.js",
+        "test/dispatch-capture.test.js",
+        "test/suppress-expected-drift.js"
+      ],
+      "recorded_at": "2026-07-23T11:32:37.404Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Execute effort on claude routes (SDK effort param, executed-only gate) + NODE_TEST_CONTEXT ledger redirect kills test-pollution wart. Full suite green (4930 node + 581 UI + 100 tracker); live ledger clean end-to-end."
+    }
+  ],
+  "commit_sha": "38c09062b8320ee6afcd092dd8777374ce1ccb8d"
 }
