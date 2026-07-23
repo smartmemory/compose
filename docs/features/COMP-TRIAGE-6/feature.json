@@ -1,0 +1,17 @@
+{
+  "code": "COMP-TRIAGE-6",
+  "description": "Dispatch scorekeeping: persist per-dispatch telemetry (model, effort, tokens, duration, retries, review findings, test outcome) for every subagent/Codex run + ACRR triage-accuracy metric; aggregate the measured model×effort cost curve so routing replaces guesses with data. Owner-directed 2026-07-23 (\"we don't know till we have adequate measurement over time\"); next item after COMP-JUDGMENT-STORES.",
+  "status": "PLANNED",
+  "phase": "COMP-TRIAGE: Task Tier Classification",
+  "created": "2026-07-23",
+  "updated": "2026-07-23",
+  "complexity": "M",
+  "position": 187,
+  "parent": "COMP-TRIAGE-5",
+  "tags": [
+    "metrics",
+    "routing",
+    "cost"
+  ],
+  "impact": "high"
+}
