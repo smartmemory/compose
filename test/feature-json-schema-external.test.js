@@ -38,6 +38,12 @@ describe('feature-json schema — compiles', () => {
 describe('feature-json schema — accepts', () => {
   const v = validator();
 
+  test('optional triageConfidence accepts the closed vocabulary', () => {
+    for (const triageConfidence of ['high', 'medium', 'low']) {
+      assert.equal(v.validateRoot({ code: 'X-1', triageConfidence }).valid, true);
+    }
+  });
+
   test('same-project link (kind+to_code)', () => {
     assert.equal(ok(v, link({ kind: 'depends_on', to_code: 'COMP-X' })).valid, true);
   });
@@ -75,6 +81,10 @@ describe('feature-json schema — accepts', () => {
 
 describe('feature-json schema — rejects', () => {
   const v = validator();
+
+  test('triageConfidence rejects values outside the closed vocabulary', () => {
+    assert.equal(v.validateRoot({ code: 'X-1', triageConfidence: 'certain' }).valid, false);
+  });
 
   test('external github missing issue', () => {
     assert.equal(ok(v, link({ kind: 'external', provider: 'github', repo: 'o/n' })).valid, false);

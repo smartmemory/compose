@@ -40,6 +40,11 @@
       "maximum": 4,
       "description": "COMP-TRIAGE-5: raw machine tier (0-4) from the front estimator/refinement. Maps to `complexity` via tierToComplexity."
     },
+    "triageConfidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "description": "COMP-TRIAGE-6: confidence from the front scope estimate."
+    },
     "estimateSource": {
       "type": "string",
       "enum": ["front", "refined", "escalated"],

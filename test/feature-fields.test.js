@@ -36,6 +36,7 @@ describe('validateFeatureFields', () => {
       triageTier: 2,
       lane: 'standard',
       estimateSource: 'front',
+      triageConfidence: 'medium',
     }));
   });
 
@@ -89,6 +90,16 @@ describe('validateFeatureFields', () => {
     }
   });
 
+  test('accepts each valid triageConfidence', () => {
+    for (const triageConfidence of ['high', 'medium', 'low']) {
+      assert.doesNotThrow(() => validateFeatureFields({ triageConfidence }));
+    }
+  });
+
+  test('rejects an invalid triageConfidence', () => {
+    assert.throws(() => validateFeatureFields({ triageConfidence: 'certain' }), /invalid triageConfidence/);
+  });
+
   // Regression: today lib/build.js writes `complexity: String(triageResult.tier)`
   // (e.g. "0", "1", ..., "4") via a raw provider write that bypasses the old
   // inline COMPLEXITIES.has check inside addRoadmapEntry. The shared validator
@@ -109,8 +120,8 @@ describe('validateFeatureFields', () => {
 // addRoadmapEntry — end-to-end wiring through the new fields
 // ---------------------------------------------------------------------------
 
-describe('addRoadmapEntry — lane/triageTier/estimateSource', () => {
-  test('persists lane, triageTier, estimateSource + regenerates ROADMAP', async () => {
+describe('addRoadmapEntry — lane/triageTier/estimateSource/triageConfidence', () => {
+  test('persists lane, triageTier, estimateSource, triageConfidence + regenerates ROADMAP', async () => {
     const cwd = freshCwd();
     const r = await addRoadmapEntry(cwd, {
       code: 'TRI-FIELD-1',
@@ -120,6 +131,7 @@ describe('addRoadmapEntry — lane/triageTier/estimateSource', () => {
       lane: 'standard',
       triageTier: 2,
       estimateSource: 'front',
+      triageConfidence: 'medium',
     });
     assert.equal(r.code, 'TRI-FIELD-1');
 
@@ -127,6 +139,7 @@ describe('addRoadmapEntry — lane/triageTier/estimateSource', () => {
     assert.equal(feature.lane, 'standard');
     assert.equal(feature.triageTier, 2);
     assert.equal(feature.estimateSource, 'front');
+    assert.equal(feature.triageConfidence, 'medium');
   });
 
   test('omits the new fields when not supplied (no undefined keys)', async () => {
@@ -140,6 +153,7 @@ describe('addRoadmapEntry — lane/triageTier/estimateSource', () => {
     assert.ok(!('lane' in feature), 'lane not added when absent');
     assert.ok(!('triageTier' in feature), 'triageTier not added when absent');
     assert.ok(!('estimateSource' in feature), 'estimateSource not added when absent');
+    assert.ok(!('triageConfidence' in feature), 'triageConfidence not added when absent');
   });
 
   test('rejects bad complexity (existing behavior preserved through validateFeatureFields)', async () => {
@@ -179,6 +193,14 @@ describe('addRoadmapEntry — lane/triageTier/estimateSource', () => {
     await assert.rejects(
       () => addRoadmapEntry(cwd, { code: 'TRI-BADE-1', description: 'd', phase: 'P', estimateSource: 'guessed' }),
       /invalid estimateSource/,
+    );
+  });
+
+  test('rejects a bad triageConfidence via addRoadmapEntry', async () => {
+    const cwd = freshCwd();
+    await assert.rejects(
+      () => addRoadmapEntry(cwd, { code: 'TRI-BADCONF-1', description: 'd', phase: 'P', triageConfidence: 'certain' }),
+      /invalid triageConfidence/,
     );
   });
 });

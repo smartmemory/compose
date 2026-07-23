@@ -37,6 +37,8 @@ describe('COMP-TRIAGE-5 front-seam golden', () => {
     assert.ok(['S', 'M', 'L', 'XL'].includes(saved.complexity), `complexity "${saved.complexity}" must be in {S,M,L,XL}`);
     assert.equal(typeof saved.triageTier, 'number');
     assert.equal(saved.estimateSource, 'front');
+    assert.equal(saved.triageConfidence, front.confidence);
+    assert.ok(['high', 'medium', 'low'].includes(front.confidence));
     assert.equal(saved.status, 'PLANNED');
     // The lane's profile (which drives skip_if) is persisted faithfully.
     assert.deepEqual(saved.profile, front.buildProfile);
@@ -95,6 +97,7 @@ describe('COMP-TRIAGE-5 refinement (narrow-only, doc-gated)', () => {
       });
       assert.equal(front.lane, 'trivial');
       assert.equal(provider._get().estimateSource, 'refined');
+      assert.equal(provider._get().triageConfidence, front.confidence);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
