@@ -2422,3 +2422,140 @@ describe('T4 intent dispatcher, attestation, and failure windows', () => {
     fixedPoint(cwd, 'explicit repair after post-clear regeneration failure');
   });
 });
+
+describe('T5 getJudgmentState counts', () => {
+  test('counts have the exact empty, stub, spoken, entity, draft-goal, and ratified-goal shapes', async () => {
+    const cwd = freshCwd();
+    assert.deepEqual((await getJudgmentState(cwd)).counts, {
+      people: { spoken: 0, stub: 0 },
+      entities: 0,
+      goal: { version: null, ratified: false },
+    });
+
+    await judgmentPersonWrite(cwd, {
+      op: 'create',
+      slug: 'counts-person',
+      display_name: 'Counts Person',
+    });
+    assert.deepEqual((await getJudgmentState(cwd)).counts, {
+      people: { spoken: 0, stub: 1 },
+      entities: 0,
+      goal: { version: null, ratified: false },
+    });
+
+    await judgmentPersonWrite(cwd, {
+      op: 'add_fact',
+      slug: 'counts-person',
+      section: 'stated',
+      text: 'I have spoken.',
+      channel: 'said',
+      at: FACT_AT_1,
+    });
+    assert.deepEqual((await getJudgmentState(cwd)).counts, {
+      people: { spoken: 1, stub: 0 },
+      entities: 0,
+      goal: { version: null, ratified: false },
+    });
+
+    await judgmentSituationWrite(cwd, {
+      op: 'create',
+      slug: 'counts-entity',
+      display_name: 'Counts Entity',
+    });
+    assert.deepEqual((await getJudgmentState(cwd)).counts, {
+      people: { spoken: 1, stub: 0 },
+      entities: 1,
+      goal: { version: null, ratified: false },
+    });
+
+    await judgmentGoalWrite(
+      cwd,
+      {
+        op: 'cut',
+        clauses: [goalClause('Imported draft for counts.', 'observed')],
+        diff_note: 'Imported count fixture.',
+      },
+      { via: 'import', writtenAt: '2026-07-23T11:00:00Z' },
+    );
+    assert.deepEqual((await getJudgmentState(cwd)).counts, {
+      people: { spoken: 1, stub: 0 },
+      entities: 1,
+      goal: { version: 1, ratified: false },
+    });
+
+    await judgmentGoalWrite(cwd, cutArgs({
+      clauses: [goalClause('Ratified goal for counts.')],
+      diff_note: 'Ratified count fixture.',
+    }));
+    assert.deepEqual((await getJudgmentState(cwd)).counts, {
+      people: { spoken: 1, stub: 0 },
+      entities: 1,
+      goal: { version: 2, ratified: true },
+    });
+  });
+
+  test('pending-excluded people, entities, and goals never contribute to counts', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+    const hidden = {
+      actor: 'agent',
+      session: null,
+      written_at: '2026-07-23T11:30:00Z',
+      via: 'migration',
+      intent_id: 'intent-hidden-counts',
+    };
+    store.writePerson({
+      slug: 'hidden-person',
+      display_name: 'Hidden Person',
+      facts: [{
+        id: 'f1',
+        section: 'stated',
+        text: 'Hidden speech.',
+        channel: 'said',
+        at: FACT_AT_1,
+        provenance: hidden,
+        trace: [],
+      }],
+      edges: [],
+      open_fields: [],
+      load_links: [],
+      provenance: hidden,
+    });
+    store.writeSituationEntity({
+      slug: 'hidden-entity',
+      display_name: 'Hidden Entity',
+      facts: [],
+      owed: [],
+      load_links: [],
+      provenance: hidden,
+    });
+    store.writeGoalVersion({
+      version: 1,
+      clauses: [{
+        id: 'c1',
+        text: 'Hidden goal.',
+        channel: 'observed',
+        elicitation: GOAL_ELICITATION,
+        provenance: hidden,
+        trace: [],
+      }],
+      provocation: null,
+      diff_note: 'Hidden by pending intent.',
+      provenance: hidden,
+    });
+    store.persistIntent({
+      id: 'intent-hidden-counts',
+      kind: 'package_transition',
+      tool: 'judgment_package_write',
+      op: 'transition',
+      payload: {},
+      created_at: '2026-07-23T11:30:00Z',
+    });
+
+    assert.deepEqual((await getJudgmentState(cwd)).counts, {
+      people: { spoken: 0, stub: 0 },
+      entities: 0,
+      goal: { version: null, ratified: false },
+    });
+  });
+});
