@@ -137,6 +137,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  items              List vision items from local state (no server)')
   console.log('  items show <id>    Show detail for a specific vision item')
   console.log('  triage    Analyze a feature and recommend build profile')
+  console.log('  metrics [--since <duration|ISO>] [--feature <code>] [--json]  Report dispatch, settlement, and triage metrics')
   console.log('  qa-scope  Show affected routes from a feature\'s changed files')
   console.log('  context decisions  Show the build decision log (--feature <FC>, --format text|json)')
   console.log('  gate list          List pending gates (--item <id>, --status pending|all|resolved)')
@@ -3821,6 +3822,42 @@ if (cmd === 'build') {
   console.error('Usage:')
   console.error('  compose smartmemory sync [--dry-run] [--feature <CODE>]')
   process.exit(1)
+
+} else if (cmd === 'metrics') {
+  // ---------------------------------------------------------------------------
+  // compose metrics [--since <duration|ISO>] [--feature <code>] [--json]
+  // ---------------------------------------------------------------------------
+  const { root: cwd } = resolveCwdWithWorkspace(args)
+  let since = null
+  let feature = null
+  let json = false
+
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]
+    if (arg === '--json') {
+      json = true
+      continue
+    }
+    if (arg === '--since' || arg === '--feature') {
+      const value = args[index + 1]
+      if (!value || value.startsWith('--')) {
+        console.error(`compose metrics: ${arg} requires a value`)
+        process.exit(1)
+      }
+      if (arg === '--since') since = value
+      else feature = value
+      index++
+      continue
+    }
+    console.error(`compose metrics: unknown flag ${arg}`)
+    process.exit(1)
+  }
+
+  const { collectDispatchMetrics, renderDispatchMetrics } = await import('../lib/dispatch-metrics.js')
+  const report = collectDispatchMetrics(cwd, { since, feature })
+  if (json) process.stdout.write(`${JSON.stringify(report, null, 2)}\n`)
+  else process.stdout.write(renderDispatchMetrics(report))
+  process.exit(0)
 
 } else {
   console.error(`Unknown command: ${cmd}`)
