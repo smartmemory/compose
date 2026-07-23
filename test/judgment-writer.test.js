@@ -1898,6 +1898,24 @@ describe('T4 goal cut — ratification, channel grammar, and migration precedenc
       'JUDGMENT_UNRATIFIED_CUT',
       /answered_at.*date-time/i,
     );
+    // Impossible calendar date: new Date() silently normalizes Feb 29 in a
+    // non-leap year, but the contract validator rejects it — the precheck
+    // must agree with the contract, even on a cached key.
+    await refusedWith(
+      judgmentGoalWrite(cwd, cutArgs({
+        idempotency_key: 'cut-key-1',
+        ratification: { ...GOAL_RATIFICATION, answered_at: '2023-02-29T09:00:00Z' },
+      })),
+      'JUDGMENT_UNRATIFIED_CUT',
+      /answered_at.*date-time/i,
+    );
+    // Schema-valid exotic forms (leap second, lowercase t/z) must PASS the
+    // precheck — it may be no stricter than the contract either.
+    const exotic = await judgmentGoalWrite(cwd, cutArgs({
+      idempotency_key: 'cut-key-exotic',
+      ratification: { ...GOAL_RATIFICATION, answered_at: '2026-06-30t23:59:60z' },
+    }));
+    assert.equal(exotic.version, 2);
   });
 
   test('ordinary cuts require clauses, elicitation, provocation, and ratification', async () => {
