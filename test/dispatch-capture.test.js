@@ -289,6 +289,78 @@ describe('normalizer and explicit call-site context', () => {
     }
   });
 
+  test('an unparseable repair is billed but not credited as the settling dispatch', async () => {
+    const project = tempDir('dispatch-repair-unused-');
+    try {
+      const { client } = makeClient([
+        { text: 'not json', usage: { tokens: 10, usd: 0.1 } },
+        { text: 'still not json', usage: { tokens: 7, usd: 0.05 } },
+      ]);
+      const normalized = await runAndNormalize(null, 'review', {
+        flow_id: 'flow-1',
+        step_id: 'review',
+        agent: 'claude',
+        output_fields: {},
+      }, {
+        stratum: client,
+        reviewMode: true,
+        profile: 'claude::fast',
+        telemetry: {
+          project_cwd: project,
+          site: 'review',
+          build_id: 'build-1',
+          feature_code: 'COMP-X',
+        },
+      });
+
+      assert.match(normalized.dispatchIds.primary, /^[0-9a-f-]{36}$/i);
+      assert.equal(normalized.dispatchIds.repair, null);
+      const rows = readEvents(project);
+      assert.equal(rows.filter((row) => row.kind === 'dispatch').length, 2);
+      assert.equal(normalized.usage.output_tokens, 17);
+      assert.ok(Math.abs(normalized.usage.cost_usd - 0.15) < 1e-9);
+    } finally {
+      cleanup(project);
+    }
+  });
+
+  test('a repair dispatch that throws is not credited as the settling dispatch', async () => {
+    const project = tempDir('dispatch-repair-failed-');
+    try {
+      const { client } = makeClient([
+        { text: 'not json', usage: { tokens: 4, usd: 0.02 } },
+        new Error('repair transport failed'),
+      ]);
+      const normalized = await runAndNormalize(null, 'review', {
+        flow_id: 'flow-1',
+        step_id: 'review',
+        agent: 'claude',
+        output_fields: {},
+      }, {
+        stratum: client,
+        reviewMode: true,
+        profile: 'claude::fast',
+        telemetry: {
+          project_cwd: project,
+          site: 'review',
+          build_id: 'build-1',
+          feature_code: 'COMP-X',
+        },
+      });
+
+      assert.match(normalized.dispatchIds.primary, /^[0-9a-f-]{36}$/i);
+      assert.equal(normalized.dispatchIds.repair, null);
+      assert.ok(normalized.result, 'text-mode fallback still yields a review result');
+      const rows = readEvents(project);
+      assert.deepEqual(
+        rows.filter((row) => row.kind === 'dispatch').map((row) => row.outcome),
+        ['ok', 'error'],
+      );
+    } finally {
+      cleanup(project);
+    }
+  });
+
   test('normalizer copies a connector carrier through AgentError replacement', async () => {
     const underlying = new Error('connector failed');
     Object.defineProperty(underlying, 'dispatchId', { value: 'dispatch-original', enumerable: false });
