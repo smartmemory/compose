@@ -391,110 +391,64 @@ If Stratum unavailable, continue with flat prompt chain.
 
 Triage is implicit on entry (severity, scope, path) — it gates which steps to run, not a Stratum step itself. Phases 6 (plan), 9 (docs) are folded into `fix` and `ship` respectively.
 
-### Spec Template
+### Spec Template (TS engine grammar, post-cutover)
+
+The TS engine's spec IR (validated by `stratum/ts/src/ir/validate.js`) differs
+from the retired python grammar: `version` is the number `1`, contracts use
+string shorthand, `flows.entry` names the entry flow, and steps use
+`do`/`out`/`after`/`ensure`/`attempts` (NOT `function`/`inputs`/`depends_on`).
+MCP `stratum_plan` currently reports grammar violations as a bare
+"spec validation failed" (smartmemory/stratum#26) — get the template right.
 
 ```yaml
-version: "0.1"
+version: 1
 contracts:
-  ResearchResult:
-    findings: {type: array}
-    relevant_files: {type: array}
   DesignResult:
-    path: {type: string}
-    word_count: {type: integer}
+    path: string
+    words: number
   BlueprintResult:
-    path: {type: string}
+    path: string
   ImplementResult:
-    files_changed: {type: array}
-    tests_pass: {type: boolean}
-
-functions:
-  research:
-    mode: compute
-    intent: "Explore the codebase with compose-explorer agents and surface patterns relevant to the feature."
-    input: {description: {type: string}}
-    output: ResearchResult
-    ensure:
-      - "len(result.findings) > 0"
-    retries: 2
-
-  write_design:
-    mode: compute
-    intent: "Run Phase 1 (and optional Phases 2-3) — explore, gate, write design.md."
-    input: {description: {type: string}}
-    output: DesignResult
-    ensure:
-      - "file_exists(result.path)"
-      - "result.word_count > 200"
-    retries: 2
-
-  write_blueprint:
-    mode: compute
-    intent: "Run Phases 4-5 — blueprint, verification. Gate before returning."
-    input: {description: {type: string}}
-    output: BlueprintResult
-    ensure:
-      - "file_exists(result.path)"
-    retries: 2
-
-  implement:
-    mode: compute
-    intent: "Run Phase 7 — TDD, E2E, review loop, coverage sweep."
-    input: {description: {type: string}}
-    output: ImplementResult
-    ensure:
-      - "result.tests_pass == True"
-      - "len(result.files_changed) > 0"
-    retries: 2
+    files_changed: string
+    tests_pass: boolean
 
 flows:
+  entry: compose_feature
   compose_feature:
-    input: {description: {type: string}}
-    output: ImplementResult
+    input:
+      goal: string
+    output:
+      from: "${implement.output}"
+      contract: ImplementResult
     steps:
-      - id: research
-        function: research
-        inputs: {description: "$.input.description"}
-        output_schema:
-          type: object
-          required: [findings]
-          properties:
-            findings: {type: array, items: {type: string}}
-            relevant_files: {type: array, items: {type: string}}
-
       - id: write_design
-        function: write_design
-        inputs: {description: "$.input.description"}
-        depends_on: [research]
-        output_schema:
-          type: object
-          required: [path, word_count]
-          properties:
-            path: {type: string}
-            word_count: {type: integer}
+        do: "Run Phase 1 (and optional 2-3) — explore, gate, write design.md. Codex design gate to REVIEW CLEAN."
+        out: DesignResult
+        ensure:
+          - file_contains: {path: "docs/features/<code>/design.md", text: "Design"}
+        attempts: 3
 
       - id: write_blueprint
-        function: write_blueprint
-        inputs: {description: "$.input.description"}
-        depends_on: [write_design]
-        output_schema:
-          type: object
-          required: [path]
-          properties:
-            path: {type: string}
+        after: [write_design]
+        do: "Run Phases 4-5 — blueprint grounded in real code, corrections table, verify every file:line ref."
+        out: BlueprintResult
+        ensure:
+          - file_contains: {path: "docs/features/<code>/blueprint.md", text: "Corrections"}
+        attempts: 3
 
       - id: implement
-        function: implement
-        inputs: {description: "$.input.description"}
-        depends_on: [write_blueprint]
-        output_schema:
-          type: object
-          required: [files_changed, tests_pass]
-          properties:
-            files_changed: {type: array, items: {type: string}}
-            tests_pass: {type: boolean}
-
+        after: [write_blueprint]
+        do: "Run Phase 7 — TDD, E2E, review loop, coverage sweep."
+        out: ImplementResult
+        ensure:
+          - file_exists: "docs/features/<code>/design.md"
+        attempts: 3
 ```
+
+Step results are reported via `stratum_step_done` with the step's `dispatchToken`;
+`result.output` must match the step's `out` contract exactly (string shorthand
+means scalar fields — e.g. `files_changed` is one string, not an array; extra
+keys are rejected).
 
 The bugfix flow lives in `compose/pipelines/bug-fix.stratum.yaml` (8 steps + bisect, ships with compose). The CLI entry `compose fix <bug-code>` (in `bin/compose.js`) reads `docs/bugs/<code>/description.md` (scaffolds and exits if missing) and dispatches `runBuild(code, { mode: 'bug', template: 'bug-fix', description })`.
 
