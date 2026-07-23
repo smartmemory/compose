@@ -2,6 +2,35 @@
 
 ## 2026-07-23
 
+### COMP-TRIAGE-6-4 — No double-counted build-actuals row on a fresh-over-failed retry
+
+A retry of a failed build whose fresh plan itself throws (spec compile error,
+stratum down) no longer emits a second `build-actuals` failed row under the
+prior attempt's `build_id` with its stale counters — which had double-counted
+in ACRR. Three parts. (1) The reused failed accumulator is rotated to a fresh
+identity (new `build_id`, zeroed counters) BEFORE the fallible `startFresh`, not
+after — so a `startFresh` throw finalizes the new record, not the old one.
+Rotation is a guarded helper called at both `startFresh` sites (the direct
+`fresh` verdict and the resume→terminal→fresh fallback). (2) A ledger-backed
+ownership guard in `finalizeBuildAttempt` covers the earlier window: an attempt
+that dies before the fresh/resume verdict resolves (e.g. the flow-audit probe
+throws) does not re-finalize a `build_id` that already has a row in the ledger —
+so it never re-emits the reused failed row, while a reused-but-still-open record
+(a hard-killed build, `last_terminal === null`) and the legitimate
+failed→resume→complete path (two rows under one id) still emit correctly.
+(3) Root cause: `emitBuildActuals` now appends the durable ledger row BEFORE the
+best-effort `last_terminal`/sidecar write (byte-identical on the happy path,
+since no row field depends on the marker). As the only writer of
+`last_terminal='failed'`, this makes a "marker without a row" orphan unreachable
+on every path (`--fresh`, resume, fresh-over-failed) — a crash between the two
+writes can leave only a stale marker or uncleared sidecar (rotated away on the
+next build), never a lost or stranded row. Surfaced by the b6ecbd5 belt-and-
+braces review; four codex sol/high rounds drove the fix down to the root-cause
+write ordering (rather than armoring each entry path with per-path
+reconciliation). Concurrency-corner findings P1a/P1b (two `--fresh` builds
+racing the same feature) remain accepted PID advisory-lock limitations, out of
+scope.
+
 ### COMP-TRIAGE-6-2 — Execute effort on claude routes + keep tests out of the live ledger
 
 Two follow-ups to COMP-TRIAGE-6. (1) The local Claude dispatch route now

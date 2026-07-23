@@ -20,6 +20,7 @@ import {
   createBuildAccumulator,
   emitBuildActuals,
   emitTriageEstimate,
+  newBuildAccumulatorRecord,
   readBuildAccumulator,
   selectBuildAccumulator,
   settleDispatches,
@@ -390,6 +391,203 @@ test('runBuild emits fresh, cached, and escalated estimates on the three resolut
     assert.deepEqual(estimates.map((row) => row.estimate_source), ['fresh', 'cached', 'escalated']);
     assert.ok(estimates.every((row) => row.confidence === null
       || ['high', 'medium', 'low'].includes(row.confidence)));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+// COMP-TRIAGE-6-4: a fresh-over-failed retry whose startFresh (the plan call)
+// throws must NOT re-finalize the prior attempt's accumulator. Before the fix,
+// rotation ran AFTER startFresh, so a throw left the OLD failed record on disk
+// under the reused build_id and finalizeBuildAttempt emitted a DUPLICATE
+// build-actuals failed row under that same build_id (stale counters →
+// double-count in ACRR). After the fix, rotation runs BEFORE startFresh, so the
+// retry's terminal row lands under a fresh, distinct build_id.
+test('fresh-over-failed retry whose startFresh throws does not duplicate the prior build-actuals row', async () => {
+  const cwd = freshProject('dispatch-build-retry-throw-');
+  try {
+    setupBuildProject(cwd, ['COMP-RETRY']);
+    const visionWriter = fakeVisionWriter();
+    const { runBuild } = await import('../lib/build.js');
+
+    // Run 1: plan resolves to a terminal 'failed' flow → leaves a failed
+    // accumulator on disk (sidecar retained, last_terminal='failed').
+    let planCalls = 0;
+    const stratum = {
+      async plan() {
+        planCalls += 1;
+        // The retry's startFresh (second plan call) explodes before writing
+        // active-build state — the fallible path this fix guards.
+        if (planCalls === 2) throw new Error('planned startFresh explosion');
+        return {
+          status: 'failed',
+          runId: `flow-${planCalls}`,
+          trace: [],
+          failure: { reason: 'planned terminal failure' },
+        };
+      },
+      async audit() {
+        return { status: 'failed', trace: [] };
+      },
+      async close() {},
+    };
+    const opts = { cwd, stratum, visionWriter, template: 'build', skipTriage: true, description: 'x' };
+
+    await runBuild('COMP-RETRY', opts);
+    const firstId = readBuildAccumulator(cwd, 'COMP-RETRY').build_id;
+
+    // Run 2: fresh-over-failed retry; startFresh throws.
+    await assert.rejects(runBuild('COMP-RETRY', opts), /planned startFresh explosion/);
+
+    const actuals = readEvents(cwd, { kind: 'build-actuals' });
+    const ids = actuals.map((row) => row.build_id);
+    // Each build_id emits exactly one terminal row — no duplicate under the old id.
+    assert.equal(new Set(ids).size, ids.length, `duplicate build-actuals rows: ${JSON.stringify(ids)}`);
+    assert.ok(actuals.every((row) => row.terminal_status === 'failed'));
+    // The retry rotated to a fresh identity before the throw.
+    const retryId = readBuildAccumulator(cwd, 'COMP-RETRY').build_id;
+    assert.notEqual(retryId, firstId, 'retry must rotate the accumulator identity');
+    assert.ok(ids.includes(firstId) && ids.includes(retryId));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+// COMP-TRIAGE-6-4 (belt): a fresh-over-failed retry can also die BEFORE the
+// fresh/resume verdict is resolved — e.g. stratum.audit() throws while probing
+// the prior flow's terminality. That is upstream of the rotation, so
+// finalizeBuildAttempt must not re-emit the reused failed record's terminal row
+// under its old build_id. The prior attempt already closed that story.
+test('fresh-over-failed retry whose flow-audit throws does not re-finalize the reused failed row', async () => {
+  const cwd = freshProject('dispatch-build-audit-throw-');
+  try {
+    setupBuildProject(cwd, ['COMP-AUDIT']);
+    const visionWriter = fakeVisionWriter();
+    const { runBuild } = await import('../lib/build.js');
+
+    let auditCalls = 0;
+    const stratum = {
+      async plan() {
+        return {
+          status: 'failed',
+          runId: 'flow-1',
+          trace: [],
+          failure: { reason: 'planned terminal failure' },
+        };
+      },
+      async audit() {
+        // The retry probes the prior flow's terminality before deciding
+        // fresh vs resume; make that probe explode.
+        auditCalls += 1;
+        throw new Error('planned audit explosion');
+      },
+      async close() {},
+    };
+    const opts = { cwd, stratum, visionWriter, template: 'build', skipTriage: true, description: 'x' };
+
+    await runBuild('COMP-AUDIT', opts);
+    const firstId = readBuildAccumulator(cwd, 'COMP-AUDIT').build_id;
+
+    await assert.rejects(runBuild('COMP-AUDIT', opts), /planned audit explosion/);
+    assert.ok(auditCalls >= 1, 'the retry must have reached the flow-audit probe');
+
+    const actuals = readEvents(cwd, { kind: 'build-actuals' });
+    // Exactly one terminal row — the retry died before owning a fresh identity,
+    // so it must not add a second row under the reused build_id.
+    assert.equal(actuals.length, 1, `expected one build-actuals row, got ${JSON.stringify(actuals.map((r) => r.build_id))}`);
+    assert.equal(actuals[0].build_id, firstId);
+    assert.equal(actuals[0].terminal_status, 'failed');
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+// COMP-TRIAGE-6-4 (guard boundary): the ownership guard must suppress ONLY a
+// reused record that already emitted (last_terminal==='failed'). A reused but
+// still-OPEN record (last_terminal===null — a hard-killed build that never
+// finalized) has not emitted yet, so an attempt that dies before the verdict
+// must still leave that build its one terminal row. Regression for the guard
+// wrongly swallowing an interrupted build's only actuals row.
+test('interrupted (last_terminal=null) reuse that dies before the verdict still emits its terminal row', async () => {
+  const cwd = freshProject('dispatch-build-interrupted-');
+  try {
+    setupBuildProject(cwd, ['COMP-INT']);
+    const dataDir = join(cwd, '.compose', 'data');
+
+    // Seed a hard-killed prior attempt: an OPEN accumulator (last_terminal=null)
+    // with real counters, and an active-build pointing at a dead pid so the
+    // retry takes the audit-probe path.
+    const seeded = {
+      ...newBuildAccumulatorRecord('COMP-INT'),
+      build_id: '4fe533b1-70b4-4df7-845e-85c1686ad832',
+      last_terminal: null,
+      tokens_total: 4242,
+      usd: 0.99,
+    };
+    writeBuildAccumulator(cwd, seeded);
+    writeFileSync(
+      join(dataDir, 'active-build.json'),
+      JSON.stringify({
+        featureCode: 'COMP-INT',
+        flowId: 'flow-open',
+        pipeline: 'build',
+        mode: 'feature',
+        pid: 999999, // not alive → audit probe runs
+        status: 'running',
+        currentStepId: 'work',
+      }),
+    );
+
+    const visionWriter = fakeVisionWriter();
+    const stratum = {
+      async plan() { return { status: 'completed', runId: 'flow-x', trace: [] }; },
+      async audit() { throw new Error('planned audit explosion'); },
+      async close() {},
+    };
+    const { runBuild } = await import('../lib/build.js');
+    await assert.rejects(
+      runBuild('COMP-INT', { cwd, stratum, visionWriter, template: 'build', skipTriage: true, description: 'x' }),
+      /planned audit explosion/,
+    );
+
+    const actuals = readEvents(cwd, { kind: 'build-actuals' });
+    assert.equal(actuals.length, 1, 'the interrupted build must still get its terminal row');
+    assert.equal(actuals[0].build_id, '4fe533b1-70b4-4df7-845e-85c1686ad832');
+    assert.equal(actuals[0].terminal_status, 'failed');
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+// COMP-TRIAGE-6-4 (row-first ordering): emitBuildActuals appends the durable
+// ledger row BEFORE writing the accumulator marker / clearing the sidecar, so
+// the two writes are effectively atomic — a crash between them can never strand
+// a `last_terminal='failed'` marker with no row, nor lose a row. Assert the
+// happy-path outcome is unchanged (row + marker for failed; row + sidecar
+// cleared for complete) and that the row is emitted from the persisted snapshot.
+test('emitBuildActuals writes the ledger row then the marker/clear (row-first)', () => {
+  const cwd = freshProject('dispatch-build-rowfirst-');
+  try {
+    createBuildAccumulator(cwd, 'COMP-ORDER');
+    updateBuildAccumulator(cwd, 'COMP-ORDER', (acc) => ({
+      ...acc,
+      files_changed: ['x.js'],
+      tokens_total: 42,
+    }));
+    const failId = readBuildAccumulator(cwd, 'COMP-ORDER').build_id;
+    emitBuildActuals(cwd, readBuildAccumulator(cwd, 'COMP-ORDER'), 'failed');
+    // Failed: row is durable AND the marker was written after it.
+    const afterFail = readEvents(cwd, { kind: 'build-actuals' });
+    assert.equal(afterFail.length, 1);
+    assert.equal(afterFail[0].build_id, failId);
+    assert.equal(afterFail[0].tokens_total, 42);
+    assert.equal(readBuildAccumulator(cwd, 'COMP-ORDER').last_terminal, 'failed');
+
+    // Complete: row is durable AND the sidecar is cleared after it.
+    emitBuildActuals(cwd, readBuildAccumulator(cwd, 'COMP-ORDER'), 'complete');
+    const afterComplete = readEvents(cwd, { kind: 'build-actuals' });
+    assert.deepEqual(afterComplete.map((r) => r.terminal_status), ['failed', 'complete']);
+    assert.equal(existsSync(buildAccumulatorPath(cwd, 'COMP-ORDER')), false);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
