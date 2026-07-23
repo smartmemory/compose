@@ -21,16 +21,149 @@
       "pattern": "^[a-z0-9][a-z0-9-]*#r[1-9][0-9]*$"
     },
 
+    "entry_id": {
+      "type": "string",
+      "description": "Writer-allocated stable sub-entry id.",
+      "pattern": "^(?:f|e|of|o|l|c|gj|gl)[1-9][0-9]*$"
+    },
+
+    "fact_id": {
+      "type": "string",
+      "pattern": "^f[1-9][0-9]*$"
+    },
+
+    "edge_id": {
+      "type": "string",
+      "pattern": "^e[1-9][0-9]*$"
+    },
+
+    "open_field_id": {
+      "type": "string",
+      "pattern": "^of[1-9][0-9]*$"
+    },
+
+    "owed_id": {
+      "type": "string",
+      "pattern": "^o[1-9][0-9]*$"
+    },
+
+    "load_link_id": {
+      "type": "string",
+      "pattern": "^l[1-9][0-9]*$"
+    },
+
+    "clause_id": {
+      "type": "string",
+      "pattern": "^c[1-9][0-9]*$"
+    },
+
+    "goal_joint_id": {
+      "type": "string",
+      "pattern": "^gj[1-9][0-9]*$"
+    },
+
+    "goal_load_link_id": {
+      "type": "string",
+      "pattern": "^gl[1-9][0-9]*$"
+    },
+
+    "goal_clause_ref": {
+      "type": "string",
+      "description": "Strict address of a clause in a goal version.",
+      "pattern": "^goal:v[1-9][0-9]*#c[1-9][0-9]*$"
+    },
+
     "provenance": {
       "type": "object",
-      "description": "Writer-stamped, never caller-set. actor is a v1 constant (oq1-agent-only-v1); session is best-effort diagnostic garnish and nothing may depend on it; via: 'import' marks historical transcription.",
+      "description": "Writer-stamped, never caller-set. actor is a v1 constant (oq1-agent-only-v1); session is best-effort diagnostic garnish and nothing may depend on it; via marks sanctioned historical transcription or migration.",
       "required": ["actor", "written_at"],
       "additionalProperties": false,
       "properties": {
         "actor": { "const": "agent" },
         "session": { "type": ["string", "null"] },
         "written_at": { "type": "string", "format": "date-time" },
-        "via": { "enum": ["import"] }
+        "via": { "enum": ["import", "migration"] },
+        "intent_id": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "fact_text": {
+      "type": "string",
+      "minLength": 1
+    },
+
+    "fact_channel": {
+      "enum": ["said", "observed", "secondhand", "inferred"]
+    },
+
+    "fact_at": {
+      "type": "string",
+      "format": "date"
+    },
+
+    "fact_via": {
+      "type": "string",
+      "minLength": 1
+    },
+
+    "person_section": {
+      "enum": ["role", "life", "stated", "revealed"]
+    },
+
+    "correction_trace_list": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/correction_trace" }
+    },
+
+    "correction_trace": {
+      "type": "object",
+      "description": "Writer-produced prior values for one correction, fill, give, or reopen transition.",
+      "required": ["prior", "corrected_at", "provenance"],
+      "additionalProperties": false,
+      "properties": {
+        "prior": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": ["string", "number", "boolean", "null"] }
+        },
+        "corrected_at": { "type": "string", "format": "date-time" },
+        "provenance": { "$ref": "#/definitions/provenance" }
+      }
+    },
+
+    "removed_block": {
+      "type": "object",
+      "description": "Writer-stamped retirement marker; the containing stable entry remains in place.",
+      "required": ["at", "reason", "provenance"],
+      "additionalProperties": false,
+      "properties": {
+        "at": { "type": "string", "format": "date-time" },
+        "reason": { "type": "string", "minLength": 1 },
+        "provenance": { "$ref": "#/definitions/provenance" }
+      }
+    },
+
+    "ratification": {
+      "type": "object",
+      "description": "Owner attestation citation: the elicitation triplet plus the owner's quoted answer.",
+      "required": ["asked", "answered_at", "answer_ref", "quote"],
+      "additionalProperties": false,
+      "properties": {
+        "asked": { "type": "string", "minLength": 1 },
+        "answered_at": { "type": "string", "format": "date-time" },
+        "answer_ref": { "type": "string", "minLength": 1 },
+        "quote": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "provocation": {
+      "type": "object",
+      "description": "Owner words that provoked a goal cut and when they were recorded.",
+      "required": ["quote", "at"],
+      "additionalProperties": false,
+      "properties": {
+        "quote": { "type": "string", "minLength": 1 },
+        "at": { "type": "string", "format": "date-time" }
       }
     },
 
@@ -43,6 +176,274 @@
         "asked": { "type": "string", "minLength": 1 },
         "answered_at": { "type": "string", "format": "date-time" },
         "answer_ref": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "person_fact": {
+      "type": "object",
+      "required": ["id", "section", "text", "channel", "at", "provenance", "trace"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/definitions/fact_id" },
+        "section": { "$ref": "#/definitions/person_section" },
+        "text": { "$ref": "#/definitions/fact_text" },
+        "channel": { "$ref": "#/definitions/fact_channel" },
+        "via": { "$ref": "#/definitions/fact_via" },
+        "at": { "$ref": "#/definitions/fact_at" },
+        "diverges_with": { "$ref": "#/definitions/fact_id" },
+        "provenance": { "$ref": "#/definitions/provenance" },
+        "trace": { "$ref": "#/definitions/correction_trace_list" }
+      },
+      "if": {
+        "properties": { "channel": { "const": "secondhand" } },
+        "required": ["channel"]
+      },
+      "then": { "required": ["via"] },
+      "else": { "not": { "required": ["via"] } }
+    },
+
+    "situation_fact": {
+      "type": "object",
+      "required": ["id", "text", "channel", "at", "provenance", "trace"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/definitions/fact_id" },
+        "text": { "$ref": "#/definitions/fact_text" },
+        "channel": { "$ref": "#/definitions/fact_channel" },
+        "via": { "$ref": "#/definitions/fact_via" },
+        "at": { "$ref": "#/definitions/fact_at" },
+        "provenance": { "$ref": "#/definitions/provenance" },
+        "trace": { "$ref": "#/definitions/correction_trace_list" }
+      },
+      "if": {
+        "properties": { "channel": { "const": "secondhand" } },
+        "required": ["channel"]
+      },
+      "then": { "required": ["via"] },
+      "else": { "not": { "required": ["via"] } }
+    },
+
+    "person_edge": {
+      "type": "object",
+      "required": ["id", "to", "kind", "provenance", "removed"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/definitions/edge_id" },
+        "to": { "$ref": "#/definitions/slug" },
+        "kind": { "type": "string", "minLength": 1 },
+        "provenance": { "$ref": "#/definitions/provenance" },
+        "removed": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/definitions/removed_block" }
+          ]
+        }
+      }
+    },
+
+    "fact_load_link": {
+      "type": "object",
+      "required": ["id", "fact", "carries", "provenance", "removed"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/definitions/load_link_id" },
+        "fact": { "$ref": "#/definitions/fact_id" },
+        "carries": { "type": "string", "minLength": 1 },
+        "provenance": { "$ref": "#/definitions/provenance" },
+        "removed": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/definitions/removed_block" }
+          ]
+        }
+      }
+    },
+
+    "open_field": {
+      "type": "object",
+      "required": ["id", "name", "status", "provenance", "trace"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/definitions/open_field_id" },
+        "name": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["open", "filled"] },
+        "filled_by": { "$ref": "#/definitions/fact_id" },
+        "provenance": { "$ref": "#/definitions/provenance" },
+        "trace": { "$ref": "#/definitions/correction_trace_list" }
+      },
+      "if": {
+        "properties": { "status": { "const": "filled" } },
+        "required": ["status"]
+      },
+      "then": { "required": ["filled_by"] },
+      "else": { "not": { "required": ["filled_by"] } }
+    },
+
+    "owed": {
+      "type": "object",
+      "required": ["id", "name", "why_load_bearing", "status", "provenance", "trace"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/definitions/owed_id" },
+        "name": { "type": "string", "minLength": 1 },
+        "why_load_bearing": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["open", "given"] },
+        "filled_by": { "$ref": "#/definitions/fact_id" },
+        "provenance": { "$ref": "#/definitions/provenance" },
+        "trace": { "$ref": "#/definitions/correction_trace_list" }
+      },
+      "if": {
+        "properties": { "status": { "const": "given" } },
+        "required": ["status"]
+      },
+      "then": { "required": ["filled_by"] },
+      "else": { "not": { "required": ["filled_by"] } }
+    },
+
+    "goal_clause": {
+      "type": "object",
+      "required": ["id", "text", "channel", "elicitation", "provenance", "trace"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/definitions/clause_id" },
+        "text": { "$ref": "#/definitions/fact_text" },
+        "channel": { "$ref": "#/definitions/fact_channel" },
+        "via": { "$ref": "#/definitions/fact_via" },
+        "elicitation": { "$ref": "#/definitions/elicitation" },
+        "provenance": { "$ref": "#/definitions/provenance" },
+        "trace": { "$ref": "#/definitions/correction_trace_list" }
+      },
+      "if": {
+        "properties": { "channel": { "const": "secondhand" } },
+        "required": ["channel"]
+      },
+      "then": { "required": ["via"] },
+      "else": { "not": { "required": ["via"] } }
+    },
+
+    "goal_joint_link": {
+      "type": "object",
+      "required": ["id", "joint", "provenance", "removed"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/definitions/goal_joint_id" },
+        "joint": { "$ref": "#/definitions/slug" },
+        "provenance": { "$ref": "#/definitions/provenance" },
+        "removed": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/definitions/removed_block" }
+          ]
+        }
+      }
+    },
+
+    "goal_load_link": {
+      "type": "object",
+      "required": ["id", "clause", "carries", "provenance", "removed"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/definitions/goal_load_link_id" },
+        "clause": {
+          "type": "string",
+          "pattern": "^v[1-9][0-9]*#c[1-9][0-9]*$"
+        },
+        "carries": { "type": "string", "minLength": 1 },
+        "provenance": { "$ref": "#/definitions/provenance" },
+        "removed": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/definitions/removed_block" }
+          ]
+        }
+      }
+    },
+
+    "person": {
+      "type": "object",
+      "description": "One aggregate record per person under records/people/<slug>.json.",
+      "required": ["slug", "display_name", "facts", "edges", "open_fields", "load_links", "provenance"],
+      "additionalProperties": false,
+      "properties": {
+        "slug": { "$ref": "#/definitions/slug" },
+        "display_name": { "type": "string", "minLength": 1 },
+        "facts": { "type": "array", "items": { "$ref": "#/definitions/person_fact" } },
+        "edges": { "type": "array", "items": { "$ref": "#/definitions/person_edge" } },
+        "open_fields": { "type": "array", "items": { "$ref": "#/definitions/open_field" } },
+        "load_links": { "type": "array", "items": { "$ref": "#/definitions/fact_load_link" } },
+        "provenance": { "$ref": "#/definitions/provenance" }
+      }
+    },
+
+    "situation_entity": {
+      "type": "object",
+      "description": "One aggregate situation record per entity under records/situation/<slug>.json.",
+      "required": ["slug", "display_name", "facts", "owed", "load_links", "provenance"],
+      "additionalProperties": false,
+      "properties": {
+        "slug": { "$ref": "#/definitions/slug" },
+        "display_name": { "type": "string", "minLength": 1 },
+        "facts": { "type": "array", "items": { "$ref": "#/definitions/situation_fact" } },
+        "owed": { "type": "array", "items": { "$ref": "#/definitions/owed" } },
+        "load_links": { "type": "array", "items": { "$ref": "#/definitions/fact_load_link" } },
+        "provenance": { "$ref": "#/definitions/provenance" }
+      }
+    },
+
+    "goal_version": {
+      "type": "object",
+      "description": "One immutable meaning version in records/goal/v<N>.json; wording-only corrections remain visibly traced.",
+      "required": ["version", "clauses", "provocation", "diff_note", "provenance"],
+      "additionalProperties": false,
+      "properties": {
+        "version": { "type": "integer", "minimum": 1 },
+        "clauses": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/goal_clause" }
+        },
+        "provocation": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/definitions/provocation" }
+          ]
+        },
+        "ratification": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/definitions/ratification" }
+          ]
+        },
+        "diff_note": { "type": "string", "minLength": 1 },
+        "provenance": { "$ref": "#/definitions/provenance" }
+      },
+      "if": {
+        "properties": {
+          "provenance": {
+            "properties": { "via": { "enum": ["import", "migration"] } },
+            "required": ["via"]
+          }
+        },
+        "required": ["provenance"]
+      },
+      "else": {
+        "required": ["ratification"],
+        "properties": {
+          "provocation": { "$ref": "#/definitions/provocation" },
+          "ratification": { "$ref": "#/definitions/ratification" }
+        }
+      }
+    },
+
+    "goal_state": {
+      "type": "object",
+      "description": "Mutable traced goal associations stored separately from the immutable meaning chain.",
+      "required": ["joints", "load_links", "provenance"],
+      "additionalProperties": false,
+      "properties": {
+        "joints": { "type": "array", "items": { "$ref": "#/definitions/goal_joint_link" } },
+        "load_links": { "type": "array", "items": { "$ref": "#/definitions/goal_load_link" } },
+        "provenance": { "$ref": "#/definitions/provenance" }
       }
     },
 
@@ -298,7 +699,7 @@
       "required": ["kind", "title", "provenance"],
       "additionalProperties": false,
       "properties": {
-        "kind": { "enum": ["decide", "kill", "override", "escalate", "calibrate", "postmortem", "rank", "note", "correct", "open"] },
+        "kind": { "enum": ["decide", "kill", "override", "escalate", "calibrate", "postmortem", "rank", "note", "correct", "open", "attest"] },
         "title": { "type": "string", "minLength": 1 },
         "body": { "type": "string" },
         "refs": { "type": "array", "items": { "type": "string" }, "default": [] },
@@ -306,6 +707,7 @@
         "conviction": { "$ref": "#/definitions/conviction" },
         "trigger": { "type": "string", "minLength": 1 },
         "open_joints": { "type": "array", "items": { "type": "string" } },
+        "rests_on": { "type": "array", "items": { "$ref": "#/definitions/goal_clause_ref" } },
         "prediction": { "$ref": "#/definitions/embedded_prediction" },
         "disposition": { "enum": ["EXT", "INT", "CONSTRUCT", "ASSERT", "STRADDLE"] },
         "recall_verdict": { "enum": ["NAMED", "NAMED-BUT-MISRANKED", "MISSED", "UNKNOWABLE"] },
@@ -314,6 +716,9 @@
         "prediction_grade": { "enum": ["right", "right-wrong-reason", "wrong"] },
         "reason": { "type": "string", "minLength": 1 },
         "anchor": { "type": "string", "minLength": 1 },
+        "intent_id": { "type": "string", "minLength": 1 },
+        "tool": { "type": "string", "minLength": 1 },
+        "op": { "type": "string", "minLength": 1 },
         "rank_change": {
           "type": "object",
           "required": ["joint", "from", "to"],
@@ -380,6 +785,20 @@
         {
           "if": { "required": ["disposition"], "properties": { "disposition": { "const": "CONSTRUCT" } } },
           "then": { "required": ["prediction"] }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "attest" } },
+            "required": ["kind"]
+          },
+          "then": { "required": ["intent_id", "tool", "op"] },
+          "else": {
+            "allOf": [
+              { "not": { "required": ["intent_id"] } },
+              { "not": { "required": ["tool"] } },
+              { "not": { "required": ["op"] } }
+            ]
+          }
         }
       ]
     },
@@ -387,10 +806,12 @@
     "pending_intent": {
       "type": "object",
       "description": "Intent-first transition record: the COMPLETE mutation persisted atomically BEFORE the guard call, replayed idempotently by the reconciler — guard state authoritative for the edge, the intent authoritative for the payload.",
-      "required": ["id", "op", "payload", "created_at"],
+      "required": ["id", "kind", "tool", "op", "payload", "created_at"],
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "tool": { "type": "string", "minLength": 1 },
         "op": { "type": "string", "minLength": 1 },
         "payload": { "type": "object" },
         "created_at": { "type": "string", "format": "date-time" }

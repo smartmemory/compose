@@ -4,6 +4,7 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { JUDGMENT_SCHEMA_PATH, getJudgmentValidator } from '../lib/judgment/schema.js';
 
@@ -18,6 +19,187 @@ const elicitation = {
   answered_at: '2026-07-22T11:00:00Z',
   answer_ref: 'ledger:decide:judgment-records-under-docs',
 };
+
+const ratification = {
+  ...elicitation,
+  quote: 'Yes, that is the goal.',
+};
+
+const provocation = {
+  quote: 'We need one objective that prices every flip.',
+  at: '2026-07-22T11:00:00Z',
+};
+
+function writerProvenance(overrides = {}) {
+  return { ...provenance, ...overrides };
+}
+
+function correctionTrace(overrides = {}) {
+  return {
+    prior: { text: 'old wording' },
+    corrected_at: '2026-07-22T12:30:00Z',
+    provenance: writerProvenance(),
+    ...overrides,
+  };
+}
+
+function removedBlock(overrides = {}) {
+  return {
+    at: '2026-07-22T12:30:00Z',
+    reason: 'no longer load-bearing',
+    provenance: writerProvenance(),
+    ...overrides,
+  };
+}
+
+function personFact(overrides = {}) {
+  return {
+    id: 'f1',
+    section: 'stated',
+    text: 'Jane wants the decision surface to stay inspectable.',
+    channel: 'said',
+    at: '2026-07-22',
+    provenance: writerProvenance(),
+    trace: [],
+    ...overrides,
+  };
+}
+
+function situationFact(overrides = {}) {
+  return {
+    id: 'f1',
+    text: 'The current register is at its reading ceiling.',
+    channel: 'observed',
+    at: '2026-07-22',
+    provenance: writerProvenance(),
+    trace: [],
+    ...overrides,
+  };
+}
+
+function personEdge(overrides = {}) {
+  return {
+    id: 'e1',
+    to: 'sam',
+    kind: 'works-with',
+    provenance: writerProvenance(),
+    removed: null,
+    ...overrides,
+  };
+}
+
+function factLoadLink(overrides = {}) {
+  return {
+    id: 'l1',
+    fact: 'f1',
+    carries: 'The rollout plan assumes this fact remains true.',
+    provenance: writerProvenance(),
+    removed: null,
+    ...overrides,
+  };
+}
+
+function openField(overrides = {}) {
+  return {
+    id: 'of1',
+    name: 'Jane\'s actual yes',
+    status: 'open',
+    provenance: writerProvenance(),
+    trace: [],
+    ...overrides,
+  };
+}
+
+function owed(overrides = {}) {
+  return {
+    id: 'o1',
+    name: 'monthly revenue number',
+    why_load_bearing: 'The runway decision changes at this threshold.',
+    status: 'open',
+    provenance: writerProvenance(),
+    trace: [],
+    ...overrides,
+  };
+}
+
+function goalClause(overrides = {}) {
+  return {
+    id: 'c1',
+    text: 'Keep every load-bearing claim inspectable.',
+    channel: 'said',
+    elicitation: { ...elicitation },
+    provenance: writerProvenance(),
+    trace: [],
+    ...overrides,
+  };
+}
+
+function goalJointLink(overrides = {}) {
+  return {
+    id: 'gj1',
+    joint: 'guard-predicate-expressible',
+    provenance: writerProvenance(),
+    removed: null,
+    ...overrides,
+  };
+}
+
+function goalLoadLink(overrides = {}) {
+  return {
+    id: 'gl1',
+    clause: 'v1#c1',
+    carries: 'The implementation plan rests on this clause.',
+    provenance: writerProvenance(),
+    removed: null,
+    ...overrides,
+  };
+}
+
+function personRecord(overrides = {}) {
+  return {
+    slug: 'jane',
+    display_name: 'Jane',
+    facts: [personFact()],
+    edges: [personEdge()],
+    open_fields: [openField()],
+    load_links: [factLoadLink()],
+    provenance: writerProvenance(),
+    ...overrides,
+  };
+}
+
+function situationRecord(overrides = {}) {
+  return {
+    slug: 'trustflow',
+    display_name: 'TrustFlow',
+    facts: [situationFact()],
+    owed: [owed()],
+    load_links: [factLoadLink()],
+    provenance: writerProvenance(),
+    ...overrides,
+  };
+}
+
+function goalVersion(overrides = {}) {
+  return {
+    version: 1,
+    clauses: [goalClause()],
+    provocation: { ...provocation },
+    ratification: { ...ratification },
+    diff_note: 'Initial owner-ratified cut.',
+    provenance: writerProvenance(),
+    ...overrides,
+  };
+}
+
+function goalState(overrides = {}) {
+  return {
+    joints: [goalJointLink()],
+    load_links: [goalLoadLink()],
+    provenance: writerProvenance(),
+    ...overrides,
+  };
+}
 
 function claim(overrides = {}) {
   return {
@@ -83,7 +265,9 @@ function ledgerEvent(overrides = {}) {
 function pendingIntent(overrides = {}) {
   return {
     id: 'intent-01',
-    op: 'judgment_transition',
+    kind: 'transition',
+    tool: 'judgment_transition',
+    op: 'transition',
     payload: { slug: 'guard-predicate-expressible', to: 'under_test' },
     created_at: '2026-07-22T12:00:00Z',
     ...overrides,
@@ -98,6 +282,316 @@ describe('schema loader', () => {
   test('exports a path and a memoized validator', () => {
     assert.ok(JUDGMENT_SCHEMA_PATH.endsWith('contracts/judgment-record.schema.json'));
     assert.equal(getJudgmentValidator(), getJudgmentValidator());
+  });
+});
+
+const NEW_OBJECT_SHAPES = [
+  {
+    definition: 'correction_trace',
+    build: correctionTrace,
+    required: ['prior', 'corrected_at', 'provenance'],
+    invalidate: (value) => { value.corrected_at = 'yesterday'; },
+  },
+  {
+    definition: 'removed_block',
+    build: removedBlock,
+    required: ['at', 'reason', 'provenance'],
+    invalidate: (value) => { value.reason = ''; },
+  },
+  {
+    definition: 'ratification',
+    build: () => ({ ...ratification }),
+    required: ['asked', 'answered_at', 'answer_ref', 'quote'],
+    invalidate: (value) => { value.quote = ''; },
+  },
+  {
+    definition: 'provocation',
+    build: () => ({ ...provocation }),
+    required: ['quote', 'at'],
+    invalidate: (value) => { value.at = 'not-a-timestamp'; },
+  },
+  {
+    definition: 'person_fact',
+    build: personFact,
+    required: ['id', 'section', 'text', 'channel', 'at', 'provenance', 'trace'],
+    invalidate: (value) => { value.section = 'psychometric-score'; },
+  },
+  {
+    definition: 'situation_fact',
+    build: situationFact,
+    required: ['id', 'text', 'channel', 'at', 'provenance', 'trace'],
+    invalidate: (value) => { value.channel = 'rumor'; },
+  },
+  {
+    definition: 'person_edge',
+    build: personEdge,
+    required: ['id', 'to', 'kind', 'provenance', 'removed'],
+    invalidate: (value) => { value.id = 'edge-1'; },
+  },
+  {
+    definition: 'fact_load_link',
+    build: factLoadLink,
+    required: ['id', 'fact', 'carries', 'provenance', 'removed'],
+    invalidate: (value) => { value.fact = 'fact-1'; },
+  },
+  {
+    definition: 'open_field',
+    build: openField,
+    required: ['id', 'name', 'status', 'provenance', 'trace'],
+    invalidate: (value) => { value.status = 'unknown'; },
+  },
+  {
+    definition: 'owed',
+    build: owed,
+    required: ['id', 'name', 'why_load_bearing', 'status', 'provenance', 'trace'],
+    invalidate: (value) => { value.id = 'owed-1'; },
+  },
+  {
+    definition: 'goal_clause',
+    build: goalClause,
+    required: ['id', 'text', 'channel', 'elicitation', 'provenance', 'trace'],
+    invalidate: (value) => { value.id = 'clause-1'; },
+  },
+  {
+    definition: 'goal_joint_link',
+    build: goalJointLink,
+    required: ['id', 'joint', 'provenance', 'removed'],
+    invalidate: (value) => { value.id = 'joint-1'; },
+  },
+  {
+    definition: 'goal_load_link',
+    build: goalLoadLink,
+    required: ['id', 'clause', 'carries', 'provenance', 'removed'],
+    invalidate: (value) => { value.clause = 'goal:v1#c1'; },
+  },
+  {
+    definition: 'person',
+    build: personRecord,
+    required: ['slug', 'display_name', 'facts', 'edges', 'open_fields', 'load_links', 'provenance'],
+    invalidate: (value) => { value.slug = 'Jane Doe'; },
+  },
+  {
+    definition: 'situation_entity',
+    build: situationRecord,
+    required: ['slug', 'display_name', 'facts', 'owed', 'load_links', 'provenance'],
+    invalidate: (value) => { value.slug = '_trustflow'; },
+  },
+  {
+    definition: 'goal_version',
+    build: goalVersion,
+    required: ['version', 'clauses', 'provocation', 'ratification', 'diff_note', 'provenance'],
+    invalidate: (value) => { value.version = 0; },
+  },
+  {
+    definition: 'goal_state',
+    build: goalState,
+    required: ['joints', 'load_links', 'provenance'],
+    invalidate: (value) => { value.joints[0].id = 'gj0'; },
+  },
+];
+
+describe('COMP-JUDGMENT-STORES object contracts', () => {
+  for (const { definition, build, required, invalidate } of NEW_OBJECT_SHAPES) {
+    test(`${definition}: valid, closed, required, and constrained`, () => {
+      const value = build();
+      const { valid, errors } = check(definition, value);
+      assert.equal(valid, true, `${definition}: ${JSON.stringify(errors)}`);
+
+      for (const field of required) {
+        const missing = structuredClone(value);
+        delete missing[field];
+        assert.equal(
+          check(definition, missing).valid,
+          false,
+          `${definition} must require ${field}`,
+        );
+      }
+
+      const unknown = structuredClone(value);
+      unknown.caller_supplied = true;
+      assert.equal(check(definition, unknown).valid, false, `${definition} must be closed`);
+
+      const invalid = structuredClone(value);
+      invalidate(invalid);
+      assert.equal(check(definition, invalid).valid, false, `${definition} must reject its invalid enum/pattern`);
+    });
+  }
+
+  test('writer provenance remains closed at every new nested record level', () => {
+    const provenanceShapes = NEW_OBJECT_SHAPES.filter(({ build }) => 'provenance' in build());
+    for (const { definition, build } of provenanceShapes) {
+      const value = build();
+      value.provenance.caller = 'forged';
+      assert.equal(check(definition, value).valid, false, `${definition} accepted caller provenance garbage`);
+    }
+
+    const nestedRoots = [
+      ['person', personRecord(), (value) => value.facts[0].provenance],
+      ['situation_entity', situationRecord(), (value) => value.facts[0].provenance],
+      ['goal_version', goalVersion(), (value) => value.clauses[0].provenance],
+      ['goal_state', goalState(), (value) => value.joints[0].provenance],
+    ];
+    for (const [definition, value, nestedProvenance] of nestedRoots) {
+      nestedProvenance(value).caller = 'forged';
+      assert.equal(check(definition, value).valid, false, `${definition} accepted nested caller provenance garbage`);
+    }
+  });
+});
+
+describe('stable ids and goal clause refs', () => {
+  const cases = [
+    ['entry_id', 'f1', 'x1'],
+    ['fact_id', 'f1', 'f0'],
+    ['edge_id', 'e1', 'e01'],
+    ['open_field_id', 'of1', 'of0'],
+    ['owed_id', 'o1', 'o-1'],
+    ['load_link_id', 'l1', 'gl1'],
+    ['clause_id', 'c1', 'c0'],
+    ['goal_joint_id', 'gj1', 'gj01'],
+    ['goal_load_link_id', 'gl1', 'gl0'],
+    ['goal_clause_ref', 'goal:v12#c3', 'v12#c3'],
+  ];
+
+  for (const [definition, validValue, invalidValue] of cases) {
+    test(`${definition} accepts only its strict address pattern`, () => {
+      assert.equal(check(definition, validValue).valid, true);
+      assert.equal(check(definition, invalidValue).valid, false);
+    });
+  }
+});
+
+describe('fact and lifecycle conditional contracts', () => {
+  test('person_fact and situation_fact keep identical shared base-property refs', () => {
+    const schema = JSON.parse(readFileSync(JUDGMENT_SCHEMA_PATH, 'utf8'));
+    const personProperties = schema.definitions.person_fact.properties;
+    const situationProperties = schema.definitions.situation_fact.properties;
+    const personOnly = new Set(['section', 'diverges_with']);
+    const personBaseKeys = Object.keys(personProperties).filter((key) => !personOnly.has(key)).sort();
+    const situationBaseKeys = Object.keys(situationProperties).sort();
+    const personRequiredBase = schema.definitions.person_fact.required
+      .filter((key) => !personOnly.has(key))
+      .sort();
+    const situationRequired = [...schema.definitions.situation_fact.required].sort();
+
+    assert.deepEqual(personBaseKeys, situationBaseKeys);
+    assert.deepEqual(personRequiredBase, situationRequired);
+    for (const key of personBaseKeys) {
+      assert.deepEqual(
+        personProperties[key],
+        situationProperties[key],
+        `${key} must use the same property-level definition`,
+      );
+      assert.equal(typeof personProperties[key].$ref, 'string', `${key} must be a shared property-level $ref`);
+    }
+    assert.ok('section' in personProperties);
+    assert.ok('diverges_with' in personProperties);
+    assert.equal('section' in situationProperties, false);
+    assert.equal('diverges_with' in situationProperties, false);
+  });
+
+  for (const [definition, build] of [
+    ['person_fact', personFact],
+    ['situation_fact', situationFact],
+    ['goal_clause', goalClause],
+  ]) {
+    test(`${definition}: secondhand requires non-empty via and every other channel forbids it`, () => {
+      assert.equal(check(definition, build({ channel: 'secondhand' })).valid, false);
+      assert.equal(check(definition, build({ channel: 'secondhand', via: '' })).valid, false);
+      const { valid, errors } = check(definition, build({ channel: 'secondhand', via: 'owner interview' }));
+      assert.equal(valid, true, JSON.stringify(errors));
+      assert.equal(check(definition, build({ channel: 'said', via: 'stale source' })).valid, false);
+    });
+  }
+
+  test('filled open fields require filled_by while open fields reject it', () => {
+    const filled = openField({ status: 'filled', filled_by: 'f1' });
+    assert.equal(check('open_field', filled).valid, true);
+    const missing = openField({ status: 'filled' });
+    assert.equal(check('open_field', missing).valid, false);
+    assert.equal(check('open_field', openField({ filled_by: 'f1' })).valid, false);
+  });
+
+  test('given owed entries require filled_by while open entries reject it', () => {
+    const given = owed({ status: 'given', filled_by: 'f1' });
+    assert.equal(check('owed', given).valid, true);
+    assert.equal(check('owed', owed({ status: 'given' })).valid, false);
+    assert.equal(check('owed', owed({ filled_by: 'f1' })).valid, false);
+  });
+
+  test('all removable entries require removed and accept a closed removal block', () => {
+    for (const [definition, build] of [
+      ['person_edge', personEdge],
+      ['fact_load_link', factLoadLink],
+      ['goal_joint_link', goalJointLink],
+      ['goal_load_link', goalLoadLink],
+    ]) {
+      const absent = build();
+      delete absent.removed;
+      assert.equal(check(definition, absent).valid, false, `${definition} must carry removed`);
+      assert.equal(check(definition, build({ removed: removedBlock() })).valid, true);
+      assert.equal(
+        check(definition, build({ removed: removedBlock({ caller: 'garbage' }) })).valid,
+        false,
+        `${definition} removal must be closed`,
+      );
+    }
+  });
+
+  test('trace entries require non-empty scalar prior values and are closed', () => {
+    assert.equal(check('correction_trace', correctionTrace({ prior: {} })).valid, false);
+    assert.equal(
+      check('correction_trace', correctionTrace({ prior: { text: { caller: 'garbage' } } })).valid,
+      false,
+    );
+    assert.equal(check('correction_trace', correctionTrace({ caller: 'garbage' })).valid, false);
+
+    const fact = personFact({ trace: [correctionTrace()] });
+    assert.equal(check('person_fact', fact).valid, true);
+    fact.trace[0].caller = 'garbage';
+    assert.equal(check('person_fact', fact).valid, false);
+  });
+});
+
+describe('goal citation and draft contracts', () => {
+  test('ordinary goal versions require non-null provocation and ratification citations', () => {
+    assert.equal(check('goal_version', goalVersion()).valid, true);
+    assert.equal(check('goal_version', goalVersion({ provocation: null })).valid, false);
+    const noRatification = goalVersion();
+    delete noRatification.ratification;
+    assert.equal(check('goal_version', noRatification).valid, false);
+    assert.equal(check('goal_version', goalVersion({ ratification: null })).valid, false);
+  });
+
+  for (const via of ['import', 'migration']) {
+    test(`${via} goal drafts may use null provocation and omit ratification`, () => {
+      const draft = goalVersion({
+        provocation: null,
+        provenance: writerProvenance({ via }),
+      });
+      delete draft.ratification;
+      const { valid, errors } = check('goal_version', draft);
+      assert.equal(valid, true, JSON.stringify(errors));
+      assert.equal(check('goal_version', { ...draft, ratification: null }).valid, true);
+    });
+  }
+
+  test('goal versions require a non-empty clause list and diff note', () => {
+    assert.equal(check('goal_version', goalVersion({ clauses: [] })).valid, false);
+    assert.equal(check('goal_version', goalVersion({ diff_note: '' })).valid, false);
+  });
+});
+
+describe('provenance extensions', () => {
+  test('via is restricted to import or migration', () => {
+    assert.equal(check('provenance', writerProvenance({ via: 'import' })).valid, true);
+    assert.equal(check('provenance', writerProvenance({ via: 'migration' })).valid, true);
+    assert.equal(check('provenance', writerProvenance({ via: 'caller' })).valid, false);
+  });
+
+  test('optional intent_id must be non-empty and provenance stays closed', () => {
+    assert.equal(check('provenance', writerProvenance({ intent_id: 'intent-01' })).valid, true);
+    assert.equal(check('provenance', writerProvenance({ intent_id: '' })).valid, false);
+    assert.equal(check('provenance', writerProvenance({ payload: 'forged' })).valid, false);
   });
 });
 
@@ -347,6 +841,63 @@ describe('ledger_event', () => {
     assert.equal(check('ledger_event', { ...commitDecide, trigger: 'bored' }).valid, false);
   });
 
+  test('commit rests_on accepts only strict goal:v<N>#c<N> refs', () => {
+    const commitDecide = {
+      kind: 'decide',
+      title: 'Commit: ship the writer',
+      rejected: [{ what: 'wait', why: 'no new information coming' }],
+      conviction: { level: 'medium', source: 'stated' },
+      trigger: 'earned',
+      open_joints: [],
+      prediction: { text: 'suite stays green', outcome_criteria: 'focused gate remains green' },
+      rests_on: ['goal:v1#c1', 'goal:v12#c3'],
+      provenance,
+    };
+    const { valid, errors } = check('ledger_event', commitDecide);
+    assert.equal(valid, true, JSON.stringify(errors));
+    assert.equal(check('ledger_event', { ...commitDecide, rests_on: ['v1#c1'] }).valid, false);
+    assert.equal(check('ledger_event', { ...commitDecide, rests_on: ['goal:v0#c1'] }).valid, false);
+  });
+
+  test('reserved attest events require the complete intent attribution triple', () => {
+    const attestation = {
+      kind: 'attest',
+      title: 'Intent applied',
+      intent_id: 'intent-01',
+      tool: 'judgment_transition',
+      op: 'transition',
+      provenance: writerProvenance({ intent_id: 'intent-01' }),
+    };
+    const { valid, errors } = check('ledger_event', attestation);
+    assert.equal(valid, true, JSON.stringify(errors));
+    for (const field of ['intent_id', 'tool', 'op']) {
+      const missing = { ...attestation };
+      delete missing[field];
+      assert.equal(check('ledger_event', missing).valid, false, `attest must require ${field}`);
+    }
+    assert.equal(check('ledger_event', { ...attestation, intent_id: '' }).valid, false);
+    assert.equal(check('ledger_event', { ...attestation, tool: '' }).valid, false);
+    assert.equal(check('ledger_event', { ...attestation, op: '' }).valid, false);
+  });
+
+  test('ordinary caller events forbid every reserved attestation field', () => {
+    for (const field of ['intent_id', 'tool', 'op']) {
+      assert.equal(
+        check('ledger_event', ledgerEvent({ [field]: 'forged' })).valid,
+        false,
+        `ordinary event accepted ${field}`,
+      );
+    }
+    assert.equal(
+      check('ledger_event', ledgerEvent({
+        intent_id: 'intent-01',
+        tool: 'judgment_transition',
+        op: 'transition',
+      })).valid,
+      false,
+    );
+  });
+
   test('MUST: CONSTRUCT-disposition event requires an embedded prediction', () => {
     const ev = ledgerEvent({ kind: 'open', anchor: undefined, disposition: 'CONSTRUCT' });
     delete ev.anchor;
@@ -407,5 +958,18 @@ describe('pending_intent', () => {
     const i = pendingIntent();
     delete i.payload;
     assert.equal(check('pending_intent', i).valid, false);
+  });
+
+  test('kind, tool, and op are separately required non-empty fields', () => {
+    for (const field of ['kind', 'tool', 'op']) {
+      const missing = pendingIntent();
+      delete missing[field];
+      assert.equal(check('pending_intent', missing).valid, false, `intent must require ${field}`);
+      assert.equal(check('pending_intent', pendingIntent({ [field]: '' })).valid, false, `${field} must be non-empty`);
+    }
+  });
+
+  test('intent envelope is closed', () => {
+    assert.equal(check('pending_intent', pendingIntent({ provenance: writerProvenance() })).valid, false);
   });
 });
