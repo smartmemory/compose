@@ -532,6 +532,58 @@ describe('kill-between-steps — intent replay recovers the WHOLE mutation', () 
     assert.equal(intentAttestations(store, 'intent-crash-1').length, 1, 'no duplicate attestation');
   });
 
+  test('kill MID-write: joint already mutated on disk, intent pending — replay converges', async () => {
+    const cwd = freshCwd();
+    await judgmentJointAdd(cwd, {
+      slug: 'midway',
+      question: 'q?',
+      branch_true: 'a',
+      branch_false: 'b',
+      resolve_by: 'INT',
+      cost: 'hours',
+      rank: 'high',
+    });
+    const store = new RecordsStore(cwd);
+    const before = store.readJoint('midway');
+
+    // Simulate death immediately AFTER applyPayload's writeJoint but before
+    // ledger events, attestation, or clear: the mutated joint is already on
+    // disk (in-place, no intent attribution — the blueprint disclaims an
+    // effective-view preimage for it) while the intent is still pending.
+    const mutated = { ...before, state: 'under_test' };
+    const event = {
+      kind: 'note',
+      title: 'midway disposed',
+      body: 'payload event not yet applied at crash time',
+      anchor: 'joint:midway',
+      provenance: before.provenance,
+    };
+    const intent = {
+      id: 'intent-crash-mid-1',
+      kind: 'transition',
+      tool: 'judgment_transition',
+      op: 'transition',
+      payload: { slug: 'midway', from: 'open', to: 'under_test', joint: mutated, events: [event], predictions: [] },
+      created_at: '2026-07-22T12:00:00Z',
+    };
+    store.persistIntent(intent);
+    store.writeJoint(mutated); // the half-published crash state
+
+    const replay = await replayPendingIntents(cwd);
+    assert.equal(replay.replayed, 1);
+    assert.equal(store.readJoint('midway').state, 'under_test', 'joint mutation stands');
+    assert.equal(store.readLedgerEvents().filter((e) => e.title === 'midway disposed').length, 1, 'missing payload event applied exactly once');
+    assert.deepEqual(store.readIntents(), [], 'intent cleared after replay');
+    assert.equal(intentAttestations(store, 'intent-crash-mid-1').length, 1, 'one success attestation');
+    fixedPoint(cwd, 'after mid-write replay');
+
+    // Idempotent on a second replay: nothing duplicates.
+    const again = await replayPendingIntents(cwd);
+    assert.equal(again.replayed, 0);
+    assert.equal(store.readLedgerEvents().filter((e) => e.title === 'midway disposed').length, 1, 'no double-append');
+    assert.equal(intentAttestations(store, 'intent-crash-mid-1').length, 1, 'no duplicate attestation');
+  });
+
   test('every write op and getJudgmentState replay pending intents first', async () => {
     const cwd = freshCwd();
     await judgmentJointAdd(cwd, {
@@ -1814,6 +1866,40 @@ function persistTransitionIntent(store, {
 }
 
 describe('T4 goal cut — ratification, channel grammar, and migration precedence', () => {
+  test('citation timestamps are validated as strict date-time BEFORE the idempotency cache', async () => {
+    const cwd = freshCwd();
+    // A date-only string parses via new Date() but fails the contract's
+    // RFC 3339 date-time format; the precheck must reject it in validate
+    // (ordinary cuts surface citation defects as UNRATIFIED_CUT).
+    await refusedWith(
+      judgmentGoalWrite(cwd, cutArgs({
+        ratification: { ...GOAL_RATIFICATION, answered_at: '2026-07-23' },
+      })),
+      'JUDGMENT_UNRATIFIED_CUT',
+      /answered_at.*date-time/i,
+    );
+    await refusedWith(
+      judgmentGoalWrite(cwd, cutArgs({
+        provocation: { ...GOAL_PROVOCATION, at: '2026-07-23' },
+      })),
+      'JUDGMENT_UNRATIFIED_CUT',
+      /provocation\.at.*date-time/i,
+    );
+
+    // Validate-before-idempotency: a malformed retry reusing a cached key
+    // must refuse, never return the cached success.
+    const ok = await judgmentGoalWrite(cwd, cutArgs({ idempotency_key: 'cut-key-1' }));
+    assert.equal(ok.version, 1);
+    await refusedWith(
+      judgmentGoalWrite(cwd, cutArgs({
+        idempotency_key: 'cut-key-1',
+        ratification: { ...GOAL_RATIFICATION, answered_at: '2026-07-23' },
+      })),
+      'JUDGMENT_UNRATIFIED_CUT',
+      /answered_at.*date-time/i,
+    );
+  });
+
   test('ordinary cuts require clauses, elicitation, provocation, and ratification', async () => {
     const cwd = freshCwd();
     await refusedWith(

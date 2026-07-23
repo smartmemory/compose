@@ -793,6 +793,7 @@ const TOOLS = [
         prediction_ref: { type: 'string' },
         prediction_grade: { type: 'string', description: 'right|right-wrong-reason|wrong' },
         reason: { type: 'string' },
+        rests_on: { type: 'array', description: 'On commit-moment decide: goal clause refs (goal:v<N>#c<N>) the commit rests on; resolved through the effective goal chain.' },
         anchor: { type: 'string', description: 'On note: projection anchor (register-header, joint:<slug>, …).' },
         idempotency_key: { type: 'string' },
       },

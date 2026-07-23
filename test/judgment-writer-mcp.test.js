@@ -171,6 +171,8 @@ describe('compose-mcp judgment writer (end-to-end)', () => {
         assert.deepEqual(definition.inputSchema.required, ['op'], `${name} requires only its discriminant`);
         assert.deepEqual(definition.inputSchema.properties.op.enum, ops, `${name} op enum`);
       }
+      const ledgerAppend = result.tools.find((tool) => tool.name === 'judgment_ledger_append');
+      assert.ok(ledgerAppend.inputSchema.properties.rests_on, 'judgment_ledger_append advertises rests_on');
     } finally {
       client.close();
     }

@@ -289,6 +289,13 @@ function seededCwd() {
     op: 'transition',
     provenance,
   });
+  store.appendLedgerEvent({
+    kind: 'decide',
+    title: 'Commit resting on goal clauses',
+    trigger: 'earned',
+    rests_on: ['goal:v1#c1'],
+    provenance,
+  });
 
   const hiddenProvenance = {
     ...provenance,
@@ -631,6 +638,13 @@ describe('S5 person and situation audit projections', () => {
     assert.match(ledger, /op: transition/);
     assert.doesNotMatch(ledger, /payload:/);
     assert.doesNotMatch(ledger, /This must not render before publication\./);
+  });
+
+  test('ledger renders commit rests_on clause dependencies', () => {
+    const cwd = seededCwd();
+    regenerateProjections(cwd);
+    const ledger = readFileSync(join(cwd, 'docs', 'judgment', 'LEDGER.md'), 'utf8');
+    assert.match(ledger, /rests_on: \["goal:v1#c1"\]/);
   });
 });
 
