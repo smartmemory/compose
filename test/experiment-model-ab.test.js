@@ -636,9 +636,13 @@ describe('COMP-MODEL-AB S4: experiment-judge', () => {
       idiomaticity: 9,
       rationale:    'Clean implementation with good coverage.',
     });
+    let capturedOpts;
     const goodStratum = {
       async runAgentText() { return '```json\n' + validPayload + '\n```'; },
-      async agentRun()     { return { text: '```json\n' + validPayload + '\n```' }; },
+      async agentRun(_agent, _prompt, opts) {
+        capturedOpts = opts;
+        return { text: '```json\n' + validPayload + '\n```' };
+      },
     };
 
     const result = await judge({
@@ -646,11 +650,16 @@ describe('COMP-MODEL-AB S4: experiment-judge', () => {
       goal:       'Write a hello-world function',
       judgeModel: 'claude',
       stratum:    goodStratum,
+      cwd:        '/tmp/judge-project',
     });
     assert.ok(result !== null, 'judge must return scores on valid response');
     assert.equal(result.correctness,  8);
     assert.equal(result.clarity,      7);
     assert.equal(result.idiomaticity, 9);
     assert.equal(result.rationale,    'Clean implementation with good coverage.');
+    assert.deepEqual(capturedOpts.telemetry, {
+      site: 'judge',
+      project_cwd: '/tmp/judge-project',
+    });
   });
 });

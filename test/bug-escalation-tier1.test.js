@@ -59,7 +59,16 @@ describe('tier1CodexReview', () => {
     const cwd = makeTmpCwd();
     try {
       const stratum = makeMockStratum(CANONICAL_CODEX_JSON);
-      const context = { cwd, mode: 'bug', bug_code: 'BUG-T1A' };
+      const context = {
+        cwd,
+        projectCwd: cwd,
+        mode: 'bug',
+        bug_code: 'BUG-T1A',
+        build_id: 'build-t1',
+        featureCode: 'BUG-T1A',
+        step_id: 'retro_check',
+        attempt: 3,
+      };
       const hypotheses = [
         { attempt: 1, ts: '2026-05-01T00:00:00Z', hypothesis: 'race in cache', verdict: 'rejected', evidence_against: ['no concurrency in repro'] },
         { attempt: 2, ts: '2026-05-01T00:01:00Z', hypothesis: 'wrong default', verdict: 'rejected' },
@@ -76,6 +85,14 @@ describe('tier1CodexReview', () => {
       const call = stratum.calls[0];
       assert.equal(call.type, 'codex');
       assert.equal(call.opts.cwd, cwd);
+      assert.deepEqual(call.opts.telemetry, {
+        site: 'escalation',
+        project_cwd: cwd,
+        build_id: 'build-t1',
+        feature_code: 'BUG-T1A',
+        step_id: 'retro_check',
+        attempt: 3,
+      });
       assert.match(call.prompt, /Pagination drops last page item/);
       assert.match(call.prompt, /pagination\.test\.js/);
       assert.match(call.prompt, /diff --git/);

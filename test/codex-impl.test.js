@@ -196,17 +196,33 @@ describe('COMP-CODEX-IMPL preflight worktree probe', () => {
   it('passes when Codex writes the sentinel inside the worktree (and caches)', async () => {
     await withGitRepo(async (dir) => {
       const dataDir = join(dir, '.compose', 'data');
+      let capturedTelemetry;
       // Fake Codex that honors the probe: write the sentinel into its cwd.
       const stratum = {
-        async runAgentText(_type, prompt, { cwd }) {
+        async runAgentText(_type, prompt, { cwd, telemetry }) {
+          capturedTelemetry = telemetry;
           // Honor the probe: write the file it asked for (unique per-run name).
           const m = prompt.match(/named (\S+)/);
           writeFileSync(join(cwd, m[1]), PROBE_SENTINEL + '\n');
           return 'done';
         },
       };
-      const r = await preflightCodexWorktreeProbe({ cwd: dir, stratum, dataDir, ts: 'pass1' });
+      const r = await preflightCodexWorktreeProbe({
+        cwd: dir,
+        projectCwd: dir,
+        buildId: 'build-probe',
+        featureCode: 'COMP-PROBE',
+        stratum,
+        dataDir,
+        ts: 'pass1',
+      });
       assert.equal(r.ok, true, r.reason);
+      assert.deepEqual(capturedTelemetry, {
+        site: 'preflight',
+        project_cwd: dir,
+        build_id: 'build-probe',
+        feature_code: 'COMP-PROBE',
+      });
       // cached
       const cached = readProbeCache(dataDir);
       assert.equal(cached.ok, true);

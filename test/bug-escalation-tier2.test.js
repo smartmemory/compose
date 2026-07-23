@@ -94,12 +94,29 @@ describe('tier2FreshAgent — materially-new gate', () => {
       });
       const codexReview = buildReview('cursor decoded with parseInt drops chars');
       const stratum = makeStratum(async () => 'agent reasoning text');
-      const context = { cwd, mode: 'bug', bug_code: code };
+      const context = {
+        cwd,
+        projectCwd: cwd,
+        mode: 'bug',
+        bug_code: code,
+        build_id: 'build-t2',
+        featureCode: code,
+        step_id: 'retro_check',
+        attempt: 4,
+      };
       const result = await tier2FreshAgent(stratum, context, codexReview, [], null);
       assert.notEqual(result.skipped, true);
       assert.ok(result.patch_path);
       assert.equal(stratum.calls.length, 1);
       assert.equal(stratum.calls[0].type, 'claude');
+      assert.deepEqual(stratum.calls[0].opts.telemetry, {
+        site: 'escalation',
+        project_cwd: cwd,
+        build_id: 'build-t2',
+        feature_code: code,
+        step_id: 'retro_check',
+        attempt: 4,
+      });
     } finally {
       cleanup(cwd);
     }
