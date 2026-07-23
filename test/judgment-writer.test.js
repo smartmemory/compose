@@ -26,12 +26,14 @@ import {
   judgmentLedgerAppend,
   judgmentPersonWrite,
   judgmentSituationWrite,
+  judgmentGoalWrite,
   allocateStableEntryId,
   getJudgmentState,
   replayPendingIntents,
 } from '../lib/judgment-writer.js';
 import { RecordsStore } from '../lib/judgment/store/records.js';
-import { checkProjectionRoundtrip } from '../lib/judgment-gen.js';
+import { effectiveStore } from '../lib/judgment/store/index.js';
+import { checkProjectionRoundtrip, regenerateProjections } from '../lib/judgment-gen.js';
 import { LEGAL_EDGES } from '../lib/judgment-write-guard.js';
 import { transitionsOf } from '../lib/lifecycle-modes.js';
 
@@ -491,7 +493,9 @@ describe('kill-between-steps — intent replay recovers the WHOLE mutation', () 
     };
     store.persistIntent({
       id: 'intent-crash-1',
-      op: 'judgment_transition',
+      kind: 'transition',
+      tool: 'judgment_transition',
+      op: 'transition',
       payload: {
         slug: 'crashy',
         from: 'open',
@@ -518,12 +522,14 @@ describe('kill-between-steps — intent replay recovers the WHOLE mutation', () 
     assert.equal(store.readLedgerEvents().filter((e) => e.title === 'crashy disposed').length, 1, 'payload event recovered');
     assert.equal(store.readPrediction('p-crash-1').status, 'open', 'payload prediction recovered');
     assert.deepEqual(store.readIntents(), [], 'intent cleared after replay');
+    assert.equal(intentAttestations(store, 'intent-crash-1').length, 1, 'replay publishes one success attestation');
     fixedPoint(cwd, 'after replay');
 
     // Idempotent: replaying again (e.g. via a read) changes nothing.
     const again = await replayPendingIntents(cwd);
     assert.equal(again.replayed, 0);
     assert.equal(store.readLedgerEvents().filter((e) => e.title === 'crashy disposed').length, 1, 'no double-append');
+    assert.equal(intentAttestations(store, 'intent-crash-1').length, 1, 'no duplicate attestation');
   });
 
   test('every write op and getJudgmentState replay pending intents first', async () => {
@@ -541,7 +547,9 @@ describe('kill-between-steps — intent replay recovers the WHOLE mutation', () 
     const mutated = { ...store.readJoint('stale'), state: 'under_test' };
     store.persistIntent({
       id: 'intent-crash-2',
-      op: 'judgment_transition',
+      kind: 'transition',
+      tool: 'judgment_transition',
+      op: 'transition',
       payload: { slug: 'stale', from: 'open', to: 'under_test', joint: mutated, events: [], predictions: [] },
       created_at: '2026-07-22T12:00:00Z',
     });
@@ -1726,5 +1734,691 @@ describe('T3 compensation and idempotency', () => {
     const situation = store.readSituationEntity('idem-situation');
     assert.equal(situation.facts.length, 1);
     assert.equal(situation.facts[0].trace.length, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// COMP-JUDGMENT-STORES T4 / S4 — goal writer + durable intent publication
+// ---------------------------------------------------------------------------
+
+const GOAL_ELICITATION = {
+  asked: 'What must the objective preserve?',
+  answered_at: '2026-07-23T09:00:00Z',
+  answer_ref: 'session:goal-elicitation',
+};
+
+const GOAL_RATIFICATION = {
+  asked: 'Does this wording cut the objective?',
+  answered_at: '2026-07-23T09:05:00Z',
+  answer_ref: 'session:goal-ratification',
+  quote: 'Yes. Cut this objective.',
+};
+
+const GOAL_PROVOCATION = {
+  quote: 'The objective needs to name the publication boundary.',
+  at: '2026-07-23T08:55:00Z',
+};
+
+function goalClause(text, channel = 'said', via) {
+  const clause = {
+    text,
+    channel,
+    elicitation: { ...GOAL_ELICITATION },
+  };
+  if (via !== undefined) clause.via = via;
+  return clause;
+}
+
+function cutArgs(overrides = {}) {
+  return {
+    op: 'cut',
+    clauses: [goalClause('Publish only after the durable boundary.')],
+    provocation: { ...GOAL_PROVOCATION },
+    ratification: { ...GOAL_RATIFICATION },
+    diff_note: 'Initial owner-ratified cut.',
+    ...overrides,
+  };
+}
+
+function intentAttestations(store, intentId) {
+  return store.readLedgerEvents().filter(
+    (event) => event.kind === 'attest' && event.intent_id === intentId,
+  );
+}
+
+function persistTransitionIntent(store, {
+  id,
+  slug,
+  before,
+  events = [],
+  predictions = [],
+  kind = 'transition',
+  tool = 'judgment_transition',
+  op = 'transition',
+}) {
+  store.persistIntent({
+    id,
+    kind,
+    tool,
+    op,
+    payload: {
+      slug,
+      from: before.state,
+      to: 'under_test',
+      joint: { ...before, state: 'under_test' },
+      events,
+      predictions,
+    },
+    created_at: '2026-07-23T10:00:00Z',
+  });
+}
+
+describe('T4 goal cut — ratification, channel grammar, and migration precedence', () => {
+  test('ordinary cuts require clauses, elicitation, provocation, and ratification', async () => {
+    const cwd = freshCwd();
+    await refusedWith(
+      judgmentGoalWrite(cwd, { op: 'cut', clauses: [], diff_note: 'Bare.' }),
+      'JUDGMENT_UNRATIFIED_CUT',
+      /non-empty clauses/i,
+    );
+    await refusedWith(
+      judgmentGoalWrite(cwd, cutArgs({
+        clauses: [{ text: 'Missing its elicitation.', channel: 'said' }],
+      })),
+      'JUDGMENT_UNRATIFIED_CUT',
+      /clause 1.*elicitation/i,
+    );
+    await refusedWith(
+      judgmentGoalWrite(cwd, cutArgs({ provocation: undefined })),
+      'JUDGMENT_UNRATIFIED_CUT',
+      /provocation/i,
+    );
+    await refusedWith(
+      judgmentGoalWrite(cwd, cutArgs({ ratification: undefined })),
+      'JUDGMENT_UNRATIFIED_CUT',
+      /ratification/i,
+    );
+    await refusedWith(
+      judgmentGoalWrite(cwd, cutArgs({
+        clauses: [goalClause('Incomplete elicitation.', 'said')],
+        ratification: { ...GOAL_RATIFICATION, quote: undefined },
+      })),
+      'JUDGMENT_UNRATIFIED_CUT',
+      /ratification.*quote/i,
+    );
+    await refusedWith(
+      judgmentGoalWrite(cwd, cutArgs({
+        clauses: [{
+          ...goalClause('Incomplete elicitation.', 'said'),
+          elicitation: { ...GOAL_ELICITATION, answer_ref: undefined },
+        }],
+      })),
+      'JUDGMENT_UNRATIFIED_CUT',
+      /clause 1.*elicitation.*answer_ref/i,
+    );
+    await refusedWith(
+      judgmentGoalWrite(cwd, cutArgs({
+        provocation: { ...GOAL_PROVOCATION, at: undefined },
+      })),
+      'JUDGMENT_UNRATIFIED_CUT',
+      /provocation.*at/i,
+    );
+  });
+
+  test('goal clauses enforce the secondhand/via iff contract with typed input errors', async () => {
+    const cwd = freshCwd();
+    await refusedWith(
+      judgmentGoalWrite(cwd, cutArgs({
+        clauses: [goalClause('A sourced clause.', 'secondhand')],
+      })),
+      'JUDGMENT_INPUT',
+      /clause 1.*secondhand.*via/i,
+    );
+    await refusedWith(
+      judgmentGoalWrite(cwd, cutArgs({
+        clauses: [goalClause('A direct clause.', 'observed', 'stale source')],
+      })),
+      'JUDGMENT_INPUT',
+      /clause 1.*via.*secondhand/i,
+    );
+  });
+
+  test('legacy-live/no-goal requires migration, but a surviving migration intent wins first', async () => {
+    const legacyCwd = freshCwd();
+    await judgmentPositionCreate(legacyCwd, {
+      slug: 'objective',
+      claims: [{ id: 'c1', text: 'Legacy objective.', grounding: 'INT' }],
+      conviction: { level: 'high', source: 'stated' },
+    });
+    await refusedWith(
+      judgmentGoalWrite(legacyCwd, cutArgs()),
+      'JUDGMENT_MIGRATION_REQUIRED',
+      /legacy objective.*migration/i,
+    );
+
+    const fencedCwd = freshCwd();
+    const store = new RecordsStore(fencedCwd);
+    const hiddenProvenance = {
+      actor: 'agent',
+      session: null,
+      written_at: '2026-07-23T09:10:00Z',
+      via: 'migration',
+      intent_id: 'intent-goal-migration',
+    };
+    store.writeGoalVersion({
+      version: 1,
+      clauses: [{
+        id: 'c1',
+        text: 'Physically present but unpublished.',
+        channel: 'said',
+        elicitation: { ...GOAL_ELICITATION },
+        provenance: hiddenProvenance,
+        trace: [],
+      }],
+      provocation: null,
+      diff_note: 'Pending migration.',
+      provenance: hiddenProvenance,
+    });
+    store.persistIntent({
+      id: 'intent-goal-migration',
+      kind: 'goal_migration',
+      tool: 'judgment_goal_migrate',
+      op: 'migrate',
+      payload: { resembles: 'a future migration payload' },
+      created_at: '2026-07-23T09:10:00Z',
+    });
+
+    const calls = [
+      cutArgs(),
+      { op: 'correct', clause_id: 'c1', text: 'No.' },
+      { op: 'joint_link', joint: 'missing' },
+      { op: 'load_link', clause: 'v1#c1', carries: 'No.' },
+    ];
+    for (const args of calls) {
+      await refusedWith(
+        judgmentGoalWrite(fencedCwd, args),
+        'JUDGMENT_INTENT_PENDING',
+        /goal_migration.*pending/i,
+      );
+    }
+    assert.equal(store.readIntents().length, 1, 'reserved migration intent remains durable');
+    assert.equal(effectiveStore(store).readGoalChain().length, 0, 'pending goal file is hidden');
+  });
+
+  test('fresh ratified cut succeeds; internal import may create an unratified draft', async () => {
+    const cwd = freshCwd();
+    const result = await judgmentGoalWrite(cwd, cutArgs({
+      clauses: [
+        goalClause('First clause.', 'said'),
+        goalClause('Second clause.', 'secondhand', 'owner delegate'),
+      ],
+    }));
+    assert.deepEqual(result, {
+      op: 'cut',
+      version: 1,
+      ref: 'goal:v1',
+      ratified: true,
+    });
+    const store = new RecordsStore(cwd);
+    const first = store.readGoalVersion(1);
+    assert.deepEqual(first.clauses.map((clause) => clause.id), ['c1', 'c2']);
+    assert.deepEqual(first.ratification, GOAL_RATIFICATION);
+    assert.deepEqual(first.provocation, GOAL_PROVOCATION);
+
+    const importCwd = freshCwd();
+    await judgmentGoalWrite(
+      importCwd,
+      {
+        op: 'cut',
+        clauses: [goalClause('Imported draft.', 'observed')],
+        diff_note: 'Imported without owner ratification.',
+      },
+      { via: 'import', writtenAt: '2026-07-23T09:20:00Z' },
+    );
+    const imported = new RecordsStore(importCwd).readGoalVersion(1);
+    assert.equal(imported.provocation, null);
+    assert.equal(imported.ratification, undefined);
+    assert.equal(imported.provenance.via, 'import');
+    await judgmentGoalWrite(importCwd, {
+      op: 'correct',
+      clause_id: 'c1',
+      text: 'Corrected imported draft wording.',
+    });
+    const correctedImport = new RecordsStore(importCwd).readGoalVersion(1);
+    assert.equal(correctedImport.clauses[0].text, 'Corrected imported draft wording.');
+    assert.equal(correctedImport.clauses[0].trace.length, 1);
+    assert.equal(correctedImport.provenance.via, 'import');
+    assert.equal(correctedImport.ratification, undefined);
+  });
+});
+
+describe('T4 goal correction and state sidecar', () => {
+  test('wording correction mutates only the current version and appends one trace', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+    await judgmentGoalWrite(cwd, cutArgs({
+      clauses: [
+        goalClause('Old wording.'),
+        goalClause('Only in version one.', 'observed'),
+      ],
+    }));
+    const ratification = structuredClone(store.readGoalVersion(1).ratification);
+    await judgmentGoalWrite(cwd, {
+      op: 'correct',
+      clause_id: 'c1',
+      text: 'Corrected wording.',
+    });
+    const corrected = store.readGoalVersion(1);
+    assert.equal(store.readGoalChain().length, 1);
+    assert.equal(corrected.version, 1);
+    assert.equal(corrected.clauses[0].text, 'Corrected wording.');
+    assert.deepEqual(corrected.clauses[0].trace[0].prior, { text: 'Old wording.' });
+    assert.deepEqual(corrected.ratification, ratification, 'wording correction needs no new ratification');
+    assert.equal(corrected.clauses[1].text, 'Only in version one.');
+
+    await judgmentGoalWrite(cwd, cutArgs({
+      clauses: [goalClause('Version two current clause.')],
+      diff_note: 'Meaning changed.',
+    }));
+    await refusedWith(
+      judgmentGoalWrite(cwd, {
+        op: 'correct',
+        clause_id: 'c2',
+        text: 'Must not search an old version.',
+      }),
+      'JUDGMENT_REF',
+      /current goal v2.*c2/i,
+    );
+    assert.equal(store.readGoalChain().length, 2);
+  });
+
+  test('joint/load links validate refs, retire in place, keep high-water IDs, and preserve old-version links', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+    await judgmentGoalWrite(cwd, cutArgs());
+
+    await refusedWith(
+      judgmentGoalWrite(cwd, { op: 'joint_link', joint: 'ghost' }),
+      'JUDGMENT_REF',
+      /joint ghost/i,
+    );
+    await judgmentJointAdd(cwd, {
+      slug: 'goal-joint',
+      question: 'Does publication happen in the right order?',
+      branch_true: 'Keep it.',
+      branch_false: 'Repair it.',
+      resolve_by: 'INT',
+      cost: 'hours',
+      rank: 'high',
+    });
+    const joint1 = await judgmentGoalWrite(cwd, { op: 'joint_link', joint: 'goal-joint' });
+    assert.equal(joint1.id, 'gj1');
+    assert.equal(store.readGoalChain().length, 1, 'sidecar writes never cut a version');
+    await judgmentGoalWrite(cwd, {
+      op: 'joint_link',
+      joint_link_id: 'gj1',
+      remove: true,
+      reason: 'Settled elsewhere.',
+    });
+    const joint2 = await judgmentGoalWrite(cwd, { op: 'joint_link', joint: 'goal-joint' });
+    assert.equal(joint2.id, 'gj2', 'retired IDs are never reused');
+
+    await refusedWith(
+      judgmentGoalWrite(cwd, {
+        op: 'load_link',
+        clause: 'v9#c1',
+        carries: 'Missing.',
+      }),
+      'JUDGMENT_REF',
+      /v9#c1/i,
+    );
+    await refusedWith(
+      judgmentGoalWrite(cwd, {
+        op: 'load_link',
+        clause: 'goal:v1#c1',
+        carries: 'Wrong address shape.',
+      }),
+      'JUDGMENT_REF',
+      /goal:v1#c1/i,
+    );
+    const load1 = await judgmentGoalWrite(cwd, {
+      op: 'load_link',
+      clause: 'v1#c1',
+      carries: 'Publication ordering.',
+    });
+    assert.equal(load1.id, 'gl1');
+    await judgmentGoalWrite(cwd, {
+      op: 'load_link',
+      load_link_id: 'gl1',
+      remove: true,
+      reason: 'Replaced by a narrower bill.',
+    });
+    const load2 = await judgmentGoalWrite(cwd, {
+      op: 'load_link',
+      clause: 'v1#c1',
+      carries: 'Durable clear boundary.',
+    });
+    assert.equal(load2.id, 'gl2');
+
+    await judgmentGoalWrite(cwd, cutArgs({
+      clauses: [goalClause('A newer meaning version.')],
+      diff_note: 'Meaning changed after the load link.',
+    }));
+    const state = store.readGoalState();
+    assert.equal(state.load_links.find((link) => link.id === 'gl2').clause, 'v1#c1');
+    assert.equal(state.load_links.find((link) => link.id === 'gl2').removed, null);
+    assert.equal(store.readGoalChain().length, 2);
+    assert.deepEqual(state.joints.map((link) => link.id), ['gj1', 'gj2']);
+    assert.deepEqual(state.load_links.map((link) => link.id), ['gl1', 'gl2']);
+  });
+});
+
+describe('T4 commit rests_on resolution', () => {
+  function decide(restsOn, suffix) {
+    const event = {
+      kind: 'decide',
+      title: `Commit ${suffix}`,
+      rejected: [],
+      conviction: { level: 'high', source: 'stated' },
+      trigger: 'earned',
+      open_joints: [],
+      prediction: {
+        text: `Prediction ${suffix}`,
+        outcome_criteria: 'The commit remains valid.',
+      },
+    };
+    if (restsOn !== undefined) event.rests_on = restsOn;
+    return event;
+  }
+
+  test('said/observed/secondhand resolve; inferred, missing, and hidden refs reject', async () => {
+    const cwd = freshCwd();
+    await judgmentGoalWrite(cwd, cutArgs({
+      clauses: [
+        goalClause('Said.', 'said'),
+        goalClause('Observed.', 'observed'),
+        goalClause('Secondhand.', 'secondhand', 'named source'),
+        goalClause('Inferred.', 'inferred'),
+      ],
+    }));
+    await judgmentLedgerAppend(cwd, decide(
+      ['goal:v1#c1', 'goal:v1#c2', 'goal:v1#c3'],
+      'supported channels',
+    ));
+    await refusedWith(
+      judgmentLedgerAppend(cwd, decide(['goal:v1#c4'], 'inferred')),
+      'JUDGMENT_INFERRED_COMMIT',
+      /goal:v1#c4.*inferred/i,
+    );
+    await refusedWith(
+      judgmentLedgerAppend(cwd, decide(['goal:v9#c1'], 'missing')),
+      'JUDGMENT_REF',
+      /goal:v9#c1/i,
+    );
+
+    const store = new RecordsStore(cwd);
+    const hiddenProvenance = {
+      actor: 'agent',
+      session: null,
+      written_at: '2026-07-23T10:10:00Z',
+      intent_id: 'intent-package-transition',
+    };
+    store.writeGoalVersion({
+      version: 2,
+      clauses: [{
+        id: 'c1',
+        text: 'Hidden by a reserved pending package intent.',
+        channel: 'said',
+        elicitation: { ...GOAL_ELICITATION },
+        provenance: hiddenProvenance,
+        trace: [],
+      }],
+      provocation: null,
+      diff_note: 'Hidden child-feature write.',
+      provenance: { ...hiddenProvenance, via: 'migration' },
+    });
+    store.persistIntent({
+      id: 'intent-package-transition',
+      kind: 'package_transition',
+      tool: 'judgment_package_write',
+      op: 'transition',
+      payload: {},
+      created_at: '2026-07-23T10:10:00Z',
+    });
+    await refusedWith(
+      judgmentLedgerAppend(cwd, decide(['goal:v2#c1'], 'hidden')),
+      'JUDGMENT_REF',
+      /goal:v2#c1/i,
+    );
+    assert.equal(store.readIntents().length, 1);
+  });
+
+  test('omitted/empty rests_on stay legal; a migration fence wins before ref resolution', async () => {
+    const cwd = freshCwd();
+    await judgmentGoalWrite(cwd, cutArgs());
+    assert.equal((await judgmentLedgerAppend(cwd, decide(undefined, 'omitted'))).kind, 'decide');
+    assert.equal((await judgmentLedgerAppend(cwd, decide([], 'empty'))).kind, 'decide');
+
+    const store = new RecordsStore(cwd);
+    store.persistIntent({
+      id: 'intent-rests-on-migration',
+      kind: 'goal_migration',
+      tool: 'judgment_goal_migrate',
+      op: 'migrate',
+      payload: {},
+      created_at: '2026-07-23T10:20:00Z',
+    });
+    await refusedWith(
+      judgmentLedgerAppend(cwd, decide(['goal:v1#c1'], 'fenced')),
+      'JUDGMENT_INTENT_PENDING',
+      /goal_migration.*pending/i,
+    );
+  });
+
+  test('caller-facing ledger append cannot forge the reserved attestation event', async () => {
+    await refusedWith(
+      judgmentLedgerAppend(freshCwd(), {
+        kind: 'attest',
+        title: 'Forged publication',
+        intent_id: 'intent-forged',
+        tool: 'judgment_transition',
+        op: 'transition',
+      }),
+      'JUDGMENT_INPUT',
+      /attest.*reserved/i,
+    );
+  });
+});
+
+describe('T4 intent dispatcher, attestation, and failure windows', () => {
+  test('inline and replay success each publish exactly one attributed attestation', async () => {
+    const inlineCwd = freshCwd();
+    const inlineStore = new RecordsStore(inlineCwd);
+    await judgmentJointAdd(inlineCwd, {
+      slug: 'inline',
+      question: 'Inline?',
+      branch_true: 'Yes.',
+      branch_false: 'No.',
+      resolve_by: 'INT',
+      cost: 'hours',
+      rank: 'high',
+    });
+    await judgmentTransition(inlineCwd, { slug: 'inline', to: 'under_test' });
+    const [inlineAttestation] = inlineStore.readLedgerEvents().filter(
+      (event) => event.kind === 'attest',
+    );
+    assert.deepEqual(
+      {
+        tool: inlineAttestation.tool,
+        op: inlineAttestation.op,
+        intent_id: inlineAttestation.intent_id,
+      },
+      {
+        tool: 'judgment_transition',
+        op: 'transition',
+        intent_id: inlineAttestation.intent_id,
+      },
+    );
+    assert.equal(inlineAttestation.provenance.intent_id, inlineAttestation.intent_id);
+    assert.equal(inlineStore.readIntents().length, 0);
+
+    const replayCwd = freshCwd();
+    const replayStore = new RecordsStore(replayCwd);
+    await judgmentJointAdd(replayCwd, {
+      slug: 'replayed',
+      question: 'Replay?',
+      branch_true: 'Yes.',
+      branch_false: 'No.',
+      resolve_by: 'INT',
+      cost: 'hours',
+      rank: 'high',
+    });
+    persistTransitionIntent(replayStore, {
+      id: 'intent-replayed-once',
+      slug: 'replayed',
+      before: replayStore.readJoint('replayed'),
+    });
+    assert.equal((await replayPendingIntents(replayCwd)).replayed, 1);
+    assert.equal(intentAttestations(replayStore, 'intent-replayed-once').length, 1);
+    assert.equal((await replayPendingIntents(replayCwd)).replayed, 0);
+    assert.equal(intentAttestations(replayStore, 'intent-replayed-once').length, 1);
+  });
+
+  test('an unknown kind resembling transition fails closed without mutation or deletion', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+    await judgmentJointAdd(cwd, {
+      slug: 'lookalike',
+      question: 'Should payload shape dispatch?',
+      branch_true: 'No.',
+      branch_false: 'Still no.',
+      resolve_by: 'INT',
+      cost: 'hours',
+      rank: 'high',
+    });
+    persistTransitionIntent(store, {
+      id: 'intent-unregistered-lookalike',
+      slug: 'lookalike',
+      before: store.readJoint('lookalike'),
+      kind: 'transition_lookalike',
+      tool: 'future_tool',
+      op: 'transition',
+    });
+    await refusedWith(
+      replayPendingIntents(cwd),
+      'JUDGMENT_INTENT_KIND',
+      /transition_lookalike.*unregistered/i,
+    );
+    assert.equal(store.readJoint('lookalike').state, 'open');
+    assert.equal(store.readIntents().length, 1);
+    assert.equal(store.readLedgerEvents().some((event) => event.kind === 'attest'), false);
+  });
+
+  test('attestation append failure restores the in-place preimage and retains the intent', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+    await judgmentJointAdd(cwd, {
+      slug: 'attest-fail',
+      question: 'Can attestation fail safely?',
+      branch_true: 'Retry.',
+      branch_false: 'Repair.',
+      resolve_by: 'INT',
+      cost: 'hours',
+      rank: 'high',
+    });
+    const original = RecordsStore.prototype.appendLedgerEvent;
+    RecordsStore.prototype.appendLedgerEvent = function failAttestation(event) {
+      if (event.kind === 'attest') {
+        throw Object.assign(new Error('injected attestation append failure'), { code: 'EIO' });
+      }
+      return original.call(this, event);
+    };
+    try {
+      await refusedWith(
+        judgmentTransition(cwd, { slug: 'attest-fail', to: 'under_test' }),
+        'JUDGMENT_PARTIAL_WRITE',
+        /intent.*retained/i,
+      );
+    } finally {
+      RecordsStore.prototype.appendLedgerEvent = original;
+    }
+    assert.equal(store.readJoint('attest-fail').state, 'open');
+    assert.equal(store.readIntents().length, 1);
+    assert.equal(store.readLedgerEvents().some((event) => event.kind === 'attest'), false);
+    assert.equal((await replayPendingIntents(cwd)).replayed, 1);
+    assert.equal(store.readJoint('attest-fail').state, 'under_test');
+  });
+
+  test('clear failure does not regenerate; retry dedupes effects and the retained attestation', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+    await judgmentJointAdd(cwd, {
+      slug: 'clear-fail',
+      question: 'Can clear fail safely?',
+      branch_true: 'Retry.',
+      branch_false: 'Repair.',
+      resolve_by: 'INT',
+      cost: 'hours',
+      rank: 'high',
+    });
+    const original = RecordsStore.prototype.clearIntent;
+    let injected = true;
+    RecordsStore.prototype.clearIntent = function failFirstClear(id) {
+      if (injected) {
+        injected = false;
+        throw Object.assign(new Error(`injected clear failure for ${id}`), { code: 'EACCES' });
+      }
+      return original.call(this, id);
+    };
+    try {
+      await refusedWith(
+        judgmentTransition(cwd, { slug: 'clear-fail', to: 'under_test' }),
+        'JUDGMENT_PARTIAL_WRITE',
+        /publication point.*retained/i,
+      );
+    } finally {
+      RecordsStore.prototype.clearIntent = original;
+    }
+    const [intent] = store.readIntents();
+    assert.equal(store.readJoint('clear-fail').state, 'open', 'in-place effect is compensated');
+    assert.equal(intentAttestations(store, intent.id).length, 1, 'durable attestation remains hidden');
+    assert.equal(
+      effectiveStore(store).readLedgerEvents().some((event) => event.kind === 'attest'),
+      false,
+      'pending intent hides the attestation before publication',
+    );
+    assert.equal((await replayPendingIntents(cwd)).replayed, 1);
+    assert.equal(store.readJoint('clear-fail').state, 'under_test');
+    assert.equal(intentAttestations(store, intent.id).length, 1, 'retry dedupes attestation');
+    assert.deepEqual(store.readIntents(), []);
+  });
+
+  test('regeneration failure after clear leaves canonical effects published and reports projection stale', async () => {
+    const cwd = freshCwd();
+    const store = new RecordsStore(cwd);
+    await judgmentJointAdd(cwd, {
+      slug: 'regen-fail',
+      question: 'Do canonical effects survive stale projections?',
+      branch_true: 'Yes.',
+      branch_false: 'No.',
+      resolve_by: 'INT',
+      cost: 'hours',
+      rank: 'high',
+    });
+    const obstruction = join(cwd, 'docs', 'judgment', 'REGISTER.md');
+    rmSync(obstruction);
+    mkdirSync(obstruction);
+    await refusedWith(
+      judgmentTransition(cwd, { slug: 'regen-fail', to: 'under_test' }),
+      'JUDGMENT_PROJECTION_STALE',
+      /canonical effects.*committed.*projections.*stale/i,
+    );
+    assert.equal(store.readJoint('regen-fail').state, 'under_test');
+    assert.deepEqual(store.readIntents(), []);
+    assert.equal(store.readLedgerEvents().filter((event) => event.kind === 'attest').length, 1);
+
+    rmSync(obstruction, { recursive: true });
+    regenerateProjections(cwd);
+    fixedPoint(cwd, 'explicit repair after post-clear regeneration failure');
   });
 });

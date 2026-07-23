@@ -56,7 +56,9 @@ function craftIntent(store, slug, before) {
   const mutated = { ...before, state: 'under_test' };
   store.persistIntent({
     id: `intent-${slug}`,
-    op: 'judgment_transition',
+    kind: 'transition',
+    tool: 'judgment_transition',
+    op: 'transition',
     payload: {
       slug,
       from: 'open',
@@ -75,6 +77,12 @@ function craftIntent(store, slug, before) {
   });
 }
 
+function attestations(store, intentId) {
+  return store.readLedgerEvents().filter(
+    (event) => event.kind === 'attest' && event.intent_id === intentId,
+  );
+}
+
 describe('guard-enabled judgment transitions', () => {
   before(() => _testOnly_resetGuardCache());
 
@@ -88,6 +96,10 @@ describe('guard-enabled judgment transitions', () => {
     assert.equal(result.applied, true);
     assert.equal(result.guard.ledgerRef, 'lr-1');
     assert.equal(result.guard.currentState, 'under_test');
+    const [attestation] = storeAttestation(cwd);
+    assert.equal(attestation.tool, 'judgment_transition');
+    assert.equal(attestation.op, 'transition');
+    assert.equal(attestation.provenance.intent_id, attestation.intent_id);
   });
 
   test('crash window: guard already advanced → replay rolls the WHOLE payload forward', async () => {
@@ -102,6 +114,7 @@ describe('guard-enabled judgment transitions', () => {
     assert.equal(replay.replayed, 1);
     assert.equal(store.readJoint('crashy').state, 'under_test');
     assert.equal(store.readLedgerEvents().filter((e) => e.title === 'crashy payload note').length, 1);
+    assert.equal(attestations(store, 'intent-crashy').length, 1);
     assert.deepEqual(store.readIntents(), []);
   });
 
@@ -118,6 +131,7 @@ describe('guard-enabled judgment transitions', () => {
     assert.equal(store.readJoint('refused').state, 'open', 'payload NOT applied on refusal');
     const dropNotes = store.readLedgerEvents().filter((e) => e.kind === 'note' && /intent dropped \(intent-refused\).*refused by guard/.test(e.title));
     assert.equal(dropNotes.length, 1, 'refusal is durable, not just in the transient result');
+    assert.equal(attestations(store, 'intent-refused').length, 0, 'refusal is not success');
     assert.deepEqual(store.readIntents(), []);
   });
 
@@ -185,6 +199,7 @@ describe('guard-enabled judgment transitions', () => {
       store.readLedgerEvents().some((e) => e.kind === 'note' && /refused by guard/.test(e.title) && /vetoed/.test(e.title)),
       'live refusal must leave a durable ledger note',
     );
+    assert.equal(store.readLedgerEvents().some((event) => event.kind === 'attest'), false);
     assert.deepEqual(store.readIntents(), []);
   });
 
@@ -206,6 +221,68 @@ describe('guard-enabled judgment transitions', () => {
     const state = await getJudgmentState(cwd);
     assert.equal(state.intents_replayed, 1);
     assert.equal(store.readJoint('flaky').state, 'under_test', 'intent rolled forward once guard returned');
+    const [published] = store.readLedgerEvents().filter((event) => event.kind === 'attest');
+    assert.equal(published.tool, 'judgment_transition');
+    assert.equal(published.op, 'transition');
     assert.deepEqual(store.readIntents(), []);
   });
+
+  test('success attestation is durable before clear publishes the intent', async () => {
+    const cwd = guardedCwd();
+    await seedJoint(cwd, 'ordered');
+    _testOnly_setGuardClient(fakeClient(async ({ toState }) => ({
+      status: 'applied', verdict: {}, ledger_ref: 'lr-order', current_state: toState,
+    })));
+    const original = RecordsStore.prototype.clearIntent;
+    let attestedBeforeClear = false;
+    RecordsStore.prototype.clearIntent = function observeClear(id) {
+      attestedBeforeClear = this.readLedgerEvents().some(
+        (event) => (
+          event.kind === 'attest'
+          && event.intent_id === id
+          && event.tool === 'judgment_transition'
+          && event.op === 'transition'
+        ),
+      );
+      return original.call(this, id);
+    };
+    try {
+      await judgmentTransition(cwd, { slug: 'ordered', to: 'under_test' });
+    } finally {
+      RecordsStore.prototype.clearIntent = original;
+    }
+    assert.equal(attestedBeforeClear, true);
+  });
+
+  test('mismatched pre-existing attestation conflicts and preserves the intent', async () => {
+    const cwd = guardedCwd();
+    const store = await seedJoint(cwd, 'mismatch');
+    const before = store.readJoint('mismatch');
+    craftIntent(store, 'mismatch', before);
+    store.appendLedgerEvent({
+      kind: 'attest',
+      title: 'Mismatched prior attestation',
+      intent_id: 'intent-mismatch',
+      tool: 'different_tool',
+      op: 'different_op',
+      provenance: {
+        ...before.provenance,
+        intent_id: 'intent-mismatch',
+      },
+    });
+    _testOnly_setGuardClient(fakeClient(async ({ toState }) => ({
+      status: 'applied', verdict: {}, ledger_ref: 'lr-mismatch', current_state: toState,
+    })));
+    await assert.rejects(
+      () => replayPendingIntents(cwd),
+      (err) => err.code === 'JUDGMENT_CONFLICT' && /intent-mismatch.*attribution/i.test(err.message),
+    );
+    assert.equal(store.readJoint('mismatch').state, 'open', 'failed publication restores the joint');
+    assert.equal(store.readIntents().length, 1, 'conflicting intent remains for operator repair');
+    assert.equal(attestations(store, 'intent-mismatch').length, 1, 'mismatched evidence is preserved');
+  });
 });
+
+function storeAttestation(cwd) {
+  return new RecordsStore(cwd).readLedgerEvents().filter((event) => event.kind === 'attest');
+}
