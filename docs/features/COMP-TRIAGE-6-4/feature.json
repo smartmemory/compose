@@ -1,0 +1,19 @@
+{
+  "code": "COMP-TRIAGE-6-4",
+  "description": "Rotate build-accumulator identity BEFORE the fallible startFresh on fresh-over-failed: today rotation/counter-reset run after startFresh (build.js:2482 vs 2467), so a retry of a failed build whose fresh plan throws emits a DUPLICATE build-actuals failed row under the old build_id with the prior attempt's stale counters, double-counting in ACRR. Surfaced by b6ecbd5 codex belt-and-braces review 2026-07-23 (P2, reachable single-process). Same review noted 2 concurrency-corner findings (P1a finalizeBuildAttempt clobbers a foreign live sidecar on pre-ownership failure; P1b post-verdict ownership non-atomic) — accepted as PID advisory-lock limitations, not in scope here unless concurrent same-feature builds become a real path.",
+  "status": "PLANNED",
+  "phase": "COMP-TRIAGE: Task Tier Classification",
+  "created": "2026-07-23",
+  "updated": "2026-07-23",
+  "complexity": "S",
+  "position": 191,
+  "parent": "COMP-TRIAGE-6",
+  "impact": "low",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-TRIAGE-6",
+      "note": "P2 finding from b6ecbd5 belt-and-braces codex review, 2026-07-23"
+    }
+  ]
+}
