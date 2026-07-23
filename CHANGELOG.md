@@ -2,6 +2,32 @@
 
 ## 2026-07-23
 
+### COMP-JUDGMENT-GOAL-MIGRATE S1 — migration intent, sidecar absorption, and atomic replay
+
+First build slice of the objective→goal store migration. Adds the intent-backed
+`judgment_goal_write op=migrate` machinery: `buildGoalMigrationIntent` constructs
+the complete migration payload (goal `v1` with an inferred-channel clause, null
+provocation and no ratification; the next objective revision as a `retracted`
+tombstone; the deterministic merged goal-state sidecar; and an anchored ledger
+note carrying the legacy `OBJECTIVE.md` verbatim), all stamped with one captured
+migration provenance. `applyGoalMigrationIntent` publishes it idempotently: every
+occupied target (goal, tombstone, state, note, attestation) is skipped only on
+full structural equality and otherwise throws `JUDGMENT_MIGRATION_CONFLICT` before
+any mutation, so a mid-migration crash replays to completion or refuses cleanly.
+`effectiveStore.readGoalState` now substitutes the captured preimage while the
+migration is pending (records-atomic reads — never absence). Occupancy is
+filename-based (a malformed slot conflicts rather than being appended past),
+artifact equality is order-insensitive structural equality (`goal/state.json`
+stays byte-level), the merged state's association ids are re-validated for
+ambiguity, and a C13 unit-injection seam (`internal.appliers`) threads only
+through the internal replay path — never an exported or MCP-reachable surface.
+
+The wholesale non-migrate fence, legality-window guard, already-migrated no-op,
+revived-objective conflict, and terminal objective retirement are S2. Two codex
+sol/xhigh review rounds folded (7 findings total, all fixed with regression
+coverage). Full node suite green.
+
+
 ### COMP-TRIAGE-6-4 — No double-counted build-actuals row on a fresh-over-failed retry
 
 A retry of a failed build whose fresh plan itself throws (spec compile error,

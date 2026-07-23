@@ -446,6 +446,41 @@ describe('effectiveStore', () => {
       assert.equal(effective[method], undefined, `${method} must not be exposed`);
     }
   });
+
+  test('substitutes the captured preimage for a pending migration\'s own state write (C3)', () => {
+    const raw = new RecordsStore(freshCwd());
+    const preimageRecord = goalState({ joints: [{ id: 'gj1', joint: 'horizon', provenance, removed: null }] });
+    const preimageBytes = `${JSON.stringify(preimageRecord, null, 2)}\n`;
+    raw.persistIntent(pendingIntent('mig-1', {
+      kind: 'goal_migration',
+      tool: 'judgment_goal_write',
+      op: 'migrate',
+      payload: { goal_state_preimage: { bytes: preimageBytes, record: preimageRecord } },
+    }));
+    // The migration's own merged state, attributed to the pending intent.
+    raw.writeGoalState(goalState({
+      joints: [{ id: 'gj1', joint: 'horizon', provenance: { ...provenance, via: 'migration', intent_id: 'mig-1' }, removed: null }],
+      provenance: { ...provenance, via: 'migration', intent_id: 'mig-1' },
+    }));
+
+    // Records-atomic: readers see the pre-migration preimage, never absence.
+    assert.deepEqual(effectiveStore(raw).readGoalState(), preimageRecord);
+
+    raw.clearIntent('mig-1');
+    assert.equal(effectiveStore(raw).readGoalState().provenance.intent_id, 'mig-1');
+  });
+
+  test('substitutes null when a pending migration captured no preimage (C3)', () => {
+    const raw = new RecordsStore(freshCwd());
+    raw.persistIntent(pendingIntent('mig-2', {
+      kind: 'goal_migration',
+      tool: 'judgment_goal_write',
+      op: 'migrate',
+      payload: { goal_state_preimage: null },
+    }));
+    raw.writeGoalState(goalState({ provenance: { ...provenance, via: 'migration', intent_id: 'mig-2' } }));
+    assert.equal(effectiveStore(raw).readGoalState(), null);
+  });
 });
 
 describe('goalCutoverComplete', () => {

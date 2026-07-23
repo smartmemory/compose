@@ -13,6 +13,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  writeFileSync,
   rmSync,
 } from 'node:fs';
 import { join } from 'node:path';
@@ -30,6 +31,7 @@ import {
   allocateStableEntryId,
   getJudgmentState,
   replayPendingIntents,
+  INTENT_APPLIERS,
 } from '../lib/judgment-writer.js';
 import { RecordsStore } from '../lib/judgment/store/records.js';
 import { effectiveStore } from '../lib/judgment/store/index.js';
@@ -2026,11 +2028,19 @@ describe('T4 goal cut — ratification, channel grammar, and migration precedenc
     store.persistIntent({
       id: 'intent-goal-migration',
       kind: 'goal_migration',
-      tool: 'judgment_goal_migrate',
+      tool: 'judgment_goal_write',
       op: 'migrate',
       payload: { resembles: 'a future migration payload' },
       created_at: '2026-07-23T09:10:00Z',
     });
+
+    // The registered applier now completes or throws, so a genuinely pending
+    // migration only survives replay via the C13 injection seam: a blocked
+    // (non-throwing) applier leaves the intent, and the shipped fence fires.
+    const blockedAppliers = {
+      ...INTENT_APPLIERS,
+      goal_migration: () => ({ status: 'blocked', reason: 'injected' }),
+    };
 
     const calls = [
       cutArgs(),
@@ -2040,12 +2050,12 @@ describe('T4 goal cut — ratification, channel grammar, and migration precedenc
     ];
     for (const args of calls) {
       await refusedWith(
-        judgmentGoalWrite(fencedCwd, args),
+        judgmentGoalWrite(fencedCwd, args, { appliers: blockedAppliers }),
         'JUDGMENT_INTENT_PENDING',
         /goal_migration.*pending/i,
       );
     }
-    assert.equal(store.readIntents().length, 1, 'reserved migration intent remains durable');
+    assert.equal(store.readIntents().length, 1, 'blocked migration intent remains durable');
     assert.equal(effectiveStore(store).readGoalChain().length, 0, 'pending goal file is hidden');
   });
 
@@ -2307,13 +2317,17 @@ describe('T4 commit rests_on resolution', () => {
     store.persistIntent({
       id: 'intent-rests-on-migration',
       kind: 'goal_migration',
-      tool: 'judgment_goal_migrate',
+      tool: 'judgment_goal_write',
       op: 'migrate',
       payload: {},
       created_at: '2026-07-23T10:20:00Z',
     });
+    const blockedAppliers = {
+      ...INTENT_APPLIERS,
+      goal_migration: () => ({ status: 'blocked', reason: 'injected' }),
+    };
     await refusedWith(
-      judgmentLedgerAppend(cwd, decide(['goal:v1#c1'], 'fenced')),
+      judgmentLedgerAppend(cwd, decide(['goal:v1#c1'], 'fenced'), { appliers: blockedAppliers }),
       'JUDGMENT_INTENT_PENDING',
       /goal_migration.*pending/i,
     );
@@ -2663,3 +2677,510 @@ describe('T5 getJudgmentState counts', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// COMP-JUDGMENT-GOAL-MIGRATE S1 — migration intent, sidecar absorption,
+// replay equality, and records-atomic reads
+// ---------------------------------------------------------------------------
+
+const MIGRATION_SLUGS = ['horizon', 'success-criteria', 'commercial-intent'];
+
+const OBJECTIVE_CLAIM = {
+  id: 'c1',
+  text: 'build Compose into a system that decides what to build well.',
+  grounding: 'ASSERT',
+  supports: [],
+  elicitation: {
+    asked: 'What are we optimizing for?',
+    answered_at: '2026-07-20T12:00:00Z',
+    answer_ref: 'import:docs/judgment/OBJECTIVE.md (back-inferred draft)',
+  },
+};
+
+async function seedLegacy(cwd, slugs = MIGRATION_SLUGS) {
+  for (const slug of slugs) {
+    await judgmentJointAdd(cwd, {
+      slug,
+      question: `${slug}?`,
+      branch_true: 'a',
+      branch_false: 'b',
+      resolve_by: 'INT',
+      cost: 'hours',
+      rank: 'medium',
+    });
+  }
+  await judgmentPositionCreate(cwd, {
+    slug: 'objective',
+    claims: [{ ...OBJECTIVE_CLAIM, elicitation: { ...OBJECTIVE_CLAIM.elicitation } }],
+    conviction: { level: 'low', source: 'inferred' },
+  });
+}
+
+// C13 injection seams — force the applier outcome without weakening the frozen
+// runtime table.
+function applyThenBlockAppliers() {
+  return {
+    ...INTENT_APPLIERS,
+    goal_migration: async (cwd, store, intent, ctx) => {
+      await INTENT_APPLIERS.goal_migration(cwd, store, intent, ctx);
+      return { status: 'blocked', reason: 'injected-crash-after-apply' };
+    },
+  };
+}
+
+function blockBeforeApplyAppliers() {
+  return {
+    ...INTENT_APPLIERS,
+    goal_migration: () => ({ status: 'blocked', reason: 'injected-pre-apply' }),
+  };
+}
+
+const recordsPath = (cwd, ...parts) => join(cwd, 'docs', 'judgment', 'records', ...parts);
+
+describe('COMP-JUDGMENT-GOAL-MIGRATE S1 — migration intent and replay', () => {
+  test('migrate publishes the exact r4 payload once', async () => {
+    const cwd = freshCwd();
+    await seedLegacy(cwd);
+    const legacyProjection = readFileSync(join(cwd, 'docs', 'judgment', 'OBJECTIVE.md'), 'utf8');
+
+    const result = await judgmentGoalWrite(cwd, { op: 'migrate' });
+    assert.deepEqual(result, {
+      op: 'migrate',
+      status: 'migrated',
+      version: 1,
+      ref: 'goal:v1',
+      intent_id: result.intent_id,
+    });
+    assert.match(result.intent_id, /^intent-/);
+
+    const store = new RecordsStore(cwd);
+
+    // Goal v1 — inferred channel, null provocation, NO ratification property.
+    const goal = store.readGoalVersion(1);
+    assert.equal(goal.version, 1);
+    assert.equal(goal.clauses.length, 1);
+    assert.equal(goal.clauses[0].id, 'c1');
+    assert.equal(goal.clauses[0].text, OBJECTIVE_CLAIM.text);
+    assert.equal(goal.clauses[0].channel, 'inferred');
+    assert.deepEqual(goal.clauses[0].elicitation, OBJECTIVE_CLAIM.elicitation);
+    assert.deepEqual(goal.clauses[0].trace, []);
+    assert.equal(goal.provocation, null);
+    assert.equal('ratification' in goal, false);
+    assert.equal(goal.diff_note, 'Migrated from legacy objective objective#r1.');
+    assert.equal(goal.provenance.via, 'migration');
+    assert.equal(goal.provenance.intent_id, result.intent_id);
+
+    // Tombstone — next objective revision, empty claims, source conviction.
+    const tombstone = store.readPositionRevision('objective', 2);
+    assert.equal(tombstone.retracted, true);
+    assert.deepEqual(tombstone.claims, []);
+    assert.deepEqual(tombstone.conviction, { level: 'low', source: 'inferred' });
+    assert.equal(tombstone.provenance.intent_id, result.intent_id);
+    assert.equal(store.derivePositionStatus('objective'), 'retracted');
+
+    // State — the three fixed joints, in order, allocated gj1..gj3, no load links.
+    const state = store.readGoalState();
+    assert.deepEqual(state.joints.map((j) => j.joint), MIGRATION_SLUGS);
+    assert.deepEqual(state.joints.map((j) => j.id), ['gj1', 'gj2', 'gj3']);
+    assert.ok(state.joints.every((j) => (
+      j.provenance.via === 'migration'
+      && j.provenance.intent_id === result.intent_id
+      && j.removed === null
+    )));
+    assert.deepEqual(state.load_links, []);
+
+    // Note — verbatim blocks + self-report-reliable naming + legacy projection.
+    const notes = store.readLedgerEvents().filter(
+      (e) => e.kind === 'note' && e.title === 'Legacy objective migrated to goal:v1',
+    );
+    assert.equal(notes.length, 1);
+    const note = notes[0];
+    assert.equal(note.anchor, 'position:objective');
+    assert.deepEqual(note.refs, ['objective#r1', 'goal:v1']);
+    assert.match(note.body, /`self-report-reliable` was not migrated because no canonical joint record exists\./);
+    assert.match(note.body, /Legacy OBJECTIVE\.md follows verbatim:/);
+    assert.ok(note.body.endsWith(legacyProjection));
+    assert.equal(note.provenance.intent_id, result.intent_id);
+
+    // Exactly one attestation, cleared intent, fixed-point goal projection.
+    const attests = store.readLedgerEvents().filter(
+      (e) => e.kind === 'attest' && e.intent_id === result.intent_id,
+    );
+    assert.equal(attests.length, 1);
+    assert.deepEqual(
+      { tool: attests[0].tool, op: attests[0].op },
+      { tool: 'judgment_goal_write', op: 'migrate' },
+    );
+    assert.deepEqual(store.readIntents(), []);
+    fixedPoint(cwd, 'after migrate');
+    assert.equal(existsSync(join(cwd, 'docs', 'judgment', 'positions', 'objective.md')), false);
+  });
+
+  test('migrate validates all three canonical joints before persisting intent', async () => {
+    for (const missing of MIGRATION_SLUGS) {
+      const cwd = freshCwd();
+      await seedLegacy(cwd, MIGRATION_SLUGS.filter((s) => s !== missing));
+      await refusedWith(
+        judgmentGoalWrite(cwd, { op: 'migrate' }),
+        'JUDGMENT_REF',
+        new RegExp(`^judgment_goal_write migrate: required joint ${missing} does not resolve$`),
+      );
+      const store = new RecordsStore(cwd);
+      assert.equal(store.readGoalVersion(1), null, `${missing}: no goal written`);
+      assert.deepEqual(store.readIntents(), [], `${missing}: no intent persisted`);
+      assert.equal(store.readPositionRevision('objective', 2), null, `${missing}: no tombstone`);
+    }
+  });
+
+  test('state preimage is absorbed and remains effective until publication', async () => {
+    const cwd = freshCwd();
+    await seedLegacy(cwd);
+    const store = new RecordsStore(cwd);
+
+    // A pre-existing sidecar: one active link (dedupes with a fixed slug), one
+    // active link to survive, one removed link (excluded, but its id still
+    // pins the high-water mark).
+    const seededProvenance = { actor: 'agent', session: null, written_at: '2026-07-23T08:00:00Z' };
+    const preimage = {
+      joints: [
+        { id: 'gj1', joint: 'horizon', provenance: seededProvenance, removed: null },
+        { id: 'gj2', joint: 'success-criteria', provenance: seededProvenance, removed: { at: '2026-07-23T08:01:00Z', reason: 'retired', provenance: seededProvenance } },
+        { id: 'gj7', joint: 'commercial-intent', provenance: seededProvenance, removed: null },
+      ],
+      load_links: [],
+      provenance: seededProvenance,
+    };
+    store.writeGoalState(preimage);
+    const preimageOnDisk = store.readGoalState();
+
+    await judgmentGoalWrite(cwd, { op: 'migrate' }, { appliers: applyThenBlockAppliers() });
+    const [pending] = store.readIntents();
+    assert.equal(pending.kind, 'goal_migration');
+
+    // Raw merged state: active preimage entries preserved (ids/joints/order),
+    // removed excluded, missing fixed joint (success-criteria) appended above
+    // the all-preimage high-water (gj7 → gj8), every link re-stamped migration.
+    const merged = store.readGoalState();
+    assert.deepEqual(
+      merged.joints.map((j) => [j.id, j.joint]),
+      [['gj1', 'horizon'], ['gj7', 'commercial-intent'], ['gj8', 'success-criteria']],
+    );
+    assert.ok(merged.joints.every((j) => (
+      j.provenance.via === 'migration' && j.provenance.intent_id === pending.id
+    )));
+    assert.equal(merged.provenance.intent_id, pending.id);
+
+    // Records-atomic: the effective view still returns the exact preimage.
+    const effective = effectiveStore(store);
+    assert.deepEqual(effective.readGoalState(), preimageOnDisk);
+    assert.deepEqual(effective.readGoalChain(), []);
+    assert.equal(effective.derivePositionStatus('objective'), 'live');
+
+    // After the intent clears, the merged state becomes visible.
+    store.clearIntent(pending.id);
+    assert.equal(effectiveStore(store).readGoalState().joints.length, 3);
+  });
+
+  test('state preimage byte drift conflicts before mutation', async () => {
+    const cwd = freshCwd();
+    await seedLegacy(cwd);
+    const store = new RecordsStore(cwd);
+    const statePath = recordsPath(cwd, 'goal', 'state.json');
+    store.writeGoalState({
+      joints: [],
+      load_links: [],
+      provenance: { actor: 'agent', session: null, written_at: '2026-07-23T08:00:00Z' },
+    });
+    const preimageBytes = readFileSync(statePath, 'utf8');
+
+    // Persist the intent (capturing the preimage) without applying it.
+    await judgmentGoalWrite(cwd, { op: 'migrate' }, { appliers: blockBeforeApplyAppliers() });
+    const [intent] = store.readIntents();
+    assert.equal(readFileSync(statePath, 'utf8'), preimageBytes, 'preimage untouched while blocked');
+
+    // Whitespace-only drift after persistence.
+    writeFileSync(statePath, `${preimageBytes} `);
+
+    await refusedWith(
+      replayPendingIntents(cwd),
+      'JUDGMENT_MIGRATION_CONFLICT',
+      new RegExp(`^goal migration ${intent.id}: goal/state\\.json no longer matches the persisted preimage$`),
+    );
+    assert.equal(store.readIntents().length, 1, 'intent retained');
+    assert.equal(store.readGoalVersion(1), null, 'no goal artifact created');
+    assert.equal(store.readPositionRevision('objective', 2), null, 'no tombstone created');
+  });
+
+  test('replay skips only full-equal migration artifacts', async () => {
+    // Idempotent replay after a crash-past-apply yields exactly one of each.
+    const cwd = freshCwd();
+    await seedLegacy(cwd);
+    await judgmentGoalWrite(cwd, { op: 'migrate' }, { appliers: applyThenBlockAppliers() });
+    const store = new RecordsStore(cwd);
+    const [pending] = store.readIntents();
+    assert.equal(pending.kind, 'goal_migration');
+    assert.ok(store.readGoalVersion(1));
+    assert.ok(store.readPositionRevision('objective', 2));
+    assert.equal(
+      store.readLedgerEvents().filter((e) => e.kind === 'attest' && e.intent_id === pending.id).length,
+      0,
+      'no attestation before publication',
+    );
+
+    assert.equal((await replayPendingIntents(cwd)).replayed, 1);
+    assert.equal(store.readGoalChain().length, 1, 'exactly one goal version');
+    assert.equal(store.readPositionChain('objective').length, 2, 'r1 + one tombstone');
+    assert.equal(
+      store.readLedgerEvents().filter((e) => e.kind === 'note' && e.title === 'Legacy objective migrated to goal:v1').length,
+      1,
+    );
+    assert.equal(
+      store.readLedgerEvents().filter((e) => e.kind === 'attest' && e.intent_id === pending.id).length,
+      1,
+    );
+    assert.deepEqual(store.readIntents(), []);
+
+    // A single non-attribution mutation on any occupied artifact throws the
+    // exact table message from the replay phase, and the presented goal op
+    // never executes.
+    const cases = {
+      goal: 'goal/v1.json differs from the persisted payload',
+      tombstone: 'objective tombstone differs from the persisted payload',
+      state: 'goal/state.json no longer matches the persisted preimage',
+      note: 'anchored migration note differs from the persisted payload',
+    };
+    for (const [artifact, detail] of Object.entries(cases)) {
+      const c = freshCwd();
+      await seedLegacy(c);
+      await judgmentGoalWrite(c, { op: 'migrate' }, { appliers: applyThenBlockAppliers() });
+      const s = new RecordsStore(c);
+      const [it] = s.readIntents();
+      tamperArtifact(c, it.id, artifact);
+
+      await refusedWith(
+        judgmentGoalWrite(c, cutArgs()),
+        'JUDGMENT_MIGRATION_CONFLICT',
+        new RegExp(`^goal migration ${it.id}: ${escapeForRegExp(detail)}$`),
+      );
+      assert.equal(s.readGoalChain().length, 1, `${artifact}: presented cut never produced v2`);
+      assert.equal(s.readIntents().length, 1, `${artifact}: intent retained on conflict`);
+    }
+  });
+
+  test('migration records are atomic and projections repair after publication', async () => {
+    // Part A — a partially-applied pending intent renders the full pre-state.
+    const a = freshCwd();
+    await seedLegacy(a);
+    const legacyProjection = readFileSync(join(a, 'docs', 'judgment', 'OBJECTIVE.md'), 'utf8');
+    await judgmentGoalWrite(a, { op: 'migrate' }, { appliers: applyThenBlockAppliers() });
+    const sa = new RecordsStore(a);
+    assert.equal(sa.readIntents().length, 1, 'intent still pending');
+    regenerateProjections(a);
+    assert.equal(
+      readFileSync(join(a, 'docs', 'judgment', 'OBJECTIVE.md'), 'utf8'),
+      legacyProjection,
+      'pending migration still renders the legacy objective',
+    );
+    assert.equal(existsSync(join(a, 'docs', 'judgment', 'positions', 'objective.md')), true);
+
+    // Part B — a clear→regenerate crash commits records but reports stale;
+    // the next read repairs to the fully post-migration projection set.
+    const b = freshCwd();
+    await seedLegacy(b);
+    const obstruction = join(b, 'docs', 'judgment', 'REGISTER.md');
+    rmSync(obstruction);
+    mkdirSync(obstruction);
+    await refusedWith(
+      judgmentGoalWrite(b, { op: 'migrate' }),
+      'JUDGMENT_PROJECTION_STALE',
+      /canonical effects.*committed.*projections.*stale/i,
+    );
+    const sb = new RecordsStore(b);
+    assert.ok(sb.readGoalVersion(1), 'goal committed despite stale projection');
+    assert.equal(sb.derivePositionStatus('objective'), 'retracted', 'tombstone committed');
+    assert.equal(sb.readLedgerEvents().filter((e) => e.kind === 'attest').length, 1);
+    assert.deepEqual(sb.readIntents(), [], 'intent cleared at publication point');
+
+    rmSync(obstruction, { recursive: true });
+    await getJudgmentState(b);
+    fixedPoint(b, 'after repair');
+    assert.equal(existsSync(join(b, 'docs', 'judgment', 'positions', 'objective.md')), false);
+  });
+
+  test('a malformed occupied goal slot conflicts instead of appending v2', async () => {
+    const cwd = freshCwd();
+    await seedLegacy(cwd);
+    await judgmentGoalWrite(cwd, { op: 'migrate' }, { appliers: applyThenBlockAppliers() });
+    const store = new RecordsStore(cwd);
+    const [intent] = store.readIntents();
+
+    // Corrupt the occupied v1.json — a forgiving parsed read would see it as
+    // absent and append v2.json past it.
+    const goalV1 = recordsPath(cwd, 'goal', 'v1.json');
+    writeFileSync(goalV1, '{ this is not valid json');
+
+    await refusedWith(
+      replayPendingIntents(cwd),
+      'JUDGMENT_MIGRATION_CONFLICT',
+      new RegExp(`^goal migration ${intent.id}: goal/v1\\.json differs from the persisted payload$`),
+    );
+    assert.equal(existsSync(recordsPath(cwd, 'goal', 'v2.json')), false, 'no v2 appended past the malformed slot');
+    assert.equal(store.readIntents().length, 1, 'intent retained');
+  });
+
+  test('a preimage with duplicate association ids conflicts before persistence', async () => {
+    const cwd = freshCwd();
+    await seedLegacy(cwd);
+    const store = new RecordsStore(cwd);
+    const p = { actor: 'agent', session: null, written_at: '2026-07-23T08:00:00Z' };
+    // Schema-valid array shape, but two active `gj1` entries — ambiguous.
+    store.writeGoalState({
+      joints: [
+        { id: 'gj1', joint: 'horizon', provenance: p, removed: null },
+        { id: 'gj1', joint: 'commercial-intent', provenance: p, removed: null },
+      ],
+      load_links: [],
+      provenance: p,
+    });
+
+    await refusedWith(
+      judgmentGoalWrite(cwd, { op: 'migrate' }),
+      'JUDGMENT_MIGRATION_CONFLICT',
+      /goal migration: goal\/state\.json is not a valid goal_state record/,
+    );
+    assert.deepEqual(store.readIntents(), [], 'no intent persisted on an ambiguous preimage');
+    assert.equal(store.readGoalVersion(1), null);
+  });
+
+  test('a same-intent note whose title is tampered conflicts on replay', async () => {
+    const cwd = freshCwd();
+    await seedLegacy(cwd);
+    await judgmentGoalWrite(cwd, { op: 'migrate' }, { appliers: applyThenBlockAppliers() });
+    const store = new RecordsStore(cwd);
+    const [intent] = store.readIntents();
+
+    // Change ONLY the note title, keeping the intent_id — matching on
+    // title/anchor would treat this as absence and append a second note.
+    const ledger = recordsPath(cwd, 'ledger.jsonl');
+    const lines = readFileSync(ledger, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    for (const event of lines) {
+      if (event.kind === 'note' && event.provenance?.intent_id === intent.id) {
+        event.title = 'Tampered title';
+      }
+    }
+    writeFileSync(ledger, `${lines.map((l) => JSON.stringify(l)).join('\n')}\n`);
+
+    await refusedWith(
+      replayPendingIntents(cwd),
+      'JUDGMENT_MIGRATION_CONFLICT',
+      new RegExp(`^goal migration ${intent.id}: anchored migration note differs from the persisted payload$`),
+    );
+    assert.equal(
+      store.readLedgerEvents().filter((e) => e.kind === 'note' && e.provenance?.intent_id === intent.id).length,
+      1,
+      'no second note appended',
+    );
+  });
+
+  test('replay skips a reordered-but-structurally-equal artifact', async () => {
+    const cwd = freshCwd();
+    await seedLegacy(cwd);
+    await judgmentGoalWrite(cwd, { op: 'migrate' }, { appliers: applyThenBlockAppliers() });
+    const store = new RecordsStore(cwd);
+
+    // Rewrite goal/v1.json with keys reordered but values identical. Structural
+    // equality must treat this as a skip, not a byte-level conflict.
+    const goalV1 = recordsPath(cwd, 'goal', 'v1.json');
+    const record = JSON.parse(readFileSync(goalV1, 'utf8'));
+    const reordered = {
+      provenance: record.provenance,
+      diff_note: record.diff_note,
+      provocation: record.provocation,
+      clauses: record.clauses,
+      version: record.version,
+    };
+    writeFileSync(goalV1, `${JSON.stringify(reordered, null, 2)}\n`);
+
+    assert.equal((await replayPendingIntents(cwd)).replayed, 1, 'reordered-equal artifact replays cleanly');
+    assert.equal(store.readGoalChain().length, 1, 'no duplicate goal version');
+    assert.deepEqual(store.readIntents(), []);
+  });
+
+  test('structural equality detects an injected own __proto__ field', async () => {
+    const cwd = freshCwd();
+    await seedLegacy(cwd);
+    await judgmentGoalWrite(cwd, { op: 'migrate' }, { appliers: applyThenBlockAppliers() });
+    const store = new RecordsStore(cwd);
+    const [intent] = store.readIntents();
+
+    // Inject a raw own `__proto__` key (JSON.parse keeps it as an own property);
+    // a canonicalizer that routed keys through an object setter would drop it
+    // and wrongly treat the tampered goal as equal.
+    const goalV1 = recordsPath(cwd, 'goal', 'v1.json');
+    const raw = readFileSync(goalV1, 'utf8').trimEnd();
+    writeFileSync(goalV1, `${raw.slice(0, -1)}, "__proto__": {"tampered": true}}\n`);
+
+    await refusedWith(
+      replayPendingIntents(cwd),
+      'JUDGMENT_MIGRATION_CONFLICT',
+      new RegExp(`^goal migration ${intent.id}: goal/v1\\.json differs from the persisted payload$`),
+    );
+    assert.equal(store.readIntents().length, 1, 'intent retained');
+  });
+
+  test('a preimage association id beyond exact float range conflicts', async () => {
+    const cwd = freshCwd();
+    await seedLegacy(cwd);
+    const store = new RecordsStore(cwd);
+    const p = { actor: 'agent', session: null, written_at: '2026-07-23T08:00:00Z' };
+    // 2^53 — incrementing the high-water mark rounds back to the same integer,
+    // so a freshly allocated fixed-joint id would collide with this one.
+    store.writeGoalState({
+      joints: [{ id: 'gj9007199254740992', joint: 'horizon', provenance: p, removed: null }],
+      load_links: [],
+      provenance: p,
+    });
+
+    await refusedWith(
+      judgmentGoalWrite(cwd, { op: 'migrate' }),
+      'JUDGMENT_MIGRATION_CONFLICT',
+      /ambiguous association ids/,
+    );
+    assert.deepEqual(store.readIntents(), [], 'no intent persisted');
+    assert.equal(store.readGoalVersion(1), null);
+  });
+});
+
+function escapeForRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function tamperArtifact(cwd, intentId, artifact) {
+  if (artifact === 'goal') {
+    const path = recordsPath(cwd, 'goal', 'v1.json');
+    const record = JSON.parse(readFileSync(path, 'utf8'));
+    record.diff_note = 'tampered diff note';
+    writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`);
+  } else if (artifact === 'tombstone') {
+    const path = recordsPath(cwd, 'positions', 'objective', 'r2.json');
+    const record = JSON.parse(readFileSync(path, 'utf8'));
+    record.conviction = { level: 'high', source: 'stated' };
+    writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`);
+  } else if (artifact === 'state') {
+    const path = recordsPath(cwd, 'goal', 'state.json');
+    writeFileSync(path, `${readFileSync(path, 'utf8')} `);
+  } else if (artifact === 'note') {
+    const path = recordsPath(cwd, 'ledger.jsonl');
+    const lines = readFileSync(path, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    for (const event of lines) {
+      if (
+        event.kind === 'note'
+        && event.title === 'Legacy objective migrated to goal:v1'
+        && event.provenance?.intent_id === intentId
+      ) {
+        event.body = `${event.body}\nTAMPERED`;
+      }
+    }
+    writeFileSync(path, `${lines.map((l) => JSON.stringify(l)).join('\n')}\n`);
+  }
+}
