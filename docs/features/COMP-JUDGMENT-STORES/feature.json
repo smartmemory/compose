@@ -1,11 +1,41 @@
 {
   "code": "COMP-JUDGMENT-STORES",
   "description": "Writer extensions — person/situation/goal/resolution-package record kinds, generated projections, invariants as rejected writes (the only door for every store; manual Writer box + ledger seq 112)",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "Judgment Layer",
   "created": "2026-07-22",
-  "updated": "2026-07-22",
+  "updated": "2026-07-23",
   "complexity": "L",
   "position": 3,
-  "parent": "COMP-JUDGMENT-WRITER"
+  "parent": "COMP-JUDGMENT-WRITER",
+  "completions": [
+    {
+      "completion_id": "COMP-JUDGMENT-STORES:1dd2432012948fa9c47ba4c7b4d7428fa05f17b1",
+      "feature_code": "COMP-JUDGMENT-STORES",
+      "commit_sha": "1dd2432012948fa9c47ba4c7b4d7428fa05f17b1",
+      "commit_sha_short": "1dd24320",
+      "tests_pass": true,
+      "files_changed": [
+        "contracts/judgment-record.schema.json",
+        "lib/judgment/store/records.js",
+        "lib/judgment/store/index.js",
+        "lib/judgment-writer.js",
+        "lib/judgment-gen.js",
+        "server/compose-mcp.js",
+        "server/compose-mcp-tools.js",
+        "server/mcp-tool-policy.js",
+        "test/judgment-schema.test.js",
+        "test/judgment-store.test.js",
+        "test/judgment-writer.test.js",
+        "test/judgment-guard-integration.test.js",
+        "test/judgment-gen.test.js",
+        "test/judgment-writer-mcp.test.js",
+        "CHANGELOG.md"
+      ],
+      "recorded_at": "2026-07-23T08:15:18.069Z",
+      "recorded_by": "mcp:agent",
+      "notes": "T1-T6 shipped 8db62c0..1dd2432; judgment family 206/206, full suite green; sol/xhigh review closed r3 (2 MAJOR + 3 MINOR fixed). Goal store ships LOCKED pending COMP-JUDGMENT-GOAL-MIGRATE."
+    }
+  ],
+  "commit_sha": "1dd2432012948fa9c47ba4c7b4d7428fa05f17b1"
 }
