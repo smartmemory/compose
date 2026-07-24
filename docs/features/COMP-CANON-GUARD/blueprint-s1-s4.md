@@ -2,6 +2,22 @@
 
 **Date:** 2026-07-24 · **Status:** IN PROGRESS · **Owner ruling this session:** build the S1+S4 prevention slice; leave S5/S6 for a separate re-spec pass (build-correlation model is dead — all 777 events carry `build_id: null`).
 
+## Progress ledger
+
+- **S1 — COMMITTED @27551dd.** `canon-registry.js` + `mcp-enforcement.js` refactor + contract test. Codex sol/xhigh gate: central ship-behavior claim approved (351-case equivalence, 0 mismatches); 2 findings fixed (deleted vestigial `_internals` shim; reconciled blueprint API names). CHANGELOG via `add_changelog_entry` (dogfood).
+- **S4 — BUILT, guard INSTALLED, Codex round 1 done (3 findings fixed), round 2 in flight.** `lib/canon-guard.js` (pure decision + settings transforms), `.claude/hooks/canon-guard.mjs` (runtime wrapper), `bin/compose.js` guard CLI, `test/canon-guard.test.js`. E2E: hook denies judgment writes with tool-naming reason, allows non-canon/ROADMAP, fails open. `compose guard install` applied → `.claude/settings.json` PreToolUse group (existing hooks preserved). **Guard is LIVE in this repo's session.**
+  - **Codex round-1 findings, all fixed + regression-tested:**
+    1. *(High)* Firmlink/alias bypass — lexical path check let `/System/Volumes/Data/...` (same inode via macOS firmlink) slip a real canon write. Fix: `realpathCanonicalize` (realpath for symlink+case) + strip `/System/Volumes/Data`, applied to root & target. **First fix attempt (plain realpath) was WRONG** — realpath does not collapse firmlinks; verified the strip closes the real exploit E2E.
+    2. *(High)* Sibling-hook data loss — group-level "any child ours → delete group" wiped unrelated sibling hooks. Fix: `pruneOurHooks` operates at the hook-entry level.
+    3. *(Medium)* Weak ownership marker — loose `.includes` false-positived and misreported drift as absent. Fix: leaf-name regex `canon-guard.mjs`.
+  - Deny envelope confirmed correct by Codex against the live hooks contract.
+  - **Codex round-2 (confirm fixes) — 2 deeper edges; adjudicated, loop STOPPED at 2 of ~3 rounds:**
+    - *R2-1 (symlink+`..`), root-cause FIXED:* `realpathCanonicalize` no longer `resolve()`s up front (that collapsed `..` before symlink resolution). Codex's demonstrated `/Volumes/Macintosh HD/../Users/...` vector now denies (E2E); portable symlinked-root regression added.
+    - *R2-2 (ownership regex edges), partially fixed + documented:* widened the leaf boundary so a trailing-`;` drift is still `stale` (regression added). The `node other.mjs canon-guard.mjs` false-positive needs full shell parsing to kill — **accepted limit**, not chased.
+  - **Accepted residual limits (runtime-scoped, Bash-bucket — closed only by S5/S6 tree-level backstop, NOT this slice):** exotic `..`-through-nested-symlink chains where `realpath`'s own `..` semantics vary; bind mounts; hardlinks; `filename-as-bare-argument` ownership false-positive. These require deliberately constructed paths/configs a normal Claude `Write` never emits. The hook canonicalizes against the realistic aliasing vectors (firmlink, symlinked root, case-fold); it is a write-time convenience for the dominant (Claude-authoring) failure mode, explicitly NOT a hardened sandbox.
+  - Full node:test suite 4828 pass / 0 fail after all fixes.
+- **Deferred (filed, not built):** override token protocol; hook-registering ROADMAP/feature.json (needs Decision 2 inventory + override); S5/S6.
+
 **Grounded against source 2026-07-24** — read `lib/mcp-enforcement.js`, `.claude/settings.json`, `lib/hooks-status.js`, `server/mcp-tool-policy.js`, `server/compose-mcp.js`, `lib/judgment-gen.js`, `lib/judgment-writer.js`, `bin/git-hooks/`. This blueprint supersedes the design's rev-6 file:line assumptions where they drifted (corrections table below).
 
 Related: [design.md](design.md) (the epic, 5 gate rounds), [COMP-JUDGMENT-WRITER](../COMP-JUDGMENT-WRITER/design.md) (S3, shipped @751cc96a).

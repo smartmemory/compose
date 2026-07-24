@@ -147,6 +147,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  sync      Re-sync global skills from this install (alias of setup)')
   console.log('  update    Pull latest compose, reinstall deps, refresh global skill')
   console.log('  doctor    Check external skill dependencies')
+  console.log('  guard     Manage the canon write-guard PreToolUse hook (install|uninstall|status)')
   console.log('  --version Print compose version, git SHA, and install root')
   process.exit(0)
 }
@@ -1896,6 +1897,81 @@ if (cmd === 'hooks') {
   }
 
   console.error(`Unknown hooks subcommand: "${sub}". Use: install | uninstall | status`)
+  process.exit(1)
+}
+
+if (cmd === 'guard') {
+  // compose guard {install,uninstall,status} — COMP-CANON-GUARD S4.
+  // Manages the write-time PreToolUse hook registration in .claude/settings.json.
+  // Scoped to compose's own checkout (dogfooding): the hook script uses a
+  // relative import into lib/, so it only works where .claude/ and lib/ are
+  // siblings — this repo. Cross-project install is design Open Question 2.
+  const sub = args[0] || 'status'
+  const { readFileSync: rfSync, writeFileSync: wfSync, existsSync: exSync, mkdirSync: mkSync } = await import('fs')
+  const { join: pjoin } = await import('path')
+  const { installGuardHook, uninstallGuardHook, guardHookStatus, HOOK_COMMAND, HOOK_MATCHER } =
+    await import('../lib/canon-guard.js')
+
+  const projectRoot = PACKAGE_ROOT
+  const claudeDir = pjoin(projectRoot, '.claude')
+  const settingsPath = pjoin(claudeDir, 'settings.json')
+  const hookScript = pjoin(claudeDir, 'hooks', 'canon-guard.mjs')
+
+  function readSettings() {
+    if (!exSync(settingsPath)) return {}
+    try {
+      return JSON.parse(rfSync(settingsPath, 'utf-8'))
+    } catch (e) {
+      console.error(`Error: ${settingsPath} is not valid JSON: ${e.message}`)
+      process.exit(1)
+    }
+  }
+  function writeSettings(obj) {
+    mkSync(claudeDir, { recursive: true })
+    wfSync(settingsPath, JSON.stringify(obj, null, 2) + '\n')
+  }
+
+  if (sub === 'install') {
+    if (!exSync(hookScript)) {
+      console.error(`Error: hook script missing at ${hookScript}`)
+      console.error('It is a tracked source file — ensure your checkout includes .claude/hooks/canon-guard.mjs')
+      process.exit(1)
+    }
+    const { settings, changed } = installGuardHook(readSettings())
+    if (changed) {
+      writeSettings(settings)
+      console.log('Installed canon-guard PreToolUse hook in .claude/settings.json')
+    } else {
+      console.log('canon-guard hook already installed (current).')
+    }
+    console.log(`  matcher: ${HOOK_MATCHER}`)
+    console.log(`  command: ${HOOK_COMMAND}`)
+    process.exit(0)
+  }
+
+  if (sub === 'uninstall') {
+    const { settings, changed } = uninstallGuardHook(readSettings())
+    if (changed) {
+      writeSettings(settings)
+      console.log('Removed canon-guard hook from .claude/settings.json')
+    } else {
+      console.log('No canon-guard hook installed.')
+    }
+    process.exit(0)
+  }
+
+  if (!sub || sub === 'status') {
+    const st = guardHookStatus(readSettings())
+    const scriptState = exSync(hookScript) ? 'present' : 'MISSING'
+    if (st.state === 'installed') console.log('canon-guard: installed (current)')
+    else if (st.state === 'stale') console.log('canon-guard: installed (stale — re-run `compose guard install`)')
+    else console.log('canon-guard: absent — run `compose guard install`')
+    console.log(`  hook script: ${scriptState} (${hookScript})`)
+    console.log(`  guards: docs/judgment/** (Write|Edit|NotebookEdit) — Claude-runtime only`)
+    process.exit(0)
+  }
+
+  console.error(`Unknown guard subcommand: "${sub}". Use: install | uninstall | status`)
   process.exit(1)
 }
 
