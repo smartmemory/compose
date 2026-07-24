@@ -2,6 +2,29 @@
 
 ## 2026-07-24
 
+### COMP-JUDGMENT-GOAL-MIGRATE S4 — the live cutover
+
+Compose's own objective is now goal canon. The legacy `objective` position,
+imported on 2026-07-20 as a back-inferred draft, has been migrated to `goal:v1`
+and retired: `objective#r2` is a retracted tombstone, its projection is pruned,
+and the goal store carries the three canonical joints (`horizon`,
+`success-criteria`, `commercial-intent`) as active associations. Published
+through the registered tool surface with `idempotency_key`
+`COMP-JUDGMENT-GOAL-MIGRATE-live-v1`, one shot, no pending intent left behind,
+projections at a verified fixed point.
+
+The clause crosses over as `channel: inferred` with its elicitation intact,
+null provocation and no ratification — a migrated draft does not get to claim
+owner ratification it never had, and `OBJECTIVE.md` now says so in a line of its
+own. What the projection no longer renders is not lost: the entire legacy file,
+including the health warning, the observed trade-off rankings, and the
+consistency tally, is preserved verbatim in the anchored migration note, which
+also records that `self-report-reliable` was not migrated because no canonical
+joint record exists for it.
+
+This is the slice that closes the epic. S1 built the intent, S2 fenced the
+store, S3 made it reachable, and S4 spent it, once, on the real thing.
+
 ### COMP-JUDGMENT-GOAL-MIGRATE S3 — MCP reachability and projection recovery closure
 
 Third build slice: the migration becomes reachable through the registered tool

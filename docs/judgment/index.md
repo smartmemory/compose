@@ -17,5 +17,4 @@ All files in this bundle are projections of `records/` — regenerated, never ha
 ## Positions
 
 - [judgment-layer](positions/judgment-layer.md) — live
-- [objective](positions/objective.md) — live
 - [product-boundary](positions/product-boundary.md) — live

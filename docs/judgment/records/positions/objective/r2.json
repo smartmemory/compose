@@ -1,0 +1,17 @@
+{
+  "slug": "objective",
+  "claims": [],
+  "conviction": {
+    "level": "low",
+    "source": "inferred"
+  },
+  "retracted": true,
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-24T02:24:00.816Z",
+    "via": "migration",
+    "intent_id": "intent-1784859840816-37452-1"
+  },
+  "rev": 2
+}

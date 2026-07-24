@@ -1,0 +1,48 @@
+{
+  "joints": [
+    {
+      "id": "gj1",
+      "joint": "horizon",
+      "provenance": {
+        "actor": "agent",
+        "session": null,
+        "written_at": "2026-07-24T02:24:00.816Z",
+        "via": "migration",
+        "intent_id": "intent-1784859840816-37452-1"
+      },
+      "removed": null
+    },
+    {
+      "id": "gj2",
+      "joint": "success-criteria",
+      "provenance": {
+        "actor": "agent",
+        "session": null,
+        "written_at": "2026-07-24T02:24:00.816Z",
+        "via": "migration",
+        "intent_id": "intent-1784859840816-37452-1"
+      },
+      "removed": null
+    },
+    {
+      "id": "gj3",
+      "joint": "commercial-intent",
+      "provenance": {
+        "actor": "agent",
+        "session": null,
+        "written_at": "2026-07-24T02:24:00.816Z",
+        "via": "migration",
+        "intent_id": "intent-1784859840816-37452-1"
+      },
+      "removed": null
+    }
+  ],
+  "load_links": [],
+  "provenance": {
+    "actor": "agent",
+    "session": null,
+    "written_at": "2026-07-24T02:24:00.816Z",
+    "via": "migration",
+    "intent_id": "intent-1784859840816-37452-1"
+  }
+}
