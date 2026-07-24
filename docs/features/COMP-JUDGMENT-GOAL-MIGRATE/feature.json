@@ -1,11 +1,37 @@
 {
   "code": "COMP-JUDGMENT-GOAL-MIGRATE",
   "description": "Intent-backed objective→goal migration: replay-durable compound op, dual-read cutover, intent-aware snapshot, position retirement. Split from COMP-JUDGMENT-STORES at gate round 5; depends on the goal store shipping first",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "Judgment Layer",
   "created": "2026-07-23",
-  "updated": "2026-07-23",
+  "updated": "2026-07-24",
   "complexity": "M",
   "position": 5,
-  "parent": "COMP-JUDGMENT-STORES"
+  "parent": "COMP-JUDGMENT-STORES",
+  "completions": [
+    {
+      "completion_id": "COMP-JUDGMENT-GOAL-MIGRATE:acfe22661f7f31935654b10be56fe686e4769204",
+      "feature_code": "COMP-JUDGMENT-GOAL-MIGRATE",
+      "commit_sha": "acfe22661f7f31935654b10be56fe686e4769204",
+      "commit_sha_short": "acfe2266",
+      "tests_pass": true,
+      "files_changed": [
+        "CHANGELOG.md",
+        "docs/features/COMP-JUDGMENT-GOAL-MIGRATE/s4-progress.md",
+        "docs/judgment/LEDGER.md",
+        "docs/judgment/OBJECTIVE.md",
+        "docs/judgment/SITUATION.md",
+        "docs/judgment/index.md",
+        "docs/judgment/positions/objective.md",
+        "docs/judgment/records/goal/state.json",
+        "docs/judgment/records/goal/v1.json",
+        "docs/judgment/records/ledger.jsonl",
+        "docs/judgment/records/positions/objective/r2.json"
+      ],
+      "recorded_at": "2026-07-24T05:56:47.137Z",
+      "recorded_by": "mcp:agent",
+      "notes": "S1-S4 shipped and pushed (@acfe226); live owner-gated cutover ran — objective r1 → goal:v1, objective#r2 retracted tombstone, legacy prose preserved verbatim in canon. Evidence-gated completion (real commit + pre-push suite green); no override token used."
+    }
+  ],
+  "commit_sha": "acfe22661f7f31935654b10be56fe686e4769204"
 }
