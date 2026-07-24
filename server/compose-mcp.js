@@ -864,12 +864,12 @@ const TOOLS = [
   },
   {
     name: 'judgment_goal_write',
-    description: 'Write goal canon by op. Ordinary cuts require elicited clauses, provocation, and owner ratification; cuts are migration-locked while a live legacy objective requires migration. joint_link/load_link support create and remove. Provenance and intents are writer-owned.',
+    description: 'Write goal canon by op. Ordinary cuts require elicited clauses, provocation, and owner ratification. Every non-migrate op is migration-locked while a live legacy objective requires migration; migrate is the one-shot, fail-closed cutover that lifts the lock and takes no payload. joint_link/load_link support create and remove. Provenance and intents are writer-owned.',
     inputSchema: {
       type: 'object',
       required: ['op'],
       properties: {
-        op: { type: 'string', enum: ['cut', 'correct', 'joint_link', 'load_link'] },
+        op: { type: 'string', enum: ['cut', 'correct', 'joint_link', 'load_link', 'migrate'] },
         clauses: { type: 'array', description: 'cut: {text, channel, elicitation, secondhand source attribution?}[]' },
         provocation: { type: 'object', description: 'cut: {quote, at}' },
         ratification: { type: 'object', description: 'cut: {asked, answered_at, answer_ref, quote}' },
@@ -889,7 +889,7 @@ const TOOLS = [
   },
   {
     name: 'get_judgment_state',
-    description: 'Judgment canon snapshot: positions (derived status), joints, under-test, open predictions, recent ledger. Replays pending transition intents first.',
+    description: 'Judgment canon snapshot: positions (derived status), joints, under-test, open predictions, recent ledger. Replays pending judgment intents first.',
     inputSchema: { type: 'object', properties: {} },
   },
 ];

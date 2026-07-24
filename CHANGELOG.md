@@ -2,6 +2,34 @@
 
 ## 2026-07-24
 
+### COMP-JUDGMENT-GOAL-MIGRATE S3 — MCP reachability and projection recovery closure
+
+Third build slice: the migration becomes reachable through the registered tool
+surface. `judgment_goal_write` advertises `migrate` on its op enum and takes no
+new arguments, so the whole cutover is one no-payload call. The registry stays
+pinned at 49 tool definitions, 49 dispatch cases, and the same nine judgment
+tool names — an op was added, not a tool. The tool's copy now describes the
+fence as wholesale (every non-`migrate` op is migration-locked while a live
+legacy objective requires migration) rather than cut-only, matching what S2
+actually built, and `get_judgment_state` replays "pending judgment intents"
+rather than only transition intents.
+
+Two closure findings came out of proving it end to end. Two of the three
+`JUDGMENT_MIGRATION_CONFLICT` diagnostics are unreachable across stdio, and
+that is the system being tight rather than a gap: terminal objective retirement
+means neither a live objective beside an ordinary goal cut nor a revived
+objective can be constructed through the tools at all. And the crash window
+that matters is narrower than it looks — obstructing `OBJECTIVE.md` fails while
+the migration is still reading it to build its note, before any canonical
+write, so the real clear-to-regenerate window is proven by obstructing a
+different generated surface: records commit, the intent clears, only the
+regeneration dies with `JUDGMENT_PROJECTION_STALE`, and the next
+`get_judgment_state` repairs the projection back to a fixed point.
+
+The pending-migration generator fixture now carries the real S1 intent payload
+under the real tool and op instead of a skeleton, so projection hiding is
+exercised against a complete migration record.
+
 ### COMP-JUDGMENT-GOAL-MIGRATE S2 — goal fence, fail-closed completion, terminal retirement
 
 Second build slice of the objective→goal store migration. The pre-cutover fence

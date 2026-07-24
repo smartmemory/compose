@@ -33,6 +33,22 @@ function removed(reason, at) {
   };
 }
 
+const MIGRATION_INTENT_ID = 'intent-goal-migration';
+
+// Stands in for the legacy OBJECTIVE.md the migration captured. Held as a
+// literal rather than generated: seededCwd() must leave the fixture
+// UN-regenerated (the pruning and emits-all-files tests key off that
+// precondition). Byte-verbatim capture is pinned against a real migration run
+// in judgment-writer.test.js, not here.
+const LEGACY_OBJECTIVE_PROJECTION = [
+  '# Objective',
+  '',
+  '**Status:** live',
+  '',
+  '- Ship the judgment writer.',
+  '',
+].join('\n');
+
 function seededCwd() {
   const cwd = mkdtempSync(join(tmpdir(), 'judgment-gen-'));
   const store = new RecordsStore(cwd);
@@ -297,20 +313,38 @@ function seededCwd() {
     provenance,
   });
 
+  // COMP-JUDGMENT-GOAL-MIGRATE C10 — the pending-migration intent under its
+  // REAL tool and op (`judgment_goal_write`/`migrate` — `judgment_goal_migrate`
+  // was overruled at design gate r1 and does not exist), with every payload key
+  // populated by a final record rather than `{}`. The payload objects below ARE
+  // what gets written, so payload and store are one source of truth.
+  //
+  // This is deliberately NOT byte-identical to an S1 migration output, and
+  // cannot be: the goal state below carries a REMOVED association so the
+  // generator's removed-association rendering is covered (asserted in "dual-read
+  // matrix…"), whereas buildMigrationState always DROPS removed entries. Same
+  // for the note — a distinctive hidden-note body is what proves note hiding.
+  // Projection behavior against a genuinely S1-produced pending migration is
+  // pinned where such a payload can exist: judgment-writer.test.js, "migration
+  // records are atomic and projections repair after publication" (part A),
+  // which drives the real writer through the C13 seam. What lives here is the
+  // generator's own contract: an intent hides its artifacts until it clears.
   const hiddenProvenance = {
     ...provenance,
     written_at: '2026-07-22T14:00:00Z',
     via: 'migration',
-    intent_id: 'intent-goal-migration',
+    intent_id: MIGRATION_INTENT_ID,
   };
-  store.writePositionRevision({
+  const legacyObjective = store.readPositionRevision('objective', 1);
+  const migrationTombstone = {
     slug: 'objective',
     claims: [],
     conviction: { level: 'high', source: 'stated' },
     retracted: true,
     provenance: hiddenProvenance,
-  });
-  store.writeGoalVersion({
+    rev: 2,
+  };
+  const migrationGoalVersion = {
     version: 1,
     clauses: [{
       id: 'c1',
@@ -327,8 +361,8 @@ function seededCwd() {
     provocation: null,
     diff_note: 'Migrated from the legacy objective.',
     provenance: hiddenProvenance,
-  });
-  store.writeGoalState({
+  };
+  const migrationGoalState = {
     joints: [
       {
         id: 'gj1',
@@ -353,20 +387,47 @@ function seededCwd() {
       },
     ],
     provenance: hiddenProvenance,
-  });
-  store.appendLedgerEvent({
+  };
+  const migrationNote = {
     kind: 'note',
     title: 'Hidden migration note',
     body: 'This must not render before publication.',
     anchor: 'ledger-header',
     provenance: hiddenProvenance,
-  });
+  };
+  // The absorbed sidecar preimage: the same associations before the migration
+  // re-stamped their provenance. `bytes` is the on-disk form the byte-drift
+  // replay check compares against.
+  const goalStatePreimageRecord = {
+    joints: migrationGoalState.joints.map((entry) => ({ ...entry, provenance })),
+    load_links: migrationGoalState.load_links.map((entry) => ({ ...entry, provenance })),
+    provenance,
+  };
+
+  store.writePositionRevision(migrationTombstone);
+  store.writeGoalVersion(migrationGoalVersion);
+  store.writeGoalState(migrationGoalState);
+  store.appendLedgerEvent(migrationNote);
   store.persistIntent({
-    id: 'intent-goal-migration',
+    id: MIGRATION_INTENT_ID,
     kind: 'goal_migration',
-    tool: 'judgment_goal_migrate',
+    tool: 'judgment_goal_write',
     op: 'migrate',
-    payload: {},
+    payload: {
+      source: {
+        objective_ref: 'objective#r1',
+        objective: legacyObjective,
+        legacy_projection: LEGACY_OBJECTIVE_PROJECTION,
+      },
+      goal_version: migrationGoalVersion,
+      objective_tombstone: migrationTombstone,
+      goal_state_preimage: {
+        bytes: `${JSON.stringify(goalStatePreimageRecord, null, 2)}\n`,
+        record: goalStatePreimageRecord,
+      },
+      goal_state: migrationGoalState,
+      note: migrationNote,
+    },
     created_at: '2026-07-22T14:00:00Z',
   });
   return cwd;
@@ -375,7 +436,7 @@ function seededCwd() {
 function postCutoverCwd() {
   const cwd = seededCwd();
   const store = new RecordsStore(cwd);
-  store.clearIntent('intent-goal-migration');
+  store.clearIntent(MIGRATION_INTENT_ID);
   store.writeGoalVersion({
     version: 2,
     clauses: [
@@ -728,6 +789,52 @@ describe('S5 OBJECTIVE dual-read and audit projection', () => {
     assert.doesNotMatch(pendingObjective, /Ship the migrated judgment writer\./);
     assert.ok(existsSync(join(pendingCwd, 'docs', 'judgment', 'positions', 'objective.md')));
     assert.match(pendingIndex, /\[objective\]\(positions\/objective\.md\) — live/);
+  });
+
+  test('real pending migration payload keeps legacy projections until clear', () => {
+    const cwd = seededCwd();
+    const store = new RecordsStore(cwd);
+
+    // The fixture's intent is the real one: real tool/op, complete payload.
+    const intent = store.readIntents().find((entry) => entry.id === MIGRATION_INTENT_ID);
+    assert.equal(intent.tool, 'judgment_goal_write');
+    assert.equal(intent.op, 'migrate');
+    assert.equal(intent.kind, 'goal_migration');
+    assert.deepEqual(
+      Object.keys(intent.payload).sort(),
+      ['goal_state', 'goal_state_preimage', 'goal_version', 'note', 'objective_tombstone', 'source'],
+    );
+    assert.equal(intent.payload.source.objective_ref, 'objective#r1');
+    assert.equal(intent.payload.objective_tombstone.retracted, true);
+    assert.equal(intent.payload.goal_version.provenance.intent_id, MIGRATION_INTENT_ID);
+
+    // Before clear: every legacy surface still reads as pre-cutover.
+    regenerateProjections(cwd);
+    const objectiveBefore = readFileSync(join(cwd, 'docs', 'judgment', 'OBJECTIVE.md'), 'utf8');
+    const positionBefore = readFileSync(
+      join(cwd, 'docs', 'judgment', 'positions', 'objective.md'),
+      'utf8',
+    );
+    const indexBefore = readFileSync(join(cwd, 'docs', 'judgment', 'index.md'), 'utf8');
+    assert.match(objectiveBefore, /Ship the judgment writer\./);
+    assert.doesNotMatch(objectiveBefore, /Ship the migrated judgment writer\./);
+    assert.match(positionBefore, /\*\*Status:\*\* live/);
+    assert.match(indexBefore, /\[objective\]\(positions\/objective\.md\) — live/);
+
+    // Clearing the intent is the publication point: the same records become
+    // effective, the goal objective renders, and the legacy surface is pruned.
+    store.clearIntent(MIGRATION_INTENT_ID);
+    regenerateProjections(cwd);
+    const objectiveAfter = readFileSync(join(cwd, 'docs', 'judgment', 'OBJECTIVE.md'), 'utf8');
+    const indexAfter = readFileSync(join(cwd, 'docs', 'judgment', 'index.md'), 'utf8');
+    assert.match(objectiveAfter, /Ship the migrated judgment writer\./);
+    assert.doesNotMatch(objectiveAfter, /Ship the judgment writer\.$/m);
+    assert.ok(
+      !existsSync(join(cwd, 'docs', 'judgment', 'positions', 'objective.md')),
+      'the legacy position projection is pruned after clear',
+    );
+    assert.doesNotMatch(indexAfter, /\(positions\/objective\.md\)/);
+    assert.equal(checkProjectionRoundtrip(cwd).fixedPoint, true);
   });
 
   test('a pending tombstone cannot retract the effective legacy objective', () => {
