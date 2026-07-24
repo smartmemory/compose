@@ -29,7 +29,16 @@ S1 gate: `node --test test/judgment-store.test.js test/judgment-writer.test.js`
 - [x] Codex sol/xhigh review R1 folded (5 findings, all real, all fixed + regression-tested)
 - [x] Codex R2 verification: confirmed R1 fixes correct; 2 exotic MEDIUM edges found + fixed
 - [x] Full node suite green: 4948 pass, 0 fail
-- [ ] Committed to main
+- [x] Committed + pushed to main @857a721 (pre-push full npm test green)
+
+## Next: S2 — DONE, see [s2-progress.md](s2-progress.md)
+See blueprint S2 — central pre-executor fence (do NOT copy into the 4 executors),
+zero-arg migrate validation is ALREADY front-loaded, legality-window guard,
+migrationCompletion (no-op/already-migrated + revived-objective conflict),
+JUDGMENT_OBJECTIVE_RETIRED in judgmentPositionCreate.execute. Also: S2 should give
+the migrate executor a real result derived from migrationCompletion instead of the
+unconditional {status:'migrated'} (S1-minimal; only ever wrong under injection).
+S2 gate: `node --test test/judgment-writer.test.js test/judgment-guard-integration.test.js`
 
 ## Codex R2 findings folded (both exotic, both fixed + regression-tested)
 - R2-M1 canonicalize dropped own `__proto__` (acc[k]= hit prototype setter) →

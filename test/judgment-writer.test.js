@@ -13,6 +13,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   writeFileSync,
   rmSync,
 } from 'node:fs';
@@ -1999,7 +2000,7 @@ describe('T4 goal cut — ratification, channel grammar, and migration precedenc
     await refusedWith(
       judgmentGoalWrite(legacyCwd, cutArgs()),
       'JUDGMENT_MIGRATION_REQUIRED',
-      /legacy objective.*migration/i,
+      exactly(fenceMessage('cut')),
     );
 
     const fencedCwd = freshCwd();
@@ -3155,6 +3156,10 @@ function escapeForRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function exactly(message) {
+  return new RegExp(`^${escapeForRegExp(message)}$`);
+}
+
 function tamperArtifact(cwd, intentId, artifact) {
   if (artifact === 'goal') {
     const path = recordsPath(cwd, 'goal', 'v1.json');
@@ -3184,3 +3189,361 @@ function tamperArtifact(cwd, intentId, artifact) {
     writeFileSync(path, `${lines.map((l) => JSON.stringify(l)).join('\n')}\n`);
   }
 }
+
+// ---------------------------------------------------------------------------
+// COMP-JUDGMENT-GOAL-MIGRATE S2 — wholesale fence, fail-closed completion,
+// terminal objective retirement
+// ---------------------------------------------------------------------------
+
+const fenceMessage = (op) => (
+  `judgment_goal_write ${op}: legacy objective is live; `
+  + 'run judgment_goal_write op=migrate before any other goal operation'
+);
+
+const NON_EMPTY_CHAIN_CONFLICT =
+  'judgment_goal_write migrate: goal chain is non-empty without a durable migration-attested v1';
+const NOT_LIVE_CONFLICT =
+  'judgment_goal_write migrate: legacy objective is not live and no durable migration is complete';
+const REVIVED_CONFLICT =
+  'judgment_goal_write migrate: migration-attested goal v1 exists but objective is live; '
+  + 'append retracted:true through judgment_position_create, then retry';
+const OBJECTIVE_RETIRED =
+  'judgment_position_create: objective is retired after goal cutover; '
+  + 'use judgment_goal_write for goal changes (retracted:true remains legal)';
+
+const CONVICTION = { level: 'low', source: 'inferred' };
+
+const objectiveClaims = () => [{ ...OBJECTIVE_CLAIM, elicitation: { ...OBJECTIVE_CLAIM.elicitation } }];
+
+/** Byte snapshot of the whole canonical record tree — the zero-write oracle. */
+function recordsSnapshot(cwd) {
+  const root = recordsPath(cwd);
+  const snapshot = {};
+  const walk = (dir, prefix) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) walk(join(dir, entry.name), rel);
+      else snapshot[rel] = readFileSync(join(dir, entry.name), 'utf8');
+    }
+  };
+  if (existsSync(root)) walk(root, '');
+  return snapshot;
+}
+
+function rewriteLedger(cwd, mutate) {
+  const path = recordsPath(cwd, 'ledger.jsonl');
+  const events = readFileSync(path, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
+  const kept = events.filter((event) => mutate(event) !== false);
+  writeFileSync(path, `${kept.map((event) => JSON.stringify(event)).join('\n')}\n`);
+}
+
+function rewriteGoalV1(cwd, mutate) {
+  const path = recordsPath(cwd, 'goal', 'v1.json');
+  const record = JSON.parse(readFileSync(path, 'utf8'));
+  mutate(record);
+  writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`);
+}
+
+/**
+ * Executor-entry spy. `stampProvenance` reads `internal.writtenAt` and every
+ * goal executor stamps provenance; validation never touches it. A zero count
+ * therefore proves the presented op's executor was never reached.
+ */
+function executorSpy() {
+  const spy = { calls: 0 };
+  spy.internal = {
+    get writtenAt() {
+      spy.calls += 1;
+      return '2026-07-23T11:00:00Z';
+    },
+  };
+  return spy;
+}
+
+describe('COMP-JUDGMENT-GOAL-MIGRATE S2 — fence, completion, retirement', () => {
+  test('legacy-live fences every non-migrate goal op without fencing migrate', async () => {
+    const cwd = freshCwd();
+    await seedLegacy(cwd);
+    const before = recordsSnapshot(cwd);
+
+    const calls = [
+      ['cut', cutArgs()],
+      ['correct', { op: 'correct', clause_id: 'c1', text: 'Rewritten.' }],
+      ['joint_link', { op: 'joint_link', joint: 'horizon' }],
+      ['joint_link', { op: 'joint_link', joint_link_id: 'gj1', remove: true, reason: 'retired' }],
+      ['load_link', { op: 'load_link', clause: 'v1#c1', carries: 'the whole goal' }],
+      ['load_link', { op: 'load_link', load_link_id: 'gl1', remove: true, reason: 'retired' }],
+    ];
+    for (const [op, args] of calls) {
+      await refusedWith(
+        judgmentGoalWrite(cwd, args),
+        'JUDGMENT_MIGRATION_REQUIRED',
+        exactly(fenceMessage(op)),
+      );
+    }
+    assert.deepEqual(recordsSnapshot(cwd), before, 'no fenced op wrote a record');
+    assert.equal(
+      existsSync(recordsPath(cwd, 'goal', 'state.json')),
+      false,
+      'a fenced joint_link never creates the sidecar',
+    );
+
+    // migrate is exempt — it reaches its executor and publishes.
+    const result = await judgmentGoalWrite(cwd, { op: 'migrate' });
+    assert.equal(result.status, 'migrated');
+  });
+
+  test('rerun no-ops only for attested migration plus retired objective', async () => {
+    const cwd = freshCwd();
+    await seedLegacy(cwd);
+    const first = await judgmentGoalWrite(cwd, { op: 'migrate' });
+    const noOpResult = {
+      op: 'migrate',
+      status: 'already migrated',
+      version: 1,
+      ref: 'goal:v1',
+      intent_id: first.intent_id,
+    };
+
+    const afterMigrate = recordsSnapshot(cwd);
+    assert.deepEqual(await judgmentGoalWrite(cwd, { op: 'migrate' }), noOpResult);
+    assert.deepEqual(recordsSnapshot(cwd), afterMigrate, 'rerun wrote zero bytes');
+
+    // A legal post-migration v2 does not invalidate the completed migration.
+    await judgmentGoalWrite(cwd, cutArgs({ diff_note: 'Post-migration v2.' }));
+    const afterV2 = recordsSnapshot(cwd);
+    assert.deepEqual(await judgmentGoalWrite(cwd, { op: 'migrate' }), noOpResult);
+    assert.deepEqual(recordsSnapshot(cwd), afterV2, 'rerun after v2 wrote zero bytes');
+
+    // Every falsified conjunct fails closed, writing nothing.
+    const broken = {
+      'wrong via': (c) => rewriteGoalV1(c, (record) => { record.provenance.via = 'import'; }),
+      'missing intent_id': (c) => rewriteGoalV1(c, (record) => { delete record.provenance.intent_id; }),
+      'missing attestation': (c) => rewriteLedger(c, (event) => (event.kind !== 'attest')),
+    };
+    for (const [label, breakIt] of Object.entries(broken)) {
+      const c = freshCwd();
+      await seedLegacy(c);
+      await judgmentGoalWrite(c, { op: 'migrate' });
+      breakIt(c);
+      const snapshot = recordsSnapshot(c);
+      await refusedWith(
+        judgmentGoalWrite(c, { op: 'migrate' }),
+        'JUDGMENT_MIGRATION_CONFLICT',
+        exactly(NON_EMPTY_CHAIN_CONFLICT),
+      );
+      assert.deepEqual(recordsSnapshot(c), snapshot, `${label}: wrote zero bytes`);
+    }
+
+    // An ordinary goal plus an ordinary tombstone is not a migration.
+    const ordinary = freshCwd();
+    await judgmentGoalWrite(ordinary, cutArgs());
+    await judgmentPositionCreate(ordinary, {
+      slug: 'objective', claims: [], conviction: CONVICTION, retracted: true,
+    });
+    const ordinarySnapshot = recordsSnapshot(ordinary);
+    await refusedWith(
+      judgmentGoalWrite(ordinary, { op: 'migrate' }),
+      'JUDGMENT_MIGRATION_CONFLICT',
+      exactly(NON_EMPTY_CHAIN_CONFLICT),
+    );
+    assert.deepEqual(recordsSnapshot(ordinary), ordinarySnapshot, 'ordinary pair wrote zero bytes');
+
+    // Empty chain with no live legacy objective.
+    for (const seed of [async () => {}, async (c) => {
+      await judgmentPositionCreate(c, {
+        slug: 'objective', claims: [], conviction: CONVICTION, retracted: true,
+      });
+    }]) {
+      const c = freshCwd();
+      await seed(c);
+      const snapshot = recordsSnapshot(c);
+      await refusedWith(
+        judgmentGoalWrite(c, { op: 'migrate' }),
+        'JUDGMENT_MIGRATION_CONFLICT',
+        exactly(NOT_LIVE_CONFLICT),
+      );
+      assert.deepEqual(recordsSnapshot(c), snapshot, 'non-live objective wrote zero bytes');
+    }
+
+    // An attestation resolving the migration intent under another tool/op.
+    const forged = freshCwd();
+    await seedLegacy(forged);
+    const forgedMigration = await judgmentGoalWrite(forged, { op: 'migrate' });
+    rewriteLedger(forged, (event) => {
+      if (event.kind === 'attest' && event.intent_id === forgedMigration.intent_id) {
+        event.tool = 'judgment_transition';
+        event.op = 'transition';
+      }
+    });
+    const forgedSnapshot = recordsSnapshot(forged);
+    await refusedWith(
+      judgmentGoalWrite(forged, { op: 'migrate' }),
+      'JUDGMENT_MIGRATION_CONFLICT',
+      exactly(`goal migration ${forgedMigration.intent_id}: durable attestation attribution conflicts`),
+    );
+    assert.deepEqual(recordsSnapshot(forged), forgedSnapshot, 'forged attestation wrote zero bytes');
+
+    // The no-op regenerates projections; a regeneration failure reports stale
+    // rather than rolling back an already-published migration.
+    const stale = freshCwd();
+    await seedLegacy(stale);
+    await judgmentGoalWrite(stale, { op: 'migrate' });
+    const staleSnapshot = recordsSnapshot(stale);
+    const obstruction = join(stale, 'docs', 'judgment', 'REGISTER.md');
+    rmSync(obstruction);
+    mkdirSync(obstruction);
+    await refusedWith(
+      judgmentGoalWrite(stale, { op: 'migrate' }),
+      'JUDGMENT_PROJECTION_STALE',
+      /canonical effects.*committed.*projections.*stale/i,
+    );
+    assert.deepEqual(recordsSnapshot(stale), staleSnapshot, 'stale rerun wrote zero bytes');
+  });
+
+  test('revived objective conflicts, tombstone repair is legal', async () => {
+    const cwd = freshCwd();
+    await seedLegacy(cwd);
+    const first = await judgmentGoalWrite(cwd, { op: 'migrate' });
+    const store = new RecordsStore(cwd);
+
+    // Revival can only come from outside the writer — position_create is
+    // terminally retired for non-tombstone objective revisions.
+    store.writePositionRevision({
+      slug: 'objective',
+      claims: objectiveClaims(),
+      conviction: CONVICTION,
+      provenance: { actor: 'agent', session: null, written_at: '2026-07-23T12:00:00Z' },
+    });
+    assert.equal(store.derivePositionStatus('objective'), 'live', 'objective revived');
+
+    const revivedSnapshot = recordsSnapshot(cwd);
+    await refusedWith(
+      judgmentGoalWrite(cwd, { op: 'migrate' }),
+      'JUDGMENT_MIGRATION_CONFLICT',
+      exactly(REVIVED_CONFLICT),
+    );
+    assert.deepEqual(recordsSnapshot(cwd), revivedSnapshot, 'revived rerun wrote zero bytes');
+
+    const repair = await judgmentPositionCreate(cwd, {
+      slug: 'objective', claims: [], conviction: CONVICTION, retracted: true,
+    });
+    assert.equal(repair.status, 'retracted');
+    assert.deepEqual(await judgmentGoalWrite(cwd, { op: 'migrate' }), {
+      op: 'migrate',
+      status: 'already migrated',
+      version: 1,
+      ref: 'goal:v1',
+      intent_id: first.intent_id,
+    });
+    fixedPoint(cwd, 'after tombstone repair');
+  });
+
+  test('post-cutover objective revival is terminally retired', async () => {
+    const cwd = freshCwd();
+    await seedLegacy(cwd);
+    await judgmentGoalWrite(cwd, { op: 'migrate' });
+    const store = new RecordsStore(cwd);
+    const before = recordsSnapshot(cwd);
+
+    await refusedWith(
+      judgmentPositionCreate(cwd, {
+        slug: 'objective', claims: objectiveClaims(), conviction: CONVICTION,
+      }),
+      'JUDGMENT_OBJECTIVE_RETIRED',
+      exactly(OBJECTIVE_RETIRED),
+    );
+    assert.deepEqual(recordsSnapshot(cwd), before, 'the objective chain is byte-identical');
+    assert.equal(store.readPositionChain('objective').length, 2, 'r1 + tombstone only');
+
+    // Only the objective is retired; other position chains stay open.
+    const other = await judgmentPositionCreate(cwd, {
+      slug: 'method', claims: objectiveClaims(), conviction: CONVICTION,
+    });
+    assert.equal(other.status, 'live');
+
+    // The tombstone exception remains legal.
+    const tombstone = await judgmentPositionCreate(cwd, {
+      slug: 'objective', claims: [], conviction: CONVICTION, retracted: true,
+    });
+    assert.equal(tombstone.rev, 3);
+    assert.equal(tombstone.status, 'retracted');
+  });
+
+  test('replayable migration wins before a presented cut', async () => {
+    const cwd = freshCwd();
+    await seedLegacy(cwd);
+    await judgmentGoalWrite(cwd, { op: 'migrate' }, { appliers: blockBeforeApplyAppliers() });
+    const store = new RecordsStore(cwd);
+    const [pending] = store.readIntents();
+    assert.equal(pending.kind, 'goal_migration');
+    assert.equal(store.readGoalVersion(1), null, 'nothing applied while blocked');
+
+    const cut = await judgmentGoalWrite(cwd, cutArgs({ diff_note: 'Presented after replay.' }));
+    assert.deepEqual(cut, {
+      op: 'cut', version: 2, ref: 'goal:v2', ratified: true,
+    });
+    assert.equal(store.readGoalVersion(1).provenance.via, 'migration', 'replay published v1 first');
+    assert.equal(store.derivePositionStatus('objective'), 'retracted');
+    assert.deepEqual(store.readIntents(), []);
+    fixedPoint(cwd, 'after replay-then-cut');
+  });
+
+  test('blocked migration maps to intent pending while thrown replay conflict escapes', async () => {
+    const blockedCwd = freshCwd();
+    await seedLegacy(blockedCwd);
+    await judgmentGoalWrite(blockedCwd, { op: 'migrate' }, { appliers: blockBeforeApplyAppliers() });
+
+    // A non-throwing blocked applier leaves the intent: pending precedes the
+    // fence for an ordinary op, and migrate itself refuses to duplicate it.
+    for (const args of [cutArgs(), { op: 'migrate' }]) {
+      await refusedWith(
+        judgmentGoalWrite(blockedCwd, args, { appliers: blockBeforeApplyAppliers() }),
+        'JUDGMENT_INTENT_PENDING',
+        exactly('judgment_goal_write: goal_migration intent is still pending'),
+      );
+    }
+    assert.equal(new RecordsStore(blockedCwd).readIntents().length, 1, 'exactly one intent survives');
+
+    // A thrown replay conflict escapes and the presented executor never runs.
+    const thrownCwd = freshCwd();
+    await seedLegacy(thrownCwd);
+    await judgmentGoalWrite(thrownCwd, { op: 'migrate' }, { appliers: applyThenBlockAppliers() });
+    const [intent] = new RecordsStore(thrownCwd).readIntents();
+    tamperArtifact(thrownCwd, intent.id, 'goal');
+
+    const spy = executorSpy();
+    await refusedWith(
+      judgmentGoalWrite(thrownCwd, cutArgs(), spy.internal),
+      'JUDGMENT_MIGRATION_CONFLICT',
+      exactly(`goal migration ${intent.id}: goal/v1.json differs from the persisted payload`),
+    );
+    assert.equal(spy.calls, 0, 'the presented cut executor never ran');
+
+    // Control: with no conflict, the same presented cut DOES reach the executor.
+    const controlCwd = freshCwd();
+    await seedLegacy(controlCwd);
+    await judgmentGoalWrite(controlCwd, { op: 'migrate' });
+    const controlSpy = executorSpy();
+    await judgmentGoalWrite(controlCwd, cutArgs(), controlSpy.internal);
+    assert.equal(controlSpy.calls, 1, 'the spy observes a real executor entry');
+  });
+
+  test('post-migration ratified cut is unlocked', async () => {
+    const cwd = freshCwd();
+    await seedLegacy(cwd);
+    await judgmentGoalWrite(cwd, { op: 'migrate' });
+
+    const cut = await judgmentGoalWrite(cwd, cutArgs({ diff_note: 'First post-migration cut.' }));
+    assert.deepEqual(cut, {
+      op: 'cut', version: 2, ref: 'goal:v2', ratified: true,
+    });
+
+    // The sidecar ops are unlocked too.
+    const link = await judgmentGoalWrite(cwd, {
+      op: 'load_link', clause: 'v2#c1', carries: 'the post-migration goal',
+    });
+    assert.deepEqual(link, { op: 'load_link', id: 'gl1', removed: false });
+    fixedPoint(cwd, 'after post-migration cut');
+  });
+});

@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-07-24
+
+### COMP-JUDGMENT-GOAL-MIGRATE S2 — goal fence, fail-closed completion, terminal retirement
+
+Second build slice of the objective→goal store migration. The pre-cutover fence
+is now wholesale: ONE central check runs before every non-`migrate` goal
+executor (`cut`, `correct`, `joint_link`, `load_link`), so a live legacy
+objective with no migration-attested `goal:v1` refuses the whole goal store with
+`JUDGMENT_MIGRATION_REQUIRED` — not just the first cut. The S1 cut-local fence is
+removed rather than copied; `JUDGMENT_INTENT_PENDING` keeps precedence after
+replay, and `migrate` is the only exempt op.
+
+`migrationCompletion` is the durable predicate the rest of the slice keys on:
+goal `v1` carrying `via:"migration"` with a non-empty intent id, the exact
+`judgment_goal_write/migrate` attestation for that id, no surviving intent, and a
+retracted objective. A rerun of `op=migrate` is therefore a true no-op —
+`{status:"already migrated"}`, projections regenerated, zero record bytes written
+— and it stays a no-op after a later ordinary goal version. Every falsified
+conjunct fails closed with its own exact diagnostic: a forged attestation
+attribution, a revived objective (which names its `retracted:true` repair), a
+non-empty chain without a durable migration, and an empty chain with no live
+legacy objective. Objective retirement is now terminal: after cutover,
+`judgment_position_create` refuses a non-tombstone `objective` revision with
+`JUDGMENT_OBJECTIVE_RETIRED`, while the tombstone repair path stays legal.
+
 ## 2026-07-23
 
 ### COMP-JUDGMENT-GOAL-MIGRATE S1 — migration intent, sidecar absorption, and atomic replay
