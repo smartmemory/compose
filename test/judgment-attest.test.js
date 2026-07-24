@@ -85,3 +85,23 @@ test('deleting a record without removeRecord reports removed drift', () => {
   assert.equal(r.ok, false);
   assert.ok(r.drift.some(x => x.kind === 'removed' && x.path === relPath));
 });
+
+test('fail-closed: wiping the whole records dir is RED (manifest survives outside it)', () => {
+  const d = repo();
+  writeManifest(d, computeRecordHashes(d));
+  // Simulate `rm -rf docs/judgment/records`. The manifest lives at
+  // docs/judgment/.attest.json, OUTSIDE the records dir, so it survives.
+  rmSync(join(d, 'docs/judgment/records'), { recursive: true, force: true });
+  const r = verifyRecords(d);
+  assert.equal(r.ok, false);
+  // every prior record now reads as removed drift, not a false green
+  assert.ok(r.drift.length >= 3);
+  assert.ok(r.drift.every(x => x.kind === 'removed'));
+});
+
+test('fresh repo (no manifest, no records) is legitimately GREEN', () => {
+  const d = mkdtempSync(join(tmpdir(), 'jattest-fresh-'));
+  const r = verifyRecords(d);
+  assert.equal(r.ok, true);
+  assert.equal(r.drift.length, 0);
+});

@@ -48,7 +48,7 @@ F3 established there is NO single mutation/rollback wrapper. Before any stamping
 - Produces:
   - `recordFileSet(cwd) -> string[]` — the EXACT canonical record paths (R4): every file under `docs/judgment/records/**` INCLUDING `ledger.jsonl`, EXCLUDING `.attest.json`. Sorted, repo-relative.
   - `computeRecordHashes(cwd) -> { [relPath]: sha256hex }` — fail-closed: a record that is unreadable or (for `.json`) unparseable throws / marks drift, never silently omitted.
-  - `readManifest(cwd) -> { [relPath]: sha256 } | null` (reads `docs/judgment/records/.attest.json`).
+  - `readManifest(cwd) -> { [relPath]: sha256 } | null` (reads `docs/judgment/.attest.json` — see manifest-location note below).
   - `writeManifest(cwd, hashes)` — atomic, sorted keys, stable formatting.
   - `stampRecord(cwd, relPath)` — recompute ONE record's hash, merge into the manifest, write. (Per-record, not whole-tree.)
   - `verifyRecords(cwd) -> { ok, drift: [{path, kind: 'modified'|'added'|'removed'|'malformed'}] }`.
@@ -124,7 +124,9 @@ test('stampRecord updates only its own entry (does not re-bless a sibling)', () 
 ```
 
 - [ ] **Step 2: Run tests, verify they fail** — `node --test test/judgment-attest.test.js` → FAIL (module missing).
-- [ ] **Step 3: Implement `lib/judgment-attest.js`** — sha256 via `node:crypto`; `recordFileSet` walks `docs/judgment/records/**` (recursive), includes `ledger.jsonl`, excludes `.attest.json`; `computeRecordHashes` reads bytes, and for `.json` files attempts `JSON.parse` and marks `malformed` on failure (fail-closed); manifest is `records/.attest.json` sorted-keys JSON; `stampRecord` is a read-merge-write of a single key.
+- [ ] **Step 3: Implement `lib/judgment-attest.js`** — sha256 via `node:crypto`; `recordFileSet` walks `docs/judgment/records/**` (recursive), includes `ledger.jsonl`, excludes `.attest.json`; `computeRecordHashes` reads bytes, and for `.json` files attempts `JSON.parse` and marks `malformed` on failure (fail-closed); manifest is `docs/judgment/.attest.json` sorted-keys JSON; `stampRecord` is a read-merge-write of a single key.
+
+> **Manifest-location note (Task 1 review fix, 2026-07-24):** the manifest lives at `docs/judgment/.attest.json`, OUTSIDE the `records/` dir it attests — NOT at `records/.attest.json` as originally specced. Co-locating it inside `records/` meant an `rm -rf docs/judgment/records` deleted the baseline together with the canon, yielding a false GREEN (Codex High finding, violates R4 fail-closed). With the baseline outside, a wiped records dir surfaces every entry as `removed` drift (RED); a genuinely fresh repo (no manifest, no records) stays green. Task 2's tree inventory must treat `docs/judgment/.attest.json` as an expected file (neither record nor projection).
 - [ ] **Step 4: Run tests, verify pass.**
 - [ ] **Step 5: Codex gate (read-only), then commit** `lib/judgment-attest.js` + test.
 
