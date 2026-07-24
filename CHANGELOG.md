@@ -76,6 +76,18 @@ legacy objective. Objective retirement is now terminal: after cutover,
 `judgment_position_create` refuses a non-tombstone `objective` revision with
 `JUDGMENT_OBJECTIVE_RETIRED`, while the tombstone repair path stays legal.
 
+### COMP-CANON-GUARD — S1 — canon-registry.js as the single source of truth for guarded canonical paths
+
+Extracts the guarded-path/tool declarations out of lib/mcp-enforcement.js into lib/canon-registry.js, the single declaration consumed by both the ship-time scan and (from S4) the write-time PreToolUse hook. Each entry declares `enforcedBy` so one registry does not imply one coverage: ROADMAP.md/CHANGELOG.md/feature.json stay ship-only (unchanged build-event correlation); docs/judgment/** is registered hook-only (100% tool-covered by the S3 judgment writer, so the always-deny hook cannot lock it out). Ship-time behavior is byte-preserved — verified by a 351-case equivalence check against the prior implementation and pinned by a new contract test.
+
+**Added:**
+- lib/canon-registry.js — path pattern → writer → tools → enforcedBy, with matchEntry/isGuarded/toolsForPath/featureCodeForPath/guardedPatternIdsFor
+- test/canon-registry-contract.test.js — pins legacy ship mappings + the per-point subset partition + the lockout invariant
+- docs/features/COMP-CANON-GUARD/blueprint-s1-s4.md — grounded S1+S4 implementation blueprint
+
+**Changed:**
+- lib/mcp-enforcement.js — consumes the registry's ship subset instead of local literal sets; removed the vestigial _internals shim (single source of truth now lives in canon-registry.js)
+
 ## 2026-07-23
 
 ### COMP-JUDGMENT-GOAL-MIGRATE S1 — migration intent, sidecar absorption, and atomic replay
