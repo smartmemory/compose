@@ -184,7 +184,7 @@ const ratifiedGoalCut = {
 };
 
 describe('compose-mcp judgment registry parity', () => {
-  test('has 49 tool definitions, 49 dispatch cases, and nine exact judgment names', () => {
+  test('has 50 tool definitions, 50 dispatch cases, and nine exact judgment names', () => {
     const source = readFileSync(MCP_SERVER, 'utf8');
     const toolsStart = source.indexOf('const TOOLS = [');
     const toolsEnd = source.indexOf('\n];\n\n// ---------------------------------------------------------------------------\n// MCP Server setup', toolsStart);
@@ -200,8 +200,8 @@ describe('compose-mcp judgment registry parity', () => {
       ...source.slice(switchStart, switchEnd).matchAll(/^      case '([^']+)'/gm),
     ].map((match) => match[1]);
 
-    assert.equal(definitionNames.length, 49, 'TOOLS definition count');
-    assert.equal(dispatchNames.length, 49, 'dispatch case count');
+    assert.equal(definitionNames.length, 50, 'TOOLS definition count');
+    assert.equal(dispatchNames.length, 50, 'dispatch case count');
     assert.deepEqual(
       [...definitionNames].sort(),
       [...dispatchNames].sort(),
@@ -428,7 +428,7 @@ describe('compose-mcp judgment writer (end-to-end)', () => {
 });
 
 describe('COMP-JUDGMENT-GOAL-MIGRATE S3 — MCP reachability', () => {
-  test('judgment_goal_write advertises migrate on the existing 49/49 registry', async () => {
+  test('judgment_goal_write advertises migrate on the existing 50/50 registry', async () => {
     const source = readFileSync(MCP_SERVER, 'utf8');
     const toolsStart = source.indexOf('const TOOLS = [');
     const toolsEnd = source.indexOf('\n];\n\n// ---------------------------------------------------------------------------\n// MCP Server setup', toolsStart);
@@ -442,8 +442,8 @@ describe('COMP-JUDGMENT-GOAL-MIGRATE S3 — MCP reachability', () => {
     ].map((match) => match[1]);
 
     // Adding an op must not add a tool: the registry stays at its pinned size.
-    assert.equal(definitionNames.length, 49, 'TOOLS definition count');
-    assert.equal(dispatchNames.length, 49, 'dispatch case count');
+    assert.equal(definitionNames.length, 50, 'TOOLS definition count');
+    assert.equal(dispatchNames.length, 50, 'dispatch case count');
     assert.deepEqual(
       definitionNames.filter((name) => name.startsWith('judgment_') || name === 'get_judgment_state').sort(),
       [...JUDGMENT_TOOLS].sort(),

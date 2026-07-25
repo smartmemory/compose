@@ -474,6 +474,29 @@ export async function toolAddChangelogEntry(args) {
   return addChangelogEntry(getTargetRoot(), args);
 }
 
+/**
+ * COMP-CANON-OVERRIDE — mint a single-use, path-scoped canon override.
+ *
+ * `actor` is deliberately not forwarded from args: it is stamped by the writer
+ * per Decision 3 and must never be caller-supplied.
+ */
+export async function toolCanonOverrideGrant(args) {
+  const { mintGrant } = await import('../lib/canon-override.js');
+  const { loadFeaturesDir } = await import('../lib/project-paths.js');
+  const root = getTargetRoot();
+  const grant = mintGrant(root, {
+    path: args?.path,
+    reason: args?.reason,
+    operation: args?.operation,
+    featuresDir: loadFeaturesDir(root),
+  });
+  return {
+    ...grant,
+    recorded_in: '.compose/canon-overrides.jsonl',
+    note: 'Single-use and path-scoped. Audit tooling for the Claude Write/Edit path, not enforcement.',
+  };
+}
+
 export async function toolGetChangelogEntries(args) {
   const { getChangelogEntries } = await import('../lib/changelog-writer.js');
   return getChangelogEntries(getTargetRoot(), args);
