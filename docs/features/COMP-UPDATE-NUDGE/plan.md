@@ -642,8 +642,26 @@ Expected: PASS, 6/6.
 
 This checkout has stratum `0.3.3` in `node_modules` while npm `latest` is `0.3.4` — the exact case the feature exists to catch.
 
-Run: `node bin/compose.js init`
-Expected: a line naming stratum `0.3.3 → 0.3.4`. If compose is also behind, both appear on the one line.
+Do NOT run `compose init` in this repo to check it: `runInit` scaffolds and refreshes
+workspace artifacts, and this repo is the live compose workspace. Call the functions directly
+instead — no CLI side effects, and it exercises the same code path the nudge uses:
+
+```bash
+node --input-type=module -e "
+import { checkPackageVersion, resolveStratumVersion, formatDriftNudge } from './lib/version-check.js';
+const root = process.cwd();
+const sv = resolveStratumVersion(root);
+const [c, s] = await Promise.all([
+  checkPackageVersion('@smartmemory/compose', JSON.parse(require('fs').readFileSync('package.json')).version),
+  sv ? checkPackageVersion('@smartmemory/stratum', sv) : null,
+]);
+console.log(JSON.stringify({ stratumResolved: sv, lines: formatDriftNudge({ compose: c, stratum: s }) }, null, 2));
+"
+```
+
+Expected: `stratumResolved` is `0.3.3`, and `lines` contains one line naming stratum
+`0.3.3 → 0.3.4`. This performs one real registry fetch — that is fine here, it is a manual
+verification step, not a test.
 
 - [ ] **Step 6: Run the full suite**
 
