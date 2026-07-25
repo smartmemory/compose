@@ -231,6 +231,24 @@ test('formatDriftNudge: null inputs are silent, never a crash', () => {
   assert.deepEqual(formatDriftNudge({}), []);
 });
 
+test('formatDriftNudge: null argument is silent, never a crash', () => {
+  assert.doesNotThrow(() => assert.deepEqual(formatDriftNudge(null), []));
+  assert.doesNotThrow(() => assert.deepEqual(formatDriftNudge(undefined), []));
+});
+
+test('formatDriftNudge: non-object argument is silent', () => {
+  assert.doesNotThrow(() => assert.deepEqual(formatDriftNudge('bad arg'), []));
+});
+
+test('formatDriftNudge: incomplete package record is silent', () => {
+  assert.deepEqual(formatDriftNudge({ compose: { behind: true } }), []);
+  assert.deepEqual(formatDriftNudge({ compose: { behind: true, current: 123, latest: true } }), []);
+  assert.deepEqual(formatDriftNudge({ stratum: { behind: true, current: 123, latest: 456 } }), []);
+  assert.deepEqual(formatDriftNudge({ compose: COMPOSE_BEHIND, stratum: { behind: true, current: 123, latest: 456 } }), [
+    '⚠ update available: compose 0.3.7 → 0.3.9 — run: compose update',
+  ]);
+});
+
 test('formatDriftNudge: absent stratum still reports compose', () => {
   assert.deepEqual(formatDriftNudge({ compose: COMPOSE_BEHIND, stratum: null }), [
     '⚠ update available: compose 0.3.7 → 0.3.9 — run: compose update',
