@@ -740,6 +740,17 @@ async function runUpdate(flags) {
     } else {
       console.log('Stratum MCP wiring already current')
     }
+
+    // Healing .mcp.json only fixes what the NEXT client launch reads. An MCP
+    // server the agent already spawned keeps serving the old Stratum build for
+    // the rest of the session, so an update can look applied while every
+    // stratum_* tool still runs pre-update code. Say so explicitly — this has
+    // bitten us before (stale tool contracts surviving a "successful" upgrade).
+    if (!wiring.skipped) {
+      console.log('')
+      console.log('⚠ Restart your MCP client (e.g. /mcp reconnect, or restart Claude Code)')
+      console.log('  to pick up the new Stratum server — a running one keeps serving the old build.')
+    }
   }
 
   console.log('')

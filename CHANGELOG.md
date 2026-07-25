@@ -2,6 +2,29 @@
 
 ## 2026-07-25
 
+### release 0.3.7 — unstick the upgrade path (stable `latest`, floating Stratum, MCP restart notice)
+
+`compose update` worked; the release train behind it did not. The npm `latest`
+dist-tag had been stranded on 0.3.0 since 2026-07-19 while every release since
+went out as a beta (0.3.1-beta … 0.3.6-beta). A user running `compose update`
+re-fetched 0.3.0 and was correctly told they were up to date — there was
+nothing on `latest` to pull. This release is 0.3.7 so stable sits above every
+published beta.
+
+Stratum was worse: the dependency was pinned exactly (`0.3.2`) while npm had
+0.3.3, so **no command a user could run reached the newer Stratum** — it took a
+compose dep bump and republish. That pin is now `^0.3.3`, so Stratum 0.3.x
+patches flow on a plain reinstall without waiting for a compose release. Users
+picking this up get Stratum 0.3.3's MCP tool-contract fix (`spec`/`input`
+declared as `object`, surface 10), which they were previously pinned away from.
+
+`compose update` also now says to restart the MCP client. `healStratumWiring`
+repairs `.mcp.json`, but an already-running MCP server keeps serving the old
+Stratum build for the rest of the session, so an upgrade could look fully
+applied while every `stratum_*` tool still ran pre-update code.
+
+Published manually: the release CI is down until at least 2026-08-01.
+
 ### COMP-CANON-GUARD S5 whole-branch review — the ship gate verified a different tree than it committed
 
 The ship gate checked the working tree and then committed the index. Staging a
