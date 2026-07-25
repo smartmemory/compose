@@ -1,6 +1,6 @@
 # COMP-CANON-GUARD — The Write-Guard for Canonical Artifacts (design)
 
-**Status:** EPIC — **S0 SHIPPED 2026-07-22**; S1–S6 deliberately un-specced pending log data (see *Scope verdict*)
+**Status:** **COMPLETE 2026-07-25** (`347e073c`). S0 `@`2026-07-22, S1 `@27551dd`, S4 + S5 `@c5908c7`; S3 delivered as [COMP-JUDGMENT-WRITER](../COMP-JUDGMENT-WRITER/design.md) `@751cc96a`. S2b RETIRED. S2 and S6 were carved out at close rather than held open here — see [COMP-CANON-INVENTORY](../COMP-CANON-INVENTORY/design.md), [COMP-CANON-ATTEST](../COMP-CANON-ATTEST/design.md), and [COMP-BUILD-CORRELATION](../COMP-BUILD-CORRELATION/design.md).
 **Date:** 2026-07-22 (rev 6 — five Codex gate rounds, eleven confirmed P1s. **Gate NOT clean at the cap — see Scope verdict.** Same-day owner rulings folded in: OQ1 resolved v1-agent-only; S3 substrate = provider records; S2b retirement now reflected in the sequencing table. `LEDGER.md` session 3.)
 **Implements:** `TOOLS-OWN-WRITES`, `BLOCK-THE-BYPASS`, `MARKDOWN-EMITTED` (partial)
 
@@ -227,20 +227,26 @@ rev 1 specified the override's semantics and none of its mechanism. A PreToolUse
 
 ## Acceptance criteria
 
-- [ ] `enforcement.mcpForFeatureMgmt` is `log` (S0), then `block` (S2b), and a hand-edited guarded file fails ship
-- [ ] With `block` on, a full `compose build` completes using only normal workflows — no CLI/server/migration surface writes canon unaccounted
-- [ ] `lib/canon-registry.js` is the only place a canonical path is declared; `mcp-enforcement.js` has no literal path set
-- [ ] Contract test proves hook and ship enforcement resolve identical path→operation mappings
-- [ ] An **unregistered** path is never blocked (lockout invariant, unit-tested with a synthetic path)
-- [ ] Every registered path has a tool for every legal mutation, or an explicit `override_only` declaration with a reason — verified at registration, not at match time
-- [ ] A Bash edit to `docs/judgment/**` with no tool event fails ship (S5)
-- [ ] An interleaved tool-call-plus-hand-edit to a guarded path is detected (S6); **until S6 this is a known, documented gap**
-- [ ] `update_feature_fields` can change description/phase/tags/profile on an existing feature
-- [ ] `judgment_*` tools stamp `actor`/`origin_session`/`written_at`; none is caller-writable
-- [ ] No tool call can persist a record carrying `[ASSERT]` or `[owner-locked]` (v1 agent-only, OQ1 ruling 2026-07-22); the only path to an owner-attributed record is the ledgered override
-- [ ] Direct `Write`/`Edit` to a guarded path is denied, and the denial names the tool to use
-- [ ] `canon_override_grant` refuses an empty reason; the token is single-use and path-scoped; the ledger entry is written before the token is minted
-- [ ] `compose guard status` reports installed/missing/drifted, mirroring `compose hooks status`
+**Reconciled at epic close, 2026-07-25.** Criteria that belonged to a slice which shipped elsewhere, or to the retired S2b, are marked at their real owner rather than left as open boxes on a COMPLETE row.
+
+Met in this epic:
+
+- [x] `enforcement.mcpForFeatureMgmt` is `log` (S0) — ~~then `block` (S2b)~~ **S2b RETIRED**; see below
+- [x] `lib/canon-registry.js` is the only place a canonical path is declared; `mcp-enforcement.js` has no literal path set
+- [x] Contract test proves hook and ship enforcement resolve identical path→operation mappings
+- [x] An **unregistered** path is never blocked (lockout invariant, unit-tested with a synthetic path)
+- [x] A Bash edit to `docs/judgment/**` with no tool event fails ship (S5)
+- [x] `judgment_*` tools stamp `actor`/`origin_session`/`written_at`; none is caller-writable *(delivered by COMP-JUDGMENT-WRITER)*
+- [x] No tool call can persist a record carrying `[ASSERT]` or `[owner-locked]` (v1 agent-only, OQ1 ruling 2026-07-22); the only path to an owner-attributed record is the ledgered override
+- [x] Direct `Write`/`Edit` to a guarded path is denied, and the denial names the tool to use
+- [x] `canon_override_grant` refuses an empty reason; the token is single-use and path-scoped; the ledger entry is written before the token is minted
+- [x] `compose guard status` reports installed/missing/drifted, mirroring `compose hooks status`
+
+Reassigned — these were never in-scope for what shipped, and now belong to their own rows:
+
+- → **COMP-CANON-ATTEST** — an interleaved tool-call-plus-hand-edit to a guarded path is detected. Until it lands this remains a known, documented gap, and it is now **reproduced**, not merely argued: baseline GREEN → out-of-band edit gives `kind: modified` → a legitimate tool amend calls `stampRecord` and verify returns GREEN over `TAMPERED` content. `stampRecord` overwrites `hashes[relPath]` without ever checking the prior value, so the amend blesses whatever the editor left behind.
+- → **COMP-CANON-INVENTORY** — every registered path has a tool for every legal mutation, or an explicit `override_only` declaration with a reason, verified at registration; and `update_feature_fields` can change description/phase/tags/profile on an existing feature.
+- → **COMP-BUILD-CORRELATION** — "with `block` on, a full `compose build` completes using only normal workflows." Unreachable as written: `scanGuarded` matches on `build_id`, and all 777 real events carry `build_id: null`, so no `block` promotion can be re-specced until the correlation model is repaired.
 - [ ] Manual mode P1–P7 remain runnable end-to-end with the guard installed (the anti-lockout test)
 - [ ] A manual typed judgment write, made outside any build, passes a later ship
 - [ ] A manual raw write to judgment canon with no attestation fails verification at commit

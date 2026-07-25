@@ -1,0 +1,19 @@
+{
+  "code": "COMP-CANON-ATTEST",
+  "description": "Content attestation for guarded canon (COMP-CANON-GUARD S6): typed writers record a hash of what they produced; the ship-time scan compares every dirty guarded path against its last attested hash, so an interleaved tool-call-plus-hand-edit is detected. Until this lands the Bash bypass is a known, documented gap — S4's PreToolUse hook cannot see Bash/sed/git writes and S5's scan verifies THAT a tool ran, not WHAT it wrote.",
+  "status": "PLANNED",
+  "phase": "Judgment Layer",
+  "created": "2026-07-25",
+  "updated": "2026-07-25",
+  "complexity": "M",
+  "position": 6,
+  "parent": "COMP-CANON-GUARD",
+  "impact": "high",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-CANON-GUARD",
+      "note": "S6 of the guard epic, carved out at close 2026-07-25"
+    }
+  ]
+}

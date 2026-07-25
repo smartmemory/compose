@@ -1,0 +1,19 @@
+{
+  "code": "COMP-BUILD-CORRELATION",
+  "description": "Repair build-correlation on feature events so enforcement can ever be promoted to 'block'. COMP-CANON-GUARD phase-1 forensics found all 777 real events across 2.5 months carry build_id: null (feature-events.js emits null outside a build runner; scanGuarded only considers events matching the current buildId) — so the ship-time correlated scan has never been satisfiable and S2b was retired on this finding. Fix the correlation model (or drop correlation as the matching key) before any 'block' promotion is re-specced.",
+  "status": "PLANNED",
+  "phase": "Judgment Layer",
+  "created": "2026-07-25",
+  "updated": "2026-07-25",
+  "complexity": "M",
+  "position": 7,
+  "parent": "COMP-CANON-GUARD",
+  "impact": "high",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-CANON-GUARD",
+      "note": "Finding A of the guard's phase-1 forensics; retired S2b and was previously untracked"
+    }
+  ]
+}

@@ -1,11 +1,31 @@
 {
   "code": "COMP-CANON-GUARD",
   "description": "**The write-guard for canonical artifacts — make TOOLS-OWN-WRITES and BLOCK-THE-BYPASS real.** Phase-1 review overturned the premise: a guard already EXISTS and is switched off. `lib/mcp-enforcement.js` declares guarded files + authorised typed tools and `lib/build.js:3963` runs a correlated pre-stage scan at ship — but `.compose/data/settings.json` is `{}`, so the mode resolves to `off`. UNGUARDED-WRITES survives; its diagnosis is amended (enforcement that ships disabled is the purest form of routable-around). Four real gaps: G1 it is disabled (a settings key); G2 it does not cover `docs/judgment/**`, where the worst failures happened; G3 it enforces at ship time only, so a whole session can go wrong before commit; G4 it verifies THAT a tool was used, not WHO wrote it — provenance is the genuinely new part, and the 2026-07-21 agent-claim-as-owner-claim failure is what it makes unrepresentable. Adds one `canon-registry.js` consumed by BOTH the existing ship-time scan and a new PreToolUse hook (complementary: the hook prevents, the scan backstops and already covers Bash/sed/git writes the hook cannot see). Registration is gated on an operation inventory — no tool can currently update a feature description/phase/tags, and roadmap prose needs a preserved-section bootstrap. Override is grant-then-write, ledger-first, single-use and path-scoped, per OVERRIDES-ARE-GOLD.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "Judgment Layer",
   "created": "2026-07-22",
-  "updated": "2026-07-22",
+  "updated": "2026-07-25",
   "complexity": "L",
   "position": 1,
-  "impact": "high"
+  "impact": "high",
+  "completions": [
+    {
+      "completion_id": "COMP-CANON-GUARD:347e073cf356903836fa8a97c33208d44288e49d",
+      "feature_code": "COMP-CANON-GUARD",
+      "commit_sha": "347e073cf356903836fa8a97c33208d44288e49d",
+      "commit_sha_short": "347e073c",
+      "tests_pass": true,
+      "files_changed": [
+        "CHANGELOG.md",
+        "docs/features/COMP-CANON-GUARD/design-s5.md",
+        "docs/features/COMP-CANON-GUARD/plan-s5.md",
+        "lib/build.js",
+        "test/build-ship-fields.test.js"
+      ],
+      "recorded_at": "2026-07-25T11:38:19.524Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Epic closed 2026-07-25. Shipped S0 (enforcement to 'log'), S1 (canon-registry.js @27551dd), S4 (PreToolUse hook + compose guard CLI) and S5 (judgment canon drift detection, verify/init, pre-push + ship gates) @c5908c7; S3 delivered as COMP-JUDGMENT-WRITER @751cc96a; S2b RETIRED on the build_id:null finding. Residuals carved to their own rows: COMP-CANON-ATTEST (S6), COMP-CANON-INVENTORY (S2), COMP-BUILD-CORRELATION (finding A). Full suite green at close: 5131 node + 581 vitest + 100 tracker, 0 failures."
+    }
+  ],
+  "commit_sha": "347e073cf356903836fa8a97c33208d44288e49d"
 }

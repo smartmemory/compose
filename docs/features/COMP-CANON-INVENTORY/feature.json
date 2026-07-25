@@ -1,0 +1,24 @@
+{
+  "code": "COMP-CANON-INVENTORY",
+  "description": "Full canon write-surface inventory (COMP-CANON-GUARD S2): every path that mutates canon outside a typed tool — roadmap-gen, feature-writer, migrate-anon, experiment, roadmap-graph, bin/compose.js (feature create + roadmap generate + init template), server/ideabox-routes — is routed through a typed tool, retired, or declared override_only with a reason, verified at registration. Adds the missing update_feature_fields tool (description/phase/tags/profile on an existing feature). NOTE: this no longer gates a 'block' promotion — S2b was retired on the build_id: null finding, so the payoff is hygiene until COMP-BUILD-CORRELATION lands.",
+  "status": "PLANNED",
+  "phase": "Judgment Layer",
+  "created": "2026-07-25",
+  "updated": "2026-07-25",
+  "complexity": "L",
+  "position": 8,
+  "parent": "COMP-CANON-GUARD",
+  "impact": "medium",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-CANON-GUARD",
+      "note": "S2 of the guard epic, carved out at close 2026-07-25"
+    },
+    {
+      "kind": "depends_on",
+      "to_code": "COMP-BUILD-CORRELATION",
+      "note": "Inventory's payoff (a 'block' promotion) is unreachable until build-correlation is repaired"
+    }
+  ]
+}
