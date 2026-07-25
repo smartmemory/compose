@@ -1,0 +1,17 @@
+{
+  "code": "COMP-TRIAGE-POOL",
+  "description": "Same-box cross-project dispatch pooling: user-level rolled-up ledger feeds a machine baseline curve, per-project data shrinks toward it",
+  "status": "PARKED",
+  "phase": "COMP-TRIAGE: Task Tier Classification",
+  "created": "2026-07-23",
+  "updated": "2026-07-23",
+  "complexity": "L",
+  "position": 192,
+  "parent": "COMP-TRIAGE-6",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-TRIAGE-6-3"
+    }
+  ]
+}
