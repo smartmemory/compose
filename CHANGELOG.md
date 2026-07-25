@@ -2,6 +2,27 @@
 
 ## 2026-07-25
 
+### COMP-CANON-GUARD S5 Task 6 — pre-push drift gate + hook version detection
+
+The pre-push hook now runs `compose guard verify` and aborts the push on
+judgment canon drift. It runs on **every** push, including docs-only ones. That
+placement is the whole point: judgment canon lives under `docs/judgment/**`, so
+a canon-only push is exactly the docs-only case that skips the test gate —
+putting the check inside that branch would leave the push most likely to carry
+drift as the one push never checked. A repo with no judgment canon is
+unaffected: the CLI exits 0 there, so the gate is a no-op. `git push
+--no-verify` still bypasses the hook; that is an accepted residual, stated
+rather than papered over.
+
+`compose hooks status` now compares a baked `HOOK_VERSION` marker against the
+version the current template ships, and reports `HOOK_VERSION_DRIFT` when they
+differ. An installed hook with no marker at all — every hook installed before
+this change — reports stale too, rather than reading as current. Editing the
+template never upgraded installed hooks, so before this a pre-S5 hook without
+the drift gate reported `installed (current)` and the rollout silently did not
+happen. Re-running `compose hooks install` is the migration path; there is no
+auto-upgrade.
+
 ### COMP-CANON-GUARD S5 Task 4 — judgment canon drift-detection CLI
 
 `compose guard verify` now reports judgment canon drift by tree, projection,

@@ -14,6 +14,7 @@
 # (no flag change needed below). XREF_TARGET_MISSING stays error and blocks.
 
 set -u
+HOOK_VERSION="1"
 COMPOSE_NODE="__COMPOSE_NODE__"
 COMPOSE_BIN="__COMPOSE_BIN__"
 COMPOSE_WORKSPACE_ID="__COMPOSE_WORKSPACE_ID__"
@@ -72,6 +73,22 @@ if [ "$VALIDATE_EXIT" -ne 0 ]; then
   echo "" >&2
   echo "pre-push: compose validate reported drift (ADVISORY — not blocking). Review with \`compose validate\`." >&2
 fi
+
+# ── Judgment drift-detection gate (COMP-CANON-GUARD S5) ─────────────────────
+# This runs for every push, including docs-only pushes: judgment canon is under
+# docs/judgment/**, so placing it inside the test-gate skip would miss the most
+# relevant push type. Accepted residual: git push --no-verify bypasses this hook.
+echo "pre-push: checking judgment canon for drift…" >&2
+"$COMPOSE_NODE" "$COMPOSE_BIN" guard verify >> "$LOG" 2>&1
+GUARD_EXIT=$?
+if [ "$GUARD_EXIT" -ne 0 ]; then
+  tail -n 40 "$LOG" >&2
+  echo "" >&2
+  echo "pre-push: judgment drift detected — push aborted (full log: $LOG)." >&2
+  echo "Run \`compose guard verify\` for details." >&2
+  exit "$GUARD_EXIT"
+fi
+echo "pre-push: judgment canon drift check green." >&2
 
 # ── Test gate (COMP-RESUME follow-up) ───────────────────────────────────────
 # Block the push if the suite is red. This is the gate whose absence let a broken

@@ -7,6 +7,9 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
+import { computeRecordHashes, writeManifest } from '../lib/judgment-attest.js';
+import { regenerateProjections } from '../lib/judgment-gen.js';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const COMPOSE_BIN = resolve(__dirname, '..', 'bin', 'compose.js');
 
@@ -175,6 +178,64 @@ test('empty stdin fails closed and runs the gate', async () => {
   await runHooks(['install', '--pre-push'], root);
   const r = runHookWithStdin(root, '');
   assert.notEqual(r.code, 0, 'no ref lines must fail closed to the (red) test gate');
+});
+
+// ── Judgment drift gate (COMP-CANON-GUARD S5 Task 6) ───────────────────────
+// EXECUTION-level, not text-level. The static template tests assert lexical
+// placement, which the Task 6 review proved does not discriminate: the hook
+// ignoring the verifier's exit code, the abort `exit` being deleted, and the
+// guard being wrapped inside the docs-only skip ALL left those tests green.
+// These run the real installed hook against a real drifted canon instead.
+//
+// The fixture's `npm test` is `exit 1`, so a docs-only push is the sharp probe:
+// the test gate is skipped, and a nonzero exit can only have come from the
+// judgment gate.
+function seedJudgmentCanon(root) {
+  const recordPath = join(root, 'docs', 'judgment', 'records', 'people', 'ada.json');
+  mkdirSync(dirname(recordPath), { recursive: true });
+  writeFileSync(recordPath, `${JSON.stringify({
+    slug: 'ada', display_name: 'Ada', facts: [], edges: [], open_fields: [], load_links: [],
+  })}\n`);
+  regenerateProjections(root);
+  writeManifest(root, computeRecordHashes(root));
+  spawnSync('git', ['add', '-A'], { cwd: root });
+  spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-m', 'canon'], { cwd: root });
+  return recordPath;
+}
+
+test('docs-only push STILL runs the judgment gate and aborts on drift', async () => {
+  const root = setupDocsOnlyFixture();
+  const recordPath = seedJudgmentCanon(root);
+  await runHooks(['install', '--pre-push'], root);
+  const base = gitSha(root, 'HEAD');
+
+  // A raw hand-edit to a record — precisely the careless drift S5 detects.
+  const record = JSON.parse(readFileSync(recordPath, 'utf-8'));
+  record.display_name = 'Ada L.';
+  writeFileSync(recordPath, `${JSON.stringify(record)}\n`);
+  spawnSync('git', ['add', '-A'], { cwd: root });
+  spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-m', 'raw edit'], { cwd: root });
+  const head = gitSha(root, 'HEAD');
+
+  const r = runHookWithStdin(root, `refs/heads/main ${head} refs/heads/main ${base}\n`);
+  assert.notEqual(r.code, 0, `judgment drift must abort the push, stderr: ${r.stderr}`);
+  assert.match(r.stderr, /judgment drift detected/);
+  // Proves the abort came from the guard and not the test gate: this push took
+  // the docs-only path, where the suite never runs.
+  assert.match(r.stderr, /checking judgment canon for drift/);
+});
+
+test('docs-only push with a clean canon passes the judgment gate', async () => {
+  const root = setupDocsOnlyFixture();
+  seedJudgmentCanon(root);
+  await runHooks(['install', '--pre-push'], root);
+  const base = gitSha(root, 'HEAD');
+  commitFile(root, 'docs/notes.md', 'docs change');
+  const head = gitSha(root, 'HEAD');
+
+  const r = runHookWithStdin(root, `refs/heads/main ${head} refs/heads/main ${base}\n`);
+  assert.equal(r.code, 0, `clean canon must not block, stderr: ${r.stderr}`);
+  assert.match(r.stderr, /judgment canon drift check green/);
 });
 
 test('foreign pre-push hook is preserved without --force', async () => {

@@ -18,7 +18,9 @@ import {
   computeHooksStatus,
   formatHookStatusLines,
   HOOK_MARKERS,
+  HOOK_VERSIONS,
   HOOK_TYPE_LIST,
+  extractBakedHookVersion,
   extractBakedWorkspaceId,
 } from '../lib/hooks-status.js';
 
@@ -26,11 +28,19 @@ const NODE = '/usr/local/bin/node';
 const BIN = '/opt/compose/bin/compose.js';
 const WS = 'ws-alpha';
 
-function hookContent({ type = 'post-commit', node = NODE, bin = BIN, ws = WS, raw = false } = {}) {
+function hookContent({
+  type = 'post-commit',
+  node = NODE,
+  bin = BIN,
+  ws = WS,
+  raw = false,
+  version = HOOK_VERSIONS[type] ?? null,
+} = {}) {
   const wsLine = raw ? 'COMPOSE_WORKSPACE_ID="__COMPOSE_WORKSPACE_ID__"' : `COMPOSE_WORKSPACE_ID="${ws}"`;
   return [
     '#!/usr/bin/env bash',
     `${HOOK_MARKERS[type]} auto-records completions.`,
+    ...(version == null ? [] : [`HOOK_VERSION="${version}"`]),
     `COMPOSE_NODE="${node}"`,
     `COMPOSE_BIN="${bin}"`,
     wsLine,
@@ -46,6 +56,11 @@ describe('hooks-status: markers + helpers', () => {
   test('extractBakedWorkspaceId pulls the baked id', () => {
     assert.equal(extractBakedWorkspaceId(hookContent({ ws: 'foo' })), 'foo');
     assert.equal(extractBakedWorkspaceId('no workspace line here'), null);
+  });
+
+  test('extractBakedHookVersion pulls the baked version', () => {
+    assert.equal(extractBakedHookVersion(hookContent({ type: 'pre-push' })), HOOK_VERSIONS['pre-push']);
+    assert.equal(extractBakedHookVersion('no version line here'), null);
   });
 });
 
@@ -97,23 +112,51 @@ describe('computeHooksStatus', () => {
     assert.equal(s.wsVerified, false);
   });
 
+  test('installed-stale HOOK_VERSION_DRIFT when pre-push predates the version marker', () => {
+    write('pre-push', hookContent({ type: 'pre-push', version: null }));
+    const s = run()['pre-push'];
+    assert.equal(s.state, 'installed-stale');
+    assert.equal(s.reason, 'HOOK_VERSION_DRIFT');
+    assert.equal(s.bakedVersion, null);
+    assert.equal(s.expectedVersion, HOOK_VERSIONS['pre-push']);
+    assert.equal(s.versionMatch, false);
+  });
+
+  test('installed-stale HOOK_VERSION_DRIFT when pre-push has an older baked version', () => {
+    write('pre-push', hookContent({ type: 'pre-push', version: '0' }));
+    const s = run()['pre-push'];
+    assert.equal(s.state, 'installed-stale');
+    assert.equal(s.reason, 'HOOK_VERSION_DRIFT');
+    assert.equal(s.bakedVersion, '0');
+    assert.equal(s.versionMatch, false);
+  });
+
+  test('installed-current when pre-push has the current baked version', () => {
+    write('pre-push', hookContent({ type: 'pre-push' }));
+    const s = run()['pre-push'];
+    assert.equal(s.state, 'installed-current');
+    assert.equal(s.reason, null);
+    assert.equal(s.bakedVersion, HOOK_VERSIONS['pre-push']);
+    assert.equal(s.versionMatch, true);
+  });
+
   test('installed-stale STALE_WORKSPACE_ID when baked workspace differs from expected', () => {
-    write('post-commit', hookContent({ type: 'post-commit', ws: 'other-ws' }));
-    const s = run({ expectedWsId: WS })['post-commit'];
+    write('pre-push', hookContent({ type: 'pre-push', ws: 'other-ws' }));
+    const s = run({ expectedWsId: WS })['pre-push'];
     assert.equal(s.state, 'installed-stale');
     assert.equal(s.reason, 'STALE_WORKSPACE_ID');
   });
 
   test('installed-stale MISSING_WORKSPACE_ID when the raw template token survives', () => {
-    write('post-commit', hookContent({ type: 'post-commit', raw: true }));
-    const s = run({ expectedWsId: WS })['post-commit'];
+    write('pre-push', hookContent({ type: 'pre-push', raw: true }));
+    const s = run({ expectedWsId: WS })['pre-push'];
     assert.equal(s.state, 'installed-stale');
     assert.equal(s.reason, 'MISSING_WORKSPACE_ID');
   });
 
   test('installed-stale "stale paths" when node/bin mismatch', () => {
-    write('post-commit', hookContent({ type: 'post-commit', node: '/wrong/node' }));
-    const s = run({ expectedWsId: WS })['post-commit'];
+    write('pre-push', hookContent({ type: 'pre-push', node: '/wrong/node' }));
+    const s = run({ expectedWsId: WS })['pre-push'];
     assert.equal(s.state, 'installed-stale');
     assert.equal(s.reason, 'stale paths');
     assert.equal(s.nodeMatch, false);
@@ -180,5 +223,23 @@ describe('formatHookStatusLines (CLI byte-identical)', () => {
       opts,
     );
     assert.deepEqual(lines, ['post-commit: installed (MISSING_WORKSPACE_ID — re-run install)']);
+  });
+
+  test('installed-stale HOOK_VERSION_DRIFT prints expected hook version', () => {
+    const lines = formatHookStatusLines(
+      'pre-push',
+      {
+        state: 'installed-stale',
+        reason: 'HOOK_VERSION_DRIFT',
+        expectedVersion: HOOK_VERSIONS['pre-push'],
+        nodeMatch: true,
+        binMatch: true,
+      },
+      opts,
+    );
+    assert.deepEqual(lines, [
+      'pre-push: installed (HOOK_VERSION_DRIFT — re-run install)',
+      `  expected HOOK_VERSION="${HOOK_VERSIONS['pre-push']}"`,
+    ]);
   });
 });

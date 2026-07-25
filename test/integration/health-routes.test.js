@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const express = (await import('express')).default;
 const { attachHealthRoutes } = await import(`${ROOT}/server/health-routes.js`);
-const { HOOK_MARKERS } = await import(`${ROOT}/lib/hooks-status.js`);
+const { HOOK_MARKERS, HOOK_VERSIONS } = await import(`${ROOT}/lib/hooks-status.js`);
 
 const NODE = '/fixture/node';
 const BIN = '/fixture/compose.js';
@@ -32,6 +32,9 @@ function compoHook(ws) {
   return [
     '#!/usr/bin/env bash',
     `${HOOK_MARKERS['pre-push']} blocks push.`,
+    // Track the contract, never a literal: a fixture that pins an old version
+    // would silently stop representing "what install writes" at the next bump.
+    `HOOK_VERSION="${HOOK_VERSIONS['pre-push']}"`,
     `COMPOSE_NODE="${NODE}"`,
     `COMPOSE_BIN="${BIN}"`,
     `COMPOSE_WORKSPACE_ID="${ws}"`,
