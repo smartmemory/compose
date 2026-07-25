@@ -1,8 +1,10 @@
 # COMP-CANON-OVERRIDE: The Canon Override — grant-then-write, ledger-first
 
-**Status:** DESIGN
+**Status:** DESIGN — gate rounds 1 and 2 folded (Codex `sol/xhigh`). **Owner decision 2026-07-25: ship as audit tooling**, per *The in-workspace ceiling* below.
 **Date:** 2026-07-25
 **Was:** COMP-CANON-GUARD Decision 4 — specified in the epic, explicitly deferred at S4, never built
+
+> **Positioning, decided and binding.** This is **audit and careless-drift tooling, not enforcement.** It makes the cooperative path logged and the accidental path hard. It does not stop a determined actor, and cannot: `Bash` writes the workspace without touching the hook, and every piece of governance state lives in that same workspace. Every guarantee here is **Claude-runtime-scoped**. Naming, help text, tool descriptions and reports must say so — the same discipline S5 adopted (R1) for exactly the same reason.
 
 ## Related Documents
 
@@ -173,6 +175,7 @@ This is the same move that made the guard epic's phase-1 forensics useful. COMP-
 
 ## Acceptance criteria
 
+- [ ] No user-facing string — tool description, denial message, `guard` help, reports — describes this as enforcement or claims a guarantee that is not qualified as Claude-runtime-scoped
 - [ ] `canon_override_grant` rejects an empty or whitespace-only `reason`
 - [ ] The ledger entry is appended **before** the token is minted — verified by a fault-injection test that fails the mint and asserts the entry exists
 - [ ] A token is single-use: the second `Write` to the same path is denied
