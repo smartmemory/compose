@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const COMPOSE_BIN = join(ROOT, 'bin', 'compose.js');
+const THROWING_VERSION_CHECK_LOADER = join(ROOT, 'test', 'fixtures', 'version-nudge-throwing-loader.mjs');
 
 /** A cache pre-seeded fresh, so the CLI never reaches the network. */
 function seedCache(t, doc) {
@@ -26,10 +27,16 @@ function workspace(t) {
   return dir;
 }
 
-function runCompose(args, { cwd, cacheFile }) {
-  return spawnSync(process.execPath, [COMPOSE_BIN, ...args], {
+function runCompose(args, { cwd, cacheFile, loader } = {}) {
+  const nodeArgs = loader ? ['--experimental-loader', loader] : [];
+  return spawnSync(process.execPath, [...nodeArgs, COMPOSE_BIN, ...args], {
     cwd, encoding: 'utf8', timeout: 60_000,
-    env: { ...process.env, HOME: join(cwd, '.home'), COMPOSE_VERSION_CACHE: cacheFile },
+    env: {
+      ...process.env,
+      HOME: join(cwd, '.home'),
+      COMPOSE_VERSION_CACHE: cacheFile,
+      COMPOSE_VERSION_CHECK_OFFLINE: '1',
+    },
   });
 }
 
@@ -78,4 +85,14 @@ test('an unusable cache never breaks the command', (t) => {
   writeFileSync(cacheFile, 'garbage{{{');
   const r = runCompose(['init'], { cwd: workspace(t), cacheFile });
   assert.equal(r.status, 0, `init must still succeed: ${r.stderr}`);
+});
+
+test('a nudge dependency failure never breaks init', (t) => {
+  const r = runCompose(['init'], {
+    cwd: workspace(t),
+    cacheFile: seedCache(t, behindCache()),
+    loader: THROWING_VERSION_CHECK_LOADER,
+  });
+  assert.equal(r.status, 0, `init must survive a nudge dependency failure: ${r.stderr}`);
+  assert.doesNotMatch(`${r.stdout}${r.stderr}`, /nudge test injected resolver failure/);
 });

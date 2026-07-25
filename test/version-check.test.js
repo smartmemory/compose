@@ -132,6 +132,27 @@ test('an unreadable cache file is a miss, not a throw', async (t) => {
   assert.equal(r.latest, '0.3.9');
 });
 
+test('COMPOSE_VERSION_CHECK_OFFLINE skips the default registry fetch', async (t) => {
+  const previousOffline = process.env.COMPOSE_VERSION_CHECK_OFFLINE;
+  const previousFetch = globalThis.fetch;
+  let calls = 0;
+  process.env.COMPOSE_VERSION_CHECK_OFFLINE = '1';
+  globalThis.fetch = async () => {
+    calls += 1;
+    throw new Error('the offline switch must prevent this fetch');
+  };
+
+  try {
+    const r = await checkPackageVersion('@smartmemory/compose', '0.3.7', { cacheFile: tmpCache(t) });
+    assert.equal(r, null);
+    assert.equal(calls, 0, 'offline mode must stop before calling fetch');
+  } finally {
+    if (previousOffline === undefined) delete process.env.COMPOSE_VERSION_CHECK_OFFLINE;
+    else process.env.COMPOSE_VERSION_CHECK_OFFLINE = previousOffline;
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test('a failed fetch returns null rather than throwing', async (t) => {
   const impl = async () => { throw new Error('ENETDOWN'); };
   const r = await checkPackageVersion('@smartmemory/compose', '0.3.7', {

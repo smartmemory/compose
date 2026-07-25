@@ -23,6 +23,11 @@ actually resolved in `node_modules`, not the range in the manifest, because the
 range is exactly what drifts. This repo was in that state while the feature was
 being built, which is what the line above is reporting.
 
+Set `COMPOSE_VERSION_CHECK_OFFLINE=1` to stop the check contacting the registry
+at all. It then reports only what is already cached, which is what you want on
+an air-gapped install, in CI, or anywhere a CLI quietly reaching for the network
+is unwelcome.
+
 The check is free on a cache hit (24h, now stored per package), bounded by a 3s
 timeout on a miss, and both lookups run in parallel. Any failure at all —
 network down, registry error, unreadable cache, malformed version — prints
