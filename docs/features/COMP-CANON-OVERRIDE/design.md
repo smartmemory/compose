@@ -71,9 +71,40 @@ The split is the point. **A committed live token would be a shared bypass** — 
 
 The hook is a **separate process** from the MCP server that mints, so the grant cannot live in memory. It is a file, and consumption must be atomic against concurrent hook invocations — two parallel `Write` calls to the same path must not both consume one token.
 
-`lib/canon-guard.js` keeps its pure/tested core; `decideCanonGuard` already takes an injected `canonicalize`. **Proposed: inject a `consumeGrant(path) → boolean` the same way**, so the decision function stays pure and the wrapper owns the I/O. Same shape as the existing seam, no new architectural idea.
+**The first draft got the primitive wrong** (gate round 1, finding 1). It proposed one JSON grant store written with temp-write-plus-rename, citing `initManifestExclusive` as precedent. That conflates *atomic publication* with *mutual exclusion*: rename makes each writer's result appear atomically, but two hooks can still read the same token, each remove it from its own in-memory snapshot, and each rename successfully — both return `true` and both writes are allowed. `initManifestExclusive` is safe only because it is a one-time exclusive **create**, never a shared read-modify-write. A `wx` lock is not a drop-in fix either, because Decision 3 fails open, so throwing on contention would *allow* the competing write.
 
-Atomicity primitive: the same one `initManifestExclusive` already relies on — an exclusive create (`wx`) or a temp-write-plus-rename, where the *filesystem operation itself* is the mutual exclusion rather than a check that a race can slip past.
+**Decision: one file per token, claimed by atomic `rename`.**
+
+```
+.compose/data/canon-grants/<token-id>.json      ← minted here
+.compose/data/canon-grants/consumed/<token-id>.json  ← claimed by rename
+```
+
+`rename` is the claim. Exactly one caller can rename a given path; every loser gets `ENOENT` and denies. The filesystem operation *is* the mutual exclusion, with no read-modify-write window to race in. Minting is likewise a per-file exclusive create, so mint and consume are both serialized without a shared store.
+
+This also makes expiry trivial (stat the file, compare mtime) and makes the consumed-token record a natural artifact rather than a separate bookkeeping concern.
+
+### Purity: the classification stays pure, the claim does not
+
+The first draft also claimed injecting `consumeGrant` would keep `decideCanonGuard` pure. It would not — a destructive callback makes the function mutate shared state and return a different answer on a second evaluation, contradicting this design's own acceptance criterion (gate round 1, finding 4).
+
+**Decision: split the two.** `decideCanonGuard` stays pure and answers *"does this path require a grant?"* — classification and deny-message construction, no I/O. The **wrapper** performs the atomic claim and selects the final decision. Purity is preserved where it is testable and valuable, and the effect lives in the layer that already owns I/O.
+
+## Decision 2b: the bypass ledger needs protecting, not just tracking
+
+Gate round 1, finding 2: **"git-tracked" is not an audit trail.** Verified — nothing under `.compose/` appears in `lib/canon-registry.js` at all, and the pre-push hook runs only `guard verify`, which covers judgment canon. So as first designed:
+
+- the same Claude runtime that is denied a canon write can freely rewrite or delete `.compose/canon-overrides.jsonl`, because no registry entry guards it;
+- the bypassed canon change can be committed **without** its ledger row, since ship staging does not include the file;
+- a fresh clone then shows the canon edit with no record of the bypass.
+
+An audit trail the audited party can edit is not one. Fixes, in order of cost:
+
+1. **Register the ledger in the canon registry at the `hook` point**, with `canon_override_grant` as its only authorized writer. Raw `Write`/`Edit` to it is then denied by the same mechanism it exists to record. No circularity: the tool is the writer, and the tool is not itself hook-guarded.
+2. **Integrity-check it as an append-only file** — `{length, prefix_hash}`, the identical primitive COMP-CANON-ATTEST needs for `ledger.jsonl`. Build it once, share it. A rewrite or in-place edit of an earlier row is then detectable; a legitimate append is not.
+3. **Add it to ship staging** so a bypassed write cannot be committed while its row is left behind.
+
+**Deliberately NOT claimed in v1: commit-coupling.** Guaranteeing that the ledger row travels *in the same commit* as the bypassed write needs commit-range verification, which is the same machinery COMP-CANON-GUARD's honest limits already flag as unbuilt (*"a committed bypass is invisible to a dirty-tree check"*). Items 1–3 stop the ledger being forged or silently dropped; they do not prove row and write shipped together. **State that residual rather than overclaiming durability.**
 
 ## Decision 3: what happens when grant lookup fails?
 
@@ -96,6 +127,7 @@ The hook's stated policy is **fail open** — *"a guard that wedges the session 
 - **`operation` is unverifiable.** It is a declared label, useful for analysis, worthless as enforcement. Say so in the tool description so nobody later mistakes it for a constraint.
 - **A grant records intent, not outcome.** If the write fails after the grant is consumed, the ledger over-records. This is deliberate — over-recording is the safe direction.
 - **Fail-open on grant-read error** (Decision 3).
+- **No commit-coupling in v1** (Decision 2b). The ledger cannot be forged or silently dropped, but nothing proves a bypass row shipped in the same commit as the write it authorizes. Closing that needs the durable commit-range baseline COMP-CANON-GUARD already lists as unbuilt.
 
 ---
 
@@ -117,10 +149,13 @@ This is the same move that made the guard epic's phase-1 forensics useful. COMP-
 - [ ] Concurrent hook invocations cannot both consume one token (atomic consumption)
 - [ ] Live tokens are un-committable — `.compose/data/canon-grants.json` is gitignored; a test asserts `git check-ignore` succeeds for it
 - [ ] `.compose/canon-overrides.jsonl` is tracked and append-only; no code path rewrites or truncates it
-- [ ] Granting for an **unregistered** path is rejected — the lockout invariant means such a path is never blocked, so a grant for it is meaningless and its ledger entry would be misleading
+- [ ] Grant eligibility uses `matchEntry(path, { point: 'hook' })`, **not** mere registration. The registry partitions by enforcement point — today `hook: ['judgment']` and `ship: ['roadmap', 'changelog', 'feature-json']` — so a grant for `ROADMAP.md`, `CHANGELOG.md`, or `feature.json` is meaningless (the hook already allows them) and its ledger row would be actively misleading. Covered by a registered-but-not-hook-enforced rejection test, distinct from the unregistered-path rejection test
 - [ ] A grant-read error fails open, and the fail-open path is covered by a test that asserts the write proceeds
 - [ ] The shipped hook's denial message is updated to name the real override path instead of telling the reader to edit the registry
-- [ ] `decideCanonGuard` remains pure — grant consumption is injected, not imported
+- [ ] `decideCanonGuard` remains pure and side-effect-free: evaluating it twice returns the same answer and consumes nothing. The atomic claim lives in the wrapper
+- [ ] The bypass ledger is hook-registered, so a raw `Write` to `.compose/canon-overrides.jsonl` is denied
+- [ ] An in-place edit of an earlier ledger row is detected by the append-only integrity check; a legitimate append is not
+- [ ] Two concurrent consumers of one token: exactly one write is allowed and one is denied (the `rename` claim, tested with real concurrency rather than a mocked lock)
 
 ## Open questions
 
@@ -132,9 +167,29 @@ This is the same move that made the guard epic's phase-1 forensics useful. COMP-
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `lib/canon-override.js` | new | Pure grant lifecycle: mint, validate, consume, expire. Ledger append. No I/O policy decisions |
-| `lib/canon-guard.js` | modify | `decideCanonGuard` accepts an injected `consumeGrant`; allow-with-consume branch before the deny branch; update the denial message |
-| `.claude/hooks/canon-guard.mjs` | modify | Wire the real `consumeGrant` I/O into the injected seam |
+| `lib/canon-override.js` | new | Grant lifecycle: mint (exclusive create), claim (atomic `rename`), expire, eligibility via `matchEntry(…, {point:'hook'})`. Ledger append |
+| `lib/canon-guard.js` | modify | `decideCanonGuard` gains a *pure* "requires a grant" classification; denial message updated. No consumption here |
+| `.claude/hooks/canon-guard.mjs` | modify | Perform the atomic claim and select the final decision |
+| `lib/canon-registry.js` | modify | Register `.compose/canon-overrides.jsonl` at the `hook` point, writer = `canon_override_grant` |
+| `lib/append-integrity.js` | new | `{length, prefix_hash}` for append-only files — shared with COMP-CANON-ATTEST's `ledger.jsonl` handling |
+| `lib/build.js` | modify | Ship staging includes the bypass ledger |
 | `server/compose-mcp.js` | modify | Declare + dispatch `canon_override_grant` |
 | `.gitignore` | verify | Confirm `.compose/data/` covers the grant file; add an explicit rule if the current `data/` rule is too broad to rely on |
 | `test/canon-override.test.js` | new | The criteria above, including fault injection and the concurrency case |
+
+---
+
+## Gate round 1 — Codex `sol/xhigh`, 2026-07-25
+
+Four findings, all confirmed against the code and folded above.
+
+| # | Finding | Verdict | Where folded |
+|---|---|---|---|
+| 1 | **[High]** Temp-write-plus-rename is atomic *publication*, not mutual exclusion — two hooks can read the same token, each drop it from its own snapshot, and both succeed. `initManifestExclusive` is safe only as a one-time exclusive create | **CONFIRMED** — the design conflated two different guarantees | Decision 2 rewritten: one file per token, claimed by atomic `rename` |
+| 2 | **[High]** "Git-tracked" does not protect the bypass ledger: not in the registry, not in ship staging, pre-push covers only judgment canon — so the audited runtime can rewrite it or commit the write without its row | **CONFIRMED** — zero `.compose/` entries in `canon-registry.js`; pre-push runs `guard verify` only | New Decision 2b; commit-coupling explicitly *not* claimed |
+| 3 | **[Medium]** Eligibility must use the registry's enforcement-point partition, not mere registration — `hook: ['judgment']` vs `ship: [...]`, so a grant for `ROADMAP.md` is meaningless | **CONFIRMED** — matches the partition probed directly | Criterion rewritten around `matchEntry(…, {point:'hook'})` |
+| 4 | **[Medium]** An injected destructive `consumeGrant` does not preserve purity; it contradicts this design's own purity criterion | **CONFIRMED** | Decision 2: pure classification in the core, claim in the wrapper |
+
+One further error was caught by self-review before this gate and is recorded in place above: the omission of the override's self-service property, and its consequence for COMP-CANON-ATTEST (a bare grant must not authorize re-attestation).
+
+**Gate status: round 1 folded, not yet re-run.** All four findings had concrete fixes and none reopened a scope question, so this is a normal second round rather than a blocker.
