@@ -2,6 +2,40 @@
 
 ## 2026-07-25
 
+### COMP-UPDATE-NUDGE — compose tells you when it is behind
+
+`compose init`, `compose build`, and `compose plan` now print a single line when
+a newer compose or stratum has been published:
+
+```
+⚠ update available: stratum 0.3.3 → 0.3.4 — run: compose update
+```
+
+Nothing else changes, and nothing prints when both are current. `compose update`
+already did the whole job; what was missing is that nothing told you to run it,
+so you found out only if you happened to run `compose doctor`.
+
+Stratum is covered because compose alone is no longer a sufficient signal. When
+the stratum dependency moved from an exact pin to `^0.3.3`, npm stopped
+re-resolving it unless something triggered an install, so you can sit on a
+current compose with a stale stratum underneath it. The check reads the version
+actually resolved in `node_modules`, not the range in the manifest, because the
+range is exactly what drifts. This repo was in that state while the feature was
+being built, which is what the line above is reporting.
+
+The check is free on a cache hit (24h, now stored per package), bounded by a 3s
+timeout on a miss, and both lookups run in parallel. Any failure at all —
+network down, registry error, unreadable cache, malformed version — prints
+nothing and never fails the command it is attached to. `compose doctor`'s own
+version reporting is unchanged.
+
+**It will never update itself.** That is a deliberate boundary. Compose has 109
+lazy `await import()` sites, so replacing its files under a running process
+leaves that process loading new modules into an old module graph — mixed-version
+code in one process, with the long-lived MCP server the most exposed. Safe
+auto-update needs side-by-side versioned installs, filed as
+COMP-UPDATE-VERSIONED-INSTALL.
+
 ### release 0.3.7 — unstick the upgrade path (stable `latest`, floating Stratum, MCP restart notice)
 
 `compose update` worked; the release train behind it did not. The npm `latest`

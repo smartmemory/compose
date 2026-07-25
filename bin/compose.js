@@ -91,7 +91,12 @@ function resolveCwdWithWorkspace(args) {
 // ---------------------------------------------------------------------------
 import { parseTeamFlag } from '../lib/team-flag.js';
 import { loadDeps, checkExternalSkills, printDepReport, buildDepReport, checkExternalBinaries, printBinaryReport, buildBinaryReport } from '../lib/deps.js';
-import { checkLatestVersion } from '../lib/version-check.js';
+import {
+  checkLatestVersion,
+  checkPackageVersion,
+  resolveStratumVersion,
+  formatDriftNudge,
+} from '../lib/version-check.js';
 import { computeHooksStatus, formatHookStatusLines, HOOK_MARKERS } from '../lib/hooks-status.js';
 
 const [,, cmd, ...args] = process.argv
@@ -757,11 +762,36 @@ async function runUpdate(flags) {
   console.log(`compose updated to v${getPkgVersion()}${style === 'git' ? ` @ ${getGitSha(root) || '?'}` : ''}`)
 }
 
+/** Print a one-line update nudge at session entry points. NOTIFY ONLY —
+ * this must never mutate an installation. Compose has ~109 lazy `await import()`
+ * sites, so replacing files under a running process would have it load new
+ * modules into an old module graph; safe self-update needs a versioned install
+ * (COMP-UPDATE-VERSIONED-INSTALL), not a check here.
+ *
+ * Swallows everything: a courtesy line may never fail the command it precedes. */
+async function emitDriftNudge() {
+  try {
+    const stratumCurrent = resolveStratumVersion(PACKAGE_ROOT)
+    const [composeInfo, stratumInfo] = await Promise.all([
+      checkPackageVersion('@smartmemory/compose', getPkgVersion()),
+      stratumCurrent
+        ? checkPackageVersion('@smartmemory/stratum', stratumCurrent)
+        : Promise.resolve(null),
+    ])
+    for (const line of formatDriftNudge({ compose: composeInfo, stratum: stratumInfo })) {
+      console.log(line)
+    }
+  } catch {
+    // never break the command this is attached to
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Command dispatch
 // ---------------------------------------------------------------------------
 
 if (cmd === 'init') {
+  await emitDriftNudge()
   await runInit(args)
   process.exit(0)
 }
@@ -2357,6 +2387,7 @@ if (cmd === 'experiment') {
 }
 
 if (cmd === 'build') {
+  await emitDriftNudge()
   // Parse --cwd <path> for cross-repo builds
   let agentWorkDir = null
   const cwdIdx = args.indexOf('--cwd')
@@ -2703,6 +2734,7 @@ if (cmd === 'build') {
     })
   })
 } else if (cmd === 'plan') {
+  await emitDriftNudge()
   // compose plan "<intent>" — runs the plan.stratum.yaml product-planning
   // lifecycle (explore_design → plan → ship). Thin delegation to runBuild() with
   // template='plan', mode='plan'. Derives a PLAN-<slug> code from the intent
