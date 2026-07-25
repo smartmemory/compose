@@ -762,6 +762,9 @@ async function runUpdate(flags) {
   console.log(`compose updated to v${getPkgVersion()}${style === 'git' ? ` @ ${getGitSha(root) || '?'}` : ''}`)
 }
 
+/** Hard ceiling on how long the update nudge may delay a command. */
+const NUDGE_BUDGET_MS = 4000
+
 /** Stratum is enabled unless this cwd's workspace manifest explicitly opts out.
  * This deliberately does not use resolveWorkspace(): the nudge runs before
  * argument parsing, and workspace resolution may print errors and exit. */
@@ -785,14 +788,32 @@ function isStratumCapabilityEnabled() {
  * Swallows everything: a courtesy line may never fail the command it precedes. */
 async function emitDriftNudge() {
   try {
+    // Only an interactive terminal pays for a registry lookup. Everything else
+    // — a spawned CLI, CI, a script — reads cache and stays silent on a miss.
+    //
+    // This is not an optimization, it is a correctness fix. The nudge sits on
+    // the startup path of init/build/plan, and the test suite alone spawns
+    // `compose init` dozens of times in parallel with a cold HOME. Every one of
+    // those fired a live fetch, and under that concurrency one failed to settle:
+    // node reported "Detected unsettled top-level await" at this call and exited
+    // non-zero, breaking `compose init` itself. A courtesy line must never be
+    // able to do that, and non-interactive callers were never its audience.
+    const cacheOnly = !process.stdout.isTTY
     const stratumCurrent = isStratumCapabilityEnabled()
       ? resolveStratumVersion(PACKAGE_ROOT)
       : null
-    const [composeInfo, stratumInfo] = await Promise.all([
-      checkPackageVersion('@smartmemory/compose', getPkgVersion()),
+    const work = Promise.all([
+      checkPackageVersion('@smartmemory/compose', getPkgVersion(), { cacheOnly }),
       stratumCurrent
-        ? checkPackageVersion('@smartmemory/stratum', stratumCurrent)
+        ? checkPackageVersion('@smartmemory/stratum', stratumCurrent, { cacheOnly })
         : Promise.resolve(null),
+    ])
+    // Belt and braces: whatever happens below, this await settles. The timer is
+    // ref'd deliberately — an unref'd one would let the loop drain and reproduce
+    // the very unsettled-await exit this guards against.
+    const [composeInfo, stratumInfo] = await Promise.race([
+      work,
+      new Promise((resolve) => setTimeout(() => resolve([null, null]), NUDGE_BUDGET_MS)),
     ])
     for (const line of formatDriftNudge({ compose: composeInfo, stratum: stratumInfo })) {
       console.log(line)

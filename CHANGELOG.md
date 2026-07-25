@@ -23,6 +23,10 @@ actually resolved in `node_modules`, not the range in the manifest, because the
 range is exactly what drifts. This repo was in that state while the feature was
 being built, which is what the line above is reporting.
 
+Only an interactive terminal triggers a registry lookup. Scripts, CI, and any
+spawned `compose` read the cache and stay quiet when it misses, so the nudge can
+never add a network round-trip to automation that did not ask for one.
+
 Set `COMPOSE_VERSION_CHECK_OFFLINE=1` to stop the check contacting the registry
 at all. It then reports only what is already cached, which is what you want on
 an air-gapped install, in CI, or anywhere a CLI quietly reaching for the network

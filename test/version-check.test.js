@@ -275,3 +275,30 @@ test('formatDriftNudge: absent stratum still reports compose', () => {
     '⚠ update available: compose 0.3.7 → 0.3.9 — run: compose update',
   ]);
 });
+
+// The nudge runs on the startup path of init/build/plan. Non-interactive callers
+// (spawned CLIs, CI, the test suite itself) must never pay for a network request
+// there: dozens of concurrent spawns with a cold cache once left a fetch
+// unsettled, and node killed `compose init` with a top-level-await warning.
+test('cacheOnly returns null on a miss instead of fetching', async (t) => {
+  const { impl, calls } = stubFetch({ '@smartmemory/compose': '9.9.9' });
+  const r = await checkPackageVersion('@smartmemory/compose', '0.3.7', {
+    fetchImpl: impl, cacheFile: tmpCache(t), cacheOnly: true,
+  });
+  assert.equal(r, null);
+  assert.deepEqual(calls, [], 'cacheOnly must not reach the fetch path at all');
+});
+
+test('cacheOnly still reports a hit from a fresh cache', async (t) => {
+  const cacheFile = tmpCache(t);
+  writeFileSync(cacheFile, JSON.stringify({
+    '@smartmemory/compose': { fetchedAt: Date.now(), latest: '0.3.9' },
+  }));
+  const { impl, calls } = stubFetch({ '@smartmemory/compose': '9.9.9' });
+  const r = await checkPackageVersion('@smartmemory/compose', '0.3.7', {
+    fetchImpl: impl, cacheFile, cacheOnly: true,
+  });
+  assert.equal(r.behind, true);
+  assert.equal(r.source, 'cache');
+  assert.deepEqual(calls, []);
+});
