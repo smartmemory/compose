@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { checkPackageVersion, checkLatestVersion, cachePath } from '../lib/version-check.js';
+import { checkPackageVersion, checkLatestVersion, cachePath,
+  resolveStratumVersion, formatDriftNudge } from '../lib/version-check.js';
 
 function tmpCache(t) {
   const dir = mkdtempSync(join(tmpdir(), 'version-cache-'));
@@ -170,4 +171,68 @@ test('cachePath honors COMPOSE_VERSION_CACHE', () => {
     if (prev === undefined) delete process.env.COMPOSE_VERSION_CACHE;
     else process.env.COMPOSE_VERSION_CACHE = prev;
   }
+});
+
+function fakeInstall(t, version) {
+  const root = mkdtempSync(join(tmpdir(), 'fake-install-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  if (version !== null) {
+    const dir = join(root, 'node_modules', '@smartmemory', 'stratum');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: '@smartmemory/stratum', version }));
+  }
+  return root;
+}
+
+test('resolveStratumVersion reads the RESOLVED version from node_modules', (t) => {
+  assert.equal(resolveStratumVersion(fakeInstall(t, '0.3.3')), '0.3.3');
+});
+
+test('resolveStratumVersion returns null when stratum is absent', (t) => {
+  assert.equal(resolveStratumVersion(fakeInstall(t, null)), null);
+});
+
+test('resolveStratumVersion returns null on a malformed package.json', (t) => {
+  const root = fakeInstall(t, '0.3.3');
+  writeFileSync(join(root, 'node_modules', '@smartmemory', 'stratum', 'package.json'), '{{{');
+  assert.equal(resolveStratumVersion(root), null);
+});
+
+const CURRENT = { current: '0.3.7', latest: '0.3.7', behind: false, source: 'cache' };
+const COMPOSE_BEHIND = { current: '0.3.7', latest: '0.3.9', behind: true, source: 'cache' };
+const STRATUM_BEHIND = { current: '0.3.3', latest: '0.3.4', behind: true, source: 'cache' };
+
+test('formatDriftNudge: both current is silent', () => {
+  assert.deepEqual(formatDriftNudge({ compose: CURRENT, stratum: CURRENT }), []);
+});
+
+test('formatDriftNudge: compose behind only', () => {
+  assert.deepEqual(formatDriftNudge({ compose: COMPOSE_BEHIND, stratum: CURRENT }), [
+    '⚠ update available: compose 0.3.7 → 0.3.9 — run: compose update',
+  ]);
+});
+
+// The case the caret pin created: compose current, stratum stale. A compose-only
+// check calls this healthy, which is the entire reason stratum is covered.
+test('formatDriftNudge: stratum behind while compose is current', () => {
+  assert.deepEqual(formatDriftNudge({ compose: CURRENT, stratum: STRATUM_BEHIND }), [
+    '⚠ update available: stratum 0.3.3 → 0.3.4 — run: compose update',
+  ]);
+});
+
+test('formatDriftNudge: both behind, one line, compose first', () => {
+  assert.deepEqual(formatDriftNudge({ compose: COMPOSE_BEHIND, stratum: STRATUM_BEHIND }), [
+    '⚠ update available: compose 0.3.7 → 0.3.9, stratum 0.3.3 → 0.3.4 — run: compose update',
+  ]);
+});
+
+test('formatDriftNudge: null inputs are silent, never a crash', () => {
+  assert.deepEqual(formatDriftNudge({ compose: null, stratum: null }), []);
+  assert.deepEqual(formatDriftNudge({}), []);
+});
+
+test('formatDriftNudge: absent stratum still reports compose', () => {
+  assert.deepEqual(formatDriftNudge({ compose: COMPOSE_BEHIND, stratum: null }), [
+    '⚠ update available: compose 0.3.7 → 0.3.9 — run: compose update',
+  ]);
 });
