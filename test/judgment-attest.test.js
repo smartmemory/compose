@@ -90,7 +90,7 @@ test('fail-closed: wiping the whole records dir is RED (manifest survives outsid
   const d = repo();
   writeManifest(d, computeRecordHashes(d));
   // Simulate `rm -rf docs/judgment/records`. The manifest lives at
-  // docs/judgment/.attest.json, OUTSIDE the records dir, so it survives.
+  // .compose/judgment-attest.json, OUTSIDE docs/judgment, so it survives.
   rmSync(join(d, 'docs/judgment/records'), { recursive: true, force: true });
   const r = verifyRecords(d);
   assert.equal(r.ok, false);
