@@ -110,6 +110,20 @@ comment.
 
 ---
 
+## Known limits (accepted after the final review, not defects)
+
+- **The capability read uses `process.cwd()`, not a resolved workspace.** `--workspace <id>`
+  can select a different workspace whose `capabilities.stratum` the nudge will not see. This
+  follows directly from Decision 4's placement rule: resolving a workspace properly can print
+  errors and call `process.exit`, and the nudge runs ahead of argument parsing on purpose.
+  Reading the manifest at cwd is exactly what `lib/stratum-engine.js:103` already does for
+  `capabilities.stratumEngine`. `--cwd` is NOT affected — it sets the agent's working
+  directory for cross-repo builds, not the compose workspace that owns capabilities.
+- **The manifest read is a synchronous `readFileSync` with no timeout.** A
+  `.compose/compose.json` that is a FIFO or a symlink to a blocking device would stall startup
+  before any catch could run. Reaching that state requires write access to your own workspace,
+  and the same unbounded read already exists at `lib/stratum-engine.js:108`.
+
 ## Files
 
 | File | Action | Purpose |
