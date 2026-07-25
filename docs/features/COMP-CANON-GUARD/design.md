@@ -237,15 +237,15 @@ Met in this epic:
 - [x] An **unregistered** path is never blocked (lockout invariant, unit-tested with a synthetic path)
 - [x] A Bash edit to `docs/judgment/**` with no tool event fails ship (S5)
 - [x] `judgment_*` tools stamp `actor`/`origin_session`/`written_at`; none is caller-writable *(delivered by COMP-JUDGMENT-WRITER)*
-- [x] No tool call can persist a record carrying `[ASSERT]` or `[owner-locked]` (v1 agent-only, OQ1 ruling 2026-07-22); the only path to an owner-attributed record is the ledgered override
+- [x] No tool call can persist a record carrying `[ASSERT]` or `[owner-locked]` (v1 agent-only, OQ1 ruling 2026-07-22). The *intended* route for an owner-attributed record is the ledgered override, which is not built — see the reassignment below
 - [x] Direct `Write`/`Edit` to a guarded path is denied, and the denial names the tool to use
-- [x] `canon_override_grant` refuses an empty reason; the token is single-use and path-scoped; the ledger entry is written before the token is minted
 - [x] `compose guard status` reports installed/missing/drifted, mirroring `compose hooks status`
 
 Reassigned — these were never in-scope for what shipped, and now belong to their own rows:
 
 - → **COMP-CANON-ATTEST** — an interleaved tool-call-plus-hand-edit to a guarded path is detected. Until it lands this remains a known, documented gap, and it is now **reproduced**, not merely argued: baseline GREEN → out-of-band edit gives `kind: modified` → a legitimate tool amend calls `stampRecord` and verify returns GREEN over `TAMPERED` content. `stampRecord` overwrites `hashes[relPath]` without ever checking the prior value, so the amend blesses whatever the editor left behind.
 - → **COMP-CANON-INVENTORY** — every registered path has a tool for every legal mutation, or an explicit `override_only` declaration with a reason, verified at registration; and `update_feature_fields` can change description/phase/tags/profile on an existing feature.
+- → **COMP-CANON-OVERRIDE** — `canon_override_grant` refuses an empty reason; the token is single-use and path-scoped; the ledger entry is written before the token is minted. **Corrected 2026-07-25:** this was briefly and wrongly marked met at epic close. S4's blueprint lists the override under *"Explicitly deferred (NOT built here)"*, `grep` finds zero references in `lib/`, `server/`, or `bin/`, and the shipped hook's denial text says the override is *"not yet available this slice."* Decision 4 specified the protocol; nothing implemented it.
 - → **COMP-BUILD-CORRELATION** — "with `block` on, a full `compose build` completes using only normal workflows." Unreachable as written: `scanGuarded` matches on `build_id`, and all 777 real events carry `build_id: null`, so no `block` promotion can be re-specced until the correlation model is repaired.
 - [ ] Manual mode P1–P7 remain runnable end-to-end with the guard installed (the anti-lockout test)
 - [ ] A manual typed judgment write, made outside any build, passes a later ship

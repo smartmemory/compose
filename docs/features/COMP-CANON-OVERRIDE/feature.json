@@ -1,0 +1,19 @@
+{
+  "code": "COMP-CANON-OVERRIDE",
+  "description": "The canon override — grant-then-write, ledger-first (COMP-CANON-GUARD Decision 4, deferred at S4 and never built). canon_override_grant({path, reason, operation}) MCP tool: rejects empty/whitespace reason, writes the ledger entry BEFORE minting, token is single-use and path-scoped so the override costs something visible rather than decaying into 'turn the guard off'. Blocks COMP-CANON-ATTEST, which needs a governed reconcile path for a chain break. Must also answer the ledger circularity: an authorization written into ledger.jsonl breaks the very chain it authorizes, so ledger-drift recovery needs a bootstrap route outside the attested set.",
+  "status": "PLANNED",
+  "phase": "Judgment Layer",
+  "created": "2026-07-25",
+  "updated": "2026-07-25",
+  "complexity": "M",
+  "position": 9,
+  "parent": "COMP-CANON-GUARD",
+  "impact": "high",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-CANON-GUARD",
+      "note": "Decision 4; specified in the epic, explicitly deferred at S4, never built"
+    }
+  ]
+}
