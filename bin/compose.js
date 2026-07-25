@@ -762,6 +762,20 @@ async function runUpdate(flags) {
   console.log(`compose updated to v${getPkgVersion()}${style === 'git' ? ` @ ${getGitSha(root) || '?'}` : ''}`)
 }
 
+/** Stratum is enabled unless this cwd's workspace manifest explicitly opts out.
+ * This deliberately does not use resolveWorkspace(): the nudge runs before
+ * argument parsing, and workspace resolution may print errors and exit. */
+function isStratumCapabilityEnabled() {
+  try {
+    const manifest = join(process.cwd(), '.compose', 'compose.json')
+    const config = JSON.parse(readFileSync(manifest, 'utf-8'))
+    return config?.capabilities?.stratum !== false
+  } catch {
+    // Absent, unreadable, or malformed means "enabled" for compatibility.
+    return true
+  }
+}
+
 /** Print a one-line update nudge at session entry points. NOTIFY ONLY —
  * this must never mutate an installation. Compose has ~109 lazy `await import()`
  * sites, so replacing files under a running process would have it load new
@@ -771,7 +785,9 @@ async function runUpdate(flags) {
  * Swallows everything: a courtesy line may never fail the command it precedes. */
 async function emitDriftNudge() {
   try {
-    const stratumCurrent = resolveStratumVersion(PACKAGE_ROOT)
+    const stratumCurrent = isStratumCapabilityEnabled()
+      ? resolveStratumVersion(PACKAGE_ROOT)
+      : null
     const [composeInfo, stratumInfo] = await Promise.all([
       checkPackageVersion('@smartmemory/compose', getPkgVersion()),
       stratumCurrent

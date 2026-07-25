@@ -19,11 +19,14 @@ function seedCache(t, doc) {
   return file;
 }
 
-function workspace(t) {
+function workspace(t, config = { version: 1, workspaceId: 'nudge-ws' }) {
   const dir = mkdtempSync(join(tmpdir(), 'nudge-ws-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   mkdirSync(join(dir, '.compose'), { recursive: true });
-  writeFileSync(join(dir, '.compose', 'compose.json'), JSON.stringify({ version: 1, workspaceId: 'nudge-ws' }));
+  writeFileSync(
+    join(dir, '.compose', 'compose.json'),
+    typeof config === 'string' ? config : JSON.stringify(config),
+  );
   return dir;
 }
 
@@ -61,6 +64,45 @@ test('compose build prints the nudge when behind', (t) => {
   const r = runCompose(['build'], { cwd: workspace(t), cacheFile: seedCache(t, behindCache()) });
   assert.match(`${r.stdout}${r.stderr}`, /update available: .*run: compose update/);
 });
+
+test('capabilities.stratum false suppresses only the stratum segment', (t) => {
+  const cwd = workspace(t, {
+    version: 1,
+    workspaceId: 'nudge-ws',
+    capabilities: { stratum: false },
+  });
+  const r = runCompose(['build', '--cwd'], { cwd, cacheFile: seedCache(t, behindCache()) });
+  const output = `${r.stdout}${r.stderr}`;
+  assert.match(output, /update available: compose .*999\.0\.0.*run: compose update/);
+  assert.doesNotMatch(output, /stratum .*999\.0\.0/);
+});
+
+for (const [label, config] of [
+  ['true', { version: 1, workspaceId: 'nudge-ws', capabilities: { stratum: true } }],
+  ['absent', { version: 1, workspaceId: 'nudge-ws' }],
+  ['a malformed config', '{{{'],
+]) {
+  test(`capabilities.stratum ${label} still checks stratum`, (t) => {
+    const r = runCompose(['build', '--cwd'], {
+      cwd: workspace(t, config),
+      cacheFile: seedCache(t, behindCache()),
+    });
+    assert.match(`${r.stdout}${r.stderr}`, /stratum .*999\.0\.0.*run: compose update/);
+  });
+}
+
+for (const command of ['build', 'plan']) {
+  test(`compose ${command} prints the nudge before rejecting a missing --cwd value`, (t) => {
+    const r = runCompose([command, '--cwd'], {
+      cwd: workspace(t),
+      cacheFile: seedCache(t, behindCache()),
+    });
+    const output = `${r.stdout}${r.stderr}`;
+    assert.equal(r.status, 1);
+    assert.match(output, /Error: --cwd requires a path argument/);
+    assert.match(output, /update available: .*run: compose update/);
+  });
+}
 
 // Current on both ends: the nudge must be absent, not merely different.
 test('no nudge when both are current', (t) => {
