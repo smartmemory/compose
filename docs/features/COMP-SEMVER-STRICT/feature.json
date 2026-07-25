@@ -1,0 +1,11 @@
+{
+  "code": "COMP-SEMVER-STRICT",
+  "description": "**`compareVersions` accepts malformed input and answers confidently.** `compareVersions('1.2.3garbage', '1.2.4')` returns -1 (\"behind\") instead of null, because the parser uses `Number.parseInt` per component and `parseInt('3garbage')` yields 3 — trailing junk is silently discarded rather than rejected. Reproduced 2026-07-25 during the COMP-UPDATE-NUDGE Task 1 review. Impact today is low: the only inputs are package.json `version` fields and npm registry responses, both well-formed, so the bad path is not currently reachable. It is filed rather than fixed inline because `lib/version-check.js:65-85` is pre-existing shipped code that `compose doctor` and its golden output depend on, and COMP-UPDATE-NUDGE Task 1 was scoped to plumbing — widening it to touch the comparator would have put doctor's output in the blast radius of an unrelated task. Fix: reject any component with non-numeric trailing characters (return null, matching the existing contract for unparseable input), with tests for `1.2.3garbage`, `1.2.x`, `v1.2.3`, and empty components, and a check that doctor's output is unchanged.",
+  "status": "PLANNED",
+  "phase": "Distribution",
+  "created": "2026-07-25",
+  "updated": "2026-07-25",
+  "complexity": "S",
+  "position": 3,
+  "impact": "low"
+}
