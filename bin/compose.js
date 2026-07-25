@@ -127,7 +127,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  fix       Run a bug through the headless bug-fix lifecycle')
   console.log('  gsd       Per-task fresh-context dispatch from existing blueprint+Boundary Map')
   console.log('  pipeline  View and edit the build pipeline')
-  console.log('  roadmap            Show roadmapUse: install | uninstall | status | init | verify [--fix]and next buildable features')
+  console.log('  roadmap            Show roadmap status and next buildable features')
   console.log('  roadmap generate   Regenerate ROADMAP.md from feature.json files')
   console.log('  roadmap migrate    Extract ROADMAP.md entries into feature.json files')
   console.log('  roadmap check      Verify feature.json and ROADMAP.md are in sync')
@@ -1952,14 +1952,15 @@ if (cmd === 'guard') {
     }
 
     const { root: cwd } = resolveCwdWithWorkspace(args)
-    const { computeRecordHashes, writeManifest, readManifest, recordFileSet } =
+    const { computeRecordHashes, initManifestExclusive, manifestPathFor, recordFileSet } =
       await import('../lib/judgment-attest.js')
 
-    if (readManifest(cwd) !== null) {
-      console.error('A judgment record baseline already exists.')
-      console.error('`guard init` will not overwrite it — that would launder any raw record edit.')
-      console.error('Use `compose guard verify --fix` for projection drift, or the judgment_* tools to change records.')
-      process.exit(1)
+    // `init` WRITES trust, so be explicit about the destination. The shared
+    // resolver honours COMPOSE_TARGET, which can point somewhere other than the
+    // shell's cwd — never let that be silent for this command.
+    if (resolve(cwd) !== resolve(process.cwd())) {
+      console.log(`Baselining resolved workspace: ${cwd}`)
+      console.log('(resolved via COMPOSE_TARGET / workspace config, not your current directory)')
     }
 
     const records = recordFileSet(cwd)
@@ -1968,11 +1969,40 @@ if (cmd === 'guard') {
       process.exit(0)
     }
 
-    writeManifest(cwd, computeRecordHashes(cwd))
+    // Existence is decided by the FILESYSTEM and the write is exclusive (O_EXCL).
+    // A parsed-value check was wrong twice over: a manifest whose contents are
+    // literally `null` parses to null and would read as "absent" (overwriting a
+    // real baseline), and a check-then-write race let two initializers both pass
+    // the check. Re-baselining over an existing manifest is the laundering step,
+    // so it must fail on the write itself, not on an advisory look.
+    let hashes
+    try {
+      hashes = computeRecordHashes(cwd)
+    } catch (e) {
+      if (e?.code === 'JUDGMENT_RECORD_MALFORMED') {
+        console.error(`Refusing to baseline: ${e.message}`)
+        console.error('A malformed record cannot be trusted as-is — fix or remove it, then re-run.')
+        process.exit(1)
+      }
+      throw e
+    }
+
+    try {
+      initManifestExclusive(cwd, hashes)
+    } catch (e) {
+      if (e?.code === 'EEXIST') {
+        console.error(`A judgment record baseline already exists: ${manifestPathFor(cwd)}`)
+        console.error('`guard init` will not overwrite it — that would launder any raw record edit.')
+        console.error('Use `compose guard verify --fix` for projection drift, or the judgment_* tools to change records.')
+        process.exit(1)
+      }
+      throw e
+    }
+
     console.log(`Baselined ${records.length} judgment record${records.length === 1 ? '' : 's'}.`)
     console.log('These records are trusted AS-IS: there is no prior attestation to verify them against.')
     console.log('From here, drift detection reports any careless change that does not go through the judgment tools.')
-    console.log('The baseline is committed, so re-baselining shows up as a reviewable diff.')
+    console.log(`Commit ${manifestPathFor(cwd)} so the baseline travels with the repo and re-baselining shows up as a reviewable diff.`)
     process.exit(0)
   }
 
@@ -2023,12 +2053,15 @@ if (cmd === 'guard') {
       if (projectionDriftBefore.length > 0) {
         regenerateProjections(cwd)
 
-        // Refreshing an already-clean baseline is safe. If any record drift is
-        // present, do not write the manifest: doing so could bless a raw edit.
-        if (result.recordDrift.length === 0) {
-          writeManifest(cwd, computeRecordHashes(cwd))
-          console.log('Record manifest refreshed after records passed drift detection.')
-        } else {
+        // `--fix` NEVER writes the record manifest. The earlier "refresh it when
+        // records already passed" branch was both unnecessary and unsafe:
+        // unnecessary because a passing record set already matches the manifest,
+        // and unsafe because verifyJudgmentCanon releases the judgment lock when
+        // it returns, so a raw edit landing between that verdict and the rewrite
+        // would be stamped — laundering a hand-edit through the repair flag,
+        // exactly what R1 forbids. Projections are derived and safe to
+        // regenerate; records are not, so `--fix` simply does not touch them.
+        if (result.recordDrift.length > 0) {
           console.log('Record drift was deliberately not fixed: --fix cannot bless record edits; use the judgment tools to make record changes.')
         }
 

@@ -225,6 +225,65 @@ test('guard init rejects --cwd instead of silently baselining the wrong repo', (
   const init = runGuardInit(cwd, '--cwd', other);
   assert.equal(init.status, 1, init.stdout + init.stderr);
   assert.match(init.stderr, /not supported here/);
-  // no baseline written anywhere
+  // "no baseline written ANYWHERE" — the invocation workspace AND the named one.
+  // Asserting only the former was tautological: an implementation that wrote the
+  // baseline into `other` and then exited 1 would have satisfied it.
   assert.throws(() => readFileSync(join(cwd, MANIFEST_REL), 'utf8'));
+  assert.throws(() => readFileSync(join(other, MANIFEST_REL), 'utf8'));
+});
+
+// ── Task 4 review fixes ────────────────────────────────────────────────────────
+
+test('guard init refuses a manifest whose contents are literally null (EEXIST, not "absent")', (t) => {
+  const cwd = unbaselinedFixture(t);
+  // A parsed-value check reads JSON `null` as "no baseline" and overwrites a real
+  // file. Existence must be decided by the filesystem + an exclusive write.
+  mkdirSync(dirname(join(cwd, MANIFEST_REL)), { recursive: true });
+  writeFileSync(join(cwd, MANIFEST_REL), 'null\n');
+
+  const init = runGuardInit(cwd);
+  assert.equal(init.status, 1, init.stdout + init.stderr);
+  assert.match(init.stderr, /already exists/);
+  assert.equal(readFileSync(join(cwd, MANIFEST_REL), 'utf8'), 'null\n', 'must not overwrite');
+});
+
+test('guard init refuses to baseline a malformed ledger.jsonl (R4 fail-closed)', (t) => {
+  const cwd = unbaselinedFixture(t);
+  writeFileSync(
+    join(cwd, 'docs', 'judgment', 'records', 'ledger.jsonl'),
+    '{"kind":"note"}\n{ this line is not json\n',
+  );
+
+  const init = runGuardInit(cwd);
+  assert.equal(init.status, 1, init.stdout + init.stderr);
+  assert.match(init.stderr, /Refusing to baseline/);
+  assert.throws(() => readFileSync(join(cwd, MANIFEST_REL), 'utf8'), 'no baseline on malformed canon');
+});
+
+test('a malformed ledger.jsonl is drift, not a silent pass', (t) => {
+  const cwd = fixture(t);                       // already baselined and clean
+  assert.equal(runGuardVerify(cwd).status, 0);
+
+  writeFileSync(
+    join(cwd, 'docs', 'judgment', 'records', 'ledger.jsonl'),
+    '{ not json at all\n',
+  );
+  const verify = runGuardVerify(cwd);
+  assert.equal(verify.status, 1, verify.stdout + verify.stderr);
+});
+
+test('guard verify --fix never writes the record manifest at all', (t) => {
+  const cwd = fixture(t);
+  const before = readFileSync(join(cwd, MANIFEST_REL), 'utf8');
+
+  // projection drift ONLY — the branch that used to re-stamp the manifest
+  const projectionPath = join(cwd, PROJECTION_REL);
+  writeFileSync(projectionPath, `${readFileSync(projectionPath, 'utf8')}\nraw projection edit\n`);
+
+  const fixed = runGuardVerify(cwd, '--fix');
+  assert.equal(fixed.status, 0, fixed.stdout + fixed.stderr);
+  assert.equal(
+    readFileSync(join(cwd, MANIFEST_REL), 'utf8'), before,
+    '--fix must leave the record manifest byte-identical even when records are clean',
+  );
 });

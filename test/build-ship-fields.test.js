@@ -6,6 +6,11 @@ import path from 'node:path';
 import { execSync } from 'node:child_process';
 
 import { executeShipStep } from '../lib/build.js';
+import {
+  computeRecordHashes,
+  writeManifest,
+} from '../lib/judgment-attest.js';
+import { regenerateProjections } from '../lib/judgment-gen.js';
 
 function makeRepo() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'compose-ship-fields-'));
@@ -19,14 +24,37 @@ function makeRepo() {
   return dir;
 }
 
-test('executeShipStep: returns commit, filesChanged after commit', async () => {
+function installCleanJudgmentCanon(repo) {
+  const record = path.join(repo, 'docs', 'judgment', 'records', 'people', 'ada.json');
+  fs.mkdirSync(path.dirname(record), { recursive: true });
+  fs.writeFileSync(record, `${JSON.stringify({
+    slug: 'ada',
+    display_name: 'Ada',
+    facts: [],
+    edges: [],
+    open_fields: [],
+    load_links: [],
+  })}\n`);
+  regenerateProjections(repo);
+  writeManifest(repo, computeRecordHashes(repo));
+  execSync('git add docs/judgment .compose/judgment-attest.json', { cwd: repo });
+  execSync('git commit -q -m "add clean judgment canon"', { cwd: repo });
+}
+
+function commitCount(repo) {
+  return Number(execSync('git rev-list --count HEAD', { cwd: repo, encoding: 'utf8' }).trim());
+}
+
+test('executeShipStep: repo with no judgment canon commits normally', async () => {
   const repo = makeRepo();
+  assert.equal(fs.existsSync(path.join(repo, 'docs', 'judgment')), false);
   // Create a feature dir + file to be staged
   const featureDir = path.join(repo, 'docs/features/TEST-FEAT');
   fs.mkdirSync(featureDir, { recursive: true });
   fs.writeFileSync(path.join(featureDir, 'plan.md'), '# plan\n');
   fs.writeFileSync(path.join(repo, 'lib-foo.js'), 'export const x = 1;\n');
 
+  const before = commitCount(repo);
   const context = { mode: 'feature', filesChanged: ['lib-foo.js'] };
   const result = await executeShipStep(
     'TEST-FEAT',
@@ -42,6 +70,59 @@ test('executeShipStep: returns commit, filesChanged after commit', async () => {
   assert.ok(typeof result.commit === 'string' && result.commit.length >= 7, `commit set: ${result.commit}`);
   assert.ok(Array.isArray(result.filesChanged), 'filesChanged is an array');
   assert.ok(result.filesChanged.includes('lib-foo.js') || result.filesChanged.some(f => f.endsWith('lib-foo.js')), `filesChanged includes lib-foo.js: ${JSON.stringify(result.filesChanged)}`);
+  assert.equal(commitCount(repo), before + 1);
+});
+
+test('executeShipStep: clean judgment canon proceeds to commit', async () => {
+  const repo = makeRepo();
+  installCleanJudgmentCanon(repo);
+  const featureDir = path.join(repo, 'docs', 'features', 'CANON-CLEAN');
+  fs.mkdirSync(featureDir, { recursive: true });
+  fs.writeFileSync(path.join(featureDir, 'plan.md'), '# plan\n');
+  fs.writeFileSync(path.join(repo, 'lib-clean.js'), 'export const clean = true;\n');
+
+  const before = commitCount(repo);
+  const result = await executeShipStep(
+    'CANON-CLEAN',
+    repo,
+    repo,
+    { mode: 'feature', filesChanged: ['lib-clean.js'] },
+    'Ship with clean canon',
+    null,
+  );
+
+  assert.equal(result.outcome, 'complete', result.summary);
+  assert.equal(commitCount(repo), before + 1);
+});
+
+test('executeShipStep: pre-staged judgment drift hard-fails before commit', async () => {
+  const repo = makeRepo();
+  installCleanJudgmentCanon(repo);
+  const projectionRel = 'docs/judgment/REGISTER.md';
+  const projection = path.join(repo, projectionRel);
+  fs.writeFileSync(projection, `${fs.readFileSync(projection, 'utf8')}\nraw edit\n`);
+  execSync(`git add -- ${projectionRel}`, { cwd: repo });
+
+  const featureDir = path.join(repo, 'docs', 'features', 'CANON-DRIFT');
+  fs.mkdirSync(featureDir, { recursive: true });
+  fs.writeFileSync(path.join(featureDir, 'plan.md'), '# plan\n');
+  fs.writeFileSync(path.join(repo, 'lib-drift.js'), 'export const drift = true;\n');
+
+  const before = commitCount(repo);
+  const result = await executeShipStep(
+    'CANON-DRIFT',
+    repo,
+    repo,
+    { mode: 'feature', filesChanged: ['lib-drift.js'] },
+    'Must not ship drift',
+    null,
+  );
+
+  assert.equal(result.outcome, 'failed');
+  assert.equal(result.error_code, 'JUDGMENT_CANON_DRIFT');
+  assert.match(result.summary, /Projection drift:/);
+  assert.match(result.summary, /docs\/judgment\/REGISTER\.md/);
+  assert.equal(commitCount(repo), before, 'drift must not create a commit');
 });
 
 test('executeShipStep: post-commit metadata failure does not downgrade outcome', async () => {

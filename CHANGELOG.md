@@ -9,19 +9,26 @@ and record tier and exits nonzero when findings remain. Projection and tree
 checks are records-anchored; record hashes detect careless edits whose manifest
 was not also changed.
 
-`compose guard verify --fix` regenerates derived projections. It refreshes the
-record manifest only after the records already pass drift detection, so it
-cannot bless a raw record edit; modified or malformed record drift remains
-reported and the command exits nonzero.
+`compose guard verify --fix` regenerates derived projections and **never writes
+the record manifest at all**. An earlier cut refreshed the manifest when records
+already passed; that was removed as both unnecessary (a passing record set
+already matches) and unsafe (verification releases the judgment lock before
+returning, so an edit landing in between would have been stamped). Modified or
+malformed record drift stays reported and the command exits nonzero.
 
 `compose guard init` establishes the first record baseline, and exists precisely
 because `--fix` refuses to stamp records: without a separate bootstrap there
 would be no way to create the initial manifest and every record would report as
-`added` forever. It baselines the workspace it is run in, trusts the current
-records as-is (there is no prior attestation to check them against, and it says
-so), and refuses to overwrite an existing baseline, since re-baselining over a
-raw edit is exactly the laundering step. It rejects a `--cwd` flag rather than
-silently writing the baseline into a different repo than the one named.
+`added` forever. It trusts the current records as-is (there is no prior
+attestation to check them against, and it says so) and refuses to overwrite an
+existing baseline, since re-baselining over a raw edit is exactly the laundering
+step — enforced by an exclusive create, so a concurrent initializer or a manifest
+whose contents are literally `null` cannot slip past. It refuses to baseline a
+malformed record, including an unparseable line in `ledger.jsonl`. It rejects a
+`--cwd` flag; when the resolved workspace differs from your shell's directory
+(via `COMPOSE_TARGET` or workspace config) it prints the resolved path before
+writing, rather than baselining somewhere else silently. The manifest it writes
+is unstaged — commit it so the baseline travels with the repo.
 
 Scope, stated plainly: the record tier is careless-drift detection, not
 enforcement. It catches an edit that did not also update the manifest. A
