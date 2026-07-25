@@ -104,6 +104,22 @@ An audit trail the audited party can edit is not one. Fixes, in order of cost:
 2. **Integrity-check it as an append-only file** — `{length, prefix_hash}`, the identical primitive COMP-CANON-ATTEST needs for `ledger.jsonl`. Build it once, share it. A rewrite or in-place edit of an earlier row is then detectable; a legitimate append is not.
 3. **Add it to ship staging** so a bypassed write cannot be committed while its row is left behind.
 
+### Round 2: governance paths must not be grant-eligible, and the token directory is governance state too
+
+Registering the ledger at the `hook` point while making *every* hook-registered path grant-eligible makes the ledger **recursively overrideable**: the agent grants an override for `.compose/canon-overrides.jsonl` itself, then rewrites it through a raw `Write`. `matchEntry` has no override-eligibility concept, so "registered at hook" and "grantable" are currently the same set.
+
+**Fix: an explicit `overrideEligible: false` class in the registry** for governance state, checked separately from `matchEntry`. Governance paths are guarded *and* ungrantable.
+
+The same reasoning extends to the tokens. `.compose/data/canon-grants/` is not registered at all, and the classifier allows every path with no hook entry (`canon-guard.js:121`) — so the runtime can simply `Write` a correctly shaped token and consume it, with no ledger row at all. That directly breaks the load-bearing claim that *a token cannot exist without its ledger entry*. **The grant directory joins the governance class: hook-registered, `overrideEligible: false`.**
+
+### Root of trust for the append-only check
+
+`{length, prefix_hash}` is meaningless without a previously trusted pair held **outside** the file it describes, plus a named verifier. The round-1 text specified neither. Filling both, following the `judgment-attest.json` precedent exactly:
+
+- **Baseline:** `.compose/canon-overrides-attest.json` — `{length, prefix_hash}` for the bypass ledger. Tracked, governance class, `overrideEligible: false`.
+- **Evolution:** the override tool updates the baseline in the same operation that appends the row, before minting the token. Ledger-first becomes ledger-and-baseline-first.
+- **Enforcement:** `compose guard verify` checks it, and the pre-push gate calls it. Today that gate runs `guard verify` for judgment canon only (`pre-push.template:77`), so this is a real change to both, not a claim that existing machinery already covers it.
+
 **Deliberately NOT claimed in v1: commit-coupling.** Guaranteeing that the ledger row travels *in the same commit* as the bypassed write needs commit-range verification, which is the same machinery COMP-CANON-GUARD's honest limits already flag as unbuilt (*"a committed bypass is invisible to a dirty-tree check"*). Items 1–3 stop the ledger being forged or silently dropped; they do not prove row and write shipped together. **State that residual rather than overclaiming durability.**
 
 ## Decision 3: what happens when grant lookup fails?
@@ -113,6 +129,22 @@ The hook's stated policy is **fail open** — *"a guard that wedges the session 
 **Proposed: keep fail-open, and state it as an honest limit rather than quietly relying on it.** Reversing it for this one path would make a corrupt local JSON file wedge every canon write in the workspace, which is exactly the failure the policy exists to prevent. The mitigation is that the ship-time and pre-push scans are runtime-independent and still see the resulting drift.
 
 ---
+
+## The in-workspace ceiling — read this before trusting any of the above
+
+Round 2 produced three High findings that look like separate holes and are one hole seen three times: **governance state protected by the runtime it governs is not protected.** Each fix moves the problem up a level rather than closing it.
+
+- Protect the ledger → who protects the grant directory?
+- Protect the grant directory → who protects the `overrideEligible: false` exclusion?
+- Integrity-check the ledger against a baseline → who protects the baseline?
+
+Every answer lives in the workspace, and `Bash` writes the workspace without touching the hook at all. `sed -i` on a token, a ledger row, and an attest baseline, all mutually consistent, defeats the whole structure. Cryptographic binding does not rescue it either: the hook and the agent share a trust domain, so any key the hook can read the agent can read.
+
+**This is the same ceiling S5 already named and accepted** — *"a deliberate actor who recomputes the manifest passes. In-workspace ceiling; an out-of-workspace anchor would be the real fix."* This feature does not clear it and cannot.
+
+**So the override must be positioned exactly as S5 positioned itself: audit and careless-drift tooling, not enforcement against a determined actor.** The `overrideEligible: false` class, the token/ledger registration and the attest baseline are all still worth building — they make the cooperative path logged and the accidental path hard, which is the realistic failure mode (the historical failure was silent hand-editing, not forgery). But the claim "a token cannot exist without its ledger entry" holds **only against the Claude `Write`/`Edit` route**, and must be written that way everywhere it appears.
+
+Naming, help text and acceptance criteria must not say enforcement. Anything stronger needs an out-of-workspace anchor — a trust domain the agent cannot write — which remains out of scope here and is the only thing that would actually change the answer.
 
 ## Honest limits (inherited and new)
 
@@ -147,13 +179,17 @@ This is the same move that made the guard epic's phase-1 forensics useful. COMP-
 - [ ] A token is path-scoped: a grant for path A does not permit a write to path B
 - [ ] A token expires: a write after TTL is denied and the expired token is not consumable
 - [ ] Concurrent hook invocations cannot both consume one token (atomic consumption)
-- [ ] Live tokens are un-committable — `.compose/data/canon-grants.json` is gitignored; a test asserts `git check-ignore` succeeds for it
+- [ ] TTL uses an **immutable `issued_at` / `expires_at` recorded inside the token**, never file mtime. A checkout gives a file a fresh mtime, so an mtime clock would let a mistakenly committed token become live again on clone
+- [ ] Verification **rejects a tracked live-token path** — gitignored is not un-committable (`git add -f` exists, and a previously tracked path stays tracked), so the property has to be checked, not assumed
+- [ ] The bypass row schema is defined, and `actor` is stamped by the tool per Decision 3, never caller-supplied — carried over from Decision 4 and dropped by the first draft of this design
 - [ ] `.compose/canon-overrides.jsonl` is tracked and append-only; no code path rewrites or truncates it
 - [ ] Grant eligibility uses `matchEntry(path, { point: 'hook' })`, **not** mere registration. The registry partitions by enforcement point — today `hook: ['judgment']` and `ship: ['roadmap', 'changelog', 'feature-json']` — so a grant for `ROADMAP.md`, `CHANGELOG.md`, or `feature.json` is meaningless (the hook already allows them) and its ledger row would be actively misleading. Covered by a registered-but-not-hook-enforced rejection test, distinct from the unregistered-path rejection test
 - [ ] A grant-read error fails open, and the fail-open path is covered by a test that asserts the write proceeds
 - [ ] The shipped hook's denial message is updated to name the real override path instead of telling the reader to edit the registry
 - [ ] `decideCanonGuard` remains pure and side-effect-free: evaluating it twice returns the same answer and consumes nothing. The atomic claim lives in the wrapper
 - [ ] The bypass ledger is hook-registered, so a raw `Write` to `.compose/canon-overrides.jsonl` is denied
+- [ ] Governance paths (bypass ledger, its attest baseline, the grant directory) are `overrideEligible: false` — a grant **for** them is rejected, so the ledger cannot authorize rewriting itself
+- [ ] A hand-written token file in `.compose/data/canon-grants/` with no corresponding ledger row is not consumable
 - [ ] An in-place edit of an earlier ledger row is detected by the append-only integrity check; a legitimate append is not
 - [ ] Two concurrent consumers of one token: exactly one write is allowed and one is denied (the `rename` claim, tested with real concurrency rather than a mocked lock)
 
@@ -192,4 +228,18 @@ Four findings, all confirmed against the code and folded above.
 
 One further error was caught by self-review before this gate and is recorded in place above: the omission of the override's self-service property, and its consequence for COMP-CANON-ATTEST (a bare grant must not authorize re-attestation).
 
-**Gate status: round 1 folded, not yet re-run.** All four findings had concrete fixes and none reopened a scope question, so this is a normal second round rather than a blocker.
+**Gate status: round 1 folded.** All four findings had concrete fixes and none reopened a scope question.
+
+## Gate round 2 — Codex `sol/xhigh`, 2026-07-25
+
+Round-1 verification: the rename-claim fix **holds**, the purity split **holds**, the enforcement-point partition **holds** for excluding ship-only paths but newly made the ledger recursively grantable, and the ledger-durability fix **does not yet hold**.
+
+| # | Finding | Verdict | Where folded |
+|---|---|---|---|
+| 1 | **[High]** Tokens are unregistered ordinary files; the classifier allows any path with no hook entry (`canon-guard.js:121`), so the runtime can write a token and consume it with no ledger row — breaking "a token cannot exist without its ledger entry" | **CONFIRMED** | Grant directory joins the governance class; ceiling section |
+| 2 | **[High]** The ledger can grant an override for itself — `matchEntry` has no override-eligibility concept, so hook-registered and grantable are the same set | **CONFIRMED** | `overrideEligible: false` governance class |
+| 3 | **[High]** `{length, prefix_hash}` has no named root of trust and no enforcement point; pre-push checks judgment canon only | **CONFIRMED** — a real spec gap, not a ceiling issue | Baseline at `.compose/canon-overrides-attest.json`, evolution protocol, `guard verify` + pre-push changes named |
+| 4 | **[Medium]** Gitignored ≠ un-committable, and mtime TTL revives a committed token on clone; one criterion still named the abandoned singular grant file | **CONFIRMED** | Immutable `issued_at`/`expires_at`; tracked-token rejection; criterion corrected |
+| 5 | **[Medium]** Decision 4 requires writer-stamped `actor` provenance; this design dropped it | **CONFIRMED** | Row schema + `actor` criterion restored |
+
+**Gate status: NOT CLEAN, and the reason is structural rather than a missing patch.** Findings 1–3 are one problem seen three times — governance state protected by the runtime it governs. Each fix relocates it upward. See *The in-workspace ceiling*: the fixes are worth building, but the guarantee they support is Claude-runtime-scoped, and no further round of patching changes that. **This needs a scope decision, not a round 3.**
