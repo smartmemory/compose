@@ -1,0 +1,11 @@
+{
+  "code": "COMP-UPDATE-NUDGE",
+  "description": "**Tell the user they're behind — never update in place.** `compose update` already does the whole job (install-style detection, reinstall/ff-pull, skill refresh, state migration, `healStratumWiring`, MCP-restart warning), but nothing tells you to run it: you learn you're behind only if you happen to run `compose doctor`. A second gap opened when compose 0.3.7 moved stratum from an exact pin to `^0.3.3` — npm won't re-resolve a caret unless something triggers an install, so \"compose is current\" no longer implies \"stratum is current\" and a compose-only check calls that state healthy. This slice generalizes `lib/version-check.js` to any package, reads the RESOLVED stratum version from `node_modules` (not the declared range — the range is what drifts), and prints ONE line at three entry points (`init`, `doctor`, `build`/`plan`) naming whichever is behind. Silent when current or on any failure. Deliberately never self-updates: `bin/compose.js` + `lib/**` hold 109 lazy `await import()` sites, so an in-place npm reinstall over a running process lazily loads NEW modules into an OLD graph — mixed-version code in one process, with the long-lived MCP server most exposed. Safe auto-update needs a versioned install (COMP-UPDATE-VERSIONED-INSTALL), not a timing guardrail.",
+  "status": "PLANNED",
+  "phase": "Distribution",
+  "created": "2026-07-25",
+  "updated": "2026-07-25",
+  "complexity": "S",
+  "position": 1,
+  "impact": "medium"
+}

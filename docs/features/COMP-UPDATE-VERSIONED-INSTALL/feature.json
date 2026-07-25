@@ -1,0 +1,11 @@
+{
+  "code": "COMP-UPDATE-VERSIONED-INSTALL",
+  "description": "**Make auto-update safe by construction, not by timing.** Compose cannot update itself in place: `bin/compose.js` + `lib/**` hold 109 lazy `await import()` sites, so an `npm install -g @latest` over a running process leaves it importing NEW modules into an OLD module graph — mixed-version code inside one process, worse than stale code and undebuggable from outside, with the long-lived MCP server most exposed. No timing guardrail fixes it, because a CLI invocation cannot know what else is running. The approach worth copying is Claude Code's native install (verified 2026-07-25): versions side by side under `versions/<v>` with a symlink flip to activate, last 3 retained, so nothing a running process depends on is ever overwritten and the next launch picks up the new build. Adopting it means compose stops being a plain npm global: version-directory layout, launcher shim, migration for every existing npm/git install, retention + rollback policy, and version-scoped paths interacting with `healStratumWiring`'s `.mcp.json` entries. Stratum rides along inside the versioned tree, incidentally fixing caret drift. Filed rather than built — COMP-UPDATE-NUDGE ships the notify-only slice first.",
+  "status": "PLANNED",
+  "phase": "Distribution",
+  "created": "2026-07-25",
+  "updated": "2026-07-25",
+  "complexity": "L",
+  "position": 2,
+  "impact": "medium"
+}
