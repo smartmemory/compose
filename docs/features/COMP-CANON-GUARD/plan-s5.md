@@ -178,9 +178,14 @@ test('stampRecord updates only its own entry (does not re-bless a sibling)', () 
 **Interfaces:**
 - Consumes: `stampRecord` (Task 1), `verifyJudgmentCanon` (Task 2), `STAMP_SITES`/`NO_STAMP_SITES` (Task 0).
 
-> **Code is Task-0-gated.** Exact edits are written after Task 0 maps the sites. Requirement: after ANY legit record mutation, `stampRecord` runs for the touched record within the same durability boundary (so a crash between record-write and stamp does not leave a false-drift — stamp inside the same atomic step or compensating wrapper). `regenerateProjections` / `getJudgmentState` MUST NOT stamp.
+> **Code is Task-0-gated.** Exact edits are written after Task 0 maps the sites. Requirement: after ANY legit record mutation, the manifest is synced for the touched records within the same durability boundary (so a crash between record-write and sync does not leave a false-drift). `regenerateProjections` MUST NOT sync.
+>
+> **CORRECTED (Task 0 + Task 3 review, 2026-07-24):** two statements in this task's original text were wrong.
+> 1. **`getJudgmentState` is NOT a pure read.** It calls `replayIntentsLocked` at its head, so when a pending intent exists it publishes it and legitimately mutates records — and therefore MUST sync. The invariant is narrower than "a read never stamps": the *projection/aggregation* half must never sync, while the *replay* half must. Asserting "getJudgmentState never changes the manifest" would fail a correct implementation.
+> 2. **Per-site `stampRecord` is not the strategy.** `UndoLog.restore` compensation bypasses the store's write primitive, so the exhaustive boundary is the three mutation orchestrators, synced via `syncManifest(cwd, undo.touchedPaths())` on a final-state basis (exists → stamp, gone → remove). See `s5-mutation-topology.md` "Recommended stamping strategy".
+> 3. The topology enumeration covers `lib/judgment-writer.js` **and** `bin/judgment-import.js` — the importer was missed in the first pass and establishes a trust-on-first-use baseline for promoted records.
 
-- [ ] **Step 1: Write failing integration tests** — for EACH legit op (create, amend, joint_add, transition, pending-intent persist, intent publish, replay, person_write, situation_write, goal_write): run the op on a fixture, then assert `verifyJudgmentCanon(cwd).ok === true` (no false "forged" verdict). Plus: assert `getJudgmentState` does NOT change `.attest.json` mtime/content.
+- [ ] **Step 1: Write failing integration tests** — for EACH legit op (create, amend, joint_add, transition, pending-intent persist, intent publish, replay, person_write, situation_write, goal_write): run the op on a fixture, then assert `verifyJudgmentCanon(cwd).ok === true` (no false "forged" verdict). Plus `getJudgmentState` in BOTH cases: with no pending intents it must not launder a pre-existing raw record edit (the edit stays `modified` drift); with a pending intent it publishes and the manifest legitimately changes, leaving verify GREEN.
 - [ ] **Step 2: Run, verify fail** (ops don't stamp yet → verify flags them as drift).
 - [ ] **Step 3: Implement** — add `stampRecord` at each `STAMP_SITES` entry; confirm no stamp on read/regeneration paths.
 - [ ] **Step 4: Run, verify pass. Then run the FULL suite** (`npm test`) — the writer is load-bearing.

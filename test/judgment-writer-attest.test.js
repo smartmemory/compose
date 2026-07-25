@@ -102,6 +102,32 @@ function goalCutArgs() {
   };
 }
 
+const MIGRATION_JOINT_SLUGS = [
+  'horizon',
+  'success-criteria',
+  'commercial-intent',
+];
+
+async function seedLegacyGoal(cwd) {
+  for (const slug of MIGRATION_JOINT_SLUGS) {
+    await judgmentJointAdd(cwd, jointArgs(slug));
+  }
+  await judgmentPositionCreate(cwd, {
+    slug: 'objective',
+    claims: [{
+      id: 'c1',
+      text: 'Build Compose into a system that decides what to build well.',
+      grounding: 'ASSERT',
+      elicitation: {
+        asked: 'What are we optimizing for?',
+        answered_at: '2026-07-20T12:00:00Z',
+        answer_ref: 'import:docs/judgment/OBJECTIVE.md',
+      },
+    }],
+    conviction: { level: 'low', source: 'inferred' },
+  });
+}
+
 async function assertCanonClean(cwd, label) {
   const verification = await verifyJudgmentCanon(cwd);
   assert.equal(
@@ -139,6 +165,17 @@ test('syncManifest accepts absolute and relative record paths and ignores projec
   rmSync(recordPath);
   syncManifest(cwd, ['docs/judgment/records/joints/sync-target.json']);
   assert.deepEqual(readManifest(cwd), {});
+});
+
+test('syncManifest rejects a non-absolute workspace root', () => {
+  assert.throws(
+    () => syncManifest('repo', ['docs/judgment/records/joints/sync-target.json']),
+    (error) => (
+      error instanceof TypeError
+      && error.code === 'JUDGMENT_ATTEST_CWD_ABSOLUTE'
+      && /cwd must be an absolute workspace path/.test(error.message)
+    ),
+  );
 });
 
 describe('legitimate writer operations synchronize record attestation', () => {
@@ -189,8 +226,21 @@ describe('legitimate writer operations synchronize record attestation', () => {
       }),
     },
     {
-      name: 'judgment_goal_write',
+      name: 'judgment_goal_write cut',
       run: (cwd) => judgmentGoalWrite(cwd, goalCutArgs()),
+    },
+    {
+      name: 'judgment_goal_write migrate',
+      run: async (cwd) => {
+        await seedLegacyGoal(cwd);
+        const result = await judgmentGoalWrite(cwd, { op: 'migrate' });
+        assert.equal(result.status, 'migrated');
+
+        const store = new RecordsStore(cwd);
+        assert.ok(store.readGoalVersion(1));
+        assert.ok(store.readPositionRevision('objective', 2));
+        assert.ok(store.readGoalState());
+      },
     },
     {
       name: 'judgment_ledger_append',
@@ -202,6 +252,41 @@ describe('legitimate writer operations synchronize record attestation', () => {
           body: 'The ledger durability boundary updates its attestation.',
           anchor: 'joint:ledger-anchor',
         });
+      },
+    },
+    {
+      name: 'judgment_ledger_append prediction create and overwrite',
+      run: async (cwd) => {
+        const created = await judgmentLedgerAppend(cwd, {
+          kind: 'open',
+          title: 'Construct prediction recorded',
+          disposition: 'CONSTRUCT',
+          refs: ['construct:manifest-sync'],
+          prediction: {
+            text: 'The manifest remains synchronized.',
+            outcome_criteria: 'Verification reports no record drift.',
+          },
+        });
+        assert.ok(created.prediction_id);
+        await assertCanonClean(cwd, 'ledger prediction creation');
+
+        const store = new RecordsStore(cwd);
+        const before = readFileSync(store._predictionPath(created.prediction_id), 'utf8');
+        const graded = await judgmentLedgerAppend(cwd, {
+          kind: 'postmortem',
+          title: 'Grade manifest synchronization prediction',
+          trigger: 'prediction-due',
+          recall_verdict: 'NAMED',
+          attribution: 'Manifest verification result',
+          prediction_ref: created.prediction_id,
+          prediction_grade: 'right',
+        });
+        assert.equal(graded.graded, created.prediction_id);
+        assert.notEqual(
+          readFileSync(store._predictionPath(created.prediction_id), 'utf8'),
+          before,
+        );
+        assert.equal(store.readPrediction(created.prediction_id).status, 'graded');
       },
     },
   ];
@@ -226,6 +311,19 @@ test('compensation synchronizes the manifest to the restored record state', asyn
   const personPath = store._personPath('rollback-record');
   const before = readFileSync(personPath, 'utf8');
 
+  // A prior legitimate incarnation makes the manifest entry load-bearing.
+  // Removing it raw lets the failing create make a NEW file durable; rollback
+  // deletes that file, and only catch-side sync can drop the now-stale key.
+  await judgmentPersonWrite(cwd, {
+    op: 'create',
+    slug: 'rollback-created',
+    display_name: 'Rollback Created',
+  });
+  const createdPath = store._personPath('rollback-created');
+  const createdRelPath = 'docs/judgment/records/people/rollback-created.json';
+  assert.ok(readManifest(cwd)[createdRelPath]);
+  rmSync(createdPath);
+
   const obstruction = join(cwd, 'docs', 'judgment', 'REGISTER.md');
   rmSync(obstruction);
   mkdirSync(obstruction);
@@ -242,19 +340,42 @@ test('compensation synchronizes the manifest to the restored record state', asyn
   );
   assert.equal(readFileSync(personPath, 'utf8'), before);
 
+  await assert.rejects(
+    judgmentPersonWrite(cwd, {
+      op: 'create',
+      slug: 'rollback-created',
+      display_name: 'Rollback Created Again',
+    }),
+    (error) => error.code === 'JUDGMENT_PARTIAL_WRITE',
+  );
+  assert.equal(existsSync(createdPath), false);
+
   rmSync(obstruction, { recursive: true });
   regenerateProjections(cwd);
   await assertCanonClean(cwd, 'compensated person write');
 });
 
-test('getJudgmentState without pending intents leaves the manifest byte-identical', async () => {
+test('getJudgmentState without pending intents does not launder raw record drift', async () => {
   const cwd = freshCwd();
   await judgmentPositionCreate(cwd, positionArgs('read-only-state'));
-  const before = readFileSync(manifestPath(cwd), 'utf8');
+  const recordRelPath = 'docs/judgment/records/positions/read-only-state/r1.json';
+  const recordPath = join(cwd, ...recordRelPath.split('/'));
+  const record = JSON.parse(readFileSync(recordPath, 'utf8'));
+  record.claims[0].text = 'Raw edit that a read must not attest.';
+  writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`);
+
+  const before = await verifyJudgmentCanon(cwd);
+  assert.ok(before.recordDrift.some(
+    (entry) => entry.kind === 'modified' && entry.path === recordRelPath,
+  ));
 
   await getJudgmentState(cwd);
 
-  assert.equal(readFileSync(manifestPath(cwd), 'utf8'), before);
+  const after = await verifyJudgmentCanon(cwd);
+  assert.equal(after.ok, false);
+  assert.ok(after.recordDrift.some(
+    (entry) => entry.kind === 'modified' && entry.path === recordRelPath,
+  ));
 });
 
 test('getJudgmentState publishes a pending intent and leaves verification green', async () => {

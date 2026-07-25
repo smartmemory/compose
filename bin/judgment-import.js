@@ -29,6 +29,10 @@ import {
   judgmentJointAdd,
   judgmentLedgerAppend,
 } from '../lib/judgment-writer.js';
+import {
+  computeRecordHashes,
+  writeManifest,
+} from '../lib/judgment-attest.js';
 import { getJudgmentValidator } from '../lib/judgment/schema.js';
 
 const METHODS = ['EXT', 'INT', 'CONSTRUCT', 'ASSERT', 'STRADDLE'];
@@ -538,6 +542,9 @@ export async function runJudgmentImport(cwd, { dryRun = false } = {}) {
     cpSync(join(staging, 'docs', 'judgment', 'records'), tmpDst, { recursive: true });
     rename(tmpDst, dst);
     regenerateProjections(cwd);
+    // Trust-on-first-use baseline for the promoted TARGET records. Never use
+    // the staging manifest here: its workspace paths are disposable.
+    writeManifest(cwd, computeRecordHashes(cwd));
   }
 
   return {

@@ -1,10 +1,12 @@
 # COMP-CANON-GUARD S5 — record-mutation durability topology (Task 0 findings)
 
 **Status:** DISCOVERY complete. Gates Task 3 (manifest stamping). No production code.
-**Method:** Codex sol/high read-only trace of `lib/judgment-writer.js` (3363 lines) + `lib/judgment/store/records.js`, controller-verified at the load-bearing sites.
+**Method:** Codex sol/high read-only trace of `lib/judgment-writer.js` (3363 lines) + `lib/judgment/store/records.js` + the one-time cutover in `bin/judgment-import.js`, controller-verified at the load-bearing sites.
 **Purpose:** enumerate every path that makes a judgment RECORD durable (a *stamp site*) and every regeneration/read path that must NEVER stamp, so Task 3 keeps `.attest.json` consistent without (a) false "drift" verdicts on legit ops or (b) laundering raw edits.
 
 A "record" = any file under `docs/judgment/records/**` (INCLUDING `ledger.jsonl` and `intents/*.json`), EXCLUDING `.attest.json`. Projections (`docs/judgment/{LEDGER,OBJECTIVE,REGISTER,SITUATION,index}.md`, `people/*.md`, `positions/*.md`) are NOT records — they are covered by the projection-roundtrip tier, not the manifest.
+
+This authoritative enumeration covers BOTH the ordinary writer and the importer. The writer owns ongoing mutations; the importer owns the one-time trust-on-first-use cutover baseline.
 
 ---
 
@@ -26,7 +28,7 @@ So the exhaustive boundary is NOT the store primitive alone — it is **the thre
 
 ## STAMP_SITES (records that become durable)
 
-All of the below run under the judgment lock (see LOCK) inside one of three orchestrators. Grouped by orchestrator; `file:line` is the write's origin.
+Writer sites below run under the judgment lock (see LOCK) inside one of three orchestrators. The importer is a separate one-time cutover path. Grouped by mutation owner; `file:line` is the write's origin.
 
 ### A. `commitWithProjections` window (`judgment-writer.js:207-220`) — mutation callback + compensation
 - **Chain appends/replacements** via `_appendChainRecord` / `_replaceChainRecord` (`records.js:75-220`):
@@ -51,6 +53,9 @@ All of the below run under the judgment lock (see LOCK) inside one of three orch
 
 ### D. Reached from BOTH writes and reads
 - **`replayIntentsLocked`** (`writer:898-921`) feeds pending intents through the publication/refusal paths above. It runs at the head of every `runOp` AND at the head of `getJudgmentState` (`writer:3308`). **Therefore a nominal read (`getJudgmentState`) legitimately mutates records when pending intents exist** — and MUST stamp. (See correction to Task 3 below.)
+
+### E. One-time importer cutover (`bin/judgment-import.js`)
+- **Target records promotion** → atomically renames the fully staged `docs/judgment/records/` tree into the target workspace, regenerates target projections, then writes the target `.compose/judgment-attest.json` from `computeRecordHashes(target)`. This is the documented trust-on-first-use baseline for exactly the promoted records. Dry-run and staging regeneration do not stamp the target.
 
 ---
 
