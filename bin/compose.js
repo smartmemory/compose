@@ -127,7 +127,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  fix       Run a bug through the headless bug-fix lifecycle')
   console.log('  gsd       Per-task fresh-context dispatch from existing blueprint+Boundary Map')
   console.log('  pipeline  View and edit the build pipeline')
-  console.log('  roadmap            Show roadmap status and next buildable features')
+  console.log('  roadmap            Show roadmapUse: install | uninstall | status | init | verify [--fix]and next buildable features')
   console.log('  roadmap generate   Regenerate ROADMAP.md from feature.json files')
   console.log('  roadmap migrate    Extract ROADMAP.md entries into feature.json files')
   console.log('  roadmap check      Verify feature.json and ROADMAP.md are in sync')
@@ -147,7 +147,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  sync      Re-sync global skills from this install (alias of setup)')
   console.log('  update    Pull latest compose, reinstall deps, refresh global skill')
   console.log('  doctor    Check external skill dependencies')
-  console.log('  guard     Manage the canon write-guard PreToolUse hook (install|uninstall|status)')
+  console.log('  guard     Manage the canon guard and drift detection (install|uninstall|status|init|verify [--fix])')
   console.log('  --version Print compose version, git SHA, and install root')
   process.exit(0)
 }
@@ -1901,7 +1901,7 @@ if (cmd === 'hooks') {
 }
 
 if (cmd === 'guard') {
-  // compose guard {install,uninstall,status} — COMP-CANON-GUARD S4.
+  // compose guard {install,uninstall,status,verify} — COMP-CANON-GUARD S4/S5.
   // Manages the write-time PreToolUse hook registration in .claude/settings.json.
   // Scoped to compose's own checkout (dogfooding): the hook script uses a
   // relative import into lib/, so it only works where .claude/ and lib/ are
@@ -1929,6 +1929,137 @@ if (cmd === 'guard') {
   function writeSettings(obj) {
     mkSync(claudeDir, { recursive: true })
     wfSync(settingsPath, JSON.stringify(obj, null, 2) + '\n')
+  }
+
+  if (sub === 'init') {
+    // Establish the first record baseline (trust-on-first-use). This exists
+    // BECAUSE `verify --fix` correctly refuses to stamp records: without a
+    // separate, deliberate bootstrap there would be no way to create the very
+    // first manifest, and drift detection would report every record as `added`
+    // forever. Kept distinct so the one-time act of trusting the current records
+    // is explicit and auditable rather than a side effect of a repair flag.
+    // Reject unrecognised args rather than silently ignoring them: `init` WRITES
+    // a baseline, so a mistyped or unsupported scope flag must never quietly
+    // baseline the wrong workspace.
+    const initExtra = args.slice(1).filter((a) => a !== '--cwd' && !a.startsWith('--cwd='))
+    if (args.slice(1).length > 0) {
+      console.error('Usage: compose guard init')
+      console.error('`guard init` baselines the workspace it is run IN — cd there instead of passing a scope flag.')
+      if (initExtra.length !== args.slice(1).length) {
+        console.error('(--cwd is not supported here: it would write the baseline to a different repo than the one you named.)')
+      }
+      process.exit(1)
+    }
+
+    const { root: cwd } = resolveCwdWithWorkspace(args)
+    const { computeRecordHashes, writeManifest, readManifest, recordFileSet } =
+      await import('../lib/judgment-attest.js')
+
+    if (readManifest(cwd) !== null) {
+      console.error('A judgment record baseline already exists.')
+      console.error('`guard init` will not overwrite it — that would launder any raw record edit.')
+      console.error('Use `compose guard verify --fix` for projection drift, or the judgment_* tools to change records.')
+      process.exit(1)
+    }
+
+    const records = recordFileSet(cwd)
+    if (records.length === 0) {
+      console.log('No judgment records found — nothing to baseline.')
+      process.exit(0)
+    }
+
+    writeManifest(cwd, computeRecordHashes(cwd))
+    console.log(`Baselined ${records.length} judgment record${records.length === 1 ? '' : 's'}.`)
+    console.log('These records are trusted AS-IS: there is no prior attestation to verify them against.')
+    console.log('From here, drift detection reports any careless change that does not go through the judgment tools.')
+    console.log('The baseline is committed, so re-baselining shows up as a reviewable diff.')
+    process.exit(0)
+  }
+
+  if (sub === 'verify') {
+    const { root: cwd } = resolveCwdWithWorkspace(args)
+    const verifyArgs = args.slice(1)
+    const fix = verifyArgs.includes('--fix')
+    if (verifyArgs.some((arg) => arg !== '--fix') || verifyArgs.filter((arg) => arg === '--fix').length > 1) {
+      console.error('Usage: compose guard verify [--fix]')
+      process.exit(1)
+    }
+
+    const { verifyJudgmentCanon } = await import('../lib/judgment-verify.js')
+    const { regenerateProjections } = await import('../lib/judgment-gen.js')
+    const { computeRecordHashes, writeManifest } = await import('../lib/judgment-attest.js')
+
+    function formatProjectionFinding(finding) {
+      const match = /^(.*) \(([^)]+)\)$/.exec(finding)
+      return match ? `${match[1]} [${match[2]}]` : finding
+    }
+
+    function printDrift(result) {
+      console.error('Judgment canon drift detected:')
+      if (result.treeDrift.length > 0) {
+        console.error('  Tree drift (records-anchored file set):')
+        for (const finding of result.treeDrift) {
+          console.error(`    - ${finding.path} [${finding.kind}]`)
+        }
+      }
+      if (result.projectionDrift.length > 0) {
+        console.error('  Projection drift (records-anchored):')
+        for (const finding of result.projectionDrift) {
+          console.error(`    - ${formatProjectionFinding(finding)}`)
+        }
+      }
+      if (result.recordDrift.length > 0) {
+        console.error('  Record drift detection (careless changes only):')
+        for (const finding of result.recordDrift) {
+          console.error(`    - ${finding.path} [${finding.kind}]`)
+        }
+      }
+    }
+
+    let result = await verifyJudgmentCanon(cwd)
+
+    if (fix) {
+      const projectionDriftBefore = result.projectionDrift
+      if (projectionDriftBefore.length > 0) {
+        regenerateProjections(cwd)
+
+        // Refreshing an already-clean baseline is safe. If any record drift is
+        // present, do not write the manifest: doing so could bless a raw edit.
+        if (result.recordDrift.length === 0) {
+          writeManifest(cwd, computeRecordHashes(cwd))
+          console.log('Record manifest refreshed after records passed drift detection.')
+        } else {
+          console.log('Record drift was deliberately not fixed: --fix cannot bless record edits; use the judgment tools to make record changes.')
+        }
+
+        result = await verifyJudgmentCanon(cwd)
+        const remainingProjectionDrift = new Set(result.projectionDrift)
+        const repaired = projectionDriftBefore.filter((finding) => !remainingProjectionDrift.has(finding))
+        if (repaired.length > 0) {
+          console.log('Fixed projection drift:')
+          for (const finding of repaired) {
+            console.log(`  - ${formatProjectionFinding(finding)}`)
+          }
+        }
+      } else {
+        console.log('No projection drift to fix.')
+        if (result.recordDrift.length > 0) {
+          console.log('Record drift was deliberately not fixed: --fix cannot bless record edits; use the judgment tools to make record changes.')
+        }
+      }
+
+      if (result.treeDrift.length > 0) {
+        console.log('Tree drift was not fixed: --fix only regenerates derived projections.')
+      }
+    }
+
+    if (result.ok) {
+      console.log('Judgment canon drift detection passed.')
+      process.exit(0)
+    }
+
+    printDrift(result)
+    process.exit(1)
   }
 
   if (sub === 'install') {
@@ -1971,7 +2102,7 @@ if (cmd === 'guard') {
     process.exit(0)
   }
 
-  console.error(`Unknown guard subcommand: "${sub}". Use: install | uninstall | status`)
+  console.error(`Unknown guard subcommand: "${sub}". Use: install | uninstall | status | init | verify [--fix]`)
   process.exit(1)
 }
 

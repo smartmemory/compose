@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-07-25
+
+### COMP-CANON-GUARD S5 Task 4 — judgment canon drift-detection CLI
+
+`compose guard verify` now reports judgment canon drift by tree, projection,
+and record tier and exits nonzero when findings remain. Projection and tree
+checks are records-anchored; record hashes detect careless edits whose manifest
+was not also changed.
+
+`compose guard verify --fix` regenerates derived projections. It refreshes the
+record manifest only after the records already pass drift detection, so it
+cannot bless a raw record edit; modified or malformed record drift remains
+reported and the command exits nonzero.
+
+`compose guard init` establishes the first record baseline, and exists precisely
+because `--fix` refuses to stamp records: without a separate bootstrap there
+would be no way to create the initial manifest and every record would report as
+`added` forever. It baselines the workspace it is run in, trusts the current
+records as-is (there is no prior attestation to check them against, and it says
+so), and refuses to overwrite an existing baseline, since re-baselining over a
+raw edit is exactly the laundering step. It rejects a `--cwd` flag rather than
+silently writing the baseline into a different repo than the one named.
+
+Scope, stated plainly: the record tier is careless-drift detection, not
+enforcement. It catches an edit that did not also update the manifest. A
+deliberate actor who recomputes the hash, or who deletes the baseline and
+re-runs `guard init`, passes. The baseline is committed, so those acts surface as
+a reviewable diff rather than being prevented.
+
 ## 2026-07-24
 
 ### COMP-JUDGMENT-GOAL-MIGRATE S4 — the live cutover
