@@ -57,8 +57,16 @@ describe('each enforcement point consumes only its subset', () => {
   test('ship guards exactly the three legacy shapes, not judgment', () => {
     assert.deepEqual(guardedPatternIdsFor('ship').sort(), ['changelog', 'feature-json', 'roadmap']);
   });
-  test('hook guards exactly judgment, not the legacy shapes', () => {
-    assert.deepEqual(guardedPatternIdsFor('hook'), ['judgment']);
+  test('hook guards judgment and the override governance state, not the legacy shapes', () => {
+    // COMP-CANON-OVERRIDE S1 widened this set deliberately. The override's own
+    // ledger, attest baseline and grant directory are hook-guarded so the
+    // runtime cannot rewrite its own audit trail; they are additionally
+    // `overrideEligible: false` (see canon-registry-override.test.js) so the
+    // override cannot be turned on itself. The legacy ship shapes stay out.
+    assert.deepEqual(
+      guardedPatternIdsFor('hook').sort(),
+      ['judgment', 'override-attest', 'override-grants', 'override-ledger'],
+    );
   });
   test('ROADMAP.md is ship-guarded but NOT hook-guarded', () => {
     assert.equal(isGuarded('ROADMAP.md', { featuresDir: FD, point: 'ship' }), true);
