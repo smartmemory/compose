@@ -125,6 +125,81 @@ test('executeShipStep: pre-staged judgment drift hard-fails before commit', asyn
   assert.equal(commitCount(repo), before, 'drift must not create a commit');
 });
 
+// Whole-branch review, HIGH: the verifier reads the WORKING TREE while `git
+// commit` ships the INDEX. Staging a forged record and then restoring the
+// worktree copy produced a GREEN verdict and committed the forgery — proven by
+// probe before this gate existed. The drift here is invisible to
+// verifyJudgmentCanon by construction, so this test fails the moment the
+// index/worktree comparison is removed.
+test('executeShipStep: a staged canon file that differs from the worktree hard-fails', async () => {
+  const repo = makeRepo();
+  installCleanJudgmentCanon(repo);
+  const recordRel = 'docs/judgment/records/people/ada.json';
+  const record = path.join(repo, recordRel);
+  const clean = fs.readFileSync(record, 'utf8');
+
+  // Stage a forgery, then put the manifest-matching bytes back in the worktree.
+  fs.writeFileSync(record, `${JSON.stringify({
+    slug: 'ada', display_name: 'FORGED', facts: [], edges: [], open_fields: [], load_links: [],
+  })}\n`);
+  execSync(`git add -- ${recordRel}`, { cwd: repo });
+  fs.writeFileSync(record, clean);
+
+  // Precondition: the working tree alone is clean, so the verifier sees nothing.
+  const { verifyJudgmentCanon } = await import('../lib/judgment-verify.js');
+  assert.equal((await verifyJudgmentCanon(repo)).ok, true, 'worktree must verify GREEN for this test to mean anything');
+
+  const featureDir = path.join(repo, 'docs', 'features', 'CANON-STAGED');
+  fs.mkdirSync(featureDir, { recursive: true });
+  fs.writeFileSync(path.join(featureDir, 'plan.md'), '# plan\n');
+  fs.writeFileSync(path.join(repo, 'lib-staged.js'), 'export const staged = true;\n');
+
+  const before = commitCount(repo);
+  const result = await executeShipStep(
+    'CANON-STAGED',
+    repo,
+    repo,
+    { mode: 'feature', filesChanged: ['lib-staged.js'] },
+    'Must not ship staged forgery',
+    null,
+  );
+
+  assert.equal(result.outcome, 'failed');
+  assert.equal(result.error_code, 'JUDGMENT_CANON_DRIFT');
+  assert.match(result.summary, /staged-differs-from-worktree/);
+  assert.match(result.summary, /ada\.json/);
+  assert.equal(commitCount(repo), before, 'a staged forgery must not create a commit');
+});
+
+test('executeShipStep: a guarded file modified but NOT staged does not trip the staged-divergence gate', async () => {
+  const repo = makeRepo();
+  installCleanJudgmentCanon(repo);
+  // A legitimate judgment write leaves records+manifest changed in the worktree
+  // and unstaged. That is worktree drift the verifier owns — it must not be
+  // reported as staged divergence, or every legit build would blame the wrong
+  // tier. (Here the manifest is refreshed with it, so the canon stays GREEN.)
+  const record = path.join(repo, 'docs', 'judgment', 'records', 'people', 'ada.json');
+  fs.writeFileSync(record, `${JSON.stringify({
+    slug: 'ada', display_name: 'Ada Lovelace', facts: [], edges: [], open_fields: [], load_links: [],
+  })}\n`);
+  regenerateProjections(repo);
+  writeManifest(repo, computeRecordHashes(repo));
+
+  fs.writeFileSync(path.join(repo, 'lib-unstaged.js'), 'export const u = true;\n');
+  const before = commitCount(repo);
+  const result = await executeShipStep(
+    'CANON-UNSTAGED',
+    repo,
+    repo,
+    { mode: 'feature', filesChanged: ['lib-unstaged.js'] },
+    'Legit unstaged canon write',
+    null,
+  );
+
+  assert.equal(result.outcome, 'complete', result.summary);
+  assert.equal(commitCount(repo), before + 1);
+});
+
 test('executeShipStep: post-commit metadata failure does not downgrade outcome', async () => {
   const repo = makeRepo();
   const featureDir = path.join(repo, 'docs/features/META-FAIL');

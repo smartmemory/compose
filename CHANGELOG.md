@@ -2,6 +2,19 @@
 
 ## 2026-07-25
 
+### COMP-CANON-GUARD S5 whole-branch review — the ship gate verified a different tree than it committed
+
+The ship gate checked the working tree and then committed the index. Staging a
+forged judgment record and restoring the working-tree copy therefore produced a
+green verdict and committed the forgery — reproduced by probe before the fix.
+The gate now refuses to commit when any staged path under `docs/judgment/**`
+differs from the bytes it just verified. A guarded file modified but not staged
+is unaffected: it is not being committed, and working-tree drift is what the
+verifier already covers.
+
+Scope stated plainly: for a build that commits into a different repository than
+the workspace, that repository's own judgment canon is still not verified.
+
 ### COMP-CANON-GUARD S5 Task 6 — pre-push drift gate + hook version detection
 
 The pre-push hook now runs `compose guard verify` and aborts the push on

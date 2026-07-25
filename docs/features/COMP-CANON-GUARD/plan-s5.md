@@ -202,9 +202,9 @@ test('stampRecord updates only its own entry (does not re-bless a sibling)', () 
 **Interfaces:**
 - Consumes: `verifyJudgmentCanon` (Task 2), `writeManifest`/`computeRecordHashes` (Task 1), `regenerateProjections` (existing).
 
-- [ ] **Step 1: Write failing test** — `compose guard verify` in a clean fixture exits 0; after a stray-file / record-tamper, exits 1 and prints the drift. `--fix` regenerates projections and re-stamps the manifest for a legit desync, but a raw RECORD edit still fails after `--fix` (R1 — `--fix` never blesses a record edit).
+- [ ] **Step 1: Write failing test** — `compose guard verify` in a clean fixture exits 0; after a stray-file / record-tamper, exits 1 and prints the drift. `--fix` regenerates projections only, and a raw RECORD edit still fails after `--fix` (R1 — `--fix` never blesses a record edit). **CORRECTED AS BUILT:** the "re-stamps the manifest for a legit desync" clause was removed in the Task 4 review — `--fix` never writes the record manifest at all, because `verifyJudgmentCanon` releases the judgment lock before returning, so any re-stamp would run on a stale verdict and could launder an edit that landed in between.
 - [ ] **Step 2: Run, verify fail.**
-- [ ] **Step 3: Implement** the `verify` subcommand: run `verifyJudgmentCanon`; on drift print each `{path, kind}` and exit 1; `--fix` = `regenerateProjections(cwd)` (projections only) + re-stamp manifest from CURRENT records, but explicitly documented/tested to NOT resolve record `modified` drift (report it, exit 1). All output says "drift", never "enforcement".
+- [ ] **Step 3: Implement** the `verify` subcommand: run `verifyJudgmentCanon`; on drift print each `{path, kind}` and exit 1; `--fix` = `regenerateProjections(cwd)` (projections only), explicitly documented/tested to NOT resolve record `modified` drift (report it, exit 1). All output says "drift", never "enforcement". **CORRECTED AS BUILT:** no manifest re-stamp — see Step 1. Baselining is `compose guard init` only.
 - [ ] **Step 4: Run, verify pass.**
 - [ ] **Step 5: Codex gate, then commit.**
 
@@ -241,13 +241,13 @@ test('stampRecord updates only its own entry (does not re-bless a sibling)', () 
 - [ ] **Step 2: Run, verify fail.**
 - [ ] **Step 3: Implement** — bump a `HOOK_VERSION` baked into the template + a marker; `hooks-status.js` compares the baked version to the expected and reports stale on mismatch. Add the verify gate to the template (hard-fail on judgment drift; place it OUTSIDE the docs-only test-skip so judgment-doc pushes are always checked; note `--no-verify` bypass in a comment).
 - [ ] **Step 4: Run, verify pass. Full suite.**
-- [ ] **Step 5: Codex gate, then commit. Then `compose hooks install --pre-push` to roll out locally, and `compose guard verify --fix` once to write the initial baseline manifest (trust-on-first-use).**
+- [ ] **Step 5: Codex gate, then commit. Then `compose hooks install --pre-push` to roll out locally, and `compose guard init` once to write the initial baseline manifest (trust-on-first-use).** **CORRECTED AS BUILT:** `guard verify --fix` cannot do this — it refuses to write the record manifest, which is exactly why `guard init` exists.
 
 ---
 
 ## Bootstrap note (trust-on-first-use)
 
-The first `.attest.json` is written by stamping the CURRENT records as the baseline (they are trusted as-is — there is no prior attestation to verify against). This is the honest starting point and is stated in the spec's honest-limits. Do it once via `compose guard verify --fix` (or a dedicated `guard init`) after Task 6.
+The first `.attest.json` is written by stamping the CURRENT records as the baseline (they are trusted as-is — there is no prior attestation to verify against). This is the honest starting point and is stated in the spec's honest-limits. Do it once via **`compose guard init`** after Task 6. **CORRECTED AS BUILT:** `guard verify --fix` is NOT an alternative — it refuses to write the record manifest, so following the original instruction would leave the canon uninitialized forever with every record reported as `added`.
 
 ## Self-Review (done)
 
