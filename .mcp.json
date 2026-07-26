@@ -3,7 +3,7 @@
     "stratum": {
       "command": "node",
       "args": [
-        "/Users/ruze/reg/my/forge/stratum/ts/src/mcp/bin.mjs"
+        "../stratum/ts/src/mcp/bin.mjs"
       ]
     },
     "compose": {
@@ -16,7 +16,7 @@
       "command": "uv",
       "args": [
         "--directory",
-        "/Users/ruze/reg/my/SmartMemory/smart-memory-service",
+        "../../SmartMemory/smart-memory-service",
         "run",
         "smartmemory-mcp"
       ],
