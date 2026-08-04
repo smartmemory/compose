@@ -768,16 +768,57 @@ describe('fluid seam — factory', () => {
     await assert.rejects(() => fluidProviderFor(root), FluidConfigError);
   });
 
-  it('fails loud when smartmemory is configured but not yet implemented', async () => {
+  // COMP-FOH S02 replaced the "not yet implemented" stub with real construction.
+  // What must still fail loud is an INCOMPLETE smartmemory config: a silent
+  // downgrade to the floor would present an intelligence-free system as a
+  // working one, which is the same hazard the stub was guarding.
+  it('fails loud when smartmemory is selected without a top-level smartmemory block', async () => {
     writeFileSync(join(root, '.compose', 'compose.json'), JSON.stringify({ fluid: { provider: 'smartmemory' } }));
     await assert.rejects(
       () => fluidProviderFor(root),
       (err) => {
         assert.ok(err instanceof FluidConfigError);
-        assert.match(err.message, /not yet implemented/);
+        assert.match(err.message, /top-level "smartmemory" config block/);
         return true;
       }
     );
+  });
+
+  it('fails loud, naming workspaceId, when the endpoint is configured but the workspace is not', async () => {
+    writeFileSync(join(root, '.compose', 'compose.json'), JSON.stringify({
+      fluid: { provider: 'smartmemory' },
+      smartmemory: { baseUrl: 'http://localhost:9999', apiKeyEnv: 'FLUID_FACTORY_TEST_KEY' },
+    }));
+    process.env.FLUID_FACTORY_TEST_KEY = 'k';
+    try {
+      await assert.rejects(
+        () => fluidProviderFor(root),
+        (err) => {
+          assert.ok(err instanceof FluidConfigError);
+          assert.match(err.message, /fluid\.smartmemory\.workspaceId/);
+          return true;
+        }
+      );
+    } finally {
+      delete process.env.FLUID_FACTORY_TEST_KEY;
+    }
+  });
+
+  it('constructs the smartmemory provider when fully configured, with no network call', async () => {
+    writeFileSync(join(root, '.compose', 'compose.json'), JSON.stringify({
+      fluid: { provider: 'smartmemory', smartmemory: { workspaceId: 'ws-abc' } },
+      smartmemory: { baseUrl: 'http://localhost:9999', apiKeyEnv: 'FLUID_FACTORY_TEST_KEY' },
+    }));
+    process.env.FLUID_FACTORY_TEST_KEY = 'k';
+    try {
+      const p = await fluidProviderFor(root);
+      assert.equal(p.name(), 'smartmemory');
+      // Construction must not touch the network — the port above is closed, so
+      // a provider that probed on init would hang or throw here.
+      assert.equal(p.config.workspaceId, 'ws-abc');
+    } finally {
+      delete process.env.FLUID_FACTORY_TEST_KEY;
+    }
   });
 
   it('rejects a fluid key that is not an object', async () => {
