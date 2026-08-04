@@ -1,0 +1,24 @@
+{
+  "id": "09602971-2d80-413b-82f4-a49b9d1e56a4",
+  "handle": "CLUS-5",
+  "kind": "cluster",
+  "title": "Standalone: counter-pressure",
+  "body": "",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": null,
+  "cluster_order": 4,
+  "tags": [],
+  "source": null,
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.140Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.140Z",
+  "updated_at": "2026-08-04T21:41:34.140Z"
+}

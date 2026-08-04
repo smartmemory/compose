@@ -1,3 +1,9 @@
+<!-- GENERATED FILE — DO NOT EDIT.
+     Projection of the fluid-store idea records (COMP-PLAN-IDEA-UNIFY).
+     Edits here are overwritten on the next render. Change ideas with
+     `compose ideabox add|pri|kill|discuss|promote`, then `compose ideabox
+     render` if this file ever looks stale. -->
+
 # Ideabox
 
 **Purpose:** Capture raw ideas before they're ready for the roadmap.
@@ -7,7 +13,7 @@
 - **Status:** `NEW` | `DISCUSSING` | `PROMOTED` | `KILLED`
 - **Priority:** `P0` (promote now) | `P1` (next up) | `P2` (backlog) | `—` (untriaged)
 - **Source:** Where the idea came from
-- **Tags:** `#ux` `#core` `#distribution` `#integration` `#research` `#infra`
+- **Tags:** bare words, space-separated
 - **Umbrella:** Ideas are grouped under thematic umbrellas. The umbrella name is a working label; ideas may move between umbrellas as they're discussed. IDs are stable.
 
 ## Ideas
@@ -90,15 +96,15 @@
 **Source:** gsd-build/gsd-2
 **Idea:** GSD-2 declares per-unit-type tool surfaces in a `UnitContextManifest` (planning units cannot Write; execution units can; researchers cannot Edit). CI guards the manifest. Stratum already has per-step tool restrictions but they're per-call; lifting them to per-step-type with a CI-checked manifest is the same shape, sharper. Prevents drift like "the planner agent silently gained Edit and started writing code from a planning step."
 
-#### IDEA-17 — Delta-spec review primitive (capability-organized ADDED/MODIFIED/REMOVED)
-**Status:** NEW | **Priority:** — | **Tags:** review contracts verification provenance research-influence
-**Source:** OpenSpec (openspec.dev / Fission-AI/OpenSpec) — comparison 2026-06-07
-**Idea:** OpenSpec's signature move is the **spec delta**: a change proposal emits an interim document that marks requirement sections as `ADDED` / `MODIFIED` / `REMOVED`, organized by capability. Reviewers (human or agent) grasp a change at the *requirement* level without diffing code, and it fits existing codebases because you only describe the delta, not the whole system. Compose's review today is prose contracts + Codex lenses + roadmap-xref/graph machinery — heavier, and none of it produces a clean intent-level diff a reviewer can skim. Steal the primitive: a per-change `delta.md` (or structured artifact) with capability-keyed ADDED/MODIFIED/REMOVED requirement blocks, generated at design/blueprint time and checked at the review gate. Lighter-weight than the graph approach and directly serves the integration-review gap (`feedback_integration_review`) by making cross-feature requirement changes legible. Pairs with the parked **idea_plan_diffing** (diff artifacts across gate/iteration revisions) — delta-spec is essentially that idea applied to *requirements* rather than plans, and OpenSpec proves the shape works in practice. Sibling to IDEA-5 (Truths/Artifacts/Key Links): both replace prose contracts with grep-able structure; delta-spec covers *what changed*, TAK covers *what must be true*. Counter-note (see IDEA-15): OpenSpec's whole pitch is "no enforced gates"; adopt the delta *artifact* without adopting its no-gate philosophy — Compose's differentiation is enforced correctness, so the delta becomes gate input, not a substitute for the gate.
-
 #### IDEA-16 — Peer-interrogation fault attribution for batch builds
 **Status:** NEW | **Priority:** — | **Tags:** review fault-attribution concurrency stratum research-influence
 **Source:** POIROT (arXiv 2606.02282, 2026-06-03)
 **Idea:** When a parallel/GSD batch build fails (or before the merge queue commits), run a POIROT-style attribution pass instead of guessing: each slice-building agent (1) self-assesses its own trajectory, (2) interrogates peers' contract assumptions via structured exchange, (3) **privately** emits a binary blame vector over structural axes (which slice/step/contract/file), (4) distance-weighted aggregation picks the blamed component — a mechanically-checkable attribution, not prose. Three principles worth stealing even standalone: **private voting before aggregation** (prevents reviewer/lens herding — worth auditing whether STRAT-REV's Claude lenses + Codex leak verdicts to each other), **blame structural components not vibes**, and **the build-agents themselves audit** (complements, doesn't replace, the external Codex pass). Directly targets the known batch-build fault gap (shared build-stream, last-writer-wins, coverage-agent confusion — `project_compose_idempotency_gaps`) and the cross-feature contract mismatches per-feature reviews miss (`feedback_integration_review`). POIROT shows the layer only pays off at high complexity/fanout (a strong single model wins at low complexity), so gate it on agent-count. **Depends on** Umbrella B concurrency primitives (IDEA-11/14). BLAME benchmark (injected faults + ground-truth attribution annotations) is a template for *measuring* whether integration review catches what we claim it does.
+
+#### IDEA-17 — Delta-spec review primitive (capability-organized ADDED/MODIFIED/REMOVED)
+**Status:** NEW | **Priority:** — | **Tags:** review contracts verification provenance research-influence
+**Source:** OpenSpec (openspec.dev / Fission-AI/OpenSpec) — comparison 2026-06-07
+**Idea:** OpenSpec's signature move is the **spec delta**: a change proposal emits an interim document that marks requirement sections as `ADDED` / `MODIFIED` / `REMOVED`, organized by capability. Reviewers (human or agent) grasp a change at the *requirement* level without diffing code, and it fits existing codebases because you only describe the delta, not the whole system. Compose's review today is prose contracts + Codex lenses + roadmap-xref/graph machinery — heavier, and none of it produces a clean intent-level diff a reviewer can skim. Steal the primitive: a per-change `delta.md` (or structured artifact) with capability-keyed ADDED/MODIFIED/REMOVED requirement blocks, generated at design/blueprint time and checked at the review gate. Lighter-weight than the graph approach and directly serves the integration-review gap (`feedback_integration_review`) by making cross-feature requirement changes legible. Pairs with the parked **idea_plan_diffing** (diff artifacts across gate/iteration revisions) — delta-spec is essentially that idea applied to *requirements* rather than plans, and OpenSpec proves the shape works in practice. Sibling to IDEA-5 (Truths/Artifacts/Key Links): both replace prose contracts with grep-able structure; delta-spec covers *what changed*, TAK covers *what must be true*. Counter-note (see IDEA-15): OpenSpec's whole pitch is "no enforced gates"; adopt the delta *artifact* without adopting its no-gate philosophy — Compose's differentiation is enforced correctness, so the delta becomes gate input, not a substitute for the gate.
 
 ---
 

@@ -1,0 +1,28 @@
+{
+  "id": "d4d80c67-b93a-477a-b2c2-3f96cb57ad22",
+  "handle": "IDEA-1",
+  "kind": "idea",
+  "title": "Byte-equal readback on persisted artifacts",
+  "body": "Round-trip every JSON/text artifact (design.md, blueprint.md, plan.md, gate decisions, audit events) before allowing the next step to consume it. Reject mismatches with a typed error. Stratum builtin: `readback_matches(path)` usable in ensure clauses. Inspired by ContextGraph Reality Loop white paper (Royse, May 2026), where every persisted artifact is byte-equal-verified before it can influence the next decision. Catches partial writes, serialization regressions, and silent FS corruption before they propagate.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-1",
+  "cluster_order": 0,
+  "tags": [
+    "stratum",
+    "integrity",
+    "research-influence"
+  ],
+  "source": "RealityLoopWhitePaper",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.142Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.142Z",
+  "updated_at": "2026-08-04T21:41:34.142Z"
+}

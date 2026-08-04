@@ -1,0 +1,30 @@
+{
+  "id": "5fc25e1c-c6ba-4d32-94b4-a486d6c9666b",
+  "handle": "IDEA-16",
+  "kind": "idea",
+  "title": "Peer-interrogation fault attribution for batch builds",
+  "body": "When a parallel/GSD batch build fails (or before the merge queue commits), run a POIROT-style attribution pass instead of guessing: each slice-building agent (1) self-assesses its own trajectory, (2) interrogates peers' contract assumptions via structured exchange, (3) **privately** emits a binary blame vector over structural axes (which slice/step/contract/file), (4) distance-weighted aggregation picks the blamed component — a mechanically-checkable attribution, not prose. Three principles worth stealing even standalone: **private voting before aggregation** (prevents reviewer/lens herding — worth auditing whether STRAT-REV's Claude lenses + Codex leak verdicts to each other), **blame structural components not vibes**, and **the build-agents themselves audit** (complements, doesn't replace, the external Codex pass). Directly targets the known batch-build fault gap (shared build-stream, last-writer-wins, coverage-agent confusion — `project_compose_idempotency_gaps`) and the cross-feature contract mismatches per-feature reviews miss (`feedback_integration_review`). POIROT shows the layer only pays off at high complexity/fanout (a strong single model wins at low complexity), so gate it on agent-count. **Depends on** Umbrella B concurrency primitives (IDEA-11/14). BLAME benchmark (injected faults + ground-truth attribution annotations) is a template for *measuring* whether integration review catches what we claim it does.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-3",
+  "cluster_order": 2,
+  "tags": [
+    "review",
+    "fault-attribution",
+    "concurrency",
+    "stratum",
+    "research-influence"
+  ],
+  "source": "POIROT (arXiv 2606.02282, 2026-06-03)",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.148Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.148Z",
+  "updated_at": "2026-08-04T21:41:34.148Z"
+}

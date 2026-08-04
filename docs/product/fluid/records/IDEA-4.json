@@ -1,0 +1,28 @@
+{
+  "id": "2e64daa1-904d-4176-97c8-4811edd0db0c",
+  "handle": "IDEA-4",
+  "kind": "idea",
+  "title": "Tee-recovery for review-fix loops",
+  "body": "When a review lens or a coverage-sweep iteration ingests command output (`git diff`, `npm test`, etc.), feed the agent a compressed/filtered view by default but tee the full output to a recoverable artifact. If a later iteration's agent flags missing context (\"the truncated log doesn't show line N\"), the loop hands it the full saved output instead of re-running the command or asking the human. RTK already implements this with `tee.mode = \"failures\"` — we can either invoke RTK directly (see `COMP-RTK-INTEROP`) or implement a thin equivalent in `lib/review-lenses.js`. Cuts the \"sorry, can you give me more context\" round-trip that currently shows up in long fix loops.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-4",
+  "cluster_order": 3,
+  "tags": [
+    "review-loop",
+    "ux",
+    "research-influence"
+  ],
+  "source": "rtk-ai/rtk",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.148Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.148Z",
+  "updated_at": "2026-08-04T21:41:34.148Z"
+}

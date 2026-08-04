@@ -1,0 +1,24 @@
+{
+  "id": "94c422ab-fe2f-4ee2-8b29-8b6cdec61455",
+  "handle": "CLUS-3",
+  "kind": "cluster",
+  "title": "Umbrella C — Mechanical verification & decision provenance",
+  "body": "Compose's contracts and decisions are too prose-y. Codex review catches what it catches, but a structured-table contract with grep-able axes (Truths / Artifacts / Key Links) is mechanically checkable in ways `ensure: result.tests_pass == True` is not. Same applies to architectural decisions and tool policy — each lives in scattered free text today; lifting to structured artifacts makes them auditable.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": null,
+  "cluster_order": 2,
+  "tags": [],
+  "source": null,
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.139Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.139Z",
+  "updated_at": "2026-08-04T21:41:34.139Z"
+}

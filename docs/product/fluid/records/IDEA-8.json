@@ -1,0 +1,29 @@
+{
+  "id": "35b039d1-aaa2-4dfd-ade9-fbd9c92d6a66",
+  "handle": "IDEA-8",
+  "kind": "idea",
+  "title": "`continue.md` per-unit resume markers",
+  "body": "Each active GSD-2 slice gets an ephemeral `continue.md` resume marker. On crash, the agent re-enters by reading this file directly instead of re-deriving state from the markdown checkboxes + DB. Compose has `checkpoint.md` for hard-bug fix mode (COMP-FIX-HARD); generalizing to all in-flight Stratum steps would make `compose <verb> --resume` work for every lifecycle, not just fix mode. Slot: writer in `lib/build.js` lifecycle-loop; reader in entry-scan. **Subsumes the existing checkpoint.md mechanism** as a generalization.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-1",
+  "cluster_order": 0,
+  "tags": [
+    "crash-recovery",
+    "resumption",
+    "stratum",
+    "gsd"
+  ],
+  "source": "gsd-build/gsd-2",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.143Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.143Z",
+  "updated_at": "2026-08-04T21:41:34.143Z"
+}

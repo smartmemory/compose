@@ -1,0 +1,28 @@
+{
+  "id": "96bf95da-6044-45b9-bee2-79c6b3afa7ae",
+  "handle": "IDEA-3",
+  "kind": "idea",
+  "title": "No-silent-fallback audit",
+  "body": "Compose has multiple soft-fallback paths: stratum-mcp chunk-size error → general-purpose Agent fallback; codex unavailable → degrade; compose doctor missing dep → use fallback string; review_mode degrades when reviewer fails. Each soft fallback hides a real failure mode. Audit every fallback against \"would I rather this fail loudly?\" Convert genuine error conditions to fail-closed; keep only the fallbacks that represent legitimate degraded-but-correct operation. Pairs with IDEA-2: every kept-fallback emits a typed `Degradation` event with reason.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-1",
+  "cluster_order": 0,
+  "tags": [
+    "reliability",
+    "tech-debt",
+    "research-influence"
+  ],
+  "source": "RealityLoopWhitePaper",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.143Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.143Z",
+  "updated_at": "2026-08-04T21:41:34.143Z"
+}

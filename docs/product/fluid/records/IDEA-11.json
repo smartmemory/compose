@@ -1,0 +1,29 @@
+{
+  "id": "f6556d12-3623-4ef1-9b2d-972483a4a5e6",
+  "handle": "IDEA-11",
+  "kind": "idea",
+  "title": "Bounded multi-feature concurrency",
+  "body": "Symphony runs N tickets in parallel with isolated workspaces, queue-managed. Compose currently serializes via active-build last-writer-wins (project memory `project_compose_idempotency_gaps`). Add a build queue with bounded N (configurable per workspace), worktree-per-ticket isolation (IDEA-14), and a queue-manager that picks the next ticket when a slot frees.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-2",
+  "cluster_order": 1,
+  "tags": [
+    "concurrency",
+    "parallelism",
+    "orchestration",
+    "symphony"
+  ],
+  "source": "symphony",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.145Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.145Z",
+  "updated_at": "2026-08-04T21:41:34.145Z"
+}

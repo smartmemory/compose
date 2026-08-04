@@ -12,26 +12,16 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import {
-  readIdeabox,
-  writeIdeabox,
-  addIdea,
-  promoteIdea,
-  killIdea,
-  resurrectIdea,
-  setPriority,
-  updateIdea,
-  addDiscussion,
-} from '../lib/ideabox.js'
-import { writeFeature } from '../lib/feature-json.js'
+// The ideabox mutators are gone from this module: the write path is closed here
+// until S3b-2 wires it onto the fluid record store (see `writesMovedToCli`).
 import { IdeaboxCache } from './ideabox-cache.js'
-import { resolveIdeaboxPathFromConfig, resolveFeaturesPathFromConfig, relForDisplay } from '../lib/project-paths.js'
+import { resolveIdeaboxPathFromConfig } from '../lib/project-paths.js'
 
 /**
  * @param {object} app              — Express app
- * @param {{ getProjectRoot, getDataDir, broadcastMessage }} deps
+ * @param {{ getProjectRoot, getDataDir }} deps
  */
-export function attachIdeaboxRoutes(app, { getProjectRoot, getDataDir, broadcastMessage }) {
+export function attachIdeaboxRoutes(app, { getProjectRoot, getDataDir }) {
   // Lazily created per project root — we need to handle project switches
   let _cache = null
   let _lastProjectRoot = null
@@ -50,17 +40,6 @@ export function attachIdeaboxRoutes(app, { getProjectRoot, getDataDir, broadcast
     return _cache
   }
 
-  function getIdeaboxPath(projectRoot) {
-    const config = loadConfig(projectRoot)
-    return config?.paths?.ideabox || 'docs/product/ideabox.md'
-  }
-
-  function broadcastUpdate() {
-    if (broadcastMessage) {
-      broadcastMessage({ type: 'ideaboxUpdated', timestamp: new Date().toISOString() })
-    }
-  }
-
   // GET /api/ideabox
   app.get('/api/ideabox', (_req, res) => {
     try {
@@ -73,209 +52,40 @@ export function attachIdeaboxRoutes(app, { getProjectRoot, getDataDir, broadcast
   })
 
   // POST /api/ideabox/ideas
-  app.post('/api/ideabox/ideas', (req, res) => {
-    try {
-      const { title, description, source, tags, cluster } = req.body || {}
-      if (!title) return res.status(400).json({ error: 'title is required' })
-
-      const projectRoot = getProjectRoot()
-      const ideaboxPath = getIdeaboxPath(projectRoot)
-      const parsed = readIdeabox(projectRoot, ideaboxPath)
-      addIdea(parsed, { title, description, source, tags, cluster })
-      writeIdeabox(projectRoot, ideaboxPath, parsed)
-      getCache().invalidate()
-      broadcastUpdate()
-      // Return the newly created idea
-      const newIdea = parsed.ideas[parsed.ideas.length - 1]
-      res.status(201).json(newIdea)
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
+  /**
+   * S3b-1 (F1): the cockpit's WRITE path is closed until S3b-2 wires it onto the
+   * record store.
+   *
+   * The CLI now treats `docs/product/ideabox.md` as GENERATED output. These
+   * handlers used to rewrite that markdown directly and return 200, so leaving
+   * them live would mean an idea added or edited in the cockpit reports success,
+   * is overwritten by the next CLI render, and takes the user's text with it.
+   * `POST /ideas` was worse still: it allocated from the markdown's own counter
+   * while the record store allocates from its own, so the two mint the same
+   * IDEA-N without either knowing.
+   *
+   * Failing closed is the honest state. A visible 409 naming the working path
+   * beats a silent success that loses the write. The previous bodies are not
+   * kept behind this guard — unreachable code that looks live is how a hole gets
+   * quietly reopened, and S3b-2 rewrites these onto the provider rather than
+   * restoring them.
+   *
+   * Reads stay open: the markdown is a faithful projection of the records.
+   */
+  const writesMovedToCli = (_req, res) => res.status(409).json({
+    error:
+      'The ideabox has moved to the record store and the cockpit write path is not wired to it yet. '
+      + 'An idea saved here would be overwritten by the next render, so the write is refused rather than lost. '
+      + 'Use `compose ideabox <add|pri|kill|discuss|promote>` until this is restored.',
+    code: 'IDEABOX_WRITES_MOVED_TO_CLI',
   })
 
-  // PATCH /api/ideabox/ideas/:id
-  app.patch('/api/ideabox/ideas/:id', (req, res) => {
-    try {
-      const { id } = req.params
-      const fields = req.body || {}
-
-      const projectRoot = getProjectRoot()
-      const ideaboxPath = getIdeaboxPath(projectRoot)
-      const parsed = readIdeabox(projectRoot, ideaboxPath)
-
-      // Handle priority shortcut
-      if (fields.priority) {
-        setPriority(parsed, id, fields.priority)
-        delete fields.priority
-      }
-
-      // Reject status changes via PATCH — must use /promote or /kill endpoints
-      // to ensure proper transition logic (move to killed section, set fields, etc.)
-      if (fields.status !== undefined) {
-        return res.status(400).json({
-          error: 'Status changes must go through /promote or /kill endpoints, not PATCH'
-        })
-      }
-
-      // Handle remaining fields (no status)
-      const allowed = ['title', 'description', 'source', 'tags', 'cluster', 'mapsTo', 'effort', 'impact']
-      const safeFields = {}
-      for (const k of allowed) {
-        if (fields[k] !== undefined) safeFields[k] = fields[k]
-      }
-      // Validate enum fields
-      if (safeFields.effort !== undefined && safeFields.effort !== null && !['S', 'M', 'L'].includes(safeFields.effort)) {
-        return res.status(400).json({ error: 'effort must be S, M, L, or null' })
-      }
-      if (safeFields.impact !== undefined && safeFields.impact !== null && !['low', 'medium', 'high'].includes(safeFields.impact)) {
-        return res.status(400).json({ error: 'impact must be low, medium, high, or null' })
-      }
-      if (Object.keys(safeFields).length > 0) {
-        updateIdea(parsed, id, safeFields)
-      }
-
-      writeIdeabox(projectRoot, ideaboxPath, parsed)
-      getCache().invalidate()
-      broadcastUpdate()
-
-      // Find and return the updated idea
-      const upper = id.toUpperCase()
-      const updated = [...parsed.ideas, ...parsed.killed].find(i => i.id.toUpperCase() === upper)
-      res.json(updated || { id })
-    } catch (err) {
-      const status = err.message.includes('not found') ? 404 : 500
-      res.status(status).json({ error: err.message })
-    }
-  })
-
-  // POST /api/ideabox/ideas/:id/promote
-  app.post('/api/ideabox/ideas/:id/promote', (req, res) => {
-    try {
-      const { id } = req.params
-      const { featureCode } = req.body || {}
-
-      const projectRoot = getProjectRoot()
-      const ideaboxPath = getIdeaboxPath(projectRoot)
-      const parsed = readIdeabox(projectRoot, ideaboxPath)
-
-      // Find the idea before promoting (need title for feature folder seed)
-      const upper = id.toUpperCase()
-      const sourceIdea = parsed.ideas.find(i => i.id.toUpperCase() === upper)
-      if (!sourceIdea) {
-        return res.status(404).json({ error: `Idea not found: ${id}` })
-      }
-
-      // Resolve feature code: explicit, or derived from idea
-      let resolvedCode = featureCode
-      if (!resolvedCode) {
-        const slug = sourceIdea.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 20).replace(/-+$/, '')
-        resolvedCode = `IDEA-${sourceIdea.num}-${slug}`.toUpperCase()
-      }
-
-      // Create feature folder + feature.json (same logic as CLI promote).
-      // COMP-PATHS-EXTERNAL: resolve the ABSOLUTE features base (may be
-      // relocated outside projectRoot). Re-rooting under projectRoot would make
-      // existsSync check the wrong path and risk overwriting external canon.
-      const composeJsonPath = path.join(projectRoot, '.compose', 'compose.json')
-      let cfg = {}
-      if (fs.existsSync(composeJsonPath)) {
-        try { cfg = JSON.parse(fs.readFileSync(composeJsonPath, 'utf-8')) } catch {}
-      }
-      const featuresBase = resolveFeaturesPathFromConfig(projectRoot, cfg)  // absolute
-      const featuresDir = path.join(featuresBase, resolvedCode)
-      if (!fs.existsSync(featuresDir)) {
-        // COMP-MCP-VALIDATE-1: route through the validated writer instead of a
-        // raw fs.writeFileSync so the promoted feature.json is schema-guarded.
-        writeFeature(projectRoot, {
-          code: resolvedCode,
-          description: sourceIdea.title,
-          status: 'PLANNED',
-          promotedFrom: sourceIdea.id,
-          createdAt: new Date().toISOString(),
-        }, featuresBase)
-      }
-
-      promoteIdea(parsed, id, resolvedCode)
-      writeIdeabox(projectRoot, ideaboxPath, parsed)
-      getCache().invalidate()
-      broadcastUpdate()
-
-      const updated = parsed.ideas.find(i => i.id.toUpperCase() === upper)
-      res.json({ ...(updated || { id }), featureCode: resolvedCode, featurePath: relForDisplay(projectRoot, featuresDir) })
-    } catch (err) {
-      const status = err.message.includes('not found') ? 404 : 500
-      res.status(status).json({ error: err.message })
-    }
-  })
-
-  // POST /api/ideabox/ideas/:id/kill
-  app.post('/api/ideabox/ideas/:id/kill', (req, res) => {
-    try {
-      const { id } = req.params
-      const { reason } = req.body || {}
-
-      const projectRoot = getProjectRoot()
-      const ideaboxPath = getIdeaboxPath(projectRoot)
-      const parsed = readIdeabox(projectRoot, ideaboxPath)
-      killIdea(parsed, id, reason || '')
-      writeIdeabox(projectRoot, ideaboxPath, parsed)
-      getCache().invalidate()
-      broadcastUpdate()
-
-      const upper = id.toUpperCase()
-      const killed = parsed.killed.find(i => i.id.toUpperCase() === upper)
-      res.json(killed || { id })
-    } catch (err) {
-      const status = err.message.includes('not found') ? 404 : 500
-      res.status(status).json({ error: err.message })
-    }
-  })
-
-  // POST /api/ideabox/ideas/:id/resurrect
-  app.post('/api/ideabox/ideas/:id/resurrect', (req, res) => {
-    try {
-      const { id } = req.params
-      const projectRoot = getProjectRoot()
-      const ideaboxPath = getIdeaboxPath(projectRoot)
-      const parsed = readIdeabox(projectRoot, ideaboxPath)
-      resurrectIdea(parsed, id)
-      writeIdeabox(projectRoot, ideaboxPath, parsed)
-      getCache().invalidate()
-      broadcastUpdate()
-
-      const upper = id.toUpperCase()
-      const restored = parsed.ideas.find(i => i.id.toUpperCase() === upper)
-      res.json(restored || { id })
-    } catch (err) {
-      const status = err.message.includes('not found') ? 404 : 500
-      res.status(status).json({ error: err.message })
-    }
-  })
-
-  // POST /api/ideabox/ideas/:id/discuss
-  app.post('/api/ideabox/ideas/:id/discuss', (req, res) => {
-    try {
-      const { id } = req.params
-      const { author, text } = req.body || {}
-      if (!author) return res.status(400).json({ error: 'author is required' })
-      if (!text) return res.status(400).json({ error: 'text is required' })
-
-      const projectRoot = getProjectRoot()
-      const ideaboxPath = getIdeaboxPath(projectRoot)
-      const parsed = readIdeabox(projectRoot, ideaboxPath)
-      addDiscussion(parsed, id, author, text)
-      writeIdeabox(projectRoot, ideaboxPath, parsed)
-      getCache().invalidate()
-      broadcastUpdate()
-
-      const upper = id.toUpperCase()
-      const updated = [...parsed.ideas, ...parsed.killed].find(i => i.id.toUpperCase() === upper)
-      res.status(201).json(updated || { id })
-    } catch (err) {
-      const status = err.message.includes('not found') ? 404 : 500
-      res.status(status).json({ error: err.message })
-    }
-  })
+  app.post('/api/ideabox/ideas', writesMovedToCli)
+  app.patch('/api/ideabox/ideas/:id', writesMovedToCli)
+  app.post('/api/ideabox/ideas/:id/promote', writesMovedToCli)
+  app.post('/api/ideabox/ideas/:id/kill', writesMovedToCli)
+  app.post('/api/ideabox/ideas/:id/resurrect', writesMovedToCli)
+  app.post('/api/ideabox/ideas/:id/discuss', writesMovedToCli)
 
   // DELETE /api/ideabox/ideas/:id — not allowed
   app.delete('/api/ideabox/ideas/:id', (_req, res) => {

@@ -1,0 +1,24 @@
+{
+  "id": "3e58eacf-6ad9-411f-861d-4d20e820660a",
+  "handle": "CLUS-2",
+  "kind": "cluster",
+  "title": "Umbrella B — Multi-feature concurrency",
+  "body": "Compose is invocation-scoped and serializes via active-build last-writer-wins. To safely run more than one feature at a time, three primitives need to land together: bounded concurrency control, isolated workspaces, and (optionally) a daemon to drive it autonomously. None of these are sound in isolation — daemon without bounded concurrency burns budget; concurrency without worktrees corrupts state. Treat as a single feature when scoped. **Depends on COMP-WORKSPACE-ID** for workspace identity.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": null,
+  "cluster_order": 1,
+  "tags": [],
+  "source": null,
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.138Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.138Z",
+  "updated_at": "2026-08-04T21:41:34.138Z"
+}

@@ -1,0 +1,29 @@
+{
+  "id": "d66bffb3-ef76-488a-be90-150b132263f9",
+  "handle": "IDEA-12",
+  "kind": "idea",
+  "title": "Long-running daemon mode",
+  "body": "Symphony runs as a long-running daemon polling a board, dispatching autonomously. Compose is invocation-scoped — every `/compose` is a fresh agent. Add `compose daemon` mode that polls vision-state for IN_PROGRESS items the user has explicitly tagged `auto:true`, dispatches Stratum runs, and surfaces results when complete. **Requires** IDEA-11 (bounded concurrency) + IDEA-13 (reconciliation, so user-cancel works) + hard budget caps (already filed as `idea_budget_ceilings`).",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-2",
+  "cluster_order": 1,
+  "tags": [
+    "daemon",
+    "autonomy",
+    "distribution",
+    "symphony"
+  ],
+  "source": "symphony",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.145Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.145Z",
+  "updated_at": "2026-08-04T21:41:34.145Z"
+}

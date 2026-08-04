@@ -1,0 +1,30 @@
+{
+  "id": "60b7f572-5db8-4c6d-b940-5c92086c68a2",
+  "handle": "IDEA-17",
+  "kind": "idea",
+  "title": "Delta-spec review primitive (capability-organized ADDED/MODIFIED/REMOVED)",
+  "body": "OpenSpec's signature move is the **spec delta**: a change proposal emits an interim document that marks requirement sections as `ADDED` / `MODIFIED` / `REMOVED`, organized by capability. Reviewers (human or agent) grasp a change at the *requirement* level without diffing code, and it fits existing codebases because you only describe the delta, not the whole system. Compose's review today is prose contracts + Codex lenses + roadmap-xref/graph machinery — heavier, and none of it produces a clean intent-level diff a reviewer can skim. Steal the primitive: a per-change `delta.md` (or structured artifact) with capability-keyed ADDED/MODIFIED/REMOVED requirement blocks, generated at design/blueprint time and checked at the review gate. Lighter-weight than the graph approach and directly serves the integration-review gap (`feedback_integration_review`) by making cross-feature requirement changes legible. Pairs with the parked **idea_plan_diffing** (diff artifacts across gate/iteration revisions) — delta-spec is essentially that idea applied to *requirements* rather than plans, and OpenSpec proves the shape works in practice. Sibling to IDEA-5 (Truths/Artifacts/Key Links): both replace prose contracts with grep-able structure; delta-spec covers *what changed*, TAK covers *what must be true*. Counter-note (see IDEA-15): OpenSpec's whole pitch is \"no enforced gates\"; adopt the delta *artifact* without adopting its no-gate philosophy — Compose's differentiation is enforced correctness, so the delta becomes gate input, not a substitute for the gate.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-3",
+  "cluster_order": 2,
+  "tags": [
+    "review",
+    "contracts",
+    "verification",
+    "provenance",
+    "research-influence"
+  ],
+  "source": "OpenSpec (openspec.dev / Fission-AI/OpenSpec) — comparison 2026-06-07",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.147Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.147Z",
+  "updated_at": "2026-08-04T21:41:34.147Z"
+}

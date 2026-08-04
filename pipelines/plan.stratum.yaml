@@ -63,10 +63,11 @@ flows:
           2. RESEARCH — search the web and the codebase for prior art, existing
              tools, architectural patterns, and risks. Summarize what is relevant.
           3. IDEATE — propose candidate features (each with a short code and a
-             one-line description, ordered by dependency). Capture each idea in the
-             ideabox funnel (append to docs/product/ideabox.md, or run
-             `compose ideabox add`) so ideation lives in the funnel, not here. Then
-             shortlist the features you recommend building first.
+             one-line description, ordered by dependency). Capture each idea with
+             `compose ideabox add "<title>" [--desc ...] [--cluster ...]` so ideation
+             lives in the funnel, not here. Do NOT edit docs/product/ideabox.md
+             directly: it is generated output now, and an edit to it is discarded by
+             the next render. Then shortlist the features you recommend building first.
 
           Write docs/plans/{projectName}/design.md containing FRAME, RESEARCH, and
           the shortlist (with feature codes). Return its path in "artifact" and the

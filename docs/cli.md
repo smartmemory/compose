@@ -169,7 +169,7 @@ Reads `feature.json`, runs `mapFilesToRoutes` and `classifyRoutes` from `lib/qa-
 
 ### `compose ideabox`
 
-Idea management CLI. Subcommands operate on the ideabox file (default `docs/product/ideabox.md`).
+Idea management CLI. Ideas are stored as git-tracked records under `docs/product/fluid/records/`, and `docs/product/ideabox.md` (default) is a **generated projection** of them. Edit ideas with the subcommands below, never by editing that file: it is rewritten on every change and a hand edit is discarded.
 
 ```bash
 compose ideabox add "Short title" [--desc "..."] [--cluster <name>]
@@ -179,9 +179,10 @@ compose ideabox pri <ID> <priority>
 compose ideabox discuss <ID> "comment"
 compose ideabox promote <ID>
 compose ideabox kill <ID> "reason"
+compose ideabox render
 ```
 
-`promote` marks the idea promoted in the ideabox file and may scaffold a feature folder with `feature.json`. It does not append to `ROADMAP.md` directly; use `compose roadmap generate` afterward if you maintain `ROADMAP.md` from `feature.json` files.
+`promote` records a `promoted_to` link on the idea's record and may scaffold a feature folder with `feature.json`. It does not append to `ROADMAP.md` directly; use `compose roadmap generate` afterward if you maintain `ROADMAP.md` from `feature.json` files.
 
 ### `compose gates`
 
@@ -317,3 +318,15 @@ COMPOSE_TARGET=/path/to/project compose start
 ```
 
 Resolves the project root from the current working directory upward, or uses `COMPOSE_TARGET` when set. Errors out if the resolved root has no `.compose/compose.json`.
+
+`render` rewrites `docs/product/ideabox.md` from the records without changing any of them. It is
+the repair path: every command writes its record before regenerating the file, so if the file is
+stale, missing, or was edited by hand, `render` brings it back into line.
+
+On first use in a project that already has a hand-written `docs/product/ideabox.md` and no records
+yet, the ideas in that file are imported once, keeping their existing `IDEA-N` numbers. If the file
+contains ideas that have no record behind them and records already exist, the command stops and
+names them rather than overwriting the file.
+
+The cockpit's ideabox write endpoints return 409 while this migration is in progress. Reads are
+unaffected.
