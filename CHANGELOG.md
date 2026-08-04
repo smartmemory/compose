@@ -1,5 +1,68 @@
 # Changelog
 
+## 2026-08-04
+
+### COMP-PLAN-IDEA-UNIFY S1 — the fluid-store provider seam
+
+Ideas, positions, joints and decisions are getting a real store instead of
+markdown. This slice cuts the seam they will live behind, with a floor
+implementation that needs nothing installed. Nothing is wired to it yet, so no
+behavior changes: the ideabox still reads and writes markdown exactly as before.
+
+The seam is drawn at three things and no more — typed record CRUD, lifecycle
+events, and capability discovery. Semantic machinery (recall, challenge,
+conviction, calibration, contradiction) is deliberately not part of it. Those
+are capabilities a provider declares, and a provider that does not declare one
+does not have it:
+
+```
+FluidCapabilityUnavailable: fluid: capability CHALLENGE is not available on
+provider "local". This capability is not emulated by design — connect a
+provider that declares it.
+```
+
+That error is the feature. The alternative — returning an empty result from a
+provider with no challenge machinery — is indistinguishable from a real answer,
+so it would turn a missing capability into a wrong one that no caller could
+detect. This is also why the seam does not copy the tracker factory's
+`withFallback` proxy: falling back is right when the substituted answer is
+equally true, and wrong when it is fabricated.
+
+The floor provider stores records as vision-store items, so there is no second
+store. Record fields the vision store has no slot for ride in one additive
+`fluid_ext` namespace, written through a dedicated method that bypasses the
+generic update allowlist — the same shape as the existing `lifecycle_ext` slot,
+rather than leaking record-specific fields into a store that serves eleven
+other types.
+
+Two details that look small and are not:
+
+**Handles are not reused.** `IDEA-20` is cited in the substrate ruling, and
+handles appear in commits and conversation, so freeing one silently repoints an
+external citation at a different idea. Retirement is therefore enforced three
+ways: the handle's tombstone is written to the append-only log *before* the
+record exists (so a failed write wastes a handle rather than freeing one),
+issuance is checked by membership across live records and the log, and that
+check reads the log as raw text so a torn line cannot resurrect a handle by
+being unparseable.
+
+The one gap, stated plainly: **two processes writing at the same instant can
+still collide**, because the floor takes no lock. Sequential writers are safe,
+including a CLI and a running server, since every operation re-reads the
+substrate first. Interleaved writers need a lock, and that lands with S3 when
+callers actually exist. The guarantee is "not reused", not "cannot collide under
+concurrency" — the difference matters and the ledger records it.
+
+**Cluster headings are record data.** The ideabox's `### Umbrella A —
+Resilience: fail loud, recover fast` headings and their ordering are
+hand-authored information, so they are stored on the record rather than treated
+as presentation. A projection that could not reproduce them verbatim would
+overwrite them on first regeneration, which is the failure `roadmap generate`
+already has.
+
+Contract: `contracts/fluid-record.schema.json`. Ruling: `PROVIDER-SEAM`,
+`docs/product/2026-07-20-what-to-build-vision.md` §8k.
+
 ## 2026-07-25
 
 ### COMP-UPDATE-NUDGE — compose tells you when it is behind

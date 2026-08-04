@@ -1,0 +1,187 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://compose.smartmemory.dev/contracts/fluid-record.schema.json",
+  "title": "fluid-record",
+  "version": "0.1.0",
+  "description": "The canonical record shape carried across the fluid-store provider seam (PROVIDER-SEAM, what-to-build 8k, owner-locked 2026-07-21). The seam is drawn at records + lifecycle events + capability discovery ONLY. Semantic machinery (recall, challenge, conviction, calibration, contradiction) is NEVER modelled here — those are provider capabilities that light up when the configured provider declares them, and a provider that lacks one lacks it visibly. Kind-generic from day one: COMP-PLAN-IDEA-UNIFY implements `idea` as the seam's pilot workload, and positions/joints/decisions adopt this same shape next without a contract change.",
+  "_source": "docs/features/COMP-PLAN-IDEA-UNIFY/design.md",
+  "_roadmap": "COMP-PLAN-IDEA-UNIFY",
+  "type": "object",
+
+  "definitions": {
+
+    "kind": {
+      "type": "string",
+      "description": "The fluid record's type. A provider declares which kinds it implements via supportedKinds(); an unsupported kind is refused loudly, never silently coerced.",
+      "enum": ["idea", "position", "joint", "decision", "thread", "question"]
+    },
+
+    "handle": {
+      "type": "string",
+      "description": "Stable, human-facing external identifier (IDEA-7, JOINT-3). Distinct from `id` ON PURPOSE: `id` is provider-assigned and changes when the record is imported into a different provider, whereas the handle is quoted in docs, commits, and conversation (e.g. IDEA-20 is cited in the substrate ruling) and MUST survive a provider swap unchanged. Allocated monotonically per kind; a retired handle is never reused. The suffix is bounded to 9 digits: allocation reads it as a Number, and a value past the exact-integer range makes `max + 1` equal `max`, which would hand the same handle out twice.",
+      "pattern": "^[A-Z][A-Z0-9]*-[1-9][0-9]{0,8}$"
+    },
+
+    "status": {
+      "type": "string",
+      "description": "Canonical fluid lifecycle state. This is the source of truth for the record's state; any provider-native status field is a projection of it, never the reverse.",
+      "enum": ["new", "discussing", "promoted", "killed"]
+    },
+
+    "priority": {
+      "type": ["string", "null"],
+      "description": "Triage rank. null means untriaged (the ideabox renders this as an em dash).",
+      "enum": ["P0", "P1", "P2", null]
+    },
+
+    "link": {
+      "type": "object",
+      "description": "A typed edge to another record or to committed (git) canon. Promotion writes an edge of type `promoted_to` rather than mutating the record into a feature, so the idea to feature transition is provenance in the graph rather than a lost jump.",
+      "required": ["type", "target"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["promoted_to", "maps_to", "informs", "blocks", "supports", "contradicts", "supersedes", "duplicate_of"]
+        },
+        "target": {
+          "type": "string",
+          "description": "Handle of another fluid record, or a committed feature code (COMP-FOO-1) when the edge crosses the crystallization boundary into git canon."
+        },
+        "note": { "type": "string" }
+      }
+    },
+
+    "provenance": {
+      "type": "object",
+      "description": "Stamped by the writing tool, never settable by a caller. Captured at write time, never retrofitted (what-to-build 12: provenance is never retrofitted successfully).",
+      "required": ["origin", "recorded_at"],
+      "additionalProperties": false,
+      "properties": {
+        "origin": {
+          "type": "string",
+          "description": "Which door the record came through. `import:ideabox` marks a record created by the one-time markdown import, distinguishing migrated rows from natively captured ones for the lifetime of the record.",
+          "enum": ["cli:ideabox", "ui:ideabox", "mcp:compose", "import:ideabox", "pipeline:plan"]
+        },
+        "recorded_at": { "type": "string", "format": "date-time" },
+        "author": { "type": ["string", "null"] }
+      }
+    },
+
+    "record": {
+      "type": "object",
+      "description": "One fluid record as it crosses the seam.",
+      "required": ["id", "handle", "kind", "title", "status", "provenance", "created_at", "updated_at"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Provider-assigned opaque identifier. Callers MUST NOT parse it or persist it as a cross-document reference — use `handle` for that."
+        },
+        "handle": { "$ref": "#/definitions/handle" },
+        "kind": { "$ref": "#/definitions/kind" },
+        "title": { "type": "string", "minLength": 1 },
+        "body": {
+          "type": "string",
+          "description": "Free prose. The ideabox's `Idea:` paragraph lands here."
+        },
+        "status": { "$ref": "#/definitions/status" },
+        "priority": { "$ref": "#/definitions/priority" },
+        "cluster": {
+          "type": ["string", "null"],
+          "description": "Editorial grouping (the ideabox's `### Umbrella A - Resilience: fail loud, recover fast` headings). This is RECORD DATA, not presentation: the headings are hand-authored information, and a projection that cannot reproduce them from the store would clobber them on first regeneration - the failure mode `roadmap generate` already has. Null means ungrouped."
+        },
+        "cluster_order": {
+          "type": ["integer", "null"],
+          "description": "Position of this record's cluster in the rendered projection, preserving hand-authored cluster ORDERING (Umbrella A before B) across a regenerate. Null when ungrouped."
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Bare tag tokens without the leading hash (ux, core, distribution)."
+        },
+        "source": {
+          "type": ["string", "null"],
+          "description": "Where the idea came from, as free text."
+        },
+        "links": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/link" }
+        },
+        "killed": {
+          "type": ["object", "null"],
+          "description": "Set when status is `killed`. A kill is a dated event with a reason (what-to-build 11), so the reason is structured rather than appended to prose.",
+          "required": ["at", "reason"],
+          "additionalProperties": false,
+          "properties": {
+            "at": { "type": "string", "format": "date-time" },
+            "reason": { "type": "string" }
+          }
+        },
+        "discussion": {
+          "type": "array",
+          "description": "Append-only comment trail (`compose ideabox discuss`). Append-only because a deliberation trail that can be rewritten is not evidence.",
+          "items": {
+            "type": "object",
+            "required": ["at", "text"],
+            "additionalProperties": false,
+            "properties": {
+              "at": { "type": "string", "format": "date-time" },
+              "text": { "type": "string" },
+              "author": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "provenance": { "$ref": "#/definitions/provenance" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      }
+    },
+
+    "lifecycle_event": {
+      "type": "object",
+      "description": "An append-only fact about a record's life. Events are part of the seam because they are portable across providers; the SEMANTIC readings of them (conviction, calibration) are not, and are never derived here.",
+      "required": ["handle", "type", "at"],
+      "additionalProperties": false,
+      "properties": {
+        "handle": { "$ref": "#/definitions/handle" },
+        "type": {
+          "type": "string",
+          "enum": ["created", "updated", "triaged", "discussed", "promoted", "killed", "linked", "imported", "deleted"]
+        },
+        "at": { "type": "string", "format": "date-time" },
+        "detail": {
+          "type": "object",
+          "description": "Type-specific payload. Deliberately unconstrained: constraining it here would drag provider-specific semantics into the seam."
+        }
+      }
+    },
+
+    "capability": {
+      "type": "string",
+      "description": "STORAGE capabilities are the seam's own contract and every provider must implement them. SEMANTIC capabilities are the reason the seam exists: they are declared, never abstracted. Asking a provider for one it has not declared is an error (FluidCapabilityUnavailable), never an empty result - an empty result is indistinguishable from a real answer and would fake the capability.",
+      "enum": [
+        "RECORDS",
+        "EVENTS",
+        "LINKS",
+        "RECALL",
+        "CHALLENGE",
+        "CONVICTION",
+        "CALIBRATION",
+        "CONTRADICTION"
+      ]
+    }
+  },
+
+  "additionalProperties": false,
+  "properties": {
+    "record": { "$ref": "#/definitions/record" },
+    "lifecycle_event": { "$ref": "#/definitions/lifecycle_event" }
+  },
+  "oneOf": [
+    { "required": ["record"] },
+    { "required": ["lifecycle_event"] }
+  ],
+
+  "_validation": "Callers validate against a NAMED DEFINITION (#/definitions/record, #/definitions/lifecycle_event) — see lib/fluid/schema.js — following contracts/judgment-record.schema.json's per-definition pattern. The root is an envelope, and `oneOf` + `additionalProperties: false` exist so that an empty or unrelated payload is REJECTED by the machine rather than merely discouraged by this prose. A prose instruction with no machine effect is not a constraint."
+}
