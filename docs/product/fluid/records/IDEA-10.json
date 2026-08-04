@@ -1,0 +1,29 @@
+{
+  "id": "af156df6-77ac-4a39-b1e6-7f524ef539f9",
+  "handle": "IDEA-10",
+  "kind": "idea",
+  "title": "Cheap query endpoint for cockpit polling",
+  "body": "GSD-2's `gsd headless query` is ~50ms, no LLM, exit-code-driven status polling. Compose's cockpit currently polls vision-state and active-build via Express endpoints that touch the JSON store; fast enough for one tab, but not for many concurrent watchers (cron, CI, multiple cockpits). Add `compose query <feature-code> --json` with exit codes (0 ok, 10 blocked, 11 cancelled, 1 error) and a corresponding stripped-down REST endpoint that hits an in-memory cache only. Separates \"show me state\" from the heavier vision-state load path.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-4",
+  "cluster_order": 3,
+  "tags": [
+    "cockpit",
+    "performance",
+    "ops",
+    "gsd"
+  ],
+  "source": "gsd-build/gsd-2",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.148Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.148Z",
+  "updated_at": "2026-08-04T21:41:34.148Z"
+}

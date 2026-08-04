@@ -1,0 +1,29 @@
+{
+  "id": "66cce783-f649-4d29-992e-137042b5e8df",
+  "handle": "IDEA-5",
+  "kind": "idea",
+  "title": "Truths / Artifacts / Key Links triplet for Stratum contracts",
+  "body": "GSD-2 splits each task's must-haves into three orthogonal axes: **Truths** (observable behaviors), **Artifacts** (files with min line counts), **Key Links** (import wiring between modules). Reported as a structured table, not prose. Cleaner mechanical-checkability than free-text `ensure` postconditions. Could become a Stratum contract subclass (`ContractTAK`) — postconditions emit the triplet and a Stratum builtin verifies each axis automatically (truths via test runner, artifacts via fs probes, key links via AST grep). Replaces current \"is the ensure expression abstract enough that the LLM rubber-stamps it?\" failure mode.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-3",
+  "cluster_order": 2,
+  "tags": [
+    "stratum",
+    "contracts",
+    "verification",
+    "gsd"
+  ],
+  "source": "gsd-build/gsd-2",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.146Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.146Z",
+  "updated_at": "2026-08-04T21:41:34.146Z"
+}

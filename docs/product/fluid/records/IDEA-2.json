@@ -1,0 +1,29 @@
+{
+  "id": "6b2aa44d-4352-4014-810f-363b25d73bef",
+  "handle": "IDEA-2",
+  "kind": "idea",
+  "title": "Typed GateError schema with structured fields",
+  "body": "Replace free-text gate decisions with a typed error shape: `error_code, field_path, remediation, details, source_of_truth`. Aligns with the canonical ReviewResult schema already at `compose/contracts/review-result.json` — extends the same pattern to all gate failures so the cockpit can render structured failures and audit traces become grep-able. ContextGraph paper makes every fail-closed gate a typed `RealityError` with these fields. **Foundation for IDEA-1, IDEA-3:** they all emit/consume this shape.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-1",
+  "cluster_order": 0,
+  "tags": [
+    "errors",
+    "gates",
+    "contracts",
+    "research-influence"
+  ],
+  "source": "RealityLoopWhitePaper",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.142Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.142Z",
+  "updated_at": "2026-08-04T21:41:34.142Z"
+}

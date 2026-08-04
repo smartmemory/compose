@@ -1,0 +1,40 @@
+{
+  "id": "1846580c-e0c4-4daf-b4f0-bc57cde17f40",
+  "handle": "IDEA-20",
+  "kind": "idea",
+  "title": "Dogfood the GitHub tracker migration on the ideabox first",
+  "body": "_Re-aimed 2026-07-21._ The `PROVIDER-SEAM` substrate ruling ([what-to-build §8k](2026-07-20-what-to-build-vision.md#substrate-ruling-2026-07-21--where-the-fluid-layer-lives)) moves ideas off the tracker seam entirely: canon for ideas is the fluid-store provider (COMP-PLAN-IDEA-UNIFY is its pilot workload), and pre-commitment judgment material never lands on the committed/execution plane. The GitHub-tracker dogfood this idea wanted survives, re-aimed at committed work: **start at stratum (1 record), then compose (291 records)** — per the standing directive to migrate stratum+compose to the GitHub tracker at the next inflection point. The field-ownership insight (triage/promote as manager-owned fields) carries over into the fluid seam's design instead.",
+  "status": "new",
+  "status_label": "RE-AIMED (2026-07-21)",
+  "priority": null,
+  "cluster": "CLUS-6",
+  "cluster_order": 5,
+  "tags": [
+    "dogfooding",
+    "tracker",
+    "ideation",
+    "infra"
+  ],
+  "source": "tracker-provider design review (2026-07-19) — [design doc](../design/2026-07-19-tracker-provider-and-reconciliation-design.md) §3.2/§5",
+  "links": [
+    {
+      "type": "maps_to",
+      "target": "GitHub tracker migration (compose ROADMAP); tracker-provider design doc §5 (re-ruled sequencing); COMP-PLAN-IDEA-UNIFY (fluid-provider pilot); IDEA-19 (ideation adoption)"
+    }
+  ],
+  "killed": null,
+  "discussion": [
+    {
+      "at": "2026-07-19T00:00:00.000Z",
+      "text": "**Original framing.** The ideabox (`lib/ideabox.js`, this file) bypasses the tracker provider entirely, so the GitHub migration as scoped would leave ideation behind on a local file — yet ideas are the lowest-risk first workload (one file, staleness-tolerant, no atomic coupling to the feature aggregate) and the smallest real instance of the manager/engineer reconciliation vision: an idea is literally \"discovered work,\" triage priority and promote/kill are literally the manager-owned fields, and `promoteIdea` is the identity claim-handshake in miniature. Sequence the dogfood ideabox → stratum (1 record) → compose (291 records), proving the field-ownership discipline in-house before any external transport exists.",
+      "author": "human"
+    }
+  ],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.150Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.150Z",
+  "updated_at": "2026-08-04T21:41:34.150Z"
+}

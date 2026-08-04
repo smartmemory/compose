@@ -1,0 +1,29 @@
+{
+  "id": "82423606-7b04-4454-b3b5-a3e1ed5e3fe1",
+  "handle": "IDEA-13",
+  "kind": "idea",
+  "title": "External-state reconciliation mid-build",
+  "body": "Symphony watches for ticket reassignment/closure externally and stops in-flight runs. Compose doesn't react to vision-item status changes during a build — if a user kills a feature in the cockpit while Phase 7 is running, the run keeps writing. Add a vision-state watcher in `lib/build.js`'s phase loop that polls or subscribes to changes; on `status: killed/blocked/parked` for the active feature, abort gracefully (write `continue.md`, log to journal, exit). Same pattern handles user-initiated cancel from cockpit.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-1",
+  "cluster_order": 0,
+  "tags": [
+    "reconciliation",
+    "external-state",
+    "safety",
+    "symphony"
+  ],
+  "source": "symphony",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.144Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.144Z",
+  "updated_at": "2026-08-04T21:41:34.144Z"
+}

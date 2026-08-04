@@ -1,0 +1,29 @@
+{
+  "id": "01f663eb-dde7-480b-b6b8-bd4df890988e",
+  "handle": "IDEA-14",
+  "kind": "idea",
+  "title": "Per-feature deterministic workspaces",
+  "body": "Symphony spawns a deterministic workspace per ticket; compose uses cwd. Worktree-per-feature would isolate concurrent builds, eliminate the active-build last-writer-wins race, and match the worktree pattern compose already uses for tier-2 hard-bug escalation. Cost: every feature triggers `git worktree add`, more disk, slower iteration when switching features. Worth gating behind a `--worktree` flag first; promote to default only if telemetry shows it pays. **Foundation for IDEA-11.**",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-2",
+  "cluster_order": 1,
+  "tags": [
+    "worktree",
+    "workspace",
+    "isolation",
+    "symphony"
+  ],
+  "source": "symphony",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.145Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.145Z",
+  "updated_at": "2026-08-04T21:41:34.145Z"
+}

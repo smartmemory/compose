@@ -1,0 +1,35 @@
+{
+  "id": "39dbbff0-c77b-473d-9070-0d6692a0d79c",
+  "handle": "IDEA-19",
+  "kind": "idea",
+  "title": "Ideation/plan tooling isn't the default reach",
+  "body": "In a Compose-native session, the agent developed a large multi-feature design (the compose-lab eval harness + stage archetypes + memory/workflow variant axes + opencode-dispatch) entirely via conversation + hand-written `design.md` + raw `add_roadmap_entry`, never invoking the ideabox→review→promote lifecycle or `compose plan`, despite repeatedly hitting ideation-trigger phrases (\"what if we\", \"we should consider\", \"down the road\"). If the agent itself bypasses the idea tooling in a native session, that's an adoption/UX gap in Compose, not a one-off. Scrutinize the cause: (a) the ideabox skill should auto-trigger on ideation phrases rather than wait to be invoked; (b) capture friction is higher than just writing a `design.md`; (c) the plan lifecycle is under-discoverable; (d) \"ship X\" task momentum suppresses the switch into ideation mode. Goal: make idea-capture the path of least resistance, so the structured lifecycle is what gets reached for by default.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-6",
+  "cluster_order": 5,
+  "tags": [
+    "meta",
+    "dogfooding",
+    "ideation",
+    "ux",
+    "adoption"
+  ],
+  "source": "compose-lab design session (agent self-observation, user-flagged) — 2026-06-27",
+  "links": [
+    {
+      "type": "maps_to",
+      "target": "Umbrella D (cockpit & loop ergonomics); IDEA-15 (operational simplicity / friction audit)"
+    }
+  ],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.150Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.150Z",
+  "updated_at": "2026-08-04T21:41:34.150Z"
+}

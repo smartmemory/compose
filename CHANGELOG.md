@@ -2,6 +2,40 @@
 
 ## 2026-08-05
 
+### The ideabox is now a real store, and the file is a view of it
+
+`compose ideabox` no longer edits `docs/product/ideabox.md`. Each idea is its own
+tracked file under `docs/product/fluid/records/`, and the ideabox markdown is
+regenerated from them every time something changes. The commands, their output
+and their arguments are unchanged, so nothing you type is different.
+
+**Your existing ideas are imported the first time you run any ideabox command**,
+keeping their existing numbers, because those numbers get quoted in documents and
+commit messages. Nothing is renumbered and nothing is dropped. If the file turns
+out to contain ideas that have no record behind them, the command stops and names
+them instead of overwriting the file, because guessing whether those were added
+by hand or lost by an interrupted import would throw away someone's work either
+way.
+
+Two things follow from the file being generated. **Editing it by hand no longer
+does anything**, because the next command overwrites it, so the file says so at
+the top. And there is a new `compose ideabox render`, which rebuilds the file from
+your ideas without changing any of them. Use it if the file ever looks stale or
+you edited it by accident.
+
+Promoting an idea now records a real link to the feature rather than writing the
+feature's name into the status text, which is what lets a future version show you
+where an idea ended up.
+
+Grouping an idea under an umbrella now checks that the umbrella exists and creates
+it if it does not. Before, a typo produced an idea that was saved successfully and
+then appeared nowhere in the file.
+
+**The ideabox panel in the cockpit is read-only for now** and its save actions
+return an error explaining why. It still writes to the markdown file directly, so
+leaving it switched on would mean edits made there looked saved and then vanished
+at the next render. Wiring it to the store is the next piece of work.
+
 ### Four ways the ideabox could lose your work, now closed
 
 Groundwork for moving the ideabox onto the record store. None of these had ever

@@ -1,0 +1,30 @@
+{
+  "id": "c864050e-371d-4c3c-a572-deec61600e64",
+  "handle": "IDEA-6",
+  "kind": "idea",
+  "title": "Append-only DECISIONS.md with supersession-by-ID",
+  "body": "GSD-2 keeps an append-only `DECISIONS.md` per project with columns `When | Scope | Decision | Choice | Rationale | Revisable?`. Decisions are never edited; superseding a prior decision means a new row with `Supersedes: D-NN`. Cleaner than threading architectural decisions through compose's session journal — provides a grep-able decision log without losing history. Slots in next to `feedback_*.md` memory but at project-scope. Could be regenerated from journal entries that match a `**Decision:**` pattern.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-3",
+  "cluster_order": 2,
+  "tags": [
+    "journal",
+    "architecture",
+    "decisions",
+    "provenance",
+    "gsd"
+  ],
+  "source": "gsd-build/gsd-2",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.146Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.146Z",
+  "updated_at": "2026-08-04T21:41:34.146Z"
+}

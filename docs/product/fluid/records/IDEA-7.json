@@ -1,0 +1,29 @@
+{
+  "id": "2eccd63d-bd21-493e-9d49-2193706a43d0",
+  "handle": "IDEA-7",
+  "kind": "idea",
+  "title": "Unit-typed tools-policy manifest",
+  "body": "GSD-2 declares per-unit-type tool surfaces in a `UnitContextManifest` (planning units cannot Write; execution units can; researchers cannot Edit). CI guards the manifest. Stratum already has per-step tool restrictions but they're per-call; lifting them to per-step-type with a CI-checked manifest is the same shape, sharper. Prevents drift like \"the planner agent silently gained Edit and started writing code from a planning step.\"",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-3",
+  "cluster_order": 2,
+  "tags": [
+    "stratum",
+    "tool-policy",
+    "security",
+    "gsd"
+  ],
+  "source": "gsd-build/gsd-2",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.147Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.147Z",
+  "updated_at": "2026-08-04T21:41:34.147Z"
+}

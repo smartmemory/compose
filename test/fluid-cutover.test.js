@@ -17,16 +17,19 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { withDirLock, acquireDirLock, DirLockTimeout } from '../lib/dir-lock.js';
+import { ensureIdeaboxMigrated } from '../lib/fluid/ideabox-migrate.js';
 import { toMarkdownDate, toRecordTimestamp } from '../lib/fluid/ideabox-dates.js';
 import { LocalFluidProvider } from '../lib/fluid/local-provider.js';
 import { renderIdeabox } from '../lib/fluid/render-ideabox.js';
 import { importIdeabox } from '../lib/fluid/import-ideabox.js';
+import { fluidProviderFor } from '../lib/fluid/factory.js';
+import { runIdeaboxCommand } from '../lib/ideabox-cli.js';
 import { parseIdeabox, serializeIdeabox } from '../lib/ideabox.js';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
@@ -204,6 +207,190 @@ describe('the projection never silently drops a record', () => {
 });
 
 // ---------------------------------------------------------------------------
+
+describe('the first-use migration gate', () => {
+  const IDEABOX = (n) => '# Ideabox\n\n## Ideas\n\n'
+    + Array.from({ length: n }, (_, i) =>
+      `#### IDEA-${i + 1} — legacy idea ${i + 1}\n**Status:** NEW | **Priority:** —\n**Idea:** body ${i + 1}\n`).join('\n')
+    + '\n## Killed Ideas\n';
+
+  const writeIdeabox = (text) => {
+    const p = join(tmp, 'ideabox.md');
+    writeFileSync(p, text);
+    return p;
+  };
+
+  it('imports an existing markdown ideabox into an empty store', async () => {
+    // THE UPGRADE PATH. Without this, an installation that upgrades with a
+    // populated ideabox and no records has its ideas replaced by the first idea
+    // the user adds.
+    const p = await provider();
+    const path = writeIdeabox(IDEABOX(5));
+    const result = await ensureIdeaboxMigrated(p, path);
+    assert.equal(result.migrated, true);
+    assert.equal((await p.listRecords({ kind: 'idea' })).length, 5);
+    // and the next handle must clear the imported ones
+    const next = await p.createRecord({ kind: 'idea', title: 'new' });
+    assert.equal(next.handle, 'IDEA-6');
+  });
+
+  it('does nothing when the store already matches the markdown', async () => {
+    const p = await provider();
+    const path = writeIdeabox(IDEABOX(3));
+    await ensureIdeaboxMigrated(p, path);
+    const again = await ensureIdeaboxMigrated(p, path);
+    assert.equal(again.migrated, false);
+    assert.equal((await p.listRecords({ kind: 'idea' })).length, 3);
+  });
+
+  it('refuses a partial store rather than projecting over the strays', async () => {
+    // The genuinely ambiguous state: importing the strays assumes the markdown
+    // is authoritative (it is not, after cutover), and ignoring them projects
+    // over someone's work. Both discard data in one of the two readings.
+    const p = await provider();
+    const path = writeIdeabox(IDEABOX(4));
+    await ensureIdeaboxMigrated(p, path);
+    await p.deleteRecord('IDEA-3');
+    await assert.rejects(ensureIdeaboxMigrated(p, path), (err) => {
+      assert.equal(err.code, 'IDEABOX_MIGRATION_CONFLICT');
+      assert.deepEqual(err.missing, ['IDEA-3']);
+      return true;
+    });
+  });
+
+  it('is a no-op for a fresh project with no markdown at all', async () => {
+    const p = await provider();
+    const result = await ensureIdeaboxMigrated(p, join(tmp, 'absent.md'));
+    assert.equal(result.migrated, false);
+  });
+});
+
+describe('a killed idea round-trips through the projection', () => {
+  it('omits the priority segment, matching the legacy serializer', async () => {
+    // The legacy serializer writes `**Status:** KILLED` with no priority. The
+    // projection emitted one, so serialize(parse(projection)) stopped being the
+    // identity the moment anyone killed an idea — and no idea on disk was
+    // killed, so nothing caught it.
+    const p = await provider();
+    const rec = await p.createRecord({ kind: 'idea', title: 'doomed', tags: ['x'] });
+    await p.updateRecord(rec.handle, {
+      status: 'killed',
+      killed: { at: new Date('2026-08-05').toISOString(), reason: 'obsolete' },
+    });
+    const ideas = await p.listRecords({ kind: 'idea' });
+    const rendered = renderIdeabox({ ideas, clusters: [] });
+
+    assert.match(rendered, /\*\*Status:\*\* KILLED \| \*\*Tags:\*\* x/);
+    assert.doesNotMatch(rendered, /KILLED \| \*\*Priority:\*\*/);
+    assert.equal(serializeIdeabox(parseIdeabox(rendered)), rendered);
+    assert.match(rendered, /\*\*Killed:\*\* 2026-08-05 — obsolete/);
+  });
+});
+
+describe('the compose ideabox CLI, writing through the record store', () => {
+  // Driving runIdeaboxCommand directly is the point of the extraction: the
+  // cutover is testable in-process instead of only through a subprocess.
+  let project, ideabox, log;
+
+  const run = async (...args) => {
+    const original = console.log;
+    console.log = (...a) => log.push(a.join(' '));
+    try { return await runIdeaboxCommand(project, args, { config: {} }); }
+    finally { console.log = original; }
+  };
+  const read = () => readFileSync(ideabox, 'utf8');
+  const parse = () => parseIdeabox(read());
+
+  beforeEach(() => {
+    project = join(tmp, 'project');
+    ideabox = join(project, 'docs/product/ideabox.md');
+    log = [];
+  });
+
+  it('adds an idea, and the file it writes is a faithful projection', async () => {
+    assert.equal(await run('add', 'first idea', '--desc', 'the body', '--tags', 'alpha,beta'), 0);
+    const parsed = parse();
+    assert.equal(parsed.ideas.length, 1);
+    assert.equal(parsed.ideas[0].id, 'IDEA-1');
+    assert.equal(parsed.ideas[0].description, 'the body');
+    // `#` is stripped: the projection's own convention line documents bare words.
+    assert.deepEqual(parsed.ideas[0].tags, ['alpha', 'beta']);
+    assert.equal(serializeIdeabox(parsed), read(), 'the CLI wrote a file it cannot round-trip');
+  });
+
+  it('carries an existing markdown ideabox into the store on first use', async () => {
+    // The upgrade path, through the command the user actually types.
+    const legacy = '# Ideabox\n\n## Ideas\n\n'
+      + '#### IDEA-1 — theirs\n**Status:** NEW | **Priority:** —\n**Idea:** existing work\n\n'
+      + '#### IDEA-2 — also theirs\n**Status:** NEW | **Priority:** —\n**Idea:** more\n\n## Killed Ideas\n';
+    mkdirSync(join(project, 'docs/product'), { recursive: true });
+    writeFileSync(ideabox, legacy);
+
+    await run('add', 'mine');
+    const parsed = parse();
+    assert.equal(parsed.ideas.length, 3, 'the existing ideas were destroyed by the first add');
+    assert.deepEqual(parsed.ideas.map((i) => i.id), ['IDEA-1', 'IDEA-2', 'IDEA-3']);
+    assert.equal(parsed.ideas[0].description, 'existing work');
+  });
+
+  it('walks the full lifecycle and keeps the file round-tripping throughout', async () => {
+    await run('add', 'lifecycle idea');
+    await run('pri', 'idea-1', 'P0');              // lowercase id, as the old CLI allowed
+    await run('discuss', 'IDEA-1', 'a comment');
+    assert.equal(serializeIdeabox(parse()), read());
+
+    const parsed = parse();
+    assert.equal(parsed.ideas[0].priority, 'P0');
+    assert.equal(parsed.ideas[0].discussion.length, 1);
+    assert.equal(parsed.ideas[0].discussion[0].text, 'a comment');
+
+    await run('add', 'doomed');
+    await run('kill', 'IDEA-2', 'not worth it');
+    const afterKill = parse();
+    assert.equal(afterKill.killed.length, 1);
+    assert.equal(afterKill.killed[0].killedReason, 'not worth it');
+    assert.equal(serializeIdeabox(afterKill), read(), 'killing an idea broke the round-trip');
+  });
+
+  it('records promotion as a link, not a formatted status string', async () => {
+    await run('add', 'promote me');
+    assert.equal(await run('promote', 'IDEA-1', 'FEAT-X'), 0);
+    assert.match(read(), /\*\*Promoted to:\*\* FEAT-X/);
+    const provider = await fluidProviderFor(project);
+    const rec = await provider.getRecord('IDEA-1');
+    assert.equal(rec.status, 'promoted');
+    assert.deepEqual(rec.links, [{ type: 'promoted_to', target: 'FEAT-X' }]);
+    assert.equal(rec.status_label, null, 'promotion must be a link, not a formatted status string');
+  });
+
+  it('resolves --cluster to a handle instead of storing a name that vanishes', async () => {
+    await run('add', 'clustered', '--cluster', 'Umbrella A');
+    const provider = await fluidProviderFor(project);
+    const [cluster] = await provider.listRecords({ kind: 'cluster' });
+    const idea = await provider.getRecord('IDEA-1');
+    assert.equal(idea.cluster, cluster.handle, 'the raw name was stored, so the idea would vanish');
+    assert.match(read(), /### Umbrella A/);
+    assert.match(read(), /IDEA-1/);
+
+    // The same name a second time reuses the cluster rather than creating a twin.
+    await run('add', 'also clustered', '--cluster', 'Umbrella A');
+    assert.equal((await provider.listRecords({ kind: 'cluster' })).length, 1);
+  });
+
+  it('render rebuilds the file from the records without touching them', async () => {
+    await run('add', 'an idea');
+    const before = read();
+    writeFileSync(ideabox, '# corrupted by hand\n');
+    assert.equal(await run('render'), 0);
+    assert.equal(read(), before, 'render did not restore the projection');
+  });
+
+  it('reports unknown subcommands and missing arguments without writing', async () => {
+    assert.equal(await run('nonsense'), 1);
+    assert.equal(await run('add'), 1);
+    assert.equal(existsSync(ideabox), false, 'a failed command created the ideabox anyway');
+  });
+});
 
 describe('the real ideabox survives the cutover', () => {
   it('imports, renders, and loses nothing but the accepted three changes', async () => {

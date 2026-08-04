@@ -1,0 +1,29 @@
+{
+  "id": "8eb55d56-ae6c-43aa-8254-538eb4a31ca8",
+  "handle": "IDEA-9",
+  "kind": "idea",
+  "title": "Doctor / Forensics / Recover commands",
+  "body": "GSD-2 ships `gsd doctor`, `gsd forensics`, `gsd headless recover` as first-class diagnostic commands for stuck/wedged runs. Compose has `compose doctor` for dep checks but not for active-build introspection. Add `compose forensics <feature-code>` (dump active-build state, last N journal entries, Stratum trace, hypothesis ledger if bug-mode) and `compose recover <feature-code>` (reconcile active-build with disk state, prompt to resume / abort / kill). Operator surface for IDEA-8 markers.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": "CLUS-1",
+  "cluster_order": 0,
+  "tags": [
+    "diagnostics",
+    "ops",
+    "cli",
+    "gsd"
+  ],
+  "source": "gsd-build/gsd-2",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "import:ideabox",
+    "recorded_at": "2026-08-04T21:41:34.144Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T21:41:34.144Z",
+  "updated_at": "2026-08-04T21:41:34.144Z"
+}
