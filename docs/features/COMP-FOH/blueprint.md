@@ -1,7 +1,7 @@
 # COMP-FOH — Implementation Blueprint (FOH-1)
 
 **Slice:** FOH-1 — `SmartMemoryFluidProvider`, storage-only
-**Status:** Revised after review round 1 — pending gate approval
+**Status:** BLOCKED at review round 2 — escalated to the architecture gate. Do not implement.
 **Date:** 2026-08-04
 **Revision:** r2. Round 1 returned five P1 findings; r1 was not implementable. See "Review round 1" at the foot.
 
@@ -280,3 +280,61 @@ research pass — the ones that change adapter code, plus C4 which drives a ruli
 **Stale references found and fixed:** 0 in r2. Three were fixed in
 `architecture.md` during the resume check; §Q1's mechanism and §Q3's coupling
 are corrected there.
+
+## Review round 2 — NOT CLEAN. Escalates above blueprint level.
+
+Codex (sol/xhigh) against r2, pointed at the round-1 fixes. Five findings, four
+P1. **Three were introduced or worsened by the round-1 fixes themselves**, which
+is the expected pattern (`feedback_review_round2_targets_fixes`).
+
+| # | Finding | Status |
+|---|---|---|
+| R2-1 | **Widening kinds (F3) + putting bodies in `content` (F5) together break the INDEXED contract.** Every record — `cluster`, `decision`, and the new `fluid_event` items — becomes embedded and therefore recallable, contradicting `design.md:45` / `architecture.md:75` | **UPHELD — and escalates. See the blocker below.** |
+| R2-2 | **The flat metadata mapping cannot round-trip.** SmartMemory unconditionally overwrites `metadata.created_at` on add (`secure_smart_memory.py:343`) and strips it from PATCH as server-controlled (`:1837`), while r2 stores the fluid record flat in that same object and promises a byte-for-byte round trip | **UPHELD.** Fix: nest the canonical record under `metadata.fluid_record`, keeping only flat lookup fields (`handle`, `kind`, `fluid_ns`) beside it. Introduced by F2's fix. |
+| R2-3 | **`getRecord` miss semantics are wrong.** r2 says a zero-match handle lookup raises `FluidRecordNotFound`; the seam returns **`null`** on absence (`local-provider.js:290`) and throws only from mutating paths | **UPHELD.** A provider swap would change caller-visible behaviour. Introduced by F2's fix. |
+| R2-4 | **The allocation race corrupts the remote store rather than wasting a handle.** Two concurrent creates can both write a tombstone and then create two items carrying the same `metadata.handle` — there is no uniqueness constraint on a metadata field. Every later resolution then hits r2's own "more than one ⇒ throw", permanently | **UPHELD, and r2 understated it.** r2 called this "identical to the floor's accepted limit". It is not: locally the two writes collide on one path and last-writer-wins, which is recoverable. Remotely they produce two live records for one handle with no tie-break. |
+| R2-5 | **Endpoint validation still incomplete** — `baseUrl`, `apiKeyEnv` and the referenced env value are not validated pre-flight, so a misconfigured endpoint fails as a request error rather than the promised `FluidConfigError` | **UPHELD.** P2, mechanical. |
+
+### BLOCKER — the seam's guarantees exceed what the HTTP surface can provide
+
+Verified directly this session, and it is why this blueprint stops here rather
+than going to r3:
+
+1. **Per-kind recallability is not controllable over HTTP.** `_embed` exists as
+   a handler-level override in the core (`pipeline/stages/crud.py:100`, and
+   `:158` even records a past bug where a caller's `_embed=false` was ignored),
+   but **`POST /memory/add` does not expose it** — the service route only
+   serializes embeddings onto responses. `_should_generate_embedding`
+   (`:140-180`) hard-codes `semantic`/`episodic`/`procedural` as always-embed and
+   `pending`/`metadata`/`relation` as never-embed; a fluid `memory_type` is
+   none of those and takes the default. So `architecture.md` §Q3's INDEXED
+   rulings for `cluster` and `decision` **cannot be honoured by this transport**,
+   and `fluid_event` items would be embedded as well, polluting recall with
+   lifecycle noise.
+
+2. **Handle uniqueness cannot be enforced remotely.** The seam treats a handle as
+   a permanently unique external citation. SmartMemory offers no uniqueness
+   constraint on a metadata field and no atomic allocate-or-fail, so the floor's
+   accepted "no lock" limit does not transfer.
+
+Both are the same shape: **the fluid seam assumes properties of a store that
+SmartMemory's HTTP API does not guarantee.** Neither is fixable by rewording the
+blueprint, and deciding either one here would be settling an architecture
+question in the wrong document.
+
+### Open questions for the architecture gate
+
+- **Q3 revisited.** Either (a) get `_embed` exposed on the add route
+  (SmartMemory-side work, outside Compose's control), (b) drop INDEXED as a
+  per-kind dial for this provider and rule that everything FOH-1 stores is
+  embedded, or (c) narrow FOH-1's kinds again — which R2/F3 already showed the
+  pilot workload will not tolerate.
+- **Handle uniqueness.** Atomic allocation, a deterministic tie-break on
+  duplicate handles (e.g. keep the earliest `item_id`, retire the other), or an
+  explicit ruling accepting possible permanent handle corruption.
+- **Events.** If everything is embedded, `fluid_event` items pollute recall.
+  They may need a different home, or the never-embed `memory_type` values may
+  need to be reused deliberately.
+
+R2-2, R2-3 and R2-5 are straightforwardly fixable and are **not** blocked by the
+above; they are carried into whatever revision follows the architecture ruling.
