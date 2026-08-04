@@ -47,5 +47,6 @@ The whole Discovery Loop stands on ideas being first-class graph objects — abl
 
 ## Open threads
 
-- Exact migration shape for the ID scheme (ideabox `IDEA-N` anchors vs vision-item IDs).
-- Whether `ideabox.md` regeneration reuses the `roadmap-gen.js` atomic-render pattern.
+- ~~Exact migration shape for the ID scheme (ideabox `IDEA-N` anchors vs vision-item IDs).~~ **RESOLVED (S1/S2):** the record carries both — a provider-assigned `id` and a stable external `handle` holding the `IDEA-N` anchor verbatim. Handles survive a provider swap and are never reused, because they are cited in docs and commits (this ruling cites IDEA-20).
+- ~~Whether `ideabox.md` regeneration reuses the `roadmap-gen.js` atomic-render pattern.~~ **RESOLVED (S2):** yes, temp + rename.
+- **NEW, and it gates S3 — where do the floor's records live, and are they tracked?** `.compose/data/` is gitignored, so cutting over as designed moves idea canon from a tracked file to untracked local state and leaves a committed GENERATED file with no source of truth on any other clone. Arguably intended (fluid lives in the provider, not git), but the ruling parked *backup cadence* for this layer and that rider is now load-bearing. **Owner ruled 2026-08-04: defer the cutover to S3 and answer this first.** See [s2-progress.md](s2-progress.md).
