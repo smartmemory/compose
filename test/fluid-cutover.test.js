@@ -16,7 +16,7 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -44,7 +44,7 @@ const provider = (root) => new LocalFluidProvider().init(tmp, { recordsRoot: roo
 // ---------------------------------------------------------------------------
 
 describe('handle allocation is serialized across processes', () => {
-  it('gives every concurrent creator a distinct handle', () => {
+  it('gives every concurrent creator a distinct handle', async () => {
     const root = join(tmp, 'records');
     const script = join(tmp, 'one-create.mjs');
     writeFileSync(script, `
@@ -54,12 +54,19 @@ describe('handle allocation is serialized across processes', () => {
       console.log(r.handle);
     `);
 
+    // MUST be launched together and awaited together. `execFileSync` inside a
+    // map looks like a fan-out and is not one: each child runs to completion
+    // before the next starts, so the processes never overlap and the assertion
+    // below holds even with no lock at all. That version of this test passed
+    // against completely unlocked code, which is worse than having no test —
+    // it certifies a guarantee it never exercised.
     const N = 8;
-    const kids = Array.from({ length: N }, () =>
-      execFileSync(process.execPath, [script], { encoding: 'utf8' }).trim());
+    const kids = await Promise.all(Array.from({ length: N }, () =>
+      new Promise((resolve, reject) =>
+        execFile(process.execPath, [script], (err, stdout) =>
+          err ? reject(err) : resolve(stdout.trim())))));
 
-    // Without the lock every one of these allocates IDEA-1 and the last writer
-    // wins, so N-1 ideas are destroyed. This is the whole reason the lock exists.
+    // Unlocked, all N allocate IDEA-1 and last-writer-wins destroys N-1 ideas.
     assert.equal(new Set(kids).size, N, `expected ${N} distinct handles, got ${JSON.stringify(kids)}`);
   });
 });
@@ -243,10 +250,42 @@ describe('the first-use migration gate', () => {
     assert.equal((await p.listRecords({ kind: 'idea' })).length, 3);
   });
 
-  it('refuses a partial store rather than projecting over the strays', async () => {
-    // The genuinely ambiguous state: importing the strays assumes the markdown
-    // is authoritative (it is not, after cutover), and ignoring them projects
-    // over someone's work. Both discard data in one of the two readings.
+  it('refuses an idea hand-typed into what is now generated output', async () => {
+    // Never issued by this store, so it cannot be a crashed create. Importing it
+    // would treat the markdown as authoritative when it no longer is.
+    const p = await provider();
+    const path = writeIdeabox(IDEABOX(3));
+    await ensureIdeaboxMigrated(p, path);
+    writeIdeabox(IDEABOX(3).replace('## Killed Ideas',
+      '#### IDEA-99 — typed in by hand\n**Status:** NEW | **Priority:** —\n**Idea:** x\n\n## Killed Ideas'));
+    await assert.rejects(ensureIdeaboxMigrated(p, path), (err) => {
+      assert.equal(err.code, 'IDEABOX_MIGRATION_CONFLICT');
+      assert.deepEqual(err.missing, ['IDEA-99']);
+      return true;
+    });
+  });
+
+  it('resumes an import that crashed partway through the corpus', async () => {
+    // Refusing this state strands the installation: the conflict error names
+    // `compose ideabox add`, and `add` runs this same gate, so every command
+    // fails with no way out. The handles the crash burned carry events and no
+    // `deleted`, which is what makes resuming safe rather than a guess.
+    const p = await provider();
+    const path = writeIdeabox(IDEABOX(6));
+    await ensureIdeaboxMigrated(p, path);
+    rmSync(join(tmp, 'records/records/IDEA-2.json'));
+    rmSync(join(tmp, 'records/records/IDEA-5.json'));
+
+    const result = await ensureIdeaboxMigrated(p, path);
+    assert.equal(result.migrated, true);
+    assert.equal((await p.listRecords({ kind: 'idea' })).length, 6);
+    assert.ok(await p.getRecord('IDEA-2'));
+  });
+
+  it('refuses a handle that was deliberately retired but still listed', async () => {
+    // Distinct from a crashed create: this one carries a `deleted` event, so
+    // importing would resurrect an idea someone removed on purpose. The file is
+    // simply stale output and a render fixes it.
     const p = await provider();
     const path = writeIdeabox(IDEABOX(4));
     await ensureIdeaboxMigrated(p, path);
@@ -350,6 +389,22 @@ describe('the compose ideabox CLI, writing through the record store', () => {
     assert.equal(afterKill.killed.length, 1);
     assert.equal(afterKill.killed[0].killedReason, 'not worth it');
     assert.equal(serializeIdeabox(afterKill), read(), 'killing an idea broke the round-trip');
+  });
+
+  it('does not rewrite the kill evidence when kill is retried', async () => {
+    // Every command writes its record before re-rendering, so "record committed,
+    // render failed" invites a retry — and an unconditional write would replace
+    // the original date and reason, most likely with "(no reason given)".
+    await run('add', 'doomed');
+    await run('kill', 'IDEA-1', 'the original reason');
+    const provider = await fluidProviderFor(project);
+    const first = await provider.getRecord('IDEA-1');
+
+    await run('kill', 'IDEA-1');           // retry, no reason given
+    const second = await provider.getRecord('IDEA-1');
+    assert.equal(second.killed.reason, 'the original reason');
+    assert.equal(second.killed.at, first.killed.at);
+    assert.match(read(), /the original reason/);
   });
 
   it('records promotion as a link, not a formatted status string', async () => {
