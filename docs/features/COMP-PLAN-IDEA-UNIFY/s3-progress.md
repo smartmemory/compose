@@ -1,8 +1,32 @@
 # COMP-PLAN-IDEA-UNIFY — S3 progress ledger
 
 **Slice:** S3 — wire callers + cutover
-**Status:** S3a COMPLETE (durable tracked record store). S3b NOT STARTED (wire CLI/API/UI + run the cutover).
-**Date:** 2026-08-04
+**Status:** S3a COMPLETE (durable tracked record store). **S3b-1 COMPLETE** (CLI cutover,
+import, allocation lock — `72d79f5`, `3ae6a65`). S3b-2 OPEN (API + cockpit + mobile).
+**Date:** 2026-08-04, S3b-1 appended 2026-08-05
+
+> **S3b split into two slices** (owner ruling 2026-08-05). S3b-1 is the CLI half and it
+> has shipped; see [blueprint-s3b-1.md](blueprint-s3b-1.md) for its decisions, its Codex
+> round-1 review and the measured cutover diff. Summary of what changed against the plan
+> written here:
+>
+> - **The cutover ran.** 26 records under `docs/product/fluid/`, every `IDEA-N` handle
+>   verbatim, `nextId` still 21. `docs/product/ideabox.md` is now generated and differs
+>   from the hand-written file in exactly three intended ways.
+> - **"Serializing allocation is S3b's job" was too narrow.** Allocation was not the only
+>   race: `updateRecord`, `appendDiscussion`, `addLink` and `removeLink` are all
+>   read-modify-write on one file. All six mutating methods now serialize on
+>   `lib/dir-lock.js`. Measured, not argued: 8 concurrent creates collide on IDEA-1
+>   without the lock, destroying 7 ideas.
+> - **`.compose/locks/` was the wrong home** and `record-store.js`'s comment saying so is
+>   corrected. It is not gitignored, and the lock writes an owner token inside itself.
+> - **Five defects were latent in shipped S2/S3a code**, each on a path no idea on disk
+>   had taken: the importer threw on any discussion entry or kill date, the renderer
+>   silently destroyed provider-written discussion entries, it emitted a priority on
+>   killed ideas (breaking the round-trip fixed point), it omitted the grouping
+>   placeholder for a file with no headings, and IDEA-20 imported with an empty body.
+> - **The migration is an upgrade path, not a one-off.** This was the review's most
+>   serious finding and the plan here missed it entirely — see F2 in the blueprint.
 
 ## Related Documents
 
