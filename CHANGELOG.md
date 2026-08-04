@@ -6,14 +6,19 @@
 
 With SmartMemory configured, Compose can now search your ideas the way you would
 ask a colleague: "have we talked about rate limiting?" rather than needing the
-exact title. Ideas, threads and questions are searchable this way.
+exact title. Ideas, threads, questions and decisions are all searchable this way.
 
-Clusters and decisions deliberately are not. A cluster is a label you wrote, not
-something to fuzzy-match against, and surfacing a decision by vague similarity
-risks handing you one that was already superseded. Both are still stored, and
-still readable the moment you name them. The exclusion is enforced on our side,
-by filtering what comes back, so it holds no matter how the SmartMemory server
-happens to be configured.
+Clusters deliberately are not. A cluster is a label you wrote, not something to
+fuzzy-match against. They are still stored, and still readable the moment you
+name one. The exclusion is enforced on our side, by filtering what comes back,
+so it holds no matter how the SmartMemory server happens to be configured.
+
+Searching decisions comes with one thing to know. A decision you killed still
+turns up, and says plainly that it was killed, which is usually what you want:
+"did we consider this?" is a real question. But if a decision was quietly
+replaced by a later one, rather than killed outright, the older one has no way to
+know that and will still read as current. Check the newer decisions around it
+before relying on an old one.
 
 Two limits worth knowing, both deliberate.
 

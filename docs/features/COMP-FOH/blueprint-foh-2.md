@@ -119,9 +119,18 @@ unfiltered query beats one-query-per-kind. Enforcement is by output exclusion,
 not by request scoping. Those are equivalent for the negative half, and only the
 output side is testable in one round trip.
 
-**RECALLABLE_KINDS = `idea`, `thread`, `question`** — architecture.md §Q3's FULL
-set. `cluster` and `decision` are INDEXED: stored and readable by handle, never
-returned from `recall()`.
+**RECALLABLE_KINDS = `idea`, `thread`, `question`, `decision`.** `decision` was
+INDEXED in architecture.md §Q3 and was **reversed by owner ruling 2026-08-04**,
+which §Q3 had explicitly left open as "the one item worth a second look". Only
+`cluster` stays out: a hand-authored grouping label is not a fuzzy-recall target.
+Excluded kinds remain stored and readable by handle.
+
+§Q3's objection to recalling decisions was surfacing a superseded one *as if it
+were live*. A hit carries the whole record including `status` and `killed`, so a
+killed decision is distinguishable — pinned by a test. **Residual, disclosed:**
+supersession is a `supersedes` link on the NEWER record, so the superseded one
+carries no marker of its own and will still be recalled as live. Closing that
+needs a back-reference on the superseded record, which is a storage change.
 
 ## Corrections table
 
@@ -323,7 +332,7 @@ without a real embedding model.
 - **Metadata filter on search** — would remove the starvation bound. Not filed: no evidence it is needed.
 - **`CHALLENGE`/`CONVICTION`/`CALIBRATION`/`CONTRADICTION`** — unchanged, still deferred past this slice.
 - **Multi-slice blueprint naming** — the tooling gap disclosed at the top.
-- **`decision` INDEXED vs FULL** — architecture.md's own open item. This slice implements INDEXED as ruled; flipping it later is a one-line change to `RECALLABLE_KINDS` plus a test.
+- ~~**`decision` INDEXED vs FULL**~~ — **CLOSED 2026-08-04**: owner ruled FULL. The residual supersession gap is recorded above and needs a storage-side back-reference, not a recall change.
 
 ## Verification Table (Phase 5)
 
