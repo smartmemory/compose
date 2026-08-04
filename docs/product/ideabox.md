@@ -156,4 +156,23 @@
 **Discussion:**
 - [2026-07-19] human: **Original framing.** The ideabox (`lib/ideabox.js`, this file) bypasses the tracker provider entirely, so the GitHub migration as scoped would leave ideation behind on a local file — yet ideas are the lowest-risk first workload (one file, staleness-tolerant, no atomic coupling to the feature aggregate) and the smallest real instance of the manager/engineer reconciliation vision: an idea is literally "discovered work," triage priority and promote/kill are literally the manager-owned fields, and `promoteIdea` is the identity claim-handshake in miniature. Sequence the dogfood ideabox → stratum (1 record) → compose (291 records), proving the field-ownership discipline in-house before any external transport exists.
 
+---
+
+### Unclustered
+
+#### IDEA-21 — Staleness-track multi-slice blueprints
+**Status:** NEW | **Priority:** — | **Tags:** tooling staleness blueprints
+**Source:** COMP-PLAN-IDEA-UNIFY S3b-1
+**Idea:** Compose tooling hard-codes '<feature>/blueprint.md' in five places (gsd.js:78, staleness.js:61, lane-gate.js:35, triage.js:338, feature-validator.js:540). A feature built in slices names them blueprint-foh-2.md, blueprint-s3b-1.md and so on, and none of those are staleness-tracked or reachable by a gate. No gate breaks today, which is the problem: the slice blueprints carrying the live decisions are exactly the ones nothing watches.
+
+#### IDEA-22 — Consolidate the six ad-hoc mkdir locks onto lib/dir-lock.js
+**Status:** NEW | **Priority:** — | **Tags:** locking tech-debt concurrency
+**Source:** COMP-PLAN-IDEA-UNIFY S3b-1 review round 2
+**Idea:** S3b-1 extracted the hardened advisory lock (owner token, heartbeat, stale reclaim, ABA-safe release AND ABA-safe reclaim) to lib/dir-lock.js, but only wired the fluid layer to it. Five copies remain in lib/ and they do NOT agree: the weakest sets its stale threshold equal to its acquire timeout, so ordinary contention is indistinguishable from a crashed holder and a busy lock gets stolen from a live owner. judgment-writer.js also still has the pre-fix reclaim race.
+
+#### IDEA-23 — lib/boundary-map.js is invisible to grep
+**Status:** NEW | **Priority:** — | **Tags:** tooling dx footgun
+**Source:** COMP-FOH / COMP-PLAN-IDEA-UNIFY
+**Idea:** Two literal NUL bytes near line 313 make the whole file unsearchable by grep and ripgrep, which silently return nothing rather than erroring. Any agent or human searching for a symbol defined there concludes it does not exist. Costs real time every session that touches the Boundary Map gate; read it with the Read tool or python until fixed.
+
 ## Killed Ideas

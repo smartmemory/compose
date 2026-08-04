@@ -1,0 +1,28 @@
+{
+  "id": "bb48d329-4cdb-4a70-a0b9-4167399e8746",
+  "handle": "IDEA-22",
+  "kind": "idea",
+  "title": "Consolidate the six ad-hoc mkdir locks onto lib/dir-lock.js",
+  "body": "S3b-1 extracted the hardened advisory lock (owner token, heartbeat, stale reclaim, ABA-safe release AND ABA-safe reclaim) to lib/dir-lock.js, but only wired the fluid layer to it. Five copies remain in lib/ and they do NOT agree: the weakest sets its stale threshold equal to its acquire timeout, so ordinary contention is indistinguishable from a crashed holder and a busy lock gets stolen from a live owner. judgment-writer.js also still has the pre-fix reclaim race.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": null,
+  "cluster_order": null,
+  "tags": [
+    "locking",
+    "tech-debt",
+    "concurrency"
+  ],
+  "source": "COMP-PLAN-IDEA-UNIFY S3b-1 review round 2",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "cli:ideabox",
+    "recorded_at": "2026-08-04T22:28:35.225Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T22:28:35.225Z",
+  "updated_at": "2026-08-04T22:28:35.225Z"
+}

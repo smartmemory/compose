@@ -330,3 +330,10 @@ names them rather than overwriting the file.
 
 The cockpit's ideabox write endpoints return 409 while this migration is in progress. Reads are
 unaffected.
+
+Ideas are stored by the **local** fluid provider by default, which is what you want.
+Setting `fluid.provider: "smartmemory"` in `.compose/compose.json` is not recommended for
+the ideabox yet: that provider does not serialize handle allocation, so two writes at once
+can be given the same idea number and one of them is lost, and an import interrupted by a
+network error cannot be re-run. Compose prints a warning if you configure it. Tracked as
+`COMP-FLUID-SEAM-GUARANTEES`.

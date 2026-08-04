@@ -1,0 +1,18 @@
+{
+  "code": "COMP-FLUID-SEAM-GUARANTEES",
+  "description": "Lift the fluid store's safety guarantees out of the floor provider and into the seam. S3b-1 put serialized mutation (lib/dir-lock.js) and restartable-import handle reclaim (reclaimAborted) in local-provider.js only, so smartmemory-provider.js has NEITHER while fully satisfying the seam interface: it takes no lock at all (unserialized allocation, and dir-lock is a local mutex that could never serialize the shared case anyway) and its issued-handle guard throws unconditionally, so an import interrupted by a network blip burns that handle permanently and can never be re-run. Latent today (no fluid block in compose.json, so the floor is used) and unsafe to enable until closed. Fix the seam, not the second implementation: state both obligations on FluidProvider and add a conformance suite every provider must pass, so a third implementation cannot miss them silently. Carries F6-1 (concurrent --cluster adds can duplicate a cluster) and F7-1 (a discussion author containing a space does not survive the markdown grammar). NON-GOAL: the SmartMemory service issues (reindex, PATCH-cannot-clear, _embed, supersession) are filed and owned upstream.",
+  "status": "PLANNED",
+  "phase": "COMP-PLAN-RIGOR: Front-of-Funnel Rigor + Parity",
+  "created": "2026-08-04",
+  "updated": "2026-08-04",
+  "complexity": "M",
+  "position": 2,
+  "impact": "high",
+  "links": [
+    {
+      "kind": "blocks",
+      "to_code": "COMP-FOH",
+      "note": "COMP-FOH's SmartMemory provider cannot safely back the ideabox until allocation is serialized across machines and the import is restartable. Enabling fluid.provider:\"smartmemory\" before this lands runs the ideabox on unserialized allocation."
+    }
+  ]
+}

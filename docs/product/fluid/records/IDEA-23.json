@@ -1,0 +1,28 @@
+{
+  "id": "b1624e55-0227-4f96-9499-2376c5e16b4d",
+  "handle": "IDEA-23",
+  "kind": "idea",
+  "title": "lib/boundary-map.js is invisible to grep",
+  "body": "Two literal NUL bytes near line 313 make the whole file unsearchable by grep and ripgrep, which silently return nothing rather than erroring. Any agent or human searching for a symbol defined there concludes it does not exist. Costs real time every session that touches the Boundary Map gate; read it with the Read tool or python until fixed.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": null,
+  "cluster_order": null,
+  "tags": [
+    "tooling",
+    "dx",
+    "footgun"
+  ],
+  "source": "COMP-FOH / COMP-PLAN-IDEA-UNIFY",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "cli:ideabox",
+    "recorded_at": "2026-08-04T22:28:35.684Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T22:28:35.684Z",
+  "updated_at": "2026-08-04T22:28:35.684Z"
+}
