@@ -18,7 +18,13 @@ import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { FluidConfigError, FluidRecordNotFound, CAP } from '../lib/fluid/provider.js';
+import { LocalFluidProvider } from '../lib/fluid/local-provider.js';
+import { assertValid } from '../lib/fluid/schema.js';
 import { SmartMemoryFluidProvider } from '../lib/fluid/smartmemory-provider.js';
 
 const servers = [];
@@ -58,6 +64,13 @@ function makeServer() {
           metadata: { ...parsed.metadata, created_at: `2026-01-01T00:00:${String(clock).padStart(2, '0')}Z` },
         });
         return json(200, { id, status: 'created' }); // 200, not 201
+      }
+
+      // Recall (FOH-2). `hits` is set per-test so ranking and filtering are
+      // testable without a real embedding model. The stub echoes whatever the
+      // test queued, in order — the provider must not reorder survivors.
+      if (path === '/memory/search' && req.method === 'POST') {
+        return json(200, { results: server.__hits ?? [] });
       }
 
       if (path === '/memory/list' && req.method === 'GET') {
@@ -109,7 +122,17 @@ async function withProvider(fn, { workspaceId = 'ws-test' } = {}) {
       workspaceId,
       timeoutMs: 5000,
     });
-    await fn({ provider, items, seen });
+    // Queue search hits for a recall test: takes the live items for the given
+    // handles, so a hit's payload is whatever the store actually holds.
+    const queueHits = (specs) => {
+      server.__hits = specs.map(({ handle, score, item }) => {
+        const found = item ?? [...items.values()].find(
+          (i) => i.metadata?.handle === handle && i.metadata?.fluid_ns === 'compose.fluid.v1',
+        );
+        return { ...found, score };
+      });
+    };
+    await fn({ provider, items, seen, queueHits });
   } finally {
     delete process.env.SM_FLUID_KEY;
     server.close();
@@ -153,13 +176,16 @@ describe('SmartMemoryFluidProvider — configuration', () => {
 });
 
 describe('SmartMemoryFluidProvider — seam contract', () => {
-  test('declares storage capabilities only; semantic ones still throw', async () => {
+  // FOH-2 added RECALL. The rest stay undeclared and keep inheriting the base
+  // class's refusal — a capability and its implementation move together.
+  test('declares storage + RECALL; the remaining semantic capabilities still throw', async () => {
     await withProvider(async ({ provider }) => {
       assert.ok(provider.has(CAP.RECORDS) && provider.has(CAP.EVENTS) && provider.has(CAP.LINKS));
-      for (const cap of [CAP.RECALL, CAP.CHALLENGE, CAP.CONVICTION, CAP.CALIBRATION, CAP.CONTRADICTION]) {
+      assert.ok(provider.has(CAP.RECALL), 'FOH-2 declares RECALL');
+      for (const cap of [CAP.CHALLENGE, CAP.CONVICTION, CAP.CALIBRATION, CAP.CONTRADICTION]) {
         assert.equal(provider.has(cap), false, `${cap} must not be declared`);
       }
-      await assert.rejects(() => provider.recall('anything'), /FluidCapabilityUnavailable|capability/i);
+      await assert.rejects(() => provider.challenge('IDEA-1'), /FluidCapabilityUnavailable|capability/i);
     });
   });
 
@@ -426,6 +452,220 @@ describe('SmartMemoryFluidProvider — the pilot workload', () => {
       const inCluster = await provider.listRecords({ cluster: cluster.handle });
       assert.deepEqual(inCluster.map((r) => r.handle), [one.handle, two.handle], 'stable cluster order');
       assert.equal((await provider.listRecords({ kind: 'cluster' })).length, 1);
+    });
+  });
+});
+
+describe('SmartMemoryFluidProvider — recall (FOH-2)', () => {
+  test('declares RECALL and answers; the floor refuses', async () => {
+    await withProvider(async ({ provider, queueHits }) => {
+      assert.ok(provider.has(CAP.RECALL), 'the capability must be declared');
+      const rec = await provider.createRecord({ title: 'findable' });
+      queueHits([{ handle: rec.handle, score: 0.9 }]);
+      const hits = await provider.recall('findable');
+      assert.equal(hits.length, 1);
+    });
+    // The capability difference IS the seam's point: same call, same input.
+    const floor = new LocalFluidProvider();
+    await floor.init(mkdtempSync(join(tmpdir(), 'fluid-recall-')), {});
+    await assert.rejects(() => floor.recall('anything'), /FluidCapabilityUnavailable|capability/i);
+  });
+
+  test('a hit is {handle, score, record}, and record validates against the contract', async () => {
+    await withProvider(async ({ provider, queueHits }) => {
+      const rec = await provider.createRecord({ title: 'shaped', body: 'prose' });
+      queueHits([{ handle: rec.handle, score: 0.75 }]);
+      const [hit] = await provider.recall('shaped');
+      assert.deepEqual(Object.keys(hit).sort(), ['handle', 'record', 'score']);
+      assert.equal(hit.handle, rec.handle);
+      assert.equal(hit.score, 0.75);
+      assert.deepEqual(hit.record, rec);
+      // Would fail if score were glued onto the record: the schema is
+      // additionalProperties:false.
+      assertValid('record', hit.record, 'record');
+    });
+  });
+
+  test('a missing score is null, never 0', async () => {
+    await withProvider(async ({ provider, queueHits }) => {
+      const rec = await provider.createRecord({ title: 'unscored' });
+      queueHits([{ handle: rec.handle, score: undefined }]);
+      const [hit] = await provider.recall('unscored');
+      assert.equal(hit.score, null, '0 would sort as a real, terrible score');
+    });
+  });
+
+  test('INDEXED kinds are excluded even when ranked above a recallable one', async () => {
+    await withProvider(async ({ provider, queueHits }) => {
+      const cluster = await provider.createRecord({ kind: 'cluster', title: 'Theme' });
+      const decision = await provider.createRecord({ kind: 'decision', title: 'Chosen' });
+      const idea = await provider.createRecord({ kind: 'idea', title: 'An idea' });
+      // Server ranks the non-recallable ones first — the config-dial failure mode.
+      queueHits([
+        { handle: cluster.handle, score: 0.99 },
+        { handle: decision.handle, score: 0.98 },
+        { handle: idea.handle, score: 0.10 },
+      ]);
+      const hits = await provider.recall('anything');
+      assert.deepEqual(hits.map((h) => h.handle), [idea.handle],
+        'output filtering must hold regardless of what the server embedded');
+    });
+  });
+
+  test('all three FULL kinds are recallable', async () => {
+    await withProvider(async ({ provider, queueHits }) => {
+      const made = [];
+      for (const kind of ['idea', 'thread', 'question']) {
+        made.push(await provider.createRecord({ kind, title: `a ${kind}` }));
+      }
+      queueHits(made.map((r, i) => ({ handle: r.handle, score: 1 - i / 10 })));
+      const hits = await provider.recall('anything');
+      assert.deepEqual(hits.map((h) => h.handle), made.map((r) => r.handle));
+    });
+  });
+
+  test('non-fluid items in the same workspace are dropped', async () => {
+    await withProvider(async ({ provider, queueHits }) => {
+      const rec = await provider.createRecord({ title: 'ours' });
+      queueHits([
+        { item: { item_id: 'foreign', content: 'someone else', memory_type: 'semantic', metadata: {} }, score: 0.99 },
+        { handle: rec.handle, score: 0.5 },
+      ]);
+      const hits = await provider.recall('anything');
+      assert.deepEqual(hits.map((h) => h.handle), [rec.handle]);
+    });
+  });
+
+  test('an unreadable blob is skipped, not fatal', async () => {
+    await withProvider(async ({ provider, queueHits }) => {
+      const rec = await provider.createRecord({ title: 'good' });
+      queueHits([
+        {
+          item: {
+            item_id: 'corrupt',
+            content: 'x',
+            memory_type: 'fluid_idea',
+            metadata: { fluid_ns: 'compose.fluid.v1', handle: 'IDEA-99', kind: 'idea', fluid_record_json: '{not json' },
+          },
+          score: 0.99,
+        },
+        { handle: rec.handle, score: 0.5 },
+      ]);
+      const hits = await provider.recall('anything');
+      assert.deepEqual(hits.map((h) => h.handle), [rec.handle], 'one corrupt row must not break recall');
+    });
+  });
+
+  test('reconstructs records from the hit itself — no follow-up fetch', async () => {
+    await withProvider(async ({ provider, queueHits, seen }) => {
+      const rec = await provider.createRecord({ title: 'no n+1', body: 'body text' });
+      queueHits([{ handle: rec.handle, score: 0.9 }]);
+      seen.length = 0;
+      const [hit] = await provider.recall('anything');
+      assert.deepEqual(hit.record, rec);
+      const gets = seen.filter((s) => s.method === 'GET' && s.path.startsWith('/memory/') && s.path !== '/memory/list');
+      assert.equal(gets.length, 0, 'the blob rides back on the hit; a per-hit GET would be N+1');
+    });
+  });
+
+  test('duplicate handles collapse to the earliest, including on an equal timestamp', async () => {
+    await withProvider(async ({ provider, items, queueHits }) => {
+      const rec = await provider.createRecord({ title: 'original' });
+      const live = [...items.values()].find((i) => i.metadata.fluid_ns === 'compose.fluid.v1');
+
+      const dupe = (id, createdAt, title) => ({
+        item_id: id,
+        content: title,
+        memory_type: 'fluid_idea',
+        metadata: {
+          ...live.metadata,
+          created_at: createdAt,
+          fluid_record_json: JSON.stringify({ ...JSON.parse(live.metadata.fluid_record_json), title }),
+        },
+      });
+
+      // Different timestamps: earliest created_at wins.
+      queueHits([
+        { item: dupe('later', '2026-01-01T00:00:09Z', 'later copy'), score: 0.9 },
+        { item: dupe('earlier', '2026-01-01T00:00:01Z', 'earlier copy'), score: 0.4 },
+      ]);
+      let hits = await provider.recall('anything');
+      assert.equal(hits.length, 1, 'one handle, one hit');
+      assert.equal(hits[0].record.title, 'earlier copy');
+      assert.equal(hits[0].score, 0.9, 'the surviving hit keeps its original rank and score');
+
+      // Equal timestamps: item_id breaks the tie, matching D-FOH-4.
+      queueHits([
+        { item: dupe('bbb', '2026-01-01T00:00:05Z', 'bbb copy'), score: 0.9 },
+        { item: dupe('aaa', '2026-01-01T00:00:05Z', 'aaa copy'), score: 0.4 },
+      ]);
+      hits = await provider.recall('anything');
+      assert.equal(hits.length, 1);
+      assert.equal(hits[0].record.title, 'aaa copy', 'lexicographic item_id, not arbitrary');
+      assert.equal(hits[0].handle, rec.handle);
+    });
+  });
+
+  test('limit defaults to 10, clamps, and tolerates garbage', async () => {
+    await withProvider(async ({ provider, queueHits, seen }) => {
+      const made = [];
+      for (let i = 0; i < 12; i += 1) made.push(await provider.createRecord({ title: `idea ${i}` }));
+      const queue = () => queueHits(made.map((r, i) => ({ handle: r.handle, score: 1 - i / 100 })));
+
+      queue();
+      assert.equal((await provider.recall('q')).length, 10, 'default');
+
+      for (const bad of [0, -5, 'x', null, 1.5e400]) {
+        queue();
+        assert.equal((await provider.recall('q', { limit: bad })).length, 10, `garbage ${String(bad)} → default`);
+      }
+
+      queue();
+      assert.equal((await provider.recall('q', { limit: 3 })).length, 3);
+
+      // Fetch bounds: floor at limit 1, cap at limit 100.
+      seen.length = 0;
+      queue();
+      await provider.recall('q', { limit: 1 });
+      assert.equal(seen.find((s) => s.path === '/memory/search').body.top_k, 20, 'MIN_FETCH floor, not limit*4');
+
+      seen.length = 0;
+      queue();
+      await provider.recall('q', { limit: 100 });
+      assert.equal(seen.find((s) => s.path === '/memory/search').body.top_k, 200, 'TOP_K_CAP');
+    });
+  });
+
+  test('every recall pins channel_weights:{} and carries the workspace', async () => {
+    await withProvider(async ({ provider, queueHits, seen }) => {
+      const rec = await provider.createRecord({ title: 'x' });
+      queueHits([{ handle: rec.handle, score: 1 }]);
+      seen.length = 0;
+      await provider.recall('q');
+      const req = seen.find((s) => s.path === '/memory/search');
+      assert.deepEqual(req.body.channel_weights, {},
+        'without this the API key\'s recall profile can disable retrieval channels');
+      assert.equal(req.workspace, 'ws-test');
+    });
+  });
+
+  test('an edited record: we never reindex, and the payload is CURRENT', async () => {
+    await withProvider(async ({ provider, queueHits, seen }) => {
+      const rec = await provider.createRecord({ title: 'first title', body: 'first body' });
+      seen.length = 0;
+      await provider.updateRecord(rec.handle, { body: 'second body' });
+
+      // The invariant that is actually true: no reindex call exists to make.
+      assert.equal(seen.filter((s) => s.path.includes('reindex')).length, 0);
+      assert.ok(seen.some((s) => s.method === 'PATCH' && s.body?.content?.includes('second body')),
+        'content is rewritten on update');
+
+      // Deliberately NOT asserting "the edited record is unfindable" — that is
+      // false. Lexical channels see the new text; only the vector lags.
+      assert.equal((await provider.getRecord(rec.handle)).body, 'second body');
+      queueHits([{ handle: rec.handle, score: 0.5 }]);
+      const [hit] = await provider.recall('anything');
+      assert.equal(hit.record.body, 'second body', 'hits carry current state, not indexed state');
     });
   });
 });
