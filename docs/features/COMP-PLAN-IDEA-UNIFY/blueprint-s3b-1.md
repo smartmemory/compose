@@ -346,6 +346,74 @@ duplicates. There is no render-only repair path. **UPHELD.**
 framing and is withdrawn. The routes fail closed, so nothing writes markdown behind the
 CLI's back, and the banner can state what is true without qualification.
 
+## Review round 2 (Codex sol/xhigh, against the shipped code at `20c3557`)
+
+Verdict: changes requested — **no P0, five P1, two P2.** Aimed at the round-1 fixes, per
+the standing rule that round N+1 mostly finds what round N's fixes introduced. It did: four
+of the five P1s are defects in the fixes, not in the original plan.
+
+**F2-1 [P1] — the concurrency test did not test concurrency. FIXED.**
+`Array.from({length: N}, () => execFileSync(...))` runs each child to completion before
+starting the next, so the processes never overlapped. Measured: 4 × 300ms took 1,312ms.
+**That test passed against completely unlocked code**, which is worse than no test — it
+certified a guarantee it never exercised, and the "8 handles, 8 collisions" result quoted
+in the previous commit came from an ad-hoc shell probe, not from it. Now `execFile` under
+`Promise.all`; removing the lock fails 2 tests.
+
+**F1-1 [P1] — a partial first-use import stranded the installation. FIXED.**
+A crash partway through the corpus leaves records present, so the next run took the
+"records exist" branch and threw `IDEABOX_MIGRATION_CONFLICT` for every remaining handle.
+The error named `compose ideabox add`, and `add` runs the same gate — so every command
+failed with no way out, and the `reclaimAborted` path built for exactly this was
+unreachable. The gate now classifies each missing handle from the events log:
+
+| Evidence | Meaning | Action |
+|---|---|---|
+| issued, no `deleted` | a create that crashed | **resume** the import |
+| issued, `deleted` | deliberately retired, file is stale output | refuse |
+| never issued | hand-typed into generated output | refuse |
+
+The evidence must be **per handle**. A global "did an import ever run" check degrades the
+moment the first import succeeds, because the log keeps `imported` events forever — it
+would then quietly import anything later hand-added, losing the protection F2 exists for.
+The third row was found by a test failing after the first attempt at this fix.
+
+**F4-1 [P1] — retrying `kill` destroyed the original evidence. FIXED.**
+`findIdea` returns killed records, and `kill` rewrote `killed.at`/`killed.reason`
+unconditionally. Since every command writes its record before re-rendering,
+"record committed, render failed" invites exactly that retry — replacing the real reason
+with `(no reason given)`. Now a no-op that still re-renders, matching the legacy helper.
+
+**F2-2 [P1] — stale-lock reclaim was ABA-unsafe. FIXED.**
+Two contenders could both judge the same lock stale; the loser's blind `rmSync` then
+deleted the winner's fresh lock and both entered the critical section. The owner token was
+checked on release but not on reclaim. Reclaim is now compare-and-delete on mtime + token.
+(Inherited from `judgment-writer.js`, which still has it — see Deferred.)
+
+**F5-1 [P1] — `_isAbortedAllocation` overclaimed. DOC FIXED, behaviour kept.**
+It cannot prove a handle was never live: a record whose file vanished out-of-band has the
+same shape, and the test itself deletes a live record's file. Upheld as a documentation
+defect. The behaviour stands because safety comes from the **caller** — only the import
+passes the flag, and it supplies handles from the markdown, so a reclaim can only restore
+a handle to the content the file already says belongs to it. The comment now says that
+instead of claiming a proof it does not have.
+
+**Deferred to follow-ups (2, both P2, plus one P1 that is unreachable in this config):**
+
+- **F3-1 [P1] — import restartability is local-provider-only.** `smartmemory-provider.js`
+  appends its tombstone before `createItem` and ignores `reclaimAborted`, so a network
+  failure mid-import burns the handle permanently. Unreachable here — `.compose/compose.json`
+  has no `fluid` block, so the floor is used — but it is real for anyone who configures
+  SmartMemory. `reclaimAborted` should become part of the seam contract.
+- **F6-1 [P2] — concurrent `add --cluster "X"` can create duplicate clusters.** Lookup and
+  create are separate operations and the lock covers only each individual mutation. Needs a
+  find-or-create inside one critical section, which needs a non-locking inner create
+  (`withDirLock` is not reentrant).
+- **F7-1 [P2] — the markdown loses discussion authors containing spaces.** The contract
+  accepts any string, the parser's grammar is `\w+`, and the renderer emits verbatim, so
+  `author: "Jane Doe"` round-trips to zero discussion entries. Unreachable from the CLI
+  (which always writes `human`) but reachable from the provider and from S3b-2's API.
+
 ## Deferred / flagged
 
 - **S3b-2:** API routes, desktop store, mobile client, and the `effort`/`impact` contract
