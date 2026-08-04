@@ -251,3 +251,271 @@ describe('createSmartmemoryClient.search', () => {
     }
   });
 });
+
+// ── typed-record CRUD (COMP-FOH S01) ────────────────────────────────────────
+//
+// A second stub, because the CRUD routes need per-method behaviour the ingest
+// stub does not model: a 404 that must become `null` rather than a throw, a
+// method-aware response body, and header capture for X-Workspace-Id.
+
+function makeCrudStub({ items = {}, failStatus = null, malformed2xx = false, missingField = false } = {}) {
+  const seen = [];
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      let parsed = null;
+      try { parsed = body ? JSON.parse(body) : null; } catch { /* ignore */ }
+      seen.push({
+        url: req.url,
+        method: req.method,
+        body: parsed,
+        auth: req.headers.authorization,
+        workspace: req.headers['x-workspace-id'],
+      });
+
+      if (malformed2xx) {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        return res.end('<html>nope</html>');
+      }
+      if (failStatus) { res.writeHead(failStatus); return res.end('{"error":"x"}'); }
+
+      const [path, query] = req.url.split('?');
+
+      if (path === '/memory/add') {
+        res.writeHead(200); // 200, NOT 201 — C9
+        return res.end(JSON.stringify(missingField ? { status: 'created' } : { id: 'item-new', status: 'created' }));
+      }
+      if (path === '/memory/list') {
+        const qs = new URLSearchParams(query || '');
+        let all = Object.values(items);
+        const k = qs.get('metadata_key');
+        const v = qs.get('metadata_value');
+        if (k) all = all.filter((it) => String(it.metadata?.[k]) === v);
+        const offset = Number(qs.get('offset') ?? 0);
+        const limit = Number(qs.get('limit') ?? 50);
+        res.writeHead(200);
+        return res.end(JSON.stringify(
+          missingField
+            ? { total: all.length }
+            : { items: all.slice(offset, offset + limit), total: all.length, limit, offset },
+        ));
+      }
+      const m = path.match(/^\/memory\/(.+)$/);
+      if (m) {
+        const id = decodeURIComponent(m[1]);
+        if (req.method === 'GET') {
+          if (!items[id]) { res.writeHead(404); return res.end('{"detail":"not found"}'); }
+          res.writeHead(200);
+          return res.end(JSON.stringify(items[id]));
+        }
+        if (req.method === 'PATCH' || req.method === 'DELETE') {
+          if (!items[id]) { res.writeHead(404); return res.end('{"detail":"not found"}'); }
+          res.writeHead(200);
+          return res.end(JSON.stringify({ status: 'ok', item_id: id }));
+        }
+      }
+      res.writeHead(404);
+      res.end('{"detail":"no route"}');
+    });
+  });
+  return { server, seen };
+}
+
+async function withCrudStub(opts, fn) {
+  const { server, seen } = makeCrudStub(opts);
+  await listen(server);
+  servers.push(server);
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  process.env.SM_TEST_KEY = 'crud-key';
+  try {
+    await fn({ baseUrl, seen });
+  } finally {
+    delete process.env.SM_TEST_KEY;
+    server.close();
+  }
+}
+
+const crudCfg = (baseUrl, extra = {}) => ({ baseUrl, apiKeyEnv: 'SM_TEST_KEY', ...extra });
+
+describe('createSmartmemoryClient — typed-record CRUD', () => {
+  test('createItem posts the wire shape, defaults use_pipeline to false, returns id', async () => {
+    await withCrudStub({}, async ({ baseUrl, seen }) => {
+      const client = createSmartmemoryClient(crudCfg(baseUrl, { workspaceId: 'ws-1' }));
+      const out = await client.createItem({
+        content: 'rendered text',
+        memoryType: 'fluid_idea',
+        metadata: { handle: 'IDEA-1' },
+      });
+      assert.equal(out.id, 'item-new');
+      assert.equal(seen[0].method, 'POST');
+      assert.equal(seen[0].url, '/memory/add');
+      assert.deepEqual(seen[0].body, {
+        content: 'rendered text',
+        memory_type: 'fluid_idea',
+        metadata: { handle: 'IDEA-1' },
+        use_pipeline: false,
+      });
+    });
+  });
+
+  test('every CRUD call carries X-Workspace-Id when configured', async () => {
+    await withCrudStub({ items: { a: { item_id: 'a', metadata: {} } } }, async ({ baseUrl, seen }) => {
+      const client = createSmartmemoryClient(crudCfg(baseUrl, { workspaceId: 'ws-42' }));
+      await client.createItem({ content: 'c', memoryType: 'fluid_idea' });
+      await client.getItem('a');
+      await client.listItems();
+      await client.updateItem('a', { metadata: { x: 1 } });
+      await client.deleteItem('a');
+      assert.equal(seen.length, 5);
+      for (const s of seen) assert.equal(s.workspace, 'ws-42');
+    });
+  });
+
+  test('workspaceId omitted → header absent, not the string "undefined"', async () => {
+    await withCrudStub({}, async ({ baseUrl, seen }) => {
+      const client = createSmartmemoryClient(crudCfg(baseUrl));
+      await client.createItem({ content: 'c', memoryType: 'fluid_idea' });
+      assert.equal(seen[0].workspace, undefined);
+    });
+  });
+
+  test('getItem on a missing id returns null, does NOT throw', async () => {
+    await withCrudStub({}, async ({ baseUrl }) => {
+      const client = createSmartmemoryClient(crudCfg(baseUrl));
+      assert.equal(await client.getItem('nope'), null);
+    });
+  });
+
+  test('updateItem and deleteItem on a missing id DO throw 404', async () => {
+    await withCrudStub({}, async ({ baseUrl }) => {
+      const client = createSmartmemoryClient(crudCfg(baseUrl));
+      await assert.rejects(
+        () => client.updateItem('nope', { metadata: {} }),
+        (err) => err instanceof SmartmemoryHttpError && err.status === 404,
+      );
+      await assert.rejects(
+        () => client.deleteItem('nope'),
+        (err) => err instanceof SmartmemoryHttpError && err.status === 404,
+      );
+    });
+  });
+
+  test('listItems filters on a single metadata pair and honours offset/limit', async () => {
+    const items = {};
+    for (let i = 1; i <= 120; i += 1) items[`i${i}`] = { item_id: `i${i}`, metadata: { ns: 'fluid' } };
+    items.other = { item_id: 'other', metadata: { ns: 'something-else' } };
+    await withCrudStub({ items }, async ({ baseUrl, seen }) => {
+      const client = createSmartmemoryClient(crudCfg(baseUrl));
+      const page = await client.listItems({ metadataKey: 'ns', metadataValue: 'fluid', limit: 50, offset: 0 });
+      assert.equal(page.total, 120);
+      assert.equal(page.items.length, 50);
+      const next = await client.listItems({ metadataKey: 'ns', metadataValue: 'fluid', limit: 50, offset: 100 });
+      assert.equal(next.items.length, 20);
+      assert.ok(seen[0].url.includes('metadata_key=ns'));
+      assert.ok(seen[0].url.includes('metadata_value=fluid'));
+    });
+  });
+
+  test('listItems refuses half a metadata filter pair before any request', async () => {
+    await withCrudStub({}, async ({ baseUrl, seen }) => {
+      const client = createSmartmemoryClient(crudCfg(baseUrl));
+      await assert.rejects(
+        () => client.listItems({ metadataKey: 'ns' }),
+        (err) => err instanceof SmartmemoryHttpError && err.status === 0,
+      );
+      assert.equal(seen.length, 0);
+    });
+  });
+
+  test('updateItem sends only the fields given, and refuses an empty patch', async () => {
+    await withCrudStub({ items: { a: { item_id: 'a', metadata: {} } } }, async ({ baseUrl, seen }) => {
+      const client = createSmartmemoryClient(crudCfg(baseUrl));
+      await client.updateItem('a', { metadata: { k: 'v' } });
+      assert.equal(seen[0].method, 'PATCH');
+      assert.deepEqual(seen[0].body, { metadata: { k: 'v' } });
+      await assert.rejects(
+        () => client.updateItem('a', {}),
+        (err) => err instanceof SmartmemoryHttpError && err.status === 0,
+      );
+      assert.equal(seen.length, 1);
+    });
+  });
+
+  test('deleteItem passes cleanup_orphans only when asked', async () => {
+    await withCrudStub({ items: { a: { item_id: 'a', metadata: {} } } }, async ({ baseUrl, seen }) => {
+      const client = createSmartmemoryClient(crudCfg(baseUrl));
+      await client.deleteItem('a');
+      await client.deleteItem('a', { cleanupOrphans: true });
+      assert.equal(seen[0].url, '/memory/a');
+      assert.equal(seen[1].url, '/memory/a?cleanup_orphans=true');
+      assert.equal(seen[1].method, 'DELETE');
+    });
+  });
+
+  test('item ids are URL-encoded, so a slash cannot forge a path', async () => {
+    await withCrudStub({}, async ({ baseUrl, seen }) => {
+      const client = createSmartmemoryClient(crudCfg(baseUrl));
+      await client.getItem('a/../../evil');
+      assert.equal(seen[0].url, '/memory/a%2F..%2F..%2Fevil');
+    });
+  });
+
+  test('missing env key throws before any fetch, on every CRUD method', async () => {
+    await withCrudStub({}, async ({ baseUrl, seen }) => {
+      delete process.env.SM_TEST_KEY;
+      const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY' });
+      for (const call of [
+        () => client.createItem({ content: 'c', memoryType: 'fluid_idea' }),
+        () => client.getItem('a'),
+        () => client.listItems(),
+        () => client.updateItem('a', { metadata: {} }),
+        () => client.deleteItem('a'),
+      ]) {
+        await assert.rejects(call, (err) => err instanceof SmartmemoryHttpError && err.status === 0);
+      }
+      assert.equal(seen.length, 0);
+    });
+  });
+
+  test('a 2xx HTML body is malformed-response, not a silent success', async () => {
+    await withCrudStub({ malformed2xx: true }, async ({ baseUrl }) => {
+      const client = createSmartmemoryClient(crudCfg(baseUrl));
+      await assert.rejects(
+        () => client.createItem({ content: 'c', memoryType: 'fluid_idea' }),
+        (err) => err instanceof SmartmemoryHttpError && err.kind === 'malformed-response',
+      );
+    });
+  });
+
+  test('a 2xx missing the field the caller reads is malformed-response', async () => {
+    await withCrudStub({ missingField: true }, async ({ baseUrl }) => {
+      const client = createSmartmemoryClient(crudCfg(baseUrl));
+      await assert.rejects(
+        () => client.createItem({ content: 'c', memoryType: 'fluid_idea' }),
+        (err) => err instanceof SmartmemoryHttpError && err.kind === 'malformed-response',
+      );
+      await assert.rejects(
+        () => client.listItems(),
+        (err) => err instanceof SmartmemoryHttpError && err.kind === 'malformed-response',
+      );
+    });
+  });
+
+  test('a 500 surfaces its status', async () => {
+    await withCrudStub({ failStatus: 500 }, async ({ baseUrl }) => {
+      const client = createSmartmemoryClient(crudCfg(baseUrl));
+      await assert.rejects(
+        () => client.getItem('a'),
+        (err) => err instanceof SmartmemoryHttpError && err.status === 500,
+      );
+    });
+  });
+
+  test('the shipped pipeline surface is untouched', async () => {
+    const client = createSmartmemoryClient({ baseUrl: 'http://127.0.0.1:1' });
+    for (const m of ['health', 'ingest', 'search', 'createItem', 'getItem', 'listItems', 'updateItem', 'deleteItem']) {
+      assert.equal(typeof client[m], 'function', `${m} should be exposed`);
+    }
+  });
+});
