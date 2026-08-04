@@ -8,7 +8,7 @@
 ## Related Documents
 
 - Design: [design.md](design.md) — the two open questions this doc resolves are named there (Sequencing section).
-- Sibling in-flight: [COMP-PLAN-IDEA-UNIFY](../COMP-PLAN-IDEA-UNIFY/design.md) (S1+S2 shipped, unpushed) — this architecture builds strictly on top of its fluid-store provider seam, does not duplicate it.
+- Sibling in-flight: [COMP-PLAN-IDEA-UNIFY](../COMP-PLAN-IDEA-UNIFY/design.md) (S1+S2+**S3a** shipped and pushed @5cfe013; S3b + S4 open) — this architecture builds strictly on top of its fluid-store provider seam, does not duplicate it.
 - Ruling: [what-to-build-vision.md §8k](../../product/2026-07-20-what-to-build-vision.md) — `PROVIDER-SEAM`, `BUNDLE-IS-SUGAR`, `COLLEAGUE-ALL-IN`.
 
 ## What all three proposals agreed on (adopted outright, not re-litigated)
@@ -71,14 +71,16 @@ Fluid record kinds are fixed at 7 (`lib/fluid/provider.js`): `idea, position, jo
 - **`idea`, `thread`, `question`** → **FULL** (recallable). Associative "have we discussed this" recall is core to these types; all three proposals agree.
 - **`cluster`** → **INDEXED** only. A hand-authored grouping label, never a fuzzy-recall target (matches existing D7 in COMP-PLAN-IDEA-UNIFY's own s2-progress.md).
 - **`decision`** → **INDEXED** (real, disclosed disagreement — 2 of 3 proposals said FULL). Adopting INDEXED: canon needs exact field lookup (`get_active_decisions`-style precision), and fuzzy recall risks surfacing a *superseded* decision as if it were live. Upgradeable to FULL later if a genuine "search past decisions by vibe" need shows up — not built ahead of demand. **This is the one open item still worth a second look at blueprint time**, not fully closed by this synthesis.
-- **`position`, `joint`** → not addressed with specificity by any proposal; default to FULL (deliberation-shaped, same reasoning as `thread`/`question`) pending blueprint-time confirmation.
+- **`position`, `joint`** → ~~default to FULL~~ **CONTESTED as of 2026-08-04.** No proposal addressed these with specificity, and COMP-PLAN-IDEA-UNIFY S3a's **D12** now argues they should not be fluid records on any provider: the judgment layer already owns both kinds, with its own tracked store (`docs/judgment/records/{positions,joints}/`) and its own write tools (`judgment_position_create`, `judgment_joint_add`). Accepting them here would give one kind two stores and two canons. The local floor already refuses them (`supportedKinds()` is `idea, decision, thread, question, cluster`). **Resolve before any slice touches these kinds; FOH-1 is `idea`-only, so it is not blocked.**
 - **`feature`/roadmap-item** → explicitly **not** a fluid/SmartMemory type — stays git-canon per Decision 2. The kitchen-side `lib/smartmemory-sync.js:153-185` already ingests feature artifacts (design/blueprint/plan/report) as INDEXED content; registering a typed schema for that is a SmartMemory-side concern, not a new Compose component.
 
 ## Sequencing — first buildable slices
 
 Two slices, sitting **behind** COMP-PLAN-IDEA-UNIFY's caller-side work (S3/S4), not parallel to or duplicating it:
 
-1. **FOH-1 — `SmartMemoryFluidProvider`, storage-only.** Declares `STORAGE_CAP` only (no `RECALL`/`CHALLENGE`/etc yet), kind `idea` only (matches the pilot kind COMP-PLAN-IDEA-UNIFY S1 already scoped). Fills the `factory.js:91` stub. Independently testable exactly like `local-provider.js` (own suite, injected-store style). Can build in parallel with COMP-PLAN-IDEA-UNIFY S3 since it's a new file behind an existing interface.
+1. **FOH-1 — `SmartMemoryFluidProvider`, storage-only.** Declares `STORAGE_CAP` only (no `RECALL`/`CHALLENGE`/etc yet), kind `idea` only (matches the pilot kind COMP-PLAN-IDEA-UNIFY S1 already scoped). Fills the `factory.js:91` stub. Independently testable exactly like `local-provider.js` (own suite, real backend, provider constructed against a disposable scope). Can build in parallel with COMP-PLAN-IDEA-UNIFY S3b since it's a new file behind an existing interface.
+
+   *Corrected 2026-08-04 after S3a landed:* the original wording said "injected-store style". That test pattern no longer exists — S3a removed `LocalFluidProvider`'s `config.store` injection (present at `8a6b687:201-202`) along with its `VisionStore` dependency, replacing `dataDir` with `recordsRoot`. FOH-1's analogous knob is a workspace id, not an injected store.
 2. **FOH-2 — RECALL.** Declares `CAP.RECALL`, implemented over the already-shipped `client.search()`. Cheapest real "colleague" capability to reach — no new SmartMemory-side machinery, just wiring a search endpoint that already works end-to-end for a different purpose (`server/smartmemory-routes.js`).
 
 Everything else — `CHALLENGE`/`CONVICTION`/`CALIBRATION`/`CONTRADICTION` capabilities, additional record kinds beyond `idea`, the portfolio rollup, the hat catalog, a dedicated `lib/colleague/` orchestration namespace — deferred past these two slices. Each needs either SmartMemory-side ontology work not yet scoped, or a real consumer that doesn't exist yet.
