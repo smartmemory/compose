@@ -12,8 +12,8 @@
 
     "kind": {
       "type": "string",
-      "description": "The fluid record's type. A provider declares which kinds it implements via supportedKinds(); an unsupported kind is refused loudly, never silently coerced.",
-      "enum": ["idea", "position", "joint", "decision", "thread", "question"]
+      "description": "The fluid record's type. A provider declares which kinds it implements via supportedKinds(); an unsupported kind is refused loudly, never silently coerced. `cluster` is a record rather than a string label because an umbrella carries a hand-authored multi-sentence Theme paragraph: that is cluster-scoped content with nowhere to live on a member idea except duplicated onto every one of them, which is a drift generator. Members reference their cluster by handle via the record's `cluster` field.",
+      "enum": ["idea", "position", "joint", "decision", "thread", "question", "cluster"]
     },
 
     "handle": {
@@ -86,10 +86,14 @@
           "description": "Free prose. The ideabox's `Idea:` paragraph lands here."
         },
         "status": { "$ref": "#/definitions/status" },
+        "status_label": {
+          "type": ["string", "null"],
+          "description": "The human-facing status token when it carries more than the canonical enum can (`RE-AIMED (2026-07-21)`, `PROMOTED (-> FEAT-1)`). Canonical `status` drives all behavior; this only preserves what the author wrote so a closed enum does not quietly flatten it away. Null when the author's token was already canonical."
+        },
         "priority": { "$ref": "#/definitions/priority" },
         "cluster": {
           "type": ["string", "null"],
-          "description": "Editorial grouping (the ideabox's `### Umbrella A - Resilience: fail loud, recover fast` headings). This is RECORD DATA, not presentation: the headings are hand-authored information, and a projection that cannot reproduce them from the store would clobber them on first regeneration - the failure mode `roadmap generate` already has. Null means ungrouped."
+          "description": "HANDLE of the `cluster` record this record belongs to (e.g. CLUS-1), or null when ungrouped. Carries the editorial grouping the ideabox renders as `### Umbrella A - Resilience: fail loud, recover fast`. This is RECORD DATA, not presentation: the headings and their theme prose are hand-authored information, and a projection that cannot reproduce them from the store would clobber them on first regeneration - the failure mode `roadmap generate` already has. A handle rather than the display name so renaming an umbrella does not orphan its members."
         },
         "cluster_order": {
           "type": ["integer", "null"],

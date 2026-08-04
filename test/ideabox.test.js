@@ -13,6 +13,7 @@
 
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import {
   parseIdeabox,
@@ -715,5 +716,62 @@ describe('resurrectIdea', () => {
     const idea = reparsed.ideas.find(i => i.id === 'IDEA-3')
     assert.ok(idea)
     assert.equal(idea.status, 'NEW')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Fidelity against the REAL ideabox (COMP-PLAN-IDEA-UNIFY S2)
+// ---------------------------------------------------------------------------
+//
+// These lock the three losses that were live in shipped code: every `compose
+// ideabox` mutation writes via parse → serialize, and before this the write
+// silently dropped every tag, every umbrella Theme paragraph, and any
+// hand-authored convention bullet. The bug was invisible precisely because the
+// data that vanished was the data nobody diffed.
+
+describe('real-ideabox fidelity', () => {
+  const REAL_PATH = new URL('../docs/product/ideabox.md', import.meta.url)
+  const real = readFileSync(REAL_PATH, 'utf8')
+
+  it('round-trips the real ideabox byte-for-byte', () => {
+    // The strongest available statement that a write loses nothing. If this
+    // fails, `compose ideabox <anything>` is corrupting the file.
+    assert.equal(serializeIdeabox(parseIdeabox(real)), real)
+  })
+
+  it('parses the tags the real file actually uses (bare words, not #-prefixed)', () => {
+    const { ideas } = parseIdeabox(real)
+    const tagged = ideas.filter(i => i.tags.length)
+    assert.ok(tagged.length > 0, 'every idea parsed with zero tags — the tag regex is wrong again')
+    assert.deepEqual(
+      ideas.find(i => i.id === 'IDEA-1').tags,
+      ['stratum', 'integrity', 'research-influence']
+    )
+  })
+
+  it('keeps #-prefixed tags verbatim (the documented convention still works)', () => {
+    const md = '# Ideabox\n\n## Ideas\n\n#### IDEA-1 — T\n**Status:** NEW | **Priority:** P1 | **Tags:** `#ux` `#core`\n\n## Killed Ideas\n'
+    assert.deepEqual(parseIdeabox(md).ideas[0].tags, ['#ux', '#core'])
+  })
+
+  it('captures every umbrella Theme paragraph', () => {
+    const { clusters } = parseIdeabox(real)
+    const themed = clusters.filter(c => c.theme)
+    assert.ok(themed.length >= 5, `expected the umbrella themes, got ${themed.length}`)
+    assert.match(clusters[0].theme, /^Compose treats too many failure modes as soft/)
+  })
+
+  it('preserves the hand-authored preamble rather than regenerating a template', () => {
+    const { preamble } = parseIdeabox(real)
+    assert.match(preamble, /## Conventions/)
+    assert.match(preamble, /\*\*Umbrella:\*\*/, 'the project-specific convention bullet was dropped')
+  })
+
+  it('does not duplicate umbrella separators on repeated writes', () => {
+    // The rules sat next to the preceding idea, so each write appended another.
+    const once = serializeIdeabox(parseIdeabox(real))
+    const twice = serializeIdeabox(parseIdeabox(once))
+    assert.equal(once, twice, 'serialization is not a fixed point')
+    assert.equal((twice.match(/^---$/gm) || []).length, (real.match(/^---$/gm) || []).length)
   })
 })
