@@ -495,15 +495,13 @@ describe('SmartMemoryFluidProvider — recall (FOH-2)', () => {
     });
   });
 
-  test('INDEXED kinds are excluded even when ranked above a recallable one', async () => {
+  test('cluster is excluded even when ranked above a recallable kind', async () => {
     await withProvider(async ({ provider, queueHits }) => {
       const cluster = await provider.createRecord({ kind: 'cluster', title: 'Theme' });
-      const decision = await provider.createRecord({ kind: 'decision', title: 'Chosen' });
       const idea = await provider.createRecord({ kind: 'idea', title: 'An idea' });
-      // Server ranks the non-recallable ones first — the config-dial failure mode.
+      // Server ranks the non-recallable one first — the config-dial failure mode.
       queueHits([
         { handle: cluster.handle, score: 0.99 },
-        { handle: decision.handle, score: 0.98 },
         { handle: idea.handle, score: 0.10 },
       ]);
       const hits = await provider.recall('anything');
@@ -512,15 +510,33 @@ describe('SmartMemoryFluidProvider — recall (FOH-2)', () => {
     });
   });
 
-  test('all three FULL kinds are recallable', async () => {
+  test('all four recallable kinds come back, decision included', async () => {
     await withProvider(async ({ provider, queueHits }) => {
       const made = [];
-      for (const kind of ['idea', 'thread', 'question']) {
+      for (const kind of ['idea', 'thread', 'question', 'decision']) {
         made.push(await provider.createRecord({ kind, title: `a ${kind}` }));
       }
       queueHits(made.map((r, i) => ({ handle: r.handle, score: 1 - i / 10 })));
       const hits = await provider.recall('anything');
       assert.deepEqual(hits.map((h) => h.handle), made.map((r) => r.handle));
+    });
+  });
+
+  // Owner ruling 2026-08-04 made decisions recallable. §Q3's objection was
+  // surfacing a superseded decision "as if it were live" — so the load-bearing
+  // property is that a hit is DISTINGUISHABLE, not that it is withheld.
+  test('a killed decision is recalled but carries its status, so a caller can tell', async () => {
+    await withProvider(async ({ provider, queueHits }) => {
+      const dec = await provider.createRecord({ kind: 'decision', title: 'Use Postgres' });
+      await provider.updateRecord(dec.handle, {
+        status: 'killed',
+        killed: { at: '2026-08-04T00:00:00Z', reason: 'superseded by DEC-2' },
+      });
+      queueHits([{ handle: dec.handle, score: 0.9 }]);
+      const [hit] = await provider.recall('database choice');
+      assert.equal(hit.handle, dec.handle, 'killed decisions are still findable');
+      assert.equal(hit.record.status, 'killed', 'and never look live');
+      assert.equal(hit.record.killed.reason, 'superseded by DEC-2');
     });
   });
 
