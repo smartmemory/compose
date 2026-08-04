@@ -2,6 +2,33 @@
 
 ## 2026-08-04
 
+### Your ideas now live in a file git actually tracks
+
+The ideabox is being rebuilt on a storage layer that can later be swapped for a
+smarter one. The first version of that layer kept ideas inside Compose's runtime
+state file, which is deliberately gitignored. That was fine while nothing used
+it, and would have stopped being fine the moment the ideabox switched over: your
+ideas would have moved from a tracked file into an ignored one, on one machine,
+with no backup and nothing for CI or a second clone to read.
+
+Ideas now live in `docs/product/fluid/`, one small JSON file per idea, named for
+the handle you already cite (`IDEA-7.json`), plus an append-only log of what
+happened to each one. Same place, same shape, same conventions as the judgment
+records. Git is the backup again, an idea edit is a reviewable diff, and two
+people adding ideas on two clones no longer collide.
+
+A test now asks git directly whether that folder is ignored, so this cannot
+quietly regress.
+
+Two older hazards disappeared along the way rather than being patched. A write
+that failed halfway could previously leave an idea half-saved, and a background
+process holding a stale copy of the state file could erase ideas it had never
+seen. One idea per file, written whole or not at all, removes both.
+
+Nothing you type has changed yet. The `compose ideabox` commands still read and
+write `docs/product/ideabox.md` exactly as before, and that switchover is the
+next step.
+
 ### `compose ideabox` was silently deleting your tags and umbrella themes
 
 Fixed. This is a live bug, not a new feature, and it is the reason this slice

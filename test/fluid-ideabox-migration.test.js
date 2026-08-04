@@ -29,8 +29,7 @@ const SOURCE = parseIdeabox(REAL);
 let root;
 
 async function freshProvider() {
-  const dataDir = join(root, '.compose', 'data');
-  return new LocalFluidProvider().init(root, { dataDir });
+  return new LocalFluidProvider().init(root);
 }
 
 /** Import the real ideabox into a clean provider. */
