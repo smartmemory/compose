@@ -60,12 +60,18 @@ describe('handle allocation is serialized across processes', () => {
     // below holds even with no lock at all. That version of this test passed
     // against completely unlocked code, which is worse than having no test —
     // it certifies a guarantee it never exercised.
-    const N = 8;
+    const N = 3;
     const kids = await Promise.all(Array.from({ length: N }, () =>
       new Promise((resolve, reject) =>
         execFile(process.execPath, [script], (err, stdout) =>
           err ? reject(err) : resolve(stdout.trim())))));
 
+    // Three, not eight. The children are real node processes and this file runs
+    // alongside the rest of the suite, so a larger fan-out starves unrelated
+    // subprocess-backed tests — an 8-way version of this reliably broke
+    // `lifecycle-guard-e2e` under `npm test`. Three still discriminates:
+    // removing the lock fails this test and the in-process one below.
+    //
     // Unlocked, all N allocate IDEA-1 and last-writer-wins destroys N-1 ideas.
     assert.equal(new Set(kids).size, N, `expected ${N} distinct handles, got ${JSON.stringify(kids)}`);
   });
