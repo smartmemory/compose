@@ -28,15 +28,17 @@ The whole Discovery Loop stands on ideas being first-class graph objects — abl
 - **All mutation** routes through CLI / UI / MCP against the vision store. Direct hand-editing of `ideabox.md` is dropped (confirmed unused) — the CLI (`compose ideabox add/triage/promote/…`) covers capture ergonomically. No bidirectional markdown↔store sync (avoids the trap Decision 3 closed for the roadmap).
 - Promote becomes a graph transition `idea → [decision/thread] → feature`, not a markdown→feature.json jump.
 
+*Second refinement (owner ruling, 2026-08-04 — S3's entry gate; see [s3-progress.md](s3-progress.md) D10):* **the substrate is git-tracked record files, not vision-store items.** The clause above ("a zero-install local floor implemented over the vision store's `idea` type") does not survive the durability question: `.compose/data/vision-state.json` is gitignored, so records hosted there are untracked and single-machine, while the `ideabox.md` this feature turns into a generated projection is tracked. Cutover would have moved canon from a tracked file to an ignored one. The floor now persists to `docs/product/fluid/records/<HANDLE>.json` plus `docs/product/fluid/events.jsonl`, mirroring `docs/judgment/`. **A1 stands in substance** — one canonical store, ideabox as generated view, provider interface as the port — and only its implementation substrate changed. Canon inverts with it: the record file is canon, and a vision item is now an optional derived projection.
+
 ## Acceptance criteria
 
-- [ ] `idea`-type vision items are the single source of truth for ideabox entries (no second store).
-- [ ] Ideabox mutation goes through a fluid-store provider interface (records + lifecycle + `capabilities()`), with the local/vision-store provider as the floor implementation; no caller binds the vision store directly.
-- [ ] `docs/product/ideabox.md` is regenerated from vision `idea` items; it is not a write target.
-- [ ] `compose ideabox add/list/promote/kill/pri/discuss/triage` write/read the vision store (behavior preserved, backing store swapped).
-- [ ] `useIdeaboxStore` / `/api/ideabox` serve from vision `idea` items (existing UI unchanged from the user's view).
+- [x] Fluid records are the single source of truth for ideabox entries (no second store). *(S1; substrate corrected in S3 — records are tracked files, not vision items.)*
+- [x] Ideabox mutation goes through a fluid-store provider interface (records + lifecycle + `capabilities()`), with the local file-backed provider as the floor implementation; no caller binds the vision store directly. *(S1/S3.)*
+- [ ] `docs/product/ideabox.md` is regenerated from fluid records; it is not a write target. *(Renderer shipped in S2; cutover is S3b.)*
+- [ ] `compose ideabox add/list/promote/kill/pri/discuss/triage` write/read through the provider (behavior preserved, backing store swapped).
+- [ ] `useIdeaboxStore` / `/api/ideabox` serve from fluid records (existing UI unchanged from the user's view).
 - [ ] Promote records the `idea → feature` transition in the graph (provenance link), not a bare feature creation.
-- [ ] One-time migration: existing `docs/product/ideabox.md` entries import to vision `idea` items (parser is import-once, not a live round-trip).
+- [x] One-time migration: existing `docs/product/ideabox.md` entries import to fluid records (parser is import-once, not a live round-trip). *(S2; runs at cutover.)*
 - [ ] `mapsTo` overlay is superseded by real graph links (or kept as a rendered view of them).
 
 ## Non-goals (deferred to later rungs / features)

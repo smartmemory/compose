@@ -1,9 +1,9 @@
 /**
  * test/fluid-provider.test.js — the fluid-store provider seam (COMP-PLAN-IDEA-UNIFY S1).
  *
- * Real backends throughout: every test drives a real VisionStore over a real
- * temp data directory. The vision store is the substrate under test, so mocking
- * it would test nothing.
+ * Real backends throughout: every test drives a real FluidRecordStore over real
+ * files in a temp directory. The on-disk layout IS the thing under test — these
+ * records are git-tracked canon — so mocking it would test nothing.
  *
  * The load-bearing assertion in this file is "capability absence throws" — see
  * the semantic-capability suite. Everything else protects a record from losing
@@ -12,7 +12,8 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdtempSync, mkdirSync, readdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -27,10 +28,11 @@ import {
   isSemanticCapability,
 } from '../lib/fluid/provider.js';
 import { LocalFluidProvider } from '../lib/fluid/local-provider.js';
+import { DEFAULT_RECORDS_ROOT } from '../lib/fluid/record-store.js';
 import { fluidProviderFor } from '../lib/fluid/factory.js';
 
 let root;
-let dataDir;
+let fluidRoot;
 
 function nowIsoForTest() { return new Date().toISOString(); }
 
@@ -41,18 +43,18 @@ function newRoot() {
 }
 
 async function newProvider(cwd = root) {
-  return new LocalFluidProvider().init(cwd, { dataDir: join(cwd, '.compose', 'data') });
+  return new LocalFluidProvider().init(cwd);
 }
 
-/** A provider on the SAME data dir but with a cold store — proves a fact is
+/** A provider on the SAME root but a fresh instance — proves a fact is
  *  persisted rather than held in the first instance's memory. */
 async function reopen(cwd = root) {
-  return new LocalFluidProvider().init(cwd, { dataDir: join(cwd, '.compose', 'data') });
+  return new LocalFluidProvider().init(cwd);
 }
 
 beforeEach(() => {
   root = newRoot();
-  dataDir = join(root, '.compose', 'data');
+  fluidRoot = join(root, 'docs', 'product', 'fluid');
 });
 
 afterEach(() => {
@@ -302,7 +304,7 @@ describe('fluid seam — handles', () => {
     const doomed = await p.createRecord({ kind: 'idea', title: 'a' });
     await p.deleteRecord(doomed.handle);
 
-    const logPath = join(dataDir, 'fluid-events.jsonl');
+    const logPath = join(fluidRoot, 'events.jsonl');
     const damaged = readFileSync(logPath, 'utf8')
       .split('\n')
       .map((line) => (line.includes(`"${doomed.handle}"`) ? line.slice(0, -3) : line))
@@ -335,11 +337,11 @@ describe('fluid seam — handles', () => {
     // handle instead of freeing one.
     const p = await newProvider();
     const boom = new Error('disk gone');
-    const original = p.store.createItem.bind(p.store);
-    p.store.createItem = () => { throw boom; };
+    const original = p.store.write.bind(p.store);
+    p.store.write = () => { throw boom; };
 
     await assert.rejects(() => p.createRecord({ kind: 'idea', title: 'doomed' }), /disk gone/);
-    p.store.createItem = original;
+    p.store.write = original;
 
     const next = await p.createRecord({ kind: 'idea', title: 'after' });
     assert.equal(next.handle, 'IDEA-2', 'IDEA-1 was burned by the tombstone and must not be reused');
@@ -455,24 +457,36 @@ describe('fluid seam — contract enforcement', () => {
     await assert.rejects(() => p.appendEvent({ type: 'created' }), /invalid lifecycle event/);
   });
 
-  it('rolls back the native fields when the namespace write fails', async () => {
-    // The update spans two saves. Restoring only the namespace would leave a
-    // record whose title and rendered status had moved while its canonical
-    // state had not.
+  it('leaves the stored record untouched when the update write fails', async () => {
+    // S1 needed a compensating rollback here because an update spanned two
+    // saves (vision item, then its namespace) and the second could fail with
+    // the first committed. A record is ONE file now, written through an atomic
+    // rename, so a failed update cannot half-apply. The guarantee the caller
+    // sees is unchanged; the mechanism providing it is.
     const p = await newProvider();
     const r = await p.createRecord({ kind: 'idea', title: 'original', priority: 'P2' });
 
-    const originalSetExt = p.store.setFluidExt.bind(p.store);
-    p.store.setFluidExt = () => { throw new Error('namespace write failed'); };
+    const originalWrite = p.store.write.bind(p.store);
+    p.store.write = () => { throw new Error('record write failed'); };
     await assert.rejects(
       () => p.updateRecord(r.handle, { title: 'changed', status: 'promoted' }),
-      /namespace write failed/
+      /record write failed/
     );
-    p.store.setFluidExt = originalSetExt;
+    p.store.write = originalWrite;
 
     const after = await p.getRecord(r.handle);
-    assert.equal(after.title, 'original', 'native fields must not stay committed');
+    assert.equal(after.title, 'original', 'a failed update must not be partly committed');
     assert.equal(after.status, 'new');
+    assert.equal(after.priority, 'P2');
+  });
+
+  it('writes the whole record or none of it, never a truncated file', async () => {
+    // The atomicity claim above, asserted on real files rather than inferred.
+    const p = await newProvider();
+    const r = await p.createRecord({ kind: 'idea', title: 'atomic', body: 'x'.repeat(50_000) });
+    const onDisk = JSON.parse(readFileSync(join(fluidRoot, 'records', `${r.handle}.json`), 'utf8'));
+    assert.equal(onDisk.body.length, 50_000);
+    assert.equal(onDisk.handle, r.handle);
   });
 });
 
@@ -498,10 +512,10 @@ describe('fluid seam — deletion', () => {
     const p = await newProvider();
     const r = await p.createRecord({ kind: 'idea', title: 'a' });
 
-    const originalSave = p.store._save.bind(p.store);
-    p.store._save = () => false;
-    await assert.rejects(() => p.deleteRecord(r.handle), /failed to persist deletion/);
-    p.store._save = originalSave;
+    const originalRemove = p.store.remove.bind(p.store);
+    p.store.remove = () => { throw new Error('unlink failed'); };
+    await assert.rejects(() => p.deleteRecord(r.handle), /unlink failed/);
+    p.store.remove = originalRemove;
 
     // Still there, as the failure implied.
     assert.ok(await p.getRecord(r.handle));
@@ -511,6 +525,80 @@ describe('fluid seam — deletion', () => {
 // ---------------------------------------------------------------------------
 // Lifecycle events
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Durability — the reason S3 opened with an entry gate
+// ---------------------------------------------------------------------------
+
+describe('fluid seam — durability', () => {
+  it('stores records under a path git actually tracks', (t) => {
+    // THE assertion this slice exists for. S1 hosted records in
+    // .compose/data/vision-state.json, which .gitignore:3 (`data/`) ignores —
+    // so cutting the CLI over would have moved idea canon to an untracked file
+    // on one machine while committing a GENERATED ideabox.md with nothing
+    // behind it. Run against the REAL repo and the REAL gitignore, because a
+    // temp dir has neither and would happily pass while production was broken.
+    const inRepo = spawnSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: process.cwd() });
+    if (inRepo.status !== 0) {
+      // A tarball install has no .gitignore to check against. Skipping is
+      // honest; asserting would turn "no git here" into a false green.
+      t.skip('not a git work tree');
+      return;
+    }
+    const probe = join(DEFAULT_RECORDS_ROOT, 'records', 'IDEA-1.json');
+    const res = spawnSync('git', ['check-ignore', '-q', probe], { cwd: process.cwd() });
+    // exit 1 = not ignored. exit 0 = ignored, and this slice is undone.
+    assert.equal(res.status, 1, `${probe} is gitignored — fluid records would not be tracked`);
+  });
+
+  it('gives every record its own file, named by its handle', async () => {
+    // Per-record files, not one array file: an `ideabox add` is then a pure
+    // file creation, so two clones each adding an idea do not conflict.
+    const p = await newProvider();
+    const a = await p.createRecord({ kind: 'idea', title: 'first' });
+    const b = await p.createRecord({ kind: 'idea', title: 'second' });
+    const names = readdirSync(join(fluidRoot, 'records')).sort();
+    assert.deepEqual(names, [`${a.handle}.json`, `${b.handle}.json`]);
+  });
+
+  it('keeps the tombstone log beside the records, not in ignored runtime state', async () => {
+    // Losing the log does not lose history, it loses the guarantee that a
+    // retired handle stays retired — so it is tracked alongside the records.
+    const p = await newProvider();
+    const r = await p.createRecord({ kind: 'idea', title: 'doomed' });
+    await p.deleteRecord(r.handle);
+    assert.ok(existsSync(join(fluidRoot, 'events.jsonl')));
+
+    const next = await p.createRecord({ kind: 'idea', title: 'after' });
+    assert.notEqual(next.handle, r.handle, 'a retired handle is an external citation and stays retired');
+  });
+
+  it('leaves no temp files behind in tracked canon', async () => {
+    // Atomic writes go through a tmp file. Litter in a tracked tree shows up in
+    // git status and in review.
+    const p = await newProvider();
+    await p.createRecord({ kind: 'idea', title: 'a' });
+    await p.updateRecord('IDEA-1', { title: 'b' });
+    const stray = readdirSync(join(fluidRoot, 'records')).filter((n) => !n.endsWith('.json'));
+    assert.deepEqual(stray, []);
+  });
+
+  it('refuses to build a record path out of a handle that escapes the root', async () => {
+    const p = await newProvider();
+    assert.throws(() => p.store.write({ handle: '../../escape', title: 'x' }), /unsafe record handle/);
+    assert.equal(await p.getRecord('../../escape'), null);
+  });
+
+  it('surfaces a corrupt record file instead of reporting it absent', async () => {
+    // Absent and damaged must not look the same: the caller's next move on
+    // "absent" is to reissue the handle or report it missing, and both quietly
+    // destroy the damaged record.
+    const p = await newProvider();
+    const r = await p.createRecord({ kind: 'idea', title: 'a' });
+    writeFileSync(join(fluidRoot, 'records', `${r.handle}.json`), '{ truncated', 'utf8');
+    await assert.rejects(() => p.getRecord(r.handle), /unreadable/);
+  });
+});
 
 describe('fluid seam — lifecycle events', () => {
   it('records creation and distinguishes an import from a native capture', async () => {
@@ -557,8 +645,8 @@ describe('fluid seam — lifecycle events', () => {
     const p = await newProvider();
     await p.createRecord({ kind: 'idea', title: 'a' });
     writeFileSync(
-      join(dataDir, 'fluid-events.jsonl'),
-      readFileSync(join(dataDir, 'fluid-events.jsonl'), 'utf8') + '{not json\n',
+      join(fluidRoot, 'events.jsonl'),
+      readFileSync(join(fluidRoot, 'events.jsonl'), 'utf8') + '{not json\n',
       'utf8'
     );
     const events = await p.readEvents();
@@ -598,7 +686,7 @@ describe('fluid seam — factory', () => {
   it('defaults to the floor when no config file exists', async () => {
     const bare = mkdtempSync(join(tmpdir(), 'fluid-bare-'));
     try {
-      const p = await fluidProviderFor(bare, { dataDir: join(bare, 'data') });
+      const p = await fluidProviderFor(bare);
       assert.equal(p.name(), 'local');
     } finally {
       rmSync(bare, { recursive: true, force: true });
@@ -607,7 +695,7 @@ describe('fluid seam — factory', () => {
 
   it('defaults to the floor when the config omits the fluid key', async () => {
     writeFileSync(join(root, '.compose', 'compose.json'), JSON.stringify({ tracker: { provider: 'local' } }));
-    const p = await fluidProviderFor(root, { dataDir });
+    const p = await fluidProviderFor(root);
     assert.equal(p.name(), 'local');
   });
 
@@ -615,18 +703,18 @@ describe('fluid seam — factory', () => {
     // A silent fallback here would strip a user's configured capabilities with
     // no signal — they would see an intelligence-free system and no error.
     writeFileSync(join(root, '.compose', 'compose.json'), '{ this is not json');
-    await assert.rejects(() => fluidProviderFor(root, { dataDir }), FluidConfigError);
+    await assert.rejects(() => fluidProviderFor(root), FluidConfigError);
   });
 
   it('fails loud on an unknown provider name', async () => {
     writeFileSync(join(root, '.compose', 'compose.json'), JSON.stringify({ fluid: { provider: 'nope' } }));
-    await assert.rejects(() => fluidProviderFor(root, { dataDir }), FluidConfigError);
+    await assert.rejects(() => fluidProviderFor(root), FluidConfigError);
   });
 
   it('fails loud when smartmemory is configured but not yet implemented', async () => {
     writeFileSync(join(root, '.compose', 'compose.json'), JSON.stringify({ fluid: { provider: 'smartmemory' } }));
     await assert.rejects(
-      () => fluidProviderFor(root, { dataDir }),
+      () => fluidProviderFor(root),
       (err) => {
         assert.ok(err instanceof FluidConfigError);
         assert.match(err.message, /not yet implemented/);
@@ -637,6 +725,6 @@ describe('fluid seam — factory', () => {
 
   it('rejects a fluid key that is not an object', async () => {
     writeFileSync(join(root, '.compose', 'compose.json'), JSON.stringify({ fluid: ['local'] }));
-    await assert.rejects(() => fluidProviderFor(root, { dataDir }), FluidConfigError);
+    await assert.rejects(() => fluidProviderFor(root), FluidConfigError);
   });
 });
