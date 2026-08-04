@@ -155,16 +155,48 @@ all actually writing.
 | **New** — durable storage | `lib/fluid/record-store.js` |
 | Reworked onto it | `lib/fluid/local-provider.js` |
 | Doc-comment only | `lib/fluid/factory.js` (`dataDir` → `recordsRoot`) |
-| Tests | `test/fluid-provider.test.js` (54), `test/fluid-ideabox-migration.test.js` (16) |
+| Tests | `test/fluid-provider.test.js` (58), `test/fluid-ideabox-migration.test.js` (16) |
 
 `server/vision-store.js` is **unchanged**. `setFluidExt` is now unused by the
 fluid layer; it was left in place rather than removed in the same commit as the
 storage move — S4 may want it for the promotion-edge projection, and deleting a
 tested method to prove a point is not worth coupling two changes.
 
+## Review round 1 (Codex sol/xhigh, against @1a502cb)
+
+Three findings, **all three upheld** and fixed in the follow-up commit. None
+were the accepted limits (the allocation race and the deferred canon-guard
+registration were correctly left alone).
+
+**F1 [P1] — `updateRecord` normalized before validating. A REGRESSION THIS SLICE
+INTRODUCED.** S1 validated the raw merge; S3a inserted `_normalize()` into the
+merge path, so the schema only ever saw already-sanitized data. Two silent
+failures lived in that gap, both reporting success: `{links: null}` was coerced
+to `[]`, erasing every link, and `{titel: 'x'}` was dropped, so a misspelled
+field wrote nothing and said it worked. Silent, successful-looking data loss is
+the precise failure this whole slice exists to prevent, so this was the worst
+possible place to introduce it. Fixed by ordering: validate the raw merge, then
+normalize. No new field list was added — the contract already rejects both
+(`links` is typed, the record definition is `additionalProperties: false`); it
+simply was not being shown the input.
+
+**F2 [P1] — no filename↔handle identity check.** Every write picks its
+destination from `record.handle`, so reading `IDEA-1.json` containing
+`"handle": "IDEA-2"` and saving it destroys IDEA-2 while leaving the malformed
+file intact. This is a hazard D11 *created*: records are now tracked,
+hand-editable files, and the canon guard is deliberately not registered yet.
+`read()` now refuses a file whose name and contents disagree.
+
+**F3 [P2] — absolute `recordsRoot` was documented but broken.** `join(cwd, root)`
+turned `/tmp/fluid` into `<cwd>/tmp/fluid`. Now `resolve(cwd, root)`.
+
+Two of the three (F1, F2) are defects a passing test suite did not catch, which
+is the argument for the review round rather than against it. Four regression
+tests added, one per failure mode plus the cross-record clobber.
+
 ## Verification
 
-- Targeted: 70 tests across the two fluid suites, zero failures (was 63).
+- Targeted: 74 tests across the two fluid suites, zero failures (was 63).
 - Full suite: **5251 node + 581 ui + 100 tracker = 5932, zero failures**
   (baseline 5925; +7 is exactly the net new fluid tests).
 - `git check-ignore docs/product/fluid/records/IDEA-1.json` exits 1 — not
