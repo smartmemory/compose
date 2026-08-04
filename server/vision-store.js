@@ -124,7 +124,10 @@ export class VisionStore {
     }
   }
 
-  /** Save state to disk atomically (temp file + rename) */
+  /** Save state to disk atomically (temp file + rename).
+   *  Returns true when the state reached disk, false when it did not. Existing
+   *  callers ignore the return and keep their prior log-and-continue behavior;
+   *  callers that must not report success on a failed write check it. */
   _save() {
     try {
       fs.mkdirSync(this._dataDir, { recursive: true });
@@ -132,8 +135,10 @@ export class VisionStore {
       const tmp = path.join(this._dataDir, `vision-state.json.tmp.${Date.now()}`);
       fs.writeFileSync(tmp, data, 'utf-8');
       fs.renameSync(tmp, this._dataFile);
+      return true;
     } catch (err) {
       console.error('[vision] Failed to save state:', err.message);
+      return false;
     }
   }
 
@@ -262,14 +267,54 @@ export class VisionStore {
     return item;
   }
 
-  /** Delete an item and all its connections and gates */
+  /** Set the additive `fluid_ext` namespace on an item — bypasses the generic
+   *  updateItem allowlist, exactly as updateLifecycle/updateLifecycleExt do for
+   *  the lifecycle namespace.
+   *
+   *  The fluid-store provider seam (lib/fluid/, PROVIDER-SEAM ruling) is the only
+   *  caller. It exists because a fluid record carries fields the vision store has
+   *  no generic slot for (handle, cluster, tags, source, links) and the ruling
+   *  forbids a second store — so the record rides in one additive namespace on
+   *  the item rather than leaking record-specific fields into the allowlist.
+   *
+   *  `touch: false` preserves updatedAt, which the provider uses when writing the
+   *  namespace as part of record CREATION so created_at and updated_at agree. */
+  setFluidExt(id, ext, { touch = true } = {}) {
+    const item = this.items.get(id);
+    if (!item) throw new Error(`Item not found: ${id}`);
+    const priorExt = item.fluid_ext;
+    const priorUpdatedAt = item.updatedAt;
+    item.fluid_ext = ext;
+    if (touch) item.updatedAt = new Date().toISOString();
+    this.items.set(id, item);
+    if (!this._save()) {
+      // Roll the in-memory change back and fail. Reporting success here would
+      // let the provider append a lifecycle event asserting a change that
+      // vanishes on restart — a log that disagrees with the store is worse than
+      // a write that visibly failed.
+      item.fluid_ext = priorExt;
+      item.updatedAt = priorUpdatedAt;
+      this.items.set(id, item);
+      throw new Error(`[vision] failed to persist fluid_ext for item ${id}`);
+    }
+    return item;
+  }
+
+  /** Delete an item and all its connections and gates.
+   *  Throws when the deletion does not reach disk — reporting success on a
+   *  failed save would let a caller believe a record is gone while it is still
+   *  on disk to reappear at the next load. */
   deleteItem(id) {
     if (!this.items.has(id)) throw new Error(`Item not found: ${id}`);
+    const removedItem = this.items.get(id);
+    const removedConnections = [];
+    const removedGates = [];
     this.items.delete(id);
 
     // Remove connections referencing this item
     for (const [connId, conn] of this.connections) {
       if (conn.fromId === id || conn.toId === id) {
+        removedConnections.push([connId, conn]);
         this.connections.delete(connId);
       }
     }
@@ -277,11 +322,20 @@ export class VisionStore {
     // Remove gates associated with this item
     for (const [gateId, gate] of this.gates) {
       if (gate.itemId === id) {
+        removedGates.push([gateId, gate]);
         this.gates.delete(gateId);
       }
     }
 
-    this._save();
+    if (!this._save()) {
+      // Restore everything the delete removed, then fail. The alternative is an
+      // in-memory state that disagrees with disk and a caller told the record
+      // is gone when the next load will bring it back.
+      this.items.set(id, removedItem);
+      for (const [connId, conn] of removedConnections) this.connections.set(connId, conn);
+      for (const [gateId, gate] of removedGates) this.gates.set(gateId, gate);
+      throw new Error(`[vision] failed to persist deletion of item ${id}`);
+    }
     return { ok: true };
   }
 
