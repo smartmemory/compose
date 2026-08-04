@@ -1,7 +1,7 @@
 # COMP-PLAN-IDEA-UNIFY — S2 progress ledger
 
 **Slice:** S2 — one-time import + `ideabox.md` as a projection
-**Status:** MACHINERY COMPLETE. **Live cutover NOT performed — owner decision pending.**
+**Status:** COMPLETE (machinery). **Cutover deferred to S3 by owner ruling, 2026-08-04.**
 **Date:** 2026-08-04
 
 ## Related Documents
@@ -26,7 +26,20 @@ cutover ends that. Deleting hand-authored content from a tracked file is an owne
 call.
 
 Options put to the owner: (1) cut over anyway, accepting local-only; (2) make the
-floor's records tracked first; (3) defer the cutover to S3. Recommendation: 2 or 3.
+floor's records tracked first; (3) defer the cutover to S3.
+
+> **OWNER RULING 2026-08-04 — option 3. The cutover moves to S3.**
+>
+> `ideabox.md` stays canon and stays hand-editable until S3 lands. Nothing in
+> this repo becomes a projection yet, and the GENERATED banner in
+> `render-ideabox.js` is not yet true of any file on disk.
+>
+> **This makes the durability question S3's entry gate, not a footnote.** S3
+> wires the CLI, the API and the UI onto the provider — the moment that lands,
+> writes go to the store whether or not the store is durable. So S3 must open by
+> answering where the floor's records live and whether they are tracked, before
+> any caller is moved. Deciding it then, with the CLI in hand, is the point of
+> deferring; letting it be discovered again mid-slice is not.
 
 ## Pre-existing data-loss bug found and fixed (not introduced by this slice)
 
@@ -83,7 +96,11 @@ bridge this epic exists to eliminate.
 
 ## Next
 
-- **Owner decision on the cutover** (above). Nothing else in S2 is blocked on it.
-- S3 — wire `compose ideabox …`, `/api/ideabox`, `useIdeaboxStore` onto the
-  provider. The parser fixes above stop the bleeding until then.
+- **S3 opens with the durability question** (see the ruling above), answered
+  before any caller is wired — because wiring the callers is what makes the
+  store the write target. Then: `compose ideabox …`, `/api/ideabox`,
+  `useIdeaboxStore` onto the provider, and the cutover itself.
 - S4 — promotion as a `promoted_to` edge.
+
+Until S3 lands, `ideabox.md` remains canon and hand-editable, and the parser
+fixes in this slice are what keep the CLI from eating it.
