@@ -467,9 +467,17 @@ describe('the real ideabox survives the cutover', () => {
     // legacy serializer, so `compose ideabox <anything>` cannot corrupt it.
     assert.equal(serializeIdeabox(parseIdeabox(rendered)), rendered);
 
+    // Counts are derived from the file, never hard-coded. An earlier version
+    // pinned "20 ideas, nextId 21" and broke the moment someone filed an idea —
+    // a test that fails on ordinary use trains people to edit the test. The
+    // invariant that actually matters is conservation: whatever the file holds,
+    // the projection holds exactly that, with the same handles.
+    const before = parseIdeabox(real);
     const parsed = parseIdeabox(rendered);
-    assert.equal(parsed.ideas.length + parsed.killed.length, 20, 'an idea went missing');
-    assert.equal(parsed.nextId, 21, 'handle numbering drifted — external citations break');
+    const handles = (d) => [...d.ideas, ...d.killed].map((i) => i.id).sort();
+
+    assert.deepEqual(handles(parsed), handles(before), 'an idea went missing or was renamed');
+    assert.equal(parsed.nextId, before.nextId, 'handle numbering drifted — external citations break');
     assert.match(parsed.preamble, /\*\*Umbrella:\*\*/, 'the hand-authored convention bullet was dropped');
 
     // IDEA-20's content is the re-ruling that created this epic. It had no

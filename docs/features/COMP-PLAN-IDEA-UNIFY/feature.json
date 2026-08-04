@@ -14,5 +14,12 @@
     "needs_report": false
   },
   "impact": "high",
-  "commit_sha": "3ae6a65"
+  "commit_sha": "3ae6a65",
+  "links": [
+    {
+      "kind": "follow_up",
+      "to_code": "COMP-FLUID-SEAM-GUARANTEES",
+      "note": "S3b-1 review round 2 (F3-1/F6-1/F7-1): the lock and reclaimAborted were built into local-provider.js instead of the seam, so smartmemory-provider.js has neither. Latent until fluid.provider is set to smartmemory."
+    }
+  ]
 }

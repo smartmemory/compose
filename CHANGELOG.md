@@ -2,6 +2,14 @@
 
 ## 2026-08-05
 
+### A warning if you point ideas at shared storage
+
+Ideas can be kept on your machine or in a shared SmartMemory workspace. The shared option
+is not ready for the ideabox: it does not yet stop two writes from being handed the same
+idea number, and an import interrupted by a network error cannot be restarted. Compose now
+says so when you configure it, instead of running quietly. The local option, which is the
+default, has both protections.
+
 ### The ideabox is now a real store, and the file is a view of it
 
 `compose ideabox` no longer edits `docs/product/ideabox.md`. Each idea is its own

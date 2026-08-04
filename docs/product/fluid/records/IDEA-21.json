@@ -1,0 +1,28 @@
+{
+  "id": "558adf9d-3f7a-49ca-9b61-51b8bab3a19e",
+  "handle": "IDEA-21",
+  "kind": "idea",
+  "title": "Staleness-track multi-slice blueprints",
+  "body": "Compose tooling hard-codes '<feature>/blueprint.md' in five places (gsd.js:78, staleness.js:61, lane-gate.js:35, triage.js:338, feature-validator.js:540). A feature built in slices names them blueprint-foh-2.md, blueprint-s3b-1.md and so on, and none of those are staleness-tracked or reachable by a gate. No gate breaks today, which is the problem: the slice blueprints carrying the live decisions are exactly the ones nothing watches.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "cluster": null,
+  "cluster_order": null,
+  "tags": [
+    "tooling",
+    "staleness",
+    "blueprints"
+  ],
+  "source": "COMP-PLAN-IDEA-UNIFY S3b-1",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "cli:ideabox",
+    "recorded_at": "2026-08-04T22:28:34.762Z",
+    "author": null
+  },
+  "created_at": "2026-08-04T22:28:34.762Z",
+  "updated_at": "2026-08-04T22:28:34.762Z"
+}
