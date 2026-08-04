@@ -583,6 +583,63 @@ describe('fluid seam — durability', () => {
     assert.deepEqual(stray, []);
   });
 
+  it('rejects a patch the contract forbids instead of quietly repairing it', async () => {
+    // Regression, S3a review: the merge was normalized BEFORE validation, so
+    // the schema only ever saw already-sanitized data. `links: null` became []
+    // and reported success — a silent erase, which is the exact failure this
+    // storage layer exists to prevent.
+    const p = await newProvider();
+    const r = await p.createRecord({ kind: 'idea', title: 'a' });
+    await p.addLink(r.handle, { type: 'informs', target: 'COMP-X-1' });
+
+    await assert.rejects(() => p.updateRecord(r.handle, { links: null }));
+    const after = await p.getRecord(r.handle);
+    assert.equal(after.links.length, 1, 'a rejected patch must not have erased the links');
+  });
+
+  it('rejects an unknown field instead of reporting success and changing nothing', async () => {
+    // The other half of the same regression: a misspelled field was dropped by
+    // normalization, so the write succeeded, an event was emitted, and the
+    // caller had no way to tell their edit had not landed.
+    const p = await newProvider();
+    const r = await p.createRecord({ kind: 'idea', title: 'original' });
+
+    await assert.rejects(() => p.updateRecord(r.handle, { titel: 'typo' }));
+    const events = await p.readEvents(r.handle);
+    assert.equal(events.filter((e) => e.type === 'updated').length, 0,
+      'a rejected patch must not emit a lifecycle event');
+  });
+
+  it('refuses a record file whose contents disagree with its filename', async () => {
+    // These are tracked files a human can hand-edit, and every write routes
+    // through record.handle to pick its destination — so reading IDEA-1.json
+    // that claims to be IDEA-2 and saving it would destroy IDEA-2.
+    const p = await newProvider();
+    const a = await p.createRecord({ kind: 'idea', title: 'first' });
+    const b = await p.createRecord({ kind: 'idea', title: 'second' });
+
+    const aPath = join(fluidRoot, 'records', `${a.handle}.json`);
+    writeFileSync(aPath, JSON.stringify({ ...JSON.parse(readFileSync(aPath, 'utf8')), handle: b.handle }), 'utf8');
+
+    await assert.rejects(() => p.getRecord(a.handle), /refusing to read it/);
+    await assert.rejects(() => p.updateRecord(a.handle, { title: 'clobber' }), /refusing to read it/);
+
+    const survivor = JSON.parse(readFileSync(join(fluidRoot, 'records', `${b.handle}.json`), 'utf8'));
+    assert.equal(survivor.title, 'second', 'the other record must be untouched');
+  });
+
+  it('honours an absolute recordsRoot instead of nesting it under cwd', async () => {
+    const elsewhere = mkdtempSync(join(tmpdir(), 'fluid-abs-'));
+    try {
+      const p = await new LocalFluidProvider().init(root, { recordsRoot: elsewhere });
+      const r = await p.createRecord({ kind: 'idea', title: 'over here' });
+      assert.ok(existsSync(join(elsewhere, 'records', `${r.handle}.json`)));
+      assert.ok(!existsSync(join(root, elsewhere)), 'absolute path must not be re-rooted under cwd');
+    } finally {
+      rmSync(elsewhere, { recursive: true, force: true });
+    }
+  });
+
   it('refuses to build a record path out of a handle that escapes the root', async () => {
     const p = await newProvider();
     assert.throws(() => p.store.write({ handle: '../../escape', title: 'x' }), /unsafe record handle/);
