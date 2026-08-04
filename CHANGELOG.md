@@ -2,6 +2,46 @@
 
 ## 2026-08-04
 
+### Ideas can now live in SmartMemory instead of on your disk
+
+Setting `fluid.provider` to `"smartmemory"` used to fail on purpose, because
+there was nothing behind it. There is now. Point it at SmartMemory and your
+ideas, decisions, threads, questions and clusters are stored there instead of in
+`docs/product/fluid/`, with the same handles (`IDEA-7`) and the same behaviour.
+
+You need three settings: `baseUrl` and `apiKeyEnv` in the existing top-level
+`smartmemory` block, shared with the ingest pipeline rather than duplicated, plus
+`fluid.smartmemory.workspaceId`. The workspace is configured, never guessed from
+your folder name, because the server checks it against your API key's memberships
+and rejects one you are not a member of. Any of the three missing, or an API key
+that is set but empty, is an error naming the exact setting, raised before a
+single request goes out. The key needs read, write **and** delete permissions.
+A key without delete works fine until the first time you delete an idea.
+
+Two things are deliberately unchanged. Nothing switches over on its own, so the
+floor stays the default and `compose ideabox` still reads the same files. And the
+provider claims only storage. It does not pretend to have the smart features
+(recall, challenge, conviction) that a later slice will add. Asking for one still
+raises a clear error rather than returning an empty result that looks like a real
+answer.
+
+Under the hood, an idea is stored as one sealed block of text rather than as
+separate fields. That sounds like a detail and is not. SmartMemory quietly drops
+blank values on the way in, and asking it to clear a field returns success while
+leaving the old value in place, so storing ideas field-by-field would mean
+clearing a priority silently did nothing. A sealed block is always written whole,
+so editing works and nothing is lost. We reported the underlying behaviour
+upstream.
+
+Two problems that only exist over a network are handled rather than ignored. If
+two people create an idea at the same instant and both land on the same handle,
+the earlier one keeps it and the later one is quietly given a fresh handle, with
+a note in its history. Neither idea is lost, which is better than what happens
+locally today. And listing your ideas follows every page to the end. The server
+returns fifty at a time, and a reader that stopped at the first page would have
+concluded you owned fifty ideas and then deleted the rest when it rewrote
+`ideabox.md`.
+
 ### Your ideas now live in a file git actually tracks
 
 The ideabox is being rebuilt on a storage layer that can later be swapped for a
