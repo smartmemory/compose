@@ -62,6 +62,18 @@ with that id happens to exist and the principal belongs to it.
 | (b) Discover-or-provision at init | Larger | Needs a second wire-contract pass over SmartMemory's workspace/team API, which this research did not cover. Turns FOH-1 into two features. |
 | (c) Re-open Q1 at architecture level | Largest | Not warranted — the *decision* is sound; only its mechanism was under-specified. |
 
+> **OWNER RULING 2026-08-04 — option (a).** FOH-1 takes an explicitly configured
+> `fluid.smartmemory.workspaceId`. Absent ⇒ `FluidConfigError` naming the
+> setting, raised **before any network call** (the `authHeader()` precedent at
+> `smartmemory-client.js:64`). Workspace provisioning is filed, not built.
+>
+> Consequence for `architecture.md` §Q1: its "keyed by the already-shipped
+> `resolveProjectTag()` … zero new identity scheme" clause is **superseded**.
+> The isolation *decision* stands unchanged — one workspace per product, not a
+> shared pool — but the id is supplied by configuration rather than derived, and
+> the local-tag → workspace-id mapping is deferred along with provisioning.
+> `resolveProjectTag()` is not used by FOH-1.
+
 Everything below assumes **(a)**.
 
 ## Wire contract (as verified)
