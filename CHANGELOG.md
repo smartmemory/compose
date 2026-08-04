@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-08-05
+
+### Four ways the ideabox could lose your work, now closed
+
+Groundwork for moving the ideabox onto the record store. None of these had ever
+fired, because each one sat on a path no idea in this project had taken yet. All
+four would have fired the moment the switch was thrown.
+
+**Discussion notes on an idea are no longer thrown away.** The stored format
+records a full timestamp and the file format records a date. Nothing translated
+between them, so importing an idea that had a discussion failed outright, and a
+note added afterwards was written back in a form the reader could not recognise
+and quietly disappeared on the next read. Both directions now agree. The record
+keeps the exact time and the file shows the day, which is all it has ever shown.
+
+**Two people can no longer be handed the same idea number.** Adding an idea
+reads the highest number in use and takes the next one, and nothing stopped two
+of those happening at once. Run eight at the same time and all eight claimed
+number one, so seven ideas were overwritten. Adding, editing, commenting,
+linking and deleting now take a lock, so they queue instead of colliding.
+
+**An interrupted import can be run again.** Importing reserves an idea's number
+before writing the idea itself, so a crash in between left the number taken and
+the idea missing, and a second attempt was refused for reusing a number. It now
+recognises a number that was reserved but never used and picks up where it left
+off. Numbers belonging to ideas you actually deleted stay retired, as before,
+because those may be referenced elsewhere.
+
+**An idea filed under a group that does not exist no longer vanishes.** It was
+absent from the file while still on disk, which reads as deletion. Writing the
+file now stops and names the idea and the group it is looking for, leaving the
+previous good file in place.
+
 ## 2026-08-04
 
 ### Search your ideas by meaning, not just by name
