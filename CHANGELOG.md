@@ -2,6 +2,63 @@
 
 ## 2026-08-04
 
+### `compose ideabox` was silently deleting your tags and umbrella themes
+
+Fixed. This is a live bug, not a new feature, and it is the reason this slice
+grew: every `compose ideabox add / kill / pri / promote / discuss` writes the
+file by parsing it and serializing it back, and that round-trip was destroying
+content.
+
+Three losses, all silent:
+
+- **Every tag on every idea.** The parser matched `/#\w+/g`, but the ideabox
+  writes bare words (`stratum integrity research-influence`). All 20 ideas
+  parsed with no tags at all, so the next write dropped them.
+- **Every umbrella `**Theme:**` paragraph.** The line sits between the umbrella
+  heading and the first idea, exactly where the parser had nothing to attach it
+  to, so it was skipped and never written back.
+- **The hand-authored preamble**, regenerated from a template that has never
+  known about this project's own `**Umbrella:**` convention.
+
+Two smaller ones: the `---` rules between umbrellas were attached to whichever
+idea preceded them and duplicated on every write, and custom field lines were
+reordered past `**Maps to:**`.
+
+Nothing had been lost yet only because nobody had run the CLI since that content
+was written. `docs/product/ideabox.md` now round-trips **byte-identical** through
+parse and serialize, and a test asserts exactly that — which is the only honest
+way to state "a write loses nothing."
+
+Both tag spellings work: bare words and the documented `` `#ux` `` form
+round-trip unchanged, whichever a file uses.
+
+### COMP-PLAN-IDEA-UNIFY S2 — import and projection (cutover not run)
+
+The machinery to move ideas into the store and regenerate `ideabox.md` from it.
+**The cutover has not been performed** — `ideabox.md` is still canon and still
+hand-editable. Running it would move your ideas from a git-tracked file into
+`.compose/data/`, which is gitignored, so canon would become local-only and a
+committed "GENERATED" file would have no source of truth behind it on any other
+clone. The ruling parked backup cadence for exactly this layer, and that rider is
+now load-bearing, so the decision is the owner's.
+
+Clusters became records rather than string labels. An umbrella owns a
+hand-authored Theme paragraph, and the only place that could live on a member
+idea is duplicated across every one of them. A record's `cluster` field holds the
+cluster's handle, so renaming an umbrella cannot orphan its members.
+
+`status_label` was added because IDEA-20's status is `RE-AIMED (2026-07-21)` and
+a closed enum would have flattened it to `NEW`. Canonical status still drives
+behavior; the label just keeps the author's words.
+
+The import preserves `IDEA-N` handles verbatim, stamps every record
+`import:ideabox` so migrated rows stay distinguishable forever, and is idempotent
+by *skipping* an existing handle rather than overwriting it — a re-run must never
+act as a reverse sync from markdown.
+
+The gate for all of this runs against the real `ideabox.md` rather than a
+fixture, because a synthetic fixture would pass while the real file lost content.
+
 ### COMP-PLAN-IDEA-UNIFY S1 — the fluid-store provider seam
 
 Ideas, positions, joints and decisions are getting a real store instead of
