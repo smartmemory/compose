@@ -2,6 +2,40 @@
 
 ## 2026-08-04
 
+### Search your ideas by meaning, not just by name
+
+With SmartMemory configured, Compose can now search your ideas the way you would
+ask a colleague: "have we talked about rate limiting?" rather than needing the
+exact title. Ideas, threads and questions are searchable this way.
+
+Clusters and decisions deliberately are not. A cluster is a label you wrote, not
+something to fuzzy-match against, and surfacing a decision by vague similarity
+risks handing you one that was already superseded. Both are still stored, and
+still readable the moment you name them. The exclusion is enforced on our side,
+by filtering what comes back, so it holds no matter how the SmartMemory server
+happens to be configured.
+
+Two limits worth knowing, both deliberate.
+
+**Editing an idea does not re-teach the search index.** The service has no way to
+refresh one item's index, so an edited idea is still matched on its original
+wording. You will always get the current text back, and it stays findable by its
+new words through keyword matching. What lags is the "find me things like this"
+sense. We have asked upstream for a fix. Reading an idea by name is never
+affected, because that reads the record directly.
+
+**A search asks for more results than it shows.** Results are filtered after the
+server ranks them, so a search asks for several times what you requested and
+trims afterwards. If a lot of non-searchable items crowd the top, you can get
+fewer results than you asked for. Fetching without a limit was the alternative,
+and that is worse.
+
+One thing you cannot see but would have felt: a search now explicitly tells the
+server to use its standard search behaviour. Without that, the server quietly
+falls back to per-account preferences that can switch whole search methods off.
+Anyone whose account carried those settings would have gotten mysteriously worse
+results, with nothing to point at.
+
 ### Ideas can now live in SmartMemory instead of on your disk
 
 Setting `fluid.provider` to `"smartmemory"` used to fail on purpose, because

@@ -519,3 +519,93 @@ describe('createSmartmemoryClient — typed-record CRUD', () => {
     }
   });
 });
+
+describe('createSmartmemoryClient.searchItems', () => {
+  function makeSearchStub({ results = [], failStatus = null, missingField = false } = {}) {
+    const seen = [];
+    const server = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', (c) => { body += c; });
+      req.on('end', () => {
+        let parsed = null;
+        try { parsed = body ? JSON.parse(body) : null; } catch { /* ignore */ }
+        seen.push({ url: req.url, method: req.method, body: parsed, workspace: req.headers['x-workspace-id'] });
+        if (failStatus) { res.writeHead(failStatus); return res.end('{"error":"x"}'); }
+        res.writeHead(200);
+        res.end(JSON.stringify(missingField ? { total: 0 } : { results }));
+      });
+    });
+    return { server, seen };
+  }
+
+  async function withSearchStub(opts, fn) {
+    const { server, seen } = makeSearchStub(opts);
+    await listen(server);
+    servers.push(server);
+    process.env.SM_TEST_KEY = 'k';
+    try {
+      await fn({ baseUrl: `http://127.0.0.1:${server.address().port}`, seen });
+    } finally {
+      delete process.env.SM_TEST_KEY;
+      server.close();
+    }
+  }
+
+  test('sends channel_weights:{} on every request — not optional', async () => {
+    await withSearchStub({ results: [{ item_id: 'a' }] }, async ({ baseUrl, seen }) => {
+      const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY', workspaceId: 'ws-1' });
+      await client.searchItems('anything');
+      await client.searchItems('again', { topK: 20 });
+      assert.equal(seen.length, 2);
+      for (const s of seen) {
+        assert.deepEqual(
+          s.body.channel_weights, {},
+          'omitting it lets the API key\'s recall profile disable retrieval channels',
+        );
+      }
+    });
+  });
+
+  test('is workspace-scoped, unlike the shipped search()', async () => {
+    await withSearchStub({ results: [] }, async ({ baseUrl, seen }) => {
+      const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY', workspaceId: 'ws-9' });
+      await client.searchItems('q');
+      await client.search('q');
+      assert.equal(seen[0].workspace, 'ws-9', 'searchItems must carry the workspace');
+      assert.equal(seen[1].workspace, undefined, 'search() is deliberately unchanged');
+    });
+  });
+
+  test('passes top_k and memory_type only when given', async () => {
+    await withSearchStub({ results: [] }, async ({ baseUrl, seen }) => {
+      const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY' });
+      await client.searchItems('q');
+      await client.searchItems('q', { topK: 40, memoryType: 'fluid_idea' });
+      assert.deepEqual(seen[0].body, { query: 'q', channel_weights: {} });
+      assert.equal(seen[1].body.top_k, 40);
+      assert.equal(seen[1].body.memory_type, 'fluid_idea');
+    });
+  });
+
+  test('a 2xx without a results array is malformed-response', async () => {
+    await withSearchStub({ missingField: true }, async ({ baseUrl }) => {
+      const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY' });
+      await assert.rejects(
+        () => client.searchItems('q'),
+        (err) => err instanceof SmartmemoryHttpError && err.kind === 'malformed-response',
+      );
+    });
+  });
+
+  test('missing env key throws before any fetch', async () => {
+    await withSearchStub({}, async ({ baseUrl, seen }) => {
+      delete process.env.SM_TEST_KEY;
+      const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY' });
+      await assert.rejects(
+        () => client.searchItems('q'),
+        (err) => err instanceof SmartmemoryHttpError && err.status === 0,
+      );
+      assert.equal(seen.length, 0);
+    });
+  });
+});
