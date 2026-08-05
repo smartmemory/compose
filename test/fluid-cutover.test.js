@@ -354,6 +354,55 @@ describe('a killed idea round-trips through the projection', () => {
   });
 });
 
+describe('a discussion author with a space survives the projection', () => {
+  // COMP-FLUID-SEAM-GUARANTEES F7-1. The parser's author grammar was `\w+`,
+  // which matches no real person's name. An entry by `Jane Doe` rendered into
+  // the file correctly and then parsed to ZERO entries — the comment silently
+  // gone, and the fixed point the cutover rests on broken with it. Unreachable
+  // while the CLI was the only writer (it always writes `human`); reachable the
+  // moment the REST API took an author from a request body (S3b-2).
+  it('round-trips a multi-word author, keeping the entry and the fixed point', async () => {
+    const p = await provider();
+    const rec = await p.createRecord({ kind: 'idea', title: 'author probe' });
+    await p.appendDiscussion(rec.handle, { text: 'a real point', author: 'Jane Doe' });
+
+    const rendered = renderIdeabox({ ideas: await p.listRecords({ kind: 'idea' }), clusters: [] });
+    const [parsed] = parseIdeabox(rendered).ideas;
+
+    assert.equal(parsed.discussion.length, 1, 'the entry vanished from the projection');
+    assert.equal(parsed.discussion[0].author, 'Jane Doe');
+    assert.equal(parsed.discussion[0].text, 'a real point');
+    assert.equal(serializeIdeabox(parseIdeabox(rendered)), rendered);
+  });
+
+  it('keeps a colon inside the comment text, which is where colons actually appear', async () => {
+    // The author match is lazy so the FIRST colon delimits. A greedy match would
+    // hand the author everything up to the LAST colon and truncate the comment.
+    const p = await provider();
+    const rec = await p.createRecord({ kind: 'idea', title: 'colon probe' });
+    await p.appendDiscussion(rec.handle, { text: 'see this: it matters', author: 'Jane Doe' });
+
+    const rendered = renderIdeabox({ ideas: await p.listRecords({ kind: 'idea' }), clusters: [] });
+    const [parsed] = parseIdeabox(rendered).ideas;
+
+    assert.equal(parsed.discussion[0].author, 'Jane Doe');
+    assert.equal(parsed.discussion[0].text, 'see this: it matters');
+  });
+
+  it('refuses an author the projection could not represent', async () => {
+    // A colon in the author is unrepresentable in `- [date] author: text`.
+    // Refused at the contract rather than escaped in the renderer: a value the
+    // surface cannot express is a value the store should not hold.
+    const p = await provider();
+    const rec = await p.createRecord({ kind: 'idea', title: 'bad author' });
+    await assert.rejects(
+      () => p.appendDiscussion(rec.handle, { text: 'x', author: 'Bad: Author' }),
+      /author must match pattern/
+    );
+    assert.equal((await p.getRecord(rec.handle)).discussion.length, 0, 'the refusal still wrote');
+  });
+});
+
 describe('the projection is published under the provider lock', () => {
   it('waits for a held lock instead of publishing a snapshot alongside another writer', async () => {
     // COMP-PLAN-IDEA-UNIFY S3b-2. Each mutation is locked inside the provider,

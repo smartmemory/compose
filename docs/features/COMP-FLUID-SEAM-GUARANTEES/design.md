@@ -1,6 +1,6 @@
 # COMP-FLUID-SEAM-GUARANTEES — lift the fluid store's safety guarantees into the seam
 
-**Status:** PLANNED
+**Status:** PARTIAL — six of seven criteria met; one blocked upstream (Q1)
 **Date:** 2026-08-05
 **Epic:** COMP-PLAN-RIGOR (Front-of-Funnel Rigor + Parity)
 **Origin:** COMP-PLAN-IDEA-UNIFY S3b-1, review round 2
@@ -73,28 +73,49 @@ recurrence; the rest only repair the current one.
 
 ## Acceptance criteria
 
-- [ ] Serialized mutation is a **seam obligation**, stated on `FluidProvider` and satisfied
-      by every implementation. The floor keeps `dir-lock`; SmartMemory needs a mechanism
-      valid across machines, since a local mutex cannot serialize the shared case.
-- [ ] `reclaimAborted` is part of the seam contract, with the floor's narrow semantics: a
+- [x] Serialized mutation is a **seam obligation**, stated on `FluidProvider` and satisfied
+      by every implementation — *or DECLARED absent*. `mutationScope()` (`none|process|machine|cluster`)
+      plus `isShared()` are how a provider says how far its serialization reaches; both
+      default to the pessimistic answer, so a provider that never considered concurrency
+      inherits "unsafe" rather than "fine". The floor declares `machine` and keeps
+      `dir-lock`. SmartMemory declares `none`, honestly — see Q1.
+- [x] `reclaimAborted` is part of the seam contract, with the floor's narrow semantics: a
       handle with no record and no `deleted` event, reclaimable only by an explicit opt-in
-      caller (the import).
-- [ ] A shared **conformance suite** runs against every provider, so a new implementation
+      caller (the import). Now implemented on the SmartMemory provider too — it needed no
+      server primitive, so it did not wait on Q1. **The import is restartable there today.**
+- [x] A shared **conformance suite** runs against every provider, so a new implementation
       cannot satisfy the interface while missing the guarantees.
-- [ ] Concurrent creates against the SmartMemory provider yield distinct handles, asserted
-      by a test that fails when the mechanism is removed.
-- [ ] An interrupted import against SmartMemory can be re-run to completion.
-- [ ] **F6-1** — `add --cluster "X"` cannot create duplicate clusters. Lookup and create are
-      separate operations (`ideabox-cli.js:101`, `:153`) and the lock covers only each
-      individual mutation. Needs find-or-create in one critical section, which needs a
-      non-locking inner create because `withDirLock` is not reentrant.
-- [ ] **F7-1** — a discussion author containing a space survives the projection. The
-      contract accepts any string, the parser's grammar is `\w+` (`lib/ideabox.js:53`), and
-      the renderer emits verbatim, so `author: "Jane Doe"` round-trips to zero discussion
-      entries. Unreachable from the CLI (always writes `human`), reachable from the provider
-      and from COMP-PLAN-IDEA-UNIFY S3b-2's API.
-- [ ] Until the above land, `fluid.provider: "smartmemory"` warns rather than silently
-      running the ideabox on a provider with unserialized allocation.
+      `test/fluid-provider-conformance.test.js`, 19 cases x 2 providers. Adding a provider
+      means adding one row. The SmartMemory row runs against the shared wire stub rather
+      than a hand-rolled double, because a double would pass by construction — which is how
+      the real provider passed review while missing both guarantees.
+- [ ] **BLOCKED on [smart-memory-service#4](https://github.com/smart-memory/smart-memory-service/issues/4).**
+      Concurrent creates against the SmartMemory provider yield distinct handles. The
+      conformance case is written and gated on `mutationScope()`, so it starts applying to
+      that provider the moment it can honestly declare `cluster` — and the suite fails today
+      if it declares `cluster` without a mechanism.
+- [x] An interrupted import against SmartMemory can be re-run to completion.
+- [x] **F6-1** — `add --cluster "X"` cannot create duplicate clusters. Lookup and create were
+      separate operations and the lock covered only each individual mutation. Now
+      `FluidProvider.findOrCreateRecord()`, one operation on the seam: the floor runs both
+      halves inside a single hold of the mutation lock (composing on the existing
+      non-locking `_createRecordLocked`, since `withDirLock` is not reentrant). *Line refs in
+      the original finding are stale — the cluster resolution moved to
+      `lib/fluid/ideabox-ops.js` in COMP-PLAN-IDEA-UNIFY S3b-2.*
+- [x] **F7-1** — a discussion author containing a space survives the projection. **This went
+      live before it was fixed:** S3b-2 shipped `POST /api/ideabox/ideas/:id/discuss`, which
+      takes the author from a request body, so the defect stopped being unreachable. Probed
+      and confirmed — `Jane Doe` rendered correctly and parsed back to ZERO entries, taking
+      the comment and the `serialize(parse(projection))` fixed point with it. The parser's
+      author grammar is now "everything up to the FIRST colon" (lazy, so a colon in the
+      comment TEXT still works), and the contract forbids a colon or line break in an author:
+      a value the surface cannot represent is a value the store should refuse to hold.
+- [x] Until the above land, `fluid.provider: "smartmemory"` warns rather than silently
+      running the ideabox on a provider with unserialized allocation. **Derived from the
+      provider's own declarations, not hardcoded to its name:** the factory warns when
+      `isShared()` and the scope is below `cluster`. A hardcoded warning has to be remembered
+      by whoever adds the third provider — the same failure this feature exists to close —
+      and remembered again, in the other direction, on the day the gap is fixed.
 
 ## Files
 
@@ -108,13 +129,110 @@ recurrence; the rest only repair the current one.
 | `lib/fluid/factory.js` | edit | Interim warning on `provider: "smartmemory"`. |
 | `test/fluid-provider-conformance.test.js` | new | The suite every provider must pass. |
 
-## Open Questions
+## Answered Questions
 
-- **What is the cross-machine mechanism?** A local mutex is definitionally wrong for a
-  shared store. Whether SmartMemory can offer a conditional create or a reservation
-  primitive decides whether this is a Compose-side change or an upstream ask. **Answer
-  before designing the fix.**
-- **Should allocation move off max-plus-one entirely?** A server-assigned monotonic counter
-  would make the race unrepresentable rather than merely guarded, but it changes how
-  `IDEA-N` handles are minted — and the whole epic treats those as external citations, so it
-  is a larger ruling than it looks.
+### Q1 — What is the cross-machine mechanism? **ANSWERED 2026-08-05: none exists yet. Upstream ask filed.**
+
+Checked the SmartMemory service directly rather than reasoning about it:
+
+| Candidate | Verdict | Evidence |
+|---|---|---|
+| Caller-supplied item id on create | **Absent** — the server assigns it, so there is no key two writers can collide on | `crud.py:373` takes `content`, `memory_type`, `metadata`, `use_pipeline`, `profile_name`, `conversation_context` |
+| Conditional create / if-not-exists | **Absent** | same route |
+| Compare-and-swap on update (ETag/If-Match/version) | **Absent** | `crud.py:1003` |
+| Counter / sequence / allocate endpoint | **Absent** | no such route |
+| Content-hash idempotency | **Exists but unusable** — an explicitly NON-ATOMIC read-then-write that proceeds on error, on a different route, keyed by content. It cannot express "claim IDEA-7": two records claiming the same handle hash differently | `ingest.py:178-205` |
+
+So there is no primitive to build a correct cross-machine reservation on, and this half is
+**genuinely blocked upstream**. Filed as
+[smart-memory-service#4](https://github.com/smart-memory/smart-memory-service/issues/4).
+
+**The ask is small, because the machinery already exists there.**
+`snapshot_sweep.py:94` runs `with_snapshot_lock` — a Redis lease with a TTL, released via
+Lua compare-and-delete — already consumed by `routes/summary.py:87`. It is internal,
+single-purpose and workspace-scoped rather than key-scoped. One behavioural change is
+required if it is generalized: it currently yields `True` when Redis is unreachable
+(`snapshot_sweep.py:88-91`), which is a sensible default for a sweep and **wrong** for
+allocation — a lease that grants itself when the coordinator is down is worse than no lease,
+because the caller believes it is serialized.
+
+**A hack was considered and rejected.** The content-hash path can be abused into a
+last-writer-wins arbiter (both racers write a claim under the same derived id, read back,
+and whoever's token survives wins). It would make a correctness primitive out of a
+convenience that documents itself as best-effort and falls back on error. Not worth it.
+
+**What this does NOT block.** Only one acceptance criterion depends on it. `reclaimAborted`
+needed no server primitive — it is a question about the provider's own event log — so it is
+fixed here rather than deferred, and the import is restartable on SmartMemory today.
+
+### Q2 — Should allocation move off max-plus-one? **Deferred, and now cheaper to defer.**
+
+A server-assigned monotonic counter would make the race unrepresentable rather than guarded.
+But there is no counter endpoint either, so it is the same upstream conversation with a
+larger blast radius: it changes how `IDEA-N` is minted, and the epic treats those as
+external citations. The lease in Q1 is the smaller ask and leaves this open rather than
+foreclosing it.
+
+---
+
+## Implementation record — 2026-08-05
+
+Six of seven acceptance criteria met. The seventh is blocked upstream and is the
+only one, which is why Q1 was answered before any design work rather than after.
+
+### What shipped
+
+| Concern | Where |
+|---|---|
+| Both obligations stated on the seam | `lib/fluid/provider.js` — a long comment block above the record methods, plus `MUTATION_SCOPE`, `mutationScopeAtLeast`, `mutationScope()`, `isShared()` |
+| Honest declarations | `local-provider.js` → `machine`/not shared. `smartmemory-provider.js` → `none`/shared |
+| `reclaimAborted` on SmartMemory | `smartmemory-provider.js` — `_isAbortedAllocation()` mirroring the floor's narrow semantics |
+| Atomic find-or-create (F6-1) | `FluidProvider.findOrCreateRecord()` + the floor's single-lock override; `ideabox-ops.js` consumes it |
+| Author grammar (F7-1) | `lib/ideabox.js` `DISCUSSION_ENTRY_RE`, plus an author `pattern` in the contract |
+| Declaration-derived warning | `factory.js` `warnIfUnsafelyShared()` |
+| Conformance suite | `test/fluid-provider-conformance.test.js` — 19 cases x 2 providers |
+
+### Decisions taken during implementation
+
+- **D1 — a provider may DECLARE the absence rather than implement it.** The original
+  criterion read "satisfied by every implementation", which SmartMemory cannot do while Q1
+  is open. The alternative to a declaration is silence, and silence is what shipped in
+  S3b-1. Both accessors default to the pessimistic answer, so a provider that never
+  considered concurrency inherits "unsafe" rather than "fine" — the direction of the default
+  is the whole point.
+- **D2 — the scope is a reach, not a boolean.** "Is it locked" has no single true answer: a
+  filesystem mutex genuinely serializes every process on one machine and cannot serialize
+  two. `machine` is the complete answer for the floor and a shortfall for a shared store,
+  and only the pair (`mutationScope` + `isShared`) decides which.
+- **D3 — the conformance suite asserts the NEGATIVE case too.** A provider declaring `none`
+  is expected to fail the concurrency cases, and the suite says so. That keeps the
+  declaration honest in both directions: a provider that later gains serialization cannot
+  leave a stale `none` behind, and one that claims `machine` or better without a mechanism
+  fails immediately (verified — that mutation fails four cases).
+- **D4 — the warning is derived, never hardcoded.** A per-provider warning has to be
+  remembered by whoever adds the third provider, which is this feature's own failure mode,
+  and remembered again in the other direction on the day the gap closes.
+- **D5 — F7-1's fix constrains the contract rather than escaping in the renderer.** An
+  author containing a colon cannot be represented in `- [date] author: text`. A value the
+  surface cannot express is a value the store should refuse to hold; escaping it would make
+  the projection unreadable to preserve something nobody wants.
+
+### Verification
+
+- 310 tests across the fluid and ideabox suites; full suite **5413 node + 581 ui + 100
+  tracker, zero failures** (node baseline 5372 after S3b-2; +41 is exactly the new tests).
+- Mutation-tested, each failing its case when removed: SmartMemory ignoring `reclaimAborted`
+  (the S3b-1 state), reclaiming a `deleted` handle (too broad), the floor's find-or-create
+  dropping its lock, and a provider overstating its `mutationScope`.
+- F7-1 was probed against the real renderer and parser before the fix — `Jane Doe` produced
+  zero parsed discussion entries and broke the fixed point — and after.
+
+### Open
+
+- The blocked criterion, tracked at
+  [smart-memory-service#4](https://github.com/smart-memory/smart-memory-service/issues/4).
+  When it lands: implement the lease in `smartmemory-provider.js`, flip `mutationScope()` to
+  `cluster`, and the conformance suite's concurrency cases begin applying to it
+  automatically. No test changes needed — that is what the gating buys.
+- Still explicitly out of scope: the other five ad-hoc `mkdir` locks in `lib/` (IDEA-22), and
+  the SmartMemory service limitations owned upstream.
