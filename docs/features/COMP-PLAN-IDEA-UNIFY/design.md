@@ -34,12 +34,12 @@ The whole Discovery Loop stands on ideas being first-class graph objects — abl
 
 - [x] Fluid records are the single source of truth for ideabox entries (no second store). *(S1; substrate corrected in S3 — records are tracked files, not vision items.)*
 - [x] Ideabox mutation goes through a fluid-store provider interface (records + lifecycle + `capabilities()`), with the local file-backed provider as the floor implementation; no caller binds the vision store directly. *(S1/S3.)*
-- [ ] `docs/product/ideabox.md` is regenerated from fluid records; it is not a write target. *(Renderer shipped in S2; cutover is S3b.)*
-- [ ] `compose ideabox add/list/promote/kill/pri/discuss/triage` write/read through the provider (behavior preserved, backing store swapped).
-- [ ] `useIdeaboxStore` / `/api/ideabox` serve from fluid records (existing UI unchanged from the user's view).
-- [ ] Promote records the `idea → feature` transition in the graph (provenance link), not a bare feature creation.
+- [x] `docs/product/ideabox.md` is regenerated from fluid records; it is not a write target. *(Renderer S2; CLI cutover S3b-1; the API's write path S3b-2. Every surface now writes records and re-renders.)*
+- [x] `compose ideabox add/list/promote/kill/pri/discuss/triage` write/read through the provider (behavior preserved, backing store swapped). *(S3b-1; rebased onto the shared ops in S3b-2, which also added `resurrect`.)*
+- [x] `useIdeaboxStore` / `/api/ideabox` serve from fluid records (existing UI unchanged from the user's view). *(S3b-2. Reads go through `lib/fluid/ideabox-view.js`, NOT by parsing the generated markdown — that would be correct only on the local provider.)*
+- [x] Promote records the `idea → feature` transition in the graph (provenance link), not a bare feature creation. *(S3b-1/S3b-2: a typed `promoted_to` edge, asserted from both surfaces.)*
 - [x] One-time migration: existing `docs/product/ideabox.md` entries import to fluid records (parser is import-once, not a live round-trip). *(S2; runs at cutover.)*
-- [ ] `mapsTo` overlay is superseded by real graph links (or kept as a rendered view of them).
+- [x] `mapsTo` overlay is superseded by real graph links (or kept as a rendered view of them). *(Stored as a typed `maps_to` link; the markdown `**Maps to:**` line is a rendering of it.)*
 
 ## Non-goals (deferred to later rungs / features)
 
