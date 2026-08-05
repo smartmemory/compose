@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://compose.smartmemory.dev/contracts/fluid-record.schema.json",
   "title": "fluid-record",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The canonical record shape carried across the fluid-store provider seam (PROVIDER-SEAM, what-to-build 8k, owner-locked 2026-07-21). The seam is drawn at records + lifecycle events + capability discovery ONLY. Semantic machinery (recall, challenge, conviction, calibration, contradiction) is NEVER modelled here — those are provider capabilities that light up when the configured provider declares them, and a provider that lacks one lacks it visibly. Kind-generic from day one: COMP-PLAN-IDEA-UNIFY implements `idea` as the seam's pilot workload, and positions/joints/decisions adopt this same shape next without a contract change.",
   "_source": "docs/features/COMP-PLAN-IDEA-UNIFY/design.md",
   "_roadmap": "COMP-PLAN-IDEA-UNIFY",
@@ -32,6 +32,18 @@
       "type": ["string", "null"],
       "description": "Triage rank. null means untriaged (the ideabox renders this as an em dash).",
       "enum": ["P0", "P1", "P2", null]
+    },
+
+    "effort": {
+      "type": ["string", "null"],
+      "description": "T-shirt size of the work, the X axis of the cockpit's 2x2 prioritization matrix. Null means unassigned, which is the matrix's `Unassigned` tray rather than a default size. Separate from `priority` on purpose: priority is a decision about sequencing, effort is an estimate of cost, and collapsing them loses the pair that makes a Quick Win distinguishable from a Big Bet.",
+      "enum": ["S", "M", "L", null]
+    },
+
+    "impact": {
+      "type": ["string", "null"],
+      "description": "Expected value of the work, the Y axis of the cockpit's 2x2 prioritization matrix. Null means unassigned. Lower-case by contract because that is what the markdown surface has always written and what `lib/ideabox.js` validates against; a casing change here would silently invalidate every existing assignment on upgrade.",
+      "enum": ["low", "medium", "high", null]
     },
 
     "link": {
@@ -91,6 +103,8 @@
           "description": "The human-facing status token when it carries more than the canonical enum can (`RE-AIMED (2026-07-21)`, `PROMOTED (-> FEAT-1)`). Canonical `status` drives all behavior; this only preserves what the author wrote so a closed enum does not quietly flatten it away. Null when the author's token was already canonical."
         },
         "priority": { "$ref": "#/definitions/priority" },
+        "effort": { "$ref": "#/definitions/effort" },
+        "impact": { "$ref": "#/definitions/impact" },
         "cluster": {
           "type": ["string", "null"],
           "description": "HANDLE of the `cluster` record this record belongs to (e.g. CLUS-1), or null when ungrouped. Carries the editorial grouping the ideabox renders as `### Umbrella A - Resilience: fail loud, recover fast`. This is RECORD DATA, not presentation: the headings and their theme prose are hand-authored information, and a projection that cannot reproduce them from the store would clobber them on first regeneration - the failure mode `roadmap generate` already has. A handle rather than the display name so renaming an umbrella does not orphan its members."

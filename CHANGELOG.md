@@ -2,6 +2,32 @@
 
 ## 2026-08-05
 
+### The cockpit and the phone can add ideas again
+
+When the ideabox became a real store, the web and mobile apps were locked out of
+writing to it. They stayed locked out rather than losing your text: they had been
+editing a file that is now regenerated, so anything saved there would have
+disappeared at the next command. That is fixed. Adding, editing, prioritising,
+discussing, promoting and killing an idea all work again from every surface, and
+they all write to the same store the `compose ideabox` commands use. An idea
+added on your phone is there in the terminal, and the numbering is one sequence
+rather than two.
+
+A killed idea can now be brought back from the command line too
+(`compose ideabox resurrect`), which until now only the web app could do.
+
+Promoting an idea that was killed is refused instead of quietly bringing it back
+to life. Kills are dated and have a reason, and a command that never mentions
+kills should not undo one. Resurrect it first if the kill was wrong.
+
+### The impact and effort you assign to an idea are no longer thrown away
+
+The web app has a grid that places ideas by how valuable and how expensive they
+look. Those two answers had nowhere to be stored, so the upgrade to the new
+ideabox deleted them from the file. They are now kept with the idea, shown in the
+ideabox file, and carried through the upgrade. If you had assigned any before
+upgrading, they come back.
+
 ### A warning if you point ideas at shared storage
 
 Ideas can be kept on your machine or in a shared SmartMemory workspace. The shared option

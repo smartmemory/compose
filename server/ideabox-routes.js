@@ -1,91 +1,210 @@
 /**
  * server/ideabox-routes.js — REST API for the ideabox feature.
  *
+ * COMP-PLAN-IDEA-UNIFY S3b-2: this module reads and writes FLUID RECORDS.
+ *
  * Routes:
- *   GET    /api/ideabox                  — return parsed ideabox JSON (cached)
- *   POST   /api/ideabox/ideas            — add new idea
- *   PATCH  /api/ideabox/ideas/:id        — update priority/status/etc.
- *   POST   /api/ideabox/ideas/:id/promote — promote to feature
- *   POST   /api/ideabox/ideas/:id/kill   — kill with reason
- *   DELETE /api/ideabox/ideas/:id        — not allowed (use kill)
+ *   GET    /api/ideabox                     — the whole ideabox, from the records
+ *   POST   /api/ideabox/ideas               — capture a new idea
+ *   PATCH  /api/ideabox/ideas/:id           — edit fields (priority, effort, impact, …)
+ *   POST   /api/ideabox/ideas/:id/promote   — promote to a feature
+ *   POST   /api/ideabox/ideas/:id/kill      — kill with a reason
+ *   POST   /api/ideabox/ideas/:id/resurrect — return a killed idea to the live set
+ *   POST   /api/ideabox/ideas/:id/discuss   — append to the deliberation trail
+ *   DELETE /api/ideabox/ideas/:id           — not allowed (use kill)
+ *
+ * WHAT S3b-1 LEFT HERE AND WHY IT IS GONE
+ * ---------------------------------------
+ * S3b-1 cut the CLI over to the record store and closed all six mutating
+ * handlers with a 409, because they rewrote `docs/product/ideabox.md` directly
+ * and that file had just become generated output: an idea saved here would have
+ * reported success, been overwritten by the next render, and taken the user's
+ * text with it. Failing closed was the honest interim state. This slice replaces
+ * it with real handlers rather than restoring the old bodies.
+ *
+ * EVERY MUTATION GOES THROUGH `fluid/ideabox-ops.js`, WHICH THE CLI ALSO USES.
+ * Not "the same way the CLI does" — the same code. Two call sites that each had
+ * to remember to run the migration gate before writing, and to re-render after,
+ * would drift exactly the way `smartmemory-provider.js` drifted from
+ * `local-provider.js` in S3b-1: satisfying the interface completely while
+ * silently missing a guarantee.
+ *
+ * Responses come from `fluid/ideabox-view.js`, which projects records into the
+ * shape the cockpit and the mobile app have always consumed (`id` is the handle,
+ * `description` is the body, an untriaged priority is an em dash).
  */
 
 import fs from 'node:fs'
 import path from 'node:path'
-// The ideabox mutators are gone from this module: the write path is closed here
-// until S3b-2 wires it onto the fluid record store (see `writesMovedToCli`).
-import { IdeaboxCache } from './ideabox-cache.js'
-import { resolveIdeaboxPathFromConfig } from '../lib/project-paths.js'
+
+import {
+  ideaboxContext,
+  addIdea,
+  addDiscussion,
+  killIdea,
+  promoteIdea,
+  resurrectIdea,
+  updateIdea,
+  IdeaboxConflict,
+  IdeaboxInvalid,
+  IdeaboxNotFound,
+  IdeaboxRenderFailed,
+} from '../lib/fluid/ideabox-ops.js'
+import { ideaboxView, toClientIdeaWith } from '../lib/fluid/ideabox-view.js'
+import { relForDisplay } from '../lib/project-paths.js'
 
 /**
  * @param {object} app              — Express app
- * @param {{ getProjectRoot, getDataDir }} deps
+ * @param {{ getProjectRoot, getDataDir, broadcastMessage }} deps
  */
-export function attachIdeaboxRoutes(app, { getProjectRoot, getDataDir }) {
-  // Lazily created per project root — we need to handle project switches
-  let _cache = null
-  let _lastProjectRoot = null
-  let _lastDataDir = null
-
-  function getCache() {
+export function attachIdeaboxRoutes(app, { getProjectRoot, broadcastMessage }) {
+  /**
+   * A fresh context per request, deliberately.
+   *
+   * The provider holds paths, not state — every handle lookup re-reads the
+   * records directory and the events log — so caching one would buy nothing and
+   * cost correctness the moment the project root changes underneath a long-lived
+   * server, which is the case this file has always had to handle.
+   */
+  function context() {
     const projectRoot = getProjectRoot()
-    const dataDir = getDataDir()
-    if (!_cache || _lastProjectRoot !== projectRoot || _lastDataDir !== dataDir) {
-      const config = loadConfig(projectRoot)
-      const sourceFile = resolveIdeaboxPathFromConfig(projectRoot, config)
-      _cache = new IdeaboxCache(dataDir, sourceFile)
-      _lastProjectRoot = projectRoot
-      _lastDataDir = dataDir
-    }
-    return _cache
+    return ideaboxContext(projectRoot, { config: loadConfig(projectRoot) ?? {}, origin: 'ui:ideabox' })
   }
 
-  // GET /api/ideabox
-  app.get('/api/ideabox', (_req, res) => {
+  function broadcastUpdate() {
+    if (broadcastMessage) {
+      broadcastMessage({ type: 'ideaboxUpdated', timestamp: new Date().toISOString() })
+    }
+  }
+
+  /**
+   * Map an op failure onto HTTP.
+   *
+   * `IdeaboxRenderFailed` is deliberately NOT an error response. The record is
+   * durable; only the generated markdown is stale. Both clients roll their
+   * optimistic update back on any non-ok response, so reporting a failure here
+   * would make a committed idea vanish from the UI and invite the user to type
+   * it again — producing the duplicate the whole record store exists to prevent.
+   * It is answered as a success carrying `projectionStale`, so a client that
+   * wants to surface the staleness can, and one that ignores unknown fields
+   * behaves correctly by default.
+   */
+  async function send(res, run, okStatus = 200) {
     try {
-      const cache = getCache()
-      const data = cache.get()
-      res.json(data)
+      const { body, broadcast = true } = await run()
+      if (broadcast) broadcastUpdate()
+      res.status(okStatus).json(body)
+    } catch (err) {
+      if (err instanceof IdeaboxRenderFailed) {
+        // The write landed. Tell the truth about both halves.
+        broadcastUpdate()
+        const idea = err.record ? await safeIdea(err.record) : null
+        return res.status(okStatus).json({
+          ...(idea ?? {}),
+          projectionStale: true,
+          warning: err.message,
+        })
+      }
+      if (err instanceof IdeaboxNotFound) return res.status(404).json({ error: err.message, code: err.code })
+      if (err instanceof IdeaboxInvalid) return res.status(400).json({ error: err.message, code: err.code, field: err.field })
+      if (err instanceof IdeaboxConflict) return res.status(409).json({ error: err.message, code: err.code })
+      return res.status(500).json({ error: err.message })
+    }
+  }
+
+  /** Best-effort client projection for the render-failed path, which must not
+   *  fail a second time on the way out. */
+  async function safeIdea(record) {
+    try {
+      const ctx = await context()
+      return await toClientIdeaWith(ctx.provider, record)
+    } catch {
+      return null
+    }
+  }
+
+  // GET /api/ideabox — served from the records, per the feature's acceptance
+  // criterion. NOT from `docs/product/ideabox.md`: that file is a local
+  // projection, and on a store shared across machines (the SmartMemory
+  // provider) a write on one machine never regenerates another's copy, so
+  // reading it would serve an indefinitely stale view of a current store.
+  app.get('/api/ideabox', async (_req, res) => {
+    try {
+      const ctx = await context()
+      res.json(await ideaboxView(ctx.provider))
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
   })
 
   // POST /api/ideabox/ideas
-  /**
-   * S3b-1 (F1): the cockpit's WRITE path is closed until S3b-2 wires it onto the
-   * record store.
-   *
-   * The CLI now treats `docs/product/ideabox.md` as GENERATED output. These
-   * handlers used to rewrite that markdown directly and return 200, so leaving
-   * them live would mean an idea added or edited in the cockpit reports success,
-   * is overwritten by the next CLI render, and takes the user's text with it.
-   * `POST /ideas` was worse still: it allocated from the markdown's own counter
-   * while the record store allocates from its own, so the two mint the same
-   * IDEA-N without either knowing.
-   *
-   * Failing closed is the honest state. A visible 409 naming the working path
-   * beats a silent success that loses the write. The previous bodies are not
-   * kept behind this guard — unreachable code that looks live is how a hole gets
-   * quietly reopened, and S3b-2 rewrites these onto the provider rather than
-   * restoring them.
-   *
-   * Reads stay open: the markdown is a faithful projection of the records.
-   */
-  const writesMovedToCli = (_req, res) => res.status(409).json({
-    error:
-      'The ideabox has moved to the record store and the cockpit write path is not wired to it yet. '
-      + 'An idea saved here would be overwritten by the next render, so the write is refused rather than lost. '
-      + 'Use `compose ideabox <add|pri|kill|discuss|promote>` until this is restored.',
-    code: 'IDEABOX_WRITES_MOVED_TO_CLI',
+  app.post('/api/ideabox/ideas', async (req, res) => {
+    const { title, description, source, tags, cluster } = req.body || {}
+    await send(res, async () => {
+      const ctx = await context()
+      const { record } = await addIdea(ctx, { title, body: description, source, tags, cluster })
+      return { body: await toClientIdeaWith(ctx.provider, record) }
+    }, 201)
   })
 
-  app.post('/api/ideabox/ideas', writesMovedToCli)
-  app.patch('/api/ideabox/ideas/:id', writesMovedToCli)
-  app.post('/api/ideabox/ideas/:id/promote', writesMovedToCli)
-  app.post('/api/ideabox/ideas/:id/kill', writesMovedToCli)
-  app.post('/api/ideabox/ideas/:id/resurrect', writesMovedToCli)
-  app.post('/api/ideabox/ideas/:id/discuss', writesMovedToCli)
+  // PATCH /api/ideabox/ideas/:id
+  app.patch('/api/ideabox/ideas/:id', async (req, res) => {
+    await send(res, async () => {
+      const ctx = await context()
+      const { record } = await updateIdea(ctx, req.params.id, req.body || {})
+      return { body: await toClientIdeaWith(ctx.provider, record) }
+    })
+  })
+
+  // POST /api/ideabox/ideas/:id/promote
+  app.post('/api/ideabox/ideas/:id/promote', async (req, res) => {
+    await send(res, async () => {
+      const ctx = await context()
+      const { record, featureCode, featurePath } = await promoteIdea(
+        ctx, req.params.id, (req.body || {}).featureCode || ''
+      )
+      // `featureCode` and `featurePath` are a promotion-specific envelope around
+      // the idea, not fields of it. The mobile client reads `result.featureCode`
+      // to name what it just created, and it matters most in exactly the case
+      // where the client did not supply one and the server derived it.
+      return {
+        body: {
+          ...(await toClientIdeaWith(ctx.provider, record)),
+          featureCode,
+          featurePath: relForDisplay(ctx.cwd, featurePath),
+        },
+      }
+    })
+  })
+
+  // POST /api/ideabox/ideas/:id/kill
+  app.post('/api/ideabox/ideas/:id/kill', async (req, res) => {
+    await send(res, async () => {
+      const ctx = await context()
+      const { record } = await killIdea(ctx, req.params.id, (req.body || {}).reason || '')
+      return { body: await toClientIdeaWith(ctx.provider, record) }
+    })
+  })
+
+  // POST /api/ideabox/ideas/:id/resurrect
+  app.post('/api/ideabox/ideas/:id/resurrect', async (req, res) => {
+    await send(res, async () => {
+      const ctx = await context()
+      const { record } = await resurrectIdea(ctx, req.params.id)
+      return { body: await toClientIdeaWith(ctx.provider, record) }
+    })
+  })
+
+  // POST /api/ideabox/ideas/:id/discuss
+  app.post('/api/ideabox/ideas/:id/discuss', async (req, res) => {
+    const { author, text } = req.body || {}
+    if (!author) return res.status(400).json({ error: 'author is required' })
+    await send(res, async () => {
+      const ctx = await context()
+      const { record } = await addDiscussion(ctx, req.params.id, { author, text })
+      return { body: await toClientIdeaWith(ctx.provider, record) }
+    }, 201)
+  })
 
   // DELETE /api/ideabox/ideas/:id — not allowed
   app.delete('/api/ideabox/ideas/:id', (_req, res) => {

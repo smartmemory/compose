@@ -175,4 +175,9 @@
 **Source:** COMP-FOH / COMP-PLAN-IDEA-UNIFY
 **Idea:** Two literal NUL bytes near line 313 make the whole file unsearchable by grep and ripgrep, which silently return nothing rather than erroring. Any agent or human searching for a symbol defined there concludes it does not exist. Costs real time every session that touches the Boundary Map gate; read it with the Read tool or python until fixed.
 
+#### IDEA-24 — Bridge CLI ideabox writes to open cockpits
+**Status:** NEW | **Priority:** — | **Tags:** cockpit fluid
+**Source:** COMP-PLAN-IDEA-UNIFY S3b-2 design review (D24)
+**Idea:** A CLI ideabox write does not refresh an open cockpit or mobile client. The REST API broadcasts ideaboxUpdated on /ws/vision (restored in COMP-PLAN-IDEA-UNIFY S3b-2), but the CLI writes records directly and the file watcher's fileChanged event goes out on a different socket (/ws/files) that neither ideabox client subscribes to. Bridging them is cross-server wiring: the docs watcher would need to recognise the ideabox path and reach the vision server's broadcast.
+
 ## Killed Ideas

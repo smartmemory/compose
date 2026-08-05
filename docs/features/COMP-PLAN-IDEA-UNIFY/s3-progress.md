@@ -227,3 +227,70 @@ tests added, one per failure mode plus the cross-record clobber.
   ignored. This is asserted as a **test** against the real repo and the real
   `.gitignore`, so moving the records back under an ignored path fails the
   build rather than being discovered at the next cutover.
+
+---
+
+# S3b-2 — API, cockpit, mobile
+
+**Blueprint:** [blueprint-s3b-2.md](blueprint-s3b-2.md)
+
+## What shipped
+
+S3b-1 closed the cockpit's six mutating endpoints with a 409 rather than let
+them overwrite generated output. S3b-2 reopens them onto the record store, and
+does it through **one shared operations module** (`lib/fluid/ideabox-ops.js`)
+that the CLI was refactored onto as well. The two invariants that used to be
+prose in the CLI — migration gate before any write, projection rewritten only
+after the record is durable — now live in code neither surface implements, so
+neither can forget them. That is the direct lesson of S3b-1, where the lock and
+`reclaimAborted` went into one provider and the second one satisfied the
+interface while silently lacking both.
+
+## Decisions
+
+- **D19** — `effort`/`impact` were an upgrade-path DATA LOSS, not a dormant
+  regression. `import-ideabox.js` is the first-use gate every upgrading install
+  runs; it parsed both fields and dropped them, and the render that follows
+  deleted them from the user's markdown. No idea in this repo carries either,
+  which is exactly why it went unnoticed. Fixed contract-first.
+- **D20** — shared ops, not routes mirroring the CLI.
+- **D21 — REVERSED in review.** The first draft derived API responses by parsing
+  the markdown the write had just rendered. Reversed: `/api/ideabox` and every
+  mutation response now come from `lib/fluid/ideabox-view.js`, reading records.
+  Parsing the projection contradicted the feature's own acceptance criterion and
+  was correct only on the local provider — under SmartMemory, a store shared
+  across machines, a write on machine A never regenerates machine B's local
+  markdown, so B would serve an indefinitely stale view of a current store.
+  `server/ideabox-cache.js` deleted with it.
+- **D21a** — a committed write whose render failed answers 200 with
+  `projectionStale: true`, not an error. Both clients roll back optimistic
+  updates on any non-ok status, so an error would erase a committed idea and
+  invite the user to retype it.
+- **D22** — promoting a killed idea is refused (409). **D22a** — typed failures,
+  not `err.message.includes('not found')`. **D22b** — the projection is published
+  under the provider's mutation lock, closing a stale-overwrite race between two
+  writers that the per-mutation lock did not cover.
+- **D23** — `compose ideabox resurrect` added, ending a CLI/API asymmetry.
+- **D24** — a CLI write still does not refresh an open cockpit (different WS
+  channel). Filed as `IDEA-24`.
+
+## Review round 1 (Codex sol/xhigh, against the blueprint)
+
+Changes requested; seven findings, all confirmed. Findings 5, 6 and 7 shared one
+root cause (responses derived from markdown) and were fixed by the D21 reversal
+rather than three patches. Finding 1 corrected a false baseline row of mine:
+mobile IS covered — ten `mobile-*` suites live under `test/ui/` and run under
+vitest, which a non-recursive listing of `test/` missed. Finding 3 caught a
+follow-up I had described as filed and had not filed.
+
+## Verification
+
+- New: `test/ideabox-routes.test.js` — the REST ideabox's first test of any
+  kind. Golden flow, a 13-case error harness, CLI↔API interop, the migration
+  gate on the API's first write, and the render-failure contract.
+- Every load-bearing behaviour was mutation-tested: importer carry, renderer
+  emit, both projection ordering fixes, the broadcast, the killed-promote guard,
+  the migration gate, cluster title resolution, the render lock, and the
+  render-failure response. Each fails its test when removed.
+- Full suite: **5372 node + 581 ui + 100 tracker, zero failures** (node baseline
+  5343; +29 is exactly the net new tests).
