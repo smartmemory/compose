@@ -55,14 +55,62 @@ nowhere today, so a third implementation would miss them just as silently.
 suite every provider must pass; the two P2s from the same review (F6-1, F7-1); an
 interim guard on configuring SmartMemory.
 
-**Not in scope:** the SmartMemory **service** limitations — no per-item reindex
-(smart-memory-core#4), PATCH cannot clear a property (smart-memory-core#3), no per-request
-`_embed` (smart-memory-service#3), and the supersession back-reference. **Do not plan
-Compose work for any of them** — they are fixed in SmartMemory or not at all. Note the
-earlier wording, "filed and owned upstream", overstated it: those issues are self-filed and
-unanswered, so they are a backlog we own, not a handoff someone else has accepted. Also out: migrating the other five
+**Not in scope:** the SmartMemory **service** gaps — no per-item reindex
+(smart-memory-core#4), REST cannot pass `_embed` (**`SVC-EMBED-CONTROL-1`**), and REST
+cannot link two records that already exist as superseding/superseded
+(**`SVC-SUPERSEDE-LINK-1`**). **Do not plan Compose work for any of them** — they are fixed
+in SmartMemory, and the last two are in flight there now. Also out: migrating the other five
 ad-hoc `mkdir` locks in `lib/` onto `lib/dir-lock.js` — real, but independent of the seam
 question.
+
+> **Correction (2026-08-05): all three claimed SmartMemory limitations re-verified against
+> live FalkorDB, not by reading code. Two were stale; the third was real but misdiagnosed.**
+>
+> **1. "PATCH cannot clear a property" — STALE, dropped.**
+> `PATCH /memory/{item_id}` with `{"properties": {...}, "write_mode": "replace"}` clears
+> omitted properties end to end: the route forwards both (`crud.py:1037`), core stamps
+> `_write_mode="replace"` (`memory/pipeline/stages/crud.py:489-513`), and the FalkorDB
+> backend issues a real `REMOVE n.<key>` across every existing key before `SET`
+> (`falkordb.py:615-652`). It looked broken because **merge is the default** and the
+> convenience surface (`content`/`metadata`) is merge-only — `crud.py:1052` hard-merges with
+> no escape hatch. **A discoverability gap, not a capability gap.** Residual, none blocking:
+> `replace` is whole-node (resend what you keep), `metadata` still cannot clear, and nine
+> system fields are preserved by design.
+>
+> **2. "Supersession back-reference does not exist" — STALE, dropped.**
+> The old node carries plain, per-hit-readable properties — `superseded=True`,
+> `superseded_by=<new_id>`, `superseded_at=<ts>` — set by both `supersede()` and
+> `ingest_superseding()` (`smart_memory.py:3531`, `:3546`, and its docstring at `:3554-3555`
+> says so outright). **No scan is needed**, so the `RECALLABLE_KINDS` caveat this design
+> carried was wrong and `decision` needs no asterisk. Reachable over REST via
+> `POST /memory/{item_id}/supersede` (`crud.py:971`).
+> *The one real narrowing:* both REST routes **create** the replacement
+> (`ingest_superseding`). The link-two-existing-records form,
+> `SmartMemory.supersede(old_id, new_id)`, is not exposed over REST — so "record B, already
+> stored, supersedes record A" is a genuine gap. That, precisely, is
+> **`SVC-SUPERSEDE-LINK-1`**.
+>
+> **3. "No per-request `_embed`" — REAL, but the diagnosis was wrong and the fix is small.**
+> The override already exists in core and beats even the hardcoded always-embed allowlist:
+> `crud.py:100` pops `_embed` from kwargs and `crud.py:160` returns it **before** any
+> memory_type or config logic. The old claim that "the deployment-side config defaults ON and
+> Compose can neither set nor verify it" was right about the outcome and **wrong about the
+> cause**: the mechanism is not missing, it is simply unplumbed — `crud.py:539` calls
+> `add(memory_item)` with no kwargs and `structured.py:51` calls `ingest_structured(...)`
+> with none. Exposing one optional REST field closes it. That is **`SVC-EMBED-CONTROL-1`**.
+> **Compose keeps filtering the output regardless** — `RECALLABLE_KINDS` enforcement is
+> correct and must not become contingent on a server flag.
+>
+> **Framing correction.** These were self-filed against our own SmartMemory with no
+> assignee, and the earlier posture here — treat them as fixed limitations and route around
+> them — was wrong. We own SmartMemory; the answer is to fix it properly with that team, not
+> to harden Compose against it. `SVC-EMBED-CONTROL-1` and `SVC-SUPERSEDE-LINK-1` are in
+> flight there now.
+>
+> **Tracker pointer.** SmartMemory tracks in `smart-memory-docs/docs/ROADMAP.md`, not GitHub
+> issues — the `SVC-` codes above are the reference. The surviving `smart-memory-core#4`
+> citation has the same wrong-tracker problem that `6644241` already corrected once for
+> `SVC-LEASE-1`; it needs its own `SVC-` code from that team.
 
 ---
 
