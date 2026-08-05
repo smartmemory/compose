@@ -1,6 +1,6 @@
 # COMP-FLUID-SEAM-GUARANTEES — lift the fluid store's safety guarantees into the seam
 
-**Status:** PARTIAL — six of seven criteria met; one blocked upstream (Q1)
+**Status:** PARTIAL — six of seven criteria met; the seventh needs a change in SmartMemory (Q1)
 **Date:** 2026-08-05
 **Epic:** COMP-PLAN-RIGOR (Front-of-Funnel Rigor + Parity)
 **Origin:** COMP-PLAN-IDEA-UNIFY S3b-1, review round 2
@@ -57,8 +57,10 @@ interim guard on configuring SmartMemory.
 
 **Not in scope:** the SmartMemory **service** limitations — no per-item reindex
 (smart-memory-core#4), PATCH cannot clear a property (smart-memory-core#3), no per-request
-`_embed` (smart-memory-service#3), and the supersession back-reference. All filed and owned
-upstream; **do not plan Compose work for any of them.** Also out: migrating the other five
+`_embed` (smart-memory-service#3), and the supersession back-reference. **Do not plan
+Compose work for any of them** — they are fixed in SmartMemory or not at all. Note the
+earlier wording, "filed and owned upstream", overstated it: those issues are self-filed and
+unanswered, so they are a backlog we own, not a handoff someone else has accepted. Also out: migrating the other five
 ad-hoc `mkdir` locks in `lib/` onto `lib/dir-lock.js` — real, but independent of the seam
 question.
 
@@ -89,7 +91,8 @@ recurrence; the rest only repair the current one.
       means adding one row. The SmartMemory row runs against the shared wire stub rather
       than a hand-rolled double, because a double would pass by construction — which is how
       the real provider passed review while missing both guarantees.
-- [ ] **BLOCKED on [smart-memory-service#4](https://github.com/smart-memory/smart-memory-service/issues/4).**
+- [ ] **Needs a SmartMemory-side change first — ours to make, not another team's
+      (spec: [smart-memory-service#4](https://github.com/smart-memory/smart-memory-service/issues/4)).**
       Concurrent creates against the SmartMemory provider yield distinct handles. The
       conformance case is written and gated on `mutationScope()`, so it starts applying to
       that provider the moment it can honestly declare `cluster` — and the suite fails today
@@ -143,9 +146,20 @@ Checked the SmartMemory service directly rather than reasoning about it:
 | Counter / sequence / allocate endpoint | **Absent** | no such route |
 | Content-hash idempotency | **Exists but unusable** — an explicitly NON-ATOMIC read-then-write that proceeds on error, on a different route, keyed by content. It cannot express "claim IDEA-7": two records claiming the same handle hash differently | `ingest.py:178-205` |
 
-So there is no primitive to build a correct cross-machine reservation on, and this half is
-**genuinely blocked upstream**. Filed as
-[smart-memory-service#4](https://github.com/smart-memory/smart-memory-service/issues/4).
+So there is no primitive to build a correct cross-machine reservation on. This half cannot
+be fixed from the Compose side — but it is **not "blocked upstream" in the sense that phrase
+usually carries**, and saying so would park it forever.
+
+**THERE IS NO OTHER TEAM. We own SmartMemory.** Every issue this document and its
+predecessors cite as "owned upstream" — `smart-memory-service#3`, `smart-memory-core#3`,
+`smart-memory-core#4`, and now `#4` — was filed by our own `smartmem-dev` account, carries
+zero comments, and has no assignee or label. SmartMemory's `ROADMAP.md` is an unused
+scaffold. Those issues are notes to ourselves in a tracker nobody triages, so treating one
+as a dependency with a queue behind it is a category error.
+
+The honest statement: **this is the next task, in a repo we own, and it is small.** Written up
+as [smart-memory-service#4](https://github.com/smart-memory/smart-memory-service/issues/4)
+because the issue is a decent spec, not because filing it delegates anything.
 
 **The ask is small, because the machinery already exists there.**
 `snapshot_sweep.py:94` runs `with_snapshot_lock` — a Redis lease with a TTL, released via
@@ -229,10 +243,12 @@ only one, which is why Q1 was answered before any design work rather than after.
 
 ### Open
 
-- The blocked criterion, tracked at
-  [smart-memory-service#4](https://github.com/smart-memory/smart-memory-service/issues/4).
-  When it lands: implement the lease in `smartmemory-provider.js`, flip `mutationScope()` to
-  `cluster`, and the conformance suite's concurrency cases begin applying to it
-  automatically. No test changes needed — that is what the gating buys.
+- The remaining criterion. **It is work we have not done yet, not work we are waiting on.**
+  Two steps, in this order: (1) expose a scoped, fail-closed lease in
+  `smart-memory-service` — the Redis + Lua CAD machinery already exists at
+  `snapshot_sweep.py:94`, it is internal and workspace-scoped; (2) here, implement it in
+  `smartmemory-provider.js` and flip `mutationScope()` to `cluster`. The conformance suite's
+  concurrency cases then begin applying to that provider automatically, with no test
+  changes — that is what the gating buys.
 - Still explicitly out of scope: the other five ad-hoc `mkdir` locks in `lib/` (IDEA-22), and
   the SmartMemory service limitations owned upstream.
