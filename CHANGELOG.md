@@ -2,6 +2,39 @@
 
 ## 2026-08-05
 
+### Comments from anyone whose name has a space no longer disappear
+
+Adding a comment to an idea as, say, "Jane Doe" saved the comment but dropped it
+from the ideabox file, silently. Only single-word names survived. This was
+harmless while the only way to comment was the command line, which always writes
+"human", and became reachable the moment the web and mobile apps could comment.
+Fixed, and names are now checked when they are saved rather than quietly mangled
+later.
+
+### Two writers can no longer create the same idea group twice
+
+Filing two ideas at the same moment under a group that did not exist yet created
+the group twice and split the ideas between the copies. Looking the group up and
+creating it were two separate steps, and only the second was protected. They are
+now one step.
+
+### Storage backends have to say what they can and cannot guarantee
+
+Compose can keep ideas in local files or in a shared SmartMemory workspace. A
+storage backend now has to state whether it can stop two people writing at the
+same moment, and how far that protection reaches: this computer only, or every
+computer sharing the workspace. A backend that says nothing is assumed to offer
+nothing, so the safe answer is the default.
+
+Local files are fully protected. The shared option is not, and now says so
+plainly instead of being described by a warning hard-coded next to its name. It
+cannot be protected yet, because the shared service offers nothing to build the
+protection on. We have asked them for it. When it arrives, the warning turns
+itself off.
+
+The half of that gap we could fix ourselves is fixed: an import to shared storage
+interrupted halfway can now be restarted. Before, it could not, ever.
+
 ### The cockpit and the phone can add ideas again
 
 When the ideabox became a real store, the web and mobile apps were locked out of

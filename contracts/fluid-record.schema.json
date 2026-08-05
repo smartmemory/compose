@@ -146,7 +146,11 @@
             "properties": {
               "at": { "type": "string", "format": "date-time" },
               "text": { "type": "string" },
-              "author": { "type": ["string", "null"] }
+              "author": {
+                "type": ["string", "null"],
+                "description": "Who wrote the entry, or null when unattributed. Spaces ARE allowed — `Jane Doe` is the common case, and the markdown parser used to require `\\w+`, which silently dropped the whole entry (COMP-FLUID-SEAM-GUARANTEES F7-1). A colon and line breaks are forbidden: the projection's grammar is `- [date] author: text` and takes everything up to the FIRST colon as the author, so an author containing one could not be represented and would parse back as something else. Constrained here rather than escaped in the renderer, because a value the surface cannot express is a value the store should refuse to hold.",
+                "pattern": "^[^:\\n\\r]*$"
+              }
             }
           }
         },

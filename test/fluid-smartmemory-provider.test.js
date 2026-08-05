@@ -16,7 +16,6 @@
 
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
-import http from 'node:http';
 
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -26,118 +25,16 @@ import { FluidConfigError, FluidRecordNotFound, CAP } from '../lib/fluid/provide
 import { LocalFluidProvider } from '../lib/fluid/local-provider.js';
 import { assertValid } from '../lib/fluid/schema.js';
 import { SmartMemoryFluidProvider } from '../lib/fluid/smartmemory-provider.js';
+// The stub IS the wire contract, so it lives in one place and every suite that
+// exercises this provider asserts against the same server behaviour.
+import { withProvider, servers } from './helpers/smartmemory-stub.js';
 
-const servers = [];
 after(() => { for (const s of servers) s.close(); });
 
 /**
  * A minimal but honest SmartMemory. Items live in a Map keyed by item_id.
  * `clock` makes the server-stamped created_at deterministic and orderable.
  */
-function makeServer() {
-  const items = new Map();
-  const seen = [];
-  let nextId = 1;
-  let clock = 0;
-
-  const server = http.createServer((req, res) => {
-    let body = '';
-    req.on('data', (c) => { body += c; });
-    req.on('end', () => {
-      let parsed = null;
-      try { parsed = body ? JSON.parse(body) : null; } catch { /* ignore */ }
-      const [path, query] = req.url.split('?');
-      seen.push({ path, query, method: req.method, body: parsed, workspace: req.headers['x-workspace-id'] });
-
-      const json = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
-
-      if (path === '/memory/add' && req.method === 'POST') {
-        const id = `item-${nextId += 1}`;
-        clock += 1;
-        items.set(id, {
-          item_id: id,
-          content: parsed.content,
-          memory_type: parsed.memory_type,
-          // The server stamps created_at itself, unconditionally, overwriting
-          // anything the caller sent. This is what makes a flat record mapping
-          // impossible to round-trip.
-          metadata: { ...parsed.metadata, created_at: `2026-01-01T00:00:${String(clock).padStart(2, '0')}Z` },
-        });
-        return json(200, { id, status: 'created' }); // 200, not 201
-      }
-
-      // Recall (FOH-2). `hits` is set per-test so ranking and filtering are
-      // testable without a real embedding model. The stub echoes whatever the
-      // test queued, in order — the provider must not reorder survivors.
-      if (path === '/memory/search' && req.method === 'POST') {
-        return json(200, { results: server.__hits ?? [] });
-      }
-
-      if (path === '/memory/list' && req.method === 'GET') {
-        const qs = new URLSearchParams(query || '');
-        let all = [...items.values()];
-        const k = qs.get('metadata_key');
-        const v = qs.get('metadata_value');
-        if (k) all = all.filter((it) => String(it.metadata?.[k]) === v);
-        const offset = Number(qs.get('offset') ?? 0);
-        const limit = Number(qs.get('limit') ?? 50);
-        return json(200, { items: all.slice(offset, offset + limit), total: all.length, limit, offset });
-      }
-
-      const m = path.match(/^\/memory\/(.+)$/);
-      if (m) {
-        const id = decodeURIComponent(m[1]);
-        const item = items.get(id);
-        if (!item) return json(404, { detail: 'not found' });
-        if (req.method === 'GET') return json(200, item);
-        if (req.method === 'DELETE') { items.delete(id); return json(200, { status: 'deleted', item_id: id }); }
-        if (req.method === 'PATCH') {
-          if (parsed.content !== undefined) item.content = parsed.content;
-          if (parsed.metadata !== undefined) {
-            // ONE-LEVEL spread, matching crud.py:1052 — NOT a deep merge, and
-            // server-controlled keys are stripped from the caller's dict.
-            const incoming = { ...parsed.metadata };
-            delete incoming.created_at;
-            delete incoming.memory_type;
-            item.metadata = { ...item.metadata, ...incoming };
-          }
-          return json(200, { status: 'ok', item_id: id });
-        }
-      }
-      return json(404, { detail: 'no route' });
-    });
-  });
-  return { server, items, seen };
-}
-
-async function withProvider(fn, { workspaceId = 'ws-test' } = {}) {
-  const { server, items, seen } = makeServer();
-  await new Promise((r) => server.listen(0, '127.0.0.1', r));
-  servers.push(server);
-  process.env.SM_FLUID_KEY = 'test-key';
-  try {
-    const provider = await new SmartMemoryFluidProvider().init('/tmp/does-not-matter', {
-      baseUrl: `http://127.0.0.1:${server.address().port}`,
-      apiKeyEnv: 'SM_FLUID_KEY',
-      workspaceId,
-      timeoutMs: 5000,
-    });
-    // Queue search hits for a recall test: takes the live items for the given
-    // handles, so a hit's payload is whatever the store actually holds.
-    const queueHits = (specs) => {
-      server.__hits = specs.map(({ handle, score, item }) => {
-        const found = item ?? [...items.values()].find(
-          (i) => i.metadata?.handle === handle && i.metadata?.fluid_ns === 'compose.fluid.v1',
-        );
-        return { ...found, score };
-      });
-    };
-    await fn({ provider, items, seen, queueHits });
-  } finally {
-    delete process.env.SM_FLUID_KEY;
-    server.close();
-  }
-}
 
 describe('SmartMemoryFluidProvider — configuration', () => {
   const base = { baseUrl: 'http://x', apiKeyEnv: 'SM_FLUID_KEY', workspaceId: 'ws' };
