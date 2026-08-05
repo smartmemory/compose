@@ -231,3 +231,88 @@ describe('ideabox migration — import-once', () => {
     assert.equal((await p.listRecords()).length, 0, 'dry run wrote records');
   });
 });
+
+// ---------------------------------------------------------------------------
+// COMP-PLAN-IDEA-UNIFY S3b-2 — the 2x2 matrix axes
+//
+// A SYNTHETIC fixture on purpose, against this file's own rule. The real
+// document is the right corpus for everything above because the risk there is
+// specific to content it actually has. The risk HERE is the opposite: no idea
+// in this repo has ever carried an effort or impact assignment, so the real
+// document cannot exercise the path at all, and a test that read it would pass
+// against an importer that drops both fields on the floor. That is precisely
+// what shipped in S3b-1 — the migration gate runs on every upgrading install,
+// so a project that used the cockpit's matrix had its assignments deleted from
+// its own markdown by the render that follows the import.
+// ---------------------------------------------------------------------------
+
+const WITH_AXES = [
+  '# Ideabox',
+  '',
+  '## Ideas',
+  '',
+  '### Umbrella A',
+  '',
+  '#### IDEA-1 — a quick win',
+  '**Status:** NEW | **Priority:** P1',
+  '**Idea:** cheap and valuable',
+  '**Effort:** S',
+  '**Impact:** high',
+  '',
+  '#### IDEA-2 — a money pit',
+  '**Status:** NEW | **Priority:** P2',
+  '**Effort:** L',
+  '**Impact:** low',
+  '',
+  '#### IDEA-3 — unassigned',
+  '**Status:** NEW | **Priority:** —',
+  '',
+  '## Killed Ideas',
+  '',
+].join('\n');
+
+describe('ideabox migration — effort and impact survive the upgrade', () => {
+  it('carries both onto the records', async () => {
+    const p = await freshProvider();
+    await importIdeabox(p, { markdown: WITH_AXES });
+
+    const one = await p.getRecord('IDEA-1');
+    assert.equal(one.effort, 'S');
+    assert.equal(one.impact, 'high');
+
+    const two = await p.getRecord('IDEA-2');
+    assert.equal(two.effort, 'L');
+    assert.equal(two.impact, 'low');
+  });
+
+  it('leaves an unassigned idea unassigned rather than defaulting it', async () => {
+    // Null is the matrix's "Unassigned" tray. A default of S/low would place an
+    // un-triaged idea in Fill-ins and read as a judgement nobody made.
+    const p = await freshProvider();
+    await importIdeabox(p, { markdown: WITH_AXES });
+
+    const three = await p.getRecord('IDEA-3');
+    assert.equal(three.effort, null);
+    assert.equal(three.impact, null);
+  });
+
+  it('renders both back into the projection, so the upgrade is lossless end to end', async () => {
+    // The whole failure was import → render, not import alone: the record could
+    // hold the field and the projection still delete it from the user's file.
+    const p = await freshProvider();
+    await importIdeabox(p, { markdown: WITH_AXES });
+    const rendered = await renderIdeaboxFrom(p);
+
+    assert.match(rendered, /\*\*Effort:\*\* S/);
+    assert.match(rendered, /\*\*Impact:\*\* high/);
+
+    const reparsed = parseIdeabox(rendered);
+    const byId = Object.fromEntries(reparsed.ideas.map((i) => [i.id, i]));
+    assert.equal(byId['IDEA-1'].effort, 'S');
+    assert.equal(byId['IDEA-1'].impact, 'high');
+    assert.equal(byId['IDEA-2'].effort, 'L');
+    assert.equal(byId['IDEA-2'].impact, 'low');
+    assert.equal(byId['IDEA-3'].effort, null);
+    assert.equal(byId['IDEA-3'].impact, null);
+  });
+});

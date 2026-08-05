@@ -26,7 +26,7 @@ import { withDirLock, acquireDirLock, DirLockTimeout } from '../lib/dir-lock.js'
 import { ensureIdeaboxMigrated } from '../lib/fluid/ideabox-migrate.js';
 import { toMarkdownDate, toRecordTimestamp } from '../lib/fluid/ideabox-dates.js';
 import { LocalFluidProvider } from '../lib/fluid/local-provider.js';
-import { renderIdeabox } from '../lib/fluid/render-ideabox.js';
+import { renderIdeabox, writeIdeaboxProjection } from '../lib/fluid/render-ideabox.js';
 import { importIdeabox } from '../lib/fluid/import-ideabox.js';
 import { fluidProviderFor } from '../lib/fluid/factory.js';
 import { runIdeaboxCommand } from '../lib/ideabox-cli.js';
@@ -329,6 +329,152 @@ describe('a killed idea round-trips through the projection', () => {
     assert.doesNotMatch(rendered, /KILLED \| \*\*Priority:\*\*/);
     assert.equal(serializeIdeabox(parseIdeabox(rendered)), rendered);
     assert.match(rendered, /\*\*Killed:\*\* 2026-08-05 — obsolete/);
+  });
+
+  it('keeps the fixed point when the killed idea was discussed', async () => {
+    // The legacy serializer writes `**Killed:**` BEFORE the discussion block
+    // (lib/ideabox.js:465-471). The projection wrote it after, so the fixed
+    // point broke for any killed idea carrying a discussion — the ordinary case,
+    // since an idea worth killing is usually one that got argued about. The test
+    // above missed it only because its idea had never been discussed.
+    const p = await provider();
+    const rec = await p.createRecord({ kind: 'idea', title: 'argued then dropped' });
+    await p.appendDiscussion(rec.handle, { text: 'not convinced', author: 'human' });
+    await p.updateRecord(rec.handle, {
+      status: 'killed',
+      killed: { at: new Date('2026-08-05').toISOString(), reason: 'lost the argument' },
+    });
+    const rendered = renderIdeabox({ ideas: await p.listRecords({ kind: 'idea' }), clusters: [] });
+
+    assert.ok(
+      rendered.indexOf('**Killed:**') < rendered.indexOf('**Discussion:**'),
+      'the killed line must precede the discussion block, as the legacy serializer writes it'
+    );
+    assert.equal(serializeIdeabox(parseIdeabox(rendered)), rendered);
+  });
+});
+
+describe('the projection is published under the provider lock', () => {
+  it('waits for a held lock instead of publishing a snapshot alongside another writer', async () => {
+    // COMP-PLAN-IDEA-UNIFY S3b-2. Each mutation is locked inside the provider,
+    // but rendering is a separate read-then-publish. With two writers (the CLI
+    // and the REST API) writer A can read a snapshot, writer B can mutate AND
+    // publish a newer projection, and A's rename lands last carrying the older
+    // content — leaving the file humans read wrong until the next write, while
+    // canon is perfectly correct.
+    //
+    // Asserted by direction, not by timing: while another holder owns the lock
+    // the render cannot complete, and it completes once the lock is released.
+    const p = await provider();
+    await p.createRecord({ kind: 'idea', title: 'contended' });
+    const out = join(tmp, 'locked-ideabox.md');
+
+    const release = await acquireDirLock(p.lockPath);
+    let done = false;
+    const render = writeIdeaboxProjection(p, out).then((md) => { done = true; return md; });
+
+    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(done, false, 'the render published while another writer held the lock');
+    assert.equal(existsSync(out), false, 'the render wrote a file while another writer held the lock');
+
+    release();
+    await render;
+    assert.equal(done, true);
+    assert.match(readFileSync(out, 'utf8'), /contended/);
+  });
+});
+
+describe('the projection is a fixed point for every field a client reads', () => {
+  // COMP-PLAN-IDEA-UNIFY S3b-2, D21. The API derives its responses by parsing
+  // the markdown it just rendered, which buys one shape for reads and writes at
+  // the cost of a real hazard: a field the renderer does not emit is invisible
+  // to every client even when canon holds it. That is not a hypothetical — it is
+  // exactly how effort and impact went missing. This is the standing guard.
+
+  const consumed = (idea) => ({
+    id: idea.id,
+    title: idea.title,
+    status: idea.status,
+    priority: idea.priority,
+    tags: idea.tags,
+    source: idea.source,
+    description: idea.description,
+    cluster: idea.cluster,
+    mapsTo: idea.mapsTo,
+    effort: idea.effort,
+    impact: idea.impact,
+  });
+
+  it('carries every consumed field through render → parse', async () => {
+    const p = await provider();
+    const cluster = await p.createRecord({ kind: 'cluster', title: 'Umbrella A', body: 'a theme' });
+    const rec = await p.createRecord({
+      kind: 'idea',
+      title: 'fully populated',
+      body: 'the description',
+      source: 'a conversation',
+      tags: ['ux', 'core'],
+      cluster: cluster.handle,
+      priority: 'P1',
+      effort: 'M',
+      impact: 'medium',
+      links: [{ type: 'maps_to', target: 'COMP-FOO-1' }],
+    });
+    await p.appendDiscussion(rec.handle, { text: 'a point', author: 'human' });
+
+    const rendered = renderIdeabox({
+      ideas: await p.listRecords({ kind: 'idea' }),
+      clusters: await p.listRecords({ kind: 'cluster' }),
+    });
+    const [parsed] = parseIdeabox(rendered).ideas;
+
+    assert.deepEqual(consumed(parsed), {
+      id: rec.handle,
+      title: 'fully populated',
+      status: 'NEW',
+      priority: 'P1',
+      tags: ['ux', 'core'],
+      source: 'a conversation',
+      description: 'the description',
+      cluster: 'Umbrella A',
+      mapsTo: 'COMP-FOO-1',
+      effort: 'M',
+      impact: 'medium',
+    });
+
+    // Asserted separately because the date is stamped at write time. The shape
+    // and the content are the part a client reads; pinning today's date here
+    // would make the test fail tomorrow for no reason.
+    assert.equal(parsed.discussion.length, 1);
+    assert.equal(parsed.discussion[0].author, 'human');
+    assert.equal(parsed.discussion[0].text, 'a point');
+    assert.match(parsed.discussion[0].date, /^\d{4}-\d{2}-\d{2}$/);
+
+    assert.equal(serializeIdeabox(parseIdeabox(rendered)), rendered);
+  });
+
+  it('keeps the fixed point when an idea carries both a maps_to and a promotion', async () => {
+    // The legacy parser knows `Maps to` and does not know `Promoted to`, so the
+    // latter becomes an extra line — and extras are re-serialized BEFORE the
+    // trailing known fields. Emitting them in the readable order therefore flips
+    // them on the first round trip. No idea has ever had both, which is why it
+    // was invisible.
+    const p = await provider();
+    const rec = await p.createRecord({
+      kind: 'idea',
+      title: 'mapped and promoted',
+      links: [{ type: 'maps_to', target: 'COMP-FOO-1' }],
+    });
+    await p.updateRecord(rec.handle, {
+      status: 'promoted',
+      links: [
+        { type: 'maps_to', target: 'COMP-FOO-1' },
+        { type: 'promoted_to', target: 'COMP-BAR-2' },
+      ],
+    });
+    const rendered = renderIdeabox({ ideas: await p.listRecords({ kind: 'idea' }), clusters: [] });
+
+    assert.equal(serializeIdeabox(parseIdeabox(rendered)), rendered);
   });
 });
 

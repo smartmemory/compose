@@ -1,0 +1,29 @@
+{
+  "id": "d2a0f733-57fb-432e-a86b-3cab280ce23d",
+  "handle": "IDEA-24",
+  "kind": "idea",
+  "title": "Bridge CLI ideabox writes to open cockpits",
+  "body": "A CLI ideabox write does not refresh an open cockpit or mobile client. The REST API broadcasts ideaboxUpdated on /ws/vision (restored in COMP-PLAN-IDEA-UNIFY S3b-2), but the CLI writes records directly and the file watcher's fileChanged event goes out on a different socket (/ws/files) that neither ideabox client subscribes to. Bridging them is cross-server wiring: the docs watcher would need to recognise the ideabox path and reach the vision server's broadcast.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "effort": null,
+  "impact": null,
+  "cluster": null,
+  "cluster_order": null,
+  "tags": [
+    "cockpit",
+    "fluid"
+  ],
+  "source": "COMP-PLAN-IDEA-UNIFY S3b-2 design review (D24)",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "cli:ideabox",
+    "recorded_at": "2026-08-05T01:59:15.424Z",
+    "author": null
+  },
+  "created_at": "2026-08-05T01:59:15.424Z",
+  "updated_at": "2026-08-05T01:59:15.424Z"
+}
