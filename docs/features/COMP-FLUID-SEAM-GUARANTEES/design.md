@@ -92,7 +92,7 @@ recurrence; the rest only repair the current one.
       than a hand-rolled double, because a double would pass by construction — which is how
       the real provider passed review while missing both guarantees.
 - [ ] **Needs a SmartMemory-side change first — ours to make, not another team's
-      (spec: [smart-memory-service#4](https://github.com/smart-memory/smart-memory-service/issues/4)).**
+      (tracked as `SVC-LEASE-1` in `smart-memory-docs/docs/ROADMAP.md`).**
       Concurrent creates against the SmartMemory provider yield distinct handles. The
       conformance case is written and gated on `mutationScope()`, so it starts applying to
       that provider the moment it can honestly declare `cluster` — and the suite fails today
@@ -150,16 +150,23 @@ So there is no primitive to build a correct cross-machine reservation on. This h
 be fixed from the Compose side — but it is **not "blocked upstream" in the sense that phrase
 usually carries**, and saying so would park it forever.
 
-**THERE IS NO OTHER TEAM. We own SmartMemory.** Every issue this document and its
-predecessors cite as "owned upstream" — `smart-memory-service#3`, `smart-memory-core#3`,
-`smart-memory-core#4`, and now `#4` — was filed by our own `smartmem-dev` account, carries
-zero comments, and has no assignee or label. SmartMemory's `ROADMAP.md` is an unused
-scaffold. Those issues are notes to ourselves in a tracker nobody triages, so treating one
-as a dependency with a queue behind it is a category error.
+**THERE IS NO OTHER TEAM, AND GITHUB IS NOT THE TRACKER.** Two corrections to how this was
+first written up:
 
-The honest statement: **this is the next task, in a repo we own, and it is small.** Written up
-as [smart-memory-service#4](https://github.com/smart-memory/smart-memory-service/issues/4)
-because the issue is a decent spec, not because filing it delegates anything.
+1. Every issue this document and its predecessors cite as "owned upstream" —
+   `smart-memory-service#3`, `smart-memory-core#3`, `smart-memory-core#4` — was filed by our
+   own `smartmem-dev` account with zero comments, no assignee and no label. We own
+   SmartMemory. Treating one as a dependency with a queue behind it parks the work forever.
+2. **SmartMemory tracks work in its own roadmap, not GitHub issues.** The live tracker is
+   `smart-memory-docs/docs/ROADMAP.md` (884KB, hand-authored prose, 555 feature folders).
+   The top-level `SmartMemory/ROADMAP.md` is an unused May scaffold, and the GitHub trackers
+   hold only Dependabot noise and our own unanswered notes.
+
+So this is filed where SmartMemory actually works: **`SVC-LEASE-1`**, with a roadmap entry
+and `smart-memory-docs/docs/features/SVC-LEASE-1/design.md`. The GitHub issue is closed and
+points there, so there is one tracker rather than two.
+
+The honest statement: **this is the next task, in a repo we own, and it is small.**
 
 **The ask is small, because the machinery already exists there.**
 `snapshot_sweep.py:94` runs `with_snapshot_lock` — a Redis lease with a TTL, released via
@@ -244,9 +251,9 @@ only one, which is why Q1 was answered before any design work rather than after.
 ### Open
 
 - The remaining criterion. **It is work we have not done yet, not work we are waiting on.**
-  Two steps, in this order: (1) expose a scoped, fail-closed lease in
-  `smart-memory-service` — the Redis + Lua CAD machinery already exists at
-  `snapshot_sweep.py:94`, it is internal and workspace-scoped; (2) here, implement it in
+  Two steps, in this order: (1) `SVC-LEASE-1` — expose a scoped, fail-closed lease in
+  `smart-memory-service`; the Redis + Lua CAD machinery already exists at
+  `snapshot_sweep.py:94`, internal and workspace-scoped; (2) here, implement it in
   `smartmemory-provider.js` and flip `mutationScope()` to `cluster`. The conformance suite's
   concurrency cases then begin applying to that provider automatically, with no test
   changes — that is what the gating buys.
