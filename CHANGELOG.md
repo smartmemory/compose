@@ -2,6 +2,20 @@
 
 ## 2026-08-05
 
+### Ideas added from the command line now appear in an open cockpit
+
+Adding an idea with `compose ideabox add` left any browser tab or phone already
+showing the ideabox on the old list. The page had no way to know anything had
+happened, so it kept showing stale ideas until someone reloaded it by hand. It
+now updates on its own, within a moment of the write, the same way it already
+did for ideas added from the page itself. Rebuilding the ideabox file with
+`compose ideabox render` refreshes open pages too, so repairing the file also
+repairs what people are looking at.
+
+A rapid burst of writes sends one update once the burst finishes, rather than
+one per write or (worse) only one for the first write. What everyone sees is
+always the finished state.
+
 ### Comments from anyone whose name has a space no longer disappear
 
 Adding a comment to an idea as, say, "Jane Doe" saved the comment but dropped it

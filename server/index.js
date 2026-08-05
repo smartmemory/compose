@@ -250,6 +250,16 @@ fileWatcher.onSpecChanged = (message) => {
   visionServer.broadcastMessage(message);
 };
 
+// Wire ideabox projection changes → broadcast `ideaboxUpdated` on the VISION WS
+// (IDEA-24). Same shape as the pipelines wiring above and for the same reason:
+// the writer is out-of-process (a `compose ideabox` CLI call), so nothing on the
+// REST path broadcasts, and the clients that care live on /ws/vision rather than
+// the /ws/files channel the watcher owns. The message is built in file-watcher.js;
+// this is the cross-server hop it cannot make itself.
+fileWatcher.onIdeaboxChanged = (message) => {
+  visionServer.broadcastMessage(message);
+};
+
 // ---------------------------------------------------------------------------
 // Static serving + SPA fallback (BOTH modes — additive)
 // Mounted AFTER all API routes so /api/* is never shadowed.

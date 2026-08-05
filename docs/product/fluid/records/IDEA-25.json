@@ -1,0 +1,32 @@
+{
+  "id": "3c21264a-2647-45b1-8a9a-ccc77ced76e0",
+  "handle": "IDEA-25",
+  "kind": "idea",
+  "title": "File watcher does not rebind on project switch",
+  "body": "",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "effort": null,
+  "impact": null,
+  "cluster": null,
+  "cluster_order": null,
+  "tags": [],
+  "source": "",
+  "links": [],
+  "killed": null,
+  "discussion": [
+    {
+      "at": "2026-08-05T07:17:17.167Z",
+      "text": "server/file-watcher.js captures PROJECT_ROOT at module import (line 20) and every watch resolves against it once: docs, features, pipelines, .compose/data, the new ideabox projection watch, AND safePath() which guards GET/PUT /api/file. POST /api/project/switch (server/index.js) changes getTargetRoot() and reloads the vision store, but never rebinds the watcher. Verified: after switching, getTargetRoot() moves while safePath() still resolves under the old root. So after a switch the server watches the OLD project (spurious events) and is blind to the NEW one (no events) until restart, and /api/file's containment check guards the wrong tree. Found by Codex during IDEA-24 review; pre-existing and module-wide, not introduced there. Fix is a switch listener that closes and re-registers every watch, plus re-resolving safePath's root.",
+      "author": "human"
+    }
+  ],
+  "provenance": {
+    "origin": "cli:ideabox",
+    "recorded_at": "2026-08-05T07:17:03.517Z",
+    "author": null
+  },
+  "created_at": "2026-08-05T07:17:03.517Z",
+  "updated_at": "2026-08-05T07:17:17.167Z"
+}

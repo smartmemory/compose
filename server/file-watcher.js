@@ -10,7 +10,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { getTargetRoot, loadProjectConfig, ensureDataDir } from './project-root.js';
-import { resolveDocsPathFromConfig, resolveFeaturesPathFromConfig } from '../lib/project-paths.js';
+import {
+  resolveDocsPathFromConfig,
+  resolveFeaturesPathFromConfig,
+  resolveIdeaboxPathFromConfig,
+  relForDisplay,
+} from '../lib/project-paths.js';
 
 const PROJECT_ROOT = getTargetRoot();
 
@@ -30,6 +35,74 @@ export function isStratumSpecFile(filename) {
  */
 export function buildSpecChangedMessage(file, relativePath) {
   return { type: 'specChanged', file, path: relativePath };
+}
+
+/** Coalescing window for the ideabox-projection watch. */
+export const IDEABOX_COALESCE_MS = 100;
+
+/**
+ * fs.watch fileFilter for the ideabox-projection watch (IDEA-24). That watch is
+ * NON-recursive on the projection's own parent directory, so `filename` is a bare
+ * name and exact equality is the whole test.
+ *
+ * Exact equality, not a suffix or basename match, because `render-ideabox.js`
+ * publishes atomically through `.ideabox.md.tmp.<uuid>` in the SAME directory. A
+ * looser predicate would fire on the temp file — announcing an update before the
+ * rename that makes it real, and a second time after.
+ */
+export function isIdeaboxProjectionFile(filename, projectionBasename) {
+  return typeof filename === 'string'
+    && typeof projectionBasename === 'string'
+    && projectionBasename.length > 0
+    && filename === projectionBasename;
+}
+
+/**
+ * Shape of the vision-WS `ideaboxUpdated` broadcast raised by the projection
+ * watch (IDEA-24).
+ *
+ * `type` is byte-identical to what `server/ideabox-routes.js` broadcasts, because
+ * both ideabox clients compare `msg.type === 'ideaboxUpdated'` and nothing else —
+ * a differently-named event would be silently ignored, which is the bug this
+ * closes. `timestamp` matches the route's shape so one channel carries one shape;
+ * `source` exists so a WS log distinguishes a route-driven update from a
+ * file-driven one, which is precisely the diagnosis that was missing here.
+ */
+export function buildIdeaboxUpdatedMessage(relativePath) {
+  return {
+    type: 'ideaboxUpdated',
+    source: 'projection-watch',
+    path: relativePath,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+/**
+ * Fire `fn` once, `waitMs` after the LAST call. TRAILING, unlike the
+ * leading-edge-and-drop debounce the other watches use, and the difference is
+ * the whole point.
+ *
+ * A leading-edge debounce announces the first write of a burst and discards the
+ * rest — so the cockpit ends up showing the state at the START of the burst and
+ * never hears about the end of it. That is the same "your list is stale until
+ * you reload" bug IDEA-24 exists to close, just at a 100ms timescale, and it is
+ * reachable from two `compose ideabox add` calls in quick succession.
+ *
+ * For a NOTIFICATION the last event is the one that must survive; the payload
+ * is a re-fetch, so intermediate events carry nothing worth delivering. One
+ * broadcast per logical write, always reflecting final state, ~waitMs late.
+ */
+export function createTrailingDebouncer(fn, waitMs) {
+  let timer = null;
+  return {
+    trigger() {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { timer = null; fn(); }, waitMs);
+    },
+    cancel() {
+      if (timer) { clearTimeout(timer); timer = null; }
+    },
+  };
 }
 
 export class FileWatcherServer {
@@ -174,13 +247,29 @@ export class FileWatcherServer {
   startWatching() {
     const debounceMap = new Map();
 
-    const watchDir = (dir, prefix, onChanged, fileFilter = (f) => f.endsWith('.md')) => {
+    /**
+     * @param {object} [opts]
+     * @param {boolean} [opts.recursive=true] fs.watch recursion.
+     * @param {number} [opts.debounceMs=100] leading-edge suppression window.
+     *
+     *   PASS 0 FOR ANY WATCH OVER AN ALREADY-WATCHED FILE. `debounceMap` is
+     *   shared across every watchDir call and keyed by the prefixed relative
+     *   path, so two watches whose dir+prefix resolve to the SAME relative path
+     *   for one file suppress each other: whichever fs.watch delivers second
+     *   inside the window is silently dropped, and which one that is depends on
+     *   the OS. (That already happens between `docs/` and `docs/features/`; it is
+     *   left exactly as it was rather than changed underneath callers here.) 0
+     *   opts out of the shared map entirely — for a watch that coalesces its own
+     *   events, which is the only reason to be in that position.
+     */
+    const watchDir = (dir, prefix, onChanged, fileFilter = (f) => f.endsWith('.md'), opts = {}) => {
+      const { recursive = true, debounceMs = 100 } = opts;
       if (!fs.existsSync(dir)) {
         console.warn(`[file-watcher] ${prefix}/ directory not found, skipping watch`);
         return;
       }
       try {
-        const watcher = fs.watch(dir, { recursive: true }, (eventType, filename) => {
+        const watcher = fs.watch(dir, { recursive }, (eventType, filename) => {
           if (!filename || !fileFilter(filename)) return;
 
           const relativePath = path.join(prefix, filename);
@@ -189,11 +278,13 @@ export class FileWatcherServer {
           // the workspace. Byte-identical to the old form for an in-root dir.
           const fullPath = path.join(dir, filename);
 
-          // Debounce: ignore events within 100ms of each other for the same file
-          const now = Date.now();
-          const lastEvent = debounceMap.get(relativePath);
-          if (lastEvent && now - lastEvent < 100) return;
-          debounceMap.set(relativePath, now);
+          // Debounce: ignore events within debounceMs of each other for the same file
+          if (debounceMs > 0) {
+            const now = Date.now();
+            const lastEvent = debounceMap.get(relativePath);
+            if (lastEvent && now - lastEvent < debounceMs) return;
+            debounceMap.set(relativePath, now);
+          }
 
           onChanged(relativePath, fullPath);
         });
@@ -247,6 +338,57 @@ export class FileWatcherServer {
         this.onSpecChanged(buildSpecChangedMessage(path.basename(fullPath), relativePath));
       }
     }, isStratumSpecFile);
+
+    // Watch the ideabox projection → `ideaboxUpdated` on the VISION WS (IDEA-24).
+    //
+    // A CLI ideabox write goes straight to the record store; it never reaches
+    // `server/ideabox-routes.js`, which is the only thing that broadcasts. So an
+    // open cockpit or mobile client kept showing the pre-write list until someone
+    // reloaded it by hand. The `fileChanged` this file already emits for the same
+    // write goes out on /ws/files, which neither ideabox client subscribes to.
+    //
+    // THE PROJECTION IS THE TRIGGER, NOT THE PAYLOAD. Clients respond by
+    // re-fetching GET /api/ideabox, which reads RECORDS — the markdown is never
+    // parsed to serve a read (COMP-PLAN-IDEA-UNIFY D21). The projection is used
+    // only as the signal, and it is a sound one because `ideabox-ops.js`
+    // guarantees the record is durable BEFORE the render: an event from this
+    // watch can never arrive ahead of the data the re-fetch will return.
+    //
+    // Two consequences, both accepted:
+    //  - An API-driven mutation broadcasts twice (the route's own, then this
+    //    one). The re-fetch is idempotent, and suppressing the echo would need a
+    //    "did I just write this?" mtime handshake — a race, to save one GET.
+    //  - A write whose render FAILED does not notify. That is the
+    //    `projectionStale` path: the writer is already told, and `compose ideabox
+    //    render` both repairs the file and fires this watch.
+    //
+    // Watched NON-recursively on the projection's own parent so a relocated
+    // `paths.ideabox` outside `paths.docs` still works.
+    const ideaboxPath = resolveIdeaboxPathFromConfig(PROJECT_ROOT, config);
+    const ideaboxDir = path.dirname(ideaboxPath);
+    // The projection's directory may not exist yet in a project that has never
+    // rendered one. Create it, or the watch is skipped and the very first CLI
+    // write — the one most likely to be watched for — silently does not refresh.
+    try { fs.mkdirSync(ideaboxDir, { recursive: true }); } catch { /* read-only tree — watchDir skips */ }
+    //
+    // Raw fs events are coalesced by a TRAILING debouncer rather than the
+    // leading-edge one `watchDir` applies (hence `debounceMs: 0`): see
+    // `createTrailingDebouncer` for why the LAST event is the one that has to
+    // survive here. That also folds the rename+change pair of a single atomic
+    // publish into one broadcast.
+    const ideaboxRelative = relForDisplay(PROJECT_ROOT, ideaboxPath);
+    this._ideaboxDebouncer = createTrailingDebouncer(() => {
+      if (typeof this.onIdeaboxChanged === 'function') {
+        this.onIdeaboxChanged(buildIdeaboxUpdatedMessage(ideaboxRelative));
+      }
+    }, IDEABOX_COALESCE_MS);
+    watchDir(
+      ideaboxDir,
+      relForDisplay(PROJECT_ROOT, ideaboxDir),
+      () => this._ideaboxDebouncer.trigger(),
+      (f) => isIdeaboxProjectionFile(f, path.basename(ideaboxPath)),
+      { recursive: false, debounceMs: 0 },
+    );
 
     // Watch .compose/data/ for active-build.json changes
     const self = this;
@@ -313,6 +455,9 @@ export class FileWatcherServer {
     for (const watcher of this.watchers) {
       watcher.close();
     }
+    // AFTER the watchers: cancelling first would leave a window in which a last
+    // fs event re-arms the timer, and a pending timer holds the event loop open.
+    this._ideaboxDebouncer?.cancel();
     this.watchers = [];
     for (const client of this.clients) {
       client.close();
