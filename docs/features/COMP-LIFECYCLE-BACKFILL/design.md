@@ -1,6 +1,6 @@
 # COMP-LIFECYCLE-BACKFILL: Design
 
-**Status:** DESIGN — **BLOCKED on a Stratum-side capability. Shape decision pending.**
+**Status:** DESIGN — **BLOCKED on a Stratum-side capability (idempotent, non-emergency guard migrate). Scope decided: fix Stratum first, then build this with no carve-out.**
 **Date:** 2026-08-05
 **Review:** Codex design gate round 1 — 4 must-fix, all confirmed and folded in. Round 2 — 5 more, all confirmed; two are **hard blockers** verified in stratum's source. See "Review adjudications".
 
@@ -221,7 +221,24 @@ Constraint 1 (one edge, one predicate list) kills Decision 2's "same edge, backf
 - It removes the reader problem behind round-2 P2 almost entirely: no closed DecisionEvent metadata schema needs widening for the *primary* signal, because the signal is the state.
 - Status projection (`phaseToStatus`) maps it to `COMPLETE` — the roadmap still reads COMPLETE, which is the true statement. The distinction lives in the lifecycle, which is where provenance belongs.
 
-**Constraint 2 remains and is a genuine cross-repo dependency.** Existing features already carry an immutable registration without the new node, and `guardMigrate` is token-gated and non-idempotent. Nothing on the Compose side can work around that. Options are recorded in the ROADMAP row; the shape decision is the owner's.
+**Constraint 2 remains and is a genuine cross-repo dependency.** Existing features already carry an immutable registration without the new node, and `guardMigrate` is token-gated and non-idempotent. Nothing on the Compose side can work around that.
+
+### How wide is constraint 2, actually?
+
+Measured 2026-08-05, not assumed: **31 registered guard resources against 350 feature folders.** Registration is *lazy* — `ensureRegistered` (`lifecycle-guard.js:301`) fires on the first guarded transition, so a feature that has never transitioned has no immutable policy and would register **fresh, with whatever graph is current at that moment**. No migration.
+
+The 31 registered are 30 at `explore_design` and 1 at `blueprint`, all `graph_version: 1`. Spot-checked by recomputing `resourceId()`: `COMP-PLAN-IDEA-UNIFY`, `COMP-FLUID-SEAM-GUARANTEES` and `COMP-LIFECYCLE-BACKFILL` are all **unregistered**.
+
+So constraint 2 blocks roughly 9% of features, and none of the ones this feature was motivated by.
+
+### Scope decision (owner, 2026-08-05): fix Stratum first
+
+A Compose-only v1 covering the ~319 unregistered features was available and was **declined**. The reasoning stands on its own: shipping a completion path that silently does not work for 31 features — with no way for a caller to know which — reintroduces the class of defect this feature exists to remove. A backfill that fails on exactly the oldest features is the worst possible distribution of the gap.
+
+So the order is:
+
+1. **Stratum:** an idempotent, purpose-scoped guard migration. Must no-op when the target policy checksum already matches, and must not require `STRATUM_GUARD_OVERRIDE_TOKEN` — a routine policy upgrade is not an emergency deviation, and coupling them is what created the contradiction here. Owned by stratum; filed in stratum's tracker.
+2. **Compose:** this feature, consuming it, with no carve-out.
 
 Note in Stratum's favour: `guardTransition` **already supports idempotency keys** (`_maybeReplay`, `transition.ts:434`), which covers the guard half of round-2 P1d. Only the `vision-state.json` half needs a reconciliation protocol.
 
