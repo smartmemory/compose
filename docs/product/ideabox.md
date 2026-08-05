@@ -179,5 +179,17 @@
 **Status:** NEW | **Priority:** — | **Tags:** cockpit fluid
 **Source:** COMP-PLAN-IDEA-UNIFY S3b-2 design review (D24)
 **Idea:** A CLI ideabox write does not refresh an open cockpit or mobile client. The REST API broadcasts ideaboxUpdated on /ws/vision (restored in COMP-PLAN-IDEA-UNIFY S3b-2), but the CLI writes records directly and the file watcher's fileChanged event goes out on a different socket (/ws/files) that neither ideabox client subscribes to. Bridging them is cross-server wiring: the docs watcher would need to recognise the ideabox path and reach the vision server's broadcast.
+**Discussion:**
+- [2026-08-05] human: Implemented: server/file-watcher.js now watches the ideabox projection non-recursively and raises ideaboxUpdated on the vision WS via a new onIdeaboxChanged hook, wired in server/index.js exactly like onSpecChanged. Trailing coalescer so the LAST write in a burst is the one announced. Covered by test/ideabox-projection-watch.test.js (8 tests) plus an end-to-end smoke against the real server. Not promoted to a feature folder: status is the owner's call.
+
+#### IDEA-25 — File watcher does not rebind on project switch
+**Status:** NEW | **Priority:** —
+**Discussion:**
+- [2026-08-05] human: server/file-watcher.js captures PROJECT_ROOT at module import (line 20) and every watch resolves against it once: docs, features, pipelines, .compose/data, the new ideabox projection watch, AND safePath() which guards GET/PUT /api/file. POST /api/project/switch (server/index.js) changes getTargetRoot() and reloads the vision store, but never rebinds the watcher. Verified: after switching, getTargetRoot() moves while safePath() still resolves under the old root. So after a switch the server watches the OLD project (spurious events) and is blind to the NEW one (no events) until restart, and /api/file's containment check guards the wrong tree. Found by Codex during IDEA-24 review; pre-existing and module-wide, not introduced there. Fix is a switch listener that closes and re-registers every watch, plus re-resolving safePath's root.
+
+#### IDEA-26 — Two file watches over the same file silently suppress each other
+**Status:** NEW | **Priority:** —
+**Discussion:**
+- [2026-08-05] human: startWatching() shares ONE debounceMap across every watchDir call, keyed by the prefixed relative path. The docs watch (dir=docs, prefix=docs) and the features watch (dir=docs/features, prefix=docs/features) both compute docs/features/X/y.md for the same file, so for any .md under docs/features/ the two watches collide: whichever fs.watch delivers second inside the 100ms window is dropped, and which one that is depends on the OS. The result is that either the fileChanged broadcast or the onFeatureChanged reseed is skipped, nondeterministically. Impact today is low (onFeatureChanged only fires for .md, and reseeding off a design.md edit is marginal) which is why IDEA-24 opted its own watch out with debounceMs:0 rather than changing this underneath existing callers. Fix is a per-watch debounce map, but it un-suppresses a duplicate fileChanged for feature files, so it needs its own look.
 
 ## Killed Ideas

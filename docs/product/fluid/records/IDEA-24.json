@@ -18,12 +18,18 @@
   "source": "COMP-PLAN-IDEA-UNIFY S3b-2 design review (D24)",
   "links": [],
   "killed": null,
-  "discussion": [],
+  "discussion": [
+    {
+      "at": "2026-08-05T07:06:12.670Z",
+      "text": "Implemented: server/file-watcher.js now watches the ideabox projection non-recursively and raises ideaboxUpdated on the vision WS via a new onIdeaboxChanged hook, wired in server/index.js exactly like onSpecChanged. Trailing coalescer so the LAST write in a burst is the one announced. Covered by test/ideabox-projection-watch.test.js (8 tests) plus an end-to-end smoke against the real server. Not promoted to a feature folder: status is the owner's call.",
+      "author": "human"
+    }
+  ],
   "provenance": {
     "origin": "cli:ideabox",
     "recorded_at": "2026-08-05T01:59:15.424Z",
     "author": null
   },
   "created_at": "2026-08-05T01:59:15.424Z",
-  "updated_at": "2026-08-05T01:59:15.424Z"
+  "updated_at": "2026-08-05T07:06:12.670Z"
 }

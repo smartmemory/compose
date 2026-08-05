@@ -1,0 +1,32 @@
+{
+  "id": "58d42725-a446-45c4-92ad-a72dc8004026",
+  "handle": "IDEA-26",
+  "kind": "idea",
+  "title": "Two file watches over the same file silently suppress each other",
+  "body": "",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "effort": null,
+  "impact": null,
+  "cluster": null,
+  "cluster_order": null,
+  "tags": [],
+  "source": "",
+  "links": [],
+  "killed": null,
+  "discussion": [
+    {
+      "at": "2026-08-05T07:17:17.644Z",
+      "text": "startWatching() shares ONE debounceMap across every watchDir call, keyed by the prefixed relative path. The docs watch (dir=docs, prefix=docs) and the features watch (dir=docs/features, prefix=docs/features) both compute docs/features/X/y.md for the same file, so for any .md under docs/features/ the two watches collide: whichever fs.watch delivers second inside the 100ms window is dropped, and which one that is depends on the OS. The result is that either the fileChanged broadcast or the onFeatureChanged reseed is skipped, nondeterministically. Impact today is low (onFeatureChanged only fires for .md, and reseeding off a design.md edit is marginal) which is why IDEA-24 opted its own watch out with debounceMs:0 rather than changing this underneath existing callers. Fix is a per-watch debounce map, but it un-suppresses a duplicate fileChanged for feature files, so it needs its own look.",
+      "author": "human"
+    }
+  ],
+  "provenance": {
+    "origin": "cli:ideabox",
+    "recorded_at": "2026-08-05T07:17:04.033Z",
+    "author": null
+  },
+  "created_at": "2026-08-05T07:17:04.033Z",
+  "updated_at": "2026-08-05T07:17:17.644Z"
+}
