@@ -1,0 +1,17 @@
+{
+  "code": "COMP-LIFECYCLE-BACKFILL",
+  "description": "**Backfill edge for out-of-band completions.** The guard enforces two claims through one gate: \"did this really ship\" (server-verified commit + attested tests — reality) and \"did this follow the process\" (server_file_exists on design/blueprint/plan — procedure). For out-of-band work the first is checkable and the second is false by definition, so failing it blocks recording a true completion — the guard forces the roadmap to lie. Already cost us once: COMP-MCP-ENFORCE-XREPO records that the STRAT-AGENT-INTERP backfill \"had to set status COMPLETE via direct feature.json edit\". Adds a `complete_backfilled` terminal state (a distinct node, so it carries its own edge predicates — the guard keys predicates by from->to alone) reachable from any non-terminal phase, gated on UNWEAKENED reality evidence plus a mandatory written reason, with attested backfill of intermediate phases so partial walks become representable. Phase history gains a transaction-time axis (`recordedAt`/`origin`/`confidence`, vocabulary borrowed from SmartMemory's MemoryItem) since `enteredAt`/`exitedAt` already encode valid time. Design COMPLETE @919c02e after two Codex gates, nine findings, all confirmed. **BLOCKED on stratum:** guardMigrate (transition.ts:565,592) requires STRATUM_GUARD_OVERRIDE_TOKEN and unconditionally bumps graph_version, so migrating the 31 already-registered guard resources would make this feature depend on the emergency token it exists to replace. Owner declined a Compose-only v1 covering the ~319 unregistered features (of 350) because a completion path that silently fails on the oldest 31 reintroduces the defect class being removed. Order: stratum idempotent non-emergency migrate first, then this with no carve-out. Three Compose-side pieces still to redo before implement: phaseOrder is not a valid temporal insertion order (backward loops verification->blueprint, test->fix), cross-mutation recovery between the guard and vision-state, and reader changes.",
+  "status": "BLOCKED",
+  "phase": "Backlog",
+  "created": "2026-08-05",
+  "updated": "2026-08-05",
+  "complexity": "L",
+  "position": 5,
+  "parent": "COMP-MCP-ENFORCE",
+  "tags": [
+    "lifecycle",
+    "guard",
+    "provenance"
+  ],
+  "impact": "high"
+}
