@@ -28,6 +28,13 @@ export function makeServer() {
   const seen = [];
   let nextId = 1;
   let clock = 0;
+  // SVC-ALLOC-1 counters and the SVC-LEASE-1 lease, modelled because the
+  // provider's two correctness claims now rest on them: distinct handles under
+  // concurrent creates, and no lost update. A stub without them would let the
+  // conformance suite's concurrency cases pass against nothing.
+  const sequences = new Map();
+  const locks = new Map();
+  let nextToken = 1;
 
   const server = http.createServer((req, res) => {
     let body = '';
@@ -71,6 +78,81 @@ export function makeServer() {
         const offset = Number(qs.get('offset') ?? 0);
         const limit = Number(qs.get('limit') ?? 50);
         return json(200, { items: all.slice(offset, offset + limit), total: all.length, limit, offset });
+      }
+
+      // ── SVC-ALLOC-1: monotonic sequences ─────────────────────────────────
+      //
+      // `$max` then `$inc`, in that order and as two statements — the same shape
+      // as sequence.py, whose module docstring records that Mongo rejects both
+      // on one path. Atomic here for free: Node runs this handler to completion
+      // before touching the next request, which is exactly the property the real
+      // allocator buys with `findOneAndUpdate`.
+      const seqNext = path.match(/^\/memory\/sequences\/([^/]+)\/next$/);
+      if (seqNext && req.method === 'POST') {
+        const name = decodeURIComponent(seqNext[1]);
+        let value = sequences.get(name) ?? 0;
+        if (typeof parsed?.floor === 'number') value = Math.max(value, parsed.floor);
+        const count = parsed?.count ?? 1;
+        const first = value + 1;
+        value += count;
+        sequences.set(name, value);
+        return json(200, { name, value, first, count });
+      }
+      const seqPeek = path.match(/^\/memory\/sequences\/([^/]+)$/);
+      if (seqPeek && req.method === 'GET') {
+        const name = decodeURIComponent(seqPeek[1]);
+        if (!sequences.has(name)) {
+          return json(404, { detail: { reason: 'sequence_not_found', name } });
+        }
+        return json(200, { name, value: sequences.get(name) });
+      }
+
+      // ── SVC-LEASE-1: scoped renewable leases ─────────────────────────────
+      //
+      // The 409 bodies are `{detail: {reason}}` on purpose: the SDK's LockAPI
+      // treats ONLY a recognised reason as control flow and raises on anything
+      // else, so a stub answering a bare 409 would make contention look like a
+      // coordinator failure.
+      const lockRenew = path.match(/^\/memory\/locks\/([^/]+)\/renew$/);
+      const lockKeyM = path.match(/^\/memory\/locks\/([^/]+)$/);
+      const leaseToken = req.headers['x-lease-token'];
+      const held = (key) => {
+        const lock = locks.get(key);
+        if (lock && lock.expiresAt <= Date.now()) { locks.delete(key); return null; }
+        return lock ?? null;
+      };
+      if (lockRenew && req.method === 'POST') {
+        const key = decodeURIComponent(lockRenew[1]);
+        const lock = held(key);
+        if (!lock || lock.token !== leaseToken) {
+          return json(409, { detail: { reason: 'not_owner' } });
+        }
+        const ttl = (parsed?.ttl_seconds ?? 30) * 1000;
+        lock.expiresAt = Date.now() + ttl;
+        return json(200, {
+          key, token: lock.token,
+          expires_at: new Date(lock.expiresAt).toISOString(), ttl_remaining_ms: ttl,
+        });
+      }
+      if (lockKeyM && req.method === 'POST') {
+        const key = decodeURIComponent(lockKeyM[1]);
+        if (held(key)) return json(409, { detail: { reason: 'lock_held' } });
+        const ttl = (parsed?.ttl_seconds ?? 30) * 1000;
+        const token = `lease-${nextToken += 1}`;
+        locks.set(key, { token, expiresAt: Date.now() + ttl });
+        return json(200, {
+          key, token,
+          expires_at: new Date(Date.now() + ttl).toISOString(), ttl_remaining_ms: ttl,
+        });
+      }
+      if (lockKeyM && req.method === 'DELETE') {
+        const key = decodeURIComponent(lockKeyM[1]);
+        const lock = held(key);
+        if (!lock || lock.token !== leaseToken) {
+          return json(409, { detail: { reason: 'not_owner' } });
+        }
+        locks.delete(key);
+        return json(200, { key, released: true });
       }
 
       const m = path.match(/^\/memory\/(.+)$/);
