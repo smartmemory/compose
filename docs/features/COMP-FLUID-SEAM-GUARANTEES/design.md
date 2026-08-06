@@ -1,6 +1,7 @@
 # COMP-FLUID-SEAM-GUARANTEES — lift the fluid store's safety guarantees into the seam
 
-**Status:** PARTIAL — six of seven criteria met; the seventh needs a change in SmartMemory (Q1)
+**Status:** COMPLETE — all seven criteria met (the seventh on 2026-08-06, once SmartMemory's
+sequence and lease primitives shipped in `@smartmemory/sdk-js` 1.4.60)
 **Date:** 2026-08-05
 **Epic:** COMP-PLAN-RIGOR (Front-of-Funnel Rigor + Parity)
 **Origin:** COMP-PLAN-IDEA-UNIFY S3b-1, review round 2
@@ -128,7 +129,8 @@ recurrence; the rest only repair the current one.
       plus `isShared()` are how a provider says how far its serialization reaches; both
       default to the pessimistic answer, so a provider that never considered concurrency
       inherits "unsafe" rather than "fine". The floor declares `machine` and keeps
-      `dir-lock`. SmartMemory declares `none`, honestly — see Q1.
+      `dir-lock`. SmartMemory declared `none`, honestly, until 2026-08-06; it now declares
+      `cluster` and exposes `leaseClient` as its mechanism — see Q1.
 - [x] `reclaimAborted` is part of the seam contract, with the floor's narrow semantics: a
       handle with no record and no `deleted` event, reclaimable only by an explicit opt-in
       caller (the import). Now implemented on the SmartMemory provider too — it needed no
@@ -139,12 +141,13 @@ recurrence; the rest only repair the current one.
       means adding one row. The SmartMemory row runs against the shared wire stub rather
       than a hand-rolled double, because a double would pass by construction — which is how
       the real provider passed review while missing both guarantees.
-- [ ] **Needs a SmartMemory-side change first — ours to make, not another team's
-      (tracked as `SVC-LEASE-1` in `smart-memory-docs/docs/ROADMAP.md`).**
-      Concurrent creates against the SmartMemory provider yield distinct handles. The
-      conformance case is written and gated on `mutationScope()`, so it starts applying to
-      that provider the moment it can honestly declare `cluster` — and the suite fails today
-      if it declares `cluster` without a mechanism.
+- [x] **MET 2026-08-06.** Concurrent creates against the SmartMemory provider yield distinct
+      handles. The SmartMemory-side change this waited on shipped as TWO primitives, not one:
+      `SVC-ALLOC-1` (monotonic sequences) and `SVC-LEASE-1` (scoped renewable leases), both
+      reachable from `@smartmemory/sdk-js` 1.4.60. Allocation uses the sequence and takes NO
+      lease — `$inc` is atomic, so serializing it would be slower and no safer — while every
+      mutation takes the lease, because read-modify-write on one opaque blob cannot be made
+      atomic by a counter. The conformance case, gated on `mutationScope()`, now applies.
 - [x] An interrupted import against SmartMemory can be re-run to completion.
 - [x] **F6-1** — `add --cluster "X"` cannot create duplicate clusters. Lookup and create were
       separate operations and the lock covered only each individual mutation. Now
@@ -167,6 +170,9 @@ recurrence; the rest only repair the current one.
       `isShared()` and the scope is below `cluster`. A hardcoded warning has to be remembered
       by whoever adds the third provider — the same failure this feature exists to close —
       and remembered again, in the other direction, on the day the gap is fixed.
+      *That day was 2026-08-06, and the design paid off exactly as intended: the warning
+      stopped firing for this provider with no edit to the factory. Only the declaration
+      moved.*
 
 ## Files
 
@@ -182,7 +188,15 @@ recurrence; the rest only repair the current one.
 
 ## Answered Questions
 
-### Q1 — What is the cross-machine mechanism? **ANSWERED 2026-08-05: none exists yet. Upstream ask filed.**
+### Q1 — What is the cross-machine mechanism? **ANSWERED 2026-08-05: none existed. BUILT and CONSUMED 2026-08-06.**
+
+> **Resolved.** The ask below was filed as `SVC-LEASE-1`, built, and is now consumed. The
+> table's five "Absent" verdicts were accurate on 2026-08-05 and two of them are no longer
+> true: there IS a counter endpoint (`POST /memory/sequences/{name}/next`, `SVC-ALLOC-1`) and
+> there IS a lease (`POST /memory/locks/{key}`, `SVC-LEASE-1`). Both reached Compose through
+> the published `@smartmemory/sdk-js` 1.4.60 rather than a hand-rolled client. The rest of
+> this section is kept as written — it is the reasoning that produced the ask, and the
+> "there is no other team" correction is the part that made it happen instead of parking.
 
 Checked the SmartMemory service directly rather than reasoning about it:
 
@@ -234,13 +248,33 @@ convenience that documents itself as best-effort and falls back on error. Not wo
 needed no server primitive — it is a question about the provider's own event log — so it is
 fixed here rather than deferred, and the import is restartable on SmartMemory today.
 
-### Q2 — Should allocation move off max-plus-one? **Deferred, and now cheaper to defer.**
+### Q2 — Should allocation move off max-plus-one? **ANSWERED YES, 2026-08-06.**
 
-A server-assigned monotonic counter would make the race unrepresentable rather than guarded.
-But there is no counter endpoint either, so it is the same upstream conversation with a
-larger blast radius: it changes how `IDEA-N` is minted, and the epic treats those as
-external citations. The lease in Q1 is the smaller ask and leaves this open rather than
-foreclosing it.
+Originally deferred: "a server-assigned monotonic counter would make the race unrepresentable
+rather than guarded, but there is no counter endpoint either, so it is the same upstream
+conversation with a larger blast radius — it changes how `IDEA-N` is minted, and the epic
+treats those as external citations."
+
+The counter endpoint now exists, and the answer flipped for a reason the deferral did not
+anticipate: **the lease alone would have been the worse fix.** Wrapping max-plus-one in a
+lease serializes allocations that never needed serializing, and leaves the two full
+enumerations (every record UNION every event) in the path of every single create. The counter
+removes the race AND the enumerations; the lease then only has to cover read-modify-write,
+which is the one thing a counter genuinely cannot do.
+
+The blast radius the deferral feared — "it changes how `IDEA-N` is minted" — was real and is
+handled in two places rather than avoided:
+
+- **Seeding.** A workspace written before the counter existed holds handles the counter has
+  never seen. The counter is therefore seeded, once per kind, from the existing issued set;
+  starting at 1 would reissue live handles. Racing seeders are harmless: `floor` is applied
+  with `$max`, so it can only raise.
+- **Caller-supplied handles.** The import still mints its own, so each one raises the counter
+  past itself (`floor: n - 1`, which leaves the counter at exactly `n` and keeps a sequential
+  import gapless).
+
+Handles stay external citations: nothing renumbers, and no handle is ever reissued. Gaps
+become possible, which is correct — a handle is a citation, not a count.
 
 ---
 
@@ -298,12 +332,59 @@ only one, which is why Q1 was answered before any design work rather than after.
 
 ### Open
 
-- The remaining criterion. **It is work we have not done yet, not work we are waiting on.**
-  Two steps, in this order: (1) `SVC-LEASE-1` — expose a scoped, fail-closed lease in
-  `smart-memory-service`; the Redis + Lua CAD machinery already exists at
-  `snapshot_sweep.py:94`, internal and workspace-scoped; (2) here, implement it in
-  `smartmemory-provider.js` and flip `mutationScope()` to `cluster`. The conformance suite's
-  concurrency cases then begin applying to that provider automatically, with no test
-  changes — that is what the gating buys.
+- ~~The remaining criterion.~~ **CLOSED 2026-08-06 — see the implementation record below.**
+  Both steps happened in the order predicted: the service primitives first, then the provider.
+  The prediction that "the conformance suite's concurrency cases begin applying automatically,
+  with no test changes" held — and was worth checking rather than assuming, because one of
+  those cases turned out to be untestable as written (see below).
 - Still explicitly out of scope: the other five ad-hoc `mkdir` locks in `lib/` (IDEA-22), and
   the SmartMemory service limitations owned upstream.
+
+---
+
+## Implementation record — 2026-08-06 (the seventh criterion)
+
+### What shipped
+
+| Change | File |
+|---|---|
+| Transport rebuilt on the published SDK; `sequences` + `locks` consumed wholesale | `lib/smartmemory-client.js` |
+| `_nextHandle` → server counter, with one-time seeding and a floor-raise for caller-supplied handles | `lib/fluid/smartmemory-provider.js` |
+| Every mutation wrapped in one scoped lease; `findOrCreateRecord` overridden to hold it across lookup+create | same |
+| `mutationScope()` → `CLUSTER`; `leaseClient` exposed as the mechanism | same |
+| Sequence + lease routes added, so the concurrency cases run against a modelled server | `test/helpers/smartmemory-stub.js` |
+| 13 coordination cases, mutation-tested | `test/fluid-smartmemory-coordination.test.js` (new) |
+
+Server side: `SVC-ALLOC-1` and `SVC-LEASE-1` were already built in `smart-memory-service`;
+what was missing was a PUBLISHED client. `@smartmemory/sdk-js@1.4.59` predated both classes
+by a day, so the SmartMemory line was released at **1.4.60** (core `VERSION` is the only dial;
+core/wrapper/service/client/sdk-js/mcp all carry it) and Compose depends on that.
+
+### The finding worth keeping
+
+**A conformance case that could not fail.** The prediction above was that flipping
+`mutationScope()` would activate four gated cases with no test changes. It did — and all four
+passed immediately, which was the suspicious part. Mutation-testing them (reducing `_withLease`
+to a pass-through) showed only ONE actually failing: *"does not lose a concurrent field
+update"* passed with the lease removed. It races two `updateRecord` calls through
+`Promise.allSettled` and relies on the event loop to interleave the read-modify-write cycles;
+it never did.
+
+So the case that motivated the whole criterion — the quiet half, where both writers succeed
+and one edit is simply gone — had cover that could not detect its own absence. The new suite
+FORCES the interleaving (the first writer's read is delayed until the second's entire cycle
+has landed) and was verified to fail without the lease. The conformance case is left as-is:
+it is a cross-provider smoke test, not the mechanism's cover.
+
+This is the same failure this feature exists to close, one level up: an assertion that
+satisfies the shape of a guarantee without testing it. It was found only because the fix was
+mutation-tested rather than trusted for going green.
+
+### Verification
+
+- 203 tests across the fluid suites, plus 32 client + 87 ingest/sync/recall — zero failures,
+  and **the 611-line client contract suite passed with no edits**, which is the evidence that
+  swapping the transport did not move the wire.
+- Mutation-tested in both directions: with `_withLease` reduced to a pass-through, 4 of the 13
+  new cases fail; with `_nextHandle` reverted to the max-plus-one scan, 2 fail.
+- The factory's derived warning stopped firing for this provider with no edit to `factory.js`.

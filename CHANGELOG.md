@@ -1,5 +1,43 @@
 # Changelog
 
+## 2026-08-06
+
+### Two people can now work the same shared ideabox without losing each other's work
+
+Compose can keep the ideabox in SmartMemory instead of in a file, so a team shares
+one list. Until now that was unsafe, and Compose said so: it printed a warning
+telling you to use the local file instead. Two people adding an idea at the same
+moment could both be handed the same number, and whoever finished second silently
+overwrote the first. Editing had the same problem in a quieter form. Two people
+changing different fields of the same idea both got a success, and one of the two
+edits simply vanished.
+
+Both are fixed, and fixed differently, because they are different problems. Idea
+numbers now come from a counter that lives on the server, so no two people can
+ever be handed the same one. Edits now take a short-lived server lease, so a second
+editor waits a moment rather than writing over the first. The warning is gone
+because the reason for it is gone.
+
+Existing ideaboxes keep their numbering. The counter is seeded from the highest
+number already in use the first time it is touched, so nothing gets renumbered and
+no existing number is handed out again. Numbers can now skip occasionally, which is
+expected and harmless: a number is a name for an idea, not a count of them.
+
+### Adding an idea to a shared ideabox got substantially faster
+
+Working out the next idea number used to mean downloading every idea and every
+history entry in the workspace, every single time. On a large ideabox that is the
+slowest thing a write does, and it got slower as the ideabox grew. It is now a
+single small request, and the full download happens at most once.
+
+### Compose now uses the official SmartMemory SDK
+
+Compose talked to SmartMemory through its own hand-written HTTP code. That code is
+gone, replaced by the published `@smartmemory/sdk-js` package, so Compose no longer
+maintains a private copy of someone else's contract. Nothing about how Compose
+behaves changed, which was checked rather than assumed: the entire existing test
+suite for that layer passes untouched.
+
 ## 2026-08-05
 
 ### Ideas added from the command line now appear in an open cockpit
