@@ -139,6 +139,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  roadmap xref-sync  Pull-reconcile feature.json external links to live state')
   console.log('  roadmap xref-push  Push-write GitHub trackers to match expect= (dry-run; --apply to write)')
   console.log('  migrate-anon       Promote historical anonymous ROADMAP rows to typed features (interactive)')
+  console.log('  judgment trace <slug>  Causal ancestry of a judgment position (revisions + supersession)')
   console.log('  items              List vision items from local state (no server)')
   console.log('  items show <id>    Show detail for a specific vision item')
   console.log('  triage    Analyze a feature and recommend build profile')
@@ -3129,6 +3130,59 @@ if (cmd === 'build') {
     }
     process.exit(1)
   })
+} else if (cmd === 'judgment') {
+  // ---------------------------------------------------------------------------
+  // compose judgment trace <slug> — causal ancestry of a position
+  // (COMP-JUDGMENT-PRECEDENT slice A). Read-only. The store has always persisted
+  // revision chains and the `supersedes` ref; nothing surfaced them.
+  // ---------------------------------------------------------------------------
+  // `args` excludes the command itself (const [,, cmd, ...args]), so the
+  // subcommand is args[0] — same shape as `subcmd = args[0]` elsewhere.
+  const sub = args[0]
+  if (sub !== 'trace') {
+    console.log('Usage: compose judgment trace <slug> [--json]')
+    process.exit(sub ? 1 : 0)
+  }
+  const slug = args[1]
+  if (!slug || slug.startsWith('--')) {
+    console.error('Usage: compose judgment trace <slug> [--json]')
+    process.exit(1)
+  }
+  const { root: jCwd } = resolveCwdWithWorkspace(args)
+  const { getJudgmentTrace } = await import('../lib/judgment-writer.js')
+  try {
+    const t = await getJudgmentTrace(jCwd, slug)
+    if (args.includes('--json')) {
+      console.log(JSON.stringify(t, null, 2))
+      process.exit(0)
+    }
+    console.log(`${t.slug}  [${t.status}]`)
+    for (const r of t.revisions) {
+      const marks = [r.retracted ? 'retracted' : null, r.conviction ? `conviction=${r.conviction}` : null]
+        .filter(Boolean).join(' ')
+      const d = Array.isArray(r.delta) && r.delta.length ? `  (${r.delta.join('; ')})` : ''
+      console.log(`  r${r.rev}  ${r.written_at ?? '—'}  ${r.claim_count} claim(s)${marks ? '  ' + marks : ''}${d}`)
+    }
+    if (Array.isArray(t.supersededBy) && t.supersededBy.length) {
+      console.log(`  superseded by: ${t.supersededBy.map(s => `${s.slug}#r${s.rev}`).join(', ')}`)
+    }
+    let anc = t.supersedes, depth = 1
+    while (anc) {
+      const pin = anc.pinned ? `#r${anc.rev}` : ''
+      console.log(`${'  '.repeat(depth)}↳ supersedes ${anc.slug}${pin}  [${anc.status}]`)
+      for (const r of anc.revisions) {
+        const d = Array.isArray(r.delta) && r.delta.length ? `  (${r.delta.join('; ')})` : ''
+        console.log(`${'  '.repeat(depth + 1)}r${r.rev}  ${r.written_at ?? '—'}  conviction=${r.conviction ?? '—'}${d}`)
+      }
+      anc = anc.supersedes; depth++
+    }
+    if (t.cycle) console.error(`  WARNING: supersession cycle — ${t.cycle}`)
+    for (const w of t.warnings) console.error(`  WARNING: ${w}`)
+    process.exit(0)
+  } catch (err) {
+    console.error(err?.message || String(err))
+    process.exit(1)
+  }
 } else if (cmd === 'ideabox') {
   // ---------------------------------------------------------------------------
   // compose ideabox — idea management CLI

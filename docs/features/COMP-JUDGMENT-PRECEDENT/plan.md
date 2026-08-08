@@ -1,6 +1,6 @@
 # COMP-JUDGMENT-PRECEDENT — Precedent search over judgment records
 
-**Status:** PLANNED | **Complexity:** M | **Impact:** high
+**Status:** COMPLETE (slice A, 2026-08-08) | **Complexity:** M | **Impact:** high
 **Promoted from:** IDEA-29 | **Source:** Semantica teardown 2026-08-08, re-grounded against code 2026-08-08
 
 ## Related Documents
@@ -78,20 +78,20 @@ set and terminate, reporting the cycle rather than hanging.
 
 ## Acceptance criteria
 
-- [ ] `buildSupersessionIndex(store)` returns forward + reverse refs in a single
-      pass over the slugs
-- [ ] `derivePositionStatus` uses the index; behaviour identical to today
-- [ ] `tracePosition(store, slug)` returns revisions plus ancestry in both
+- [x] `buildSupersessionIndex(store)` returns forward + reverse refs in a single
+      pass over the slugs (reverse refs are an array — forks preserved)
+- [x] `derivePositionStatus` uses the index; behaviour identical to today
+- [x] `tracePosition(store, slug)` returns revisions plus ancestry in both
       directions
-- [ ] Recursive walk is cycle-guarded and reports the cycle instead of hanging
-- [ ] Retracted positions surface as `retracted`, and a tombstone still traces
-- [ ] Unknown slug returns a typed `JUDGMENT_NOT_FOUND`, not null
-- [ ] `compose judgment trace <slug>` renders the chain
-- [ ] `get_judgment_trace` MCP tool, on the reviewer-allowed read list
-- [ ] Golden flow: create → amend → supersede → trace shows all three, in order,
+- [x] Recursive walk is cycle-guarded and reports the cycle instead of hanging
+- [x] Retracted positions surface as `retracted`, and a tombstone still traces
+- [x] Unknown slug returns a typed `JUDGMENT_NOT_FOUND`, not null
+- [x] `compose judgment trace <slug>` renders the chain
+- [x] `get_judgment_trace` MCP tool, on the reviewer-allowed read list
+- [x] Golden flow: create → amend → supersede → trace shows all three, in order,
       with the pre-amendment state still visible
-- [ ] Unit test: a synthetic `a → b → a` cycle terminates and reports
-- [ ] No write path touched; no judgment record schema change
+- [x] Unit test: a synthetic `a → b → a` cycle terminates and reports
+- [x] No write path touched; no judgment record schema change
 
 ## Out of scope
 

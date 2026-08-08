@@ -55,6 +55,24 @@ Nothing else changed. Compose still uses RTK automatically if it happens to be
 on your PATH, so anyone who does run it keeps the compression. The only
 difference is that Compose no longer asks you to go get it.
 
+### COMP-JUDGMENT-PRECEDENT — judgment history is now readable — decision-chain trace over revisions and supersession (slice A)
+
+The judgment layer persisted full causal history — revision chains, the `supersedes: <slug>#r<N>` reference, retraction tombstones — and exposed none of it. The only reader, `get_judgment_state`, returned the latest revision per position and dropped everything behind it, so a decision's precedent sat on disk and unreadable. Slice A adds a purely additive, read-only trace: no schema change, no migration, no external dependency. (Slice B, semantic precedent search, stays BLOCKED on the unresolved SmartMemory recall failure and is not built.)
+
+**Added:**
+- `buildSupersessionIndex(store)` — forward and reverse supersession refs for every position in a single pass, replacing the O(n^2) rescan inside `derivePositionStatus` (which now takes it as an optional index). Reverse refs are an array of `{ref, rev}`, so forks (two positions superseding the same revision) are preserved, not last-writer-wins.
+- `tracePosition(store, slug)` — cycle-guarded ancestry walk pinned to the referenced revision, returning each revision, a schema-complete per-revision delta, and supersession in both directions.
+- `compose judgment trace <slug> [--json]` CLI verb and the `get_judgment_trace` MCP read tool (on the reviewer-allowed list).
+- 22-plus tests in `test/judgment-trace.test.js`, including a contract-locked field-list test that fails if the record schema grows a field the delta does not diff.
+
+**Changed:**
+- `derivePositionStatus` accepts an optional prebuilt index; `get_judgment_state` and the projection generator pass one, turning a whole-store status pass from O(n^2) to O(n). Behaviour identical.
+
+**Fixed:**
+- Delta now covers every writer-legal field of `position_revision`/`claim` (conviction level and source, per-claim grounding/text/supports/owner_locked/elicitation, rejected_alternatives, provider_ids, supersedes, and retraction in both directions), and no longer drops `supports` from the returned claim view.
+- A pinned ancestor reports its own revision's status and only the reverse refs aimed at that revision, instead of inheriting the slug's latest-revision metadata.
+- Duplicate claim ids (schema-valid) no longer collapse in the delta — a duplicate-safe multiset fallback keeps a removal from reading as no change.
+
 ## 2026-08-06
 
 ### Two people can now work the same shared ideabox without losing each other's work

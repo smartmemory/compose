@@ -37,6 +37,7 @@ const REVIEWER_ALLOW = [
   'validate_feature', 'validate_project', 'roadmap_diff', 'get_roadmap', 'roadmap_graph_check', 'assess_feature_artifacts',
   'set_workspace', 'get_workspace', 'bind_session',
   'get_judgment_state', // COMP-JUDGMENT-WRITER: read-only; the eight judgment write tools stay reviewer-denied
+  'get_judgment_trace', // COMP-JUDGMENT-PRECEDENT: read-only ancestry walk
 ];
 
 export const PROFILE_POLICY = {
