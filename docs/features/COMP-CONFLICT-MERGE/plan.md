@@ -1,7 +1,17 @@
 # COMP-CONFLICT-MERGE — Conflict-first merge instead of last-writer-wins
 
-**Status:** PLANNED | **Complexity:** M | **Impact:** high
-**Promoted from:** IDEA-27 | **Source:** Semantica teardown (semantica-agi/semantica), 2026-08-08
+**Status:** PLANNED | **Complexity:** S | **Impact:** medium
+**Promoted from:** IDEA-27 | **Source:** Semantica teardown 2026-08-08, re-grounded 2026-08-08
+
+> **SUPERSEDED IN PART (2026-08-08).** This plan was written at promotion time,
+> before anyone read the roadmap writer. Two of its premises are false:
+> the "field ownership" model does not fit a text document, and general prose
+> loss **does not occur** (`spliceTableIntoBlock` preserves typed-phase prose;
+> `test/roadmap-roundtrip.test.js:83` asserts it). The feature narrowed to two
+> verified loss paths and a CLI-scoped guarantee.
+>
+> **[design.md](design.md) is the authority.** Read it first; treat the
+> acceptance criteria below as superseded where the two disagree.
 
 ## Related Documents
 

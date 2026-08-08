@@ -1,12 +1,12 @@
 {
   "code": "COMP-CONFLICT-MERGE",
-  "description": "Conflict-first merge instead of last-writer-wins: before a write supersedes an existing record, diff the incoming value against the stored one on fields the writer does not own; on divergence emit a typed conflict and halt rather than overwrite. Targets two live data-loss paths — roadmap generate clobbering hand-authored prose, and the shared build-stream / active-build last-writer-wins race. First slice is the roadmap/prose writer (single-threaded, needs no Umbrella B concurrency primitives). Distinct from COMP-* concurrency work, which prevents the race; this makes the merge honest when the race is already lost. Anchor: docs/features/COMP-CONFLICT-MERGE/plan.md",
+  "description": "Close two verified silent-loss paths in roadmap regeneration. (1) An unbalanced `preserved-section` open marker is discarded on purpose (roadmap-preservers.js:233) so a typo'd close marker deletes exactly the content it was meant to protect. (2) readPhaseBlocks keys blocks by phase id in a Map (roadmap-preservers.js:268), so two `##` headings with the same text collapse to the last one and the earlier curated block is dropped — reachable via the second generation pass the CLI writes (bin/compose.js:1256). Guard by computing residue against the FINAL canonical bytes, not the first pass, using an occurrence-aware multiset keyed by line plus containing block. NOTE: the original justification (roadmap generate clobbers hand-authored prose generally) was DISPROVED — spliceTableIntoBlock preserves typed-phase prose and roadmap-roundtrip.test.js:83 asserts it. Providers bypass the CLI (local-provider.js:101, github-provider.js:524), so the guarantee is CLI-scoped unless it moves into the render paths. Anchor: docs/features/COMP-CONFLICT-MERGE/design.md",
   "status": "PLANNED",
   "promotedFrom": "IDEA-27",
   "createdAt": "2026-08-08T05:33:17.506Z",
   "updated": "2026-08-08",
   "phase": "Standalone",
-  "complexity": "M",
-  "impact": "high",
-  "source": "Semantica teardown (semantica-agi/semantica), 2026-08-08"
+  "complexity": "S",
+  "impact": "medium",
+  "source": "Semantica teardown 2026-08-08; re-grounded against code 2026-08-08 after design gate"
 }

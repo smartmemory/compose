@@ -1,0 +1,28 @@
+{
+  "id": "5312dd78-42b8-40b7-95f6-3301f2720991",
+  "handle": "IDEA-31",
+  "kind": "idea",
+  "title": "Should judgment positions carry a valid-time axis?",
+  "body": "OPEN QUESTION, not a defect. position_revision carries only provenance.written_at (transaction time: when we recorded it). There is no valid-time axis (when the belief was true of the world). The codebase already has the concept where it judged it necessary — fact_at is a date field on facts — so valid time was available and deliberately not applied to positions. The question is whether a position meaningfully HAS a valid time distinct from its written_at, e.g. 'we held this view of the architecture as of 0.3.x' vs 'we typed it on 2026-08-08'. If yes it is a small schema addition plus an as_of() read; if no, close it. Does NOT block precedent trace (COMP-JUDGMENT-PRECEDENT) — revision + supersedes already give decision-time reconstruction. Residual of the killed COMP-JUDGMENT-BITEMPORAL, whose framing (that amendment overwrites) was false.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "effort": null,
+  "impact": null,
+  "cluster": "CLUS-3",
+  "cluster_order": null,
+  "tags": [
+    "judgment temporal question open-design"
+  ],
+  "source": "COMP-JUDGMENT-BITEMPORAL kill, 2026-08-08",
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "cli:ideabox",
+    "recorded_at": "2026-08-08T08:06:21.993Z",
+    "author": null
+  },
+  "created_at": "2026-08-08T08:06:21.993Z",
+  "updated_at": "2026-08-08T08:06:21.993Z"
+}

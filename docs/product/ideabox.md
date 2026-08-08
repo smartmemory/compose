@@ -130,6 +130,11 @@
 **Idea:** Semantica emits W3C PROV-O for its lineage graph rather than inventing a schema. The parked idea_artifact_lineage (artifacts declare upstream _sources so staleness propagates: design.md changes => blueprint.md and plan.md go stale) is the same problem, and PROV-O already models it — the Entity / Activity / Agent triad plus wasDerivedFrom, wasGeneratedBy, used gives exactly 'this artifact came from those artifacts via that phase, run by that agent'. Borrow the VOCABULARY, not the RDF stack: name the fields after PROV-O terms in the existing artifact records so the concepts are already right if a graph export is ever wanted, and so the staleness rule is a standard graph reachability query instead of bespoke logic. Pairs with IDEA-21 (staleness-track multi-slice blueprints), which is the same staleness problem scoped to one artifact type — PROV-O is the general form. Read the spec before designing a custom _sources schema.
 **Promoted to:** COMP-PROV-LINEAGE
 
+#### IDEA-31 — Should judgment positions carry a valid-time axis?
+**Status:** NEW | **Priority:** — | **Tags:** judgment temporal question open-design
+**Source:** COMP-JUDGMENT-BITEMPORAL kill, 2026-08-08
+**Idea:** OPEN QUESTION, not a defect. position_revision carries only provenance.written_at (transaction time: when we recorded it). There is no valid-time axis (when the belief was true of the world). The codebase already has the concept where it judged it necessary — fact_at is a date field on facts — so valid time was available and deliberately not applied to positions. The question is whether a position meaningfully HAS a valid time distinct from its written_at, e.g. 'we held this view of the architecture as of 0.3.x' vs 'we typed it on 2026-08-08'. If yes it is a small schema addition plus an as_of() read; if no, close it. Does NOT block precedent trace (COMP-JUDGMENT-PRECEDENT) — revision + supersedes already give decision-time reconstruction. Residual of the killed COMP-JUDGMENT-BITEMPORAL, whose framing (that amendment overwrites) was false.
+
 ---
 
 ### Umbrella D — Cockpit & loop ergonomics
