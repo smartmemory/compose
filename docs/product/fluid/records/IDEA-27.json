@@ -1,0 +1,33 @@
+{
+  "id": "123b0c8e-5012-40b4-bdaf-79c58dbe55d0",
+  "handle": "IDEA-27",
+  "kind": "idea",
+  "title": "Conflict-first merge instead of last-writer-wins",
+  "body": "Semantica's ingest pipeline DETECTS contradictory facts across sources and flags them for resolution rather than silently merging — 'conflict-first design' is their stated stance. Compose has two live instances of the opposite: the shared build-stream / active-build last-writer-wins race (project_compose_idempotency_gaps, IDEA-11/14), and roadmap generate clobbering hand-authored prose (reference_roadmap_generate_clobbers_prose). The borrow is the STANCE, not their implementation: any writer that merges two sources without a contradiction check loses data quietly. Concretely — before a write that supersedes an existing record, diff the incoming value against the stored one on the fields the writer does not own; if they differ, emit a typed conflict (pairs with IDEA-2 typed errors) and halt rather than overwrite. Cheapest first slice is the roadmap/prose writer, which is single-threaded and needs no concurrency primitives. Distinct from IDEA-11/14, which prevent the RACE; this makes the merge itself honest even when the race is already lost.",
+  "status": "promoted",
+  "status_label": null,
+  "priority": "P0",
+  "effort": null,
+  "impact": null,
+  "cluster": "CLUS-1",
+  "cluster_order": null,
+  "tags": [
+    "integrity concurrency roadmap merge research-influence"
+  ],
+  "source": "Semantica (semantica-agi/semantica) teardown, 2026-08-08",
+  "links": [
+    {
+      "type": "promoted_to",
+      "target": "COMP-CONFLICT-MERGE"
+    }
+  ],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "cli:ideabox",
+    "recorded_at": "2026-08-08T04:06:44.847Z",
+    "author": null
+  },
+  "created_at": "2026-08-08T04:06:44.847Z",
+  "updated_at": "2026-08-08T05:33:17.520Z"
+}

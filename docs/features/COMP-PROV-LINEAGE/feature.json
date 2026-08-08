@@ -1,0 +1,12 @@
+{
+  "code": "COMP-PROV-LINEAGE",
+  "description": "Adopt the W3C PROV-O vocabulary for artifact lineage rather than inventing a _sources schema: the Entity/Activity/Agent triad plus wasDerivedFrom / wasGeneratedBy / used already models \"this artifact came from those artifacts via that phase, run by that agent\". Borrow the vocabulary, not the RDF stack — name the fields after PROV-O terms in existing artifact records so staleness becomes a standard graph-reachability query and a graph export stays possible later. General form of the per-artifact-type staleness tracking already filed. Read the spec before designing anything custom. Anchor: docs/features/COMP-PROV-LINEAGE/plan.md",
+  "status": "PLANNED",
+  "promotedFrom": "IDEA-30",
+  "createdAt": "2026-08-08T05:33:17.857Z",
+  "updated": "2026-08-08",
+  "phase": "Backlog",
+  "complexity": "S",
+  "impact": "low",
+  "source": "Semantica teardown (semantica-agi/semantica), 2026-08-08"
+}

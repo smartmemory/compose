@@ -2,6 +2,48 @@
 
 ## 2026-08-08
 
+### Compose now has a pitch, not just a description
+
+The README opened with what Compose *is* and never said what goes wrong without
+it. It now leads with the failure everyone has actually lived through — the
+agent reports done, the suite is green, and weeks later you find the feature is
+wired to nothing — followed by six named roles and a comparison table against
+the two things people really do today: prompting the agent directly, and
+keeping a plan.md. The tagline is "your agent writes the code, Compose makes it
+prove it", which positions Compose as a complement to Claude Code and Codex
+rather than a replacement for them.
+
+Applied to `README.md`, `docs/compose-one-pager.md`, `compose-mcp/README.md`,
+and the npm `description` fields, which are the first line a visitor reads on a
+package page. Stratum's README gained the matching "where it sits" paragraph so
+the two projects read as one stack. Prose in the customer-facing surfaces
+follows the no-em-dash/no-semicolon house rule.
+
+Sourced from a teardown of `semantica-agi/semantica`, whose README is
+unusually well-built: it names its enemy (vector DB + RAG, not other graph
+libraries), opens on a concrete regulated-industry scenario, and lists six job
+roles rather than "developers".
+
+### Four features promoted from the ideabox (IDEA-27 through IDEA-30)
+
+Same teardown, structural ideas rather than marketing ones:
+
+- **COMP-CONFLICT-MERGE** (P0) — detect contradiction before a write supersedes
+  a record instead of resolving it last-writer-wins. Targets two live data-loss
+  paths: `roadmap generate` clobbering hand-authored prose, and the shared
+  build-stream race. First slice is the roadmap writer, which is single-threaded
+  and needs none of the concurrency primitives.
+- **COMP-JUDGMENT-BITEMPORAL** (P1) — valid time vs transaction time on judgment
+  records, so "what did we believe when we made that call" is a query rather
+  than a ledger replay. Cheap now while the store schema is young.
+- **COMP-JUDGMENT-PRECEDENT** (P1) — the read side of the judgment layer.
+  Slice A (causal-chain trace) is mechanical and unblocked; slice B (semantic
+  precedent search) is explicitly BLOCKED on the unresolved SmartMemory recall
+  failure.
+- **COMP-PROV-LINEAGE** (P2) — adopt the W3C PROV-O vocabulary for artifact
+  lineage instead of inventing a `_sources` schema. Vocabulary only, no RDF
+  runtime.
+
 ### `compose doctor` no longer tells you to install RTK
 
 RTK is an optional command-output compressor. Compose could detect it and, when
