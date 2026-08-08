@@ -878,6 +878,11 @@ export async function toolGetJudgmentState() {
   return getJudgmentState(getTargetRoot());
 }
 
+export async function toolGetJudgmentTrace(args = {}) {
+  const { getJudgmentTrace } = await import('../lib/judgment-writer.js');
+  return getJudgmentTrace(getTargetRoot(), args.slug);
+}
+
 // ---------------------------------------------------------------------------
 // COMP-MCP-ENFORCE-1 — phase-scoped MCP tool gate (profile × phase)
 //

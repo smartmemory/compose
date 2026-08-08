@@ -97,6 +97,7 @@ const JUDGMENT_TOOLS = [
   'judgment_situation_write',
   'judgment_goal_write',
   'get_judgment_state',
+  'get_judgment_trace',
 ];
 
 const NEW_JUDGMENT_TOOL_OPS = {
@@ -184,7 +185,7 @@ const ratifiedGoalCut = {
 };
 
 describe('compose-mcp judgment registry parity', () => {
-  test('has 50 tool definitions, 50 dispatch cases, and nine exact judgment names', () => {
+  test('has 51 tool definitions, 51 dispatch cases, and ten exact judgment names', () => {
     const source = readFileSync(MCP_SERVER, 'utf8');
     const toolsStart = source.indexOf('const TOOLS = [');
     const toolsEnd = source.indexOf('\n];\n\n// ---------------------------------------------------------------------------\n// MCP Server setup', toolsStart);
@@ -200,15 +201,15 @@ describe('compose-mcp judgment registry parity', () => {
       ...source.slice(switchStart, switchEnd).matchAll(/^      case '([^']+)'/gm),
     ].map((match) => match[1]);
 
-    assert.equal(definitionNames.length, 50, 'TOOLS definition count');
-    assert.equal(dispatchNames.length, 50, 'dispatch case count');
+    assert.equal(definitionNames.length, 51, 'TOOLS definition count');
+    assert.equal(dispatchNames.length, 51, 'dispatch case count');
     assert.deepEqual(
       [...definitionNames].sort(),
       [...dispatchNames].sort(),
       'every listed tool has exactly one dispatch case',
     );
     assert.deepEqual(
-      definitionNames.filter((name) => name.startsWith('judgment_') || name === 'get_judgment_state').sort(),
+      definitionNames.filter((name) => name.startsWith('judgment_') || name.startsWith('get_judgment_')).sort(),
       [...JUDGMENT_TOOLS].sort(),
     );
   });
@@ -428,7 +429,7 @@ describe('compose-mcp judgment writer (end-to-end)', () => {
 });
 
 describe('COMP-JUDGMENT-GOAL-MIGRATE S3 — MCP reachability', () => {
-  test('judgment_goal_write advertises migrate on the existing 50/50 registry', async () => {
+  test('judgment_goal_write advertises migrate on the existing 51/51 registry', async () => {
     const source = readFileSync(MCP_SERVER, 'utf8');
     const toolsStart = source.indexOf('const TOOLS = [');
     const toolsEnd = source.indexOf('\n];\n\n// ---------------------------------------------------------------------------\n// MCP Server setup', toolsStart);
@@ -442,10 +443,12 @@ describe('COMP-JUDGMENT-GOAL-MIGRATE S3 — MCP reachability', () => {
     ].map((match) => match[1]);
 
     // Adding an op must not add a tool: the registry stays at its pinned size.
-    assert.equal(definitionNames.length, 50, 'TOOLS definition count');
-    assert.equal(dispatchNames.length, 50, 'dispatch case count');
+    // Pin moved 50 -> 51 by COMP-JUDGMENT-PRECEDENT, which adds one READ tool
+    // (get_judgment_trace). The invariant under test is unchanged.
+    assert.equal(definitionNames.length, 51, 'TOOLS definition count');
+    assert.equal(dispatchNames.length, 51, 'dispatch case count');
     assert.deepEqual(
-      definitionNames.filter((name) => name.startsWith('judgment_') || name === 'get_judgment_state').sort(),
+      definitionNames.filter((name) => name.startsWith('judgment_') || name.startsWith('get_judgment_')).sort(),
       [...JUDGMENT_TOOLS].sort(),
       'the nine judgment tool names are unchanged',
     );
@@ -645,11 +648,15 @@ describe('reviewer gate enforced end-to-end (phaseScopedTools workspace)', () =>
 });
 
 describe('mcp-tool-policy — judgment entries', () => {
-  test('reviewer: write tools denied, get_judgment_state allowed', () => {
-    for (const tool of JUDGMENT_TOOLS.filter((t) => t !== 'get_judgment_state')) {
+  const JUDGMENT_READ_TOOLS = ['get_judgment_state', 'get_judgment_trace'];
+
+  test('reviewer: write tools denied, read tools allowed', () => {
+    for (const tool of JUDGMENT_TOOLS.filter((t) => !JUDGMENT_READ_TOOLS.includes(t))) {
       assert.equal(isToolAllowed({ tool, profile: 'reviewer' }).allowed, false, `${tool} must be denied to reviewer`);
     }
-    assert.equal(isToolAllowed({ tool: 'get_judgment_state', profile: 'reviewer' }).allowed, true);
+    for (const tool of JUDGMENT_READ_TOOLS) {
+      assert.equal(isToolAllowed({ tool, profile: 'reviewer' }).allowed, true, `${tool} must be allowed to reviewer`);
+    }
   });
 
   test('implementer and orchestrator may write judgment canon', () => {

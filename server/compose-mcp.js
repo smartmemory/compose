@@ -78,6 +78,7 @@ import {
   toolJudgmentSituationWrite,
   toolJudgmentGoalWrite,
   toolGetJudgmentState,
+  toolGetJudgmentTrace,
   _getBinding,
   assertToolPhaseAllowed,
   _getSessionProfile,
@@ -916,6 +917,15 @@ const TOOLS = [
     description: 'Judgment canon snapshot: positions (derived status), joints, under-test, open predictions, recent ledger. Replays pending judgment intents first.',
     inputSchema: { type: 'object', properties: {} },
   },
+  {
+    name: 'get_judgment_trace',
+    description: 'Causal ancestry of one judgment position: every revision in order, what it superseded (walked recursively), and what superseded it. Read-only; answers "what did we believe when we made that call", which get_judgment_state cannot (it returns latest-only).',
+    inputSchema: {
+      type: 'object',
+      properties: { slug: { type: 'string', description: 'Position slug' } },
+      required: ['slug'],
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -1019,6 +1029,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'judgment_situation_write': result = await toolJudgmentSituationWrite(args); break;
       case 'judgment_goal_write':      result = await toolJudgmentGoalWrite(args); break;
       case 'get_judgment_state':       result = await toolGetJudgmentState(args); break;
+      case 'get_judgment_trace':       result = await toolGetJudgmentTrace(args); break;
       // agent_run removed — STRAT-DEDUP-AGENTRUN v1. Use mcp__stratum__stratum_agent_run.
       default:
         return {
