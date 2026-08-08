@@ -1,0 +1,16 @@
+{
+  "code": "COMP-CTXBUDGET-2",
+  "description": "**Context budget as a tracked recurring cost, not a one-shot snapshot.** COMP-CTXBUDGET-1/-1-2 shipped a manually-invoked audit that reports live-startup tokens for the current moment; it cannot tell you the surface grew since the last check. Three deltas on `lib/context-budget.js`: (a) **persist a baseline series** — append each run's live-startup total plus per-component breakdown to JSONL so the skill reports drift against the 2026-06-06 forge baseline (~107.8K live / ~55.5K reclaimable) instead of a bare snapshot; (b) **run unattended** — pre-push hook or cron against a configurable live-startup ceiling, so context debt surfaces before sessions feel heavy rather than when someone thinks to ask; (c) **rank reclaims by recurring cost** — tokens/session x sessions/week rather than bytes-on-disk, which materially reorders the cut list under progressive disclosure (a 400-line rarely-invoked skill is near-free at frontmatter-only load; 200 lines of always-loaded `~/.claude/rules/` is not). Secondary scope to split if it grows: **adoption auditing** — measure whether an optimization actually fires, not just whether it exists. Source case study found a trusted token-saving tool reached by only 6% of eligible calls over 30 days (tool fine, trigger broken); we have no instrumentation on whether our own hooks, gates, and guards fire at assumed rates. Read-only and advisory like -1: never auto-applies cuts. Promoted from IDEA-17 (`zwolf25/tokenminning` scan 2026-08-08).",
+  "status": "PLANNED",
+  "phase": "COMP-CTXBUDGET: Context Budget Audit",
+  "created": "2026-08-08",
+  "updated": "2026-08-08",
+  "complexity": "S",
+  "position": 290,
+  "tags": [
+    "infra",
+    "skills",
+    "observability"
+  ],
+  "impact": "medium"
+}
