@@ -1,12 +1,12 @@
 {
   "code": "COMP-JUDGMENT-BITEMPORAL",
-  "description": "Bi-temporal judgment records: stamp positions/goals/situations with valid time (when true in the world) and transaction time (when recorded), so \"what do we believe now\" and \"what did we believe when we made that call\" are direct queries rather than a ledger replay. Makes amendment non-destructive by construction. Sibling to the append-only decisions-log shape; the query model that makes an append-only log answerable. Cheap now while the judgment store schema is young; cost rises with every record written. Anchor: docs/features/COMP-JUDGMENT-BITEMPORAL/plan.md",
-  "status": "PLANNED",
+  "description": "KILLED 2026-08-08 — premise disproved. Filed on the belief that amending a judgment position overwrites the belief and the ledger is the only history. Both are false: judgment_position_amend writes a NEW revision (judgment-writer.js:2931+), and the store already carries rev numbering, a `supersedes: <slug>#r<N>` chain, and retraction tombstones. Amendment is already non-destructive by construction. The only true residual — position_revision carries transaction time (provenance.written_at) but no valid-time axis, while facts already have one (fact_at) — is a design question, not a data-loss fix, and is re-filed in the ideabox. See docs/features/COMP-JUDGMENT-BITEMPORAL/killed.md",
+  "status": "KILLED",
   "promotedFrom": "IDEA-28",
   "createdAt": "2026-08-08T05:33:17.624Z",
   "updated": "2026-08-08",
   "phase": "Judgment Layer",
-  "complexity": "M",
-  "impact": "medium",
-  "source": "Semantica teardown (semantica-agi/semantica), 2026-08-08"
+  "complexity": "S",
+  "impact": "low",
+  "source": "Semantica teardown 2026-08-08; re-grounded against code 2026-08-08 after design gate"
 }
