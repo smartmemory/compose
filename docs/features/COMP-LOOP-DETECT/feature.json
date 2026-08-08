@@ -1,0 +1,16 @@
+{
+  "code": "COMP-LOOP-DETECT",
+  "description": "**Retry-loop detection at the tool-call layer (PreToolUse warn, not block).** A PreToolUse hook that counts consecutive identical tool calls and, on the 3rd, returns `permissionDecision: \"ask\"` with a \"possible retry loop, confirm to continue\" reason. The load-bearing design choice is **warn, not block**: `ask` rather than exit-code-2 preserves legitimate repetition (polling a background job, watching a build) while still interrupting a blind retry loop, so it can ship enabled by default without curating an exception list. Sits one layer BELOW COMP-ITER-BUDGET, which caps *pipeline* iterations on `start_iteration_loop` with auto-abort and a structured failure report and therefore cannot see an agent burning 60 turns re-running one failing command inside a single step. Complementary to per-step `allowed_tools` gating (IDEA-7): that makes the wrong tool invisible, this catches the right tool used in circles. Targets a known, costed failure mode — `~/.claude/rules/subagent-model-routing.md` records the expensive outcome as a retry blowup (268 steps / 214K tokens for the same result a converging run reached in 95 / 86K), currently caught only by the controller happening to notice. Ships on the existing hook surface alongside `.claude/hooks/canon-guard.mjs`, installed by `compose setup` / `compose update`. Open scoping questions: what counts as \"identical\" (exact command string vs normalized vs same tool + same target file), whether the counter resets on any intervening different call or uses a sliding window, and whether the trip count varies per tool (3 is right for Edit, wrong for deliberate sleep-and-poll). Value is in tuning the identity predicate, not the hook. Promoted from IDEA-18 (`zwolf25/tokenminning` scan 2026-08-08, `loop-detect.sh`).",
+  "status": "PLANNED",
+  "phase": "Backlog",
+  "created": "2026-08-08",
+  "updated": "2026-08-08",
+  "complexity": "S",
+  "position": 6,
+  "tags": [
+    "infra",
+    "safety",
+    "hooks"
+  ],
+  "impact": "medium"
+}
