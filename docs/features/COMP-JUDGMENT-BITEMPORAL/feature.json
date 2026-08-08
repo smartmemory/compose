@@ -1,0 +1,12 @@
+{
+  "code": "COMP-JUDGMENT-BITEMPORAL",
+  "description": "Bi-temporal judgment records: stamp positions/goals/situations with valid time (when true in the world) and transaction time (when recorded), so \"what do we believe now\" and \"what did we believe when we made that call\" are direct queries rather than a ledger replay. Makes amendment non-destructive by construction. Sibling to the append-only decisions-log shape; the query model that makes an append-only log answerable. Cheap now while the judgment store schema is young; cost rises with every record written. Anchor: docs/features/COMP-JUDGMENT-BITEMPORAL/plan.md",
+  "status": "PLANNED",
+  "promotedFrom": "IDEA-28",
+  "createdAt": "2026-08-08T05:33:17.624Z",
+  "updated": "2026-08-08",
+  "phase": "Judgment Layer",
+  "complexity": "M",
+  "impact": "medium",
+  "source": "Semantica teardown (semantica-agi/semantica), 2026-08-08"
+}

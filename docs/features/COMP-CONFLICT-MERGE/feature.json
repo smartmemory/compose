@@ -1,0 +1,12 @@
+{
+  "code": "COMP-CONFLICT-MERGE",
+  "description": "Conflict-first merge instead of last-writer-wins: before a write supersedes an existing record, diff the incoming value against the stored one on fields the writer does not own; on divergence emit a typed conflict and halt rather than overwrite. Targets two live data-loss paths — roadmap generate clobbering hand-authored prose, and the shared build-stream / active-build last-writer-wins race. First slice is the roadmap/prose writer (single-threaded, needs no Umbrella B concurrency primitives). Distinct from COMP-* concurrency work, which prevents the race; this makes the merge honest when the race is already lost. Anchor: docs/features/COMP-CONFLICT-MERGE/plan.md",
+  "status": "PLANNED",
+  "promotedFrom": "IDEA-27",
+  "createdAt": "2026-08-08T05:33:17.506Z",
+  "updated": "2026-08-08",
+  "phase": "Standalone",
+  "complexity": "M",
+  "impact": "high",
+  "source": "Semantica teardown (semantica-agi/semantica), 2026-08-08"
+}

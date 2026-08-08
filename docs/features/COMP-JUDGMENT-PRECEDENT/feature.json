@@ -1,0 +1,15 @@
+{
+  "code": "COMP-JUDGMENT-PRECEDENT",
+  "description": "Precedent search over judgment records — the read side that makes recording pay for itself. Slice A: trace the causal chain behind a position by walking the ledger (mechanical, no embeddings, unblocked). Slice B: semantic similarity over position statements to surface precedent for a new call, the natural bridge to the SmartMemory coupling. BLOCKED for slice B until the SmartMemory recall failure (19/20 drop) is root-caused. Depends on COMP-JUDGMENT-BITEMPORAL: a precedent is only useful if you can see what was believed AT decision time. Anchor: docs/features/COMP-JUDGMENT-PRECEDENT/plan.md",
+  "status": "PLANNED",
+  "promotedFrom": "IDEA-29",
+  "createdAt": "2026-08-08T05:33:17.738Z",
+  "updated": "2026-08-08",
+  "phase": "Judgment Layer",
+  "complexity": "L",
+  "impact": "high",
+  "depends_on": [
+    "COMP-JUDGMENT-BITEMPORAL"
+  ],
+  "source": "Semantica teardown (semantica-agi/semantica), 2026-08-08"
+}

@@ -1,0 +1,33 @@
+{
+  "id": "740a4b03-fae0-4567-a120-9e8b6ab667d0",
+  "handle": "IDEA-28",
+  "kind": "idea",
+  "title": "Bi-temporal judgment records (valid time vs transaction time)",
+  "body": "Semantica stamps every entity, relation, decision and provenance record with TWO timestamps: valid time (when the fact was true in the world) and transaction time (when the system learned it). This is the standard database answer to the problem the judgment layer already has — amending a position overwrites the belief, so the ledger is the only history and point-in-time reconstruction means replaying it. Two columns on judgment positions/goals/situations gives 'what do we believe now' and 'what did we believe when we made that call' as direct queries, and makes amendments non-destructive by construction. Sibling to IDEA-6 (append-only DECISIONS.md with supersession-by-ID): IDEA-6 is the append-only shape, bi-temporality is the query model that makes the append-only log answerable without a replay. Cheap to retrofit — it is a schema addition to the judgment store, not an architecture change. Prerequisite for IDEA-29 (precedent search), which needs to know what was believed AT decision time, not now.",
+  "status": "promoted",
+  "status_label": null,
+  "priority": "P1",
+  "effort": null,
+  "impact": null,
+  "cluster": "CLUS-3",
+  "cluster_order": null,
+  "tags": [
+    "judgment provenance temporal decisions research-influence"
+  ],
+  "source": "Semantica (semantica-agi/semantica) v0.4.0 teardown, 2026-08-08",
+  "links": [
+    {
+      "type": "promoted_to",
+      "target": "COMP-JUDGMENT-BITEMPORAL"
+    }
+  ],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "cli:ideabox",
+    "recorded_at": "2026-08-08T04:06:52.741Z",
+    "author": null
+  },
+  "created_at": "2026-08-08T04:06:52.741Z",
+  "updated_at": "2026-08-08T05:33:17.638Z"
+}

@@ -33,3 +33,15 @@
 {"at":"2026-08-05T07:17:04.033Z","handle":"IDEA-26","type":"created","detail":{"kind":"idea"}}
 {"at":"2026-08-05T07:17:17.180Z","handle":"IDEA-25","type":"discussed","detail":{}}
 {"at":"2026-08-05T07:17:17.658Z","handle":"IDEA-26","type":"discussed","detail":{}}
+{"at":"2026-08-08T04:06:44.847Z","handle":"IDEA-27","type":"created","detail":{"kind":"idea"}}
+{"at":"2026-08-08T04:06:52.741Z","handle":"IDEA-28","type":"created","detail":{"kind":"idea"}}
+{"at":"2026-08-08T04:07:02.298Z","handle":"IDEA-29","type":"created","detail":{"kind":"idea"}}
+{"at":"2026-08-08T04:07:14.054Z","handle":"IDEA-30","type":"created","detail":{"kind":"idea"}}
+{"at":"2026-08-08T05:20:26.545Z","handle":"IDEA-27","type":"triaged","detail":{"fields":["priority"]}}
+{"at":"2026-08-08T05:20:26.647Z","handle":"IDEA-28","type":"triaged","detail":{"fields":["priority"]}}
+{"at":"2026-08-08T05:20:26.751Z","handle":"IDEA-29","type":"triaged","detail":{"fields":["priority"]}}
+{"at":"2026-08-08T05:20:26.853Z","handle":"IDEA-30","type":"triaged","detail":{"fields":["priority"]}}
+{"at":"2026-08-08T05:33:17.532Z","handle":"IDEA-27","type":"promoted","detail":{"fields":["status","links"]}}
+{"at":"2026-08-08T05:33:17.649Z","handle":"IDEA-28","type":"promoted","detail":{"fields":["status","links"]}}
+{"at":"2026-08-08T05:33:17.764Z","handle":"IDEA-29","type":"promoted","detail":{"fields":["status","links"]}}
+{"at":"2026-08-08T05:33:17.880Z","handle":"IDEA-30","type":"promoted","detail":{"fields":["status","links"]}}

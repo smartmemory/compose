@@ -2,6 +2,8 @@
 
 Slim MCP stdio launcher for [`@smartmemory/compose`](https://github.com/smartmemory/compose). Installing this package transitively pulls the full compose runtime; the `compose-mcp` binary spawns the embedded MCP server.
 
+Compose is a structured AI dev pipeline that takes a goal to shipped code. Your agent writes the code, Compose makes it prove it: design decisions are gated before any code, every step has to clear its postconditions, and review runs on a different model than the one that wrote the work.
+
 ## Install
 
 ```bash

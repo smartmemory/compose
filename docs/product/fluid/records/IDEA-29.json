@@ -1,0 +1,33 @@
+{
+  "id": "c874f8ee-df1e-4339-be03-508bb614157c",
+  "handle": "IDEA-29",
+  "kind": "idea",
+  "title": "Precedent search over judgment records",
+  "body": "Semantica exposes decisions as first-class objects with three READ operations: trace_decision_chain (causal ancestry of a decision), find_similar_decisions (precedent search), and impact analysis (what depends on this decision). Compose's judgment layer is strong on the write side — positions, amendments, ledger, goal/situation/person stores all shipped — but has no similarity-retrieval surface. This is the operation that makes recording pay for itself: you do not write judgment records to have them, you write them so the NEXT similar call retrieves the precedent unprompted. Two slices: (a) trace — walk the ledger to reconstruct the causal chain behind a position, mechanical, no embeddings needed; (b) precedent — semantic similarity over position statements, the natural bridge to the SmartMemory coupling (project_comp_smartmemory) since recall is exactly what SmartMemory is for. Slice (a) is worth doing standalone even if (b) never lands. Depends on IDEA-28 for correctness: a precedent is only useful if you can see what was believed AT the time it was decided, not what is believed now. NOTE: SmartMemory recall is currently unreliable (project_livefire_recall_broken, 19/20 drop) — do not build slice (b) on it until that is root-caused.",
+  "status": "promoted",
+  "status_label": null,
+  "priority": "P1",
+  "effort": null,
+  "impact": null,
+  "cluster": "CLUS-3",
+  "cluster_order": null,
+  "tags": [
+    "judgment decisions recall smartmemory research-influence"
+  ],
+  "source": "Semantica (semantica-agi/semantica) teardown, 2026-08-08",
+  "links": [
+    {
+      "type": "promoted_to",
+      "target": "COMP-JUDGMENT-PRECEDENT"
+    }
+  ],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "cli:ideabox",
+    "recorded_at": "2026-08-08T04:07:02.298Z",
+    "author": null
+  },
+  "created_at": "2026-08-08T04:07:02.298Z",
+  "updated_at": "2026-08-08T05:33:17.752Z"
+}
