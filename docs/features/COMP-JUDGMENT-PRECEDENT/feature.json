@@ -1,7 +1,7 @@
 {
   "code": "COMP-JUDGMENT-PRECEDENT",
   "description": "Surface the judgment history that already exists on disk but is invisible. Revisions (`rev`), the `supersedes: <slug>#r<N>` chain, and retraction tombstones are all persisted, but the only read surface — get_judgment_state (judgment-writer.js:3354) — returns the LATEST revision per position and nothing else. Slice A: a trace op that walks a position back through its revisions and supersession chain, exposing what it replaced and why. Purely additive, no schema change, no external dependency. Slice B (semantic precedent search) remains BLOCKED on the unresolved SmartMemory recall failure. Anchor: docs/features/COMP-JUDGMENT-PRECEDENT/plan.md",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "promotedFrom": "IDEA-29",
   "createdAt": "2026-08-08T05:33:17.738Z",
   "updated": "2026-08-08",
@@ -9,5 +9,32 @@
   "complexity": "M",
   "impact": "high",
   "depends_on": [],
-  "source": "Semantica teardown 2026-08-08; re-grounded against code 2026-08-08 after design gate"
+  "source": "Semantica teardown 2026-08-08; re-grounded against code 2026-08-08 after design gate",
+  "completions": [
+    {
+      "completion_id": "COMP-JUDGMENT-PRECEDENT:c421e212119fc050d5e1d20f2cccefcba6fe0f37",
+      "feature_code": "COMP-JUDGMENT-PRECEDENT",
+      "commit_sha": "c421e212119fc050d5e1d20f2cccefcba6fe0f37",
+      "commit_sha_short": "c421e212",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/judgment/trace.js",
+        "test/judgment-trace.test.js",
+        "bin/compose.js",
+        "lib/judgment-gen.js",
+        "lib/judgment-writer.js",
+        "lib/judgment/store/index.js",
+        "server/compose-mcp-tools.js",
+        "server/compose-mcp.js",
+        "server/mcp-tool-policy.js",
+        "test/judgment-writer-mcp.test.js",
+        "CHANGELOG.md",
+        "docs/features/COMP-JUDGMENT-PRECEDENT/plan.md"
+      ],
+      "recorded_at": "2026-08-08T15:35:09.478Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Slice A shipped; 503 tests green; 4 Codex review rounds. Slice B remains BLOCKED (SmartMemory recall)."
+    }
+  ],
+  "commit_sha": "c421e212119fc050d5e1d20f2cccefcba6fe0f37"
 }
