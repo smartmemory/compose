@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-08-08
+
+### `compose doctor` no longer tells you to install RTK
+
+RTK is an optional command-output compressor. Compose could detect it and, when
+it was missing, `compose doctor` would list it and suggest installing it. That
+suggestion is now gone, because it was nagging about a tool we had deliberately
+removed rather than one we had forgotten to install.
+
+Nothing else changed. Compose still uses RTK automatically if it happens to be
+on your PATH, so anyone who does run it keeps the compression. The only
+difference is that Compose no longer asks you to go get it.
+
 ## 2026-08-06
 
 ### Two people can now work the same shared ideabox without losing each other's work

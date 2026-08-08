@@ -4,7 +4,12 @@
  * Verifies loadDeps surfaces the new optional `external_binaries` array (with
  * skip-and-warn on invalid entries, default [] when absent) and that
  * checkExternalBinaries splits present/missing via an injectable probe.
- * The real manifest's rtk entry is asserted too.
+ *
+ * The manifest currently declares NO external binaries — the rtk entry was
+ * removed 2026-08-08 after RTK was uninstalled, so `compose doctor` no longer
+ * recommends installing it. `rtk` survives below only as an arbitrary fixture
+ * id in the synthetic manifests; these tests exercise the deps machinery, not
+ * any particular binary.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -29,15 +34,19 @@ function withManifest(manifest, fn) {
 
 const BASE = { version: 1, external_skills: [] }
 
-test('real manifest declares rtk as an optional external binary', () => {
+test('real manifest declares external_binaries as a well-formed array', () => {
   assert.ok(existsSync(MANIFEST_PATH))
   const raw = JSON.parse(readFileSync(MANIFEST_PATH, 'utf-8'))
   assert.ok(Array.isArray(raw.external_binaries))
-  const rtk = raw.external_binaries.find(b => b.id === 'rtk')
-  assert.ok(rtk, 'rtk binary entry must exist')
-  assert.equal(typeof rtk.detect, 'string')
-  assert.equal(typeof rtk.install, 'string')
-  assert.equal(rtk.optional, true)
+  assert.ok(
+    !raw.external_binaries.some(b => b.id === 'rtk'),
+    'rtk was removed 2026-08-08; re-adding it would make `compose doctor` recommend an uninstalled tool',
+  )
+  for (const b of raw.external_binaries) {
+    assert.equal(typeof b.id, 'string')
+    assert.equal(typeof b.detect, 'string')
+    assert.equal(typeof b.install, 'string')
+  }
 })
 
 test('loadDeps returns external_binaries when present', () => {
