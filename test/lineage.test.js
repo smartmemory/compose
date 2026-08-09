@@ -24,6 +24,7 @@ import {
   lineageOf,
   buildDerivationGraph,
   findStaleDescendants,
+  findStaleArtifacts,
   stampLineageContent,
   stampFeatureLineage,
 } from '../lib/lineage.js';
@@ -301,6 +302,45 @@ describe('stampLineageContent', () => {
     const out = stampLineageContent(withMarkers, { wasGeneratedBy: null, wasDerivedFrom: [] });
     assert.ok(!out.includes('wasGeneratedBy'));
     assert.ok(out.includes('# B'));
+  });
+});
+
+describe('findStaleArtifacts — global scan (build signal form)', () => {
+  test('all fresh when nothing derives from a newer upstream', () => {
+    const dir = tmpDir();
+    writeAt(dir, 'design.md', '# D\n', 10);
+    writeAt(dir, 'blueprint.md', '# B\n', 20);
+    writeAt(dir, 'plan.md', '# P\n', 30);
+    const rows = findStaleArtifacts(dir);
+    assert.equal(rows.length, 3);
+    assert.ok(rows.every((r) => !r.stale));
+  });
+
+  test('flags every descendant of an edited upstream and names it', () => {
+    const dir = tmpDir();
+    writeAt(dir, 'blueprint.md', '# B\n', 10);
+    writeAt(dir, 'plan.md', '# P\n', 20);
+    writeAt(dir, 'design.md', '# D (edited)\n', 100);
+    const rows = findStaleArtifacts(dir);
+    const byFile = Object.fromEntries(rows.map((r) => [r.file, r]));
+    assert.equal(byFile['design.md'].stale, false); // origin
+    assert.equal(byFile['blueprint.md'].stale, true);
+    assert.deepEqual(byFile['blueprint.md'].staleAgainst, ['design.md']);
+    assert.equal(byFile['plan.md'].stale, true);
+    assert.ok(byFile['plan.md'].staleAgainst.includes('design.md'));
+  });
+
+  test('output is shape-compatible with scoreDocFreshness', async () => {
+    const { scoreDocFreshness } = await import('../lib/health-score.js');
+    const fresh = tmpDir();
+    writeAt(fresh, 'design.md', '# D\n', 10);
+    writeAt(fresh, 'blueprint.md', '# B\n', 20);
+    assert.equal(scoreDocFreshness(findStaleArtifacts(fresh)), 100);
+
+    const stale = tmpDir();
+    writeAt(stale, 'blueprint.md', '# B\n', 10);
+    writeAt(stale, 'design.md', '# D\n', 100);
+    assert.ok(scoreDocFreshness(findStaleArtifacts(stale)) < 100);
   });
 });
 
