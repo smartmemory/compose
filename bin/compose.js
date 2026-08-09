@@ -146,6 +146,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   console.log('  metrics [--since <duration|ISO>] [--feature <code>] [--json]  Report dispatch, settlement, and triage metrics')
   console.log('  qa-scope  Show affected routes from a feature\'s changed files')
   console.log('  context decisions  Show the build decision log (--feature <FC>, --format text|json)')
+  console.log('  lineage    PROV-O artifact lineage: stamp | stale --changed <file> | show (--feature <FC>)')
   console.log('  gate list          List pending gates (--item <id>, --status pending|all|resolved)')
   console.log('  gate resolve <id>  Resolve a gate (--approve|--revise|--kill, --comment <text>)')
   console.log('  init      Initialize Compose in the current project')
@@ -3396,6 +3397,96 @@ if (cmd === 'build') {
   } else {
     console.error('usage: compose context decisions [--feature <FC>] [--format text|json]')
     process.exit(1)
+  }
+
+} else if (cmd === 'lineage') {
+  // ---------------------------------------------------------------------------
+  // compose lineage <stamp|stale|show> --feature <FC> [--changed <file>] [--format text|json]
+  // COMP-PROV-LINEAGE: W3C PROV-O artifact lineage (vocabulary only, no RDF).
+  //   stamp — materialise wasGeneratedBy/wasDerivedFrom markers into artifacts
+  //   stale — reachability query: given a --changed artifact, list stale descendants
+  //   show  — print the derivation graph for the feature's canonical artifacts
+  // See docs/features/COMP-PROV-LINEAGE/. Read-only except `stamp`; no server.
+  // ---------------------------------------------------------------------------
+  const lineageSub = args[0]
+  const flagVal = (flag) => {
+    const i = args.indexOf(flag)
+    return i !== -1 && args[i + 1] ? args[i + 1] : null
+  }
+  const feature = flagVal('--feature')
+  const format = flagVal('--format') || 'text'
+  if (!feature || !['stamp', 'stale', 'show'].includes(lineageSub)) {
+    console.error('usage: compose lineage <stamp|stale|show> --feature <FC> [--changed <file>] [--format text|json]')
+    process.exit(1)
+  }
+  const { isFeatureCode } = await import('../lib/feature-code.js')
+  if (!isFeatureCode(feature)) {
+    console.error(`Invalid feature code: ${JSON.stringify(feature)} (must match ${'^[A-Z][A-Z0-9-]*[A-Z0-9]$'})`)
+    process.exit(1)
+  }
+  const { join } = await import('node:path')
+  const { existsSync } = await import('node:fs')
+  const { resolveFeaturesPath } = await import('../lib/project-paths.js')
+  const {
+    stampFeatureLineage, findStaleDescendants, buildDerivationGraph,
+  } = await import('../lib/lineage.js')
+  const featureDir = join(resolveFeaturesPath(process.cwd()), feature)
+  if (!existsSync(featureDir)) {
+    console.error(`No feature folder at ${featureDir}`)
+    process.exit(1)
+  }
+
+  if (lineageSub === 'stamp') {
+    const results = stampFeatureLineage(featureDir)
+    if (format === 'json') {
+      console.log(JSON.stringify(results, null, 2))
+    } else if (results.length === 0) {
+      console.log(`No canonical artifacts found in ${feature}.`)
+    } else {
+      const changed = results.filter(r => r.changed).length
+      console.log(`Stamped lineage on ${feature} — ${changed} of ${results.length} artifact(s) updated:\n`)
+      for (const r of results) {
+        const from = r.wasDerivedFrom.length ? r.wasDerivedFrom.join(', ') : '(origin)'
+        console.log(`  ${r.changed ? '✓' : '·'} ${r.file}  wasGeneratedBy=${r.wasGeneratedBy ?? '?'}  wasDerivedFrom=${from}`)
+      }
+    }
+  } else if (lineageSub === 'stale') {
+    const changedFile = flagVal('--changed')
+    if (!changedFile) {
+      console.error('compose lineage stale: --changed <file> is required')
+      process.exit(1)
+    }
+    // Must be a bare filename inside the feature folder — no path traversal.
+    if (changedFile.includes('/') || changedFile.includes('\\') || changedFile.includes('..')) {
+      console.error(`compose lineage stale: --changed must be a bare filename, got ${JSON.stringify(changedFile)}`)
+      process.exit(1)
+    }
+    const results = findStaleDescendants(featureDir, changedFile)
+    if (format === 'json') {
+      console.log(JSON.stringify(results, null, 2))
+    } else {
+      const stale = results.filter(r => r.stale)
+      if (results.length === 0) {
+        console.log(`${changedFile} has no downstream artifacts in ${feature}.`)
+      } else if (stale.length === 0) {
+        console.log(`No stale descendants of ${changedFile} — all ${results.length} downstream artifact(s) are newer.`)
+      } else {
+        console.log(`${stale.length} artifact(s) downstream of ${changedFile} are STALE (older than the change):\n`)
+        for (const r of stale) console.log(`  ⚠ ${r.file}`)
+      }
+    }
+  } else if (lineageSub === 'show') {
+    const graph = buildDerivationGraph(featureDir)
+    if (format === 'json') {
+      console.log(JSON.stringify(Object.fromEntries(graph), null, 2))
+    } else if (graph.size === 0) {
+      console.log(`No canonical artifacts found in ${feature}.`)
+    } else {
+      console.log(`Derivation graph for ${feature}:\n`)
+      for (const [file, parents] of graph) {
+        console.log(parents.length ? `  ${file}  ⟵  ${parents.join(', ')}` : `  ${file}  (origin)`)
+      }
+    }
   }
 
 } else if (cmd === 'gates' || cmd === 'gate') {

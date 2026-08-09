@@ -2,6 +2,17 @@
 
 ## 2026-08-09
 
+### COMP-PROV-LINEAGE — W3C PROV-O artifact lineage (vocabulary only, no RDF)
+
+Compose artifacts form a derivation chain — design.md → blueprint.md → plan.md → report.md — but nothing recorded it, so when an upstream artifact changed, downstream artifacts went stale silently. The verified gap: feature.json `artifacts[]` entries carry only `{type, path, status}` and canonical artifacts are auto-discovered, never registered, so there was no edge to hang staleness on. This adopts the W3C PROV-O vocabulary (Entity/Activity/Agent, `wasGeneratedBy`, `wasDerivedFrom`) — the naming only, no triple store, no SPARQL, no JSON-LD runtime — so staleness becomes a graph-reachability query and a standards-based export stays possible later.
+
+**Added:**
+- `docs/features/COMP-PROV-LINEAGE/prov-o-mapping.md` — the PROV-O term mapping, written before any schema work (first acceptance gate). Records the storage decision: embedded markers over a feature.json block, so canonical artifacts stay auto-discovered.
+- `lib/lineage.js` — the model. `CANONICAL_CHAIN` mirrors `lib/lifecycle-modes.js` build mode (drift-guarded by a test). Lineage lives as `<!-- wasGeneratedBy: <phase> -->` / `<!-- wasDerivedFrom: <files> -->` markers in an artifact's header, reusing the `<!-- phase: -->` convention `lib/staleness.js` already reads. `findStaleDescendants(featureDir, changedFile)` is the reachability query — it falls back to the canonical chain when no markers are stamped, so it works on any feature folder today; markers only override the default derivation. `stampFeatureLineage` / `stampLineageContent` materialise the markers idempotently, preserving hand-authored overrides. Staleness = a descendant's mtime is older than the changed ancestor's.
+- `compose lineage {stamp,stale,show}` CLI — stamp materialises markers, `stale --changed <file>` runs the reachability query, `show` prints the derivation graph (text or `--format json`). `--feature` is validated against the strict feature-code regex (no path traversal).
+- Build wiring: `stampFeatureLineage` runs once per build in `compose build`'s finalization pass (`lib/build.js`, after the dispatch loop, when the artifact set is complete), so lineage markers are populated during the lifecycle, not only by the manual command. Build is the single writer there, and stamping preserves mtime, so it never resets the derivation clock.
+- `test/lineage.test.js` — 36 tests: drift guard vs lifecycle-modes, marker parse/stamp, canonical + marker-overridden resolution, the reachability query (incl. the "editing design.md marks blueprint.md and plan.md stale" acceptance case), on-disk stamping, CLI integration, and a no-RDF-dependency import guard.
+
 ### COMP-CONFLICT-MERGE — roadmap generate now refuses to silently drop hand-authored prose (CLI-scoped)
 
 ROADMAP.md is part generated (feature rows) and part hand-authored (phase prose, curated tables, narrative). `compose roadmap generate` preserved curated content through a whitelist of six readers and dropped anything that matched none of them, while the row-level roundtrip check reported "lossless: true" — so a curated block could vanish quietly. This adds a residue check: the base is compared against the FINAL canonical bytes (after all generation passes, since the duplicate-heading loss only manifests on a later pass) and the write is refused if hand-authored lines would be lost. The guarantee is CLI-scoped by design: the MCP provider render paths are a separate, larger piece of work and are explicitly out of scope.
