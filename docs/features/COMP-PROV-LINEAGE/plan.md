@@ -76,15 +76,16 @@ finalization pass" (not per-step); and the read/write/utimes in stamping is
 uncontended because build is the single writer at that point (accepted, not
 locked, for this single-writer context).
 
-Post-ship follow-up (same day): the build's `doc_freshness` health signal was
-consuming the phase-based `checkStaleness`, which reads a `<!-- phase: -->`
-marker that no production code writes — so the signal always scored 100/fresh.
-Added `findStaleArtifacts` (the global, changed-file-free form of the
-reachability query) and pointed the build signal at it, so the freshness score
-now reflects real derivation staleness. `staleness.js` remains only for the
-gate-context warning in `step-prompt.js` — swapping that surface (which changes
-agent-facing gate messaging and its tests) is a deliberate separate step, not
-done here.
+Post-ship follow-up (same day): the phase-based `checkStaleness` read a
+`<!-- phase: -->` marker that no production code writes, so every consumer of it
+was a dead signal (always fresh, never warned). Added `findStaleArtifacts` (the
+global, changed-file-free form of the reachability query) and moved BOTH
+consumers to it: the build's `doc_freshness` health signal (`lib/build.js`) and
+the gate-context "Stale Artifacts" warning (`lib/step-prompt.js`, now
+phase-independent and naming the newer upstream). With no consumers left,
+`lib/staleness.js` (`checkStaleness` / `extractPhaseMarker`) and its unit tests
+were deleted — the phase-marker convention is fully retired; model-level
+staleness tests live in `test/lineage.test.js`.
 
 ## Why this is P2
 
