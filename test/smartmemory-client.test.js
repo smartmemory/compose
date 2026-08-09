@@ -45,6 +45,13 @@ function makeStub({ failStatus = null, quota = false, delayMs = 0, searchResults
         res.writeHead(200);
         return res.end(JSON.stringify({ results: searchResults }));
       }
+      if (req.url === '/memory/reasoning/challenge') {
+        res.writeHead(200);
+        return res.end(JSON.stringify({
+          new_assertion: parsed.assertion ?? '', has_conflicts: false,
+          conflicts: [], related_facts_count: 0, overall_confidence: 1.0,
+        }));
+      }
       if (quota) { res.writeHead(429); return res.end('{"error":"quota"}'); }
       if (failStatus) { res.writeHead(failStatus); return res.end('{"error":"x"}'); }
       res.writeHead(200);
@@ -607,5 +614,51 @@ describe('createSmartmemoryClient.searchItems', () => {
       );
       assert.equal(seen.length, 0);
     });
+  });
+});
+
+describe('createSmartmemoryClient.challenge', () => {
+  test('sends assertion, memory_type and use_llm; returns the raw response', async () => {
+    process.env.SM_TEST_KEY = 'k';
+    try {
+      await withStub({}, async ({ baseUrl, seen }) => {
+        const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY' });
+        const raw = await client.challenge('X is not Y', { memoryType: 'fluid_decision', useLlm: false });
+        assert.equal(raw.has_conflicts, false);
+        assert.deepEqual(seen.at(-1).body, { assertion: 'X is not Y', memory_type: 'fluid_decision', use_llm: false });
+      });
+    } finally { delete process.env.SM_TEST_KEY; }
+  });
+
+  test('a 2xx with a non-JSON body is rejected as malformed', async () => {
+    process.env.SM_TEST_KEY = 'k';
+    try {
+      await withStub({ malformed2xx: true }, async ({ baseUrl }) => {
+        const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY' });
+        await assert.rejects(
+          () => client.challenge('x', { memoryType: 'fluid_decision' }),
+          (err) => err instanceof SmartmemoryHttpError && /non-JSON body/.test(err.message),
+        );
+      });
+    } finally { delete process.env.SM_TEST_KEY; }
+  });
+
+  test('per-call timeoutMs overrides a tiny client default (the load-bearing FOH-3 fix)', async () => {
+    process.env.SM_TEST_KEY = 'k';
+    try {
+      await withStub({ delayMs: 60 }, async ({ baseUrl }) => {
+        // Client default is 20ms; the challenge route delays 60ms.
+        const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY', timeoutMs: 20 });
+        // No override → the 20ms default aborts before the 60ms response.
+        await assert.rejects(
+          () => client.challenge('x', { memoryType: 'fluid_decision' }),
+          (err) => err instanceof SmartmemoryHttpError && err.status === 0,
+        );
+        // Per-call override (2s) beats the delay → succeeds. If the override were
+        // dropped, this would time out exactly like the call above.
+        const raw = await client.challenge('x', { memoryType: 'fluid_decision', timeoutMs: 2000 });
+        assert.equal(raw.has_conflicts, false);
+      });
+    } finally { delete process.env.SM_TEST_KEY; }
   });
 });

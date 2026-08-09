@@ -2,6 +2,17 @@
 
 ## 2026-08-09
 
+### COMP-FOH / FOH-3 — CHALLENGE: same-kind contradiction detection over the fluid corpus
+
+The third slice of the Front-of-House epic gives the fluid provider its first *adversarial* capability (Discovery-Loop rung 4): challenge a stored record and surface what in the same-kind corpus contradicts it. Like FOH-2 (recall), the hard machinery already ships in SmartMemory (`POST /memory/reasoning/challenge`), so this is Compose-side wiring — but a feasibility check caught the trap that would have made it a silent no-op: SmartMemory's `memory_type` is an *exact* filter (no wildcard), and our records are stored as `fluid_<kind>`, so the endpoint's `"semantic"` default matches none of them. The fix is to send the record's exact wire type, which forces **same-kind** scoping (a decision vs. other decisions) for v1; cross-kind fan-out is deferred.
+
+**Added:**
+- `lib/fluid/smartmemory-provider.js` — `challenge(handle, opts)` implementing `CAP.CHALLENGE`. Renders the record's text, sends the exact `fluid_<kind>` type, then applies the seam's namespace discipline: conflicts are mapped from SmartMemory item-ids back to fluid handles, non-fluid and self conflicts are dropped, and `hasConflicts`/`confidence` are **recomputed from the retained set** (never SmartMemory's pre-filter aggregates, which could otherwise report conflicts the caller never sees). Only `decision`/`idea` are challengeable — the endpoint runs its detector directly with no `should_challenge` gate, so non-assertional kinds throw `FluidKindUnsupported` rather than being fed to it.
+- `lib/smartmemory-client.js` — `challenge(assertion, {memoryType, useLlm, timeoutMs})` wrapper, plus per-call timeout support in `fetchWithContract` (passed through `BaseAPI.post`'s options, which `getRequestOptions` preserves). The default 3s client timeout aborts an LLM challenge over ~10 facts; challenge overrides it to 30s per-call without loosening hang-detection for CRUD/recall.
+- `lib/fluid/provider.js` — `CHALLENGEABLE_KINDS = {decision, idea}` and the `ChallengeResult`/`Conflict` seam shapes locked as JSDoc (as `RecallHit` is).
+- `lib/fluid/ideabox-ops.js` — `challengeIdea(ctx, id, opts)` consumer (kind-agnostic, case-insensitive resolution; `IdeaboxNotFound` on a miss), so the capability is callable end-to-end rather than shipped seam-only like recall.
+- `test/fluid-smartmemory-provider.test.js`, `test/smartmemory-client.test.js`, `test/helpers/smartmemory-stub.js` — challenge coverage: golden same-kind flow, exact-type scoping (a contradicting idea does not surface for a decision), fluid-namespace + self filtering, retained-only aggregate recomputation, the per-call timeout override, the malformed-response guard, kind gate over thread/question/cluster, and consumer resolution.
+
 ### COMP-AUDIT-13 — `--help` and `docs/cli.md` render from one real command table
 
 Installed capability was invisible unless you read the source: `compose --help` listed ~24 commands and `docs/cli.md` documented ~18, while the CLI actually ships 36 top-level commands. Both surfaces were hand-maintained and had drifted — `plan`, `validate`, `experiment`, `ideabox`, `loops`, `tracker`, `smartmemory`, `record-completion`, `hooks`, `migrate-state`, and more were undocumented. Rather than re-patch two lists by hand, this makes both render from a single command table and adds a drift guard so they cannot silently omit a command again.
