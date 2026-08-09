@@ -1,15 +1,83 @@
 # CLI Reference
 
-Reference for every `compose` subcommand. Source of truth: `bin/compose.js`.
+Reference for every `compose` subcommand. Source of truth: `bin/compose.js`, indexed from `lib/cli-commands.js`.
 
-The verbs group naturally:
-- **Workflow:** `new`, `import`, `feature`, `roadmap`, `build`, `fix`
-- **Pipeline editing:** `pipeline`
-- **Triage and QA:** `triage`, `qa-scope`
-- **Tracking:** `ideabox`, `gates`, `loops`
-- **Completion:** `record-completion`, `hooks`
-- **Setup:** `init`, `setup` (alias `sync`), `update`, `install`, `doctor`
-- **Server:** `start`
+The Command Index below is generated from the command table and lists every shipped command. Deep-dives for the primary verbs follow.
+
+## Command Index
+
+<!-- Generated from lib/cli-commands.js (COMP-AUDIT-13). Every shipped command appears here. -->
+
+### Getting started
+
+| Command | Summary |
+|---|---|
+| `compose init` | Initialize Compose in the current project |
+| `compose setup` (alias: `sync`) | Install/sync global Compose skills |
+| `compose install` | Legacy bootstrap — runs init + setup |
+| `compose import` | Scan an existing project and generate a structured analysis |
+| `compose doctor` | Check external skill dependencies |
+| `compose update` (alias: `upgrade`) | Pull latest compose, reinstall deps, refresh global skill |
+
+### Features & roadmap
+
+| Command | Summary |
+|---|---|
+| `compose new` | Kickoff a product (research, brainstorm, roadmap, scaffold) |
+| `compose feature` | Add a single feature (folder, design seed, ROADMAP entry) |
+| `compose roadmap` | Show roadmap status; generate/migrate/check ROADMAP.md |
+| `compose triage` | Analyze a feature and recommend a build profile |
+| `compose qa-scope` | Show affected routes from a feature's changed files |
+
+### Build & implement
+
+| Command | Summary |
+|---|---|
+| `compose build` | Run a feature through the headless lifecycle |
+| `compose fix` | Run a bug through the headless bug-fix lifecycle |
+| `compose plan` | Plan work into a structured roadmap from a prompt |
+| `compose gsd` | Per-task fresh-context dispatch from a blueprint + Boundary Map |
+| `compose pipeline` | View and edit the build pipeline |
+| `compose experiment` | Run an A/B model experiment from a spec |
+
+### Lifecycle, gates & review
+
+| Command | Summary |
+|---|---|
+| `compose gates` (alias: `gate`) | List and resolve pending gates |
+| `compose loops` | Manage iteration loops for a feature |
+| `compose guard` | Manage the canon guard and drift detection |
+| `compose validate` | Validate feature/project artifacts against contracts |
+| `compose record-completion` | Record a completion bound to a commit SHA (flips status to COMPLETE) |
+| `compose lineage` | PROV-O artifact lineage: stamp \| stale \| show |
+| `compose context` | Show the build decision log |
+
+### Vision, ideas & tracking
+
+| Command | Summary |
+|---|---|
+| `compose items` | List vision items from local state (no server) |
+| `compose ideabox` | Capture, review, and promote product ideas |
+| `compose judgment` | Judgment records: trace a position's causal ancestry |
+| `compose metrics` | Report dispatch, settlement, and triage metrics |
+| `compose tracker` | Tracker provider status and op-log sync |
+
+### App, integrations & runtime
+
+| Command | Summary |
+|---|---|
+| `compose start` | Start the compose app (UI + API) for this project |
+| `compose remote` | Manage remote access: pair, list, revoke, status |
+| `compose smartmemory` | Sync feature-events/journal/artifacts into SmartMemory |
+
+### Maintenance & info
+
+| Command | Summary |
+|---|---|
+| `compose migrate-state` | Run pending feature.json state migrations |
+| `compose migrate-anon` | Promote anonymous ROADMAP rows to typed features (interactive) |
+| `compose hooks` | Manage Claude Code hooks (install \| uninstall \| status) |
+| `compose version` (alias: `--version`, `-V`) | Print compose version, git SHA, and install root |
 
 ---
 
