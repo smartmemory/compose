@@ -1,15 +1,35 @@
 {
   "code": "COMP-AUDIT-13",
-  "description": "docs/cli.md and `compose --help` omit shipped subcommands (plan, gsd, validate, experiment, remote, tracker, items, context, smartmemory) \u2014 installed capability is invisible unless users read source. Regenerate the reference and help from the real command table.",
-  "status": "PLANNED",
+  "description": "docs/cli.md and `compose --help` omit shipped subcommands (plan, gsd, validate, experiment, remote, tracker, items, context, smartmemory) — installed capability is invisible unless users read source. Regenerate the reference and help from the real command table.",
+  "status": "COMPLETE",
   "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
   "created": "2026-07-12",
-  "updated": "2026-07-12",
+  "updated": "2026-08-09",
   "complexity": "S",
   "position": 13,
   "tags": [
     "audit-2026-07",
     "docs"
   ],
-  "impact": "medium"
+  "impact": "medium",
+  "completions": [
+    {
+      "completion_id": "COMP-AUDIT-13:5cb1644e5a834f8bd7e57c55b83cb826f7e11049",
+      "feature_code": "COMP-AUDIT-13",
+      "commit_sha": "5cb1644e5a834f8bd7e57c55b83cb826f7e11049",
+      "commit_sha_short": "5cb1644e",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/cli-commands.js",
+        "test/cli-commands.test.js",
+        "bin/compose.js",
+        "docs/cli.md",
+        "CHANGELOG.md"
+      ],
+      "recorded_at": "2026-08-09T08:00:37.188Z",
+      "recorded_by": "mcp:agent",
+      "notes": "--help and docs/cli.md now render from a single command table (lib/cli-commands.js, 36 commands). Drift-guard test parses real dispatch branches and enforces table↔dispatch parity both ways + doc completeness. Full suite green."
+    }
+  ],
+  "commit_sha": "5cb1644e5a834f8bd7e57c55b83cb826f7e11049"
 }
