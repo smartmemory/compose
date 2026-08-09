@@ -1235,32 +1235,100 @@ if (cmd === 'roadmap') {
   // compose roadmap generate — regenerate ROADMAP.md from feature.json files,
   // converging to a fixed point before finishing.
   if (subcmd === 'generate' || subcmd === 'gen') {
-    const { writeRoadmap } = await import('../lib/roadmap-gen.js')
     const { checkRoundtrip } = await import('../lib/roadmap-roundtrip.js')
+    const { generateRoadmapFromBase } = await import('../lib/roadmap-gen.js')
     const { listFeatures } = await import('../lib/feature-json.js')
-    const { loadExternalPrefixes } = await import('../lib/project-paths.js')
+    const { loadExternalPrefixes, resolveRoadmapPath, loadFeaturesDir } = await import('../lib/project-paths.js')
     const { isNarrativeOwned } = await import('../lib/roadmap-config.js')
+    const { readPreservedSections } = await import('../lib/roadmap-preservers.js')
+    const { computeResidue, protectResidue, RoadmapProseLossError } = await import('../lib/roadmap-residue.js')
     const { root: cwd } = resolveCwdWithWorkspace(args)
     // Narrative-owned workspaces (#39): ROADMAP.md is hand-authored, not a render
-    // of feature.json. writeRoadmap already no-ops, but the canonicalization pass
-    // below would still overwrite the file (or crash if it's absent) — skip the
-    // whole generate path here so the hand-authored file is never touched.
+    // of feature.json — never regenerate or overwrite it.
     if (isNarrativeOwned(cwd)) {
       console.log('narrative-owned workspace (roadmap.narrative=true) — ROADMAP.md is hand-authored; generate skipped.')
       process.exit(0)
     }
-    const path = writeRoadmap(cwd)
+    const path = resolveRoadmapPath(cwd)
+    const base = existsSync(path) ? readFileSync(path, 'utf-8') : ''
+    const acceptLoss = args.includes('--accept-loss')
+    const protect = args.includes('--protect')
     const externalPrefixes = loadExternalPrefixes(cwd)
-    // checkRoundtrip's now:'0000-00-00' is only used to detect/canonicalize
-    // structural non-convergence — once the file has headings, readPreamble
-    // preserves the existing preamble date verbatim, so no sentinel date leaks.
-    const rt = checkRoundtrip(readFileSync(path, 'utf-8'), listFeatures(cwd), { now: '0000-00-00', externalPrefixes })
-    if (!rt.fixedPoint) {
-      writeFileSync(path, rt.canonical)
-      console.log(`Generated ${path} (canonicalized over ${rt.passes} passes)`)
-    } else {
-      console.log(`Generated ${path} from feature.json files`)
+    const now = new Date().toISOString().slice(0, 10)
+
+    // Guard 1 (COMP-CONFLICT-MERGE): structural preserved-section marker defects
+    // silently drop the content they were meant to protect — an unbalanced open
+    // (typo'd close) or a duplicate id (Map collision). Fail loud, write nothing.
+    try {
+      readPreservedSections(base, { strict: true })
+    } catch (err) {
+      if (err?.code === 'ROADMAP_UNBALANCED_MARKER') {
+        console.error(`Refusing to write ${path}: unbalanced preserved-section marker(s):`)
+        for (const m of err.markers) console.error(`  line ${m.lineNo}: open "${m.id}" has no matching close`)
+        console.error(err.remediation)
+        process.exit(1)
+      }
+      if (err?.code === 'ROADMAP_DUPLICATE_MARKER') {
+        console.error(`Refusing to write ${path}: duplicate preserved-section id(s):`)
+        for (const m of err.markers) console.error(`  line ${m.lineNo}: id "${m.id}" is used more than once`)
+        console.error(err.remediation)
+        process.exit(1)
+      }
+      throw err
     }
+
+    // Honor a configured non-default features directory (paths.features), else a
+    // project using one regenerates from the wrong/empty feature set.
+    const featuresDir = loadFeaturesDir(cwd)
+    const features = listFeatures(cwd, featuresDir)
+
+    // Emit the phase-override drift warning + roadmap_drift audit event, which the
+    // old writeRoadmap-first path produced and the pure roundtrip path suppresses.
+    generateRoadmapFromBase(base, features, { cwd, featuresDir, now })
+
+    // Guard 2: compute the FINAL canonical bytes (fixed point over all passes)
+    // BEFORE writing, then diff the base against exactly what will be written.
+    // The duplicate-heading loss only surfaces on a later pass, so checking the
+    // first candidate would pass cleanly and then write the lossy result.
+    const featureCodes = new Set(features.map(f => f.code))
+    const rt = checkRoundtrip(base, features, { now, externalPrefixes, featuresDir })
+    let finalText = rt.canonical
+    let residue = computeResidue(base, finalText, { featureCodes })
+
+    if (residue.length > 0 && protect) {
+      const protectedBase = protectResidue(base, residue)
+      const rt2 = checkRoundtrip(protectedBase, features, { now, externalPrefixes, featuresDir })
+      const stillLost = computeResidue(protectedBase, rt2.canonical, { featureCodes })
+      if (stillLost.length === 0) {
+        writeFileSync(path, rt2.canonical)
+        console.log(`Generated ${path} — wrapped ${residue.length} line(s) in preserved-section markers`)
+        process.exit(0)
+      }
+      // --protect could not fully account for the loss; fall through to the error
+      // with the residual set so the operator sees what remains.
+      finalText = rt2.canonical
+      residue = stillLost
+    }
+
+    if (residue.length > 0 && !acceptLoss) {
+      const err = new RoadmapProseLossError(residue)
+      console.error(`Refusing to write ${path}: ${err.message}:`)
+      for (const r of err.lines) {
+        console.error(`  line ${r.lineNo} (under "${r.nearestHeading ?? '(preamble)'}"): ${r.text}`)
+      }
+      console.error('')
+      console.error(err.remediation)
+      process.exit(1)
+    }
+
+    if (residue.length > 0 && acceptLoss) {
+      console.log(`--accept-loss: dropping ${residue.length} hand-authored line(s):`)
+      for (const r of residue) console.log(`  line ${r.lineNo}: ${r.text}`)
+    }
+
+    writeFileSync(path, finalText)
+    if (!rt.fixedPoint) console.log(`Generated ${path} (canonicalized over ${rt.passes} passes)`)
+    else console.log(`Generated ${path} from feature.json files`)
     process.exit(0)
   }
 

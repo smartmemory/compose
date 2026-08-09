@@ -319,6 +319,34 @@ content with no close
     assert.equal(preserved.size, 0);
   });
 
+  test('strict mode raises RoadmapUnbalancedMarkerError on an unbalanced open (COMP-CONFLICT-MERGE)', () => {
+    // Default drops silently (above); the CLI write path passes strict so a
+    // typo'd close fails loud instead of deleting the content it guarded.
+    const text = `<!-- preserved-section: orphan -->
+content with no close
+`;
+    assert.throws(
+      () => readPreservedSections(text, { strict: true }),
+      (err) => {
+        assert.equal(err.code, 'ROADMAP_UNBALANCED_MARKER');
+        assert.equal(err.markers.length, 1);
+        assert.equal(err.markers[0].id, 'orphan');
+        assert.equal(err.markers[0].lineNo, 1);
+        return true;
+      },
+    );
+  });
+
+  test('strict mode still passes a balanced file', () => {
+    const text = `<!-- preserved-section: ok -->
+content
+<!-- /preserved-section -->
+`;
+    const preserved = readPreservedSections(text, { strict: true });
+    assert.equal(preserved.size, 1);
+    assert.ok(preserved.has('ok'));
+  });
+
   test('ignores markers inside fenced code blocks', () => {
     const text = `<!-- preserved-section: real -->
 real content

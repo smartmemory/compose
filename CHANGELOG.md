@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-08-09
+
+### COMP-CONFLICT-MERGE — roadmap generate now refuses to silently drop hand-authored prose (CLI-scoped)
+
+ROADMAP.md is part generated (feature rows) and part hand-authored (phase prose, curated tables, narrative). `compose roadmap generate` preserved curated content through a whitelist of six readers and dropped anything that matched none of them, while the row-level roundtrip check reported "lossless: true" — so a curated block could vanish quietly. This adds a residue check: the base is compared against the FINAL canonical bytes (after all generation passes, since the duplicate-heading loss only manifests on a later pass) and the write is refused if hand-authored lines would be lost. The guarantee is CLI-scoped by design: the MCP provider render paths are a separate, larger piece of work and are explicitly out of scope.
+
+**Added:**
+- `lib/roadmap-residue.js` — `computeResidue(base, candidate, {featureCodes})` reports hand-authored lines a regeneration would drop, using an occurrence-aware multiset keyed by (containing block, line text). It excludes what the generator legitimately owns: feature rows, structural lines, feature-table headers/dividers, phase headings whose section survives, and Key Documents rows whose code is a real current feature (identity, not shape). `protectResidue(base, residue)` wraps lost runs in preserved-section markers with collision-safe ids.
+- `lib/roadmap-errors.js` — typed `RoadmapProseLossError` (ROADMAP_PROSE_LOSS, carries lineNo/text/nearestHeading + remediation), `RoadmapUnbalancedMarkerError`, `RoadmapDuplicateMarkerError`.
+- Three `roadmap generate` outcomes: default halts on residue (nothing written), `--accept-loss` writes after printing what was dropped, `--protect` wraps the residue in preserved-section markers and regenerates.
+- 25 residue tests + strict-marker tests in test/roadmap-residue.test.js / test/roadmap-preservers.test.js, including a guard that the live ROADMAP.md is residue-clean.
+
+**Changed:**
+- `readPreservedSections(text, {strict})` — strict mode (used by the CLI write path) raises on an unbalanced open marker or a duplicate section id instead of silently dropping the guarded content. Default behaviour (drop) is unchanged for all existing readers.
+- `roadmap generate` computes the fixed point BEFORE writing and diffs the base against exactly the bytes it will write, replacing the previous unconditional write-then-canonicalize.
+
+**Fixed:**
+- An unbalanced preserved-section marker (typo'd close) and a duplicate preserved-section id no longer silently discard the content they were meant to protect — generate refuses with a named remediation.
+
 ## 2026-08-08
 
 ### Compose now has a pitch, not just a description

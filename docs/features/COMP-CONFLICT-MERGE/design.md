@@ -1,6 +1,6 @@
 # COMP-CONFLICT-MERGE — Design
 
-**Status:** design | **Promoted from:** IDEA-27
+**Status:** COMPLETE (2026-08-09) | **Promoted from:** IDEA-27
 **Source:** Semantica teardown (semantica-agi/semantica), 2026-08-08
 
 ## Related Documents
@@ -227,18 +227,36 @@ data loss. IDEA-3 (no-silent-fallback) argues the same way.
 
 ## Acceptance criteria
 
-- [ ] `residue(base, candidate)` returns hand-authored lines lost in regeneration
-- [ ] Feature rows, structural lines, and table headers are never reported
-- [ ] `RoadmapProseLossError` carries lineNo, text, nearestHeading, remediation
-- [ ] `roadmap generate` computes residue **before** writing; nothing is written
+- [x] `residue(base, candidate)` returns hand-authored lines lost in regeneration
+- [x] Feature rows, structural lines, and table headers are never reported
+- [x] `RoadmapProseLossError` carries lineNo, text, nearestHeading, remediation
+- [x] `roadmap generate` computes residue **before** writing; nothing is written
       on conflict
-- [ ] `--accept-loss` writes and prints what was dropped
-- [ ] `--protect` wraps residue in `preserved-section` markers and regenerates
-- [ ] Unbalanced `preserved-section` open marker raises instead of silently
-      dropping
-- [ ] Regression test: the exact historical failure — hand-authored prose inside
+- [x] `--accept-loss` writes and prints what was dropped
+- [x] `--protect` wraps residue in `preserved-section` markers and regenerates
+- [x] Unbalanced `preserved-section` open marker raises instead of silently
+      dropping (and duplicate section ids, discovered in review)
+- [x] Regression test: the exact historical failure — hand-authored prose inside
       a phase that has feature.json features survives a generate, or the generate
       refuses
-- [ ] Regression test: a normal status flip produces zero residue (no false
+- [x] Regression test: a normal status flip produces zero residue (no false
       positive)
-- [ ] `roadmap generate` on the live compose ROADMAP.md is residue-clean
+- [x] `roadmap generate` on the live compose ROADMAP.md is residue-clean
+
+## Implementation notes (2026-08-09)
+
+Four Codex review rounds hardened the residue classifier. Two lessons worth recording:
+
+- **Key Documents is generator-owned by identity, not shape.** buildKeyDocs emits
+  `| `<path>` | <CODE> design |` rows; a curated row can look identical. Excluding
+  by shape either silently dropped a curated look-alike or false-flagged a stale
+  generated row on a designDoc change. The classifier keys on the actual feature
+  set instead: a Key Documents row is the generator's only when its code is a
+  current feature. Curated rows referencing a non-feature code stay eligible
+  (path-2 preserved).
+- **Occurrence counting must flag the FIRST of N duplicates**, because the
+  collapse mechanism (readPhaseBlocks Map) keeps the LAST — otherwise the reported
+  line and `--protect` target the surviving copy.
+
+`--protect` id generation now slugs the nearest heading and dedupes against ids
+already in the file (open question resolved: slug, not operator-named).
