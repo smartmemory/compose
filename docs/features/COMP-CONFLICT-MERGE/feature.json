@@ -1,12 +1,35 @@
 {
   "code": "COMP-CONFLICT-MERGE",
   "description": "Close two verified silent-loss paths in roadmap regeneration. (1) An unbalanced `preserved-section` open marker is discarded on purpose (roadmap-preservers.js:233) so a typo'd close marker deletes exactly the content it was meant to protect. (2) readPhaseBlocks keys blocks by phase id in a Map (roadmap-preservers.js:268), so two `##` headings with the same text collapse to the last one and the earlier curated block is dropped — reachable via the second generation pass the CLI writes (bin/compose.js:1256). Guard by computing residue against the FINAL canonical bytes, not the first pass, using an occurrence-aware multiset keyed by line plus containing block. NOTE: the original justification (roadmap generate clobbers hand-authored prose generally) was DISPROVED — spliceTableIntoBlock preserves typed-phase prose and roadmap-roundtrip.test.js:83 asserts it. Providers bypass the CLI (local-provider.js:101, github-provider.js:524), so the guarantee is CLI-scoped unless it moves into the render paths. Anchor: docs/features/COMP-CONFLICT-MERGE/design.md",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "promotedFrom": "IDEA-27",
   "createdAt": "2026-08-08T05:33:17.506Z",
-  "updated": "2026-08-08",
+  "updated": "2026-08-09",
   "phase": "Standalone",
   "complexity": "S",
   "impact": "medium",
-  "source": "Semantica teardown 2026-08-08; re-grounded against code 2026-08-08 after design gate"
+  "source": "Semantica teardown 2026-08-08; re-grounded against code 2026-08-08 after design gate",
+  "completions": [
+    {
+      "completion_id": "COMP-CONFLICT-MERGE:e951e9d486956c554b93af29196f5d33d39eb905",
+      "feature_code": "COMP-CONFLICT-MERGE",
+      "commit_sha": "e951e9d486956c554b93af29196f5d33d39eb905",
+      "commit_sha_short": "e951e9d4",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/roadmap-residue.js",
+        "lib/roadmap-errors.js",
+        "lib/roadmap-preservers.js",
+        "bin/compose.js",
+        "test/roadmap-residue.test.js",
+        "test/roadmap-preservers.test.js",
+        "CHANGELOG.md",
+        "docs/features/COMP-CONFLICT-MERGE/design.md"
+      ],
+      "recorded_at": "2026-08-09T05:22:50.009Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Residue check + typed errors + 3 generate outcomes; strict marker guard. 4 Codex review rounds, all findings fixed. Full suite green (5497+581+100). CLI-scoped guarantee; provider render paths out of scope."
+    }
+  ],
+  "commit_sha": "e951e9d486956c554b93af29196f5d33d39eb905"
 }
