@@ -2,6 +2,18 @@
 
 ## 2026-08-09
 
+### COMP-AUDIT-13 — `--help` and `docs/cli.md` render from one real command table
+
+Installed capability was invisible unless you read the source: `compose --help` listed ~24 commands and `docs/cli.md` documented ~18, while the CLI actually ships 36 top-level commands. Both surfaces were hand-maintained and had drifted — `plan`, `validate`, `experiment`, `ideabox`, `loops`, `tracker`, `smartmemory`, `record-completion`, `hooks`, `migrate-state`, and more were undocumented. Rather than re-patch two lists by hand, this makes both render from a single command table and adds a drift guard so they cannot silently omit a command again.
+
+**Added:**
+- `lib/cli-commands.js` — the single source of truth: `COMMANDS` (36 entries, each `{name, aliases, group, summary}`), plus `renderHelp()` (grouped `--help` body) and `renderCommandIndex()` (the grouped markdown table for the docs, pipe-escaped so summaries like `stamp | stale | show` can't break the table).
+- `test/cli-commands.test.js` — the drift guard. Parses the real `cmd === '…'` dispatch branches out of `bin/compose.js` and asserts, in both directions, that they match the table (a new command with no row, or a row with no dispatch branch, fails the build). Also asserts `--help` and `docs/cli.md` name every command, and that `cli.md` embeds the current generated index verbatim.
+
+**Changed:**
+- `bin/compose.js` `--help` now calls `renderHelp()` instead of ~35 hardcoded `console.log` lines.
+- `docs/cli.md` gains a generated, complete Command Index at the top (grouped by area); the curated deep-dive sections for the primary verbs remain below.
+
 ### COMP-PROV-LINEAGE — W3C PROV-O artifact lineage (vocabulary only, no RDF)
 
 Compose artifacts form a derivation chain — design.md → blueprint.md → plan.md → report.md — but nothing recorded it, so when an upstream artifact changed, downstream artifacts went stale silently. The verified gap: feature.json `artifacts[]` entries carry only `{type, path, status}` and canonical artifacts are auto-discovered, never registered, so there was no edge to hang staleness on. This adopts the W3C PROV-O vocabulary (Entity/Activity/Agent, `wasGeneratedBy`, `wasDerivedFrom`) — the naming only, no triple store, no SPARQL, no JSON-LD runtime — so staleness becomes a graph-reachability query and a standards-based export stays possible later.
