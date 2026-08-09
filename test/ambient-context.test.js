@@ -3,21 +3,21 @@
  *
  * Covers:
  *   - Item 100: docs/context/ scaffolding in compose init + prompt injection
- *   - Item 101: Staleness detection (lib/staleness.js)
+ *   - Item 101: Staleness warnings in gate context (now derivation-based,
+ *     lib/lineage.js findStaleArtifacts; the phase-marker lib/staleness.js was removed)
  *   - Item 102: Decision log append (appendDecisionEntry via build.js integration)
  */
 
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync,
+  mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, utimesSync,
 } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-import { extractPhaseMarker, checkStaleness } from '../lib/staleness.js';
 import {
   buildStepPrompt, buildGateContext, loadAmbientContext, clearAmbientContextCache,
 } from '../lib/step-prompt.js';
@@ -216,100 +216,11 @@ describe('buildStepPrompt — ambient context injection', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Item 101 — Staleness detection
+// Staleness warnings in gate context — now derivation-based (COMP-PROV-LINEAGE).
+// The phase-marker reader (lib/staleness.js) was removed; the model-level
+// staleness tests live in test/lineage.test.js. These cover only the gate-
+// context surface, which now uses findStaleArtifacts.
 // ---------------------------------------------------------------------------
-
-describe('extractPhaseMarker', () => {
-  test('extracts phase from first line', () => {
-    const content = '<!-- phase: explore_design -->\n# Title\n';
-    assert.equal(extractPhaseMarker(content), 'explore_design');
-  });
-
-  test('extracts phase from line 5', () => {
-    const content = 'line1\nline2\nline3\nline4\n<!-- phase: blueprint -->\nrest';
-    assert.equal(extractPhaseMarker(content), 'blueprint');
-  });
-
-  test('ignores phase comment after line 5', () => {
-    const content = 'line1\nline2\nline3\nline4\nline5\n<!-- phase: plan -->\nrest';
-    assert.equal(extractPhaseMarker(content), null);
-  });
-
-  test('handles whitespace variations in comment', () => {
-    assert.equal(extractPhaseMarker('<!--phase:build-->'), 'build');
-    assert.equal(extractPhaseMarker('<!--  phase:  ship  -->'), 'ship');
-  });
-
-  test('returns null when no marker present', () => {
-    assert.equal(extractPhaseMarker('# No phase here\n\nSome content\n'), null);
-  });
-});
-
-describe('checkStaleness', () => {
-  test('returns empty array when featureDir does not exist', () => {
-    const results = checkStaleness('/nonexistent/feature/xyz', 'build');
-    assert.deepEqual(results, []);
-  });
-
-  test('returns empty array when no tracked artifacts are present', () => {
-    const dir = tmpDir();
-    writeFileSync(join(dir, 'other.md'), '# Other\nno phase');
-    const results = checkStaleness(dir, 'build');
-    assert.deepEqual(results, []);
-  });
-
-  test('returns empty array for artifact without phase marker', () => {
-    const dir = tmpDir();
-    writeFileSync(join(dir, 'design.md'), '# Design\n\nNo phase marker here');
-    const results = checkStaleness(dir, 'build');
-    assert.deepEqual(results, []);
-  });
-
-  test('flags design.md as stale when currentPhase is past writtenPhase', () => {
-    const dir = tmpDir();
-    writeFileSync(join(dir, 'design.md'), '<!-- phase: explore_design -->\n# Design\n');
-    const results = checkStaleness(dir, 'build');
-    assert.equal(results.length, 1);
-    assert.equal(results[0].file, 'design.md');
-    assert.equal(results[0].writtenPhase, 'explore_design');
-    assert.equal(results[0].currentPhase, 'build');
-    assert.equal(results[0].stale, true);
-  });
-
-  test('does NOT flag artifact as stale when currentPhase equals writtenPhase', () => {
-    const dir = tmpDir();
-    writeFileSync(join(dir, 'blueprint.md'), '<!-- phase: blueprint -->\n# Blueprint\n');
-    const results = checkStaleness(dir, 'blueprint');
-    assert.equal(results.length, 1);
-    assert.equal(results[0].stale, false);
-  });
-
-  test('does NOT flag artifact as stale when currentPhase is earlier than writtenPhase', () => {
-    const dir = tmpDir();
-    writeFileSync(join(dir, 'plan.md'), '<!-- phase: plan -->\n# Plan\n');
-    const results = checkStaleness(dir, 'explore_design');
-    assert.equal(results.length, 1);
-    assert.equal(results[0].stale, false);
-  });
-
-  test('checks all three tracked artifacts', () => {
-    const dir = tmpDir();
-    writeFileSync(join(dir, 'design.md'), '<!-- phase: explore_design -->\n# Design\n');
-    writeFileSync(join(dir, 'blueprint.md'), '<!-- phase: blueprint -->\n# Blueprint\n');
-    writeFileSync(join(dir, 'plan.md'), '<!-- phase: plan -->\n# Plan\n');
-    const results = checkStaleness(dir, 'build');
-    assert.equal(results.length, 3);
-    assert.ok(results.every(r => r.stale), 'all three should be stale when in build phase');
-  });
-
-  test('handles unknown phase gracefully — not stale', () => {
-    const dir = tmpDir();
-    writeFileSync(join(dir, 'design.md'), '<!-- phase: unknown_phase -->\n# Design\n');
-    const results = checkStaleness(dir, 'build');
-    assert.equal(results.length, 1);
-    assert.equal(results[0].stale, false, 'unknown phase should not be flagged stale');
-  });
-});
 
 describe('buildGateContext — staleness warnings', () => {
   const gateDispatch = {
@@ -318,54 +229,52 @@ describe('buildGateContext — staleness warnings', () => {
     on_revise: 'explore_design',
     on_kill: 'kill',
   };
+  const BASE = new Date('2026-01-01T00:00:00Z');
+  const writeAt = (dir, file, content, offsetSec) => {
+    const p = join(dir, file);
+    writeFileSync(p, content);
+    const t = new Date(BASE.getTime() + offsetSec * 1000);
+    utimesSync(p, t, t);
+  };
 
-  test('includes Stale Artifacts section when artifacts are stale', () => {
+  test('includes Stale Artifacts when a descendant is older than its upstream', () => {
     const featureDir = tmpDir();
-    writeFileSync(join(featureDir, 'design.md'), '<!-- phase: explore_design -->\n# Design\n');
+    writeAt(featureDir, 'blueprint.md', '# Blueprint\n', 10);
+    writeAt(featureDir, 'design.md', '# Design (edited)\n', 100);
 
-    const context = {
-      cwd: '/some/dir',
-      featureCode: 'FEAT-1',
-      featureDir,
-      stepHistory: [],
-    };
-    const gateExtras = { toPhase: 'build' };
-    const result = buildGateContext(gateDispatch, context, gateExtras);
+    const context = { cwd: '/some/dir', featureCode: 'FEAT-1', featureDir, stepHistory: [] };
+    const result = buildGateContext(gateDispatch, context, { toPhase: 'build' });
 
     assert.ok(result.includes('## Stale Artifacts'), 'should include stale artifacts section');
-    assert.ok(result.includes('design.md'), 'should mention the stale file');
-    assert.ok(result.includes('explore_design'), 'should mention the written phase');
+    assert.ok(result.includes('blueprint.md'), 'should mention the stale file');
+    assert.ok(result.includes('design.md'), 'should name the newer upstream');
   });
 
-  test('omits Stale Artifacts section when no artifacts are stale', () => {
+  test('omits Stale Artifacts when all artifacts are fresh', () => {
     const featureDir = tmpDir();
-    writeFileSync(join(featureDir, 'design.md'), '<!-- phase: build -->\n# Design\n');
+    writeAt(featureDir, 'design.md', '# Design\n', 10);
+    writeAt(featureDir, 'blueprint.md', '# Blueprint\n', 100);
 
-    const context = {
-      cwd: '/some/dir',
-      featureCode: 'FEAT-1',
-      featureDir,
-      stepHistory: [],
-    };
-    const gateExtras = { toPhase: 'build' };
-    const result = buildGateContext(gateDispatch, context, gateExtras);
+    const context = { cwd: '/some/dir', featureCode: 'FEAT-1', featureDir, stepHistory: [] };
+    const result = buildGateContext(gateDispatch, context, { toPhase: 'build' });
 
     assert.ok(!result.includes('## Stale Artifacts'), 'should not include stale artifacts section');
   });
 
-  test('omits Stale Artifacts section when gateExtras has no toPhase', () => {
+  test('omits Stale Artifacts when context has no featureDir', () => {
+    const context = { cwd: '/some/dir', featureCode: 'FEAT-1', stepHistory: [] };
+    const result = buildGateContext(gateDispatch, context, { toPhase: 'build' });
+    assert.ok(!result.includes('## Stale Artifacts'), 'no featureDir → no staleness section');
+  });
+
+  test('is phase-independent — shows staleness even with no toPhase', () => {
     const featureDir = tmpDir();
-    writeFileSync(join(featureDir, 'design.md'), '<!-- phase: explore_design -->\n# Design\n');
+    writeAt(featureDir, 'blueprint.md', '# Blueprint\n', 10);
+    writeAt(featureDir, 'design.md', '# Design (edited)\n', 100);
 
-    const context = {
-      cwd: '/some/dir',
-      featureCode: 'FEAT-1',
-      featureDir,
-      stepHistory: [],
-    };
+    const context = { cwd: '/some/dir', featureCode: 'FEAT-1', featureDir, stepHistory: [] };
     const result = buildGateContext(gateDispatch, context, {});
-
-    assert.ok(!result.includes('## Stale Artifacts'), 'should not include section without toPhase');
+    assert.ok(result.includes('## Stale Artifacts'), 'derivation staleness does not need toPhase');
   });
 });
 
