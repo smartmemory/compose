@@ -76,6 +76,16 @@ finalization pass" (not per-step); and the read/write/utimes in stamping is
 uncontended because build is the single writer at that point (accepted, not
 locked, for this single-writer context).
 
+Post-ship follow-up (same day): the build's `doc_freshness` health signal was
+consuming the phase-based `checkStaleness`, which reads a `<!-- phase: -->`
+marker that no production code writes — so the signal always scored 100/fresh.
+Added `findStaleArtifacts` (the global, changed-file-free form of the
+reachability query) and pointed the build signal at it, so the freshness score
+now reflects real derivation staleness. `staleness.js` remains only for the
+gate-context warning in `step-prompt.js` — swapping that surface (which changes
+agent-facing gate messaging and its tests) is a deliberate separate step, not
+done here.
+
 ## Why this is P2
 
 Nothing is blocked on it, and the artifact-lineage feature it serves has not
