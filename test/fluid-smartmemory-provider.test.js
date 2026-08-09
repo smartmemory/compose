@@ -21,10 +21,11 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { FluidConfigError, FluidRecordNotFound, CAP } from '../lib/fluid/provider.js';
+import { FluidConfigError, FluidRecordNotFound, FluidKindUnsupported, CAP } from '../lib/fluid/provider.js';
 import { LocalFluidProvider } from '../lib/fluid/local-provider.js';
 import { assertValid } from '../lib/fluid/schema.js';
 import { SmartMemoryFluidProvider } from '../lib/fluid/smartmemory-provider.js';
+import { challengeIdea, IdeaboxNotFound } from '../lib/fluid/ideabox-ops.js';
 // The stub IS the wire contract, so it lives in one place and every suite that
 // exercises this provider asserts against the same server behaviour.
 import { withProvider, servers } from './helpers/smartmemory-stub.js';
@@ -73,16 +74,18 @@ describe('SmartMemoryFluidProvider — configuration', () => {
 });
 
 describe('SmartMemoryFluidProvider — seam contract', () => {
-  // FOH-2 added RECALL. The rest stay undeclared and keep inheriting the base
-  // class's refusal — a capability and its implementation move together.
-  test('declares storage + RECALL; the remaining semantic capabilities still throw', async () => {
+  // FOH-2 added RECALL; FOH-3 adds CHALLENGE. The rest stay undeclared and keep
+  // inheriting the base class's refusal — a capability and its impl move together.
+  test('declares storage + RECALL + CHALLENGE; the remaining semantic capabilities still throw', async () => {
     await withProvider(async ({ provider }) => {
       assert.ok(provider.has(CAP.RECORDS) && provider.has(CAP.EVENTS) && provider.has(CAP.LINKS));
       assert.ok(provider.has(CAP.RECALL), 'FOH-2 declares RECALL');
-      for (const cap of [CAP.CHALLENGE, CAP.CONVICTION, CAP.CALIBRATION, CAP.CONTRADICTION]) {
+      assert.ok(provider.has(CAP.CHALLENGE), 'FOH-3 declares CHALLENGE');
+      for (const cap of [CAP.CONVICTION, CAP.CALIBRATION, CAP.CONTRADICTION]) {
         assert.equal(provider.has(cap), false, `${cap} must not be declared`);
       }
-      await assert.rejects(() => provider.challenge('IDEA-1'), /FluidCapabilityUnavailable|capability/i);
+      // Still-undeclared capabilities inherit the base refusal.
+      await assert.rejects(() => provider.conviction('IDEA-1'), /FluidCapabilityUnavailable|capability/i);
     });
   });
 
@@ -579,6 +582,139 @@ describe('SmartMemoryFluidProvider — recall (FOH-2)', () => {
       queueHits([{ handle: rec.handle, score: 0.5 }]);
       const [hit] = await provider.recall('anything');
       assert.equal(hit.record.body, 'second body', 'hits carry current state, not indexed state');
+    });
+  });
+});
+
+describe('SmartMemoryFluidProvider — challenge (FOH-3)', () => {
+  // These pin the PROVIDER's contract: exact-type send, fluid-namespace + self
+  // filtering, and retained-only aggregates. Actual contradiction DETECTION is
+  // SmartMemory's own responsibility (and its suite's) — the stub, like the
+  // recall stub, returns queued conflicts rather than running a detector. The
+  // negation-pair text documents the intended real-world shape; it is not what
+  // the stub keys on (the stub keys on the exact memory_type).
+  async function seedContradiction(provider) {
+    const a = await provider.createRecord({ kind: 'decision', title: 'Postgres is the datastore' });
+    const b = await provider.createRecord({ kind: 'decision', title: 'Postgres is not the datastore' });
+    const idea = await provider.createRecord({ kind: 'idea', title: 'Postgres is not the datastore' });
+    return { a, b, idea };
+  }
+
+  test('the floor provider without CHALLENGE refuses', async () => {
+    const floor = new LocalFluidProvider();
+    await floor.init(mkdtempSync(join(tmpdir(), 'fluid-challenge-')), {});
+    await assert.rejects(() => floor.challenge('IDEA-1'), /FluidCapabilityUnavailable|capability/i);
+  });
+
+  test('golden: a decision is challenged against another decision, self excluded', async () => {
+    await withProvider(async ({ provider, items, queueConflicts, seen }) => {
+      const { a, b, idea } = await seedContradiction(provider);
+      // Queue B (decision) AND the idea AND A itself as candidate conflicts.
+      queueConflicts([
+        { handle: b.handle, existingFact: 'Postgres is not the datastore', confidence: 0.9 },
+        { handle: idea.handle, existingFact: 'idea says otherwise', confidence: 0.9 },
+        { handle: a.handle, existingFact: 'self', confidence: 0.9 },
+      ]);
+      const result = await provider.challenge(a.handle, { useLlm: false });
+
+      assert.equal(result.hasConflicts, true);
+      assert.deepEqual(result.conflicts.map((c) => c.handle), [b.handle],
+        'only the same-kind (decision) conflict survives; idea filtered by exact-type, self excluded');
+      assert.equal(result.conflicts[0].conflictType, 'direct_contradiction');
+      // The wrapper sent the record's EXACT wire type, and use_llm:false.
+      const sent = seen.find((s) => s.path === '/memory/reasoning/challenge');
+      assert.equal(sent.body.memory_type, 'fluid_decision');
+      assert.equal(sent.body.use_llm, false);
+    });
+  });
+
+  test('D1c: aggregates are recomputed from retained conflicts, not the server total', async () => {
+    await withProvider(async ({ provider, items, queueConflicts }) => {
+      const { a } = await seedContradiction(provider);
+      // A non-fluid item typed fluid_decision (passes the server exact-type
+      // filter) but WITHOUT our namespace — the provider must drop it (D1a) and
+      // then report hasConflicts:false, confidence:1.0 (D1c), NOT the server's
+      // has_conflicts:true.
+      const foreignId = 'item-foreign';
+      items.set(foreignId, {
+        item_id: foreignId, content: 'foreign', memory_type: 'fluid_decision',
+        metadata: { fluid_ns: 'someone.else', handle: 'X-1' },
+      });
+      queueConflicts([{ itemId: foreignId, existingFact: 'foreign', confidence: 0.9 }]);
+      const result = await provider.challenge(a.handle, { useLlm: false });
+      assert.equal(result.hasConflicts, false, 'a fully-filtered result is not "true with no conflicts"');
+      assert.deepEqual(result.conflicts, []);
+      assert.equal(result.confidence, 1.0, 'confidence derived from the retained (empty) set');
+    });
+  });
+
+  test('D1c: with one retained + one filtered conflict, confidence reflects ONLY the retained', async () => {
+    await withProvider(async ({ provider, items, queueConflicts }) => {
+      const { a, b } = await seedContradiction(provider);
+      // A foreign fluid_decision (dropped by D1a) with a LOW confidence, and the
+      // real same-kind conflict B with a distinct confidence. If aggregates came
+      // from the raw set, the mean — and thus `confidence` — would differ.
+      const foreignId = 'item-foreign';
+      items.set(foreignId, {
+        item_id: foreignId, content: 'foreign', memory_type: 'fluid_decision',
+        metadata: { fluid_ns: 'someone.else', handle: 'X-1' },
+      });
+      queueConflicts([
+        { handle: b.handle, existingFact: 'kept', confidence: 0.6 },
+        { itemId: foreignId, existingFact: 'dropped', confidence: 0.2 },
+      ]);
+      const result = await provider.challenge(a.handle, { useLlm: false });
+      assert.deepEqual(result.conflicts.map((c) => c.handle), [b.handle]);
+      // Formula over the RETAINED set {0.6}: 1 - (0.6 * 0.5) = 0.7. The raw-set
+      // mean {0.6,0.2}=0.4 would give 0.8 — so this pins retained-only.
+      assert.equal(result.confidence, 0.7);
+    });
+  });
+
+  test('empty/sparse corpus: no conflicts', async () => {
+    await withProvider(async ({ provider, queueConflicts }) => {
+      const a = await provider.createRecord({ kind: 'decision', title: 'a lone decision' });
+      queueConflicts([]);
+      const result = await provider.challenge(a.handle, { useLlm: false });
+      assert.equal(result.hasConflicts, false);
+      assert.deepEqual(result.conflicts, []);
+      assert.equal(result.confidence, 1.0);
+    });
+  });
+
+  test('every non-challengeable kind (thread, question, cluster) throws FluidKindUnsupported', async () => {
+    await withProvider(async ({ provider }) => {
+      for (const kind of ['thread', 'question', 'cluster']) {
+        const rec = await provider.createRecord({ kind, title: `a ${kind}` });
+        await assert.rejects(
+          () => provider.challenge(rec.handle, { useLlm: false }), FluidKindUnsupported,
+          `${kind} must be refused`,
+        );
+      }
+    });
+  });
+
+  test('an unknown handle throws FluidRecordNotFound', async () => {
+    await withProvider(async ({ provider }) => {
+      await assert.rejects(() => provider.challenge('DECISION-999', { useLlm: false }), FluidRecordNotFound);
+    });
+  });
+
+  // ── consumer: challengeIdea (FOH-3 D2) ──────────────────────────────────────
+  test('challengeIdea resolves a decision kind-agnostically and case-insensitively', async () => {
+    await withProvider(async ({ provider, queueConflicts }) => {
+      const { a, b } = await seedContradiction(provider);
+      queueConflicts([{ handle: b.handle, existingFact: 'contradiction', confidence: 0.8 }]);
+      // lowercase id must resolve the same record (parity with the other ops).
+      const result = await challengeIdea({ provider }, a.handle.toLowerCase(), { useLlm: false });
+      assert.equal(result.hasConflicts, true);
+      assert.deepEqual(result.conflicts.map((c) => c.handle), [b.handle]);
+    });
+  });
+
+  test('challengeIdea maps an unknown id to IdeaboxNotFound', async () => {
+    await withProvider(async ({ provider }) => {
+      await assert.rejects(() => challengeIdea({ provider }, 'DECISION-999'), IdeaboxNotFound);
     });
   });
 });

@@ -69,6 +69,30 @@ export function makeServer() {
         return json(200, { results: server.__hits ?? [] });
       }
 
+      // Challenge (FOH-3). Models SmartMemory's contradiction endpoint AND its
+      // load-bearing behaviour: `memory_type` is an EXACT filter (search.py:123),
+      // so a queued conflict only survives when the item it references is stored
+      // under the requested type. `has_conflicts`/`overall_confidence` are the
+      // server's PRE-filter aggregates (challenger.py:232-262) — the provider is
+      // expected to IGNORE them and recompute after its own fluid_ns/self filter.
+      if (path === '/memory/reasoning/challenge' && req.method === 'POST') {
+        const wantType = parsed?.memory_type;
+        const kept = (server.__conflicts ?? []).filter((c) => {
+          const it = items.get(c.existing_item_id);
+          return it && it.memory_type === wantType; // the exact-type filter
+        });
+        const overall = kept.length
+          ? Math.max(0, 1 - (kept.reduce((s, c) => s + (c.confidence ?? 0), 0) / kept.length) * 0.5)
+          : 1.0;
+        return json(200, {
+          new_assertion: parsed?.assertion ?? '',
+          has_conflicts: kept.length > 0,
+          conflicts: kept,
+          related_facts_count: kept.length,
+          overall_confidence: overall,
+        });
+      }
+
       if (path === '/memory/list' && req.method === 'GET') {
         const qs = new URLSearchParams(query || '');
         let all = [...items.values()];
@@ -203,7 +227,27 @@ export async function withProvider(fn, { workspaceId = 'ws-test' } = {}) {
         return { ...found, score };
       });
     };
-    await fn({ provider, items, seen, queueHits });
+    // Queue conflicts for a challenge test. Each spec references a stored item by
+    // `handle` (resolved to its item_id) so the stub's exact-type filter and the
+    // provider's item_id→handle mapping both run against real stored items.
+    const queueConflicts = (specs) => {
+      server.__conflicts = specs.map(({ handle, itemId, ...rest }) => {
+        // Resolve to the RECORD item, not the event item — both share a handle.
+        const id = itemId ?? [...items.values()].find(
+          (i) => i.metadata?.handle === handle && i.metadata?.fluid_ns === 'compose.fluid.v1',
+        )?.item_id;
+        return {
+          existing_item_id: id,
+          existing_fact: rest.existingFact ?? '',
+          new_fact: rest.newFact ?? '',
+          conflict_type: rest.conflictType ?? 'direct_contradiction',
+          confidence: rest.confidence ?? 0.8,
+          explanation: rest.explanation ?? '',
+          suggested_resolution: rest.suggestedResolution ?? 'keep_existing',
+        };
+      });
+    };
+    await fn({ provider, items, seen, queueHits, queueConflicts });
   } finally {
     delete process.env.SM_FLUID_KEY;
     server.close();
