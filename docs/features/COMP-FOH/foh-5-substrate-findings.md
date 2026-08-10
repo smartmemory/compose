@@ -65,6 +65,42 @@ viable when it is not.
   is written. This is consistent with FOH-3 shipping as detection-only and with
   FOH-4's finding that no durable challenge record exists.
 
+## REVISED 2026-08-10 (post Codex design review) — CONTRADICTION IS BUILDABLE NOW
+
+The verdict above ("blocked upstream") was **wrong about CONTRADICTION**, and the error was
+mine: I checked whether the *contradiction-resolution routes* could link, and never checked
+whether the *graph-edge routes* could. They can.
+
+- **Write:** `POST /memory/edge` (`routes/links.py:72-103`) takes arbitrary
+  `source_id`, `target_id`, `relation_type`, `properties`, validated through
+  `SecureSmartMemory.add_edge` (tenant ownership of **both** nodes). Compose can write a real
+  `CONTRADICTS` edge between two fluid records today.
+- **Read:** `GET /memory/{item_id}/neighbors` walks outgoing and incoming separately and
+  returns `direction` per neighbour. An incoming edge from the contradicting record reads back
+  as `{item_id: <new>, link_type: "CONTRADICTS", direction: "incoming"}`.
+  **NOT `/links`** — core `get_links` (`memory/pipeline/stages/linking.py:77-113`) inverts
+  direction on incoming edges and drops all properties. An earlier claim in this doc that
+  `/links` "filters only HAS_VERSION" was false; that filter lives in `/neighbors`
+  (`links.py:168`).
+
+**Sequencing (load-bearing).** Do NOT try to make decay-and-link atomic. FalkorDB's
+`transaction_context()` is an explicit no-op (`falkordb.py:272`), so no transaction exists.
+It is also unnecessary, because the two operations have different retry safety:
+
+- a **resolve** must never be retried (double-decay of a near-irreversible value);
+- an **edge write** is safe to retry (touches no confidence, MERGEs by identity).
+
+So: `resolve` → `classifyResolution` over the confidence-history bracket (the existing trusted
+read) → **only if it decayed**, write the edge, retrying that write alone on failure. Worst
+case is a transient unlinked state, which is repairable.
+
+**Residual upstream gap, non-blocking:** neither link-read surface returns edge *properties*,
+so anything written in the edge props (e.g. `detected_at`) is unreadable over REST. Keep the
+durable detail in the confidence-history event, which Compose already reads, and treat edge
+props as write-only until a property-carrying read exists.
+
+`CALIBRATION` is unchanged by this revision — still no subject, still blocked.
+
 ## The one substrate that does work today
 
 `contradictions(handle)` can be reconstructed **per-handle** from the
@@ -85,6 +121,13 @@ Two disclosed limits, both inherent to the substrate:
 Scope-honestly, a v1 on this substrate is **"conviction, itemized"** — it adds
 the per-event contradicting claim and timestamp that `conviction()` does not
 return, but it reads the same underlying history. Real, but incremental.
+
+## Consumer-side note for the eventual build
+
+`lib/smartmemory-client.js` has **no wrapper for `GET /memory/{item_id}/links`** (nor
+`/neighbors`). The read surface exists on the wire and needs no SmartMemory work, but the
+Compose side will need a `getLinks(itemId)` wrapper before `contradictions(handle)` can
+consume it.
 
 ## Leverage note
 
