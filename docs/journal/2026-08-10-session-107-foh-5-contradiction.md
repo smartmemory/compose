@@ -94,11 +94,12 @@ run.
 
 ## Open threads
 
-- [ ] Push compose main (owner call — outward-facing).
-- [ ] File the surviving upstream SmartMemory items as `smartmem-dev`: (a) the owed server-side
-      idempotency-ID on `/resolve` (covers non-Compose callers the workspace lease can't reach);
-      (b) atomic decay-plus-link; (c) a property-carrying link read (so edge `origin`/`detected_at`
-      become readable). None block Compose.
+- [x] Push compose main — already up to date with `origin/main` @5a16d9d (no unpushed commits).
+- [x] File the surviving upstream SmartMemory items as `smartmem-dev` (2026-08-10): (a) idempotency-ID
+      on `/resolve` → [smart-memory-service#5](https://github.com/smart-memory/smart-memory-service/issues/5);
+      (b) atomic decay-plus-link → [smart-memory-core#5](https://github.com/smart-memory/smart-memory-core/issues/5);
+      (c) property-carrying link read → [smart-memory-core#6](https://github.com/smart-memory/smart-memory-core/issues/6).
+      None block Compose.
 - [ ] CALIBRATION remains genuinely blocked (no subject). COMP-FOH stays IN_PROGRESS.
 - [ ] `contradictions()` "outgoing" direction (records `handle` itself contradicts) is a trivial
       later flip if a consumer wants it.
