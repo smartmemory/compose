@@ -17,15 +17,25 @@
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { FluidConfigError, FluidRecordNotFound, FluidKindUnsupported, CAP } from '../lib/fluid/provider.js';
+import {
+  CAP,
+  CONVICTION_STRATEGIES,
+  FluidConfigError,
+  FluidInvalidStrategy,
+  FluidKindUnsupported,
+  FluidRecordNotFound,
+  FluidResolutionConflict,
+  FluidResolutionIndeterminate,
+  FluidResolutionNoOp,
+} from '../lib/fluid/provider.js';
 import { LocalFluidProvider } from '../lib/fluid/local-provider.js';
 import { assertValid } from '../lib/fluid/schema.js';
 import { SmartMemoryFluidProvider } from '../lib/fluid/smartmemory-provider.js';
-import { challengeIdea, IdeaboxNotFound } from '../lib/fluid/ideabox-ops.js';
+import { challengeIdea, convictionOf, resolveIdeaChallenge, IdeaboxNotFound } from '../lib/fluid/ideabox-ops.js';
 // The stub IS the wire contract, so it lives in one place and every suite that
 // exercises this provider asserts against the same server behaviour.
 import { withProvider, servers } from './helpers/smartmemory-stub.js';
@@ -74,18 +84,20 @@ describe('SmartMemoryFluidProvider — configuration', () => {
 });
 
 describe('SmartMemoryFluidProvider — seam contract', () => {
-  // FOH-2 added RECALL; FOH-3 adds CHALLENGE. The rest stay undeclared and keep
-  // inheriting the base class's refusal — a capability and its impl move together.
-  test('declares storage + RECALL + CHALLENGE; the remaining semantic capabilities still throw', async () => {
+  // FOH-2 added RECALL; FOH-3 CHALLENGE; FOH-4 CONVICTION. The rest stay
+  // undeclared and keep inheriting the base class's refusal — a capability and
+  // its impl move together.
+  test('declares storage + RECALL + CHALLENGE + CONVICTION; the remaining semantic capabilities still throw', async () => {
     await withProvider(async ({ provider }) => {
       assert.ok(provider.has(CAP.RECORDS) && provider.has(CAP.EVENTS) && provider.has(CAP.LINKS));
       assert.ok(provider.has(CAP.RECALL), 'FOH-2 declares RECALL');
       assert.ok(provider.has(CAP.CHALLENGE), 'FOH-3 declares CHALLENGE');
-      for (const cap of [CAP.CONVICTION, CAP.CALIBRATION, CAP.CONTRADICTION]) {
+      assert.ok(provider.has(CAP.CONVICTION), 'FOH-4 declares CONVICTION');
+      for (const cap of [CAP.CALIBRATION, CAP.CONTRADICTION]) {
         assert.equal(provider.has(cap), false, `${cap} must not be declared`);
       }
       // Still-undeclared capabilities inherit the base refusal.
-      await assert.rejects(() => provider.conviction('IDEA-1'), /FluidCapabilityUnavailable|capability/i);
+      await assert.rejects(() => provider.calibration('all'), /FluidCapabilityUnavailable|capability/i);
     });
   });
 
@@ -716,5 +728,395 @@ describe('SmartMemoryFluidProvider — challenge (FOH-3)', () => {
     await withProvider(async ({ provider }) => {
       await assert.rejects(() => challengeIdea({ provider }, 'DECISION-999'), IdeaboxNotFound);
     });
+  });
+});
+
+describe('SmartMemoryFluidProvider — conviction (FOH-4)', () => {
+  // A ctx whose ideaboxPath does not exist: the migration gate is a clean
+  // no-op, which is what lets consumer tests run against the raw provider.
+  const ctxFor = (provider) => ({ provider, ideaboxPath: join(tmpdir(), 'no-such-ideabox.md') });
+
+  async function seedPair(provider) {
+    const a = await provider.createRecord({ kind: 'decision', title: 'Postgres is the datastore' });
+    const b = await provider.createRecord({ kind: 'decision', title: 'Postgres is not the datastore' });
+    return { a, b };
+  }
+
+  test('base provider refuses conviction AND resolveConflict with FluidCapabilityUnavailable', async () => {
+    const floor = new LocalFluidProvider();
+    await floor.init(mkdtempSync(join(tmpdir(), 'fluid-conviction-')), {});
+    await assert.rejects(() => floor.conviction('IDEA-1'), /FluidCapabilityUnavailable|capability/i);
+    await assert.rejects(
+      () => floor.resolveConflict('IDEA-1', 'IDEA-2', { strategy: 'accept_new' }),
+      /FluidCapabilityUnavailable|capability/i,
+      'the base seam must refuse resolveConflict typed, not TypeError',
+    );
+  });
+
+  test('read on a never-resolved record: honest 1.0, empty history, ONE wire call — no getItem', async () => {
+    await withProvider(async ({ provider, seen }) => {
+      const { a } = await seedPair(provider);
+      seen.length = 0;
+      const result = await provider.conviction(a.handle);
+      assert.deepEqual(result, {
+        handle: a.handle, confidence: 1.0, challenged: false,
+        challengeCount: 0, lastChallengedAt: null, history: [],
+      });
+      const wire = seen.filter((s) => s.path.startsWith('/memory/') && !s.path.includes('/list'));
+      assert.deepEqual(wire.map((s) => s.path.includes('confidence-history')), [true],
+        'exactly one confidence-history call and NO getItem in the read path');
+    });
+  });
+
+  test('golden loop: challenge → resolve accept_new → conviction reflects the decay', async () => {
+    await withProvider(async ({ provider, queueConflicts, seen }) => {
+      const { a, b } = await seedPair(provider);
+      queueConflicts([{ handle: b.handle, existingFact: 'Postgres is not the datastore', confidence: 0.9 }]);
+      const challenge = await challengeIdea(ctxFor(provider), a.handle, { useLlm: false });
+      assert.equal(challenge.conflicts[0].handle, b.handle);
+
+      seen.length = 0;
+      const resolved = await resolveIdeaChallenge(ctxFor(provider), a.handle, {
+        against: challenge.conflicts[0].handle, strategy: 'accept_new',
+      });
+
+      assert.equal(resolved.handle, b.handle);
+      assert.equal(resolved.confidence, 0.5);
+      assert.equal(resolved.challenged, true);
+      assert.equal(resolved.challengeCount, 1);
+      assert.ok(resolved.lastChallengedAt, 'lastChallengedAt derives from the newest event');
+      assert.equal(resolved.history.length, 1);
+      assert.equal(resolved.history[0].newConfidence, 0.5);
+      assert.equal(resolved.history[0].oldConfidence, 1.0);
+
+      // Wire contract: the flags flip, and new_fact is A's RENDERED content —
+      // never caller text.
+      const sent = seen.find((s) => s.path === '/memory/reasoning/resolve');
+      assert.equal(sent.body.auto_resolve, false);
+      assert.equal(sent.body.use_llm, false);
+      assert.equal(sent.body.use_wikipedia, false);
+      assert.equal(sent.body.strategy, 'accept_new');
+      assert.ok(sent.body.new_fact.includes('Postgres is the datastore'),
+        'new_fact is derived from the SOURCE record content');
+
+      // The lease brackets the mutation: acquire before /resolve, release after.
+      const order = seen.map((s) => s.path);
+      const lockIdx = order.findIndex((p) => p.includes('/memory/locks/'));
+      const resolveIdx = order.indexOf('/memory/reasoning/resolve');
+      assert.ok(lockIdx !== -1 && lockIdx < resolveIdx, 'workspace lease acquired before the mutation');
+
+      // And the read path agrees afterwards.
+      const conviction = await convictionOf(ctxFor(provider), b.handle);
+      assert.equal(conviction.confidence, 0.5);
+      assert.equal(conviction.challengeCount, 1);
+    });
+  });
+
+  test('a second intentional resolve decays again: 0.5 → 0.0, and the floor case still succeeds', async () => {
+    await withProvider(async ({ provider, queueConflicts }) => {
+      const { a, b } = await seedPair(provider);
+      const first = await provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' });
+      assert.equal(first.confidence, 0.5);
+      const second = await provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' });
+      assert.equal(second.confidence, 0.0, 'cumulative decay');
+      // 0.0 floor: expected = max(0, 0-0.5) = 0 — count advances, confidence
+      // stays, and the exact-value postcondition still recognizes success.
+      const third = await provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' });
+      assert.equal(third.confidence, 0.0);
+      assert.equal(third.challengeCount, 3);
+    });
+  });
+
+  test('strategy gate: everything except accept_new is refused BEFORE any wire call', async () => {
+    await withProvider(async ({ provider, seen }) => {
+      const { a, b } = await seedPair(provider);
+      seen.length = 0;
+      for (const strategy of ['keep_existing', 'keep_both', 'defer', 'merge', 'nonsense', undefined]) {
+        await assert.rejects(
+          () => provider.resolveConflict(a.handle, b.handle, { strategy }),
+          FluidInvalidStrategy, `${strategy} must be refused`,
+        );
+      }
+      assert.equal(seen.filter((s) => s.path === '/memory/reasoning/resolve').length, 0,
+        'no /resolve call was made for any refused strategy');
+    });
+  });
+
+  test('provider-seam authorization: kind mismatch, self-target, unknown handles — all pre-mutation', async () => {
+    await withProvider(async ({ provider, seen }) => {
+      const { a, b } = await seedPair(provider);
+      const idea = await provider.createRecord({ kind: 'idea', title: 'an idea, not a decision' });
+      const thread = await provider.createRecord({ kind: 'thread', title: 'not challengeable' });
+
+      seen.length = 0;
+      await assert.rejects(
+        () => provider.resolveConflict(a.handle, idea.handle, { strategy: 'accept_new' }),
+        FluidKindUnsupported, 'cross-kind target refused',
+      );
+      await assert.rejects(
+        () => provider.resolveConflict(thread.handle, b.handle, { strategy: 'accept_new' }),
+        FluidKindUnsupported, 'non-challengeable source refused',
+      );
+      await assert.rejects(
+        () => provider.resolveConflict(a.handle, a.handle, { strategy: 'accept_new' }),
+        /FluidInvalidTarget|self-target/, 'self-decay refused',
+      );
+      await assert.rejects(
+        () => provider.resolveConflict(a.handle, 'DECISION-999', { strategy: 'accept_new' }),
+        FluidRecordNotFound,
+      );
+      await assert.rejects(
+        () => provider.resolveConflict('DECISION-999', b.handle, { strategy: 'accept_new' }),
+        FluidRecordNotFound,
+      );
+      assert.equal(seen.filter((s) => s.path === '/memory/reasoning/resolve').length, 0,
+        'no /resolve call for any refused pairing');
+    });
+  });
+
+  test('a corrupt record blob refuses typed, not TypeError', async () => {
+    await withProvider(async ({ provider, items, seen }) => {
+      const { a } = await seedPair(provider);
+      const corruptId = 'item-corrupt';
+      items.set(corruptId, {
+        item_id: corruptId, content: 'x', memory_type: 'fluid_decision', confidence: 1.0,
+        metadata: { fluid_ns: 'compose.fluid.v1', handle: 'DECISION-77', fluid_record_json: '{not json' },
+      });
+      seen.length = 0;
+      await assert.rejects(
+        () => provider.resolveConflict(a.handle, 'DECISION-77', { strategy: 'accept_new' }),
+        FluidRecordNotFound, 'corrupt target blob → typed refusal',
+      );
+      assert.equal(seen.filter((s) => s.path === '/memory/reasoning/resolve').length, 0);
+    });
+  });
+
+  test('clean 200 that persisted nothing → FluidResolutionNoOp (the ONLY retryable failure)', async () => {
+    await withProvider(async ({ provider, items }) => {
+      const { a, b } = await seedPair(provider);
+      const server = servers[servers.length - 1];
+      server.__resolveMode = 'no-op';
+      await assert.rejects(
+        () => provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' }),
+        FluidResolutionNoOp,
+      );
+      // Nothing moved.
+      const bItem = [...items.values()].find((i) => i.metadata?.handle === b.handle && i.metadata?.fluid_ns === 'compose.fluid.v1');
+      assert.equal(bItem.confidence, 1.0);
+    });
+  });
+
+  test('count advanced but by someone else (unattributed) → FluidResolutionConflict, never our success', async () => {
+    await withProvider(async ({ provider }) => {
+      const { a, b } = await seedPair(provider);
+      const server = servers[servers.length - 1];
+      server.__resolveMode = 'unattributed';
+      await assert.rejects(
+        () => provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' }),
+        FluidResolutionConflict,
+        'numerically identical foreign decay must not be mistaken for ours',
+      );
+    });
+  });
+
+  test('two decays interleaved (count jump) → FluidResolutionConflict', async () => {
+    await withProvider(async ({ provider }) => {
+      const { a, b } = await seedPair(provider);
+      const server = servers[servers.length - 1];
+      server.__resolveMode = 'count-jump';
+      await assert.rejects(
+        () => provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' }),
+        FluidResolutionConflict,
+      );
+    });
+  });
+
+  test('malformed 2xx (proxy error page) hiding a REAL mutation → reconciled success, never NoOp', async () => {
+    await withProvider(async ({ provider }) => {
+      const { a, b } = await seedPair(provider);
+      const server = servers[servers.length - 1];
+      // The origin decay succeeds; a proxy replaces the response with HTML.
+      // The provider must treat the 200-that-isn't-JSON as ambiguous, poll,
+      // positively recognize OUR landed decay, and return success.
+      server.__resolveMode = 'malformed-mutate';
+      const result = await provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' });
+      assert.equal(result.confidence, 0.5, 'reconciliation poll recognized the landed decay as success');
+      assert.equal(result.challengeCount, 1);
+    });
+  });
+
+  test('malformed 2xx with NO mutation → Indeterminate (a broken proxy is never a retryable no-op)', async () => {
+    await withProvider(async ({ provider, seen }) => {
+      const { a, b } = await seedPair(provider);
+      const server = servers[servers.length - 1];
+      server.__resolveMode = 'malformed';
+      await assert.rejects(
+        () => provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' }),
+        FluidResolutionIndeterminate,
+      );
+      assert.equal(seen.filter((s) => s.path === '/memory/reasoning/resolve').length, 1, 'no retry');
+    });
+  });
+
+  test('gateway 502 with NO mutation → FluidResolutionIndeterminate, never NoOp/retry', async () => {
+    await withProvider(async ({ provider, seen }) => {
+      const { a, b } = await seedPair(provider);
+      const server = servers[servers.length - 1];
+      server.__resolveMode = 'gateway-502';
+      await assert.rejects(
+        () => provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' }),
+        FluidResolutionIndeterminate,
+        'a 5xx does not prove the origin handler stopped — unchanged reads are NOT a retryable no-op',
+      );
+      assert.equal(seen.filter((s) => s.path === '/memory/reasoning/resolve').length, 1,
+        'the provider NEVER retries /resolve on an ambiguous outcome');
+    });
+  });
+
+  test('timeout, mutation lands late → the poll positively confirms it and returns success', async () => {
+    await withProvider(async ({ provider }) => {
+      const { a, b } = await seedPair(provider);
+      const server = servers[servers.length - 1];
+      server.__resolveMode = 'mutate-late';
+      server.__resolveLateMs = 120; // lands after the 60ms abort, before the poll window ends
+      const result = await provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new', timeoutMs: 60 });
+      assert.equal(result.confidence, 0.5,
+        'a verified-landed mutation is a success even though its HTTP response died');
+      assert.equal(result.challengeCount, 1);
+    });
+  });
+
+  test('timeout, mutation never observed → FluidResolutionIndeterminate and NO /resolve retry', async () => {
+    await withProvider(async ({ provider, seen }) => {
+      const { a, b } = await seedPair(provider);
+      const server = servers[servers.length - 1];
+      server.__resolveMode = 'mutate-late';
+      server.__resolveLateMs = 60_000; // never lands within the poll window
+      await assert.rejects(
+        () => provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new', timeoutMs: 60 }),
+        FluidResolutionIndeterminate,
+      );
+      assert.equal(seen.filter((s) => s.path === '/memory/reasoning/resolve').length, 1,
+        'an unchanged read after an abort is "not yet", never "safe to retry"');
+    });
+  });
+
+  test('attribution truncation is code-point exact: an astral char at the 200 boundary still lands', async () => {
+    await withProvider(async ({ provider }) => {
+      // 199 ascii chars + an emoji straddling the boundary: Python [:200] keeps
+      // the whole emoji (1 code point); JS slice(0,200) would cut it in half.
+      const title = `${'x'.repeat(199)}😀 and more text past the boundary`;
+      const a = await provider.createRecord({ kind: 'decision', title });
+      const b = await provider.createRecord({ kind: 'decision', title: 'contradicts the long one' });
+      const result = await provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' });
+      assert.equal(result.confidence, 0.5,
+        'code-point truncation matches the server; a UTF-16 slice would misclassify this landed decay');
+    });
+  });
+
+  // ── consumers: convictionOf / resolveIdeaChallenge ────────────────────────
+  test('consumers run the migration gate and map not-found; against is required', async () => {
+    await withProvider(async ({ provider }) => {
+      const { a } = await seedPair(provider);
+      await assert.rejects(() => convictionOf(ctxFor(provider), 'DECISION-999'), IdeaboxNotFound);
+      await assert.rejects(
+        () => resolveIdeaChallenge(ctxFor(provider), a.handle, { strategy: 'accept_new' }),
+        /against is required/,
+      );
+      // Case-insensitive resolve, like every other op.
+      const result = await convictionOf(ctxFor(provider), a.handle.toLowerCase());
+      assert.equal(result.confidence, 1.0);
+    });
+  });
+
+  test('consumer golden: migrate-then-operate on a markdown-only project — read AND resolve', async () => {
+    await withProvider(async ({ provider }) => {
+      // A markdown ideabox that has never been migrated: BOTH consumers must
+      // migrate first and then answer, not report not-found. The resolve half
+      // is the one that mutates, so its gate coverage is the load-bearing one.
+      const dir = mkdtempSync(join(tmpdir(), 'foh4-md-'));
+      const ideaboxPath = join(dir, 'ideabox.md');
+      writeFileSync(ideaboxPath, [
+        '# Ideabox', '',
+        '## Ideas', '',
+        '#### IDEA-1 — ship the feature now',
+        '**Status:** NEW | **Priority:** P1 | **Tags:** test',
+        '**Idea:** ship the feature now', '',
+        '#### IDEA-2 — never ship the feature',
+        '**Status:** NEW | **Priority:** P1 | **Tags:** test',
+        '**Idea:** never ship the feature', '',
+      ].join('\n'));
+      const ctx = { provider, ideaboxPath };
+      // RESOLVE FIRST, on the never-migrated project: this is the assertion
+      // that the mutating consumer gates for itself. (Reading first would
+      // migrate as a side effect and prove nothing about the resolve path.)
+      const resolved = await resolveIdeaChallenge(ctx, 'IDEA-1', { against: 'IDEA-2', strategy: 'accept_new' });
+      assert.equal(resolved.confidence, 0.5, 'migrate-then-RESOLVE: the mutating consumer gates for itself');
+      assert.equal(resolved.handle, 'IDEA-2');
+      const read = await convictionOf(ctx, 'IDEA-2');
+      assert.equal(read.confidence, 0.5, 'the read consumer sees the resolved state');
+    });
+  });
+
+  test('legacy bridge: a pre-fix item whose metadata.confidence is lower reads and decays from the LOWER value', async () => {
+    await withProvider(async ({ provider, items }) => {
+      const { a, b } = await seedPair(provider);
+      // A record decayed under the OLD metadata-only path: field still 1.0,
+      // metadata carrying the real 0.4. The real service's _effective_confidence
+      // honours the lower value — reading 1.0 would resurrect a dead belief.
+      const bItem = [...items.values()].find((i) => i.metadata?.handle === b.handle && i.metadata?.fluid_ns === 'compose.fluid.v1');
+      bItem.metadata.confidence = 0.4;
+      const read = await provider.conviction(b.handle);
+      assert.equal(read.confidence, 0.4, 'the legacy metadata value wins when lower');
+      const resolved = await provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' });
+      assert.equal(resolved.confidence, 0, 'decay computes from 0.4 → max(0, 0.4-0.5) = 0, not from the stale field');
+    });
+  });
+
+  test('partial write (the stale-runtime shape: count moves, confidence does not) → Indeterminate, never success', async () => {
+    await withProvider(async ({ provider }) => {
+      const { a, b } = await seedPair(provider);
+      const server = servers[servers.length - 1];
+      server.__resolveMode = 'partial-write';
+      await assert.rejects(
+        () => provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' }),
+        FluidResolutionIndeterminate,
+        'the exact-confidence clause is the guard that catches a pre-fix runtime',
+      );
+    });
+  });
+
+  test('authoritative 404 from /resolve → typed not-found, NO reconciliation poll', async () => {
+    await withProvider(async ({ provider, seen }) => {
+      const { a, b } = await seedPair(provider);
+      const server = servers[servers.length - 1];
+      server.__resolveMode = '404';
+      await assert.rejects(
+        () => provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' }),
+        FluidRecordNotFound,
+        'a real 4xx is a pre-mutation rejection, surfaced typed',
+      );
+      const historyReads = seen.filter((s) => s.path.includes('confidence-history')).length;
+      assert.equal(historyReads, 1, 'only the pre-read — an authoritative rejection is never reconciled');
+    });
+  });
+
+  test('reconciliation reads that FAIL are failed attempts, and the window exhausts to Indeterminate', async () => {
+    await withProvider(async ({ provider }) => {
+      const { a, b } = await seedPair(provider);
+      const server = servers[servers.length - 1];
+      server.__resolveMode = 'gateway-502';
+      server.__historyFailAfter = 1; // pre-read succeeds; every poll read 500s
+      await assert.rejects(
+        () => provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' }),
+        FluidResolutionIndeterminate,
+        'a failing reconciliation read never surfaces as its own error and never becomes a retry',
+      );
+    });
+  });
+
+  test('the strategy allowlist is genuinely immutable (a frozen Set would still accept .add)', () => {
+    assert.throws(() => { CONVICTION_STRATEGIES.push('defer'); }, TypeError);
+    assert.deepEqual([...CONVICTION_STRATEGIES], ['accept_new']);
   });
 });
