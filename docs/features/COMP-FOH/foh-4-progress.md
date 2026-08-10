@@ -1,5 +1,7 @@
 # COMP-FOH / FOH-4 (CONVICTION) — progress ledger
 
+**SHIPPED 2026-08-10 @ `8a477bb` (compose main).** Full suite green (5571 node + ui + tracker; one non-reproducible flake in the first run, known flake class). Codex r2 fix-verification: all 6 post-impl findings correct, 2 trivial residuals fixed (resolve-first consumer golden, `__historyFailAfter` null-check). Live-fire against a real smart-memory-service remains gated on the unreleased SM fix (see design Rollout: confirm source@main before E2E; ask before restarting).
+
 **Started:** 2026-08-09 · **Owner directive:** `/compose build FOH` → "Next FOH slice" → owner picked **CONVICTION (FOH-4)**
 **Lifecycle:** build mode, full lifecycle (design → blueprint → plan → implement → ship)
 **Workspace:** compose (owner initially picked forge-root by mistake; FOH lives entirely in compose)
