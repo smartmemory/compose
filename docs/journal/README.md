@@ -10,6 +10,7 @@ Each entry is a dated session log capturing what we tried, what broke, what we l
 
 | Date | Entry | Summary |
 |------|-------|---------|
+| 2026-08-10 | [Session 106: FOH-4 CONVICTION shipped @8a477bb: belief-strength read + gated challenge→resolve loop, hardened across five review rounds; SmartMemory decay fix verified upstream first](2026-08-10-session-106-foh-4-conviction.md) | FOH-4 CONVICTION shipped @8a477bb: belief-strength read + gated challenge→resolve loop, hardened across five review rounds; SmartMemory decay fix verified upstream first |
 | 2026-08-09 | [Session 105: FOH-3 — CHALLENGE: same-kind contradiction detection, and the exact-type filter that would have made it a silent no-op](2026-08-09-session-105-foh-3-challenge.md) | FOH-3 — CHALLENGE: same-kind contradiction detection, and the exact-type filter that would have made it a silent no-op |
 | 2026-08-09 | [Session 104: COMP-PROV-LINEAGE: W3C PROV-O artifact lineage (vocabulary only), reachability query for staleness, two Codex rounds](2026-08-09-session-104-prov-o-artifact-lineage.md) | COMP-PROV-LINEAGE: W3C PROV-O artifact lineage (vocabulary only), reachability query for staleness, two Codex rounds |
 | 2026-08-09 | [Session 103: roadmap generate stops silently eating hand-authored prose; four review rounds taught us to identify generator-owned content by identity, not shape.](2026-08-09-session-103-roadmap-prose-loss-guard.md) | roadmap generate stops silently eating hand-authored prose; four review rounds taught us to identify generator-owned content by identity, not shape. |
