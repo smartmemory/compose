@@ -96,7 +96,12 @@ Repro script: scratchpad/repro_confidence.py (add semantic item conf=1.0 → app
   - #2 (`against` binding) — resolved to **structural gate** (option a): `against` required, same challengeable kind as `id`, ≠ `id`. NOT re-detection: FOH-3 `challenge` defaults `useLlm:true` (provider.js:1187) so deterministic re-detection would false-refuse. Trust boundary (caller passes a handle from a real prior challenge) disclosed in JSDoc. Persisted-challenge binding deferred (no durable challenge record exists).
   - #3 (lease) — resolve + pre-read + re-read + postcondition all inside `_withLease`.
   - #4 (fail-loud) — re-read `/confidence-history`; authoritative signal = **`challenge_count` advanced** (NOT confidence-drop: 0.0-floor re-resolve is a real success with no drop). Throw `FluidResolutionNoOp` on non-advance. Needs a pre-read to compare.
-  - #5 (allowlist) — **`accept_new` ONLY** in v1. keep_existing = don't call; keep_both/defer = markers nothing reads (dead paths); merge = manual-review. Unknown/other → `FluidInvalidStrategy`. strategy param retained (explicit gate, widen later without signature change).
+  - #5 (allowlist) — **`accept_new` ONLY** in v1. keep_existing = don't call; keep_both/defer = markers nothing reads (dead paths); merge = manual-review.
+    **CORRECTED (2026-08-10, session 107):** "markers nothing reads" is FALSE — `GET /reasoning/conflicts`
+    reads exactly those markers and is their only reader. The ruling stands on independent grounds
+    (neither strategy decays confidence, so neither achieves a resolution `classifyResolution` can verify),
+    but do not carry the premise forward: it is what makes a CONTRADICTION slice look viable when it is not.
+    See [`foh-5-substrate-findings.md`](foh-5-substrate-findings.md). Unknown/other → `FluidInvalidStrategy`. strategy param retained (explicit gate, widen later without signature change).
   - #6 (migrate/gate) — both consumers open with `ensureIdeaboxMigrated` + `gate(ctx)`.
 - **Phase-7 landmine recorded in Rollout:** SM fix is on main but UNRELEASED — confirm the service Compose talks to runs source@main before E2E/live-fire, else golden loop reads 1.0. Restart only with owner OK (no-kill-ports).
 - Self-adversary catch (fixed pre-gate): #4 postcondition must key on challenge_count, not a strict confidence drop, or it false-fails at the 0.0 floor.
