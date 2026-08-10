@@ -187,6 +187,15 @@
 
 ---
 
+### discovery-loop
+
+#### IDEA-32 — CALIBRATION (loop rung 6): grade Compose's own promote/kill judgments over time
+**Status:** NEW | **Priority:** P2
+**Source:** COMP-FOH FOH-6 spike, shelved 2026-08-10
+**Idea:** Meta rung of the discovery loop: grade the loop's own judgment over time (which promotions shipped-and-mattered, which kills a competitor later validated) and recalibrate. SHELVED 2026-08-10 as premature — captured so the spike isn't re-run (token spend). Two grounded blockers, do NOT re-derive: (1) NO SUBJECT — SmartMemory GET /agents/{id}/evaluation needs an AGENT-type row + written evaluations; Compose registers neither, and there is no reachable REST write path to create evaluations. (2) NO TRACK RECORD — Compose rarely records BOTH halves of a bet: predictions are written (feature triageConfidence/impact/effort in lib/feature-writer.js) but the later shipped-and-mattered OUTCOME never is; gate recommendations are rendered then discarded (only the human outcome persists). Sole exception: judgment-ledger reversals (superseded/retracted positions) — editorial, not scored forecasts. PREREQUISITE: start recording the missing half (tag feature confidences with a later outcome so prediction<->outcome pairs accumulate). SEQUENCING: build a lower rung first (pre-promotion wind-tunnel / standing adversaries) — it generates the very track record calibration later grades. Refs: docs/features/COMP-FOH/foh-5-substrate-findings.md, docs/product/2026-07-20-discovery-loop-vision.md (rungs 4/6).
+
+---
+
 ### Unclustered
 
 #### IDEA-21 — Staleness-track multi-slice blueprints

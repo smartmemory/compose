@@ -1,0 +1,26 @@
+{
+  "id": "1aec8c0b-3d8a-464f-a03c-49f0c602ff0e",
+  "handle": "CLUS-7",
+  "kind": "cluster",
+  "title": "discovery-loop",
+  "body": "",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "effort": null,
+  "impact": null,
+  "cluster": null,
+  "cluster_order": null,
+  "tags": [],
+  "source": null,
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "cli:ideabox",
+    "recorded_at": "2026-08-10T08:55:11.994Z",
+    "author": null
+  },
+  "created_at": "2026-08-10T08:55:11.994Z",
+  "updated_at": "2026-08-10T08:55:11.994Z"
+}
