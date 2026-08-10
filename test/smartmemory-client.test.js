@@ -22,7 +22,7 @@ function listen(server) {
 
 function makeStub({
   failStatus = null, quota = false, delayMs = 0, searchResults = [], malformed2xx = false,
-  historyEnvelope = null,
+  historyEnvelope = null, edgeResult = undefined, neighborsList = null, neighbors404 = false,
 } = {}) {
   const seen = [];
   const server = http.createServer((req, res) => {
@@ -69,6 +69,25 @@ function makeStub({
           auto_resolved: false, resolution: parsed.strategy ?? 'defer', confidence: 0.8,
           method: 'manual', evidence: null, actions_taken: ['decayed'],
         }));
+      }
+      // FOH-5. The edge route ALWAYS answers 200 status:success; `edgeResult`
+      // overrides the embedded `result` so a test can serve the deceptive
+      // edge_created:false shape.
+      if (req.url === '/memory/edge') {
+        res.writeHead(200);
+        return res.end(JSON.stringify({
+          status: 'success',
+          source_id: parsed.source_id, target_id: parsed.target_id, relation_type: parsed.relation_type,
+          result: edgeResult !== undefined ? edgeResult : {
+            edge_created: true, source_id: parsed.source_id, target_id: parsed.target_id, edge_type: parsed.relation_type,
+          },
+        }));
+      }
+      const neighborsMatch = req.url.match(/^\/memory\/(.+)\/neighbors$/);
+      if (neighborsMatch) {
+        if (neighbors404) { res.writeHead(404); return res.end('{"detail":"not found"}'); }
+        res.writeHead(200);
+        return res.end(JSON.stringify({ neighbors: neighborsList ?? [], item_id: decodeURIComponent(neighborsMatch[1]) }));
       }
       if (quota) { res.writeHead(429); return res.end('{"error":"quota"}'); }
       if (failStatus) { res.writeHead(failStatus); return res.end('{"error":"x"}'); }
@@ -737,6 +756,94 @@ describe('createSmartmemoryClient.resolveConflict (FOH-4)', () => {
         const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY', timeoutMs: 20 });
         const raw = await client.resolveConflict({ existingItemId: 'item-9', newFact: 'x', strategy: 'accept_new' });
         assert.equal(raw.auto_resolved, false);
+      });
+    } finally { delete process.env.SM_TEST_KEY; }
+  });
+});
+
+describe('createSmartmemoryClient.addEdge (FOH-5)', () => {
+  test('POSTs /memory/edge with the snake_case body and returns the verified envelope', async () => {
+    process.env.SM_TEST_KEY = 'k';
+    try {
+      await withStub({}, async ({ baseUrl, seen }) => {
+        const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY' });
+        const raw = await client.addEdge({
+          sourceId: 'item-1', targetId: 'item-2', relationType: 'CONTRADICTS', properties: { origin: 'fluid:resolveConflict' },
+        });
+        assert.equal(raw.result.edge_created, true);
+        assert.deepEqual(seen.at(-1).body, {
+          source_id: 'item-1', target_id: 'item-2', relation_type: 'CONTRADICTS', properties: { origin: 'fluid:resolveConflict' },
+        });
+      });
+    } finally { delete process.env.SM_TEST_KEY; }
+  });
+
+  test('a deceptive 200 with result.edge_created:false is refused as malformed (review H1)', async () => {
+    process.env.SM_TEST_KEY = 'k';
+    try {
+      const edgeResult = { edge_created: false, source_id: 'item-1', target_id: 'item-2', edge_type: 'CONTRADICTS' };
+      await withStub({ edgeResult }, async ({ baseUrl }) => {
+        const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY' });
+        await assert.rejects(
+          () => client.addEdge({ sourceId: 'item-1', targetId: 'item-2', relationType: 'CONTRADICTS' }),
+          (err) => err instanceof SmartmemoryHttpError && err.kind === 'malformed-response',
+          'edge_created:false under a 200 is a FAILED write, not a success',
+        );
+      });
+    } finally { delete process.env.SM_TEST_KEY; }
+  });
+
+  test('a mismatched source/target/type in the result is refused (the server acted on something else)', async () => {
+    process.env.SM_TEST_KEY = 'k';
+    try {
+      const edgeResult = { edge_created: true, source_id: 'WRONG', target_id: 'item-2', edge_type: 'CONTRADICTS' };
+      await withStub({ edgeResult }, async ({ baseUrl }) => {
+        const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY' });
+        await assert.rejects(
+          () => client.addEdge({ sourceId: 'item-1', targetId: 'item-2', relationType: 'CONTRADICTS' }),
+          (err) => err instanceof SmartmemoryHttpError && err.kind === 'malformed-response',
+        );
+      });
+    } finally { delete process.env.SM_TEST_KEY; }
+  });
+});
+
+describe('createSmartmemoryClient.neighbors (FOH-5)', () => {
+  test('GETs the encoded neighbours path and returns the array', async () => {
+    process.env.SM_TEST_KEY = 'k';
+    try {
+      const neighborsList = [{ item_id: 'item-3', content: 'x', memory_type: 'fluid_idea', link_type: 'CONTRADICTS', direction: 'incoming' }];
+      await withStub({ neighborsList }, async ({ baseUrl, seen }) => {
+        const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY' });
+        const out = await client.neighbors('item/1');
+        assert.deepEqual(out, neighborsList);
+        assert.equal(seen.at(-1).url, '/memory/item%2F1/neighbors');
+      });
+    } finally { delete process.env.SM_TEST_KEY; }
+  });
+
+  test('throws on 404 (the target-deletion race), never returns null (review M7)', async () => {
+    process.env.SM_TEST_KEY = 'k';
+    try {
+      await withStub({ neighbors404: true }, async ({ baseUrl }) => {
+        const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY' });
+        await assert.rejects(
+          () => client.neighbors('item-1'),
+          (err) => err instanceof SmartmemoryHttpError && err.status === 404,
+        );
+      });
+    } finally { delete process.env.SM_TEST_KEY; }
+  });
+
+  test('a 2xx missing the neighbors array is refused as malformed', async () => {
+    process.env.SM_TEST_KEY = 'k';
+    try {
+      await withStub({ malformed2xx: true }, async ({ baseUrl }) => {
+        const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY' });
+        await assert.rejects(
+          () => client.neighbors('item-1'),
+          (err) => err instanceof SmartmemoryHttpError && err.kind === 'malformed-response',
+        );
       });
     } finally { delete process.env.SM_TEST_KEY; }
   });

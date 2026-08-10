@@ -84,19 +84,18 @@ describe('SmartMemoryFluidProvider — configuration', () => {
 });
 
 describe('SmartMemoryFluidProvider — seam contract', () => {
-  // FOH-2 added RECALL; FOH-3 CHALLENGE; FOH-4 CONVICTION. The rest stay
-  // undeclared and keep inheriting the base class's refusal — a capability and
-  // its impl move together.
-  test('declares storage + RECALL + CHALLENGE + CONVICTION; the remaining semantic capabilities still throw', async () => {
+  // FOH-2 added RECALL; FOH-3 CHALLENGE; FOH-4 CONVICTION; FOH-5 CONTRADICTION.
+  // CALIBRATION alone stays undeclared (no subject exists) and keeps inheriting
+  // the base class's refusal — a capability and its impl move together.
+  test('declares storage + RECALL + CHALLENGE + CONVICTION + CONTRADICTION; CALIBRATION still throws', async () => {
     await withProvider(async ({ provider }) => {
       assert.ok(provider.has(CAP.RECORDS) && provider.has(CAP.EVENTS) && provider.has(CAP.LINKS));
       assert.ok(provider.has(CAP.RECALL), 'FOH-2 declares RECALL');
       assert.ok(provider.has(CAP.CHALLENGE), 'FOH-3 declares CHALLENGE');
       assert.ok(provider.has(CAP.CONVICTION), 'FOH-4 declares CONVICTION');
-      for (const cap of [CAP.CALIBRATION, CAP.CONTRADICTION]) {
-        assert.equal(provider.has(cap), false, `${cap} must not be declared`);
-      }
-      // Still-undeclared capabilities inherit the base refusal.
+      assert.ok(provider.has(CAP.CONTRADICTION), 'FOH-5 declares CONTRADICTION');
+      assert.equal(provider.has(CAP.CALIBRATION), false, 'CALIBRATION must not be declared');
+      // The still-undeclared capability inherits the base refusal.
       await assert.rejects(() => provider.calibration('all'), /FluidCapabilityUnavailable|capability/i);
     });
   });
@@ -1118,5 +1117,231 @@ describe('SmartMemoryFluidProvider — conviction (FOH-4)', () => {
   test('the strategy allowlist is genuinely immutable (a frozen Set would still accept .add)', () => {
     assert.throws(() => { CONVICTION_STRATEGIES.push('defer'); }, TypeError);
     assert.deepEqual([...CONVICTION_STRATEGIES], ['accept_new']);
+  });
+});
+
+describe('SmartMemoryFluidProvider — contradiction (FOH-5)', () => {
+  const srv = () => servers[servers.length - 1];
+  const idOf = (items, handle) => [...items.values()].find(
+    (i) => i.metadata?.handle === handle && i.metadata?.fluid_ns === 'compose.fluid.v1',
+  )?.item_id;
+  const contradicts = (edges, src, tgt) => edges.filter(
+    (e) => e.edge_type === 'CONTRADICTS' && e.source_id === src && e.target_id === tgt,
+  );
+
+  async function seedPair(provider) {
+    const a = await provider.createRecord({ kind: 'decision', title: 'Postgres is the datastore' });
+    const b = await provider.createRecord({ kind: 'decision', title: 'Postgres is not the datastore' });
+    return { a, b };
+  }
+
+  test('base provider refuses contradictions with FluidCapabilityUnavailable', async () => {
+    const floor = new LocalFluidProvider();
+    await floor.init(mkdtempSync(join(tmpdir(), 'fluid-contra-')), {});
+    await assert.rejects(() => floor.contradictions('IDEA-1'), /FluidCapabilityUnavailable|capability/i);
+  });
+
+  test('the smartmemory provider now declares CONTRADICTION', async () => {
+    await withProvider(async ({ provider }) => {
+      assert.ok(provider.capabilities().has(CAP.CONTRADICTION), 'CAP.CONTRADICTION is declared');
+    });
+  });
+
+  test('golden loop: a landed resolve writes a CONTRADICTS edge, and contradictions(target) resolves it back', async () => {
+    await withProvider(async ({ provider, items, edges }) => {
+      const { a, b } = await seedPair(provider);
+      const aId = idOf(items, a.handle);
+      const bId = idOf(items, b.handle);
+
+      const res = await provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' });
+      assert.equal(res.confidence, 0.5);
+      assert.equal(contradicts(edges, aId, bId).length, 1, 'one CONTRADICTS edge source -> target');
+
+      const hits = await provider.contradictions(b.handle);
+      assert.equal(hits.length, 1);
+      assert.equal(hits[0].handle, a.handle);
+      assert.equal(hits[0].kind, 'decision');
+      assert.equal(hits[0].record.handle, a.handle, 'the record agrees with getRecord(handle)');
+      assert.ok(hits[0].record.title.includes('Postgres is the datastore'));
+
+      // The source itself has no INCOMING contradictions.
+      assert.deepEqual(await provider.contradictions(a.handle), []);
+    });
+  });
+
+  test('the RECONCILIATION landed-exit also links, not only the clean path (review H2)', async () => {
+    await withProvider(async ({ provider, items, edges }) => {
+      const { a, b } = await seedPair(provider);
+      const aId = idOf(items, a.handle);
+      const bId = idOf(items, b.handle);
+      // 200 + HTML but the mutation lands: the provider confirms via the poll.
+      srv().__resolveMode = 'malformed-mutate';
+      const res = await provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' });
+      assert.equal(res.confidence, 0.5, 'landed via the reconciliation poll');
+      assert.equal(contradicts(edges, aId, bId).length, 1, 'a reconciled landed resolve is ALSO linked');
+      assert.equal((await provider.contradictions(b.handle)).length, 1);
+    });
+  });
+
+  test('no edge on a no-op, and none on an indeterminate outcome', async () => {
+    await withProvider(async ({ provider, edges }) => {
+      const { a, b } = await seedPair(provider);
+      srv().__resolveMode = 'no-op';
+      await assert.rejects(
+        () => provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' }),
+        FluidResolutionNoOp,
+      );
+      assert.equal(edges.length, 0, 'a no-op writes no contradiction edge');
+    });
+    await withProvider(async ({ provider, edges }) => {
+      const { a, b } = await seedPair(provider);
+      srv().__resolveMode = 'gateway-502';
+      srv().__historyFailAfter = 1;
+      await assert.rejects(
+        () => provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' }),
+        FluidResolutionIndeterminate,
+      );
+      assert.equal(edges.length, 0, 'an indeterminate outcome writes no edge');
+    });
+  });
+
+  test('idempotency: a second landed resolve does not add a second edge (review M5)', async () => {
+    await withProvider(async ({ provider, items, edges }) => {
+      const { a, b } = await seedPair(provider);
+      const aId = idOf(items, a.handle);
+      const bId = idOf(items, b.handle);
+      await provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' });
+      await provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' });
+      assert.equal(contradicts(edges, aId, bId).length, 1, 'MERGE semantics: one edge, not two');
+      assert.equal((await provider.contradictions(b.handle)).length, 1);
+    });
+  });
+
+  test('a deceptive 200 with edge_created:false is a FAILED write: resolve still succeeds, no edge, contradictions under-reports (review H1)', async () => {
+    await withProvider(async ({ provider, edges }) => {
+      const { a, b } = await seedPair(provider);
+      srv().__edgeMode = 'not-created';
+      const res = await provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' });
+      assert.equal(res.confidence, 0.5, 'the decay still succeeded — the link is best-effort');
+      assert.equal(edges.length, 0, 'edge_created:false stored no edge');
+      assert.deepEqual(await provider.contradictions(b.handle), [],
+        'contradictions() is a lower bound: it under-reports the pair whose link was abandoned');
+    });
+  });
+
+  test('a hard edge-write failure never fails the resolution (best-effort epilogue)', async () => {
+    await withProvider(async ({ provider, edges }) => {
+      const { a, b } = await seedPair(provider);
+      srv().__edgeMode = 'fail';
+      const res = await provider.resolveConflict(a.handle, b.handle, { strategy: 'accept_new' });
+      assert.equal(res.confidence, 0.5, 'the resolution outcome is returned despite the link failing');
+      assert.equal(edges.length, 0);
+    });
+  });
+
+  test('canonical-handle rule: a CONTRADICTS edge from a LATER duplicate of the source yields no hit (review M4)', async () => {
+    await withProvider(async ({ provider, items, edges }) => {
+      const { a, b } = await seedPair(provider);
+      const canonical = [...items.values()].find(
+        (i) => i.metadata?.handle === a.handle && i.metadata?.fluid_ns === 'compose.fluid.v1',
+      );
+      const bId = idOf(items, b.handle);
+      // A pre-SVC-ALLOC-1 workspace can hold a duplicate handle: forge a LATER one.
+      const dupId = 'item-dup-later';
+      items.set(dupId, {
+        item_id: dupId,
+        content: canonical.content,
+        memory_type: canonical.memory_type,
+        confidence: 1.0,
+        metadata: { ...canonical.metadata, created_at: '2026-12-31T23:59:59Z' },
+      });
+      edges.push({ source_id: dupId, target_id: bId, edge_type: 'CONTRADICTS', properties: {} });
+      assert.deepEqual(await provider.contradictions(b.handle), [],
+        'the later duplicate is not the canonical item for its handle, so it is skipped');
+
+      // The canonical item's own edge DOES produce exactly one hit.
+      edges.push({ source_id: canonical.item_id, target_id: bId, edge_type: 'CONTRADICTS', properties: {} });
+      const hits = await provider.contradictions(b.handle);
+      assert.equal(hits.length, 1, 'canonical edge yields one hit; the duplicate stays skipped');
+      assert.equal(hits[0].record.handle, a.handle);
+    });
+  });
+
+  test('failure semantics: per-neighbour 404 and non-fluid neighbours are skipped (review M6)', async () => {
+    await withProvider(async ({ provider, items, edges }) => {
+      const { a, b } = await seedPair(provider);
+      const aId = idOf(items, a.handle);
+      const bId = idOf(items, b.handle);
+      edges.push({ source_id: aId, target_id: bId, edge_type: 'CONTRADICTS', properties: {} });
+      // A non-fluid item linked in — _fromItem rejects it, silently skipped.
+      items.set('plain-1', { item_id: 'plain-1', content: 'not ours', memory_type: 'semantic', metadata: {} });
+      edges.push({ source_id: 'plain-1', target_id: bId, edge_type: 'CONTRADICTS', properties: {} });
+      // A ghost neighbour whose item is gone (deletion race) — injected, since a
+      // dangling edge is dropped by the route's own hydration.
+      srv().__extraNeighbors = [
+        { item_id: 'ghost-9', content: 'x', memory_type: 'fluid_idea', link_type: 'CONTRADICTS', direction: 'incoming' },
+      ];
+      const hits = await provider.contradictions(b.handle);
+      assert.equal(hits.length, 1, 'only the real fluid contradiction survives');
+      assert.equal(hits[0].handle, a.handle);
+    });
+  });
+
+  test('a parseable-but-schema-invalid neighbour blob is skipped, not emitted and not crash-inducing (post-impl review)', async () => {
+    await withProvider(async ({ provider, items, edges }) => {
+      const { a, b } = await seedPair(provider);
+      const aId = idOf(items, a.handle);
+      const bId = idOf(items, b.handle);
+      edges.push({ source_id: aId, target_id: bId, edge_type: 'CONTRADICTS', properties: {} });
+      // A namespaced fluid item whose blob parses but fails the record schema.
+      // (a) missing kind/title → would be a malformed hit; (b) a handleless {}
+      // blob would send undefined into _resolveOne and throw on the paired filter.
+      items.set('bad-partial', {
+        item_id: 'bad-partial', content: 'x', memory_type: 'fluid_idea',
+        metadata: { fluid_ns: 'compose.fluid.v1', handle: 'IDEA-X', fluid_record_json: JSON.stringify({ handle: 'IDEA-X' }) },
+      });
+      items.set('bad-empty', {
+        item_id: 'bad-empty', content: 'x', memory_type: 'fluid_idea',
+        metadata: { fluid_ns: 'compose.fluid.v1', handle: 'IDEA-Y', fluid_record_json: '{}' },
+      });
+      edges.push({ source_id: 'bad-partial', target_id: bId, edge_type: 'CONTRADICTS', properties: {} });
+      edges.push({ source_id: 'bad-empty', target_id: bId, edge_type: 'CONTRADICTS', properties: {} });
+
+      const hits = await provider.contradictions(b.handle);
+      assert.equal(hits.length, 1, 'only the schema-valid contradiction survives; invalid blobs are skipped, not thrown');
+      assert.equal(hits[0].handle, a.handle);
+    });
+  });
+
+  test('failure semantics: any OTHER neighbour fetch failure fails the whole read — no silent partial (review M6)', async () => {
+    await withProvider(async ({ provider, items, edges }) => {
+      const { a, b } = await seedPair(provider);
+      const aId = idOf(items, a.handle);
+      const bId = idOf(items, b.handle);
+      edges.push({ source_id: aId, target_id: bId, edge_type: 'CONTRADICTS', properties: {} });
+      srv().__getFail = new Set([aId]); // getItem(source) → 500
+      await assert.rejects(
+        () => provider.contradictions(b.handle),
+        /HTTP 500/,
+        'a non-404 fetch failure must throw, not return an apparently-complete partial',
+      );
+    });
+  });
+
+  test('the target-deletion race (resolve then vanish) maps to FluidRecordNotFound (review M7)', async () => {
+    await withProvider(async ({ provider, items }) => {
+      const { b } = await seedPair(provider);
+      const bId = idOf(items, b.handle);
+      srv().__neighbors404 = new Set([bId]); // resolves via /list, 404s on /neighbors
+      await assert.rejects(() => provider.contradictions(b.handle), FluidRecordNotFound);
+    });
+  });
+
+  test('unknown handle rejects; a record with no contradictions is an empty list', async () => {
+    await withProvider(async ({ provider }) => {
+      const { b } = await seedPair(provider);
+      await assert.rejects(() => provider.contradictions('DECISION-999'), FluidRecordNotFound);
+      assert.deepEqual(await provider.contradictions(b.handle), []);
+    });
   });
 });
