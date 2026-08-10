@@ -73,10 +73,12 @@ mode (default on) 400s. Live-fire must confirm: a real CONTRADICTS edge lands be
 nodes, reads back via /neighbors, and a double-write yields ONE edge. Provisioning recipe:
 `foh-4-progress.md` top section.
 
-## Remaining
+## Remaining — ALL DONE (2026-08-10)
 1. ~~Adjudicate post-impl Codex review~~ DONE — 1 Medium fixed.
 2. ~~Live-fire~~ PASSED.
-3. Commit + journal (milestone: new capability) — NEXT.
-4. THEN (owner: "1 then 3") file the two upstream SmartMemory leftovers + the older idempotency-ID
-   errand as smartmem-dev, and set the epic status (COMP-FOH stays IN_PROGRESS: CALIBRATION remains
-   undeclared/blocked — no subject).
+3. ~~Commit + journal~~ DONE — feat @7731043, journal session 107 @5a16d9d, pushed (origin/main up to date).
+4. ~~File upstream SmartMemory leftovers as smartmem-dev~~ DONE:
+   - idempotency-ID on `/resolve` → smart-memory-service#5
+   - atomic decay-plus-link → smart-memory-core#5
+   - property-carrying link read → smart-memory-core#6
+   Epic status unchanged: COMP-FOH stays IN_PROGRESS (CALIBRATION undeclared/blocked — no subject).
