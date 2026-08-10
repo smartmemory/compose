@@ -26,6 +26,10 @@ export const servers = [];
 export function makeServer() {
   const items = new Map();
   const seen = [];
+  // FOH-5 graph edges: {source_id, target_id, edge_type, properties}. Deduped by
+  // (source, target, type) on write, mirroring the backends' MERGE/upsert
+  // (falkordb.py:857 / sqlite.py:649) — a double-write must leave ONE edge.
+  const edges = [];
   let nextId = 1;
   let clock = 0;
   // SVC-ALLOC-1 counters and the SVC-LEASE-1 lease, modelled because the
@@ -296,11 +300,85 @@ export function makeServer() {
         return json(200, { key, released: true });
       }
 
+      // FOH-5 write: POST /memory/edge (links.py:72). The real route ALWAYS
+      // answers 200 {status:"success", result}; the truth is result.edge_created,
+      // which FalkorDB returns false for on a swallowed write (falkordb.py:906).
+      // `__edgeMode`: 'ok' (default) | 'not-created' (the deceptive 200 +
+      // edge_created:false) | 'fail' (500). A missing node is a 500, mirroring
+      // SecureSmartMemory.add_edge's ValueError → route 500.
+      if (path === '/memory/edge' && req.method === 'POST') {
+        const mode = server.__edgeMode ?? 'ok';
+        if (mode === 'fail') return json(500, { detail: 'edge write failed' });
+        const src = parsed?.source_id;
+        const tgt = parsed?.target_id;
+        const type = parsed?.relation_type;
+        if (!items.has(src) || !items.has(tgt)) {
+          return json(500, { detail: 'Source or target node not found or not accessible' });
+        }
+        const created = mode !== 'not-created';
+        if (created && !edges.some((e) => e.source_id === src && e.target_id === tgt && e.edge_type === type)) {
+          edges.push({ source_id: src, target_id: tgt, edge_type: type, properties: parsed?.properties ?? {} });
+        }
+        return json(200, {
+          status: 'success',
+          source_id: src,
+          target_id: tgt,
+          relation_type: type,
+          result: { edge_created: created, source_id: src, target_id: tgt, edge_type: type },
+        });
+      }
+
+      // FOH-5 read: GET /memory/{id}/neighbors (links.py:149). Walks outgoing then
+      // incoming separately (so direction is preserved), filters HAS_VERSION, and
+      // dedups by (item_id, link_type, direction). MUST precede the generic
+      // /memory/(.+) catch-all below, which would otherwise swallow the path.
+      // `__extraNeighbors`: inject synthetic neighbours (a ghost item_id for the
+      // deletion-race skip, or a non-fluid item) that the edge store cannot model.
+      const neighM = path.match(/^\/memory\/([^/]+)\/neighbors$/);
+      if (neighM && req.method === 'GET') {
+        const id = decodeURIComponent(neighM[1]);
+        // `__neighbors404`: force a 404 here while the item still resolves via
+        // /list — the target-deletion race between contradictions()'s resolve and
+        // its neighbours read (must map to FluidRecordNotFound, like conviction).
+        if (server.__neighbors404?.has(id)) return json(404, { detail: 'Memory item not found' });
+        if (!items.has(id)) return json(404, { detail: 'Memory item not found' });
+        const INFRA = new Set(['HAS_VERSION']);
+        const out = [];
+        const seenKeys = new Set();
+        const push = (neighborId, linkType, direction) => {
+          if (INFRA.has(linkType)) return;
+          const neighbor = items.get(neighborId);
+          if (!neighbor) return; // real route hydrates the node; a gone node isn't yielded
+          const key = `${neighborId}|${linkType}|${direction}`;
+          if (seenKeys.has(key)) return;
+          seenKeys.add(key);
+          out.push({
+            item_id: neighbor.item_id,
+            content: neighbor.content,
+            memory_type: neighbor.memory_type,
+            link_type: linkType,
+            direction,
+          });
+        };
+        for (const e of edges) if (e.source_id === id) push(e.target_id, e.edge_type, 'outgoing');
+        for (const e of edges) if (e.target_id === id) push(e.source_id, e.edge_type, 'incoming');
+        for (const extra of server.__extraNeighbors ?? []) {
+          const key = `${extra.item_id}|${extra.link_type}|${extra.direction}`;
+          if (seenKeys.has(key)) continue;
+          seenKeys.add(key);
+          out.push(extra);
+        }
+        return json(200, { neighbors: out, item_id: id });
+      }
+
       const m = path.match(/^\/memory\/(.+)$/);
       if (m) {
         const id = decodeURIComponent(m[1]);
         const item = items.get(id);
         if (!item) return json(404, { detail: 'not found' });
+        // `__getFail`: force a NON-404 failure on a getItem for specific ids —
+        // drives FOH-5's "any other neighbour fetch failure must THROW, not skip".
+        if (req.method === 'GET' && server.__getFail?.has(id)) return json(500, { detail: 'boom' });
         if (req.method === 'GET') return json(200, item);
         if (req.method === 'DELETE') { items.delete(id); return json(200, { status: 'deleted', item_id: id }); }
         if (req.method === 'PATCH') {
@@ -319,11 +397,11 @@ export function makeServer() {
       return json(404, { detail: 'no route' });
     });
   });
-  return { server, items, seen };
+  return { server, items, seen, edges };
 }
 
 export async function withProvider(fn, { workspaceId = 'ws-test' } = {}) {
-  const { server, items, seen } = makeServer();
+  const { server, items, seen, edges } = makeServer();
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   servers.push(server);
   process.env.SM_FLUID_KEY = 'test-key';
@@ -364,7 +442,7 @@ export async function withProvider(fn, { workspaceId = 'ws-test' } = {}) {
         };
       });
     };
-    await fn({ provider, items, seen, queueHits, queueConflicts });
+    await fn({ provider, items, seen, edges, queueHits, queueConflicts });
   } finally {
     delete process.env.SM_FLUID_KEY;
     server.close();
