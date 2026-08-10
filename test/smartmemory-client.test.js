@@ -20,7 +20,10 @@ function listen(server) {
   });
 }
 
-function makeStub({ failStatus = null, quota = false, delayMs = 0, searchResults = [], malformed2xx = false } = {}) {
+function makeStub({
+  failStatus = null, quota = false, delayMs = 0, searchResults = [], malformed2xx = false,
+  historyEnvelope = null,
+} = {}) {
   const seen = [];
   const server = http.createServer((req, res) => {
     if (req.url === '/health') {
@@ -50,6 +53,21 @@ function makeStub({ failStatus = null, quota = false, delayMs = 0, searchResults
         return res.end(JSON.stringify({
           new_assertion: parsed.assertion ?? '', has_conflicts: false,
           conflicts: [], related_facts_count: 0, overall_confidence: 1.0,
+        }));
+      }
+      if (req.url.startsWith('/memory/reasoning/confidence-history/')) {
+        res.writeHead(200);
+        return res.end(JSON.stringify(historyEnvelope ?? {
+          item_id: 'item-1', current_confidence: 0.5, challenge_count: 1,
+          history: [{ timestamp: 't', old_confidence: 1.0, new_confidence: 0.5, decay_factor: 0.5, reason: 'manual_resolution:accept_new' }],
+          history_count: 1,
+        }));
+      }
+      if (req.url === '/memory/reasoning/resolve') {
+        res.writeHead(200);
+        return res.end(JSON.stringify({
+          auto_resolved: false, resolution: parsed.strategy ?? 'defer', confidence: 0.8,
+          method: 'manual', evidence: null, actions_taken: ['decayed'],
         }));
       }
       if (quota) { res.writeHead(429); return res.end('{"error":"quota"}'); }
@@ -658,6 +676,67 @@ describe('createSmartmemoryClient.challenge', () => {
         // dropped, this would time out exactly like the call above.
         const raw = await client.challenge('x', { memoryType: 'fluid_decision', timeoutMs: 2000 });
         assert.equal(raw.has_conflicts, false);
+      });
+    } finally { delete process.env.SM_TEST_KEY; }
+  });
+});
+
+describe('createSmartmemoryClient.confidenceHistory (FOH-4)', () => {
+  test('GETs the item path and returns the full envelope', async () => {
+    process.env.SM_TEST_KEY = 'k';
+    try {
+      await withStub({}, async ({ baseUrl, seen }) => {
+        const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY' });
+        const raw = await client.confidenceHistory('item/1'); // needs encoding
+        assert.equal(raw.current_confidence, 0.5);
+        assert.equal(raw.challenge_count, 1);
+        assert.equal(seen.at(-1).url, '/memory/reasoning/confidence-history/item%2F1');
+      });
+    } finally { delete process.env.SM_TEST_KEY; }
+  });
+
+  test('a shaped-but-partial envelope is refused as malformed (missing challenge_count)', async () => {
+    process.env.SM_TEST_KEY = 'k';
+    try {
+      // The destructive-write classifier reads challenge_count from this
+      // envelope; a 2xx without it must never reach the provider.
+      const partial = { item_id: 'item-1', current_confidence: 0.5, history: [], history_count: 0 };
+      await withStub({ historyEnvelope: partial }, async ({ baseUrl }) => {
+        const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY' });
+        await assert.rejects(
+          () => client.confidenceHistory('item-1'),
+          (err) => err instanceof SmartmemoryHttpError && err.kind === 'malformed-response',
+        );
+      });
+    } finally { delete process.env.SM_TEST_KEY; }
+  });
+});
+
+describe('createSmartmemoryClient.resolveConflict (FOH-4)', () => {
+  test('POSTs /resolve with ALL THREE cascade flags explicitly false (route defaults are true)', async () => {
+    process.env.SM_TEST_KEY = 'k';
+    try {
+      await withStub({}, async ({ baseUrl, seen }) => {
+        const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY' });
+        const raw = await client.resolveConflict({ existingItemId: 'item-9', newFact: 'X supersedes', strategy: 'accept_new' });
+        assert.equal(raw.auto_resolved, false);
+        assert.deepEqual(seen.at(-1).body, {
+          existing_item_id: 'item-9', new_fact: 'X supersedes',
+          auto_resolve: false, strategy: 'accept_new', use_llm: false, use_wikipedia: false,
+        });
+      });
+    } finally { delete process.env.SM_TEST_KEY; }
+  });
+
+  test('the 8s default timeout survives a tiny client default (an abort here is an ambiguous outcome)', async () => {
+    process.env.SM_TEST_KEY = 'k';
+    try {
+      await withStub({ delayMs: 60 }, async ({ baseUrl }) => {
+        // Client default 20ms would abort a 60ms response; the wrapper's own
+        // 8s default must win without the caller passing anything.
+        const client = createSmartmemoryClient({ baseUrl, apiKeyEnv: 'SM_TEST_KEY', timeoutMs: 20 });
+        const raw = await client.resolveConflict({ existingItemId: 'item-9', newFact: 'x', strategy: 'accept_new' });
+        assert.equal(raw.auto_resolved, false);
       });
     } finally { delete process.env.SM_TEST_KEY; }
   });

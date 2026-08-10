@@ -54,6 +54,10 @@ export function makeServer() {
           item_id: id,
           content: parsed.content,
           memory_type: parsed.memory_type,
+          // First-class field (CORE-PROPS-1): every item carries confidence,
+          // defaulting to 1.0. Post CONFIDENCE-DECAY-FIELD-1 the FIELD is
+          // canonical — decay moves it, and /confidence-history reads it.
+          confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 1.0,
           // The server stamps created_at itself, unconditionally, overwriting
           // anything the caller sent. This is what makes a flat record mapping
           // impossible to round-trip.
@@ -90,6 +94,119 @@ export function makeServer() {
           conflicts: kept,
           related_facts_count: kept.length,
           overall_confidence: overall,
+        });
+      }
+
+      // Conviction (FOH-4). Models the POST-FIX (CONFIDENCE-DECAY-FIELD-1)
+      // contract: decay reads and sets the first-class `confidence` field, and
+      // /confidence-history reports the field. `__resolveMode` selects a failure
+      // shape per test (same style as __hits/__conflicts):
+      //   'ok' (default) | 'no-op' (200, nothing persisted) | 'malformed'
+      //   (200 + HTML — the proxy-error-page case) | 'gateway-502' |
+      //   'mutate-late' (never respond; mutate after __resolveLateMs — the
+      //   aborted-request-whose-mutation-lands-anyway race) | 'count-jump'
+      //   (two decays interleaved) | 'unattributed' (a foreign caller's decay).
+      const codePointSlice = (s, n) => Array.from(String(s ?? '')).slice(0, n).join('');
+      // The real service's legacy bridge (`_effective_confidence`,
+      // confidence.py:12 / reasoning.py:26): read the first-class field, but
+      // honour a LOWER metadata.confidence left by the old pre-fix decay path —
+      // a migrated item must not reset toward 1.0. Both decay and the history
+      // route read through this, exactly as the real routes do.
+      const effectiveConfidence = (item) => {
+        const field = typeof item.confidence === 'number' ? item.confidence : 1.0;
+        const legacy = item.metadata?.confidence;
+        return typeof legacy === 'number' && legacy < field ? legacy : field;
+      };
+      const decayItem = (item, fact) => {
+        const old = effectiveConfidence(item);
+        const next = Math.max(0, old - 0.5);
+        clock += 1;
+        const ts = `2026-01-01T00:01:${String(clock).padStart(2, '0')}Z`;
+        // The real apply_decay sets the field AND the metadata mirror.
+        item.confidence = next;
+        item.metadata.confidence = next;
+        const hist = item.metadata.confidence_history = item.metadata.confidence_history ?? [];
+        hist.push({
+          timestamp: ts, old_confidence: old, new_confidence: next, decay_factor: 0.5,
+          reason: 'manual_resolution:accept_new', conflicting_fact: codePointSlice(fact, 200),
+        });
+        if (hist.length > 20) item.metadata.confidence_history = hist.slice(-20);
+        item.metadata.challenged = true;
+        item.metadata.challenge_count = (item.metadata.challenge_count ?? 0) + 1;
+        item.metadata.last_challenged_at = ts;
+      };
+
+      if (path === '/memory/reasoning/resolve' && req.method === 'POST') {
+        const mode = server.__resolveMode ?? 'ok';
+        const item = items.get(parsed?.existing_item_id);
+        if (!item) return json(404, { detail: 'not found' });
+        const respond = () => json(200, {
+          auto_resolved: false,
+          resolution: parsed?.strategy ?? 'defer',
+          // Deliberately ambiguous, like the real route (result.get("confidence", 0.0))
+          // — a provider trusting this value instead of re-reading is a bug.
+          confidence: 0.8,
+          method: 'manual',
+          evidence: null,
+          actions_taken: [`Decayed confidence of existing fact ${parsed?.existing_item_id}`],
+        });
+        if (mode === 'no-op') return respond();
+        if (mode === 'malformed') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end('<html>proxy error page</html>'); }
+        if (mode === 'malformed-mutate') {
+          // The dangerous proxy shape: the origin mutation SUCCEEDED but the
+          // response was replaced by an HTML error page.
+          decayItem(item, parsed?.new_fact);
+          res.writeHead(200, { 'Content-Type': 'text/html' });
+          return res.end('<html>proxy error page</html>');
+        }
+        if (mode === 'gateway-502') return json(502, { detail: 'bad gateway' });
+        if (mode === 'mutate-late') {
+          // Never respond: the client aborts at its deadline, but the "handler"
+          // keeps going and the mutation lands afterwards. unref() so a
+          // never-observed late mutation cannot hold the test process open.
+          setTimeout(() => decayItem(item, parsed?.new_fact), server.__resolveLateMs ?? 100).unref();
+          return undefined;
+        }
+        if (mode === 'count-jump') { decayItem(item, 'a foreign fact'); decayItem(item, parsed?.new_fact); return respond(); }
+        if (mode === 'unattributed') { decayItem(item, 'a foreign fact'); return respond(); }
+        if (mode === '404') return json(404, { detail: 'not found' });
+        if (mode === 'partial-write') {
+          // The pre-fix-runtime shape (CONFIDENCE-DECAY-FIELD-1's bug): the
+          // metadata count + history advance but the canonical field never
+          // moves. The exact-confidence clause is what catches this.
+          const old = effectiveConfidence(item);
+          clock += 1;
+          const ts = `2026-01-01T00:01:${String(clock).padStart(2, '0')}Z`;
+          (item.metadata.confidence_history = item.metadata.confidence_history ?? []).push({
+            timestamp: ts, old_confidence: old, new_confidence: Math.max(0, old - 0.5),
+            decay_factor: 0.5, reason: 'manual_resolution:accept_new',
+            conflicting_fact: codePointSlice(parsed?.new_fact, 200),
+          });
+          item.metadata.challenge_count = (item.metadata.challenge_count ?? 0) + 1;
+          return respond();
+        }
+        decayItem(item, parsed?.new_fact); // 'ok'
+        return respond();
+      }
+
+      const chM = path.match(/^\/memory\/reasoning\/confidence-history\/(.+)$/);
+      if (chM && req.method === 'GET') {
+        // `__historyFailAfter = N`: history reads beyond the Nth return 500 —
+        // drives the "reconciliation read failure is a failed attempt" branch.
+        // Null-checked, not truthiness: N=0 legitimately means "every read fails".
+        server.__historyCalls = (server.__historyCalls ?? 0) + 1;
+        if (server.__historyFailAfter != null && server.__historyCalls > server.__historyFailAfter) {
+          return json(500, { detail: 'history read failed' });
+        }
+        const item = items.get(decodeURIComponent(chM[1]));
+        if (!item) return json(404, { detail: 'not found' });
+        const hist = item.metadata.confidence_history ?? [];
+        return json(200, {
+          item_id: item.item_id,
+          current_confidence: effectiveConfidence(item),
+          challenge_count: item.metadata.challenge_count ?? 0,
+          history: hist,
+          history_count: hist.length,
         });
       }
 
