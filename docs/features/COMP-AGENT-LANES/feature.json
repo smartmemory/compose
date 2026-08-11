@@ -1,0 +1,17 @@
+{
+  "code": "COMP-AGENT-LANES",
+  "description": "Per-subagent lane visibility for parallel fan-outs in the cockpit. When the lifecycle runs 2-3 agents in parallel (Phase-1 research, Phase-3 competing mandates), the cockpit shows only an aggregate '3 running' counter instead of each worker's mandate label, live status, and streamed output. Completes ITEM-25a's explicitly-deferred agent_run/parallel-step tracking. Cross-repo: Stratum stamps each parallel worker's stream events with a stable scoped step id + human label; Compose renders one lane per worker, reusing the existing AgentPanel per-agent renderer.",
+  "status": "IN_PROGRESS",
+  "phase": "COMP-AGENT-LANES: Per-subagent lanes for parallel fan-outs",
+  "created": "2026-08-10",
+  "updated": "2026-08-10",
+  "complexity": "M",
+  "position": 1,
+  "profile": {
+    "needs_prd": false,
+    "needs_architecture": false,
+    "needs_verification": true,
+    "needs_report": true
+  },
+  "impact": "medium"
+}
