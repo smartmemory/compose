@@ -19,6 +19,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import AgentStream from '../AgentStream.jsx';
+import LaneStrip from './LaneStrip.jsx';
 import VerboseToggle from '../agent/VerboseToggle.jsx';
 import {
   nextAgentBarState,
@@ -35,6 +36,8 @@ const EXPAND_ICON  = '⤢';   // maximized
 export default function AgentBar({ barState = 'collapsed', onStateChange }) {
   const [statusText, setStatusText] = useState('ready');
   const [parallelProgress, setParallelProgress] = useState(null);
+  // COMP-AGENT-LANES: per-worker lane entries from the same status payload
+  const [lanes, setLanes] = useState([]);
 
   // Listen for compose:agent-status events to power the collapsed status line
   useEffect(() => {
@@ -43,6 +46,7 @@ export default function AgentBar({ barState = 'collapsed', onStateChange }) {
 
       // Track parallel task progress
       setParallelProgress(parallelTasks ?? null);
+      setLanes(e.detail?.lanes ?? []);
 
       if (parallelTasks) {
         const { total, completed, failed, active } = parallelTasks;
@@ -171,8 +175,13 @@ export default function AgentBar({ barState = 'collapsed', onStateChange }) {
       {/* Stream content — shown in expanded and maximized states             */}
       {/* ------------------------------------------------------------------ */}
       {!isCollapsed && (
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <AgentStream />
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          {/* COMP-AGENT-LANES: one lane per parallel worker; collapsed it shows
+              the legacy counter line. Renders nothing when no fanout runs. */}
+          <LaneStrip lanes={lanes} />
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <AgentStream />
+          </div>
         </div>
       )}
     </div>
