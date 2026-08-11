@@ -2,7 +2,7 @@
 
 ## 2026-08-12
 
-### COMP-FOH / FOH-6 — COLLEAGUE-PANEL: Maya in the cockpit (S1: relay + token source)
+### COMP-FOH / FOH-6 — COLLEAGUE-PANEL: Maya in the cockpit (S1: relay + token source, S2: context builder)
 
 The sixth Front-of-House slice starts layering Maya (the existing SmartMemory assistant, core never modified) into the cockpit as a summonable colleague. S1 ships the server relay and the pluggable token source. Compose holds the credential server-side and relays turns to Maya's `POST /api/chat`; the identity that owns her single standing conversation is provisioned lazily on first use via smart-memory-service's sanctioned test surface (`POST /test/provision-user` + beta-NDA accept) and persisted in `data/maya-identity.json`, or pasted as a static token. The shallow-binding invariant is enforced at the seam: a colleague token whose workspace claim equals the fluid `workspaceId` is refused (`workspace-collision` funnel) before any provisioning side effect or chat turn, because accepting it would silently turn Maya's background turn-ingestion into a writer against the fluid workspace.
 
@@ -12,6 +12,9 @@ The sixth Front-of-House slice starts layering Maya (the existing SmartMemory as
 - `lib/maya-client.js` — `health()` (never throws) + `chat()`: Bearer auth read at call time, ONE same-token retry on 401 then `MayaAuthError` (never a silent re-provision — the identity owns the standing thread), generous chat deadline (her turn does LLM work), and a trust gate on 2xx bodies (non-JSON, `success:false`, or a missing `message_id` — the write-back idempotency key — all fail rather than pass as replies).
 - `server/maya-routes.js` — `GET /api/maya/status` (degrade-never-fail shaped 200s driving the panel funnel: not-installed / connect-smartmemory / offline / workspace-collision / ready with an honest capability strip — calibration visibly unavailable) and `POST /api/maya/message` (context → chat → shaped `{ok, reply, message_id, writeback, context}`; context-composition failure is a funnel, never a fall-through to plain chat, per COLLEAGUE-ALL-IN). Auth posture: stays behind the remote auth gate, never allowlisted — asserted by test.
 - `test/helpers/maya-stub.js` (Maya + provisioning stubs with 401/slow/reject-context/HTML-body knobs), `test/maya-client.test.js`, `test/maya-routes.test.js`.
+- `lib/colleague/context.js` (S2) — `composeColleagueContext`: the per-turn `channel_context` composer and the FIRST production consumer of the FOH-3/4/5 capabilities (`challengeIdea`, `convictionOf`, and the new `contradictionsOf` had zero production call sites until here — an FOH-6 acceptance criterion). Sections are declared-capability-derived (`provider.has(CAP.X)`), fetched concurrently with a per-capability deadline; a section that fails is omitted AND named, never a turn failure. Truncation priority under a byte budget, enforced before Maya's own token cap: contradictions > conviction > challenge > record body (truncated to headline first) > discussion (dropped first) — every drop named in `omissions` so a truncated turn is never mistaken for a clean one. No focus → corpus-level context (recent ideas). Explicit provenance authors (`compose:idea IDEA-42`, `compose:conviction`, …).
+- `lib/fluid/ideabox-ops.js` — `contradictionsOf(ctx, id)`: the CONTRADICTION wrapper in the `convictionOf` shape (migration gate, `FluidRecordNotFound → IdeaboxNotFound`).
+- `test/colleague-context.test.js` — inclusion/absence per capability, capability-throw-is-not-turn-failure, the truncation golden (contradiction survives, discussion drops first), per-section caps, corpus fallback, unknown-focus refusal.
 
 ### COMP-AGENT-LANES — Per-subagent lanes for parallel fan-outs
 

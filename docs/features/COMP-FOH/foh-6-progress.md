@@ -69,6 +69,11 @@ coverage sweep per Phase 7.
   lazy provision+NDA, no-silent-reprovision, workspace-collision refusal before side effects,
   static mode, allowlist-posture assertion). Message route uses an injectable `composeContext`
   (S1 default: empty blocks) — S2 wires the real builder.
+- **S2 COMPLETE:** `lib/colleague/context.js` (composeColleagueContext: capability-derived
+  sections, concurrent fetch + per-capability deadline, priority truncation with named
+  omissions, corpus fallback) + `contradictionsOf` export in ideabox-ops; wired as the relay's
+  default composeContext. First production callers of challengeIdea/convictionOf/contradictions
+  now exist (acceptance criterion). 142 tests green across colleague/maya/ideabox/provider suites.
 - Deferred to end-of-build (stack-dependent): dogfood config, live-fire, same-identity re-auth
   probe + upstream issues (channel_context supported field; POST /test/login ask).
 

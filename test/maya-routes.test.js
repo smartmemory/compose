@@ -51,6 +51,10 @@ function wiredRoot({ mayaBase, smBase, mode = 'provision' }) {
   });
 }
 
+/** For tests targeting auth/transport concerns, not composition (the real
+ *  builder has its own suite, test/colleague-context.test.js). */
+const emptyContext = async () => ({ blocks: [], omissions: [] });
+
 function startApp({ root, deps = {} }) {
   const app = express();
   app.use(express.json());
@@ -182,7 +186,7 @@ describe('maya routes', () => {
     const maya = await makeMayaServer();
     const sm = await makeSmStub();
     const root = wiredRoot({ mayaBase: maya.baseUrl, smBase: sm.baseUrl });
-    const srv = await startApp({ root });
+    const srv = await startApp({ root, deps: { composeContext: emptyContext } });
     track(srv);
 
     const r1 = await postMessage(srv.baseUrl, { text: 'hello maya' });
@@ -260,7 +264,7 @@ describe('maya routes', () => {
     maya.server.__401Always = true;
     const sm = await makeSmStub();
     const root = wiredRoot({ mayaBase: maya.baseUrl, smBase: sm.baseUrl });
-    const srv = await startApp({ root });
+    const srv = await startApp({ root, deps: { composeContext: emptyContext } });
     track(srv);
     const { body } = await postMessage(srv.baseUrl, { text: 'hi' });
     assert.equal(body.ok, false);
@@ -275,7 +279,7 @@ describe('maya routes', () => {
   test('message: Maya unreachable → offline funnel', async () => {
     const sm = await makeSmStub();
     const root = wiredRoot({ mayaBase: 'http://127.0.0.1:1', smBase: sm.baseUrl });
-    const srv = await startApp({ root });
+    const srv = await startApp({ root, deps: { composeContext: emptyContext } });
     track(srv);
     const { body } = await postMessage(srv.baseUrl, { text: 'hi' });
     assert.equal(body.ok, false);
@@ -315,7 +319,7 @@ describe('maya routes', () => {
     const sm = await makeSmStub();
     const root = wiredRoot({ mayaBase: maya.baseUrl, smBase: sm.baseUrl, mode: 'static' });
     saveIdentity(root, { access_token: 'pasted-token', mode: 'static' });
-    const srv = await startApp({ root });
+    const srv = await startApp({ root, deps: { composeContext: emptyContext } });
     track(srv);
     const { body } = await postMessage(srv.baseUrl, { text: 'hi' });
     assert.equal(body.ok, true);
