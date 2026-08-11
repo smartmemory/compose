@@ -10,6 +10,7 @@ import {
   groupToolResults,
 } from './agent-stream-helpers.js';
 import { createAgentStream } from '../lib/agentStream.js';
+import { applyLaneEvent, deriveParallelSummary } from './agent-stream-lanes.js';
 
 /**
  * AgentStream — structured SDK message stream + chat input.
@@ -73,6 +74,11 @@ const _state = {
   _idleTimer: null,
   sourceStatus: { build: null, interactive: null }, // per-source status tracking
   parallelTasks: null, // { total, completed, failed, active } when parallel dispatch is running
+  // COMP-AGENT-LANES: per-worker lanes for parallel fanouts, keyed
+  // flowId:stepId:itemIndex (see agent-stream-lanes.js). parallelTasks is
+  // derived from this map when events carry a lane envelope; lane-less streams
+  // keep the legacy aggregate bookkeeping (back-compat).
+  lanes: new Map(),
   // Connection error / retry state (issue #24)
   streamError: null,        // latest error message string
   retryInfo: null,          // { attempt, maxRetries, nextBackoffMs } | null
@@ -174,6 +180,9 @@ function setAgentStatus(status, tool, category) {
     activityLog: _state.activityLog,
     currentActivity: _state.currentActivity,
     parallelTasks: _state.parallelTasks,
+    // COMP-AGENT-LANES: per-worker lane entries (see agent-stream-lanes.js).
+    // Entries are shared by reference; consumers must treat them as read-only.
+    lanes: [..._state.lanes.values()],
   };
 
   if (_state.onAgentStatusChange) _state.onAgentStatusChange({ ...payload });
@@ -198,8 +207,14 @@ function mergeSourceStatus() {
 }
 
 function processMessage(msg) {
-  // Track parallel task progress from build stream events
-  if (msg._source === 'build' && msg.type === 'system' && msg.parallel) {
+  // COMP-AGENT-LANES: lane-stamped build events feed the per-worker lane map;
+  // the legacy aggregate shape is derived from it (a failed worker now counts
+  // failed — the old reducer marked every done "complete").
+  if (msg._source === 'build' && msg.lane) {
+    applyLaneEvent(_state.lanes, msg);
+    _state.parallelTasks = deriveParallelSummary(_state.lanes);
+  } else if (msg._source === 'build' && msg.type === 'system' && msg.parallel) {
+    // Legacy lane-less stream: aggregate bookkeeping unchanged (back-compat).
     if (msg.subtype === 'build_step' && msg.stepNum?.toString().startsWith('∥')) {
       // Individual parallel task started — initialize or increment active
       if (!_state.parallelTasks) {
@@ -216,10 +231,11 @@ function processMessage(msg) {
     } else if (msg.subtype === 'build_step_done' && _state.parallelTasks && !msg.stepNum?.toString().startsWith('∥')) {
       // Batch-level consumer fanout done — clear parallel state
       _state.parallelTasks = null;
+      _state.lanes.clear();
     }
   }
-  // Build errors for parallel tasks
-  if (msg._source === 'build' && msg.type === 'error' && _state.parallelTasks?.tasks?.[msg.stepId]) {
+  // Build errors for parallel tasks (legacy lane-less path)
+  if (msg._source === 'build' && msg.type === 'error' && !msg.lane && _state.parallelTasks?.tasks?.[msg.stepId]) {
     _state.parallelTasks.active = Math.max(0, _state.parallelTasks.active - 1);
     _state.parallelTasks.failed++;
     _state.parallelTasks.tasks[msg.stepId] = 'failed';
@@ -233,6 +249,7 @@ function processMessage(msg) {
 
     if (derived.status === 'idle') {
       _state.parallelTasks = null; // Clear parallel state on idle
+      _state.lanes.clear();
       mergeSourceStatus();
     } else {
       if (_state._idleTimer) { clearTimeout(_state._idleTimer); _state._idleTimer = null; }
