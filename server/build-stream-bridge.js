@@ -391,8 +391,10 @@ export class BuildStreamBridge {
           message: event.message, source: 'build',
           // COMP-AGENT-LANES: stepId + lane let the cockpit scope a failure to
           // its worker lane (C5 — dropped here before, so lane-scoped failure
-          // could never fire).
+          // could never fire). laneTerminal distinguishes a lane-closing error
+          // from an advisory one — the reducer closes only on laneTerminal.
           ...(event.stepId ? { stepId: event.stepId } : {}),
+          ...(event.laneTerminal === true ? { laneTerminal: true } : {}),
           ...laneOf(event),
           _source: 'build',
         };
