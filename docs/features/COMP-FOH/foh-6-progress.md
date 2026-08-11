@@ -74,6 +74,13 @@ coverage sweep per Phase 7.
   omissions, corpus fallback) + `contradictionsOf` export in ideabox-ops; wired as the relay's
   default composeContext. First production callers of challengeIdea/convictionOf/contradictions
   now exist (acceptance criterion). 142 tests green across colleague/maya/ideabox/provider suites.
+- **S3 COMPLETE:** ColleaguePanel slide-over (5 funnel states, capability strip w/ calibration
+  visibly unavailable, focus picker following Ideabox selection, context notes, write-back chips),
+  useMayaStatus (workspace-keyed memo + refresh), ViewTabs summon button (chrome, not a tab),
+  App mount. **Blueprint addition:** `POST /api/maya/identity` (reprovision/static) — the auth
+  funnel's explicit actions needed server wiring the blueprint didn't enumerate; refuses
+  fluid-workspace tokens like every other entry point. Panel's repair affordance posts
+  `/api/ideabox/render` — endpoint lands in S4. 20 route tests + 10 UI tests green; vite build OK.
 - Deferred to end-of-build (stack-dependent): dogfood config, live-fire, same-identity re-auth
   probe + upstream issues (channel_context supported field; POST /test/login ask).
 

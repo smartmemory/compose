@@ -341,6 +341,58 @@ describe('maya routes', () => {
     assert.equal(sm.seen.length, 0);
   });
 
+  // ── /identity — the auth funnel's explicit actions (S3) ──────────────────
+
+  test('identity reprovision: tears down upstream, clears the store; next turn provisions fresh', async () => {
+    const maya = await makeMayaServer();
+    const sm = await makeSmStub();
+    const root = wiredRoot({ mayaBase: maya.baseUrl, smBase: sm.baseUrl });
+    const srv = await startApp({ root, deps: { composeContext: emptyContext } });
+    track(srv);
+
+    await postMessage(srv.baseUrl, { text: 'first' }); // provisions token-1
+    const r = await fetch(`${srv.baseUrl}/api/maya/identity`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Connection: 'close' },
+      body: JSON.stringify({ action: 'reprovision' }),
+    });
+    assert.deepEqual(await r.json(), { ok: true });
+    assert.equal(loadIdentity(root), null);
+    assert.ok(sm.seen.some((s) => s.path === '/test/provision-user' && s.method === 'DELETE'));
+
+    // Next turn mints a FRESH identity — a new thread, chosen explicitly.
+    const r2 = await postMessage(srv.baseUrl, { text: 'again' });
+    assert.equal(r2.body.ok, true);
+    assert.equal(loadIdentity(root).access_token, 'token-2');
+  });
+
+  test('identity static: stores a pasted token; a fluid-workspace token is refused and NOT stored', async () => {
+    const maya = await makeMayaServer();
+    const sm = await makeSmStub();
+    const root = wiredRoot({ mayaBase: maya.baseUrl, smBase: sm.baseUrl });
+    const srv = await startApp({ root, deps: { composeContext: emptyContext } });
+    track(srv);
+
+    const post = async (body) => {
+      const r = await fetch(`${srv.baseUrl}/api/maya/identity`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Connection: 'close' },
+        body: JSON.stringify(body),
+      });
+      return r.json();
+    };
+
+    // A JWT whose workspace claim IS the fluid workspace → refused, nothing stored.
+    const claim = Buffer.from(JSON.stringify({ workspace_id: FLUID_WS })).toString('base64url');
+    const bad = await post({ action: 'static', token: `h.${claim}.s` });
+    assert.equal(bad.ok, false);
+    assert.equal(bad.error.kind, 'workspace-collision');
+    assert.equal(loadIdentity(root), null);
+
+    // An opaque token stores as a static identity.
+    const good = await post({ action: 'static', token: 'pasted-opaque' });
+    assert.equal(good.ok, true);
+    assert.deepEqual(loadIdentity(root), { mode: 'static', access_token: 'pasted-opaque' });
+  });
+
   // ── workspace-isolation validation (the VERIFY-3 refusal unit test) ──────
 
   test('validateWorkspaceIsolation: fluid-workspace token refused, distinct allowed', () => {
