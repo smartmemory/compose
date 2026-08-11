@@ -1,10 +1,10 @@
 {
   "code": "COMP-AGENT-LANES",
   "description": "Per-subagent lane visibility for parallel fan-outs in the cockpit. When the lifecycle runs 2-3 agents in parallel (Phase-1 research, Phase-3 competing mandates), the cockpit shows only an aggregate '3 running' counter instead of each worker's mandate label, live status, and streamed output. Completes ITEM-25a's explicitly-deferred agent_run/parallel-step tracking. Cross-repo: Stratum stamps each parallel worker's stream events with a stable scoped step id + human label; Compose renders one lane per worker, reusing the existing AgentPanel per-agent renderer.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "COMP-AGENT-LANES: Per-subagent lanes for parallel fan-outs",
   "created": "2026-08-10",
-  "updated": "2026-08-10",
+  "updated": "2026-08-11",
   "complexity": "M",
   "position": 1,
   "profile": {
@@ -13,5 +13,34 @@
     "needs_verification": true,
     "needs_report": true
   },
-  "impact": "medium"
+  "impact": "medium",
+  "completions": [
+    {
+      "completion_id": "COMP-AGENT-LANES:c060ef8a9fa9202b2ee84f7db09f0ec4802536a4",
+      "feature_code": "COMP-AGENT-LANES",
+      "commit_sha": "c060ef8a9fa9202b2ee84f7db09f0ec4802536a4",
+      "commit_sha_short": "c060ef8a",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/build.js",
+        "lib/result-normalizer.js",
+        "lib/local-claude-connector.js",
+        "server/build-stream-bridge.js",
+        "src/components/agent-stream-lanes.js",
+        "src/components/AgentStream.jsx",
+        "src/components/cockpit/LaneStrip.jsx",
+        "src/components/cockpit/AgentBar.jsx",
+        "test/build-emission.test.js",
+        "test/result-normalizer.test.js",
+        "test/build-stream-bridge.test.js",
+        "test/agent-stream-build.test.js",
+        "test/ui/LaneStrip.test.jsx",
+        "test/integration/agent-lanes-pipeline.test.js"
+      ],
+      "recorded_at": "2026-08-11T12:01:50.891Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Per-subagent lanes for parallel fan-outs. 8 commits 8d5008f..c060ef8a. Stratum flow 4384da22-b1c8-4dfa-be12-30c3253e86a8 (implement step succeeded, audited). Full suite green (node + UI 589 + tracker 100). Codex review: 1 P2 fixed in-loop (laneTerminal bridge forwarding), otherwise clean. Reconnect replay + Agent-tool fan-out path deferred per design."
+    }
+  ],
+  "commit_sha": "c060ef8a9fa9202b2ee84f7db09f0ec4802536a4"
 }
