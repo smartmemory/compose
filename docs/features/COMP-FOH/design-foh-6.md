@@ -250,7 +250,13 @@ removed** (Codex design finding). The funnel state machine the blueprint derives
 
 1. No `maya` config block → feature not installed → no chrome button.
 2. `maya` config present, fluid provider is the local floor (no SmartMemory) → panel opens to the
-   **connect-SmartMemory funnel**. No chat. The colleague does not run degraded.
+   **connect-SmartMemory funnel**. No chat. The colleague does not run degraded. **This includes
+   SmartMemory *lite* users** (the PyPI `smartmemory` embedded library/CLI — no service, no auth):
+   Maya and the fluid provider both require the full `smart-memory-service` stack, and lite is
+   undetectable from Compose (nothing to probe), so the funnel states the requirement rather than
+   diagnosing the setup. A "lite colleague" would be the degraded-Maya the `COLLEAGUE-ALL-IN`
+   ruling forbids — the answer for lite users is the funnel, i.e. upgrade to the service stack
+   (owner Q&A 2026-08-11).
 3. SmartMemory provider up, Maya unreachable → **offline funnel** (start command shown).
 4. Maya up, auth rejected after the single same-token retry → **auth funnel** (§2 actions).
 5. All up → conversation. Within it, the *declared subset* `{CHALLENGE, CONVICTION, CONTRADICTION}`
