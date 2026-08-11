@@ -241,3 +241,90 @@ test('refuses to run without opts.stratum', async () => {
     (err) => err instanceof AgentError,
   );
 });
+
+// ---------------------------------------------------------------------------
+// COMP-AGENT-LANES (S01b) — lane stamping on relayed stream writes
+// ---------------------------------------------------------------------------
+
+const LANE = {
+  flowId: 'f1', stepId: 'execute_tasks/0', itemIndex: 0,
+  generation: 1, attempt: 1, label: 'Run task 0', agent: 'claude',
+};
+
+test('lane opt stamps every engine-path stream write (assistant, tool_use, tool_use_summary, usage)', async () => {
+  const written = [];
+  const stratum = fakeStratum({
+    text: 'ok',
+    events: [
+      { kind: 'agent_relay', metadata: { role: 'assistant', text: 'hi' } },
+      { kind: 'tool_use_summary', metadata: { tool: 'Bash', input: { command: 'ls' }, summary: 'listed', output: 'a' } },
+      { kind: 'step_usage', metadata: { input_tokens: 1, output_tokens: 1, model: 'm' } },
+    ],
+  });
+  await runAndNormalize(
+    null,
+    'p',
+    { step_id: 's', output_fields: {} },
+    { stratum, lane: LANE, streamWriter: { write: (ev) => written.push(ev) } },
+  );
+  const byType = Object.groupBy(written, (ev) => ev.type);
+  for (const type of ['assistant', 'tool_use', 'tool_use_summary', 'usage']) {
+    assert.ok(byType[type]?.length, `expected a ${type} write`);
+    for (const ev of byType[type]) {
+      assert.deepEqual(ev.lane, LANE, `${type} write must carry the lane envelope`);
+    }
+  }
+});
+
+test('absent lane opt leaves stream writes byte-identical (no lane key)', async () => {
+  const written = [];
+  const stratum = fakeStratum({
+    text: 'ok',
+    events: [
+      { kind: 'agent_relay', metadata: { role: 'assistant', text: 'hi' } },
+      { kind: 'tool_use_summary', metadata: { tool: 'Bash', input: { command: 'ls' }, summary: 'listed', output: 'a' } },
+      { kind: 'step_usage', metadata: { input_tokens: 1, output_tokens: 1, model: 'm' } },
+    ],
+  });
+  await runAndNormalize(
+    null,
+    'p',
+    { step_id: 's', output_fields: {} },
+    { stratum, streamWriter: { write: (ev) => written.push(ev) } },
+  );
+  for (const ev of written) {
+    assert.ok(!('lane' in ev), `write ${ev.type} must not grow a lane key without the opt`);
+  }
+  // Exact-shape snapshot for the relay write (the historical contract).
+  assert.deepEqual(written[0], { type: 'assistant', content: 'hi' });
+});
+
+test('lane opt stamps the local-claude path tool_use write (C2)', async () => {
+  const written = [];
+  const localQuery = function () {
+    return (async function* () {
+      yield { type: 'system', subtype: 'init', model: 'claude-test' };
+      yield {
+        type: 'assistant',
+        message: { content: [{ type: 'tool_use', name: 'Read', input: { file_path: '/x' } }] },
+      };
+      yield {
+        type: 'result', subtype: 'success', result: 'done',
+        total_cost_usd: 0, usage: { input_tokens: 1, output_tokens: 1 }, duration_ms: 1,
+      };
+    })();
+  };
+  const stratum = fakeStratum({ text: 'unused' });
+  await runAndNormalize(
+    null,
+    'p',
+    { step_id: 's', agent: 'claude', output_fields: {} },
+    {
+      stratum, lane: LANE, localExecution: true, localQuery,
+      streamWriter: { write: (ev) => written.push(ev) },
+    },
+  );
+  const toolUse = written.find((ev) => ev.type === 'tool_use');
+  assert.ok(toolUse, 'local path must emit a tool_use write');
+  assert.deepEqual(toolUse.lane, LANE, 'local-path tool_use must carry the lane envelope');
+});
