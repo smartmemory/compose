@@ -328,3 +328,40 @@ test('lane opt stamps the local-claude path tool_use write (C2)', async () => {
   assert.ok(toolUse, 'local path must emit a tool_use write');
   assert.deepEqual(toolUse.lane, LANE, 'local-path tool_use must carry the lane envelope');
 });
+
+test('local path relays assistant text with lane stamp; without lane it stays silent', async () => {
+  const mkQuery = () => function () {
+    return (async function* () {
+      yield { type: 'system', subtype: 'init', model: 'claude-test' };
+      yield { type: 'assistant', message: { content: [{ type: 'text', text: 'live text' }] } };
+      yield {
+        type: 'result', subtype: 'success', result: 'done',
+        total_cost_usd: 0, usage: { input_tokens: 1, output_tokens: 1 }, duration_ms: 1,
+      };
+    })();
+  };
+  const run = async (withLane) => {
+    const written = [];
+    await runAndNormalize(
+      null, 'p',
+      { step_id: 's', agent: 'claude', output_fields: {} },
+      {
+        stratum: fakeStratum({ text: 'unused' }),
+        localExecution: true, localQuery: mkQuery(),
+        ...(withLane ? { lane: LANE } : {}),
+        streamWriter: { write: (ev) => written.push(ev) },
+      },
+    );
+    return written;
+  };
+  const withLane = await run(true);
+  const assistant = withLane.find((ev) => ev.type === 'assistant');
+  assert.ok(assistant, 'lane-carrying local run must relay assistant text');
+  assert.equal(assistant.content, 'live text');
+  assert.deepEqual(assistant.lane, LANE);
+  const withoutLane = await run(false);
+  assert.ok(
+    !withoutLane.some((ev) => ev.type === 'assistant'),
+    'lane-less local run keeps its historical shape (no assistant writes)',
+  );
+});
