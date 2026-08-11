@@ -251,12 +251,20 @@ removed** (Codex design finding). The funnel state machine the blueprint derives
 1. No `maya` config block → feature not installed → no chrome button.
 2. `maya` config present, fluid provider is the local floor (no SmartMemory) → panel opens to the
    **connect-SmartMemory funnel**. No chat. The colleague does not run degraded. **This includes
-   SmartMemory *lite* users** (the PyPI `smartmemory` embedded library/CLI — no service, no auth):
-   Maya and the fluid provider both require the full `smart-memory-service` stack, and lite is
-   undetectable from Compose (nothing to probe), so the funnel states the requirement rather than
-   diagnosing the setup. A "lite colleague" would be the degraded-Maya the `COLLEAGUE-ALL-IN`
-   ruling forbids — the answer for lite users is the funnel, i.e. upgrade to the service stack
-   (owner Q&A 2026-08-11).
+   SmartMemory *lite* users** (the PyPI `smartmemory` package). Lite DOES ship a local REST API +
+   MCP server (verified: ingest/search/recall/list/graph/neighbors routes in
+   `smart-memory/smartmemory_app/local_api.py`), but two hard facts keep the colleague
+   service-only: (a) **Maya cannot run against lite** — her auth middleware, `service_common`
+   dependency, and adapter all target the full `smart-memory-service` stack; (b) **lite's API
+   lacks the capability surface** the provider's semantic methods need — no
+   `/memory/reasoning/*` (challenge/conviction), no `/memory/edge` write (contradiction), no
+   ontology type declaration, no sequence/lock primitives. A "lite colleague" would be the
+   degraded-Maya the `COLLEAGUE-ALL-IN` ruling forbids — for lite users the funnel is the
+   answer: upgrade to the service stack. **Named follow-up (not FOH-6):** a fluid provider over
+   lite's local API honestly declaring `{RECORDS, RECALL}` is plausible as a middle tier between
+   the local floor and the full service — records travel, colleague stays service-only.
+   (Owner Q&A 2026-08-11, corrected same day: lite has an API; the blocker is capability
+   coverage + Maya's service coupling, not the absence of HTTP.)
 3. SmartMemory provider up, Maya unreachable → **offline funnel** (start command shown).
 4. Maya up, auth rejected after the single same-token retry → **auth funnel** (§2 actions).
 5. All up → conversation. Within it, the *declared subset* `{CHALLENGE, CONVICTION, CONTRADICTION}`
