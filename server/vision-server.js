@@ -31,6 +31,7 @@ import { attachHealthRoutes } from './health-routes.js';
 import { attachValidateRoutes } from './validate-routes.js';
 import { attachQaScopeRoutes } from './qa-scope-routes.js';
 import { attachSmartmemoryRoutes } from './smartmemory-routes.js';
+import { attachMayaRoutes } from './maya-routes.js';
 import { attachDesignRoutes } from './design-routes.js';
 import { DesignSessionManager } from './design-session.js';
 import { attachPipelineRoutes } from './pipeline-routes.js';
@@ -107,6 +108,11 @@ export class VisionServer {
     // Read-only GET /api/smartmemory/recall?featureCode=…; degrade-never-fail,
     // answers {enabled:false} from config alone when the flag is OFF.
     attachSmartmemoryRoutes(app);
+
+    // ── Maya colleague relay (COMP-FOH FOH-6, opt-in) ──────────────────────
+    // GET /api/maya/status (degrade-never-fail funnel probe) + POST
+    // /api/maya/message. Auth-gated in remote mode — never allowlisted.
+    attachMayaRoutes(app);
 
     // ── Vision CRUD + lifecycle routes ─────────────────────────────────────
     attachVisionRoutes(app, {

@@ -1,6 +1,17 @@
 # Changelog
 
-## 2026-08-11
+## 2026-08-12
+
+### COMP-FOH / FOH-6 — COLLEAGUE-PANEL: Maya in the cockpit (S1: relay + token source)
+
+The sixth Front-of-House slice starts layering Maya (the existing SmartMemory assistant, core never modified) into the cockpit as a summonable colleague. S1 ships the server relay and the pluggable token source. Compose holds the credential server-side and relays turns to Maya's `POST /api/chat`; the identity that owns her single standing conversation is provisioned lazily on first use via smart-memory-service's sanctioned test surface (`POST /test/provision-user` + beta-NDA accept) and persisted in `data/maya-identity.json`, or pasted as a static token. The shallow-binding invariant is enforced at the seam: a colleague token whose workspace claim equals the fluid `workspaceId` is refused (`workspace-collision` funnel) before any provisioning side effect or chat turn, because accepting it would silently turn Maya's background turn-ingestion into a writer against the fluid workspace.
+
+**Added:**
+- `lib/maya-config.js` — `.compose/compose.json` readers: `maya` block (presence = feature installed), fluid workspace id, SmartMemory-provider check.
+- `lib/maya-identity.js` — identity store + lazy provisioning (+NDA retry on the SAME identity after a crash between provision and accept), teardown, `validateWorkspaceIsolation` (`team_id` from the provision response first, JWT workspace claims as the static-token fallback; an underivable claim is documented-unsupported, not refused).
+- `lib/maya-client.js` — `health()` (never throws) + `chat()`: Bearer auth read at call time, ONE same-token retry on 401 then `MayaAuthError` (never a silent re-provision — the identity owns the standing thread), generous chat deadline (her turn does LLM work), and a trust gate on 2xx bodies (non-JSON, `success:false`, or a missing `message_id` — the write-back idempotency key — all fail rather than pass as replies).
+- `server/maya-routes.js` — `GET /api/maya/status` (degrade-never-fail shaped 200s driving the panel funnel: not-installed / connect-smartmemory / offline / workspace-collision / ready with an honest capability strip — calibration visibly unavailable) and `POST /api/maya/message` (context → chat → shaped `{ok, reply, message_id, writeback, context}`; context-composition failure is a funnel, never a fall-through to plain chat, per COLLEAGUE-ALL-IN). Auth posture: stays behind the remote auth gate, never allowlisted — asserted by test.
+- `test/helpers/maya-stub.js` (Maya + provisioning stubs with 401/slow/reject-context/HTML-body knobs), `test/maya-client.test.js`, `test/maya-routes.test.js`.
 
 ### COMP-AGENT-LANES — Per-subagent lanes for parallel fan-outs
 
