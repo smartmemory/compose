@@ -10,9 +10,14 @@
  *   activeTab   {string}    currently active tab key
  *   onTabChange {fn}        called with (tabKey) when a tab is clicked
  *   onOpenPalette {fn}      called when Cmd+K button is clicked
+ *   colleague   {object?}   {installed, open, onToggle} — the Maya summon
+ *                           button (FOH-6). Renders iff installed; NOT a tab
+ *                           (deliberately outside DEFAULT_MAIN_TABS and the
+ *                           tab-persistence machinery — a chrome button can
+ *                           be conditional, a persisted tab cannot).
  */
 import React from 'react';
-import { Network, GitBranch, Activity, ShieldCheck, Search, FileText, Workflow, MessageSquare, LayoutDashboard, Lightbulb, History, BookOpen, ListChecks, FileSearch } from 'lucide-react';
+import { Network, GitBranch, Activity, ShieldCheck, Search, FileText, Workflow, MessageSquare, LayoutDashboard, Lightbulb, History, BookOpen, ListChecks, FileSearch, Sparkles } from 'lucide-react';
 
 const TAB_META = {
   dashboard: { label: 'Dashboard', icon: LayoutDashboard, tip: 'Overview of project status and activity' },
@@ -31,7 +36,7 @@ const TAB_META = {
   ideabox:   { label: 'Ideabox',   icon: Lightbulb,       tip: 'Captured ideas and suggestions' },
 };
 
-export default function ViewTabs({ tabs = [], activeTab, onTabChange, onOpenPalette, badges = {} }) {
+export default function ViewTabs({ tabs = [], activeTab, onTabChange, onOpenPalette, badges = {}, colleague }) {
   return (
     <div
       className="flex items-center gap-0.5 h-full"
@@ -71,6 +76,21 @@ export default function ViewTabs({ tabs = [], activeTab, onTabChange, onOpenPale
         );
       })}
       <div className="flex-1" />
+      {colleague?.installed && (
+        <button
+          onClick={colleague.onToggle}
+          data-testid="colleague-summon"
+          aria-pressed={colleague.open}
+          title="Maya — talk to the colleague about this project's ideas"
+          className={[
+            'colleague-summon flex items-center gap-1.5 px-2.5 h-full text-[11px] transition-colors',
+            colleague.open ? 'text-accent' : 'text-muted-foreground hover:text-foreground',
+          ].join(' ')}
+        >
+          <Sparkles style={{ width: 12, height: 12 }} />
+          Maya
+        </button>
+      )}
       {onOpenPalette && (
         <button
           onClick={onOpenPalette}

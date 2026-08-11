@@ -34,6 +34,9 @@ import { createMayaClient as defaultCreateClient, MayaAuthError, MayaHttpError }
 import {
   loadIdentity as defaultLoadIdentity,
   ensureIdentity as defaultEnsureIdentity,
+  teardownIdentity as defaultTeardownIdentity,
+  saveIdentity as defaultSaveIdentity,
+  clearIdentity as defaultClearIdentity,
   validateWorkspaceIsolation,
   MayaIdentityError,
   MayaWorkspaceCollisionError,
@@ -101,6 +104,9 @@ export function attachMayaRoutes(app, {
   createClient = defaultCreateClient,
   loadIdentity = defaultLoadIdentity,
   ensureIdentity = defaultEnsureIdentity,
+  teardownIdentity = defaultTeardownIdentity,
+  saveIdentity = defaultSaveIdentity,
+  clearIdentity = defaultClearIdentity,
   composeContext = defaultComposeContext,
 } = {}) {
   /** Resolve the per-request project scope, or null when not installed. */
@@ -216,6 +222,48 @@ export function attachMayaRoutes(app, {
           omissions: context.omissions,
         },
       });
+    } catch (err) {
+      return res.json({ ok: false, error: errorEnvelope(err) });
+    }
+  });
+
+  /**
+   * The auth funnel's two EXPLICIT recovery actions (design §2). Both are
+   * continuity-costing, so neither ever happens implicitly — this endpoint
+   * only exists for the user pressing the button.
+   */
+  app.post('/api/maya/identity', async (req, res) => {
+    const scope = scopeOf(req);
+    if (!scope) return res.json({ ok: false, error: { kind: 'not-installed' } });
+    const { root } = scope;
+    const action = req.body?.action;
+
+    try {
+      if (action === 'reprovision') {
+        // Best-effort upstream teardown; the local clear is the real action —
+        // the next turn lazily provisions a fresh identity (fresh thread).
+        try {
+          await teardownIdentity(root, { smBaseUrl: getSmartmemoryConfig(root)?.baseUrl });
+        } catch {
+          clearIdentity(root);
+        }
+        return res.json({ ok: true });
+      }
+
+      if (action === 'static') {
+        const token = String(req.body?.token ?? '').trim();
+        if (!token) {
+          return res.json({ ok: false, error: { kind: 'invalid', message: 'token is required' } });
+        }
+        const candidate = { mode: 'static', access_token: token };
+        // Same refusal as every other entry point: a fluid-workspace token
+        // never gets stored.
+        validateWorkspaceIsolation(candidate, getFluidWorkspaceId(root));
+        saveIdentity(root, candidate);
+        return res.json({ ok: true });
+      }
+
+      return res.json({ ok: false, error: { kind: 'invalid', message: `unknown action: ${action}` } });
     } catch (err) {
       return res.json({ ok: false, error: errorEnvelope(err) });
     }

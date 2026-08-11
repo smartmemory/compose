@@ -6,6 +6,8 @@ import ProjectSwitchPopover from './components/ProjectSwitchPopover.jsx';
 
 // Cockpit shell components
 import ViewTabs from './components/cockpit/ViewTabs.jsx';
+import ColleaguePanel from './components/colleague/ColleaguePanel.jsx';
+import useMayaStatus from './components/colleague/useMayaStatus.js';
 import AgentBar from './components/cockpit/AgentBar.jsx';
 import ContextPanel from './components/cockpit/ContextPanel.jsx';
 import ContextItemDetail from './components/cockpit/ContextItemDetail.jsx';
@@ -544,6 +546,11 @@ function AppInner() {
 
   const [challengeItemId, setChallengeItemId] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // FOH-6: Maya colleague slide-over. Status probe is workspace-keyed; the
+  // summon button renders iff the feature is installed (a `maya` config
+  // block), while every degraded state is a funnel INSIDE the panel.
+  const [colleagueOpen, setColleagueOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   // COMP-COCKPIT-5: preselected type for the create dialog (empty-state CTA → 'feature').
   const [createInitialType, setCreateInitialType] = useState('task');
@@ -555,6 +562,7 @@ function AppInner() {
   // ── Project info ────────────────────────────────────────────────────────
   const [projectName, setProjectName] = useState('');
   const [projectRoot, setProjectRoot] = useState('');
+  const { status: mayaStatus, refresh: refreshMayaStatus } = useMayaStatus(projectRoot || null);
   useEffect(() => {
     wsFetch('/api/project').then(r => r.json()).then(data => {
       setProjectName(data.name || '');
@@ -1111,6 +1119,11 @@ function AppInner() {
               onTabChange={setActiveTab}
               onOpenPalette={() => setPaletteOpen(v => !v)}
               badges={{ gates: gates.filter(g => g.status === 'pending').length }}
+              colleague={{
+                installed: mayaStatus?.enabled === true,
+                open: colleagueOpen,
+                onToggle: () => setColleagueOpen(v => !v),
+              }}
             />
           </div>
 
@@ -1507,6 +1520,17 @@ function AppInner() {
           open={newFeatureOpen}
           onClose={() => setNewFeatureOpen(false)}
         />
+
+        {/* Maya colleague slide-over (FOH-6) */}
+        {colleagueOpen && (
+          <PanelErrorBoundary zone="colleague panel">
+            <ColleaguePanel
+              onClose={() => setColleagueOpen(false)}
+              status={mayaStatus}
+              refreshStatus={refreshMayaStatus}
+            />
+          </PanelErrorBoundary>
+        )}
       </div>
     </VisionChangesContext.Provider>
     </NavigationContext.Provider>
