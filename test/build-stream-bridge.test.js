@@ -559,3 +559,85 @@ describe('BuildStreamBridge', () => {
     rmSync(lateDirBase, { recursive: true, force: true });
   });
 });
+
+// ---------------------------------------------------------------------------
+// COMP-AGENT-LANES (S02) — lane forwarding per case
+// ---------------------------------------------------------------------------
+
+describe('BuildStreamBridge lane forwarding (COMP-AGENT-LANES)', () => {
+  let tmpDir;
+  let composeDir;
+  let filePath;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'bsb-lane-'));
+    composeDir = join(tmpDir, '.compose');
+    mkdirSync(composeDir, { recursive: true });
+    filePath = join(composeDir, 'build-stream.jsonl');
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const LANE = {
+    flowId: 'f1', stepId: 'execute_tasks/1', itemIndex: 1,
+    generation: 2, attempt: 1, label: 'security', agent: 'codex',
+  };
+
+  async function collect(events) {
+    const broadcasts = [];
+    const bridge = new BuildStreamBridge(composeDir, (msg) => broadcasts.push(msg));
+    bridge.start();
+    await sleep(100);
+    events.forEach((event, i) => writeLine(filePath, event, i));
+    await sleep(200);
+    bridge.stop();
+    return broadcasts;
+  }
+
+  it('forwards lane on every lane-bearing case', async () => {
+    const cases = [
+      { type: 'build_step_start', stepId: LANE.stepId, stepNum: '∥1', totalSteps: '?', agent: 'codex', flowId: 'f1', parallel: true, lane: LANE },
+      { type: 'tool_use', tool: 'Read', input: { file_path: '/x' }, lane: LANE },
+      { type: 'tool_use_summary', summary: 'read a file', output: 'ok', lane: LANE },
+      { type: 'assistant', content: 'working', lane: LANE },
+      { type: 'build_step_done', stepId: LANE.stepId, summary: 'done', flowId: 'f1', parallel: true, status: 'succeeded', outcome: 'complete', lane: LANE },
+      { type: 'build_error', message: 'boom', stepId: LANE.stepId, lane: LANE },
+    ];
+    const broadcasts = await collect(cases);
+    assert.equal(broadcasts.length, cases.length);
+    for (const [i, msg] of broadcasts.entries()) {
+      assert.deepEqual(msg.lane, LANE, `broadcast ${i} (${cases[i].type}) must forward the lane envelope`);
+    }
+  });
+
+  it('build_step_done forwards explicit status and outcome', async () => {
+    const broadcasts = await collect([
+      { type: 'build_step_done', stepId: 's', summary: 'x', flowId: 'f1', parallel: true, status: 'failed', outcome: 'failed', lane: LANE },
+    ]);
+    assert.equal(broadcasts[0].status, 'failed');
+    assert.equal(broadcasts[0].outcome, 'failed');
+  });
+
+  it('build_error forwards stepId (lane-scoped failure)', async () => {
+    const broadcasts = await collect([
+      { type: 'build_error', message: 'item died', stepId: 'execute_tasks/2' },
+    ]);
+    assert.equal(broadcasts[0].stepId, 'execute_tasks/2');
+  });
+
+  it('lane-less events pass through unchanged (no lane/status keys added)', async () => {
+    const broadcasts = await collect([
+      { type: 'build_step_start', stepId: 's1', stepNum: 1, totalSteps: 2, agent: 'claude', flowId: 'f1' },
+      { type: 'assistant', content: 'hello' },
+      { type: 'build_step_done', stepId: 's1', summary: 'done', flowId: 'f1' },
+      { type: 'build_error', message: 'oops' },
+    ]);
+    for (const msg of broadcasts) {
+      assert.ok(!('lane' in msg), `${msg.subtype ?? msg.type} must not grow a lane key`);
+    }
+    assert.ok(!('status' in broadcasts[2]), 'done without status must not grow one');
+    assert.ok(!('stepId' in broadcasts[3]), 'error without stepId must not grow one');
+  });
+});
