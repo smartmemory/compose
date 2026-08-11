@@ -627,6 +627,15 @@ describe('BuildStreamBridge lane forwarding (COMP-AGENT-LANES)', () => {
     assert.equal(broadcasts[0].stepId, 'execute_tasks/2');
   });
 
+  it('build_error forwards laneTerminal so a terminal error can close its lane', async () => {
+    const broadcasts = await collect([
+      { type: 'build_error', message: 'fatal', stepId: LANE.stepId, laneTerminal: true, lane: LANE },
+      { type: 'build_error', message: 'advisory', stepId: LANE.stepId, lane: LANE },
+    ]);
+    assert.equal(broadcasts[0].laneTerminal, true, 'terminal marker must survive the bridge');
+    assert.ok(!('laneTerminal' in broadcasts[1]), 'advisory errors must not grow the marker');
+  });
+
   it('lane-less events pass through unchanged (no lane/status keys added)', async () => {
     const broadcasts = await collect([
       { type: 'build_step_start', stepId: 's1', stepNum: 1, totalSteps: 2, agent: 'claude', flowId: 'f1' },
