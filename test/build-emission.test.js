@@ -14,7 +14,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { runConsumerIssuance } from '../lib/build.js';
+import { runConsumerIssuance, buildLaneEnvelope } from '../lib/build.js';
 
 process.env.NODE_ENV = 'test';
 
@@ -246,13 +246,14 @@ function successQuery() {
   };
 }
 
-async function driveConsumerItem(writer, itemIndex) {
+async function driveConsumerItem(writer, itemIndex, overrides = {}) {
   const descriptor = {
     id: `execute_tasks/${itemIndex}`, step: 'execute_tasks', flow: 'build',
     itemIndex, stage: 0, generation: 1, attempt: 1, epoch: 1,
     dispatchToken: `tok-${itemIndex}`,
     agent: 'claude', do: `Run task ${itemIndex}`,
     item: { id: `t${itemIndex}` }, policy: { isolation: 'none' }, contract: TASK_CLOSURE,
+    ...(overrides.descriptor ?? {}),
   };
   const artifacts = {
     hooks: {},
@@ -262,12 +263,14 @@ async function driveConsumerItem(writer, itemIndex) {
     restoreToPreStageWitness: () => {},
   };
   const stratum = {
-    _localQuery: successQuery(),
+    _localQuery: overrides.query ?? successQuery(),
     onEvent: () => () => {},
     stepDone: async () => ({ status: 'completed' }),
     audit: async () => ({}),
     agentRun: async () => ({ text: '' }),
     cancelAgentRun: async () => {},
+    resume: async () => ({ status: 'running' }),
+    ...(overrides.stratum ?? {}),
   };
   const localSpec = {
     flows: { build: { steps: [{ id: 'execute_tasks', fanout: { steps: [{ agent: 'claude', do: 'x', out: 'TaskResult' }] } }] } },
@@ -301,5 +304,132 @@ describe('Sites 3/4: real consumer-fanout parallel emission', () => {
     assert.equal(done.stepId, descriptor.id, 'done stepId matches the start so the UI decrements the same task');
     assert.equal(done.retries, 0, 'parallel emission must include retries:0');
     assert.deepEqual(done.violations, [], 'parallel emission must include violations:[]');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// COMP-AGENT-LANES: lane envelope production (S01a).
+//
+// Every fanout-item lifecycle write (start / done, incl. the stale-report
+// skipped variant) carries a `lane` envelope so the cockpit can key one lane
+// per worker slot: identity flowId:stepId:itemIndex, version (generation,
+// attempt), human label, agent. The success-path done additionally carries an
+// explicit terminal `status` (C4) — the UI must never infer "complete".
+// ---------------------------------------------------------------------------
+
+function failureQuery() {
+  return function () {
+    return (async function* () {
+      yield { type: 'system', subtype: 'init', model: 'claude-test' };
+      yield {
+        type: 'result', subtype: 'success',
+        result: JSON.stringify({ outcome: 'failed', summary: 'it broke' }),
+        total_cost_usd: 0, usage: { input_tokens: 1, output_tokens: 1 }, duration_ms: 1,
+      };
+    })();
+  };
+}
+
+describe('COMP-AGENT-LANES: buildLaneEnvelope', () => {
+  it('carries identity, version, label, and agent from the descriptor', () => {
+    const lane = buildLaneEnvelope({
+      id: 'execute_tasks/2', itemIndex: 2, generation: 3, attempt: 2,
+      agent: 'codex', do: 'Review the diff',
+    }, 'flow-9');
+    assert.deepEqual(lane, {
+      flowId: 'flow-9', stepId: 'execute_tasks/2', itemIndex: 2,
+      generation: 3, attempt: 2, label: 'Review the diff', agent: 'codex',
+    });
+  });
+
+  it('defaults generation to 0 and attempt to 1 when absent (first dispatch)', () => {
+    const lane = buildLaneEnvelope({ id: 's/0', itemIndex: 0, do: 'x' }, 'f');
+    assert.equal(lane.generation, 0);
+    assert.equal(lane.attempt, 1);
+  });
+
+  it('prefers the lens id as the label when given', () => {
+    const lane = buildLaneEnvelope({ id: 's/0', itemIndex: 0, do: 'Long review mandate text' }, 'f', { lens: 'security' });
+    assert.equal(lane.label, 'security');
+  });
+
+  it('truncates a long descriptor.do label', () => {
+    const longDo = 'x'.repeat(200);
+    const lane = buildLaneEnvelope({ id: 's/0', itemIndex: 0, do: longDo }, 'f');
+    assert.ok(lane.label.length <= 80, `label must be capped, got ${lane.label.length}`);
+  });
+
+  it('defaults agent to claude', () => {
+    const lane = buildLaneEnvelope({ id: 's/0', itemIndex: 0, do: 'x' }, 'f');
+    assert.equal(lane.agent, 'claude');
+  });
+});
+
+describe('COMP-AGENT-LANES: fanout lifecycle writes carry the lane', () => {
+  it('build_step_start carries the lane envelope', async () => {
+    const writer = new FakeStreamWriter();
+    const descriptor = await driveConsumerItem(writer, 1);
+    const start = writer.events.find(e => e.type === 'build_step_start');
+    assert.ok(start.lane, 'build_step_start must carry a lane envelope');
+    assert.deepEqual(start.lane, {
+      flowId: 'flow-1', stepId: descriptor.id, itemIndex: 1,
+      generation: 1, attempt: 1, label: 'Run task 1', agent: 'claude',
+    });
+  });
+
+  it('success-path build_step_done carries lane + explicit status succeeded (C4)', async () => {
+    const writer = new FakeStreamWriter();
+    const descriptor = await driveConsumerItem(writer, 0);
+    const done = writer.events.find(e => e.type === 'build_step_done');
+    assert.ok(done.lane, 'build_step_done must carry a lane envelope');
+    assert.equal(done.lane.stepId, descriptor.id);
+    assert.equal(done.status, 'succeeded', 'success-path done must carry explicit status');
+    assert.equal(done.itemIndex, 0, 'done must carry itemIndex at top level too');
+  });
+
+  it('failed-item build_step_done carries explicit status failed', async () => {
+    const writer = new FakeStreamWriter();
+    await driveConsumerItem(writer, 0, { query: failureQuery() });
+    const done = writer.events.find(e => e.type === 'build_step_done');
+    assert.ok(done, 'a done must still be emitted for a failed item');
+    assert.equal(done.status, 'failed', 'failed item must carry explicit status failed');
+    assert.ok(done.lane, 'failed done must carry the lane envelope');
+  });
+
+  it('stale-report skipped build_step_done carries the lane envelope', async () => {
+    const writer = new FakeStreamWriter();
+    const staleError = Object.assign(new Error('stale/duplicate report'), { code: -32603 });
+    const descriptor = await driveConsumerItem(writer, 3, {
+      stratum: { stepDone: async () => { throw staleError; } },
+    });
+    const done = writer.events.find(e => e.type === 'build_step_done');
+    assert.equal(done.status, 'skipped');
+    assert.ok(done.lane, 'skipped done must carry the lane envelope');
+    assert.equal(done.lane.stepId, descriptor.id);
+    assert.equal(done.lane.itemIndex, 3);
+  });
+
+  it('lane label uses the lens id for a review fanout item', async () => {
+    const writer = new FakeStreamWriter();
+    const reviewClosure = {
+      root: 'ReviewResult',
+      contracts: { ReviewResult: { outcome: 'string', summary: 'string' } },
+    };
+    const reviewQuery = function () {
+      return (async function* () {
+        yield { type: 'system', subtype: 'init', model: 'claude-test' };
+        yield {
+          type: 'result', subtype: 'success',
+          result: JSON.stringify({ verdict: 'approve', confidence: 9, issues: [], summary: 'clean' }),
+          total_cost_usd: 0, usage: { input_tokens: 1, output_tokens: 1 }, duration_ms: 1,
+        };
+      })();
+    };
+    await driveConsumerItem(writer, 0, {
+      query: reviewQuery,
+      descriptor: { contract: reviewClosure, item: { id: 't0', lens_name: 'security' } },
+    });
+    const start = writer.events.find(e => e.type === 'build_step_start');
+    assert.equal(start.lane.label, 'security', 'review item lane label must be the lens id');
   });
 });
