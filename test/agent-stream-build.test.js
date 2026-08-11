@@ -379,3 +379,47 @@ describe('lane reducer — legacy summary parity', () => {
     assert.equal(deriveParallelSummary(new Map()), null);
   });
 });
+
+describe('lane reducer — coverage sweep edges', () => {
+  it('a done for a never-started lane creates it joined-mid-build and closes it', () => {
+    const lanes = new Map();
+    const lane = mkLane();
+    applyLaneEvent(lanes, doneMsg(lane, 'succeeded'));
+    const entry = lanes.get(laneKey(lane));
+    assert.ok(entry, 'done for unknown lane still materializes it');
+    assert.equal(entry.joinedMidBuild, true);
+    assert.equal(entry.status, 'succeeded');
+  });
+
+  it('a start after same-version output clears the joined-mid-build marker', () => {
+    const lanes = new Map();
+    const lane = mkLane();
+    applyLaneEvent(lanes, textMsg(lane, 'early'));
+    assert.equal(lanes.get(laneKey(lane)).joinedMidBuild, true);
+    applyLaneEvent(lanes, startMsg(lane));
+    const entry = lanes.get(laneKey(lane));
+    assert.equal(entry.joinedMidBuild, false, 'the start proves the lane is fully observed');
+    assert.equal(entry.messages.length, 1, 'same-version output kept');
+  });
+
+  it('skipped done counts as completed in the legacy summary', () => {
+    const lanes = new Map();
+    const lane = mkLane();
+    applyLaneEvent(lanes, startMsg(lane));
+    applyLaneEvent(lanes, doneMsg(lane, 'skipped'));
+    const summary = deriveParallelSummary(lanes);
+    assert.equal(summary.completed, 1);
+    assert.equal(summary.tasks[lane.stepId], 'complete');
+  });
+
+  it('output after terminal close still appends (late flush) without reopening', () => {
+    const lanes = new Map();
+    const lane = mkLane();
+    applyLaneEvent(lanes, startMsg(lane));
+    applyLaneEvent(lanes, doneMsg(lane, 'succeeded'));
+    applyLaneEvent(lanes, textMsg(lane, 'late flush'));
+    const entry = lanes.get(laneKey(lane));
+    assert.equal(entry.status, 'succeeded', 'late output must not reopen a closed lane');
+    assert.equal(entry.messages.length, 1);
+  });
+});
