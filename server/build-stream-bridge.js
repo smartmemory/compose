@@ -16,6 +16,12 @@ const STALE_GATE_TIMEOUT_MS = 86_400_000; // 24h
 const DEBOUNCE_MS = 50;
 const POLL_INTERVAL_MS = 2000;
 
+// COMP-AGENT-LANES: forward a producer-stamped lane envelope untouched; absent,
+// contribute nothing so lane-less events keep their exact historical shape.
+function laneOf(event) {
+  return event.lane && typeof event.lane === 'object' ? { lane: event.lane } : {};
+}
+
 export class BuildStreamBridge {
   #filePath;
   #composeDir;
@@ -304,6 +310,7 @@ export class BuildStreamBridge {
           flowId: event.flowId,
           ...(event.parentFlowId ? { parentFlowId: event.parentFlowId } : {}),
           ...(event.parallel ? { parallel: true } : {}),
+          ...laneOf(event),
           _source: 'build',
         };
 
@@ -311,6 +318,7 @@ export class BuildStreamBridge {
         return {
           type: 'assistant',
           message: { content: [{ type: 'tool_use', name: event.tool, input: event.input }] },
+          ...laneOf(event),
           _source: 'build',
         };
 
@@ -318,6 +326,7 @@ export class BuildStreamBridge {
         return {
           type: 'assistant', subtype: 'tool_use_summary',
           summary: event.summary, output: event.output,
+          ...laneOf(event),
           _source: 'build',
         };
 
@@ -332,6 +341,7 @@ export class BuildStreamBridge {
         return {
           type: 'assistant',
           message: { content: [{ type: 'text', text: event.content }] },
+          ...laneOf(event),
           _source: 'build',
         };
 
@@ -348,6 +358,11 @@ export class BuildStreamBridge {
           cumulative_cost_usd: event.cumulative_cost_usd ?? 0,
           ...(event.parentFlowId ? { parentFlowId: event.parentFlowId } : {}),
           ...(event.parallel ? { parallel: true } : {}),
+          // COMP-AGENT-LANES: explicit terminal status — the UI must not infer
+          // "complete" from the done event's existence.
+          ...(event.status ? { status: event.status } : {}),
+          ...(event.outcome ? { outcome: event.outcome } : {}),
+          ...laneOf(event),
           _source: 'build',
         };
 
@@ -374,6 +389,11 @@ export class BuildStreamBridge {
         return {
           type: 'error',
           message: event.message, source: 'build',
+          // COMP-AGENT-LANES: stepId + lane let the cockpit scope a failure to
+          // its worker lane (C5 — dropped here before, so lane-scoped failure
+          // could never fire).
+          ...(event.stepId ? { stepId: event.stepId } : {}),
+          ...laneOf(event),
           _source: 'build',
         };
 
