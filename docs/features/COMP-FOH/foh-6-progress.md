@@ -36,11 +36,31 @@ cockpit as a summonable colleague slide-over. Her core is never modified.
   accordion, write-back chips (incl. partial-failure retry), all four funnel states.
   Published: https://claude.ai/code/artifact/2c50cb1a-cc8a-4f22-8e86-443efed3bc12
 
-## Blueprint entry-gates (need the local stack UP — owner starts it, never unasked)
-- VERIFY-1: provision-user token accepted by Maya middleware end-to-end; measure token TTL.
-- VERIFY-2: `channel_context` accepted + reflected on live `/api/chat` (static pydantic check only so far).
-- VERIFY-3: her turn-ingestion lands in the colleague workspace, not fluid; configure-time
-  validation refuses a fluid-workspace token (the invariant, not the happy path).
+## Blueprint PHASE 4+5 COMPLETE (2026-08-11)
+- `blueprint-foh-6.md` written; Boundary Map validated (0 violations, 0 warnings); 34-ref file:line
+  sweep: 27 exact, 5 off-by-lines + 1 dead anchor (`tab-spacer` doesn't exist — unnamed
+  `flex-1` div at `ViewTabs.jsx:73`) — ALL corrected inline.
+
+## VERIFY-1/2/3 — LIVE-FIRE PASSED (2026-08-11, owner-started stack, throwaway identity torn down)
+- **VERIFY-1 PASSED:** `POST /test/provision-user` → identity + token; NDA accepted; Maya
+  `/api/chat` round-trip `success:true`, `message_id` returned, `memory_available:true`.
+  **Token TTL = 1440 min (24 h).** JWT payload carries NO workspace claims — Maya resolves
+  workspace server-side from the verified user record (default team), which worked.
+- **VERIFY-2 PASSED:** `channel_context` accepted on the live endpoint and REFLECTED — injected
+  "Redis streams" fact came back verbatim in her reply. The at-risk dependency is real and works.
+- **VERIFY-3 PARTIAL:** structural isolation holds (colleague token never had the fluid workspace);
+  her workspace list couldn't be inspected (`GET /memory/list` 400 — wrong shape; use the client
+  lib's listItems during implementation). The refusal-of-fluid-token check is a compose-side unit
+  test in S1. Finish both during implement.
+- **NEW FINDING (design updated):** same-email re-provision → **409 "Email already registered"**.
+  No token-refresh path exists on the test surface. Daily expiry recovery = teardown + new identity
+  = loses her accumulated colleague-workspace memory. S1 probes for a same-identity re-auth path;
+  if absent, file upstream ask (`POST /test/login {email}`) with the channel_context issue.
+- Script: scratchpad `livefire-foh6-verify.mjs` (this session).
+
+## Next: implement (S1 relay+token → S2 context builder → S3 panel → S4 write-back; S5 stretch)
+Blueprint is the plan (FOH-4/5 slice pattern — no separate plan.md). TDD per task, review loop,
+coverage sweep per Phase 7.
 
 ## Scope fences (blueprint must honor)
 - Ideas only (no clusters — seam refuses; no decisions — no producer exists).

@@ -306,7 +306,7 @@ removed** (Codex design finding). The funnel state machine the blueprint derives
 | Risk | Exposure | Mitigation |
 |---|---|---|
 | `channel_context` gated/removed in a Maya upgrade | Whole context path | Smoke test fails loudly; upstream issue for a supported field; the panel enters an **unavailable funnel** ("this Maya version doesn't support context injection") — never plain conversation, per the no-degraded-mode contract |
-| Provisioned-token TTL unknown | Session breaks mid-conversation | VERIFY-1 measures TTL; 401 → one same-token retry, then auth funnel with explicit continuity-costing actions (§2) — never silent re-provision |
+| Provisioned-token TTL is **24 h** (VERIFY-1 measured), and same-email re-provision is refused (409, probed live) | Daily auth expiry; recovery-by-reprovision costs the identity AND her accumulated colleague-workspace memory, not just the session | 401 → one same-token retry, then auth funnel with explicit continuity-costing actions (§2) — never silent re-provision. S1 probes for a same-identity re-auth path on the test surface; if none exists, file the upstream ask (a `POST /test/login {email}` → fresh token) alongside the channel_context issue |
 | `/test/provision-user` is a test endpoint doing standing-identity duty | Upstream could restrict it | Honest v1 trade-off for a local dev stack; `static` mode is the durable path |
 | Colleague token accidentally scoped to the fluid workspace | Silent deep binding — her turn writes land in fluid records' workspace | Configure-time validation: token workspace ≠ `fluid.smartmemory.workspaceId`, refuse otherwise (§2) |
 | Maya not running locally | Pane dead | `/status` funnel with the start command; degrade-never-fail probe |
