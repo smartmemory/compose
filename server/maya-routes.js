@@ -38,6 +38,8 @@ import {
   MayaIdentityError,
   MayaWorkspaceCollisionError,
 } from '../lib/maya-identity.js';
+import { ideaboxContext } from '../lib/fluid/ideabox-ops.js';
+import { composeColleagueContext } from '../lib/colleague/context.js';
 
 /**
  * The provider's declared semantic subset today (smartmemory-provider.js
@@ -50,12 +52,13 @@ const CAPABILITIES = Object.freeze({
   challenge: true, conviction: true, contradiction: true, calibration: false,
 });
 
-/** S1 placeholder — S2 replaces this with lib/colleague/context.js. A default
- *  EMPTY context is honest (nothing composed, nothing claimed), not degraded:
- *  degraded is when composition was expected and failed, which maps to the
- *  context funnel below. */
-async function defaultComposeContext() {
-  return { blocks: [], omissions: [] };
+/** The real per-turn composer (S2): an ideabox ops context over the project's
+ *  fluid provider, then the priority-ordered findings blocks. A fresh context
+ *  per turn, deliberately — the provider holds paths, not state (the
+ *  ideabox-routes.js reasoning). */
+async function defaultComposeContext(root, { focusId }) {
+  const ctx = await ideaboxContext(root, { origin: 'ui:colleague' });
+  return composeColleagueContext(ctx, { focusId });
 }
 
 function shortReason(e) {
