@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-08-11
+
+### COMP-AGENT-LANES — Per-subagent lanes for parallel fan-outs
+
+When a build fans out work across parallel workers (Phase-1 exploration, Phase-3 competing mandates, review fanouts), the cockpit showed only an aggregate "3 running" counter — no per-worker mandate, status, or output. This slice replaces the counter with one live lane per worker, compose-only (the design's sizing spike proved the attribution loss happens inside Compose; no Stratum change). A `lane` envelope — identity `flowId:stepId:itemIndex`, version `(generation, attempt)`, human label (review lens id or step intent), agent — is built once at the fanout dispatch site and rides every lifecycle write and every relayed output write; the bridge forwards it plus explicit terminal status; a pure UI reducer keys one lane per worker slot with version-based reset/staleness rejection and a strict terminal rule (a lane closes only on done-with-explicit-status or a `laneTerminal` error — advisory errors render as in-lane diagnostics). Reconnect is forward-only in v1: lanes joined mid-build are marked, not replayed.
+
+**Added:**
+- `lib/build.js` — `buildLaneEnvelope`; lane stamped on the `∥` `build_step_start`, both parallel `build_step_done` variants, and passed into `runAndNormalize`; the success-path done now carries explicit `status`/`outcome` (the UI previously inferred "complete" from the event's existence — a failed worker showed complete).
+- `lib/result-normalizer.js` — lane stamped on all five stream-write sites (engine-path assistant/tool_use/tool_use_summary/usage, local-path tool_use); byte-identical writes when absent.
+- `lib/local-claude-connector.js` — `onAssistantText` relay seam (lane-gated): isolation:none workers (review fanouts) previously accumulated assistant text without ever streaming it, so lanes would have shown only tool calls.
+- `server/build-stream-bridge.js` — forwards `lane`, done `status`/`outcome`, error `stepId` and `laneTerminal`; lane-less events keep their exact historical shape.
+- `src/components/agent-stream-lanes.js` — pure lane reducer (node-tested); `src/components/AgentStream.jsx` derives the legacy `parallelTasks` summary from the lane map (failed workers now count failed) and publishes lanes in the `compose:agent-status` payload; legacy aggregate path preserved for lane-less streams.
+- `src/components/cockpit/LaneStrip.jsx` + `AgentBar.jsx` mount — per-lane tabs (status dot, label, attempt badge, joined-mid-build marker) over the selected worker's feed; collapses to the legacy counter line.
+- Tests: producer emission, both stamping paths + back-compat snapshots, per-case bridge forwarding, reducer identity/version/terminal rules, LaneStrip render, and a golden-flow integration test (real producer → real bridge tail → real reducer, one failing worker, zero cross-lane leakage).
+
 ## 2026-08-10
 
 ### COMP-FOH / FOH-5 — CONTRADICTION: durable contradiction links + the resolvable read
