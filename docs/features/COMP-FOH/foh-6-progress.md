@@ -62,6 +62,16 @@ cockpit as a summonable colleague slide-over. Her core is never modified.
 Blueprint is the plan (FOH-4/5 slice pattern — no separate plan.md). TDD per task, review loop,
 coverage sweep per Phase 7.
 
+## Implement progress (2026-08-12)
+- **S1 COMPLETE:** `lib/maya-config.js`, `lib/maya-identity.js`, `lib/maya-client.js`,
+  `server/maya-routes.js` (+ vision-server attach), `test/helpers/maya-stub.js`, 29 tests green
+  (client contract incl. 401-retry-once/deadline/2xx-trust-gate; routes funnel machine,
+  lazy provision+NDA, no-silent-reprovision, workspace-collision refusal before side effects,
+  static mode, allowlist-posture assertion). Message route uses an injectable `composeContext`
+  (S1 default: empty blocks) — S2 wires the real builder.
+- Deferred to end-of-build (stack-dependent): dogfood config, live-fire, same-identity re-auth
+  probe + upstream issues (channel_context supported field; POST /test/login ask).
+
 ## Scope fences (blueprint must honor)
 - Ideas only (no clusters — seam refuses; no decisions — no producer exists).
 - CALIBRATION visibly unavailable, never faked. No resolve affordance in the panel (CLI-only).
