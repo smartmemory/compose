@@ -163,6 +163,7 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
 
   const [messages, setMessages] = useState([]);
   const [pending, setPending] = useState(false);
+  const [writebackOn, setWritebackOn] = useState(true); // design §5: toggleable, default on
   const [authError, setAuthError] = useState(null);   // per-turn 'auth' error → auth funnel
   const [offlineError, setOfflineError] = useState(null);
   const [pasting, setPasting] = useState(false);
@@ -194,7 +195,7 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
     setOfflineError(null);
     setMessages((m) => [...m, { role: 'user', text }]);
     try {
-      const body = await postJson('/api/maya/message', { text, focusId });
+      const body = await postJson('/api/maya/message', { text, focusId, writeback: writebackOn });
       if (body.ok) {
         setMessages((m) => [...m, {
           role: 'maya', text: body.reply, messageId: body.message_id,
@@ -442,6 +443,19 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
                 </div>
               )}
             </div>
+            <label
+              className="flex items-center gap-1.5 px-3 py-1 text-[10px] select-none"
+              style={{ color: 'hsl(var(--muted-foreground))', borderTop: '1px solid hsl(var(--border))' }}
+              title="Append her replies about the focused idea to its discussion trail (author: maya)"
+            >
+              <input
+                type="checkbox"
+                checked={writebackOn}
+                onChange={(e) => setWritebackOn(e.target.checked)}
+                style={{ accentColor: 'hsl(var(--accent))' }}
+              />
+              note replies on the idea
+            </label>
             <ChatInput onSend={send} disabled={pending} placeholder="Message Maya…" />
           </>
         )}

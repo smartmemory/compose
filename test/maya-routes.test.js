@@ -341,6 +341,90 @@ describe('maya routes', () => {
     assert.equal(sm.seen.length, 0);
   });
 
+  // ── write-back wiring (S4) — the reconcile logic itself is golden-tested
+  //    in test/colleague-writeback.test.js; these cover the route contract ──
+
+  function writebackSpy(result = { outcome: 'ok', focusId: 'IDEA-42' }) {
+    const calls = [];
+    const fn = async (root, args) => {
+      calls.push({ root, args });
+      if (result instanceof Error) throw result;
+      return result;
+    };
+    return { fn, calls };
+  }
+
+  async function wiredMessageApp({ writeback, context = emptyContext }) {
+    const maya = await makeMayaServer();
+    const sm = await makeSmStub();
+    const root = wiredRoot({ mayaBase: maya.baseUrl, smBase: sm.baseUrl });
+    const srv = await startApp({
+      root,
+      deps: { composeContext: context, performWriteback: writeback },
+    });
+    track(srv);
+    return { maya, sm, root, srv };
+  }
+
+  test('message with a focus: write-back runs with the reply + message_id; outcome rides the response', async () => {
+    const { fn, calls } = writebackSpy({ outcome: 'ok', focusId: 'IDEA-42' });
+    const { srv } = await wiredMessageApp({ writeback: fn });
+    const { body } = await postMessage(srv.baseUrl, { text: 'hi', focusId: 'IDEA-42' });
+    assert.equal(body.ok, true);
+    assert.deepEqual(body.writeback, { outcome: 'ok', focusId: 'IDEA-42' });
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].args, {
+      focusId: 'IDEA-42', messageId: body.message_id, text: body.reply,
+    });
+  });
+
+  test('message with writeback:false or without focus: no write-back attempt', async () => {
+    const { fn, calls } = writebackSpy();
+    const { srv } = await wiredMessageApp({ writeback: fn });
+    const r1 = await postMessage(srv.baseUrl, { text: 'hi', focusId: 'IDEA-42', writeback: false });
+    assert.equal(r1.body.writeback, null);
+    const r2 = await postMessage(srv.baseUrl, { text: 'hi' });
+    assert.equal(r2.body.writeback, null);
+    assert.equal(calls.length, 0);
+  });
+
+  test('write-back failure NEVER fails the turn: reply authoritative, outcome failed', async () => {
+    const { fn } = writebackSpy(new Error('append blew up'));
+    const { srv } = await wiredMessageApp({ writeback: fn });
+    const { body } = await postMessage(srv.baseUrl, { text: 'hi', focusId: 'IDEA-42' });
+    assert.equal(body.ok, true);
+    assert.equal(body.reply, 'echo:hi');
+    assert.equal(body.writeback.outcome, 'failed');
+    assert.match(body.writeback.reason, /append blew up/);
+  });
+
+  test('writeback-retry: append-only — runs the reconcile, never touches chat', async () => {
+    const { fn, calls } = writebackSpy({ outcome: 'ok', focusId: 'IDEA-42', deduped: true });
+    const { maya, srv } = await wiredMessageApp({ writeback: fn });
+    const r = await fetch(`${srv.baseUrl}/api/maya/writeback-retry`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Connection: 'close' },
+      body: JSON.stringify({ focusId: 'IDEA-42', message_id: 'msg_7', text: 'her reply' }),
+    });
+    const body = await r.json();
+    assert.equal(body.ok, true);
+    assert.deepEqual(body.writeback, { outcome: 'ok', focusId: 'IDEA-42', deduped: true });
+    assert.deepEqual(calls[0].args, { focusId: 'IDEA-42', messageId: 'msg_7', text: 'her reply' });
+    assert.equal(maya.seen.filter((s) => s.path === '/api/chat').length, 0);
+  });
+
+  test('writeback-retry: missing fields refused before any work', async () => {
+    const { fn, calls } = writebackSpy();
+    const { srv } = await wiredMessageApp({ writeback: fn });
+    const r = await fetch(`${srv.baseUrl}/api/maya/writeback-retry`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Connection: 'close' },
+      body: JSON.stringify({ focusId: 'IDEA-42' }),
+    });
+    const body = await r.json();
+    assert.equal(body.ok, false);
+    assert.equal(body.error.kind, 'invalid');
+    assert.equal(calls.length, 0);
+  });
+
   // ── /identity — the auth funnel's explicit actions (S3) ──────────────────
 
   test('identity reprovision: tears down upstream, clears the store; next turn provisions fresh', async () => {

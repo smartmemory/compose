@@ -52,6 +52,22 @@ const get = (p) => api('GET', p);
 const post = (p, b) => api('POST', p, b);
 const patch = (p, b) => api('PATCH', p, b);
 
+// FOH-6 S4: the projection-repair endpoint (the landed-unrendered fix). It
+// must rebuild the file from the records without touching any record.
+it('POST /api/ideabox/render rebuilds a deleted projection from the records', async () => {
+  const { body: created } = await post('/api/ideabox/ideas', { title: 'Render me back' });
+  rmSync(ideaboxPath(), { force: true });
+  const { status, body } = await post('/api/ideabox/render');
+  assert.equal(status, 200);
+  assert.equal(body.ok, true);
+  assert.ok(existsSync(ideaboxPath()));
+  assert.ok(readProjection().includes('Render me back'));
+  // No record mutation: the idea is still there, untouched.
+  const { body: after } = await get('/api/ideabox');
+  const idea = after.ideas.find((i) => i.id === created.id);
+  assert.ok(idea);
+});
+
 before(async () => {
   const app = express();
   app.use(express.json());
