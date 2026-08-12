@@ -25,6 +25,35 @@ import ChatInput from '../agent/ChatInput.jsx';
 import MessageCard from '../agent/MessageCard.jsx';
 import { useIdeaboxStore } from '../vision/useIdeaboxStore.js';
 
+function parseSseFrame(frame) {
+  let event = 'message';
+  const data = [];
+  for (const line of frame.split('\n')) {
+    if (!line || line.startsWith(':')) continue;
+    const colon = line.indexOf(':');
+    const field = colon === -1 ? line : line.slice(0, colon);
+    let value = colon === -1 ? '' : line.slice(colon + 1);
+    if (value.startsWith(' ')) value = value.slice(1);
+    if (field === 'event') event = value;
+    if (field === 'data') data.push(value);
+  }
+  if (!data.length) return null;
+  try {
+    return { event, body: JSON.parse(data.join('\n')) };
+  } catch {
+    return null;
+  }
+}
+
+function updateLastMaya(messages, update) {
+  let index = messages.length - 1;
+  while (index >= 0 && messages[index].role !== 'maya') index -= 1;
+  if (index < 0) return messages;
+  const next = [...messages];
+  next[index] = update(next[index]);
+  return next;
+}
+
 // ---------------------------------------------------------------------------
 // Small pieces
 // ---------------------------------------------------------------------------
@@ -176,6 +205,26 @@ function WritebackChip({ writeback, messageId, replyText, onRetry, onRepair }) {
       </div>
     );
   }
+  if (outcome === 'unknown') {
+    // The stream ended after `final` but before the relay's writeback event —
+    // the append may or may not have landed. Never let that read as clean
+    // (§5 outcome contract); retry is reconcile-then-append, so it dedups
+    // into a no-op if the original landed.
+    return (
+      <div className="flex items-center gap-1.5 text-[10px] mt-0.5" style={{ color: 'hsl(38 92% 50%)' }}>
+        <AlertTriangle style={{ width: 10, height: 10 }} />
+        save to {focusId} unconfirmed — connection dropped
+        <button
+          className="underline"
+          onClick={() => onRetry({ focusId, messageId, replyText })}
+          style={{ color: 'inherit', background: 'none', border: 'none', cursor: 'pointer' }}
+          title="Reconcile-then-append — a no-op if the original save landed"
+        >
+          retry
+        </button>
+      </div>
+    );
+  }
   return null;
 }
 
@@ -194,6 +243,7 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
 
   const [messages, setMessages] = useState([]);
   const [pending, setPending] = useState(false);
+  const [streamReplyStarted, setStreamReplyStarted] = useState(false);
   const [writebackOn, setWritebackOn] = useState(true); // design §5: toggleable, default on
   const [authError, setAuthError] = useState(null);   // per-turn 'auth' error → auth funnel
   const [offlineError, setOfflineError] = useState(null);
@@ -208,9 +258,10 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const lastMessageTextLength = messages[messages.length - 1]?.text?.length ?? 0;
   useEffect(() => {
     scrollRef.current?.scrollTo?.({ top: scrollRef.current.scrollHeight });
-  }, [messages.length]);
+  }, [messages.length, lastMessageTextLength]);
 
   async function postJson(url, body) {
     const r = await wsFetch(url, {
@@ -221,32 +272,174 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
     return r.json();
   }
 
+  function handleTurnError(error) {
+    if (error?.kind === 'auth') {
+      setAuthError(error);
+    } else if (error?.kind === 'offline') {
+      setOfflineError(error);
+      refreshStatus?.();
+    } else {
+      setMessages((m) => [...m, {
+        role: 'error',
+        text: `${error?.kind ?? 'error'}: ${error?.message ?? 'the turn failed'}`,
+      }]);
+    }
+  }
+
   async function send(text) {
     setPending(true);
+    setStreamReplyStarted(false);
     setOfflineError(null);
     setMessages((m) => [...m, { role: 'user', text }]);
+    let hasStreamMessage = false;
+    let sawFinal = false;
+    let sawError = false;
+    // Captured at send time: whether this turn owes a terminal writeback
+    // event. If the stream dies between `final` and that event, the outcome
+    // is UNKNOWN, never silently clean (§5 outcome contract, Codex r1 P2).
+    const expectWriteback = Boolean(focusId) && writebackOn;
+    const turnFocusId = focusId;
+    let sawWriteback = false;
+
+    const markInterrupted = () => {
+      setMessages((m) => updateLastMaya(m, (msg) => ({
+        ...msg, streaming: false, failed: true,
+      })));
+    };
+
     try {
-      const body = await postJson('/api/maya/message', { text, focusId, writeback: writebackOn });
-      if (body.ok) {
-        setMessages((m) => [...m, {
-          role: 'maya', text: body.reply, messageId: body.message_id,
-          writeback: body.writeback, context: body.context,
-        }]);
-      } else if (body.error?.kind === 'auth') {
-        setAuthError(body.error);
-      } else if (body.error?.kind === 'offline') {
-        setOfflineError(body.error);
-        refreshStatus?.();
-      } else {
-        setMessages((m) => [...m, {
-          role: 'error',
-          text: `${body.error?.kind ?? 'error'}: ${body.error?.message ?? 'the turn failed'}`,
-        }]);
+      const res = await wsFetch('/api/maya/message?stream=1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, focusId, writeback: writebackOn }),
+      });
+      const contentType = (res.headers?.get?.('Content-Type') ?? '')
+        .split(';', 1)[0].trim().toLowerCase();
+
+      if (contentType === 'application/json') {
+        const body = await res.json();
+        if (body.ok) {
+          setMessages((m) => [...m, {
+            role: 'maya', text: body.reply, messageId: body.message_id,
+            writeback: body.writeback, context: body.context,
+          }]);
+        } else {
+          handleTurnError(body.error);
+        }
+        return;
+      }
+
+      if (contentType !== 'text/event-stream') {
+        throw new Error(`unexpected response content type: ${contentType || 'missing'}`);
+      }
+      const reader = res.body?.getReader?.();
+      if (!reader) throw new Error('stream response has no readable body');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const handleFrame = (frame) => {
+        const parsed = parseSseFrame(frame);
+        if (!parsed) return;
+        const { event, body } = parsed;
+
+        if (event === 'token') {
+          if (!hasStreamMessage) {
+            hasStreamMessage = true;
+            setStreamReplyStarted(true);
+            setMessages((m) => [...m, { role: 'maya', streaming: true, text: '' }]);
+          }
+          const chunk = String(body?.text ?? '');
+          setMessages((m) => updateLastMaya(m, (msg) => ({
+            ...msg, text: `${msg.text}${chunk}`,
+          })));
+          return;
+        }
+
+        if (event === 'final') {
+          sawFinal = true;
+          setStreamReplyStarted(true);
+          if (!hasStreamMessage) {
+            hasStreamMessage = true;
+            setMessages((m) => [...m, {
+              role: 'maya', text: body.reply, messageId: body.message_id,
+              context: body.context, streaming: false,
+            }]);
+          } else {
+            setMessages((m) => updateLastMaya(m, (msg) => ({
+              ...msg,
+              text: body.reply,
+              messageId: body.message_id,
+              context: body.context,
+              streaming: false,
+              failed: false,
+            })));
+          }
+          return;
+        }
+
+        if (event === 'writeback') {
+          sawWriteback = true;
+          if (hasStreamMessage && sawFinal) {
+            setMessages((m) => updateLastMaya(m, (msg) => ({ ...msg, writeback: body })));
+          }
+          return;
+        }
+
+        if (event === 'error') {
+          sawError = true;
+          if (hasStreamMessage && !sawFinal) markInterrupted();
+          handleTurnError(body);
+        }
+      };
+
+      const drainFrames = () => {
+        buffer = buffer.replace(/\r\n/g, '\n');
+        let boundary = buffer.indexOf('\n\n');
+        while (boundary !== -1 && !sawError) {
+          const frame = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          handleFrame(frame);
+          boundary = buffer.indexOf('\n\n');
+        }
+      };
+
+      while (!sawError) {
+        const { done, value } = await reader.read();
+        if (done) {
+          buffer += decoder.decode();
+          drainFrames();
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        drainFrames();
+      }
+
+      if (!sawFinal && !sawError) {
+        if (hasStreamMessage) {
+          markInterrupted();
+        } else {
+          setMessages((m) => [...m, {
+            role: 'error', text: 'request failed: stream ended before a final reply',
+          }]);
+        }
       }
     } catch (e) {
-      setMessages((m) => [...m, { role: 'error', text: `request failed: ${e.message}` }]);
+      if (!sawFinal && hasStreamMessage) {
+        markInterrupted();
+      } else if (!sawFinal && !sawError) {
+        setMessages((m) => [...m, { role: 'error', text: `request failed: ${e.message}` }]);
+      }
     } finally {
+      // Covers both the clean-close and the thrown-mid-drain paths: a turn
+      // that owed a writeback event but never got one ends UNKNOWN, with the
+      // idempotent retry affordance — never silently clean.
+      if (sawFinal && expectWriteback && !sawWriteback) {
+        setMessages((m) => updateLastMaya(m, (msg) => ({
+          ...msg, writeback: { outcome: 'unknown', focusId: turnFocusId },
+        })));
+      }
       setPending(false);
+      setStreamReplyStarted(false);
     }
   }
 
@@ -485,6 +678,14 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
                 return (
                   <div key={i}>
                     <MessageCard msg={{ type: 'assistant', message: { content: [{ type: 'text', text: msg.text }] } }} />
+                    {msg.failed && (
+                      <div
+                        className="text-[10px] mt-0.5"
+                        style={{ color: 'hsl(var(--destructive))' }}
+                      >
+                        reply interrupted — not saved
+                      </div>
+                    )}
                     <ContextNote context={msg.context} />
                     <WritebackChip
                       writeback={msg.writeback}
@@ -496,7 +697,7 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
                   </div>
                 );
               })}
-              {pending && (
+              {pending && !streamReplyStarted && (
                 <div className="text-[11px] animate-pulse" style={{ color: 'hsl(var(--muted-foreground))' }}>
                   Maya is thinking…
                 </div>

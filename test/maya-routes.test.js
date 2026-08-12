@@ -15,7 +15,7 @@
  */
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
+import { createServer, request } from 'node:http';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
@@ -83,6 +83,79 @@ async function postMessage(baseUrl, payload) {
     body: JSON.stringify(payload),
   });
   return { status: r.status, body: await r.json() };
+}
+
+async function readSse(res) {
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  const events = [];
+  let buffer = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
+    let boundary;
+    while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+      const frame = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      let event = '';
+      const data = [];
+      for (const line of frame.split('\n')) {
+        if (line.startsWith(':')) continue;
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        if (line.startsWith('data:')) data.push(line.slice(5).trimStart());
+      }
+      events.push({ event, data: JSON.parse(data.join('\n')) });
+    }
+    if (done) break;
+  }
+  return events;
+}
+
+async function postStream(baseUrl, payload) {
+  const res = await fetch(`${baseUrl}/api/maya/message?stream=1`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Connection: 'close' },
+    body: JSON.stringify(payload),
+  });
+  return { res, events: await readSse(res) };
+}
+
+function disconnectAfterFirstToken(baseUrl, payload) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(payload);
+    let sawToken = false;
+    let received = '';
+    const req = request(`${baseUrl}/api/maya/message?stream=1`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        Connection: 'close',
+      },
+    }, (response) => {
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => {
+        received += chunk;
+        if (!sawToken && received.includes('event: token')) {
+          sawToken = true;
+          response.destroy();
+          resolve();
+        }
+      });
+      response.on('end', () => {
+        if (!sawToken) reject(new Error('stream ended before the first token'));
+      });
+      response.on('error', (err) => {
+        if (sawToken) resolve();
+        else reject(err);
+      });
+    });
+    req.on('error', (err) => {
+      if (sawToken) resolve();
+      else reject(err);
+    });
+    req.end(body);
+  });
 }
 
 describe('maya routes', () => {
@@ -645,6 +718,114 @@ describe('maya routes', () => {
     track(srv);
     const { body } = await postMessage(srv.baseUrl, { text: 'hi', focusId: 'IDEA-42' });
     assert.deepEqual(body.context.blocks, [{ author: 'compose:contradiction', text: 'IDEA-7 contradicts' }]);
+  });
+
+  // ── /message?stream=1 (S5) ──────────────────────────────────────────────
+
+  test('stream message: tokens, final context, then successful write-back, then clean end', async () => {
+    const { fn, calls } = writebackSpy({ outcome: 'ok', focusId: 'IDEA-42' });
+    const context = async () => ({
+      blocks: [{ author: 'compose:idea IDEA-42', text: 'Redis streams' }],
+      omissions: ['discussion omitted, over budget'],
+    });
+    const { srv } = await wiredMessageApp({ writeback: fn, context });
+    const { res, events } = await postStream(srv.baseUrl, {
+      text: 'stream this', focusId: 'IDEA-42',
+    });
+    assert.match(res.headers.get('content-type'), /^text\/event-stream/);
+    assert.equal(res.headers.get('cache-control'), 'no-cache');
+    // Without this, a reverse proxy (nginx) buffers the SSE body whole and
+    // S5 collapses back into a one-shot response (Codex r1 P2).
+    assert.equal(res.headers.get('x-accel-buffering'), 'no');
+    assert.deepEqual(events.map((event) => event.event), [
+      'token', 'token', 'final', 'writeback',
+    ]);
+
+    const final = events.find((event) => event.event === 'final').data;
+    assert.equal(events.filter((event) => event.event === 'token')
+      .map((event) => event.data.text).join(''), final.reply);
+    assert.deepEqual(final.context, {
+      sent: ['compose:idea IDEA-42'],
+      omissions: ['discussion omitted, over budget'],
+      blocks: [{ author: 'compose:idea IDEA-42', text: 'Redis streams' }],
+    });
+    assert.ok(!('writeback' in final));
+    assert.deepEqual(events.at(-1).data, { outcome: 'ok', focusId: 'IDEA-42' });
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].args, {
+      focusId: 'IDEA-42', messageId: final.message_id, text: final.reply,
+    });
+  });
+
+  test('stream message: no focus emits final without a write-back event', async () => {
+    const { fn, calls } = writebackSpy();
+    const { srv } = await wiredMessageApp({ writeback: fn });
+    const { events } = await postStream(srv.baseUrl, { text: 'hi' });
+    assert.deepEqual(events.map((event) => event.event), ['token', 'token', 'final']);
+    assert.equal(calls.length, 0);
+  });
+
+  test('stream message: pre-flight failure stays the existing JSON envelope', async () => {
+    const root = makeProjectRoot({});
+    const srv = await startApp({ root });
+    track(srv);
+    const res = await fetch(`${srv.baseUrl}/api/maya/message?stream=1`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Connection: 'close' },
+      body: JSON.stringify({ text: 'hi' }),
+    });
+    assert.match(res.headers.get('content-type'), /^application\/json/);
+    assert.deepEqual(await res.json(), { ok: false, error: { kind: 'not-installed' } });
+  });
+
+  test('stream message: upstream error event becomes one terminal relay error event', async () => {
+    const { fn } = writebackSpy();
+    const { maya, srv } = await wiredMessageApp({ writeback: fn });
+    maya.server.__streamErrorEvent = true;
+    const { res, events } = await postStream(srv.baseUrl, { text: 'hi' });
+    assert.match(res.headers.get('content-type'), /^text\/event-stream/);
+    assert.equal(events.filter((event) => event.event === 'error').length, 1);
+    assert.deepEqual(events.at(-1), {
+      event: 'error',
+      data: { kind: 'upstream', message: 'boom', status: 500 },
+    });
+    assert.equal(events.some((event) => event.event === 'final'), false);
+  });
+
+  test('stream message: write-back failure follows final and still ends cleanly', async () => {
+    const { fn } = writebackSpy(new Error('append blew up'));
+    const { srv } = await wiredMessageApp({ writeback: fn });
+    const { events } = await postStream(srv.baseUrl, {
+      text: 'hi', focusId: 'IDEA-42',
+    });
+    assert.deepEqual(events.slice(-2).map((event) => event.event), ['final', 'writeback']);
+    assert.equal(events.at(-1).data.outcome, 'failed');
+    assert.equal(events.at(-1).data.focusId, 'IDEA-42');
+    assert.match(events.at(-1).data.reason, /append blew up/);
+  });
+
+  test('stream message: downstream disconnect detaches; final still drives write-back', async () => {
+    let writebackArgs;
+    let writebackDone;
+    const completed = new Promise((resolve) => { writebackDone = resolve; });
+    const performWriteback = async (_root, args) => {
+      writebackArgs = args;
+      writebackDone();
+      return { outcome: 'ok', focusId: args.focusId };
+    };
+    const { maya, srv } = await wiredMessageApp({ writeback: performWriteback });
+    maya.server.__streamSplitFrames = true;
+
+    await disconnectAfterFirstToken(srv.baseUrl, { text: 'hi', focusId: 'IDEA-42' });
+    await Promise.race([
+      completed,
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('write-back did not complete after detach')), 1000).unref();
+      }),
+    ]);
+    assert.equal(writebackArgs.focusId, 'IDEA-42');
+    assert.match(writebackArgs.messageId, /^msg_/);
+    assert.equal(writebackArgs.text, 'echo:hi');
   });
 
   // ── workspace-isolation validation (the VERIFY-3 refusal unit test) ──────

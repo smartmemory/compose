@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 vi.mock('../../src/lib/wsFetch.js', () => ({ wsFetch: vi.fn() }));
 // The ideabox store attaches a live-update WebSocket on an import-time timer;
@@ -34,10 +34,26 @@ function routeFetch(routes) {
     for (const [pattern, handler] of routes) {
       if (url.includes(pattern)) return Promise.resolve(handler(url, opts));
     }
-    return Promise.resolve({ ok: true, json: async () => ({}) });
+    return Promise.resolve(json({}));
   });
 }
-const json = (body) => ({ ok: true, json: async () => body });
+const json = (body) => new Response(JSON.stringify(body), {
+  headers: { 'Content-Type': 'application/json' },
+});
+
+function controlledSse() {
+  const encoder = new TextEncoder();
+  let controller;
+  const response = new Response(new ReadableStream({
+    start(c) { controller = c; },
+  }), { headers: { 'Content-Type': 'text/event-stream; charset=utf-8' } });
+  return {
+    response,
+    push: (frame) => controller.enqueue(encoder.encode(frame)),
+    close: () => controller.close(),
+    fail: (error) => controller.error(error),
+  };
+}
 
 function renderPanel({ status = READY, refreshStatus = vi.fn() } = {}) {
   return render(
@@ -86,6 +102,53 @@ describe('ColleaguePanel funnel states', () => {
 });
 
 describe('conversation flow', () => {
+  it('renders tokens progressively, then replaces them with final context + write-back', async () => {
+    const stream = controlledSse();
+    routeFetch([
+      ['/api/maya/message?stream=1', () => stream.response],
+    ]);
+    useIdeaboxStore.setState({ selectedIdeaId: 'IDEA-42' });
+
+    renderPanel();
+    const textarea = document.querySelector('textarea');
+    textarea.value = 'stream this';
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    await waitFor(() => expect(document.querySelector('textarea').disabled).toBe(true));
+
+    await act(async () => {
+      stream.push(': heartbeat\n\nevent: token\ndata: {"text":"draft"}\n\n');
+    });
+    await waitFor(() => expect(screen.getByText('draft')).toBeTruthy());
+    expect(screen.queryByText(/Maya is thinking/i)).toBeNull();
+    expect(document.querySelector('textarea').disabled).toBe(true);
+
+    // The second token frame is intentionally split across transport chunks.
+    await act(async () => {
+      stream.push('event: token\ndata: {"text":" words');
+      stream.push('"}\n\nevent: ignored\ndata: {"value":true}\n\n');
+    });
+    await waitFor(() => expect(screen.getByText('draft words')).toBeTruthy());
+
+    await act(async () => {
+      stream.push(
+        'event: final\ndata: {"ok":true,"reply":"Authoritative reply.","message_id":"msg_stream","memory_available":true,"context":{"sent":["compose:idea IDEA-42","compose:contradiction"],"omissions":["challenge omitted, over budget"],"blocks":[{"author":"compose:contradiction","text":"stream finding text"}]}}\n\n'
+        + 'event: writeback\ndata: {"outcome":"ok","focusId":"IDEA-42"}\n\n',
+      );
+      stream.close();
+    });
+
+    await waitFor(() => expect(screen.getByText('Authoritative reply.')).toBeTruthy());
+    expect(screen.queryByText('draft words')).toBeNull();
+    expect(screen.getByText(/challenge omitted, over budget/)).toBeTruthy();
+    expect(screen.getByText(/findings \(1\)/i)).toBeTruthy();
+    expect(screen.getByText('stream finding text')).toBeTruthy();
+    expect(screen.getByText(/noted on IDEA-42/i)).toBeTruthy();
+    expect(document.querySelector('textarea').disabled).toBe(false);
+
+    const call = wsFetch.mock.calls.find(([u]) => u.includes('/api/maya/message'));
+    expect(call[0]).toBe('/api/maya/message?stream=1');
+  });
+
   it('sends text + focusId, disables input while pending, renders reply + context note', async () => {
     let resolveTurn;
     const turn = new Promise((r) => { resolveTurn = r; });
@@ -149,7 +212,7 @@ describe('conversation flow', () => {
     expect(screen.queryByText(/the record body/)).toBeNull();
   });
 
-  it('auth turn error → auth funnel with the two explicit continuity-costing actions', async () => {
+  it('pre-flight JSON auth error → auth funnel with the two explicit continuity-costing actions', async () => {
     routeFetch([
       ['/api/maya/message', () => json({
         ok: false,
@@ -165,6 +228,95 @@ describe('conversation flow', () => {
     expect(screen.getByRole('button', { name: /paste a new token/i })).toBeTruthy();
     // Never silent: no chat input in the auth funnel.
     expect(document.querySelector('textarea')).toBeNull();
+    const call = wsFetch.mock.calls.find(([u]) => u.includes('/api/maya/message'));
+    expect(call[0]).toBe('/api/maya/message?stream=1');
+  });
+
+  it('routes a terminal SSE error through the existing error taxonomy', async () => {
+    const stream = controlledSse();
+    routeFetch([
+      ['/api/maya/message?stream=1', () => stream.response],
+    ]);
+    renderPanel();
+    const textarea = document.querySelector('textarea');
+    textarea.value = 'hi';
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    await act(async () => {
+      stream.push('event: token\ndata: {"text":"partial upstream text"}\n\n');
+    });
+    await waitFor(() => expect(screen.getByText('partial upstream text')).toBeTruthy());
+    await act(async () => {
+      stream.push('event: error\ndata: {"kind":"upstream","message":"Maya stopped"}\n\n');
+      stream.close();
+    });
+
+    await waitFor(() => expect(screen.getByText('upstream: Maya stopped')).toBeTruthy());
+    expect(screen.getByText('partial upstream text')).toBeTruthy();
+    expect(document.querySelector('textarea').disabled).toBe(false);
+  });
+
+  it('keeps a partial reply and marks it failed when the stream cuts off without final', async () => {
+    const stream = controlledSse();
+    routeFetch([
+      ['/api/maya/message?stream=1', () => stream.response],
+    ]);
+    renderPanel();
+    const textarea = document.querySelector('textarea');
+    textarea.value = 'hi';
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    await act(async () => {
+      stream.push('event: token\ndata: {"text":"keep this partial reply"}\n\n');
+    });
+    await waitFor(() => expect(screen.getByText('keep this partial reply')).toBeTruthy());
+    await act(async () => {
+      stream.fail(new Error('socket reset'));
+    });
+
+    await waitFor(() => expect(screen.getByText(/reply interrupted — not saved/i)).toBeTruthy());
+    expect(screen.getByText('keep this partial reply')).toBeTruthy();
+    expect(screen.queryByText(/noted on/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: /re-render/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^retry$/i })).toBeNull();
+    expect(document.querySelector('textarea').disabled).toBe(false);
+  });
+
+  it('final without the owed write-back event ends UNKNOWN — unconfirmed chip, idempotent retry', async () => {
+    // The §5 outcome contract is transport-independent: a turn that owed a
+    // writeback event must never read as clean when the stream dies after
+    // final but before the outcome arrives (Codex r1 P2).
+    const stream = controlledSse();
+    routeFetch([
+      ['/api/maya/message?stream=1', () => stream.response],
+      ['/api/maya/writeback-retry', () => json({ ok: true, writeback: { outcome: 'ok', focusId: 'IDEA-42' } })],
+    ]);
+    useIdeaboxStore.setState({ selectedIdeaId: 'IDEA-42' });
+
+    renderPanel();
+    const textarea = document.querySelector('textarea');
+    textarea.value = 'stream this';
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    await act(async () => {
+      stream.push(
+        'event: token\ndata: {"text":"partial"}\n\n'
+        + 'event: final\ndata: {"ok":true,"reply":"Full reply.","message_id":"msg_wb","memory_available":true,"context":{"sent":[],"omissions":[],"blocks":[]}}\n\n',
+      );
+      stream.close(); // connection dies before the writeback event
+    });
+
+    await waitFor(() => expect(screen.getByText(/save to IDEA-42 unconfirmed/i)).toBeTruthy());
+    expect(screen.getByText('Full reply.')).toBeTruthy();
+    expect(screen.queryByText(/noted on/i)).toBeNull();
+    expect(document.querySelector('textarea').disabled).toBe(false);
+
+    // Retry is reconcile-then-append keyed on message_id — resolving it
+    // flips the chip to the confirmed state.
+    fireEvent.click(screen.getByRole('button', { name: /^retry$/i }));
+    await waitFor(() => expect(screen.getByText(/noted on IDEA-42/i)).toBeTruthy());
+    const retryCall = wsFetch.mock.calls.find(([u]) => u.includes('/api/maya/writeback-retry'));
+    expect(JSON.parse(retryCall[1].body).message_id).toBe('msg_wb');
   });
 });
 

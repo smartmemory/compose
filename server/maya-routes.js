@@ -145,6 +145,107 @@ export function attachMayaRoutes(app, {
     return { root, cfg, mode: cfg.auth?.mode ?? 'provision', misconfigured: false };
   }
 
+  /** Shared pre-flight for both transports. Nothing upstream-facing starts
+   *  until every funnel, isolation check, and context build has passed. */
+  async function prepareMessage(req) {
+    const scope = scopeOf(req);
+    if (!scope) return { errorBody: { ok: false, error: { kind: 'not-installed' } } };
+    if (scope.misconfigured) {
+      return {
+        errorBody: {
+          ok: false,
+          error: { kind: 'misconfigured', message: 'the maya block has no baseUrl' },
+        },
+      };
+    }
+    const { root, cfg, mode } = scope;
+
+    const text = String(req.body?.text ?? '').trim();
+    if (!text) {
+      return {
+        errorBody: { ok: false, error: { kind: 'invalid', message: 'text is required' } },
+      };
+    }
+    const focusId = req.body?.focusId ? String(req.body.focusId) : null;
+
+    try {
+      if (!hasSmartmemoryFluidProvider(root)) {
+        return { errorBody: { ok: false, error: { kind: 'connect-smartmemory' } } };
+      }
+
+      // Identity BEFORE any upstream traffic: a stored fluid-workspace token
+      // must be refused before provisioning side effects or a chat turn.
+      let stored = loadIdentity(root);
+      // A LEGACY static identity (stored before paste-time verification
+      // existed) carries no workspace claim, which would make the isolation
+      // check vacuous — verify-and-migrate it on first use, failing closed
+      // into the auth funnel when it cannot be verified (Codex r2 P1).
+      if (stored?.mode === 'static' && !workspaceClaimOf(stored)) {
+        const team = await fetchVerifiedWorkspace({
+          smBaseUrl: getSmartmemoryConfig(root)?.baseUrl, token: stored.access_token,
+        });
+        const candidate = { ...stored, team_id: team };
+        // Validate BEFORE persisting: writing a colliding claim first would
+        // pin the refusal to a stale verification — a colliding token is
+        // refused each turn against a FRESH upstream answer instead.
+        validateWorkspaceIsolation(candidate, getFluidWorkspaceId(root));
+        saveIdentity(root, candidate);
+        stored = candidate;
+      }
+      validateWorkspaceIsolation(stored, getFluidWorkspaceId(root));
+      const identity = stored ?? await ensureIdentity(root, {
+        smBaseUrl: getSmartmemoryConfig(root)?.baseUrl, mode,
+      });
+      // A lazily-provisioned identity gets the same refusal before first use.
+      if (!stored) validateWorkspaceIsolation(identity, getFluidWorkspaceId(root));
+      // Complete a pending NDA on a stored identity (crash between provision
+      // and accept) — same identity, never a fresh one.
+      if (stored && stored.mode === 'provision' && !stored.ndaAccepted) {
+        await ensureIdentity(root, { smBaseUrl: getSmartmemoryConfig(root)?.baseUrl, mode });
+      }
+
+      // Context composition is load-bearing: a failure here is a funnel, never
+      // a silent fall-through to plain chat (COLLEAGUE-ALL-IN).
+      let context;
+      try {
+        context = await composeContext(root, { focusId });
+      } catch (e) {
+        return {
+          errorBody: {
+            ok: false,
+            error: { kind: 'context', message: `findings composition failed: ${shortReason(e)}` },
+          },
+        };
+      }
+
+      const client = createClient({
+        baseUrl: cfg.baseUrl,
+        getToken: () => loadIdentity(root)?.access_token ?? identity.access_token,
+      });
+      return {
+        root,
+        text,
+        focusId,
+        context,
+        client,
+        writebackEnabled: !!(focusId && req.body?.writeback !== false),
+      };
+    } catch (err) {
+      return { errorBody: { ok: false, error: errorEnvelope(err) } };
+    }
+  }
+
+  async function completeWriteback({ root, focusId, reply, enabled }) {
+    if (!enabled) return null;
+    try {
+      return await performWriteback(root, {
+        focusId, messageId: reply.message_id, text: reply.response,
+      });
+    } catch (e) {
+      return { outcome: 'failed', focusId, reason: shortReason(e) };
+    }
+  }
+
   app.get('/api/maya/status', async (req, res) => {
     try {
       const scope = scopeOf(req);
@@ -208,104 +309,109 @@ export function attachMayaRoutes(app, {
   });
 
   app.post('/api/maya/message', async (req, res) => {
-    const scope = scopeOf(req);
-    if (!scope) return res.json({ ok: false, error: { kind: 'not-installed' } });
-    if (scope.misconfigured) {
-      return res.json({
-        ok: false,
-        error: { kind: 'misconfigured', message: 'the maya block has no baseUrl' },
-      });
-    }
-    const { root, cfg, mode } = scope;
+    const prepared = await prepareMessage(req);
+    if (prepared.errorBody) return res.json(prepared.errorBody);
+    const { root, text, focusId, context, client, writebackEnabled } = prepared;
 
-    const text = String(req.body?.text ?? '').trim();
-    if (!text) return res.json({ ok: false, error: { kind: 'invalid', message: 'text is required' } });
-    const focusId = req.body?.focusId ? String(req.body.focusId) : null;
+    if (req.query?.stream !== '1') {
+      try {
+        const reply = await client.chat({ message: text, channelContext: context.blocks });
+
+        // Write-back (S4): the chat result is AUTHORITATIVE — her reply renders
+        // whatever happens here, and a write-back failure is an outcome field,
+        // never a failed turn (resending the chat would double-charge her
+        // session with the same turn). Toggleable per request, default on.
+        const writeback = await completeWriteback({
+          root, focusId, reply, enabled: writebackEnabled,
+        });
+
+        return res.json({
+          ok: true,
+          reply: reply.response,
+          message_id: reply.message_id,
+          memory_available: reply.memory_available ?? null,
+          writeback,
+          context: {
+            sent: context.blocks.map((b) => b.author),
+            omissions: context.omissions,
+            // The composed blocks themselves — the panel's findings accordion
+            // renders these (design §4); authors carry the provenance labels.
+            blocks: context.blocks,
+          },
+        });
+      } catch (err) {
+        return res.json({ ok: false, error: errorEnvelope(err) });
+      }
+    }
+
+    // Downstream cancellation is deliberately NOT connected to the upstream
+    // controller. Maya's final and the durable write-back still complete.
+    let closed = false;
+    let upstreamOpened = false;
+    res.on('close', () => { closed = true; });
+    const writable = () => !closed && !res.writableEnded && !res.destroyed;
+    const openStream = () => {
+      upstreamOpened = true;
+      if (!writable() || res.headersSent) return;
+      try {
+        res.status(200);
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        // Upstream Maya sends this too — without it the documented nginx
+        // reverse-proxy deployment buffers the SSE body until res.end(),
+        // collapsing S5 back into a one-shot response (Codex r1 P2).
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders();
+      } catch {
+        closed = true;
+      }
+    };
+    const writeEvent = (event, payload) => {
+      if (!writable()) return;
+      try {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
+      } catch {
+        closed = true;
+      }
+    };
+    const endStream = () => {
+      if (!writable()) return;
+      try { res.end(); } catch { closed = true; }
+    };
 
     try {
-      if (!hasSmartmemoryFluidProvider(root)) {
-        return res.json({ ok: false, error: { kind: 'connect-smartmemory' } });
-      }
-
-      // Identity BEFORE any upstream traffic: a stored fluid-workspace token
-      // must be refused before provisioning side effects or a chat turn.
-      let stored = loadIdentity(root);
-      // A LEGACY static identity (stored before paste-time verification
-      // existed) carries no workspace claim, which would make the isolation
-      // check vacuous — verify-and-migrate it on first use, failing closed
-      // into the auth funnel when it cannot be verified (Codex r2 P1).
-      if (stored?.mode === 'static' && !workspaceClaimOf(stored)) {
-        const team = await fetchVerifiedWorkspace({
-          smBaseUrl: getSmartmemoryConfig(root)?.baseUrl, token: stored.access_token,
-        });
-        const candidate = { ...stored, team_id: team };
-        // Validate BEFORE persisting: writing a colliding claim first would
-        // pin the refusal to a stale verification — a colliding token is
-        // refused each turn against a FRESH upstream answer instead.
-        validateWorkspaceIsolation(candidate, getFluidWorkspaceId(root));
-        saveIdentity(root, candidate);
-        stored = candidate;
-      }
-      validateWorkspaceIsolation(stored, getFluidWorkspaceId(root));
-      const identity = stored ?? await ensureIdentity(root, {
-        smBaseUrl: getSmartmemoryConfig(root)?.baseUrl, mode,
+      const reply = await client.chatStream({
+        message: text,
+        channelContext: context.blocks,
+        onToken: (token) => {
+          openStream();
+          writeEvent('token', { text: token });
+        },
       });
-      // A lazily-provisioned identity gets the same refusal before first use.
-      if (!stored) validateWorkspaceIsolation(identity, getFluidWorkspaceId(root));
-      // Complete a pending NDA on a stored identity (crash between provision
-      // and accept) — same identity, never a fresh one.
-      if (stored && stored.mode === 'provision' && !stored.ndaAccepted) {
-        await ensureIdentity(root, { smBaseUrl: getSmartmemoryConfig(root)?.baseUrl, mode });
-      }
-
-      // Context composition is load-bearing: a failure here is a funnel, never
-      // a silent fall-through to plain chat (COLLEAGUE-ALL-IN).
-      let context;
-      try {
-        context = await composeContext(root, { focusId });
-      } catch (e) {
-        return res.json({
-          ok: false,
-          error: { kind: 'context', message: `findings composition failed: ${shortReason(e)}` },
-        });
-      }
-
-      const client = createClient({
-        baseUrl: cfg.baseUrl,
-        getToken: () => loadIdentity(root)?.access_token ?? identity.access_token,
-      });
-      const reply = await client.chat({ message: text, channelContext: context.blocks });
-
-      // Write-back (S4): the chat result is AUTHORITATIVE — her reply renders
-      // whatever happens here, and a write-back failure is an outcome field,
-      // never a failed turn (resending the chat would double-charge her
-      // session with the same turn). Toggleable per request, default on.
-      let writeback = null;
-      if (focusId && req.body?.writeback !== false) {
-        try {
-          writeback = await performWriteback(root, {
-            focusId, messageId: reply.message_id, text: reply.response,
-          });
-        } catch (e) {
-          writeback = { outcome: 'failed', focusId, reason: shortReason(e) };
-        }
-      }
-
-      return res.json({
+      openStream();
+      writeEvent('final', {
         ok: true,
         reply: reply.response,
         message_id: reply.message_id,
         memory_available: reply.memory_available ?? null,
-        writeback,
         context: {
           sent: context.blocks.map((b) => b.author),
           omissions: context.omissions,
-          // The composed blocks themselves — the panel's findings accordion
-          // renders these (design §4); authors carry the provenance labels.
           blocks: context.blocks,
         },
       });
+
+      const writeback = await completeWriteback({
+        root, focusId, reply, enabled: writebackEnabled,
+      });
+      if (writebackEnabled) writeEvent('writeback', writeback);
+      return endStream();
     } catch (err) {
+      if (upstreamOpened || err?.streamStarted) {
+        openStream();
+        writeEvent('error', errorEnvelope(err));
+        return endStream();
+      }
       return res.json({ ok: false, error: errorEnvelope(err) });
     }
   });
