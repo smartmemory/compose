@@ -123,6 +123,49 @@ coverage sweep per Phase 7.
   (inject contradicting idea → findings reflected in reply → write-back lands → teardown; also
   the VERIFY-3 leftover — inspect her workspace via the client lib's listItems).
 
+## LIVE-FIRE (2026-08-12, owner-started stack, throwaway everything, torn down) — colleague loop PASSED; one upstream P1 surfaced
+
+Setup: throwaway fluid tenant via `POST /test/provision-user` (`team_fce68e35699b`), NDA, all 7
+`fluid_*` record types declared (`X-Workspace-Id` header REQUIRED on `/memory/ontology/types` —
+new since FOH-4's recipe; and the ideabox migration imports CLUSTERS, so `fluid_cluster` etc.
+must be declared too, not just idea/event/decision). Dogfood config written to
+`.compose/compose.json` (maya + smartmemory + fluid blocks), own server instance on scratch
+ports 4801/4802 with `SM_FLUID_KEY`, seeded IDEA-53 ("Postgres") ⊃contradicts⊃ IDEA-54
+("Redis", decayed 1.0→0.5 via `resolveIdeaChallenge`). Afterwards: both tenants deleted
+(colleague identity through the shipped `reprovision` action — it live-fired too), server
+stopped, `compose.json` + `ideabox.md` restored byte-for-byte (shasum-verified), tree clean.
+
+**PASSED (design acceptance):**
+- `GET /api/maya/status` → `ready`, capability strip correct (calibration `false`, visible-unavailable).
+- `POST /api/maya/message {focusId: IDEA-54}` → lazy provision of the colleague identity
+  (separate workspace `team_994740c42d42`), context blocks sent = idea + conviction +
+  contradiction + challenge, zero omissions; **her reply named IDEA-53 and the Postgres
+  contradiction** — the injected findings, reflected.
+- Write-back durable as `author:'maya'` + `<!-- maya:msg_<id> -->` marker (verified via direct
+  `GET /memory/{item_id}` — NOT via list; see the finding).
+- VERIFY-3 leftover CLOSED: her colleague workspace listed via the client lib =
+  4 items, all her own turn-ingestion (semantic/episodic/latent_intent), **zero
+  `compose.fluid.*` items**. Isolation holds end-to-end.
+
+**UPSTREAM P1 SURFACED — `/memory/list` serves ingest-time metadata forever after `updateItem`:**
+- Repro: append discussion (updateItem rewrites `fluid_record_json`) → direct GET shows the
+  entry; `/memory/list` (incl. metadata-filtered) still returns the PRE-update blob 7+ minutes
+  later. Not a lag — it never converged during the session.
+- Consequence 1: write-back idempotency defeated. `writeback-retry` reconcile-scan reads via
+  list → misses the marker → re-appends from the stale base. Masked here (identical content,
+  entry count stayed 1) but the `at` timestamp proved the original entry was OVERWRITTEN, not
+  deduped (`deduped:true` never fired).
+- Consequence 2 (decisive probe): a SECOND `addDiscussion` on IDEA-54 rebuilt the blob from the
+  creation-time base and **silently dropped Maya's entry** — on this backend the append-only
+  discussion trail keeps only the last write. Every provider read-modify-write
+  (`_resolveForWrite` → `_resolveItems` → `_listAllItems` → `/memory/list`) shares the exposure.
+- Attribution: FOH-6 code behaves per contract; the provider's FOH-1-era read-your-writes
+  assumption is what the substrate violates. Same defect family as the 2026-08-05 recall
+  live-fire ("storage GOOD, reads stale").
+- Filed upstream: smart-memory/smart-memory-service#7 (list staleness after updateItem). Compose-side hardening
+  option (owner decision, not taken unilaterally): list-for-discovery, direct-GET-for-truth in
+  `_resolveItems` + the write-back reconcile scan — one extra round-trip per write.
+
 ## Scope fences (blueprint must honor)
 - Ideas only (no clusters — seam refuses; no decisions — no producer exists).
 - CALIBRATION visibly unavailable, never faked. No resolve affordance in the panel (CLI-only).
