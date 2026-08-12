@@ -166,10 +166,14 @@ stopped, `compose.json` + `ideabox.md` restored byte-for-byte (shasum-verified),
   briefly-filed service#7 was deleted; the owner tests upstream separately). Full repro for
   that testing: add item → updateItem metadata → direct GET is fresh, `/memory/list` (incl.
   metadata-filtered) still returns the pre-update blob 7+ min later, never converging.
-  **Owner ruling 2026-08-12: WAIT for the upstream fix (it is being fixed now) — do NOT build
-  the compose-side hardening** (list-for-discovery, direct-GET-for-truth was the considered
-  option; not taken). Until the fix lands, treat the discussion trail as last-write-only on
-  the real backend.
+  **Owner ruling 2026-08-12: WAIT for the upstream fix — do NOT build the compose-side
+  hardening** (list-for-discovery, direct-GET-for-truth was the considered option; not taken).
+  **UPSTREAM FIX VERIFIED same day** (owner: "fixed"; fresh throwaway tenant, torn down):
+  wire repro now fresh (list blob v2 immediately after updateItem), and the shipped-path
+  consequence re-test passed — two `addDiscussion` appends BOTH survive, `writebackReply`
+  with a repeated messageId returns `deduped:true` with exactly one marker entry (3 entries
+  total: probe-1, probe-2, maya). The read-your-writes contract holds; the last-write-only
+  caveat is LIFTED.
 
 ## Scope fences (blueprint must honor)
 - Ideas only (no clusters — seam refuses; no decisions — no producer exists).

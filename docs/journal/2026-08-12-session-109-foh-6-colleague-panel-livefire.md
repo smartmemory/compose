@@ -42,10 +42,11 @@ No production code this session — the live-fire exercised what shipped at `e15
 
 ## Open threads
 
-- [x] Owner decision (same day): WAIT for the upstream fix — no compose-side hardening; discussion trail is last-write-only on the real backend until it lands
+- [x] Owner decision (same day): WAIT for the upstream fix — no compose-side hardening
+- [x] Upstream fix landed and VERIFIED same day (wire repro fresh; both appends survive; writeback dedup fires `deduped:true`) — the last-write-only caveat is lifted
 - [ ] S5 streaming (design §S5: POST fetch-streaming on `/api/maya/message?stream=1`) — named stretch, not started
 - [ ] FOH epic next candidates: exhaust-loop / portfolio rollup (design.md §Sequencing) — owner picks
-- [ ] Upstream: smart-memory/maya#2 (channel_context field), smart-memory-service#6 (test re-auth), list-staleness fix (in progress upstream, tracked in the FOH-6 ledger) — watch for fixes
+- [ ] Upstream: smart-memory/maya#2 (channel_context field), smart-memory-service#6 (test re-auth) — watch for fixes (list-staleness: FIXED + verified same day)
 - [ ] COMP-FOH epic stays IN_PROGRESS
 
 ---
