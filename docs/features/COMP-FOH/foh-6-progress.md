@@ -168,12 +168,30 @@ stopped, `compose.json` + `ideabox.md` restored byte-for-byte (shasum-verified),
   metadata-filtered) still returns the pre-update blob 7+ min later, never converging.
   **Owner ruling 2026-08-12: WAIT for the upstream fix — do NOT build the compose-side
   hardening** (list-for-discovery, direct-GET-for-truth was the considered option; not taken).
-  **UPSTREAM FIX VERIFIED same day** (owner: "fixed"; fresh throwaway tenant, torn down):
-  wire repro now fresh (list blob v2 immediately after updateItem), and the shipped-path
-  consequence re-test passed — two `addDiscussion` appends BOTH survive, `writebackReply`
-  with a repeated messageId returns `deduped:true` with exactly one marker entry (3 entries
-  total: probe-1, probe-2, maya). The read-your-writes contract holds; the last-write-only
-  caveat is LIFTED.
+  **UPSTREAM FIX VERIFIED same day, against `smart-memory-common@5afef49`** ("fix(security):
+  exclude Version snapshot rows from list_memories" — root cause: list returned version-history
+  SNAPSHOT rows, which is why it never converged; svc-api restarted on the mount; that repo had
+  1 uncommitted local file at verification time). Fresh throwaway tenant, torn down: wire repro
+  fresh (list blob v2 immediately after updateItem) and the shipped-path consequence re-test
+  passed — two `addDiscussion` appends BOTH survive, `writebackReply` with a repeated messageId
+  returns `deduped:true`, exactly one marker entry (3 entries: probe-1, probe-2, maya). The
+  caveat is lifted FOR THIS REVISION. Harness + outputs + the exact turn-1 prompt/reply retained
+  in [`livefire-foh6/`](livefire-foh6/RESULTS.md). Known residual (Codex post-review P1,
+  adjudicated ACCEPT): compose's suite cannot detect a REGRESSION of this — stubs are
+  read-your-writes by construction (`smartmemory-stub.js` list serves the live map). Follow-up
+  option, deliberately not built (session-end scope): a stale-list knob on the stub + one
+  writeback golden pinning the lost-update shape.
+
+**Codex post-review of the live-fire docs (terra/high, 2026-08-12): diagnosis code-accurate,
+three commits internally consistent, 1 P1 + 2 methodology notes — all adjudicated ACCEPT:**
+- P1 "fix verified is under-evidenced" → fixed above (pinned revision, retained harness,
+  conditional claim, regression-gap disclosed).
+- "Isolation holds end-to-end" was broader than the evidence: the live check was
+  workspace-listing only (zero fluid items in her workspace); the ADVERSARIAL
+  same-workspace-token refusal was NOT re-demonstrated live — it is unit-covered
+  (maya-routes tests) and was code-verified in review r1/r2. Phrase scoped accordingly.
+- Turn-1 prompt/reply were not retained → now retained (`livefire-foh6/turn1.json`); the
+  reflection verdict is independently checkable.
 
 ## Scope fences (blueprint must honor)
 - Ideas only (no clusters — seam refuses; no decisions — no producer exists).
