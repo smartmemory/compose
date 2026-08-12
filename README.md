@@ -222,6 +222,29 @@ compose smartmemory sync --dry-run       # preview counts without ingesting
 compose smartmemory sync --feature CODE  # scope the sync to one feature
 ```
 
+### Maya colleague panel (opt-in, requires the SmartMemory service stack)
+
+With the SmartMemory fluid provider configured, a `maya` block summons Maya (the SmartMemory
+assistant) as a colleague inside the cockpit: a slide-over panel where you discuss ideas while
+Compose computes the memory findings (challenge, conviction, contradictions) and hands them to
+her as per-turn context. Her replies about a focused idea append to its discussion trail as
+`author: maya`.
+
+```json
+{
+  "maya": {
+    "baseUrl": "http://localhost:9005",
+    "auth": { "mode": "provision" }
+  }
+}
+```
+
+`auth.mode` is `provision` (a dedicated colleague identity minted lazily against the local
+smart-memory-service test surface) or `static` (paste a token in the panel; it is verified
+against the service before being stored). The colleague never runs degraded: without the
+SmartMemory provider the panel explains what to connect instead of falling back to plain chat,
+and capabilities the provider does not declare render as visibly unavailable.
+
 ## Documentation
 
 Topic-scoped reference:

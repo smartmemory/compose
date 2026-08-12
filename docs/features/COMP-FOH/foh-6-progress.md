@@ -2,8 +2,10 @@
 
 **Feature:** COMP-FOH FOH-6 — Maya (existing SmartMemory assistant) layered into the Compose
 cockpit as a summonable colleague slide-over. Her core is never modified.
-**Status:** DESIGN COMPLETE (Codex REVIEW CLEAN r3, owner pre-approved continue-on-clean
-2026-08-11). Next: Phase 4 blueprint.
+**Status:** IMPLEMENT COMPLETE (2026-08-12) — S1–S4 shipped, impl Codex REVIEW CLEAN r3,
+full suite green, upstream issues filed. REMAINING before slice close: dogfood config +
+live-fire (owner-started stack), then journal (deferred to the live-fire session). S5
+streaming remains the named stretch follow-up.
 
 ## Owner decisions (do not re-litigate)
 - FOH-6 = colleague slice (over exhaust-loop / portfolio / pause).
@@ -88,8 +90,11 @@ coverage sweep per Phase 7.
   provenance origin enum gains `ui:colleague` (new door; write-backs distinguishable for the
   record's lifetime). Golden write-back suite runs the REAL local provider incl. the
   landed-unrendered path (read-only projection dir) and reconcile-to-ok retry.
-- **Full suite GREEN** (node + 599 UI + 100 tracker, exit 0). Zero tracked diffs under
-  `SmartMemory/maya/` (acceptance criterion holds; untracked avatar PNGs pre-date FOH-6).
+- **Full suite GREEN** (pre-review run: node + 599 UI + 100 tracker; final post-fix run:
+  5694 node + 601 UI + 100 tracker — one non-reproducible node flake in the first post-fix
+  run, identity lost to `| tail` truncation, clean on re-run; known flake class per FOH-4).
+  Zero tracked diffs under `SmartMemory/maya/` (acceptance criterion holds; untracked avatar
+  PNGs pre-date FOH-6).
 - **Upstream issues FILED** (2026-08-12, as smartmem-dev; re-auth probe answered statically —
   `test_provisioning.py` has exactly POST+DELETE, no login path):
   - smart-memory/maya#2 — supported per-turn context-injection field (channel_context is
@@ -108,8 +113,15 @@ coverage sweep per Phase 7.
   matters: persisting first pinned a colliding claim); project switch clears the global Ideabox
   selection (same-handle cross-project write-back); paste refusals always render. 96 targeted
   tests green (84 node + 12 UI). r3 scoped to these three fixes.
+- **Codex r3 (terra/high, scoped to r2 fixes): REVIEW CLEAN.** Review loop closed at 3 rounds.
+- **Phase 9/10 (2026-08-12):** README gains the Maya colleague section (config + modes + no-degraded
+  contract); CHANGELOG complete (grown per slice + both review rounds); COMP-FOH feature.json stays
+  IN_PROGRESS (epic; this is a slice). Stratum flow ee814ae9 audit: 4 steps, all first-attempt,
+  trace in the ship commit. Journal entry deferred to the live-fire session (borderline-milestone
+  rule: fold into the completion chapter).
 - Deferred (need the owner-started stack): dogfood config in `.compose/compose.json`, live-fire
-  (inject contradicting idea → findings reflected in reply → write-back lands → teardown).
+  (inject contradicting idea → findings reflected in reply → write-back lands → teardown; also
+  the VERIFY-3 leftover — inspect her workspace via the client lib's listItems).
 
 ## Scope fences (blueprint must honor)
 - Ideas only (no clusters — seam refuses; no decisions — no producer exists).
