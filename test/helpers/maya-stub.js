@@ -4,8 +4,10 @@
  * surface. Shared by test/maya-client.test.js and test/maya-routes.test.js.
  *
  * Same doctrine as smartmemory-stub.js: THE STUB IS THE WIRE CONTRACT. The
- * shapes here reproduce what the FOH-6 live-fire verified against the real
- * stack (VERIFY-1/2/3, foh-6-progress.md):
+ * NON-STREAM shapes here reproduce what the FOH-6 live-fire verified against
+ * the real stack (VERIFY-1/2/3, foh-6-progress.md). The /api/chat/stream
+ * shapes (S5) are SOURCE-DERIVED from maya routes.py:5362 + turn_events.py —
+ * mirrored exactly, but not yet wire-verified (ledger §S5 evidence scope):
  *   - POST /api/chat answers `{success, response, message_id, memory_available}`
  *     and accepts `channel_context: [{author, text}]` on input.
  *   - POST /test/provision-user answers `{user_id, tenant_id, team_id,

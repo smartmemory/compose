@@ -212,7 +212,12 @@ by Claude per the review-loop roles.
 **Wire contract (relay-authored, upstream re-framed — never forwarded verbatim):**
 - Upstream: Maya `POST /api/chat/stream` emits `token`/`final`/`error` SSE frames wrapped in
   the `maya.turn.v1` envelope (`turn_id, seq, ts, kind, status, payload, protocol`); auth 401s
-  are HTTP-level, BEFORE any SSE bytes. The stub reproduces this exactly (stub-is-the-wire-contract).
+  are HTTP-level, BEFORE any SSE bytes. **Evidence scope: this contract is SOURCE-DERIVED
+  (routes.py:5362, `_stream_chat_sse`:3516, turn_events.py) — NOT wire-verified.** The stub
+  mirrors the source exactly, but unlike the non-stream routes it is not backed by a live-fire.
+  VERIFY-2 exercised `/api/chat` only; `/api/chat/stream` shares `_chat_impl`, so
+  channel_context should hold — unverified. A ~5-min live streaming check against the next
+  owner-started stack closes this (owner-gated: never start servers unasked).
 - Relay downstream: `token {text}` → `final` (the non-streaming success body minus `writeback`)
   → `writeback` (same outcome object as the non-streaming field; emitted only when the turn
   owed one) → end. `error` events carry the existing `errorEnvelope` taxonomy.
@@ -259,5 +264,7 @@ S5 dispatch note for future sessions: stratum's codex dispatch pins `--sandbox r
 these suites bind loopback listeners, which seatbelt EPERMs — implementation dispatches ran via
 raw `codex exec` under the owner's config default instead. Codex review runs are unaffected (read-only).
 
-**FOH-6 is now fully closed, stretch included.** Remaining FOH candidates (owner picks):
-exhaust-loop / portfolio rollup (design.md §Sequencing).
+**FOH-6 is closed, stretch included — with one scoped residual:** the streaming transport is
+stub/source-verified only (see evidence scope above); the live streaming check rides the next
+owner-started stack session. Remaining FOH candidates (owner picks): exhaust-loop / portfolio
+rollup (design.md §Sequencing).
