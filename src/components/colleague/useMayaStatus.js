@@ -9,7 +9,7 @@
  * visibility decision keyed on this is the summon button's `enabled` bit:
  * "not installed" is a different state from "installed but degraded".
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { wsFetch } from '../../lib/wsFetch.js';
 
 const _cache = new Map(); // workspaceKey -> last status body
@@ -22,6 +22,10 @@ const _cache = new Map(); // workspaceKey -> last status body
 export default function useMayaStatus(workspaceKey) {
   const key = workspaceKey ?? '__none__';
   const [status, setStatus] = useState(() => _cache.get(key) ?? null);
+  // Guards a slow probe against a project switch: a response that started
+  // under an old key must not clobber the new project's status (Codex r1 P1).
+  const keyRef = useRef(key);
+  keyRef.current = key;
 
   const refresh = useCallback(async () => {
     let body;
@@ -34,7 +38,7 @@ export default function useMayaStatus(workspaceKey) {
       body = { enabled: false, unreachable: true };
     }
     _cache.set(key, body);
-    setStatus(body);
+    if (keyRef.current === key) setStatus(body);
     return body;
   }, [key]);
 

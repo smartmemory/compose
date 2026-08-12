@@ -37,6 +37,7 @@ import {
   teardownIdentity as defaultTeardownIdentity,
   saveIdentity as defaultSaveIdentity,
   clearIdentity as defaultClearIdentity,
+  fetchVerifiedWorkspace as defaultFetchVerifiedWorkspace,
   validateWorkspaceIsolation,
   MayaIdentityError,
   MayaWorkspaceCollisionError,
@@ -60,15 +61,20 @@ const CAPABILITIES = Object.freeze({
  *  fluid provider, then the priority-ordered findings blocks. A fresh context
  *  per turn, deliberately — the provider holds paths, not state (the
  *  ideabox-routes.js reasoning). */
+// Origin note: the colleague CREATES no records (scope fence), so provenance
+// origin never fires on these paths — write-back attribution rides
+// `author:'maya'` plus the embedded msg marker. `ui:ideabox` is the cockpit
+// door these contexts genuinely come through; a colleague-specific origin
+// joins the contract enum only when the panel gains a record-creating op.
 async function defaultComposeContext(root, { focusId }) {
-  const ctx = await ideaboxContext(root, { origin: 'ui:colleague' });
+  const ctx = await ideaboxContext(root, { origin: 'ui:ideabox' });
   return composeColleagueContext(ctx, { focusId });
 }
 
 /** The real write-back (S4): reconcile-then-append through the shared ops
  *  module. Returns an OUTCOME, never throws (lib/colleague/writeback.js). */
 async function defaultPerformWriteback(root, args) {
-  const ctx = await ideaboxContext(root, { origin: 'ui:colleague' });
+  const ctx = await ideaboxContext(root, { origin: 'ui:ideabox' });
   return writebackReply(ctx, args);
 }
 
@@ -115,17 +121,27 @@ export function attachMayaRoutes(app, {
   teardownIdentity = defaultTeardownIdentity,
   saveIdentity = defaultSaveIdentity,
   clearIdentity = defaultClearIdentity,
+  fetchVerifiedWorkspace = defaultFetchVerifiedWorkspace,
   composeContext = defaultComposeContext,
   performWriteback = defaultPerformWriteback,
 } = {}) {
-  /** Resolve the per-request project scope, or null when not installed. */
+  /**
+   * Resolve the per-request project scope. Null ONLY when the feature is not
+   * installed (no `maya` block at all) — a block whose `baseUrl` is missing or
+   * malformed is `misconfigured: true`, a FUNNEL, not a hidden button: the
+   * presence of the block is the feature switch, and hiding a broken config
+   * would violate funnel-not-hide (Codex r1 P2).
+   */
   function scopeOf(req) {
     const root = req.workspace?.root;
     if (!root) return null;
     let cfg;
     try { cfg = getMayaConfig(root); } catch { cfg = null; }
-    if (!cfg || typeof cfg.baseUrl !== 'string' || !cfg.baseUrl) return null;
-    return { root, cfg, mode: cfg.auth?.mode ?? 'provision' };
+    if (!cfg) return null;
+    if (typeof cfg.baseUrl !== 'string' || !cfg.baseUrl) {
+      return { root, cfg, mode: cfg.auth?.mode ?? 'provision', misconfigured: true };
+    }
+    return { root, cfg, mode: cfg.auth?.mode ?? 'provision', misconfigured: false };
   }
 
   app.get('/api/maya/status', async (req, res) => {
@@ -133,6 +149,13 @@ export function attachMayaRoutes(app, {
       const scope = scopeOf(req);
       if (!scope) return res.json({ enabled: false });
       const { root, cfg, mode } = scope;
+
+      if (scope.misconfigured) {
+        return res.json({
+          enabled: true, state: 'misconfigured',
+          error: 'the maya block in .compose/compose.json has no baseUrl',
+        });
+      }
 
       if (!hasSmartmemoryFluidProvider(root)) {
         // COLLEAGUE-ALL-IN: no degraded plain-chat mode — the colleague
@@ -160,6 +183,17 @@ export function attachMayaRoutes(app, {
         return res.json({ enabled: true, state: 'workspace-collision', error: shortReason(err) });
       }
 
+      // Static mode with no pasted token cannot chat — reporting 'ready' would
+      // promise a conversation the first turn immediately refuses (Codex r1
+      // P2). The auth funnel (paste action) is the honest state.
+      if (mode === 'static' && !identity) {
+        return res.json({
+          enabled: true, state: 'auth',
+          auth: { mode, identity: false },
+          error: 'static token mode with no token stored — paste one',
+        });
+      }
+
       return res.json({
         enabled: true,
         state: 'ready',
@@ -175,6 +209,12 @@ export function attachMayaRoutes(app, {
   app.post('/api/maya/message', async (req, res) => {
     const scope = scopeOf(req);
     if (!scope) return res.json({ ok: false, error: { kind: 'not-installed' } });
+    if (scope.misconfigured) {
+      return res.json({
+        ok: false,
+        error: { kind: 'misconfigured', message: 'the maya block has no baseUrl' },
+      });
+    }
     const { root, cfg, mode } = scope;
 
     const text = String(req.body?.text ?? '').trim();
@@ -243,6 +283,9 @@ export function attachMayaRoutes(app, {
         context: {
           sent: context.blocks.map((b) => b.author),
           omissions: context.omissions,
+          // The composed blocks themselves — the panel's findings accordion
+          // renders these (design §4); authors carry the provenance labels.
+          blocks: context.blocks,
         },
       });
     } catch (err) {
@@ -261,8 +304,19 @@ export function attachMayaRoutes(app, {
     const { root } = scope;
     const action = req.body?.action;
 
+    const { mode } = scope;
+
     try {
       if (action === 'reprovision') {
+        // Provision-mode only: in static mode clearing the store just re-enters
+        // the auth funnel (the next turn refuses to provision), so offering it
+        // would be a dead-end action (Codex r1 P2).
+        if (mode === 'static') {
+          return res.json({
+            ok: false,
+            error: { kind: 'invalid', message: 're-provision applies to provision mode — paste a token instead' },
+          });
+        }
         // Best-effort upstream teardown; the local clear is the real action —
         // the next turn lazily provisions a fresh identity (fresh thread).
         try {
@@ -278,9 +332,17 @@ export function attachMayaRoutes(app, {
         if (!token) {
           return res.json({ ok: false, error: { kind: 'invalid', message: 'token is required' } });
         }
-        const candidate = { mode: 'static', access_token: token };
-        // Same refusal as every other entry point: a fluid-workspace token
-        // never gets stored.
+        // Cheap offline pre-check: a JWT that self-declares the fluid
+        // workspace is refused without a network round-trip.
+        validateWorkspaceIsolation({ mode: 'static', access_token: token }, getFluidWorkspaceId(root));
+        // Authoritative check — FAILS CLOSED. Real tokens carry no workspace
+        // claims in the JWT (VERIFY-1), so the pre-check alone is vacuous; the
+        // verified workspace comes from the service's own user record, and a
+        // token that cannot be verified is not stored (Codex r1 P1).
+        const verifiedTeam = await fetchVerifiedWorkspace({
+          smBaseUrl: getSmartmemoryConfig(root)?.baseUrl, token,
+        });
+        const candidate = { mode: 'static', access_token: token, team_id: verifiedTeam };
         validateWorkspaceIsolation(candidate, getFluidWorkspaceId(root));
         saveIdentity(root, candidate);
         return res.json({ ok: true });

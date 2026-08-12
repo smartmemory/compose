@@ -157,6 +157,18 @@ export async function makeSmStub({ teamId = 'team_colleague' } = {}) {
         return json(200, { accepted: true, version: parsed?.version ?? null });
       }
 
+      // The token-verification read the static-token paste flow uses
+      // (auth.py:673 — UserResponse carries default_team_id). Knobs:
+      // __meFail → 500; __meTeamId overrides the returned workspace.
+      if (req.url === '/auth/me' && req.method === 'GET') {
+        if (!req.headers.authorization) return json(401, { detail: 'unauthorized' });
+        if (server.__meFail) return json(500, { detail: 'me failed' });
+        return json(200, {
+          id: 'user_me', email: 'me@compose.invalid', tenant_id: 'tenant_me',
+          default_team_id: server.__meTeamId ?? teamId,
+        });
+      }
+
       return json(404, { detail: 'no route' });
     });
   });

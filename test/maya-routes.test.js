@@ -236,7 +236,9 @@ describe('maya routes', () => {
     const { body } = await postMessage(srv.baseUrl, { text: 'hi', focusId: 'IDEA-42' });
     assert.equal(body.ok, true);
     assert.deepEqual(body.context, {
-      sent: ['compose:idea IDEA-42'], omissions: ['discussion omitted, over budget'],
+      sent: ['compose:idea IDEA-42'],
+      omissions: ['discussion omitted, over budget'],
+      blocks: [{ author: 'compose:idea IDEA-42', text: 'Redis streams' }],
     });
     const chat = maya.seen.find((s) => s.path === '/api/chat');
     assert.deepEqual(chat.body.channel_context, [
@@ -480,7 +482,7 @@ describe('maya routes', () => {
     assert.equal(loadIdentity(root).access_token, 'token-2');
   });
 
-  test('identity static: stores a pasted token; a fluid-workspace token is refused and NOT stored', async () => {
+  test('identity static: paste verifies the token upstream and FAILS CLOSED', async () => {
     const maya = await makeMayaServer();
     const sm = await makeSmStub();
     const root = wiredRoot({ mayaBase: maya.baseUrl, smBase: sm.baseUrl });
@@ -495,17 +497,119 @@ describe('maya routes', () => {
       return r.json();
     };
 
-    // A JWT whose workspace claim IS the fluid workspace → refused, nothing stored.
+    // A JWT whose workspace claim IS the fluid workspace → refused offline,
+    // before any network verification.
     const claim = Buffer.from(JSON.stringify({ workspace_id: FLUID_WS })).toString('base64url');
     const bad = await post({ action: 'static', token: `h.${claim}.s` });
     assert.equal(bad.ok, false);
     assert.equal(bad.error.kind, 'workspace-collision');
     assert.equal(loadIdentity(root), null);
+    assert.equal(sm.seen.filter((s) => s.path === '/auth/me').length, 0);
 
-    // An opaque token stores as a static identity.
+    // Real tokens carry NO workspace claims (VERIFY-1) — the authoritative
+    // check resolves the workspace from the service's own user record. A
+    // token whose VERIFIED workspace is the fluid workspace is refused.
+    sm.server.__meTeamId = FLUID_WS;
+    const collide = await post({ action: 'static', token: 'opaque-fluid-scoped' });
+    assert.equal(collide.ok, false);
+    assert.equal(collide.error.kind, 'workspace-collision');
+    assert.equal(loadIdentity(root), null);
+
+    // Verification unavailable → FAIL CLOSED: not stored.
+    sm.server.__meTeamId = undefined;
+    sm.server.__meFail = true;
+    const unverifiable = await post({ action: 'static', token: 'opaque-unverifiable' });
+    assert.equal(unverifiable.ok, false);
+    assert.equal(loadIdentity(root), null);
+
+    // A verifiable, distinct-workspace token stores WITH its verified claim,
+    // so every later isolation check has a real claim to test.
+    sm.server.__meFail = false;
     const good = await post({ action: 'static', token: 'pasted-opaque' });
     assert.equal(good.ok, true);
-    assert.deepEqual(loadIdentity(root), { mode: 'static', access_token: 'pasted-opaque' });
+    assert.deepEqual(loadIdentity(root), {
+      mode: 'static', access_token: 'pasted-opaque', team_id: 'team_colleague',
+    });
+    const me = sm.seen.filter((s) => s.path === '/auth/me');
+    assert.ok(me.length >= 1);
+    assert.equal(me.at(-1).authorization, 'Bearer pasted-opaque');
+  });
+
+  test('identity reprovision in static mode → refused (dead-end action, not offered)', async () => {
+    const maya = await makeMayaServer();
+    const sm = await makeSmStub();
+    const root = wiredRoot({ mayaBase: maya.baseUrl, smBase: sm.baseUrl, mode: 'static' });
+    saveIdentity(root, { mode: 'static', access_token: 'tok', team_id: 'team_other' });
+    const srv = await startApp({ root, deps: { composeContext: emptyContext } });
+    track(srv);
+    const r = await fetch(`${srv.baseUrl}/api/maya/identity`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Connection: 'close' },
+      body: JSON.stringify({ action: 'reprovision' }),
+    });
+    const body = await r.json();
+    assert.equal(body.ok, false);
+    assert.equal(body.error.kind, 'invalid');
+    // The stored identity survives.
+    assert.equal(loadIdentity(root).access_token, 'tok');
+  });
+
+  test('status: static mode with no stored token → auth funnel, not ready', async () => {
+    const maya = await makeMayaServer();
+    const sm = await makeSmStub();
+    const root = wiredRoot({ mayaBase: maya.baseUrl, smBase: sm.baseUrl, mode: 'static' });
+    const srv = await startApp({ root });
+    track(srv);
+    const { body } = await getStatus(srv.baseUrl);
+    assert.equal(body.state, 'auth');
+    assert.deepEqual(body.auth, { mode: 'static', identity: false });
+  });
+
+  test('maya block present but no baseUrl → misconfigured FUNNEL, never hidden', async () => {
+    const root = makeProjectRoot({ maya: { auth: { mode: 'provision' } } });
+    const srv = await startApp({ root });
+    track(srv);
+    const { body } = await getStatus(srv.baseUrl);
+    assert.equal(body.enabled, true);
+    assert.equal(body.state, 'misconfigured');
+    const msg = await postMessage(srv.baseUrl, { text: 'hi' });
+    assert.equal(msg.body.ok, false);
+    assert.equal(msg.body.error.kind, 'misconfigured');
+  });
+
+  test('concurrent first turns provision exactly ONE identity (single-flight)', async () => {
+    const maya = await makeMayaServer();
+    const sm = await makeSmStub();
+    const root = wiredRoot({ mayaBase: maya.baseUrl, smBase: sm.baseUrl });
+    const srv = await startApp({ root, deps: { composeContext: emptyContext } });
+    track(srv);
+    const [r1, r2] = await Promise.all([
+      postMessage(srv.baseUrl, { text: 'first' }),
+      postMessage(srv.baseUrl, { text: 'second' }),
+    ]);
+    assert.equal(r1.body.ok, true);
+    assert.equal(r2.body.ok, true);
+    assert.equal(sm.seen.filter((s) => s.path === '/test/provision-user' && s.method === 'POST').length, 1);
+    // Both turns chatted with the ONE provisioned token.
+    const chats = maya.seen.filter((s) => s.path === '/api/chat');
+    assert.ok(chats.every((c) => c.authorization === 'Bearer token-1'));
+  });
+
+  test('message response carries the composed findings blocks for the accordion', async () => {
+    const maya = await makeMayaServer();
+    const sm = await makeSmStub();
+    const root = wiredRoot({ mayaBase: maya.baseUrl, smBase: sm.baseUrl });
+    const srv = await startApp({
+      root,
+      deps: {
+        composeContext: async () => ({
+          blocks: [{ author: 'compose:contradiction', text: 'IDEA-7 contradicts' }],
+          omissions: [],
+        }),
+      },
+    });
+    track(srv);
+    const { body } = await postMessage(srv.baseUrl, { text: 'hi', focusId: 'IDEA-42' });
+    assert.deepEqual(body.context.blocks, [{ author: 'compose:contradiction', text: 'IDEA-7 contradicts' }]);
   });
 
   // ── workspace-isolation validation (the VERIFY-3 refusal unit test) ──────

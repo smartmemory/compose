@@ -72,8 +72,8 @@
       "properties": {
         "origin": {
           "type": "string",
-          "description": "Which door the record came through. `import:ideabox` marks a record created by the one-time markdown import, distinguishing migrated rows from natively captured ones for the lifetime of the record. `ui:colleague` is the Maya colleague panel (FOH-6) — its write-backs stay distinguishable from ideabox-surface edits for the lifetime of the record.",
-          "enum": ["cli:ideabox", "ui:ideabox", "mcp:compose", "import:ideabox", "pipeline:plan", "ui:colleague"]
+          "description": "Which door the record came through. `import:ideabox` marks a record created by the one-time markdown import, distinguishing migrated rows from natively captured ones for the lifetime of the record.",
+          "enum": ["cli:ideabox", "ui:ideabox", "mcp:compose", "import:ideabox", "pipeline:plan"]
         },
         "recorded_at": { "type": "string", "format": "date-time" },
         "author": { "type": ["string", "null"] }

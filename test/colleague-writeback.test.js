@@ -26,7 +26,7 @@ afterEach(() => rmSync(project, { recursive: true, force: true }));
 
 async function makeCtx() {
   const provider = await new LocalFluidProvider().init(project);
-  return ideaboxContext(project, { provider, origin: 'ui:colleague' });
+  return ideaboxContext(project, { provider, origin: 'ui:ideabox' });
 }
 
 async function seedIdea(ctx) {
@@ -96,6 +96,17 @@ describe('writebackReply', () => {
     } finally {
       chmodSync(outDir, 0o755);
     }
+  });
+
+  test('CONCURRENT retries with one message_id append exactly once (serialized reconcile)', async () => {
+    const ctx = await makeCtx();
+    const handle = await seedIdea(ctx);
+    const args = { focusId: handle, messageId: 'msg_race', text: 'raced.' };
+    const [a, b] = await Promise.all([writebackReply(ctx, args), writebackReply(ctx, args)]);
+    assert.equal(a.outcome, 'ok');
+    assert.equal(b.outcome, 'ok');
+    assert.equal([a, b].filter((r) => r.deduped).length, 1, 'exactly one call deduped');
+    assert.equal((await discussionOf(ctx, handle)).length, 1);
   });
 
   test('unknown focus → failed with a reason, never a throw', async () => {

@@ -77,6 +77,20 @@ describe('maya-client', () => {
     assert.equal(calls[0].authorization, calls[1].authorization);
   });
 
+  test('the 401 retry reuses the token CAPTURED at chat() start, even if getToken moves', async () => {
+    const { server, baseUrl, seen } = await makeMayaServer();
+    server.__401Once = true;
+    // A concurrent paste/re-provision changes what getToken returns mid-turn;
+    // the retry must NOT pick it up — that would move the retry onto a
+    // different identity and conversation.
+    let calls = 0;
+    const c = createMayaClient({ baseUrl, getToken: () => (calls++ === 0 ? 'tok-first' : 'tok-second') });
+    await c.chat({ message: 'hi' });
+    const attempts = seen.filter((s) => s.path === '/api/chat');
+    assert.equal(attempts.length, 2);
+    assert.ok(attempts.every((a) => a.authorization === 'Bearer tok-first'));
+  });
+
   test('401 always → MayaAuthError after exactly two attempts', async () => {
     const { server, baseUrl, seen } = await makeMayaServer();
     server.__401Always = true;
