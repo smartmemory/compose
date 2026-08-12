@@ -8,6 +8,7 @@ import ProjectSwitchPopover from './components/ProjectSwitchPopover.jsx';
 import ViewTabs from './components/cockpit/ViewTabs.jsx';
 import ColleaguePanel from './components/colleague/ColleaguePanel.jsx';
 import useMayaStatus from './components/colleague/useMayaStatus.js';
+import { useIdeaboxStore } from './components/vision/useIdeaboxStore.js';
 import AgentBar from './components/cockpit/AgentBar.jsx';
 import ContextPanel from './components/cockpit/ContextPanel.jsx';
 import ContextItemDetail from './components/cockpit/ContextItemDetail.jsx';
@@ -584,6 +585,11 @@ function AppInner() {
       // and their mount effects fire wsFetch immediately. Updating the cache
       // first guarantees those fetches carry the new X-Compose-Workspace-Id.
       await refreshWorkspace();
+      // The Ideabox selection is global store state that hydration does NOT
+      // clear — carried across a switch it points at whatever record happens
+      // to share the handle in the new project (and the colleague panel would
+      // write Maya's replies onto it). Clear it before the root flips.
+      useIdeaboxStore.getState().setSelectedIdea(null);
       setProjectName(data.name);
       setProjectRoot(data.targetRoot);
       // Vision store will get new state via WebSocket broadcast

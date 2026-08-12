@@ -39,6 +39,7 @@ import {
   clearIdentity as defaultClearIdentity,
   fetchVerifiedWorkspace as defaultFetchVerifiedWorkspace,
   validateWorkspaceIsolation,
+  workspaceClaimOf,
   MayaIdentityError,
   MayaWorkspaceCollisionError,
 } from '../lib/maya-identity.js';
@@ -228,7 +229,23 @@ export function attachMayaRoutes(app, {
 
       // Identity BEFORE any upstream traffic: a stored fluid-workspace token
       // must be refused before provisioning side effects or a chat turn.
-      const stored = loadIdentity(root);
+      let stored = loadIdentity(root);
+      // A LEGACY static identity (stored before paste-time verification
+      // existed) carries no workspace claim, which would make the isolation
+      // check vacuous — verify-and-migrate it on first use, failing closed
+      // into the auth funnel when it cannot be verified (Codex r2 P1).
+      if (stored?.mode === 'static' && !workspaceClaimOf(stored)) {
+        const team = await fetchVerifiedWorkspace({
+          smBaseUrl: getSmartmemoryConfig(root)?.baseUrl, token: stored.access_token,
+        });
+        const candidate = { ...stored, team_id: team };
+        // Validate BEFORE persisting: writing a colliding claim first would
+        // pin the refusal to a stale verification — a colliding token is
+        // refused each turn against a FRESH upstream answer instead.
+        validateWorkspaceIsolation(candidate, getFluidWorkspaceId(root));
+        saveIdentity(root, candidate);
+        stored = candidate;
+      }
       validateWorkspaceIsolation(stored, getFluidWorkspaceId(root));
       const identity = stored ?? await ensureIdentity(root, {
         smBaseUrl: getSmartmemoryConfig(root)?.baseUrl, mode,

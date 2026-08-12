@@ -103,6 +103,11 @@ coverage sweep per Phase 7.
   401-retry token captured once; misconfigured + static-no-token funnel states; findings
   accordion (relay returns blocks); `ui:colleague` enum reverted (dead until a create op exists).
   94 targeted tests green (83 node + 11 UI) after fixes. r2 dispatched scoped to the fixes.
+- **Codex r2 (sol/high, scoped to fixes): 3 findings (2 P1), ALL accepted + fixed** — legacy
+  claimless static identities verify-and-migrate on first use (verify→validate→persist order
+  matters: persisting first pinned a colliding claim); project switch clears the global Ideabox
+  selection (same-handle cross-project write-back); paste refusals always render. 96 targeted
+  tests green (84 node + 12 UI). r3 scoped to these three fixes.
 - Deferred (need the owner-started stack): dogfood config in `.compose/compose.json`, live-fire
   (inject contradicting idea → findings reflected in reply → write-back lands → teardown).
 

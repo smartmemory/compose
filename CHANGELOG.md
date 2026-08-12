@@ -38,6 +38,11 @@ The sixth Front-of-House slice starts layering Maya (the existing SmartMemory as
 - The design's findings accordion now exists: the relay returns the composed blocks and the panel renders conviction/contradiction/challenge findings collapsibly.
 - The speculative `ui:colleague` provenance enum value was removed (write-back attribution rides `author:'maya'` + the embedded marker; a colleague origin joins the contract only when the panel gains a record-creating op).
 
+**Codex review round 2 (scoped to the fixes, 3 findings — all accepted and fixed):**
+- Legacy claimless static identities (stored before paste-time verification existed) are verified-and-migrated on first use — verify, validate, and only then persist, so a colliding claim is refused each turn against a fresh upstream answer and an unverifiable token funnels instead of chatting unchecked.
+- A project switch clears the global Ideabox selection (hydration never did), so the colleague's cockpit-followed focus can no longer point at a same-handle record in the new project.
+- Every paste-token refusal renders its server explanation in the auth funnel — a fail-closed Save is never silent.
+
 ### COMP-AGENT-LANES — Per-subagent lanes for parallel fan-outs
 
 When a build fans out work across parallel workers (Phase-1 exploration, Phase-3 competing mandates, review fanouts), the cockpit showed only an aggregate "3 running" counter — no per-worker mandate, status, or output. This slice replaces the counter with one live lane per worker, compose-only (the design's sizing spike proved the attribution loss happens inside Compose; no Stratum change). A `lane` envelope — identity `flowId:stepId:itemIndex`, version `(generation, attempt)`, human label (review lens id or step intent), agent — is built once at the fanout dispatch site and rides every lifecycle write and every relayed output write; the bridge forwards it plus explicit terminal status; a pure UI reducer keys one lane per worker slot with version-based reset/staleness rejection and a strict terminal rule (a lane closes only on done-with-explicit-status or a `laneTerminal` error — advisory errors render as in-lane diagnostics). Reconnect is forward-only in v1: lanes joined mid-build are marked, not replayed.

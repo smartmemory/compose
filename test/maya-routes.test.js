@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const express = (await import('express')).default;
 const { attachMayaRoutes } = await import(`${ROOT}/server/maya-routes.js`);
-const { loadIdentity, saveIdentity, validateWorkspaceIsolation, MayaWorkspaceCollisionError } =
+const { loadIdentity, saveIdentity, clearIdentity, validateWorkspaceIsolation, MayaWorkspaceCollisionError } =
   await import(`${ROOT}/lib/maya-identity.js`);
 const { makeMayaServer, makeSmStub, servers } = await import(`${ROOT}/test/helpers/maya-stub.js`);
 
@@ -533,6 +533,41 @@ describe('maya routes', () => {
     const me = sm.seen.filter((s) => s.path === '/auth/me');
     assert.ok(me.length >= 1);
     assert.equal(me.at(-1).authorization, 'Bearer pasted-opaque');
+  });
+
+  test('LEGACY claimless static identity: verified-and-migrated on first use, failing closed', async () => {
+    const maya = await makeMayaServer();
+    const sm = await makeSmStub();
+    const root = wiredRoot({ mayaBase: maya.baseUrl, smBase: sm.baseUrl, mode: 'static' });
+    // A pre-verification identity: static, no team_id, no JWT claims.
+    saveIdentity(root, { mode: 'static', access_token: 'legacy-opaque' });
+    const srv = await startApp({ root, deps: { composeContext: emptyContext } });
+    track(srv);
+
+    // Verified workspace IS the fluid workspace → refused, never chats.
+    sm.server.__meTeamId = FLUID_WS;
+    const bad = await postMessage(srv.baseUrl, { text: 'hi' });
+    assert.equal(bad.body.ok, false);
+    assert.equal(bad.body.error.kind, 'workspace-collision');
+    assert.equal(maya.seen.filter((s) => s.path === '/api/chat').length, 0);
+
+    // Distinct workspace → migrated in place (claim stored) and the turn runs.
+    sm.server.__meTeamId = 'team_elsewhere';
+    const ok = await postMessage(srv.baseUrl, { text: 'hi' });
+    assert.equal(ok.body.ok, true);
+    assert.equal(loadIdentity(root).team_id, 'team_elsewhere');
+    // Migration is once: the next turn consults /auth/me no further.
+    const meCallsBefore = sm.seen.filter((s) => s.path === '/auth/me').length;
+    await postMessage(srv.baseUrl, { text: 'again' });
+    assert.equal(sm.seen.filter((s) => s.path === '/auth/me').length, meCallsBefore);
+
+    // Unverifiable → auth funnel, not a chat with an unchecked token.
+    clearIdentity(root);
+    saveIdentity(root, { mode: 'static', access_token: 'legacy-2' });
+    sm.server.__meFail = true;
+    const closed = await postMessage(srv.baseUrl, { text: 'hi' });
+    assert.equal(closed.body.ok, false);
+    assert.equal(closed.body.error.kind, 'auth');
   });
 
   test('identity reprovision in static mode → refused (dead-end action, not offered)', async () => {

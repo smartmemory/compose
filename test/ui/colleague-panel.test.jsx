@@ -168,6 +168,27 @@ describe('conversation flow', () => {
   });
 });
 
+describe('paste-token refusals render', () => {
+  it('a fail-closed verification refusal shows its explanation, never a silent Save', async () => {
+    routeFetch([
+      ['/api/maya/identity', () => json({
+        ok: false,
+        error: { kind: 'auth', message: 'could not verify the token against SmartMemory (HTTP 500) — not storing it' },
+      })],
+    ]);
+    renderPanel({
+      status: { enabled: true, state: 'auth', auth: { mode: 'static', identity: false } },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /paste a new token/i }));
+    const input = screen.getByLabelText(/new maya token/i);
+    input.value = 'some-token';
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+    await waitFor(() => expect(screen.getByText(/could not verify the token/i)).toBeTruthy());
+    // Static mode: re-provision is a dead-end action and must not be offered.
+    expect(screen.queryByRole('button', { name: /re-provision/i })).toBeNull();
+  });
+});
+
 describe('write-back chips', () => {
   async function sendWith(writeback) {
     routeFetch([
