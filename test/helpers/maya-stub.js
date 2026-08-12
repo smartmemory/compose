@@ -22,6 +22,14 @@
  *   maya.__chatFail                 — /api/chat answers 500
  *   maya.__htmlBody                 — /api/chat answers 200 with HTML (proxy page)
  *   maya.__successFalse             — /api/chat answers 200 {success:false,...}
+ *   maya.__streamErrorEvent         — stream emits a terminal 500 error event
+ *   maya.__streamError401           — stream emits a terminal 401 error event
+ *   maya.__streamCutoff             — stream closes after tokens, without final
+ *   maya.__streamSplitFrames        — stream splits frames at awkward byte boundaries
+ *   maya.__streamNonSse             — stream path answers a non-SSE 2xx body
+ *   maya.__postFinalDelayMs         — hold the stream open after final (post-
+ *                                     final work); sets __clientGoneEarly if
+ *                                     the client hangs up before the close
  *
  * No express, no mocking library.
  */
@@ -40,6 +48,35 @@ function listen(server) {
   });
 }
 
+function streamFrame(event, envelope) {
+  return `event: ${event}\ndata: ${JSON.stringify(envelope)}\n\n`;
+}
+
+function writeSplit(res, bytes) {
+  const firstData = bytes.indexOf('data: ');
+  const firstBoundary = bytes.indexOf('\n\n');
+  const secondBoundary = bytes.indexOf('\n\n', firstBoundary + 2);
+  const cuts = [
+    3,
+    firstData + 8,
+    firstBoundary + 1,
+    firstBoundary + 2,
+    secondBoundary + 1,
+    secondBoundary + 2,
+    bytes.length,
+  ].filter((cut, index, all) => cut > 0 && cut <= bytes.length && cut > (all[index - 1] ?? 0));
+  let offset = 0;
+  const writeNext = () => {
+    if (offset >= bytes.length) return res.end();
+    const next = cuts.find((cut) => cut > offset) ?? bytes.length;
+    res.write(bytes.slice(offset, next));
+    offset = next;
+    if (offset === firstBoundary + 2) return setTimeout(writeNext, 15);
+    return setImmediate(writeNext);
+  };
+  writeNext();
+}
+
 /** Maya's surface: GET /health, POST /api/chat. */
 export async function makeMayaServer() {
   const seen = [];
@@ -55,6 +92,7 @@ export async function makeMayaServer() {
       seen.push({
         path: req.url, method: req.method, body: parsed,
         authorization: req.headers.authorization ?? null,
+        accept: req.headers.accept ?? null,
       });
       const json = (code, obj) => {
         res.writeHead(code, { 'Content-Type': 'application/json' });
@@ -90,6 +128,77 @@ export async function makeMayaServer() {
             message_id: `msg_${nextMsg}`,
             memory_available: true,
           });
+        };
+        if (server.__slowMs) return void setTimeout(answer, server.__slowMs).unref();
+        return answer();
+      }
+
+      if (req.url === '/api/chat/stream' && req.method === 'POST') {
+        const answer = () => {
+          if (server.__401Always || (server.__401Once && !used401)) {
+            used401 = true;
+            return json(401, { detail: 'unauthorized' });
+          }
+          if (server.__rejectChannelContext && parsed?.channel_context) {
+            return json(422, { detail: 'channel_context is not accepted' });
+          }
+          if (server.__chatFail) return json(500, { detail: 'internal error' });
+          if (server.__streamNonSse) return json(200, { detail: 'not an event stream' });
+
+          nextMsg += 1;
+          const replyText = `echo:${parsed?.message ?? ''}`;
+          const reply = server.__successFalse
+            ? { success: false, response: '', error: 'turn failed' }
+            : {
+                success: true,
+                response: replyText,
+                message_id: `msg_${nextMsg}`,
+                memory_available: true,
+              };
+          const turnId = `turn_${nextMsg}`;
+          const envelope = (seq, kind, status, payload) => ({
+            turn_id: turnId,
+            seq,
+            ts: Date.now() / 1000,
+            kind,
+            status,
+            payload,
+            protocol: 'maya.turn.v1',
+          });
+          const splitAt = Math.max(1, Math.floor(replyText.length / 2));
+          const chunks = [replyText.slice(0, splitAt), replyText.slice(splitAt)];
+          let bytes = chunks.map((text, seq) => streamFrame(
+            'token', envelope(seq, 'maya.turn.token', 'progress', { text }),
+          )).join('');
+
+          if (!server.__streamCutoff) {
+            if (server.__streamError401 || server.__streamErrorEvent) {
+              const statusCode = server.__streamError401 ? 401 : 500;
+              bytes += streamFrame('error', envelope(
+                chunks.length, 'maya.turn.error', 'error',
+                { detail: 'boom', status_code: statusCode },
+              ));
+            } else {
+              bytes += streamFrame('final', envelope(
+                chunks.length, 'maya.turn.final', 'ok', reply,
+              ));
+            }
+          }
+
+          res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+          if (server.__postFinalDelayMs) {
+            // Maya does post-final work (history, persistence) before closing
+            // the stream. A client that aborts on receipt of `final` shows up
+            // here as a close before writableEnded.
+            res.on('close', () => {
+              if (!res.writableEnded) server.__clientGoneEarly = true;
+            });
+            res.write(bytes);
+            setTimeout(() => res.end(), server.__postFinalDelayMs).unref();
+            return undefined;
+          }
+          if (server.__streamSplitFrames) return writeSplit(res, bytes);
+          return res.end(bytes);
         };
         if (server.__slowMs) return void setTimeout(answer, server.__slowMs).unref();
         return answer();

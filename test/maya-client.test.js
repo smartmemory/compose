@@ -152,4 +152,113 @@ describe('maya-client', () => {
       (err) => err instanceof MayaHttpError && err.status === 0,
     );
   });
+
+  test('chatStream: split frames deliver tokens in order and resolve the validated final', async () => {
+    const { server, baseUrl, seen } = await makeMayaServer();
+    server.__streamSplitFrames = true;
+    const tokens = [];
+    const res = await client(baseUrl).chatStream({
+      message: 'stream this',
+      channelContext: [{ author: 'compose:idea IDEA-42', text: 'Redis streams' }],
+      onToken: (text) => tokens.push(text),
+    });
+    assert.equal(res.success, true);
+    assert.equal(res.response, 'echo:stream this');
+    assert.match(res.message_id, /^msg_/);
+    assert.ok(tokens.length >= 2);
+    assert.equal(tokens.join(''), res.response);
+
+    const call = seen.find((s) => s.path === '/api/chat/stream');
+    assert.equal(call.authorization, 'Bearer tok-1');
+    assert.equal(call.accept, 'text/event-stream');
+    assert.deepEqual(call.body.channel_context, [
+      { author: 'compose:idea IDEA-42', text: 'Redis streams' },
+    ]);
+  });
+
+  test('chatStream: resolves on final without hanging up on Maya\'s post-final work', async () => {
+    // Maya persists the turn AFTER emitting final; the client must return the
+    // reply immediately but drain to EOF instead of aborting (Codex r1 P1).
+    const { server, baseUrl } = await makeMayaServer();
+    server.__postFinalDelayMs = 150;
+    const started = Date.now();
+    const res = await client(baseUrl).chatStream({ message: 'hi' });
+    assert.equal(res.success, true);
+    assert.ok(Date.now() - started < 150, 'final must resolve before the upstream closes');
+    // Give the detached drain time to reach the stub's delayed close.
+    await new Promise((r) => setTimeout(r, 250));
+    assert.notEqual(server.__clientGoneEarly, true,
+      'client must not abort the upstream before its post-final close');
+  });
+
+  test('chatStream: HTTP 401 once retries exactly once with the captured token', async () => {
+    const { server, baseUrl, seen } = await makeMayaServer();
+    server.__401Once = true;
+    let reads = 0;
+    const c = createMayaClient({
+      baseUrl,
+      getToken: () => (reads++ === 0 ? 'tok-first' : 'tok-second'),
+    });
+    const res = await c.chatStream({ message: 'hi' });
+    assert.equal(res.success, true);
+    const calls = seen.filter((s) => s.path === '/api/chat/stream');
+    assert.equal(calls.length, 2);
+    assert.ok(calls.every((call) => call.authorization === 'Bearer tok-first'));
+  });
+
+  test('chatStream: mid-stream 401 event is MayaAuthError and is never retried', async () => {
+    const { server, baseUrl, seen } = await makeMayaServer();
+    server.__streamError401 = true;
+    await assert.rejects(
+      client(baseUrl).chatStream({ message: 'hi' }),
+      (err) => err instanceof MayaAuthError && err.status === 401,
+    );
+    assert.equal(seen.filter((s) => s.path === '/api/chat/stream').length, 1);
+  });
+
+  test('chatStream: upstream error event becomes MayaHttpError with its status', async () => {
+    const { server, baseUrl } = await makeMayaServer();
+    server.__streamErrorEvent = true;
+    await assert.rejects(
+      client(baseUrl).chatStream({ message: 'hi' }),
+      (err) => err instanceof MayaHttpError && !(err instanceof MayaAuthError)
+        && err.status === 500 && err.message === 'boom',
+    );
+  });
+
+  test('chatStream: cutoff without final is a malformed response', async () => {
+    const { server, baseUrl } = await makeMayaServer();
+    server.__streamCutoff = true;
+    await assert.rejects(
+      client(baseUrl).chatStream({ message: 'hi' }),
+      (err) => err instanceof MayaHttpError && err.kind === 'malformed-response',
+    );
+  });
+
+  test('chatStream: invalid final payload is a malformed response', async () => {
+    const { server, baseUrl } = await makeMayaServer();
+    server.__successFalse = true;
+    await assert.rejects(
+      client(baseUrl).chatStream({ message: 'hi' }),
+      (err) => err instanceof MayaHttpError && err.kind === 'malformed-response',
+    );
+  });
+
+  test('chatStream: non-SSE 2xx response is malformed', async () => {
+    const { server, baseUrl } = await makeMayaServer();
+    server.__streamNonSse = true;
+    await assert.rejects(
+      client(baseUrl).chatStream({ message: 'hi' }),
+      (err) => err instanceof MayaHttpError && err.kind === 'malformed-response',
+    );
+  });
+
+  test('chatStream: one overall deadline aborts before the stream opens', async () => {
+    const { server, baseUrl } = await makeMayaServer();
+    server.__slowMs = 200;
+    await assert.rejects(
+      client(baseUrl, { chatTimeoutMs: 25 }).chatStream({ message: 'hi' }),
+      (err) => err instanceof MayaHttpError && err.status === 0,
+    );
+  });
 });

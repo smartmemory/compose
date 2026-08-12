@@ -2,10 +2,9 @@
 
 **Feature:** COMP-FOH FOH-6 — Maya (existing SmartMemory assistant) layered into the Compose
 cockpit as a summonable colleague slide-over. Her core is never modified.
-**Status:** IMPLEMENT COMPLETE (2026-08-12) — S1–S4 shipped, impl Codex REVIEW CLEAN r3,
-full suite green, upstream issues filed. REMAINING before slice close: dogfood config +
-live-fire (owner-started stack), then journal (deferred to the live-fire session). S5
-streaming remains the named stretch follow-up.
+**Status:** COMPLETE incl. stretch (2026-08-12) — S1–S4 shipped, impl Codex REVIEW CLEAN r3,
+live-fire PASSED, upstream list-staleness P1 fixed + verified. **S5 streaming SHIPPED
+same day** (Codex r2 CLEAN — see §S5 below).
 
 ## Owner decisions (do not re-litigate)
 - FOH-6 = colleague slice (over exhaust-loop / portfolio / pause).
@@ -202,3 +201,63 @@ three commits internally consistent, 1 P1 + 2 methodology notes — all adjudica
 - Pin `MAYA_PROACTIVE_CHECK_INTERVAL_S=0` in relay ops notes.
 - New capability consumers: `challengeIdea`, `convictionOf` (existing wrappers, first production
   callers) + new `contradictions` ideabox-ops wrapper.
+
+## S5 STREAMING SHIPPED (2026-08-12) — the named stretch, closed
+
+Per design-foh-6.md §1 bullet + slice-plan item 5: **POST fetch-streaming on
+`/api/maya/message?stream=1`** — no EventSource, no `streamPaths`. Implementation was
+dispatched to Codex (sol/xhigh) in two brief-bounded slices (backend, panel); fixes applied
+by Claude per the review-loop roles.
+
+**Wire contract (relay-authored, upstream re-framed — never forwarded verbatim):**
+- Upstream: Maya `POST /api/chat/stream` emits `token`/`final`/`error` SSE frames wrapped in
+  the `maya.turn.v1` envelope (`turn_id, seq, ts, kind, status, payload, protocol`); auth 401s
+  are HTTP-level, BEFORE any SSE bytes. The stub reproduces this exactly (stub-is-the-wire-contract).
+- Relay downstream: `token {text}` → `final` (the non-streaming success body minus `writeback`)
+  → `writeback` (same outcome object as the non-streaming field; emitted only when the turn
+  owed one) → end. `error` events carry the existing `errorEnvelope` taxonomy.
+- **Two-regime error rule:** every pre-flight failure (funnels, isolation, context loss) stays
+  a plain-JSON shaped 200 — identical envelopes to the non-streaming path (shared `prepareMessage`
+  helper; non-streaming behavior byte-equivalent, its tests untouched). Once the upstream stream
+  is open, failures are terminal relay `error` events. The panel branches on Content-Type.
+- Client (`chatStream` in lib/maya-client.js): one captured token + ONE HTTP-level same-token
+  401 retry; a mid-stream `error` event with status 401 maps to the auth funnel but is NEVER
+  retried (the turn may have partially charged her session). Final validated by the same trust
+  gate as `chat()`; cutoff-without-final = malformed-response. Panel: final REPLACES the
+  accumulated tokens (display-only); cutoff keeps the partial text marked
+  "reply interrupted — not saved", never vanished, never auto-resent.
+
+**DERIVED RULING — detach-and-complete on client disconnect (recorded, not owner-gated):**
+the design's "outcome contract is transport-independent" ruling implies a downstream disconnect
+mid-stream must not change durable outcomes — in the non-streaming path a disconnect doesn't
+stop the handler. So the relay DETACHES on disconnect (guarded writes, upstream kept), still
+consumes to `final`, and still performs the idempotent write-back. `attachAgentProxy`'s
+abort-on-close is the wrong precedent here, deliberately not copied. Pinned by test
+(socket destroyed after first token → write-back still runs).
+
+**Codex review r1 (sol/xhigh, whole S5 diff): 1 P1 + 2 P2 — all accepted, fixed by Claude:**
+- **P1 abort-after-final (ACCEPTED, mechanism amended):** Maya persists the turn AFTER emitting
+  `final` (routes.py:5106→5310: conversation history, engagement, storage enqueue); the client
+  aborted on receipt. Adjudication nuance: the reviewer's concrete cancellation path is weaker
+  than claimed (Maya's producer is a detached asyncio task; a disconnect doesn't provably cancel
+  it) — but aborting still couples us to that upstream internal, and Maya's own client drains to
+  EOF. Fix: return the validated final immediately, drain to EOF detached, bounded by the
+  existing 120s deadline; abort only on deadline/error. Pinned via stub `__postFinalDelayMs` +
+  `__clientGoneEarly`.
+- **P2 post-final drop loses the write-back outcome (ACCEPTED):** stream death between `final`
+  and the `writeback` event previously read as clean. Panel now captures the turn's write-back
+  obligation at send time; an owed-but-missing outcome renders an `unknown` chip
+  ("save unconfirmed — connection dropped") with the reconcile-then-append retry (dedups on the
+  message_id marker if the original landed). §5's never-mistake-unknown-for-clean, transport-independent.
+- **P2 missing `X-Accel-Buffering: no` (ACCEPTED):** without it the documented nginx deployment
+  buffers the SSE body whole and S5 collapses into a one-shot response. Header added + asserted.
+
+**Codex review r2 (sol/xhigh, scoped to the fixes): VERDICT CLEAN.**
+
+Tests: 60 backend (`maya-client` 21 / `maya-routes` 39) + 16 panel — all green locally.
+S5 dispatch note for future sessions: stratum's codex dispatch pins `--sandbox read-only|workspace-write`;
+these suites bind loopback listeners, which seatbelt EPERMs — implementation dispatches ran via
+raw `codex exec` under the owner's config default instead. Codex review runs are unaffected (read-only).
+
+**FOH-6 is now fully closed, stretch included.** Remaining FOH candidates (owner picks):
+exhaust-loop / portfolio rollup (design.md §Sequencing).
