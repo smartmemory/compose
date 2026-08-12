@@ -276,6 +276,37 @@ describe('maya routes', () => {
     assert.equal(loadIdentity(root).access_token, 'token-1');
   });
 
+  test('message: crash between provision and NDA-accept retries the NDA on the SAME identity', async () => {
+    const maya = await makeMayaServer();
+    const sm = await makeSmStub();
+    const root = wiredRoot({ mayaBase: maya.baseUrl, smBase: sm.baseUrl });
+    // A saved identity whose NDA never completed (crash window).
+    saveIdentity(root, {
+      mode: 'provision', email: 'x@compose.invalid', user_id: 'u1', tenant_id: 't1',
+      team_id: 'team_colleague', access_token: 'tok-crashed', ndaAccepted: false,
+    });
+    const srv = await startApp({ root, deps: { composeContext: emptyContext } });
+    track(srv);
+    const { body } = await postMessage(srv.baseUrl, { text: 'hi' });
+    assert.equal(body.ok, true);
+    // NDA accepted with the EXISTING token; no fresh identity was minted.
+    const nda = sm.seen.find((s) => s.path === '/memory/beta/nda/accept');
+    assert.equal(nda.authorization, 'Bearer tok-crashed');
+    assert.equal(sm.seen.filter((s) => s.path === '/test/provision-user' && s.method === 'POST').length, 0);
+    assert.equal(loadIdentity(root).ndaAccepted, true);
+  });
+
+  test('message: local-floor fluid provider → connect-smartmemory refusal, zero upstream traffic', async () => {
+    const maya = await makeMayaServer();
+    const root = makeProjectRoot({ maya: { baseUrl: maya.baseUrl, auth: { mode: 'provision' } } });
+    const srv = await startApp({ root, deps: { composeContext: emptyContext } });
+    track(srv);
+    const { body } = await postMessage(srv.baseUrl, { text: 'hi' });
+    assert.equal(body.ok, false);
+    assert.equal(body.error.kind, 'connect-smartmemory');
+    assert.equal(maya.seen.filter((s) => s.path === '/api/chat').length, 0);
+  });
+
   test('message: Maya unreachable → offline funnel', async () => {
     const sm = await makeSmStub();
     const root = wiredRoot({ mayaBase: 'http://127.0.0.1:1', smBase: sm.baseUrl });
