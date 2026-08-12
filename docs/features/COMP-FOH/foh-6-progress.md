@@ -162,9 +162,14 @@ stopped, `compose.json` + `ideabox.md` restored byte-for-byte (shasum-verified),
 - Attribution: FOH-6 code behaves per contract; the provider's FOH-1-era read-your-writes
   assumption is what the substrate violates. Same defect family as the 2026-08-05 recall
   live-fire ("storage GOOD, reads stale").
-- Filed upstream: smart-memory/smart-memory-service#7 (list staleness after updateItem). Compose-side hardening
-  option (owner decision, not taken unilaterally): list-for-discovery, direct-GET-for-truth in
-  `_resolveItems` + the write-back reconcile scan — one extra round-trip per write.
+- Tracked LOCALLY, in this ledger (owner directive 2026-08-12: no GitHub issue filing — a
+  briefly-filed service#7 was deleted; the owner tests upstream separately). Full repro for
+  that testing: add item → updateItem metadata → direct GET is fresh, `/memory/list` (incl.
+  metadata-filtered) still returns the pre-update blob 7+ min later, never converging.
+  **Owner ruling 2026-08-12: WAIT for the upstream fix (it is being fixed now) — do NOT build
+  the compose-side hardening** (list-for-discovery, direct-GET-for-truth was the considered
+  option; not taken). Until the fix lands, treat the discussion trail as last-write-only on
+  the real backend.
 
 ## Scope fences (blueprint must honor)
 - Ideas only (no clusters — seam refuses; no decisions — no producer exists).
