@@ -2,7 +2,7 @@
 date: 2026-08-12
 session_number: 109
 slug: foh-6-colleague-panel-livefire
-summary: "FOH-6 Maya colleague panel: 3-round review arc, live-fire E2E passed, and the append-only trail that wasn't — /memory/list serves ingest-time metadata forever (service#7)"
+summary: "FOH-6 Maya colleague panel: 3-round review arc, live-fire E2E passed, and the append-only trail that wasn't — /memory/list serves ingest-time metadata forever (tracked locally)"
 feature_code: COMP-FOH
 closing_line: The panel worked on the first live turn; the bug we found was in the ground it stands on.
 ---
@@ -20,7 +20,7 @@ The review arc that shaped the code is worth retelling. Round 1's sharpest findi
 
 The live-fire itself: throwaway fluid tenant, all seven `fluid_*` record types declared (FOH-4's recipe needed two updates — `/memory/ontology/types` now requires `X-Workspace-Id`, and the ideabox migration imports clusters, so three types aren't enough), IDEA-53 ("Postgres") set contradicting IDEA-54 ("Redis", decayed 1.0→0.5), our own server instance on scratch ports. The loop passed: status funnel `ready`, her reply named IDEA-53 and the Postgres conflict — the injected findings, reflected — and the write-back landed durably as `author:'maya'` with the message-id marker. Her colleague workspace held only her own turn-ingestion, zero fluid items: isolation verified end-to-end, closing VERIFY-3.
 
-Then the retry test lied to us, and chasing the lie found the session's real discovery. The idempotent write-back retry returned `ok` — but not `deduped`, and the entry's timestamp was NEW. The reconcile scan reads through `/memory/list`, and list was serving the record as it was at CREATION, ignoring the update entirely — not lagging, never converging. A decisive probe confirmed the consequence: a second `addDiscussion` rebuilt the record from the creation-time base and silently dropped Maya's entry. On this backend, the append-only discussion trail keeps exactly one entry — the last write. Every provider read-modify-write shares the exposure. FOH-6's code behaves per its contract; the substrate violates the contract's read-your-writes assumption. Filed as smart-memory-service#7. Teardown left the tree byte-for-byte clean (shasum-verified), both tenants deleted, the colleague identity through the shipped reprovision action — which thereby live-fired too.
+Then the retry test lied to us, and chasing the lie found the session's real discovery. The idempotent write-back retry returned `ok` — but not `deduped`, and the entry's timestamp was NEW. The reconcile scan reads through `/memory/list`, and list was serving the record as it was at CREATION, ignoring the update entirely — not lagging, never converging. A decisive probe confirmed the consequence: a second `addDiscussion` rebuilt the record from the creation-time base and silently dropped Maya's entry. On this backend, the append-only discussion trail keeps exactly one entry — the last write. Every provider read-modify-write shares the exposure. FOH-6's code behaves per its contract; the substrate violates the contract's read-your-writes assumption. Tracked locally in the FOH-6 ledger — owner directive: no GitHub issue filing; upstream is fixing it and tests it separately. Teardown left the tree byte-for-byte clean (shasum-verified), both tenants deleted, the colleague identity through the shipped reprovision action — which thereby live-fired too.
 
 ## What we built
 
@@ -28,7 +28,7 @@ No production code this session — the live-fire exercised what shipped at `e15
 - `lib/maya-{config,identity,client}.js`, `server/maya-routes.js` — status funnel, relay turn, identity actions, writeback-retry, all hit live
 - `lib/colleague/{context,writeback}.js` — findings composition (idea + conviction + contradiction + challenge blocks) and reconcile-then-append write-back, both live
 - `docs/features/COMP-FOH/foh-6-progress.md` — live-fire section: setup, PASSED items, the upstream P1 with repro and attribution
-- smart-memory/smart-memory-service#7 — upstream issue: `/memory/list` serves ingest-time metadata indefinitely after `updateItem`
+- Local upstream-defect record (FOH-6 ledger): `/memory/list` serves ingest-time metadata indefinitely after `updateItem` — repro preserved for the upstream fix's verification
 - Scratch harness (session scratchpad): provision/seed/verify scripts, throwaway tenants `team_fce68e35699b` (fluid) and `team_994740c42d42` (colleague), both torn down
 
 ## What we learned
@@ -42,10 +42,10 @@ No production code this session — the live-fire exercised what shipped at `e15
 
 ## Open threads
 
-- [ ] Owner decision: compose-side hardening (direct-GET-for-truth in `_resolveItems` + write-back reconcile) now, or wait for the upstream fix to service#7?
+- [x] Owner decision (same day): WAIT for the upstream fix — no compose-side hardening; discussion trail is last-write-only on the real backend until it lands
 - [ ] S5 streaming (design §S5: POST fetch-streaming on `/api/maya/message?stream=1`) — named stretch, not started
 - [ ] FOH epic next candidates: exhaust-loop / portfolio rollup (design.md §Sequencing) — owner picks
-- [ ] Upstream: smart-memory/maya#2 (channel_context field), smart-memory-service#6 (test re-auth), service#7 (list staleness) — watch for fixes
+- [ ] Upstream: smart-memory/maya#2 (channel_context field), smart-memory-service#6 (test re-auth), list-staleness fix (in progress upstream, tracked in the FOH-6 ledger) — watch for fixes
 - [ ] COMP-FOH epic stays IN_PROGRESS
 
 ---
