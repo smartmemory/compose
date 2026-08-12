@@ -89,6 +89,37 @@ function CapabilityStrip({ capabilities }) {
   );
 }
 
+/** The findings accordion (design §4): the latest turn's composed findings
+ *  blocks — conviction, contradictions, challenge — collapsible under the
+ *  header, with provenance authors. Record/discussion blocks are context, not
+ *  findings, and stay out of it. */
+function FindingsAccordion({ blocks }) {
+  const findings = (blocks ?? []).filter((b) =>
+    ['compose:conviction', 'compose:contradiction', 'compose:challenge'].includes(b.author));
+  if (!findings.length) return null;
+  return (
+    <details
+      className="px-3 py-1.5 text-[11px]"
+      style={{ borderBottom: '1px solid hsl(var(--border))' }}
+      data-testid="findings-accordion"
+    >
+      <summary className="cursor-pointer select-none" style={{ color: 'hsl(var(--muted-foreground))' }}>
+        findings ({findings.length})
+      </summary>
+      <div className="flex flex-col gap-1.5 mt-1.5">
+        {findings.map((b) => (
+          <div key={b.author}>
+            <div className="text-[9px] uppercase tracking-wider" style={{ color: 'hsl(var(--accent))' }}>
+              {b.author.replace(/^compose:/, '')}
+            </div>
+            <div className="whitespace-pre-wrap" style={{ color: 'hsl(var(--foreground))' }}>{b.text}</div>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 /** Per-reply context note: what was sent, and every named omission — a
  *  truncated turn must never look like a clean one. */
 function ContextNote({ context }) {
@@ -263,9 +294,11 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
   if (authError) view = 'auth';
   else if (offlineError) view = 'offline';
   else if (!status) view = 'loading';
+  else if (status.state === 'misconfigured') view = 'misconfigured';
   else if (status.state === 'connect-smartmemory') view = 'connect-smartmemory';
   else if (status.state === 'offline') view = 'offline';
   else if (status.state === 'workspace-collision') view = 'workspace-collision';
+  else if (status.state === 'auth') view = 'auth'; // e.g. static mode, no token pasted yet
   else if (status.state === 'ready') view = 'chat';
   else view = 'loading';
 
@@ -325,12 +358,26 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
         </div>
 
         {view === 'chat' && <CapabilityStrip capabilities={status.capabilities} />}
+        {view === 'chat' && (
+          <FindingsAccordion
+            blocks={[...messages].reverse().find((m) => m.role === 'maya')?.context?.blocks}
+          />
+        )}
 
         {/* body */}
         {view === 'loading' && (
           <div className="flex-1 flex items-center justify-center text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
             checking Maya…
           </div>
+        )}
+
+        {view === 'misconfigured' && (
+          <FunnelCard icon={AlertTriangle} title="Maya is misconfigured">
+            The <code>maya</code> block in <code>.compose/compose.json</code> is present but has
+            no <code>baseUrl</code>. Point it at the Maya deployment
+            (local dev: <code>http://localhost:9005</code>).
+            {status?.error && <div className="mt-1 font-mono text-[10px]">{status.error}</div>}
+          </FunnelCard>
         )}
 
         {view === 'connect-smartmemory' && (
@@ -373,12 +420,14 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
             title="Maya rejected the colleague credential"
             actions={
               <>
-                <FunnelAction
-                  onClick={reprovision}
-                  sub="starts a fresh conversation — her accumulated colleague memory is lost"
-                >
-                  re-provision
-                </FunnelAction>
+                {status?.auth?.mode !== 'static' && (
+                  <FunnelAction
+                    onClick={reprovision}
+                    sub="starts a fresh conversation — her accumulated colleague memory is lost"
+                  >
+                    re-provision
+                  </FunnelAction>
+                )}
                 {!pasting && (
                   <FunnelAction onClick={() => setPasting(true)} sub="keeps whatever identity the token carries">
                     paste a new token
@@ -387,10 +436,14 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
               </>
             }
           >
-            The token was refused after one retry. A 401 does not prove expiry, and
-            re-provisioning destroys the standing thread — both recoveries are explicit,
-            never automatic.
-            {authError?.message && <div className="mt-1 font-mono text-[10px]">{authError.message}</div>}
+            {authError
+              ? 'The token was refused after one retry. A 401 does not prove expiry, and '
+                + 're-provisioning destroys the standing thread — both recoveries are explicit, '
+                + 'never automatic.'
+              : 'No usable credential is stored for Maya yet.'}
+            {(authError?.message ?? status?.error) && (
+              <div className="mt-1 font-mono text-[10px]">{authError?.message ?? status?.error}</div>
+            )}
             {pasting && (
               <div className="flex gap-1.5 mt-2">
                 <input

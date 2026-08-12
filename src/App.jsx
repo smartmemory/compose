@@ -1521,10 +1521,14 @@ function AppInner() {
           onClose={() => setNewFeatureOpen(false)}
         />
 
-        {/* Maya colleague slide-over (FOH-6) */}
+        {/* Maya colleague slide-over (FOH-6). Keyed on projectRoot: a project
+            switch remounts the panel with fresh state, so a stale message,
+            focus, or write-back retry from the previous project can never act
+            against the new one. */}
         {colleagueOpen && (
           <PanelErrorBoundary zone="colleague panel">
             <ColleaguePanel
+              key={projectRoot || '__no-project__'}
               onClose={() => setColleagueOpen(false)}
               status={mayaStatus}
               refreshStatus={refreshMayaStatus}

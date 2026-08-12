@@ -88,8 +88,23 @@ coverage sweep per Phase 7.
   provenance origin enum gains `ui:colleague` (new door; write-backs distinguishable for the
   record's lifetime). Golden write-back suite runs the REAL local provider incl. the
   landed-unrendered path (read-only projection dir) and reconcile-to-ok retry.
-- Deferred to end-of-build (stack-dependent): dogfood config, live-fire, same-identity re-auth
-  probe + upstream issues (channel_context supported field; POST /test/login ask).
+- **Full suite GREEN** (node + 599 UI + 100 tracker, exit 0). Zero tracked diffs under
+  `SmartMemory/maya/` (acceptance criterion holds; untracked avatar PNGs pre-date FOH-6).
+- **Upstream issues FILED** (2026-08-12, as smartmem-dev; re-auth probe answered statically —
+  `test_provisioning.py` has exactly POST+DELETE, no login path):
+  - smart-memory/maya#2 — supported per-turn context-injection field (channel_context is
+    comment-convention only; Discord framing + undocumented cap noted).
+  - smart-memory/smart-memory-service#6 — `POST /test/login {email}` same-identity re-auth
+    (24h TTL + 409 on re-provision = daily loss of the standing thread without it).
+- **Codex review r1 (sol/high): 9 findings (2 P1), ALL accepted + fixed** — static-token
+  fail-closed verification via `GET /auth/me` (JWT-claim check was vacuous — real tokens carry no
+  claims); panel keyed on projectRoot (stale cross-project write-back killed); identity file
+  0600+atomic; ensureIdentity single-flight; write-back serialization per (root,focus,msg);
+  401-retry token captured once; misconfigured + static-no-token funnel states; findings
+  accordion (relay returns blocks); `ui:colleague` enum reverted (dead until a create op exists).
+  94 targeted tests green (83 node + 11 UI) after fixes. r2 dispatched scoped to the fixes.
+- Deferred (need the owner-started stack): dogfood config in `.compose/compose.json`, live-fire
+  (inject contradicting idea → findings reflected in reply → write-back lands → teardown).
 
 ## Scope fences (blueprint must honor)
 - Ideas only (no clusters — seam refuses; no decisions — no producer exists).

@@ -124,6 +124,31 @@ describe('conversation flow', () => {
     expect(screen.getByText(/discussion omitted, over budget/)).toBeTruthy();
   });
 
+  it('findings accordion renders the latest turn\'s findings blocks (record/discussion excluded)', async () => {
+    routeFetch([
+      ['/api/maya/message', () => json({
+        ok: true, reply: 'see the findings.', message_id: 'msg_2', writeback: null,
+        context: {
+          sent: ['compose:idea IDEA-42', 'compose:contradiction'],
+          omissions: [],
+          blocks: [
+            { author: 'compose:idea IDEA-42', text: 'the record body' },
+            { author: 'compose:contradiction', text: 'IDEA-7 contradicts it' },
+          ],
+        },
+      })],
+    ]);
+    renderPanel();
+    const textarea = document.querySelector('textarea');
+    textarea.value = 'hi';
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByTestId('findings-accordion')).toBeTruthy());
+    expect(screen.getByText(/findings \(1\)/i)).toBeTruthy();
+    expect(screen.getByText(/IDEA-7 contradicts it/)).toBeTruthy();
+    // The record-body block is context, not a finding — it stays out.
+    expect(screen.queryByText(/the record body/)).toBeNull();
+  });
+
   it('auth turn error → auth funnel with the two explicit continuity-costing actions', async () => {
     routeFetch([
       ['/api/maya/message', () => json({

@@ -84,7 +84,7 @@ function fakeProvider({
 
 function ctxWith(provider) {
   const cwd = mkdtempSync(join(tmpdir(), 'foh6-ctx-'));
-  return { cwd, provider, ideaboxPath: join(cwd, 'ideabox.md'), config: {}, origin: 'ui:colleague' };
+  return { cwd, provider, ideaboxPath: join(cwd, 'ideabox.md'), config: {}, origin: 'ui:ideabox' };
 }
 
 const authors = (r) => r.blocks.map((b) => b.author);
