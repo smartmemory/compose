@@ -50,6 +50,7 @@ import {
   IdeaboxNotFound,
   IdeaboxRenderFailed,
 } from '../lib/fluid/ideabox-ops.js'
+import { writeIdeaboxProjection } from '../lib/fluid/render-ideabox.js'
 import { ideaboxView, toClientIdeaWith } from '../lib/fluid/ideabox-view.js'
 import { relForDisplay } from '../lib/project-paths.js'
 
@@ -204,6 +205,18 @@ export function attachIdeaboxRoutes(app, { getProjectRoot, broadcastMessage }) {
       const { record } = await addDiscussion(ctx, req.params.id, { author, text })
       return { body: await toClientIdeaWith(ctx.provider, record) }
     }, 201)
+  })
+
+  // POST /api/ideabox/render — rebuild the projection from the records (the
+  // repair for a landed-unrendered write: the durable record is fine, only the
+  // generated file is stale). The HTTP twin of `compose ideabox render`;
+  // touches no record. (FOH-6 S4 — the colleague panel's repair affordance.)
+  app.post('/api/ideabox/render', async (_req, res) => {
+    await send(res, async () => {
+      const ctx = await context()
+      await writeIdeaboxProjection(ctx.provider, ctx.ideaboxPath)
+      return { body: { ok: true } }
+    })
   })
 
   // DELETE /api/ideabox/ideas/:id — not allowed

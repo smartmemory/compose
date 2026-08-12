@@ -2,7 +2,7 @@
 
 ## 2026-08-12
 
-### COMP-FOH / FOH-6 — COLLEAGUE-PANEL: Maya in the cockpit (S1: relay + token source, S2: context builder, S3: panel)
+### COMP-FOH / FOH-6 — COLLEAGUE-PANEL: Maya in the cockpit (S1: relay + token source, S2: context builder, S3: panel, S4: write-back)
 
 The sixth Front-of-House slice starts layering Maya (the existing SmartMemory assistant, core never modified) into the cockpit as a summonable colleague. S1 ships the server relay and the pluggable token source. Compose holds the credential server-side and relays turns to Maya's `POST /api/chat`; the identity that owns her single standing conversation is provisioned lazily on first use via smart-memory-service's sanctioned test surface (`POST /test/provision-user` + beta-NDA accept) and persisted in `data/maya-identity.json`, or pasted as a static token. The shallow-binding invariant is enforced at the seam: a colleague token whose workspace claim equals the fluid `workspaceId` is refused (`workspace-collision` funnel) before any provisioning side effect or chat turn, because accepting it would silently turn Maya's background turn-ingestion into a writer against the fluid workspace.
 
@@ -21,6 +21,12 @@ The sixth Front-of-House slice starts layering Maya (the existing SmartMemory as
 - `server/maya-routes.js` — `POST /api/maya/identity` (S3): the auth funnel's explicit actions — `reprovision` (best-effort upstream teardown + local clear; the next turn mints a fresh identity/thread) and `static` (paste a token; a fluid-workspace token is refused and never stored).
 - `src/App.jsx` — panel mount behind a `PanelErrorBoundary`, summon wiring, workspace-keyed status probe.
 - `test/ui/colleague-panel.test.jsx` — funnel states, calibration-visibly-unavailable, send flow (focus piping, pending-disables-input, context-note omissions), auth funnel actions, write-back chips incl. append-only retry, summon-button visibility.
+- `lib/colleague/writeback.js` (S4) — `writebackReply`: Maya's reply joins the focused idea's discussion trail as `author:'maya'` through the shared `addDiscussion` op, IDEMPOTENTLY keyed on her `message_id` (a trailing `<!-- maya:msg_<id> -->` HTML comment — invisible in rendered markdown, greppable, zero schema change). Every attempt is reconcile-then-append: scan for the marker first, append only if absent — a 'failed' outcome does not prove the append didn't land, and the trail is append-only. Outcomes, never throws: `ok` / `landed-unrendered` (durable record, stale projection — distinct so the repair affordance renders) / `failed`.
+- `server/maya-routes.js` — write-back wired into `/message` (chat result AUTHORITATIVE — write-back failure is an outcome field, never a failed turn; toggleable per request, default on) + `POST /api/maya/writeback-retry` (append-only — never re-sends the chat turn; missing fields refused before any work).
+- `server/ideabox-routes.js` — `POST /api/ideabox/render`: the projection-repair endpoint (HTTP twin of `compose ideabox render`); rebuilds the file from the records, touches no record.
+- `contracts/fluid-record.schema.json` — provenance enum gains `ui:colleague`: the colleague panel is a new door, and its write-backs stay distinguishable from ideabox-surface edits for the lifetime of the record.
+- Panel: "note replies on the idea" toggle (default on) above the input.
+- `test/colleague-writeback.test.js` (golden, real local provider: append + marker + projection, dedup on message_id, landed-unrendered via read-only projection dir with reconcile-to-ok retry, unknown-focus, case-insensitive resolution) + write-back route-contract tests + a render-route test.
 
 ### COMP-AGENT-LANES — Per-subagent lanes for parallel fan-outs
 

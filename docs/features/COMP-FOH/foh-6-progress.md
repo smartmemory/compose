@@ -81,6 +81,13 @@ coverage sweep per Phase 7.
   funnel's explicit actions needed server wiring the blueprint didn't enumerate; refuses
   fluid-workspace tokens like every other entry point. Panel's repair affordance posts
   `/api/ideabox/render` — endpoint lands in S4. 20 route tests + 10 UI tests green; vite build OK.
+- **S4 COMPLETE:** `lib/colleague/writeback.js` (reconcile-then-append keyed on `message_id`
+  marker `<!-- maya:msg_<id> -->`; outcomes ok/landed-unrendered/failed, never throws), wired
+  into `/message` (chat authoritative, toggleable default-on) + `POST /api/maya/writeback-retry`
+  (append-only) + `POST /api/ideabox/render` repair endpoint + panel toggle. **Contract change:**
+  provenance origin enum gains `ui:colleague` (new door; write-backs distinguishable for the
+  record's lifetime). Golden write-back suite runs the REAL local provider incl. the
+  landed-unrendered path (read-only projection dir) and reconcile-to-ok retry.
 - Deferred to end-of-build (stack-dependent): dogfood config, live-fire, same-identity re-auth
   probe + upstream issues (channel_context supported field; POST /test/login ask).
 

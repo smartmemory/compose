@@ -43,6 +43,7 @@ import {
 } from '../lib/maya-identity.js';
 import { ideaboxContext } from '../lib/fluid/ideabox-ops.js';
 import { composeColleagueContext } from '../lib/colleague/context.js';
+import { writebackReply } from '../lib/colleague/writeback.js';
 
 /**
  * The provider's declared semantic subset today (smartmemory-provider.js
@@ -62,6 +63,13 @@ const CAPABILITIES = Object.freeze({
 async function defaultComposeContext(root, { focusId }) {
   const ctx = await ideaboxContext(root, { origin: 'ui:colleague' });
   return composeColleagueContext(ctx, { focusId });
+}
+
+/** The real write-back (S4): reconcile-then-append through the shared ops
+ *  module. Returns an OUTCOME, never throws (lib/colleague/writeback.js). */
+async function defaultPerformWriteback(root, args) {
+  const ctx = await ideaboxContext(root, { origin: 'ui:colleague' });
+  return writebackReply(ctx, args);
 }
 
 function shortReason(e) {
@@ -108,6 +116,7 @@ export function attachMayaRoutes(app, {
   saveIdentity = defaultSaveIdentity,
   clearIdentity = defaultClearIdentity,
   composeContext = defaultComposeContext,
+  performWriteback = defaultPerformWriteback,
 } = {}) {
   /** Resolve the per-request project scope, or null when not installed. */
   function scopeOf(req) {
@@ -210,13 +219,27 @@ export function attachMayaRoutes(app, {
       });
       const reply = await client.chat({ message: text, channelContext: context.blocks });
 
+      // Write-back (S4): the chat result is AUTHORITATIVE — her reply renders
+      // whatever happens here, and a write-back failure is an outcome field,
+      // never a failed turn (resending the chat would double-charge her
+      // session with the same turn). Toggleable per request, default on.
+      let writeback = null;
+      if (focusId && req.body?.writeback !== false) {
+        try {
+          writeback = await performWriteback(root, {
+            focusId, messageId: reply.message_id, text: reply.response,
+          });
+        } catch (e) {
+          writeback = { outcome: 'failed', focusId, reason: shortReason(e) };
+        }
+      }
+
       return res.json({
         ok: true,
         reply: reply.response,
         message_id: reply.message_id,
         memory_available: reply.memory_available ?? null,
-        // S4 fills this with the ok|landed-unrendered|failed outcome.
-        writeback: null,
+        writeback,
         context: {
           sent: context.blocks.map((b) => b.author),
           omissions: context.omissions,
@@ -266,6 +289,34 @@ export function attachMayaRoutes(app, {
       return res.json({ ok: false, error: { kind: 'invalid', message: `unknown action: ${action}` } });
     } catch (err) {
       return res.json({ ok: false, error: errorEnvelope(err) });
+    }
+  });
+
+  /**
+   * Retry a failed write-back — APPEND-ONLY, never the chat turn. Runs the
+   * same reconcile-then-append as the message path: if the original append
+   * actually landed (a 'failed' outcome does not prove it didn't), the
+   * `message_id` marker dedups this into a no-op.
+   */
+  app.post('/api/maya/writeback-retry', async (req, res) => {
+    const scope = scopeOf(req);
+    if (!scope) return res.json({ ok: false, error: { kind: 'not-installed' } });
+
+    const focusId = String(req.body?.focusId ?? '').trim();
+    const messageId = String(req.body?.message_id ?? '').trim();
+    const text = String(req.body?.text ?? '');
+    if (!focusId || !messageId || !text.trim()) {
+      return res.json({
+        ok: false,
+        error: { kind: 'invalid', message: 'focusId, message_id and text are required' },
+      });
+    }
+
+    try {
+      const writeback = await performWriteback(scope.root, { focusId, messageId, text });
+      return res.json({ ok: true, writeback });
+    } catch (e) {
+      return res.json({ ok: true, writeback: { outcome: 'failed', focusId, reason: shortReason(e) } });
     }
   });
 }
