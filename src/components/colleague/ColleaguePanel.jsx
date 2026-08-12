@@ -284,8 +284,14 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
       setAuthError(null);
       setPasting(false);
       refreshStatus?.();
-    } else if (body.error?.kind === 'workspace-collision') {
-      setAuthError({ kind: 'auth', message: body.error.message });
+    } else {
+      // EVERY refusal renders — the paste flow fails closed server-side
+      // (unverifiable tokens are not stored), and a Save that silently does
+      // nothing would hide the actionable explanation (Codex r2 P2).
+      setAuthError({
+        kind: 'auth',
+        message: body.error?.message ?? `token refused (${body.error?.kind ?? 'unknown error'})`,
+      });
     }
   }
 
