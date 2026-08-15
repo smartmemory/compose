@@ -38,26 +38,28 @@ function makeProject(tmpDir, { template = 'bug-fix' } = {}) {
   writeFileSync(
     join(pipeDir, `${template}.stratum.yaml`),
     `
-version: "0.2"
+version: 1
 contracts:
   PhaseResult:
-    phase: { type: string }
-    artifact: { type: string }
-    outcome: { type: string }
+    phase: string
+    artifact: string
+    outcome: string
 flows:
+  entry: ${template === 'bug-fix' ? 'bug_fix' : template}
   ${template === 'bug-fix' ? 'bug_fix' : template}:
     input:
-      featureCode: { type: string }
-      description: { type: string }
-      task: { type: string }
-    output: PhaseResult
+      featureCode: string?
+      description: string?
+      task: string?
+    output:
+      from: "\${design.output}"
+      contract: PhaseResult
     steps:
       - id: design
         agent: claude
-        intent: "stub"
-        inputs: { featureCode: "$.input.featureCode" }
-        output_contract: PhaseResult
-        retries: 1
+        do: "stub"
+        out: PhaseResult
+        attempts: 2
 `
   );
 }

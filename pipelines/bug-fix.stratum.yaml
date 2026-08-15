@@ -3,266 +3,230 @@
 #   label: "Bug Fix"
 #   description: "Diagnose and fix a bug — reproduce, trace root cause, scope audit, fix, test, verify, ship"
 #   category: maintenance
-#   steps: 8
+#   steps: 9
 #   estimated_minutes: 40
 
-version: "0.1"
+version: 1
 
 # bug-fix pipeline
 #
-# Eight-step flow for disciplined bug resolution:
+# Nine-step flow for disciplined bug resolution:
 #   1. reproduce    — confirm the bug exists with a failing test
 #   2. diagnose     — trace root cause by OBSERVING actual data (not assuming)
-#   3. scope_check  — grep audit if change spans multiple layers/repos
-#   4. fix          — implement the minimal correct fix across ALL affected layers
-#   5. test         — run full test suite, ensure no regressions
-#   6. verify       — confirm original reproduction case now passes
-#   7. retro_check  — detect fix chains and log discipline signals
-#   8. ship         — commit and report
+#   3. bisect       — optionally git-bisect a suspected regression
+#   4. scope_check  — grep audit if change spans multiple layers/repos
+#   5. fix          — implement the minimal correct fix across ALL affected layers
+#   6. test         — run full test suite, ensure no regressions
+#   7. verify       — confirm original reproduction case now passes
+#   8. retro_check  — detect fix chains and log discipline signals
+#   9. ship         — commit and report
 #
 # Debug Discipline (COMP-DEBUG-1):
 #   - diagnose requires trace_evidence (actual command output, not prose assumptions)
 #   - scope_check prevents incremental multi-layer discovery
 #   - retro_check detects fix chains and feeds iteration ledger
 #
+# COMP-PIPELINE-QUARANTINE: re-authored from the v0.1 `functions:` dialect to TS
+# v1. STRAT-PY-RETIRE converted only build and gsd and deleted the older
+# execution paths, so this spec had been unrunnable since that cutover — every
+# `compose fix` died on a bare `MCP error -32602: spec validation failed`.
+#
+# Conversion notes (semantics preserved, not redesigned):
+#   - `functions:` + `flows.steps[].function` collapse into inline `do` steps;
+#     v1 has no separate function table.
+#   - `depends_on` -> `after`. The chain is linear and has NO backward routing,
+#     so unlike the build conversion there are no ROUTING_CYCLE gates to model.
+#   - `retries: N` -> `attempts: N + 1`. v0.1 counted retries AFTER the first
+#     try; v1 `attempts` is the total, so a bare rename would silently cut every
+#     step's budget by one.
+#   - Enum constraints move from `ensure` into the contract (`a|b|c`), which is
+#     where v1 expresses them — the engine rejects a bad value at the contract
+#     boundary instead of one step later.
+#   - bisect's approve/skip/kill remains PROSE inside `do`, exactly as in v0.1.
+#     Promoting it to a real engine `gate:` step would change runner behavior
+#     (gate routing + promptGate handling) and is a redesign, not a migration.
+#
 # Inputs:
 #   task — bug description (symptoms, steps to reproduce, affected files)
-#
-# Usage:
-#   stratum_plan <this yaml> "bug_fix" {"task": "..."}
 
 contracts:
   BugFixResult:
-    phase:                {type: string}
-    summary:              {type: string}
-    outcome:              {type: string, values: [complete, failed]}
-    references_addressed: {type: string}  # stringified int
+    phase: string
+    summary: string
+    outcome: complete|failed
+    references_addressed: string?   # stringified int
 
   TestResult:
-    passing:  {type: boolean}
-    summary:  {type: string}
-    failures: {type: array}
+    passing: boolean
+    summary: string
+    failures: string[]
 
   TraceEvidence:
-    command:       {type: string}
-    actual_output: {type: string}
-    conclusion:    {type: string}
+    command: string
+    actual_output: string
+    conclusion: string
 
   DiagnoseResult:
-    root_cause:      {type: string}
-    affected_layers: {type: array}
-    trace_evidence:  {type: array, items: TraceEvidence}
-    summary:         {type: string}
-    scope_hint:      {type: string}  # single | cross-layer | unknown
+    root_cause: string
+    affected_layers: string[]
+    trace_evidence: TraceEvidence[]
+    summary: string
+    scope_hint: single|cross-layer|unknown
 
   ScopeResult:
-    scope:                {type: string, values: [single, cross_layer]}
-    references_found:     {type: array}
-    repos_scanned:        {type: number}
-    summary:              {type: string}
-    references_count:     {type: string}  # stringified int for Stratum compat
+    scope: single|cross_layer
+    references_found: string[]
+    repos_scanned: number
+    summary: string
+    references_count: string        # stringified int for Stratum compat
 
   RetroCheckResult:
-    fix_chains:       {type: array}
-    attempt_count:    {type: number}
-    escalation:       {type: boolean}
-    discipline_score: {type: number}
-    summary:          {type: string}
+    fix_chains: string[]
+    attempt_count: number
+    escalation: boolean
+    discipline_score: number
+    summary: string
 
   BisectResult:
-    skipped:          {type: boolean}
-    bisect_commit:    {type: string}  # nullable; empty string when skipped
-    estimate_minutes: {type: number}
-    log_path:         {type: string}  # nullable; empty string when skipped
-    summary:          {type: string}
-
-functions:
-  reproduce:
-    mode: compute
-    intent: >
-      Write a failing test that demonstrates the bug. The test must fail
-      before any fix is applied. Return a summary of the reproduction.
-    input:
-      task: {type: string}
-    output: BugFixResult
-    retries: 2
-
-  diagnose:
-    mode: compute
-    intent: >
-      Trace the root cause by OBSERVING actual data, not assuming.
-      You MUST run at least one command that prints a real value at the
-      failure point (docker exec, curl, python -c "print(type(x))").
-      Return trace_evidence: a list of {command, actual_output, conclusion}.
-      Also identify which layers are affected (core, service, frontend, infra).
-      "Import OK" and "build passed" are NOT trace evidence.
-    input:
-      task: {type: string}
-    output: DiagnoseResult
-    ensure:
-      - "result.trace_evidence != null"
-      - "result.trace_evidence.length >= 2"
-      - "result.root_cause != null"
-      - "result.scope_hint in ('single', 'cross-layer', 'unknown')"
-    retries: 2
-
-  bisect:
-    mode: compute
-    intent: >
-      Decide whether the bug is a regression worth bisecting; if so,
-      classify → estimate cost → gate the human → run git bisect.
-      The runtime helper `lib/bug-bisect.js` does the work:
-        1. classifyRegression(): repro test exists in main AND files in
-           diagnosis.affected_layers were touched in the last 10 commits.
-        2. estimateBisectCost(): test_runs = ceil(log2(commits in range));
-           seconds_per_run sampled by running the test once.
-        3. Gate: "Looks like a regression. Run git bisect? Estimate:
-           <test_runs> runs × <seconds_per_run>s = ~<total_minutes> min.
-           approve / skip / kill"
-        4. On approve: runBisect() drives `git bisect start && bad HEAD
-           && good <baseline> && bisect run <testCmd>`, captures log to
-           docs/bugs/<bug-code>/bisect.log, always resets in finally.
-        5. On skip OR not-a-regression: return {skipped: true,
-           bisect_commit: null, estimate_minutes: 0} and continue.
-    input:
-      task: {type: string}
-      diagnosis: {type: object}
-    output: BisectResult
-    retries: 1
-
-  scope_check:
-    mode: compute
-    intent: >
-      If the diagnosis shows the root cause involves a provider switch,
-      field rename, config key change, or anything spanning multiple
-      repos or layers: grep ALL configured project repos for every reference
-      to the affected term. Return the full reference list grouped by repo.
-      If the change is single-layer, return scope: 'single' and skip.
-      This prevents incremental multi-layer discovery (fixing one layer,
-      deploying, discovering the next layer is broken, repeat).
-    input:
-      task: {type: string}
-      diagnosis: {type: object}
-    output: ScopeResult
-    retries: 1
-
-  fix:
-    mode: compute
-    intent: >
-      Implement the minimal correct fix for the diagnosed root cause.
-      If scope_check found cross-layer references, address ALL of them
-      in coordinated commits — do not leave any reference unaddressed.
-      Change only what is necessary. Return a summary of changes made.
-    input:
-      task: {type: string}
-      scope: {type: object}
-    output: BugFixResult
-    retries: 2
-
-  test:
-    mode: compute
-    intent: >
-      Run the full test suite. Return structured JSON:
-      { "passing": boolean, "summary": string, "failures": string[] }.
-    input:
-      task: {type: string}
-    output: TestResult
-    ensure:
-      - "result.passing == true"
-    retries: 5
-
-  verify:
-    mode: compute
-    intent: >
-      Re-run the reproduction test from step 1. Confirm it now passes.
-      Return a summary confirming the fix resolves the original bug.
-    input:
-      task: {type: string}
-    output: BugFixResult
-    retries: 1
-
-  retro_check:
-    mode: compute
-    intent: >
-      Analyze git history for this session. Detect fix chains: 2+ commits
-      modifying the same file or function. Count total fix attempts on
-      the target bug. For visual/CSS/layout bugs, enforce hard stop at
-      attempt 2 and flag for cross-agent escalation.
-      Return fix_chains (list of repeated files), attempt_count, whether
-      escalation was triggered, and a discipline_score (0-100).
-    input:
-      task: {type: string}
-    output: RetroCheckResult
-    retries: 1
-
-  ship:
-    mode: compute
-    intent: >
-      Commit all changes with a descriptive message. Update CHANGELOG.md
-      if appropriate. Return a summary of what was shipped.
-    input:
-      task: {type: string}
-    output: BugFixResult
-    retries: 1
+    skipped: boolean
+    bisect_commit: string           # empty string when skipped
+    estimate_minutes: number
+    log_path: string                # empty string when skipped
+    summary: string
 
 flows:
+  entry: bug_fix
   bug_fix:
     input:
-      task: {type: string}
-    output: BugFixResult
+      task: string
+    output:
+      from: "${ship.output}"
+      contract: BugFixResult
     steps:
       - id: reproduce
-        function: reproduce
-        inputs:
-          task: "$.input.task"
+        agent: claude
+        do: >
+          Write a failing test that demonstrates the bug: ${input.task}.
+          The test must fail before any fix is applied. Return a summary of the
+          reproduction as BugFixResult.
+        out: BugFixResult
+        ensure:
+          - expr: "result.outcome == 'complete'"
+        attempts: 3
 
       - id: diagnose
-        function: diagnose
-        inputs:
-          task: "$.input.task"
-        depends_on: [reproduce]
+        after: [reproduce]
+        agent: claude
+        do: >
+          Trace the root cause of ${input.task} by OBSERVING actual data, not
+          assuming. You MUST run at least two commands that print a real value at
+          the failure point (docker exec, curl, python -c "print(type(x))").
+          Return trace_evidence: a list of {command, actual_output, conclusion}.
+          Also identify which layers are affected (core, service, frontend, infra)
+          and set scope_hint. "Import OK" and "build passed" are NOT trace evidence.
+        out: DiagnoseResult
+        ensure:
+          # scope_hint's allowed values are enforced by the contract enum above.
+          - expr: "len(result.trace_evidence) >= 2"
+          - expr: "len(result.root_cause) > 0"
+        attempts: 3
 
       - id: bisect
-        function: bisect
-        inputs:
-          task: "$.input.task"
-          diagnosis: "$.steps.diagnose.output"
-        depends_on: [diagnose]
+        after: [diagnose]
+        agent: claude
+        do: >
+          Decide whether ${input.task} is a regression worth bisecting; if so,
+          classify -> estimate cost -> gate the human -> run git bisect. The
+          root cause found by diagnose is ${diagnose.output.root_cause} and the
+          affected layers are ${diagnose.output.affected_layers}.
+          The runtime helper `lib/bug-bisect.js` does the work:
+            1. classifyRegression(): repro test exists in main AND files in the
+               affected layers were touched in the last 10 commits.
+            2. estimateBisectCost(): test_runs = ceil(log2(commits in range));
+               seconds_per_run sampled by running the test once.
+            3. Ask the human: "Looks like a regression. Run git bisect? Estimate:
+               <test_runs> runs x <seconds_per_run>s = ~<total_minutes> min.
+               approve / skip / kill"
+            4. On approve: runBisect() drives `git bisect start && bad HEAD
+               && good <baseline> && bisect run <testCmd>`, captures the log to
+               docs/bugs/<bug-code>/bisect.log, always resets in finally.
+            5. On skip OR not-a-regression: return {skipped: true,
+               bisect_commit: "", estimate_minutes: 0, log_path: ""} and continue.
+        out: BisectResult
+        attempts: 2
 
       - id: scope_check
-        function: scope_check
-        inputs:
-          task: "$.input.task"
-          diagnosis: "$.steps.diagnose.output"
-        depends_on: [bisect]
+        after: [bisect]
+        agent: claude
+        do: >
+          If the diagnosis of ${input.task} shows the root cause involves a
+          provider switch, field rename, config key change, or anything spanning
+          multiple repos or layers: grep ALL configured project repos for every
+          reference to the affected term. The diagnosed root cause is
+          ${diagnose.output.root_cause}. Return the full reference list grouped
+          by repo. If the change is single-layer, return scope: 'single' and skip.
+          This prevents incremental multi-layer discovery (fixing one layer,
+          deploying, discovering the next layer is broken, repeat).
+        out: ScopeResult
+        attempts: 2
 
       - id: fix
-        function: fix
-        inputs:
-          task: "$.input.task"
-          scope: "$.steps.scope_check.output"
-        depends_on: [scope_check]
+        after: [scope_check]
+        agent: claude
+        do: >
+          Implement the minimal correct fix for the diagnosed root cause of
+          ${input.task}. If scope_check found cross-layer references
+          (${scope_check.output.references_count} of them) address ALL of them in
+          coordinated commits — do not leave any reference unaddressed. Change
+          only what is necessary. Return a summary of changes made.
+        out: BugFixResult
+        ensure:
+          - expr: "result.outcome == 'complete'"
+        attempts: 3
 
       - id: test
-        function: test
-        inputs:
-          task: "$.input.task"
-        depends_on: [fix]
+        after: [fix]
+        agent: claude
+        do: >
+          Run the full test suite. Return structured JSON:
+          { "passing": boolean, "summary": string, "failures": string[] }.
+        out: TestResult
+        ensure:
+          - expr: "result.passing == true"
+        attempts: 6
 
       - id: verify
-        function: verify
-        inputs:
-          task: "$.input.task"
-        depends_on: [test]
+        after: [test]
+        agent: claude
+        do: >
+          Re-run the reproduction test from step 1. Confirm it now passes.
+          Return a summary confirming the fix resolves the original bug:
+          ${input.task}.
+        out: BugFixResult
+        ensure:
+          - expr: "result.outcome == 'complete'"
+        attempts: 2
 
       - id: retro_check
-        function: retro_check
-        inputs:
-          task: "$.input.task"
-        depends_on: [verify]
+        after: [verify]
+        agent: claude
+        do: >
+          Analyze git history for this session. Detect fix chains: 2+ commits
+          modifying the same file or function. Count total fix attempts on the
+          target bug. For visual/CSS/layout bugs, enforce a hard stop at attempt 2
+          and flag for cross-agent escalation. Return fix_chains (list of repeated
+          files), attempt_count, whether escalation was triggered, and a
+          discipline_score (0-100).
+        out: RetroCheckResult
+        attempts: 2
 
       - id: ship
-        function: ship
-        inputs:
-          task: "$.input.task"
-        depends_on: [retro_check]
+        after: [retro_check]
+        agent: claude
+        do: >
+          Commit all changes with a descriptive message. Update CHANGELOG.md if
+          appropriate. Return a summary of what was shipped as BugFixResult.
+        out: BugFixResult
+        ensure:
+          - expr: "result.outcome == 'complete'"
+        attempts: 2

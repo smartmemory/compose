@@ -23,25 +23,28 @@ function makeProject(tmpDir, template, flowName) {
   const pipeDir = join(tmpDir, 'pipelines');
   mkdirSync(pipeDir, { recursive: true });
   writeFileSync(join(pipeDir, `${template}.stratum.yaml`), `
-version: "0.2"
+version: 1
 contracts:
-  R: { phase: { type: string } }
+  R:
+    phase: string
 flows:
+  entry: ${flowName}
   ${flowName}:
     input:
-      featureCode: { type: string }
-      description: { type: string }
-      task: { type: string }
-      projectName: { type: string }
-      intent: { type: string }
-    output: R
+      featureCode: string?
+      description: string?
+      task: string?
+      projectName: string?
+      intent: string?
+    output:
+      from: "\${design.output}"
+      contract: R
     steps:
       - id: design
         agent: claude
-        intent: "stub"
-        inputs: { featureCode: "$.input.featureCode" }
-        output_contract: R
-        retries: 1
+        do: "stub"
+        out: R
+        attempts: 2
 `);
 }
 
