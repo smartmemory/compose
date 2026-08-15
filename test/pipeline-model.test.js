@@ -38,7 +38,46 @@ const {
 } = await import(`${ROOT}/src/lib/pipeline-model.js`);
 
 const buildSpecText = readFileSync(`${ROOT}/pipelines/build.stratum.yaml`, 'utf-8');
-const researchSpecText = readFileSync(`${ROOT}/pipelines/research.stratum.yaml`, 'utf-8');
+// COMP-PIPELINE-QUARANTINE: this was `pipelines/research.stratum.yaml`, used as a
+// convenient v0.1 example. That spec is v1 now, so the v0.1 branch of specToModel
+// — which still has to read the old dialect for a user workspace that pins an old
+// spec — would have silently stopped being exercised. The fixture is inline now so
+// it cannot drift out from under the test again.
+const researchSpecText = [
+  'version: "0.1"',
+  'contracts:',
+  '  ResearchResult:',
+  '    phase:   {type: string}',
+  '    summary: {type: string}',
+  'functions:',
+  '  gather:',
+  '    mode: compute',
+  '    intent: "Collect sources."',
+  '    output: ResearchResult',
+  '  analyze:',
+  '    mode: compute',
+  '    intent: "Synthesize findings."',
+  '    output: ResearchResult',
+  '  report:',
+  '    mode: compute',
+  '    intent: "Write the report."',
+  '    output: ResearchResult',
+  'flows:',
+  '  research:',
+  '    input:',
+  '      task: {type: string}',
+  '    output: ResearchResult',
+  '    steps:',
+  '      - id: gather',
+  '        function: gather',
+  '      - id: analyze',
+  '        function: analyze',
+  '        depends_on: [gather]',
+  '      - id: report',
+  '        function: report',
+  '        depends_on: [analyze]',
+  '',
+].join('\n');
 const newSpecText = readFileSync(`${ROOT}/pipelines/new.stratum.yaml`, 'utf-8');
 
 function parseBuild() { return YAML.parse(buildSpecText); }

@@ -1,108 +1,105 @@
 # TEAM PRESET: research
 #
 # Purpose:     Parallel exploration for cold-start discovery
-# Pattern:     Triage → parallel_dispatch explorers → synthesize findings
+# Pattern:     Plan → fanout explorers → synthesize findings
 # Capability:  codebase/docs use read-only-reviewer, web uses read-only-researcher
 # Isolation:   none (read-only exploration)
 # Merge:       Sequential synthesis step
 #
-# Use with:    compose build <feature-code> --team research
+# Use with:    compose build <feature-code> --template team-research
 # Customize:   Copy to your project's pipelines/ as team-research.stratum.yaml and edit.
-
-version: "0.3"
+#
+# COMP-PIPELINE-QUARANTINE: re-authored from v0.3 to TS v1.
+#   - `parallel_dispatch` + `source`/`intent_template`/`output_fields` becomes a
+#     `fanout:` block with `over`/`dispatch: consumer`/`steps`, matching the
+#     construct the build conversion settled on. The per-item prompt reads
+#     `${item}` instead of `{task.*}`.
+#   - Agent PROFILE strings (`claude:orchestrator`, `claude:read-only-reviewer`)
+#     are not engine values — v1 accepts only the bare `claude`/`codex` literals.
+#     They move to team-research.profiles.json, keyed by step id, and compose
+#     re-applies them at invocation. Dropping them instead would silently hand
+#     read-only explorers full write capability.
+#   - `retries: N` -> `attempts: N + 1`.
 
 contracts:
   ResearchTaskList:
-    tasks:
-      type: array
-      values: [{type: object}]
-    topic: {type: string}
-  ExplorerFindings:
-    sources: {type: string}
-    patterns: {type: string}
-    open_questions: {type: string}
-  ResearchResult:
-    synthesis: {type: string}
-    recommendations: {type: string}
-    summary: {type: string}
+    tasks: object[]
+    topic: string
 
-workflow:
-  name: team-research
-  description: "Parallel multi-source research and synthesis"
-  input:
-    featureCode:
-      type: string
-      required: true
-    description:
-      type: string
-      required: true
+  ExplorerFindings:
+    sources: string
+    patterns: string
+    open_questions: string
+
+  ResearchResult:
+    synthesis: string
+    recommendations: string
+    summary: string
+
+version: 1
 
 flows:
-  team-research:
+  entry: team_research
+  team_research:
     input:
-      featureCode: {type: string}
-      description: {type: string}
-    output: ResearchResult
+      featureCode: string
+      description: string
+    output:
+      from: "${synthesize.output}"
+      contract: ResearchResult
     steps:
       - id: plan
-        agent: "claude:orchestrator"
-        intent: >
-          Plan the research for this feature. Read the feature description
-          and any existing docs. Produce a task list with 3 research tasks:
+        agent: claude
+        do: >
+          Plan the research for ${input.featureCode}. Read the feature description
+          (${input.description}) and any existing docs. Produce a task list with
+          exactly 3 research tasks:
 
-          1. id: "codebase", agent: "claude:read-only-reviewer"
-             - Explore the local codebase for relevant patterns, files, conventions
-          2. id: "web", agent: "claude:read-only-researcher"
-             - Search the web for best practices, library docs, similar implementations
-          3. id: "docs", agent: "claude:read-only-reviewer"
-             - Read local docs, READMEs, specs, ADRs for relevant context
+          1. id: "codebase" — explore the local codebase for relevant patterns,
+             files and conventions
+          2. id: "web" — search the web for best practices, library docs and
+             similar implementations
+          3. id: "docs" — read local docs, READMEs, specs and ADRs for context
 
           Each task must have: id, description, agent.
           Also output the research topic derived from the feature description.
-        inputs:
-          featureCode: "$.input.featureCode"
-          description: "$.input.description"
-        output_contract: ResearchTaskList
+        out: ResearchTaskList
         ensure:
-          - "len(result.tasks) == 3"
-        retries: 2
+          - expr: "len(result.tasks) == 3"
+        attempts: 3
 
       - id: explore
-        type: parallel_dispatch
-        source: "$.steps.plan.output.tasks"
-        agent: "claude:read-only-reviewer"
-        max_concurrent: 3
-        isolation: none
-        require: all
-        intent_template: >
-          Research this topic: {task.description}
-
-          Find relevant sources, patterns, and open questions.
-          List sources with file:line references (for code) or URLs (for web).
-          Note patterns that could inform the implementation.
-          List open questions that need answers before implementation.
-        output_fields:
-          sources: {type: string}
-          patterns: {type: string}
-          open_questions: {type: string}
-        ensure:
-          - "result.sources is not None"
-        depends_on: [plan]
+        after: [plan]
+        fanout:
+          over: "${plan.output.tasks}"
+          dispatch: consumer
+          concurrency: 3
+          isolation: none
+          require: all
+          merge: sequential
+          steps:
+            - agent: claude
+              do: >
+                Research the topic described by ${item}. Honor its id, description
+                and agent fields. Find relevant sources, patterns and open
+                questions. List sources with file:line references (for code) or
+                URLs (for web). Note patterns that could inform the
+                implementation. List open questions that need answers before
+                implementation.
+              out: ExplorerFindings
 
       - id: synthesize
-        agent: "claude:orchestrator"
-        depends_on: [explore]
-        intent: >
-          Synthesize findings from all research explorers. Cross-reference
-          sources. Identify consensus patterns and contradictions. Produce
-          actionable recommendations for the feature implementation.
-          Write a one-sentence summary.
-        inputs:
-          research_results: "$.steps.explore.output"
-          topic: "$.steps.plan.output.topic"
-        output_contract: ResearchResult
+        after: [explore]
+        agent: claude
+        do: >
+          Synthesize the findings from all research explorers (${explore.output})
+          on the topic ${plan.output.topic}. Cross-reference sources. Identify
+          consensus patterns and contradictions. Produce actionable
+          recommendations for implementing ${input.featureCode}. Write a
+          one-sentence summary.
+        out: ResearchResult
         ensure:
-          - "result.synthesis != ''"
-          - "result.recommendations != ''"
-          - "result.summary != ''"
-        retries: 2
+          - expr: "len(result.synthesis) > 0"
+          - expr: "len(result.recommendations) > 0"
+          - expr: "len(result.summary) > 0"
+        attempts: 3

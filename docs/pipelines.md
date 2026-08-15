@@ -83,33 +83,35 @@ The `verification` step has `on_fail: blueprint` — when retries are exhausted 
 
 ## Pipeline Specs
 
-Compose ships these pipeline specs in `pipelines/`. **Runnable** means the spec is
-authored for the TS v1 engine; **quarantined** means it was left on an older dialect
-when STRAT-PY-RETIRE cut the engine over and deleted the older execution paths, so it
-cannot start at all. Invoking a quarantined pipeline fails immediately with a message
-naming the spec and the reason (see `lib/pipeline-compat.js`). A quarantined spec
-becomes runnable the moment it is re-authored as `version: 1` — nothing else to flip.
+Every shipped spec is authored for the TS v1 engine (`version: 1`). A spec on an older
+dialect cannot start at all — the engine refuses it — so invoking one fails immediately
+with a message naming the spec and the reason (see `lib/pipeline-compat.js`) rather than
+a bare `-32602`. Compatibility is read from the spec's own `version` stamp, so
+re-authoring a spec as `version: 1` is the whole of what makes it runnable.
 
-| Spec | Flow | Status | Purpose |
-|------|------|--------|---------|
-| `build.stratum.yaml` | `build` | runnable | Feature lifecycle: design through ship |
-| `gsd.stratum.yaml` | `gsd` | runnable | Per-task fresh-context dispatch across a decomposed blueprint |
-| `new.stratum.yaml` | `new` | runnable | Product kickoff: research, brainstorm, roadmap, scaffold (`compose new`) |
-| `bug-fix.stratum.yaml` | `bug_fix` | runnable | Bug-fix lifecycle (`compose fix`): reproduce → diagnose → bisect → scope_check → fix → test → verify → retro_check → ship |
-| `plan.stratum.yaml` | `plan` | quarantined (v0.3) | Product-planning lifecycle (`compose plan`) |
-| `build-quick.stratum.yaml` | `build` | quarantined (v0.3) | Trimmed build lifecycle (`compose build --quick`) |
-| `content.stratum.yaml` | `content` | quarantined (v0.1) | Content production pipeline |
-| `coverage-sweep.stratum.yaml` | `coverage_sweep` | quarantined (v0.1) | Test loop: run tests, fix failures until passing |
-| `refactor.stratum.yaml` | `refactor` | quarantined (v0.1) | Refactor lifecycle |
-| `research.stratum.yaml` | `research` | quarantined (v0.1) | Standalone research pipeline |
-| `review-fix.stratum.yaml` | `review_fix` | quarantined (v0.1) | Two-phase loop: implement then review/fix until clean |
+| Spec | Flow | Purpose |
+|------|------|---------|
+| `build.stratum.yaml` | `build` | Feature lifecycle: design through ship |
+| `build-quick.stratum.yaml` | `build` | Trimmed build lifecycle (`compose build --quick`): design → implement → ship, single gate |
+| `gsd.stratum.yaml` | `gsd` | Per-task fresh-context dispatch across a decomposed blueprint |
+| `new.stratum.yaml` | `new` | Product kickoff: research, brainstorm, roadmap, scaffold (`compose new`) |
+| `plan.stratum.yaml` | `plan` | Product-planning lifecycle (`compose plan`): explore_design → plan → ship, two gates |
+| `bug-fix.stratum.yaml` | `bug_fix` | Bug-fix lifecycle (`compose fix`): reproduce → diagnose → bisect → scope_check → fix → test → verify → retro_check → ship |
+| `content.stratum.yaml` | `content` | Content production: research → draft → review → publish |
+| `coverage-sweep.stratum.yaml` | `coverage_sweep` | Test loop: run tests, fix failures until passing |
+| `refactor.stratum.yaml` | `refactor` | Refactor lifecycle: snapshot → analyze → plan → execute → test → review → ship |
+| `research.stratum.yaml` | `research` | Standalone research: gather → analyze → report |
+| `review-fix.stratum.yaml` | `review_fix` | Two-phase loop: implement then review/fix until clean |
 
 The three bundled presets in `presets/` (`team-feature`, `team-research`, `team-review`)
-are also quarantined (v0.3).
+are v1 as well. Each pairs with a `<name>.profiles.json` sidecar holding the agent
+profile strings (tool restrictions and model tiers) that v1 strips from the spec, which
+compose re-applies at invocation — these are load-bearing wherever a fanout runs at
+`isolation: none`, since the read-only restriction lives only there.
 
-`test/pipeline-ts-engine-guard.test.js` iterates both directories and enforces the split:
-every runnable spec must actually plan on the engine, and every quarantined one must
-actually be refused by it.
+`test/pipeline-ts-engine-guard.test.js` iterates both directories and enforces this:
+every spec must be v1, every v1 spec must actually plan on the engine, and a spec on an
+older dialect must actually be refused by it.
 
 ### Stratum IR v0.3
 

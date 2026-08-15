@@ -6,47 +6,46 @@
 #   steps: 1
 #   estimated_minutes: 10
 
-version: "0.1"
+version: 1
 
 # coverage-sweep pipeline
 #
-# Runs the test suite in a loop until all tests pass.
-# Same pattern as review-fix.stratum.yaml but for test coverage.
+# Runs the test suite until it passes. The loop is the step's own `attempts`
+# budget: `ensure` rejects a run with failures, the engine retries the step with
+# the previous failure as feedback, and the step only settles when the suite is
+# green. Same pattern as review-fix.stratum.yaml but for test coverage.
+#
+# COMP-PIPELINE-QUARANTINE: re-authored from v0.1 to TS v1. `retries: 15` became
+# `attempts: 16` — v0.1 counted retries AFTER the first try, so a bare rename
+# would have cost this pipeline a run.
 #
 # Inputs:
 #   task — what to test (feature description, file paths, etc.)
-#
-# Usage:
-#   stratum_plan <this yaml> "coverage_sweep" {"task": "..."}
 
 contracts:
   CoverageResult:
-    passing:  {type: boolean}
-    summary:  {type: string}
-    failures: {type: array}
-
-functions:
-  run_coverage:
-    mode: compute
-    intent: >
-      Run the project test suite. Return structured JSON:
-      { "passing": boolean, "summary": string, "failures": string[] }.
-      Set passing=true only if all tests pass with no failures.
-      If tests fail, list each failing test name in the failures array.
-    input:
-      task: {type: string}
-    output: CoverageResult
-    ensure:
-      - "result.passing == true"
-    retries: 15
+    passing: boolean
+    summary: string
+    failures: string[]
 
 flows:
+  entry: coverage_sweep
   coverage_sweep:
     input:
-      task: {type: string}
-    output: CoverageResult
+      task: string
+    output:
+      from: "${sweep.output}"
+      contract: CoverageResult
     steps:
       - id: sweep
-        function: run_coverage
-        inputs:
-          task: "$.input.task"
+        agent: claude
+        do: >
+          Run the project test suite for ${input.task}. Return structured JSON:
+          { "passing": boolean, "summary": string, "failures": string[] }.
+          Set passing=true only if all tests pass with no failures.
+          If tests fail, list each failing test name in the failures array and
+          fix them before the next attempt.
+        out: CoverageResult
+        ensure:
+          - expr: "result.passing == true"
+        attempts: 16

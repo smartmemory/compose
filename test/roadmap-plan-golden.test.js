@@ -36,7 +36,9 @@ const REPO = process.cwd();
 describe('golden: the plan spine', () => {
   test('plan.stratum.yaml has phase-named steps and projectName/intent inputs', () => {
     const spec = YAML.parse(readFileSync(join(REPO, 'pipelines', 'plan.stratum.yaml'), 'utf-8'));
-    assert.equal(spec.workflow.name, 'plan');
+    // COMP-PIPELINE-QUARANTINE: was `spec.workflow.name` — the v0.3 header is gone
+    // now that the spec is TS v1, and the flow identity lives in `flows.entry`.
+    assert.equal(spec.flows.entry, 'plan');
     assert.deepEqual(Object.keys(spec.flows.plan.input).sort(), ['intent', 'projectName']);
     const stepIds = spec.flows.plan.steps.filter((s) => s.id).map((s) => s.id);
     // top-level step IDs must equal the plan phaseOrder for phase tracking

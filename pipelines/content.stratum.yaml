@@ -6,7 +6,7 @@
 #   steps: 4
 #   estimated_minutes: 20
 
-version: "0.1"
+version: 1
 
 # content pipeline
 #
@@ -16,97 +16,77 @@ version: "0.1"
 #   3. review    — review for accuracy, completeness, and clarity
 #   4. publish   — finalize and commit
 #
+# COMP-PIPELINE-QUARANTINE: re-authored from v0.1 to TS v1. Linear chain, no
+# gates or backward routing. `retries: N` -> `attempts: N + 1` (v0.1 counted
+# retries AFTER the first try). The `outcome` enum moved into the contract.
+# review's fix loop is its own `attempts` budget: `ensure` rejects an unclean
+# review and the engine re-runs the step with the findings as feedback.
+#
 # Inputs:
 #   task — what to write (doc type, topic, target audience)
-#
-# Usage:
-#   stratum_plan <this yaml> "content" {"task": "..."}
 
 contracts:
   ContentResult:
-    phase:    {type: string}
-    artifact: {type: string}
-    summary:  {type: string}
-    outcome:  {type: string, values: [complete, failed]}
+    phase: string
+    artifact: string
+    summary: string
+    outcome: complete|failed
 
   ReviewResult:
-    clean:    {type: boolean}
-    summary:  {type: string}
-    findings: {type: array}
-
-functions:
-  research:
-    mode: compute
-    intent: >
-      Gather context for the content. Read existing documentation, related
-      code, and prior art. Identify gaps and outline key topics to cover.
-      Return a summary of research findings.
-    input:
-      task: {type: string}
-    output: ContentResult
-    retries: 1
-
-  draft:
-    mode: compute
-    intent: >
-      Write the content based on research findings. Follow existing
-      documentation conventions and standards. Write to the appropriate
-      file path. Return the artifact path.
-    input:
-      task: {type: string}
-    output: ContentResult
-    ensure:
-      - "result.outcome == 'complete'"
-    retries: 2
-
-  review:
-    mode: compute
-    intent: >
-      Review the drafted content for accuracy, completeness, and clarity.
-      Check that all claims are supported by code or documentation.
-      Return { "clean": boolean, "summary": string, "findings": string[] }.
-    input:
-      task: {type: string}
-    output: ReviewResult
-    ensure:
-      - "result.clean == true"
-    retries: 3
-
-  publish:
-    mode: compute
-    intent: >
-      Finalize the content. Update any cross-references (README, CHANGELOG,
-      index files). Commit with a descriptive message.
-    input:
-      task: {type: string}
-    output: ContentResult
-    retries: 1
+    clean: boolean
+    summary: string
+    findings: string[]
 
 flows:
+  entry: content
   content:
     input:
-      task: {type: string}
-    output: ContentResult
+      task: string
+    output:
+      from: "${publish.output}"
+      contract: ContentResult
     steps:
       - id: research
-        function: research
-        inputs:
-          task: "$.input.task"
+        agent: claude
+        do: >
+          Gather context for this content: ${input.task}. Read existing
+          documentation, related code and prior art. Identify gaps and outline
+          the key topics to cover. Return a summary of research findings.
+        out: ContentResult
+        attempts: 2
 
       - id: draft
-        function: draft
-        inputs:
-          task: "$.input.task"
-        depends_on: [research]
+        after: [research]
+        agent: claude
+        do: >
+          Write the content for ${input.task} based on the research findings:
+          ${research.output.summary}. Follow existing documentation conventions
+          and standards. Write to the appropriate file path and return the
+          artifact path.
+        out: ContentResult
+        ensure:
+          - expr: "result.outcome == 'complete'"
+        attempts: 3
 
       - id: review
-        function: review
-        inputs:
-          task: "$.input.task"
-        depends_on: [draft]
+        after: [draft]
+        agent: claude
+        do: >
+          Review the drafted content at ${draft.output.artifact} for accuracy,
+          completeness and clarity. Check that every claim is supported by code
+          or documentation. If this is a retry, fix the previous findings before
+          re-reviewing. Return { "clean": boolean, "summary": string,
+          "findings": string[] }.
+        out: ReviewResult
+        ensure:
+          - expr: "result.clean == true"
+        attempts: 4
 
       - id: publish
-        function: publish
-        inputs:
-          task: "$.input.task"
-        depends_on: [review]
+        after: [review]
+        agent: claude
+        do: >
+          Finalize the content for ${input.task}. Update any cross-references
+          (README, CHANGELOG, index files). Commit with a descriptive message.
+        out: ContentResult
+        attempts: 2

@@ -1,0 +1,8 @@
+{
+  "_comment": "COMP-PIPELINE-QUARANTINE: compose-owned agent profiles for team-review.stratum.yaml. The TS engine accepts only the literal claude|codex agent, so the profile strings (tool restrictions + model tier) that the v0.3->v1 conversion stripped live here, keyed by step id, and are applied compose-side at invocation (lib/build.js loadPipelineProfiles). The review_lenses fanout runs at isolation:none and MUST bind the read-only-reviewer restriction — without it the lenses would hold write capability while the preset advertises read-only review.",
+  "_reduceSteps": ["merge"],
+  "_reduceSteps_comment": "ReviewResult-out steps that MERGE/deduplicate rather than review. They get review normalization but never the review scaffold (H1, mirroring build.profiles.json).",
+  "triage": "claude:orchestrator",
+  "review_lenses": "claude:read-only-reviewer",
+  "merge": "claude:orchestrator"
+}

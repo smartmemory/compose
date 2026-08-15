@@ -4,47 +4,62 @@
 # Pattern:     Decompose → parallel implement with files_owned → verify
 # Capability:  Orchestrator decomposes, implementers have full access
 # Isolation:   worktree (each task in its own worktree)
-# Merge:       sequential_apply (patches applied in topo order)
+# Merge:       sequential (patches applied in topo order)
 #
-# Use with:    compose build <feature-code> --team feature
+# Use with:    compose build <feature-code> --template team-feature
 # Customize:   Copy to your project's pipelines/ as team-feature.stratum.yaml and edit.
+#
+# COMP-PIPELINE-QUARANTINE: re-authored from v0.3 to TS v1.
+#   - `parallel_dispatch` + `source`/`intent_template` becomes a `fanout:` block
+#     with `over`/`dispatch: consumer`/`steps`, matching the construct the build
+#     conversion settled on. The per-item prompt reads `${item}` rather than
+#     `{task.*}`, so the item's own fields (id, description, files_owned,
+#     files_read) travel as data instead of being string-substituted.
+#   - Agent PROFILE strings move to team-feature.profiles.json — v1 accepts only
+#     the bare `claude`/`codex` literals, and compose re-applies the profiles at
+#     invocation.
+#   - `no_file_conflicts(...)` is not an engine predicate; file-ownership
+#     exclusivity is stated as a hard rule in the decompose prompt (as the build
+#     pipeline's own decompose step does) and remains enforced compose-side.
+#   - `retries: 2` -> `attempts: 3`.
+#   - An `execute_merge` gate was ADDED after the worktree fanout: the engine
+#     requires one (CONSUMER_WORKTREE_GATE_REQUIRED) and the v0.3 preset had none,
+#     so merging per-task worktree patches was never a decision point.
 
-version: "0.3"
+version: 1
 
 contracts:
   TaskGraph:
-    tasks:
-      type: array
-      values: [{type: object}]
-  VerifyResult:
-    tests_pass: {type: string}
-    summary: {type: string}
+    tasks: object[]
 
-workflow:
-  name: team-feature
-  description: "Multi-agent parallel feature implementation"
-  input:
-    featureCode:
-      type: string
-      required: true
-    description:
-      type: string
-      required: true
+  TaskResult:
+    outcome: string
+    summary: string
+    files_changed: string[]?
+
+  VerifyResult:
+    tests_pass: string
+    summary: string
 
 flows:
-  team-feature:
+  entry: team_feature
+  team_feature:
     input:
-      featureCode: {type: string}
-      description: {type: string}
-    output: VerifyResult
+      featureCode: string
+      description: string
+    output:
+      from: "${verify.output}"
+      contract: VerifyResult
+    # Required by the engine once any gate declares on_revise, since a revise edge
+    # is what makes a flow able to loop (GATE_REVISE_REQUIRES_MAX_ROUNDS).
+    max_rounds: 10
     steps:
       - id: decompose
-        type: decompose
-        agent: "claude:orchestrator"
-        intent: >
-          Read the feature description and any existing plan/blueprint docs.
-          Break down this feature into parallel implementation tasks.
-          Each task must have:
+        agent: claude
+        do: >
+          Read the description for ${input.featureCode} (${input.description}) and
+          any existing plan/blueprint docs. Break the feature down into parallel
+          implementation tasks. Each task must have:
           - id: unique short identifier
           - description: what to implement
           - files_owned: list of files this task may create or modify
@@ -52,54 +67,63 @@ flows:
           - depends_on: list of task ids that must complete first (empty if independent)
 
           Rules:
-          - No two tasks may share files_owned (each file has exactly one owner)
+          - No two tasks may share files_owned (each file has exactly one owner).
+            Reject the decomposition and redo it if any file would have two owners.
           - Minimize dependencies — prefer independent parallel tasks
           - Each task should be completable in one focused session
           - Target 2-4 tasks for a typical feature
-        inputs:
-          featureCode: "$.input.featureCode"
-          description: "$.input.description"
-        output_contract: TaskGraph
+        out: TaskGraph
         ensure:
-          - "len(result.tasks) >= 1"
-          - "len(result.tasks) <= 6"
-          - "no_file_conflicts(result.tasks)"
-        retries: 2
+          - expr: "len(result.tasks) >= 1"
+          - expr: "len(result.tasks) <= 6"
+        attempts: 3
 
       - id: execute
-        type: parallel_dispatch
-        source: "$.steps.decompose.output.tasks"
-        agent: "claude:implementer"
-        max_concurrent: 3
-        isolation: worktree
-        require: all
-        merge: sequential_apply
-        intent_template: >
-          Implement this task using TDD. Write the test first, watch it fail,
-          implement, watch it pass.
+        after: [decompose]
+        fanout:
+          over: "${decompose.output.tasks}"
+          dispatch: consumer
+          concurrency: 3
+          isolation: worktree
+          require: all
+          merge: sequential
+          steps:
+            - agent: claude
+              do: >
+                Implement the task described by ${item} using TDD. Write the test
+                first, watch it fail, implement, and watch it pass. Honor the
+                item's id, description, files_owned (you may create/modify these)
+                and files_read (you may read but NOT modify these).
+                Return {outcome, summary, files_changed}.
+              out: TaskResult
 
-          Task: {task.description}
-          You own these files (may create/modify): {task.files_owned}
-          You may read (but NOT modify): {task.files_read}
-
-          Feature: {task.id}
-        depends_on: [decompose]
+      # Engine invariant (CONSUMER_WORKTREE_GATE_REQUIRED): a consumer worktree
+      # fanout must be followed by an unconditional gate. The v0.3 preset had no
+      # such step — it declared `merge: sequential_apply` and moved straight on —
+      # so the merge of per-task worktree patches was never a decision point.
+      # This is the same execute -> execute_merge pairing build.stratum.yaml uses.
+      - id: execute_merge
+        after: [execute]
+        gate:
+          on_approve: verify
+          on_revise: execute
+          on_kill: null
+          max_rounds: 10
 
       - id: verify
-        agent: "claude:orchestrator"
-        depends_on: [execute]
-        intent: >
-          All implementation tasks are complete and merged. Run the test suite
-          to verify everything works together. Check that:
+        after: [execute_merge]
+        agent: claude
+        do: >
+          All implementation tasks for ${input.featureCode} are complete and
+          merged. Run the test suite to verify everything works together. Check
+          that:
           1. All tests pass
           2. No merge conflicts remain
-          3. The feature matches the original task description
+          3. The feature matches the original description
 
           Report tests_pass as "true" or "false" with details.
-        inputs:
-          featureCode: "$.input.featureCode"
-        output_contract: VerifyResult
+        out: VerifyResult
         ensure:
-          - "result.tests_pass == 'true'"
-          - "result.summary != ''"
-        retries: 2
+          - expr: "result.tests_pass == 'true'"
+          - expr: "len(result.summary) > 0"
+        attempts: 3
