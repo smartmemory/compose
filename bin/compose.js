@@ -2523,6 +2523,25 @@ if (cmd === 'build') {
       console.error('Error: --template requires a name argument')
       process.exit(1)
     }
+    // COMP-PIPELINE-QUARANTINE round 3: refuse templates that belong to another
+    // command's runner. `compose build` is feature mode, which sends
+    // {featureCode, description, implementer_agent, reviewer_agent}; these four
+    // specs declare a different runner's envelope (task / projectName+intent /
+    // gateCommands), so selecting one here resolves the spec and then fails at
+    // plan time with an unhelpful error. Point at the command that can drive it.
+    const MODE_BOUND_TEMPLATES = {
+      'bug-fix': 'compose fix <bug-code>',
+      plan: 'compose plan "<intent>"',
+      new: 'compose new',
+      gsd: 'compose gsd <feature-code>',
+    }
+    if (MODE_BOUND_TEMPLATES[templateValue]) {
+      console.error(
+        `Error: --template ${templateValue} is not a build template — it belongs to ` +
+        `\`${MODE_BOUND_TEMPLATES[templateValue]}\`, which supplies the inputs it declares.`
+      )
+      process.exit(1)
+    }
     templateName = templateValue
   }
   if (teamTemplate && !templateName) {

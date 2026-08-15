@@ -150,8 +150,15 @@ test('every pipeline declares inputs the runner that drives it actually sends', 
     plan: ['projectName', 'intent'],
     gsd: ['featureCode', 'gateCommands', 'pre_merge_gate'],
   };
-  // Specs a dedicated runner drives with its own envelope. Everything else is
-  // `compose build --template <name>`, i.e. feature mode.
+  // Specs a dedicated runner drives with its own envelope. Everything else —
+  // including every preset — is reached through `compose build --template <name>`,
+  // i.e. feature mode.
+  //
+  // These bindings are only safe because `compose build` REFUSES these four
+  // templates (bin/compose.js MODE_BOUND_TEMPLATES). Without that refusal the
+  // generic --template path could select them under feature mode and they would
+  // fail at plan time, so the exception list would be describing a hole rather
+  // than a guarantee. The assertion below checks the refusal still exists.
   const DRIVER = {
     'bug-fix.stratum.yaml': 'bug',
     'plan.stratum.yaml': 'plan',
@@ -159,8 +166,17 @@ test('every pipeline declares inputs the runner that drives it actually sends', 
     'gsd.stratum.yaml': 'gsd',
   };
 
+  const cli = readFileSync(path.join(ROOT, 'bin', 'compose.js'), 'utf8');
+  for (const file of Object.keys(DRIVER)) {
+    const name = file.replace('.stratum.yaml', '');
+    assert.match(
+      cli, new RegExp(`MODE_BOUND_TEMPLATES[\\s\\S]{0,400}['"\`]?${name}['"\`]?\\s*:`),
+      `bin/compose.js must refuse --template ${name}; this test's driver binding assumes it`,
+    );
+  }
+
   const offenders = [];
-  for (const spec of shippedSpecs().filter(s => s.dir === 'pipelines')) {
+  for (const spec of shippedSpecs()) {
     const parsed = YAML.parse(spec.text);
     const entry = parsed?.flows?.entry;
     const declared = parsed?.flows?.[entry]?.input ?? {};
@@ -170,7 +186,7 @@ test('every pipeline declares inputs the runner that drives it actually sends', 
     const driver = DRIVER[spec.file] ?? 'feature';
     const missing = required.filter(field => !ENVELOPES[driver].includes(field));
     if (missing.length) {
-      offenders.push(`${spec.file}: driven by ${driver} mode, which never sends [${missing.join(', ')}]`);
+      offenders.push(`${spec.dir}/${spec.file}: driven by ${driver} mode, which never sends [${missing.join(', ')}]`);
     }
   }
   assert.deepEqual(offenders, [], `pipelines their runner cannot drive:\n${offenders.join('\n')}`);
