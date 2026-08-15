@@ -6,7 +6,7 @@
 #   steps: 7
 #   estimated_minutes: 45
 
-version: "0.1"
+version: 1
 
 # refactor pipeline
 #
@@ -16,154 +16,115 @@ version: "0.1"
 #   3. plan        — write a step-by-step refactoring plan
 #   4. execute     — apply refactoring changes incrementally
 #   5. test        — run full test suite, compare against snapshot
-#   6. review      — codex reviews refactored code for correctness
+#   6. review      — cross-model review of the refactored code for correctness
 #   7. ship        — commit and report
+#
+# COMP-PIPELINE-QUARANTINE: re-authored from v0.1 to TS v1. Linear chain, no
+# gates or backward routing. `retries: N` -> `attempts: N + 1` (v0.1 counted
+# retries AFTER the first try). The `outcome` enum moved into the contract.
+# review declares `agent: codex` so the cross-model pass the header always
+# promised is an actual dispatch rather than a hope.
 #
 # Inputs:
 #   task — what to refactor (module, pattern, or scope description)
-#
-# Usage:
-#   stratum_plan <this yaml> "refactor" {"task": "..."}
 
 contracts:
   RefactorResult:
-    phase:    {type: string}
-    summary:  {type: string}
-    outcome:  {type: string, values: [complete, failed]}
+    phase: string
+    summary: string
+    outcome: complete|failed
 
   TestResult:
-    passing:  {type: boolean}
-    summary:  {type: string}
-    failures: {type: array}
+    passing: boolean
+    summary: string
+    failures: string[]
 
   ReviewResult:
-    clean:    {type: boolean}
-    summary:  {type: string}
-    findings: {type: array}
-
-functions:
-  snapshot:
-    mode: compute
-    intent: >
-      Run the full test suite and capture results as a baseline snapshot.
-      Record pass/fail counts and test names. Return a summary of the
-      current test state before any changes.
-    input:
-      task: {type: string}
-    output: RefactorResult
-    retries: 1
-
-  analyze:
-    mode: compute
-    intent: >
-      Analyze the target code for refactoring opportunities. Identify code
-      smells, duplication, coupling issues, and improvement targets.
-      Return a structured summary of findings.
-    input:
-      task: {type: string}
-    output: RefactorResult
-    retries: 1
-
-  plan:
-    mode: compute
-    intent: >
-      Write a step-by-step refactoring plan. Each step should be a safe,
-      incremental change that preserves behavior. Include file paths and
-      expected changes.
-    input:
-      task: {type: string}
-    output: RefactorResult
-    retries: 1
-
-  execute:
-    mode: compute
-    intent: >
-      Apply the refactoring changes incrementally following the plan.
-      Make each change as small as possible. Return a summary of all
-      modifications made.
-    input:
-      task: {type: string}
-    output: RefactorResult
-    retries: 3
-
-  test:
-    mode: compute
-    intent: >
-      Run the full test suite. Compare results against the baseline snapshot.
-      Return structured JSON: { "passing": boolean, "summary": string, "failures": string[] }.
-      All tests that passed before must still pass.
-    input:
-      task: {type: string}
-    output: TestResult
-    ensure:
-      - "result.passing == true"
-    retries: 5
-
-  review:
-    mode: compute
-    intent: >
-      Review the refactored code for correctness and quality. Verify that
-      behavior is preserved and the code is cleaner than before.
-      Return { "clean": boolean, "summary": string, "findings": string[] }.
-    input:
-      task: {type: string}
-    output: ReviewResult
-    ensure:
-      - "result.clean == true"
-    retries: 3
-
-  ship:
-    mode: compute
-    intent: >
-      Commit all changes with a descriptive message. Return a summary.
-    input:
-      task: {type: string}
-    output: RefactorResult
-    retries: 1
+    clean: boolean
+    summary: string
+    findings: string[]
 
 flows:
+  entry: refactor
   refactor:
     input:
-      task: {type: string}
-    output: RefactorResult
+      task: string
+    output:
+      from: "${ship.output}"
+      contract: RefactorResult
     steps:
       - id: snapshot
-        function: snapshot
-        inputs:
-          task: "$.input.task"
+        agent: claude
+        do: >
+          Run the full test suite and capture the results as a baseline snapshot
+          before any changes to ${input.task}. Record pass/fail counts and test
+          names. Return a summary of the current test state.
+        out: RefactorResult
+        attempts: 2
 
       - id: analyze
-        function: analyze
-        inputs:
-          task: "$.input.task"
-        depends_on: [snapshot]
+        after: [snapshot]
+        agent: claude
+        do: >
+          Analyze ${input.task} for refactoring opportunities. Identify code
+          smells, duplication, coupling issues and improvement targets. Return a
+          structured summary of findings.
+        out: RefactorResult
+        attempts: 2
 
       - id: plan
-        function: plan
-        inputs:
-          task: "$.input.task"
-        depends_on: [analyze]
+        after: [analyze]
+        agent: claude
+        do: >
+          Write a step-by-step refactoring plan for ${input.task} addressing
+          ${analyze.output.summary}. Each step must be a safe, incremental change
+          that preserves behavior. Include file paths and expected changes.
+        out: RefactorResult
+        attempts: 2
 
       - id: execute
-        function: execute
-        inputs:
-          task: "$.input.task"
-        depends_on: [plan]
+        after: [plan]
+        agent: claude
+        do: >
+          Apply the refactoring changes incrementally, following the plan:
+          ${plan.output.summary}. Make each change as small as possible. Return
+          a summary of all modifications made.
+        out: RefactorResult
+        attempts: 4
 
       - id: test
-        function: test
-        inputs:
-          task: "$.input.task"
-        depends_on: [execute]
+        after: [execute]
+        agent: claude
+        do: >
+          Run the full test suite and compare the results against the baseline
+          snapshot: ${snapshot.output.summary}. Every test that passed before
+          MUST still pass — this is the behavior-preservation check, not a
+          general green-suite check. Return structured JSON:
+          { "passing": boolean, "summary": string, "failures": string[] }.
+        out: TestResult
+        ensure:
+          - expr: "result.passing == true"
+        attempts: 6
 
       - id: review
-        function: review
-        inputs:
-          task: "$.input.task"
-        depends_on: [test]
+        after: [test]
+        agent: codex
+        do: >
+          Review the refactored code for ${input.task} for correctness and
+          quality. Verify that behavior is preserved and the code is cleaner than
+          before. If this is a retry, fix the previous findings before
+          re-reviewing. Return { "clean": boolean, "summary": string,
+          "findings": string[] }.
+        out: ReviewResult
+        ensure:
+          - expr: "result.clean == true"
+        attempts: 4
 
       - id: ship
-        function: ship
-        inputs:
-          task: "$.input.task"
-        depends_on: [review]
+        after: [review]
+        agent: claude
+        do: >
+          Commit all changes for ${input.task} with a descriptive message.
+          Return a summary.
+        out: RefactorResult
+        attempts: 2

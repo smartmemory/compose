@@ -24,7 +24,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, cpSync, rmSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -130,7 +130,16 @@ test('every v1 spec plans on the real TS engine', async () => {
   assert.deepEqual(failures, [], `v1 specs that cannot run:\n${failures.join('\n')}`);
 });
 
-test('every non-v1 spec is quarantined AND genuinely refused by the engine', async () => {
+test('nothing shipped is stranded on a retired dialect', () => {
+  // As of COMP-PIPELINE-QUARANTINE every shipped spec is v1, so the loop below
+  // would otherwise iterate nothing and pass vacuously. This states the real
+  // claim: adding a spec on an older dialect fails HERE, at the point it lands,
+  // rather than the first time somebody tries to run it.
+  const stranded = shippedSpecs().filter(s => !tsCompatibilityOf(s.text).compatible);
+  assert.deepEqual(stranded.map(s => `${s.dir}/${s.file}`), []);
+});
+
+test('any non-v1 spec would be quarantined AND genuinely refused by the engine', async () => {
   const stranded = shippedSpecs().filter(s => !tsCompatibilityOf(s.text).compatible);
 
   for (const spec of stranded) {
@@ -168,8 +177,20 @@ test('invoking a quarantined pipeline fails with a message that names the cause'
     mkdirSync(path.join(ws, '.compose'), { recursive: true });
     writeFileSync(path.join(ws, '.compose', 'compose.json'), JSON.stringify({ capabilities: { stratum: true } }));
     mkdirSync(path.join(ws, 'pipelines'), { recursive: true });
-    // Any still-stranded spec works here; plan is one of the three real commands.
-    cpSync(path.join(ROOT, 'pipelines', 'plan.stratum.yaml'), path.join(ws, 'pipelines', 'plan.stratum.yaml'));
+    // The fixture is MINTED here rather than copied from pipelines/. Pointing at a
+    // real stranded spec made this test quietly depend on the repo still containing
+    // one, so it broke the moment the last of them was migrated — the refusal path
+    // has to stay covered after there is nothing left to refuse. It also has to keep
+    // working for a workspace that pins an old spec, which is the real-world case.
+    writeFileSync(path.join(ws, 'pipelines', 'plan.stratum.yaml'), [
+      'version: "0.3"',
+      'workflow:',
+      '  name: plan',
+      'flows:',
+      '  plan:',
+      '    steps: []',
+      '',
+    ].join('\n'));
     mkdirSync(path.join(ws, 'docs', 'bugs', 'BUG-1'), { recursive: true });
     writeFileSync(path.join(ws, 'docs', 'bugs', 'BUG-1', 'description.md'), '# BUG-1\nbroken\n');
 

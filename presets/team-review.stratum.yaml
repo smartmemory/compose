@@ -1,56 +1,64 @@
 # TEAM PRESET: review
 #
 # Purpose:     Parallel multi-lens review after implementation
-# Pattern:     Triage → parallel_dispatch reviewers → merge findings → gate
+# Pattern:     Triage → fanout reviewers → merge findings → gate
 # Capability:  Agents use read-only-reviewer profile (Read/Grep/Glob/Agent only)
 # Isolation:   none (reviewers read shared state, don't modify)
 # Merge:       Deduplication step consolidates findings
 #
-# Use with:    compose build <feature-code> --team review
+# Use with:    compose build <feature-code> --template team-review
 # Customize:   Copy to your project's pipelines/ as team-review.stratum.yaml and edit.
+#
+# COMP-PIPELINE-QUARANTINE: re-authored from v0.3 to TS v1.
+#   - `parallel_dispatch` becomes a `fanout:` block; the per-lens prompt reads
+#     `${item}` and honors its lens_name/lens_focus/confidence_gate/exclusions
+#     fields rather than string-substituting them.
+#   - Agent PROFILE strings move to team-review.profiles.json. Load-bearing here:
+#     the lenses run at isolation:none, so losing the read-only restriction would
+#     hand "read-only reviewers" full write capability.
+#   - The merge step's `ensure: result.clean == true` is REMOVED and the
+#     cleanliness decision becomes a gate, mirroring what the build conversion
+#     learned (build.stratum.yaml, note I1): a reducer cannot converge by
+#     retrying, because re-running it re-merges the SAME frozen lens outputs.
+#     Keeping the ensure would spin the reducer until its attempts ran out and
+#     then fail the flow, with no chance of the code being fixed in between. The
+#     gate lets a dirty merge route back to triage after a fix instead.
+#   - `retries: 2` -> `attempts: 3`.
 
-version: "0.3"
+version: 1
 
 contracts:
   TriageResult:
-    tasks:
-      type: array
-      values: [{type: object}]
-    diff: {type: string}
+    tasks: object[]
+    diff: string
+
   # Canonical schema — STRAT-CLAUDE-EFFORT-PARITY. Local MergedReviewResult removed.
   ReviewResult:
-    clean:      {type: boolean}
-    summary:    {type: string}
-    findings:   {type: array}
-    meta:       {type: object}
-    lenses_run: {type: array}
-    auto_fixes: {type: array}
-    asks:       {type: array}
-
-workflow:
-  name: team-review
-  description: "Parallel multi-lens code review"
-  input:
-    featureCode:
-      type: string
-      required: true
-    description:
-      type: string
-      required: true
+    clean: boolean
+    summary: string
+    findings: object[]
+    meta: object
+    lenses_run: string[]
+    auto_fixes: object[]
+    asks: object[]
 
 flows:
-  team-review:
+  entry: team_review
+  team_review:
     input:
-      featureCode: {type: string}
-      description: {type: string}
-    output: ReviewResult
+      featureCode: string
+      description: string
+    output:
+      from: "${merge.output}"
+      contract: ReviewResult
+    max_rounds: 10
     steps:
       - id: triage
-        agent: "claude:orchestrator"
-        intent: >
-          Gather the git diff for this feature and decide which review lenses
-          to activate. Read the changed files. Produce a task list with one
-          entry per lens. Each task must have:
+        agent: claude
+        do: >
+          Gather the git diff for ${input.featureCode} (${input.description}) and
+          decide which review lenses to activate. Read the changed files. Produce
+          a task list with one entry per lens. Each task must have:
           - id: lens name (e.g. "security", "performance", "architecture")
           - lens_name: same as id
           - lens_focus: one-sentence description of what to look for
@@ -59,55 +67,55 @@ flows:
 
           Always include: security, performance, architecture.
           Include the full git diff in your output.
-        inputs:
-          featureCode: "$.input.featureCode"
-          description: "$.input.description"
-        output_contract: TriageResult
+        out: TriageResult
         ensure:
-          - "len(result.tasks) >= 3"
-        retries: 2
+          - expr: "len(result.tasks) >= 3"
+        attempts: 3
 
       - id: review_lenses
-        type: parallel_dispatch
-        source: "$.steps.triage.output.tasks"
-        agent: "claude:read-only-reviewer"
-        max_concurrent: 4
-        isolation: none
-        require: all
-        intent_template: >
-          You are reviewing a code diff as the {lens_name} reviewer.
+        after: [triage]
+        fanout:
+          over: "${triage.output.tasks}"
+          dispatch: consumer
+          concurrency: 4
+          isolation: none
+          require: all
+          merge: sequential
+          steps:
+            - agent: claude
+              do: >
+                Review the code diff as the reviewer described by ${item}. Honor
+                its lens_name, lens_focus, confidence_gate (only report findings
+                at or above that confidence) and exclusions (never flag those).
 
-          Focus: {lens_focus}
-          Confidence gate: only report findings with confidence >= {confidence_gate}/10.
-          Exclusions: do NOT flag {exclusions}.
+                Return the canonical ReviewResult shape. Each finding has: lens,
+                file, line, severity (must-fix|should-fix|nit), finding
+                (description), confidence (1-10), applied_gate (integer).
+                If no issues are found, return clean=true with no findings.
+              out: ReviewResult
 
-          Return JSON: { "clean": boolean, "findings": <ReviewResult finding items> }
-          where each finding has: lens, file, line, severity (must-fix|should-fix|nit),
-          finding (description), confidence (1-10), applied_gate (integer).
-
-          If no issues found, return { "clean": true, "findings": [] }.
-        output_fields:
-          clean: {type: string}
-          findings: {type: string}
-        ensure:
-          - "result.findings is not None"
-        depends_on: [triage]
-
+      # Reducer: NO ensure by construction — see the header note. It consolidates,
+      # it does not judge, and it cannot fix anything by being retried.
       - id: merge
-        agent: "claude:orchestrator"
-        depends_on: [review_lenses]
-        intent: >
-          Consolidate ReviewResult arrays from all review lenses into a single
-          canonical ReviewResult. Deduplicate findings (same file:line+lens,
-          keep highest confidence; carry over its applied_gate). Rank by
-          severity (must-fix first, then should-fix, then nit). Set clean=true
-          only if zero must-fix AND zero should-fix findings remain. Write a
-          one-sentence summary.
-        inputs:
-          review_results: "$.steps.review_lenses.output"
-          reduce_mode: "true"
-        output_contract: ReviewResult
-        ensure:
-          - "result.clean == True"
-          - "result.summary != ''"
-        retries: 2
+        after: [review_lenses]
+        agent: claude
+        do: >
+          Consolidate the ReviewResults from all review lenses
+          (${review_lenses.output}) into a single canonical ReviewResult.
+          Deduplicate findings (same file:line+lens, keep the highest confidence
+          and carry over its applied_gate). Rank by severity (must-fix first,
+          then should-fix, then nit). Set clean=true only if zero must-fix AND
+          zero should-fix findings remain. Write a one-sentence summary.
+        out: ReviewResult
+        attempts: 3
+
+      # The cleanliness decision. A clean merge approves and ends the flow; a
+      # dirty one is fixed and REVISED back to triage, which re-reviews the fixed
+      # code — the only route by which a dirty review can ever become clean.
+      - id: merge_gate
+        after: [merge]
+        gate:
+          on_approve: null
+          on_revise: triage
+          on_kill: null
+          max_rounds: 10

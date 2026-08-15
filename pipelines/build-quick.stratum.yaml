@@ -3,419 +3,316 @@
 #   label: "Quick Feature Build"
 #   description: "Trimmed build lifecycle for small additive work — design → implement → ship, single gate, Phase-7 enforcement preserved"
 #   category: development
-#   steps: 11
+#   steps: 16
 #   estimated_minutes: 45
 #
 # COMP-BUILD-QUICK: a trimmed variant of build.stratum.yaml. Symmetric to fix
 # mode's Quick path. Collapses the full lifecycle to design → implement → ship:
-# prd, architecture, blueprint, verification, plan, plan_gate, and report are
+# prd, architecture, blueprint, verification, plan, plan_gate and report are
 # OMITTED (not self-skipping). Phase-7 enforcement (parallel + codex review,
-# coverage sweep, test review) is preserved verbatim — only phase ceremony
-# shrinks. NOT OpenSpec's no-gates model: the design gate and ship gate remain.
+# coverage sweep, generated-test review, TDD) is preserved — only phase
+# ceremony shrinks.
 #
-# workflow.name is kept as `build` so the runner (lib/build.js extractFlowName /
-# step-id couplings for execute|docs|ship) sees the identical flow; only the
-# step list differs. Selected via `compose build --quick` → template 'build-quick'.
+# COMP-PIPELINE-QUARANTINE: re-authored from v0.3 to TS v1, which is what makes
+# `compose build --quick` runnable again. It was NOT hand-converted: it is
+# DERIVED from the already-migrated build.stratum.yaml by dropping exactly the
+# seven steps above, which is precisely how the two differed in v0.3 (verified by
+# diffing their v0.3 ancestors — the step lists were otherwise identical).
+# Deriving from the migrated sibling means the fanout, subflow and gate-revise
+# constructs are the reviewed ones from that conversion rather than a second,
+# independently-guessed translation of the same v0.3 source.
+#
+# Three edges had to be rewired after the trim, each matching the choice the v0.3
+# quick spec had already made:
+#   - design_gate approves straight to decompose (there is no plan_gate).
+#   - decompose reads the design doc, since there is no plan artifact. Its
+#     quick-path guardrail (stop and recommend the full build if the work turns
+#     out to be cross-cutting) is carried over verbatim.
+#   - docs follows test_review, since report is gone; the codex_review and
+#     coverage subflows take the design doc for `blueprint` and the feature
+#     description for `plan`.
 
-version: "0.3"
-
-workflow:
-  name: build
-  description: "Quick feature build — design → implement → ship (single design gate, Phase-7 enforcement preserved)"
-  input:
-    featureCode:
-      type: string
-      required: true
-    description:
-      type: string
-      required: true
-    pre_merge_gate:
-      type: array
-      required: false   # COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY: default-OFF per-task gate (lint+build), omitted unless capabilities.preMergeGate
+version: 1
 
 contracts:
   PhaseResult:
-    phase:    {type: string}
-    artifact: {type: string}
-    outcome:  {type: string, values: [complete, skipped, failed]}
-    summary:  {type: string}
+    phase: string
+    artifact: string
+    outcome: complete|skipped|failed
+    summary: string
+    plan_items: array?
+    files_changed: string[]?
+    commit_hash: string?
 
-  # Canonical review output — produced by both review_check (Codex) and parallel_review (Claude).
-  # Schema source: compose/contracts/review-result.json  (_roadmap: STRAT-CLAUDE-EFFORT-PARITY)
   ReviewResult:
-    clean:      {type: boolean}
-    summary:    {type: string}
-    findings:   {type: array}
-    meta:       {type: object}
-    lenses_run: {type: array}
-    auto_fixes: {type: array}
-    asks:       {type: array}
+    clean: boolean
+    summary: string
+    findings: array
+    meta: object
+    lenses_run: string[]
+    auto_fixes: array
+    asks: array
 
   TestResult:
-    passing:  {type: boolean}
-    summary:  {type: string}
-    failures: {type: array}
+    passing: boolean
+    summary: string
+    failures: string[]
 
   TaskGraph:
-    tasks: {type: array}
+    tasks: object[]
 
-  LensTask:
-    id:              {type: string}
-    lens_name:       {type: string}
-    lens_focus:      {type: string}
-    confidence_gate: {type: number}
-    exclusions:      {type: string}
+  TaskResult:
+    outcome: string
+    summary: string
+    files_changed: string[]?
 
   TriageResult:
-    tasks:    {type: array}
-
-functions:
-  design_gate:
-    mode: gate
-    timeout: 3600
-
-  ship_gate:
-    mode: gate
-    timeout: 1800
+    tasks: object[]
 
 flows:
-  # --- Sub-flow: review ---
-  # Single-step: codex reviews, stratum retries via ensure_failed.
-  # Cross-agent fix (claude) is dispatched by build.js when ensure_failed
-  # fires with a recovery_agent configured on the parent flow step.
+  entry: build
+
+  # Task-only subflow: cross-model implementation review.
   review_check:
     input:
-      task:      {type: string}
-      blueprint: {type: string}
-    output: ReviewResult
+      task: string
+      blueprint: string
+      reviewer_agent: string
+    output:
+      from: "${review.output}"
+      contract: ReviewResult
     steps:
       - id: review
-        agent: codex
-        intent: >
+        agent: "$.input.reviewer_agent"
+        do: >
           Review the implementation against the blueprint and task.
-        inputs:
-          task: "$.input.task"
-          blueprint: "$.input.blueprint"
-          review_mode: "true"
-          confidence_gate: "7"
-        output_contract: ReviewResult
+          Task: ${input.task}
+          Blueprint: ${input.blueprint}
+          Return the canonical ReviewResult shape.
+        out: ReviewResult
         ensure:
-          - "result.clean == True"
-        retries: 5
+          - expr: "result.clean == true"
+        attempts: 5
 
-  # --- Sub-flow: parallel_review ---
-  # Multi-lens review: triage selects lenses, parallel dispatch runs them,
-  # merge deduplicates and classifies findings. Falls back to review_check
-  # if parallel dispatch is unavailable.
-  parallel_review:
-    input:
-      task:               {type: string}
-      blueprint:          {type: string}
-      diff:               {type: string}
-    output: ReviewResult
-    steps:
-      - id: triage
-        agent: "claude:orchestrator"
-        intent: >
-          Decide which review lenses to activate.
-
-          Always include diff-quality and contract-compliance.
-          Add security if files touch auth, crypto, SQL, HTTP handlers.
-          Add framework if detected framework files (React, Express, Next.js, etc).
-
-          Return JSON: { "tasks": LensTask[] } where each task has id, lens_name,
-          lens_focus, confidence_gate, exclusions.
-        inputs:
-          diff: "$.input.diff"
-        output_contract: TriageResult
-
-      - id: review_lenses
-        type: parallel_dispatch
-        agent: "claude:read-only-reviewer"
-        source: "$.steps.triage.output.tasks"
-        max_concurrent: 4
-        isolation: none
-        output_contract: ReviewResult
-        intent_template: >
-          Lens: {lens_name}. Focus: {lens_focus}.
-        require: all
-
-      - id: merge
-        agent: "claude:orchestrator"
-        intent: >
-          Merge ReviewResult arrays from all lens runs into a single canonical ReviewResult.
-          The input contains the parallel dispatch aggregate with tasks[].result for each lens.
-          1. Concatenate all findings arrays from completed task results.
-             Deduplicate by file+line+lens: keep finding with highest confidence;
-             carry over its applied_gate.
-          2. Recompute clean: zero must-fix AND zero should-fix findings (post-dedupe, post-gate).
-          3. lenses_run = IDs of lenses that produced any must-fix or should-fix finding.
-          4. auto_fixes = mechanical fixes (formatting, typos, simple tests).
-          5. asks = findings requiring human judgment.
-          Return canonical ReviewResult with clean, summary, findings, lenses_run,
-          auto_fixes, asks, meta.
-        inputs:
-          results: "$.steps.review_lenses.output"
-          task: "$.input.task"
-          blueprint: "$.input.blueprint"
-          reduce_mode: "true"
-        output_contract: ReviewResult
-        depends_on: [review_lenses]
-
-  # --- Sub-flow: coverage ---
-  # Single-step: claude runs tests, stratum retries via ensure_failed.
-  # Cross-agent fix is dispatched by build.js on ensure_failed.
+  # Task-only subflow: test generation and coverage sweep.
   coverage_check:
     input:
-      task: {type: string}
-      plan: {type: string}
-    output: TestResult
+      task: string
+      plan: string
+    output:
+      from: "${run_tests.output}"
+      contract: TestResult
     steps:
       - id: run_tests
-        agent: "claude::fast"
-        intent: >
-          Run the project test suite. Return structured JSON:
-          { "passing": boolean, "summary": string, "failures": string[] }.
-        inputs:
-          task: "$.input.task"
-        output_contract: TestResult
+        agent: claude
+        do: >
+          Run the project test suite for ${input.task}, following plan ${input.plan}.
+          Return {passing, summary, failures}.
+        out: TestResult
         ensure:
-          - "result.passing == True"
-        retries: 15
+          - expr: "result.passing == true"
+        attempts: 15
 
-  # --- Sub-flow: test_review (COMP-TEST-BOOTSTRAP-4-1) ---
-  # Reviews the test files the coverage step generated this build. The
-  # implementation review (review/codex_review) runs BEFORE coverage, so
-  # generated tests are never otherwise reviewed. build.js injects the exact
-  # generated-test file list into this step's intent, and skips the step
-  # entirely (synthetic clean stepDone) when coverage produced no test files.
-  # ADVISORY: no blocking ensure — findings surface to the human, never fail ship.
-  test_review:
-    input:
-      task:      {type: string}
-      blueprint: {type: string}
-    output: ReviewResult
-    steps:
-      - id: review_generated_tests
-        agent: codex
-        intent: >
-          Review the auto-generated test files listed below (written by the coverage
-          step this build) and verify their assertions match intent. Read each file.
-          Flag tests that are placeholders (assert true / pass with no real assertion),
-          tautological, or assert only on mocks/stubs rather than exercising the
-          feature's behavior. For each weak test, cite file:line and state what real
-          assertion is missing. Do NOT flag hand-written tests or pure style. Output a
-          canonical ReviewResult.
-        inputs:
-          task: "$.input.task"
-          blueprint: "$.input.blueprint"
-          review_mode: "true"
-          confidence_gate: "7"
-        # ADVISORY (COMP-TEST-BOOTSTRAP-4-1): deliberately NO output_contract and NO
-        # ensure. A schema/postcondition failure here would trigger executeChildFlow's
-        # blocking fix-retry path and could block ship (report→docs→ship chain through
-        # test_review). Without either gate the step always completes; build.js captures
-        # whatever the reviewer returns and surfaces it via the test_review stream event.
-
-  # --- Main flow: quick feature lifecycle (design → implement → ship) ---
   build:
     input:
-      featureCode: {type: string}
-      description: {type: string}
-      pre_merge_gate: {type: array}   # COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY: optional per-task pre-merge gate
-    output: PhaseResult
+      featureCode: string
+      description: string
+      pre_merge_gate: string[]?
+      implementer_agent: string
+      reviewer_agent: string
+    output:
+      from: "${ship.output}"
+      contract: PhaseResult
     max_rounds: 10
     steps:
-      # Phase: Explore & Design
       - id: explore_design
         agent: claude
-        intent: >
-          Explore the codebase and write a design doc for this feature.
-          Launch 2-3 explorer subagents in parallel to map architecture,
-          find similar features, and analyze related implementations.
-          Write the design to docs/features/{featureCode}/design.md.
-          Return the artifact path in the "artifact" field.
-
-          QUICK-PATH GUARDRAIL: this is `compose build --quick`, scoped to small
-          additive work (e.g. one flag + a test). If the work proves multi-file,
-          cross-cutting, or in need of architecture/PRD-level design, STOP and
-          recommend the user re-run with full `compose build` (no `--quick`)
-          rather than under-scoping. Note the recommendation in the design doc.
-        inputs:
-          featureCode: "$.input.featureCode"
-          description: "$.input.description"
-        output_contract: PhaseResult
+        do: >
+          Explore the codebase and write a design doc for ${input.featureCode}.
+          Launch 2-3 explorer subagents in parallel to map architecture, find similar
+          features, and analyze related implementations. Feature: ${input.description}.
+          Write docs/features/${input.featureCode}/design.md and return PhaseResult.
+        out: PhaseResult
         ensure:
-          - "result.outcome == 'complete'"
-          - "file_exists(result.artifact)"
-        retries: 2
+          - expr: "result.outcome == 'complete'"
+          - expr: "file_exists(result.artifact)"
+        attempts: 2
 
-      # Gate: Design review
       - id: design_gate
-        function: design_gate
-        on_approve: decompose
-        on_revise: explore_design
-        on_kill: null
-        depends_on: [explore_design]
+        after: [explore_design]
+        gate:
+          on_approve: decompose
+          on_revise: explore_design
+          on_kill: null
 
-      # Phase: Decompose — analyze the design and emit a task graph
-      # (Quick path: no separate plan step — decompose reads the design doc directly.)
       - id: decompose
-        type: decompose
         agent: claude
-        intent: >
-          Read the design doc at docs/features/{featureCode}/design.md and decompose
-          it into independent tasks. For each task, identify files_owned (exclusive
-          write), files_read (read-only), and depends_on (tasks that must complete first).
-          Return a TaskGraph with the task array.
+        do: >
+          Read the design doc at docs/features/${input.featureCode}/design.md and
+          decompose it into independent tasks. For each task identify id, description,
+          files_owned, files_read, and depends_on. Reject file ownership conflicts.
+          Return {tasks}.
 
-          QUICK-PATH GUARDRAIL: if decomposition reveals the work is actually multi-file,
-          cross-cutting, or architecture-dependent, STOP and recommend the user re-run
-          with full `compose build` (no `--quick`) rather than under-scoping.
-        output_contract: TaskGraph
+          QUICK-PATH GUARDRAIL: if decomposition reveals the work is actually
+          multi-file, cross-cutting, or architecture-dependent, STOP and recommend the
+          user re-run with the full `compose build` (no `--quick`) rather than
+          under-scoping it.
+        out: TaskGraph
         ensure:
-          - "no_file_conflicts(result.tasks)"
-          - "len(result.tasks) >= 1"
-        retries: 2
-        depends_on: [design_gate]
+          - expr: "len(result.tasks) >= 1"
+        attempts: 2
 
-      # Phase: Execute — parallel dispatch of decomposed tasks
+      # v0.3 parallel_dispatch -> TS v1 consumer fanout. Compose owns worktrees,
+      # pre-merge commands, retained diffs, and the downstream merge handshake.
       - id: execute
-        type: parallel_dispatch
-        source: "$.steps.decompose.output.tasks"
+        after: [decompose]
+        attempts: 2
+        fanout:
+          over: "${decompose.output.tasks}"
+          dispatch: consumer
+          concurrency: 3
+          isolation: worktree
+          require: all
+          merge: sequential
+          pre_merge: "$.input.pre_merge_gate"
+          steps:
+            - agent: "$.input.implementer_agent"
+              do: >
+                Implement the task described by ${item} using TDD. Write the test first,
+                watch it fail, implement, and watch it pass. Honor the item's id,
+                files_owned, files_read, description, and dependency fields.
+                Return {outcome, summary, files_changed}.
+              out: TaskResult
+
+      - id: execute_merge
+        after: [execute]
+        gate:
+          on_approve: review_triage
+          on_revise: execute
+          on_kill: null
+          max_rounds: 10
+
+      # The former parallel_review subflow is flattened because TS v1 permits
+      # fanout only in the entry flow.
+      - id: review_triage
         agent: claude
-        max_concurrent: 3
-        isolation: worktree
-        capture_diff: true
-        defer_advance: true
-        pre_merge_verify: "$.input.pre_merge_gate"   # COMP-PAR-MERGE-QUEUE-CONSUMER-RETRY: optional per-task fast gate (default-OFF)
-        require: all
-        merge: sequential_apply
-        intent_template: >
-          Implement this task using TDD. Write the test first, watch it fail,
-          implement, watch it pass.
+        do: >
+          Select review lenses for the implementation results ${execute.output}.
 
-          Task: {task.description}
-          You own these files (may create/modify): {task.files_owned}
-          You may read (but NOT modify): {task.files_read}
+          RETRY PATH — If .compose/prior_dirty_lenses.json exists, read its JSON array.
+          Activate all lenses listed in that array. Always also include diff-quality
+          and contract-compliance. Skip all other lenses because they already passed
+          clean.
 
-          Feature: {task.id}
-        depends_on: [decompose]
+          FIRST RUN PATH — If .compose/prior_dirty_lenses.json does not exist, always
+          include diff-quality, contract-compliance, and debug-discipline. Add security
+          for auth, crypto, SQL, or HTTP-handler changes, and add framework for detected
+          framework files.
 
-      # Sub-flow: Review (parallel multi-lens review; falls back to review_check)
-      # Parent-step ensure retries the whole review flow after a failed result.
-      # Quick path: review reference is the design doc (no blueprint step exists).
-      - id: review
-        flow: parallel_review
-        inputs:
-          task: "$.steps.execute.output.outcome"
-          blueprint: "$.steps.explore_design.output.artifact"
-          diff: "$.steps.execute.output.tasks"
-        ensure:
-          - "result.clean == True"
-        depends_on: [execute]
+          Return {tasks}; each task must include id, lens_name, lens_focus,
+          confidence_gate, and exclusions.
+        out: TriageResult
 
-      # Sub-flow: Codex review (independent cross-model pass after Claude lenses + fixes)
+      - id: review_lenses
+        after: [review_triage]
+        fanout:
+          over: "${review_triage.output.tasks}"
+          dispatch: consumer
+          concurrency: 4
+          isolation: none
+          require: all
+          merge: sequential
+          steps:
+            - agent: claude
+              do: >
+                Run the review lens described by ${item}. Honor its lens_name,
+                lens_focus, confidence_gate, and exclusions fields. Return the canonical
+                ReviewResult shape.
+              out: ReviewResult
+
+      - id: review_lenses_gate
+        after: [review_lenses]
+        gate:
+          on_approve: review_merge
+          on_revise: review_triage
+          on_kill: null
+          max_rounds: 10
+
+      - id: review_merge
+        agent: claude
+        do: >
+          Merge ${review_lenses.output} into one canonical ReviewResult. Concatenate and
+          deduplicate findings by file+line+lens, keep the highest confidence, recompute
+          clean, set lenses_run to dirty lens ids, and classify auto_fixes and asks.
+        out: ReviewResult
+
+      # I1: dirty-review recovery is engine-native. review_merge cannot converge on
+      # its own (re-running the reducer re-merges the SAME frozen lens outputs), so
+      # the cleanliness decision is a GATE. Compose resolves it by policy: a clean
+      # merge approves; a dirty merge runs the corrective fixer, persists the dirty
+      # lens ids, and REVISES — the engine reroutes to review_triage, whose RETRY
+      # PATH reads the sidecar and re-runs only the dirty lenses on the fixed code.
+      - id: review_gate
+        after: [review_merge]
+        gate:
+          on_approve: codex_review
+          on_revise: review_triage
+          on_kill: null
+          max_rounds: 10
+
       - id: codex_review
-        flow: review_check
-        inputs:
-          task: "$.steps.execute.output.outcome"
-          blueprint: "$.steps.explore_design.output.artifact"
-        ensure:
-          - "result.clean == True"
-        depends_on: [review]
+        after: [review_gate]
+        run: review_check
+        with:
+          task: "${review_merge.output.summary}"
+          blueprint: "${explore_design.output.artifact}"
+          reviewer_agent: "${input.reviewer_agent}"
 
-      # Sub-flow: Coverage (claude runs tests)
       - id: coverage
-        flow: coverage_check
-        inputs:
-          task: "$.steps.execute.output.outcome"
-          plan: "$.input.description"
-        ensure:
-          - "result.passing == True"
-        depends_on: [codex_review]
+        after: [codex_review]
+        run: coverage_check
+        with:
+          task: "${input.description}"
+          plan: "${input.description}"
 
-      # Sub-flow: Test review (COMP-TEST-BOOTSTRAP-4-1) — review the tests the
-      # coverage step generated this build. build.js injects the generated-test
-      # file list into the intent, and reports a synthetic clean result (skip)
-      # when coverage produced no test files. Advisory — never blocks ship.
+      # Advisory by construction: no output contract and no ensure.
       - id: test_review
-        flow: test_review
-        inputs:
-          task: "$.steps.execute.output.outcome"
-          blueprint: "$.steps.explore_design.output.artifact"
-        depends_on: [coverage]
+        after: [coverage]
+        agent: "$.input.reviewer_agent"
+        do: >
+          Review tests generated for ${input.featureCode}. Flag placeholders,
+          tautologies, and assertions that only exercise mocks. Cite file:line and the
+          missing real assertion. This is advisory and must not block ship.
 
-      # Phase: Update Docs
       - id: docs
+        after: [test_review]
         agent: claude
-        intent: >
-          Update project documentation for this feature. You MUST:
+        do: >
+          Update CHANGELOG.md and ROADMAP.md for ${input.featureCode}. Update README.md,
+          CLAUDE.md, and public docs only when the feature changes their documented
+          surfaces. Commit nothing. Return PhaseResult.
+        out: PhaseResult
+        attempts: 2
 
-          1. CHANGELOG.md — Add an entry under today's date with the feature code
-             and a bullet list of what was built. Read the existing format first.
-          2. ROADMAP.md — Find this feature's row and change its status to COMPLETE.
-             If this completes a parent feature, update the parent header too.
-          3. README.md — Update ONLY if the feature changes user-facing setup,
-             commands, or capabilities. Skip if purely internal.
-          4. CLAUDE.md — Update ONLY if new conventions, commands, or architecture
-             patterns were introduced. Skip if no changes.
-          5. Public docs — If the feature introduces or changes any of these, update
-             the relevant file in docs/:
-               - New CLI commands or flags → docs/compose-one-pager.md
-               - New connector or agent type → docs/connectors.md
-               - New workflow or lifecycle change → docs/use-cases.md
-               - API or config changes → docs/PRODUCT-SPEC.md
-             Read each file before editing. Skip if the feature is purely internal
-             with no user-facing changes.
-
-          Read each file before editing. Do not skip CHANGELOG and ROADMAP —
-          they are always required. Commit nothing — the ship step handles commits.
-        inputs:
-          featureCode: "$.input.featureCode"
-          description: "$.input.description"
-        output_contract: PhaseResult
-        retries: 2
-        depends_on: [test_review]
-
-      # Phase: Ship
       - id: ship
-        agent: "claude::critical"
-        intent: >
-          Final verification and commit. You MUST:
+        after: [docs]
+        agent: claude
+        do: >
+          Run the full test suite and build for ${input.featureCode}; fix failures.
+          Verify CHANGELOG.md and ROADMAP.md, stage only feature files, commit and push.
+          Parse plan acceptance criteria with lib/plan-parser.js and return PhaseResult
+          including plan_items, files_changed, and commit_hash.
+        out: PhaseResult
+        # C5: the judged ship ensure was removed — it is unevaluable from the
+        # {result, input} the judge receives (it fails closed even on evidenced
+        # results, so real TS-default builds would plausibly die at ship). Same
+        # class as the F5 vocabulary ruling. Ship stays gated by ship_gate; revisit
+        # when a deterministic/tunable judge backend exists (stratum follow-up).
+        attempts: 2
 
-          1. Run the test suite (npm test or node --test test/*.test.js).
-             If tests fail, fix them before proceeding.
-          2. Run the build (npx vite build). Must pass.
-          3. Check git status — verify CHANGELOG.md and ROADMAP.md were updated
-             by the docs step. If they weren't, update them now.
-          4. Stage all changed files for this feature (git add — be explicit,
-             never stage worktrees, pycache, or node_modules).
-          5. Commit with message: "feat(<featureCode>): <one-line summary>"
-          6. Push to remote.
-          7. Read docs/features/{featureCode}/design.md and extract acceptance criteria
-             as plan_items: an array of objects { text, file, critical } where:
-             - text is the checkbox item text
-             - file is the backtick-quoted file path in the item (null if none)
-             - critical is true if the item mentions MUST, required, security, or tests
-             Use lib/plan-parser.js (parsePlanItems) to do this extraction.
-          8. Collect the list of files you staged as files_changed.
-
-          Include plan_items and files_changed in your result JSON.
-          Report the commit hash and files changed.
-        inputs:
-          featureCode: "$.input.featureCode"
-          description: "$.input.description"
-        output_contract: PhaseResult
-        ensure:
-          - "plan_completion(result.plan_items, result.files_changed)"
-        retries: 2
-        depends_on: [docs]
-
-      # Gate: Ship review
       - id: ship_gate
-        function: ship_gate
-        on_approve: null
-        on_revise: ship
-        on_kill: null
-        depends_on: [ship]
+        after: [ship]
+        gate:
+          on_approve: null
+          on_revise: ship
+          on_kill: null
