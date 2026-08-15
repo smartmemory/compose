@@ -79,6 +79,12 @@ The Command Index below is generated from the command table and lists every ship
 | `compose hooks` | Manage Claude Code hooks (install \| uninstall \| status) |
 | `compose version` (alias: `--version`, `-V`) | Print compose version, git SHA, and install root |
 
+> **Currently unavailable:** `compose plan` and `compose build --quick` depend on pipeline
+> specs that were left on a retired dialect at the TS engine cutover, so they fail fast with
+> a message saying so rather than running. See
+> [pipelines.md](pipelines.md#pipeline-specs) for the full runnable/quarantined split.
+> (The table above is generated from `lib/cli-commands.js` — do not hand-edit its rows.)
+
 ---
 
 ## Workflow
@@ -167,7 +173,7 @@ compose build FEAT-1 --abort            # abort a specific feature's build
 ```
 
 **Flags:**
-- `--quick` — trimmed lifecycle (design → implement → ship, single design gate) for small-but-real additive work; selects the `build-quick` pipeline. Single-feature only; mutually exclusive with `--template` and batch builds. Phase-7 enforcement (review loop, coverage sweep, generated-test review, TDD) is preserved — only phase ceremony shrinks. See COMP-BUILD-QUICK.
+- `--quick` — **currently unavailable**: the `build-quick` pipeline is quarantined (see [pipelines.md](pipelines.md#pipeline-specs)), so this flag fails fast until that spec is migrated. When available: trimmed lifecycle (design → implement → ship, single design gate) for small-but-real additive work; selects the `build-quick` pipeline. Single-feature only; mutually exclusive with `--template` and batch builds. Phase-7 enforcement (review loop, coverage sweep, generated-test review, TDD) is preserved — only phase ceremony shrinks. See COMP-BUILD-QUICK.
 - `--abort` — abort the active build (cannot combine with batch flags)
 - `--all` — build every `PLANNED` roadmap entry in dependency order
 - `--dry-run` — print the build order; valid only with `--all`, multiple codes, or a prefix match (batch mode)

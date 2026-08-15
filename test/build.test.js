@@ -42,26 +42,27 @@ function createTestProject(tmpDir, featureCode = 'TEST-1') {
   writeFileSync(
     join(pipeDir, 'build.stratum.yaml'),
     `
-version: "0.2"
+version: 1
 contracts:
   PhaseResult:
-    phase: { type: string }
-    artifact: { type: string }
-    outcome: { type: string }
+    phase: string
+    artifact: string
+    outcome: string
 flows:
+  entry: build
   build:
     input:
-      featureCode: { type: string }
-      description: { type: string }
-    output: PhaseResult
+      featureCode: string?
+      description: string?
+    output:
+      from: "\${design.output}"
+      contract: PhaseResult
     steps:
       - id: design
         agent: claude
-        intent: "Write the design doc."
-        inputs:
-          featureCode: "$.input.featureCode"
-        output_contract: PhaseResult
-        retries: 1
+        do: "Write the design doc."
+        out: PhaseResult
+        attempts: 2
 `
   );
 

@@ -16,6 +16,7 @@ import { readdirSync, readFileSync, writeFileSync, unlinkSync, existsSync, mkdir
 import { join, basename, dirname } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import YAML from 'yaml';
+import { tsCompatibilityOf } from '../lib/pipeline-compat.js';
 
 /** sha-256 hex of a string (COMP-PIPE-EDIT-6 conflict-detection baseline). */
 function sha256(text) {
@@ -139,7 +140,12 @@ function extractSteps(parsed) {
  * The shipped specs store `metadata` as a leading `#` comment (or omit it), so
  * the metadata-based `loadTemplates` never surfaces them. The editor discovers
  * by filename instead.
- * @returns {Array<{ file, version, flows: string[] }>}
+ * COMP-PIPELINE-QUARANTINE: each entry also carries `tsCompatible` — false for a
+ * spec left on the retired v0.3 dialect, which the engine cannot run at all. The
+ * editor lists specs it cannot execute, so the flag is what lets the surface say
+ * so instead of presenting them as ordinary choices.
+ *
+ * @returns {Array<{ file, version, flows: string[], tsCompatible: boolean, tsIncompatibleReason: string|null }>}
  */
 function listSpecFiles(pipelinesDir) {
   let files;
@@ -151,14 +157,24 @@ function listSpecFiles(pipelinesDir) {
   const out = [];
   for (const file of files) {
     try {
-      const parsed = YAML.parse(readFileSync(join(pipelinesDir, file), 'utf-8'));
+      const raw = readFileSync(join(pipelinesDir, file), 'utf-8');
+      const parsed = YAML.parse(raw);
+      const compat = tsCompatibilityOf(raw);
       out.push({
         file,
         version: parsed?.version ?? null,
         flows: flowNamesOf(parsed),
+        tsCompatible: compat.compatible,
+        tsIncompatibleReason: compat.reason,
       });
     } catch {
-      out.push({ file, version: null, flows: [] });
+      out.push({
+        file,
+        version: null,
+        flows: [],
+        tsCompatible: false,
+        tsIncompatibleReason: 'spec is not parseable YAML',
+      });
     }
   }
   return out;
