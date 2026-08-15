@@ -22,6 +22,8 @@ STRAT-PY-RETIRE converted only `build` and `gsd` to TS v1 (commit 9221548: "Both
 **Added:** `lib/pipeline-compat.js`, `test/pipeline-ts-engine-guard.test.js` — the guard whose absence let this rot: it iterates `pipelines/` and `presets/` rather than a list, asserts every `version: 1` spec actually plans on the real engine, and asserts every quarantined one is *genuinely* refused by it (the half that keeps the quarantine from being an unchecked claim). Plan inputs are synthesized from each flow's own declared input types, so a brand-new pipeline is covered with nothing added to the test.
 **Changed:** `pipelines/bug-fix.stratum.yaml` (v0.1 → v1), `lib/build.js` (quarantine refusal at the template seam), `server/pipeline-routes.js`, `docs/pipelines.md` (runnable/quarantined status per spec), `docs/cli.md` (`compose plan` and `--quick` marked unavailable).
 
+**Follow-up, tracked locally:** `lib/lifecycle-modes.js`'s `fix` graph omits `bisect` — its `phaseOrder` lists eight phases while the spec walks nine. Pre-existing and harmless today (that block's own comment says the graph is informational and registers no live guard), so it was left alone rather than edited as a side effect of a spec migration.
+
 **Still quarantined, by decision:** `plan` and `build-quick` are real commands and are the next migration candidates; `content`, `coverage-sweep`, `refactor`, `research`, `review-fix` have zero code references and were last touched 2026-04-12 in a bulk test-fix commit.
 
 ### test — de-flaked the Bridge-to-SSE late-connect smoke test
