@@ -35,6 +35,11 @@ function basename(p) {
 
 // COMP-PIPE-EDIT-1: v0.1 specs are not validated by Stratum (IR_UNKNOWN_VERSION);
 // they load read-only with a banner. v0.2/v0.3 are fully editable.
+//
+// COMP-PIPELINE-QUARANTINE follow-up: a spec that is not v1 CANNOT RUN, and the
+// picker now says so (`tsCompatible` from the server). Editability is deliberately
+// NOT gated on that: making a stranded spec read-only would block the one edit
+// that matters — migrating it — from the surface built for editing specs.
 function isReadOnlyVersion(version) {
   return String(version) === '0.1';
 }

@@ -19,6 +19,13 @@ version: 1
 # `attempts: 16` — v0.1 counted retries AFTER the first try, so a bare rename
 # would have cost this pipeline a run.
 #
+# DELIBERATE BEHAVIOR CHANGE (owner decision, not a side effect of the dialect
+# move): the v0.1 prompt only RAN the suite and reported failures, so a retry
+# re-ran identical code and reported the identical failure up to fifteen times —
+# a loop that could not converge. The step now fixes what it finds before the
+# next attempt, which is what makes the retry budget meaningful. This makes the
+# pipeline write-capable, so it is no longer safe to treat as read-only.
+#
 # Inputs:
 #   task — what to test (feature description, file paths, etc.)
 

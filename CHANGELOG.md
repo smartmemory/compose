@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-08-15 (review round)
+
+### COMP-PIPELINE-QUARANTINE — Codex review of the migration; 12 findings applied
+
+Two independent Codex passes (`sol/xhigh`) over the migration and the code. The migration had been verified only by *running* the specs, which proves they work and cannot see semantic drift or provisioning. Both gaps were real.
+
+**`compose fix` was still broken in a fresh workspace.** Verified by running `compose init` in a clean repo: it seeds `build`, `build-quick`, `new` and `plan` — never `bug-fix` — and `resolveTemplatePath` fell back only to `presets/`, never bundled `pipelines/`. So `compose fix` detected the missing spec, ran init, and then died on "Lifecycle spec not found". The migration removed one of *two* causes; the claim that the command was revived held only inside this repo. Init now seeds `bug-fix` and copies each spec's `.profiles.json` alongside it (a spec provisioned without its sidecar runs on bare defaults and silently drops the tool restrictions it declares). `resolveTemplatePath` also falls back to the bundled `pipelines/` — but deliberately NOT for the init-provisioned set, since a missing `build` means an uninitialized workspace and should fail loudly rather than silently run Compose's own pipeline. That distinction was found by the narrow fix breaking a test that asserted the loud failure.
+
+**Semantic drift the migration introduced, now corrected:**
+- **`review-fix` had Codex reviewing its own repair.** The first v1 draft collapsed the loop into one `agent: codex` step, so on retry Codex fixed the findings and re-reviewed its own change — destroying the pipeline's entire premise while the header still promised "Claude fixes, Codex reviews". Now a real two-model loop: `review` (codex) is the reducer, `review_gate` is resolved programmatically by Compose, and a dirty result runs the corrective fixer under `implementerAgent` before revising. Its new `review-fix.profiles.json` declares `review` as a `_reduceSteps` entry, which is what routes the result into that gate.
+- **`team-review`'s gate was inert.** `lib/build.js` keys the corrective-fixer path on the exact gate id `review_gate`; the preset called it `merge_gate`, so approving could complete with `clean:false` and revising re-reviewed unchanged code. Renamed. The resume re-derive path was also hardcoded to read `steps.review_merge.output`, so any pipeline whose reducer has a different name got a null stash on resume and had a clean review treated as dirty — it now matches the sidecar's declared reduce steps.
+- **`bug-fix` starved its own fix step.** v0.1 passed the whole `ScopeResult`; the migration passed `references_count` — a number. A cross-layer audit could find every reference and hand the fixer none of their identities. `fix` now receives `references_found` and the scope; `scope_check` receives the full diagnosis rather than just `root_cause`.
+- **`build-quick` lost one of two escalation guardrails** (dropped by deriving from `build`, which has none). Restored in `explore_design`. Its attempt budgets are inherited from `build` deliberately — documented, since they intentionally do not follow the `retries + 1` rule used elsewhere.
+- **`coverage-sweep`'s new write-capable behavior is now declared** as a deliberate decision rather than filed under dialect changes.
+- **`team-research`'s capability header was corrected**: a consumer fanout binds one profile per step, so the web lane cannot get web tools. Inherited from v0.3, previously restated as if true.
+
+**Verification gaps the review exposed:**
+- **The ship regression test never touched the fixed call site** — every assertion called `toPhaseResultOutput` directly, so reverting `lib/gsd.js` to report the raw result would have left it green. The real coverage now lives in the gsd golden, which asserts `ship_gsd` succeeds on **attempt 1** with a populated `commit_hash` — the only assertion that fails if the narrowing is removed.
+- **`compose new` bypassed the quarantine** entirely (its own runner calls `stratum.plan` directly), so a workspace pinning an old spec still got the opaque `-32602`.
+- **The de-flake introduced a second race**: waiting for `sseClients.size` to increase can hang, because a prior client is removed asynchronously and the set can drop and re-grow to the same size. `collectSSE` now exposes a `.connected` promise for that request specifically. Fixing that surfaced a *third*, older race the fixed sleep had been masking all along: the bridge starts before the stream file exists, so it watches the directory and only goes live when its watcher (2s poll plus debounce) notices the file — events written into that window are never seen at all. The test now proves liveness with a sentinel event before writing anything the assertion depends on.
+- **The quarantine message asserted STRAT-PY-RETIRE provenance for any incompatible spec**, including a fresh YAML typo. Now only for specs that actually declare an older dialect.
+- **The spec picker showed unrunnable specs as ordinary choices**; it now labels them. Editability was deliberately NOT gated on compatibility — making a stranded spec read-only would block the one edit that matters, migrating it.
+
+**Changed:** `bin/compose.js`, `lib/build.js`, `lib/new.js`, `lib/pipeline-compat.js`, `pipelines/{bug-fix,build-quick,coverage-sweep,review-fix}.stratum.yaml`, `presets/{team-review,team-research}.stratum.yaml`, `src/components/vision/PipelineEditor.jsx`, `test/{ship-phase-result-contract,ts-cutover-pipeline-fanout-golden,build-stream-smoke}.test.js`.
+**Added:** `pipelines/review-fix.profiles.json`.
+
 ## 2026-08-15 (later)
 
 ### COMP-PIPELINE-QUARANTINE — the remaining ten specs migrated; nothing is stranded any more

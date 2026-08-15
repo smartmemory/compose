@@ -31,6 +31,17 @@
 #   - docs follows test_review, since report is gone; the codex_review and
 #     coverage subflows take the design doc for `blueprint` and the feature
 #     description for `plan`.
+#
+# The quick path's escalation guardrail ("stop and recommend the full build if
+# this turns out to be cross-cutting") is required in BOTH explore_design and
+# decompose per COMP-BUILD-QUICK's blueprint. Deriving from `build` dropped the
+# explore_design one, since `build` has no such guardrail; restored after review.
+#
+# Attempt budgets are inherited from build.stratum.yaml deliberately: build-quick
+# IS build with phases removed, so a step that survives the trim should retry
+# exactly as often as its counterpart in the pipeline it was cut from. That means
+# they do NOT follow the `retries + 1` rule used when converting a spec from its
+# own v0.x ancestor — there is no ancestor step here, only a sibling.
 
 version: 1
 
@@ -132,6 +143,11 @@ flows:
           Launch 2-3 explorer subagents in parallel to map architecture, find similar
           features, and analyze related implementations. Feature: ${input.description}.
           Write docs/features/${input.featureCode}/design.md and return PhaseResult.
+
+          QUICK-PATH GUARDRAIL: if the design reveals the work is actually
+          multi-file, cross-cutting, or architecture-dependent, STOP and recommend
+          the user re-run with the full `compose build` (no `--quick`) rather than
+          under-scoping it.
         out: PhaseResult
         ensure:
           - expr: "result.outcome == 'complete'"

@@ -54,7 +54,7 @@ contracts:
     phase: string
     summary: string
     outcome: complete|failed
-    references_addressed: string?   # stringified int
+    references_addressed: string?   # stringified int; set by the fix step
 
   TestResult:
     passing: boolean
@@ -162,9 +162,17 @@ flows:
           If the diagnosis of ${input.task} shows the root cause involves a
           provider switch, field rename, config key change, or anything spanning
           multiple repos or layers: grep ALL configured project repos for every
-          reference to the affected term. The diagnosed root cause is
-          ${diagnose.output.root_cause}. Return the full reference list grouped
-          by repo. If the change is single-layer, return scope: 'single' and skip.
+          reference to the affected term.
+
+          The diagnosis: root cause ${diagnose.output.root_cause}; affected
+          layers ${diagnose.output.affected_layers}; scope hint
+          ${diagnose.output.scope_hint}; trace evidence
+          ${diagnose.output.trace_evidence}.
+
+          Return the full reference list grouped by repo in references_found —
+          the fix step gets its cross-layer worklist from that field and from
+          nothing else, so an omitted reference is a reference nobody fixes.
+          If the change is single-layer, return scope: 'single' and skip.
           This prevents incremental multi-layer discovery (fixing one layer,
           deploying, discovering the next layer is broken, repeat).
         out: ScopeResult
@@ -175,10 +183,17 @@ flows:
         agent: claude
         do: >
           Implement the minimal correct fix for the diagnosed root cause of
-          ${input.task}. If scope_check found cross-layer references
-          (${scope_check.output.references_count} of them) address ALL of them in
-          coordinated commits — do not leave any reference unaddressed. Change
-          only what is necessary. Return a summary of changes made.
+          ${input.task}: ${diagnose.output.root_cause}, affecting
+          ${diagnose.output.affected_layers}.
+
+          scope_check reported scope ${scope_check.output.scope} with
+          ${scope_check.output.references_count} cross-layer references. They are:
+          ${scope_check.output.references_found}
+          Address EVERY one of them in coordinated commits — do not leave any
+          reference unaddressed.
+
+          Change only what is necessary. Return a summary of changes made, and set
+          references_addressed to how many of those references you fixed.
         out: BugFixResult
         ensure:
           - expr: "result.outcome == 'complete'"
