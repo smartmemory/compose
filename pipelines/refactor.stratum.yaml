@@ -41,15 +41,20 @@ contracts:
   RefactorResult:
     phase: string
     summary: string
-    outcome: complete|failed
-    # The `ship` step is INTERCEPTED by compose (lib/build.js shouldInterceptShip:
-    # any step named `ship` outside plan mode), which submits the PhaseResult
-    # shape — artifact, files_changed, commit_hash — regardless of what this spec
-    # declares. Engine contracts are strict, so these must be declared or every
-    # ship fails with unrecognized_keys AFTER the commit has already happened.
-    # Optional, because the pipeline's other steps return this contract too and
-    # never set them. Third instance of this defect class; see COMP-SHIP-CONTRACT.
-    artifact: string?
+    outcome: complete|skipped|failed   # `skipped` is reachable: compose offers an interactive skip
+
+  # The `ship` step is INTERCEPTED by compose (lib/build.js shouldInterceptShip:
+  # any step named `ship` outside plan mode), which submits this shape regardless
+  # of what the spec declares. It is a SEPARATE contract, not extra optional
+  # fields on the pipeline's own result: outputFieldsToJsonSchema marks every
+  # declared field required and ignores `?`, so widening the shared contract
+  # would instruct every other step to return commit metadata it has no business
+  # producing. Third instance of this defect class; see COMP-SHIP-CONTRACT.
+  ShipResult:
+    phase: string
+    artifact: string
+    outcome: complete|skipped|failed
+    summary: string
     files_changed: string[]?
     commit_hash: string?
 
@@ -85,7 +90,7 @@ flows:
       pre_merge_gate: string[]?
     output:
       from: "${ship.output}"
-      contract: RefactorResult
+      contract: ShipResult
     steps:
       - id: snapshot
         agent: claude
@@ -160,5 +165,5 @@ flows:
         do: >
           Commit all changes for ${input.description} with a descriptive message.
           Return a summary.
-        out: RefactorResult
+        out: ShipResult
         attempts: 2

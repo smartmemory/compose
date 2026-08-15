@@ -30,6 +30,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import YAML from 'yaml';
+import { spawnSync } from 'node:child_process';
 
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 import { tsCompatibilityOf, TS_SPEC_VERSION } from '../lib/pipeline-compat.js';
@@ -166,13 +167,23 @@ test('every pipeline declares inputs the runner that drives it actually sends', 
     'gsd.stratum.yaml': 'gsd',
   };
 
-  const cli = readFileSync(path.join(ROOT, 'bin', 'compose.js'), 'utf8');
-  for (const file of Object.keys(DRIVER)) {
+  // BEHAVIORAL, not a grep: the first version of this searched bin/compose.js for
+  // the map's keys, and still passed with the refusal's `if` block deleted. It has
+  // to actually invoke the CLI, and with a path-ish spelling too — resolveTemplatePath
+  // normalizes `./bug-fix` through join(), so an exact-string guard was bypassable.
+  for (const [file, driverCmd] of Object.entries({
+    'bug-fix.stratum.yaml': 'compose fix',
+    'plan.stratum.yaml': 'compose plan',
+    'new.stratum.yaml': 'compose new',
+    'gsd.stratum.yaml': 'compose gsd',
+  })) {
     const name = file.replace('.stratum.yaml', '');
-    assert.match(
-      cli, new RegExp(`MODE_BOUND_TEMPLATES[\\s\\S]{0,400}['"\`]?${name}['"\`]?\\s*:`),
-      `bin/compose.js must refuse --template ${name}; this test's driver binding assumes it`,
-    );
+    for (const spelling of [name, `./${name}`]) {
+      const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'compose.js'), 'build', '--template', spelling, 'GUARD-1'], { encoding: 'utf-8' });
+      assert.equal(r.status, 1, `compose build --template ${spelling} must be refused`);
+      assert.match(r.stderr, /is not a build template/, `--template ${spelling} must be refused by name`);
+      assert.ok(r.stderr.includes(driverCmd), `refusal for ${spelling} must point at ${driverCmd}`);
+    }
   }
 
   const offenders = [];
@@ -287,7 +298,9 @@ test('the migrated bug-fix pipeline runs its whole lifecycle to completion', asy
     test: { passing: true, summary: '100 passed', failures: [] },
     verify: { phase: 'verify', summary: 'repro now passes', outcome: 'complete' },
     retro_check: { fix_chains: [], attempt_count: 1, escalation: false, discipline_score: 95, summary: 'clean' },
-    ship: { phase: 'ship', summary: 'committed abc1234', outcome: 'complete' },
+    // ShipResult, not BugFixResult: `ship` is intercepted by compose and submitted
+    // as the commit-metadata shape, so it declares its own contract.
+    ship: { phase: 'ship', artifact: 'abc1234', summary: 'committed abc1234', outcome: 'complete', commit_hash: 'abc1234' },
   };
 
   const { walked, status, output } = await withClient(async (client) => {

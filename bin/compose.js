@@ -2535,10 +2535,14 @@ if (cmd === 'build') {
       new: 'compose new',
       gsd: 'compose gsd <feature-code>',
     }
-    if (MODE_BOUND_TEMPLATES[templateValue]) {
+    // Compare the BASENAME: resolveTemplatePath builds `<cwd>/pipelines/<name>.stratum.yaml`
+    // via join(), which normalizes away a leading `./`, so `--template ./bug-fix`
+    // resolved the same spec while slipping past an exact-string check.
+    const templateKey = basename(String(templateValue)).replace(/\.stratum\.ya?ml$/, '')
+    if (MODE_BOUND_TEMPLATES[templateKey]) {
       console.error(
         `Error: --template ${templateValue} is not a build template — it belongs to ` +
-        `\`${MODE_BOUND_TEMPLATES[templateValue]}\`, which supplies the inputs it declares.`
+        `\`${MODE_BOUND_TEMPLATES[templateKey]}\`, which supplies the inputs it declares.`
       )
       process.exit(1)
     }
