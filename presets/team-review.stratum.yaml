@@ -6,7 +6,7 @@
 # Isolation:   none (reviewers read shared state, don't modify)
 # Merge:       Deduplication step consolidates findings
 #
-# Use with:    compose build <feature-code> --template team-review
+# Use with:    compose build <feature-code> --team review
 # Customize:   Copy to your project's pipelines/ as team-review.stratum.yaml and edit.
 #
 # COMP-PIPELINE-QUARANTINE: re-authored from v0.3 to TS v1.
