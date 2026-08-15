@@ -21,8 +21,11 @@
 #     learned (build.stratum.yaml, note I1): a reducer cannot converge by
 #     retrying, because re-running it re-merges the SAME frozen lens outputs.
 #     Keeping the ensure would spin the reducer until its attempts ran out and
-#     then fail the flow, with no chance of the code being fixed in between. The
-#     gate lets a dirty merge route back to triage after a fix instead.
+#     then fail the flow, with no chance of the code being fixed in between.
+#     The gate is named `review_gate` because compose resolves THAT id
+#     programmatically — clean approves, dirty runs the corrective fixer and
+#     revises back to triage so the lenses re-run on fixed code. A differently
+#     named gate is inert, which is what the first draft shipped.
 #   - `retries: 2` -> `attempts: 3`.
 
 version: 1
@@ -109,10 +112,13 @@ flows:
         out: ReviewResult
         attempts: 3
 
-      # The cleanliness decision. A clean merge approves and ends the flow; a
-      # dirty one is fixed and REVISED back to triage, which re-reviews the fixed
-      # code — the only route by which a dirty review can ever become clean.
-      - id: merge_gate
+      # The cleanliness decision, resolved PROGRAMMATICALLY by compose, not by a
+      # human. The gate MUST be called `review_gate`: lib/build.js keys the
+      # corrective-fixer path on that exact id. Named anything else (the first
+      # draft called it `merge_gate`) the gate is inert — approving it can
+      # complete the flow with clean:false, and revising re-reviews unchanged code
+      # because no fixer ever runs. Caught in review.
+      - id: review_gate
         after: [merge]
         gate:
           on_approve: null

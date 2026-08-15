@@ -194,6 +194,10 @@ export default function PipelineEditor() {
           {specs.map(s => (
             <option key={s.file} value={s.file}>
               {s.file}{s.version ? ` (v${s.version})` : ''}
+              {/* COMP-PIPELINE-QUARANTINE: the server reports whether the engine
+                  can actually run this spec. Without it the picker offered
+                  unrunnable specs as ordinary choices. */}
+              {s.tsCompatible === false ? ' — cannot run' : ''}
             </option>
           ))}
         </select>

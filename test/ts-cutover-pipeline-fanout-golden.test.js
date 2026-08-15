@@ -236,6 +236,26 @@ describe('GSD end-to-end on the TS route (D7b)', () => {
       throw new Error(`runGsd not complete: ${JSON.stringify({ result, evs, invocations: invocations.length }).slice(0, 1200)}`);
     }
     assert.equal(result.status, 'complete', `runGsd should complete: ${JSON.stringify(result)}`);
+
+    // COMP-SHIP-CONTRACT: ship_gsd must satisfy the strict PhaseResult contract on
+    // its FIRST attempt. The original defect passed the raw ship result, which the
+    // engine rejected for unrecognized keys — and then hid, because attempt 2
+    // re-ran ship, found nothing staged, and returned the field-less
+    // "already committed" shape, which passes. Asserting one attempt (and a
+    // populated commit_hash) is what makes reverting the narrowing fail a test;
+    // the unit tests around toPhaseResultOutput would all stay green.
+    const shipAudit = await client.audit(result.flowId);
+    const shipStep = shipAudit?.steps?.ship_gsd;
+    assert.ok(shipStep, 'audit must carry the ship_gsd step');
+    assert.equal(shipStep.status, 'succeeded');
+    assert.equal(
+      shipStep.attempts.length, 1,
+      `ship_gsd must succeed on attempt 1; failure: ${JSON.stringify(shipStep.failure ?? null)}`,
+    );
+    assert.equal(shipStep.failure, undefined, 'ship_gsd must not have a recorded contract failure');
+    assert.ok(shipStep.output?.commit_hash, 'ship_gsd output must carry commit_hash');
+    assert.ok(Array.isArray(shipStep.output?.files_changed), 'ship_gsd output must carry files_changed');
+
     // Two items executed and their exact-path TaskResults landed in the blackboard.
     assert.ok(result.blackboardEntries >= 2, `expected >=2 blackboard entries, got ${result.blackboardEntries}`);
     const t01 = JSON.parse(await readFile(join(workspace, '.compose', 'gsd', 'GSD-E2E', 'results', 'T01.json'), 'utf8'));

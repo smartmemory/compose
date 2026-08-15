@@ -3,27 +3,44 @@
 #   label: "Review & Fix"
 #   description: "Iterative review-fix loop — Codex reviews, Claude fixes until clean"
 #   category: quality
-#   steps: 2
+#   steps: 3
 #   estimated_minutes: 15
 
 version: 1
 
 # review-fix pipeline
 #
-# Runs a task to completion via a two-phase loop:
-#   1. execute  — claude produces the initial implementation
-#   2. review   — codex reviews against the blueprint; on failure, claude fixes
-#                 the findings before codex re-reviews
-#
-# The fix-then-review step is a single unit so findings always feed back into a
-# fix pass before re-review runs. Its `attempts` budget is the iteration cap.
+# Runs a task to completion via a two-model loop:
+#   1. execute     — the implementer writes the initial implementation
+#   2. review      — the REVIEWER (a different model) reviews it
+#   3. review_gate — clean approves; dirty runs the corrective fixer as the
+#                    IMPLEMENTER and revises, so the reviewer re-reviews the
+#                    fixed code. The two roles never collapse into one model.
 #
 # COMP-PIPELINE-QUARANTINE: re-authored from v0.1 to TS v1.
-#   - The two `functions:` collapse into inline `do` steps; v1 has no function table.
-#   - `retries: 10` -> `attempts: 11` (v0.1 counted retries after the first try).
-#   - The review step declares `agent: codex` directly, which is what the old
-#     prose was asking the step to arrange through agent_run by hand. Cross-model
-#     review is a first-class dispatch in v1, not something a step improvises.
+#
+# The first v1 draft of this file collapsed the whole loop into ONE `agent: codex`
+# step, which meant that on every retry Codex fixed the findings and then reviewed
+# its own repair. That silently destroyed the point of the pipeline — independent
+# cross-model repair — while the header still claimed it. Caught in review.
+#
+# The loop is now expressed the way the engine and compose actually implement it:
+#   - `review` is the reducer. It carries NO convergence `ensure`: re-running a
+#     reviewer against unchanged code cannot converge, so an ensure here would
+#     just burn attempts and fail (the same lesson as build.stratum.yaml note I1).
+#   - The decision is `review_gate`. Compose resolves that gate id
+#     PROGRAMMATICALLY (lib/build.js): a clean result approves, a dirty one runs
+#     the corrective fixer under `implementerAgent` — a DIFFERENT model from the
+#     reviewer — and then revises back to `review`.
+#   - `review-fix.profiles.json` declares `review` as a `_reduceSteps` entry,
+#     which is what routes its result into that gate decision. Without the
+#     sidecar the gate would never see the review result.
+#
+# Other conversion notes:
+#   - The two `functions:` collapse into inline steps; v1 has no function table.
+#   - `retries: 1` -> `attempts: 2` (v0.1 counted retries after the first try).
+#   - The old `retries: 10` iteration cap becomes the flow's `max_rounds`, which
+#     is where v1 bounds a gate-revise loop.
 #
 # Inputs:
 #   task      — what to implement (full task description with file paths, etc.)
@@ -37,7 +54,7 @@ contracts:
   ReviewResult:
     clean: boolean
     summary: string
-    findings: string[]
+    findings: object[]
 
 flows:
   entry: review_fix
@@ -48,6 +65,8 @@ flows:
     output:
       from: "${review.output}"
       contract: ReviewResult
+    # Bounds the review -> fix -> re-review loop; the v0.1 `retries: 10` cap.
+    max_rounds: 10
     steps:
       - id: execute
         agent: claude
@@ -63,22 +82,27 @@ flows:
         after: [execute]
         agent: codex
         do: >
-          Perform one full fix-then-review cycle for ${input.task}.
+          Review the implementation against the blueprint. Do NOT fix anything —
+          reviewing is your only job, and a corrective pass runs separately before
+          you are asked again.
 
-          Step A — Fix (skip on the first attempt, when there are no prior findings):
-            If this is a retry, the previous attempt's findings are in your
-            feedback. Fix EVERY finding before proceeding. Never re-review
-            without fixing first.
+          Task: ${input.task}
+          What was implemented: ${execute.output.summary}
+          Blueprint: ${input.blueprint}
 
-          Step B — Review:
-            Review the implementation against the blueprint. What was
-            implemented: ${execute.output.summary}. The blueprint is
-            ${input.blueprint}.
-            List actionable findings with confidence >= 7. Set clean=true only
-            if no actionable findings remain.
-
-          Return ReviewResult.
+          List actionable findings with confidence >= 7. Each finding has file,
+          line, severity and a description. Set clean=true only if no actionable
+          findings remain.
         out: ReviewResult
-        ensure:
-          - expr: "result.clean == true"
-        attempts: 11
+        attempts: 3
+
+      # Resolved programmatically by compose, not by a human: clean approves and
+      # ends the flow; dirty runs the corrective fixer as the implementer, then
+      # revises so the reviewer sees the fixed code.
+      - id: review_gate
+        after: [review]
+        gate:
+          on_approve: null
+          on_revise: review
+          on_kill: null
+          max_rounds: 10

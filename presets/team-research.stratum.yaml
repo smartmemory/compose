@@ -2,7 +2,7 @@
 #
 # Purpose:     Parallel exploration for cold-start discovery
 # Pattern:     Plan → fanout explorers → synthesize findings
-# Capability:  codebase/docs use read-only-reviewer, web uses read-only-researcher
+# Capability:  ALL explorers run read-only-reviewer (see the limitation note below)
 # Isolation:   none (read-only exploration)
 # Merge:       Sequential synthesis step
 #
@@ -20,6 +20,15 @@
 #     re-applies them at invocation. Dropping them instead would silently hand
 #     read-only explorers full write capability.
 #   - `retries: N` -> `attempts: N + 1`.
+#
+# KNOWN LIMITATION, inherited from v0.3 and NOT introduced here: the header used
+# to claim the web lane runs `read-only-researcher`, but a consumer fanout binds
+# ONE profile for the whole step (lib/build.js resolves it per fanout step, not
+# per item), so every explorer gets `explore`'s profile. read-only-reviewer has
+# no WebSearch/WebFetch, so the web task cannot actually search the web. The
+# claim has been corrected rather than left as an aspiration; giving the lanes
+# distinct capabilities needs either per-item profile resolution or three
+# separate steps, which is a redesign.
 
 contracts:
   ResearchTaskList:

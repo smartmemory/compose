@@ -13,6 +13,12 @@
  *
  * The declared field sets are read from the pipeline YAML rather than
  * hard-coded, so a contract edit that drops a field fails here.
+ *
+ * SCOPE: these cover the helper only. Reverting lib/gsd.js to report the RAW ship
+ * result would leave every assertion here green, so the CALL SITE is covered in
+ * test/ts-cutover-pipeline-fanout-golden.test.js, which runs a real gsd flow
+ * against the engine and asserts ship_gsd succeeds on attempt 1 with a populated
+ * commit_hash. Keep that pairing: a helper test alone cannot catch this defect.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';

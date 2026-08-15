@@ -1,0 +1,6 @@
+{
+  "_comment": "COMP-PIPELINE-QUARANTINE follow-up: compose-owned agent profiles for review-fix.stratum.yaml, applied at invocation by lib/build.js loadPipelineProfiles.",
+  "_reduceSteps": ["review"],
+  "_reduceSteps_comment": "LOAD-BEARING, not an optimization. `review` is the step whose ReviewResult the programmatic review_gate reads to decide clean vs dirty. Without this entry the gate never sees a result, so the corrective fixer never runs and the cross-model repair loop this pipeline exists for does not happen.",
+  "review": "codex:read-only-reviewer"
+}

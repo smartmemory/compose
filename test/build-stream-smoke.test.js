@@ -44,11 +44,22 @@ async function waitUntil(predicate, message, timeoutMs = 10_000) {
   throw new Error(`timed out after ${timeoutMs}ms waiting for: ${message}`);
 }
 
-/** Collect SSE messages from a server for a given duration. */
+/**
+ * Collect SSE messages from a server for a given duration.
+ *
+ * The returned promise carries a `.connected` promise that settles when THIS
+ * request has its response. Callers that must not write events until the client
+ * is attached should await that, never a count of `sseClients`: a prior test's
+ * response is removed asynchronously on close, so the set can drop and re-grow
+ * to the same size and a "wait until size increases" check would hang forever.
+ */
 function collectSSE(port, durationMs = 2000) {
-  return new Promise((resolve) => {
+  let markConnected;
+  const connected = new Promise((resolve) => { markConnected = resolve; });
+  const done = new Promise((resolve) => {
     const messages = [];
     const req = http.get(`http://127.0.0.1:${port}/stream`, (res) => {
+      markConnected();
       let buf = '';
       res.on('data', (chunk) => {
         buf += chunk.toString();
@@ -69,6 +80,8 @@ function collectSSE(port, durationMs = 2000) {
       resolve(messages);
     }, durationMs);
   });
+  done.connected = connected;
+  return done;
 }
 
 // ---------------------------------------------------------------------------
@@ -223,10 +236,24 @@ describe('Bridge-to-SSE smoke test', () => {
     bridge.start();
 
     try {
-      // Write events BEFORE any SSE client connects
-      const drainedBefore = broadcasts.length;
+      // The bridge started BEFORE this file existed, so it is watching the
+      // DIRECTORY and only becomes live once its watcher (2s poll + debounce)
+      // notices the new file. Writing the events we depend on into that window is
+      // a race: the drain wait then expires having never seen them, which is
+      // exactly how this test failed under full-suite load. Prove liveness with a
+      // sentinel first, and only then write the events the assertion rests on.
       let seq = 0;
       writeFileSync(jsonlPath, '');
+      writeJsonlLine(jsonlPath, { type: 'build_start', featureCode: 'SENTINEL', flowId: 'f0' }, seq++);
+      await waitUntil(
+        () => broadcasts.some(m => m.featureCode === 'SENTINEL'),
+        'the bridge to pick up the stream file at all',
+      );
+
+      // Now the bridge is demonstrably reading this file. Events written from
+      // here are guaranteed to be seen, so the drain wait below measures drain
+      // and not startup.
+      const drainedBefore = broadcasts.length;
       writeJsonlLine(jsonlPath, { type: 'build_start', featureCode: 'LATE-1', flowId: 'f3' }, seq++);
       writeJsonlLine(jsonlPath, { type: 'build_step_start', stepId: 's1', stepNum: 1, totalSteps: 1, agent: 'claude', flowId: 'f3' }, seq++);
       writeJsonlLine(jsonlPath, { type: 'build_end', status: 'complete', featureCode: 'LATE-1' }, seq++);
@@ -243,12 +270,11 @@ describe('Bridge-to-SSE smoke test', () => {
         'bridge to broadcast all three pre-connection events',
       );
 
-      // NOW connect SSE client and write new events. Wait for the connection to
-      // actually register, not a guessed 200ms — otherwise LATE-2 can be
-      // broadcast before this client is in the set.
-      const before = sseClients.size;
+      // NOW connect the SSE client and write new events. Wait for THIS request's
+      // own response rather than a guessed 200ms or a client-count increase —
+      // see collectSSE's note on why counting races with prior-client teardown.
       const collecting = collectSSE(port, 1500);
-      await waitUntil(() => sseClients.size > before, 'the late SSE client to connect');
+      await collecting.connected;
 
       // Write NEW events (seq continues monotonically)
       writeJsonlLine(jsonlPath, { type: 'build_start', featureCode: 'LATE-2', flowId: 'f4' }, seq++);

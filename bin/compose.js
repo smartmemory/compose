@@ -543,10 +543,24 @@ async function runInit(flags, cwdOverride) {
     }
   }
 
-  // 8. Copy default pipeline specs if absent
+  // 8. Copy default pipeline specs if absent.
+  // COMP-PIPELINE-QUARANTINE follow-up: `bug-fix` belongs in this set. `compose
+  // fix` checks for pipelines/bug-fix.stratum.yaml, runs init when it is absent,
+  // and then fails with "Lifecycle spec not found" because init never copied it —
+  // so the command was unavailable in every fresh workspace independently of the
+  // spec's dialect. Each spec's `<name>.profiles.json` sidecar travels WITH it:
+  // loadPipelineProfiles fails open, so a spec copied without its sidecar runs on
+  // bare defaults and silently drops the tool restrictions it declares.
   const pipelinesDir = join(cwd, 'pipelines')
   mkdirSync(pipelinesDir, { recursive: true })
-  for (const specName of ['build.stratum.yaml', 'build-quick.stratum.yaml', 'new.stratum.yaml', 'plan.stratum.yaml']) {
+  const DEFAULT_PIPELINES = [
+    'build.stratum.yaml',
+    'build-quick.stratum.yaml',
+    'bug-fix.stratum.yaml',
+    'new.stratum.yaml',
+    'plan.stratum.yaml',
+  ]
+  for (const specName of DEFAULT_PIPELINES) {
     const dest = join(pipelinesDir, specName)
     if (!existsSync(dest)) {
       const src = join(PACKAGE_ROOT, 'pipelines', specName)
@@ -554,6 +568,12 @@ async function runInit(flags, cwdOverride) {
         copyFileSync(src, dest)
         console.log(`Copied default pipeline to ${dest}`)
       }
+    }
+    const sidecarName = specName.replace(/\.stratum\.ya?ml$/, '.profiles.json')
+    const sidecarDest = join(pipelinesDir, sidecarName)
+    if (!existsSync(sidecarDest)) {
+      const sidecarSrc = join(PACKAGE_ROOT, 'pipelines', sidecarName)
+      if (existsSync(sidecarSrc)) copyFileSync(sidecarSrc, sidecarDest)
     }
   }
 
