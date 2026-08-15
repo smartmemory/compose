@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-08-15
+
+### COMP-SHIP-CONTRACT — gsd's ship step was failing its contract on every run and hiding it behind a retry
+
+`runGsd` handed `executeShipStep`'s raw return straight to `stepDone`. Engine contracts are STRICT Zod objects, so the caller-facing extras that return carries — `commit`, `filesChanged`, `completionWarning` (plus `test_count`/`pass_rate` and `error_code` on other branches) — were rejected as `unrecognized_keys` against `gsd.stratum.yaml`'s `PhaseResult`. The run never looked broken because the failure was self-healing in the worst way: attempt 1 committed and was rejected, attempt 2 re-ran the whole ship step, found nothing left to stage, and returned the field-less `{phase, artifact:'no-changes', outcome, summary}` shape, which passes. Net effect across the persisted corpus — every gsd ship ran `executeShipStep` twice (double test run, double `recordCompletion`) and the flow output **never once carried the `commit_hash`/`files_changed` the pipeline's own step docstring asks for**. `runBuild` already had the correct narrowing inline at its `stepDone` site; gsd simply never got it.
+
+Fix: `toPhaseResultOutput` in `lib/build.js` is now the single narrowing seam, used by both `stepDone` sites. `plan_items` stays spread at the `runBuild` call site because `build.stratum.yaml`'s `PhaseResult` declares it and gsd's does not — folding it into the shared helper would reintroduce the same strict-key failure in gsd the moment a ship result carried one. Verified end-to-end against the real TS engine: the gsd golden's persisted run now shows `ship_gsd` succeeding on attempt 1 with `commit_hash` and `files_changed` populated.
+
+**Changed:** `lib/build.js` (`toPhaseResultOutput` export; `tsShipOutput` now composes it), `lib/gsd.js` (narrow before `stepDone`).
+**Added:** `test/ship-phase-result-contract.test.js` — asserts the helper's key set against the field names parsed out of the pipeline YAML (not hard-coded), for all four ship return branches, so a contract edit that drops a field fails here.
+
+**Follow-up, tracked locally (no issue filed, per owner directive):** `pipelines/build-quick.stratum.yaml` is still authored in the retired v0.3 dialect (`version: "0.3"`, `function:`/`output_contract:`/`inputs:`, typed-object contract fields) and fails TS-engine validation with 139 errors, so `compose build --quick` may not start at all. `bug-fix`, `content`, `coverage-sweep`, `plan`, `refactor`, `research`, and `review-fix` share the same dialect problem; `new` is clean, and `build`/`gsd` fail raw-file validation only on pre-substitution placeholders (`$.input.*`, `${input.pre_merge_gate}`) and demonstrably run. Not folded into this fix — different lifecycle, and the runtime impact of each needs confirming separately.
+
 ## 2026-08-12
 
 ### COMP-FOH / FOH-6 — S5 streaming SHIPPED (the named stretch): Maya's replies stream into the panel
