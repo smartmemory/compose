@@ -26,8 +26,17 @@ version: 1
 # next attempt, which is what makes the retry budget meaningful. This makes the
 # pipeline write-capable, so it is no longer safe to treat as read-only.
 #
-# Inputs:
-#   task — what to test (feature description, file paths, etc.)
+#
+# COMP-PIPELINE-QUARANTINE round 2: the flow input is the RUNNER's envelope, not
+# a bespoke `task`. runBuild derives plan inputs from the MODE, not from the spec
+# (lib/build.js startFresh), and feature mode always sends
+# {featureCode, description, implementer_agent, reviewer_agent} plus an optional
+# pre_merge_gate. Declaring `task` meant this spec resolved but could never plan —
+# making it reachable via `--template` without this change just moved the failure
+# from "not found" to a failed run. `${input.description}` carries what `task` did.
+# Inputs (the runner's feature envelope):
+#   featureCode  — the feature/work code
+#   description  — what to do; this is what the old `task` input carried
 
 contracts:
   CoverageResult:
@@ -39,7 +48,11 @@ flows:
   entry: coverage_sweep
   coverage_sweep:
     input:
-      task: string
+      featureCode: string
+      description: string
+      implementer_agent: string?
+      reviewer_agent: string?
+      pre_merge_gate: string[]?
     output:
       from: "${sweep.output}"
       contract: CoverageResult
@@ -47,7 +60,7 @@ flows:
       - id: sweep
         agent: claude
         do: >
-          Run the project test suite for ${input.task}. Return structured JSON:
+          Run the project test suite for ${input.description}. Return structured JSON:
           { "passing": boolean, "summary": string, "failures": string[] }.
           Set passing=true only if all tests pass with no failures.
           If tests fail, list each failing test name in the failures array and

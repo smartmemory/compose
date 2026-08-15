@@ -35,7 +35,7 @@ function writeJsonlLine(filePath, event, seq) {
  * break under full-suite load, which is exactly when the whole suite reds.
  * Throws on timeout so a genuinely stalled bridge still fails the test.
  */
-async function waitUntil(predicate, message, timeoutMs = 10_000) {
+async function waitUntil(predicate, message, timeoutMs = 30_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (predicate()) return;
@@ -232,19 +232,24 @@ describe('Bridge-to-SSE smoke test', () => {
     mkdirSync(composeDir, { recursive: true });
     const jsonlPath = join(composeDir, 'build-stream.jsonl');
 
+    // Create the stream file BEFORE starting the bridge. Once the directory
+    // exists the bridge's ONLY notification mechanism is fs.watch — there is no
+    // periodic re-check of the file (server/build-stream-bridge.js
+    // _startWatching; _pollForDirectory only covers a MISSING directory). Under
+    // full-suite load the file-creation event can simply be missed, and the
+    // bridge then never reads the file at all. Starting with the file already
+    // present makes start() read it synchronously, so the sentinel below is a
+    // liveness check rather than a bet on the watcher.
+    let seq = 0;
+    writeFileSync(jsonlPath, '');
+    writeJsonlLine(jsonlPath, { type: 'build_start', featureCode: 'SENTINEL', flowId: 'f0' }, seq++);
+
     const bridge = new BuildStreamBridge(composeDir, broadcastFn, { crashTimeoutMs: 60000 });
     bridge.start();
 
     try {
-      // The bridge started BEFORE this file existed, so it is watching the
-      // DIRECTORY and only becomes live once its watcher (2s poll + debounce)
-      // notices the new file. Writing the events we depend on into that window is
-      // a race: the drain wait then expires having never seen them, which is
-      // exactly how this test failed under full-suite load. Prove liveness with a
-      // sentinel first, and only then write the events the assertion rests on.
-      let seq = 0;
-      writeFileSync(jsonlPath, '');
-      writeJsonlLine(jsonlPath, { type: 'build_start', featureCode: 'SENTINEL', flowId: 'f0' }, seq++);
+      // Prove the bridge is reading THIS file before writing anything the
+      // assertion depends on.
       await waitUntil(
         () => broadcasts.some(m => m.featureCode === 'SENTINEL'),
         'the bridge to pick up the stream file at all',

@@ -42,26 +42,54 @@ version: 1
 #   - The old `retries: 10` iteration cap becomes the flow's `max_rounds`, which
 #     is where v1 bounds a gate-revise loop.
 #
-# Inputs:
-#   task      — what to implement (full task description with file paths, etc.)
-#   blueprint — the feature blueprint to review against (file content or path)
+#
+# COMP-PIPELINE-QUARANTINE round 2: the flow input is the RUNNER's envelope, not
+# a bespoke `task`. runBuild derives plan inputs from the MODE, not from the spec
+# (lib/build.js startFresh), and feature mode always sends
+# {featureCode, description, implementer_agent, reviewer_agent} plus an optional
+# pre_merge_gate. Declaring `task` meant this spec resolved but could never plan —
+# making it reachable via `--template` without this change just moved the failure
+# from "not found" to a failed run. `${input.description}` carries what `task` did.
+# Inputs (the runner's feature envelope):
+#   featureCode  — the feature code; the blueprint is read from its folder
+#   description  — what to implement; this is what the old `task` input carried
 
 contracts:
   ExecuteResult:
     summary: string
     findings: string[]
 
+  # CANONICAL ReviewResult — STRAT-CLAUDE-EFFORT-PARITY. It MUST carry meta,
+  # lenses_run, auto_fixes and asks even though this pipeline never sets them by
+  # hand: compose enables review normalization for any step whose out contract is
+  # NAMED ReviewResult (deriveOrdinaryReviewScaffold), and the normalizer always
+  # stamps those four fields. Engine contracts are strict, so a narrower
+  # declaration makes every review step fail with unrecognized_keys and exhaust
+  # its attempts — the same defect class as COMP-SHIP-CONTRACT. Caught in review.
   ReviewResult:
     clean: boolean
     summary: string
-    findings: object[]
+    findings: array
+    meta: object
+    lenses_run: string[]
+    auto_fixes: array
+    asks: array
 
 flows:
   entry: review_fix
   review_fix:
     input:
-      task: string
-      blueprint: string
+      featureCode: string
+      description: string
+      # REQUIRED, not optional: the review step interpolates reviewer_agent, and
+      # the corrective fixer runs as implementer_agent. Hard-coding the reviewer
+      # to codex looked safe until you notice `--implementer codex` is a supported
+      # override — then Codex fixes and reviews its own repair again, which is the
+      # exact defect this file was corrected for. Deriving both roles from the
+      # envelope keeps them whatever the invocation says, and always distinct.
+      implementer_agent: string
+      reviewer_agent: string
+      pre_merge_gate: string[]?
     output:
       from: "${review.output}"
       contract: ReviewResult
@@ -69,10 +97,10 @@ flows:
     max_rounds: 10
     steps:
       - id: execute
-        agent: claude
+        agent: "$.input.implementer_agent"
         do: >
           Implement this task fully — write all required files and make all
-          required changes: ${input.task}.
+          required changes: ${input.description}.
           Return a summary of what was done and an empty findings array.
           Do not review — only implement.
         out: ExecuteResult
@@ -80,15 +108,15 @@ flows:
 
       - id: review
         after: [execute]
-        agent: codex
+        agent: "$.input.reviewer_agent"
         do: >
           Review the implementation against the blueprint. Do NOT fix anything —
           reviewing is your only job, and a corrective pass runs separately before
           you are asked again.
 
-          Task: ${input.task}
+          Task: ${input.description}
           What was implemented: ${execute.output.summary}
-          Blueprint: ${input.blueprint}
+          Blueprint: docs/features/${input.featureCode}/blueprint.md (fall back to design.md if absent)
 
           List actionable findings with confidence >= 7. Each finding has file,
           line, severity and a description. Set clean=true only if no actionable

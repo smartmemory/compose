@@ -130,6 +130,52 @@ test('every v1 spec plans on the real TS engine', async () => {
   assert.deepEqual(failures, [], `v1 specs that cannot run:\n${failures.join('\n')}`);
 });
 
+test('every pipeline declares inputs the runner that drives it actually sends', () => {
+  // The plan-input envelope comes from the MODE, not from the spec (lib/build.js
+  // startFresh, lib/lifecycle-modes.js). A spec is only drivable if its REQUIRED
+  // inputs are a subset of the envelope of the runner that actually invokes it.
+  //
+  // This is the assertion that was missing. The plan test above synthesizes
+  // inputs from each spec's OWN declaration, so it happily proved that five
+  // pipelines could plan — with an envelope no runner ever sends. They resolved
+  // and then failed at run time, which is worse than being unreachable.
+  //
+  // Matching against "any envelope" is not enough either: `task` alone looks
+  // drivable because bug mode sends exactly that, but bug mode only ever runs
+  // bug-fix. The binding below is per-spec, and anything NOT bound is reached
+  // through `--template`, which is feature mode.
+  const ENVELOPES = {
+    feature: ['featureCode', 'description', 'implementer_agent', 'reviewer_agent', 'pre_merge_gate'],
+    bug: ['task'],
+    plan: ['projectName', 'intent'],
+    gsd: ['featureCode', 'gateCommands', 'pre_merge_gate'],
+  };
+  // Specs a dedicated runner drives with its own envelope. Everything else is
+  // `compose build --template <name>`, i.e. feature mode.
+  const DRIVER = {
+    'bug-fix.stratum.yaml': 'bug',
+    'plan.stratum.yaml': 'plan',
+    'new.stratum.yaml': 'plan',
+    'gsd.stratum.yaml': 'gsd',
+  };
+
+  const offenders = [];
+  for (const spec of shippedSpecs().filter(s => s.dir === 'pipelines')) {
+    const parsed = YAML.parse(spec.text);
+    const entry = parsed?.flows?.entry;
+    const declared = parsed?.flows?.[entry]?.input ?? {};
+    const required = Object.entries(declared)
+      .filter(([, type]) => !String(type).endsWith('?'))
+      .map(([field]) => field);
+    const driver = DRIVER[spec.file] ?? 'feature';
+    const missing = required.filter(field => !ENVELOPES[driver].includes(field));
+    if (missing.length) {
+      offenders.push(`${spec.file}: driven by ${driver} mode, which never sends [${missing.join(', ')}]`);
+    }
+  }
+  assert.deepEqual(offenders, [], `pipelines their runner cannot drive:\n${offenders.join('\n')}`);
+});
+
 test('nothing shipped is stranded on a retired dialect', () => {
   // As of COMP-PIPELINE-QUARANTINE every shipped spec is v1, so the loop below
   // would otherwise iterate nothing and pass vacuously. This states the real

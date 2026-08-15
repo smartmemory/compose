@@ -20,8 +20,17 @@ version: 1
 # AFTER the first try, so a bare rename would leave every step with no retry at
 # all). The `outcome` enum moved from the old `values:` list into the contract.
 #
-# Inputs:
-#   task — research question or topic to explore
+#
+# COMP-PIPELINE-QUARANTINE round 2: the flow input is the RUNNER's envelope, not
+# a bespoke `task`. runBuild derives plan inputs from the MODE, not from the spec
+# (lib/build.js startFresh), and feature mode always sends
+# {featureCode, description, implementer_agent, reviewer_agent} plus an optional
+# pre_merge_gate. Declaring `task` meant this spec resolved but could never plan —
+# making it reachable via `--template` without this change just moved the failure
+# from "not found" to a failed run. `${input.description}` carries what `task` did.
+# Inputs (the runner's feature envelope):
+#   featureCode  — the feature/work code
+#   description  — what to do; this is what the old `task` input carried
 
 contracts:
   ResearchResult:
@@ -34,7 +43,11 @@ flows:
   entry: research
   research:
     input:
-      task: string
+      featureCode: string
+      description: string
+      implementer_agent: string?
+      reviewer_agent: string?
+      pre_merge_gate: string[]?
     output:
       from: "${report.output}"
       contract: ResearchResult
@@ -42,7 +55,7 @@ flows:
       - id: gather
         agent: claude
         do: >
-          Collect sources relevant to the research topic: ${input.task}.
+          Collect sources relevant to the research topic: ${input.description}.
           Search the codebase, read documentation, and gather external
           references. Return a summary of sources found and key data points.
         out: ResearchResult
@@ -52,7 +65,7 @@ flows:
         after: [gather]
         agent: claude
         do: >
-          Synthesize the information gathered on ${input.task}. What was found:
+          Synthesize the information gathered on ${input.description}. What was found:
           ${gather.output.summary}. Identify patterns, contradictions, gaps and
           insights. Organize findings into themes. Return a structured analysis
           summary.
@@ -63,7 +76,7 @@ flows:
         after: [analyze]
         agent: claude
         do: >
-          Produce a structured research report on ${input.task} with findings,
+          Produce a structured research report on ${input.description} with findings,
           analysis and actionable recommendations, drawing on the analysis:
           ${analyze.output.summary}. Write it to an appropriate file path.
           Return the artifact path and summary.

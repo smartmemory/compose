@@ -7,7 +7,11 @@
 # Merge:       Deduplication step consolidates findings
 #
 # Use with:    compose build <feature-code> --team review
-# Customize:   Copy to your project's pipelines/ as team-review.stratum.yaml and edit.
+# Customize:   Copy BOTH team-review.stratum.yaml AND team-review.profiles.json into
+#              your project's pipelines/ and edit. Copying only the YAML is a trap:
+#              a project-local spec wins resolution, but profiles load only from an
+#              ADJACENT sidecar and fail open — so the tool restrictions vanish, and
+#              the review gate stops seeing its reducer's result entirely.
 #
 # COMP-PIPELINE-QUARANTINE: re-authored from v0.3 to TS v1.
 #   - `parallel_dispatch` becomes a `fanout:` block; the per-lens prompt reads
