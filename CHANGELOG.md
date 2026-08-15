@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-15 (review round 3)
+
+### COMP-PIPELINE-QUARANTINE — round 3: the ship-contract defect, for the third time
+
+**The same defect class that opened this whole thread was still present in three more specs.** Any step named `ship` outside plan mode is intercepted by compose (`shouldInterceptShip`), which submits the `PhaseResult` shape — `artifact`, `files_changed`, `commit_hash` — regardless of what the spec declares. `bug-fix` declared `BugFixResult`, `refactor` declared `RefactorResult`, and `content` declared `ContentResult`; a direct schema probe confirmed all three reject those keys. Every `compose fix` would have committed and *then* failed its ship step, exactly as gsd did. Round 3 reported two of them; probing the rest found the third. All three now declare the intercepted fields as optional.
+
+**The cross-model role fix was syntactically right and semantically inert.** Round 2 changed `review-fix` to interpolate `implementer_agent`/`reviewer_agent` instead of hard-coding Codex. But the defaults are claude/codex, and `--implementer codex` overrides only the implementer — leaving the reviewer at codex, so both resolve to Codex and the pipeline reviews its own repair again, one layer down from where it was fixed. Role resolution now keeps the two on different providers when only one is overridden, and warns rather than silently degrading when both are set the same deliberately.
+
+**The guard's driver bindings described a hole rather than a guarantee.** It treated `bug-fix`, `plan`, `new` and `gsd` as reachable only through their dedicated runners, but `compose build --template <name>` accepted any template and runs feature mode — so those four could be selected with the wrong envelope. `compose build` now refuses them by name, pointing at the command that can actually drive each one, and the guard asserts that refusal still exists (control-tested: removing one entry fails the test). The guard also covers `presets/` now instead of assuming their compatibility.
+
 ## 2026-08-15 (review round 2)
 
 ### COMP-PIPELINE-QUARANTINE — round 2 reviewed the FIXES, and two of them were regressions
