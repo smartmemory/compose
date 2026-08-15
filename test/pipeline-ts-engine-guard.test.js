@@ -179,7 +179,16 @@ test('every pipeline declares inputs the runner that drives it actually sends', 
   })) {
     const name = file.replace('.stratum.yaml', '');
     for (const spelling of [name, `./${name}`]) {
-      const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'compose.js'), 'build', '--template', spelling, 'GUARD-1'], { encoding: 'utf-8' });
+      // Run in a THROWAWAY cwd. Invoking the CLI from the repo root wrote
+      // docs/features/GUARD-1/audit.json into the working tree — a test that
+      // dirties the repo it is testing.
+      const probeCwd = mkdtempSync(path.join(tmpdir(), 'compose-template-guard-'));
+      let r;
+      try {
+        r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'compose.js'), 'build', '--template', spelling, 'GUARD-1'], { encoding: 'utf-8', cwd: probeCwd });
+      } finally {
+        rmSync(probeCwd, { recursive: true, force: true });
+      }
       assert.equal(r.status, 1, `compose build --template ${spelling} must be refused`);
       assert.match(r.stderr, /is not a build template/, `--template ${spelling} must be refused by name`);
       assert.ok(r.stderr.includes(driverCmd), `refusal for ${spelling} must point at ${driverCmd}`);
