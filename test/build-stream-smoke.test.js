@@ -29,6 +29,21 @@ function writeJsonlLine(filePath, event, seq) {
   appendFileSync(filePath, line);
 }
 
+/**
+ * Poll until `predicate()` is true. Replaces fixed sleeps used as "the bridge
+ * has surely drained by now" preconditions — those hold on an idle machine and
+ * break under full-suite load, which is exactly when the whole suite reds.
+ * Throws on timeout so a genuinely stalled bridge still fails the test.
+ */
+async function waitUntil(predicate, message, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise(r => setTimeout(r, 20));
+  }
+  throw new Error(`timed out after ${timeoutMs}ms waiting for: ${message}`);
+}
+
 /** Collect SSE messages from a server for a given duration. */
 function collectSSE(port, durationMs = 2000) {
   return new Promise((resolve) => {
@@ -66,13 +81,17 @@ describe('Bridge-to-SSE smoke test', () => {
   let port;
   let sseClients;
   let broadcastFn;
+  /** Every message the bridge has broadcast, in order — the drain signal. */
+  let broadcasts;
 
   before(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'sse-smoke-'));
 
     sseClients = new Set();
+    broadcasts = [];
 
     broadcastFn = function broadcast(msg) {
+      broadcasts.push(msg);
       const line = `data: ${JSON.stringify(msg)}\n\n`;
       for (const client of sseClients) {
         try { client.write(line); } catch { sseClients.delete(client); }
@@ -205,18 +224,31 @@ describe('Bridge-to-SSE smoke test', () => {
 
     try {
       // Write events BEFORE any SSE client connects
+      const drainedBefore = broadcasts.length;
       let seq = 0;
       writeFileSync(jsonlPath, '');
       writeJsonlLine(jsonlPath, { type: 'build_start', featureCode: 'LATE-1', flowId: 'f3' }, seq++);
       writeJsonlLine(jsonlPath, { type: 'build_step_start', stepId: 's1', stepNum: 1, totalSteps: 1, agent: 'claude', flowId: 'f3' }, seq++);
       writeJsonlLine(jsonlPath, { type: 'build_end', status: 'complete', featureCode: 'LATE-1' }, seq++);
 
-      // Wait for bridge to process these (broadcast to zero clients)
-      await new Promise(r => setTimeout(r, 500));
+      // Wait for the bridge to actually broadcast all three to zero clients.
+      // A fixed sleep here was the suite's most frequent flake: under load the
+      // bridge had not drained yet, so LATE-1 was still in flight when the
+      // client connected and arrived as "replayed history" it never sent.
+      // Counted against a baseline, not by featureCode: the bridge stamps
+      // build_step_start with no featureCode, so only 2 of these 3 lines carry
+      // 'LATE-1' — which is precisely the leaked count the assertion below sees.
+      await waitUntil(
+        () => broadcasts.length - drainedBefore >= 3,
+        'bridge to broadcast all three pre-connection events',
+      );
 
-      // NOW connect SSE client and write new events
+      // NOW connect SSE client and write new events. Wait for the connection to
+      // actually register, not a guessed 200ms — otherwise LATE-2 can be
+      // broadcast before this client is in the set.
+      const before = sseClients.size;
       const collecting = collectSSE(port, 1500);
-      await new Promise(r => setTimeout(r, 200));
+      await waitUntil(() => sseClients.size > before, 'the late SSE client to connect');
 
       // Write NEW events (seq continues monotonically)
       writeJsonlLine(jsonlPath, { type: 'build_start', featureCode: 'LATE-2', flowId: 'f4' }, seq++);
