@@ -37,7 +37,7 @@ contracts:
     phase: string
     artifact: string
     summary: string
-    outcome: complete|failed
+    outcome: complete|skipped|failed   # `skipped` is reachable: compose offers an interactive skip
 
 flows:
   entry: research

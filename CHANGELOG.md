@@ -1,10 +1,26 @@
 # Changelog
 
+## 2026-08-15 (review round 4 — stopping here)
+
+### COMP-PIPELINE-QUARANTINE — round 4, and an honest stop
+
+Round 4 found six more, three P1, and **corrected one of round 3's claims**: `content` has no `ship` step (it ends at `publish`), so the interception never applied and widening `ContentResult` was wrong. Reverted, and the round-3 entry below is corrected.
+
+**The round-3 ship fix was right in aim and wrong in method.** Widening `BugFixResult`/`RefactorResult` with optional fields looked harmless, but `outputFieldsToJsonSchema` marks every declared field REQUIRED and does not parse `?` — so every step returning those contracts was newly instructed to produce `artifact`, `files_changed` and `commit_hash`. `ship` now has its own `ShipResult` contract instead, which is what "the intercepted step submits a different shape" actually means.
+
+**The template refusal was bypassable.** `resolveTemplatePath` builds its path with `join()`, which normalizes a leading `./`, so `--template ./bug-fix` slipped past the exact-string check and ran anyway. It compares the basename now. The guard's assertion for it was a **grep** over `bin/compose.js` — and Codex proved it still passed with the refusal's `if` block deleted. It invokes the CLI now, in both spellings, and was control-tested by deleting the logic.
+
+**Two pre-existing defects, newly reachable:** the interactive skip submitted `{outcome:'skipped', summary}` with no `phase`, which strict contracts reject — so `s=skip` would have failed the very step it was meant to bypass, on every migrated pipeline. And the mandatory Codex worktree preflight compared `implementerAgent === 'codex'` exactly, so a profile-qualified `codex:orchestrator` implementer skipped the probe entirely. Both fixed.
+
+**Stopping at four rounds.** Findings went 15 → 5 → 3 → 6, but the later rounds were no longer finding migration defects — they were finding pre-existing compose-side ones that the migration made reachable (the skip path, the preflight comparison, resume-warning ordering). That is a different piece of work with a different blast radius, and continuing would expand scope indefinitely rather than converge. What remains is tracked below rather than pretending the loop reached clean.
+
+**Tracked, not fixed:** resume-warning ordering — the same-provider role check runs before persisted roles are restored, so a persisted same-provider build resumes without the warning while current same-provider flags can warn spuriously before being overwritten (`lib/build.js` role resolution vs `restoreRolesFromActive`). Low impact; restructuring the resume path is riskier than the warning is worth.
+
 ## 2026-08-15 (review round 3)
 
 ### COMP-PIPELINE-QUARANTINE — round 3: the ship-contract defect, for the third time
 
-**The same defect class that opened this whole thread was still present in three more specs.** Any step named `ship` outside plan mode is intercepted by compose (`shouldInterceptShip`), which submits the `PhaseResult` shape — `artifact`, `files_changed`, `commit_hash` — regardless of what the spec declares. `bug-fix` declared `BugFixResult`, `refactor` declared `RefactorResult`, and `content` declared `ContentResult`; a direct schema probe confirmed all three reject those keys. Every `compose fix` would have committed and *then* failed its ship step, exactly as gsd did. Round 3 reported two of them; probing the rest found the third. All three now declare the intercepted fields as optional.
+**The same defect class that opened this whole thread was still present in three more specs.** Any step named `ship` outside plan mode is intercepted by compose (`shouldInterceptShip`), which submits the `PhaseResult` shape — `artifact`, `files_changed`, `commit_hash` — regardless of what the spec declares. `bug-fix` declared `BugFixResult` and `refactor` declared `RefactorResult`; a direct schema probe confirmed both reject those keys. (Round 4 correction: `content` was also changed here, wrongly — it has no `ship` step at all, so interception never applied. Reverted.) Every `compose fix` would have committed and *then* failed its ship step, exactly as gsd did. Round 3 reported two of them; probing the rest found the third. All three now declare the intercepted fields as optional.
 
 **The cross-model role fix was syntactically right and semantically inert.** Round 2 changed `review-fix` to interpolate `implementer_agent`/`reviewer_agent` instead of hard-coding Codex. But the defaults are claude/codex, and `--implementer codex` overrides only the implementer — leaving the reviewer at codex, so both resolve to Codex and the pipeline reviews its own repair again, one layer down from where it was fixed. Role resolution now keeps the two on different providers when only one is overridden, and warns rather than silently degrading when both are set the same deliberately.
 

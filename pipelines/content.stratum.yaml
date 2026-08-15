@@ -39,16 +39,7 @@ contracts:
     phase: string
     artifact: string
     summary: string
-    outcome: complete|failed
-    # The `ship` step is INTERCEPTED by compose (lib/build.js shouldInterceptShip:
-    # any step named `ship` outside plan mode), which submits the PhaseResult
-    # shape — artifact, files_changed, commit_hash — regardless of what this spec
-    # declares. Engine contracts are strict, so these must be declared or every
-    # ship fails with unrecognized_keys AFTER the commit has already happened.
-    # Optional, because the pipeline's other steps return this contract too and
-    # never set them. Third instance of this defect class; see COMP-SHIP-CONTRACT.
-    files_changed: string[]?
-    commit_hash: string?
+    outcome: complete|skipped|failed   # `skipped` is reachable: compose offers an interactive skip
 
   # CANONICAL ReviewResult — STRAT-CLAUDE-EFFORT-PARITY. It MUST carry meta,
   # lenses_run, auto_fixes and asks even though this pipeline never sets them by
