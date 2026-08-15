@@ -2759,7 +2759,11 @@ if (cmd === 'build') {
   const { root: fixCwd } = resolveCwdWithWorkspace(args)
   if (!existsSync(join(fixCwd, '.compose', 'compose.json')) || !existsSync(join(fixCwd, 'pipelines', 'bug-fix.stratum.yaml'))) {
     console.log('Running compose init...\n')
-    await runInit(args.filter(a => a.startsWith('--')))
+    // Thread the RESOLVED workspace root, exactly as the build path does. Without
+    // it runInit seeds process.cwd(), which differs from fixCwd when `compose fix`
+    // is invoked from a subdirectory — the guard checks fixCwd but the seed lands
+    // elsewhere, so the run still fails with the same missing-spec error.
+    await runInit(args.filter(a => a.startsWith('--')), fixCwd)
     console.log('')
   }
 

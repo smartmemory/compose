@@ -25,8 +25,17 @@ version: 1
 # review declares `agent: codex` so the cross-model pass the header always
 # promised is an actual dispatch rather than a hope.
 #
-# Inputs:
-#   task — what to refactor (module, pattern, or scope description)
+#
+# COMP-PIPELINE-QUARANTINE round 2: the flow input is the RUNNER's envelope, not
+# a bespoke `task`. runBuild derives plan inputs from the MODE, not from the spec
+# (lib/build.js startFresh), and feature mode always sends
+# {featureCode, description, implementer_agent, reviewer_agent} plus an optional
+# pre_merge_gate. Declaring `task` meant this spec resolved but could never plan —
+# making it reachable via `--template` without this change just moved the failure
+# from "not found" to a failed run. `${input.description}` carries what `task` did.
+# Inputs (the runner's feature envelope):
+#   featureCode  — the feature/work code
+#   description  — what to do; this is what the old `task` input carried
 
 contracts:
   RefactorResult:
@@ -39,16 +48,31 @@ contracts:
     summary: string
     failures: string[]
 
+  # CANONICAL ReviewResult — STRAT-CLAUDE-EFFORT-PARITY. It MUST carry meta,
+  # lenses_run, auto_fixes and asks even though this pipeline never sets them by
+  # hand: compose enables review normalization for any step whose out contract is
+  # NAMED ReviewResult (deriveOrdinaryReviewScaffold), and the normalizer always
+  # stamps those four fields. Engine contracts are strict, so a narrower
+  # declaration makes every review step fail with unrecognized_keys and exhaust
+  # its attempts — the same defect class as COMP-SHIP-CONTRACT. Caught in review.
   ReviewResult:
     clean: boolean
     summary: string
-    findings: string[]
+    findings: array
+    meta: object
+    lenses_run: string[]
+    auto_fixes: array
+    asks: array
 
 flows:
   entry: refactor
   refactor:
     input:
-      task: string
+      featureCode: string
+      description: string
+      implementer_agent: string?
+      reviewer_agent: string?
+      pre_merge_gate: string[]?
     output:
       from: "${ship.output}"
       contract: RefactorResult
@@ -57,7 +81,7 @@ flows:
         agent: claude
         do: >
           Run the full test suite and capture the results as a baseline snapshot
-          before any changes to ${input.task}. Record pass/fail counts and test
+          before any changes to ${input.description}. Record pass/fail counts and test
           names. Return a summary of the current test state.
         out: RefactorResult
         attempts: 2
@@ -66,7 +90,7 @@ flows:
         after: [snapshot]
         agent: claude
         do: >
-          Analyze ${input.task} for refactoring opportunities. Identify code
+          Analyze ${input.description} for refactoring opportunities. Identify code
           smells, duplication, coupling issues and improvement targets. Return a
           structured summary of findings.
         out: RefactorResult
@@ -76,7 +100,7 @@ flows:
         after: [analyze]
         agent: claude
         do: >
-          Write a step-by-step refactoring plan for ${input.task} addressing
+          Write a step-by-step refactoring plan for ${input.description} addressing
           ${analyze.output.summary}. Each step must be a safe, incremental change
           that preserves behavior. Include file paths and expected changes.
         out: RefactorResult
@@ -110,7 +134,7 @@ flows:
         after: [test]
         agent: codex
         do: >
-          Review the refactored code for ${input.task} for correctness and
+          Review the refactored code for ${input.description} for correctness and
           quality. Verify that behavior is preserved and the code is cleaner than
           before. If this is a retry, fix the previous findings before
           re-reviewing. Return { "clean": boolean, "summary": string,
@@ -124,7 +148,7 @@ flows:
         after: [review]
         agent: claude
         do: >
-          Commit all changes for ${input.task} with a descriptive message.
+          Commit all changes for ${input.description} with a descriptive message.
           Return a summary.
         out: RefactorResult
         attempts: 2

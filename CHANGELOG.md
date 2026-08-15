@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-08-15 (review round 2)
+
+### COMP-PIPELINE-QUARANTINE — round 2 reviewed the FIXES, and two of them were regressions
+
+Round 2 was scoped to the round-1 fixes, which is where fixes tend to introduce findings. It found five, two of them P1 — both introduced by round 1.
+
+**The bundled-pipeline fallback made five specs resolvable but not runnable.** `resolveTemplatePath` now finds `content`, `coverage-sweep`, `refactor`, `research` and `review-fix`, but the plan-input envelope comes from the MODE, not the spec: feature mode always sends `{featureCode, description, implementer_agent, reviewer_agent}`, and those specs declared `task`. Probed directly against the engine — all five returned `status=failed`. The fallback had moved failure from "not found" to a failed run, which is worse. Their inputs now declare the runner's envelope, and `${input.description}` carries what `task` did; re-probed, all five plan.
+
+**`review-fix` could never reach its own gate.** It declared a three-field `ReviewResult`, but Compose enables review normalization for any step whose out contract is *named* `ReviewResult`, and the normalizer always stamps `meta`, `lenses_run`, `auto_fixes` and `asks`. Engine contracts are strict, so the review step would fail every attempt with `unrecognized_keys` and exhaust itself before the gate could fire — **the identical defect class as the ship-contract bug this whole thread started with.** Checking the rest found it was broader than reported: `content` and `refactor` had the same narrow declaration. All three now use the canonical shape.
+
+**Also fixed:** `compose fix` passed no cwd to `runInit`, so invoking it from a subdirectory seeded the spec in the wrong place and still failed (the build path already had this right). `review-fix` hard-coded `agent: codex` while the corrective fixer runs as `implementerAgent` — `--implementer codex` would have collapsed it back into self-review, so both roles now derive from the envelope and stay distinct by construction. The preset headers told users to copy only the YAML; a project-local spec wins resolution while profiles load only from an adjacent sidecar and fail open, so a YAML-only copy silently drops the tool restrictions and, for `team-review`, disconnects the gate from its reducer.
+
+**The guard could not have caught any of this**, because it synthesizes plan inputs from each spec's own declaration — so it proved five pipelines could plan with an envelope no runner sends. It now also asserts that each pipeline's required inputs are a subset of the envelope belonging to the runner that actually drives it. Control-tested: reverting one spec makes it fail with `driven by feature mode, which never sends [task]`. The first version of that assertion was too loose (it matched *any* envelope, so a bare `task` looked drivable because bug mode sends exactly that) and passed the control — the per-driver binding is what makes it bite.
+
+**The SSE flake had a third, deeper cause.** The sentinel added in round 1 relocated the failure to "the bridge never picked up the file at all", which turned out to be real: once the directory exists the bridge's only notification mechanism is `fs.watch`, with no periodic re-check (`_pollForDirectory` covers a missing *directory* only). Under load the file-creation event is simply missed. The test now creates the stream file before starting the bridge, so `start()` reads it synchronously instead of betting on the watcher. Verified 3x isolated and 4x in parallel.
+
 ## 2026-08-15 (review round)
 
 ### COMP-PIPELINE-QUARANTINE — Codex review of the migration; 12 findings applied
