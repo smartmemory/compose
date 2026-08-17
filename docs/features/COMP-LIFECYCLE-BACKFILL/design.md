@@ -1,6 +1,6 @@
 # COMP-LIFECYCLE-BACKFILL: Design
 
-**Status:** DESIGN — **BLOCKED on a Stratum-side capability (idempotent, non-emergency guard migrate). Scope decided: fix Stratum first, then build this with no carve-out.**
+**Status:** DESIGN — **PARTIALLY UNBLOCKED 2026-08-17 by stratum `91a55ed` (STRAT-GUARD-UPGRADE). One owner decision outstanding before implement — see "2026-08-17 update" below.**
 **Date:** 2026-08-05
 **Review:** Codex design gate round 1 — 4 must-fix, all confirmed and folded in. Round 2 — 5 more, all confirmed; two are **hard blockers** verified in stratum's source. See "Review adjudications".
 
@@ -12,6 +12,43 @@
 > Constraint 2 is a design contradiction, not just an inconvenience: adding the backfill edge to already-registered features would make this feature **depend on `STRATUM_GUARD_OVERRIDE_TOKEN`, the very mechanism it exists to replace**.
 >
 > See "Reshape forced by the guard constraints" for the way out of (1) and the open cross-repo dependency for (2).
+
+> **2026-08-17 update — constraint 2 is half resolved, and the other half is now a deliberate refusal, not a defect.**
+> Stratum shipped `STRAT-GUARD-UPGRADE` (`stratum@91a55ed`,
+> `stratum/docs/features/STRAT-GUARD-UPGRADE/design.md`): a new token-free,
+> idempotent, additive-only `stratum_guard_upgrade` alongside the unchanged
+> emergency `stratum_guard_migrate`.
+>
+> **What is fixed.** A policy whose checksum already matches returns
+> `unchanged` and writes nothing — no ledger entry, no `graph_version` bump, no
+> token. The lazy per-resource migration off the `_registered` cache path is
+> therefore free in the steady state and safe to re-run after a partial batch
+> failure (there is no cross-resource transaction; per-resource `flock` is all
+> there is, and idempotency is what makes that acceptable).
+>
+> **What is NOT fixed, and why it will not be.** `guardUpgrade` freezes
+> `terminal` in both directions and refuses any new edge entering or leaving a
+> terminal state. Adversarial review proved the alternative is a completion
+> bypass: if a token-free caller may add a terminal state, it can declare its
+> own success state, reach it over a new edge whose predicates it also chose (an
+> empty predicate list evaluates as met), and be COMPLETE without passing any
+> gate that existed at registration — while touching no existing edge, so an
+> additive classifier waves it through. Granting completability is an
+> authorization decision. `complete_backfilled` **is** a completability grant.
+>
+> **Owner decision required before implement.** Either
+> (a) accept one token-gated `guardMigrate` per resource for the one-time
+> terminal grant, with the free idempotent `guardUpgrade` check on every path
+> thereafter; or
+> (b) file stratum work for a **server-owned upgrade descriptor** — the target
+> policy must match a checksum the server was configured with rather than one
+> the caller supplies, which is the general safe form of a pre-authorized
+> policy change.
+>
+> Also answered, closing open question 4 below: the ledger is append-only and
+> fully preserved across a policy change; `current_state` is derived from it and
+> `graph_version` entries do not advance it; there is no cross-resource
+> transaction.
 
 ## Related Documents
 
