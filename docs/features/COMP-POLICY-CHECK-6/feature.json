@@ -1,9 +1,10 @@
 {
   "code": "COMP-POLICY-CHECK-6",
-  "description": "Stratum step postcondition. Stratum specs can declare `ensure: compose.policy.unsuppressed_violations == 0` as a step postcondition. Runs the same check inside Stratum's evaluation layer for Stratum-driven flows.",
-  "status": "IN_PROGRESS",
+  "description": "Stratum step postcondition. Stratum specs declare `ensure: ['result.unsuppressed_violations == 0']` \u2014 the policy check exposes `unsuppressed_violations` in the step result (contract-gated: attached when the step's out contract declares it or has no contract). Corrected 2026-08-17: the originally-proposed `compose.policy.*` ensure namespace does not exist; ensure is evaluated by the external Stratum engine against `result.<field>` only.",
+  "status": "COMPLETE",
   "phase": "COMP-POLICY-CHECK: Pre-Response Policy Check (Adherence Enforcement)",
   "position": 277,
   "created": "2026-05-29",
-  "updated": "2026-08-17"
+  "updated": "2026-08-17",
+  "commit_sha": "128ed7f"
 }
