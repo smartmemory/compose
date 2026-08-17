@@ -21,6 +21,7 @@ import {
   iterationDecisionEventId,
   gateDecisionEventId,
   driftThresholdDecisionEventId,
+  policyViolationDecisionEventId,
 } from './decision-event-id.js';
 import { mapResolveOutcomeToSchema } from './gate-log-store.js';
 
@@ -169,6 +170,39 @@ export function buildGateEvent({ featureCode, gateLogEntryId, gateId, decision, 
       gate_id: gateId,
       decision: schemaDecision,
       gate_log_entry_id: gateLogEntryId,
+    },
+    roles: [],
+  };
+}
+
+/**
+ * Build a kind=policy_violation DecisionEvent (COMP-POLICY-CHECK-5).
+ *
+ * CONTRACT: first-class kind since `contracts/comp-obs-contract.schema.json`
+ * v0.2.6 (2026-08-17) — closed metadata subschema {step_id, rule, matched,
+ * suppressed, user_mode, build_id}. Keep the emitted shape and the subschema in
+ * lockstep; extending either is a versioned contract edit.
+ *
+ * @param {{ featureCode, buildId, stepId, rule, matched, suppressed, userMode, timestamp }} params
+ */
+export function buildPolicyViolationEvent({
+  featureCode, buildId, stepId, rule, matched, suppressed, userMode, timestamp,
+}) {
+  const now = timestamp || new Date().toISOString();
+  const id = policyViolationDecisionEventId(featureCode, buildId ?? 'no-build', stepId, rule, matched);
+  return {
+    id,
+    feature_code: featureCode,
+    timestamp: now,
+    kind: 'policy_violation',
+    title: `${suppressed ? 'Policy match suppressed' : 'Policy violation'}: ${rule}`,
+    metadata: {
+      step_id: stepId,
+      rule,
+      matched,
+      suppressed: Boolean(suppressed),
+      user_mode: userMode,
+      build_id: buildId ?? null,
     },
     roles: [],
   };

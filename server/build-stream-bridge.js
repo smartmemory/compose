@@ -9,6 +9,7 @@
 import { readFileSync, statSync, watch } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { existsSync } from 'node:fs';
+import { emitDecisionEvent, buildPolicyViolationEvent } from './decision-event-emit.js';
 
 const JSONL_FILENAME = 'build-stream.jsonl';
 const DEFAULT_CRASH_TIMEOUT_MS = 300_000; // 5 min
@@ -224,6 +225,23 @@ export class BuildStreamBridge {
       const mapped = this._mapEvent(event);
       if (mapped) {
         this.#broadcast(mapped);
+      }
+
+      // COMP-POLICY-CHECK-5: a policy match also lands on the feature-level
+      // decision timeline, alongside the step event, for live cockpit visibility.
+      if (event.type === 'policy_violation') {
+        try {
+          emitDecisionEvent(this.#broadcast, buildPolicyViolationEvent({
+            featureCode: event.featureCode ?? null,
+            buildId: event.buildId ?? null,
+            stepId: event.stepId,
+            rule: event.rule,
+            matched: event.matched,
+            suppressed: event.suppressed,
+            userMode: event.userMode,
+            timestamp: event._ts ? new Date(event._ts).toISOString() : undefined,
+          }));
+        } catch { /* timeline emit is best-effort — never break the tail loop */ }
       }
     }
   }
@@ -524,6 +542,19 @@ export class BuildStreamBridge {
           template: event.template,
           detail: event.detail,
           severity: event.severity ?? 'violation',
+          _source: 'build',
+        };
+
+      // COMP-POLICY-CHECK-5: pre-response policy check pattern matches
+      case 'policy_violation':
+        return {
+          type: 'system', subtype: 'policy_violation',
+          stepId: event.stepId,
+          rule: event.rule,
+          matched: event.matched,
+          suppressed: Boolean(event.suppressed),
+          detail: event.detail,
+          userMode: event.userMode,
           _source: 'build',
         };
 

@@ -650,3 +650,83 @@ describe('BuildStreamBridge lane forwarding (COMP-AGENT-LANES)', () => {
     assert.ok(!('stepId' in broadcasts[3]), 'error without stepId must not grow one');
   });
 });
+
+// COMP-POLICY-CHECK-5 — pre-response policy matches reach both the step surface
+// and the feature-level decision timeline.
+describe('BuildStreamBridge — policy_violation', () => {
+  let composeDir;
+  let filePath;
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'bsb-policy-'));
+    composeDir = join(tmpDir, '.compose');
+    mkdirSync(composeDir, { recursive: true });
+    filePath = join(composeDir, 'build-stream.jsonl');
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  async function collectPolicy(events) {
+    const broadcasts = [];
+    const bridge = new BuildStreamBridge(composeDir, (msg) => broadcasts.push(msg));
+    bridge.start();
+    await sleep(100);
+    events.forEach((event, i) => writeLine(filePath, event, i));
+    await sleep(200);
+    bridge.stop();
+    return broadcasts;
+  }
+
+  it('maps to a system event AND emits a decisionEvent alongside it', async () => {
+    const broadcasts = await collectPolicy([{
+      type: 'policy_violation',
+      stepId: 'execute',
+      rule: 'Never suggest stopping points',
+      matched: '(?i)\\bwant me to continue\\b',
+      suppressed: false,
+      detail: 'Response matches ...',
+      userMode: 'AUTONOMOUS',
+      featureCode: 'COMP-POLICY-CHECK-5',
+      buildId: 'b-1',
+    }]);
+
+    assert.equal(broadcasts.length, 2, 'one step event + one timeline event');
+
+    const [mapped, timeline] = broadcasts;
+    assert.equal(mapped.type, 'system');
+    assert.equal(mapped.subtype, 'policy_violation');
+    assert.equal(mapped.stepId, 'execute');
+    assert.equal(mapped.rule, 'Never suggest stopping points');
+    assert.equal(mapped.suppressed, false);
+    assert.equal(mapped._source, 'build');
+
+    assert.equal(timeline.type, 'decisionEvent');
+    assert.equal(timeline.event.kind, 'policy_violation');
+    assert.equal(timeline.event.feature_code, 'COMP-POLICY-CHECK-5');
+    assert.equal(timeline.event.metadata.rule, 'Never suggest stopping points');
+    assert.equal(timeline.event.metadata.suppressed, false);
+    assert.equal(timeline.event.metadata.user_mode, 'AUTONOMOUS');
+    assert.match(timeline.event.title, /^Policy violation:/);
+  });
+
+  it('a suppressed match is still broadcast, titled as suppressed', async () => {
+    const broadcasts = await collectPolicy([{
+      type: 'policy_violation',
+      stepId: 'execute',
+      rule: 'feedback-external-prose',
+      matched: ' — ',
+      suppressed: true,
+      detail: 'Response matches ... suppressed',
+      userMode: 'PACED',
+      featureCode: 'F-1',
+      buildId: null,
+    }]);
+
+    assert.equal(broadcasts.length, 2);
+    assert.equal(broadcasts[0].suppressed, true);
+    assert.match(broadcasts[1].event.title, /^Policy match suppressed:/);
+  });
+});
