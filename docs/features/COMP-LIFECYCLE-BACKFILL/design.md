@@ -1,6 +1,6 @@
 # COMP-LIFECYCLE-BACKFILL: Design
 
-**Status:** DESIGN — **PARTIALLY UNBLOCKED 2026-08-17 by stratum `91a55ed` (STRAT-GUARD-UPGRADE). One owner decision outstanding before implement — see "2026-08-17 update" below.**
+**Status:** DESIGN — **STILL BLOCKED 2026-08-17. Two stratum features shipped toward it (`91a55ed`, `e01b6d7`), and the second proved the blocker is deeper than assumed: compose's CLI transport cannot carry ANY authorized guard mutation, including the override-token fallback. Owner decision required — see the two 2026-08-17 updates below.**
 **Date:** 2026-08-05
 **Review:** Codex design gate round 1 — 4 must-fix, all confirmed and folded in. Round 2 — 5 more, all confirmed; two are **hard blockers** verified in stratum's source. See "Review adjudications".
 
@@ -44,6 +44,46 @@
 > policy must match a checksum the server was configured with rather than one
 > the caller supplies, which is the general safe form of a pre-authorized
 > policy change.
+>
+> **2026-08-17, later the same day — option (b) was built, and it exposed a
+> deeper problem that blocks BOTH options.** Stratum shipped
+> `STRAT-GUARD-DESCRIPTOR` (`stratum@e01b6d7`): server-owned upgrade descriptors,
+> where the exact target policy is held in a file a human reviewed and whose
+> sha256 is pinned in the server environment, applied by name via
+> `stratum_guard_apply_upgrade`. That is the right shape and it does grant
+> `complete_backfilled` legitimately.
+>
+> **But it is MCP-only, and compose does not talk to stratum over MCP.**
+> `server/stratum-client.js` is, by its own docstring, "the ONLY module in
+> compose that spawns Stratum CLI processes" — every guard call is a CLI
+> subprocess. A CLI process inherits the *caller's* environment, so a CLI apply
+> action would let any caller write its own descriptor file, pin its own digest,
+> and mint its own authorization (with the ledger stamping `resolved_by:
+> "human"` over it). Stratum therefore refused to expose one.
+>
+> **And the fallback was never real either.** Proving that finding turned up a
+> defect in the existing system: `_checkOverrideToken` compares the supplied
+> token against `process.env` *in whatever process is running*, so over the CLI a
+> caller sets both sides and they match. Verified empirically against a guard
+> whose only predicate could never be satisfied — the honest transition was
+> `refused`, and the same walk with a self-invented token returned `deviation`
+> and moved the state. So option (a) from the earlier note, "accept one
+> token-gated migrate per resource", **was not an authorized path at any point**.
+>
+> **The decision is now a different one**, and it is bigger than this feature:
+> - **(i) Trusted transport** — compose calls stratum over MCP for privileged
+>   guard operations instead of spawning the CLI. Scoped to guard mutations this
+>   is small; as a general transport change it is not.
+> - **(ii) Signed descriptors** — authorization becomes a signature the calling
+>   process cannot produce, verified against a public key checked into stratum's
+>   source. Transport-independent, and it retroactively repairs the override
+>   token. Stratum's design recommends this one.
+>
+> Compose-side work that is useful under either: generate and commit the
+> descriptor file (compose owns `buildPhaseGraph`, so it can enumerate the
+> distinct policies among registered guards and emit `{from_checksum, to_policy}`
+> for each), and have a human review it. That is the authorization artifact
+> either way.
 >
 > Also answered, closing open question 4 below: the ledger is append-only and
 > fully preserved across a policy change; `current_state` is derived from it and
