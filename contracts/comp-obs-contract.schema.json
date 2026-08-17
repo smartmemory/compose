@@ -2,10 +2,11 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://forge.local/contracts/comp-obs-contract.schema.json",
   "title": "COMP-OBS-CONTRACT — Wave 6 shared data model",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "_source": "docs/features/COMP-OBS-CONTRACT/schema.json",
   "_roadmap": "Wave 6 — Situational Awareness",
   "_changelog": {
+    "0.2.6": "COMP-POLICY-CHECK (2026-08-17) — DecisionEvent gains kind=policy_violation (pre-response policy check, emitter server/decision-event-emit.js buildPolicyViolationEvent) with a closed metadata subschema {step_id, rule, matched, suppressed, user_mode, build_id}. Additive — 0.2.5 events continue to validate. Note: BuildStreamEvent.schema_version const stays 0.2.5 (no BuildStreamEvent change in this bump).",
     "0.2.5": "STRAT-PAR-STREAM — added BuildStreamEvent typed discriminated union (12 kinds): 6 new agent-narration kinds (agent_started, tool_use_summary, agent_relay closed + live; iteration_update, tier_result, health_event closed + reserved) and 6 legacy build-level kinds imported from compose/lib/build-stream-writer.js (capability_profile, capability_violation, step_usage, gate_tier_result, health_score, build_end — open metadata, catalog only; STRAT-PAR-STREAM-LEGACY-CLOSE will tighten). Additive — v0.2.4 specs continue to validate.",
     "0.2.4": "COMP-OBS-DRIFT — added optional breach_started_at + breach_event_id to DriftAxis for stable threshold-event identity across WS reconnect; live emit and snapshot rehydration both compose the event id from these persisted fields.",
     "0.2.3": "Codex review (2026-04-24) — two joinable-data fixes + SURFACE-split propagation. (a) `StatusSnapshot.drift_alerts[]` now a locally-defined subschema that mandates `breached: true`, so STATUS cannot emit non-alert axes through the alerts field. (b) gate `DecisionEvent.metadata.gate_log_entry_id` promoted to required — every gate DecisionEvent MUST carry its GateLogEntry id. `GateLogEntry.decision_event_id` remains nullable (explicit emission-failure escape hatch, reader reconciliation documented in prose). (c) Propagate 2026-04-23 SURFACE split (ROADMAP): `COMP-OBS-SURFACE` → `COMP-OBS-TIMELINE` (region ②, DecisionEvent producer+reader) + `COMP-OBS-STEPDETAIL` (step-level surface, no direct contract consumption in v1). `_consumers` updated; no field-shape changes beyond (a)+(b). DecisionEvent emitter ownership restated: BRANCH emits kind=branch, GATELOG emits kind=gate, TIMELINE adds kind=phase_transition (on lifecycle.advance) + kind=iteration (wrapping existing iteration-loop events), DRIFT emits kind=drift_threshold on breach.",
@@ -216,7 +217,7 @@
         "id":           { "type": "string", "format": "uuid" },
         "feature_code": { "type": "string" },
         "timestamp":    { "type": "string", "format": "date-time" },
-        "kind":         { "type": "string", "enum": ["gate", "branch", "iteration", "phase_transition", "drift_threshold"] },
+        "kind":         { "type": "string", "enum": ["gate", "branch", "iteration", "phase_transition", "drift_threshold", "policy_violation"] },
         "title":        { "type": "string", "maxLength": 140 },
         "roles": {
           "type": "array",
@@ -269,6 +270,10 @@
         {
           "if":   { "properties": { "kind": { "const": "drift_threshold" } } },
           "then": { "properties": { "metadata": { "type": "object", "required": ["axis_id", "ratio", "threshold"], "properties": { "axis_id": { "type": "string", "enum": ["path_drift", "contract_drift", "review_debt_drift"] }, "ratio": { "type": "number" }, "threshold": { "type": "number" } }, "additionalProperties": false } } }
+        },
+        {
+          "if":   { "properties": { "kind": { "const": "policy_violation" } } },
+          "then": { "properties": { "metadata": { "type": "object", "required": ["step_id", "rule", "matched", "suppressed", "user_mode"], "properties": { "step_id": { "type": "string" }, "rule": { "type": "string" }, "matched": { "type": "string" }, "suppressed": { "type": "boolean" }, "user_mode": { "type": "string", "enum": ["AUTONOMOUS", "PACED", "SKILL_GATED"] }, "build_id": { "type": ["string", "null"] } }, "additionalProperties": false } } }
         }
       ]
     },

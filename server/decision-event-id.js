@@ -62,3 +62,20 @@ export function driftThresholdDecisionEventId(featureCode, axisId, breachStarted
   const featureNs = uuidv5(String(featureCode), ROOT_NAMESPACE);
   return uuidv5(`drift_threshold:${axisId}:${breachStartedAtIso}`, featureNs);
 }
+
+/**
+ * Deterministic id for a policy_violation DecisionEvent (COMP-POLICY-CHECK-5).
+ * Unique per (featureCode, buildId, stepId, rule, matched pattern) so a replayed
+ * build-stream line re-derives the same id and the timeline stays deduplicated.
+ *
+ * @param {string} featureCode
+ * @param {string} buildId
+ * @param {string} stepId
+ * @param {string} ruleName
+ * @param {string} matched — the pattern text that matched
+ * @returns {string} UUID v5
+ */
+export function policyViolationDecisionEventId(featureCode, buildId, stepId, ruleName, matched) {
+  const featureNs = uuidv5(String(featureCode), ROOT_NAMESPACE);
+  return uuidv5(`policy_violation:${buildId}:${stepId}:${ruleName}:${matched}`, featureNs);
+}

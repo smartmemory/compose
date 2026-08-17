@@ -59,3 +59,117 @@
 - Default ON but structurally inert without a catalog; kill switch `policyCheck.enabled=false`.
 - False-positive tuning is expected (design risk 1): suppression signals live in the CATALOG (user-authored markdown), not in Compose code — tuning never needs a Compose release.
 - Success metrics (design): unsuppressed CONTRADICTED <5% on the next n=100 run; false-positive <5% on PACED sessions; revision-acceptance >70%.
+
+---
+
+## Implemented surface (2026-08-17)
+
+### Configuration — `.compose/compose.json`
+
+```json
+{
+  "policyCheck": {
+    "enabled": true,
+    "memoryDir": "~/.claude/projects/-Users-me-reg-my-Proj/memory",
+    "userMode": "AUTONOMOUS"
+  }
+}
+```
+
+An **absent `policyCheck` block means enabled** — the check ships as the Compose
+default and is structurally inert without a catalog. `"enabled": false` is the
+kill switch. `memoryDir` (absolute, `~`, or cwd-relative) overrides the default
+`~/.claude/projects/<encoded-cwd>/memory`, where the encoding replaces `/` and
+`.` with `-`. Only `feedback_*.md` files are read, and only their
+`## Detection patterns` fenced-yaml block.
+
+`userMode` (`AUTONOMOUS` | `PACED` | `SKILL_GATED`, default `AUTONOMOUS`) declares
+the pacing mode for build-mediated work. An unrecognized value warns and is
+ignored. This is the ONLY way a build reaches `PACED`: see deviation 4.
+
+### User mode in the build engine
+
+| Surface | How the mode is decided |
+|---|---|
+| Interactive (chat harness, Claude Code hook) | `classifyUserMode(recentUserTurns, catalog)` — a suppression signal in the last 2 user turns means PACED |
+| Compose build engine | `resolveBuildUserMode(config.userMode, {skillGated})` — config override, else SKILL_GATED on a gate step, else AUTONOMOUS |
+
+### Pattern safety
+
+The catalog is user-authored, but a pathological regex would still stall the
+build loop. Three layers, all in `compilePattern`/`applyExclusions`: patterns
+over 300 characters are skipped; every compiled pattern is timed against canary
+inputs once per process and dropped if it exceeds 25ms; and no pattern is ever
+applied to more than 100KB of response text. Each rejection warns, naming the
+rule and pattern.
+
+### COMP-POLICY-CHECK-6 — the Stratum postcondition
+
+Compose attaches the unsuppressed count to the step's result payload as
+`unsuppressed_violations`. A spec opts in by **declaring the field in the step's
+out contract** (engine contracts are strict, so an undeclared field is never
+attached) and then asserting it:
+
+```yaml
+contracts:
+  PhaseResult:
+    phase: string
+    summary: string
+    outcome: string
+    unsuppressed_violations: number
+
+flows:
+  build:
+    steps:
+      - id: execute
+        do: "implement ${input.task}"
+        out: PhaseResult
+        attempts: 2
+        ensure:
+          - expr: "result.unsuppressed_violations == 0"
+```
+
+The ensure is evaluated by the external Stratum engine against `result.<field>`,
+exactly like `result.clean == True` (`lib/pipeline-cli.js:246`). There is no
+`compose.*` ensure namespace and no engine change. Steps that declare nothing
+are untouched: the scan still runs, still traces, and still contributes
+violation strings, but nothing gates.
+
+### Files
+
+| File | Role |
+|---|---|
+| `lib/policy-catalog.js` | config read, memory-dir resolution, markdown → catalog, mtime-invalidated per-process cache |
+| `lib/policy-check.js` | `classifyUserMode`, `scanResponse`, `toViolationStrings`, `buildRevisionNotice`, `attachPolicyCount` |
+| `lib/build.js` | `isGateStep`, `policyScanForStep`, `recordPolicyScan`, revision settlement in `settleDispatches` + the step-loop wiring (scan → one revision pass → re-scan) |
+| `lib/result-normalizer.js` | `mergeUsage` (a step whose work took two agent calls reports the sum) |
+| `lib/dispatch-ledger.js` | `policy-revision` added to `DISPATCH_SITES` |
+| `lib/build-stream-writer.js` | `writePolicyViolation` |
+| `server/build-stream-bridge.js` | `policy_violation` → system event + `decisionEvent` |
+| `server/decision-event-emit.js` | `buildPolicyViolationEvent` |
+
+### Deviations from the plan above
+
+1. **Trace `pass` field.** Rows carry `pass: 'initial' | 'policy_revision'` so
+   revision-acceptance rate is computable from the bus alone.
+2. **`unsuppressed_violations` is contract-gated.** The plan said "include it in
+   the step's result payload"; engine out contracts are strict, so attaching it
+   unconditionally would fail every existing step. It is attached when the step
+   has no out contract, or its contract declares the field.
+3. **User mode in a build is declared, never inferred (review fix).** The design's
+   PACED classification reads recent user turns. The build engine has none: a
+   build runs from a feature description written once, so classifying it as a
+   "turn" would let one incidental phrase ("walk me through the refactor")
+   silently disable the check for an entire build. `classifyUserMode` stays
+   exported and tested for interactive surfaces that genuinely have turns; the
+   build path uses the explicit `resolveBuildUserMode`.
+4. **A replacing revision is a second billable dispatch (review fix).** It carries
+   its own dispatch id and its own usage. The replacement merges both, so
+   settlement settles both ids on the same verdict and `step_usage` /
+   `build_end` / build-history totals include the revision's cost. A rejected
+   revision is billed separately, like the review fixer's.
+5. **`policy_violation` is a schema DecisionEvent kind as of contract 0.2.6.**
+   Originally emitted off-schema (the timeline renderer tolerates unknown kinds);
+   adjudicated at review and the contract was bumped 0.2.5 → 0.2.6 (2026-08-17):
+   `DecisionEvent.kind` gains `policy_violation` with a closed metadata subschema
+   `{step_id, rule, matched, suppressed, user_mode, build_id}`. Additive.
