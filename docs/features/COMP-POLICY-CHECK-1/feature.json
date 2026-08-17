@@ -1,9 +1,10 @@
 {
   "code": "COMP-POLICY-CHECK-1",
   "description": "Pattern-catalog client. Fetch SmartMemory's violation-pattern catalog via `mcp__smartmemory__memory_get_violation_patterns` once per session; cache in-memory; refresh on rule-change signal.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "COMP-POLICY-CHECK: Pre-Response Policy Check (Adherence Enforcement)",
   "position": 272,
   "created": "2026-05-29",
-  "updated": "2026-08-17"
+  "updated": "2026-08-17",
+  "commit_sha": "128ed7f"
 }
