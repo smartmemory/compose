@@ -1,0 +1,16 @@
+{
+  "code": "COMP-MCP-ENFORCE-CLAIM",
+  "description": "**Correct COMP-MCP-ENFORCE's false guard-coverage claim (COMP-COMPLETION-GATE AC-14).** `docs/features/COMP-MCP-ENFORCE/report.md:8` states \"No caller — skill, human cockpit, or rogue MCP/REST client — can effect a transition the guard refuses\", and the Slice 3 section repeats it. This has never been true: the COMP-COMPLETION-GATE audit measured 321 managed features against 31 registered guard resources with ZERO overlap (all 31 leaked test fixtures), and 230 COMPLETE features none of which passed a guarded transition. The report describes the MCP boundary it genuinely closed and then generalises that to ALL callers — the CLI and build runner ran in-process, never called a guarded transition, and were never covered. Replace the absolute claim with what was actually delivered (the MCP/REST boundary), state the measured coverage, and forward-reference COMP-COMPLETION-GATE for the paths that remained open. Doc-only, no code. Scope note: state slice-1+2 reality only — after those slices `setFeatureStatus`, the vision PATCH endpoint, stratum-sync and direct `updateItemStatus` are STILL unguarded, so the correction must not swap one overclaim for a smaller one.",
+  "status": "PLANNED",
+  "phase": "COMP-PARITY: UI↔CLI Parity",
+  "created": "2026-08-18",
+  "updated": "2026-08-18",
+  "complexity": "S",
+  "position": 15,
+  "profile": {
+    "needs_prd": false,
+    "needs_architecture": false,
+    "needs_verification": false,
+    "needs_report": false
+  }
+}
