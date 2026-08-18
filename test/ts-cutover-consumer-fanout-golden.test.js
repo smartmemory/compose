@@ -2723,3 +2723,123 @@ describe('TS-native consumer fanout journal and merge recovery', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// COMP-FANOUT-NOOP-MERGE — a worker that changed nothing must not block the merge.
+//
+// computeWitnessChain pushes a `write-tree` after EVERY accepted entry but skips
+// `git apply` for a zero-length diff. So a no-op worker contributed a witness
+// identical to its predecessor, the uniqueness check fired, and the whole merge
+// aborted with MERGE_WITNESS_NOT_UNIQUE — over a fanout whose only fault was
+// that one worker had nothing to do.
+//
+// That is the NORMAL outcome whenever work is fanned out more ways than it
+// divides. Observed live: `compose build --quick` on a two-edit single-file doc
+// change fanned two workers; one wrote the correction, one produced an empty
+// diff; the merge blocked, and blocked again on retry, because the retry
+// re-derived the same split.
+//
+// Empty and MISSING stay different: a null diff (never captured — a real fault)
+// must still fail the completeness accounting.
+// ---------------------------------------------------------------------------
+
+describe('consumer merge — no-op workers', () => {
+  /** Seed a journal with the given issuances and return a prepared transaction. */
+  async function prepareWith(scenario, opts, issuances) {
+    new ConsumerFanoutArtifacts(opts);
+    const journalPath = await journalPathOf(scenario);
+    const seeded = JSON.parse(await readFile(journalPath, 'utf8'));
+    seeded.revisionDigest = 'rev-noop';
+    seeded.specDigest = 'spec-noop';
+    seeded.issuances = issuances;
+    await writeFile(journalPath, `${JSON.stringify(seeded, null, 2)}\n`);
+    const audit = {
+      steps: {
+        fan: {
+          fanout: {
+            items: issuances.map((i) => ({
+              status: 'succeeded', generation: i.generation, acceptedDispatchToken: i.dispatchToken,
+            })),
+          },
+        },
+      },
+    };
+    return new ConsumerFanoutArtifacts(opts)
+      .prepareMerge({ gateStepId: 'merge', gateToken: 'gt-noop', fanoutStepId: 'fan', audit });
+  }
+
+  const issuance = (index, token, diff) => ({
+    dispatchToken: token, scopedId: `fan/${index}`, fanoutStepId: 'fan', itemIndex: index,
+    generation: 1, stage: 0, attempt: 1, isolation: 'worktree',
+    state: 'accepted', diff, hadCumulativeDiff: (diff?.length ?? 0) > 0, diffDigest: `digest-${index}`,
+  });
+
+  test('an EMPTY diff alongside a real one no longer aborts the merge', async (t) => {
+    const scenario = await setupScenario(t, 'noop-empty-diff');
+    const opts = {
+      runId: 'noop-empty-run',
+      targetCwd: scenario.workspace,
+      artifactRoot: scenario.artifactRoot,
+    };
+    const realDiff = await captureAddFileDiff(scenario.workspace, 'merged.txt', 'real work\n');
+
+    // Worker 0 did nothing; worker 1 did the work. Before the fix this threw
+    // MERGE_WITNESS_NOT_UNIQUE, because the chain was [T0, T0, T1].
+    const prepared = await prepareWith(scenario, opts, [
+      issuance(0, 'tok-noop', ''),
+      issuance(1, 'tok-real', realDiff),
+    ]);
+
+    assert.equal(prepared.state, 'prepared', 'the merge must prepare, not block');
+    assert.equal(prepared.orderedDiffs.length, 1, 'only the work-bearing worker participates');
+    assert.equal(prepared.orderedDiffs[0].dispatchToken, 'tok-real');
+    assert.equal(
+      new Set(prepared.witnessChain).size, prepared.witnessChain.length,
+      'the witness chain is unique',
+    );
+    assert.equal(prepared.witnessChain.length, 2, 'baseline + one applied diff');
+
+    // And it actually applies: the real worker's file lands.
+    const artifacts = new ConsumerFanoutArtifacts(opts);
+    await artifacts.applyMerge(
+      artifacts.journal.mergeTransactions.find((e) => e.gateToken === 'gt-noop'),
+    );
+    assert.equal(
+      await readFile(join(scenario.workspace, 'merged.txt'), 'utf8'), 'real work\n',
+      'the work-bearing diff still lands',
+    );
+  });
+
+  test('a fanout where EVERY worker no-ops prepares an empty, valid merge', async (t) => {
+    const scenario = await setupScenario(t, 'noop-all-empty');
+    const opts = {
+      runId: 'noop-all-run',
+      targetCwd: scenario.workspace,
+      artifactRoot: scenario.artifactRoot,
+    };
+    const prepared = await prepareWith(scenario, opts, [
+      issuance(0, 'tok-a', ''),
+      issuance(1, 'tok-b', ''),
+    ]);
+    assert.equal(prepared.state, 'prepared');
+    assert.deepEqual(prepared.orderedDiffs, [], 'nothing to apply');
+    assert.equal(prepared.witnessChain.length, 1, 'just the baseline');
+  });
+
+  test('a NULL diff still fails — absent is not the same as empty', async (t) => {
+    const scenario = await setupScenario(t, 'noop-null-diff');
+    const opts = {
+      runId: 'noop-null-run',
+      targetCwd: scenario.workspace,
+      artifactRoot: scenario.artifactRoot,
+    };
+    // A null diff means the capture never happened. That is a genuine fault and
+    // the completeness accounting must still refuse it — the fix must not have
+    // widened into "ignore anything without a diff".
+    await assert.rejects(
+      () => prepareWith(scenario, opts, [issuance(0, 'tok-null', null)]),
+      (error) => error?.code === 'ACCEPTED_ARTIFACTS_INCOMPLETE',
+      'a never-captured diff is still a hard failure',
+    );
+  });
+});
