@@ -279,3 +279,162 @@ test('executeShipStep: non-git cwd → fields default safely', async () => {
   assert.ok(result.commit === null || result.commit === undefined || typeof result.commit === 'string');
   assert.ok(result.filesChanged === undefined || Array.isArray(result.filesChanged));
 });
+
+
+// ===========================================================================
+// COMP-COMPLETION-GATE slice 2 — the ship step collects evidence and stops.
+//
+// Before slice 2 the ship step COMPLETED the feature: it called recordCompletion
+// on both branches, swallowed any failure, and returned success anyway — while
+// the terminal block wrote COMPLETE a second time and the health gate that can
+// FAIL the build ran after both. Ship now records evidence only; the single
+// completion happens at terminalization, through the gate, after health.
+//
+// The non-git branch is the sharper change: it used to return BEFORE the test
+// run and hard-code tests_pass:true on a permanent record. Tests are now hoisted
+// above the git-availability check, so both branches attest identically. "No
+// repo" is a reason to skip the commit, never a reason to skip the tests.
+// ===========================================================================
+
+/**
+ * A dir whose test framework is pytest, with `pytest` shimmed onto PATH to emit
+ * a real, parseable summary. Keeps the attestation path exercised end-to-end
+ * (detect → run → parse → derive) without a network install.
+ */
+function withPytestShim(summaryLine, fn) {
+  const shimDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pytest-shim-'));
+  const shim = path.join(shimDir, 'pytest');
+  fs.writeFileSync(shim, `#!/bin/sh\necho "${summaryLine}"\n`);
+  fs.chmodSync(shim, 0o755);
+  const origPath = process.env.PATH;
+  process.env.PATH = `${shimDir}:${origPath}`;
+  try {
+    return fn();
+  } finally {
+    process.env.PATH = origPath;
+    fs.rmSync(shimDir, { recursive: true, force: true });
+  }
+}
+
+function makeFeature(root, code, status = 'PLANNED') {
+  const dir = path.join(root, 'docs', 'features', code);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, 'feature.json'),
+    JSON.stringify({ code, description: 'ship fixture', phase: 'Phase 1', status }, null, 2),
+  );
+  return dir;
+}
+
+function readFeature(root, code) {
+  return JSON.parse(fs.readFileSync(path.join(root, 'docs', 'features', code, 'feature.json'), 'utf8'));
+}
+
+/** A context that records what ship handed to the completion evidence sink. */
+function evidenceContext(extra = {}) {
+  const recorded = [];
+  return {
+    recorded,
+    context: {
+      mode: 'feature',
+      filesChanged: [],
+      recordCompletionEvidence: (e) => recorded.push(e),
+      ...extra,
+    },
+  };
+}
+
+test('slice 2: a NON-GIT ship runs the tests and attests them (it never could before)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'compose-ship-nongit-attest-'));
+  fs.writeFileSync(path.join(dir, 'pytest.ini'), '[pytest]\n');
+  makeFeature(dir, 'NOGIT-1');
+  const { recorded, context } = evidenceContext();
+
+  const result = await withPytestShim(
+    '===================== 4 passed in 0.02s =====================',
+    () => executeShipStep('NOGIT-1', dir, dir, context, 'no-op', null),
+  );
+
+  assert.equal(result.outcome, 'complete');
+  assert.equal(result.noRepo, true, 'the non-git branch is flagged for the caller');
+  assert.equal(result.testsAttested, 'passed', 'the test run actually happened on the non-git path');
+  assert.equal(recorded.length, 1, 'exactly one evidence hand-off');
+  assert.equal(recorded[0].testsAttested, 'passed');
+  assert.equal(recorded[0].testSummary.test_count, 4);
+
+  // The behavior change: ship writes NO completion. It used to record one here
+  // with a null SHA and a hard-coded tests_pass:true.
+  const feature = readFeature(dir, 'NOGIT-1');
+  assert.equal(feature.status, 'PLANNED', 'ship must not flip status');
+  assert.equal(feature.completions, undefined, 'ship must not write a completion record');
+  assert.equal('completionWarning' in result, false, 'the completionWarning channel is gone');
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("slice 2: an unreadable test run attests 'no-signal', not a pass", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'compose-ship-nosignal-'));
+  makeFeature(dir, 'NOSIG-1');
+  // No framework at all → nothing detected, `npm test` in an empty dir fails,
+  // output does not parse. The old code called this `true`.
+  const { recorded, context } = evidenceContext();
+
+  const result = await executeShipStep('NOSIG-1', dir, dir, context, 'no-op', null);
+
+  assert.equal(result.testsAttested, 'no-signal');
+  assert.equal(recorded[0].testsAttested, 'no-signal');
+  assert.equal(readFeature(dir, 'NOSIG-1').status, 'PLANNED');
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('slice 2: a COMMITTING ship hands over evidence and completes nothing', async () => {
+  const repo = makeRepo();
+  fs.writeFileSync(path.join(repo, 'pytest.ini'), '[pytest]\n');
+  makeFeature(repo, 'SHIPEV-1');
+  fs.writeFileSync(path.join(repo, 'lib-ev.js'), 'export const e = 1;\n');
+  const { recorded, context } = evidenceContext({ filesChanged: ['lib-ev.js'] });
+
+  const result = await withPytestShim(
+    '===================== 7 passed in 0.02s =====================',
+    () => executeShipStep('SHIPEV-1', repo, repo, context, 'add ev', null),
+  );
+
+  assert.equal(result.outcome, 'complete');
+  assert.ok(typeof result.commit === 'string' && result.commit.length >= 7, 'the commit still happens');
+  assert.equal(result.testsAttested, 'passed');
+
+  const evidence = recorded.at(-1);
+  assert.equal(evidence.commitSha, result.commit, 'the SHA rides along as evidence');
+  assert.equal(evidence.testsAttested, 'passed');
+  assert.ok(Array.isArray(evidence.filesChanged));
+  assert.equal(evidence.notes, 'add ev');
+
+  // The commit is durable; the completion is not ship's to write.
+  const feature = readFeature(repo, 'SHIPEV-1');
+  assert.equal(feature.status, 'PLANNED');
+  assert.equal(feature.completions, undefined);
+
+  fs.rmSync(repo, { recursive: true, force: true });
+});
+
+test('slice 2: a failing suite attests failure — the commit still stands', async () => {
+  const repo = makeRepo();
+  fs.writeFileSync(path.join(repo, 'pytest.ini'), '[pytest]\n');
+  makeFeature(repo, 'SHIPFAIL-1');
+  fs.writeFileSync(path.join(repo, 'lib-fail.js'), 'export const f = 1;\n');
+  const { recorded, context } = evidenceContext({ filesChanged: ['lib-fail.js'] });
+
+  const result = await withPytestShim(
+    '========== 2 failed, 5 passed in 0.10s ==========',
+    () => executeShipStep('SHIPFAIL-1', repo, repo, context, 'add fail', null),
+  );
+
+  // Ship does not block on a red suite — that judgement belongs to the gate,
+  // which refuses a completion whose evidence says the tests failed.
+  assert.equal(result.testsAttested, 'failed');
+  assert.equal(recorded.at(-1).testsAttested, 'failed');
+  assert.equal(readFeature(repo, 'SHIPFAIL-1').status, 'PLANNED');
+
+  fs.rmSync(repo, { recursive: true, force: true });
+});

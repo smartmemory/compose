@@ -828,6 +828,51 @@ be described as "completions are guarded"; that claim is what `COMP-MCP-ENFORCE/
 falsely, and repeating it one slice early would be the same error in a new place. AC-14's correction
 is written against the slice-1 reality, and re-checked at each subsequent slice.
 
+## 2.9a SLICE 2 — the build runner (SHIPPED)
+
+**Slice 2 principle: exactly one completion, at terminalization, after the health verdict.** Slice 1
+gated the deliberate completion. Slice 2 gates the one that actually produces COMPLETE features.
+
+| in slice 2 | what changed |
+|---|---|
+| `deriveTestsAttested` (`lib/test-bootstrap.js`) — AC-18 | tri-state `passed`/`failed`/`no-signal`. `deriveTestsPass` is UNCHANGED and still feeds the ungated lane-triage gate; the two diverge exactly on the unreadable case |
+| Accumulator **v1 → v2** (`tests_attested`, `evidence_root`) + read-time migration | a v1 record migrates to `no-signal`, which the gate refuses — a build resumed across the upgrade re-attests rather than inheriting a pass it never recorded |
+| Tests hoisted **above** the `isGitRepo` branch in `executeShipStep` | the non-git branch used to return before the test run and hard-code `tests_pass: true`. "No repo" is a reason to skip the commit, never the tests |
+| Ship stops completing: both branches call `context.recordCompletionEvidence(...)` | it used to `recordCompletion`, swallow any failure, and return success anyway. `completionWarning` is gone |
+| Terminal block defers to `pendingCompletion` | it used to write COMPLETE immediately, before the health gate that can fail the build |
+| The gated completion runs **after** the health gate | AC-8/8a/8b/8c. Resolves HEAD from `evidence_root`, refuses `no-signal`, calls `completionGate`, and only then completes the vision item |
+
+**The `no-signal` refusal is scoped to `capabilities.guard: true`** — found by the full suite, not by
+review. Three integration builds with no ship step went from completing to refusing, because the
+refusal sat OUTSIDE the guarded regime the gate itself already respects (AC-5). Enforcing attestation
+on an opted-out project breaks every one of them, including non-git workspaces where the evidence can
+never pass — the same reversal already made once in slice 1. An opted-out project keeps
+`deriveTestsPass`'s degrade contract: `no-signal` reads as true there, and only an OBSERVED failure
+is recorded as one.
+
+**Non-`tracksFeatureJson` modes (fix, plan) are untouched** — they keep their old completion path,
+per COMP-COMPLETION-GATE-MODES.
+
+**Honest statement of what slice 2 does and does not achieve.** After slice 2 the build runner is
+gated: a health-rejected build writes nothing (no completion record, no COMPLETE status, no vision
+completion, no guard transition), and an unattested test run refuses instead of claiming a pass.
+**Paths 5, 7, 8 and 14 (`setFeatureStatus`, the vision PATCH, stratum-sync, direct
+`updateItemStatus`) remain open.** Do not describe completions as guarded — that is exactly the
+claim `COMP-MCP-ENFORCE/report.md` made falsely. AC-14's correction is still outstanding and lands
+with slice 3.
+
+**Coverage.** `test/build-completion-gate.test.js` drives the real `runBuild` through a real ship
+step against a stub engine — the defect is in the ORDER of finalization, so no unit of it can show
+the behaviour. All five cases fail against pre-slice-2 `lib/build.js`. Ship-level evidence hand-off
+is in `test/build-ship-fields.test.js`, the accumulator migration in `test/dispatch-build.test.js`,
+the tri-state in `test/parse-test-summary.test.js`.
+
+**Coverage gap, stated:** the cross-repo test exercises the *mechanism* (`evidence_root` persisted at
+ship, read back at terminalization, HEAD resolved from the work repo via the sidecar fallback) but
+NOT a genuine cross-process resume through `decideBuildStart`'s resume branch. A fresh start rotates
+the accumulator (`rotateStaleAccumulatorForFreshStart`), so seeded evidence cannot stand in for a
+real resume; driving one needs a resume harness that is out of slice-2 scope.
+
 ## 3. Scope
 
 ### In scope

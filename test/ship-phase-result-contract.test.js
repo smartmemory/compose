@@ -4,7 +4,7 @@
  *
  * Engine contracts are strict Zod objects: any key the contract does not
  * declare fails the step. executeShipStep's return carries Compose-facing
- * extras (`commit`, `filesChanged`, `completionWarning`, `test_count`,
+ * extras (`commit`, `filesChanged`, `testsAttested`, `noRepo`, `test_count`,
  * `pass_rate`, `error_code`) that PhaseResult never declared. Reporting it raw
  * failed attempt 1 with `unrecognized_keys` and only "recovered" because
  * attempt 2 re-ran ship, found nothing staged, and returned the field-less
@@ -49,15 +49,21 @@ const SHIP_RETURNS = {
     filesChanged: ['lib/a.js', 'lib/b.js'],
     test_count: 12,
     pass_rate: 1,
-    completionWarning: 'completion record failed (FEATURE_NOT_FOUND): nope',
+    // COMP-COMPLETION-GATE slice 2: `completionWarning` is gone (ship no longer
+    // writes completions) and `testsAttested` took its place as the extra the
+    // caller consumes. Keep these fixtures byte-faithful to executeShipStep's
+    // real returns — the allowlist keeps this test green either way, so a stale
+    // fixture stops mirroring reality without ever going red.
+    testsAttested: 'passed',
   },
   'no-git': {
     phase: 'ship',
     artifact: 'no-git',
     outcome: 'complete',
-    summary: 'No git repository — wrote artifacts, recorded completion (commit skipped)',
+    summary: 'No git repository — wrote artifacts (commit skipped)',
     commit: null,
-    completionWarning: 'completion record failed (UNKNOWN): boom',
+    noRepo: true,
+    testsAttested: 'no-signal',
   },
   'no-changes': {
     phase: 'ship',
