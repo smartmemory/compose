@@ -521,9 +521,45 @@ export async function toolGetJournalEntries(args) {
 // ---------------------------------------------------------------------------
 
 export async function toolRecordCompletion(args) {
-  await assertCompletionEvidence(args);
+  // COMP-COMPLETION-GATE slice 1: route the deliberate completion path through
+  // the gate, which verifies the same evidence AND takes a guarded transition —
+  // the step that has never happened for any real feature (design.md §1).
+  //
+  // `set_status:false` is not a completion: it records evidence without moving
+  // the feature, so it must not drive the guard to a terminal state. It keeps
+  // the evidence check and the original write.
+  const cwd = getTargetRoot();
   const { recordCompletion } = await import('../lib/completion-writer.js');
-  return recordCompletion(getTargetRoot(), args);
+  const { completionGate } = await import('../lib/completion-gate.js');
+
+  if (args?.set_status === false) {
+    await assertCompletionEvidence(args);
+    return recordCompletion(cwd, args);
+  }
+
+  const gated = await completionGate({
+    featureCode: args?.feature_code,
+    commitSha: args?.commit_sha,
+    testsPass: args?.tests_pass,
+    filesChanged: args?.files_changed || [],
+    notes: args?.notes,
+    force: args?.force,
+    builtVia: args?.built_via,
+    idempotencyKey: args?.idempotency_key,
+    workspaceRoot: cwd,
+  });
+  if (!gated.ok) {
+    const e = new Error(
+      `record_completion: refused at ${gated.refusedAt} — ${gated.reasons.join('; ')}`,
+    );
+    // Preserve the established code for the evidence case so existing callers
+    // and tests keep matching on it; the guard cases get their own.
+    e.code = gated.refusedAt === 'evidence'
+      ? 'COMPLETION_EVIDENCE_REQUIRED'
+      : 'COMPLETION_GATE_REFUSED';
+    throw e;
+  }
+  return gated.result;
 }
 
 export async function toolGetCompletions(args) {

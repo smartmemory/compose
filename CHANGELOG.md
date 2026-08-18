@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-08-18
+
+### COMP-COMPLETION-GATE slice 1 — the guard finally guards something
+
+**The finding:** the lifecycle guard has never guarded a real feature. 321 managed features, 31 registered guard resources, **zero overlap** — every one of the 31 is a test fixture leaked into live state. 230 features are COMPLETE and not one passed through a guarded transition. `docs/features/COMP-MCP-ENFORCE/report.md:8,52` claims "no caller can effect an unverified transition"; that has always been false.
+
+The cause was not that registration was impossible — `guardedTransition` registers lazily. It was that the writers which actually complete features never call a guarded transition at all.
+
+**Slice 1** puts `record_completion` (MCP tool and CLI) behind a real gate: `lib/completion-gate.js` verifies evidence, takes a guarded `→ complete` transition, and only then writes. It wraps `recordCompletion` rather than replacing it, so `setFeatureStatus` keeps doing the ROADMAP regeneration and vision projection it already did correctly — that is what keeps this slice small.
+
+**What it does NOT do, stated plainly:** the build runner still completes features without the gate, and that is how most features actually complete. Other bypasses remain open. This must not be described as "completions are guarded" — repeating COMP-MCP-ENFORCE's overclaim one slice early would be the same mistake in a new place.
+
+**Design decisions worth not re-litigating** (five Codex review rounds, `docs/features/COMP-COMPLETION-GATE/design.md`):
+
+- **Late registration, one edge.** Only 30 of 321 features have design+blueprint+plan, so walking the full phase graph would refuse 91% of legitimate completions — and a gate that refuses nine of ten gets forced, which is how coverage reached zero. Transitions are stamped `agent:late-registration` so the ledger never implies lifecycle history it cannot know.
+- **Recovery is a write-ahead intent, not a derived id.** A derived id identifies the *retry*, not the transition that reached the ledger: commit A applies, the process dies before the record is written, a retry on commit B would have been waved through as "recovery" against evidence that attested A. Refused now, with a test.
+- **`operation_id` rides in the guard artifacts.** Artifacts feed the payload digest, and without it two commit-less completions are byte-identical in the ledger.
+- **The test command runs outside the lock.** `spawnSync` blocks the event loop, and a blocked event loop cannot fire the lock heartbeat — a long test run inside the lock would get the lock declared stale and stolen from a live owner.
+- **`capabilities.guard:false` stays a true opt-out.** An earlier draft enforced evidence even with the guard off; that breaks every opted-out project, including non-git workspaces where the check can never pass.
+
+**BREAKING — `compose record-completion` no longer defaults `--tests-pass` to true.** It used to record "tests passed" on the strength of nothing. The flag is now required unless `guard.testCommand` is configured to attest by running.
+
+**Closed: `compose roadmap add --status COMPLETE`** — the worst single hole found, minting an already-finished feature in one command with no evidence, no lifecycle, and nothing to audit. `proposeFollowup` forwarded caller status into the same path. A feature can no longer be born complete.
+
+**Migration exemption.** Migrations transcribe completions that already happened rather than minting new ones, so `migrate-anon`'s promotion of historical ROADMAP rows passes an explicit, logged `_migration.reason`. Narrow, visible, and opt-in — the full suite found this path, which my two enumeration sweeps had both missed (it was the 15th).
+
+**Contract change:** completing a KILLED/SUPERSEDED feature is now refused at preflight instead of writing a completion record and then failing the status flip. No more orphan completion records on killed features. The status-flip error path keeps its coverage via the ROADMAP partial-write test.
+
+Tests: 14 new in `test/completion-gate.test.js`. Full suite 5792 passing.
+
+
 ## 2026-08-15 (review round 4 — stopping here)
 
 ### COMP-PIPELINE-QUARANTINE — round 4, and an honest stop

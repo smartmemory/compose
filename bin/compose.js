@@ -1785,8 +1785,13 @@ if (cmd === 'record-completion') {
     process.exit(1)
   }
 
-  // Parse tests-pass: default true
-  let testsPass = true
+  // Parse tests-pass. COMP-COMPLETION-GATE (BREAKING): there is NO default.
+  // This used to default to `true`, which meant every completion recorded from
+  // the CLI attested a test run the operator may never have made — the record
+  // said "tests passed" on the strength of nothing. An attestation nobody made
+  // is worse than an absent one, so the flag is now required unless a
+  // `guard.testCommand` is configured to attest by running.
+  let testsPass
   if (flags['tests-pass'] !== undefined) {
     const tp = flags['tests-pass']
     if (tp === 'false' || tp === false) testsPass = false
@@ -1823,7 +1828,42 @@ if (cmd === 'record-completion') {
   const { root: cwd } = resolveCwdWithWorkspace(args)
   const { recordCompletion } = await import('../lib/completion-writer.js')
   try {
-    const result = await recordCompletion(cwd, completionArgs)
+    let result
+    if (completionArgs.set_status === false) {
+      // --no-status records evidence without completing, so it does not drive
+      // the guard. tests_pass still has no default; the writer requires a boolean.
+      if (testsPass === undefined) {
+        console.error(
+          'Error: --tests-pass is required (true|false). It no longer defaults to true — ' +
+          'a completion record must not attest a test run that was never made.'
+        )
+        process.exit(1)
+      }
+      result = await recordCompletion(cwd, completionArgs)
+    } else {
+      const { completionGate } = await import('../lib/completion-gate.js')
+      const gated = await completionGate({
+        featureCode:    featureCode,
+        commitSha:      commitSha,
+        testsPass:      testsPass,
+        filesChanged:   filesChanged,
+        notes:          flags['notes'] || undefined,
+        force:          flags['force'] === true || undefined,
+        idempotencyKey: flags['idempotency-key'] || undefined,
+        workspaceRoot:  cwd,
+      })
+      if (!gated.ok) {
+        console.error(`Refused at ${gated.refusedAt}:\n  - ${gated.reasons.join('\n  - ')}`)
+        if (gated.refusedAt === 'evidence' && testsPass === undefined) {
+          console.error(
+            '\nHint: --tests-pass no longer defaults to true. Pass --tests-pass true|false, ' +
+            'or configure guard.testCommand in .compose/compose.json so the test run itself attests.'
+          )
+        }
+        process.exit(1)
+      }
+      result = gated.result
+    }
     console.log(JSON.stringify({
       completion_id:  result.completion_id,
       idempotent:     result.idempotent,

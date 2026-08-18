@@ -5,7 +5,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -167,7 +167,15 @@ describe('compose-mcp completion writer (end-to-end)', () => {
     }
   });
 
-  test('#20 STATUS_FLIP_AFTER_COMPLETION_RECORDED (transition rejected): error contains both codes', async () => {
+  // COMP-COMPLETION-GATE changed this contract deliberately, and for the better.
+  // This used to assert that completing a KILLED feature wrote the completion
+  // record and THEN failed the status flip — leaving an orphan completion record
+  // attached to a killed feature. The gate's preflight now refuses a terminal
+  // status before anything is written, so there is no orphan to clean up.
+  //
+  // The STATUS_FLIP_AFTER_COMPLETION_RECORDED path is still real and still
+  // covered by #20b below (ROADMAP partial write), so no coverage is lost here.
+  test('#20 a KILLED feature is refused at preflight, and NO record is written', async () => {
     const cwd = freshCwd();
     seedFeature(cwd, { code: 'COMP-1', status: 'KILLED' });
     const client = new McpClient(cwd);
@@ -181,12 +189,16 @@ describe('compose-mcp completion writer (end-to-end)', () => {
       });
       assert.ok(result.isError, 'result should be an error');
       const text = result.content?.[0]?.text || '';
-      assert.match(text, /\[STATUS_FLIP_AFTER_COMPLETION_RECORDED\]/,
-        `expected [STATUS_FLIP_AFTER_COMPLETION_RECORDED] in: ${text}`);
-      // The underlying transition error from feature-writer doesn't set .code,
-      // so the MCP wrapper emits "Caused by: <message>" (no code brackets).
-      assert.match(text, /Caused by/,
-        `expected "Caused by" in: ${text}`);
+      assert.match(text, /KILLED/, `expected the terminal status named in: ${text}`);
+
+      const feature = JSON.parse(
+        readFileSync(join(cwd, 'docs', 'features', 'COMP-1', 'feature.json'), 'utf8'),
+      );
+      assert.equal(feature.status, 'KILLED', 'status must be untouched');
+      assert.equal(
+        (feature.completions || []).length, 0,
+        'a refused completion must not leave a completion record behind',
+      );
     } finally {
       client.close();
     }

@@ -186,6 +186,11 @@ describe('T9 — CLI record-completion', () => {
     const result = runCLI(cwd, [
       'record-completion', 'CODE-1',
       '--commit-sha=abc1234',
+      // COMP-COMPLETION-GATE: --tests-pass no longer defaults to true, and this
+      // test is about SHA validation — pass it explicitly so the missing-flag
+      // error does not preempt the assertion under test. The removed default has
+      // its own coverage in #23b.
+      '--tests-pass=true',
       '--no-status',
     ]);
     assert.equal(result.status, 1, `expected exit 1`);
@@ -193,11 +198,24 @@ describe('T9 — CLI record-completion', () => {
     assert.match(result.stderr, /full 40-char/i);
   });
 
+  test('#23b CLI requires --tests-pass: the old default-to-true is gone', () => {
+    const cwd = freshCwd();
+    seedFeature(cwd, { code: 'CODE-1', status: 'PLANNED' });
+    const result = runCLI(cwd, [
+      'record-completion', 'CODE-1',
+      `--commit-sha=${FULL_SHA_A}`,
+      '--no-status',
+    ]);
+    assert.equal(result.status, 1, 'a completion must not attest a test run nobody made');
+    assert.match(result.stderr, /--tests-pass is required/);
+  });
+
   test('#24 CLI FEATURE_NOT_FOUND: exit 1, stderr contains [FEATURE_NOT_FOUND]', () => {
     const cwd = freshCwd();
     const result = runCLI(cwd, [
       'record-completion', 'MISSING-1',
       `--commit-sha=${FULL_SHA_A}`,
+      '--tests-pass=true',   // see #23 — this test is about feature lookup, not attestation
       '--no-status',
     ]);
     assert.equal(result.status, 1);

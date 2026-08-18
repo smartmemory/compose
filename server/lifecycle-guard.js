@@ -330,14 +330,22 @@ export async function ensureGuard(featureCode, currentPhase, workspaceRoot, mode
  * @returns {Promise<{applied:boolean, refused?:boolean, verdict?:object,
  *   ledgerRef?:string, currentState?:string, error?:object}>}
  */
-export async function guardedTransition({ featureCode, from, to, workspaceRoot, commitSha, resolvedBy = 'agent', mode = 'build' }) {
+export async function guardedTransition({ featureCode, from, to, workspaceRoot, commitSha, resolvedBy = 'agent', mode = 'build', artifacts: extraArtifacts }) {
   const reg = await ensureGuard(featureCode, from, workspaceRoot, mode);
   if (reg && (reg.error || reg.status === 'error')) {
     return { applied: false, error: reg.error || reg };
   }
 
   const rid = resourceId(featureCode, workspaceRoot, mode);
-  const artifacts = commitSha ? { commit_sha: commitSha } : {};
+  // COMP-COMPLETION-GATE: callers may add artifacts (e.g. the completion gate's
+  // `operation_id`). Artifacts feed the ledger's payload_digest, which is the
+  // only way two commit-less transitions on one resource are distinguishable —
+  // without it, every null-SHA completion hashes identically and a crash-recovery
+  // check cannot tell one operation from another.
+  const artifacts = {
+    ...(commitSha ? { commit_sha: commitSha } : {}),
+    ...(extraArtifacts || {}),
+  };
   // No idempotency_key: a refuse→fix→retry is a NEW logical attempt that must
   // re-evaluate evidence, but it carries an identical (from,to,artifacts)
   // payload — an idempotency_key would make the guard replay the prior refusal.
