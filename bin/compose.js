@@ -1717,7 +1717,7 @@ if (cmd === 'record-completion') {
   //
   // Flags:
   //   --commit-sha=<sha>          required; full 40-char hex SHA (Decision 9)
-  //   --tests-pass=<bool>         default true
+  //   --tests-pass=<bool>         REQUIRED (true|false) — no default (COMP-COMPLETION-GATE)
   //   --notes=<string>            optional
   //   --files-changed-from-stdin  read newline-separated paths from stdin
   //   --no-status                 set_status: false (don't flip status to COMPLETE)
@@ -1762,7 +1762,8 @@ if (cmd === 'record-completion') {
     console.log('')
     console.log('Options:')
     console.log('  --commit-sha=<sha>          Full 40-char hex SHA (required)')
-    console.log('  --tests-pass=<bool>         Whether tests passed (default: true)')
+    console.log('  --tests-pass=<bool>         Whether tests passed — REQUIRED, no default')
+    console.log('                              (configure guard.testCommand to attest by running instead)')
     console.log('  --notes=<string>            Optional provenance notes')
     console.log('  --files-changed-from-stdin  Read newline-separated repo-relative paths from stdin')
     console.log('  --no-status                 Do not flip feature status to COMPLETE')
