@@ -2,6 +2,26 @@
 
 ## 2026-08-18
 
+### COMP-COMPLETION-GATE slice 2 — the build runner completes through the gate
+
+Slice 1 gated the completion a person types. Slice 2 gates the one that actually produces COMPLETE features: the build runner.
+
+**The headline defect: a build the system judged a failure was left marked COMPLETE.** The terminal block wrote COMPLETE as soon as the flow finished, and the COMP-HEALTH gate that can downgrade the build to `failed` runs *after* it. Ship had already written a completion record of its own by then. So the ordering was: complete, complete again, then decide whether the build failed. Once gated, the very first thing the append-only ledger would ever durably attest would have been a rejected build. The health verdict is a **precondition** of completion, not its successor.
+
+**Ship no longer completes anything.** `executeShipStep` used to call `recordCompletion` on both branches, catch every failure, and return a successful ship outcome regardless — a completion could fail silently while the build marched on. It now collects evidence and stops. Exactly one completion happens, at terminalization, through the gate, after health. The `completionWarning` channel is gone.
+
+**A non-git build now runs its tests.** The non-git branch returned *before* the test run and hard-coded `tests_pass: true` onto a permanent completion record. Tests are hoisted above the git-availability check: "no repo" is a reason to skip the commit, never a reason to skip the tests. Both branches attest identically.
+
+**Absence of signal is never attestation** (AC-18). `deriveTestsAttested` is a tri-state — `passed` / `failed` / `no-signal` — and the gate refuses `no-signal`, telling the operator to configure `guard.testCommand` so the test run's own exit code attests where the parser cannot. `deriveTestsPass` keeps its degrade-to-true contract for the ungated lane-triage gate; the two functions diverge on exactly one case, deliberately.
+
+**Build accumulator v1 → v2**, adding `tests_attested` and `evidence_root`, with a read-time migration. A v1 record predates completion evidence, so it migrates to `no-signal` — which the gate refuses. A build resumed across the upgrade re-attests rather than inheriting a pass it never recorded. `evidence_root` is persisted because a cross-repo build runs git and tests in the agent's tree while feature metadata lives in the project tree, and `runBuild` reconstructs that root from the *current* invocation — so a resumed cross-repo build would otherwise verify the wrong repository's HEAD.
+
+**The refusal respects the opt-out.** `capabilities.guard: false` is a deliberate opt-out and the gate already honored it; the new `no-signal` refusal initially did not, which would have broken every opted-out project — including non-git workspaces, where the evidence can never pass at all. The full suite caught it: three integration builds with no ship step went from completing to refusing. An opted-out project keeps the old degrade contract, and only an observed failure is recorded as one.
+
+**Still not guarded, stated plainly:** `setFeatureStatus`, the vision PATCH endpoint, stratum-sync, and direct `updateItemStatus` remain open, as do fix and plan modes. Slice 2 must not be described as "completions are guarded".
+
+**Coverage.** `test/build-completion-gate.test.js` drives the real `runBuild` through a real ship step against a stub engine — the defect is in the *order* of finalization, and no unit of it can show that. All five cases fail against pre-slice-2 code.
+
 ### COMP-COMPLETION-GATE slice 1 — the guard finally guards something
 
 **The finding:** the lifecycle guard has never guarded a real feature. 321 managed features, 31 registered guard resources, **zero overlap** — every one of the 31 is a test fixture leaked into live state. 230 features are COMPLETE and not one passed through a guarded transition. `docs/features/COMP-MCP-ENFORCE/report.md:8,52` claims "no caller can effect an unverified transition"; that has always been false.

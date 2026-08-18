@@ -196,6 +196,126 @@ describe('build accumulator lifecycle', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// COMP-COMPLETION-GATE slice 2 — accumulator v1 → v2.
+//
+// v2 carries the completion evidence the gate consumes (`tests_attested`,
+// `evidence_root`). A v1 record predates that evidence, so the only honest
+// value it can migrate to is 'no-signal' — which the gate REFUSES. A build
+// resumed across the upgrade has to re-attest rather than inherit a pass it
+// never recorded. Absence of signal is never attestation.
+// ---------------------------------------------------------------------------
+
+describe('build accumulator v1 → v2 migration', () => {
+  const V1 = {
+    v: 1,
+    build_id: '930d8aac-46ac-4f7f-a6b4-36fb96e12b4c',
+    feature_code: 'COMP-MIG',
+    last_terminal: null,
+    review_iterations: 2,
+    escalations: 1,
+    files_changed: ['lib/a.js'],
+    ship_files_changed: null,
+    test_count: 8,
+    pass_rate: 100,
+    tokens_total: 40,
+    usd: 0.5,
+  };
+
+  function seed(cwd, record) {
+    mkdirSync(join(cwd, '.compose', 'data', 'build-accumulator'), { recursive: true });
+    writeFileSync(buildAccumulatorPath(cwd, record.feature_code), JSON.stringify(record));
+  }
+
+  test("a v1 sidecar on disk reads as v2 with tests_attested='no-signal'", () => {
+    const cwd = freshProject();
+    try {
+      seed(cwd, V1);
+      const migrated = readBuildAccumulator(cwd, 'COMP-MIG');
+      assert.equal(migrated.v, 2);
+      assert.equal(migrated.tests_attested, 'no-signal');
+      assert.equal(migrated.evidence_root, null);
+      // Everything else survives untouched — this is an additive migration, not
+      // a reset. A resumed build keeps its cumulative cost/iteration counters.
+      assert.equal(migrated.build_id, V1.build_id);
+      assert.equal(migrated.review_iterations, 2);
+      assert.equal(migrated.tokens_total, 40);
+      assert.equal(migrated.test_count, 8);
+      assert.equal(migrated.pass_rate, 100);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test('a v1 pass_rate of 100 does NOT migrate into a passing attestation', () => {
+    // The tempting shortcut. test_count/pass_rate are metrics that are only
+    // populated when the output PARSED — their presence says nothing about
+    // whether THIS record's run was observed, and a v1 record was written by
+    // code that also hard-coded tests_pass:true on non-git builds.
+    const cwd = freshProject();
+    try {
+      seed(cwd, { ...V1, test_count: 500, pass_rate: 100 });
+      assert.equal(readBuildAccumulator(cwd, 'COMP-MIG').tests_attested, 'no-signal');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test('a fresh record starts at no-signal, and round-trips', () => {
+    const cwd = freshProject();
+    try {
+      const fresh = newBuildAccumulatorRecord('COMP-MIG');
+      assert.equal(fresh.v, 2);
+      assert.equal(fresh.tests_attested, 'no-signal');
+      assert.equal(fresh.evidence_root, null);
+      writeBuildAccumulator(cwd, fresh);
+      assert.deepEqual(readBuildAccumulator(cwd, 'COMP-MIG'), fresh);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test('the validator rejects a bogus tests_attested and a non-string evidence_root', () => {
+    const cwd = freshProject();
+    try {
+      // Already v2 on disk, so migration does not run — the validator is the
+      // only thing standing between a corrupt sidecar and the guard ledger.
+      const base = { ...V1, v: 2, tests_attested: 'no-signal', evidence_root: null };
+      for (const bad of [true, 'pass', 'PASSED', null]) {
+        seed(cwd, { ...base, tests_attested: bad });
+        assert.throws(
+          () => readBuildAccumulator(cwd, 'COMP-MIG'),
+          /tests_attested must be one of/,
+          `tests_attested=${JSON.stringify(bad)} must be rejected`,
+        );
+      }
+      // Omitted entirely (an undefined value is not serialized) is caught one
+      // check earlier, by the missing-field sweep — but it is still a refusal.
+      seed(cwd, { ...base, tests_attested: undefined });
+      assert.throws(() => readBuildAccumulator(cwd, 'COMP-MIG'), /missing field "tests_attested"/);
+      seed(cwd, { ...base, evidence_root: undefined });
+      assert.throws(() => readBuildAccumulator(cwd, 'COMP-MIG'), /missing field "evidence_root"/);
+      seed(cwd, { ...base, evidence_root: 42 });
+      assert.throws(() => readBuildAccumulator(cwd, 'COMP-MIG'), /evidence_root must be null or a string/);
+
+      seed(cwd, { ...base, evidence_root: '/somewhere/else' });
+      assert.equal(readBuildAccumulator(cwd, 'COMP-MIG').evidence_root, '/somewhere/else');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test('an unknown future version still refuses (migration is v1-only, not a catch-all)', () => {
+    const cwd = freshProject();
+    try {
+      seed(cwd, { ...V1, v: 3, tests_attested: 'passed', evidence_root: null });
+      assert.throws(() => readBuildAccumulator(cwd, 'COMP-MIG'), /unsupported version 3/);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('triage estimate and settlement rows', () => {
   test('persisted front/refined/escalated sources map to fresh/fresh/escalated', () => {
     const cwd = freshProject();

@@ -42,17 +42,33 @@ test('GOLDEN S3: MCP-enforcement guard stays in repo-relative space (D6c)', asyn
   assert.equal(isGuardedPath('/ext/docs/features/X-1/feature.json', 'docs/features'), false);
 });
 
-test('GOLDEN S3: non-git workspace ship records a commit-less completion + flips status (D6b)', async () => {
+test('GOLDEN S3: non-git workspace ship succeeds and hands over evidence (D6b)', async () => {
+  // COMP-COMPLETION-GATE slice 2 moved the completion OUT of ship. D6b's intent
+  // is unchanged — a workspace with no repo still advances its lifecycle — but
+  // the completion now happens once, at terminalization, after the health gate.
+  // Ship used to record it here, with a null SHA and a hard-coded tests_pass:true
+  // written by a branch that returned before the test run even happened.
   const { executeShipStep } = await import('../../lib/build.js');
   const cwd = mkdtempSync(join(tmpdir(), 'pe-nogit-'));   // deliberately NOT a git repo
   mkdirSync(join(cwd, 'docs/features'), { recursive: true });
   writeFeature(cwd, { code: 'NG-1', description: 'd', status: 'IN_PROGRESS' });
 
-  const context = { featureCode: 'NG-1', filesChanged: [] };
+  const evidence = [];
+  const context = {
+    featureCode: 'NG-1',
+    filesChanged: [],
+    recordCompletionEvidence: (e) => evidence.push(e),
+  };
   const res = await executeShipStep('NG-1', cwd, cwd, context, 'ship NG-1', null);
 
-  assert.equal(res.outcome, 'complete');
-  assert.equal(readFeature(cwd, 'NG-1').status, 'COMPLETE', 'status flips even with no commit');
+  assert.equal(res.outcome, 'complete', 'no repo is not a ship failure');
+  assert.equal(res.noRepo, true, 'the caller is told there was nothing to commit');
+  assert.equal(evidence.length, 1, 'ship hands its evidence to terminalization');
+  assert.ok(['passed', 'failed', 'no-signal'].includes(evidence[0].testsAttested));
+  assert.equal(
+    readFeature(cwd, 'NG-1').status, 'IN_PROGRESS',
+    'ship no longer flips status — the gate does, after the health verdict',
+  );
 });
 
 test('GOLDEN: validate flags an unreachable external parent, not a not-yet-created leaf', async () => {

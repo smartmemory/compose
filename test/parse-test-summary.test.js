@@ -6,7 +6,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseTestSummary, deriveTestsPass } from '../lib/test-bootstrap.js';
+import { parseTestSummary, deriveTestsPass, deriveTestsAttested } from '../lib/test-bootstrap.js';
 
 // ---------------------------------------------------------------------------
 // Degrade behavior — the safety valve. Unparseable input must NEVER claim parsed.
@@ -204,5 +204,57 @@ describe('parseTestSummary — cargo-test', () => {
     // passed 5+3+2=10, failed 0+2+0=2 → total 12
     assert.equal(r.test_count, 12);
     assert.equal(r.pass_rate, 83.33);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deriveTestsAttested — COMP-COMPLETION-GATE slice 2.
+//
+// The tri-state the completion gate consumes. Its whole reason to exist is the
+// third value: `deriveTestsPass` collapses "could not read the output" into
+// `true`, which is a passing claim nobody observed. The gate refuses
+// 'no-signal' instead. These pin the contract, and pin that the two functions
+// DISAGREE exactly on the unparsed case (deriveTestsPass keeps its degrade
+// contract for the ungated ship path — do not "align" them).
+// ---------------------------------------------------------------------------
+
+describe('deriveTestsAttested — tri-state', () => {
+  it("parsed + all passing → 'passed'", () => {
+    assert.equal(deriveTestsAttested({ test_count: 12, pass_rate: 100, parsed: true }), 'passed');
+  });
+
+  it("parsed + a failure → 'failed'", () => {
+    assert.equal(deriveTestsAttested({ test_count: 12, pass_rate: 91.67, parsed: true }), 'failed');
+  });
+
+  it("parsed but ZERO tests ran → 'failed', not 'passed'", () => {
+    // A suite that ran nothing has a vacuous 0% / 100% pass rate depending on
+    // the parser. Neither is an attestation that the code works.
+    assert.equal(deriveTestsAttested({ test_count: 0, pass_rate: 100, parsed: true }), 'failed');
+    assert.equal(deriveTestsAttested({ test_count: 0, pass_rate: 0, parsed: true }), 'failed');
+  });
+
+  it("unparsed output → 'no-signal' (never an attestation)", () => {
+    assert.equal(deriveTestsAttested({ test_count: 0, pass_rate: 0, parsed: false }), 'no-signal');
+  });
+
+  it("null/undefined summary → 'no-signal'", () => {
+    assert.equal(deriveTestsAttested(null), 'no-signal');
+    assert.equal(deriveTestsAttested(undefined), 'no-signal');
+  });
+
+  it('diverges from deriveTestsPass exactly on the unreadable case', () => {
+    const unreadable = { test_count: 0, pass_rate: 0, parsed: false };
+    assert.equal(deriveTestsPass(unreadable), true, 'ship path still degrades to true');
+    assert.equal(deriveTestsAttested(unreadable), 'no-signal', 'the gate gets no attestation');
+
+    // Everywhere else they agree.
+    for (const s of [
+      { test_count: 12, pass_rate: 100, parsed: true },
+      { test_count: 12, pass_rate: 50, parsed: true },
+      { test_count: 0, pass_rate: 100, parsed: true },
+    ]) {
+      assert.equal(deriveTestsPass(s), deriveTestsAttested(s) === 'passed');
+    }
   });
 });
