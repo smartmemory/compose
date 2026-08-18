@@ -365,3 +365,76 @@ test('local path relays assistant text with lane stamp; without lane it stays si
     'lane-less local run keeps its historical shape (no assistant writes)',
   );
 });
+
+// ---------------------------------------------------------------------------
+// sandboxMode routing — the engine's read-only sandbox binds CODEX ONLY.
+//
+// A read-only profile (Edit+Write disallowed) used to map to
+// `sandboxMode: 'read-only'` for every provider. For a claude agent the engine's
+// connector does not merely ignore it, it REJECTS the run:
+//
+//   "claude runs with sandboxMode=read-only are not supported: the Claude
+//    connector cannot enforce read-only (D8). Omit sandboxMode or pass
+//    workspace-write."
+//
+// `review_triage` is exactly that shape (`claude:orchestrator`, Edit+Write
+// disallowed) in BOTH build.profiles.json and build-quick.profiles.json, so
+// every headless build died on dispatch before it could reach `ship` — which is
+// why build-history.jsonl contains no successful run. Found by running a real
+// build, not by review.
+//
+// Nothing is lost by omitting it: the engine seam never enforced claude tool
+// restrictions in the first place (see lib/local-claude-connector.js), and the
+// read-only FANOUT keeps its real enforcement through the compose-local
+// connector. Binding the restriction on plain claude steps is COMP-CLAUDE-READONLY-BIND.
+// ---------------------------------------------------------------------------
+
+test('read-only CODEX profile still requests the engine read-only sandbox', async () => {
+  const stratum = fakeStratum({ text: '{}' });
+  await runAndNormalize(
+    null,
+    'review it',
+    { step_id: 'review_triage', agent: 'codex' },
+    { stratum, profile: 'codex:read-only-reviewer' },
+  );
+  const call = stratum._calls.agentRun.at(-1);
+  assert.equal(call.opts.sandboxMode, 'read-only',
+    'codex is the one connector the engine sandbox actually binds');
+});
+
+test('read-only CLAUDE profile must NOT send sandboxMode (the connector rejects it)', async () => {
+  const stratum = fakeStratum({ text: '{}' });
+  await runAndNormalize(
+    null,
+    'triage lenses',
+    { step_id: 'review_triage', agent: 'claude' },
+    { stratum, profile: 'claude:orchestrator' },
+  );
+  const call = stratum._calls.agentRun.at(-1);
+  assert.equal(call.opts.sandboxMode, undefined,
+    'sending read-only for claude hard-fails the dispatch — omit it');
+});
+
+test('the WIRE request omits sandboxMode entirely when it is undefined', async () => {
+  // The assertion above stops at compose's own boundary, where the key may be
+  // present-and-undefined. What the engine validates is the request built here,
+  // and `mcp-surface.json` rejects unknown keys — so pin the actual wire shape.
+  const { buildAgentRunRequest } = await import(`${REPO_ROOT}/lib/stratum-mcp-client.js`);
+  const req = buildAgentRunRequest('claude', 'triage lenses', { cwd: '/tmp', sandboxMode: undefined });
+  assert.equal('sandboxMode' in req, false, 'no sandboxMode key reaches the engine');
+  assert.deepEqual(Object.keys(req).sort(), ['agent', 'cwd', 'prompt']);
+
+  const codexReq = buildAgentRunRequest('codex', 'review it', { cwd: '/tmp', sandboxMode: 'read-only' });
+  assert.equal(codexReq.sandboxMode, 'read-only', 'codex still carries it');
+});
+
+test('a WRITE claude profile is unaffected (never had a sandbox to begin with)', async () => {
+  const stratum = fakeStratum({ text: '{}' });
+  await runAndNormalize(
+    null,
+    'implement it',
+    { step_id: 'execute', agent: 'claude' },
+    { stratum },
+  );
+  assert.equal(stratum._calls.agentRun.at(-1).opts.sandboxMode, undefined);
+});
