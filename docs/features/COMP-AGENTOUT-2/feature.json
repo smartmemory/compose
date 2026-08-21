@@ -1,0 +1,18 @@
+{
+  "code": "COMP-AGENTOUT-2",
+  "description": "One greppable line per finding for validate_project/validate_feature/roadmap check/doctor. Today every diagnostic surface renders prose an agent must re-parse, and findings carry no stable identity, so tooling cannot filter by kind and an agent re-derives severity by reading. Adopt Axiom's AXDL shape: all findings flow through ONE structured type with three renderers (human / agent / json-lines) off the same record, so the formats can never disagree about what went wrong. Each finding gets a stable code namespaced by producer plus a wording-independent kebab-case slug, an exact location, and machine-applicable fixes inline (`loc:\"msg\"~>\"replacement\"`) rather than as English. One line per finding, colorless, no re-rendered source: `grep -c '^E '` counts errors. A consumer meeting an unknown field must FAIL, not skip (see COMP-SHIP-CONTRACT). Enforced tail: a code with a construction site but no explanation entry, or an explanation entry with no construction site, fails the gate in BOTH directions. Prior art: Axiom docs/diagnostics.md, scripts/check-doc-drift.sh check 1.",
+  "status": "PLANNED",
+  "phase": "COMP-AGENTOUT: Dense Agent-Facing Tool Output",
+  "created": "2026-08-21",
+  "updated": "2026-08-21",
+  "complexity": "M",
+  "position": 2,
+  "tags": [
+    "mcp",
+    "dx",
+    "agent-output",
+    "validate",
+    "axiom-prior-art"
+  ],
+  "impact": "high"
+}
