@@ -1,0 +1,18 @@
+{
+  "code": "COMP-AGENTOUT-3",
+  "description": "Success-path notation: `compose symbols` / a dense read tool answering \"what does this feature already declare\" in one line per fact. AGENTOUT-2 only fires when something is WRONG; the other constant agent question is what already exists, and today answering it means re-reading feature.json, the folder, the gate log and the links, then re-deriving facts compose already computed. Emit one line per fact — status, phase, complexity, artifacts present/absent, gate state, links and their expect/actual, lifecycle position — with a kind letter deliberately disjoint from AGENTOUT-2's severity letters so a merged stream is never ambiguous. Include the stable feature code as the coordinate (compose already has content identity where Axiom needed to invent NID). Payoff claim to test, not assume: Axiom reports that making the success path greppable immediately exposed a parser bug that pretty-printed output had been absorbing for the life of the project. Prior art: Axiom AXSYM, docs/diagnostics.md.",
+  "status": "PLANNED",
+  "phase": "COMP-AGENTOUT: Dense Agent-Facing Tool Output",
+  "created": "2026-08-21",
+  "updated": "2026-08-21",
+  "complexity": "M",
+  "position": 3,
+  "tags": [
+    "mcp",
+    "dx",
+    "agent-output",
+    "cli",
+    "axiom-prior-art"
+  ],
+  "impact": "medium"
+}
