@@ -2,6 +2,48 @@
 
 ## 2026-08-22
 
+### GOV-COMPOSE-SEAM-1 step 1 P2 — the judgment write path, fail-closed
+
+`lib/judgment-decision-write.js` (new) writes a mapped ledger entry to
+SmartMemory, and `judgmentLedgerAppend` calls it BEFORE its local commit: under
+D1 the SmartMemory decision is the canon and the markdown is a projection, so
+the canon is written first and the projection follows. It is also the only
+ordering that fails safely — a remote failure throws and nothing local is
+written, whereas committing locally first would leave a decision that exists in
+the projection and nowhere else.
+
+**Fail-closed, unlike ingest.** A dropped feature event costs an analytics row;
+a dropped decision leaves a build governed by a rule set missing the thing just
+decided, and nobody reads the warning. A failed write throws and the tool call
+fails with it. `lib/smartmemory-client.js` gains `createDecision` / `getDecision`,
+hand-rolled because `@smartmemory/sdk-js` has no decisions surface at all.
+
+**Verified, not assumed.** The write is read back and its provenance checked.
+A service predating the 2026-08-22 `source_type` / `context_snapshot` addition
+answers 200 and silently discards both, which from the caller's side is
+indistinguishable from success — the exact failure D4 exists to prevent.
+
+**One idempotency ledger, not two.** The live path and the P3 backfill briefly
+kept separate resume files (`docs/judgment/records/decision-ids.json` and
+`.compose/data/judgment-migration-state.json`) keyed identically but read
+separately, so a decision written live and then backfilled would have been
+written twice — the create endpoint has no server-side idempotency to catch it.
+That is the same "two mechanisms guarding one fact" failure D2 retired the
+markdown hash chain over. Merged into the shared writer, which keeps the
+backfill's two better ideas: per-write flush, and verify-before-skip (a key only
+counts once the decision is confirmed still present server-side, so a drifted
+ledger cannot mask a write that never landed). The old file is adopted on first
+read so a migration already run is not repeated.
+
+The seq for the idempotency key is computed under the advisory lock before the
+append rather than taken from it, so a failed local commit recomputes the same
+key on retry, skips the remote write and completes the local one.
+
+Also fixed: `rejected_alternatives` is `array<string>` on both the core manager
+and the HTTP contract, and the mapper was emitting `{option, reason}` objects.
+The reason is now flattened into the same string rather than dropped — a
+rejected option without its reason is the least useful half.
+
 ### GOV-COMPOSE-SEAM-1 step 1 P2.5 — the inferred-conviction review gate is ruled
 
 The 15 ledger entries carrying an agent-inferred conviction now have owner
