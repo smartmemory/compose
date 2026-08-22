@@ -20,7 +20,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { mapLedger, CONFIDENCE } from '../lib/judgment-decisions.js';
+import { mapLedger, applyReviewFile, CONFIDENCE } from '../lib/judgment-decisions.js';
 
 /** Pre-registered 2026-08-22, before any count was taken. */
 const SPIKE_THRESHOLD_RULES = 10;
@@ -42,6 +42,17 @@ function readLedger(cwd) {
     });
 }
 
+/**
+ * The owner's P2.5 verdicts. Absent, the dry run still reports (it writes
+ * nothing), but it says so — a report that silently skipped the gate would read
+ * exactly like one that passed it.
+ */
+function readReview(cwd) {
+  const path = join(cwd, 'docs', 'features', 'GOV-COMPOSE-SEAM-1', 'conviction-review.json');
+  if (!existsSync(path)) return null;
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
 function truncate(s, n) {
   const one = (s ?? '').replace(/\s+/g, ' ').trim();
   return one.length > n ? `${one.slice(0, n - 1)}…` : one;
@@ -57,6 +68,7 @@ function report(mapped, opts) {
 
   const candidates = decisions.filter((d) => d.enforceability.verdict === 'candidate');
   const inferred = decisions.filter((d) => d.decision.context_snapshot.conviction_review_required);
+  const reviewed = decisions.filter((d) => d.decision.context_snapshot.conviction_review);
 
   if (opts.json) {
     process.stdout.write(`${JSON.stringify({
@@ -67,6 +79,8 @@ function report(mapped, opts) {
       enforceable_candidates: candidates.length,
       threshold: SPIKE_THRESHOLD_RULES,
       inferred_conviction_review_required: inferred.length,
+      inferred_conviction_reviewed: reviewed.length,
+      review_ruled_at: opts.review?.ruled_at ?? null,
       decisions: decisions.map((d) => ({
         seq: d.seq,
         kind: d.entry.kind,
@@ -105,20 +119,40 @@ function report(mapped, opts) {
   out.push('');
   out.push('## Inferred convictions (P2.5 review gate — D4)');
   out.push('');
-  out.push(`${inferred.length} decision-shaped entries carry an agent-inferred conviction. The backfill`);
-  out.push('REFUSES to write these at stated confidence until the owner rules on each.');
   out.push(`Inferred scale: high=${CONFIDENCE.inferred.high} medium=${CONFIDENCE.inferred.medium} low=${CONFIDENCE.inferred.low}`);
   out.push(`Stated scale:   high=${CONFIDENCE.stated.high} medium=${CONFIDENCE.stated.medium} low=${CONFIDENCE.stated.low}`);
   out.push('');
-  for (const d of inferred) {
-    const c = d.decision.context_snapshot.conviction;
-    out.push(`- [${d.seq}] ${c.level} (inferred -> ${d.decision.confidence})  ${truncate(d.decision.content, 90)}`);
+  if (!opts.review) {
+    out.push(`${inferred.length} decision-shaped entries carry an agent-inferred conviction, and NO`);
+    out.push('verdict file was found. The backfill REFUSES these until the owner rules on each.');
+    for (const d of inferred) {
+      const c = d.decision.context_snapshot.conviction;
+      out.push(`- [${d.seq}] ${c.level} (inferred -> ${d.decision.confidence})  ${truncate(d.decision.content, 90)}`);
+    }
+  } else {
+    const byGroup = {};
+    for (const d of reviewed) {
+      const r = d.decision.context_snapshot.conviction_review;
+      byGroup[r.verdict] = (byGroup[r.verdict] ?? 0) + 1;
+    }
+    out.push(`RULED ${reviewed.length}/${reviewed.length} by ${opts.review.ruled_by} on ${opts.review.ruled_at}:`);
+    for (const [v, n] of Object.entries(byGroup)) out.push(`  ${v}: ${n}`);
+    out.push('');
+    for (const d of reviewed) {
+      const snap = d.decision.context_snapshot;
+      const marks = [
+        snap.conviction_strength_dropped ? 'strength-dropped' : null,
+        snap.conviction_unrated ? 'UNRATED, not rule-eligible' : null,
+      ].filter(Boolean).join(', ');
+      out.push(`- [${d.seq}] ${snap.conviction.level} ${snap.conviction_review.verdict} -> ${d.decision.confidence}/${d.decision.source_type}${marks ? `  (${marks})` : ''}`);
+      out.push(`      ${truncate(d.decision.content, 90)}`);
+    }
   }
 
   if (opts.reviewBatch) {
     out.push('');
     out.push('## Review batch (full text of each inferred entry)');
-    for (const d of inferred) {
+    for (const d of (opts.review ? reviewed : inferred)) {
       out.push('');
       out.push(`### [${d.seq}] ${d.entry.title}`);
       out.push(`conviction: ${d.decision.context_snapshot.conviction.level} (inferred)`);
@@ -150,7 +184,15 @@ function main(argv) {
 
   const cwd = resolve(process.env.COMPOSE_CWD ?? process.cwd());
   const events = readLedger(cwd);
-  report(mapLedger(events), opts);
+  const mapped = mapLedger(events);
+
+  // Applying the gate here, in the dry run, is deliberate: it throws on the
+  // first inferred conviction the owner has not ruled on, so the refusal shows
+  // up before anything is written rather than halfway through a backfill.
+  opts.review = readReview(cwd);
+  if (opts.review) applyReviewFile(mapped, opts.review);
+
+  report(mapped, opts);
   return 0;
 }
 

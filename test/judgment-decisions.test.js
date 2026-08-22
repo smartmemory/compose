@@ -15,6 +15,8 @@ import { fileURLToPath } from 'node:url';
 import {
   CONFIDENCE,
   CONFIDENCE_UNSTATED,
+  applyConvictionReview,
+  applyReviewFile,
   classifyEnforceable,
   decideSubtype,
   ledgerEntryToDecision,
@@ -156,4 +158,75 @@ test('the committed ledger maps to 43 decision-shaped entries, 15 needing review
 
   const inferred = decisions.filter((d) => d.decision.context_snapshot.conviction_review_required);
   assert.equal(inferred.length, 15, 'P2.5 review batch is 15 entries');
+});
+
+// ── P2.5: the owner's inferred-conviction review gate (D4) ────────────────
+
+function inferredDecision(level = 'high') {
+  return ledgerEntryToDecision(entry({ conviction: { level, source: 'inferred' } }), 7);
+}
+
+test('P2.5: an unreviewed inferred conviction REFUSES, it does not warn', () => {
+  assert.throws(
+    () => applyConvictionReview(inferredDecision(), undefined),
+    /no owner verdict/,
+    'the gate must throw — a warning in a backfill log is not a gate',
+  );
+});
+
+test('P2.5: an unrecognised verdict also refuses', () => {
+  assert.throws(() => applyConvictionReview(inferredDecision(), { verdict: 'looks-fine' }), /no owner verdict/);
+});
+
+test('P2.5 group A: promoted reaches the stated scale and explicit source', () => {
+  const d = applyConvictionReview(inferredDecision('high'), { group: 'A', verdict: 'promoted' });
+  assert.equal(d.confidence, CONFIDENCE.stated.high);
+  assert.equal(d.source_type, 'explicit');
+  assert.equal(d.context_snapshot.conviction_review_required, false);
+});
+
+test('P2.5 group B: the choice is kept, the guessed strength is dropped', () => {
+  const d = applyConvictionReview(inferredDecision('high'), {
+    group: 'B', verdict: 'choice_kept_strength_dropped',
+  });
+  // The owner made the decision, so the source is explicit...
+  assert.equal(d.source_type, 'explicit');
+  // ...but the agent's reading of how firmly is discarded.
+  assert.equal(d.confidence, CONFIDENCE_UNSTATED);
+  assert.equal(d.context_snapshot.conviction_strength_dropped, true);
+  assert.ok(d.confidence < CONFIDENCE.stated.high, 'a dropped strength must not survive as a stated high');
+});
+
+test('P2.5 group C: unrated is marked, and may not back an enforceable rule', () => {
+  const d = applyConvictionReview(inferredDecision('high'), { group: 'C', verdict: 'unrated' });
+  assert.equal(d.source_type, 'inferred');
+  assert.equal(d.context_snapshot.conviction_unrated, true);
+  assert.equal(d.context_snapshot.enforceable_eligible, false);
+  // Decision.confidence is a non-optional float upstream, so "unrated" cannot
+  // be null. The marker is what downstream branches on, never the number.
+  assert.equal(d.confidence, CONFIDENCE_UNSTATED);
+});
+
+test('P2.5: a stated conviction is untouched by the gate', () => {
+  const d = ledgerEntryToDecision(entry({ conviction: { level: 'high', source: 'stated' } }), 7);
+  const out = applyConvictionReview(d, undefined);
+  assert.equal(out.confidence, CONFIDENCE.stated.high, 'no verdict needed, and none applied');
+});
+
+test('P2.5: the committed verdict file rules on every inferred entry', () => {
+  const review = JSON.parse(readFileSync(
+    join(repoRoot, 'docs/features/GOV-COMPOSE-SEAM-1/conviction-review.json'), 'utf8',
+  ));
+  const events = readFileSync(join(repoRoot, 'docs/judgment/records/ledger.jsonl'), 'utf8')
+    .split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  const mapped = mapLedger(events);
+
+  // Throws if any inferred entry is missing a verdict — this is the gate.
+  applyReviewFile(mapped, review);
+
+  const snaps = mapped.decisions.map((d) => d.decision.context_snapshot);
+  assert.equal(snaps.filter((s) => s.conviction_review_required).length, 0, 'no entry left unreviewed');
+  assert.equal(snaps.filter((s) => s.conviction_review?.group === 'A').length, 4);
+  assert.equal(snaps.filter((s) => s.conviction_review?.group === 'B').length, 7);
+  assert.equal(snaps.filter((s) => s.conviction_review?.group === 'C').length, 4);
 });
