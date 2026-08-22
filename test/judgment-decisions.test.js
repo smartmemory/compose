@@ -60,8 +60,15 @@ test('D3: a kill stays active and records the killed option as rejected', () => 
   // Not `abandoned`: a kill is a live decision NOT to do something.
   assert.equal(d.status, 'active');
   assert.match(d.content, /^Do not: build exhaust/);
-  assert.equal(d.rejected_alternatives[0].option, 'build exhaust as the source of ideas');
-  assert.equal(d.rejected_alternatives[0].reason, 'closed loop');
+  // `rejected_alternatives` is array<string> on the wire (service
+  // CreateDecisionRequest) — the reason is flattened into the same string
+  // rather than dropped, because a rejected option without its reason is the
+  // least useful half.
+  assert.equal(
+    d.rejected_alternatives[0],
+    'build exhaust as the source of ideas — closed loop',
+  );
+  assert.ok(d.rejected_alternatives.every((r) => typeof r === 'string'));
 });
 
 test('D3: an open entry is a pending decision', () => {
