@@ -84,7 +84,9 @@ describe('render determinism', () => {
 
   test('renderGateLogContent produces the pinned string, twice identically', () => {
     const entry = { timestamp: '2026-07-03T10:00:00.000Z', decision: 'approve', feature_code: 'FOO-1', id: 'gid-1' };
-    const expected = '[compose:regio] 2026-07-03T10:00:00.000Z gate:approve FOO-1 gid-1';
+    // GOV-COMPOSE-SEAM-1 F2: `vision-gate:`, not `gate:` — a Compose product
+    // approval must be distinguishable from a Stratum enforcement gate_resolution.
+    const expected = '[compose:regio] 2026-07-03T10:00:00.000Z vision-gate:approve FOO-1 gid-1';
     assert.equal(renderGateLogContent(entry, 'regio'), expected);
     assert.equal(renderGateLogContent(entry, 'regio'), expected);
   });
@@ -100,6 +102,7 @@ describe('render determinism', () => {
     const entry = { timestamp: 't', decision: 'approve', id: 'gid-1' };
     const gctx = buildGateLogContext('regio', entry);
     assert.equal(gctx.origin, 'cli:compose');
+    assert.equal(gctx.record_kind, 'compose_vision_gate');
     assert.equal(gctx.source_path, 'compose/regio/.compose/data/gate-log.jsonl');
     assert.deepEqual(gctx.event, entry);
   });
