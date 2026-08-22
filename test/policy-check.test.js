@@ -56,6 +56,19 @@ describe('compilePattern', () => {
   });
 });
 
+// Envelope for the two ReDoS containment timings below.
+//
+// These assert the GUARD does not hang, not that it is fast. The failure they
+// exist to catch is unbounded: `^(a+)+$` over a long enough input never returns,
+// so any finite envelope catches it. 2000ms was too tight to survive the full
+// parallel suite — `compilePattern` deliberately measures its canary TWICE
+// (lib/policy-check.js: "confirm a slow verdict with a second measurement so a
+// GC pause or a loaded machine cannot drop a legitimate pattern"), and under
+// 5800-test contention the pair landed at 2070-2287ms across three consecutive
+// runs while passing in ~100ms standalone. Widened to 8000ms, which still fails
+// closed on a hang and no longer fails on machine load.
+const CONTAINMENT_ENVELOPE_MS = 8000;
+
 describe('ReDoS containment', () => {
   test('a catastrophic pattern is dropped with a warning naming the rule', () => {
     _clearRegexCache();
@@ -67,7 +80,7 @@ describe('ReDoS containment', () => {
     assert.equal(warnings.length, 1);
     assert.match(warnings[0], /catastrophic regex/);
     assert.match(warnings[0], /rule "evil-rule"/);
-    assert.ok(elapsed < 2000, `the canary itself must stay bounded (took ${elapsed}ms)`);
+    assert.ok(elapsed < CONTAINMENT_ENVELOPE_MS, `the canary itself must stay bounded (took ${elapsed}ms)`);
   });
 
   test('a catastrophic pattern in a catalog does not stall the scan path', () => {
@@ -91,7 +104,7 @@ describe('ReDoS containment', () => {
 
     assert.equal(records.length, 1, 'the surviving phrase still matches');
     assert.equal(records[0].matched, 'still scanned');
-    assert.ok(elapsed < 2000, `scan must stay fast with a hostile pattern present (took ${elapsed}ms)`);
+    assert.ok(elapsed < CONTAINMENT_ENVELOPE_MS, `scan must stay bounded with a hostile pattern present (took ${elapsed}ms)`);
   });
 
   test('an over-length pattern is skipped with a warning', () => {
