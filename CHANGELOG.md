@@ -2,6 +2,38 @@
 
 ## 2026-08-22
 
+### GOV-COMPOSE-SEAM-1 step 1 (`canon-on-decisions`) P1 — ledger-to-decision mapper and dry run
+
+`lib/judgment-decisions.js` (new, pure) maps a ledger event to a SmartMemory
+decision payload, and `bin/judgment-migrate.js --dry-run` reports the mapping
+plus the pre-registered value spike. Nothing is written: the write path (P2) and
+backfill (P3) are blocked on the spike result and on the P2.5
+inferred-conviction review gate, so invoking the script without `--dry-run`
+refuses rather than half-migrating.
+
+Implements the D1-D5 answers settled in
+`smart-memory-docs/docs/features/GOV-COMPOSE-SEAM-1/design.md`. D3: `decide` ->
+`choice`/`policy`, `kill` -> an **active** choice with the killed option in
+`rejected_alternatives` (a kill is a live decision not to do something, not an
+abandoned one), `open` -> `pending`, `correct` -> a supersede; `note`,
+`escalate`, `override`, `attest` and `calibrate` are not decisions. D4: stated
+and inferred convictions map on two separate confidence scales and an inferred
+`high` (0.55) ranks below a stated `medium` (0.6) on purpose, `source_type`
+carries `explicit` vs `inferred`, and every inferred entry is flagged
+`conviction_review_required` so the backfill can refuse rather than warn.
+
+D5's enforceability test (names a step, names an observable, a build could
+violate it) is fixed in writing before any count was taken. The classifier
+emits `candidate`, never a confident yes: the reported spike number is the
+adjudicated count after a human confirms each candidate, because a regex cannot
+tell a constraint from a description and a self-graded classifier is exactly
+the motivated counting the plan warns about.
+
+Measured on the committed ledger: 116 entries, **43 decision-shaped** (33
+`decide`, 4 `kill`, 3 `open`, 3 `correct`), 73 not decisions, **18 enforceable
+candidates** pending adjudication against a threshold of 10, and **15** inferred
+convictions queued for the P2.5 owner review.
+
 ### GOV-COMPOSE-SEAM-1 step 0 (`plumbing`) — Compose hands Stratum its SmartMemory coordinates
 
 `connect()` now resolves `SMARTMEMORY_API_URL` / `SMARTMEMORY_API_KEY` /
