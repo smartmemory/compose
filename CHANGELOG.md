@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-08-22
+
+### GOV-COMPOSE-SEAM-1 step 0 (`plumbing`) — Compose hands Stratum its SmartMemory coordinates
+
+`connect()` now resolves `SMARTMEMORY_API_URL` / `SMARTMEMORY_API_KEY` /
+`SMARTMEMORY_WORKSPACE_ID` from the `.compose/compose.json` `smartmemory` block
+(new `resolveStratumPolicyEnv`) and merges them into the Stratum MCP spawn env,
+so Compose's ingest events and Stratum's enforcement events can land in one
+workspace. It must be the spawn env: Stratum's policy client reads `process.env`
+once, at construction. A workspace with the coupling off contributes nothing and
+spawns a byte-identical env to before.
+
+Reads `smartmemory.workspaceId`, never the top-level `compose.json#workspaceId`,
+which is a Compose **project slug** — sending it as `X-Workspace-Id` scopes every
+event to a workspace that does not exist, and the API still answers 200. All
+three vars resolve or none do; a partial env addresses events to nowhere.
+
+`plan()` forwards `policy_bundle` and `policy_step_selector` (the engine arg is
+`policy_step_selector`; `step_selector` is the field inside a bundle rule and is
+silently ignored at the call level). Nothing passes them yet — `consume-bundle`
+is the consumer and is gated on the canon step.
+
+Compose gate-log records are now tagged `vision-gate:` / `record_kind:
+compose_vision_gate`. These are Vision UI **product** approvals, not Stratum's
+flow-step `gate_resolution`; the design called for deduping the two by `run_id`,
+but they are two different events and no Stratum run id exists at that call site,
+so deduping would have destroyed a real record.
+
+**Not done, deliberately:** `rationale` and `user_id` are still not transmitted on
+gate resolve. `stratum_gate_resolve` has no rationale parameter, and `resolvedBy`
+is a role (`human`/`agent`/`system`) rather than an identity — Compose has no user
+identity at that call site at all. Populating the audit field `resolved_by_user_id`
+with `"human"` would manufacture false provenance. Both are documented at the call
+site and deferred to roles (Stratum P3 / GOV-ROLES-1).
+
 ## 2026-08-18
 
 ### COMP-COMPLETION-GATE slice 2 — the build runner completes through the gate
