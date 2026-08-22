@@ -2,6 +2,38 @@
 
 ## 2026-08-22
 
+### GOV-COMPOSE-SEAM-1 step 1 P2.5 — the inferred-conviction review gate is ruled
+
+The 15 ledger entries carrying an agent-inferred conviction now have owner
+verdicts, recorded in `docs/features/GOV-COMPOSE-SEAM-1/conviction-review.json`
+and applied by `applyConvictionReview` / `applyReviewFile`. The 15 sorted into
+three groups by what evidence of the owner each entry actually contains, so they
+were ruled as three groups rather than one at a time:
+
+- **promoted (4)** — the entry quotes the owner's own words ("Owner-originated",
+  with the question verbatim). The `inferred` label was simply wrong; these
+  migrate on the stated scale at `source_type: explicit`.
+- **choice_kept_strength_dropped (7)** — "Decided (owner, elicited)": the owner
+  made the call, but the CONFIDENCE was read off behaviour ("without hedging",
+  "quick, unhesitating yes", "no elaboration offered"). The choice is kept and
+  attributed as explicit; the agent's reading of its strength is discarded to
+  neutral. A fast yes can mean confident or can mean bored, and treating those
+  as the same is the laundering D4 exists to stop.
+- **unrated (4)** — no trace the owner was ever asked. `Decision.confidence` is
+  a non-optional float upstream (`smartmemory/managed/framework.py:377`), so
+  "unrated" cannot be written as null: these take the neutral value and carry
+  `conviction_unrated: true`, which is what downstream branches on. A 0.5
+  meaning "nobody asked" and a 0.5 meaning "middling" are different facts
+  wearing the same number, so the flag is the load-bearing part, not the value.
+
+The gate REFUSES rather than warns: an inferred conviction with no verdict, or
+an unrecognised verdict, throws. A warning in a backfill log is not a gate.
+
+**Consequence for the value spike:** entry [16] (Stratum stays domain-agnostic)
+was counted as one of the 8 net-new enforceable rules and is ruled `unrated`, so
+it is not rule-eligible. The adjudicated count is **7, not 8**. The verdict is
+unchanged — the threshold was 10 and `consume-bundle` stays PARKED.
+
 ### GOV-COMPOSE-SEAM-1 step 1 (`canon-on-decisions`) P1 — ledger-to-decision mapper and dry run
 
 `lib/judgment-decisions.js` (new, pure) maps a ledger event to a SmartMemory

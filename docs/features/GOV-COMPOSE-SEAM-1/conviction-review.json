@@ -1,0 +1,28 @@
+{
+  "_source": "GOV-COMPOSE-SEAM-1 canon-on-decisions P2.5 (D4 inferred-conviction review gate)",
+  "_roadmap": "smart-memory-docs/docs/ROADMAP.md#gov-compose-seam-1",
+  "_design": "smart-memory-docs/docs/features/GOV-COMPOSE-SEAM-1/design.md",
+  "version": 1,
+  "ruled_at": "2026-08-22",
+  "ruled_by": "owner",
+  "_note": "The 15 ledger entries whose conviction was agent-inferred. Ruled in three groups rather than one at a time, because the entries sort cleanly by what evidence of the owner they actually contain. The backfill refuses to write any inferred conviction absent from this file.",
+  "verdicts": {
+    "4": { "group": "A", "verdict": "promoted", "why": "entry quotes the owner reframing it himself as \"a ledger that can be tested independently\"" },
+    "8": { "group": "A", "verdict": "promoted", "why": "entry reads **Owner-originated**" },
+    "9": { "group": "A", "verdict": "promoted", "why": "entry reads **Owner-originated** and quotes \"we limit N to 1?\"" },
+    "14": { "group": "A", "verdict": "promoted", "why": "entry reads **Owner-originated** and quotes \"how can compose/stratum enforce you if your primary mode is freeform markdown?\"" },
+
+    "60": { "group": "B", "verdict": "choice_kept_strength_dropped", "why": "Decided (owner, elicited); strength read off \"chose the sequenced option over both poles without hedging\"" },
+    "61": { "group": "B", "verdict": "choice_kept_strength_dropped", "why": "Decided (owner, elicited); strength read off \"single-choice answer, no elaboration offered\"", "defect": "prose says medium-high, structured field says high — the field overstated the text. Moot under this verdict since the strength is dropped, recorded so the mismatch is not rediscovered as new." },
+    "62": { "group": "B", "verdict": "choice_kept_strength_dropped", "why": "Decided (owner, elicited); strength read off \"selected all four without qualification\"" },
+    "63": { "group": "B", "verdict": "choice_kept_strength_dropped", "why": "Decided (owner, elicited); strength read off \"took the data-backed recommendation\"" },
+    "64": { "group": "B", "verdict": "choice_kept_strength_dropped", "why": "Decided (owner, elicited); strength read off \"chose the more-work-up-front option knowingly\"" },
+    "65": { "group": "B", "verdict": "choice_kept_strength_dropped", "why": "Decided (owner, elicited); strength read off \"quick, unhesitating yes after the two-source guard was shown\"", "defect": "prose says medium-high, structured field says high — same mismatch as seq 61." },
+    "67": { "group": "B", "verdict": "choice_kept_strength_dropped", "why": "Decided (owner, elicited); strength read off \"ruled yes with both branches specified and costed\"" },
+
+    "3": { "group": "C", "verdict": "unrated", "why": "self-admitted guess: \"asserted early and never revisited\"" },
+    "10": { "group": "C", "verdict": "unrated", "why": "bare **Conviction:** high with no provenance note" },
+    "15": { "group": "C", "verdict": "unrated", "why": "bare **Conviction:** high with no provenance note" },
+    "16": { "group": "C", "verdict": "unrated", "why": "\"high, argued from encapsulation\" — a conviction derived from an argument, not stated by the owner" }
+  }
+}
