@@ -219,7 +219,12 @@ function resolveTarget(cwd, argv) {
   if (!process.env[apiKeyEnv]) {
     throw new Error(`judgment-migrate --apply: $${apiKeyEnv} is not set`);
   }
-  return { baseUrl, workspaceId, apiKeyEnv, timeoutMs: 15000 };
+  // `enabled: true` is the flags themselves. The config gate exists so the
+  // coupling is OFF by default for the live tool path; naming a destination
+  // explicitly on an `--apply` invocation IS the opt-in, and requiring the
+  // operator to also edit compose.json first would mean a one-off migration
+  // could not run without turning the live emitter on for every later build.
+  return { enabled: true, baseUrl, workspaceId, apiKeyEnv, timeoutMs: 15000 };
 }
 
 /** The payload the HTTP contract accepts. Anything the mapper carries that the

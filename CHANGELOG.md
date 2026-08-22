@@ -2,6 +2,48 @@
 
 ## 2026-08-22
 
+### GOV-COMPOSE-SEAM-1 step 1 P3 — the backfill runs, and three contract defects it found
+
+`bin/judgment-migrate.js --apply` writes the 43 decision-shaped ledger entries
+through the shared `writeJudgmentDecision` path. Verified end to end against a
+throwaway workspace on the local service: **43 written, then 43
+skipped-as-verified on a second run, 43 decisions server-side.** Running it twice
+produces 43, not 86, and the skip is verified by reading each decision back
+rather than trusting the local ledger.
+
+`--apply` refuses to guess a destination: an api url, a workspace and a key-env
+name are all required, from flags or `compose.json#smartmemory`. Naming a
+destination explicitly IS the opt-in, so a one-off migration does not require
+turning the live emitter on for every later build.
+
+Three defects surfaced by running it, none of them visible from reading code:
+
+- **A sent `null` came back absent, and the verifier called that a lost write.**
+  The store drops null-valued keys from `context_snapshot`: a 13-key snapshot
+  round-tripped with exactly one key missing, `ledger_anchor`, the only null.
+  `provenanceLanded` compared `undefined` against `"null"` and failed all 43
+  correct writes. The store cannot represent the difference, so sent-null and
+  stored-absent are now the same fact — and only for null; a non-null value
+  going missing is still a failure.
+- **`status` cannot be written with provenance, so `open` entries land `active`.**
+  `/decisions/create` has no `status` field, and `/decisions/pending/create`
+  accepts no `source_type`, `context_snapshot`, `confidence` or `rationale`.
+  Every route trades a wrong status for lost provenance. Provenance wins, and
+  the divergence is recorded on the record (`intended_status`,
+  `status_diverged`) and warned per write rather than dropped. Closing it needs
+  a service change. Three entries are affected.
+- **A created-but-unverified decision was orphaned.** The writer created, failed
+  verification, threw — leaving the decision server-side with no ledger entry,
+  so a re-run wrote a second copy. That is how the first test workspace ended up
+  with 44. Orphans are now recorded to `docs/judgment/records/decision-orphans.json`
+  and never auto-deleted: this path fires exactly when we do not know what the
+  service did, and an automated delete on a bad diagnosis destroys a good record.
+
+`correct` → supersede is still NOT applied, and the migration report says so per
+run. `POST /decisions/{id}/supersede` mints its replacement from `new_content`
+alone, so using it would add three provenance-less decisions and break the
+run-it-twice property. Three links are recorded and left unapplied.
+
 ### GOV-COMPOSE-SEAM-1 step 1 P2 — the judgment write path, fail-closed
 
 `lib/judgment-decision-write.js` (new) writes a mapped ledger entry to
