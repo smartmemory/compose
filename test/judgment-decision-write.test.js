@@ -301,3 +301,66 @@ test('a legacy backfill resume file is adopted, not ignored', async () => {
 
   assert.deepEqual(readSidecar(cwd), { 'compose-ledger-abc123': 'dec_from_legacy' });
 });
+
+// ── measured against the real service, 2026-08-22 (P3 backfill) ───────────
+
+test('a sent null is not a lost write: the store drops null snapshot keys', () => {
+  // Measured: a 13-key context_snapshot round-tripped with exactly one key
+  // missing — `ledger_anchor`, the only null. The store cannot represent the
+  // difference between null and absent, so treating them as different failed
+  // 43 correct writes.
+  const sent = { context_snapshot: { ledger_slug: 'x', ledger_anchor: null } };
+  const stored = { context_snapshot: { ledger_slug: 'x' } };
+  assert.equal(provenanceLanded(stored, sent), true);
+});
+
+test('a sent null does NOT excuse a non-null value going missing', () => {
+  const sent = { context_snapshot: { ledger_slug: 'x', ledger_anchor: null } };
+  const stored = { context_snapshot: { ledger_anchor: null } };
+  assert.equal(provenanceLanded(stored, sent), false);
+});
+
+test('an unwritable status is recorded on the record, never dropped', async () => {
+  // `status` is not on the create contract and `/decisions/pending/create`
+  // takes no provenance, so a `pending` decision lands `active` either way.
+  // Provenance wins and the divergence is made visible on the record itself.
+  const cwd = freshCwd();
+  const calls = [];
+  await writeJudgmentDecision(cwd, decision({ status: 'pending' }), {
+    client: goodClient(calls),
+    config: ON,
+  });
+  assert.equal(calls[0].status, undefined, 'status is not a create-contract field');
+  assert.equal(calls[0].context_snapshot.intended_status, 'pending');
+  assert.equal(calls[0].context_snapshot.status_diverged, true);
+});
+
+test('an active decision carries no divergence marker', async () => {
+  const cwd = freshCwd();
+  const calls = [];
+  await writeJudgmentDecision(cwd, decision({ status: 'active' }), {
+    client: goodClient(calls),
+    config: ON,
+  });
+  assert.equal(calls[0].context_snapshot.status_diverged, undefined);
+  assert.equal(calls[0].context_snapshot.intended_status, undefined);
+});
+
+test('a created-but-unverified decision is recorded as an orphan', async () => {
+  // It exists server-side and will NOT be in the sidecar, so without this a
+  // re-run writes a second copy of the same ledger entry and nobody notices.
+  const cwd = freshCwd();
+  const badClient = {
+    async createDecision() { return { decision_id: 'dec_orphan1' }; },
+    async getDecision() { return { decision_id: 'dec_orphan1' }; }, // no provenance
+  };
+  await assert.rejects(
+    () => writeJudgmentDecision(cwd, decision(), { client: badClient, config: ON }),
+    /provenance did not land/,
+  );
+  const p = join(cwd, 'docs', 'judgment', 'records', 'decision-orphans.json');
+  assert.ok(existsSync(p), 'the orphan must be recorded');
+  const rec = JSON.parse(readFileSync(p, 'utf8'));
+  assert.equal(rec.orphans[0].decision_id, 'dec_orphan1');
+  assert.equal(rec.orphans[0].key, 'compose-ledger-abc123');
+});
