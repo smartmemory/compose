@@ -2,6 +2,38 @@
 
 ## 2026-08-23
 
+### GOV-COMPOSE-SEAM-1 step 1 P4 — the projection round-trips, and two fields were silently not making it
+
+D1 says SmartMemory owns the canon and `LEDGER.md` is a printout. That is only
+true if a decision turns back into the ledger event the generator renders, so
+`decisionToLedgerEntry` is now the inverse of `ledgerEntryToDecision` and a test
+asserts the whole file, through the real renderer, over this repo's real ledger.
+
+Writing the inverse is what found the defects. Measured against the 43 backfilled
+entries, only **14 of 43** reproduced their rendered ledger event:
+
+- **`refs` was dropped by the mapper and `refs` RENDERS.** It is in
+  `judgment-gen.js`'s `EVENT_DETAIL_KEYS`, so 14 decisions lost their evidence
+  pointers and the markdown could not be rebuilt from them. It was the only
+  rendered detail key the mapper did not carry. Fix took it to 35 of 43.
+- **The flattened `rejected_alternatives` cannot be split back.** `what` and
+  `why` are joined with " — ", a separator that also occurs inside `what` as
+  ordinary prose; splitting on the first or the last occurrence both guess
+  wrong, on 8 of the 43. The structured list now travels in `context_snapshot`,
+  which has no type constraint, while the flattened list stays where readers
+  expect it. 43 of 43.
+
+**What P4 does NOT claim: LEDGER.md as a whole does not regenerate from
+decisions.** 73 of its 116 entries are `note`/`escalate`/`override`/`calibrate`/
+`attest`, which D3 ruled are not decisions and which were never migrated. Only
+the 43 decision-shaped events round-trip. That is asserted as a test rather than
+written as prose, so it fails and says so if the other kinds are ever migrated.
+
+**The 43 already in the canon workspace predate this fix and cannot be
+repaired.** A decision is append-only — there is no update route and no delete,
+only `retract` — and the write path skips on presence, so a re-run will not
+correct them. A correct canon needs a fresh workspace.
+
 ### test: the per-file timeout measured machine speed, not correctness
 
 `--test-timeout` 120s → 300s. `test/ts-cutover-consumer-fanout-golden.test.js`
