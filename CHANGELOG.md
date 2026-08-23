@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-08-23
+
+### GOV-COMPOSE-SEAM-1 step 1 P3 — the canon has a home, and the backfill has run for real
+
+Until now every `--apply` run had been against a throwaway tenant, because
+`compose.json` named no destination and `--apply` refuses to guess one. The
+owner ruled the canon lives in a dedicated Compose workspace rather than a
+personal one, so `.compose/compose.json` now carries a `smartmemory` block
+(`workspaceId`, `baseUrl`, `apiKeyEnv: COMPOSE_SM_KEY`) and the migration runs
+with no flags at all.
+
+The real backfill: **43 written, 0 failed**; a second run wrote 0 and verified
+43; the service lists exactly 43. Provenance was spot-checked through the
+single-GET route (`source_type`, the full `context_snapshot` including the
+conviction review verdict, tags, and `rejected_alternatives`) because the list
+route still returns an empty snapshot.
+
+Three known divergences are unchanged and stamped on the records, not hidden:
+the 3 `open` entries land `active` with `intended_status`/`status_diverged`
+(no route writes a lifecycle state together with provenance), and the 3
+`correct` links are recorded but still not applied as supersessions (the
+supersede route mints a provenance-less replacement). Both need a service
+change.
+
 ## 2026-08-22
 
 ### GOV-COMPOSE-SEAM-1 step 1 P3 — the backfill runs, and three contract defects it found

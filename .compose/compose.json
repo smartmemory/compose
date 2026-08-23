@@ -1,6 +1,8 @@
 {
   "version": 2,
-  "externalPrefixes": ["STRAT-"],
+  "externalPrefixes": [
+    "STRAT-"
+  ],
   "capabilities": {
     "stratum": true,
     "lifecycle": true,
@@ -31,5 +33,12 @@
     "enabled": true,
     "backend": "jsonl",
     "confidenceThreshold": 0.6
+  },
+  "smartmemory": {
+    "enabled": true,
+    "baseUrl": "http://localhost:9001",
+    "workspaceId": "team_b3774c516a5f",
+    "apiKeyEnv": "COMPOSE_SM_KEY",
+    "timeoutMs": 15000
   }
 }
