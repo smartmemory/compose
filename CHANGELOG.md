@@ -2,6 +2,16 @@
 
 ## 2026-08-23
 
+### test: the per-file timeout measured machine speed, not correctness
+
+`--test-timeout` 120s → 300s. `test/ts-cutover-consumer-fanout-golden.test.js`
+takes ~165s on its own (40 tests, all passing) and more when 385 sibling files
+run beside it, so it was cancelled by the runner and aborted the pre-push gate
+with **zero actual failures**. A limit a healthy file cannot clear is a coin
+flip on machine load for everyone who pushes. The file's own cost is a separate
+question and is being looked at; widening the envelope is the same call made for
+`test/policy-check.test.js` (2000→8000ms) on 2026-08-22.
+
 ### GOV-COMPOSE-SEAM-1 — the decision ledger is stamped, so a backfill stops blocking every later push
 
 The first real backfill wrote `docs/judgment/records/decision-ids.json` and then
