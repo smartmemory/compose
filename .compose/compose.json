@@ -37,7 +37,7 @@
   "smartmemory": {
     "enabled": true,
     "baseUrl": "http://localhost:9001",
-    "workspaceId": "team_b3774c516a5f",
+    "workspaceId": "team_11bc48bd9bc3",
     "apiKeyEnv": "COMPOSE_SM_KEY",
     "timeoutMs": 15000
   }

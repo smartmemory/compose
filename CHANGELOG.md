@@ -2,6 +2,27 @@
 
 ## 2026-08-23
 
+### GOV-COMPOSE-SEAM-1 — the canon is re-seeded, and the projection is proved end to end
+
+The 43 decisions backfilled this morning predated the `refs` / `rejected` fix and
+could not be repaired: a decision is append-only (no update route, no delete,
+only `retract`) and the write path skips on presence. So the canon moved to a
+fresh workspace and was rebuilt with the fixed mapper.
+
+**No ledger surgery was needed, and that is the verify-before-skip design paying
+off.** The idempotency ledger is not keyed by workspace, so all 43 keys looked
+already-written. Because the skip is confirmed by reading each decision back
+rather than trusting the ledger, every one reported "the service has no such
+decision; rewriting" and the run self-corrected. A presence-assumed skip would
+have written nothing and reported success.
+
+Verified against the live service: 43 written, 0 failed; a second run wrote 0 and
+verified 43; `ledger_refs` on 14 and `ledger_rejected` on 29, exactly as the
+local measurement predicted. **All 88,326 bytes of `LEDGER.md` rebuilt from the
+live decision store are byte-identical to the generated file** — the D1 claim
+that markdown is a printout is now a measurement rather than an intention, for
+the decision-shaped 43 of 116 entries.
+
 ### GOV-COMPOSE-SEAM-1 step 1 P4 — the projection round-trips, and two fields were silently not making it
 
 D1 says SmartMemory owns the canon and `LEDGER.md` is a printout. That is only
