@@ -2,6 +2,21 @@
 
 ## 2026-08-23
 
+### GOV-COMPOSE-SEAM-1 — the decision ledger is stamped, so a backfill stops blocking every later push
+
+The first real backfill wrote `docs/judgment/records/decision-ids.json` and then
+the pre-push canon guard refused the push: that path is inside the attested
+records tree, `recordFileSet` walks it wholesale, and nothing had ever stamped
+it. Every subsequent commit and push in the repo would have failed the same way
+until someone hand-blessed the file, which is the one thing the guard exists to
+prevent.
+
+`writeSidecar` and `recordOrphan` now call `syncManifest` after writing, the
+same way `lib/judgment-writer.js` stamps after every publication. This records
+what the writer wrote; it does not bless edits, and a hand-edited ledger still
+reports as `modified` drift. Two tests assert both halves. The already-written
+ledger was stamped once through the same API.
+
 ### GOV-COMPOSE-SEAM-1 step 1 P3 — the canon has a home, and the backfill has run for real
 
 Until now every `--apply` run had been against a throwaway tenant, because

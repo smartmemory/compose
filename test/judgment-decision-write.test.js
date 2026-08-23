@@ -364,3 +364,32 @@ test('a created-but-unverified decision is recorded as an orphan', async () => {
   assert.equal(rec.orphans[0].decision_id, 'dec_orphan1');
   assert.equal(rec.orphans[0].key, 'compose-ledger-abc123');
 });
+
+test('the sidecar is stamped into the attest manifest, not left as drift', async () => {
+  const cwd = freshCwd();
+  await writeJudgmentDecision(cwd, decision(), { client: goodClient(), config: ON });
+
+  const { verifyRecords, readManifest } = await import('../lib/judgment-attest.js');
+  const rel = 'docs/judgment/records/decision-ids.json';
+
+  assert.ok(readManifest(cwd)?.[rel], 'the ledger has a manifest entry');
+  assert.deepEqual(
+    verifyRecords(cwd).drift.filter((d) => d.path === rel),
+    [],
+    'writing the ledger leaves no record drift — an unstamped write blocks every later commit',
+  );
+});
+
+test('a hand-edited sidecar is still drift: stamping records the writer, it does not bless edits', async () => {
+  const cwd = freshCwd();
+  await writeJudgmentDecision(cwd, decision(), { client: goodClient(), config: ON });
+
+  writeFileSync(sidecarPath(cwd), JSON.stringify({ 'compose-ledger-abc123': 'dec_forged' }));
+
+  const { verifyRecords } = await import('../lib/judgment-attest.js');
+  const rel = 'docs/judgment/records/decision-ids.json';
+  assert.deepEqual(
+    verifyRecords(cwd).drift.filter((d) => d.path === rel).map((d) => d.kind),
+    ['modified'],
+  );
+});
