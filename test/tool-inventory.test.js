@@ -130,8 +130,9 @@ test('toolsWritingCanon: feature-json writers include the lifecycle pair', () =>
   const writers = toolsWritingCanon(TOOLS, 'feature-json');
   // Traced 2026-08-24 (server/vision-routes.js:366,451): complete/kill write
   // feature.json server-side via _postLifecycle. Neither is in the registry's
-  // TOOLS_FOR_FEATURE_JSON — that gap is slice 2's C2 finding, recorded here
-  // so the trace is not re-derived from scratch next time.
+  // TOOLS_FOR_FEATURE_JSON. Slice 2 surfaced that as its C2 finding and closed
+  // it (both are now in the registry list); the trace is kept here so it is not
+  // re-derived from scratch next time.
   assert.ok(writers.includes('complete_feature'));
   assert.ok(writers.includes('kill_feature'));
   assert.ok(writers.includes('record_completion'));

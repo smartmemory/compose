@@ -2,6 +2,57 @@
 
 ## 2026-08-24
 
+### COMP-COVERAGE-GATE slice 2 — the authorization coverage check
+
+Slice 1 made Compose's mutating surface *declared*. Slice 2 cross-checks that
+declaration against the two lists that are supposed to govern it — canon-registry
+entries and the profile policy — and reports what neither accounts for. Static
+check over declarations only: no new enforcement point, blast radius confined to
+`validate_project` output.
+
+- `lib/coverage-gate.js` (new) — pure `checkAuthorizationCoverage({ inventory,
+  registry, policy })` → `{ findings }`. Four codes, ranked most-actionable
+  first: `MISSING_EFFECT` (error, the only hard tier — unambiguous and
+  one-line-fixable), `UNGATED_MUTATION` (warning), `ORPHAN_REGISTRY_TOOL`
+  (warning), `UNCOVERED_WRITE` (info). Every finding carries a `remediation`
+  naming the file and list to edit, not a verdict.
+- `lib/feature-validator.js` — `runCoverageCheck()` in `validateProject`, never
+  in `validateFeature` (installation property, not a feature one). Findings land
+  in the main `findings` array tagged `source: 'coverage'` **and** as a
+  structured `result.coverage` section, so the CLI exit code, `--block-on` and
+  the REST severity rollup work with no per-consumer fork. It cannot throw: an
+  internal error degrades to one `COVERAGE_CHECK_SKIPPED` warning.
+- `lib/canon-registry.js` — new `canonEntries()` public accessor (`_internals` is
+  test-only, and it hands out the live matchers).
+- `test/coverage-gate.test.js` (new) — 26 tests: a table-driven error harness
+  (one row per code), the clean cases, bad-input robustness, ranking, the wiring,
+  and the live gate.
+
+No route change was needed: `server/validate-routes.js` and `toolValidateProject`
+both pass the validator result through verbatim.
+
+**The gate's first run found twelve things.** Two `UNCOVERED_WRITE` are FIXED:
+`complete_feature` and `kill_feature` write `feature.json` server-side via
+`_postLifecycle` and were missing from `TOOLS_FOR_FEATURE_JSON`. Verified safe
+before editing — `entry.tools` has one consumer (`lib/canon-guard.js:128`, the
+deny message) and `expectedToolsForPath` has no production callers at all — so
+this widens no enforcement, it stops a rejection message from omitting two legal
+alternatives. The contract test's byte-for-byte pin was updated deliberately.
+
+Ten `UNGATED_MUTATION` are REAL and left OPEN as advisory warnings:
+`canon_override_grant` (an implementer can mint its own canon bypass), the eight
+`judgment_*` writers (reasoned about for the reviewer allowlist, never for the
+implementer — the decision record is writable by the profile whose decisions it
+records) and `roadmap_xref_push` (writes external trackers). Closing them means
+editing `IMPLEMENTER_DENY`, which changes runtime behavior for implementer
+sessions — a policy decision, not a coverage fix. The set is pinned in the test
+so an eleventh cannot appear silently.
+
+The C4 exception list lives next to the check in `lib/coverage-gate.js`, not in a
+doc (a doc nobody loads is how the three lists drifted in the first place). Nine
+tools an implementer legitimately needs are excepted with a one-line reason each,
+and a gate test fails if an exception stops naming a live mutating tool.
+
 ### COMP-COVERAGE-GATE slice 1 — derived mutating-tool inventory
 
 Compose kept three hand-maintained lists that each partially described which MCP
