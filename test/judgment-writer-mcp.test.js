@@ -19,6 +19,10 @@ import { checkProjectionRoundtrip } from '../lib/judgment-gen.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const MCP_SERVER = join(ROOT, 'server', 'compose-mcp.js');
+// COMP-COVERAGE-GATE: the TOOLS array moved to its own data-only module so it
+// can be imported without booting the stdio server. Definitions are scanned
+// there; the dispatch switch is still in MCP_SERVER.
+const MCP_TOOL_DEFS = join(ROOT, 'server', 'mcp-tool-defs.js');
 
 class McpClient {
   constructor(cwd, extraEnv = {}) {
@@ -187,15 +191,16 @@ const ratifiedGoalCut = {
 describe('compose-mcp judgment registry parity', () => {
   test('has 51 tool definitions, 51 dispatch cases, and ten exact judgment names', () => {
     const source = readFileSync(MCP_SERVER, 'utf8');
-    const toolsStart = source.indexOf('const TOOLS = [');
-    const toolsEnd = source.indexOf('\n];\n\n// ---------------------------------------------------------------------------\n// MCP Server setup', toolsStart);
+    const defsSource = readFileSync(MCP_TOOL_DEFS, 'utf8');
+    const toolsStart = defsSource.indexOf('export const TOOLS = [');
+    const toolsEnd = defsSource.length;
     const switchStart = source.indexOf('    switch (name) {');
     const switchEnd = source.indexOf('      // agent_run removed', switchStart);
     assert.ok(toolsStart >= 0 && toolsEnd > toolsStart, 'TOOLS array anchors must resolve');
     assert.ok(switchStart >= 0 && switchEnd > switchStart, 'dispatch switch anchors must resolve');
 
     const definitionNames = [
-      ...source.slice(toolsStart, toolsEnd).matchAll(/^    name: '([^']+)',/gm),
+      ...defsSource.slice(toolsStart, toolsEnd).matchAll(/^    name: '([^']+)',/gm),
     ].map((match) => match[1]);
     const dispatchNames = [
       ...source.slice(switchStart, switchEnd).matchAll(/^      case '([^']+)'/gm),
@@ -431,12 +436,13 @@ describe('compose-mcp judgment writer (end-to-end)', () => {
 describe('COMP-JUDGMENT-GOAL-MIGRATE S3 — MCP reachability', () => {
   test('judgment_goal_write advertises migrate on the existing 51/51 registry', async () => {
     const source = readFileSync(MCP_SERVER, 'utf8');
-    const toolsStart = source.indexOf('const TOOLS = [');
-    const toolsEnd = source.indexOf('\n];\n\n// ---------------------------------------------------------------------------\n// MCP Server setup', toolsStart);
+    const defsSource = readFileSync(MCP_TOOL_DEFS, 'utf8');
+    const toolsStart = defsSource.indexOf('export const TOOLS = [');
+    const toolsEnd = defsSource.length;
     const switchStart = source.indexOf('    switch (name) {');
     const switchEnd = source.indexOf('      // agent_run removed', switchStart);
     const definitionNames = [
-      ...source.slice(toolsStart, toolsEnd).matchAll(/^    name: '([^']+)',/gm),
+      ...defsSource.slice(toolsStart, toolsEnd).matchAll(/^    name: '([^']+)',/gm),
     ].map((match) => match[1]);
     const dispatchNames = [
       ...source.slice(switchStart, switchEnd).matchAll(/^      case '([^']+)'/gm),

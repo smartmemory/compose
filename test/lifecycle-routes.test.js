@@ -226,6 +226,9 @@ describe('lifecycle REST endpoints', () => {
 describe('MCP tool schemas', () => {
   test('compose-mcp.js contains all lifecycle + gate tool names', async () => {
     const { readFileSync } = await import('node:fs');
+    // COMP-COVERAGE-GATE: definitions live in mcp-tool-defs.js; the dispatch
+    // switch stays in compose-mcp.js.
+    const defs = readFileSync(join(REPO_ROOT, 'server', 'mcp-tool-defs.js'), 'utf-8');
     const source = readFileSync(join(REPO_ROOT, 'server', 'compose-mcp.js'), 'utf-8');
     const expected = [
       'get_feature_lifecycle',
@@ -235,7 +238,7 @@ describe('MCP tool schemas', () => {
       'get_pending_gates',
     ];
     for (const name of expected) {
-      assert.ok(source.includes(`name: '${name}'`), `Missing tool definition: ${name}`);
+      assert.ok(defs.includes(`name: '${name}'`), `Missing tool definition: ${name}`);
       assert.ok(source.includes(`case '${name}'`), `Missing switch case: ${name}`);
     }
   });

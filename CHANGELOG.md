@@ -1,5 +1,52 @@
 # Changelog
 
+## 2026-08-24
+
+### COMP-COVERAGE-GATE slice 1 — derived mutating-tool inventory
+
+Compose kept three hand-maintained lists that each partially described which MCP
+tools change state (`TOOLS_FOR_*`/`JUDGMENT_WRITE_TOOLS` in `lib/canon-registry.js`;
+`IMPLEMENTER_DENY`/`REVIEWER_ALLOW` in `server/mcp-tool-policy.js`) and none of
+them was the inventory — nothing enumerated every mutating tool or cross-checked
+the three against the tool definitions. Same shape as COMP-COMPLETION-GATE, where
+guard coverage turned out to be 0/321, found by audit rather than by a check.
+
+Every tool definition now declares `effect: 'read' | 'mutating' | 'setup'`, and
+every mutating one declares `writes` (canon-registry entry ids, `[]` for a
+non-canon write). The sets are derived from those declarations, never listed.
+
+- `server/mcp-tool-defs.js` (new) — the 51 definitions, extracted data-only.
+  `server/compose-mcp.js` connects a `StdioServerTransport` at module load, so
+  importing it for `TOOLS` hung any consumer.
+- `lib/tool-inventory.js` (new) — pure `loadToolInventory` / `mutatingTools` /
+  `toolsWritingCanon`. Fail-closed: a tool with no `effect` is reported
+  `undeclared`, and a mutating tool with no `writes` is too (`[]` is a real
+  answer and must be distinguishable from a forgotten field).
+- `server/compose-mcp.js` — imports `TOOLS`; strips `effect`/`writes` at the
+  ListTools boundary via `toWire()`. **Fixes a defect introduced by the
+  annotation:** the handler returned `TOOLS` directly, so the two local fields
+  appeared in every `tools/list` response on the wire.
+- `test/tool-inventory.test.js` (new) — 15 tests, including the gate
+  (`undeclared: []` against the live array), a `setup`↔`SETUP_TOOLS` cross-check,
+  and a pin on the wire shape.
+
+Partition: 4 setup / 21 read / 26 mutating.
+
+Two corrections to the design, both found by doing the work: `roadmap_xref_push`
+writes external trackers rather than this repo's ROADMAP.md, and
+`scaffold_feature` writes only the six markdown templates, never `feature.json`.
+Both had been guessed from the tool name.
+
+Four existing tests scanned `server/compose-mcp.js` as TEXT for `name: '<tool>'`
+and broke on the extraction (`test/artifact-manager.test.js`,
+`test/lifecycle-routes.test.js`, and two in `test/judgment-writer-mcp.test.js`).
+All four now read definitions from `server/mcp-tool-defs.js` while keeping the
+dispatch-switch assertions on `server/compose-mcp.js`. Caught only by the full
+suite — the targeted MCP suites passed.
+
+Slice 2 (the coverage check itself) is not started — deliberately, so its checks
+can be judged against the real inventory instead of ahead of it.
+
 ## 2026-08-23
 
 ### GOV-COMPOSE-SEAM-1 — the canon is re-seeded, and the projection is proved end to end
@@ -286,6 +333,10 @@ with `"human"` would manufacture false provenance. Both are documented at the ca
 site and deferred to roles (Stratum P3 / GOV-ROLES-1).
 
 ## 2026-08-18
+
+### COMP-GUARD-CLAIM-1 — correct COMP-MCP-ENFORCE's false guard-coverage claim
+
+Doc-only correction to `docs/features/COMP-MCP-ENFORCE/report.md`. Two dated correction blocks appended (original text preserved): one after line 8's "No caller..." summary claim, one after the Slice 3 Codex annotation. Both corrections document the measured non-coverage (321 managed features, 31 leaked test fixtures, zero overlap, 230 COMPLETE features without a guarded transition) and state the honest post-COMP-COMPLETION-GATE-slice-1+2 ceiling. Forward reference to `docs/features/COMP-COMPLETION-GATE/design.md` for the remaining open paths. Implements COMP-COMPLETION-GATE AC-14.
 
 ### COMP-COMPLETION-GATE slice 2 — the build runner completes through the gate
 

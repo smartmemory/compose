@@ -375,9 +375,12 @@ describe('artifact REST endpoints', () => {
 
 describe('MCP artifact tool schemas', () => {
   test('compose-mcp.js contains both artifact tool names', async () => {
+    // COMP-COVERAGE-GATE: definitions live in mcp-tool-defs.js; the dispatch
+    // switch stays in compose-mcp.js.
+    const defs = readFileSync(join(REPO_ROOT, 'server', 'mcp-tool-defs.js'), 'utf-8');
     const source = readFileSync(join(REPO_ROOT, 'server', 'compose-mcp.js'), 'utf-8');
     for (const name of ['assess_feature_artifacts', 'scaffold_feature']) {
-      assert.ok(source.includes(`name: '${name}'`), `Missing tool definition: ${name}`);
+      assert.ok(defs.includes(`name: '${name}'`), `Missing tool definition: ${name}`);
       assert.ok(source.includes(`case '${name}'`), `Missing switch case: ${name}`);
     }
   });
