@@ -36,6 +36,10 @@ try {
     cwd: payload?.cwd,
     projectRoot,
     canonicalize: realpathCanonicalize,
+    // Spawn-injected and un-rewritable by the agent. Only steers the deny
+    // message's escape sentence — a restricted profile cannot call
+    // canon_override_grant, so it must be told to escalate instead.
+    profile: process.env.COMPOSE_SESSION_PROFILE,
   });
   if (decision.deny) {
     // The atomic claim lives here, not in decideCanonGuard: consuming a grant

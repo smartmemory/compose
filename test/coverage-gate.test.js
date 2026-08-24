@@ -214,27 +214,20 @@ describe('GATE — live tool definitions, registry and policy', () => {
     assert.deepEqual(live().findings.filter((f) => f.code === 'UNCOVERED_WRITE'), []);
   });
 
-  test('UNGATED_MUTATION is pinned — a new one must be ruled on, not absorbed', () => {
-    // These are REAL, OPEN findings, deliberately not auto-fixed: adding any of
-    // them to IMPLEMENTER_DENY changes what implementer-profile sessions may do
-    // at runtime, which is a policy decision, not a coverage fix. They report as
-    // warnings (advisory) until that decision is made.
-    const expected = [
-      'canon_override_grant',   // an implementer can currently grant itself a canon bypass
-      'judgment_goal_write',
-      'judgment_joint_add',
-      'judgment_ledger_append',
-      'judgment_person_write',
-      'judgment_position_amend',
-      'judgment_position_create',
-      'judgment_situation_write',
-      'judgment_transition',    // the 8 judgment writers: reviewer-denied, implementer-open
-      'roadmap_xref_push',      // writes EXTERNAL trackers from an implementer session
-    ];
-    assert.deepEqual(
-      live().findings.filter((f) => f.code === 'UNGATED_MUTATION').map((f) => f.tool),
-      expected,
-    );
+  test('zero UNGATED_MUTATION — the ten C4 findings were closed in IMPLEMENTER_DENY', () => {
+    // The gate's first run found ten mutating tools named by no profile list:
+    // canon_override_grant (an implementer could mint its own canon bypass),
+    // the eight judgment_* writers (the decision record was writable by the
+    // profile whose decisions it records), and roadmap_xref_push (writes
+    // external trackers). All ten were added to IMPLEMENTER_DENY.
+    //
+    // This assertion is the standing guard: a NEW mutating tool that nobody
+    // rules on fails here, rather than appearing as a warning nobody reads.
+    assert.deepEqual(live().findings.filter((f) => f.code === 'UNGATED_MUTATION'), []);
+  });
+
+  test('the whole live run is clean — zero findings of any code', () => {
+    assert.deepEqual(live().findings, []);
   });
 
   test('nothing in the live run is an error — the gate is advisory today', () => {
