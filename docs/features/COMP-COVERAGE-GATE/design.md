@@ -1,6 +1,6 @@
 # COMP-COVERAGE-GATE: Design
 
-**Status:** SLICE 1 COMPLETE — slice 2 not started
+**Status:** SLICE 1 COMPLETE — SLICE 2 COMPLETE
 **Date:** 2026-08-24
 
 ## Related Documents
@@ -171,14 +171,14 @@ heuristic gets them wrong or cannot decide:
 
 Acceptance criteria:
 
-- [ ] **C1 `MISSING_EFFECT`** (hard) — tool definition with no `effect` field
-- [ ] **C4 `UNGATED_MUTATION`** (headline — the enforced list) — an `effect: 'mutating'` tool in neither `IMPLEMENTER_DENY` nor `PHASE_REFINEMENT`, and not in `REVIEWER_ALLOW`: an implementer-profile session can call it and nothing records whether that is intended
-- [ ] **C3 `ORPHAN_REGISTRY_TOOL`** — a registry entry names a tool absent from the inventory (reverse drift; catches renames)
-- [ ] **C2 `UNCOVERED_WRITE`** (minor) — tool declares `writes: ['X']` but is absent from `X`'s registry tool list. Keeps the *remediation message* honest rather than closing a hole. Known instances: `complete_feature`, `kill_feature` → `feature.json`
-- [ ] Wired into `validate_project` under a `coverage` section; absent from `validate_feature` (project-level property)
-- [ ] `MISSING_EFFECT` fails the overall validate result; C2–C4 report only
-- [ ] Table-driven error harness over the four codes
-- [ ] **Gate:** runs against the live registry, zero `MISSING_EFFECT`; every C2–C4 finding fixed or exception-recorded
+- [x] **C1 `MISSING_EFFECT`** (hard) — tool definition with no `effect` field
+- [x] **C4 `UNGATED_MUTATION`** (headline — the enforced list) — an `effect: 'mutating'` tool in neither `IMPLEMENTER_DENY` nor `PHASE_REFINEMENT`, and not in `REVIEWER_ALLOW`: an implementer-profile session can call it and nothing records whether that is intended
+- [x] **C3 `ORPHAN_REGISTRY_TOOL`** — a registry entry names a tool absent from the inventory (reverse drift; catches renames)
+- [x] **C2 `UNCOVERED_WRITE`** (minor) — tool declares `writes: ['X']` but is absent from `X`'s registry tool list. Keeps the *remediation message* honest rather than closing a hole. Known instances: `complete_feature`, `kill_feature` → `feature.json` — **both fixed**, C2 is now zero
+- [x] Wired into `validate_project` under a `coverage` section; absent from `validate_feature` (project-level property)
+- [x] `MISSING_EFFECT` fails the overall validate result; C2–C4 report only
+- [x] Table-driven error harness over the four codes (`test/coverage-gate.test.js`, 26 tests)
+- [x] **Gate:** runs against the live registry, zero `MISSING_EFFECT`, zero `ORPHAN_REGISTRY_TOOL`, zero `UNCOVERED_WRITE`; the 10 `UNGATED_MUTATION` are pinned in the test and recorded below — see "the gate's first real output"
 
 ---
 
@@ -256,3 +256,73 @@ Full suite after the fixes: 5884 pass, 1 pre-existing failure
 
 **Not done:** slice 2. The inventory now exists; whether C2–C4 earn their keep is
 a question to answer against it, not ahead of it.
+
+---
+
+## Slice 2 implementation notes (2026-08-24)
+
+**Files:**
+- `lib/coverage-gate.js` (new) — `checkAuthorizationCoverage({ inventory, registry, policy })`, pure, plus the `C4_EXCEPTIONS` ruling list
+- `lib/canon-registry.js` (modified) — new `canonEntries()` public accessor (`_internals` is test-only); `complete_feature`/`kill_feature` added to `TOOLS_FOR_FEATURE_JSON`
+- `lib/feature-validator.js` (modified) — `runCoverageCheck()` called from `validateProject`; 5 kinds added to the catalog header
+- `test/coverage-gate.test.js` (new) — 26 tests: error harness, clean cases, robustness, ranking, the live gate, the wiring
+
+**No route change was needed.** Both `server/validate-routes.js` and
+`toolValidateProject` (`server/compose-mcp-tools.js:579`) pass the validator
+result through verbatim, so `coverage` surfaces on `GET /api/validate` and the
+`validate_project` MCP tool for free.
+
+**Findings go to two places on purpose.** They are pushed into the main
+`findings` array (tagged `source: 'coverage'`) AND returned structured under
+`result.coverage`. The array gives the CLI exit code, `--block-on` and the REST
+severity rollup the right behavior with no per-consumer fork; the section gives
+callers the codes and remediations without re-parsing prose.
+
+### The gate's first real output
+
+The feature was scoped "gated on slices 1–2 finding something real". It found
+**twelve**, of which ten are open.
+
+**C2 (2) — FIXED.** `complete_feature` and `kill_feature` added to
+`TOOLS_FOR_FEATURE_JSON`. Verified safe first: `entry.tools` has ONE consumer
+(`lib/canon-guard.js:128`, the deny message), and `expectedToolsForPath` — the
+ship point's accessor for it — has **no production callers at all**, only tests.
+The edit therefore widens no enforcement; it stops a rejection message from
+omitting two legitimate alternatives. The contract test's "legacy byte-for-byte"
+pin was updated deliberately, with the reason recorded next to it.
+
+**C4 (10) — REAL, OPEN, deliberately NOT auto-fixed.** Each is a mutating tool an
+implementer-profile session can call today with nothing recording whether that
+was intended:
+
+| Tool(s) | Why it matters |
+|---|---|
+| `canon_override_grant` | An implementer can mint its own canon bypass. The override was designed so it could not be turned on its own governance state — but nothing stops the profile that is *subject* to canon enforcement from granting itself an exemption from it. |
+| the 8 `judgment_*` writers | `mcp-tool-policy.js` explicitly reasoned about these for the reviewer allowlist ("the eight judgment write tools stay reviewer-denied") and never about the implementer. The decision record is writable by the profile whose decisions it records. |
+| `roadmap_xref_push` | Writes EXTERNAL trackers (github issues, sibling repos) from an implementer session. |
+
+They report as **advisory warnings**, not errors, because closing them means
+editing `IMPLEMENTER_DENY`, which changes what implementer sessions may do at
+runtime. That is a policy decision with its own blast radius, not a coverage fix,
+and it is the natural next slice. Until then the set is pinned in
+`test/coverage-gate.test.js` so an eleventh cannot appear silently.
+
+**The C4 exception list lives in `lib/coverage-gate.js`**, resolving the design's
+open question. Nine tools are excepted (`scaffold_feature`, `link_artifact`,
+`link_features`, `write_journal_entry`, `write_checkpoint`, the three
+iteration-loop tools, `add_changelog_entry`) — each with a one-line reason, and a
+gate test asserts every exception still names a live mutating tool, so a rename
+or deletion turns a stale exception into a failure rather than a silent hole.
+
+### The other open question, answered
+
+*"Is `writes` worth its cost given C2's demotion?"* — Yes, narrowly. C2 found
+exactly the two instances predicted and they are now closed, so as a *check* it
+is spent. But `writes` is what made C3 (`ORPHAN_REGISTRY_TOOL`) and the
+registry↔inventory join possible at all, and it remains the only field a
+pipeline-graph slice could build on. Keep it; expect no further findings from C2.
+
+### Not done
+
+The pipeline-graph slice (unreachable steps, per-step `authorizes:`) and the
+online verifier remain out of scope, unchanged from the original ruling.
