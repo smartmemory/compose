@@ -2,6 +2,33 @@
 
 ## 2026-08-24
 
+### COMP-COMPLETION-GATE fix — the not-found branch was dead against the real client
+
+`record_completion` refused EVERY feature that had never run a lifecycle, with
+`COMPLETION_GATE_REFUSED: guard unreachable`. The gate's own comment says a
+missing guard is "the expected state for every feature today" and returns a null
+state — but `currentGuardState` read `err.code` / `err.kind`, and
+`server/stratum-client.js` returns stratum's canonical error verbatim:
+`{status:'error', error_type:'guard_not_found', message:'no guard registered
+for "<rid>"'}`. Neither field matched, and neither did the message wording. The
+branch never fired outside tests.
+
+It never fired IN tests either, for the same reason it was never caught: all
+seven call sites inject `{ error: { code: 'guard_not_found' } }` — a shape the
+real client cannot produce. Green suite, dead path, and the one thing the gate
+exists to do (take a guarded transition on a real completion) had therefore
+never happened for a real feature.
+
+- `lib/completion-gate.js` — `currentGuardState` also reads `err.error_type` and
+  matches "no guard registered". A genuinely unreachable guard (timeout, spawn
+  failure) still refuses: the fix does not fail open.
+- `test/completion-gate.test.js` — two tests using the REAL producer shape: the
+  not-found case proceeds AND still attempts the transition; a `timeout` error
+  still refuses at `guard`.
+
+Found while completing COMP-COVERAGE-GATE, which is now the first feature to
+flip to COMPLETE through an applied guarded transition.
+
 ### COMP-COVERAGE-GATE C4 closure — ten ungated mutations ruled on
 
 The ten `UNGATED_MUTATION` findings slice 2 surfaced are closed. The call split

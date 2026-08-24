@@ -360,3 +360,55 @@ test('the migration exemption is explicit and narrow: only a stated reason gets 
     assert.equal(f.status, 'COMPLETE');
   } finally { ws.cleanup(); }
 });
+
+// --- the REAL producer shape ------------------------------------------------
+//
+// Every other test in this file injects `{ error: { code: 'guard_not_found' } }`.
+// server/stratum-client.js never produces that: it returns stratum's canonical
+// error object verbatim, `{ status:'error', error_type:'guard_not_found',
+// message:'no guard registered for "<rid>"' }`. Reading only `code`/`kind` made
+// the not-found branch dead against the real client, so EVERY unregistered
+// feature — i.e. every feature that never ran a lifecycle — refused with "guard
+// unreachable". Green suite, dead path. Found 2026-08-24.
+
+test('guard_not_found in the REAL client shape is a null state, not unreachable', async () => {
+  const ws = makeWorkspace();
+  const calls = [];
+  _testOnly_setGuardClient(applyingGuard(calls));
+  _testOnly_setHistoryClient(async () => ({
+    status: 'error',
+    error_type: 'guard_not_found',
+    message: `no guard registered for "compose:deadbeef1234:GATE-1"`,
+  }));
+  try {
+    const r = await completionGate({
+      featureCode: 'GATE-1', commitSha: ws.sha, testsPass: true,
+      workspaceRoot: ws.root, filesChanged: ['README.md'],
+    });
+    assert.equal(r.ok, true, 'an unregistered guard must not refuse the gate');
+    assert.ok(calls.find((c) => c.op === 'transition'), 'and the transition must still be attempted');
+  } finally {
+    reset();
+  }
+});
+
+test('a genuinely unreachable guard STILL refuses — the fix must not fail open', async () => {
+  const ws = makeWorkspace();
+  _testOnly_setGuardClient(applyingGuard([]));
+  _testOnly_setHistoryClient(async () => ({
+    status: 'error',
+    error_type: 'timeout',
+    message: 'Stratum guard timed out',
+  }));
+  try {
+    const r = await completionGate({
+      featureCode: 'GATE-1', commitSha: ws.sha, testsPass: true,
+      workspaceRoot: ws.root, filesChanged: ['README.md'],
+    });
+    assert.equal(r.ok, false);
+    assert.equal(r.refusedAt, 'guard');
+    assert.deepEqual(r.reasons, ['guard unreachable']);
+  } finally {
+    reset();
+  }
+});
