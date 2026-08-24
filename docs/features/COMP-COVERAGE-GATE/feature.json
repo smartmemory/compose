@@ -1,7 +1,7 @@
 {
   "code": "COMP-COVERAGE-GATE",
   "description": "**Mutating-tool authorization coverage as a validate_project check.** Compose keeps three hand-maintained lists describing which MCP tools mutate state (`TOOLS_FOR_*`/`JUDGMENT_WRITE_TOOLS` in `lib/canon-registry.js`; `IMPLEMENTER_DENY`/`REVIEWER_ALLOW` in `server/mcp-tool-policy.js`) and no list is the inventory — nothing enumerates every mutating tool or cross-checks the three against the 51 tool defs in `server/compose-mcp.js`. Same class of hole as COMP-COMPLETION-GATE (guard coverage found 0/321 by audit, not by a check). Prior art: PolicyGuide (arXiv:2608.19861) §3.3 Stage 6 makes the equivalent property a compile-time refusal. **Slice 1:** declare `effect: read|mutating|setup` + `writes: [canonPathKey]` on every tool def; derive `MUTATING_TOOLS` (new `lib/tool-inventory.js`, pure). **Slice 2:** `checkAuthorizationCoverage()` → four codes wired into `validate_project` — C1 MISSING_EFFECT (hard fail), C4 UNGATED_MUTATION (headline; tests `PROFILE_POLICY`, the list that is actually enforced at dispatch), C3 ORPHAN_REGISTRY_TOOL, C2 UNCOVERED_WRITE (minor). Findings carry a specific remediation, not a verdict. **Scope note (2026-08-24 trace):** the originating hunch was largely disconfirmed — `scaffold_feature` writes only the six markdown templates, not feature.json; `complete_feature`/`kill_feature` do write feature.json (`server/vision-routes.js:366,451`) without being in `TOOLS_FOR_FEATURE_JSON`, but `entry.tools` has exactly one consumer (`lib/canon-guard.js:128`, the deny-message string) and feature.json is `enforcedBy:['ship']`, so that list is help text, not a boundary. C2 demoted, C4 promoted accordingly. Pipeline-graph checks (unreachable steps, per-step `authorizes:`) split out and NOT in scope. Design: `docs/plans/2026-08-24-authorization-coverage-gate-design.md`.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "Backlog",
   "created": "2026-08-24",
   "updated": "2026-08-24",
@@ -13,5 +13,33 @@
     "mcp",
     "prior-art"
   ],
-  "impact": "medium"
+  "impact": "medium",
+  "completions": [
+    {
+      "completion_id": "COMP-COVERAGE-GATE:51d932095f05bdc68386a8ac1e27095ffaf8a756",
+      "feature_code": "COMP-COVERAGE-GATE",
+      "commit_sha": "51d932095f05bdc68386a8ac1e27095ffaf8a756",
+      "commit_sha_short": "51d93209",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/coverage-gate.js",
+        "lib/tool-inventory.js",
+        "lib/canon-registry.js",
+        "lib/canon-guard.js",
+        "lib/feature-validator.js",
+        "server/mcp-tool-defs.js",
+        "server/mcp-tool-policy.js",
+        ".claude/hooks/canon-guard.mjs",
+        "test/coverage-gate.test.js",
+        "test/tool-inventory.test.js",
+        "test/canon-guard.test.js",
+        "docs/features/COMP-COVERAGE-GATE/design.md",
+        "CHANGELOG.md"
+      ],
+      "recorded_at": "2026-08-24T15:18:53.930Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Slices 1+2 COMPLETE plus C4 closure. slice1 @24f1736, slice2 @66d0df8, C4 closure @51d9320. Gate output: 2 UNCOVERED_WRITE fixed, 2 UNGATED_MUTATION denied (canon_override_grant, roadmap_xref_push), 8 recorded as an existing ruling in C4_EXCEPTIONS (COMP-JUDGMENT-WRITER design.md:137). Live gate returns zero findings."
+    }
+  ],
+  "commit_sha": "51d932095f05bdc68386a8ac1e27095ffaf8a756"
 }
