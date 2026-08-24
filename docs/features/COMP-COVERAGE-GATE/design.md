@@ -1,6 +1,6 @@
 # COMP-COVERAGE-GATE: Design
 
-**Status:** SLICE 1 COMPLETE — SLICE 2 COMPLETE
+**Status:** SLICE 1 COMPLETE — SLICE 2 COMPLETE — C4 findings CLOSED
 **Date:** 2026-08-24
 
 ## Related Documents
@@ -326,3 +326,68 @@ pipeline-graph slice could build on. Keep it; expect no further findings from C2
 
 The pipeline-graph slice (unreachable steps, per-step `authorizes:`) and the
 online verifier remain out of scope, unchanged from the original ruling.
+
+
+---
+
+## C4 closure (2026-08-24, same day)
+
+The ten `UNGATED_MUTATION` findings were left open above pending a policy call.
+That call was made, and it split two ways. The live gate now returns **zero
+findings of any code**, and the pinned-set test became a zero-findings
+assertion — a new mutating tool nobody rules on now FAILS the suite rather than
+becoming a warning nobody reads.
+
+**Two DENIED — added to `IMPLEMENTER_DENY`.** `canon_override_grant` and
+`roadmap_xref_push`. Both postdate COMP-MCP-ENFORCE-1's charter ("cannot
+self-approve, self-complete, or mutate roadmap status") and no design ever ruled
+that an implementer may call them. The override case is the sharper one:
+COMP-CANON-OVERRIDE reasoned that the override must not be grantable for its own
+governance state (`overrideEligible: false`), and this is the same argument one
+level up — at the caller instead of the target. Verified first that no pipeline
+spec, prompt template or server flow invokes either from an implementer session.
+
+**Eight RECORDED AS AN EXISTING RULING — added to `C4_EXCEPTIONS`.** The eight
+`judgment_*` writers. `COMP-JUDGMENT-WRITER/design.md:137` rules that the write
+tools "stay implementer/orchestrator-only", with a provenance argument aimed
+squarely at reviewers. Denying them would have silently reversed a design
+decision under the cover of a coverage fix.
+
+**How that was caught is the interesting part.** The first attempt denied all
+ten. Targeted runs were green; the FULL suite failed on
+`test/judgment-writer-mcp.test.js:668` — "implementer and orchestrator may write
+judgment canon", a test whose *name* is the ruling. This is the third time on
+this feature that only the full suite caught a cross-cutting break
+([[reference_dead_paths_under_green_suites]]), and the first time the thing it
+protected was a DECISION rather than a wiring path.
+
+It also revalidates the gate's own premise from the other direction: C4's job is
+to force the question, and for eight of ten the correct answer was "already
+answered, in prose, where no check could see it". Recording the ruling in
+`C4_EXCEPTIONS` is what moves it somewhere a check CAN see.
+
+**One defect the fix introduced, and closed.** `lib/canon-guard.js` ends every
+deny message with "mint a single-use grant with `canon_override_grant`" — now a
+tool the implementer profile cannot call. An implementer subagent hitting a canon
+block would have been sent straight into its own tool gate and looped.
+`decideCanonGuard` now takes an optional `profile` (the hook wrapper passes the
+spawn-injected, un-rewritable `COMPOSE_SESSION_PROFILE`) and swaps the escape
+sentence for an escalate-instead instruction when the caller is restricted. It
+changes the message only, never the verdict, asserted directly in
+`test/canon-guard.test.js`.
+
+That is [[feedback_strict_contract_seams]] one level out: tightening an
+authorization list silently invalidated a *remediation string* that pointed at
+the thing being tightened. Enumerate what READS a policy, not just what enforces
+it.
+
+**Open for the user, not for the gate.** Whether an implementer should be able to
+write the judgment record at all is a live question — the provenance argument
+that keeps reviewers out ("a second unattributed author") is not obviously
+weaker for implementers. But reversing it is a revisit of COMP-JUDGMENT-WRITER,
+with `test/judgment-writer-mcp.test.js` as the starting point, not a coverage
+fix.
+
+**Files:** `server/mcp-tool-policy.js`, `lib/coverage-gate.js`,
+`lib/canon-guard.js`, `.claude/hooks/canon-guard.mjs`,
+`test/coverage-gate.test.js`, `test/canon-guard.test.js`.

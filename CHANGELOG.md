@@ -2,6 +2,46 @@
 
 ## 2026-08-24
 
+### COMP-COVERAGE-GATE C4 closure — ten ungated mutations ruled on
+
+The ten `UNGATED_MUTATION` findings slice 2 surfaced are closed. The call split
+two ways, and the split is the point.
+
+**Two DENIED** — `canon_override_grant` and `roadmap_xref_push` added to
+`IMPLEMENTER_DENY`. Both postdate COMP-MCP-ENFORCE-1's charter ("cannot
+self-approve, self-complete, or mutate roadmap status") and no design ever ruled
+an implementer may call them. The override is the sharper case: the escape hatch
+FROM canon enforcement was callable by the profile SUBJECT to it.
+COMP-CANON-OVERRIDE already reasoned the override must not be grantable for its
+own governance state; this is that argument one level up, at the caller instead
+of the target. Verified first that no pipeline spec, prompt template or server
+flow invokes either from an implementer session.
+
+**Eight RECORDED as an existing ruling** — the `judgment_*` writers added to
+`C4_EXCEPTIONS` in `lib/coverage-gate.js`, citing
+`COMP-JUDGMENT-WRITER/design.md:137` ("write tools stay
+implementer/orchestrator-only"). Denying them would have silently reversed a
+design decision under cover of a coverage fix.
+
+The first attempt denied all ten. Targeted runs were green; the FULL suite
+failed on `test/judgment-writer-mcp.test.js:668` — a test whose name *is* the
+ruling. Third time on this feature that only the full suite caught a
+cross-cutting break, and the first where the thing it protected was a decision
+rather than a wiring path.
+
+**Fixes a defect the closure introduced.** `lib/canon-guard.js` ends every deny
+message with "mint a single-use grant with `canon_override_grant`" — now a tool
+the implementer cannot call, so a denied implementer subagent would have looped
+against its own tool gate. `decideCanonGuard` takes an optional `profile` (the
+hook wrapper passes the spawn-injected, un-rewritable `COMPOSE_SESSION_PROFILE`)
+and swaps that sentence for an escalate-instead instruction when the caller is
+restricted. Message only — the verdict is profile-independent, asserted
+directly.
+
+The live coverage gate now returns **zero findings of any code**, and
+`test/coverage-gate.test.js` asserts exactly that: a new mutating tool nobody
+rules on fails the suite instead of becoming a warning nobody reads.
+
 ### COMP-COVERAGE-GATE slice 2 — the authorization coverage check
 
 Slice 1 made Compose's mutating surface *declared*. Slice 2 cross-checks that
