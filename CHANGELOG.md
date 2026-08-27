@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-08-27
+
+### COMP-FLUID-SEAM-GUARANTEES doc fix — the concurrent-create failure is orphaning, not loss
+
+Three sites asserted that N concurrent creates make `last-writer-wins destroy
+N-1 records`, one of them stamped "Measured, not theorised". The collision was
+measured (3/3 rounds allocated the same handle, 2026-08-05). The **loss** was
+not: it was inferred from the floor and assumed to carry across the seam.
+
+It does not carry. The floor keys its file BY HANDLE, so it really does lose
+N-1. SmartMemory writes by `item_id`, so all N persist and N-1 are silently
+orphaned behind a handle that resolves to one of them. Same collision, opposite
+consequence — and orphaning is the harder failure to notice, which is why
+leaving the wrong claim in place was worse than saying nothing.
+
+The three sites were wrong in different ways, so each needed its own wording:
+
+- `lib/fluid/provider.js` — the generic seam contract. Keeps the measured
+  collision as the invariant, hands the *cost* back to the implementation, and
+  states both outcomes. Collision is the invariant; loss is not.
+- `lib/fluid/smartmemory-provider.js` — store-specific history, and flatly
+  false as written. Now records that nothing was lost, plus an explicit warning
+  not to carry the floor's loss claim across this seam.
+- `docs/features/COMP-FLUID-SEAM-GUARANTEES/design.md` — the origin. Said "the
+  floor's measured failure transfers unmitigated", which is the inference that
+  produced the other two. Split into collision (transfers) and loss (does not),
+  and marked as a correction so the reasoning error stays visible.
+
+Comments and docs only — no executable lines changed.
+
 ## 2026-08-24
 
 ### COMP-COMPLETION-GATE fix — the not-found branch was dead against the real client

@@ -25,9 +25,13 @@ failed to warn us — it satisfies the seam's interface completely.
 nothing, while that provider allocates through `_nextHandle` (`:445`) → `_issuedHandles`
 (`:433`) — both remote reads — and appends its event log remotely too (`:815-820`).
 
-The floor's measured failure transfers unmitigated: N concurrent creates all allocate
-`IDEA-1`, and last-writer-wins destroys N-1 ideas. Two independent reasons the S3b-1 fix
-does not carry over:
+The floor's measured COLLISION transfers unmitigated: N concurrent creates all allocate
+`IDEA-1` (3/3 rounds, measured 2026-08-05). Its *loss* does not transfer. The floor keys
+its file by handle, so last-writer-wins destroys N-1 ideas; SmartMemory writes by
+`item_id`, so all N persist and N-1 are silently orphaned behind a handle that resolves to
+one of them. **The failure here is silent orphaning, not loss** — corrected 2026-08-23,
+this paragraph previously asserted the floor's loss behaviour carried over.
+Two independent reasons the S3b-1 fix does not carry over:
 
 - `dir-lock` is a **local filesystem mutex**, so it could never serialize two machines
   sharing one SmartMemory workspace — and being shared is the entire reason to use it.
