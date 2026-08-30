@@ -2634,10 +2634,16 @@ if (cmd === 'build') {
     }
   }
 
+  const { root: buildCwd } = resolveCwdWithWorkspace(args)
+
   // Multiple codes: compose build FEAT-1 FEAT-2 FEAT-3
   const isMulti = featureCodes.length > 1
-  // Single prefix: compose build STRAT-COMP (no trailing digit)
-  const isPrefix = featureCodes.length === 1 && featureCode && !/\d$/.test(featureCode)
+  // Single prefix: compose build STRAT-COMP (no trailing digit). An exact
+  // feature on disk always wins over the prefix heuristic — codes like
+  // COMP-SEMVER-STRICT have no trailing digit but are single features.
+  const isExactFeature = featureCodes.length === 1 && featureCode &&
+    existsSync(join(buildCwd, 'docs', 'features', featureCode, 'feature.json'))
+  const isPrefix = featureCodes.length === 1 && featureCode && !isExactFeature && !/\d$/.test(featureCode)
   const isBatch = all || isPrefix || isMulti
 
   if (abort && isBatch) {
@@ -2710,7 +2716,6 @@ if (cmd === 'build') {
   // and there's no bundled preset fallback — so when --quick is requested and
   // that file is absent, treat it as init-needed (runInit re-seeds it) rather
   // than letting runBuild fail later with "Lifecycle spec not found".
-  const { root: buildCwd } = resolveCwdWithWorkspace(args)
   const needsInit =
     !existsSync(join(buildCwd, '.compose', 'compose.json')) ||
     !existsSync(join(buildCwd, 'pipelines', 'build.stratum.yaml')) ||
