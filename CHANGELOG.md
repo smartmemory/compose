@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### build: exact feature code beats the prefix heuristic
+
+- `compose build <CODE>` treated any code without a trailing digit
+  (e.g. `COMP-SEMVER-STRICT`) as a prefix batch, so `--quick`/`--resume`/
+  `--codex` refused it. An exact `docs/features/<CODE>/feature.json` on disk
+  now wins over the prefix heuristic. Found running the STRAT-LEARN-COST
+  cost census (parity 36354/36354/36354 tokens across receipts, `flowSpent`,
+  and the build accumulator on flow `13fd190e`).
+
+
 ### STRAT-LEARN-COST S05 — compose usage receipt producer
 
 - Feature-detect Stratum's `stratum_usage_report` surface once per run and emit

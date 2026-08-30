@@ -183,6 +183,16 @@ describe('compose build --quick CLI guards', () => {
     assert.match(r.stderr, /--quick cannot be combined with/);
   });
 
+  it('treats a no-trailing-digit code that exists on disk as a single feature, not a prefix', () => {
+    // COMP-SEMVER-STRICT-style codes: exact feature.json on disk beats the prefix heuristic.
+    // --codex is rejected AFTER the prefix check, so reaching that error proves
+    // the exact code was not classified as a batch (and nothing is built).
+    const r = runBuild(['--quick', '--codex', 'COMP-SEMVER-STRICT']);
+    assert.equal(r.status, 1);
+    assert.doesNotMatch(r.stderr, /--quick cannot be combined with/);
+    assert.match(r.stderr, /--codex and --quick are mutually exclusive/);
+  });
+
   it('lists --quick in the build usage help', () => {
     const r = runBuild([]);
     assert.equal(r.status, 1);
