@@ -14,10 +14,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+
+// Never let the gate's default vision projector find a real cockpit on :4001.
+process.env.COMPOSE_PORT = '19995';
 
 import {
   completionGate, readIntent, guardEnabled,
@@ -410,5 +413,117 @@ test('a genuinely unreachable guard STILL refuses — the fix must not fail open
     assert.deepEqual(r.reasons, ['guard unreachable']);
   } finally {
     reset();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Slice 3 — the gate owns the projections (§2.3a)
+// ---------------------------------------------------------------------------
+
+function writeVision(root, items) {
+  mkdirSync(path.join(root, '.compose', 'data'), { recursive: true });
+  writeFileSync(path.join(root, '.compose', 'data', 'vision-state.json'),
+    JSON.stringify({ items, connections: [], gates: [] }));
+}
+const readVision = (root) => JSON.parse(readFileSync(path.join(root, '.compose', 'data', 'vision-state.json'), 'utf8'));
+
+test('AC-4a: after a gated completion, ROADMAP and vision are NOT stale (the round-2 P0)', async () => {
+  const { root, sha, cleanup } = makeWorkspace({ guard: true, status: 'IN_PROGRESS' });
+  const calls = [];
+  _testOnly_setGuardClient(applyingGuard(calls));
+  _testOnly_setHistoryClient(async () => ({ error: { code: 'guard_not_found' } }));
+  writeVision(root, [{ id: 'it-1', title: 'GATE-1', status: 'in_progress', lifecycle: { featureCode: 'GATE-1', mode: 'build', currentPhase: 'ship' } }]);
+  try {
+    const r = await completionGate({ featureCode: 'GATE-1', commitSha: sha, testsPass: true, workspaceRoot: root });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(r.partial, false, JSON.stringify(r.failures));
+    assert.equal(featureStatus(root), 'COMPLETE');
+    assert.deepEqual(r.result.status_changed, { from: 'IN_PROGRESS', to: 'COMPLETE' });
+    assert.equal(r.result.completion_id, `GATE-1:${sha}`);
+
+    // ROADMAP regenerated with the new status
+    const roadmap = readFileSync(path.join(root, 'ROADMAP.md'), 'utf8');
+    assert.match(roadmap, /GATE-1[\s\S]*COMPLETE/, 'ROADMAP row reflects COMPLETE');
+
+    // Vision projected through the seam, with the tier stamped. The guard stub
+    // reports not-found for history, so this is honestly canonical-status-only.
+    const it = readVision(root).items[0];
+    assert.equal(it.status, 'complete');
+    assert.equal(it.completion_projection.verified_by, 'canonical-status-only');
+    assert.equal(it.completion_projection.commit_sha, sha);
+    assert.equal(r.visionProjection.verified_by, 'canonical-status-only');
+
+    // The gate's own status event carries the operation id + reason
+    const events = readFileSync(path.join(root, '.compose', 'data', 'feature-events.jsonl'), 'utf8')
+      .trim().split('\n').map((l) => JSON.parse(l));
+    const flip = events.find((e) => e.tool === 'set_feature_status' && e.code === 'GATE-1');
+    assert.ok(flip, 'status event appended');
+    assert.equal(flip.reason, 'completion_gate');
+    assert.equal(flip.operation_id, r.operationId);
+
+    assert.equal(calls.filter((c) => c.op === 'transition').length, 1, 'exactly one guard transition');
+    assert.equal(readIntent(root, 'GATE-1'), null, 'intent cleared');
+  } finally { reset(); cleanup(); }
+});
+
+test('AC-4c: a projection failure is reported as partial, never a silent success', async () => {
+  const { root, sha, cleanup } = makeWorkspace({ guard: true, status: 'IN_PROGRESS' });
+  _testOnly_setGuardClient(applyingGuard([]));
+  _testOnly_setHistoryClient(async () => ({ error: { code: 'guard_not_found' } }));
+  // Make ROADMAP.md a directory so the roadmap writer throws.
+  mkdirSync(path.join(root, 'ROADMAP.md'));
+  try {
+    const r = await completionGate({ featureCode: 'GATE-1', commitSha: sha, testsPass: true, workspaceRoot: root });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(r.partial, true);
+    assert.equal(r.failures[0].step, 'roadmap');
+    assert.match(r.failures[0].recover, /roadmap generate/);
+    assert.equal(r.result.status_flip_partial, true);
+    assert.equal(featureStatus(root), 'COMPLETE', 'the durable truth stands');
+    assert.equal(readIntent(root, 'GATE-1'), null, 'a partial projection is still a completed operation');
+  } finally { reset(); cleanup(); }
+});
+
+test('AC-4c: a VISION projection failure reaches the writer-shaped result every caller returns (Codex r1 #3)', async () => {
+  const { root, sha, cleanup } = makeWorkspace({ guard: true, status: 'IN_PROGRESS' });
+  _testOnly_setGuardClient(applyingGuard([]));
+  _testOnly_setHistoryClient(async () => ({ error: { code: 'guard_not_found' } }));
+  try {
+    const r = await completionGate({
+      featureCode: 'GATE-1', commitSha: sha, testsPass: true, workspaceRoot: root,
+      visionProjector: async () => { throw new Error('cockpit exploded'); },
+    });
+    assert.equal(r.ok, true);
+    assert.equal(r.partial, true);
+    assert.equal(r.failures[0].step, 'vision');
+    // The legacy result — what record_completion (MCP), the CLI and
+    // recordCompletion() hand back — must say so too.
+    assert.equal(r.result.partial, true);
+    assert.equal(r.result.status_flip_partial, true);
+    assert.equal(r.result.failures[0].step, 'vision');
+    assert.match(r.result.failures[0].message, /cockpit exploded/);
+    assert.equal(featureStatus(root), 'COMPLETE');
+  } finally { reset(); cleanup(); }
+});
+
+test('AC-4a: no vision item is a skipped projection, not a failure (paths 1–2 carry no item id)', async () => {
+  const { root, sha, cleanup } = makeWorkspace({ guard: true, status: 'IN_PROGRESS' });
+  _testOnly_setGuardClient(applyingGuard([]));
+  _testOnly_setHistoryClient(async () => ({ error: { code: 'guard_not_found' } }));
+  try {
+    const r = await completionGate({ featureCode: 'GATE-1', commitSha: sha, testsPass: true, workspaceRoot: root });
+    assert.equal(r.ok, true);
+    assert.equal(r.partial, false);
+    assert.equal(r.visionProjection.skipped, true);
+  } finally { reset(); cleanup(); }
+});
+
+test('AC-20: no import cycle — each entry point loads cleanly when imported FIRST', () => {
+  const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+  for (const first of ['lib/completion-gate.js', 'lib/feature-writer.js', 'server/lifecycle-guard.js', 'lib/completion-writer.js', 'lib/vision-writer.js', 'server/completion-projection.js']) {
+    const others = ['lib/completion-gate.js', 'lib/feature-writer.js', 'server/lifecycle-guard.js', 'lib/completion-writer.js', 'lib/vision-writer.js', 'server/completion-projection.js'].filter((m) => m !== first);
+    const code = [first, ...others].map((m) => `await import(${JSON.stringify(path.join(ROOT, m))});`).join('\n');
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8', cwd: ROOT });
+    assert.equal(r.status, 0, `importing ${first} first failed:\n${r.stderr}`);
   }
 });

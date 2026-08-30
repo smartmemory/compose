@@ -19,7 +19,7 @@ import { getRoadmap } from '../lib/get-roadmap.js';
  * status/roadmap mutation is the bypass STRAT-GUARD exists to close, so it is
  * rejected unless it carries a valid out-of-band override token (the agent
  * cannot mint it). Guard off → legacy behavior (no-op). Internal callers
- * (recordCompletion → setFeatureStatus directly) never pass through here.
+ * (the completion gate → persistFeatureRaw) never pass through here.
  *
  * @param {object} args tool args (may carry force / override_token)
  * @param {string} toolName for the error message

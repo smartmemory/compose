@@ -121,46 +121,51 @@ describe('COMP-MCP-MIGRATION — cockpit lifecycle/complete', () => {
     assert.match(roadmap, /COMPLETE/);
   });
 
-  test('without commit_sha: emits cockpit_completion_skipped, no completion record', async () => {
+  test('without commit_sha (guard off): the gate records a commit-less completion — nothing is skipped', async () => {
+    // COMP-COMPLETION-GATE slice 3: a managed build item completes THROUGH the
+    // gate. With the guard off, a commit-less completion is the no-repo path
+    // (NULL_SHA record), the same thing `compose record-completion` without a
+    // SHA does. The old `cockpit_completion_skipped` best-effort branch — item
+    // complete, feature.json untouched — was the drift the gate exists to end.
     await advanceToShip(ctx.port, ctx.item.id);
 
     const res = await request(ctx.port, 'POST',
       `/api/vision/items/${ctx.item.id}/lifecycle/complete`, {});
 
-    assert.equal(res.status, 200);
-    assert.equal(res.body.partial, false);  // still not "partial" — skipped is a clean state
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.partial, false);
 
     const feature = readFeature(ctx.tmpDir, 'MIG-1');
-    assert.ok(!feature.completions || feature.completions.length === 0,
-      'no completion record without commit_sha');
+    assert.equal(feature.completions.length, 1);
+    assert.equal(feature.completions[0].commit_sha, '0'.repeat(40));
+    assert.equal(feature.status, 'COMPLETE');
+    assert.equal(ctx.store.items.get(ctx.item.id).completion_projection.verified_by, 'canonical-status-only');
 
-    // Decision event captured
     const skipEvent = ctx.decisionEvents.find(e =>
       e.event?.type === 'cockpit_completion_skipped' || e.type === 'cockpit_completion_skipped');
-    assert.ok(skipEvent, 'cockpit_completion_skipped event emitted');
+    assert.ok(!skipEvent, 'nothing was skipped');
   });
 
-  test('with invalid commit_sha: lifecycle still transitions, partial flag set', async () => {
+  test('with invalid commit_sha: the gate REFUSES — lifecycle does not transition, nothing written', async () => {
+    // Pre-slice-3 this was 200 + partial with the item marked complete and no
+    // record: a completion the cockpit showed and canon did not have. A refusal
+    // now writes nothing on either side.
     await advanceToShip(ctx.port, ctx.item.id);
 
     const res = await request(ctx.port, 'POST',
       `/api/vision/items/${ctx.item.id}/lifecycle/complete`,
       { commit_sha: 'short' });  // not 40 chars → INVALID_INPUT from writer
 
-    assert.equal(res.status, 200);
-    // Lifecycle still completed
-    assert.ok(res.body.completedAt);
-    // But typed-tool failed
-    assert.equal(res.body.partial, true);
-    assert.equal(res.body.completion_failed, 'INVALID_INPUT');
+    assert.equal(res.status, 422, JSON.stringify(res.body));
+    assert.match(res.body.reasons.join(), /INVALID_INPUT|40/);
 
-    // Item lifecycle is still 'complete' on the cockpit side
     const item = ctx.store.items.get(ctx.item.id);
-    assert.equal(item.status, 'complete');
+    assert.equal(item.lifecycle.currentPhase, 'ship', 'lifecycle untouched');
+    assert.notEqual(item.status, 'complete');
 
-    // Feature.json has no completion record (writer rejected)
     const feature = readFeature(ctx.tmpDir, 'MIG-1');
     assert.ok(!feature.completions || feature.completions.length === 0);
+    assert.notEqual(feature.status, 'COMPLETE');
   });
 
   test('item without featureCode: works as before, no typed-tool calls', async () => {

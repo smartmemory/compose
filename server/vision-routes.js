@@ -44,6 +44,7 @@ function getSchemaValidator() {
 import { randomUUID } from 'node:crypto';
 import { getTargetRoot, resolveProjectPath } from './project-root.js';
 import { resolveFeaturesPathFromConfig } from '../lib/project-paths.js';
+import { isManagedBuildItem, applyVerifiedProjection } from './completion-projection.js';
 import { getCompletions } from '../lib/completion-writer.js';
 import { isFeatureCode } from '../lib/feature-code.js';
 import { anchorBoundary } from '../lib/checkpoint/checkpoint-writer.js';
@@ -148,6 +149,34 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
   // PATCH /api/vision/items/:id — update item
   app.patch('/api/vision/items/:id', guardAuth, (req, res) => {
     try {
+      // COMP-COMPLETION-GATE slice 3 (AC-10, path 7): `status: 'complete'` on a
+      // MANAGED BUILD-MODE feature item is refused here. The general PATCH has
+      // no evidence to offer; the legitimate write is the self-verifying
+      // projection endpoint below, which the gate reaches after the guard has
+      // applied. Fix/plan items and unmanaged items are untouched (§2.3d) —
+      // round 5 caught that an unconditional refusal bricks those modes
+      // whenever a server is running, since every mode shares the terminal call.
+      // The verification stamp is SERVER-OWNED: only the §2.3b predicate writes
+      // it. A PATCH carrying it could relabel a legacy item as `guarded` with a
+      // fake ledger ref (Codex r2 #1).
+      if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'completion_projection')) {
+        return res.status(422).json({
+          error: 'completion_projection is written by the completion projection only and cannot be set through PATCH',
+          code: 'PROJECTION_STAMP_READONLY',
+        });
+      }
+      if (req.body?.status === 'complete') {
+        const existing = store.items.get(req.params.id);
+        if (existing && isManagedBuildItem(existing, projectRoot)) {
+          return res.status(422).json({
+            error: `refusing status: complete for ${existing.lifecycle.featureCode} — a managed build-mode ` +
+              'feature completes through the completion gate (record_completion / the build runner / ' +
+              'POST …/lifecycle/complete), which verifies evidence and projects the item via ' +
+              'POST /api/vision/items/:id/completion-projection.',
+            code: 'COMPLETE_VIA_GATE_ONLY',
+          });
+        }
+      }
       const item = store.updateItem(req.params.id, req.body);
       // If group changed, write back to docs/features/<code>/feature.json
       // so the change survives restart and re-scan. Non-fatal on failure.
@@ -163,6 +192,31 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
       res.status(status).json({ error: err.message });
+    }
+  });
+
+  // POST /api/vision/items/:id/completion-projection — COMP-COMPLETION-GATE
+  // slice 3 (§2.3b, AC-4b/4d). Self-verifying, NOT privileged: before writing
+  // it re-reads feature.json (must already be COMPLETE — §2.3a step 2, the
+  // durable truth) and, if a guard resource exists, the guard ledger (must be
+  // complete). It cannot be used to complete anything; it only mirrors a
+  // completion canonical state already records — which is why it needs no
+  // token and does not reopen the bypass the PATCH refusal closes. Never calls
+  // the gate (no recursion: gate → here is one-directional).
+  app.post('/api/vision/items/:id/completion-projection', guardAuth, async (req, res) => {
+    try {
+      const { featureCode, commitSha, ledgerRef } = req.body || {};
+      if (!featureCode) return res.status(400).json({ error: 'featureCode required' });
+      if (!store.items.get(req.params.id)) return res.status(404).json({ error: `Item not found: ${req.params.id}` });
+      const r = await applyVerifiedProjection(store, {
+        itemId: req.params.id, featureCode, cwd: projectRoot, consultGuard: true,
+        evidence: { commitSha: commitSha || undefined, ledgerRef: ledgerRef || undefined, source: 'rest' },
+      });
+      if (!r.ok) return res.status(422).json({ error: 'completion projection refused', reasons: r.reasons });
+      scheduleBroadcast();
+      res.json({ ok: true, itemId: req.params.id, verified_by: r.verified_by });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
     }
   });
 
@@ -479,39 +533,92 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
         return res.status(400).json({ error: `Can only complete from ${completable} phase, currently in: ${item.lifecycle.currentPhase}` });
       }
 
-      // COMP-MCP-ENFORCE Slice 3: evidence-bound completion. Under the guard,
-      // ship→complete requires REAL evidence — the commit must exist (server-read
-      // git) and tests must be attested (configured test command exits 0, or
-      // tests_pass is explicitly true; never a silent default). Then the guard
-      // verdict gates the transition (fail-closed).
-      let verifiedTestsPass = req.body?.tests_pass;
-      if (guardEnabled) {
-        const ev = await verifyCompletionEvidence({
-          commitSha: req.body?.commit_sha,
-          cwd: projectRoot,
-          testCommand: guardTestCommand(projectRoot),
-          testsPassClaim: req.body?.tests_pass,
-        });
-        if (!ev.ok) {
-          return res.status(422).json({ error: 'completion evidence not satisfied', reasons: ev.reasons });
-        }
-        verifiedTestsPass = ev.testsAttested ? true : (req.body?.tests_pass === true);
+      const featureCode = item.lifecycle.featureCode;
+      const completionResult = { partial: false };
+      let now;
 
-        const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from: completable, to: 'complete', workspaceRoot: projectRoot, commitSha: req.body?.commit_sha, resolvedBy: 'agent', mode: modeOf(item) });
-        if (!g.applied) return res.status(422).json({ error: 'completion refused by guard', from: completable, to: 'complete', verdict: g.verdict, guardError: g.error });
+      // MANAGED build item = bound to a code, build mode, feature.json exists
+      // (the same key AC-10/AC-16 use). An unmanaged build item — a lifecycle
+      // started for a code that has no feature.json — has nothing canonical to
+      // complete and keeps the pre-slice-3 path, as fix/plan do.
+      if (isManagedBuildItem(item, projectRoot)) {
+        // COMP-COMPLETION-GATE slice 3 (§2.1, AC-10): for a mode that tracks
+        // feature.json (build), the cockpit completion IS a completion and goes
+        // through the gate — evidence, ONE guarded transition, then the gate
+        // performs record → status → ROADMAP → vision → events (§2.3a). The
+        // vision step is an in-process projector against this server's live
+        // store (a REST call back into ourselves would race it; a direct file
+        // write would leave it stale). Under the guard a request with no
+        // commit_sha is refused by the evidence check: an evidence-free cockpit
+        // completion was path 7's quieter twin and is closed on purpose.
+        const { completionGate } = await import('../lib/completion-gate.js');
+        const { commit_sha, tests_pass, files_changed, notes } = req.body || {};
+        const gated = await completionGate({
+          featureCode,
+          ...(commit_sha ? { commitSha: commit_sha } : {}),
+          // Guard on: no default — the evidence check attests (test command) or
+          // the caller states it. Guard off: the cockpit's pre-existing default
+          // (flag-off parity, the same opt-out the gate itself honours in AC-5).
+          testsPass: guardEnabled ? tests_pass : (tests_pass ?? true),
+          filesChanged: files_changed ?? [],
+          notes: notes ?? `cockpit lifecycle: ${featureCode} complete`,
+          workspaceRoot: projectRoot,
+          mode: modeOf(item),
+          visionItemId: req.params.id,
+          visionProjector: ({ visionItemId, commitSha, ledgerRef }) => applyVerifiedProjection(store, {
+            itemId: visionItemId, featureCode, cwd: projectRoot, consultGuard: true,
+            evidence: { commitSha, ledgerRef, source: 'lifecycle/complete' },
+          }).then((r) => { if (!r.ok) throw new Error(r.reasons.join('; ')); return r; }),
+        });
+        if (!gated.ok) {
+          return res.status(422).json({
+            error: gated.refusedAt === 'evidence' ? 'completion evidence not satisfied' : 'completion refused',
+            refusedAt: gated.refusedAt, reasons: gated.reasons,
+            ...(gated.verdict ? { verdict: gated.verdict } : {}),
+            ...(gated.error ? { guardError: gated.error } : {}),
+          });
+        }
+        now = new Date().toISOString();
+        item.lifecycle.currentPhase = 'complete';
+        item.lifecycle.completedAt = now;
+        appendPhaseHistory(item, { from: completable, to: 'complete', outcome: 'approved', timestamp: now });
+        store.updateLifecycle(req.params.id, item.lifecycle);
+        const failures = [...(gated.failures || [])];
+        if (store.lastSaveOk === false) {
+          // The projection reached disk; this lifecycle write did not. Report it
+          // as a partial like any other projection failure (Codex r2 #3).
+          failures.push({ step: 'lifecycle-persist', message: 'vision-state could not be persisted after the lifecycle transition', recover: 'restart the server or re-run compose validate --fix' });
+        }
+        if (failures.length > 0) {
+          completionResult.partial = true;
+          completionResult.failures = failures;
+        }
+        completionResult.ledgerRef = gated.ledgerRef ?? null;
+        completionResult.verified_by = gated.visionProjection?.verified_by ?? null;
+      } else {
+        // Fix/plan (no feature.json — COMP-COMPLETION-GATE-MODES) and items
+        // with no feature code: the pre-slice-3 path, byte-identical.
+        if (guardEnabled) {
+          const ev = await verifyCompletionEvidence({
+            commitSha: req.body?.commit_sha,
+            cwd: projectRoot,
+            testCommand: guardTestCommand(projectRoot),
+            testsPassClaim: req.body?.tests_pass,
+          });
+          if (!ev.ok) {
+            return res.status(422).json({ error: 'completion evidence not satisfied', reasons: ev.reasons });
+          }
+          const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from: completable, to: 'complete', workspaceRoot: projectRoot, commitSha: req.body?.commit_sha, resolvedBy: 'agent', mode: modeOf(item) });
+          if (!g.applied) return res.status(422).json({ error: 'completion refused by guard', from: completable, to: 'complete', verdict: g.verdict, guardError: g.error });
+        }
+        now = new Date().toISOString();
+        item.lifecycle.currentPhase = 'complete';
+        item.lifecycle.completedAt = now;
+        appendPhaseHistory(item, { from: completable, to: 'complete', outcome: 'approved', timestamp: now });
+        store.updateLifecycle(req.params.id, item.lifecycle);
+        store.updateItem(req.params.id, { status: 'complete' });
       }
 
-      const now = new Date().toISOString();
-      item.lifecycle.currentPhase = 'complete';
-      item.lifecycle.completedAt = now;
-      // COMP-OBS-TIMELINE: populate phaseHistory + emit phase_transition DecisionEvent
-      appendPhaseHistory(item, { from: completable, to: 'complete', outcome: 'approved', timestamp: now });
-      store.updateLifecycle(req.params.id, item.lifecycle);
-      store.updateItem(req.params.id, { status: 'complete' });
-      // COMP-MCP-ENFORCE Slice 2: status projection for the no-commit path is
-      // applied BELOW (in the `else` branch) so it does not pre-empt and mask the
-      // recordCompletion bridge, which is the authority + partial-write reporter
-      // on the commit_sha path.
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from: completable, to: 'complete', outcome: 'approved', timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from: completable, to: 'complete', outcome: 'approved', timestamp: now }));
@@ -521,60 +628,6 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
       // COMP-RESUME: best-effort anchor checkpoint at the (terminal) phase boundary
       anchorBoundary(getTargetRoot(), { item, trigger: 'phase-transition' });
-
-      // COMP-MCP-MIGRATION: reconcile cockpit complete with record_completion
-      // (commit-bound completion writer). Best-effort: failures emit a decision
-      // event but never roll back the lifecycle transition.
-      const featureCode = item.lifecycle.featureCode;
-      const completionResult = { partial: false };
-      if (featureCode) {
-        const { commit_sha, tests_pass, files_changed, notes } = req.body || {};
-        if (commit_sha) {
-          try {
-            const { recordCompletion } = await import('../lib/completion-writer.js');
-            await recordCompletion(projectRoot, {
-              feature_code: featureCode,
-              commit_sha,
-              // Slice 3: under the guard, tests_pass reflects verified evidence
-              // (attested or explicit), NOT a silent default-to-true.
-              tests_pass: guardEnabled ? (verifiedTestsPass === true) : (tests_pass ?? true),
-              files_changed: files_changed ?? [],
-              notes: notes ?? `cockpit lifecycle: ${featureCode} complete`,
-            });
-          } catch (err) {
-            completionResult.partial = true;
-            const eventType = err.code === 'STATUS_FLIP_AFTER_COMPLETION_RECORDED'
-              ? 'cockpit_completion_partial_status_flip'
-              : 'cockpit_completion_failed';
-            completionResult.completion_failed = err.code || 'UNKNOWN';
-            completionResult.message = err.message;
-            try {
-              emitDecisionEvent(broadcastMessage, {
-                type: eventType,
-                featureCode,
-                timestamp: now,
-                error: { code: err.code, message: err.message },
-              });
-            } catch { /* decision event emit best-effort */ }
-            // eslint-disable-next-line no-console
-            console.warn(`[lifecycle/complete] record_completion ${eventType} for ${featureCode}: ${err.message}`);
-          }
-        } else {
-          // No SHA — emit a skip event so validate_feature can flag drift later
-          try {
-            emitDecisionEvent(broadcastMessage, {
-              type: 'cockpit_completion_skipped',
-              featureCode,
-              timestamp: now,
-              reason: 'no_commit_sha',
-            });
-          } catch { /* decision event emit best-effort */ }
-          // No recordCompletion bridge ran — project complete → COMPLETE so
-          // lifecycle-as-truth still reaches feature.json (best-effort).
-          // COMP-ROADMAP-PLAN: skipped for tracksFeatureJson:false modes (no feature.json).
-          if (guardEnabled && getMode(modeOf(item)).runner.tracksFeatureJson) await projectFeatureStatus({ featureCode, phase: 'complete', cwd: projectRoot });
-        }
-      }
 
       res.json({ completedAt: now, ...completionResult });
     } catch (err) {

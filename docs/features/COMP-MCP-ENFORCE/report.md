@@ -65,3 +65,30 @@ Phase-scoped MCP tool filtering ("an implement-phase context should not even *ha
 
 - The design assumed "compose → stratum over MCP," but the server request path is a CLI subprocess and the guard had no CLI surface — verifying the seam first (rather than trusting the design's framing) turned a hidden blocker into a clean prerequisite work-unit.
 - The guard's idempotency-replay semantics are correct for true retries but wrong for refuse→fix→retry; the E2E golden flow (real backend) caught it where the stubbed unit tests could not.
+
+## 7. Corrections (COMP-COMPLETION-GATE)
+
+> **Correction — 2026-08-30 (COMP-COMPLETION-GATE slice 3, AC-14).** Two claims above are
+> corrected, with the originals preserved:
+>
+> - §1 (line 8): *"No caller — skill, human cockpit, or rogue MCP/REST client — can effect a
+>   transition the guard refuses."* Not true when written: the CLI and the build runner never called
+>   a guarded transition (0 of 321 managed features had a guard resource; all 31 registered resources
+>   were test fixtures). Slices 1–3 of COMP-COMPLETION-GATE (`753ed47`, `4625b2b`, this commit)
+>   change what is true, and it is narrower than the sentence above.
+> - Slice 3 (line 52): *"The MCP boundary is closed against four bypass paths"* was accurate for the
+>   MCP boundary; the Codex annotation *"every public terminal-write path"* was not — the audit
+>   found fourteen (design §1.3), and the in-process ones carried most real completions.
+>
+> **What is true now.** For a build-mode feature that has a `feature.json`, COMPLETE is reachable
+> only through `lib/completion-gate.js`: the commit is server-verified, tests are attested (never
+> defaulted), ONE guarded `→ complete` transition is ledgered, and the gate performs the record,
+> status, ROADMAP, vision and event writes itself. `setFeatureStatus` refuses COMPLETE
+> unconditionally; the vision PATCH, direct `updateItemStatus`, and stratum audit ingestion no longer
+> reach it; the vision projection re-reads canonical state before it writes. The invariant is
+> **allowlist-shaped** — every remaining COMPLETE/complete write is enumerated and justified in
+> `test/completion-write-allowlist.test.js` — and it is **evidence-checked + ledgered, not
+> lifecycle-enforced**: the guard registers late at the completable phase and takes one edge; it
+> does not attest that design/blueprint/plan phases were walked (design §2.2). Legacy COMPLETE
+> features are projected as `canonical-status-only` and stay unguarded. Fix/plan modes and remote
+> trackers are out of scope (COMP-COMPLETION-GATE-MODES / -REMOTE).

@@ -1864,6 +1864,12 @@ if (cmd === 'record-completion') {
         process.exit(1)
       }
       result = gated.result
+      if (gated.partial) {
+        console.warn(
+          `Completed, but a projection failed — ` +
+          gated.failures.map(f => `${f.step}: ${f.message} (recover: ${f.recover})`).join('; ')
+        )
+      }
     }
     console.log(JSON.stringify({
       completion_id:  result.completion_id,

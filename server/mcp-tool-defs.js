@@ -147,7 +147,7 @@ export const TOOLS = [
     name: 'complete_feature',
     effect: 'mutating',
     writes: ["feature-json"],
-    description: 'Mark a feature as complete. Only callable from the ship phase. When commit_sha is provided, the lifecycle endpoint also writes a commit-bound completion record via record_completion (which atomically flips feature.status to COMPLETE and regenerates ROADMAP.md). Without commit_sha, the lifecycle transitions but no completion record is written; a `cockpit_completion_skipped` decision event explains the skip.',
+    description: 'Mark a feature as complete. Only callable from the ship phase. For a managed build-mode feature (one with a feature.json) this goes through the completion gate (COMP-COMPLETION-GATE): the commit is verified and tests attested when capabilities.guard is on, ONE guarded transition is ledgered, and the gate writes the completion record, feature.status COMPLETE, ROADMAP.md and the cockpit item. A refusal (bad evidence, KILLED feature, guard refused) returns 422 and writes nothing. commit_sha is required under the guard; with the guard off a commit-less completion records a no-commit completion. Fix/plan items and items with no feature.json transition as before.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -620,7 +620,7 @@ export const TOOLS = [
     name: 'record_completion',
     effect: 'mutating',
     writes: ["feature-json"],
-    description: 'Record a completion bound to a commit SHA. Stores in feature.json completions[]; idempotent on (feature_code, commit_sha); when set_status:true (default) also flips status to COMPLETE via set_feature_status. Audit append best-effort. Status-flip failure rethrows as STATUS_FLIP_AFTER_COMPLETION_RECORDED with err.cause; the completion record is still persisted.',
+    description: 'Record a completion bound to a commit SHA — THROUGH the completion gate (COMP-COMPLETION-GATE): under capabilities.guard the commit is server-verified and tests attested (no silent default), ONE guarded transition is ledgered, then the gate writes completions[], status COMPLETE, ROADMAP.md, the cockpit item and the audit event. A refusal (bad evidence, KILLED/SUPERSEDED feature, guard refused/unreachable) errors with COMPLETION_REFUSED and writes NOTHING. Projection failures (ROADMAP/vision) return success with partial:true + failures[]. set_status:false records evidence only (no status change, no guard transition). Idempotent on (feature_code, commit_sha).',
     inputSchema: {
       type: 'object',
       required: ['feature_code', 'commit_sha', 'tests_pass', 'files_changed'],

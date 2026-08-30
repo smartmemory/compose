@@ -77,16 +77,22 @@ describe('setFeatureStatus → vision-state projection', () => {
     assert.equal(item.status, 'in_progress');
   });
 
-  test('projects COMPLETE as complete', async () => {
+  test('COMPLETE is not reachable through setFeatureStatus, so it never projects complete (path 5 closed)', async () => {
+    // COMP-COMPLETION-GATE slice 3 (AC-9): the projection to `complete` is the
+    // gate's (§2.3a step 4, via VisionWriter.completeItem). This writer refuses
+    // before any write, so vision is untouched.
     const root = newProject();
     writeFeature(root, 'FWVP-3', 'IN_PROGRESS');
     writeRoadmap(root, [['FWVP-3', 'IN_PROGRESS']]);
     writeVision(root, [visionItem('FWVP-3', 'in_progress')]);
 
-    await setFeatureStatus(root, { code: 'FWVP-3', status: 'COMPLETE' });
+    await assert.rejects(
+      () => setFeatureStatus(root, { code: 'FWVP-3', status: 'COMPLETE' }),
+      (e) => e.code === 'COMPLETE_VIA_GATE_ONLY',
+    );
 
     const item = readVision(root).items.find(i => i.lifecycle?.featureCode === 'FWVP-3');
-    assert.equal(item.status, 'complete');
+    assert.equal(item.status, 'in_progress', 'vision untouched by a refused write');
   });
 
   test('matches the item bound by lifecycle.featureCode, not a colliding id', async () => {

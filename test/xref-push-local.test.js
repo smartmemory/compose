@@ -38,11 +38,24 @@ function seedLocalLink(cwd, expect, repo = 'sib') {
 describe('pushExternalRefs — local provider (sibling delegation)', () => {
   test('--apply flips the sibling status via its own setFeatureStatus', async () => {
     const { parent, cwd } = layout('IN_PROGRESS');
-    seedLocalLink(cwd, 'COMPLETE');
+    seedLocalLink(cwd, 'PARTIAL');
     const res = await pushExternalRefs(cwd, { apply: true });
     assert.equal(res.pushed.length, 1);
-    assert.deepEqual(res.pushed[0].state, { from: 'IN_PROGRESS', to: 'COMPLETE' });
-    assert.equal(readFeature(join(parent, 'sib'), 'X-1').status, 'COMPLETE');
+    assert.deepEqual(res.pushed[0].state, { from: 'IN_PROGRESS', to: 'PARTIAL' });
+    assert.equal(readFeature(join(parent, 'sib'), 'X-1').status, 'PARTIAL');
+  });
+
+  test('expect COMPLETE is degrade-skipped: the sibling refuses COMPLETE outside its gate (COMP-COMPLETION-GATE AC-9)', async () => {
+    // Path 9 of the gate design, local half. A cross-repo push cannot carry the
+    // sibling's commit/test evidence, so the sibling's setFeatureStatus refuses
+    // and xref-push reports a skip rather than minting a completion next door.
+    const { parent, cwd } = layout('IN_PROGRESS');
+    seedLocalLink(cwd, 'COMPLETE');
+    const res = await pushExternalRefs(cwd, { apply: true });
+    assert.equal(res.pushed.length, 0);
+    assert.equal(res.skipped.length, 1);
+    assert.match(JSON.stringify(res.skipped[0]), /completion gate|COMPLETE/);
+    assert.equal(readFeature(join(parent, 'sib'), 'X-1').status, 'IN_PROGRESS', 'sibling untouched');
   });
 
   test('dry-run reports but does NOT change the sibling', async () => {

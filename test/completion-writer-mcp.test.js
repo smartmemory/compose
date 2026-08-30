@@ -204,7 +204,10 @@ describe('compose-mcp completion writer (end-to-end)', () => {
     }
   });
 
-  test('#20b STATUS_FLIP_AFTER_COMPLETION_RECORDED (ROADMAP partial-write): cause.code is ROADMAP_PARTIAL_WRITE', async () => {
+  test('#20b ROADMAP regen failure after the flip is reported as partial, not an error', async () => {
+    // Slice 3 (AC-4c): projections (ROADMAP, vision, events) never fail a
+    // completion; they are re-drivable and reported. status_flip_partial is
+    // the writer-shaped view of the gate's {partial:true, failures:[…]}.
     const cwd = freshCwd();
     seedFeature(cwd, { code: 'COMP-1', status: 'PLANNED' });
     sabotageRoadmap(cwd);
@@ -217,12 +220,10 @@ describe('compose-mcp completion writer (end-to-end)', () => {
         files_changed: [],
         set_status: true,
       });
-      assert.ok(result.isError, 'result should be an error');
-      const text = result.content?.[0]?.text || '';
-      assert.match(text, /\[STATUS_FLIP_AFTER_COMPLETION_RECORDED\]/,
-        `expected [STATUS_FLIP_AFTER_COMPLETION_RECORDED] in: ${text}`);
-      assert.match(text, /Caused by \[ROADMAP_PARTIAL_WRITE\]:/,
-        `expected "Caused by [ROADMAP_PARTIAL_WRITE]:" in: ${text}`);
+      assert.ok(!result.isError, `should succeed with partial: ${result.content?.[0]?.text}`);
+      const body = JSON.parse(result.content[0].text);
+      assert.equal(body.status_flip_partial, true);
+      assert.deepEqual(body.status_changed, { from: 'PLANNED', to: 'COMPLETE' });
     } finally {
       client.close();
     }
