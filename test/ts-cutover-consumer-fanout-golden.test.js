@@ -2932,6 +2932,39 @@ describe('consumer merge — lanes editing the same file', () => {
     assert.equal(landed, 'a\nB\nc\nD\ne\nf\ng\nh\n', 'both lanes landed in the working tree');
   });
 
+  test('a lane that un-ignores an existing ignored file never deletes it (merge or block)', async (t) => {
+    // Codex review of e98ea87: .gitignore excludes scratch/; a lane drops that
+    // rule. The witness (add -A under the OLD rules) never captured
+    // scratch/token.json, so a clean-based checkout or rollback under the NEW
+    // rules would delete a file no snapshot holds. Tree-delta checkout must not.
+    const scenario = await scenarioWithSharedFile(t, 'shared-unignore');
+    const opts = { runId: 'shared-unignore-run', targetCwd: scenario.workspace, artifactRoot: scenario.artifactRoot };
+    const gitignore = await readFile(join(scenario.workspace, '.gitignore'), 'utf8');
+    await writeFile(join(scenario.workspace, '.gitignore'), `${gitignore}scratch/\n`);
+    git(scenario.workspace, ['add', '-A']);
+    git(scenario.workspace, ['commit', '-qm', 'ignore scratch']);
+    // Capture the lane diffs BEFORE the target-only file exists, exactly as an
+    // isolated worktree lane would: the lane never sees scratch/token.json.
+    const diff0 = await captureEditDiff(scenario.workspace, SHARED, (text) => text.replace(/^b$/m, 'B'));
+    const diff1 = await captureEditDiff(scenario.workspace, '.gitignore', (text) => text.replace('scratch/\n', ''));
+    assert.doesNotMatch(diff1, /token\.json/, 'the lane diff must not carry the target-only file');
+    await mkdir(join(scenario.workspace, 'scratch'), { recursive: true });
+    await writeFile(join(scenario.workspace, 'scratch', 'token.json'), '{"secret":true}\n');
+
+    const { artifacts, prepared } = await prepareWith(scenario, opts, [
+      issuance(0, 'tok-b', diff0),
+      issuance(1, 'tok-unignore', diff1),
+    ]);
+    assert.equal(prepared.state, 'prepared');
+    await artifacts.applyMerge(prepared).catch(() => { /* blocking is acceptable; deletion is not */ });
+
+    assert.equal(
+      await readFile(join(scenario.workspace, 'scratch', 'token.json'), 'utf8'),
+      '{"secret":true}\n',
+      'the never-snapshotted ignored file survives the merge/rollback',
+    );
+  });
+
   test('a genuine overlap on one line still blocks the merge', async (t) => {
     const scenario = await scenarioWithSharedFile(t, 'shared-conflict');
     const opts = { runId: 'shared-conflict-run', targetCwd: scenario.workspace, artifactRoot: scenario.artifactRoot };

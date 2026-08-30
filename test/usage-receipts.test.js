@@ -1011,14 +1011,15 @@ test('bug escalation tier 2 passes an escalation usage callback', async () => {
   }
 });
 
-test('runAgentText keeps a provider-reported usd when the engine labels it usdSource (ConnectorUsage camel-case)', async () => {
+test('runAgentText keeps a provider-reported usd when the engine labels it usdSource beside usage (ConnectorResult)', async () => {
   const client = new StratumMcpClient();
   Object.defineProperty(client, '_testClient', {
     value: {
       async callTool() {
         return mcpResult({
           text: 'answer',
-          usage: { usd: 0.02, usdSource: 'reported', tokens: 9, ms: 5 },
+          usage: { usd: 0.02, tokens: 9, ms: 5 },
+          usdSource: 'reported',
           telemetry: { model: 'claude-sonnet-4-6', durationMs: 5 },
         });
       },

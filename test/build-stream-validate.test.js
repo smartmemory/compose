@@ -164,11 +164,12 @@ describe('validateBuildStreamEvent — unknown schema_version', () => {
     assert.equal(result.valid, false);
   });
 
-  it('KNOWN_VERSIONS set contains exactly 0.2.5, 0.2.6 and 0.2.7', () => {
+  it('KNOWN_VERSIONS set contains exactly 0.2.5, 0.2.6, 0.2.7 and 0.2.8', () => {
     assert.ok(KNOWN_VERSIONS.has('0.2.5'), '0.2.5 backward-compat');
     assert.ok(KNOWN_VERSIONS.has('0.2.6'), '0.2.6 backward-compat');
-    assert.ok(KNOWN_VERSIONS.has('0.2.7'), '0.2.7 current (STRAT-PAR-STREAM-TOOLDETAIL)');
-    assert.equal(KNOWN_VERSIONS.size, 3, 'no other versions accepted');
+    assert.ok(KNOWN_VERSIONS.has('0.2.7'), '0.2.7 (STRAT-PAR-STREAM-TOOLDETAIL)');
+    assert.ok(KNOWN_VERSIONS.has('0.2.8'), '0.2.8 current (_agent_run envelopes may omit flow_id)');
+    assert.equal(KNOWN_VERSIONS.size, 4, 'no other versions accepted');
   });
 });
 
