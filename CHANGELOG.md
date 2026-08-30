@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Census follow-ups: shadowed stratum warning, usd provenance, merge-loop kill
+
+- `resolveStratumBin` warns once when the installed `@smartmemory/stratum`
+  shadows a sibling checkout at a different version, naming both versions and
+  `COMPOSE_STRATUM_TS_MCP_BIN`. The installed package still wins (CI has no
+  sibling); the monorepo just stops running a stale engine silently.
+- `runAgentText` accepts the engine's `usage.usdSource` label as usd provenance
+  (alongside compose-native `usd_source`); an unlabelled usd is still dropped.
+- `decideMergeRepairOutcome` (exported from `lib/build.js`): a consumer-merge
+  failure that repeats byte-identically at the same gate now KILLS with a
+  recovery rationale instead of revising, which re-dispatched every fan-out lane
+  for the same conflict (4 paid rounds observed on one
+  `MERGE_WITNESS_PRECOMPUTE_FAILED`, 2026-08-30).
+
+
 ### build: exact feature code beats the prefix heuristic
 
 - `compose build <CODE>` treated any code without a trailing digit

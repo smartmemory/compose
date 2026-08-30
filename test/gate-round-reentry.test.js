@@ -17,7 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { VisionWriter } from '../lib/vision-writer.js';
 import { VisionStore } from '../server/vision-store.js';
-import { assertGateReentryWithinCap, MAX_GATE_REENTRIES } from '../lib/build.js';
+import { assertGateReentryWithinCap, MAX_GATE_REENTRIES, decideMergeRepairOutcome } from '../lib/build.js';
 
 describe('assertGateReentryWithinCap', () => {
   it('does not throw at or under the cap', () => {
@@ -102,5 +102,33 @@ describe('VisionStore.findPendingGate is flow-scoped (server path)', () => {
     assert.ok(store.findPendingGate('item-z', 's', 'flow-old'));
     // Legacy null flowId → falls back to item+step match.
     assert.ok(store.findPendingGate('item-z', 's'));
+  });
+});
+
+describe('decideMergeRepairOutcome', () => {
+  const failure = 'MERGE_WITNESS_PRECOMPUTE_FAILED: patch does not apply';
+
+  it('revises on the first failure at a gate', () => {
+    const decision = decideMergeRepairOutcome(undefined, failure, 'revise');
+    assert.deepEqual(decision, { outcome: 'revise', repeated: false, rationale: failure });
+  });
+
+  it('revises again when the failure changed (genuine progress)', () => {
+    const decision = decideMergeRepairOutcome(failure, 'MERGE_WITNESS_NOT_UNIQUE: chain', 'revise');
+    assert.equal(decision.outcome, 'revise');
+    assert.equal(decision.repeated, false);
+  });
+
+  it('kills instead of paying for another round when the failure repeats byte-identically', () => {
+    const decision = decideMergeRepairOutcome(failure, failure, 'revise');
+    assert.equal(decision.outcome, 'kill');
+    assert.equal(decision.repeated, true);
+    assert.match(decision.rationale, /identical to the previous round/);
+    assert.match(decision.rationale, /--resume/);
+  });
+
+  it('keeps kill as kill when the gate has no revise route', () => {
+    assert.equal(decideMergeRepairOutcome(undefined, failure, 'kill').outcome, 'kill');
+    assert.equal(decideMergeRepairOutcome(failure, failure, 'kill').outcome, 'kill');
   });
 });
