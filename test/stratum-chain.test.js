@@ -147,3 +147,49 @@ test('healStratumWiring replaces stale Stratum wiring and preserves sibling serv
   assert.equal(again.healed, false);
   assert.deepEqual(JSON.parse(readFileSync(mcpPath, 'utf8')).mcpServers.stratum, expected);
 });
+
+test('warns once when the installed dependency shadows a sibling checkout at another version', (t) => {
+  const root = fixture(t, 'compose-stratum-shadow-');
+  installStubStratum(root);
+  const installedPackageJson = join(root, 'node_modules', '@smartmemory', 'stratum', 'package.json');
+  writeFileSync(installedPackageJson, JSON.stringify({
+    ...JSON.parse(readFileSync(installedPackageJson, 'utf8')),
+    version: '0.3.3',
+  }));
+  const siblingPackageJson = join(root, 'sibling', 'ts', 'package.json');
+  mkdirSync(dirname(siblingPackageJson), { recursive: true });
+  writeFileSync(siblingPackageJson, JSON.stringify({ name: '@smartmemory/stratum', version: '0.3.4' }));
+
+  const warnings = [];
+  const deps = {
+    env: {},
+    requireResolve: resolverFrom(root),
+    siblingPackageJson,
+    warn: (message) => warnings.push(message),
+  };
+  resolveStratumMcpConnection(root, deps);
+  resolveStratumMcpConnection(root, deps);
+
+  assert.equal(warnings.length, 1, 'one warning per process, not per connect');
+  assert.match(warnings[0], /installed @smartmemory\/stratum 0\.3\.3/);
+  assert.match(warnings[0], /sibling checkout .* is 0\.3\.4/);
+  assert.match(warnings[0], /COMPOSE_STRATUM_TS_MCP_BIN/);
+});
+
+test('no shadow warning when installed and sibling versions match', (t) => {
+  const root = fixture(t, 'compose-stratum-same-');
+  installStubStratum(root);
+  const installedPackageJson = join(root, 'node_modules', '@smartmemory', 'stratum', 'package.json');
+  writeFileSync(installedPackageJson, JSON.stringify({
+    ...JSON.parse(readFileSync(installedPackageJson, 'utf8')),
+    version: '0.3.4',
+  }));
+  const siblingPackageJson = join(root, 'sibling', 'ts', 'package.json');
+  mkdirSync(dirname(siblingPackageJson), { recursive: true });
+  writeFileSync(siblingPackageJson, JSON.stringify({ name: '@smartmemory/stratum', version: '0.3.4' }));
+  const warnings = [];
+  resolveStratumMcpConnection(root, {
+    env: {}, requireResolve: resolverFrom(root), siblingPackageJson, warn: (m) => warnings.push(m),
+  });
+  assert.equal(warnings.length, 0);
+});

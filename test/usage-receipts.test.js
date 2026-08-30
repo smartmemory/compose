@@ -1010,3 +1010,42 @@ test('bug escalation tier 2 passes an escalation usage callback', async () => {
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test('runAgentText keeps a provider-reported usd when the engine labels it usdSource (ConnectorUsage camel-case)', async () => {
+  const client = new StratumMcpClient();
+  Object.defineProperty(client, '_testClient', {
+    value: {
+      async callTool() {
+        return mcpResult({
+          text: 'answer',
+          usage: { usd: 0.02, usdSource: 'reported', tokens: 9, ms: 5 },
+          telemetry: { model: 'claude-sonnet-4-6', durationMs: 5 },
+        });
+      },
+    },
+  });
+  const seen = [];
+  await client.runAgentText('claude', 'q', { onUsage: (usages) => seen.push(...usages) });
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].cost_usd, 0.02);
+  assert.equal(seen[0].usd_source, 'reported');
+});
+
+test('runAgentText still drops an unlabelled usd (fail closed)', async () => {
+  const client = new StratumMcpClient();
+  Object.defineProperty(client, '_testClient', {
+    value: {
+      async callTool() {
+        return mcpResult({
+          text: 'answer',
+          usage: { usd: 0.02, tokens: 9, ms: 5 },
+          telemetry: { model: 'claude-sonnet-4-6', durationMs: 5 },
+        });
+      },
+    },
+  });
+  const seen = [];
+  await client.runAgentText('claude', 'q', { onUsage: (usages) => seen.push(...usages) });
+  assert.equal(Object.hasOwn(seen[0], 'cost_usd'), false);
+  assert.equal(Object.hasOwn(seen[0], 'usd_source'), false);
+});
