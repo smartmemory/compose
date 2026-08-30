@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### STRAT-LEARN-COST S05 — compose usage receipt producer
+
+- Feature-detect Stratum's `stratum_usage_report` surface once per run and emit
+  one model-attributed receipt for every Compose-dispatched model call.
+- Preserve legacy `stepDone` usage envelopes against older Stratum surfaces;
+  surface-15 runs use receipts as the single accounting owner.
+- Add per-dispatch usage normalization, gate-budget latching, GSD and escalation
+  coverage, plus `scripts/cost-census.mjs` for receipt/ledger/accumulator parity.
+
 ## 2026-08-27
 
 ### COMP-FLUID-SEAM-GUARANTEES doc fix — the concurrent-create failure is orphaning, not loss
