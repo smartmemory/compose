@@ -241,10 +241,11 @@ export function attachStratumRoutes(app, { store, scheduleBroadcast, broadcastMe
       // eslint-disable-next-line no-unused-vars
       const { stratumViolations: _v, violatedAt: _va, ...existingEvidence } = item.evidence || {};
       const evidence = { ...existingEvidence, stratumTrace: trace, tracedAt: new Date().toISOString() };
+      // COMP-COMPLETION-GATE slice 3 (AC-11, path 8): an audit trace is NOT
+      // completion evidence. A flow reporting `complete` used to flip the item
+      // to complete here with no commit, no test attestation and no ledger
+      // entry. The trace is still stored; the status is left to the gate.
       const updates = { evidence };
-      if (trace.status === 'complete' && item.status !== 'complete') {
-        updates.status = 'complete';
-      }
       const updatedItem = store.updateItem(req.params.itemId, updates);
       scheduleBroadcast();
 

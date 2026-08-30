@@ -173,6 +173,13 @@ function spyVisionWriter() {
     statuses,
     async ensureFeatureItem(featureCode) { return featureCode; },
     async updateItemStatus(_id, status) { statuses.push(status); },
+    // Slice 3: the gate projects completion through completeItem (AC-4b), never
+    // through updateItemStatus('complete'). Record it under the same key so the
+    // assertions read as "the vision item was completed".
+    async completeItem(_id, evidence) {
+      statuses.push('complete');
+      return { ok: true, verified_by: 'test', evidence };
+    },
     async updateItemPhase() {},
   };
 }

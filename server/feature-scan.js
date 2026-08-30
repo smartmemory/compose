@@ -18,6 +18,8 @@ import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { getTargetRoot, resolveProjectPath } from './project-root.js';
 import { relForDisplay } from '../lib/project-paths.js';
+import { featureStatusToVisionStatus } from '../lib/status-projection.js';
+import { VERIFIED_BY } from './completion-projection.js';
 import { assertValidLinkShape } from '../lib/feature-write-guard.js';
 import { depsToEdges } from '../lib/roadmap-graph/model.js';
 
@@ -175,7 +177,9 @@ export function scanFeatures(featuresDir) {
       const specPath = path.join(featureDir, 'feature.json');
       if (fs.existsSync(specPath)) {
         feature.hasFeatureJson = true;
+        feature.featureJsonUnreadable = true; // cleared once the parse succeeds
         const spec = JSON.parse(fs.readFileSync(specPath, 'utf-8'));
+        feature.featureJsonUnreadable = false;
         if (typeof spec.group === 'string' && spec.group.trim()) {
           feature.group = spec.group.trim();
         }
@@ -185,6 +189,7 @@ export function scanFeatures(featuresDir) {
         // it (COMP-ROADMAP-GRAPH-2: kills the feature.json/cockpit status de-sync).
         if (typeof spec.status === 'string' && spec.status.trim()) {
           feature.status = normalizeStatus(spec.status);
+          feature.canonicalStatus = spec.status.trim().toUpperCase();
         }
       }
     } catch { /* ignore malformed feature.json */ }
@@ -473,6 +478,33 @@ export function writeFeatureGroupToDisk(item, newGroup, featuresDir) {
  * @param {object} store — VisionStore instance
  * @returns {{ features: number, updated: number, connections: number }}
  */
+/**
+ * The synchronous startup tier for a scanned `complete` feature (§2.3b).
+ * @returns {{status:string, completion_projection?:object}}
+ */
+function seedCompletionTier(feature) {
+  if (feature.canonicalStatus === 'COMPLETE') {
+    return {
+      status: 'complete',
+      completion_projection: { verified_by: VERIFIED_BY.CANONICAL, at: new Date().toISOString(), source: 'startup-scan' },
+    };
+  }
+  if (!feature.hasFeatureJson) {
+    // No feature.json at all: the scanner inferred completion from documents
+    // (report.md present, design.md prose). Weakest tier — and the ONLY case
+    // that gets it. This is what "unmanaged" means (§2.3b round 5).
+    return {
+      status: 'complete',
+      completion_projection: { verified_by: VERIFIED_BY.DOCUMENT, at: new Date().toISOString(), source: 'startup-scan' },
+    };
+  }
+  // A feature.json exists and does not say COMPLETE — malformed, or valid with
+  // no status while the documents claim completion. Canon wins: a managed
+  // feature is never seeded complete on document evidence (Codex r1 #4).
+  if (feature.featureJsonUnreadable) return { status: 'planned' };
+  return { status: featureStatusToVisionStatus(feature.canonicalStatus) || 'planned' };
+}
+
 export function seedFeatures(features, store) {
   const seeded = { features: 0, updated: 0, connections: 0 };
   const featureItemMap = new Map(); // featureCode → itemId
@@ -489,11 +521,23 @@ export function seedFeatures(features, store) {
     );
 
     if (!featureItem) {
+      // COMP-COMPLETION-GATE slice 3 (AC-4d, AC-16a, AC-16b): startup seeding is
+      // synchronous and pre-listen, so it does not consult the guard (§2.3b,
+      // round 5). A `complete` status is projected through the same predicate
+      // as every other transport — on canonical feature.json alone, stamped
+      // `canonical-status-only`, or `document-derived` for an unmanaged folder
+      // (no feature.json; the scanner inferred completion from report.md or doc
+      // metadata). That is display state, never a completion compose vouches
+      // for. A folder whose documents say complete but whose feature.json does
+      // NOT is created as its feature.json says.
+      const projected = feature.status === 'complete'
+        ? seedCompletionTier(feature)
+        : { status: feature.status || 'planned' };
       featureItem = store.createItem({
         type: 'feature',
         title: feature.name,
         description: feature.description || '',
-        status: feature.status || 'planned',
+        status: projected.status,
         phase: feature.phase || 'planning',
         confidence: feature.confidence,
         files: feature.artifacts.map(a => artifactPath(feature, a)),
@@ -503,6 +547,9 @@ export function seedFeatures(features, store) {
       try {
         store.updateLifecycle(featureItem.id, { featureCode: feature.name, currentPhase: 'explore_design' });
       } catch { /* lifecycle method may not exist */ }
+      if (projected.completion_projection) {
+        store.updateItem(featureItem.id, { completion_projection: projected.completion_projection });
+      }
       featureItem = store.items.get(featureItem.id);
       seeded.features++;
     } else {
@@ -511,8 +558,35 @@ export function seedFeatures(features, store) {
       if (feature.description && feature.description !== featureItem.description) {
         updates.description = feature.description;
       }
+      // A complete item is RE-VERIFIED on every scan, not only when its status
+      // differs (Codex r1 #5, r2 #2): an item stamped when canon was valid must
+      // be downgraded if canon is later corrupted or loses its status, and an
+      // item complete before tiers existed must gain its stamp.
+      if (feature.status === 'complete' && featureItem.status === 'complete') {
+        const projected = seedCompletionTier(feature);
+        if (projected.status !== 'complete') {
+          updates.status = projected.status;
+          updates.completion_projection = null;
+        } else if (!featureItem.completion_projection
+            || featureItem.completion_projection.verified_by !== projected.completion_projection.verified_by) {
+          updates.completion_projection = projected.completion_projection;
+        }
+      }
       if (feature.status && feature.status !== featureItem.status) {
-        updates.status = feature.status;
+        if (feature.status === 'complete') {
+          const projected = seedCompletionTier(feature);
+          if (projected.status === 'complete') {
+            updates.status = 'complete';
+            updates.completion_projection = projected.completion_projection;
+          } else if (projected.status !== featureItem.status) {
+            updates.status = projected.status;
+          }
+        } else {
+          updates.status = feature.status;
+          // Leaving complete for any recognized status: the stamp is a claim
+          // about a completion that canon no longer records (Codex r3).
+          if (featureItem.completion_projection) updates.completion_projection = null;
+        }
       }
       if (feature.confidence > (featureItem.confidence || 0)) {
         updates.confidence = feature.confidence;

@@ -520,7 +520,11 @@ describe('T3 — status-flip', () => {
     assert.ok(events.some(e => e.tool === 'record_completion'), 'record_completion audit row present');
   });
 
-  test('#11 set_status: true from KILLED: completion persists, throws STATUS_FLIP_AFTER_COMPLETION_RECORDED', async () => {
+  test('#11 set_status: true from KILLED: the gate refuses in preflight and NOTHING is written', async () => {
+    // Slice 3 (AC-26a, AC-28): the completing path goes through the gate, which
+    // checks terminal-status legality BEFORE the record write. The old
+    // behaviour — record persisted, then a flip failure — is gone: a refusal
+    // writes nothing.
     const cwd = freshCwd();
     seedFeature(cwd, { code: 'CODE-1', status: 'KILLED' });
 
@@ -537,56 +541,41 @@ describe('T3 — status-flip', () => {
     }
 
     assert.ok(thrown, 'should throw');
-    assert.equal(thrown.code, 'STATUS_FLIP_AFTER_COMPLETION_RECORDED');
-    assert.ok(thrown.cause, 'should have err.cause');
-    assert.match(thrown.cause.message, /invalid transition|KILLED/i);
+    assert.equal(thrown.code, 'COMPLETION_REFUSED');
+    assert.equal(thrown.refusedAt, 'preflight');
+    assert.match(thrown.message, /KILLED/);
 
-    // On-disk completion record IS persisted
     const feature = readFeature(cwd, 'CODE-1');
-    assert.ok(Array.isArray(feature.completions) && feature.completions.length > 0,
-      'completion record must be persisted even after flip failure');
-
-    // Status is still KILLED (not flipped)
+    assert.ok(!Array.isArray(feature.completions) || feature.completions.length === 0,
+      'a refused completion writes no record');
     assert.equal(feature.status, 'KILLED');
 
-    // No set_feature_status audit row
     const events = readEvents(cwd);
     assert.ok(!events.some(e => e.tool === 'set_feature_status'), 'no set_feature_status audit row');
+    assert.ok(!events.some(e => e.tool === 'record_completion'), 'no record_completion audit row');
   });
 
-  test('#11b ROADMAP_PARTIAL_WRITE subcase: status flips but ROADMAP regen fails', async () => {
+  test('#11b ROADMAP regen fails AFTER status flips: reported as partial, never thrown or swallowed', async () => {
+    // Slice 3 (AC-4c): steps 3–5 of §2.3a are projections. A failure there
+    // returns {partial:true, failures:[…]} on the gate result, which the writer
+    // surfaces as status_flip_partial — the completion stands.
     const cwd = freshCwd();
     seedFeature(cwd, { code: 'CODE-1', status: 'PLANNED' });
-    // Sabotage ROADMAP.md so writeRoadmap throws EISDIR
     sabotageRoadmap(cwd);
 
-    let thrown;
-    try {
-      await recordCompletion(cwd, {
-        feature_code: 'CODE-1', commit_sha: FULL_SHA_A,
-        tests_pass: true, files_changed: [],
-        set_status: true,
-      });
-      assert.fail('should have thrown');
-    } catch (err) {
-      thrown = err;
-    }
+    const res = await recordCompletion(cwd, {
+      feature_code: 'CODE-1', commit_sha: FULL_SHA_A,
+      tests_pass: true, files_changed: [],
+      set_status: true,
+    });
 
-    assert.ok(thrown, 'should throw');
-    assert.equal(thrown.code, 'STATUS_FLIP_AFTER_COMPLETION_RECORDED');
-    assert.ok(thrown.cause, 'should have err.cause');
-    assert.equal(thrown.cause.code, 'ROADMAP_PARTIAL_WRITE', 'cause.code must be ROADMAP_PARTIAL_WRITE');
+    assert.equal(res.status_flip_partial, true, 'ROADMAP failure surfaces as partial');
+    assert.deepEqual(res.status_changed, { from: 'PLANNED', to: 'COMPLETE' });
 
-    // On-disk: completion IS persisted
     const feature = readFeature(cwd, 'CODE-1');
     assert.ok(Array.isArray(feature.completions) && feature.completions.length > 0,
       'completion record must be persisted');
-
-    // On-disk: status DID flip to COMPLETE (the partial write scenario)
-    assert.equal(feature.status, 'COMPLETE', 'status must have been flipped before ROADMAP failed');
-
-    // Error message names the partial subcase
-    assert.match(thrown.message, /ROADMAP_PARTIAL_WRITE/);
+    assert.equal(feature.status, 'COMPLETE', 'status flipped before ROADMAP failed');
   });
 
   test('#12 set_status: false: status untouched, status_changed: null, no set_feature_status row', async () => {

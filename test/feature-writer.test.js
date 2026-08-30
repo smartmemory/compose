@@ -232,9 +232,24 @@ describe('setFeatureStatus', () => {
     const cwd = freshCwd();
     seedFeature(cwd, { code: 'BAD-1', description: 'x', phase: 'P', status: 'PLANNED' });
     await assert.rejects(
-      () => setFeatureStatus(cwd, { code: 'BAD-1', status: 'COMPLETE' }),
+      () => setFeatureStatus(cwd, { code: 'BAD-1', status: 'PARTIAL' }),
       /invalid transition/
     );
+  });
+
+  test('COMPLETE is refused unconditionally — force, derived, any source status (COMP-COMPLETION-GATE AC-9)', async () => {
+    const cwd = freshCwd();
+    seedFeature(cwd, { code: 'GATE-9', description: 'x', phase: 'P', status: 'IN_PROGRESS' });
+    for (const extra of [{}, { force: true }, { derived: true }, { force: true, derived: true }]) {
+      await assert.rejects(
+        () => setFeatureStatus(cwd, { code: 'GATE-9', status: 'COMPLETE', ...extra }),
+        (e) => e.code === 'COMPLETE_VIA_GATE_ONLY' && /completion gate/.test(e.message),
+        `refused with ${JSON.stringify(extra)}`,
+      );
+    }
+    assert.equal(readFeature(cwd, 'GATE-9').status, 'IN_PROGRESS', 'nothing written');
+    const events = readEvents(cwd, { tool: 'set_feature_status', code: 'GATE-9' });
+    assert.equal(events.length, 0, 'no audit row for a refusal');
   });
 
   test('COMPLETE -> SUPERSEDED requires force', async () => {
@@ -264,7 +279,7 @@ describe('setFeatureStatus', () => {
     seedFeature(cwd, { code: 'REA-1', description: 'x', phase: 'P', status: 'IN_PROGRESS' });
     await setFeatureStatus(cwd, {
       code: 'REA-1',
-      status: 'COMPLETE',
+      status: 'PARTIAL',
       reason: 'shipped in commit abc',
       commit_sha: 'abc1234',
     });

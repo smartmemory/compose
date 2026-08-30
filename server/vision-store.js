@@ -205,7 +205,7 @@ export class VisionStore {
       throw new Error(`Invalid phase: ${updates.phase}`);
     }
 
-    const allowed = ['type', 'title', 'description', 'confidence', 'status', 'phase', 'position', 'parentId', 'summary', 'files', 'featureCode', 'stratumFlowId', 'evidence', 'group', 'priority'];
+    const allowed = ['type', 'title', 'description', 'confidence', 'status', 'phase', 'position', 'parentId', 'summary', 'files', 'featureCode', 'stratumFlowId', 'evidence', 'group', 'priority', 'completion_projection'];
     for (const key of allowed) {
       if (updates[key] !== undefined) {
         item[key] = updates[key];
@@ -226,7 +226,7 @@ export class VisionStore {
     item.updatedAt = new Date().toISOString();
 
     this.items.set(id, item);
-    this._save();
+    this.lastSaveOk = this._save();
     return item;
   }
 
@@ -248,7 +248,7 @@ export class VisionStore {
     }
     item.updatedAt = new Date().toISOString();
     this.items.set(id, item);
-    this._save();
+    this.lastSaveOk = this._save();
     return item;
   }
 

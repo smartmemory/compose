@@ -1,6 +1,6 @@
 # COMP-COMPLETION-GATE — one door for "this feature is done"
 
-**Status:** DESIGN (revision 6 — post Codex review round 5) — **STOPPING CRITERION FIRED, see below**
+**Status:** IN_PROGRESS — slices 1, 2 and 3 SHIPPED (see §2.9, §2.9a, §2.9b); design revision 6 (post Codex review round 5) — **STOPPING CRITERION FIRED, see below**
 **Date:** 2026-08-18
 **Mode:** build
 
@@ -873,6 +873,76 @@ NOT a genuine cross-process resume through `decideBuildStart`'s resume branch. A
 the accumulator (`rotateStaleAccumulatorForFreshStart`), so seeded evidence cannot stand in for a
 real resume; driving one needs a resume harness that is out of slice-2 scope.
 
+## 2.9b SLICE 3 — the projections and the refusals (SHIPPED 2026-08-30)
+
+**Slice 3 principle: the gate owns every write, and every other door is refused or made
+self-verifying.** Slices 1–2 gated the two paths that actually complete features but left the writes
+themselves in `setFeatureStatus` — one of the doors. Slice 3 moves the writes into the gate (§2.3a),
+closes paths 5/7/8/14, and replaces the closed doors with the seam of §2.3b.
+
+| in slice 3 | what changed |
+|---|---|
+| `completionGate` step 6 (`lib/completion-gate.js`) — AC-4a/4c | record → status (`persistFeatureRaw`) → ROADMAP regen → vision projection → events, in that order. Steps 1–2 abort and KEEP the intent (a retry recovers); steps 3–5 are collected into `{ok:true, partial:true, failures:[…]}` |
+| `recordCompletion` — AC-7 | the completing path (`set_status ≠ false`) delegates to the gate and throws `COMPLETION_REFUSED` on refusal, writing nothing. `set_status:false` is the record-only path the gate calls back into. `STATUS_FLIP_AFTER_COMPLETION_RECORDED` is gone: a KILLED feature is refused in preflight with no record left behind |
+| `setFeatureStatus` — AC-9 | refuses `COMPLETE` unconditionally (`COMPLETE_VIA_GATE_ONLY`), including `force` and `derived`. Closes path 5, path 10 (reconciler `derived`), `projectFeatureStatus(phase:'complete')`, and — for free — the local half of path 9 (`xref-push` already degrade-skips a thrown refusal) |
+| `server/completion-projection.js` (new) — AC-4d/16b | ONE predicate, `verifiedCompleteProjection`: feature.json reads COMPLETE **and** the item is bound to the code **and** *if a guard resource exists* its state is complete. Tiers stamped on the item as `completion_projection.verified_by`: `guarded` / `canonical-status-only` / `document-derived`. Only `not_found` means legacy; every other guard outcome fails closed |
+| Four transports of that predicate | `POST /api/vision/items/:id/completion-projection` (the gate over REST); `applyVerifiedProjection(store, …)` in-process (the `/lifecycle/complete` route, the reconciler); `VisionWriter.completeItem` direct mode; and startup seeding (`seedFeatures`, synchronous — no guard consulted, per round 5) |
+| `VisionWriter.completeItem` (new) — AC-4b | REST → the endpoint; direct → the predicate. `updateItemStatus(…, 'complete')` refuses a **managed build item** in both transports (AC-16) |
+| `PATCH /api/vision/items/:id` — AC-10 | 422 `COMPLETE_VIA_GATE_ONLY` for a managed build item |
+| `POST /api/stratum/audit/:itemId` — AC-11 | stores the trace, no longer flips status |
+| `/lifecycle/complete` (§2.1) | for `tracksFeatureJson` modes the route calls the gate with an in-process projector against the live store. Under the guard a request with no `commit_sha` is now refused (422) — the evidence-free cockpit completion was path 7's quieter twin |
+| `roadmap migrate` — AC-17 | named, logged exemption on BOTH branches; negative test for a new COMPLETE row created without `--overwrite` |
+| `test/completion-write-allowlist.test.js` — AC-19 | repo-wide scan of every COMPLETE/complete write + every `persistFeatureRaw` callsite; two-sided allowlist justified in-file |
+
+**"Managed build item" is the refusal key, not "build mode".** `modeOf(item)` defaults to build,
+and the `compose new` kickoff item is a build-mode lifecycle item with no `feature.json`
+(`lib/new.js:238`). A refusal keyed on mode alone would brick `compose new` — contrary to §1.3's
+"documented, not changed". The refusals (AC-10, AC-16) therefore apply to an item that is bound to
+a feature code, in build mode, **and** whose code has a `feature.json` in the workspace
+(`isManagedBuildItem`). Everything else — fix/plan items, UI items with no lifecycle, the kickoff
+item — keeps its path. The same reasoning as the `document-derived` tier: what compose does not
+manage, compose does not vouch for, and does not police.
+
+**A fail-open found by the slice-3 tests, fixed in the gate.** `currentGuardState` read a guard
+error as "not found" when its *message* contained "not found". A `SPAWN` failure whose message is
+`stratum-mcp: command not found` therefore read as a legacy, unregistered feature — the exact
+disguise §2.3b warns about. The message fallback now applies only when no error code was returned.
+
+**Codex review, round 1 (gpt-5.6-sol/high): 7 findings, 5 fixed, 1 deferred, 1 partially taken.**
+
+| # | finding | resolution |
+|---|---|---|
+| 1 P1 | a present-but-malformed `feature.json` read as *unmanaged* → PATCH / `updateItemStatus` let `complete` through | `isManagedBuildItem` is existence-based (`canonicalFile`); the predicate refuses an unparseable file in every tier — broken canon is not absent canon |
+| 2 P1 | `VisionStore._save` swallows disk failures; the endpoint returned 200 for a projection that only reached memory | `updateItem` records `lastSaveOk`; `applyVerifiedProjection` rolls the live item back and returns `ok:false`; the endpoint 422s |
+| 3 P1 | the writer-shaped `result` (what MCP/CLI/`recordCompletion` return) only surfaced the ROADMAP half of a partial | `result.partial`, `result.failures[]`, `status_flip_partial` true for any projection failure; the CLI warns |
+| 4 P1 | a managed feature with a status-less or malformed `feature.json` plus `report.md` seeded as `document-derived` complete | only a folder with NO `feature.json` gets the document tier; canon wins otherwise (`featureJsonUnreadable` → planned) |
+| 5 P2 | items already complete before tiers existed never get stamped (status equality skipped them) | upgrade branch in `seedFeatures` stamps an unstamped complete item |
+| 6 P2 | `VisionWriter` decides REST vs direct on one probe; a missed probe against a live-but-slow server writes the file under the server's in-memory state | **DEFERRED — pre-existing**, shared by every dual-dispatch op (`updateItemStatus`, `updateItemPhase`, gates); not introduced here. Belongs to a transport-level fix (probe retry / server-side lease), filed under COMP-SESSION-COORD's family |
+| 7 P2 | AC-19 does not see generic sinks (`writeFeature(`, PATCH pass-through) | both sinks added to the scan with justified entries; AC-19 remains allowlist-shaped by design |
+
+**Codex review, round 2 (reviewed the round-1 fixes): 3 findings, all fixed.**
+
+| # | finding | resolution |
+|---|---|---|
+| 1 High | adding `completion_projection` to the store's update allowlist made the tier stamp writable through the generic PATCH — a legacy item could be relabelled `guarded` with a fake ledger ref | PATCH refuses any body carrying `completion_projection` (`PROJECTION_STAMP_READONLY`); the stamp is server-owned, written only by the predicate's transports |
+| 2 Med | an item stamped while canon was valid stayed complete after `feature.json` was corrupted or lost its status (the r1 #4 fix only covered new/unstamped items) | `seedFeatures` re-derives the tier on every scan for a complete item: downgrades and clears the stamp when canon no longer yields complete, re-stamps when the tier changed |
+| 3 Med | `/lifecycle/complete` returned `partial:false` when the projection persisted but the subsequent `updateLifecycle` save failed | `updateLifecycle` records `lastSaveOk`; the route reports a `lifecycle-persist` failure as partial |
+
+**Codex review, round 3 (reviewed the round-2 fixes): 1 medium, fixed by the controller (no round 4).**
+A canonical downgrade to a recognized non-complete status (COMPLETE → IN_PROGRESS) left the old
+stamp attached; `seedFeatures` now clears `completion_projection` whenever an item leaves `complete`.
+PATCH rejection and lifecycle-persist reporting were confirmed clean.
+
+**Honest statement of what slice 3 does and does not achieve.** After slice 3, a build-mode
+feature with a `feature.json` reaches COMPLETE — in feature.json, ROADMAP, and the cockpit — only
+through the gate, and every general writer that used to reach it refuses. The invariant is
+allowlist-shaped (Decision 7): `persistFeatureRaw` and `writeFeature` stay public, so the guarantee
+is "no write appears without an entry in the allowlist test", enforced by review plus AC-19, not by
+the type system. Still open, by design: paths 9 (GitHub half) and 15 → COMP-COMPLETION-GATE-REMOTE;
+fix/plan modes → COMP-COMPLETION-GATE-MODES; the 230 legacy COMPLETE features stay
+`canonical-status-only` forever. The correct sentence is now: *build-mode completions of managed
+features are evidence-checked, ledgered, and single-doored* — not "lifecycle-enforced".
+
 ## 3. Scope
 
 ### In scope
@@ -969,31 +1039,31 @@ real resume; driving one needs a resume harness that is out of slice-2 scope.
 - [ ] **AC-2** Evidence verified via the existing `verifyCompletionEvidence` — no reimplementation
 - [ ] **AC-3** **One regime, one edge:** the gate always registers at `completablePhaseOf(mode)` and takes a single `→ complete` transition; a test asserts exactly one guard transition per completion. (The multi-edge walk is cut — see §2.2 and follow-up COMP-GUARD-PHASE-ADVANCE)
 - [ ] **AC-4** Late registration stamped `resolved_by: 'agent:late-registration'`, combining with the no-repo tag per the §2.2 grammar (`agent:late-registration+no-repo-exemption`); a test asserts the value in the ledger entry (NOT an artifact field — none exists)
-- [ ] **AC-4a** §2.3a projection transaction: after the guard applies, the gate performs completion record → status → ROADMAP regen → vision projection → events, in that order; a test asserts ROADMAP and vision are **not** stale after a gated completion (the round-2 P0)
-- [ ] **AC-4b** `VisionWriter.completeItem(itemId, evidence)` (new) is the only path that writes `status: complete` to a vision item, in **both** modes: REST dispatches to `POST /api/vision/items/:id/completion-projection`, direct writes the file. The build runner uses it
-- [ ] **AC-4d** The verification lives in a **server-local primitive** `verifiedCompleteProjection(store, …)` (§2.3b) with four callers: the REST endpoint, the startup scanner (pre-listen, in-process), the reconciler, and `completeItem` direct mode. One predicate, four transports. It refuses unless feature.json reads COMPLETE, `lifecycle.featureCode` matches, and — **only if a guard resource exists** — its `current_state` is `complete`. Tests: refuses a non-complete feature (proving it grants no authority); succeeds for a legacy unguarded feature and stamps `verified_by: 'canonical-status-only'`; works during startup seeding before the server listens
-- [ ] **AC-4c** A failure in projection steps 3–5 returns `{ok:true, partial:true, failures:[…]}` — never a silent success
+- [x] **AC-4a** §2.3a projection transaction: after the guard applies, the gate performs completion record → status → ROADMAP regen → vision projection → events, in that order; a test asserts ROADMAP and vision are **not** stale after a gated completion (the round-2 P0)
+- [x] **AC-4b** `VisionWriter.completeItem(itemId, evidence)` (new) is the only path that writes `status: complete` to a vision item, in **both** modes: REST dispatches to `POST /api/vision/items/:id/completion-projection`, direct writes the file. The build runner uses it
+- [x] **AC-4d** The verification lives in a **server-local primitive** `verifiedCompleteProjection(store, …)` (§2.3b) with four callers: the REST endpoint, the startup scanner (pre-listen, in-process), the reconciler, and `completeItem` direct mode. One predicate, four transports. It refuses unless feature.json reads COMPLETE, `lifecycle.featureCode` matches, and — **only if a guard resource exists** — its `current_state` is `complete`. Tests: refuses a non-complete feature (proving it grants no authority); succeeds for a legacy unguarded feature and stamps `verified_by: 'canonical-status-only'`; works during startup seeding before the server listens
+- [x] **AC-4c** A failure in projection steps 3–5 returns `{ok:true, partial:true, failures:[…]}` — never a silent success
 - [ ] **AC-5** Guard disabled → evidence check runs, guard steps skipped, `{ok, guarded:false}`
 - [ ] **AC-6** Guard enabled + stratum unreachable → fail closed for **both** error shapes: thrown (`GUARD_UNREACHABLE`) and returned (`SPAWN`)
-- [ ] **AC-7** `recordCompletion` (paths 1, 2) calls the gate before any write; a refusal writes nothing
+- [x] **AC-7** `recordCompletion` (paths 1, 2) calls the gate before any write; a refusal writes nothing
 - [ ] **AC-8** Build runner gates **exactly once**, at terminalization; `executeShipStep` no longer completes best-effort; a test asserts a single guard transition per build and that top-level `filesChanged` survives
 - [ ] **AC-8a** When the terminal accumulator carries no commit SHA, the gate resolves `HEAD` in `evidenceRoot` at terminalization; the already-committed / no-changes branch completes against `HEAD` (§2.3). No evidence envelope is threaded through resume
 - [ ] **AC-8b** The gate runs **after** the health verdict and every terminal downgrade path (§2.3c). Test: a flow that completes but scores sub-threshold health writes **no** completion record, **no** COMPLETE status, **no** vision completion, and **no** guard transition
 - [ ] **AC-8c** Test execution moves ahead of the git-availability branch (`lib/build.js:4840` vs `:4882`) so non-git builds attest tests identically; the no-repo exemption covers the **commit only**, never the test result (§2.5a)
-- [ ] **AC-9** `setFeatureStatus` refuses `COMPLETE` unconditionally — including `derived:true` and `force:true` — with a message naming the gate (paths 5, 10); the gate's own write does not go through it (Decision 8)
-- [ ] **AC-10** `PATCH /api/vision/items/:id` refuses `status: 'complete'` with 422 — **only when `modeOf(item) === 'build'`** (§2.3d). Round 5 caught that an unconditional refusal bricks fix/plan whenever a server is running, because all modes share the terminal call (`lib/build.js:4309`) and `VisionWriter` dispatches it to this PATCH (`lib/vision-writer.js:403`). The same condition applies to re-pointing `/lifecycle/complete` at the gate (§2.1). Tests must run **with the server up** for fix and plan
-- [ ] **AC-11** `POST /api/stratum/audit/:itemId` no longer flips item status to complete (path 8)
+- [x] **AC-9** `setFeatureStatus` refuses `COMPLETE` unconditionally — including `derived:true` and `force:true` — with a message naming the gate (paths 5, 10); the gate's own write does not go through it (Decision 8)
+- [x] **AC-10** `PATCH /api/vision/items/:id` refuses `status: 'complete'` with 422 — **only when `modeOf(item) === 'build'`** (§2.3d). Round 5 caught that an unconditional refusal bricks fix/plan whenever a server is running, because all modes share the terminal call (`lib/build.js:4309`) and `VisionWriter` dispatches it to this PATCH (`lib/vision-writer.js:403`). The same condition applies to re-pointing `/lifecycle/complete` at the gate (§2.1). Tests must run **with the server up** for fix and plan
+- [x] **AC-11** `POST /api/stratum/audit/:itemId` no longer flips item status to complete (path 8)
 - [ ] **AC-12** *(DEFERRED to follow-up COMP-COMPLETION-GATE-REMOTE — see §3)* `lib/xref-push.js` and `GitHubProvider.setStatus` refuse COMPLETE (paths 9, 15)
 - [ ] **AC-13** CLI `record-completion` no longer defaults `tests_pass`; missing attestation errors naming the flag (**BREAKING**)
-- [ ] **AC-14** `COMP-MCP-ENFORCE/report.md:8,52` corrected with a dated note; the original claim preserved, not deleted; the correction describes the **new** guarantee accurately (evidence-checked + ledgered, not lifecycle-enforced) rather than swapping one overclaim for another
+- [x] **AC-14** `COMP-MCP-ENFORCE/report.md:8,52` corrected with a dated note; the original claim preserved, not deleted; the correction describes the **new** guarantee accurately (evidence-checked + ledgered, not lifecycle-enforced) rather than swapping one overclaim for another
 - [ ] **AC-15** `addRoadmapEntry` refuses `status: 'COMPLETE'` at creation, closing `compose roadmap add --status COMPLETE` and `proposeFollowup` (paths 11, 12)
-- [ ] **AC-16** `VisionWriter.updateItemStatus` refuses `complete` in **both** transports (path 14) — but **only for build mode** (§2.3d); `fix` and `plan` items are unaffected, and a test asserts both still complete normally. The legitimate build-mode write goes through `completeItem` (AC-4b)
-- [ ] **AC-16b** Three verification tiers are distinguishable on the projection and tested: `guarded` (guard resource exists and is `complete`), `canonical-status-only` (no guard resource — legacy features and startup seeding), `document-derived` (unmanaged folders with no feature.json, `server/feature-scan.js:172,294`). A `guardHistory` error **other than** `guard_not_found` fails closed rather than downgrading a tier (§2.3b)
-- [ ] **AC-16a** Projection **repair** tooling routes through the same self-verifying seam rather than being carved out: `lib/feature-reconciler.js:161,236` (vision repair from canonical status) and `server/feature-scan.js:491` (startup scan creating items with dynamic status incl. `complete`). Tests assert both still repair correctly after AC-16 lands — this is the regression round 3 predicted (P1-6)
-- [ ] **AC-17** `roadmap migrate` retains its COMPLETE write under a named, logged exemption covering **both** branches (path 13); a **negative test** asserts a *new* COMPLETE row created without `--overwrite` is still covered by the exemption and logged, not silently bypassing (§2.7)
+- [x] **AC-16** `VisionWriter.updateItemStatus` refuses `complete` in **both** transports (path 14) — but **only for build mode** (§2.3d); `fix` and `plan` items are unaffected, and a test asserts both still complete normally. The legitimate build-mode write goes through `completeItem` (AC-4b)
+- [x] **AC-16b** Three verification tiers are distinguishable on the projection and tested: `guarded` (guard resource exists and is `complete`), `canonical-status-only` (no guard resource — legacy features and startup seeding), `document-derived` (unmanaged folders with no feature.json, `server/feature-scan.js:172,294`). A `guardHistory` error **other than** `guard_not_found` fails closed rather than downgrading a tier (§2.3b)
+- [x] **AC-16a** Projection **repair** tooling routes through the same self-verifying seam rather than being carved out: `lib/feature-reconciler.js:161,236` (vision repair from canonical status) and `server/feature-scan.js:491` (startup scan creating items with dynamic status incl. `complete`). Tests assert both still repair correctly after AC-16 lands — this is the regression round 3 predicted (P1-6)
+- [x] **AC-17** `roadmap migrate` retains its COMPLETE write under a named, logged exemption covering **both** branches (path 13); a **negative test** asserts a *new* COMPLETE row created without `--overwrite` is still covered by the exemption and logged, not silently bypassing (§2.7)
 - [ ] **AC-18** `lib/test-bootstrap.js` `_UNPARSED` no longer degrades to `true`; the gate treats it as not attested; the error names the unreadable framework and the remedy (**BREAKING**)
-- [ ] **AC-19** An **allowlist test**: a repo-wide scan of every COMPLETE/complete status write — including dynamic status values (e.g. migrate's `entry.status`) and every `persistFeatureRaw` callsite — asserting each is either the gate or an entry on an explicit allowlist justified in-file. Because `persistFeatureRaw` stays public and policy-free (Decision 7), the invariant is **allowlist-shaped, not absolute**, and the test and the shipped docs must say so. This is what makes §1.3 a property instead of a claim
-- [ ] **AC-20** No import cycle: `completion-gate` ↔ `feature-writer` ↔ `lifecycle-guard` load cleanly in both orders (test imports each entrypoint first)
+- [x] **AC-19** An **allowlist test**: a repo-wide scan of every COMPLETE/complete status write — including dynamic status values (e.g. migrate's `entry.status`) and every `persistFeatureRaw` callsite — asserting each is either the gate or an entry on an explicit allowlist justified in-file. Because `persistFeatureRaw` stays public and policy-free (Decision 7), the invariant is **allowlist-shaped, not absolute**, and the test and the shipped docs must say so. This is what makes §1.3 a property instead of a claim
+- [x] **AC-20** No import cycle: `completion-gate` ↔ `feature-writer` ↔ `lifecycle-guard` load cleanly in both orders (test imports each entrypoint first)
 - [ ] **AC-21** An explicit workspace root is threaded through capability lookup, engine + binary resolution, evidence checks, and guard registration; a test runs the gate under `--workspace` against a non-cwd root and asserts the guard registers under that root's `resourceId`
 - [ ] **AC-21a** The gate takes **two** roots: `workspaceRoot` (provider, capabilities, `resourceId`, feature.json) and `evidenceRoot` (git verification, test execution, HEAD resolution), derived from `agentCwd` (§2.6). Both appear in the AC-1 signature. A **cross-repo acceptance test** asserts the commit is verified in the agent's repo, not the project root's — this defect is invisible in the single-repo default
 - [ ] **AC-21b** `evidenceRoot` is persisted (normalized) in the v2 accumulator and restored on resume; a **cross-repo resume** test asserts a restarted build still verifies against the agent's repo rather than falling back to the project root (§2.6)

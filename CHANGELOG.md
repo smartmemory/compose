@@ -2,6 +2,75 @@
 
 ## Unreleased
 
+### COMP-COMPLETION-GATE slice 3 — the gate owns the writes; the back doors are shut
+
+After slices 1–2 the gate verified evidence and took the guarded transition,
+then handed the actual writes to `setFeatureStatus` — itself one of the
+bypasses. Slice 3 closes the loop.
+
+- **The gate performs every write** (design §2.3a): completion record → status
+  COMPLETE (`persistFeatureRaw`) → ROADMAP regen → vision projection → events.
+  Steps 1–2 abort and keep the write-ahead intent; steps 3–5 are reported as
+  `{ok:true, partial:true, failures:[…]}`, never swallowed.
+- **`setFeatureStatus` refuses `COMPLETE` unconditionally** (`COMPLETE_VIA_GATE_ONLY`)
+  — `force` and `derived` included. Closes `set_feature_status`, the
+  reconciler's derived projection, `projectFeatureStatus(phase:'complete')`,
+  and the local half of `xref-push` (it degrade-skips the refusal).
+- **`recordCompletion` delegates its completing path to the gate** (BREAKING for
+  one error shape): a refused completion throws `COMPLETION_REFUSED` and writes
+  nothing. `STATUS_FLIP_AFTER_COMPLETION_RECORDED` no longer exists — a KILLED
+  feature is refused in preflight with no record left behind. `set_status:false`
+  is unchanged (record-only).
+- **Self-verifying vision projection** (§2.3b): `server/completion-projection.js`
+  is ONE predicate (feature.json COMPLETE ∧ item bound ∧ guard complete *if a
+  resource exists*) with four transports — `POST /api/vision/items/:id/completion-projection`,
+  in-process `applyVerifiedProjection` (cockpit `/lifecycle/complete`, the
+  reconciler), `VisionWriter.completeItem` direct mode, and startup seeding.
+  Tiers stamped on the item: `guarded` / `canonical-status-only` / `document-derived`.
+  Only `not_found` means legacy; any other guard outcome fails closed.
+- **Refusals for managed build items only**: `PATCH …/items/:id {status:'complete'}`
+  → 422; `VisionWriter.updateItemStatus(…, 'complete')` refuses in both
+  transports; `POST /api/stratum/audit/:itemId` keeps the trace but no longer
+  flips status. Fix/plan items, UI items with no lifecycle, and the `compose new`
+  kickoff item (build mode, no feature.json) keep their paths.
+- **Cockpit `/lifecycle/complete` for a managed build item goes through the
+  gate** with an in-process projector (BREAKING for the best-effort contract):
+  under the guard a request without `commit_sha` is refused (422); with the
+  guard off it records a commit-less completion (the same thing
+  `compose record-completion` without a SHA does) instead of marking the item
+  complete and leaving feature.json untouched. An invalid `commit_sha` is now a
+  422 with nothing written, where it used to be `200 {partial:true}` with the
+  item shown complete and no record. `cockpit_completion_skipped` no longer
+  fires for managed build items. Unmanaged items (no feature.json) and fix/plan
+  items transition exactly as before.
+- **`roadmap xref-push` to a local sibling with `expect: COMPLETE`** is now
+  degrade-skipped (the sibling's `setFeatureStatus` refuses) instead of minting a
+  completion in the neighbouring repo. The GitHub half of path 9 and path 15
+  remain COMP-COMPLETION-GATE-REMOTE.
+- **`roadmap migrate`** keeps its COMPLETE write under a named, logged
+  exemption on both branches (AC-17).
+- **`test/completion-write-allowlist.test.js`** (AC-19): repo-wide scan of every
+  COMPLETE/complete write and `persistFeatureRaw` callsite against a two-sided,
+  justified allowlist — design §1.3 as a property, not a claim.
+- **Codex round-1 fixes** (4×P1, 1×P2): a present-but-malformed `feature.json`
+  is broken canon, not absence — the refusals still apply and the projection
+  refuses in every tier; a `vision-state` persist failure is rolled back and
+  reported (422), never a 200 that vanishes on restart; a vision projection
+  failure reaches the writer-shaped result every caller returns
+  (`partial`, `failures[]`); a managed feature with a status-less or malformed
+  `feature.json` is never seeded `document-derived`; items already complete
+  before tiers existed get stamped on the next scan.
+- **Codex round-2 fixes** (1×High, 2×Med): the tier stamp
+  (`completion_projection`) is server-owned — PATCH refuses it
+  (`PROJECTION_STAMP_READONLY`); a complete item is re-verified on every scan
+  and downgraded when its canon is later corrupted or loses status; a failed
+  lifecycle save after a successful projection is reported as partial.
+- **Fail-open fixed in `currentGuardState`**: a `SPAWN` error whose message
+  contained "not found" read as a legacy, unregistered feature. The message
+  fallback now applies only when no error code was returned.
+- `COMP-MCP-ENFORCE/report.md` corrected (AC-14) with what is true now:
+  evidence-checked + ledgered + single-doored, not lifecycle-enforced.
+
 ### Codex review of the census follow-ups (3 rounds, CLEAN)
 
 Post-hoc adversarial review of `3f94c85`/`bb3604b`/`e98ea87` found three
