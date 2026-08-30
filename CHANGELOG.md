@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Consumer merge: 3-way apply so lanes editing the same file merge
+
+- `computeWitnessChain` and `applyMerge` now apply each lane's diff with
+  `git apply --cached --3way` in a temporary index and check out the merged
+  tree. Every lane diffs against the same baseline, so lane 2's hunks carry
+  context lane 1 already touched; plain apply rejected that even when the edits
+  did not overlap (`MERGE_WITNESS_PRECOMPUTE_FAILED: patch failed:
+  test/version-check.test.js:5`, 2026-08-30). Adjacent edits merge; a genuine
+  overlap still blocks with the working tree untouched.
+
+
 ### Census follow-ups: shadowed stratum warning, usd provenance, merge-loop kill
 
 - `resolveStratumBin` warns once when the installed `@smartmemory/stratum`
