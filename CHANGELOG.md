@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Codex review of the census follow-ups (3 rounds, CLEAN)
+
+Post-hoc adversarial review of `3f94c85`/`bb3604b`/`e98ea87` found three
+real defects; all fixed here.
+
+- **Merge rollback could delete a never-snapshotted ignored file** (high). A
+  lane that un-ignores `scratch/` made `scratch/token.json` visible; the
+  clean-based restore then deleted it under the new rules. `applyMerge` now
+  checks out and rolls back by two-tree `read-tree -m -u` from the last tree
+  it actually WROTE (`checkoutTreeDelta`), never by `git clean` and never from
+  a fresh snapshot. Golden test reproduces the production shape (lane diff
+  captured before the target-only file exists).
+- **Repeated-merge-failure kill pointed at `--resume`**, which refuses killed
+  builds. The rationale now says `--fresh`.
+- **Shadow warning named the MCP override for the CLI bin**; it now names the
+  per-kind variable (`COMPOSE_STRATUM_TS_CLI_BIN` / `_MCP_BIN`).
+- Envelope `schema_version` 0.2.8 accepted (`_agent_run` envelopes may omit
+  `flow_id`; the client stamps its correlation id before validation), and usd
+  provenance is read from the result level (`ConnectorResult.usdSource`).
+
+
 ### Consumer merge: 3-way apply so lanes editing the same file merge
 
 - `computeWitnessChain` and `applyMerge` now apply each lane's diff with

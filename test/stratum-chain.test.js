@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import {
   LIVE_STRATUM_TS_MCP_BIN,
   healStratumWiring,
+  resolveStratumBin,
   resolveStratumMcpConnection,
 } from '../lib/stratum-engine.js';
 
@@ -174,6 +175,25 @@ test('warns once when the installed dependency shadows a sibling checkout at ano
   assert.match(warnings[0], /installed @smartmemory\/stratum 0\.3\.3/);
   assert.match(warnings[0], /sibling checkout .* is 0\.3\.4/);
   assert.match(warnings[0], /COMPOSE_STRATUM_TS_MCP_BIN/);
+});
+
+test('the shadow warning names the CLI override for the cli bin', (t) => {
+  const root = fixture(t, 'compose-stratum-shadow-cli-');
+  installStubStratum(root);
+  const installedPackageJson = join(root, 'node_modules', '@smartmemory', 'stratum', 'package.json');
+  writeFileSync(installedPackageJson, JSON.stringify({
+    ...JSON.parse(readFileSync(installedPackageJson, 'utf8')), version: '0.3.3',
+  }));
+  const siblingPackageJson = join(root, 'sibling', 'ts', 'package.json');
+  mkdirSync(dirname(siblingPackageJson), { recursive: true });
+  writeFileSync(siblingPackageJson, JSON.stringify({ name: '@smartmemory/stratum', version: '0.3.4' }));
+  const warnings = [];
+  resolveStratumBin('cli', root, {
+    env: {}, requireResolve: resolverFrom(root), siblingPackageJson, warn: (m) => warnings.push(m),
+  });
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /COMPOSE_STRATUM_TS_CLI_BIN/);
+  assert.doesNotMatch(warnings[0], /COMPOSE_STRATUM_TS_MCP_BIN/);
 });
 
 test('no shadow warning when installed and sibling versions match', (t) => {

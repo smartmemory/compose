@@ -124,7 +124,8 @@ describe('decideMergeRepairOutcome', () => {
     assert.equal(decision.outcome, 'kill');
     assert.equal(decision.repeated, true);
     assert.match(decision.rationale, /identical to the previous round/);
-    assert.match(decision.rationale, /--resume/);
+    assert.match(decision.rationale, /--fresh/);
+    assert.doesNotMatch(decision.rationale, /--resume/);
   });
 
   it('keeps kill as kill when the gate has no revise route', () => {
