@@ -1231,6 +1231,20 @@ async function captureAddFileDiff(cwd, relPath, content) {
   return diff;
 }
 
+/** Diff of an in-place edit to an already-committed file, leaving the tree untouched. */
+async function captureEditDiff(cwd, relPath, edit) {
+  const original = await readFile(join(cwd, relPath), 'utf8');
+  await writeFile(join(cwd, relPath), edit(original));
+  const indexPath = join(tmpdir(), `compose-c5-index-${process.pid}-${Date.now()}-${Math.random()}`);
+  const env = { ...process.env, GIT_INDEX_FILE: indexPath };
+  execSync('git read-tree HEAD', { cwd, env, stdio: 'pipe' });
+  execSync('git add -A', { cwd, env, stdio: 'pipe' });
+  const diff = execSync('git diff --cached --binary HEAD --', { cwd, env, encoding: 'utf8', stdio: 'pipe' });
+  execFileSync('rm', ['-f', indexPath]);
+  await writeFile(join(cwd, relPath), original);
+  return diff;
+}
+
 async function journalPathOf(scenario) {
   const children = await readdir(scenario.artifactRoot, { withFileTypes: true });
   const runDirs = children.filter((entry) => entry.isDirectory());
@@ -2840,6 +2854,101 @@ describe('consumer merge — no-op workers', () => {
       () => prepareWith(scenario, opts, [issuance(0, 'tok-null', null)]),
       (error) => error?.code === 'ACCEPTED_ARTIFACTS_INCOMPLETE',
       'a never-captured diff is still a hard failure',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Same-file lanes. Every lane diffs against the same baseline, so lane 2's
+// hunks carry baseline context that lane 1 may have touched. Plain `git apply`
+// rejected that even when the edits did not overlap — observed 2026-08-30 as
+// `MERGE_WITNESS_PRECOMPUTE_FAILED: patch failed: test/version-check.test.js:5`
+// looping for four paid revise rounds. Three-way apply merges adjacent edits;
+// a genuine overlap must still block.
+// ---------------------------------------------------------------------------
+
+describe('consumer merge — lanes editing the same file', () => {
+  const SHARED = 'docs/features/TS-CONSUMER/shared.txt';
+  const LINES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+
+  async function scenarioWithSharedFile(t, slug) {
+    const scenario = await setupScenario(t, slug);
+    await writeFile(join(scenario.workspace, SHARED), `${LINES.join('\n')}\n`);
+    git(scenario.workspace, ['add', '-A']);
+    git(scenario.workspace, ['commit', '-qm', 'shared file']);
+    return scenario;
+  }
+
+  async function prepareWith(scenario, opts, issuances) {
+    new ConsumerFanoutArtifacts(opts);
+    const journalPath = await journalPathOf(scenario);
+    const seeded = JSON.parse(await readFile(journalPath, 'utf8'));
+    seeded.revisionDigest = 'rev-shared';
+    seeded.specDigest = 'spec-shared';
+    seeded.issuances = issuances;
+    await writeFile(journalPath, `${JSON.stringify(seeded, null, 2)}\n`);
+    const audit = {
+      steps: {
+        fan: {
+          fanout: {
+            items: issuances.map((i) => ({
+              status: 'succeeded', generation: i.generation, acceptedDispatchToken: i.dispatchToken,
+            })),
+          },
+        },
+      },
+    };
+    const artifacts = new ConsumerFanoutArtifacts(opts);
+    return {
+      artifacts,
+      prepared: artifacts.prepareMerge({ gateStepId: 'merge', gateToken: 'gt-shared', fanoutStepId: 'fan', audit }),
+    };
+  }
+
+  const issuance = (index, token, diff) => ({
+    dispatchToken: token, scopedId: `fan/${index}`, fanoutStepId: 'fan', itemIndex: index,
+    generation: 1, stage: 0, attempt: 1, isolation: 'worktree',
+    state: 'accepted', diff, hadCumulativeDiff: true, diffDigest: `digest-${index}`,
+  });
+
+  test('adjacent (non-overlapping) edits to one file prepare AND land via three-way apply', async (t) => {
+    const scenario = await scenarioWithSharedFile(t, 'shared-adjacent');
+    const opts = { runId: 'shared-adjacent-run', targetCwd: scenario.workspace, artifactRoot: scenario.artifactRoot };
+    // Lane 0 edits line b, lane 1 edits line d: two lines apart, so lane 1's
+    // context includes lane 0's change once lane 0 has landed.
+    const diff0 = await captureEditDiff(scenario.workspace, SHARED, (text) => text.replace(/^b$/m, 'B'));
+    const diff1 = await captureEditDiff(scenario.workspace, SHARED, (text) => text.replace(/^d$/m, 'D'));
+
+    const { artifacts, prepared } = await prepareWith(scenario, opts, [
+      issuance(0, 'tok-b', diff0),
+      issuance(1, 'tok-d', diff1),
+    ]);
+    assert.equal(prepared.state, 'prepared', `expected prepared, got ${prepared.failure ?? prepared.state}`);
+    assert.equal(prepared.witnessChain.length, 3, 'baseline + two applied lanes');
+    assert.equal(new Set(prepared.witnessChain).size, 3);
+
+    await artifacts.applyMerge(prepared);
+    const landed = await readFile(join(scenario.workspace, SHARED), 'utf8');
+    assert.equal(landed, 'a\nB\nc\nD\ne\nf\ng\nh\n', 'both lanes landed in the working tree');
+  });
+
+  test('a genuine overlap on one line still blocks the merge', async (t) => {
+    const scenario = await scenarioWithSharedFile(t, 'shared-conflict');
+    const opts = { runId: 'shared-conflict-run', targetCwd: scenario.workspace, artifactRoot: scenario.artifactRoot };
+    const diff0 = await captureEditDiff(scenario.workspace, SHARED, (text) => text.replace(/^b$/m, 'B'));
+    const diff1 = await captureEditDiff(scenario.workspace, SHARED, (text) => text.replace(/^b$/m, 'X'));
+
+    await assert.rejects(
+      prepareWith(scenario, opts, [issuance(0, 'tok-b', diff0), issuance(1, 'tok-x', diff1)]),
+      (error) => {
+        assert.equal(error.code, 'MERGE_WITNESS_PRECOMPUTE_FAILED');
+        return true;
+      },
+    );
+    assert.equal(
+      await readFile(join(scenario.workspace, SHARED), 'utf8'),
+      `${LINES.join('\n')}\n`,
+      'the working tree is untouched by a blocked precompute',
     );
   });
 });
