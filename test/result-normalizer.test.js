@@ -31,7 +31,7 @@ const {
  * @param {Error}                              [cfg.error]      Throw from agentRun.
  * @param {object[]}                           [cfg.events]     BuildStreamEvent envelopes to fire on subscribers.
  */
-function fakeStratum({ text = '', error = null, events = [] } = {}) {
+function fakeStratum({ text = '', error = null, events = [], result = null } = {}) {
   const subs = new Map();
   const recordedCalls = { agentRun: [], cancel: [] };
   return {
@@ -57,7 +57,7 @@ function fakeStratum({ text = '', error = null, events = [] } = {}) {
       }
       if (error) throw error;
       const finalText = typeof text === 'function' ? text(prompt) : text;
-      return { text: finalText, correlation_id: correlationId };
+      return { text: finalText, correlation_id: correlationId, ...(result ?? {}) };
     },
     async cancelAgentRun(correlationId) {
       recordedCalls.cancel.push(correlationId);
@@ -233,6 +233,51 @@ test('aggregates step_usage envelopes into usage totals', async () => {
   assert.equal(usage.output_tokens, 5);
   assert.equal(usage.model, 'claude-sonnet-4-6');
   assert.equal(usage.cost_usd, 0.001);
+});
+
+// STRAT-USAGE-SPLIT: before surface 16 the TS envelope carried only an
+// aggregate ({usd?, tokens, ms}) and the fold filed it all as output —
+// input_tokens read 0 on every record ever written. The envelope now carries
+// the true detail beside usage; the fold must adopt it.
+test('adopts the TS envelope split: input tokens stop reading zero', async () => {
+  const stratum = fakeStratum({
+    text: 'ok',
+    result: {
+      usage: { tokens: 436736, usd: 0.697, ms: 1200 },
+      split: { input: 430000, output: 6736, cacheRead: 400000, cacheCreation: 20000 },
+      usdSource: 'reported',
+      telemetry: { durationMs: 1200, model: 'claude-sonnet-4-6' },
+    },
+  });
+  const { usage } = await runAndNormalize(
+    null,
+    'p',
+    { step_id: 's', output_fields: {} },
+    { stratum },
+  );
+  assert.equal(usage.input_tokens, 430000, 'input must come from the split, not read 0');
+  assert.equal(usage.output_tokens, 6736, 'output must be true output, not the aggregate');
+  assert.equal(usage.cache_read_input_tokens, 400000);
+  assert.equal(usage.cache_creation_input_tokens, 20000);
+  assert.equal(usage.cost_usd, 0.697);
+});
+
+test('split-less legacy envelope still folds the aggregate (as output, for continuity)', async () => {
+  const stratum = fakeStratum({
+    text: 'ok',
+    result: {
+      usage: { tokens: 100, ms: 10 },
+      telemetry: { durationMs: 10, model: 'm' },
+    },
+  });
+  const { usage } = await runAndNormalize(
+    null,
+    'p',
+    { step_id: 's', output_fields: {} },
+    { stratum },
+  );
+  assert.equal(usage.input_tokens, 0);
+  assert.equal(usage.output_tokens, 100);
 });
 
 test('refuses to run without opts.stratum', async () => {

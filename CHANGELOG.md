@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### STRAT-USAGE-SPLIT — stop filing input tokens as output
+
+The TS `agent_run` envelope now carries the connector-reported token detail
+(`split: {input, output, cacheRead?, cacheCreation?}`) beside its
+Budget-shaped `usage` (stratum surface 16). Compose adopts it instead of
+reconstructing:
+
+- `result-normalizer.js`: the D2(b) fold takes input/output/cache from
+  `runResult.split`; only a split-less (pre-surface-16) envelope falls back
+  to aggregate-as-output. `usageRecordFromRaw` accepts a split and prefers it.
+- `stratum-mcp-client.js` `runAgentText`: usage records prefer the envelope
+  split over the `input = 0, output = tokens` reconstruction.
+- Receipts sent via `stratum_usage_report` (build.js) were already built from
+  these records' `input_tokens`/`output_tokens` — they now carry real values.
+
+**Charts will move**: `output_tokens` previously contained the whole
+aggregate; it drops to true output, and `input_tokens` stops reading zero.
+No backfill is possible — records written before this fix stay mislabeled
+(input was never captured).
+
 ### COMP-COMPLETION-GATE slice 3 — the gate owns the writes; the back doors are shut
 
 After slices 1–2 the gate verified evidence and took the guarded transition,
