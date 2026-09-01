@@ -64,21 +64,44 @@ if (projectConfig.capabilities.stratum) {
 }
 
 // Handle unexpected errors — fatal startup errors exit (supervisor retries),
-// runtime errors keep the process alive to preserve PTY sessions
+// runtime errors keep the process alive to preserve PTY sessions.
+//
+// stdio death is fatal by design: when the parent process dies, stdout/stderr
+// become dead sockets and every console.* write throws EPIPE. Logging from the
+// uncaughtException handler then throws again, which re-enters the handler via
+// the stream's error emission — an infinite setImmediate loop pinning a core
+// (observed 2026-09-01: 2 days at 100% CPU as an orphan). So: stream errors on
+// stdio exit immediately, and every log in an error/signal path is guarded.
+const isDeadStdio = (err) =>
+  err && (err.code === 'EPIPE' || err.code === 'ERR_STREAM_DESTROYED' || err.code === 'ERR_STREAM_WRITE_AFTER_END');
+const safeLog = (...args) => {
+  try {
+    console.error(...args);
+  } catch {
+    process.exit(0); // stdio is gone — parent died, nothing left to serve logs to
+  }
+};
+process.stdout.on('error', (err) => {
+  if (isDeadStdio(err)) process.exit(0);
+});
+process.stderr.on('error', (err) => {
+  if (isDeadStdio(err)) process.exit(0);
+});
 let serverListening = false;
 process.on('uncaughtException', (err) => {
+  if (isDeadStdio(err)) process.exit(0);
   if (!serverListening && err.code === 'EADDRINUSE') {
-    console.error(`[compose] Port in use, exiting for supervisor retry: ${err.message}`);
+    safeLog(`[compose] Port in use, exiting for supervisor retry: ${err.message}`);
     process.exit(1);
   }
-  console.error('[compose] Uncaught exception (process kept alive):', err.message);
-  console.error(err.stack);
+  safeLog('[compose] Uncaught exception (process kept alive):', err.message);
+  safeLog(err.stack);
 });
 process.on('unhandledRejection', (reason) => {
-  console.error('[compose] Unhandled rejection (process kept alive):', reason);
+  safeLog('[compose] Unhandled rejection (process kept alive):', reason);
 });
 process.on('SIGTERM', () => {
-  console.log('[compose] SIGTERM received, shutting down gracefully');
+  safeLog('[compose] SIGTERM received, shutting down gracefully');
   process.exit(0);
 });
 
