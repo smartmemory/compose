@@ -1,0 +1,17 @@
+{
+  "code": "COMP-GUARD-ONE-TAP",
+  "description": "One-tap guard authorization: compose generates/enrols the signing key, builds and signs upgrade descriptors on demand inside the gate; the human's only act is a system confirm dialog (ssh-agent confirm mode or security key). Deletes the six manual operator steps from COMP-LIFECYCLE-BACKFILL. Owner decision 2026-09-06: never an agent-held usable key.",
+  "status": "PLANNED",
+  "phase": "Backlog",
+  "created": "2026-09-05",
+  "updated": "2026-09-05",
+  "complexity": "M",
+  "position": 8,
+  "parent": "COMP-LIFECYCLE-BACKFILL",
+  "tags": [
+    "guard",
+    "authz",
+    "operator-ux"
+  ],
+  "impact": "high"
+}
