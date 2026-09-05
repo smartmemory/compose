@@ -1,0 +1,322 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://forge.local/contracts/lifecycle-backfill.schema.json",
+  "title": "COMP-LIFECYCLE-BACKFILL — backfill request, occurrence, intent and batch record",
+  "version": "1.0.0",
+  "_source": "docs/features/COMP-LIFECYCLE-BACKFILL/design.md",
+  "_roadmap": "COMP-LIFECYCLE-BACKFILL",
+  "_changelog": {
+    "1.0.0": "Initial: BackfillRequest, BackfilledOccurrence, BackfillIntent, BackfillRecord."
+  },
+
+  "definitions": {
+
+    "EvidenceRef": {
+      "type": "object",
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["commit", "path"] },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "40-char lowercase hex SHA when kind=commit; repo-relative regular file path when kind=path."
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "ResolvedEvidence": {
+      "description": "EvidenceRef after server resolution. verifiedAt and observedTime are server-written and MUST NOT be caller-supplied.",
+      "type": "object",
+      "required": ["kind", "ref", "verifiedAt", "observedTime", "observedEpochMs"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["commit", "path"] },
+        "ref": { "type": "string", "minLength": 1 },
+        "verifiedAt": { "type": "string", "format": "date-time" },
+        "observedTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Commit AUTHOR date (git show -s --format=%aI, which carries the committer's UTC OFFSET) or file mtime."
+        },
+        "observedEpochMs": {
+          "type": "integer",
+          "description": "BP-8: the epoch form, computed once at resolution. Every ordering and interval comparison uses THIS, never the string."
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "BackfillRequest": {
+      "type": "object",
+      "required": ["feature_code", "commit_sha", "tests_pass", "files_changed", "reason", "occurrences"],
+      "properties": {
+        "feature_code": { "type": "string", "minLength": 1 },
+        "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "tests_pass": {
+          "type": "boolean",
+          "description": "Ignored when guard.testCommand is configured and exits 0; otherwise must be true. No silent default."
+        },
+        "files_changed": { "type": "array", "items": { "type": "string" } },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Mandatory prose. Why this work skipped the phase walk."
+        },
+        "notes": { "type": "string" },
+        "occurrences": {
+          "type": "array",
+          "minItems": 0,
+          "items": { "$ref": "#/definitions/RequestedOccurrence" }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "RequestedOccurrence": {
+      "type": "object",
+      "required": ["phase", "evidence"],
+      "properties": {
+        "phase": {
+          "type": "string",
+          "minLength": 1,
+          "description": "BP-9: MUST be a node of the item's mode graph. An unknown phase is refused, never accepted as out-of-graph."
+        },
+        "evidence": { "$ref": "#/definitions/EvidenceRef" }
+      },
+      "additionalProperties": false
+    },
+
+    "StoredHistoryEntry": {
+      "description": "R3-3: an entry that is ALREADY on disk in lifecycle.phaseHistory[]. appendPhaseHistory writes exactly eight fields and nothing else, and every live entry written before this feature — including the lifecycle genesis record — carries no origin, recordedAt, confidence, episode or evidence. The merge preserves those records byte-for-byte, so the stored-history schema MUST accept them. The backfill-only fields are optional here precisely so an entry this feature wrote validates under this branch too.",
+      "type": "object",
+      "required": ["phase", "step", "enteredAt", "exitedAt", "from", "to", "outcome", "timestamp"],
+      "properties": {
+        "phase": { "type": "string" },
+        "step": { "type": "string" },
+        "enteredAt": { "type": "string", "format": "date-time" },
+        "exitedAt": { "type": ["string", "null"], "format": "date-time" },
+        "from": { "type": ["string", "null"] },
+        "to": { "type": "string" },
+        "outcome": { "type": ["string", "null"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "recordedAt": { "type": "string", "format": "date-time" },
+        "origin": { "type": "string", "enum": ["live", "backfill"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "episode": { "type": "integer", "minimum": 1 },
+        "operation_id": { "type": "string", "format": "uuid" },
+        "evidence": { "$ref": "#/definitions/ResolvedEvidence" }
+      },
+      "additionalProperties": false
+    },
+
+    "BackfilledOccurrence": {
+      "description": "BP-9: the FULL entry this feature CONSTRUCTS and appends to lifecycle.phaseHistory[]. R3-3: this is the constructor's contract, not the store's — it governs `occurrences` and `terminal_occurrence`, which the gate builds field by field in §5.5, and never a record read off disk.",
+      "type": "object",
+      "required": ["phase", "step", "enteredAt", "exitedAt", "from", "to", "outcome", "timestamp", "recordedAt", "origin", "confidence", "evidence", "episode"],
+      "properties": {
+        "phase": { "type": "string" },
+        "step": { "type": "string", "description": "Equals phase, as appendPhaseHistory writes it." },
+        "enteredAt": { "type": "string", "format": "date-time", "description": "Valid-time start = evidence.observedTime." },
+        "exitedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Recomputed by the merge from valid time: the next occurrence's enteredAt, or null when last."
+        },
+        "from": {
+          "type": ["string", "null"],
+          "description": "The phase of the preceding occurrence in the merged order, or null when first."
+        },
+        "to": { "type": "string", "description": "Equals phase." },
+        "outcome": { "type": ["string", "null"], "description": "'backfilled' for a backfilled occurrence." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Equals enteredAt." },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Transaction time, minted ONCE and persisted in the intent (BP-6). Never re-stamped on a re-drive."
+        },
+        "origin": { "type": "string", "enum": ["live", "backfill"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "episode": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1 = pre-adoption (enteredAt < lifecycle.startedAt), 2 = at or after it."
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Present on the TERMINAL occurrence only (BP-6), so a re-drive can detect it and skip the append."
+        },
+        "evidence": { "$ref": "#/definitions/ResolvedEvidence" }
+      },
+      "additionalProperties": false
+    },
+
+    "BackfillIntent": {
+      "description": "BP-3: the SINGLE recovery DTO, at .compose/data/completion-intents/<CODE>.json. Everything recovery needs is here; the batch record is a marker only.",
+      "type": "object",
+      "required": ["operation_id", "feature_code", "commit_sha", "files_changed", "notes",
+                   "tests_attested", "started_at", "intent", "request_digest", "reason", "mode",
+                   "occurrences", "terminal_occurrence", "write_plan", "envelope", "guarded",
+                   "guard_initial", "upgrade", "policy_checksum"],
+      "comment": "R3-4: notes, guard_initial, upgrade and policy_checksum are REQUIRED although all four are nullable. Every one of them is a write input §5.10 consumes; making presence mandatory means a resumed attempt can tell 'the operation had none' from 'the intent did not record it'.",
+      "properties": {
+        "operation_id": { "type": "string", "format": "uuid" },
+        "feature_code": { "type": "string" },
+        "commit_sha": { "type": ["string", "null"] },
+        "tests_attested": { "type": "boolean" },
+        "started_at": { "type": "string", "format": "date-time" },
+        "intent": { "type": "string", "const": "backfill" },
+        "request_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "reason": { "type": "string" },
+        "mode": { "type": "string" },
+        "guarded": {
+          "type": "boolean",
+          "description": "R2B-4: the EFFECTIVE guard flag for the WHOLE operation, captured once."
+        },
+        "files_changed": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "R2B-3: a recordCompletion argument, so it must survive to a resume."
+        },
+        "notes": { "type": ["string", "null"] },
+        "guard_initial": {
+          "type": ["object", "null"],
+          "description": "R2B-3: copied onto the batch record; recovery must not recompute it."
+        },
+        "upgrade": {
+          "type": ["object", "null"],
+          "description": "R2B-3: the descriptor stamp for the batch record."
+        },
+        "write_plan": {
+          "description": "R2B-3: the VALIDATED write plan from §5.5. anyOf, not oneOf: a backfilled entry satisfies BOTH branches by construction.",
+          "type": "object",
+          "required": ["history", "written", "skipped"],
+          "properties": {
+            "history": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  { "$ref": "#/definitions/BackfilledOccurrence" },
+                  { "$ref": "#/definitions/StoredHistoryEntry" }
+                ]
+              }
+            },
+            "written": { "type": "array", "items": { "type": "string" } },
+            "skipped": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        },
+        "occurrences": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/BackfilledOccurrence" },
+          "description": "BP-4/BP-6: the MATERIALISED, VALIDATED, stably-timestamped occurrences, persisted before the transition."
+        },
+        "terminal_occurrence": { "$ref": "#/definitions/BackfilledOccurrence" },
+        "policy_checksum": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "BP-1: the checksum from `guard policy` AFTER any upgrade and BEFORE the transition. Null when guarded is false."
+        },
+        "envelope": {
+          "type": "object",
+          "required": ["from", "to", "artifacts", "resolved_by", "idempotency_key", "modified_files"],
+          "properties": {
+            "from": { "type": "string" },
+            "to": { "type": "string", "const": "complete_backfilled" },
+            "artifacts": { "type": "object" },
+            "modified_files": { "type": "array", "items": { "type": "string" } },
+            "resolved_by": { "type": "string", "const": "agent" },
+            "idempotency_key": { "type": "string", "format": "uuid" },
+            "expected_policy_checksum": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "R2B-7/R3-2/R4-1: ALWAYS present and non-null on a guarded operation, and EQUAL to the intent's policy_checksum. The equality is enforced here by an Ajv $data reference (validators must be constructed with {$data:true}), because the two fields cannot disagree without a recovery replaying under a policy the plan was never validated against.",
+              "const": { "$data": "2/policy_checksum" }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "description": "R4-1: a GUARDED intent must carry a real checksum on both the intent and the envelope. Making them merely optional let an intent with neither validate, which is exactly the shape that reopens the pre-transition window.",
+          "if": {
+            "required": ["guarded"],
+            "properties": { "guarded": { "const": true } }
+          },
+          "then": {
+            "properties": {
+              "policy_checksum": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+              "envelope": { "required": ["expected_policy_checksum"] }
+            }
+          }
+        },
+        {
+          "description": "An UNGUARDED intent has no policy to pin, so it must carry neither.",
+          "if": {
+            "required": ["guarded"],
+            "properties": { "guarded": { "const": false } }
+          },
+          "then": {
+            "properties": {
+              "policy_checksum": { "type": "null" },
+              "envelope": { "not": { "required": ["expected_policy_checksum"] } }
+            }
+          }
+        }
+      ]
+    },
+
+    "BackfillRecord": {
+      "description": "BP-3: one entry in lifecycle.backfills[], keyed by operation_id. A MARKER, not a recovery source.",
+      "type": "object",
+      "required": ["operation_id", "request_digest", "state", "reason", "recordedAt", "completionEvidence", "actor"],
+      "properties": {
+        "operation_id": { "type": "string", "format": "uuid" },
+        "request_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "state": { "type": "string", "enum": ["pending", "finalized"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "recordedAt": { "type": "string", "format": "date-time" },
+        "finalizedAt": { "type": ["string", "null"], "format": "date-time" },
+        "completionEvidence": {
+          "type": "object",
+          "required": ["commit_sha", "tests_attested"],
+          "properties": {
+            "commit_sha": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
+            "tests_attested": { "type": "boolean" },
+            "verified_at": { "type": "string", "format": "date-time" }
+          },
+          "additionalProperties": false
+        },
+        "guardRef": { "type": ["string", "null"] },
+        "guard_initial": {
+          "type": ["object", "null"],
+          "required": ["registered", "lifecycle_phase"],
+          "properties": {
+            "registered": { "type": "string" },
+            "lifecycle_phase": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "upgrade": {
+          "type": ["object", "null"],
+          "required": ["descriptor_id", "status"],
+          "properties": {
+            "descriptor_id": { "type": "string" },
+            "status": { "type": "string", "enum": ["applied", "unchanged"] },
+            "ledger_ref": { "type": ["string", "null"] }
+          },
+          "additionalProperties": false
+        },
+        "actor": { "type": "string", "description": "resolved_by plus the transport, e.g. 'agent:rest'." },
+        "occurrenceKeys": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "phase + U+001F + evidence.ref for each occurrence this operation wrote. Uses UNIT SEPARATOR, never a NUL byte."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
