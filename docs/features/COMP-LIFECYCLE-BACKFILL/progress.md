@@ -1,7 +1,7 @@
 # COMP-LIFECYCLE-BACKFILL — progress ledger (session 2026-09-05)
 
 Stratum run for this lifecycle: runId `9ed5acaf-cf66-42e8-a23b-be70a8bb14d3` (steps write_design DONE,
-write_blueprint READY dispatchToken `ff97e416-04ed-4008-a952-cb3cad1f6baf`, implement pending).
+write_blueprint DONE 2026-09-06, implement READY dispatchToken `e94162a0-6e11-4234-b310-378192744354`).
 
 ## Done
 - Roadmap reconciliation + completion-gate resolved_by fix: compose `d459846`.
@@ -21,8 +21,18 @@ write_blueprint READY dispatchToken `ff97e416-04ed-4008-a952-cb3cad1f6baf`, impl
   Reviewer executed §7.1 dep resolution from stratum/ts: works. GATE CLOSED (18→13→8→2).
   `reviews/blueprint-r4-2026-09-05.md`.
 
+- S1 SHIPPED (Codex terra impl `870e3206969f`, review `c65530d8f566`: 3/3 confirmed + fixed by controller,
+  `reviews/impl-s1-r1-2026-09-06.md`). Targeted set 11 files green (see commit). Seam cross-check
+  derive∘project == buildPhaseGraph for all 4 modes. Live `compose guard descriptors` → 0 (correct; all 3
+  real registered features terminal, 32 registered ids are test fixtures).
+
 ## In flight
-- `stratum_step_done` write_blueprint → S1 dispatch (Codex terra/high, workspace-write) per plan.md Task 1.
+- S2 → Opus high (gate intent + valid-time history + golden flows) per plan.md Task 2.
+
+## Follow-ups (outside this feature)
+- compose test suites pollute the real `~/.stratum/guards` with fixture registrations (32 ids under this
+  workspace's hash). Run them with `HOME` → temp dir. Falsifier: `ls ~/.stratum/guards | wc -l` stops growing
+  after a `CI=1 npm test`.
 
 ## Then
 - plan.md (ordered tasks from the blueprint File Plan, S1→S2→S3).

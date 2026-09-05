@@ -24,12 +24,14 @@ import { artifactKeysForMode } from '../server/artifact-manager.js';
 test('GOLDEN build phase graph is exactly the legacy graph', () => {
   const g = buildPhaseGraph('build');
   // forward edges
-  assert.deepEqual(g.explore_design.filter((x) => x !== 'killed'), ['prd', 'architecture', 'blueprint']);
-  assert.deepEqual(g.docs.filter((x) => x !== 'killed'), ['ship']);
+  assert.deepEqual(g.explore_design.filter((x) => x !== 'killed' && x !== 'complete_backfilled'), ['prd', 'architecture', 'blueprint']);
+  assert.deepEqual(g.docs.filter((x) => x !== 'killed' && x !== 'complete_backfilled'), ['ship']);
   // the completion edge + kill edges + terminal sinks
   assert.ok(g.ship.includes('complete'));
   assert.ok(g.blueprint.includes('killed'));
+  assert.ok(g.explore_design.includes('complete_backfilled'));
   assert.deepEqual(g.complete, []);
+  assert.deepEqual(g.complete_backfilled, []);
   assert.deepEqual(g.killed, []);
   // no-arg call (legacy default) is identical
   assert.deepEqual(buildPhaseGraph(), g);
@@ -58,7 +60,7 @@ test('a 4th mode is a DATA-ONLY change — register / assess / project, then rem
   LIFECYCLE_MODES.demo = {
     transitions: { start: ['done'], done: [] },
     skippable: [],
-    terminal: ['complete', 'killed'],
+    terminal: ['complete', 'killed', 'complete_backfilled'],
     genesis: 'start',
     completablePhase: 'done',
     phaseArtifacts: ['design.md'],

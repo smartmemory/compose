@@ -191,9 +191,12 @@ async function runMutation(args) {
  * @param {number}   timeoutMs
  * @returns {Promise<{ stdout: string, stderr: string, code: number }>}
  */
-function spawnStratumStdin(args, inputJson, timeoutMs, bin) {
+function spawnStratumStdin(args, inputJson, timeoutMs, bin, extraEnv) {
   return new Promise((resolve) => {
-    const proc = _execFile(bin, args, { timeout: timeoutMs }, (err, out, err2) => {
+    const proc = _execFile(bin, args, {
+      timeout: timeoutMs,
+      ...(extraEnv ? { env: { ...process.env, ...extraEnv } } : {}),
+    }, (err, out, err2) => {
       resolve(_spawnResult(bin, err, out, err2));
     });
     // Same both-paths-settle-identically contract as spawnStratum.
@@ -219,8 +222,8 @@ function spawnStratumStdin(args, inputJson, timeoutMs, bin) {
  *
  * @returns {Promise<any>} parsed JSON result or { error }
  */
-async function runGuard(action, kwargs, timeoutMs = MUTATION_TIMEOUT_MS) {
-  const result = await spawnStratumStdin(['guard', action], JSON.stringify(kwargs), timeoutMs, flowGateBin());
+async function runGuard(action, kwargs, timeoutMs = MUTATION_TIMEOUT_MS, extraEnv) {
+  const result = await spawnStratumStdin(['guard', action], JSON.stringify(kwargs), timeoutMs, flowGateBin(), extraEnv);
 
   if (result.code === -1) {
     return { error: { code: 'TIMEOUT', message: 'Stratum guard timed out', detail: '' } };
@@ -346,7 +349,7 @@ export async function guardRegister({ resourceId, graph, edgePredicates, initial
  * predicates verify server-side. A refusal is a normal result (status:"refused").
  * @returns {Promise<{status:string,verdict:object,ledger_ref:string,current_state:string}|ErrorResult>}
  */
-export async function guardTransition({ resourceId, fromState, toState, artifacts, modifiedFiles, idempotencyKey, resolvedBy }) {
+export async function guardTransition({ resourceId, fromState, toState, artifacts, modifiedFiles, idempotencyKey, expectedPolicyChecksum, resolvedBy }) {
   return runGuard('transition', _compact({
     resource_id: resourceId,
     from_state: fromState,
@@ -354,6 +357,7 @@ export async function guardTransition({ resourceId, fromState, toState, artifact
     artifacts,
     modified_files: modifiedFiles,
     idempotency_key: idempotencyKey,
+    expected_policy_checksum: expectedPolicyChecksum,
     resolved_by: resolvedBy,
   }));
 }
@@ -381,4 +385,31 @@ export async function guardOverride({ resourceId, fromState, toState, overrideTo
  */
 export async function guardHistory(resourceId) {
   return runGuard('history', { resource_id: resourceId }, QUERY_TIMEOUT_MS);
+}
+
+/** Read an immutable guard policy for compatibility and upgrade decisions. */
+export async function guardPolicy(resourceId) {
+  return runGuard('policy', { resource_id: resourceId }, QUERY_TIMEOUT_MS);
+}
+
+/** Apply a signed, server-owned guard upgrade descriptor. */
+export async function guardApplyUpgrade({ resourceId, descriptorId, descriptorsPath }) {
+  return runGuard('apply-upgrade', {
+    resource_id: resourceId,
+    descriptor_id: descriptorId,
+  }, MUTATION_TIMEOUT_MS, {
+    STRATUM_GUARD_UPGRADE_DESCRIPTORS: descriptorsPath,
+  });
+}
+
+/** Compute stratum's canonical transition payload digest without changing state. */
+export async function guardDigest({ fromState, toState, artifacts, modifiedFiles, resolvedBy, policyChecksum }) {
+  return runGuard('digest', {
+    from_state: fromState,
+    to_state: toState,
+    artifacts,
+    modified_files: modifiedFiles,
+    resolved_by: resolvedBy,
+    policy_checksum: policyChecksum,
+  }, QUERY_TIMEOUT_MS);
 }

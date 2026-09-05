@@ -459,10 +459,14 @@ describe('writer unit coverage', () => {
     // (unreachable through the writer — the edge table refuses them first).
     const surplus = [...registered].filter((e) => !legal.has(e)).sort();
     assert.deepEqual(surplus, [
+      'inconclusive→complete_backfilled',
       'inconclusive→killed',
+      'open→complete_backfilled',
       'open→killed',
       'resolved→complete',
+      'resolved→complete_backfilled',
       'resolved→killed',
+      'under_test→complete_backfilled',
       'under_test→killed',
     ]);
   });

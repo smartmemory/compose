@@ -8,26 +8,33 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SERVER_DIR = `${REPO_ROOT}/server`;
 
 const {
   buildPhaseGraph, edgePredicates, resourceId, ensureGuard, guardedTransition,
+  policyChecksumFields, legacyPolicyProjection, policiesEqual,
+  verifyCompletionEvidenceAsync,
   _testOnly_setGuardClient, _testOnly_resetGuardCache,
 } = await import(`${SERVER_DIR}/lifecycle-guard.js`);
 
 function stubClient() {
-  const calls = { register: [], transition: [] };
+  const calls = { register: [], transition: [], policy: [], applyUpgrade: [] };
   let registerResult = { status: 'registered', checksum: 'c', guard_id: 'g' };
   let transitionResult = { status: 'applied', current_state: 'blueprint', verdict: { met: true }, ledger_ref: 'r' };
+  let policyResult = { status: 'ok' };
   return {
     calls,
     setRegister(r) { registerResult = r; },
     setTransition(t) { transitionResult = t; },
+    setPolicy(p) { policyResult = p; },
     client: {
       register: async (a) => { calls.register.push(a); return registerResult; },
       transition: async (a) => { calls.transition.push(a); return transitionResult; },
+      policy: async (a) => { calls.policy.push(a); return policyResult; },
+      applyUpgrade: async (a) => { calls.applyUpgrade.push(a); return { status: 'unchanged' }; },
     },
   };
 }
@@ -77,11 +84,84 @@ test('ensureGuard: registers with initial=currentPhase, caches per resource', as
   await ensureGuard('FEAT-9', 'plan', '/tmp/projX');
   assert.equal(s.calls.register.length, 1);
   assert.equal(s.calls.register[0].initial, 'plan', 'seeds initial from current phase (backfill-safe)');
-  assert.deepEqual(s.calls.register[0].terminal, ['complete', 'killed']);
+  assert.deepEqual(s.calls.register[0].terminal, ['complete', 'killed', 'complete_backfilled']);
 
   // Second call for same resource is cached — no second subprocess.
   await ensureGuard('FEAT-9', 'plan', '/tmp/projX');
   assert.equal(s.calls.register.length, 1, 'cached, not re-registered');
+});
+
+test('policy compatibility: projection removes only backfill additions and terminal order is ignored', () => {
+  const oldPolicy = {
+    graph: { explore_design: ['blueprint', 'killed'], blueprint: ['killed'], complete: [], killed: [] },
+    edge_predicates: { 'explore_design->blueprint': [] },
+    terminal: ['complete', 'killed'], stakes: {}, initial: 'explore_design',
+  };
+  const projected = legacyPolicyProjection({
+    graph: {
+      explore_design: ['blueprint', 'complete_backfilled', 'killed'],
+      blueprint: ['complete_backfilled', 'killed'], complete: [], complete_backfilled: [], killed: [],
+    },
+    edge_predicates: oldPolicy.edge_predicates,
+    terminal: ['complete', 'killed', 'complete_backfilled'], stakes: {},
+  });
+  assert.deepEqual(projected, policyChecksumFields(oldPolicy));
+  assert.ok(policiesEqual(projected, { ...policyChecksumFields(oldPolicy), terminal: ['killed', 'complete'] }));
+  assert.ok(!policiesEqual(projected, { ...policyChecksumFields(oldPolicy), graph: { ...oldPolicy.graph, blueprint: ['killed', 'complete'] } }));
+});
+
+test('ensureGuard: an already-registered projected legacy policy is cached as legacy', async () => {
+  _testOnly_resetGuardCache();
+  const s = stubClient();
+  s.setRegister({ status: 'error', error_type: 'guard_already_registered', message: 'exists' });
+  s.setPolicy({ status: 'ok', checksum: 'old-checksum', graph: {
+    explore_design: ['prd', 'architecture', 'blueprint', 'killed'], prd: ['architecture', 'blueprint', 'killed'],
+    architecture: ['blueprint', 'killed'], blueprint: ['verification', 'killed'], verification: ['plan', 'blueprint', 'killed'],
+    plan: ['execute', 'killed'], execute: ['report', 'docs', 'killed'], report: ['docs', 'killed'], docs: ['ship', 'killed'],
+    ship: ['complete', 'killed'], complete: [], killed: [],
+  }, edge_predicates: edgePredicates('docs/features/FEAT-9'), terminal: ['complete', 'killed'], stakes: {}, initial: 'ship' });
+  _testOnly_setGuardClient(s.client);
+  const first = await ensureGuard('FEAT-9', 'explore_design', '/tmp/projX');
+  assert.deepEqual(first, { guard_id: resourceId('FEAT-9', '/tmp/projX'), status: 'legacy', storedChecksum: 'old-checksum' });
+  const second = await ensureGuard('FEAT-9', 'explore_design', '/tmp/projX');
+  assert.equal(second.status, 'legacy');
+  assert.equal(s.calls.register.length, 1);
+  assert.equal(s.calls.policy.length, 1);
+});
+
+test('ensureGuard: a divergent stored policy fails closed', async () => {
+  _testOnly_resetGuardCache();
+  const s = stubClient();
+  s.setRegister({ status: 'error', error_type: 'guard_already_registered', message: 'exists' });
+  s.setPolicy({ status: 'ok', checksum: 'wrong', graph: {}, edge_predicates: {}, terminal: [], stakes: {} });
+  _testOnly_setGuardClient(s.client);
+  const result = await ensureGuard('FEAT-9', 'explore_design', '/tmp/projX');
+  assert.equal(result.error.code, 'GUARD_POLICY_DIVERGED');
+});
+
+test('guardedTransition: forwards camelCase idempotency and expected policy checksum on legacy resources', async () => {
+  _testOnly_resetGuardCache();
+  const s = stubClient();
+  s.setRegister({ status: 'error', error_type: 'guard_already_registered', message: 'exists' });
+  s.setPolicy({ status: 'ok', checksum: 'old-checksum', graph: {
+    explore_design: ['prd', 'architecture', 'blueprint', 'killed'], prd: ['architecture', 'blueprint', 'killed'], architecture: ['blueprint', 'killed'], blueprint: ['verification', 'killed'], verification: ['plan', 'blueprint', 'killed'], plan: ['execute', 'killed'], execute: ['report', 'docs', 'killed'], report: ['docs', 'killed'], docs: ['ship', 'killed'], ship: ['complete', 'killed'], complete: [], killed: [],
+  }, edge_predicates: edgePredicates('docs/features/FEAT-1'), terminal: ['complete', 'killed'], stakes: {} });
+  _testOnly_setGuardClient(s.client);
+  const result = await guardedTransition({ featureCode: 'FEAT-1', from: 'explore_design', to: 'complete_backfilled', workspaceRoot: '/tmp/projX', idempotencyKey: 'op-1', expectedPolicyChecksum: 'a'.repeat(64) });
+  assert.equal(result.applied, true);
+  assert.equal(s.calls.transition[0].idempotencyKey, 'op-1');
+  assert.equal(s.calls.transition[0].expectedPolicyChecksum, 'a'.repeat(64));
+});
+
+test('verifyCompletionEvidenceAsync preserves completion evidence result shape without blocking spawns', async () => {
+  const commitSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO_ROOT, encoding: 'utf8' }).trim();
+  const result = await verifyCompletionEvidenceAsync({
+    commitSha,
+    cwd: REPO_ROOT,
+    testCommand: [process.execPath, '-e', 'process.exit(0)'],
+    testsPassClaim: false,
+  });
+  assert.deepEqual(result, { ok: true, reasons: [], testsAttested: true });
 });
 
 test('guardedTransition: applied → {applied:true} with verdict', async () => {
