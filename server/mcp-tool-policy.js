@@ -53,6 +53,8 @@ export const SETUP_TOOLS = new Set([
 const IMPLEMENTER_DENY = [
   'approve_gate', 'complete_feature', 'kill_feature',
   'set_feature_status', 'add_roadmap_entry', 'record_completion', 'propose_followup',
+  // COMP-LIFECYCLE-BACKFILL: a completion is a management act, backfilled or not.
+  'backfill_completion',
   // ── added by COMP-COVERAGE-GATE C4 ──
   'canon_override_grant',
   'roadmap_xref_push',
@@ -77,7 +79,7 @@ export const PROFILE_POLICY = {
 
 /** phase → management tools re-permitted for DENY-mode profiles in that phase. */
 export const PHASE_REFINEMENT = {
-  ship: new Set(['complete_feature', 'record_completion']),
+  ship: new Set(['complete_feature', 'record_completion', 'backfill_completion']),
 };
 
 // Strictness ordering — a bind hint may only NARROW (raise strictness), never widen.
