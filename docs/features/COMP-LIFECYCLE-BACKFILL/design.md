@@ -715,3 +715,20 @@ with `upgrade_descriptor_unavailable`; backfill on unregistered features works i
 Gate closed after three rounds (8 → 7 → 5 findings, all confirmed, all folded). Per the review-budget
 rule the remaining findings were spec-precision fixes whose correctness is checkable at the blueprint
 gate, which re-reads this document against the code.
+
+## Addendum 2026-09-05 (blueprint gate round 1) — recovery after a policy change
+
+The blueprint found that stratum's replay check binds the **policy checksum** into the payload digest
+(`transition.ts:131,559`), so a descriptor applied between a crash and its retry turns "replay" into
+`idempotency_conflict`. Adopting the ledger entry under the key alone was already rejected (R2-1),
+and the blueprint's narrower version of that was rejected again at its own gate (BP-1). Decision:
+
+- The intent persists the resource's **policy checksum** (from `guard policy`) before the transition.
+- Stratum gains a read-only CLI action **`guard digest`** `{from_state, to_state, artifacts,
+  modified_files, resolved_by, policy_checksum}` → `{payload_digest, payload_digest_version}` that
+  runs stratum's own `payloadDigestForVersion` (0.4.3, `STRAT-GUARD-DIGEST`). It grants nothing and
+  reads no state; it exists so compose never reimplements `fingerprint.ts`/`canonical.ts`.
+- On `idempotency_conflict`, recovery resumes **only if** a ledger entry under the operation's key has
+  `kind:'transition'`, `outcome:'applied'`, `to_state:'complete_backfilled'`, and a `payload_digest`
+  equal to `guard digest` of the persisted envelope + persisted checksum, **and** the resource's
+  `current_state` is still `complete_backfilled` with no later transition entry. Anything else refuses.
