@@ -1,7 +1,7 @@
 {
   "code": "COMP-LIFECYCLE-BACKFILL",
   "description": "**Backfill edge for out-of-band completions.** The guard enforces two claims through one gate: \"did this really ship\" (server-verified commit + attested tests — reality) and \"did this follow the process\" (server_file_exists on design/blueprint/plan — procedure). For out-of-band work the first is checkable and the second is false by definition, so failing it blocks recording a true completion — the guard forces the roadmap to lie. Already cost us once: COMP-MCP-ENFORCE-XREPO records that the STRAT-AGENT-INTERP backfill \"had to set status COMPLETE via direct feature.json edit\". Adds a `complete_backfilled` terminal state (a distinct node, so it carries its own edge predicates — the guard keys predicates by from->to alone) reachable from any non-terminal phase, gated on UNWEAKENED reality evidence plus a mandatory written reason, with attested backfill of intermediate phases so partial walks become representable. Phase history gains a transaction-time axis (`recordedAt`/`origin`/`confidence`, vocabulary borrowed from SmartMemory's MemoryItem) since `enteredAt`/`exitedAt` already encode valid time. Design COMPLETE @919c02e after two Codex gates, nine findings, all confirmed. **BLOCKED on stratum:** guardMigrate (transition.ts:565,592) requires STRATUM_GUARD_OVERRIDE_TOKEN and unconditionally bumps graph_version, so migrating the 31 already-registered guard resources would make this feature depend on the emergency token it exists to replace. Owner declined a Compose-only v1 covering the ~319 unregistered features (of 350) because a completion path that silently fails on the oldest 31 reintroduces the defect class being removed. Order: stratum idempotent non-emergency migrate first, then this with no carve-out. Three Compose-side pieces still to redo before implement: phaseOrder is not a valid temporal insertion order (backward loops verification->blueprint, test->fix), cross-mutation recovery between the guard and vision-state, and reader changes. **RECONCILED 2026-09-05 — stratum blocker CLOSED.** The 2026-08-17 re-diagnosis (compose c7cc848) found the real blocker was the transport, not guardMigrate: compose reaches the guard over the CLI, where the override token was caller-mintable. Stratum shipped STRAT-GUARD-AUTHZ @3647b4c the same day (option ii, signed sshsig authorization over a server-reconstructed payload; override token removed; trust root ships EMPTY) and STRAT-GUARD-UPGRADE @91a55ed (token-free idempotent per-resource upgrade; `terminal` frozen by design, so complete_backfilled still needs one signed migrate per resource). Nothing remains on stratum. Compose-side work to do: enrol a signing key in stratum's trust root, generate + review the upgrade descriptor file, then the three redo items (phaseOrder is not a temporal insertion order; guard<->vision-state cross-mutation recovery; reader changes), then implement. Status BLOCKED->PLANNED.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "Backlog",
   "created": "2026-08-05",
   "updated": "2026-09-05",
@@ -13,5 +13,47 @@
     "guard",
     "provenance"
   ],
-  "impact": "high"
+  "impact": "high",
+  "completions": [
+    {
+      "completion_id": "COMP-LIFECYCLE-BACKFILL:dbc3e17e3736cdbf421a59d564b0c4fd5d8f0620",
+      "feature_code": "COMP-LIFECYCLE-BACKFILL",
+      "commit_sha": "dbc3e17e3736cdbf421a59d564b0c4fd5d8f0620",
+      "commit_sha_short": "dbc3e17e",
+      "tests_pass": true,
+      "files_changed": [
+        "CHANGELOG.md",
+        "README.md",
+        "bin/compose.js",
+        "contracts/comp-obs-contract.schema.json",
+        "contracts/lifecycle-backfill.schema.json",
+        "lib/backfill-evidence.js",
+        "lib/canon-registry.js",
+        "lib/completion-gate.js",
+        "lib/guard-descriptors.js",
+        "lib/lifecycle-modes.js",
+        "package.json",
+        "server/completion-projection.js",
+        "server/compose-mcp-tools.js",
+        "server/compose-mcp.js",
+        "server/decision-event-emit.js",
+        "server/decision-events-snapshot.js",
+        "server/lifecycle-guard.js",
+        "server/lifecycle-phase-history.js",
+        "server/mcp-tool-defs.js",
+        "server/mcp-tool-policy.js",
+        "server/schema-validator.js",
+        "server/session-routes.js",
+        "server/stratum-client.js",
+        "server/vision-routes.js",
+        "src/components/vision/ContextPipelineDots.jsx",
+        "src/components/vision/ItemDetailPanel.jsx",
+        "src/components/vision/constants.js"
+      ],
+      "recorded_at": "2026-09-05T18:10:25.564Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Shipped: compose 82ef056 (S1), 80a9592 (S2), 04dc99b (S3+ship), dbc3e17 (policy/registry+journal); stratum v0.4.2-0.4.4. Full suite 6206 green, test:ui 613, test:tracker 100. Operator steps (key, trust root, descriptors, sign) remain before any legacy-resource backfill."
+    }
+  ],
+  "commit_sha": "dbc3e17e3736cdbf421a59d564b0c4fd5d8f0620"
 }
