@@ -107,7 +107,7 @@ describe('connector-owned dispatch capture', () => {
       });
 
       assert.equal(calls.length, 1);
-      assert.deepEqual(calls[0].args, { agent: 'claude', prompt: 'prompt', cwd: worktree });
+      assert.deepEqual(calls[0].args, { agent: 'claude', prompt: 'prompt', cwd: worktree, effort: 'medium' });
       assertHiddenCarrier(result);
       const rows = readEvents(project);
       assert.equal(rows.length, 1);
@@ -384,6 +384,7 @@ describe('normalizer and explicit call-site context', () => {
       const { client } = makeClient([
         { text: 'not json', usage: { tokens: 4, usd: 0.02 } },
         new Error('repair transport failed'),
+        { status: 'already_error' }, // server confirms teardown before text fallback
       ]);
       const normalized = await runAndNormalize(null, 'review', {
         flow_id: 'flow-1',

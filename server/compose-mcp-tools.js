@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { ArtifactManager, artifactKeysForMode } from './artifact-manager.js';
-import { getTargetRoot, getDataDir, resolveProjectPath, switchProject, setCurrentWorkspaceId, loadProjectConfig, isLifecycleEnabled } from './project-root.js';
+import { getTargetRoot, getDataDir, resolveProjectPath, switchProject, setCurrentWorkspaceId, getCurrentWorkspaceId, loadProjectConfig, isLifecycleEnabled } from './project-root.js';
 import { resolveProfile, isToolAllowed } from './mcp-tool-policy.js';
 import { getRoadmap } from '../lib/get-roadmap.js';
 
@@ -686,8 +686,8 @@ export async function toolBindSession({ featureCode, profile } = {}) {
   // differ from the request arg) so the anchor never drifts. The trusted env
   // profile is the floor; the bind `profile` arg may only NARROW it.
   const boundCode = (body && typeof body === 'object' && body.featureCode) || featureCode;
-  if (boundCode) _boundFeatureCode = boundCode;
-  _sessionProfile = resolveProfile(process.env.COMPOSE_SESSION_PROFILE, profile);
+  if (boundCode) sessionContext().featureCode = boundCode;
+  sessionContext().profile = resolveProfile(process.env.COMPOSE_SESSION_PROFILE, profile);
   return body;
 }
 
@@ -741,7 +741,8 @@ async function _postGate(gateId, action, body) {
 async function _httpRequest(method, urlPath, body = null) {
   const port = resolvePort();
   const headers = { 'Content-Type': 'application/json' };
-  if (_binding?.id) headers['X-Compose-Workspace-Id'] = _binding.id;
+  const workspaceId = getCurrentWorkspaceId() || _binding?.id;
+  if (workspaceId) headers['X-Compose-Workspace-Id'] = workspaceId;
   let payload = null;
   if (body !== null && body !== undefined) {
     payload = JSON.stringify(body);
@@ -926,26 +927,32 @@ export async function toolGetJudgmentTrace(args = {}) {
 // rewrite its own launch env); bind_session may only NARROW it. The bound
 // feature anchor (_boundFeatureCode) lets the gate resolve the current phase
 // on-disk and check that re-permitted mutations target the bound feature.
-// All process-global by intent (one MCP child per session).
+// One MCP child may rebind while older calls await; keep policy state per root.
 // ---------------------------------------------------------------------------
 
-let _sessionProfile = resolveProfile(process.env.COMPOSE_SESSION_PROFILE, null);
-let _boundFeatureCode = null;
+const sessionContexts = new Map();
+function sessionContext() {
+  const root = getTargetRoot();
+  if (!sessionContexts.has(root)) {
+    sessionContexts.set(root, { profile: resolveProfile(process.env.COMPOSE_SESSION_PROFILE, null), featureCode: null });
+  }
+  return sessionContexts.get(root);
+}
 
-export function _getSessionProfile() { return _sessionProfile; }
-export function _getBoundFeatureCode() { return _boundFeatureCode; }
+export function _getSessionProfile() { return sessionContext().profile; }
+export function _getBoundFeatureCode() { return sessionContext().featureCode; }
 /** @internal test seam */
 export function _testOnly_setSessionContext({ profile, boundFeatureCode } = {}) {
-  if (profile !== undefined) _sessionProfile = profile;
-  if (boundFeatureCode !== undefined) _boundFeatureCode = boundFeatureCode;
+  if (profile !== undefined) sessionContext().profile = profile;
+  if (boundFeatureCode !== undefined) sessionContext().featureCode = boundFeatureCode;
 }
 
 /** The bound feature's current lifecycle phase from vision-state.json, or null. */
 export function resolveBoundPhase() {
-  if (!_boundFeatureCode) return null;
+  if (!sessionContext().featureCode) return null;
   try {
     const { items } = loadVisionState();
-    const item = items.find((i) => i.lifecycle?.featureCode === _boundFeatureCode);
+    const item = items.find((i) => i.lifecycle?.featureCode === sessionContext().featureCode);
     return item?.lifecycle?.currentPhase ?? null;
   } catch {
     return null;
@@ -973,9 +980,9 @@ function _resolveTargetFeatureCode(tool, args = {}) {
 }
 
 function _targetMatchesBoundFeature(tool, args) {
-  if (!_boundFeatureCode) return false;
+  if (!sessionContext().featureCode) return false;
   const code = _resolveTargetFeatureCode(tool, args);
-  return code !== null && code === _boundFeatureCode;
+  return code !== null && code === sessionContext().featureCode;
 }
 
 /**
@@ -993,7 +1000,7 @@ export function assertToolPhaseAllowed(tool, args = {}, _testCtx) {
   if (!guardOn) return;
   if (_overrideOk(args)) return;
 
-  const profile = _testCtx?.profile ?? _sessionProfile;
+  const profile = _testCtx?.profile ?? sessionContext().profile;
   const phase = _testCtx?.phase ?? resolveBoundPhase();
   const targetMatchesBoundFeature = _testCtx?.targetMatches ?? _targetMatchesBoundFeature(tool, args);
 

@@ -1,32 +1,18 @@
-/**
- * COMP-COCKPIT-2: agentServerUrl — hostname-portable agent-server URL builder.
- * Replaces hardcoded http://localhost:4002 in ChallengeModal so the pressure-test
- * feature works on any non-localhost deploy.
- */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { agentServerUrl } from '../../src/lib/agentServer.js';
 
 describe('agentServerUrl', () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.unstubAllGlobals();
-  });
-
-  it('builds protocol//hostname:port/path from window.location (default port 4002)', () => {
+  afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
+  it('routes agent calls through the workspace-aware same-origin proxy', () => {
     vi.stubGlobal('location', { protocol: 'https:', hostname: 'staging.example.com' });
-    expect(agentServerUrl('/api/terminal/inject')).toBe(
-      'https://staging.example.com:4002/api/terminal/inject',
-    );
+    expect(agentServerUrl('/api/agent/message')).toBe('/api/agent/proxy/message');
+    expect(agentServerUrl('/api/agent/stream')).toBe('/api/agent/proxy/stream');
   });
-
-  it('does NOT hardcode localhost — uses the page hostname', () => {
-    vi.stubGlobal('location', { protocol: 'http:', hostname: '10.0.0.42' });
-    expect(agentServerUrl('/api/agent/stream')).toBe('http://10.0.0.42:4002/api/agent/stream');
+  it('routes session creation through workspace selection', () => {
+    expect(agentServerUrl('/api/agent/session')).toBe('/api/agent/proxy/session');
   });
-
-  it('honors VITE_AGENT_PORT when set', () => {
-    vi.stubGlobal('location', { protocol: 'http:', hostname: 'localhost' });
-    vi.stubEnv('VITE_AGENT_PORT', '5005');
-    expect(agentServerUrl('/x')).toBe('http://localhost:5005/x');
+  it('does not rewrite unrelated or already proxied endpoints', () => {
+    expect(agentServerUrl('/api/agent/proxy/session')).toBe('/api/agent/proxy/session');
+    expect(agentServerUrl('/other')).toBe('/other');
   });
 });

@@ -273,7 +273,9 @@ export class CCSessionWatcher {
   }
 
   start() {
-    if (this._watcher) return;
+    // C5: the fs.watch fallback leaves `_watcher` null, so guarding on it alone
+    // let every resume() start ANOTHER poll interval — one leaked per switch.
+    if (this._watcher || this._pollTimer) return;
     if (!fs.existsSync(this.projectsRoot)) {
       fs.mkdirSync(this.projectsRoot, { recursive: true });
     }
@@ -296,6 +298,7 @@ export class CCSessionWatcher {
   }
 
   _startPolling(intervalMs = 2000) {
+    if (this._pollTimer) return;
     this._pollTimer = setInterval(async () => {
       const files = listJsonlFiles(this.projectsRoot);
       for (const f of files) {

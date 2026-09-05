@@ -77,6 +77,8 @@ export class StratumSync {
   start() {
     this.#stopped = false;
     this.#lastTickAt = Date.now();
+    // Idempotent: a second start() must not orphan the armed timer.
+    if (this.#pollTimer) return;
     this.#scheduleNext();
   }
 

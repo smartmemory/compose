@@ -3,16 +3,10 @@ import cors from 'cors';
 import http from 'node:http';
 import path from 'node:path';
 import { existsSync, statSync, readFileSync } from 'node:fs';
-import { FileWatcherServer } from './file-watcher.js';
-import { VisionStore } from './vision-store.js';
-import { VisionServer } from './vision-server.js';
-import { SessionManager } from './session-manager.js';
-import { scanFeatures, seedFeatures, scanSubPackages, seedSubPackages } from './feature-scan.js';
-import { attachGraphExportRoutes } from './graph-export.js';
+import { WorkspaceRuntime } from './workspace-runtime.js';
 import { attachWorkspaceRoutes } from './workspace-routes.js';
-import { attachGraphLayoutRoutes } from './graph-layout-routes.js';
 import { createWorkspaceMiddleware } from './workspace-middleware.js';
-import { getTargetRoot, getDataDir, ensureDataDir, loadProjectConfig, resolveProjectPath, switchProject, COMPOSE_HOME } from './project-root.js';
+import { getTargetRoot, getDataDir, ensureDataDir, loadProjectConfig, withProjectContext, COMPOSE_HOME } from './project-root.js';
 import { resolveStratumEngine } from './stratum-client.js';
 import { probeStratumBin, resolveStratumBin } from '../lib/stratum-engine.js';
 import { createAuthStore } from './auth-store.js';
@@ -164,23 +158,21 @@ attachAuthRoutes(app, {
     } catch { return null; }
   },
   broadcast: (msg) => {
-    if (typeof visionServer?.broadcastMessage === 'function') {
-      visionServer.broadcastMessage(msg);
+    if (typeof workspaces?.active?.visionServer?.broadcastMessage === 'function') {
+      activeVision().broadcastMessage(msg);
     }
   },
   requireSensitive: requireSensitiveToken,
 });
 
 // ---------------------------------------------------------------------------
-// Agent proxy (BOTH modes — additive) — mounted after the gate so gate clears
-// requests first. Proxy injects the real sensitive token server-side.
+// Each workspace installs its agent proxy after workspace resolution. The
+// proxy stamps the selected root and sensitive token for the SDK process.
 // ---------------------------------------------------------------------------
 const _agentPort = parseInt(process.env.AGENT_PORT || '4002', 10);
-attachAgentProxy(app, { agentPort: _agentPort });
 
 attachWorkspaceRoutes(app);
-attachGraphLayoutRoutes(app);
-app.use(createWorkspaceMiddleware());
+app.use(createWorkspaceMiddleware({ resolveKnownWorkspace: (id) => workspaces.resolveKnownWorkspace(id) }));
 
 // `remote` lets clients (desktop cockpit served through a tunnel) detect
 // remote mode at boot and switch their WS/SSE URLs to token-carrying form.
@@ -197,91 +189,27 @@ app.get('/api/project', (_req, res) => {
   });
 });
 
+const server = http.createServer(app);
+const workspaces = new WorkspaceRuntime(server, { agentPort: _agentPort });
+try { workspaces.switch(getTargetRoot(), projectConfig); }
+catch (err) {
+  console.error(`[compose] Workspace startup failed: ${err.message}`);
+  process.exit(1);
+}
+
+// Accessors always select the current context; old requests retain their own router.
+const activeVision = () => workspaces.active.visionServer;
 app.post('/api/project/switch', (req, res) => {
   const { path: projectPath } = req.body || {};
-  if (!projectPath) return res.status(400).json({ error: 'path is required' });
+  if (typeof projectPath !== 'string' || !projectPath) return res.status(400).json({ error: 'path is required' });
   try {
-    const result = switchProject(projectPath);
-    ensureDataDir();
-    // Reload store from new data directory
-    visionStore.reloadFrom(result.dataDir);
-    // Re-scan features and sub-packages from new project
-    try {
-      const features = scanFeatures();
-      if (features.length > 0) seedFeatures(features, visionStore);
-      const packages = scanSubPackages();
-      if (packages.length > 0) seedSubPackages(packages, visionStore);
-    } catch (err) {
-      console.error('[compose] Feature scan after switch:', err.message);
-    }
-    // Broadcast new state to all connected clients
-    visionServer.scheduleBroadcast();
-    res.json({ ok: true, targetRoot: result.targetRoot, name: path.basename(result.targetRoot) });
+    const { binding } = workspaces.switch(projectPath);
+    res.json({ ok: true, targetRoot: binding.targetRoot, name: path.basename(binding.targetRoot) });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
-
-const server = http.createServer(app);
-const fileWatcher = new FileWatcherServer();
-fileWatcher.attach(server, app);
-
-const visionStore = new VisionStore(getDataDir());
-const sessionManager = new SessionManager({
-  getFeaturePhase: (featureCode) => {
-    const item = visionStore.getItemByFeatureCode(featureCode);
-    return item?.lifecycle?.currentPhase || null;
-  },
-  featureRoot: resolveProjectPath('features'),
-});
-const visionServer = new VisionServer(visionStore, sessionManager, { config: projectConfig });
-visionServer.attach(server, app);
-
-// Seed feature folders and sub-packages into vision store on startup
-try {
-  const features = scanFeatures();
-  if (features.length > 0) seedFeatures(features, visionStore);
-  const packages = scanSubPackages();
-  if (packages.length > 0) seedSubPackages(packages, visionStore);
-} catch (err) {
-  console.error('[compose] Feature scan startup error:', err.message);
-}
-
-// Wire feature folder changes → auto-reseed vision store
-fileWatcher.onFeatureChanged = (_relativePath) => {
-  try {
-    const features = scanFeatures();
-    seedFeatures(features, visionStore);
-    visionServer.scheduleBroadcast();
-  } catch (err) {
-    console.error('[compose] Feature reseed error:', err.message);
-  }
-};
-
-// Wire build state changes → broadcast over /ws/vision
-fileWatcher.onBuildStateChanged = (state) => {
-  if (state) {
-    // Broadcast flat payload per STRAT-COMP-4 contract
-    visionServer.broadcastMessage({ type: 'buildState', ...state });
-  }
-};
-
-// Wire pipelines/*.stratum.yaml external changes → broadcast `specChanged` on
-// the VISION WS (COMP-PIPE-EDIT-6 — the channel the pipeline editor store uses,
-// not /ws/files). The message already carries { type:'specChanged', file, path }.
-fileWatcher.onSpecChanged = (message) => {
-  visionServer.broadcastMessage(message);
-};
-
-// Wire ideabox projection changes → broadcast `ideaboxUpdated` on the VISION WS
-// (IDEA-24). Same shape as the pipelines wiring above and for the same reason:
-// the writer is out-of-process (a `compose ideabox` CLI call), so nothing on the
-// REST path broadcasts, and the clients that care live on /ws/vision rather than
-// the /ws/files channel the watcher owns. The message is built in file-watcher.js;
-// this is the cross-server hop it cannot make itself.
-fileWatcher.onIdeaboxChanged = (message) => {
-  visionServer.broadcastMessage(message);
-};
+app.use((req, res, next) => workspaces.handle(req, res, next));
 
 // ---------------------------------------------------------------------------
 // Static serving + SPA fallback (BOTH modes — additive)
@@ -315,18 +243,27 @@ server.on('upgrade', (req, socket, head) => {
     return;
   }
 
-  const { pathname } = new URL(req.url, 'http://localhost');
-  if (pathname === '/ws/files' && fileWatcher.wss) {
-    fileWatcher.wss.handleUpgrade(req, socket, head, (ws) => {
-      fileWatcher.wss.emit('connection', ws, req);
-    });
-  } else if (pathname === '/ws/vision' && visionServer.wss) {
-    visionServer.wss.handleUpgrade(req, socket, head, (ws) => {
-      visionServer.wss.emit('connection', ws, req);
-    });
-  } else {
-    socket.destroy();
+  const url = new URL(req.url, 'http://localhost');
+  const workspaceId = req.headers['x-compose-workspace-id'] || url.searchParams.get('workspaceId');
+  let context = workspaces.active;
+  if (workspaceId) {
+    try {
+      const resolved = workspaces.resolveKnownWorkspace(workspaceId);
+      context = resolved && workspaces.get(resolved.root);
+    } catch { context = null; }
+    if (!context) {
+      socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+      socket.destroy();
+      return;
+    }
   }
+  const { fileWatcher, visionServer } = context;
+  const wss = url.pathname === '/ws/files' ? fileWatcher.wss
+    : url.pathname === '/ws/vision' ? visionServer.wss : null;
+  if (!wss) { socket.destroy(); return; }
+  withProjectContext(context.binding, () => {
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+  });
 });
 
 server.listen(PORT, _host, () => {

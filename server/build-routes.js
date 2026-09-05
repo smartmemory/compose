@@ -20,7 +20,7 @@ import { runNew as defaultRunNew } from '../lib/new.js';
 import { runBuildAll as defaultRunBuildAll } from '../lib/build-all.js';
 import { runGsd as defaultRunGsd } from '../lib/gsd.js';
 import { requireSensitiveOrPaired as requireSensitiveToken } from './security.js';
-import { getDataDir as defaultGetDataDir, getTargetRoot as defaultGetTargetRoot } from './project-root.js';
+import { getDataDir as defaultGetDataDir, getTargetRoot as defaultGetTargetRoot, trackProjectWork } from './project-root.js';
 import { readBuildHistory } from '../lib/build-history.js';
 
 // A launcher conflict (another build/GSD run already owns the feature) is a
@@ -32,11 +32,12 @@ function launcherErrorStatus(err) {
 }
 
 export function attachBuildRoutes(app, deps = {}) {
-  const runBuild = deps.runBuild || defaultRunBuild;
+  const tracked = run => (...args) => trackProjectWork(() => run(...args));
+  const runBuild = tracked(deps.runBuild || defaultRunBuild);
   const abortBuild = deps.abortBuild || defaultAbortBuild;
-  const runNew = deps.runNew || defaultRunNew;
-  const runBuildAll = deps.runBuildAll || defaultRunBuildAll;
-  const runGsd = deps.runGsd || defaultRunGsd;
+  const runNew = tracked(deps.runNew || defaultRunNew);
+  const runBuildAll = tracked(deps.runBuildAll || defaultRunBuildAll);
+  const runGsd = tracked(deps.runGsd || defaultRunGsd);
   const getDataDir = deps.getDataDir || defaultGetDataDir;
   // Bind build dispatch to the active project root (the same global target the
   // vision store + getDataDir() use). Without this the runners default to

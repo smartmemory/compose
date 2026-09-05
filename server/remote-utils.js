@@ -15,7 +15,7 @@
  */
 
 import http from 'node:http';
-import { loadProjectConfig } from './project-root.js';
+import { loadProjectConfig, getTargetRoot } from './project-root.js';
 
 // ---------------------------------------------------------------------------
 // resolveComposeHost
@@ -83,6 +83,8 @@ export function attachAgentProxy(app, { agentPort }) {
       // Inject the server-side sensitive token; strip any client-sent credential
       delete headers['x-compose-token'];
       delete headers['authorization'];
+      // Only the resolved server workspace may choose the SDK cwd.
+      headers['x-compose-project-root'] = getTargetRoot();
       const apiToken = process.env.COMPOSE_API_TOKEN;
       if (apiToken) headers['x-compose-token'] = apiToken;
 

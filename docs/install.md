@@ -100,3 +100,30 @@ compose --version
 ## Backwards compatibility
 
 `compose install` runs both `init` and `setup` in sequence.
+
+
+## Developing Compose and Stratum together
+
+Execution profiles require Stratum MCP surface 17 or newer (tool restrictions,
+reasoning settings, and acknowledged foreground cancellation). Compose checks the
+connected server's advertised agent options before dispatch and refuses unsupported
+settings with `UNSUPPORTED_AGENT_OPTIONS`.
+
+The production resolver prefers an installed `@smartmemory/stratum` package over
+an adjacent checkout. Editing Stratum source alone does not update that installed
+runtime. For development, build the sibling and point both entrypoints at it:
+
+```bash
+cd ../stratum/ts
+npm run build
+cd ../../compose
+export COMPOSE_STRATUM_TS_MCP_BIN="$(cd ../stratum/ts && pwd)/dist/mcp/main.js"
+export COMPOSE_STRATUM_TS_CLI_BIN="$(cd ../stratum/ts && pwd)/dist/cli/stratum.js"
+```
+
+Keep both overrides together so the CLI and MCP inspect the same engine contract.
+`node --test test/execution-runtime.test.js` exercises the production resolver and
+real stdio/process boundaries without calling a model provider. Its SDK/CLI fixtures
+replace inference only. Before publishing Compose, publish the matching Stratum
+package and update Compose's dependency and lockfile to that release; a local
+checkout or link is not a published dependency update.

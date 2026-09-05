@@ -59,7 +59,6 @@ function ensureComposeApiToken() {
   // Expose the same token to Vite client code.
   process.env.VITE_COMPOSE_API_TOKEN = process.env.COMPOSE_API_TOKEN;
   // Expose AGENT_PORT so AgentStream.jsx can reach the right port
-  process.env.VITE_AGENT_PORT = process.env.AGENT_PORT || '4002';
 }
 
 // --- Singleton enforcement ---

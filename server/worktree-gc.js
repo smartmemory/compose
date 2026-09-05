@@ -37,6 +37,7 @@ export class WorktreeGC {
 
   /** Start periodic scanning. Also runs an initial scan. */
   start() {
+    if (this.#timer) return;
     this.runNow().catch(() => {}); // fire-and-forget initial scan
     this.#timer = setInterval(() => {
       this.runNow().catch(() => {});

@@ -16,8 +16,6 @@ import { serializeSession, persistSession, readLastSession, readSessionsByFeatur
 
 import { getTargetRoot, getDataDir } from './project-root.js';
 
-const PROJECT_ROOT = getTargetRoot();
-const SESSIONS_FILE = path.join(getDataDir(), 'sessions.json');
 
 /** Tools whose events count toward the Haiku summary batch threshold */
 const SIGNIFICANT_TOOLS = new Set(['Write', 'Edit', 'Bash', 'NotebookEdit']);
@@ -26,7 +24,8 @@ const SIGNIFICANT_TOOLS = new Set(['Write', 'Edit', 'Bash', 'NotebookEdit']);
 const BATCH_SIZE = 4;
 
 export class SessionManager {
-  constructor({ getFeaturePhase, featureRoot, sessionsFile } = {}) {
+  constructor({ getFeaturePhase, featureRoot, sessionsFile, projectRoot = getTargetRoot() } = {}) {
+    this._projectRoot = projectRoot;
     /** @type {object|null} Current active session */
     this.currentSession = null;
 
@@ -37,7 +36,7 @@ export class SessionManager {
     this._featureRoot = featureRoot || 'docs/features';
 
     /** @type {string} Path to sessions.json — injectable for tests */
-    this._sessionsFile = sessionsFile || SESSIONS_FILE;
+    this._sessionsFile = sessionsFile || path.join(getDataDir(), 'sessions.json');
 
     /** @type {Array<{tool,filePath,input,itemIds,timestamp}>} Buffered significant events */
     this._pendingBatch = [];
@@ -332,8 +331,8 @@ export class SessionManager {
     const batch = this._pendingBatch.splice(0);
 
     try {
-      const prompt = buildSummaryPrompt(batch, PROJECT_ROOT);
-      const result = await summarize(prompt, { projectRoot: PROJECT_ROOT });
+      const prompt = buildSummaryPrompt(batch, this._projectRoot);
+      const result = await summarize(prompt, { projectRoot: this._projectRoot });
       if (result) {
         this._distributeSummary(result, batch);
         for (const fn of this._summaryListeners) {

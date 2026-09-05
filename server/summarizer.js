@@ -10,7 +10,6 @@ import path from 'node:path';
 
 import { getTargetRoot } from './project-root.js';
 
-const PROJECT_ROOT = getTargetRoot();
 
 const DEFAULT_MODEL = process.env.SUMMARIZER_MODEL || 'haiku';
 
@@ -25,7 +24,7 @@ const DEFAULT_MODEL = process.env.SUMMARIZER_MODEL || 'haiku';
  * @param {string} [projectRoot]
  * @returns {string}
  */
-export function buildSummaryPrompt(batch, projectRoot = PROJECT_ROOT) {
+export function buildSummaryPrompt(batch, projectRoot = getTargetRoot()) {
   const eventLines = batch.map(evt => {
     const itemLabel = evt.itemTitles.length > 0
       ? ` [${evt.itemTitles.join(', ')}]`
@@ -66,9 +65,9 @@ JSON schema:
  * @param {string} [opts.projectRoot]
  * @returns {Promise<object|null>}
  */
-export function summarize(prompt, { model = DEFAULT_MODEL, projectRoot = PROJECT_ROOT } = {}) {
+export function summarize(prompt, { model = DEFAULT_MODEL, projectRoot = getTargetRoot() } = {}) {
   return new Promise((resolve) => {
-    const cleanEnv = { ...process.env, NO_COLOR: '1' };
+    const cleanEnv = { ...process.env, COMPOSE_TARGET: projectRoot, NO_COLOR: '1' };
     delete cleanEnv.CLAUDECODE;
 
     const proc = spawn('claude', [

@@ -16,6 +16,11 @@ import { render, act, fireEvent } from '@testing-library/react';
 // Captured callbacks from createAgentStream so tests can push messages
 let capturedOnEvent = null;
 let capturedOnOpen = null;
+let workspaceRoot = '/workspace/a';
+let streamCloses = 0;
+vi.mock('../../src/contexts/WorkspaceContext.jsx', () => ({
+  useWorkspace: () => ({ workspace: { root: workspaceRoot } }),
+}));
 
 vi.mock('../../src/components/agent/MessageCard.jsx', () => ({
   default: ({ msg }) => <div data-testid="msg">{msg.type}</div>,
@@ -39,12 +44,11 @@ vi.mock('../../src/lib/agentStream.js', () => ({
     capturedOnEvent = onEvent;
     // Simulate immediate connection
     setTimeout(() => onOpen?.(), 0);
-    return { close: () => {} };
+    return { close: () => { streamCloses++; } };
   },
 }));
 
 // Intercept import.meta.env
-vi.stubEnv('VITE_AGENT_PORT', '4002');
 vi.stubEnv('VITE_COMPOSE_API_TOKEN', 'test-token');
 
 // ---------------------------------------------------------------------------
@@ -86,8 +90,22 @@ describe('AgentStream sticky scroll', () => {
     vi.resetModules();
     capturedOnEvent = null;
     capturedOnOpen = null;
+    workspaceRoot = '/workspace/a'; streamCloses = 0;
     // Mock scrollIntoView — jsdom doesn't implement it
     Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it('closes the old stream and clears old messages when the workspace changes', async () => {
+    const view = await renderAgentStream();
+    await pushMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'A message' }] } });
+    expect(view.queryAllByTestId('msg')).toHaveLength(1);
+    workspaceRoot = '/workspace/b';
+    const AgentStream = (await import('../../src/components/AgentStream.jsx')).default;
+    view.rerender(<AgentStream />);
+    expect(streamCloses).toBe(1);
+    expect(view.queryAllByTestId('msg')).toHaveLength(0);
+    await pushMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'B message' }] } });
+    expect(view.queryAllByTestId('msg')).toHaveLength(1);
   });
 
   it('auto-scrolls when user is at the bottom (within 48px threshold)', async () => {

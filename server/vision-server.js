@@ -1,3 +1,4 @@
+import express from 'express';
 /**
  * Vision Server — REST endpoints + WebSocket broadcast for the vision surface.
  * Follows the same attach() pattern as FileWatcherServer.
@@ -81,6 +82,18 @@ export class VisionServer {
     this._stratumSync = null;
   }
 
+  /**
+   * Create the Stratum poller on first use. Never called while
+   * `capabilities.stratum` is false, so a stratum-disabled workspace keeps
+   * `_stratumSync === null` (no timers, no poller) for its whole lifetime.
+   */
+  _ensureStratumSync() {
+    if (!this._stratumSync) {
+      this._stratumSync = new StratumSync(this.store, () => this.scheduleBroadcast());
+    }
+    return this._stratumSync;
+  }
+
   attach(httpServer, app) {
     // ── Settings store ────────────────────────────────────────────────────
     this.settingsStore = new SettingsStore(undefined, SETTINGS_DEFAULTS);
@@ -161,17 +174,14 @@ export class VisionServer {
     });
 
     // ── Design conversation routes ──────────────────────────────────────────
-    // Re-resolve on every call so project switches get fresh instances.
+    // The workspace owns its manager; pending conversations retain their data root.
     let _designSessionManager = null;
-    let _designDataDir = null;
 
     attachDesignRoutes(app, {
       getSessionManager: () => {
-        const dataDir = getDataDir();
-        if (dataDir !== _designDataDir) {
-          if (_designSessionManager) _designSessionManager.destroy();
-          _designSessionManager = new DesignSessionManager(dataDir);
-          _designDataDir = dataDir;
+        if (!_designSessionManager) {
+          _designSessionManager = new DesignSessionManager(getDataDir());
+          this._designSessionManager = _designSessionManager;
         }
         return _designSessionManager;
       },
@@ -268,28 +278,32 @@ export class VisionServer {
     });
 
     // ── Stratum (conditional) ────────────────────────────────────────────
-    if (this._config.capabilities?.stratum) {
-      app.use('/api/stratum', createStratumRouter());
-      this._stratumSync = new StratumSync(this.store, () => this.scheduleBroadcast());
-      attachStratumRoutes(app, {
-        store: this.store,
-        scheduleBroadcast: () => this.scheduleBroadcast(),
-        broadcastMessage: (msg) => this.broadcastMessage(msg),
-        sync: this._stratumSync,
-      });
-      this._stratumSync.start();
-      console.log('[vision] Stratum sync enabled');
-    } else {
-      app.use('/api/stratum', (_req, res) => {
-        res.status(503).json({ error: 'Stratum not enabled', hint: 'compose init (TS engine; python retired — see python-legacy branch)' });
-      });
-    }
+    const self = this;
+    const stratumRouter = express.Router();
+    stratumRouter.use('/api/stratum', createStratumRouter());
+    attachStratumRoutes(stratumRouter, {
+      store: this.store,
+      scheduleBroadcast: () => this.scheduleBroadcast(),
+      broadcastMessage: (msg) => this.broadcastMessage(msg),
+      // Lazily resolved: the poller only exists while stratum is enabled
+      // (capabilities can flip at runtime via refreshConfig/switch).
+      get sync() { return self._stratumSync; },
+    });
+    app.use((req, res, next) => {
+      if (this._config.capabilities?.stratum) return stratumRouter(req, res, next);
+      if (req.path.startsWith('/api/stratum')) return res.status(503).json({ error: 'Stratum not enabled', hint: 'compose init (TS engine; python retired — see python-legacy branch)' });
+      return next();
+    });
+    if (this._config.capabilities?.stratum) this._ensureStratumSync().start();
 
     // ── COMP-OBS-BRANCH: CC-session watcher (opt-in) ──────────────────────
     // Default OFF. Enable by setting `capabilities.cc_session_watcher: true` in compose.json
     // or by setting the `CC_SESSION_WATCHER=1` env var. When enabled, Forge reads
     // `~/.claude/projects/**/*.jsonl` and emits BranchLineage + DecisionEvents tied to the
     // current feature via sessions.json's transcriptPath basename.
+    this._refreshCCWatcher = () => {
+    this._ccWatcher?.stop();
+    this._ccWatcher = null;
     const ccWatcherEnabled =
       this._config.capabilities?.cc_session_watcher === true ||
       process.env.CC_SESSION_WATCHER === '1';
@@ -359,6 +373,9 @@ export class VisionServer {
         console.warn('[vision] cc-session-watcher failed to start:', err.message);
       }
     }
+
+    };
+    this._refreshCCWatcher();
 
     // ── Haiku summary broadcast ─────────────────────────────────────────────
     if (this.sessionManager) {
@@ -476,7 +493,47 @@ export class VisionServer {
     }
   }
 
+  /** The live config object routes and the workspace binding both hold. */
+  get config() { return this._config; }
+
+  refreshConfig(config) {
+    this._stratumSync?.stop();
+    // C4: the incoming config may BE the object we already hold — the workspace
+    // binding aliases it, so `switch(root, ctx.binding.config)` hands it straight
+    // back. Snapshot first: clearing the holder would otherwise empty the very
+    // config being installed, leaving the workspace with no capabilities at all.
+    const next = JSON.parse(JSON.stringify(config ?? {}));
+    // Existing routes hold this capabilities object; update it in place.
+    const capabilities = this._config.capabilities ?? {};
+    for (const key of Object.keys(capabilities)) delete capabilities[key];
+    Object.assign(capabilities, next.capabilities);
+    for (const key of Object.keys(this._config)) delete this._config[key];
+    Object.assign(this._config, next, { capabilities });
+    if (this.sessionManager) this.sessionManager._featureRoot = resolveProjectPath('features');
+    this._refreshCCWatcher?.();
+  }
+
+  suspend() {
+    this._healthMonitor?.suspend();
+    this._coalescingBuffer?.stop();
+    this._stratumSync?.stop();
+    this._ccWatcher?.stop();
+    this._worktreeGC?.stop();
+    for (const client of this.clients) client.close(1000, 'Workspace changed');
+    this.clients.clear();
+  }
+
+  resume() {
+    this._healthMonitor?.resume();
+    this._coalescingBuffer?.start();
+    if (this._config.capabilities?.stratum) this._ensureStratumSync().start();
+    this._ccWatcher?.start();
+    this._worktreeGC?.start();
+  }
+
   close() {
+    this.suspend();
+    this._designSessionManager?.destroy();
     this._coalescingBuffer?.stop();
     if (this._stratumSync) this._stratumSync.stop();
     if (this._healthMonitor) this._healthMonitor.destroy();

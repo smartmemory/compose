@@ -23,3 +23,6 @@ __pycache__/
 .claude/session-context.*.md
 .compose/breadcrumbs.log
 .compose/build-stream.jsonl
+
+# Codex agent run logs
+.codex-out/

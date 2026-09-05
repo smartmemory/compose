@@ -619,33 +619,27 @@ function createNewFlowNode(doc, model, name) {
 }
 
 // ---------------------------------------------------------------------------
-// In-memory draft state (single draft at a time)
+// Workspace-local draft state (disk is authoritative)
 // ---------------------------------------------------------------------------
-
-let currentDraft = null;
 
 const DRAFT_FILE = 'pipeline-draft.json';
 
 function saveDraft(dataDir, draft) {
-  currentDraft = draft;
   mkdirSync(dataDir, { recursive: true });
   writeFileSync(join(dataDir, DRAFT_FILE), JSON.stringify(draft, null, 2));
 }
 
 function loadDraft(dataDir) {
-  if (currentDraft) return currentDraft;
   const p = join(dataDir, DRAFT_FILE);
   if (!existsSync(p)) return null;
   try {
-    currentDraft = JSON.parse(readFileSync(p, 'utf-8'));
-    return currentDraft;
+    return JSON.parse(readFileSync(p, 'utf-8'));
   } catch {
     return null;
   }
 }
 
 function clearDraft(dataDir) {
-  currentDraft = null;
   const p = join(dataDir, DRAFT_FILE);
   try { if (existsSync(p)) unlinkSync(p); } catch { /* ignore */ }
 }

@@ -10,8 +10,6 @@
  * payload themselves (see `useAgentStream` for an example).
  */
 
-import { agentServerUrl } from './agentServer.js';
-import { getAuthMode } from './wsFetch.js';
 import { streamUrl } from './wsUrl.js';
 
 const DEFAULT_MAX_BACKOFF_MS = 30_000;
@@ -182,17 +180,10 @@ export function createAgentStream({
 
 /**
  * Default URL builder for the agent stream — the agent-server runs on
- * AGENT_PORT (default 4002) on the same hostname as the page.
+ * The same-origin workspace-aware agent proxy.
  * COMP-COCKPIT-2: delegates to the shared agentServerUrl helper.
  */
 export function defaultAgentStreamUrl() {
   if (typeof window === 'undefined' || !window.location) return '';
-  if (getAuthMode() === 'mobile-paired') {
-    // COMP-MOBILE-REMOTE S05: paired mode reaches the agent stream through the
-    // 4001 proxy (?token= carries the access JWT — EventSource can't set
-    // headers). agentStream reconnects on error, which re-invokes this builder
-    // and naturally picks up refreshed tokens.
-    return streamUrl('/api/agent/proxy/stream');
-  }
-  return agentServerUrl('/api/agent/stream');
+  return streamUrl('/api/agent/proxy/stream');
 }

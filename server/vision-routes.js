@@ -60,7 +60,6 @@ import {
 } from '../lib/lifecycle-modes.js';
 import { requireSensitiveOrPaired as requireSensitiveToken } from './security.js';
 
-const PROJECT_ROOT = getTargetRoot();
 
 /**
  * Read the compose.json config for an ARBITRARY workspace root (not the bound
@@ -82,10 +81,10 @@ function loadComposeConfig(root) {
  * @param {object} app — Express app
  * @param {{ store: object, scheduleBroadcast: function, broadcastMessage: function, projectRoot: string, settingsStore?: object, capabilities?: object }} deps
  */
-export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMessage, projectRoot = PROJECT_ROOT, settingsStore, capabilities }) {
+export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMessage, projectRoot = getTargetRoot(), settingsStore, capabilities }) {
   // COMP-MCP-ENFORCE: when enabled, lifecycle transitions are verdict-gated by
   // stratum's STRAT-GUARD (fail-closed). Default OFF — legacy behavior intact.
-  const guardEnabled = capabilities?.guard === true;
+  const guardEnabled = () => capabilities?.guard === true;
 
   // COMP-MCP-ENFORCE Slice 4: opt-in loopback REST auth on vision MUTATION
   // endpoints (lifecycle transitions, iterations, gate resolve, item CRUD,
@@ -96,9 +95,8 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
   // returns 503 (mutations disabled) rather than silently allowing them — enabling
   // auth without a token is a misconfiguration, not an open door. Pass-through
   // when off, so route wiring is unconditional.
-  const guardAuthEnabled = capabilities?.guardAuth === true;
   const guardAuth = (req, res, next) =>
-    guardAuthEnabled ? requireSensitiveToken(req, res, next) : next();
+    capabilities?.guardAuth === true ? requireSensitiveToken(req, res, next) : next();
 
   // PARITY-5: GET /api/completions — read-only recorded-completion log for a
   // feature. Reads are open (not guardAuth-wrapped); wraps the same
@@ -267,9 +265,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
   });
 
   // ── Lifecycle endpoints (simplified — no state machine) ──────────────
-  const featuresPath = projectRoot !== PROJECT_ROOT
-    ? resolveFeaturesPathFromConfig(projectRoot, loadComposeConfig(projectRoot))
-    : resolveProjectPath('features');
+  const featuresPath = () => resolveFeaturesPathFromConfig(projectRoot, loadComposeConfig(projectRoot));
 
   // Phase graph + skippable + terminal are owned by the mode registry (single
   // source of truth shared with the STRAT-GUARD graph) — see COMP-MCP-ENFORCE /
@@ -337,7 +333,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       // (the clean bootstrap path; backfill for pre-rollout items happens lazily
       // on first transition). Best-effort — a registration hiccup must not block
       // starting a lifecycle; the next guarded transition re-attempts ensureGuard.
-      if (guardEnabled) {
+      if (guardEnabled()) {
         try { await ensureGuard(featureCode, genesis, projectRoot, mode); }
         catch (e) { console.warn(`[lifecycle/start] guard register for ${featureCode} failed: ${e.message}`); }
         // Slice 2: starting a lifecycle projects the genesis phase → IN_PROGRESS so
@@ -406,7 +402,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (!valid?.includes(targetPhase)) return res.status(400).json({ error: `Invalid transition: ${from} → ${targetPhase}` });
 
       // COMP-MCP-ENFORCE: verdict-gate the transition (fail-closed) before mutating.
-      if (guardEnabled) {
+      if (guardEnabled()) {
         const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, workspaceRoot: projectRoot, resolvedBy: 'agent', mode: modeOf(item) });
         if (!g.applied) return res.status(422).json({ error: 'transition refused by guard', from, to: targetPhase, verdict: g.verdict, guardError: g.error });
       }
@@ -419,7 +415,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       // COMP-MCP-ENFORCE Slice 2 (lifecycle-as-truth): project the new phase onto
       // feature.json STATUS (best-effort; idempotent — only writes on a real change).
       // COMP-ROADMAP-PLAN: skipped for tracksFeatureJson:false modes (no feature.json).
-      if (guardEnabled && getMode(modeOf(item)).runner.tracksFeatureJson) await projectFeatureStatus({ featureCode: item.lifecycle.featureCode, phase: targetPhase, cwd: projectRoot });
+      if (guardEnabled() && getMode(modeOf(item)).runner.tracksFeatureJson) await projectFeatureStatus({ featureCode: item.lifecycle.featureCode, phase: targetPhase, cwd: projectRoot });
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: targetPhase, outcome, timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, outcome, timestamp: now }));
@@ -448,7 +444,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (!valid?.includes(targetPhase)) return res.status(400).json({ error: `Invalid transition: ${from} → ${targetPhase}` });
 
       // COMP-MCP-ENFORCE: verdict-gate the skip (fail-closed) before mutating.
-      if (guardEnabled) {
+      if (guardEnabled()) {
         const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, workspaceRoot: projectRoot, resolvedBy: 'agent', mode: modeOf(item) });
         if (!g.applied) return res.status(422).json({ error: 'transition refused by guard', from, to: targetPhase, verdict: g.verdict, guardError: g.error });
       }
@@ -460,7 +456,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       store.updateLifecycle(req.params.id, item.lifecycle);
       // COMP-MCP-ENFORCE Slice 2 (lifecycle-as-truth): project phase → STATUS.
       // COMP-ROADMAP-PLAN: skipped for tracksFeatureJson:false modes (no feature.json).
-      if (guardEnabled && getMode(modeOf(item)).runner.tracksFeatureJson) await projectFeatureStatus({ featureCode: item.lifecycle.featureCode, phase: targetPhase, cwd: projectRoot });
+      if (guardEnabled() && getMode(modeOf(item)).runner.tracksFeatureJson) await projectFeatureStatus({ featureCode: item.lifecycle.featureCode, phase: targetPhase, cwd: projectRoot });
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: targetPhase, outcome: 'skipped', timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, outcome: 'skipped', timestamp: now }));
@@ -489,7 +485,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       // The `<from>→killed` edge has no predicate, so it only fails if the guard
       // is unreachable — consistent with advance/skip/complete. Authorized
       // bypass remains stratum_guard_override (Slice 3).
-      if (guardEnabled) {
+      if (guardEnabled()) {
         const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from, to: 'killed', workspaceRoot: projectRoot, resolvedBy: 'agent', mode: modeOf(item) });
         if (!g.applied) return res.status(422).json({ error: 'kill refused by guard', from, to: 'killed', verdict: g.verdict, guardError: g.error });
       }
@@ -505,7 +501,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       // COMP-MCP-ENFORCE Slice 2: project kill → KILLED onto feature.json
       // (closes the COMP-PARITY-7 gap — kill previously wrote vision-state only).
       // COMP-ROADMAP-PLAN: skipped for tracksFeatureJson:false modes (no feature.json).
-      if (guardEnabled && getMode(modeOf(item)).runner.tracksFeatureJson) await projectFeatureStatus({ featureCode: item.lifecycle.featureCode, phase: 'killed', cwd: projectRoot });
+      if (guardEnabled() && getMode(modeOf(item)).runner.tracksFeatureJson) await projectFeatureStatus({ featureCode: item.lifecycle.featureCode, phase: 'killed', cwd: projectRoot });
       scheduleBroadcast();
       broadcastMessage({ type: 'lifecycleTransition', itemId: req.params.id, from, to: 'killed', outcome: 'killed', timestamp: now });
       emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({ featureCode: item.lifecycle.featureCode, from, to: 'killed', outcome: 'killed', timestamp: now }));
@@ -559,7 +555,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
           // Guard on: no default — the evidence check attests (test command) or
           // the caller states it. Guard off: the cockpit's pre-existing default
           // (flag-off parity, the same opt-out the gate itself honours in AC-5).
-          testsPass: guardEnabled ? tests_pass : (tests_pass ?? true),
+          testsPass: guardEnabled() ? tests_pass : (tests_pass ?? true),
           filesChanged: files_changed ?? [],
           notes: notes ?? `cockpit lifecycle: ${featureCode} complete`,
           workspaceRoot: projectRoot,
@@ -598,7 +594,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       } else {
         // Fix/plan (no feature.json — COMP-COMPLETION-GATE-MODES) and items
         // with no feature code: the pre-slice-3 path, byte-identical.
-        if (guardEnabled) {
+        if (guardEnabled()) {
           const ev = await verifyCompletionEvidence({
             commitSha: req.body?.commit_sha,
             cwd: projectRoot,
@@ -847,7 +843,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (!item.lifecycle?.featureCode) {
         return res.status(400).json({ error: 'Item has no lifecycle featureCode' });
       }
-      const assessment = new ArtifactManager(featuresPath, item.lifecycle?.mode).assess(item.lifecycle.featureCode);
+      const assessment = new ArtifactManager(featuresPath(), item.lifecycle?.mode).assess(item.lifecycle.featureCode);
       res.json(assessment);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -861,7 +857,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (!item.lifecycle?.featureCode) {
         return res.status(400).json({ error: 'Item has no lifecycle featureCode' });
       }
-      const result = new ArtifactManager(featuresPath, item.lifecycle?.mode).scaffold(item.lifecycle.featureCode, req.body);
+      const result = new ArtifactManager(featuresPath(), item.lifecycle?.mode).scaffold(item.lifecycle.featureCode, req.body);
       res.json(result);
     } catch (err) {
       res.status(400).json({ error: err.message });

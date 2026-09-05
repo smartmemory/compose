@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { isRemoteMode, streamUrl } from '../lib/wsUrl.js';
+import { streamUrl } from '../lib/wsUrl.js';
+import { wsFetch } from '../lib/wsFetch.js';
+import { useWorkspace } from '../contexts/WorkspaceContext.jsx';
+import { agentServerUrl } from '../lib/agentServer.js';
 import MessageCard from './agent/MessageCard.jsx';
 import ChatInput from './agent/ChatInput.jsx';
 import {
@@ -23,7 +26,6 @@ import { applyLaneEvent, deriveParallelSummary } from './agent-stream-lanes.js';
  * unmount/remount cycles don't reset the message history or close the SSE stream.
  */
 
-const AGENT_PORT = parseInt(import.meta.env.VITE_AGENT_PORT || '4002', 10);
 const SESSION_STORAGE_KEY = 'compose-agent-session';
 const MAX_MESSAGES = 500;
 const MAX_ACTIVITY_LOG = 8;
@@ -282,11 +284,7 @@ function processMessage(msg) {
 
 function connect() {
   if (_state.es) return; // handle already exists
-  // Remote mode (cockpit through a tunnel): only 4001 is exposed — use the
-  // authenticated proxy path. Localhost keeps the direct 4002 connection.
-  const url = isRemoteMode()
-    ? streamUrl('/api/agent/proxy/stream')
-    : `${window.location.protocol}//${window.location.hostname}:${AGENT_PORT}/api/agent/stream`;
+  const url = streamUrl('/api/agent/proxy/stream');
 
   const handle = createAgentStream({
     url,
@@ -368,13 +366,8 @@ function connect() {
 const COMPOSE_TOKEN = import.meta.env.VITE_COMPOSE_API_TOKEN;
 
 async function postAgent(path, body) {
-  // TODO COMP-WORKSPACE-AGENT-SVR
-  // Remote mode: only 4001 is exposed — route through the authenticated proxy
-  // (path /api/agent/X → /api/agent/proxy/X, relative). Localhost: direct 4002.
-  const target = isRemoteMode()
-    ? path.replace(/^\/api\/agent\//, '/api/agent/proxy/')
-    : `${window.location.protocol}//${window.location.hostname}:${AGENT_PORT}${path}`;
-  const res = await fetch(
+  const target = agentServerUrl(path);
+  const res = await wsFetch(
     target,
     {
       method: 'POST',
@@ -405,6 +398,7 @@ function formatElapsed(ms) {
 }
 
 export default function AgentStream() {
+  const { workspace } = useWorkspace();
   const [connected, setConnected] = useState(_state.connected);
   const [messages, setMessages] = useState(_state.messages);
   const [agentStatus, setAgentStatusState] = useState({
@@ -442,11 +436,24 @@ export default function AgentStream() {
     };
   }, []);
 
-  // Start SSE connection
+  // Retain the stream through HMR, but never retain another workspace's session.
   useEffect(() => {
+    if (!workspace?.root) return;
+    if (_state.workspaceRoot !== workspace.root) {
+      _state.es?.close();
+      clearTimeout(_state._idleTimer);
+      Object.assign(_state, {
+        workspaceRoot: workspace.root, es: null, connected: false, sessionId: null,
+        messages: [], agentStatus: 'idle', agentTool: null, agentCategory: null,
+        currentActivity: null, activityLog: [], sourceStatus: { build: null, interactive: null },
+        parallelTasks: null, lanes: new Map(), streamError: null, retryInfo: null, stalled: false,
+      });
+      setMessages([]); setConnected(false);
+      setAgentStatusState({ status: 'idle', tool: null, category: null, currentActivity: null });
+      sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    }
     connect();
-    // No cleanup: SSE survives HMR, same as old WebSocket pattern
-  }, []);
+  }, [workspace?.root]);
 
   // Sticky scroll: auto-scroll only when user is already at bottom
   const handleScroll = useCallback(() => {

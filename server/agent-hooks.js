@@ -9,6 +9,8 @@
  * Terminal.jsx and vision-server.js).
  */
 
+import { getTargetRoot, withProjectContext } from './project-root.js';
+import { deriveId } from '../lib/discover-workspaces.js';
 import { resolvePort } from '../lib/resolve-port.js';
 
 const API_SERVER = `http://127.0.0.1:${resolvePort()}`;
@@ -26,7 +28,11 @@ async function post(path, body) {
   try {
     const res = await fetch(`${API_SERVER}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-compose-workspace-id': deriveId({ root: getTargetRoot() }).id,
+        ...(process.env.COMPOSE_API_TOKEN ? { 'x-compose-token': process.env.COMPOSE_API_TOKEN } : {}),
+      },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(5000),
     });
@@ -102,3 +108,10 @@ export const HOOK_OPTIONS = {
   SessionStart: [{ hooks: [sessionStartHook] }],
   SessionEnd: [{ hooks: [sessionEndHook] }],
 };
+
+/** SDK callbacks can be invoked outside the HTTP async context. Pin explicitly. */
+export function hooksForProject(binding) {
+  return Object.fromEntries(Object.entries(HOOK_OPTIONS).map(([event, groups]) => [event,
+    groups.map(group => ({ ...group, hooks: group.hooks.map(hook => (...args) => withProjectContext(binding, () => hook(...args))) })),
+  ]));
+}

@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+### Wiring repair — execution contract, cancellation, workspace isolation
+
+Three review/repair rounds (Codex → Opus → Codex, alternating reviewer and
+fixer) over a Codex-found set of wiring gaps. Full trail in
+`docs/reviews/2026-09-05-wiring-repair*.md`. Requires `@smartmemory/stratum`
+`^0.4.0` (MCP surface 17).
+
+- **Execution contract.** Compose sends the fields each call actually needs
+  (`cancellationId`, `effort`, `thinking`, tool filters, `sandboxMode`) and
+  refuses with `UNSUPPORTED_AGENT_OPTIONS` only when the connected Stratum
+  lacks one of them, naming the installed and required surface. Codex tiers
+  resolve to Codex models and efforts (`model-tiers.js`), never to Claude
+  models. Consumer worktree implementation, fix passes, and the Codex
+  preflight request `workspace-write`; reviewer profiles stay read-only.
+- **Cancellation.** A foreground timeout or interrupt now stops the agent:
+  the MCP path registers a `cancellationId` before dispatch and waits for
+  Stratum's acknowledged teardown; the local Claude fanout owns the SDK
+  process group (SIGTERM, `COMPOSE_CANCEL_GRACE_MS` grace, SIGKILL, bounded
+  reap; Windows falls back to the SDK's own abort). Both waits are bounded
+  by `COMPOSE_CANCEL_TIMEOUT_MS` and surface `CANCELLATION_TEARDOWN_TIMEOUT`.
+  A transport failure keeps its original error and stays retryable; only an
+  unrecognised cancel acknowledgement is fatal. The policy-revision pass
+  fails open again on a stuck-detector abort.
+- **Usage accounting.** Failed, timed-out, interrupted, and late-resolving
+  runs all carry usage, split, and USD provenance into receipts, including
+  the review-repair path.
+- **Workspace isolation.** Switching projects rebinds every service: routes,
+  settings, vision store, lifecycle config, sessions, agent registry,
+  watchers, hooks, and MCP feature/profile bindings. Async work and spawned
+  processes keep their original root. Suspended workspaces are fully
+  quiesced; retention is an LRU that evicts only idle workspaces (no running
+  builds, SDK queries, streams, design dispatches, or monitored agents) with
+  a busy-only capacity backstop. A same-root switch refreshes config without
+  dropping sockets. Malformed `compose.json` fails with the file named.
+- **Test runners.** `npm test` includes `test/golden/*.test.js` and
+  `src/**/*.test.{js,jsx}`; `test/test-discovery.test.js` fails if a test
+  location is dropped from the runners. New real-seam suites:
+  `execution-runtime` (stdio MCP → Stratum connector → OS process),
+  `workspace-switch-runtime` (production HTTP/WS server), `workspace-review-fixes`
+  (Express handlers, no port), `review-fixes-runtime`, `round3-execution`.
+- **Cockpit.** Agent traffic goes through the :4001 workspace proxy;
+  `VITE_AGENT_PORT` is gone.
+
 ### STRAT-USAGE-SPLIT — stop filing input tokens as output
 
 The TS `agent_run` envelope now carries the connector-reported token detail

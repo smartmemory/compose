@@ -12,6 +12,7 @@
  */
 
 import path from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { findProjectRoot } from './find-root.js';
@@ -42,15 +43,40 @@ let _targetRoot = (() => {
 
 let _dataDir = path.join(_targetRoot, '.compose', 'data');
 let _configCache = null;
+const projectContext = new AsyncLocalStorage();
+
+/** Pin a request and all of its asynchronous descendants to one workspace. */
+export function withProjectContext(binding, fn) {
+  return projectContext.run(binding, fn);
+}
+
+/** Keep asynchronous work pinned even when its HTTP client disconnects. */
+export async function trackProjectWork(operation) {
+  const binding = projectContext.getStore();
+  if (!binding) return operation();
+  binding.activeWork = (binding.activeWork ?? 0) + 1;
+  try { return await operation(); }
+  finally { binding.activeWork--; }
+}
+
+/** Validate a destination before changing the process default or its services. */
+export function prepareProject(newRoot) {
+  const targetRoot = path.resolve(newRoot);
+  if (!fs.statSync(targetRoot).isDirectory()) throw new Error(`Project path is not a directory: ${targetRoot}`);
+  const dataDir = path.join(targetRoot, '.compose', 'data');
+  fs.mkdirSync(dataDir, { recursive: true });
+  const config = readProjectConfig(targetRoot, true);
+  return { targetRoot, dataDir, config };
+}
 
 /** The target project being developed. */
-export function getTargetRoot() { return _targetRoot; }
+export function getTargetRoot() { return projectContext.getStore()?.targetRoot ?? _targetRoot; }
 
 /** Data directory for Compose state. Lives in the target project. */
-export function getDataDir() { return _dataDir; }
+export function getDataDir() { return projectContext.getStore()?.dataDir ?? _dataDir; }
 
 let _currentWorkspaceId = null;
-export function getCurrentWorkspaceId() { return _currentWorkspaceId; }
+export function getCurrentWorkspaceId() { return projectContext.getStore()?.workspaceId ?? _currentWorkspaceId; }
 export function setCurrentWorkspaceId(id) { _currentWorkspaceId = id; }
 
 // ---------------------------------------------------------------------------
@@ -73,15 +99,12 @@ export function onProjectSwitch(fn) {
  * @returns {{ targetRoot: string, dataDir: string }}
  */
 export function switchProject(newRoot) {
-  const resolved = path.resolve(newRoot);
-  if (!fs.existsSync(resolved)) {
-    throw new Error(`Project path does not exist: ${resolved}`);
-  }
-  _targetRoot = resolved;
-  _dataDir = path.join(resolved, '.compose', 'data');
-  _configCache = null;
-  fs.mkdirSync(_dataDir, { recursive: true });
-  console.log(`[project-root] Switched to: ${resolved}`);
+  const prepared = prepareProject(newRoot);
+  _targetRoot = prepared.targetRoot;
+  _dataDir = prepared.dataDir;
+  _configCache = prepared.config;
+  _currentWorkspaceId = null;
+  console.error(`[project-root] Switched to: ${_targetRoot}`);
   for (const fn of _switchListeners) {
     try { fn(_targetRoot, _dataDir); } catch (e) { console.error('[project-root] Switch listener error:', e.message); }
   }
@@ -107,16 +130,32 @@ function cloneConfig(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
-export function loadProjectConfig() {
-  if (_configCache) return cloneConfig(_configCache);
-  const configPath = path.join(getTargetRoot(), '.compose', 'compose.json');
+function readProjectConfig(root, strict = false) {
+  const file = path.join(root, '.compose', 'compose.json');
   try {
-    _configCache = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    return cloneConfig(_configCache);
-  } catch {
-    _configCache = DEFAULT_CONFIG;
+    const config = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('project config must be a JSON object');
+    return { ...config, capabilities: { ...DEFAULT_CONFIG.capabilities, ...config.capabilities } };
+  } catch (err) {
+    if (strict && err.code !== 'ENOENT') {
+      // C10: a malformed config is fatal on purpose — silently falling back to
+      // defaults switched the workspace into a configuration nobody wrote. Say
+      // which file is broken and what to do about it; a bare SyntaxError does
+      // neither. A MISSING file is still fine (defaults apply).
+      throw Object.assign(
+        new Error(`Invalid Compose config at ${file}: ${err.message}. Fix the file or delete it to fall back to defaults.`),
+        { code: 'InvalidProjectConfig', file, cause: err },
+      );
+    }
     return cloneConfig(DEFAULT_CONFIG);
   }
+}
+
+export function loadProjectConfig() {
+  const context = projectContext.getStore();
+  if (context) return cloneConfig(context.config ?? readProjectConfig(context.targetRoot));
+  _configCache ??= readProjectConfig(_targetRoot);
+  return cloneConfig(_configCache);
 }
 
 export function resolveProjectPath(key) {

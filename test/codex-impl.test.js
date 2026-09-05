@@ -168,13 +168,13 @@ describe('COMP-CODEX-IMPL startFresh role injection', () => {
 // ---------------------------------------------------------------------------
 
 describe('COMP-CODEX-IMPL preflight worktree probe', () => {
-  function withGitRepo(fn) {
+  async function withGitRepo(fn) {
     const dir = mkdtempSync(join(tmpdir(), 'cci-git-'));
     try {
       execSync('git init -q && git config user.email t@t && git config user.name t', { cwd: dir });
       writeFileSync(join(dir, 'README.md'), '# probe\n');
       execSync('git add -A && git commit -q -m init', { cwd: dir });
-      return fn(dir);
+      return await fn(dir);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -247,6 +247,22 @@ describe('COMP-CODEX-IMPL preflight worktree probe', () => {
       const r = await preflightCodexWorktreeProbe({ cwd: dir, stratum, dataDir, ts: 'fail1' });
       assert.equal(r.ok, false);
       assert.match(r.reason, /did not write the sentinel/);
+    });
+  });
+
+  it('preserves the probe worktree when remote termination is unconfirmed', async () => {
+    await withGitRepo(async (dir) => {
+      let worktree;
+      const uncertainty = Object.assign(new Error('cannot confirm termination'), { code: 'CANCELLATION_UNCONFIRMED' });
+      const stratum = { async runAgentText(_agent, _prompt, opts) { worktree = opts.cwd; throw uncertainty; } };
+      try {
+        await assert.rejects(preflightCodexWorktreeProbe({
+          cwd: dir, stratum, dataDir: join(dir, '.compose', 'data'), ts: `uncertain-${Date.now()}`,
+        }), error => error === uncertainty && error.worktreePath === worktree);
+        assert.equal(existsSync(worktree), true);
+      } finally {
+        if (worktree) execSync(`git worktree remove "${worktree}" --force`, { cwd: dir, stdio: 'pipe' });
+      }
     });
   });
 

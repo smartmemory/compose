@@ -4,9 +4,11 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
-import { runAndNormalize } from '../lib/result-normalizer.js';
+import { runAndNormalize, UserInterruptError } from '../lib/result-normalizer.js';
+import { resolveAgentConfig } from '../lib/agent-string.js';
 import {
   ConsumerStuckError,
   makeAskAgent,
@@ -521,6 +523,47 @@ test('runBuild reports retry-fixer and both main attempts with receipt ownership
   }
 });
 
+// C9: the review-repair fixer used to be dispatched with `profile: <agent literal>`,
+// which drops the sidecar's tool restrictions and model tier. The sibling
+// review_merge repair site keys off the sidecar's `fix` entry; this one must too.
+test('the review-repair fixer runs under the sidecar fix profile', async () => {
+  const code = 'BUG-FIX-PROFILE';
+  const cwd = makeBuildWorkspace(code, {
+    spec: SCOPED_RETRY_SPEC,
+    profiles: { fix: 'claude:read-only-reviewer:critical' },
+  });
+  let agentCall = 0;
+  let doneCall = 0;
+  const stratum = fakeBuildStratum({
+    plan: readyWork({ id: 'nested/work' }),
+    agentRun: async () => {
+      agentCall += 1;
+      if (agentCall === 2) return agentResult({ outcome: 'complete', summary: 'fixed' }, 'fixer-dispatch');
+      return agentResult({ phase: 'work', outcome: 'complete', summary: `main ${agentCall}` }, `main-${agentCall}`);
+    },
+    stepDone: async () => {
+      doneCall += 1;
+      if (doneCall === 1) {
+        return readyWork({ id: 'nested/work', attempt: 2, dispatchToken: 'tok-2', previousFailure: { reason: 'ensure failed' } });
+      }
+      return { status: 'completed', runId: 'flow-receipts' };
+    },
+  });
+  try {
+    await runBuild(code, { cwd, stratum, mode: 'bug', template: 'bug-fix', skipTriage: true, description: 'x' });
+    const runs = stratum.calls.filter((call) => call.type === 'agentRun').map((call) => call.args);
+    assert.equal(runs.length, 3, 'main, fixer, main retry');
+    const [main, fixer] = runs;
+    assert.equal(fixer[0], 'claude', 'the fixer keeps the implementer identity');
+    assert.ok(Array.isArray(fixer[2].allowedTools) && fixer[2].allowedTools.length > 0,
+      'the fixer inherits the sidecar profile tool restrictions');
+    assert.equal(fixer[2].modelID, resolveAgentConfig('claude:read-only-reviewer:critical').modelID);
+    assert.equal(main[2].allowedTools, undefined, 'the unprofiled main step stays unrestricted');
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
 test('runBuild fatal main throw reports its receipt before propagating', async () => {
   const code = 'BUG-RECEIPT-FATAL';
   const cwd = makeBuildWorkspace(code);
@@ -552,20 +595,18 @@ test('runBuild fatal main throw reports its receipt before propagating', async (
 test('runBuild late main timeout reports exact raw usage and debits the accumulator', async () => {
   const code = 'BUG-RECEIPT-TIMEOUT';
   const cwd = makeBuildWorkspace(code);
-  let resolveLateRun;
   const stratum = fakeBuildStratum({
-    agentRun: () => new Promise((resolve) => { resolveLateRun = resolve; }),
+    agentRun: (_agent, _prompt, { signal }) => new Promise((resolve) => {
+      const finish = () => resolve({
+        text: JSON.stringify({ phase: 'work', outcome: 'complete', summary: 'late' }),
+        dispatchId: 'late-timeout-dispatch',
+        usage: { tokens: 9, usd: 0.02, ms: 5 },
+        telemetry: { model: 'claude-test', durationMs: 5 },
+      });
+      if (signal.aborted) finish();
+      else signal.addEventListener('abort', finish, { once: true });
+    }),
   });
-  stratum.cancelAgentRun = async () => {
-    stratum.calls.push({ type: 'cancelAgentRun' });
-    resolveLateRun({
-      text: JSON.stringify({ phase: 'work', outcome: 'complete', summary: 'late' }),
-      dispatchId: 'late-timeout-dispatch',
-      usage: { tokens: 9, usd: 0.02, ms: 5 },
-      telemetry: { model: 'claude-test', durationMs: 5 },
-    });
-    return { status: 'cancelled' };
-  };
   try {
     await runBuild(code, {
       cwd, stratum, mode: 'bug', template: 'bug-fix', skipTriage: true, description: 'x', stepTimeoutMs: 5,
@@ -1050,3 +1091,103 @@ test('runAgentText still drops an unlabelled usd (fail closed)', async () => {
   assert.equal(Object.hasOwn(seen[0], 'cost_usd'), false);
   assert.equal(Object.hasOwn(seen[0], 'usd_source'), false);
 });
+
+
+test('policy revision with unconfirmed termination aborts build before any step settlement', async () => {
+  const code = 'BUG-POLICY-CANCEL';
+  const memoryDir = seedCanonicalCatalog();
+  const cwd = makeBuildWorkspace(code, { compose: { policyCheck: { memoryDir } } });
+  let call = 0;
+  const uncertainty = Object.assign(new Error('revision still running'), { code: 'CANCELLATION_UNCONFIRMED' });
+  const stratum = fakeBuildStratum({
+    agentRun: async () => {
+      if (++call === 2) throw uncertainty;
+      return agentResult({ phase: 'work', outcome: 'complete', summary: 'Want me to continue with the tests?' }, 'policy-main');
+    },
+  });
+  try {
+    await assert.rejects(
+      runBuild(code, { cwd, stratum, mode: 'bug', template: 'bug-fix', skipTriage: true, description: 'x' }),
+      (error) => error === uncertainty,
+    );
+    assert.equal(call, 2);
+    assert.equal(stepDoneEnvelopes(stratum).length, 0, 'never settle while revision termination is unknown');
+  } finally {
+    _clearCatalogCache();
+    rmSync(cwd, { recursive: true, force: true });
+    rmSync(memoryDir, { recursive: true, force: true });
+  }
+});
+
+for (const [control, receiptsMode] of [
+  ['timeout', true], ['timeout', false], ['interrupt', true], ['interrupt', false],
+]) {
+  test(`review repair ${control} preserves both dispatches in ${receiptsMode ? 'receipts' : 'legacy budget'} mode`, async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'usage-repair-timeout-'));
+    const receipts = receiptStratum();
+    const envelopes = [];
+    let dispatchCount = 0;
+    const ui = Object.assign(new EventEmitter(), {
+      stepStart() {}, stepDone() {}, info() {}, debug() {}, warn() {}, toolUse() {}, toolSummary() {}, findings() {},
+      consumeAction: () => 'skip',
+    });
+    const stratum = {
+      ...receipts, onEvent: () => () => {},
+      async agentRun(_agent, _prompt, { signal }) {
+        if (++dispatchCount === 1) return {
+          text: 'review requires formatting', dispatchId: 'primary-review',
+          usage: { tokens: 5, ms: 4 }, telemetry: { model: 'gpt-primary', durationMs: 4 },
+        };
+        if (control === 'interrupt') queueMicrotask(() => ui.emit('interrupt'));
+        return new Promise((_resolve, reject) => {
+          const finish = () => reject(Object.assign(new Error('repair stopped'), {
+            name: 'AbortError', dispatchId: 'repair-review', usage: { tokens: 3, ms: 2 },
+            telemetry: { model: 'gpt-repair', durationMs: 2 },
+          }));
+          if (signal.aborted) finish();
+          else signal.addEventListener('abort', finish, { once: true });
+        });
+      },
+      async stepDone(_flow, _step, envelope) { envelopes.push(envelope); return { status: 'completed', runId: 'flow-1' }; },
+      audit: async () => ({}),
+    };
+    const descriptor = {
+      id: 'review/0', step: 'review', flow: 'build', itemIndex: 0, stage: 0,
+      generation: 1, attempt: 1, epoch: 1, dispatchToken: 'tok-1',
+      agent: 'codex', do: 'review', item: { id: 'T1' }, policy: { isolation: 'none' },
+      contract: { root: 'ReviewResult', contracts: { ReviewResult: { summary: 'string', findings: 'array' } } },
+    };
+    const artifacts = {
+      hooks: {}, reconcileDescriptor: () => ({ action: 'execute', worktree: cwd }),
+      prepareIssuance: () => ({ diff: '' }), reconcileAudit() {}, restoreToPreStageWitness() {},
+    };
+    const seenUsage = [];
+    try {
+      const running = runConsumerIssuance({
+        descriptor, flowId: 'flow-1', stratum, artifacts, perItemTimeoutMs: control === 'timeout' ? 30 : 1_000,
+        localSpec: { flows: { build: { steps: [{ id: 'review', fanout: { steps: [{ agent: 'codex', do: 'review', out: 'ReviewResult' }] } }] } }, contracts: descriptor.contract.contracts },
+        context: { cwd, flowId: 'flow-1', receiptsMode, onUsage: (usage, meta) => {
+          seenUsage.push(usage);
+          return reportUsageReceipts({ stratum, flowId: 'flow-1', receiptsMode }, usage, meta);
+        } },
+        progress: ui,
+        streamWriter: { write() {} },
+      });
+      if (control === 'interrupt') await assert.rejects(running, UserInterruptError);
+      else await running;
+      assert.equal(dispatchCount, 2);
+      assert.equal(seenUsage.length, 1);
+      assert.deepEqual(seenUsage[0].usages.map((entry) => entry.dispatch_id), ['primary-review', 'repair-review']);
+      assert.equal(seenUsage[0].output_tokens, 8);
+      assert.equal(envelopes.length, control === 'interrupt' ? 0 : 1);
+      if (control === 'timeout') assert.match(envelopes[0].failure, /timed out/i);
+      if (receiptsMode) {
+        assert.equal(receipts.calls.length, 2);
+        assert.deepEqual(receipts.calls.map((entry) => entry.receipt.usage), [{ tokens: 5, ms: 4 }, { tokens: 3, ms: 2 }]);
+        if (control === 'timeout') assert.equal(Object.hasOwn(envelopes[0], 'usage'), false);
+      } else if (control === 'timeout') {
+        assert.deepEqual(envelopes[0].usage, { tokens: 8, ms: 6 });
+      }
+    } finally { rmSync(cwd, { recursive: true, force: true }); }
+  });
+}

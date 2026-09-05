@@ -16,7 +16,7 @@ import { randomUUID } from 'node:crypto';
 import { parseDecisionBlocks } from '../src/components/vision/designSessionState.js';
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 import { KNOWN_VERSIONS } from '../lib/build-stream-schema.js';
-import { getTargetRoot, resolveProjectPath } from './project-root.js';
+import { getTargetRoot, resolveProjectPath, trackProjectWork } from './project-root.js';
 import { resolveStratumMcpConnection } from '../lib/stratum-engine.js';
 import { relForDisplay } from '../lib/project-paths.js';
 
@@ -50,11 +50,11 @@ async function _getStratum(root = getTargetRoot(), { factory } = {}) {
 // Test-only export: exercise the root-keyed connect/cache without a live server.
 export { _getStratum as _getDesignStratumForTest };
 
-/** Tear down every cached Stratum connection. Tests should call this in after(). */
-export async function closeDesignStratum() {
-  const clients = [..._stratumClients.values()];
-  _stratumClients.clear();
-  _stratumConnectPromises.clear();
+/** Tear down an evicted workspace's connection, or all connections at shutdown. */
+export async function closeDesignStratum(projectRoot) {
+  const keys = projectRoot === undefined ? [..._stratumConnectPromises.keys()] : [projectRoot];
+  const clients = keys.map(key => _stratumClients.get(key)).filter(Boolean);
+  for (const key of keys) { _stratumClients.delete(key); _stratumConnectPromises.delete(key); }
   for (const c of clients) {
     try { await c.close(); } catch { /* ignore */ }
   }
@@ -65,6 +65,12 @@ export const designListeners = new Map();
 
 /** In-flight guard — prevents overlapping agent runs for the same session. */
 const _inFlight = new Set();
+
+export function hasDesignWork(projectRoot) {
+  const prefix = `${projectRoot}:`;
+  return [..._inFlight].some(key => key.startsWith(prefix))
+    || [...designListeners].some(([key, clients]) => key.startsWith(prefix) && clients.size > 0);
+}
 
 /**
  * Build a session key for SSE listener scoping.
@@ -384,7 +390,7 @@ export function attachDesignRoutes(app, { getSessionManager, getProjectRoot }) {
   });
 
   // POST /api/design/complete — generate design doc and mark session complete
-  app.post('/api/design/complete', async (req, res) => {
+  app.post('/api/design/complete', (req, res) => trackProjectWork(async () => {
     const { scope, featureCode, draftDoc } = req.body || {};
     try {
       const sessionManager = getSessionManager();
@@ -528,7 +534,7 @@ Output ONLY the Markdown content, no code fences.`;
       }
       res.status(400).json({ error: err.message });
     }
-  });
+  }));
 
   // POST /api/design/revise — mark a decision as superseded and re-ask
   app.post('/api/design/revise', (req, res) => {
