@@ -561,8 +561,9 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
           workspaceRoot: projectRoot,
           mode: modeOf(item),
           visionItemId: req.params.id,
-          visionProjector: ({ visionItemId, commitSha, ledgerRef }) => applyVerifiedProjection(store, {
-            itemId: visionItemId, featureCode, cwd: projectRoot, consultGuard: true,
+          visionProjector: ({ visionItemId, commitSha, ledgerRef, guarded }) => applyVerifiedProjection(store, {
+            itemId: visionItemId, featureCode, cwd: projectRoot, consultGuard: guarded ?? true,
+            guardEnabledOverride: guarded,
             evidence: { commitSha, ledgerRef, source: 'lifecycle/complete' },
           }).then((r) => { if (!r.ok) throw new Error(r.reasons.join('; ')); return r; }),
         });
@@ -626,6 +627,65 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       anchorBoundary(getTargetRoot(), { item, trigger: 'phase-transition' });
 
       res.json({ completedAt: now, ...completionResult });
+    } catch (err) {
+      const status = err.message.includes('not found') ? 404 : 400;
+      res.status(status).json({ error: err.message });
+    }
+  });
+
+  // A reconstructed completion has the same completion evidence and durable
+  // writes as the normal gate, but may be reached from any active lifecycle
+  // phase. The gate owns the terminal history/item mutation as one recoverable
+  // transaction; this route only supplies the live store and emits its effects.
+  app.post('/api/vision/items/:id/lifecycle/backfill', guardAuth, async (req, res) => {
+    try {
+      const item = store.items.get(req.params.id);
+      if (!item?.lifecycle) return res.status(404).json({ error: 'No lifecycle on this item' });
+      const { commit_sha, tests_pass, files_changed, notes, reason, occurrences } = req.body || {};
+      if (typeof reason !== 'string' || reason.trim().length === 0) {
+        return res.status(400).json({ error: 'reason is required' });
+      }
+      const { completionGate } = await import('../lib/completion-gate.js');
+      const featureCode = item.lifecycle.featureCode;
+      const gated = await completionGate({
+        intent: 'backfill', featureCode,
+        ...(commit_sha !== undefined ? { commitSha: commit_sha } : {}),
+        testsPass: tests_pass,
+        filesChanged: files_changed ?? [], notes, reason, occurrences: occurrences ?? [],
+        workspaceRoot: projectRoot, mode: modeOf(item), item, store,
+        visionItemId: req.params.id,
+        visionProjector: ({ visionItemId, commitSha, ledgerRef, guarded }) => applyVerifiedProjection(store, {
+          itemId: visionItemId, featureCode, cwd: projectRoot,
+          consultGuard: guarded ?? true, guardEnabledOverride: guarded,
+          evidence: { commitSha, ledgerRef, source: 'lifecycle/backfill' },
+        }).then((r) => { if (!r.ok) throw new Error(r.reasons.join('; ')); return r; }),
+      });
+      if (!gated.ok) {
+        return res.status(422).json({
+          error: 'backfill refused', refusedAt: gated.refusedAt, reasons: gated.reasons,
+          ...(gated.verdict ? { verdict: gated.verdict } : {}),
+          ...(gated.error ? { guardError: gated.error } : {}),
+        });
+      }
+
+      const timestamp = item.lifecycle.completedAt;
+      if (!gated.replayed) {
+        const terminal = item.lifecycle.phaseHistory?.findLast((entry) => entry.phase === 'complete_backfilled');
+        scheduleBroadcast();
+        broadcastMessage({
+          type: 'lifecycleTransition', itemId: req.params.id, from: terminal?.from ?? null,
+          to: 'complete_backfilled', outcome: terminal?.outcome ?? 'backfilled', timestamp,
+        });
+        emitDecisionEvent(broadcastMessage, buildPhaseTransitionEvent({
+          featureCode, from: terminal?.from ?? null, to: 'complete_backfilled',
+          outcome: terminal?.outcome ?? 'backfilled', timestamp,
+          origin: terminal?.origin, recordedAt: terminal?.recordedAt, confidence: terminal?.confidence,
+        }));
+        emitDriftAxes(broadcastMessage, store, item, projectRoot, timestamp);
+        emitStatusSnapshot(broadcastMessage, store, featureCode, timestamp);
+        anchorBoundary(getTargetRoot(), { item, trigger: 'phase-transition' });
+      }
+      res.json({ completedAt: timestamp, backfill: gated.backfill ?? null, ...gated });
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 400;
       res.status(status).json({ error: err.message });

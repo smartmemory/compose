@@ -80,6 +80,28 @@ describe('deriveDecisionEvents — empty state', () => {
 });
 
 describe('deriveDecisionEvents — phase_transition events', () => {
+  test('preserves backfill provenance and leaves legacy live metadata absent', () => {
+    const phaseHistory = [
+      {
+        from: 'ship', to: 'complete_backfilled', outcome: 'backfilled',
+        timestamp: '2026-09-05T10:00:00.000Z', origin: 'backfill',
+        recordedAt: '2026-09-06T10:00:00.000Z', confidence: 0.9,
+      },
+      { from: null, to: 'explore_design', outcome: null, timestamp: '2026-09-01T10:00:00.000Z' },
+    ];
+    const events = deriveDecisionEvents(
+      { items: new Map([['item-1', makeItem({ featureCode: FC, phaseHistory })]]) }, FC,
+    ).filter((event) => event.kind === 'phase_transition');
+
+    const backfill = events.find((event) => event.metadata.to_phase === 'complete_backfilled');
+    assert.deepEqual(backfill.metadata, {
+      from_phase: 'ship', to_phase: 'complete_backfilled', origin: 'backfill',
+      recorded_at: '2026-09-06T10:00:00.000Z', confidence: 0.9,
+    });
+    const legacyLive = events.find((event) => event.metadata.to_phase === 'explore_design');
+    assert.deepEqual(legacyLive.metadata, { from_phase: 'null', to_phase: 'explore_design' });
+  });
+
   test('derives one phase_transition event per phaseHistory entry', () => {
     const phaseHistory = [
       { from: null, to: 'explore_design', outcome: null, timestamp: '2026-04-24T10:00:00Z' },

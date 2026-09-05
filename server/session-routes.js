@@ -245,7 +245,9 @@ export function attachSessionRoutes(app, { sessionManager, scheduleBroadcast, br
       session: sessionData || recentSessions[0] || null,
       lifecycle: item?.lifecycle ? {
         currentPhase: item.lifecycle.currentPhase,
-        phaseHistory: (item.lifecycle.phaseHistory || []).map(h => ({ phase: h.phase, enteredAt: h.enteredAt, exitedAt: h.exitedAt })),
+        phaseHistory: (item.lifecycle.phaseHistory || []).map(h => ({
+          phase: h.phase, enteredAt: h.enteredAt, exitedAt: h.exitedAt, origin: h.origin,
+        })),
         artifacts: item.lifecycle.artifacts || {},
         pendingGate: item.lifecycle.pendingGate || null,
       } : null,

@@ -617,6 +617,25 @@ export const TOOLS = [
   // Completion writer — COMP-MCP-COMPLETION
   // -------------------------------------------------------------------------
   {
+    name: 'backfill_completion',
+    effect: 'mutating',
+    writes: ["feature-json"],
+    description: 'Reconstruct a completion through the running Compose server from historical evidence. With no configured guard.testCommand, tests_pass must be explicitly true. Each occurrence must cite either a verified commit SHA or a repo-relative file already inside the repository. This is HTTP delegation like complete_feature, so the Compose server must be running.',
+    inputSchema: {
+      type: 'object',
+      required: ['id', 'commit_sha', 'tests_pass', 'files_changed', 'reason'],
+      properties: {
+        id: { type: 'string' },
+        commit_sha: { type: 'string' },
+        tests_pass: { type: 'boolean' },
+        files_changed: { type: 'array', items: { type: 'string' } },
+        notes: { type: 'string' },
+        reason: { type: 'string' },
+        occurrences: { type: 'array', items: { type: 'object' } },
+      },
+    },
+  },
+  {
     name: 'record_completion',
     effect: 'mutating',
     writes: ["feature-json"],
@@ -919,4 +938,3 @@ export const TOOLS = [
     },
   },
 ];
-

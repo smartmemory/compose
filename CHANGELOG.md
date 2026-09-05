@@ -2,6 +2,50 @@
 
 ## Unreleased
 
+### Lifecycle backfill — record a completion the lifecycle never walked (COMP-LIFECYCLE-BACKFILL)
+
+A feature finished outside the lifecycle (before compose, or while the guard was
+off) can now be completed with evidence instead of an override token.
+`POST /api/vision/items/:id/lifecycle/backfill` and the MCP tool
+`backfill_completion` go through the completion gate with `intent:'backfill'`:
+the same evidence checks as a live completion (commit in the repo, tests
+attested), plus dated phase occurrences that are merged into the phase history
+by valid time and land the guard in a distinct terminal state,
+`complete_backfilled`. The state itself is the provenance signal — readers,
+decision events and the UI carry `origin`/`recordedAt`/`confidence` on each
+backfilled entry and leave live entries byte-identical.
+
+- **Crash-safe by construction.** The gate persists a write-ahead intent holding
+  the complete validated write plan before it touches the guard, transitions
+  with `idempotency_key` = the operation id and `expected_policy_checksum`, and
+  flips the record pending → finalized only when every durable write succeeded.
+  Recovery replays the persisted envelope (always with the persisted checksum)
+  and falls back to a read-only ledger verification (`guard digest` + one
+  `guard history`) rather than ever issuing an unchecked transition.
+- **Registered legacy resources upgrade lazily and only under a signed
+  descriptor.** `compose guard descriptors` writes `.compose/guard-upgrades.json`
+  (one entry per stored policy checksum); an operator signs it with
+  `ssh-keygen -Y sign`; the gate applies the matching descriptor through stratum
+  `guard apply-upgrade` on first backfill. Until a descriptor exists, backfill on
+  a registered resource refuses with `upgrade_descriptor_unavailable`;
+  unregistered features register fresh with the new graph and just work. The
+  guard's own trust root (`guard-signers.allowed` in the installed stratum) must
+  carry the signer's public key. Operator steps are in the README.
+- `ensureGuard` tolerates a stored policy equal to the new one minus the backfill
+  node (`status:'legacy'`), so advance/skip/kill/complete on the 35 resources
+  registered before this change keep working after a restart.
+- `@smartmemory/stratum` `^0.4.4` (needs `guard policy`, `guard apply-upgrade`,
+  `guard digest`, `expected_policy_checksum` on `guard transition`).
+- comp-obs-contract 0.2.7: `phase_transition` metadata admits optional
+  `origin`, `recorded_at`, `confidence`.
+- `server/schema-validator.js` enables Ajv `$data` so a contract can pin one
+  field to another's value.
+- Golden flows run the REAL stratum CLI from an isolated copy with a temp `HOME`
+  and an in-test sshsig signer (no test seam in stratum, no fake guard client);
+  the refusal harness pins the taxonomy row by row.
+- Design/blueprint/review trail: `docs/features/COMP-LIFECYCLE-BACKFILL/`
+  (blueprint gate 4 rounds, 41 findings, all confirmed; impl reviews per slice).
+
 ### Completion gate — every completion refused after the stratum 0.4.0 upgrade
 
 Stratum 0.4.0 validates `resolved_by` strictly as `"agent" | "human"`

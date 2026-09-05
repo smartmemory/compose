@@ -177,6 +177,20 @@ compose tracker sync     # reconcile op-log against remote provider
 
 See [docs/configuration.md](docs/configuration.md) for the full `tracker` config reference.
 
+## Backfilling a completion (guarded workspaces)
+
+Sometimes a feature is finished before its lifecycle was ever walked: it shipped before Compose existed, or the guard was switched off at the time. Compose can record that completion with evidence instead of an override token. Call the MCP tool `backfill_completion` (or `POST /api/vision/items/:id/lifecycle/backfill`) with the completing commit, a test attestation, a reason, and dated phase occurrences. The gate verifies the evidence, merges the occurrences into the phase history by their real dates, and moves the guard to `complete_backfilled`. Readers and the UI show which entries were backfilled.
+
+Features that were never registered with the guard need nothing else. Features registered before this release carry an older policy, and the guard will only accept the new one under a signed upgrade descriptor. That signature is an operator step and cannot be automated:
+
+1. Create a signing key (keep it out of any agent): `ssh-keygen -t ed25519 -f ~/.stratum/guard-signing -C "<who>"`
+2. Enrol the PUBLIC key in stratum's trust root, `ts/contracts/guard-signers.allowed`, then release stratum and install that version here.
+3. Generate the descriptors: `compose guard descriptors` (writes `.compose/guard-upgrades.json`).
+4. Sign them: `ssh-keygen -Y sign -f ~/.stratum/guard-signing -n stratum-guard-descriptors .compose/guard-upgrades.json`
+5. Commit `.compose/guard-upgrades.json` and `.compose/guard-upgrades.json.sig`.
+
+Until step 5 is done, a backfill on a registered feature refuses with `upgrade_descriptor_unavailable` and writes nothing. Re-run steps 3 to 5 whenever the lifecycle graph changes again.
+
 ## Remote access (mobile PWA from anywhere)
 
 The mobile cockpit at `/m` can be reached from outside localhost — bring your own tunnel, compose handles auth and pairing:

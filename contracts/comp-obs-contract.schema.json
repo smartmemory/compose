@@ -2,10 +2,11 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://forge.local/contracts/comp-obs-contract.schema.json",
   "title": "COMP-OBS-CONTRACT — Wave 6 shared data model",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "_source": "docs/features/COMP-OBS-CONTRACT/schema.json",
   "_roadmap": "Wave 6 — Situational Awareness",
   "_changelog": {
+    "0.2.7": "COMP-LIFECYCLE-BACKFILL (2026-09-05) — DecisionEvent kind=phase_transition metadata gains three OPTIONAL fields (origin, recorded_at, confidence). additionalProperties:false is kept; required stays [from_phase, to_phase], so every 0.2.6 event still validates.",
     "0.2.6": "COMP-POLICY-CHECK (2026-08-17) — DecisionEvent gains kind=policy_violation (pre-response policy check, emitter server/decision-event-emit.js buildPolicyViolationEvent) with a closed metadata subschema {step_id, rule, matched, suppressed, user_mode, build_id}. Additive — 0.2.5 events continue to validate. Note: BuildStreamEvent.schema_version const stays 0.2.5 (no BuildStreamEvent change in this bump).",
     "0.2.5": "STRAT-PAR-STREAM — added BuildStreamEvent typed discriminated union (12 kinds): 6 new agent-narration kinds (agent_started, tool_use_summary, agent_relay closed + live; iteration_update, tier_result, health_event closed + reserved) and 6 legacy build-level kinds imported from compose/lib/build-stream-writer.js (capability_profile, capability_violation, step_usage, gate_tier_result, health_score, build_end — open metadata, catalog only; STRAT-PAR-STREAM-LEGACY-CLOSE will tighten). Additive — v0.2.4 specs continue to validate.",
     "0.2.4": "COMP-OBS-DRIFT — added optional breach_started_at + breach_event_id to DriftAxis for stable threshold-event identity across WS reconnect; live emit and snapshot rehydration both compose the event id from these persisted fields.",
@@ -265,7 +266,7 @@
         },
         {
           "if":   { "properties": { "kind": { "const": "phase_transition" } } },
-          "then": { "properties": { "metadata": { "type": "object", "required": ["from_phase", "to_phase"], "properties": { "from_phase": { "type": "string" }, "to_phase": { "type": "string" } }, "additionalProperties": false } } }
+          "then": { "properties": { "metadata": { "type": "object", "required": ["from_phase", "to_phase"], "properties": { "from_phase": { "type": "string" }, "to_phase": { "type": "string" }, "origin": { "type": "string", "enum": ["live", "backfill"], "description": "ABSENT means live; emitters pass stored provenance unchanged." }, "recorded_at": { "type": "string", "format": "date-time" }, "confidence": { "type": "number", "minimum": 0, "maximum": 1 } }, "additionalProperties": false } } }
         },
         {
           "if":   { "properties": { "kind": { "const": "drift_threshold" } } },

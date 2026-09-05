@@ -85,10 +85,13 @@ test('CONTRACT: the live partition matches the authored classification', () => {
   const inv = loadToolInventory(TOOLS);
   // Pinned 2026-08-24 against the 51-tool array. These counts are a tripwire:
   // adding a tool SHOULD break this, forcing an explicit classification review.
-  assert.equal(TOOLS.length, 51, 'tool count changed — re-review the classification');
+  // Re-pinned 2026-09-06: +1 mutating — `backfill_completion`
+  // (COMP-LIFECYCLE-BACKFILL S3-2, HTTP delegation through the completion gate,
+  // writes feature-json). Classification reviewed: mutating, not read/setup.
+  assert.equal(TOOLS.length, 52, 'tool count changed — re-review the classification');
   assert.equal(inv.setup.length, 4);
   assert.equal(inv.read.length, 21);
-  assert.equal(inv.mutating.length, 26);
+  assert.equal(inv.mutating.length, 27);
 });
 
 test('CONTRACT: setup set matches mcp-tool-policy SETUP_TOOLS', async () => {

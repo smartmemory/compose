@@ -33,18 +33,13 @@ write_blueprint DONE 2026-09-06, implement READY dispatchToken `e94162a0-6e11-42
   fresh branch uses raw guardTransition (wrapper collapses replayed→applied); projection widening +
   allowlist entry landed in S2; `server/schema-validator.js` gains Ajv `$data:true`.
 
-## In flight
-- S3 → Codex terra/high (workspace-write): route, MCP tool, readers, UI per plan.md Task 3. NOTE plan 3.2
-  "no new allowlist entry" is now wrong (the gate's fix/plan status write is registered); 3.3 projection
-  widening already done in S2.
+- S3 SHIPPED (Codex terra impl `ee9553abb565`, review `25ca71ca7d1b` 3 P2 → fix run `fbcde24e8ccc`; two
+  sandbox-invisible test defects fixed by the controller — `reviews/impl-s3-r1-2026-09-06.md`). Tool inventory
+  re-pinned 52/27. Ship prep in the same commit: stratum ^0.4.4, CHANGELOG, README operator steps, report.md.
 
-## Follow-ups (outside this feature)
-- The gate never validates the persisted intent against `contracts/lifecycle-backfill.schema.json` at
-  runtime (only the contract test does, on the intent the gate actually writes). Wiring it in adds a
-  refusal path §5.11 does not name — a design call, deliberately not made in S2.
-- compose test suites pollute the real `~/.stratum/guards` with fixture registrations (32 ids under this
-  workspace's hash). Run them with `HOME` → temp dir. Falsifier: `ls ~/.stratum/guards | wc -l` stops growing
-  after a `CI=1 npm test`.
+## In flight
+- Full suite once (`CI=1 npm test`, then `test:ui`, `test:tracker`), record_completion through the gate,
+  journal, `stratum_step_done` implement, `stratum_audit`, push.
 
 ## Then
 - plan.md (ordered tasks from the blueprint File Plan, S1→S2→S3).

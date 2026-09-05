@@ -37,6 +37,7 @@ import {
   toolGetFeatureLifecycle,
   toolKillFeature,
   toolCompleteFeature,
+  toolBackfillCompletion,
   toolAssessFeatureArtifacts,
   toolScaffoldFeature,
   toolApproveGate,
@@ -157,6 +158,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         case 'get_feature_lifecycle':    result = toolGetFeatureLifecycle(args); break;
         case 'kill_feature':             result = await toolKillFeature(args); break;
         case 'complete_feature':         result = await toolCompleteFeature(args); break;
+        case 'backfill_completion':       result = await toolBackfillCompletion(args); break;
         case 'start_iteration_loop':     result = await toolIterationStart(args); break;
         case 'report_iteration_result':  result = await toolIterationReport(args); break;
         case 'abort_iteration_loop':     result = await toolIterationAbort(args); break;

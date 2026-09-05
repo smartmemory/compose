@@ -59,6 +59,7 @@ export const LIFECYCLE_PHASE_LABELS = {
   docs:           'Docs',
   ship:           'Ship',
   complete:       'Complete',
+  complete_backfilled: 'Complete (backfilled)',
   killed:         'Killed',
 };
 
