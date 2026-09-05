@@ -36,6 +36,7 @@ export class HealthMonitor {
   #silenceKillMs;
   #defaultTimeoutMs;
   #memoryLimitMB;
+  #suspended = false;
 
   /** @type {Map<string, TrackedAgent>} */
   #agents = new Map();
@@ -91,6 +92,7 @@ export class HealthMonitor {
     // Start silence timers
     this._resetSilenceTimers(agentId);
 
+    if (this.#suspended) return;
     // Wall-clock timeout
     entry.wallClockTimer = setTimeout(() => this._kill(agentId, 'wall_clock_timeout'), this.#defaultTimeoutMs);
 
@@ -117,6 +119,8 @@ export class HealthMonitor {
     return this.#agents.has(agentId);
   }
 
+  get hasActiveProcesses() { return this.#agents.size > 0; }
+
   getTerminalReason(agentId) {
     return this.#agents.get(agentId)?.terminalReason ?? null;
   }
@@ -124,6 +128,23 @@ export class HealthMonitor {
   setTerminalReason(agentId, reason) {
     const entry = this.#agents.get(agentId);
     if (entry) entry.terminalReason = reason;
+  }
+
+  suspend() {
+    this.#suspended = true;
+    for (const entry of this.#agents.values()) this._clearTimers(entry);
+  }
+
+  resume() {
+    if (!this.#suspended) return;
+    this.#suspended = false;
+    for (const [id, entry] of this.#agents) {
+      if (entry.terminalReason) continue;
+      this._resetSilenceTimers(id);
+      entry.wallClockTimer = setTimeout(() => this._kill(id, 'wall_clock_timeout'),
+        Math.max(0, this.#defaultTimeoutMs - (Date.now() - entry.startedAt)));
+      if (this.#memoryLimitMB > 0) entry.memoryPollTimer = setInterval(() => this._checkMemory(id), MEMORY_POLL_INTERVAL_MS);
+    }
   }
 
   /** Clean up all tracked agents and timers. */
@@ -136,6 +157,7 @@ export class HealthMonitor {
   // ── Internal ────────────────────────────────────────────────────────────
 
   _resetSilenceTimers(agentId) {
+    if (this.#suspended) return;
     const entry = this.#agents.get(agentId);
     if (!entry) return;
 

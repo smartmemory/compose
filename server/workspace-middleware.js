@@ -41,7 +41,7 @@ const EXEMPT_PATHS = new Set([
  *   the workspace header soft-fallback to the target root with a hint header.
  *   When false, missing header surfaces as a WorkspaceUnknown(null) → 400.
  */
-export function createWorkspaceMiddleware({ allowGetFallback = true } = {}) {
+export function createWorkspaceMiddleware({ allowGetFallback = true, resolveKnownWorkspace = () => null } = {}) {
   return function workspaceMiddleware(req, res, next) {
     if (EXEMPT_PATHS.has(req.path)) {
       req.workspace = { id: null, root: getTargetRoot(), source: 'exempt' };
@@ -60,7 +60,7 @@ export function createWorkspaceMiddleware({ allowGetFallback = true } = {}) {
         // Hard-fail mode: missing header is treated as an unknown id.
         throw new WorkspaceUnknown(null);
       }
-      const resolved = resolveWorkspace({
+      const resolved = resolveKnownWorkspace(headerId) || resolveWorkspace({
         workspaceId: headerId,
         cwd: getTargetRoot(),
       });

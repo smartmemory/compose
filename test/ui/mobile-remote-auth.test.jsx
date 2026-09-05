@@ -665,7 +665,7 @@ describe('useInteractiveSession proxy paths', () => {
     vi.restoreAllMocks();
   });
 
-  it('legacy mode: status poll calls agentServerUrl (4002 direct)', async () => {
+  it('legacy mode: status poll keeps workspace selection through proxy', async () => {
     const calls = [];
     globalThis.fetch = vi.fn(async (url) => {
       calls.push(String(url));
@@ -677,8 +677,7 @@ describe('useInteractiveSession proxy paths', () => {
     await new Promise(r => setTimeout(r, 10));
     const statusCall = calls.find(u => u.includes('session/status'));
     expect(statusCall).toBeTruthy();
-    expect(statusCall).toContain(':4002');
-    expect(statusCall).not.toContain('/proxy/');
+    expect(statusCall).toBe('/api/agent/proxy/session/status');
     unmount();
   });
 
@@ -734,7 +733,7 @@ describe('useInteractiveSession proxy paths', () => {
     unmount();
   });
 
-  it('legacy mode: interrupt posts to agentServerUrl path (unchanged)', async () => {
+  it('legacy mode: interrupt targets the workspace proxy', async () => {
     const calls = [];
     globalThis.fetch = vi.fn(async (url) => {
       calls.push(String(url));
@@ -744,8 +743,8 @@ describe('useInteractiveSession proxy paths', () => {
     const { useInteractiveSession } = await import('../../src/mobile/hooks/useInteractiveSession.js');
     const { result, unmount } = renderHook(() => useInteractiveSession());
     await act(async () => { await result.current.interrupt(); });
-    const intCall = calls.find(u => u.includes('/api/agent/interrupt'));
-    expect(intCall).toContain(':4002');
+    const intCall = calls.find(u => u.includes('/api/agent/proxy/interrupt'));
+    expect(intCall).toBe('/api/agent/proxy/interrupt');
     unmount();
   });
 });

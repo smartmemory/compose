@@ -199,14 +199,13 @@ describe('StratumMcpClient.agentRun', () => {
       modelID: 'claude-sonnet-4-6',
       allowedTools: ['Read'],
       disallowedTools: ['Bash'],
-      thinking: { type: 'enabled' },
+      thinking: { type: 'adaptive' },
       effort: 'high',
       cwd: '/tmp',
     });
 
-    // D1: the TS surface accepts only {agent, prompt, cwd, model?, sandboxMode?}
-    // and rejects any other key. The python-era knobs (type/allowed_tools/
-    // thinking/effort/correlation_id) are compose-side concerns and are NOT sent.
+    // Surface 17 preserves provider execution settings in their canonical names.
+    // Legacy Python aliases and client correlation metadata stay off the wire.
     assert.equal(captured.name, 'stratum_agent_run');
     assert.equal(captured.args.agent, 'claude');
     assert.equal(captured.args.prompt, 'do thing');
@@ -214,7 +213,10 @@ describe('StratumMcpClient.agentRun', () => {
     assert.equal(captured.args.model, 'claude-sonnet-4-6');
     assert.ok(!('type' in captured.args), 'python-era `type` must not be on the wire');
     assert.ok(!('allowed_tools' in captured.args), 'allowed_tools is compose-side, not on the wire');
-    assert.ok(!('thinking' in captured.args), 'thinking is compose-side, not on the wire');
+    assert.deepEqual(captured.args.allowedTools, ['Read']);
+    assert.deepEqual(captured.args.disallowedTools, ['Bash']);
+    assert.deepEqual(captured.args.thinking, { type: 'adaptive' });
+    assert.equal(captured.args.effort, 'high');
     assert.ok(!('correlation_id' in captured.args), 'correlation_id is not on the TS wire');
     assert.equal(out.text, 'hi');
     assert.deepEqual(out, { text: 'hi' });

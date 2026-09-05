@@ -79,7 +79,7 @@ export function installAgentHarness(stratum, factory, defaultCwd) {
 
   stratum.agentRun = async (agentType, prompt, agentOpts = {}) => {
     const correlationId = agentOpts.correlationId ?? `mock-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const connector = factory(agentType, { cwd: agentOpts.cwd ?? defaultCwd });
+    const connector = factory(agentType, { ...agentOpts, cwd: agentOpts.cwd ?? defaultCwd });
     const parts = [];
     let seq = 0;
     let interruptHook = null;
@@ -89,6 +89,8 @@ export function installAgentHarness(stratum, factory, defaultCwd) {
     // Hook for cancelAgentRun: stash the interrupt function under correlationId.
     if (!stratum._shimInterrupts) stratum._shimInterrupts = new Map();
     if (interruptHook) stratum._shimInterrupts.set(correlationId, interruptHook);
+    agentOpts.signal?.throwIfAborted();
+    if (interruptHook) agentOpts.signal?.addEventListener('abort', interruptHook, { once: true });
     try {
       for await (const ev of connector.run(prompt, {})) {
         if (ev.type === 'assistant' && ev.content) {
@@ -145,6 +147,7 @@ export function installAgentHarness(stratum, factory, defaultCwd) {
         }
       }
     } finally {
+      if (interruptHook) agentOpts.signal?.removeEventListener('abort', interruptHook);
       stratum._shimInterrupts?.delete(correlationId);
     }
     return { text: parts.join(''), correlation_id: correlationId };

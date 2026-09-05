@@ -13,7 +13,6 @@ import { fileURLToPath } from 'node:url';
 import { getTargetRoot } from './project-root.js';
 import { resolveJournalPathFromConfig, relForDisplay } from '../lib/project-paths.js';
 
-const PROJECT_ROOT = getTargetRoot();
 
 /**
  * Read the compose.json config for an ARBITRARY workspace root (not the bound
@@ -83,9 +82,9 @@ export function detectError(tool, input, responseText) {
  *
  * @param {object} session — serialized session object
  * @param {string} transcriptPath
- * @param {string} [projectRoot] — defaults to PROJECT_ROOT
+ * @param {string} [projectRoot] — defaults to the current request workspace
  */
-export function spawnJournalAgent(session, transcriptPath, projectRoot = PROJECT_ROOT) {
+export function spawnJournalAgent(session, transcriptPath, projectRoot = getTargetRoot()) {
   // Resolve the journal path against the PASSED projectRoot's own config — not
   // the process-global cached config of the bound target (COMP-PATHS-EXTERNAL).
   const journalAbs = resolveJournalPathFromConfig(projectRoot, loadComposeConfig(projectRoot));
@@ -126,7 +125,7 @@ Session data:
 After writing the entry, update ${journalRel}/README.md with the new entry row.
 Then commit both files.`;
 
-  const cleanEnv = { ...process.env, NO_COLOR: '1' };
+  const cleanEnv = { ...process.env, COMPOSE_TARGET: projectRoot, NO_COLOR: '1' };
   delete cleanEnv.CLAUDECODE;
   const proc = spawn('claude', ['-p', prompt, '--dangerously-skip-permissions'], {
     cwd: projectRoot,

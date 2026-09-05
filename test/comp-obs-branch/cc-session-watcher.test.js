@@ -242,3 +242,22 @@ describe('CCSessionWatcher — in_progress_siblings', () => {
     assert.ok(!l.in_progress_siblings.includes(complete.branch_id));
   });
 });
+
+describe('CCSessionWatcher — restart safety', () => {
+  it('a poll-fallback watcher started twice keeps exactly one interval', () => {
+    const w = makeWatcher({ posts: [], broadcasts: [], itemMap: {} });
+    const realWatch = fs.watch;
+    fs.watch = () => { throw new Error('watch unavailable'); };
+    try {
+      w.start();
+      const first = w._pollTimer;
+      assert.ok(first, 'the fs.watch failure falls back to polling');
+      w.start();
+      assert.equal(w._pollTimer, first, 'resume must not leak a second interval');
+    } finally {
+      fs.watch = realWatch;
+      w.stop();
+    }
+    assert.equal(w._pollTimer, null);
+  });
+});

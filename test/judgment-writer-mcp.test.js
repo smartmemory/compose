@@ -203,7 +203,7 @@ describe('compose-mcp judgment registry parity', () => {
       ...defsSource.slice(toolsStart, toolsEnd).matchAll(/^    name: '([^']+)',/gm),
     ].map((match) => match[1]);
     const dispatchNames = [
-      ...source.slice(switchStart, switchEnd).matchAll(/^      case '([^']+)'/gm),
+      ...source.slice(switchStart, switchEnd).matchAll(/^\s*case '([^']+)'/gm),
     ].map((match) => match[1]);
 
     assert.equal(definitionNames.length, 51, 'TOOLS definition count');
@@ -445,7 +445,7 @@ describe('COMP-JUDGMENT-GOAL-MIGRATE S3 — MCP reachability', () => {
       ...defsSource.slice(toolsStart, toolsEnd).matchAll(/^    name: '([^']+)',/gm),
     ].map((match) => match[1]);
     const dispatchNames = [
-      ...source.slice(switchStart, switchEnd).matchAll(/^      case '([^']+)'/gm),
+      ...source.slice(switchStart, switchEnd).matchAll(/^\s*case '([^']+)'/gm),
     ].map((match) => match[1]);
 
     // Adding an op must not add a tool: the registry stays at its pinned size.

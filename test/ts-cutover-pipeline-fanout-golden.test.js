@@ -509,7 +509,10 @@ describe('GSD budgets on the TS route (D2)', () => {
     const stratum = {
       onEvent: () => () => {},
       cancelAgentRun: async () => { cancel?.(); },
-      agentRun: () => new Promise((resolve) => { cancel = () => resolve({ text: '' }); }),
+      agentRun: (_agent, _prompt, { signal }) => new Promise((resolve) => {
+        cancel = () => resolve({ text: '' });
+        signal.addEventListener('abort', cancel, { once: true });
+      }),
     };
     const dispatch = { step_id: 's', flow_id: 'f', agent: 'claude', output_fields: { outcome: 'string' } };
     await assert.rejects(
@@ -540,13 +543,16 @@ describe('stuck detection on the TS route (D3)', () => {
     const stratum = {
       onEvent: (_f, _s, h) => { handler = h; return () => {}; },
       cancelAgentRun: async () => { cancel?.(); },
-      agentRun: () => {
+      agentRun: (_agent, _prompt, { signal }) => {
         // Stream two same-file edits, then hang until the observer cancels.
         queueMicrotask(() => {
           handler?.({ schema_version: '0.2.5', kind: 'tool_use_summary', metadata: { tool: 'Edit', input: { file_path: 'x.js' } } });
           handler?.({ schema_version: '0.2.5', kind: 'tool_use_summary', metadata: { tool: 'Edit', input: { file_path: 'x.js' } } });
         });
-        return new Promise((resolve) => { cancel = () => resolve({ text: '' }); });
+        return new Promise((resolve) => {
+          cancel = () => resolve({ text: '' });
+          signal.addEventListener('abort', cancel, { once: true });
+        });
       },
     };
     const dispatch = { step_id: 'execute', flow_id: 'f', agent: 'claude', output_fields: { outcome: 'string' } };
@@ -681,7 +687,7 @@ describe('profile sidecar restores tool restrictions (D6)', () => {
     await runAndNormalize(null, 'p', dispatch, { stratum, profile: 'claude:read-only-reviewer' });
     assert.deepEqual(captured.opts.allowedTools, ['Read', 'Grep', 'Glob', 'Agent']);
     assert.deepEqual(captured.opts.disallowedTools, ['Edit', 'Write', 'Bash']);
-    assert.equal(captured.opts.sandboxMode, 'read-only', 'a read-only profile binds a read-only sandbox');
+    assert.equal(captured.opts.sandboxMode, undefined, 'claude does not support sandboxMode (engine rejects it); the restriction binds via allowedTools/disallowedTools');
   });
 
   test('a bare provider literal (no profile) carries no tool restrictions', async () => {

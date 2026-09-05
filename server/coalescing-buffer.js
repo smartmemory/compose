@@ -5,10 +5,16 @@ export class CoalescingBuffer {
   #pending = new Map();
   #timer = null;
   #flushFn;
+  #intervalMs;
 
   constructor(flushFn, { intervalMs = 16 } = {}) {
     this.#flushFn = flushFn;
-    this.#timer = setInterval(() => this.#flush(), intervalMs);
+    this.#intervalMs = intervalMs;
+    this.start();
+  }
+
+  start() {
+    this.#timer ??= setInterval(() => this.#flush(), this.#intervalMs);
   }
 
   register(key, mode) {

@@ -1,6 +1,6 @@
 /**
  * COMP-COCKPIT-11: the ChallengeRow "Discuss" button must POST to the live
- * agent-server route /api/agent/message (body { prompt }), not the dead
+ * workspace-aware route /api/agent/proxy/message (body { prompt }), not the dead
  * /api/terminal/inject (a leftover from the retired terminal-server.js).
  */
 import React from 'react';
@@ -17,13 +17,13 @@ describe('ChallengeRow Discuss (COCKPIT-11)', () => {
   beforeEach(() => wsFetch.mockReset());
   afterEach(() => vi.restoreAllMocks());
 
-  it('posts to /api/agent/message with a { prompt } body, not the dead /api/terminal/inject', async () => {
+  it('posts to /api/agent/proxy/message with a { prompt } body, not the dead /api/terminal/inject', async () => {
     wsFetch.mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
     render(<ChallengeRow item={item} onUpdate={vi.fn()} />);
     fireEvent.click(screen.getByText(/Discuss/i));
     await waitFor(() => expect(wsFetch).toHaveBeenCalled());
     const [url, opts] = wsFetch.mock.calls[0];
-    expect(url).toMatch(/\/api\/agent\/message$/);
+    expect(url).toBe('/api/agent/proxy/message');
     expect(url).not.toMatch(/terminal\/inject/);
     const body = JSON.parse(opts.body);
     expect(body).toHaveProperty('prompt');

@@ -17,7 +17,6 @@ import {
   relForDisplay,
 } from '../lib/project-paths.js';
 
-const PROJECT_ROOT = getTargetRoot();
 
 /**
  * fs.watch fileFilter for the pipelines/ watch (COMP-PIPE-EDIT-6): only
@@ -106,7 +105,8 @@ export function createTrailingDebouncer(fn, waitMs) {
 }
 
 export class FileWatcherServer {
-  constructor() {
+  constructor({ projectRoot = getTargetRoot() } = {}) {
+    this.projectRoot = projectRoot;
     this.clients = new Set();
     this.wss = null;
     this.watchers = [];
@@ -114,8 +114,8 @@ export class FileWatcherServer {
 
   /** Resolve and validate a relative path stays within project root */
   safePath(relativePath) {
-    const resolved = path.resolve(PROJECT_ROOT, relativePath);
-    if (!resolved.startsWith(PROJECT_ROOT + path.sep) && resolved !== PROJECT_ROOT) {
+    const resolved = path.resolve(this.projectRoot, relativePath);
+    if (!resolved.startsWith(this.projectRoot + path.sep) && resolved !== this.projectRoot) {
       return null;
     }
     return resolved;
@@ -162,7 +162,7 @@ export class FileWatcherServer {
       const config = loadProjectConfig();
       const docsPrefix = config.paths?.docs || 'docs';
       // COMP-PATHS-EXTERNAL: list the RESOLVED docs dir (may be relocated).
-      const docsDir = resolveDocsPathFromConfig(PROJECT_ROOT, config);
+      const docsDir = resolveDocsPathFromConfig(this.projectRoot, config);
       try {
         const files = this.listMarkdownFiles(docsDir, docsPrefix);
         res.json({ files });
@@ -274,7 +274,7 @@ export class FileWatcherServer {
 
           const relativePath = path.join(prefix, filename);
           // COMP-PATHS-EXTERNAL: derive the real path from the WATCHED dir, not
-          // by re-rooting under PROJECT_ROOT — the dir may be relocated outside
+          // by re-rooting under this.projectRoot — the dir may be relocated outside
           // the workspace. Byte-identical to the old form for an in-root dir.
           const fullPath = path.join(dir, filename);
 
@@ -295,10 +295,10 @@ export class FileWatcherServer {
     };
 
     // Watch docs/ — broadcast fileChanged events. COMP-PATHS-EXTERNAL: watch
-    // the RESOLVED absolute dir (may be relocated outside PROJECT_ROOT).
+    // the RESOLVED absolute dir (may be relocated outside this.projectRoot).
     const config = loadProjectConfig();
     const docsPrefix = config.paths?.docs || 'docs';
-    watchDir(resolveDocsPathFromConfig(PROJECT_ROOT, config), docsPrefix, (relativePath, fullPath) => {
+    watchDir(resolveDocsPathFromConfig(this.projectRoot, config), docsPrefix, (relativePath, fullPath) => {
       try {
         if (!fs.existsSync(fullPath)) return;
         const content = fs.readFileSync(fullPath, 'utf-8');
@@ -310,9 +310,9 @@ export class FileWatcherServer {
 
     // Watch features/ — notify for auto-reseed into vision store
     const featuresPrefix = config.paths?.features || 'docs/features';
-    watchDir(resolveFeaturesPathFromConfig(PROJECT_ROOT, config), featuresPrefix, (relativePath, fullPath) => {
+    watchDir(resolveFeaturesPathFromConfig(this.projectRoot, config), featuresPrefix, (relativePath, fullPath) => {
       // Also broadcast as fileChanged (features are docs). fullPath comes from
-      // the watched dir (COMP-PATHS-EXTERNAL) — do not re-root under PROJECT_ROOT.
+      // the watched dir (COMP-PATHS-EXTERNAL) — do not re-root under this.projectRoot.
       try {
         if (fs.existsSync(fullPath)) {
           const content = fs.readFileSync(fullPath, 'utf-8');
@@ -332,7 +332,7 @@ export class FileWatcherServer {
     // `fileChanged` on this server's /ws/files. The payload carries `file` as a
     // BASENAME because editorSpecFile is a bare filename (a prefixed relative path
     // would never match the store's compare).
-    const pipelinesDir = path.join(PROJECT_ROOT, 'pipelines');
+    const pipelinesDir = path.join(this.projectRoot, 'pipelines');
     watchDir(pipelinesDir, 'pipelines', (relativePath, fullPath) => {
       if (typeof this.onSpecChanged === 'function') {
         this.onSpecChanged(buildSpecChangedMessage(path.basename(fullPath), relativePath));
@@ -364,7 +364,7 @@ export class FileWatcherServer {
     //
     // Watched NON-recursively on the projection's own parent so a relocated
     // `paths.ideabox` outside `paths.docs` still works.
-    const ideaboxPath = resolveIdeaboxPathFromConfig(PROJECT_ROOT, config);
+    const ideaboxPath = resolveIdeaboxPathFromConfig(this.projectRoot, config);
     const ideaboxDir = path.dirname(ideaboxPath);
     // The projection's directory may not exist yet in a project that has never
     // rendered one. Create it, or the watch is skipped and the very first CLI
@@ -376,7 +376,7 @@ export class FileWatcherServer {
     // `createTrailingDebouncer` for why the LAST event is the one that has to
     // survive here. That also folds the rename+change pair of a single atomic
     // publish into one broadcast.
-    const ideaboxRelative = relForDisplay(PROJECT_ROOT, ideaboxPath);
+    const ideaboxRelative = relForDisplay(this.projectRoot, ideaboxPath);
     this._ideaboxDebouncer = createTrailingDebouncer(() => {
       if (typeof this.onIdeaboxChanged === 'function') {
         this.onIdeaboxChanged(buildIdeaboxUpdatedMessage(ideaboxRelative));
@@ -384,7 +384,7 @@ export class FileWatcherServer {
     }, IDEABOX_COALESCE_MS);
     watchDir(
       ideaboxDir,
-      relForDisplay(PROJECT_ROOT, ideaboxDir),
+      relForDisplay(this.projectRoot, ideaboxDir),
       () => this._ideaboxDebouncer.trigger(),
       (f) => isIdeaboxProjectionFile(f, path.basename(ideaboxPath)),
       { recursive: false, debounceMs: 0 },
@@ -392,7 +392,7 @@ export class FileWatcherServer {
 
     // Watch .compose/data/ for active-build.json changes
     const self = this;
-    const dataDir = path.join(PROJECT_ROOT, '.compose', 'data');
+    const dataDir = path.join(this.projectRoot, '.compose', 'data');
     let dataDirWatcherRegistered = false;
 
     // Guarantee .compose/data/ exists before registering the watcher
@@ -451,7 +451,7 @@ export class FileWatcherServer {
     return results;
   }
 
-  close() {
+  stopWatching() {
     for (const watcher of this.watchers) {
       watcher.close();
     }
@@ -459,6 +459,10 @@ export class FileWatcherServer {
     // fs event re-arms the timer, and a pending timer holds the event loop open.
     this._ideaboxDebouncer?.cancel();
     this.watchers = [];
+  }
+
+  close() {
+    this.stopWatching();
     for (const client of this.clients) {
       client.close();
     }

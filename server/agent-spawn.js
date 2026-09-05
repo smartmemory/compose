@@ -11,7 +11,6 @@ import { getTargetRoot } from './project-root.js';
 import { gracefulKill } from './agent-health.js';
 import { resolveSpawnProfile } from './mcp-tool-policy.js';
 
-const PROJECT_ROOT = getTargetRoot();
 
 // ---------------------------------------------------------------------------
 // Route registration
@@ -35,7 +34,7 @@ function deriveAgentType(prompt) {
   return 'claude';
 }
 
-export function attachAgentSpawnRoutes(app, { projectRoot = PROJECT_ROOT, broadcastMessage, requireSensitiveToken, registry, sessionManager, healthMonitor, worktreeGC }) {
+export function attachAgentSpawnRoutes(app, { projectRoot = getTargetRoot(), broadcastMessage, requireSensitiveToken, registry, sessionManager, healthMonitor, worktreeGC }) {
   const _agents = new Map();
   // POST /api/agent/spawn — spawn a hidden Claude subagent
   app.post('/api/agent/spawn', requireSensitiveToken, (req, res) => {
@@ -48,7 +47,7 @@ export function attachAgentSpawnRoutes(app, { projectRoot = PROJECT_ROOT, broadc
       return res.status(409).json({ error: `Agent ${agentId} already running` });
     }
 
-    const cleanEnv = { ...process.env, NO_COLOR: '1' };
+    const cleanEnv = { ...process.env, COMPOSE_TARGET: projectRoot, NO_COLOR: '1' };
     delete cleanEnv.CLAUDECODE;
     // COMP-MCP-ENFORCE-1: inject a TRUSTED, spawn-time MCP profile the subagent
     // cannot rewrite (its compose-mcp child inherits this env). Only restrictive
@@ -217,7 +216,7 @@ export function attachAgentSpawnRoutes(app, { projectRoot = PROJECT_ROOT, broadc
     const currentSessionId = sessionManager?.currentSession?.id ?? null;
     if (agentId === currentSessionId) {
       const agentPort = process.env.AGENT_PORT || 4002;
-      const headers = { 'Content-Type': 'application/json' };
+      const headers = { 'Content-Type': 'application/json', 'x-compose-project-root': projectRoot };
       if (process.env.COMPOSE_API_TOKEN) headers['x-compose-token'] = process.env.COMPOSE_API_TOKEN;
       fetch(`http://127.0.0.1:${agentPort}/api/agent/interrupt`, {
         method: 'POST',
