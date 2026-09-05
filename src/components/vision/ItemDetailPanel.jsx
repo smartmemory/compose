@@ -592,6 +592,9 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
                             {entry.outcome && entry.outcome !== 'approved' && (
                               <span className="text-amber-400"> ({entry.outcome})</span>
                             )}
+                            {(entry.origin ?? 'live') === 'backfill' && (
+                              <span className="ml-1 rounded bg-muted px-1 py-px text-[8px] text-muted-foreground">Backfilled</span>
+                            )}
                             {i < lc.phaseHistory.length - 1 && ' → '}
                           </span>
                         ))}

@@ -53,6 +53,9 @@ export function deriveDecisionEvents(state, featureCode) {
         outcome: entry.outcome,
         agent_id: entry.agent_id || null,
         timestamp: entry.timestamp,
+        origin: entry.origin,
+        recordedAt: entry.recordedAt,
+        confidence: entry.confidence,
       }));
     }
 

@@ -785,6 +785,17 @@ export async function toolCompleteFeature({ id, commit_sha, tests_pass, files_ch
   return _postLifecycle(id, 'complete', body);
 }
 
+export async function toolBackfillCompletion({ id, commit_sha, tests_pass, files_changed, notes, reason, occurrences }) {
+  const body = {};
+  if (commit_sha !== undefined) body.commit_sha = commit_sha;
+  if (tests_pass !== undefined) body.tests_pass = tests_pass;
+  if (files_changed !== undefined) body.files_changed = files_changed;
+  if (notes !== undefined) body.notes = notes;
+  body.reason = reason;
+  body.occurrences = occurrences ?? [];
+  return _postLifecycle(id, 'backfill', body);
+}
+
 export async function toolIterationStart({ id, loopType, maxIterations }) {
   return _postLifecycle(id, 'iteration/start', { loopType, maxIterations });
 }

@@ -30,6 +30,7 @@ function getStepStatus(stepId, phaseHistory, activeBuild, featureCode) {
     const entry = phaseHistory.find(p => p.phase === stepId || p.step === stepId);
     if (entry) {
       if (entry.status === 'failed') return 'failed';
+      if ((entry.origin ?? 'live') === 'backfill') return 'backfilled';
       return 'complete';
     }
   }
@@ -47,7 +48,9 @@ export default function ContextPipelineDots({ item, activeBuild }) {
       <div className="flex items-center gap-0 mb-3">
         {LIFECYCLE_STEPS.map((step, i) => {
           const status = getStepStatus(step.id, phaseHistory, activeBuild, featureCode);
-          const color = PIPELINE_STATUS_COLORS[status];
+          const color = status === 'backfilled'
+            ? 'hsl(var(--muted-foreground) / 0.45)'
+            : PIPELINE_STATUS_COLORS[status];
           const isSelected = selectedStep === step.id;
           return (
             <React.Fragment key={step.id}>
@@ -71,6 +74,7 @@ export default function ContextPipelineDots({ item, activeBuild }) {
                   className={[
                     'w-3 h-3 rounded-full border-2 transition-all',
                     status === 'active' ? 'animate-pulse' : '',
+                    status === 'backfilled' ? 'opacity-50' : '',
                     isSelected ? 'ring-2 ring-accent/30' : '',
                   ].join(' ')}
                   style={{
@@ -95,7 +99,7 @@ export default function ContextPipelineDots({ item, activeBuild }) {
             <span
               key={step.id}
               className="text-[8px] font-medium uppercase tracking-wider"
-              style={{ color: status === 'pending' ? 'hsl(var(--muted-foreground) / 0.4)' : PIPELINE_STATUS_COLORS[status] }}
+              style={{ color: status === 'pending' ? 'hsl(var(--muted-foreground) / 0.4)' : (status === 'backfilled' ? 'hsl(var(--muted-foreground) / 0.65)' : PIPELINE_STATUS_COLORS[status]) }}
             >
               {step.label}
             </span>
@@ -121,6 +125,7 @@ function StepDetail({ stepId, phaseHistory, activeBuild, featureCode }) {
     complete: 'text-success',
     active: 'text-accent',
     failed: 'text-destructive',
+    backfilled: 'text-muted-foreground',
     pending: 'text-muted-foreground',
   };
 
@@ -140,6 +145,12 @@ function StepDetail({ stepId, phaseHistory, activeBuild, featureCode }) {
       )}
       {entry?.agent && (
         <p className="text-[10px] text-muted-foreground">Agent: {entry.agent}</p>
+      )}
+      {entry?.origin !== undefined && (
+        <p className="text-[10px] text-muted-foreground">Origin: {entry.origin}</p>
+      )}
+      {entry?.confidence !== undefined && (
+        <p className="text-[10px] text-muted-foreground">Confidence: {entry.confidence}</p>
       )}
       {status === 'active' && activeBuild && (
         <p className="text-[10px] text-accent">Running...</p>

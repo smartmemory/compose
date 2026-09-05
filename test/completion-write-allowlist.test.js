@@ -136,6 +136,15 @@ test('AC-19: every COMPLETE/complete status write is the gate or an allowlisted,
   );
 });
 
+test('COMP-LIFECYCLE-BACKFILL: the HTTP-delegating MCP tool adds no COMPLETE writer', () => {
+  const source = readFileSync(join(ROOT, 'server', 'compose-mcp-tools.js'), 'utf8');
+  const start = source.indexOf('export async function toolBackfillCompletion');
+  assert.notEqual(start, -1, 'backfill_completion must be implemented as an MCP tool');
+  const body = source.slice(start, source.indexOf('\n}', start) + 2);
+  assert.match(body, /_postLifecycle\(id, 'backfill', body\)/);
+  assert.doesNotMatch(body, /_overrideOk|assertTerminalStatusAuthorized/);
+});
+
 test('AC-19: no stale allowlist entries — every entry still matches a live callsite', () => {
   const hits = scan();
   const stale = ALLOWLIST.filter((a) => !hits.some((h) => h.file === a.file && a.match.test(h.text)));

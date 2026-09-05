@@ -44,13 +44,15 @@ export function emitDecisionEvent(broadcastMessage, event) {
 /**
  * Build a kind=phase_transition DecisionEvent.
  *
- * @param {{ featureCode, from, to, outcome, agent_id, timestamp }} params
+ * @param {{ featureCode, from, to, outcome, agent_id, timestamp, origin, recordedAt, confidence }} params
  *   - from: previous phase string, or null for the initial lifecycle start
  *   - to: new phase string
  *   - outcome: optional outcome string (for context)
  *   - agent_id: optional operator/agent identifier
  */
-export function buildPhaseTransitionEvent({ featureCode, from, to, outcome, agent_id, timestamp }) {
+export function buildPhaseTransitionEvent({
+  featureCode, from, to, outcome, agent_id, timestamp, origin, recordedAt, confidence,
+}) {
   const now = timestamp || new Date().toISOString();
   const fromStr = from == null ? 'null' : String(from);
   const id = phaseTransitionDecisionEventId(featureCode, from, to, now);
@@ -65,6 +67,9 @@ export function buildPhaseTransitionEvent({ featureCode, from, to, outcome, agen
     metadata: {
       from_phase: fromStr,
       to_phase: String(to),
+      ...(origin !== undefined ? { origin } : {}),
+      ...(recordedAt !== undefined ? { recorded_at: recordedAt } : {}),
+      ...(confidence !== undefined ? { confidence } : {}),
     },
     roles: [{ name: 'PRODUCER', agent_id: agent_id || null }],
   };
