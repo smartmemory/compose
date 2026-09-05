@@ -103,6 +103,6 @@ test('resolveSpawnProfile: agent-template mapped to MCP profile', () => {
 });
 
 test('PHASE_REFINEMENT: only ship re-permits, and only completion tools', () => {
-  assert.deepEqual([...PHASE_REFINEMENT.ship].sort(), ['complete_feature', 'record_completion']);
+  assert.deepEqual([...PHASE_REFINEMENT.ship].sort(), ['backfill_completion', 'complete_feature', 'record_completion']);
   assert.equal(PHASE_REFINEMENT.execute, undefined);
 });

@@ -36,7 +36,7 @@ const LEGACY_TOOLS_FOR_CHANGELOG = ['add_changelog_entry'];
 // allow/deny input — it only builds the canon-guard deny message.
 const LEGACY_TOOLS_FOR_FEATURE_JSON = [
   'add_roadmap_entry', 'set_feature_status', 'link_artifact',
-  'link_features', 'record_completion', 'propose_followup',
+  'link_features', 'record_completion', 'backfill_completion', 'propose_followup',
   'complete_feature', 'kill_feature',
 ];
 
