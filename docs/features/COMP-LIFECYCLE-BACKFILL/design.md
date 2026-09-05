@@ -310,6 +310,8 @@ So constraint 2 blocks roughly 9% of features, and none of the ones this feature
 
 ### Scope decision (owner, 2026-08-05): fix Stratum first
 
+> **Closed 2026-09-05.** Stratum shipped `STRAT-GUARD-UPGRADE` (`91a55ed`), `STRAT-GUARD-DESCRIPTOR` and the signed-descriptor + `STRAT-GUARD-AUTHZ` work (`3647b4c`, 2026-08-17). The override token no longer exists. See **Revision 2026-09-05** below for the transport decision and the redo of adjudications #3, #4, #5.
+
 A Compose-only v1 covering the ~319 unregistered features was available and was **declined**. The reasoning stands on its own: shipping a completion path that silently does not work for 31 features — with no way for a caller to know which — reintroduces the class of defect this feature exists to remove. A backfill that fails on exactly the oldest features is the worst possible distribution of the gap.
 
 So the order is:
@@ -357,3 +359,359 @@ Note in Stratum's favour: `guardTransition` **already supports idempotency keys*
 2. ~~Should `confidence` be caller-supplied or derived?~~ **Settled:** derived from evidence kind (Decision 4).
 3. ~~Does a backfilled completion still require `guardedTransition`?~~ **Settled:** yes (Decision 2, option (a) rejected).
 4. **What does `stratum guard migrate` actually guarantee** — does it preserve the existing ledger, and can it fail partway across many resources? Blueprint must read the stratum implementation, not assume.
+
+---
+
+# Revision 2026-09-05 — unblocked; transport, descriptors, history, idempotency, readers
+
+Grounding: `explore-compose-2026-09-05.md` and `explore-stratum-2026-09-05.md` in this folder (two
+read-only passes over compose and stratum 0.4.1, every citation below verified there this session).
+Stale citations in the sections above are corrected in `explore-compose-2026-09-05.md` §13; the
+prose is left as written for history.
+
+## What stratum shipped, and what it leaves us
+
+| Stratum capability | What it gives this feature | Where |
+|---|---|---|
+| `guardRegister` idempotent; **a fresh registration may carry any terminal set** | Every feature that registers after this ships gets `complete_backfilled` for free. No migration for the unregistered majority | `transition.ts:393-455` |
+| `guardUpgrade` (token-free, additive, **terminal frozen**) | Not usable here — it cannot add a terminal state, by design | `transition.ts:980`, CHANGELOG `STRAT-GUARD-UPGRADE` |
+| `guardApplyUpgrade(resource_id, descriptor_id)` over a **signed descriptor file** | The sanctioned way to add `complete_backfilled` to an already-registered resource. Idempotent (`unchanged` writes nothing), destination-checked before `from_checksum`, refuses with `upgrade_descriptor_mismatch` | `transition.ts:1070-1133`, `descriptors.ts` |
+| Signed authorization (`sshsig`, in-source trust root `contracts/guard-signers.allowed`, ships EMPTY) | One operator signature per descriptor file; the path env var only locates the file | `trust.ts`, `sshsig.ts`, `descriptors.ts:193-227` |
+| `guardMigrate` with a per-resource signed authorization bound to the ledger head | Break-glass only; one human signature per resource per attempt. Not the routine path | `transition.ts:780` |
+
+**Measured 2026-09-05 (`explore-compose` §12):** 35 registered guard resources, all in this
+workspace, all `graph_version 1`, states 31 `explore_design` / 1 `blueprint` / 3 `complete`. **All 35
+policy checksums are distinct**, because the edge predicates embed the feature directory
+(`server_file_exists('docs/features/<CODE>/design.md')`). So a descriptor's `from_checksum` binds to
+exactly one resource: the descriptor file is **one entry per registered non-terminal resource**, not
+one shared entry. The 3 resources already at `complete` need nothing.
+
+## Decision 8: Transport — the guard stays behind the CLI; stratum gains a CLI `apply-upgrade`
+
+The 2026-08-17 note (`c7cc848`) framed the choice as (i) compose calls stratum over MCP for
+privileged guard mutations, or (ii) signed descriptors. Stratum shipped (ii). With (ii) in place, the
+reason `apply-upgrade` is MCP-only is gone: `STRAT-GUARD-DESCRIPTOR` Decision 6 rested on a caller
+pointing *two* env vars (path + digest pin) at a file it wrote; the pin was deleted when signing
+landed, and stratum's own code says so (`descriptors.ts:20-22`: "Locating an artifact is not
+authorizing it"). The residual attacks — `NODE_OPTIONS` injection into a process you already control,
+or editing the committed trust root — are **identical on both surfaces**, and compose spawns the
+stratum MCP server itself, so an MCP transport would not even buy the "operator-owned environment"
+the restriction assumed.
+
+Compose does already own an MCP client to stratum (`lib/stratum-mcp-client.js`, generic `#callTool`
+`:517`) — the earlier claim that it does not was wrong. Using it for one guard operation would split
+guard traffic across two transports for no security gain, against the module-level invariant that
+`server/stratum-client.js` is the only module that spawns the stratum CLI (`:4-6`) and that the
+guard is reached exclusively through it.
+
+**Chosen:** a small stratum slice, **`STRAT-GUARD-CLI-APPLY`** (stratum 0.4.2), then compose consumes
+it over the existing CLI client:
+
+1. CLI action `guard apply-upgrade` `{resource_id, descriptor_id}` → `guardApplyUpgrade`, same
+   envelope as the MCP tool. `STRAT-GUARD-DESCRIPTOR` Decision 6 is amended in place to record why
+   the restriction is retired (signing made the env path non-authorizing).
+2. CLI action `guard policy` `{resource_id}` → `{checksum, graph, edge_predicates, terminal, stakes,
+   initial, graph_version, current_state}`. Read-only, CLI-only. Compose needs the **stored** checksum
+   to fill `from_checksum`; recomputing stratum's canonical-JSON fingerprint in compose would
+   duplicate `fingerprint.ts` and break silently on ordering (adjacency order is load-bearing,
+   `fingerprint.ts:7-20`). `history` cannot be widened without touching the frozen MCP surface.
+3. ~~Test seam via `STRATUM_GUARD_TRUST_ROOT` under `NODE_ENV=test`~~ **Withdrawn at the design gate
+   (finding 1):** an env-selected trust root, however gated, lets a CLI caller set `NODE_ENV=test`
+   and point at its own key — self-authorization with no code injection, the exact hole signing
+   closed. Stratum ships no seam. **Compose's golden flow instead runs the real CLI from an
+   isolated package copy:** copy `node_modules/@smartmemory/stratum/dist` to a temp dir, write a
+   fixture trust root into that copy's **`dist/contracts/guard-signers.allowed`** — the packaged
+   reader resolves `dist/contracts/…` (`prepare-dist.mjs:24` rewrites `trust.ts:23`'s path and copies
+   the contracts under `dist`; the published package ships only `dist`, `package.json:19`) — point
+   `COMPOSE_STRATUM_TS_CLI_BIN` at the copy's `dist/cli/stratum.js` and `$HOME` at a temp guard
+   store. **The copy must be runnable (R2-7):** the CLI eagerly imports third-party packages
+   (`yaml` at `cli/stratum.ts:6`), so a bare `dist` copy fails `MODULE_NOT_FOUND`. The test copies
+   `package.json` + the complete `dist` tree, then symlinks `<copy>/node_modules` to the directory that
+   actually resolves the real stratum's dependencies (found with
+   `createRequire(<real dist path>).resolve('yaml')` and walking up to its `node_modules`), which is
+   `compose/node_modules` when hoisted and `stratum/ts/node_modules` when the sibling checkout is
+   symlinked. Nothing test-shaped ships in either package.
+
+Stratum's `guardApplyUpgrade` is unchanged; the slice adds two read/apply CLI actions and nothing else.
+
+## Decision 9: Descriptor lifecycle in compose
+
+- **Generation:** `compose guard descriptors` (CLI, operator-facing) enumerates this workspace's
+  registered resources (`resourceId()` over feature folders + `guard policy` per resource), skips
+  terminal ones, and writes `.compose/guard-upgrades.json`:
+  `{version:1, descriptors:[{id:"backfill-<mode>-<from_checksum[:12]>", rationale, from_checksum:<stored>, to_policy:<stored policy + node + edges>}]}`
+  **deduplicated by `from_checksum`** (finding 8): a checksum binds a *policy*, not a resource —
+  `fingerprint.ts:13-19` excludes resource id and workspace root, so every fix-mode bug (no
+  feature-specific predicates, `lifecycle-modes.js:99`) shares one entry, and build-mode features
+  get one each only because their predicates embed the folder. `to_policy` is derived from the
+  **stored** policy (so the from/to pair is exact), never from a fresh `buildPhaseGraph`. Byte-stable
+  (sorted ids, stratum's key order), `chmod 0600`. Authorization scope is therefore policy-wide by
+  construction; that is accepted and stated, not hidden.
+- **Signing is a human act, outside compose.** The operator runs
+  `ssh-keygen -Y sign -f ~/.stratum/guard-signing -n stratum-guard-descriptors .compose/guard-upgrades.json`
+  (passphrase prompt is the point). Both `guard-upgrades.json` and `.sig` are **committed**. The
+  operator's PUBLIC key is enrolled in stratum's `contracts/guard-signers.allowed` (a stratum commit
+  + release; compose reads the trust root of the *installed* package).
+- **Application is lazy, inside the gate.** When a backfill is requested for a registered resource
+  whose policy lacks `complete_backfilled`, the gate spawns `guard apply-upgrade` with
+  `STRATUM_GUARD_UPGRADE_DESCRIPTORS=<abs path of .compose/guard-upgrades.json>` in the child env.
+  `unchanged` and `applied` proceed; `upgrade_descriptor_unavailable` / `_mismatch` / any error
+  **refuse the backfill, fail-closed**, naming the fix (`compose guard descriptors` + re-sign). No
+  batch job; the 3 `complete` resources are never touched.
+- **Staleness is bounded, not chased.** A resource that registers *between* generation and this
+  feature shipping gets the old graph and no descriptor; its first backfill refuses with a message
+  that says to regenerate and re-sign. After ship, every new registration carries the node.
+- **Unregistered features** (the ~315 majority) register fresh at first backfill with the new graph
+  — no descriptor involved (`transition.ts:393-455`).
+
+## Decision 5 (rewritten): phase history is ordered by valid time, not by phase rank
+
+Round-2 finding #3 stands: `phaseOrder` has loops (`verification → blueprint` `lifecycle-modes.js:46`,
+`test → fix` `:89`), so a phase can recur and rank-based insertion is unimplementable.
+
+**Model.** `lifecycle.phaseHistory` is a list of **occurrences**. An occurrence is
+`{phase, enteredAt, exitedAt, recordedAt, origin, confidence, evidence?, step?, from?, to?, outcome?, timestamp?}`
+(legacy dual-shape fields kept; `appendPhaseHistory` `lifecycle-phase-history.js:23-44` is the sole
+live writer and gains `recordedAt = enteredAt`, `origin:'live'`, `confidence: 1.0` on new writes —
+**no migration of stored records**; readers treat a missing `origin` as `'live'`).
+
+**Backfill insertion (`insertBackfilledPhases(item, occurrences)`):**
+
+1. Each backfilled occurrence's `enteredAt` is its `evidence.observedTime` (commit author date, or
+   file mtime — Decision 3/4); `recordedAt = now`, `origin:'backfill'`, `confidence` derived
+   (`commit` → 0.9, `path` → 0.6; exact values live in the contract, not prose).
+2. Merge live + backfilled occurrences and sort by `enteredAt`. **Closure is recomputed from valid
+   time**: every occurrence's `exitedAt` = next occurrence's `enteredAt`; the last is `null` unless a
+   terminal occurrence follows.
+3. **Before any check (R2-4, R3-2):** an incoming occurrence whose key `(phase, evidence.ref)` already
+   exists with an identical **claim** is dropped from the batch (it is the retry case); one whose key
+   exists with a **different claim** refuses the batch ("occurrence already recorded with other
+   evidence"). The claim is exactly `{phase, evidence.kind, evidence.ref, evidence.observedTime}` —
+   never `recordedAt`, `exitedAt`, `confidence`, `episode` or any other generated/closure field,
+   which a later retry legitimately regenerates. On recovery the persisted `recordedAt` is kept, not
+   re-stamped. Only then:
+4. Refusals (whole batch, nothing persisted):
+   - an **incoming backfilled** occurrence whose `enteredAt` equals any existing or incoming
+     `enteredAt` ("two phases cannot start at the same instant — cite distinct evidence"). Existing
+     live ties are legal — `appendPhaseHistory` produces zero-length intervals when two transitions
+     share a timestamp (`lifecycle-phase-history.js:23-43`) — and keep their **stored sequence** as
+     the secondary sort key (finding 7);
+   - a backfilled `enteredAt` strictly inside a **closed live** interval (that claims a phase ran while
+     a live phase was known to be running);
+   - a **closed live** occurrence whose `enteredAt`/`exitedAt` would change (live records are never
+     rewritten; only the *open* live occurrence may be closed by a later backfilled one);
+   - consecutive occurrences not transitively reachable in the mode's `BASE_TRANSITIONS`, **except
+     across the adoption instant** (encodes Decision 7's "ordered by reality" without rank: gaps
+     allowed, `explore_design → execute` legal, `execute → explore_design` not). **Adoption (findings 6,
+     R2-6, R3-3, R3-4):** the single boundary is the *instant* `lifecycle.startedAt` — not any
+     particular occurrence, because the reconciler recreates a missing first live entry with the
+     current time (`reconciler.js:97`). Occurrences with `enteredAt < startedAt` are episode 1
+     (pre-adoption work); those at or after it are episode 2. Reachability is not checked between the
+     last episode-1 occurrence and the first episode-2 one; everywhere else it is, including into a
+     reconstructed `outcome:'resumed'` entry and from live→backfill (work claimed after adoption must
+     follow the adopted phase). A backfilled occurrence with `enteredAt === startedAt` is refused as
+     ambiguous placement. **Out-of-graph genesis:** lifecycle start writes `explore_design` in every
+     mode (`vision-routes.js:317`), which is not a node of the fix graph (`lifecycle-modes.js:83`);
+     such an occurrence is an adoption marker, never a reachability source or target — the first
+     in-graph occurrence after it may be any node of the mode (entering the mode's first work
+     episode). The genesis entry itself is preserved as written;
+   - `enteredAt <= exitedAt` violated anywhere after the merge (invariant check before persist).
+5. Because step 3 runs first, re-running a batch whose occurrences already reached disk is a no-op
+   rather than a tie refusal — which is what Decision 10's recovery re-drive relies on.
+
+The pre-adoption case (backfilled occurrences earlier than the first live one) and the common
+"live `explore_design` still open, work happened afterwards" case both fall out of step 2.
+
+## Decision 10: One door — backfill is an `intent` of the completion gate
+
+`lib/completion-gate.js` already owns the write-ahead intent (`:353-362`), the dir lock (`:283-284`),
+guard-state recovery via `guardHistory` (`:306-351`) and the five writes (`:419-499`), and it already
+takes an `intent` parameter (`:232`). Backfill does **not** get a sibling; it is `intent: 'backfill'`
+on the same function:
+
+- `from` = the resource's **current** guard state (read via `currentGuardState`, `:155-185`), not
+  `completablePhaseOf(mode)`; `to = 'complete_backfilled'`. Both are parameterised (`:367`, `:388-389`).
+  **Bootstrap for unregistered resources (R2-2):** `currentGuardState` returns `null` when no guard
+  exists (`:178`), so the gate registers **first** and reads state second. The registration
+  `initial` is the item's `lifecycle.currentPhase` when that is a node of the mode's graph;
+  otherwise the mode's own initial state (`lifecycle-modes.js:83` — `reproduce` for fix mode, whose
+  items nonetheless start at the genesis `explore_design`, `vision-routes.js:317`; stratum rejects
+  an `initial` absent from the graph, `transition.ts:349`). The mapping is recorded on the batch
+  record as `guard_initial: {registered, lifecycle_phase}`; the item's history is **not** relabelled.
+- **Registration compatibility (finding 2).** Once `buildPhaseGraph` carries the node, a cold
+  `ensureGuard` (`lifecycle-guard.js:299-323`) would send the new policy for an already-registered
+  resource and stratum would refuse it as "a different policy" (`transition.ts:423-437`) — blocking
+  *every* transition on legacy resources after a restart, not just backfill. So `ensureGuard`
+  changes for all callers: on that refusal it calls `guard policy`; if the stored policy equals the
+  new policy **under the legacy projection**, the resource is cached as `legacy` and **ordinary
+  transitions proceed on the old policy** (its edges are a subset; nothing they use changed). Any
+  other difference fails closed as today. **Comparison contract (R2-3):** compare exactly the four
+  checksum fields `{graph, edge_predicates, terminal, stakes}` — never `initial`, `current_state`,
+  `checksum` or `graph_version` (`initial` legitimately differs: registration seeds it from the
+  phase at first contact, `lifecycle-guard.js:290`). The legacy projection removes
+  `complete_backfilled` from `terminal`, deletes its node from `graph`, and removes it from every
+  adjacency list; the comparison is object-key-order-insensitive, sorts `terminal`, and preserves
+  adjacency-array order (the order stratum hashes, `fingerprint.ts:13-19`). Descriptor generation
+  uses the **same four-field projection in reverse** to build `to_policy` from the stored policy;
+  descriptor parsing rejects any other field (`descriptors.ts:41`). Backfill on a
+  `legacy` resource then runs `apply-upgrade` per Decision 9 before its transition; refusal refuses.
+- **Recovery is joined through the ledger, not the local file (finding 3).** The backfill
+  transition carries `idempotency_key = operation_id`; stratum's `_maybeReplay`
+  (`transition.ts:459-480`) replays an identical retry as `status:"replayed"`, and the ledger entry
+  records `idempotency_key` (`store.ts:45,167`), which `guard history` returns. **Recovery re-issues
+  the transition, it does not adopt a ledger entry (R2-1):** the intent persists the exact
+  transition envelope `{from, to, artifacts, resolved_by, idempotency_key}`, and on recovery the
+  gate sends that envelope again. Stratum's replay check compares the **payload** under the key
+  (`transition.ts:459-480`): identical → `replayed`, and the gate proceeds to re-drive its writes;
+  different payload under the same key → stratum refuses, so a caller who learned a pending
+  `operation_id` and spent it on another payload cannot have that transition adopted. `guard
+  history` is consulted only to distinguish "terminal reached under **another** key" (refuse,
+  `refusedAt:'recovery'`) from "not terminal" (proceed). When neither an intent nor a finalized
+  record exists for the request, recovery is **refused**: the ledger holds only a payload hash
+  (`store.ts:38`) and cannot reconstruct a request. An idempotency key is correlation, not
+  ownership. The intent persists the full request — `reason`, occurrence batch, `commit_sha` — plus
+  `request_digest = sha256` over them; `operation_id` is minted once per `request_digest`, so an
+  identical retry reuses the key and a changed request cannot resume another request's transition.
+  This is why backfill, unlike live completion, does use an idempotency key: its retry is defined
+  as "the same request".
+- **Whole-call finalization (finding 4, R3-1).** `lifecycle.backfills[]` is keyed by `operation_id`
+  and each record carries `state: 'pending' | 'finalized'`. The record is written `pending` together
+  with the occurrences; it flips to `finalized` **only after** status, ROADMAP, projection and the
+  audit event have all reached disk, and the intent is cleared only after that flip. The lookup
+  order is therefore: `finalized` record → return it; `pending` record or intent → **resume** the
+  remaining writes (never "return early"); neither → new operation or refusal per the recovery
+  rule. On a resumed attempt the audit event is emitted whether or not `statusChanged` is set on
+  that attempt (today's gate emits it only when the status flipped, `completion-gate.js:485`). An
+  identical retry after a
+  clear finds the finalized record by `request_digest` and returns it (`status:'finalized'`,
+  idempotent), instead of refusing for a missing intent. **Ordering (R2-5):** for `intent:'backfill'`
+  the gate canonicalises the request and computes `request_digest` first, takes the dir lock, and
+  checks finalized → pending → new **before** any evidence verification; a finalized match returns
+  immediately and a pending match resumes. Fresh `verifyCompletionEvidence` (`lifecycle-guard.js:199-224`,
+  which runs the configured tests against the *current* workspace, `:209`) runs only for a new
+  operation. This deliberately differs from live completion, which verifies evidence before the
+  lock (`completion-gate.js:246`, header note 3) — a retry of a finished backfill must not be
+  refused because the suite regressed later. `vision-store.js` `_save()` returns a
+  boolean rather than throwing (`:131-143`); the gate treats `false` as a collected failure and
+  keeps the intent.
+- **Projection (finding 5).** `server/completion-projection.js:152-155` accepts only `complete`;
+  it must accept `complete_backfilled` as a guarded terminal (stamping `guardState` with the actual
+  state), including its reconstruction path. Added to Files/S2.
+- Artifacts: `operation_id`, `request_digest`, `resolver_tags` (`late-registration+backfill`),
+  `commit_sha`. The guard edge carries **no predicate**, exactly like today's
+  `ship → complete` (`explore-compose` §1: only three predicates exist, all on early edges);
+  stratum predicates are static statements and cannot reference per-call artifacts
+  (`evidence.ts:437-441`), so reality evidence is verified by the gate's `verifyCompletionEvidence`
+  (`:199-224`) and the guard's contribution is legality + the tamper-evident ledger. Stated plainly
+  so nobody reads the ledger entry as a stratum-verified commit.
+- Writes added to the sequence: `lifecycle.backfills[]` batch record (Decision 4) and the phase
+  occurrences, both on the vision item **through the same in-process store the server uses** — the
+  gate is invoked inside the compose server (MCP tool) so `vision-store.js`'s no-lock, whole-file
+  save (`:131-143`) is not raced by a second process. The CLI path calls the server's route, not
+  the store, for the same reason.
+- `phaseToStatus` (`lifecycle-guard.js:143`) maps `complete_backfilled → COMPLETE`; `terminalOf`
+  includes it for both modes; `buildPhaseGraph` adds `<every non-terminal> → complete_backfilled`.
+- `set_feature_status`/`_overrideOk` (`compose-mcp-tools.js:71-75`) are **not** authorization for
+  backfill and are untouched.
+
+## Decision 11 (replaces round-2 #5): readers
+
+The primary signal is the terminal state. Secondary: `origin`/`recordedAt` on occurrences.
+- `server/decision-events-snapshot.js:48-57` and `decision-event-emit.js:64-67` carry
+  `origin`, `recorded_at`, `confidence` for `phase_transition`; `contracts/comp-obs-contract.schema.json:267-268`
+  opens those three optional fields (contract version bump; `additionalProperties:false` kept).
+- `server/session-routes.js:248` projection and the two UI readers (`ItemDetailPanel.jsx`,
+  `ContextPipelineDots.jsx`) render `origin:'backfill'` visibly (badge + muted dot); the item's phase
+  label shows `complete_backfilled` as "Complete (backfilled)".
+- `lib/checkpoint/reconciler.js` → `session-routes.js:156-159` (the second live writer) is
+  unchanged: it appends live occurrences.
+
+## Open questions — settled
+
+1. **Must the vision item exist with a lifecycle?** Yes. Backfill refuses `ITEM_NOT_FOUND` naming
+   `scaffold_feature`; creation stays a separate concern.
+4. **What does the upgrade guarantee?** Answered by reading `guardApplyUpgrade`: ledger preserved
+   (append-only, hash-chained), idempotent `unchanged`, destination-before-source check, refuses on
+   mismatch, `graph_version+1`, `resolved_by:"human"` with the signer's principal + fingerprint in
+   the rationale. Per-resource, so a partial fleet is safe to re-run.
+
+## Slices
+
+| Slice | Repo | Scope |
+|---|---|---|
+| S0 `STRAT-GUARD-CLI-APPLY` | stratum → 0.4.2 | `guard apply-upgrade`, `guard policy`, Decision-6 amendment, CHANGELOG |
+| S1 graph + descriptors | compose | `buildPhaseGraph`/`terminalOf`/`phaseToStatus`; `compose guard descriptors`; `stratum-client.js` `guardApplyUpgrade`/`guardPolicy`; lazy apply in the gate |
+| S2 gate intent + history | compose | `completionGate({intent:'backfill'})`, `insertBackfilledPhases`, evidence resolver (containment via `lib/canon-guard.js:46-95` firmlink strip + `feature-writer.js:610-641`), `backfills[]`, contracts |
+| S3 surfaces + readers | compose | `POST /api/vision/items/:id/lifecycle/backfill`, MCP `backfill_completion`, snapshot/emit/schema, UI badges, CHANGELOG/README |
+
+Tests (`~/.claude/rules/testing.md`): one golden flow that spawns the **real** stratum CLI from an
+isolated package copy (fixture trust root written into the copy) against an isolated `$HOME` (this is the seam a
+fake guard client hid on 2026-09-05 — `feedback_test_the_real_producer_path` instance 4); a
+table-driven refusal harness (no reason, no evidence, bad SHA, path escape, tie, closed-interval
+violation, unreachable pair, unsigned descriptor, mismatched descriptor, unregistered vs registered);
+contract tests for the obs schema bump; unit tests for the valid-time merge only.
+
+## Operator steps at ship (cannot be automated; called out for the owner)
+
+1. `ssh-keygen -t ed25519 -f ~/.stratum/guard-signing -C "<who>"` (passphrase, never in ssh-agent).
+2. Enrol the public key in stratum `ts/contracts/guard-signers.allowed`, commit, release, `npm install` in compose.
+3. `compose guard descriptors` → sign the file → commit `.compose/guard-upgrades.json{,.sig}`.
+
+Until step 2 lands the trust root is empty and every backfill on a **registered** resource refuses
+with `upgrade_descriptor_unavailable`; backfill on unregistered features works immediately.
+
+## Files (revised)
+
+| File | Action | Purpose |
+|---|---|---|
+| stratum `ts/src/cli/guard.ts`, `ts/docs/features/STRAT-GUARD-DESCRIPTOR/design.md`, `CHANGELOG.md` | modify | S0 (no trust.ts change) |
+| `server/lifecycle-guard.js` | modify | node + edges, `phaseToStatus`, `terminalOf`, lazy apply, evidence resolver |
+| `server/stratum-client.js` | modify | `guardApplyUpgrade`, `guardPolicy` (CLI, stdin JSON) |
+| `lib/completion-gate.js` | modify | `intent:'backfill'`, parameterised from/to, idempotency key, finalized-record lookup, added writes |
+| `server/completion-projection.js` | modify | accept `complete_backfilled` as a guarded terminal (finding 5) |
+| `server/lifecycle-phase-history.js` | modify | `recordedAt/origin/confidence`, `insertBackfilledPhases` |
+| `server/vision-routes.js`, `server/compose-mcp-tools.js`, `bin/compose.js` | modify | route, MCP tool, `compose guard descriptors` |
+| `server/decision-events-snapshot.js`, `server/decision-event-emit.js`, `contracts/comp-obs-contract.schema.json` | modify | carry origin/recorded_at/confidence |
+| `contracts/lifecycle-backfill.schema.json` | new | request + batch record + occurrence |
+| `src/components/ItemDetailPanel.jsx`, `ContextPipelineDots.jsx` | modify | visible backfill marking |
+| `test/lifecycle-backfill.test.js` (golden + harness), `test/phase-history-merge.test.js` | new | see Tests |
+| `CHANGELOG.md`, `README.md` | modify | same commit |
+
+## Review adjudications (Codex design gate, round 3 — 2026-09-05, gpt-6-astra/high)
+
+| # | Finding | Verdict | Resolution |
+|---|---|---|---|
+| 1 | Env-selected trust root under `NODE_ENV=test` reopens self-authorization from the CLI | **CONFIRMED** (`trust.ts:26-37` draws exactly this line) | Seam withdrawn; golden flow runs the real CLI from an isolated package copy with a fixture trust root (Decision 8 §3) |
+| 2 | `ensureGuard` sends the new policy first; stratum refuses existing registrations, blocking ordinary transitions after restart | **CONFIRMED** (`lifecycle-guard.js:299-313`, `transition.ts:423-437`) | Registration compatibility rule for every caller; `legacy` cache state; upgrade only on backfill (Decision 10) |
+| 3 | Recovery join via `operation_id` did not exist — recovery compared only the local commit | **CONFIRMED** (`completion-gate.js:155-184`, `:322-347`) | `idempotency_key = operation_id` on the transition; recovery matches the ledger entry by key + `to_state`; request persisted with `request_digest` (Decision 10) |
+| 4 | Occurrence dedup is not whole-call finalization; double-append and refuse-after-clear | **CONFIRMED** (`:501`, `:322-330`, `vision-store.js:127`) | `backfills[]` keyed by `operation_id`, skip-if-present; intent cleared last; identical retry returns the finalized record (Decision 10) |
+| 5 | `completion-projection.js:152-155` accepts only `complete` | **CONFIRMED** | Module added to Files/S2; predicate widened to the guarded terminal set |
+| 6 | Reachability rule refuses the pre-adoption history it promises (execute Aug → live explore_design Sep) | **CONFIRMED** (`vision-routes.js:318-330`, `lifecycle-modes.js:47-51`) | Episodes: backfill→live boundary is an adoption boundary, not checked; `episode` counter on occurrences (Decision 5) |
+| 7 | Global tie refusal rejects live histories the writer already produces | **CONFIRMED** (reproduced `blueprint`→`verification` same timestamp) | Ties refused only when an incoming backfilled occurrence is involved; stored sequence is the secondary key (Decision 5) |
+| 8 | `from_checksum` binds a policy, not a resource; fix-mode bugs share one checksum | **CONFIRMED** (`fingerprint.ts:13-19`) | Descriptors deduplicated by `from_checksum`; policy-wide authorization scope stated and accepted (Decision 9) |
+
+## Review adjudications (Codex design gate, round 4 — 2026-09-05, gpt-6-astra/high, on the round-3 fixes)
+
+| # | Finding | Verdict | Resolution |
+|---|---|---|---|
+| R2-1 | Recovery by `idempotency_key` + `to_state` could adopt a different payload spent under a leaked key; ledger stores only a hash | **CONFIRMED** (`transition.ts:459`, `store.ts:38`) | Recovery re-issues the persisted envelope so stratum's replay check verifies the payload; history only detects "terminal under another key"; refuse when neither intent nor finalized record exists (Decision 10) |
+| R2-2 | Fresh-registration bootstrap undefined; fix-mode items start at `explore_design`, absent from the fix graph | **CONFIRMED** (`completion-gate.js:178`, `vision-routes.js:317`, `lifecycle-modes.js:83`, `transition.ts:349`) | Register-then-read; `initial` = lifecycle phase if a graph node else the mode initial, recorded as `guard_initial` on the batch record, history not relabelled (Decision 10) |
+| R2-3 | "New minus backfill node" comparison unspecified; `initial` differs legitimately | **CONFIRMED** (`lifecycle-guard.js:290`, `fingerprint.ts:13`, `descriptors.ts:41`) | Exact four-field contract + legacy projection; same projection reversed for `to_policy` (Decision 10, 9) |
+| R2-4 | Dedup ran after the tie check, so a retry after partial persistence refused itself | **CONFIRMED** | Dedup/conflict check moved to step 3, before ties/intervals/reachability (Decision 5) |
+| R2-5 | Finalized-record retry ran after evidence verification, so a later suite regression refused a finished request | **CONFIRMED** (`completion-gate.js:246`, `lifecycle-guard.js:209`) | Backfill ordering: digest → lock → finalized/pending → evidence only for new ops (Decision 10) |
+| R2-6 | Every backfill→live boundary counted as adoption; a reconstructed `resumed` entry let `ship → execute` through | **CONFIRMED** (`reconciler.js:93`, `lifecycle-modes.js:51`) | Exactly one adoption boundary: the lifecycle-start occurrence (`from: null`, `enteredAt === startedAt`); all other boundaries checked (Decision 5) |
+| R2-7 | A `dist`-only copy cannot run: CLI imports `yaml` eagerly | **CONFIRMED** (`cli/stratum.ts:6`, reproduced `MODULE_NOT_FOUND`) | Runnable copy: `package.json` + `dist` + `contracts` + `node_modules` symlink to the resolving directory (Decision 8 §3) |
+
+## Review adjudications (Codex design gate, round 5 — 2026-09-05, gpt-6-astra/high, on the round-4 fixes)
+
+| # | Finding | Verdict | Resolution |
+|---|---|---|---|
+| R3-1 | Skip-if-present batch record + finalized-before-pending lookup returns a partially written batch as finalized; audit only on `statusChanged` | **CONFIRMED** (`completion-gate.js:485`) | `state: pending|finalized` on the batch record; finalized only after every write; pending/intent → resume; audit emitted on resume regardless (Decision 10) |
+| R3-2 | Dedup equality over regenerated fields (`recordedAt`, closure) is not retry-stable | **CONFIRMED** | Equality over the immutable claim `{phase, evidence.kind, evidence.ref, observedTime}`; persisted `recordedAt` kept (Decision 5 step 3) |
+| R3-3 | Fix-mode items keep an `explore_design` genesis absent from the fix graph; live→backfill reachability then refuses all fix backfills | **CONFIRMED** (`vision-routes.js:318`, `lifecycle-modes.js:83`) | Out-of-graph genesis is an adoption marker, never a reachability endpoint (Decision 5) |
+| R3-4 | Anchoring adoption to an occurrence with `enteredAt === startedAt` fails when the reconciler recreated it later; blanket backfill→live exemption text still present | **CONFIRMED** (`reconciler.js:97`) | Boundary anchored to the `startedAt` instant; equal-instant backfill refused as ambiguous; blanket text replaced (Decision 5) |
+| R3-5 | Fixture trust root placed at `<copy>/contracts`; the packaged reader reads `<copy>/dist/contracts` | **CONFIRMED** (`prepare-dist.mjs:24`, `package.json:19`) | Copy the complete `dist` tree and replace the trust root inside `dist/contracts` (Decision 8 §3) |
+
+Gate closed after three rounds (8 → 7 → 5 findings, all confirmed, all folded). Per the review-budget
+rule the remaining findings were spec-precision fixes whose correctness is checkable at the blueprint
+gate, which re-reads this document against the code.
