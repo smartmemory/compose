@@ -37,11 +37,15 @@ write_blueprint DONE 2026-09-06, implement READY dispatchToken `e94162a0-6e11-42
   sandbox-invisible test defects fixed by the controller — `reviews/impl-s3-r1-2026-09-06.md`). Tool inventory
   re-pinned 52/27. Ship prep in the same commit: stratum ^0.4.4, CHANGELOG, README operator steps, report.md.
 
-## In flight
-- Full suite once (`CI=1 npm test`, then `test:ui`, `test:tracker`), record_completion through the gate,
-  journal, `stratum_step_done` implement, `stratum_audit`, push.
+- SHIPPED + COMPLETE 2026-09-06. Full suite 6206/6206 after re-pinning the tool-count contracts
+  (`dbc3e17`), test:ui 613, test:tracker 100. Completion recorded through the gate at `dbc3e17` via
+  `compose record-completion` (the session's compose MCP process predates today's code and had registered
+  the feature's guard with the legacy graph; the CLI ran the new code and the legacy-policy path accepted
+  it live — guard ledger: ship→complete applied). Journal session 113. Stratum run
+  `9ed5acaf-cf66-42e8-a23b-be70a8bb14d3` COMPLETED (3 steps, 4 dispatches).
 
-## Then
+## Done — nothing in flight
+## Was planned as "Then" (all done)
 - plan.md (ordered tasks from the blueprint File Plan, S1→S2→S3).
 - Implementation dispatch: S1 (graph/transport/descriptors) Codex terra; S2 (gate intent + valid-time
   history) Opus high — judgment-heavy; S3 (routes/MCP/readers/UI) Codex terra. Each slice: Codex
