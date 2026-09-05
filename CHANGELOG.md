@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Completion gate — every completion refused after the stratum 0.4.0 upgrade
+
+Stratum 0.4.0 validates `resolved_by` strictly as `"agent" | "human"`
+(`guard/transition.ts`, shipped in `17f0d38`). The completion gate stamped
+`agent:late-registration[+no-repo-exemption]`, so every `record_completion`
+under `capabilities.guard` failed with `evidence_parse_error` — reported only
+as "guard transition failed" because the gate dropped the guard's message.
+Found 2026-09-05 reconciling `COMP-PLAN-IDEA-UNIFY` (the first real completion
+since the upgrade; the suite injects a fake guard client and never saw it).
+
+- `resolved_by` is `agent` again; the provenance tags ride in
+  `artifacts.resolver_tags`, so they still land in the ledger payload digest.
+- The gate's refusal reason now carries the guard's own error message.
+- `test/completion-gate.test.js` asserts the `agent | human` contract.
+
+### Roadmap reconciliation (2026-09-05)
+
+- `COMP-PLAN-IDEA-UNIFY` PARTIAL → COMPLETE through the gate at `193897b`
+  (all seven acceptance criteria closed 2026-08-05; follow-up
+  `COMP-FLUID-SEAM-GUARANTEES` COMPLETE 2026-08-06).
+- `COMP-LIFECYCLE-BACKFILL` BLOCKED → IN_PROGRESS: the stratum-side blocker
+  closed 2026-08-17 (`STRAT-GUARD-AUTHZ` `3647b4c`, `STRAT-GUARD-UPGRADE`
+  `91a55ed`); remaining work is compose-side, recorded in the description.
+
 ### Wiring repair — execution contract, cancellation, workspace isolation
 
 Three review/repair rounds (Codex → Opus → Codex, alternating reviewer and
