@@ -12,7 +12,7 @@ write_blueprint READY dispatchToken `ff97e416-04ed-4008-a952-cb3cad1f6baf`, impl
   confirmed, adjudications in `reviews/blueprint-r{1,2}-2026-09-05.md` (committed `9289690`, `e98449b`).
 
 ## In flight
-- Blueprint revision for r2 (agent `blueprint-backfill`). Next: commit blueprint.md, Codex round 3
+- Blueprint r2 revision landed + committed. Next: Codex round 3
   (last full round per review-budget rule), `stratum_step_done` write_blueprint, then plan.md.
 
 ## Then
