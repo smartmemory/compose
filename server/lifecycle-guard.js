@@ -14,12 +14,17 @@
 
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { promisify } from 'node:util';
+
+import { descriptorIdFor } from '../lib/guard-descriptors.js';
 
 import {
   guardRegister as _guardRegister,
   guardTransition as _guardTransition,
+  guardPolicy as _guardPolicy,
+  guardApplyUpgrade as _guardApplyUpgrade,
 } from './stratum-client.js';
 import { setFeatureStatus as _setFeatureStatus } from '../lib/feature-writer.js';
 import {
@@ -30,6 +35,8 @@ import {
   terminalOf,
   edgeEvidenceOf,
 } from '../lib/lifecycle-modes.js';
+
+const execFileAsync = promisify(execFile);
 
 // ---------------------------------------------------------------------------
 // Canonical phase graph (compose-owned data — single source of truth)
@@ -53,7 +60,12 @@ export const BASE_TRANSITIONS = {
 export const SKIPPABLE = new Set(['prd', 'architecture', 'report']);
 
 /** Terminal phases — no outgoing edges. */
-export const TERMINAL = new Set(['complete', 'killed']);
+export const TERMINAL = new Set(['complete', 'killed', 'complete_backfilled']);
+
+/** Normalise raw stratum and local adapter error envelopes at the boundary. */
+export const isGuardError = (result) => !result || Boolean(result.error) || result.status === 'error';
+export const guardErrorType = (result) => (result && (result.error?.code ?? result.error_type)) ?? null;
+export const guardErrorMessage = (result) => (result && (result.error?.message ?? result.message)) ?? 'no guard response';
 
 /**
  * Assemble the FULL guarded graph the design requires: the forward
@@ -77,6 +89,13 @@ export function buildPhaseGraph(mode = 'build') {
   // separately in vision-routes at /lifecycle/complete, so absent from the mode's
   // forward transitions). For build this is `ship → complete`.
   graph[completable] = [...(graph[completable] || []), 'complete'];
+  // Every non-terminal phase → complete_backfilled. This must precede the
+  // killed loop: stratum fingerprints adjacency arrays in their stored order.
+  for (const s of nodes) {
+    if (terminal.has(s)) continue;
+    graph[s] = graph[s] || [];
+    if (!graph[s].includes('complete_backfilled')) graph[s].push('complete_backfilled');
+  }
   // Every non-terminal phase → killed (vision-routes /lifecycle/kill allows
   // kill from any non-terminal phase, including the completable phase).
   for (const s of nodes) {
@@ -141,6 +160,7 @@ export function resourceId(featureCode, workspaceRoot, mode = 'build') {
  * and stay set_feature_status's domain.
  */
 export function phaseToStatus(phase) {
+  if (phase === 'complete_backfilled') return 'COMPLETE';
   if (phase === 'complete') return 'COMPLETE';
   if (phase === 'killed') return 'KILLED';
   return 'IN_PROGRESS';
@@ -223,19 +243,101 @@ export async function verifyCompletionEvidence({ commitSha, cwd, testCommand, te
   return { ok: reasons.length === 0, reasons, testsAttested };
 }
 
+/**
+ * Async equivalent for backfill completion while a directory lock heartbeat is
+ * active. The synchronous live-completion verifier above remains unchanged.
+ */
+export async function verifyCompletionEvidenceAsync({ commitSha, cwd, testCommand, testsPassClaim }) {
+  const reasons = [];
+
+  if (!commitSha || typeof commitSha !== 'string' || !commitSha.trim()) {
+    reasons.push('commit_sha is required for evidence-bound completion');
+  } else {
+    try {
+      await execFileAsync('git', ['rev-parse', '--verify', '--quiet', `${commitSha.trim()}^{commit}`], { cwd, encoding: 'utf8' });
+    } catch {
+      reasons.push(`commit ${commitSha.trim()} not found in repository (server-read git verification)`);
+    }
+  }
+
+  let testsAttested = false;
+  if (Array.isArray(testCommand) && testCommand.length > 0) {
+    const [bin, ...rest] = testCommand;
+    try {
+      await execFileAsync(bin, rest, { cwd, encoding: 'utf8' });
+      testsAttested = true;
+    } catch (error) {
+      if (error?.code === 'ENOENT') reasons.push(`test command failed to run: ${error.message}`);
+      else reasons.push(`test command exited ${error?.code ?? 'null'} (not 0)`);
+    }
+  } else if (testsPassClaim !== true) {
+    reasons.push('tests_pass must be explicitly true (no configured test command to attest test results)');
+  }
+
+  return { ok: reasons.length === 0, reasons, testsAttested };
+}
+
 // ---------------------------------------------------------------------------
 // Guard client (injectable for tests)
 // ---------------------------------------------------------------------------
 
-let _client = { register: _guardRegister, transition: _guardTransition };
+let _client = {
+  register: _guardRegister,
+  transition: _guardTransition,
+  policy: _guardPolicy,
+  applyUpgrade: _guardApplyUpgrade,
+};
 /** @internal test seam */
 export function _testOnly_setGuardClient(c) { _client = c; }
 
 // Per-process registration cache — register is idempotent server-side, but the
 // cache avoids a subprocess per request once a resource is known-registered.
-const _registered = new Set();
+const _registered = new Map();
 /** @internal test seam */
 export function _testOnly_resetGuardCache() { _registered.clear(); }
+
+/** The four and only four fields covered by stratum's policy checksum. */
+export function policyChecksumFields(policy) {
+  return {
+    graph: policy.graph,
+    edge_predicates: policy.edge_predicates,
+    terminal: policy.terminal,
+    stakes: policy.stakes,
+  };
+}
+
+/** Reverse buildPhaseGraph's complete_backfilled additions for legacy comparison. */
+export function legacyPolicyProjection(policy) {
+  const fields = policyChecksumFields(policy);
+  const graph = {};
+  for (const [phase, targets] of Object.entries(fields.graph || {})) {
+    if (phase === 'complete_backfilled') continue;
+    graph[phase] = (targets || []).filter((target) => target !== 'complete_backfilled');
+  }
+  return {
+    graph,
+    edge_predicates: fields.edge_predicates,
+    terminal: (fields.terminal || []).filter((phase) => phase !== 'complete_backfilled'),
+    stakes: fields.stakes,
+  };
+}
+
+function _sortPolicyObject(value) {
+  if (Array.isArray(value)) return value.map(_sortPolicyObject);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, _sortPolicyObject(value[key])]));
+  }
+  return value;
+}
+
+/** Object key order is irrelevant; terminal order is not; adjacency order is. */
+export function policiesEqual(a, b) {
+  const normalise = (policy) => {
+    const fields = policyChecksumFields(policy);
+    return _sortPolicyObject({ ...fields, terminal: [...(fields.terminal || [])].sort() });
+  };
+  return JSON.stringify(normalise(a)) === JSON.stringify(normalise(b));
+}
 
 /**
  * Resolve the feature directory RELATIVE to the served `workspaceRoot` — read
@@ -298,11 +400,13 @@ export function guardTestCommand(workspaceRoot) {
  */
 export async function ensureGuard(featureCode, currentPhase, workspaceRoot, mode = 'build') {
   const rid = resourceId(featureCode, workspaceRoot, mode);
-  if (_registered.has(rid)) return { guard_id: rid, status: 'cached' };
+  if (_registered.has(rid)) {
+    return { guard_id: rid, status: _registered.get(rid) === 'legacy' ? 'legacy' : 'cached' };
+  }
 
   let res;
   try {
-    res = await _client.register({
+    const newPolicy = {
       resourceId: rid,
       graph: buildPhaseGraph(mode),
       edgePredicates: edgePredicates(_featureRelDir(featureCode, workspaceRoot, mode), mode),
@@ -310,16 +414,75 @@ export async function ensureGuard(featureCode, currentPhase, workspaceRoot, mode
       terminal: terminalOf(mode),
       stakes: {},
       workspaceRoot,
-    });
+    };
+    res = await _client.register(newPolicy);
+    if (guardErrorType(res) === 'guard_already_registered') {
+      const stored = await _client.policy(rid);
+      if (isGuardError(stored)) {
+        return { error: { code: guardErrorType(stored), message: guardErrorMessage(stored) } };
+      }
+      const projected = legacyPolicyProjection({
+        graph: newPolicy.graph,
+        edge_predicates: newPolicy.edgePredicates,
+        terminal: newPolicy.terminal,
+        stakes: newPolicy.stakes,
+      });
+      if (policiesEqual(projected, policyChecksumFields(stored))) {
+        _registered.set(rid, 'legacy');
+        return { guard_id: rid, status: 'legacy', storedChecksum: stored.checksum };
+      }
+      return {
+        error: {
+          code: 'GUARD_POLICY_DIVERGED',
+          message: `stored guard policy for ${rid} differs from the expected legacy policy`,
+        },
+      };
+    }
   } catch (e) {
     // A thrown Stratum CLI failure must NOT escape as
     // a generic 500/400 — normalise to a fail-closed error result.
     return { error: { code: 'GUARD_UNREACHABLE', message: e.message } };
   }
   if (res && (res.status === 'registered' || res.status === 'exists')) {
-    _registered.add(rid);
+    _registered.set(rid, 'cached');
   }
   return res;
+}
+
+/** Lazily apply the signed legacy-policy upgrade required for backfilled completion. */
+export async function applyBackfillUpgrade({ featureCode, workspaceRoot, mode = 'build' }) {
+  const rid = resourceId(featureCode, workspaceRoot, mode);
+  let stored;
+  try {
+    stored = await _client.policy(rid);
+  } catch (error) {
+    return { ok: false, reasons: ['could not read stored guard policy; run compose guard descriptors and re-sign'], error: { code: 'GUARD_UNREACHABLE', message: error.message } };
+  }
+  if (isGuardError(stored)) {
+    return { ok: false, reasons: ['could not read stored guard policy; run compose guard descriptors and re-sign'], error: { code: guardErrorType(stored), message: guardErrorMessage(stored) } };
+  }
+  const descriptorsPath = path.resolve(workspaceRoot, '.compose', 'guard-upgrades.json');
+  let applied;
+  try {
+    applied = await _client.applyUpgrade({
+      resourceId: rid,
+      descriptorId: descriptorIdFor(stored.checksum, mode),
+      descriptorsPath,
+    });
+  } catch (error) {
+    return { ok: false, reasons: ['guard upgrade failed; run compose guard descriptors and re-sign'], error: { code: 'GUARD_UNREACHABLE', message: error.message } };
+  }
+  if (isGuardError(applied)) {
+    return {
+      ok: false,
+      reasons: ['guard upgrade failed; run compose guard descriptors and re-sign'],
+      error: { code: guardErrorType(applied), message: guardErrorMessage(applied) },
+    };
+  }
+  if (applied.status !== 'applied' && applied.status !== 'unchanged') {
+    return { ok: false, reasons: ['guard upgrade returned an unexpected result; run compose guard descriptors and re-sign'], error: applied };
+  }
+  return { ok: true, status: applied.status, ledgerRef: applied.ledger_ref, checksum: applied.checksum };
 }
 
 /**
@@ -330,7 +493,7 @@ export async function ensureGuard(featureCode, currentPhase, workspaceRoot, mode
  * @returns {Promise<{applied:boolean, refused?:boolean, verdict?:object,
  *   ledgerRef?:string, currentState?:string, error?:object}>}
  */
-export async function guardedTransition({ featureCode, from, to, workspaceRoot, commitSha, resolvedBy = 'agent', mode = 'build', artifacts: extraArtifacts }) {
+export async function guardedTransition({ featureCode, from, to, workspaceRoot, commitSha, resolvedBy = 'agent', mode = 'build', artifacts: extraArtifacts, idempotencyKey, expectedPolicyChecksum }) {
   const reg = await ensureGuard(featureCode, from, workspaceRoot, mode);
   if (reg && (reg.error || reg.status === 'error')) {
     return { applied: false, error: reg.error || reg };
@@ -358,6 +521,8 @@ export async function guardedTransition({ featureCode, from, to, workspaceRoot, 
       fromState: from,
       toState: to,
       artifacts,
+      idempotencyKey,
+      expectedPolicyChecksum,
       resolvedBy,
     });
   } catch (e) {

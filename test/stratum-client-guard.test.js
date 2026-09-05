@@ -17,7 +17,7 @@ const SERVER_DIR = `${REPO_ROOT}/server`;
 
 const {
   _testOnly_setExecFile,
-  guardRegister, guardTransition, guardOverride, guardHistory,
+  guardRegister, guardTransition, guardOverride, guardHistory, guardPolicy, guardApplyUpgrade, guardDigest,
 } = await import(`${SERVER_DIR}/stratum-client.js`);
 
 /** Mock execFile that captures args + piped stdin and replays a response. */
@@ -25,11 +25,13 @@ function makeMock(responses) {
   let callCount = 0;
   let lastArgs = [];
   let lastStdin = '';
+  let lastOpts = null;
 
-  function exec(_bin, args, _opts, callback) {
+  function exec(_bin, args, opts, callback) {
     const resp = responses[Math.min(callCount, responses.length - 1)];
     callCount++;
     lastArgs = args;
+    lastOpts = opts;
     if (!resp || resp.timeout) {
       const err = new Error('ETIMEDOUT');
       err.code = 'ETIMEDOUT';
@@ -52,6 +54,7 @@ function makeMock(responses) {
     get callCount() { return callCount; },
     get lastArgs() { return lastArgs; },
     get lastStdin() { return lastStdin; },
+    get lastOpts() { return lastOpts; },
   };
 }
 
@@ -88,6 +91,7 @@ test('guardTransition: translates fromState/toState/modifiedFiles, returns verdi
     artifacts: { commit_sha: 'deadbeef' },
     modifiedFiles: ['x.js'],
     idempotencyKey: 'k1',
+    expectedPolicyChecksum: 'a'.repeat(64),
     resolvedBy: 'agent',
   });
 
@@ -97,9 +101,50 @@ test('guardTransition: translates fromState/toState/modifiedFiles, returns verdi
   assert.equal(piped.to_state, 'b');
   assert.deepEqual(piped.modified_files, ['x.js']);
   assert.equal(piped.idempotency_key, 'k1');
+  assert.equal(piped.expected_policy_checksum, 'a'.repeat(64));
+  assert.ok(!Object.hasOwn(piped, 'idempotencyKey'));
+  assert.ok(!Object.hasOwn(piped, 'expectedPolicyChecksum'));
   assert.equal(piped.resolved_by, 'agent');
   assert.equal(piped.artifacts.commit_sha, 'deadbeef');
   assert.equal(res.status, 'applied');
+});
+
+test('guardPolicy: minimal resource_id payload and canonical not-found envelope', async () => {
+  const m = makeMock([{ exitCode: 1, stdout: '{"status":"error","error_type":"guard_not_found","message":"missing"}' }]);
+  _testOnly_setExecFile(m.exec);
+  const res = await guardPolicy('rid');
+  assert.deepEqual(m.lastArgs, ['guard', 'policy']);
+  assert.deepEqual(JSON.parse(m.lastStdin), { resource_id: 'rid' });
+  assert.equal(res.error_type, 'guard_not_found');
+  assert.deepEqual(m.lastOpts, { timeout: 5_000 });
+});
+
+test('guardApplyUpgrade: sends only descriptor identifiers and path through child env', async () => {
+  const m = makeMock([{ exitCode: 0, stdout: '{"status":"applied"}' }]);
+  _testOnly_setExecFile(m.exec);
+  await guardApplyUpgrade({ resourceId: 'rid', descriptorId: 'backfill-build-abcdef', descriptorsPath: '/tmp/guard-upgrades.json' });
+  assert.deepEqual(m.lastArgs, ['guard', 'apply-upgrade']);
+  assert.deepEqual(JSON.parse(m.lastStdin), { resource_id: 'rid', descriptor_id: 'backfill-build-abcdef' });
+  assert.equal(m.lastOpts.timeout, 10_000);
+  assert.equal(m.lastOpts.env.STRATUM_GUARD_UPGRADE_DESCRIPTORS, '/tmp/guard-upgrades.json');
+});
+
+test('guardDigest: sends its exact six-key payload', async () => {
+  const m = makeMock([{ exitCode: 0, stdout: '{"status":"ok","payload_digest":"d","payload_digest_version":2}' }]);
+  _testOnly_setExecFile(m.exec);
+  await guardDigest({ fromState: 'ship', toState: 'complete_backfilled', artifacts: { commit_sha: 'x' }, modifiedFiles: [], resolvedBy: 'agent', policyChecksum: 'b'.repeat(64) });
+  assert.deepEqual(m.lastArgs, ['guard', 'digest']);
+  assert.deepEqual(JSON.parse(m.lastStdin), {
+    from_state: 'ship', to_state: 'complete_backfilled', artifacts: { commit_sha: 'x' },
+    modified_files: [], resolved_by: 'agent', policy_checksum: 'b'.repeat(64),
+  });
+});
+
+test('guardTransition: omits expected policy checksum when absent', async () => {
+  const m = makeMock([{ exitCode: 0, stdout: '{"status":"applied"}' }]);
+  _testOnly_setExecFile(m.exec);
+  await guardTransition({ resourceId: 'rid', fromState: 'a', toState: 'b', artifacts: {} });
+  assert.ok(!Object.hasOwn(JSON.parse(m.lastStdin), 'expected_policy_checksum'));
 });
 
 test('guardTransition: refused verdict is a normal (exit 0) result, not an error', async () => {

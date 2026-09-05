@@ -1218,6 +1218,23 @@ _This is a seed design doc created by \`compose feature\`. The \`compose build\`
   process.exit(0)
 }
 
+if (cmd === 'guard' && args[0] === 'descriptors') {
+  // compose guard descriptors — COMP-LIFECYCLE-BACKFILL S1-5. Narrowly gated so
+  // the canon-guard dispatcher below keeps install/uninstall/status/verify.
+  const { root: cwd } = resolveCwdWithWorkspace(args)
+  const { writeDescriptorFile } = await import('../lib/guard-descriptors.js')
+  try {
+    const result = await writeDescriptorFile(cwd)
+    console.log(`Wrote ${result.path} (${result.descriptors.length} descriptor(s)). Next:`)
+    console.log(`  ${result.signCommand}`)
+    console.log(`Commit ${result.path} and ${result.path}.sig after signing.`)
+    process.exit(0)
+  } catch (err) {
+    console.error(`guard descriptors: ${err?.message || String(err)}`)
+    process.exit(1)
+  }
+}
+
 if (cmd === 'roadmap') {
   const subcmd = args[0]
 

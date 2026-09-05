@@ -65,7 +65,7 @@ test('accessors return per-mode data, defaulting to build', () => {
   assert.equal(completablePhaseOf('build'), 'ship');
   assert.deepEqual(transitionsOf('build'), BASE_TRANSITIONS);
   assert.deepEqual(skippableOf('build'), ['prd', 'architecture', 'report']);
-  assert.deepEqual(terminalOf('build'), ['complete', 'killed']);
+  assert.deepEqual(terminalOf('build'), ['complete', 'killed', 'complete_backfilled']);
   assert.ok(phaseOrderOf('build').includes('ship'));
   assert.ok(phaseOrderOf('build').includes('explore_design'));
   // unknown mode falls back to build's data
