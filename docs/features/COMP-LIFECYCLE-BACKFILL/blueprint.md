@@ -44,8 +44,8 @@ out of the gate. "Design says" quotes the design doc; "Reality" is what the file
 | C11 | `reconciler.js:97` recreates a missing first live entry with the current time | `:97` is the `historyEmpty && currentPhase` test; the timestamp is `:108` | Citation only |
 | C12 | `contracts/comp-obs-contract.schema.json` needs "a contract version bump" | Current `version` is `"0.2.6"` (`:5`) | The bump is **0.2.6 → 0.2.7** with a new `_changelog` entry |
 | C13 | The stratum trust root "ships EMPTY" | Confirmed: 1892 bytes of comment, zero signer lines. **But** `node_modules/@smartmemory/stratum` is a **symlink to `/Users/ruze/reg/my/forge/stratum/ts`** | In this workspace the operator step is "edit `stratum/ts/contracts/guard-signers.allowed` and rebuild `dist`", not "npm install". Both forms go in the README |
-| C14 | The override token "no longer exists" | True in stratum (`ts/src/cli/guard.ts:107` takes `authorization`). **Compose still ships the dead wrapper** `guardOverride` at `server/stratum-client.js:367-376` sending `override_token` | Out of scope. Flagged so nobody reads it as a working fallback |
-| C15 | Recovery "re-issues the persisted envelope so stratum's replay check verifies the payload" | The payload digest **binds the policy checksum** (`ts/src/guard/transition.ts:131`, `:559`), compared in `_maybeReplay` (`:467`), which throws `IdempotencyConflict` (`:468`) | A descriptor applied between attempts turns replay into `idempotency_conflict`. **Superseded by C21** — the first draft's fix was itself rejected as BP-1 |
+| C14 | The override token "no longer exists" | True in stratum (`ts/src/cli/guard.ts:109-113` takes `authorization`). **Compose still ships the dead wrapper** `guardOverride` at `server/stratum-client.js:367-376` sending `override_token` | Out of scope. Flagged so nobody reads it as a working fallback |
+| C15 | Recovery "re-issues the persisted envelope so stratum's replay check verifies the payload" | The payload digest **binds the policy checksum** (`ts/src/guard/transition.ts:131`, `:559`), compared in `_maybeReplay` (`:467`), which throws `IdempotencyConflict` (`:468`) | A descriptor applied between attempts turns replay into `idempotency_conflict` — and, since R3-2, on `policy_checksum_mismatch` too. **Superseded by C21** — the first draft's fix was itself rejected as BP-1 |
 | C16 | Golden flow needs a test seam for guard history | None needed. `currentGuardState` lazily imports `guardHistory` (`lib/completion-gate.js:156`), which spawns through `flowGateBin()` → `resolveStratumBin('cli', …)`, honouring `COMPOSE_STRATUM_TS_CLI_BIN` first (`lib/stratum-engine.js:134`, `:218-221`) | One env var routes every guard verb to the isolated copy. The golden flow injects no fakes |
 | C17 | The guard `_client` seam covers the guard calls | `server/lifecycle-guard.js:230` is `{ register, transition }` only | The new verbs are called through `server/stratum-client.js` directly, as `currentGuardState` already does. Existing `_client` tests keep working |
 | C18 | `terminalOf('build')` gains `complete_backfilled` | `test/lifecycle-modes.test.js` and `test/lifecycle-modes-golden.test.js` pin build's `terminal`; **and (BP-17) `test/lifecycle-modes-golden.test.js:26-27` pins adjacency with `.filter(x => x !== 'killed')`, while `test/judgment-writer.test.js:449-467` pins the guard graph's surplus-edge list to exactly five entries** | Three suites break by design and are updated in the same commit. See S1-1 |
@@ -62,22 +62,32 @@ out of the gate. "Design says" quotes the design doc; "Reality" is what the file
 | **C29** | (first draft) consecutive occurrences are checked against `transitionsOf(mode)` | **R2B-1:** the forward graph does **not** contain `complete_backfilled` — only the augmented `buildPhaseGraph(mode)` does (S1-1). The final pair `<fromState> -> complete_backfilled` was therefore unreachable by construction | The merge takes **both** graphs: caller occurrences against the forward graph, any pair whose target is an adapter-added terminal against the augmented one (§4.1). Without this **every** backfill refuses at `history` |
 | **C30** | (first draft) `originals := index(existing, '_tid')` is the untouched baseline | **R2B-5:** it indexes the same objects the closure loop then rewrites, so step 4d compares each object with itself and can never fire; and the `from == null` that identifies the genesis marker is destroyed before the marker test reads it | An independent `snapshot` clone is taken up front, marker identity is computed off it **before** any rewrite, and 4d compares against it (§4.1) |
 | **C31** | (first draft) recovery replays through `guardedTransition` | **R2B-2:** that calls `ensureGuard` first (`server/lifecycle-guard.js:334-337`), and after a second descriptor the stored policy matches neither the new policy nor its legacy projection, so registration refuses before the replay is ever attempted | Recovery calls the raw transport `guardTransition` in `server/stratum-client.js:349-359` with the persisted envelope and no `ensureGuard` (§5.9a) |
-| **C32** | (first draft) `if (g.applied)` accepts the transition | **R2B-6:** `:376` maps `replayed` to `applied:true`, so a replay — which returns the historical verdict and the registry's current state (`ts/src/guard/transition.ts:474-483`) — was accepted without checking whether anything moved the resource afterwards | `guardedTransition` surfaces `status` verbatim, and every recovery success requires all three of: the digest-matched applied ledger entry under this key, `current_state` still `complete_backfilled`, and no later mutating entry (§5.9b) |
+| **C32** | (first draft) `if (g.applied)` accepts the transition | **R2B-6:** `:376` maps `replayed` to `applied:true`, so a replay — which returns the historical verdict and the registry's current state (`ts/src/guard/transition.ts:479-487`) — was accepted without checking whether anything moved the resource afterwards | `guardedTransition` surfaces `status` verbatim, and every recovery success requires all three of: the digest-matched applied ledger entry under this key, `current_state` still `complete_backfilled`, and no later mutating entry (§5.9b/§5.9c) |
 | **C33** | (first draft) the persisted policy checksum is the one the transition hashes under | **R2B-7:** `guard policy` and `guard transition` are two processes taking the lock in turn, so a descriptor applied between them leaves compose holding P while stratum hashes Q — and a later recovery then computes a digest matching nothing | **Cross-repo:** `STRAT-GUARD-EXPECTED-CHECKSUM` (stratum 0.4.4) adds optional `expected_policy_checksum` to `guard transition`, refused atomically under the resource lock with `policy_checksum_mismatch`, writing nothing. Compose sends it on every fresh backfill transition and treats the mismatch as a retryable refusal (§5.6, §5.8) |
 | **C34** | (first draft) `store.updateLifecycle` is the only durable write a fix/plan backfill needs | **R2B-9:** `updateLifecycle` (`server/vision-store.js:235-253`) does **not** touch `item.status`, so a `tracksFeatureJson:false` item finalized with its lifecycle reading `complete_backfilled` and its status still `in_progress` | Step 6.4's else-branch performs the durable `item.status = 'complete'` write the live unmanaged path already does (`server/vision-routes.js:615`), with rollback and failure collection (§5.10) |
+| **C35** | (round 2) the new transition options are forwarded as `idempotency_key` / `expected_policy_checksum` | **R3-1:** `_client.transition` is `server/stratum-client.js`'s `guardTransition` (`:349`), which destructures **camelCase**. Snake_case properties are discarded silently — no throw, no warning — taking replay identity and checksum protection with them | camelCase across every JS boundary; snake_case only inside `runGuard`'s payload object. `guardTransition` gains `expectedPolicyChecksum`; the wire assertions at `test/stratum-client-guard.test.js:80-103` are extended to assert the absence of the camelCase keys (S1-2, §5.8) |
+| **C36** | (round 2) a recovery replay sends no `expected_policy_checksum`, because the checksum is expected to have moved | **R3-2:** that covers only the post-transition crash. In the **pre-transition** window no ledger entry exists, so `_maybeReplay` returns null (`transition.ts:467-469`) and stratum **applies** under whatever policy is current (`:638-664`). The verification then checks against the persisted checksum, finds nothing, and refuses forever — with the guard already moved | The recovery sends the persisted checksum too, so it can never apply except under the policy the intent was written against. `policy_checksum_mismatch` routes to §5.9c, a **read-only** verification (`guard digest` + `guard history`); if the operation never applied, refuse at `recovery` with an operator-actionable message and keep the intent (§5.9a, §5.9c, §5.11) |
+| **C37** | (round 2) `write_plan.history` is an array of `BackfilledOccurrence` | **R3-3:** live entries carry none of `origin`/`recordedAt`/`confidence`/`episode`/`evidence` (`server/lifecycle-phase-history.js:31-42`), including the genesis record every lifecycle starts with (`server/vision-routes.js:330`). No item that had ever run a lifecycle could produce a valid intent | Split the schema: `StoredHistoryEntry` (live/legacy, backfill fields optional) alongside `BackfilledOccurrence` (constructed, all required); `write_plan.history` items are `anyOf` the two. A contract test validates an intent carrying a real genesis record (§2) |
+| **C38** | (round 2) recovery restores the write inputs it needs | **R3-4:** step 6.0 still read `probe.history` / `probe.written` / `probe.skipped`, which exist only on the fresh branch; it used a fresh `now` instead of `op.started_at`; and it never restored `notes`, a `recordCompletion` argument (`lib/completion-gate.js:425`) | One `writeContext` object, built by **both** branches, is the only thing §5.10 reads. Its field table names the source on each side and says which fields the intent persists; `notes`, `guard_initial`, `upgrade` and `policy_checksum` become **required** (nullable) so a missing one refuses instead of defaulting (§5.4a, §5.7, §5.10) |
+| **C39** | (round 2) the divergence check re-merges the terminal occurrence safely | **R3-5:** the terminal's `origin` is `live` (§5.5), while the claim index covers only `origin === 'backfill'` (§4.1). Once step 6.0 persists it, the retry's terminal ties with its stored twin on the same instant and **every** post-6.0 recovery refuses at `history` | §4.1 gains a step 3a that dedups by `operation_id` **before** the claim index and before every step-4 refusal, verifying the stored entry's immutable fields first. Flow A gains step 6b: recovery after a successful 6.0 (§4.1, §5.4a) |
+| **C40** | (round 2) the recovery suffix scan rejects later `transition`, `override` and `migrate` entries | **R3-6:** stratum writes exactly three kinds — `transition` (`transition.ts:653`), `deviation` (`:765`) and `graph_version` (`:838`, `:1050`, `:1130`). `override` and `migrate` are not kinds, so **an override passed the check silently** while a migration was rejected under a name never written | Reject later `transition` and `deviation`; allow `graph_version` only after verifying `from_state == to_state`; refuse an unrecognised kind. Flow A's condition-3 variant is rebuilt: an override needs a declared edge (`:757-759`), so a signed migrate adds `complete_backfilled ↔ killed` and two overrides round-trip the state (§5.9c, §7.3) |
+| **C41** | (round 2) passing the persisted guard flag to the projector makes the projection honour it | **R3-7:** the route closure hardcodes `consultGuard: true` (`server/vision-routes.js:564`) and the verifier independently reads live config (`server/completion-projection.js:136`). false→true spawns stratum on an unguarded resume; true→false silently downgrades the verification tier | Thread the effective flag through the closure **and** add `guardEnabledOverride` to `verifiedCompleteProjection`/`applyVerifiedProjection`, read with `??` so a persisted `false` is honoured. Flow A step 9 asserts both flips through the real projection path, proving the guard-off half with a marker script (§5.10a, S3-1, S3-3) |
+| **C42** | (round 2) `require.resolve('<dep>/package.json')`, falling back to the bare specifier, locates every dependency | **R3-8:** measured — `@openai/codex-sdk` fails **both** legs (`ERR_PACKAGE_PATH_NOT_EXPORTED`; its `exports` publishes an `import` condition only), and `@modelcontextprotocol/sdk`'s `"./*"` wildcard resolves `./package.json` to `dist/cjs/package.json`, a plausible wrong answer. `import.meta.resolve` takes no parent argument, so it cannot resolve from stratum's context either | Symlink stratum's whole `node_modules` into the copy — demonstrated end to end, exit 1 with the expected usage text and no `MODULE_NOT_FOUND` — and keep a directory-walk resolver (which `exports` cannot block) plus a package-`name` check on every resolved root as the partial-hoisting fallback, arbitrated by the smoke run (§7.1) |
 
 ### Design points that were not implementable as written
 
 1. **Atomicity of the checksum read (C33).** `guard policy` and `guard transition` cannot be made
    atomic from compose's side, so this one is closed in stratum: `STRAT-GUARD-EXPECTED-CHECKSUM`
    (0.4.4) is a **prerequisite for the fresh-transition path**, exactly as `guard digest` was for the
-   recovery path. Until it lands, compose can send the key harmlessly — an older stratum refuses an
-   unknown payload key outright (`assertOnlyKeys`), so the blueprint gates sending it on the installed
-   CLI advertising the action, and the window C33 describes stays open until 0.4.4 is installed.
+   recovery path — and, since R3-2, for the recovery path too. **It has landed and is installed:**
+   `ts/package.json:3` reads `0.4.4`, `ts/src/cli/guard.ts:98` accepts `expected_policy_checksum`, and
+   `ts/src/guard/transition.ts:566-570` / `:633-637` enforce it under both locks. Compose must still
+   not send the key to an older CLI — an older stratum refuses an unknown payload key outright
+   (`assertOnlyKeys`) — so the send stays gated on the installed CLI advertising it.
 2. **Recovery across a policy change (C15 → C21).** Closed by the design addendum: stratum computes
    the digest, compose compares it. This is now a **cross-repo dependency**: `STRAT-GUARD-DIGEST` must
    have landed in stratum 0.4.3, which it now has — `guard digest` is live at
-   `ts/src/cli/guard.ts:204-224` and compiled into the installed `dist`. Compose's side is the
+   `ts/src/cli/guard.ts:207-227` and compiled into the installed `dist`. Compose's side is the
    `guardDigest` wrapper (S1-2) and the verification branch (§5.9); nothing is blocked.
 3. **The fourth terminal declaration (C3).** `TERMINAL` in `lifecycle-guard.js` is an independent
    source of truth consulted by three routes; the design's three-symbol change list would have shipped
@@ -159,8 +169,31 @@ documentation rule.
       "additionalProperties": false
     },
 
+    "StoredHistoryEntry": {
+      "description": "R3-3: an entry that is ALREADY on disk in lifecycle.phaseHistory[]. `appendPhaseHistory` (server/lifecycle-phase-history.js:23-44) writes exactly the eight fields below (:31-42) and nothing else, and every live entry ever written — including the lifecycle genesis record minted at server/vision-routes.js:330 — therefore carries no origin, recordedAt, confidence, episode or evidence. The merge preserves those records byte-for-byte (Decision: no migration), so the stored-history schema MUST accept them. The five backfill-only fields are optional here precisely so an entry this feature wrote validates under this branch too.",
+      "type": "object",
+      "required": ["phase", "step", "enteredAt", "exitedAt", "from", "to", "outcome", "timestamp"],
+      "properties": {
+        "phase":      { "type": "string" },
+        "step":       { "type": "string" },
+        "enteredAt":  { "type": "string", "format": "date-time" },
+        "exitedAt":   { "type": ["string", "null"], "format": "date-time" },
+        "from":       { "type": ["string", "null"] },
+        "to":         { "type": "string" },
+        "outcome":    { "type": ["string", "null"] },
+        "timestamp":  { "type": "string", "format": "date-time" },
+        "recordedAt": { "type": "string", "format": "date-time" },
+        "origin":     { "type": "string", "enum": ["live", "backfill"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "episode":    { "type": "integer", "minimum": 1 },
+        "operation_id": { "type": "string", "format": "uuid" },
+        "evidence":   { "$ref": "#/definitions/ResolvedEvidence" }
+      },
+      "additionalProperties": false
+    },
+
     "BackfilledOccurrence": {
-      "description": "BP-9: the FULL entry appended to lifecycle.phaseHistory[]. Dual-shape: the legacy fields keep ItemDetailPanel/ContextPipelineDots/session-routes working; from/to/outcome/timestamp keep decision-events-snapshot working. Every field is constructed, none is left undefined.",
+      "description": "BP-9: the FULL entry this feature CONSTRUCTS and appends to lifecycle.phaseHistory[]. R3-3: this is the constructor's contract, not the store's — it governs `occurrences` and `terminal_occurrence`, which the gate builds field by field in §5.5, and never a record read off disk. Dual-shape: the legacy fields keep ItemDetailPanel/ContextPipelineDots/session-routes working; from/to/outcome/timestamp keep decision-events-snapshot working. Every field is constructed, none is left undefined.",
       "type": "object",
       "required": ["phase", "step", "enteredAt", "exitedAt", "from", "to", "outcome", "timestamp", "recordedAt", "origin", "confidence", "evidence", "episode"],
       "properties": {
@@ -190,9 +223,11 @@ documentation rule.
     "BackfillIntent": {
       "description": "BP-3: the SINGLE recovery DTO, at .compose/data/completion-intents/<CODE>.json. Everything recovery needs is here; the batch record is a marker only. A superset of the live-completion intent, so readIntent's existing callers are unaffected.",
       "type": "object",
-      "required": ["operation_id", "feature_code", "commit_sha", "files_changed", "tests_attested",
-                   "started_at", "intent", "request_digest", "reason", "mode", "occurrences",
-                   "terminal_occurrence", "write_plan", "envelope", "guarded"],
+      "required": ["operation_id", "feature_code", "commit_sha", "files_changed", "notes",
+                   "tests_attested", "started_at", "intent", "request_digest", "reason", "mode",
+                   "occurrences", "terminal_occurrence", "write_plan", "envelope", "guarded",
+                   "guard_initial", "upgrade", "policy_checksum"],
+      "comment": "R3-4: notes, guard_initial, upgrade and policy_checksum are REQUIRED although all four are nullable. Every one of them is a write input §5.10 consumes; making presence mandatory means a resumed attempt can tell 'the operation had none' from 'the intent did not record it', and an intent that omits one fails validation instead of silently handing recovery an undefined.",
       "properties": {
         "operation_id":   { "type": "string", "format": "uuid" },
         "feature_code":   { "type": "string" },
@@ -214,7 +249,12 @@ documentation rule.
           "type": "object",
           "required": ["history", "written", "skipped"],
           "properties": {
-            "history": { "type": "array", "items": { "$ref": "#/definitions/BackfilledOccurrence" } },
+            "history": {
+              "description": "R3-3: the MERGED array — stored entries the merge preserved PLUS the occurrences this operation adds. Its items are a union, not one shape: a live/legacy record has none of the backfill fields, so requiring them here would make the intent unvalidatable for every item that ever ran a lifecycle. anyOf, not oneOf: a backfilled entry satisfies BOTH branches by construction (StoredHistoryEntry's extra fields are optional), and oneOf would reject exactly the entries this feature writes.",
+              "type": "array",
+              "items": { "anyOf": [ { "$ref": "#/definitions/BackfilledOccurrence" },
+                                    { "$ref": "#/definitions/StoredHistoryEntry" } ] }
+            },
             "written": { "type": "array", "items": { "type": "string" } },
             "skipped": { "type": "array", "items": { "type": "string" } }
           },
@@ -331,6 +371,26 @@ for its own bump.
 `commit → 0.9`, `path → 0.6`, live → `1.0`, in a frozen `CONFIDENCE_BY_KIND` in
 `lib/backfill-evidence.js`, asserted by a contract test so the numbers exist in one place.
 
+### Contract tests (`test/lifecycle-backfill-contract.test.js`, new)
+
+- **Test first — R3-3, the genesis record.** Build a `BackfillIntent` whose `write_plan.history[0]` is
+  the **literal** record `appendPhaseHistory` produces for a lifecycle start — take it from a real
+  store, or construct it with the same call the route makes
+  (`appendPhaseHistory({lifecycle}, {from:null, to:'explore_design', outcome:null, timestamp})`,
+  `server/vision-routes.js:330`), giving
+  `{phase:'explore_design', step:'explore_design', enteredAt:T, exitedAt:null, from:null,
+  to:'explore_design', outcome:null, timestamp:T}` and **no** origin, recordedAt, confidence, episode
+  or evidence. Assert the intent **validates**. Written against the first draft's schema this test
+  fails, which is the point: `write_plan.history` required `BackfilledOccurrence` of every entry, so
+  no item that had ever run a lifecycle could produce a valid intent.
+- The same array's later entries — a backfilled occurrence carrying all thirteen fields, and the
+  terminal occurrence carrying `operation_id` — validate in the same document.
+- An entry with an **unknown** property is rejected under both branches (`additionalProperties:false`
+  on each), so the union widens the accepted shapes without widening the accepted fields.
+- `occurrences` and `terminal_occurrence` still require the full `BackfilledOccurrence`: feed one a
+  legacy-shaped entry and assert it is **rejected**. Those two arrays are constructed by §5.5, never
+  read off disk, so the strictness that is wrong for `write_plan.history` is right for them.
+
 ---
 
 ## 3. Slice S1 — graph, transport, descriptors
@@ -392,6 +452,16 @@ Each unit names its test first (TDD): write the test, watch it fail, then the co
   - `guardApplyUpgrade` spawns `['guard','apply-upgrade']` with **exactly**
     `{"resource_id":…,"descriptor_id":…}` and passes the descriptors path in the child **env**.
   - `guardDigest` spawns `['guard','digest']` with exactly the six documented keys.
+  - **R3-1 wire shape, extending `test/stratum-client-guard.test.js:80-103`:** `guardTransition({…,
+    idempotencyKey:'k1', expectedPolicyChecksum:'<64-hex>'})` pipes `idempotency_key` **and**
+    `expected_policy_checksum` and pipes **no** camelCase key — assert
+    `Object.keys(piped)` contains neither `idempotencyKey` nor `expectedPolicyChecksum`.
+  - **R3-1 omission:** `guardTransition` called without `expectedPolicyChecksum` pipes a payload with
+    no `expected_policy_checksum` key at all (`_compact` drops undefined), so a live-completion
+    transition stays byte-identical to today's.
+  - **R3-1 rejection:** `guardTransition({…, expectedPolicyChecksum:'NOTHEX'})` reaches stratum and
+    comes back as the canonical error envelope — the 64-lowercase-hex check is stratum's
+    (`ts/src/guard/transition.ts:552-553`), not compose's, and compose must not duplicate it.
 - **`server/stratum-client.js` (existing)** — `spawnStratumStdin` (`:194-213`) passes only
   `{timeout}` today and must be able to extend the child env:
   - `spawnStratumStdin(args, inputJson, timeoutMs, bin, extraEnv)` — pass
@@ -413,7 +483,7 @@ Each unit names its test first (TDD): write the test, watch it fail, then the co
     }
 
     /**
-     * STRAT-GUARD-DIGEST (stratum 0.4.3, ts/src/cli/guard.ts:204-224). Read-only:
+     * STRAT-GUARD-DIGEST (stratum 0.4.3, ts/src/cli/guard.ts:207-227). Read-only:
      * runs stratum's own payloadDigestForVersion (transition.ts:131) over a
      * transition envelope under a given policy checksum. Grants nothing and reads
      * no state — it exists so compose never reimplements fingerprint.ts /
@@ -432,6 +502,37 @@ Each unit names its test first (TDD): write the test, watch it fail, then the co
     }
     ```
 
+- **`guardTransition` gains one parameter (R3-1).** This is the ONLY place a camelCase argument
+  becomes a snake_case wire key. `server/stratum-client.js:349-359` destructures **camelCase** today
+  (`idempotencyKey`, `modifiedFiles`, `fromState`, …) and maps each into the snake_case stdin object,
+  so a caller that passes `idempotency_key` or `expected_policy_checksum` has those properties
+  silently dropped by the destructuring — the transport sees `undefined`, `_compact` removes the key,
+  and both replay identity and checksum protection vanish with no error anywhere. Add
+  `expectedPolicyChecksum` to the destructure and `expected_policy_checksum` to the piped object:
+
+  ```js
+  export async function guardTransition({ resourceId, fromState, toState, artifacts, modifiedFiles,
+                                          idempotencyKey, expectedPolicyChecksum, resolvedBy }) {
+    return runGuard('transition', _compact({
+      resource_id: resourceId,
+      from_state: fromState,
+      to_state: toState,
+      artifacts,
+      modified_files: modifiedFiles,
+      idempotency_key: idempotencyKey,
+      expected_policy_checksum: expectedPolicyChecksum,   // R3-1, stratum 0.4.4
+      resolved_by: resolvedBy,
+    }));
+  }
+  ```
+
+  `_compact` drops undefined values, so every existing caller pipes exactly what it pipes today.
+  **The naming rule for the whole feature:** camelCase crosses every JS call boundary
+  (`completionGate` → `guardedTransition` → `guardTransition`); snake_case exists only inside the
+  object handed to `runGuard`. §5.7's persisted intent is the one deliberate exception — it is a JSON
+  document modelled on the wire envelope, so its keys are snake_case, and §5.8/§5.9a translate them
+  back to camelCase at the call.
+
 **Exact stdin payloads compose sends** (each validated against `assertOnlyKeys` in
 `stratum/ts/src/cli/guard.ts`):
 
@@ -445,9 +546,9 @@ Each unit names its test first (TDD): write the test, watch it fail, then the co
 
 Any extra key on any of the three is refused with
 `{"status":"error","error_type":"TypeError","message":"unexpected guard argument \"…\""}` and exit 1.
-`guard digest` shipped in stratum 0.4.3 (`ts/src/cli/guard.ts:204-224`) with exactly these six keys
-asserted at `:206`, `policy_checksum` constrained to 64 lowercase hex at `:208-210`, and the response
-`{status:'ok', payload_digest, payload_digest_version: 2}` built at `:211-223`. `modified_files`
+`guard digest` shipped in stratum 0.4.3 (`ts/src/cli/guard.ts:207-227`) with exactly these six keys
+asserted at `:209`, `policy_checksum` constrained to 64 lowercase hex at `:211-213`, and the response
+`{status:'ok', payload_digest, payload_digest_version: 2}` built at `:214-226`. `modified_files`
 defaults to `[]` and `resolved_by` to `'agent'`, so compose sends both explicitly rather than relying
 on the defaults. Should the action ever be unavailable, `guardDigest` returns an error envelope and
 §5.9 refuses — fail-closed.
@@ -455,7 +556,7 @@ on the defaults. Should the action ever be unavailable, `guardDigest` returns an
 ### S1-3 — legacy-policy projection and `ensureGuard` compatibility
 
 Without this, a cold `ensureGuard` on any of the 35 registered resources sends the new policy, stratum
-refuses with `guard_already_registered` (`ts/src/guard/transition.ts:435-437`), and
+refuses with `guard_already_registered` (`ts/src/guard/transition.ts:438-440`), and
 advance/skip/kill/complete all fail closed on legacy features after a restart.
 
 - **Test first (existing file, new cases):** `test/lifecycle-guard.test.js`
@@ -646,8 +747,41 @@ claimOf(o) := { phase: o.phase, kind: o.evidence.kind, ref: o.evidence.ref,
                 observedEpochMs: o.evidence.observedEpochMs }        # R3-2: these four ONLY
 keyOf(o)   := o.phase + U+001F + o.evidence.ref
 
+# ---- STEP 3a FIRST OF ALL (R3-5): dedup by operation_id, BEFORE the claim
+#      index and before every step-4 refusal. The terminal occurrence carries
+#      `origin: 'live'` (§5.5 step 4) — deliberately, because it happened now —
+#      so the claim index below, which is filtered to `origin === 'backfill'`,
+#      can never match it. Without this pass a recovery that re-runs the merge
+#      after step 6.0 already persisted the terminal hits 4a: the stored
+#      terminal's enteredAt and the incoming terminal's observedEpochMs are the
+#      SAME instant by construction (both are `now`, minted once, BP-6), the tie
+#      check counts two, and every ordinary recovery refuses at `history`.
+#      Identity here is the operation id, not the claim: the terminal's
+#      evidence.ref is the commit sha, which is null for a commit-less backfill
+#      and shared by every occurrence when it is not.
+opIdOf(x)    := x.operation_id                       # present on the TERMINAL only (BP-6)
+immutableOf(x) := { phase: x.phase, enteredAt: x.enteredAt, timestamp: x.timestamp,
+                    recordedAt: x.recordedAt, outcome: x.outcome, origin: x.origin,
+                    evidenceKind: x.evidence.kind, evidenceRef: x.evidence.ref,
+                    observedEpochMs: x.evidence.observedEpochMs }
+byOpId := index(existing.filter(e => opIdOf(e) != null), opIdOf)
+remaining := []; skipped := []
+for o in incoming:
+    if opIdOf(o) == null: remaining.push(o); continue
+    prior := byOpId[opIdOf(o)]
+    if prior is undefined: remaining.push(o); continue
+    #  ALREADY PERSISTED BY THIS OPERATION. Verify it is byte-for-byte the entry
+    #  we wrote before treating it as ours — a stored entry sharing our id but
+    #  differing in any immutable field is corruption, not idempotence.
+    if not deepEqual(immutableOf(prior), immutableOf(o)):
+        REFUSE "an entry under operation " + opIdOf(o) + " is already stored with different "
+             + "immutable fields — refusing to overwrite it"
+    skipped.push(keyOf(o))                            # persisted entry KEPT, never re-stamped
+incoming := remaining
+
+# ---- STEP 3b: dedup by CLAIM, for everything that carries no operation id.
 byKey := index(existing.filter(e => e.origin === 'backfill'), keyOf)
-batch := []; skipped := []
+batch := []
 for o in incoming:
     prior := byKey[keyOf(o)]
     if prior is undefined: batch.push({ ...deepClone(o), _tid: 'n' + index, _seq: +Infinity }); continue
@@ -960,46 +1094,91 @@ recovering := priorIntent is not null and priorIntent.request_digest == request_
 the resource is *expected* to be at `complete_backfilled`, so a terminal check here would refuse every
 legitimate recovery.
 
+**`writeContext` — the single object every write reads (R3-4).** Both branches end by producing one
+`writeContext`, and §5.10 consumes **nothing else**: no `probe`, no `now`, no `request`, no live
+config. `probe` exists only on the fresh branch, `now` is a fresh timestamp on a resumed attempt, and
+`notes` is a `recordCompletion` argument (`lib/completion-gate.js:425`) that the first draft never
+restored — three ways for a resume to write different bytes than the crash intended. The rule that
+prevents all three is structural: if a value is not in `writeContext`, §5.10 cannot see it.
+
+| `writeContext` field | Fresh branch | Recovery branch | Persisted in the intent? |
+|---|---|---|---|
+| `operationId` | minted §5.4b | `op.operation_id` | yes (`operation_id`) |
+| `requestDigest` | §5.1 | `op.request_digest` | yes |
+| `featureCode`, `mode` | request / item | `op.feature_code`, `op.mode` | yes |
+| `reason` | request | `op.reason` | yes |
+| `commitSha` | request | `op.commit_sha` | yes, nullable |
+| `filesChanged` | request | `op.files_changed` | yes |
+| `notes` | request | `op.notes` | **yes, nullable (R3-4 — was missing)** |
+| `attested` | §5.5 evidence | `op.tests_attested` | yes |
+| `startedAt` | `now`, minted once §5.4b | `op.started_at` | yes (`started_at`) |
+| `occurrences`, `terminalOcc` | §5.5 | `op.occurrences`, `op.terminal_occurrence` | yes |
+| `history` | `probe.history` | `op.write_plan.history`, subject to the divergence rule below | yes (`write_plan.history`) |
+| `writtenKeys`, `skippedKeys` | `probe.written`, `probe.skipped` | `op.write_plan.written`, `.skipped` | yes |
+| `guardInitial` | §5.4b | `op.guard_initial` | yes, nullable |
+| `upgrade` | §5.6 | `op.upgrade` | yes, nullable |
+| `guarded` | `guardEnabled` at §5.3 | `op.guarded` | yes |
+| `policyChecksum` | §5.6 | `op.policy_checksum` | yes, nullable |
+| `envelope` | §5.4b / §5.6 | `op.envelope` | yes |
+| `ledgerRef` | set by §5.8 | set by §5.9c | **no** — it is an outcome, not an input |
+| `tracksJson` | `getMode(mode).runner.tracksFeatureJson` | same, from `writeContext.mode` | no — a pure function of `mode` |
+
+`startedAt` is the **only** timestamp §5.10 writes onto the batch record's `recordedAt` and the
+completion evidence's `verified_at`. A resumed attempt therefore stamps the instant the operation
+began, not the instant it resumed, which is what makes an identical retry deep-equal (Flow A step 5).
+
 ```
 if recovering:
     op          := priorIntent                              # the single DTO (BP-3)
-    operationId := op.operation_id
 
-    # R2B-3: EVERY write input comes from the intent, none is recomputed.
-    plan        := op.write_plan
-    occurrences := op.occurrences                           # materialised + validated already
-    terminalOcc := op.terminal_occurrence
-    attested    := op.tests_attested
-    filesChanged:= op.files_changed
-    reason      := op.reason
-    guardInitial:= op.guard_initial
-    upgrade     := op.upgrade
-    commitSha   := op.commit_sha
+    # R2B-3 / R3-4: EVERY write input comes from the intent, none is recomputed
+    # and none is defaulted. A missing field is a corrupt intent, not a zero.
+    writeContext := { operationId: op.operation_id, requestDigest: op.request_digest,
+                      featureCode: op.feature_code, mode: op.mode, reason: op.reason,
+                      commitSha: op.commit_sha, filesChanged: op.files_changed,
+                      notes: op.notes, attested: op.tests_attested,
+                      startedAt: op.started_at,
+                      occurrences: op.occurrences, terminalOcc: op.terminal_occurrence,
+                      history: op.write_plan.history,
+                      writtenKeys: op.write_plan.written, skippedKeys: op.write_plan.skipped,
+                      guardInitial: op.guard_initial, upgrade: op.upgrade,
+                      guarded: op.guarded, policyChecksum: op.policy_checksum,
+                      envelope: op.envelope, ledgerRef: null }
+    if any required field of writeContext is undefined:
+        REFUSE refusedAt 'recovery', 'the persisted intent is missing <field> — clear it and re-run'
 
     # R2B-4: ONE effective guard flag, taken from the intent — NOT from live
     # config. If capabilities.guard was flipped off between the crash and the
     # retry, branching on the live value would skip the replay entirely and
     # re-drive the writes as if no guard transition had ever happened; flipped
     # ON, it would try to drive a guard that never saw this operation. The
-    # persisted flag governs the transition, the projection's consultGuard, and
-    # the guardRef expectation alike, for the whole of the resumed attempt.
-    guarded     := op.guarded
+    # persisted flag governs the transition, the projection's consultGuard, the
+    # verifier's guard consultation (§S3-3, R3-7) and the guardRef expectation
+    # alike, for the whole of the resumed attempt.
 
     # NO fresh evidence check, NO re-materialisation, NO re-stamping (BP-6),
     # NO ensureGuard, NO guard policy, NO apply-upgrade.
-    if guarded: goto §5.9a (raw replay) with op.envelope and op.policy_checksum
-    else:       ledgerRef := null; goto §5.10 (re-drive the writes)
+    if writeContext.guarded: goto §5.9a (raw replay) with writeContext.envelope
+    else:                    goto §5.10 (re-drive the writes) with ledgerRef null
 ```
 
-**History divergence on resume (R2-B3).** The intent's `write_plan.history` was computed against the
-item as it stood before the transition. If the stored history has changed since (a live
+**History divergence on resume (R2-B3, R3-5).** The intent's `write_plan.history` was computed against
+the item as it stood before the transition. If the stored history has changed since (a live
 advance/skip/kill landed in the window), re-driving the plan verbatim would clobber it. So on resume
-the gate re-runs `insertBackfilledPhases(item, occurrences ++ [terminalOcc])` and compares:
-identical to `write_plan.history` means nothing moved and the plan is used as-is; the dedup path
-returning a pure no-op means the history already reached disk and the plan is skipped; anything else
-**refuses at `history`** with "the item's phase history changed while a backfill was in flight",
-because silently overwriting a live transition is exactly the class of damage this feature exists to
-avoid.
+the gate re-runs `insertBackfilledPhases(item, writeContext.occurrences ++
+[writeContext.terminalOcc])` and compares:
+
+- **identical** to `write_plan.history` — nothing moved; keep `writeContext.history` as persisted;
+- **a pure no-op** (`written` empty, every occurrence in `skipped`) — the history already reached disk,
+  including the terminal occurrence, which §4.1 step 3a recognises by `operation_id` rather than by
+  claim (R3-5). Set `writeContext.history := lc.phaseHistory` and skip the history write in §5.10;
+- **anything else** — **refuse at `history`** with "the item's phase history changed while a backfill
+  was in flight", because silently overwriting a live transition is exactly the class of damage this
+  feature exists to avoid.
+
+The step-3a dedup is what makes the second bullet reachable at all. The terminal occurrence's `origin`
+is `live`, so the claim index cannot match it, and its `enteredAt` equals the stored terminal's to the
+millisecond — before R3-5 the tie check fired and **every** post-6.0 recovery refused at `history`.
 
 **5.4b Bootstrap — new operation only.** Ordering is load-bearing (**R2B-8**): registration is a
 **durable write** that creates a guard resource and a ledger on disk, so it must not happen before the
@@ -1024,7 +1203,7 @@ if guarded:
         proposedInitial := inGraph(transitionsOf(mode), lp) ? lp : genesisOf(mode)
         # genesisOf, NOT a literal (C5). Fix-mode items start at the genesis
         # `explore_design` (vision-routes.js:318), absent from the fix graph, and
-        # stratum refuses an `initial` that is not a node (transition.ts:349).
+        # stratum refuses an `initial` that is not a node (transition.ts:352-354).
         needsRegistration := true
         fromState := proposedInitial       # what registration WILL seed current_state to
         guardInitial := { registered: proposedInitial, lifecycle_phase: lp }
@@ -1150,7 +1329,9 @@ The intent is not a hint that an operation started; it is **the whole of what th
 write**, computed and validated, persisted in one file before the transition. A resumed attempt
 recomputes nothing. The first draft carried the request but not the plan, so a resume had no
 `probe.history`, no written/skipped key lists, no `guard_initial`, no `upgrade` and no
-`files_changed` — five write inputs it would have had to invent.
+`files_changed` — five write inputs it would have had to invent. R3-4 found a sixth, `notes`, and a
+seventh input that was being *substituted* rather than restored: `started_at`. §5.4a's `writeContext`
+table is the closed list; this section is where the fresh branch fills it in.
 
 Every field, and where each comes from:
 
@@ -1175,29 +1356,56 @@ Every field, and where each comes from:
 | `policy_checksum` | §5.6, after any upgrade | BP-1: the digest recomputation basis |
 | `envelope` | §5.4b / §5.6 | replayed verbatim by §5.9a |
 
+**The fresh branch builds `writeContext` FIRST, then serialises the intent from it (R3-4).** The
+intent is the on-disk projection of `writeContext`, not a second assembly of the same values from
+scattered locals — if the two were built independently they could disagree, and the disagreement would
+only surface on a crash. So: assemble, persist, and from here on §5.8 and §5.10 read `writeContext`
+alone. Its keys are camelCase; the intent's are snake_case, because it is modelled on the wire
+envelope (S1-2's naming rule).
+
 ```
+writeContext := { operationId, requestDigest: request_digest, featureCode, mode, reason,
+                  commitSha: commitSha ?? null, filesChanged, notes: notes ?? null,
+                  attested,                       # §5.5 evidence
+                  startedAt: now,                 # minted ONCE in §5.4b (BP-6)
+                  occurrences, terminalOcc,       # MATERIALISED + VALIDATED (§5.5)
+                  history: probe.history,         # the validated array itself
+                  writtenKeys: probe.written, skippedKeys: probe.skipped,
+                  guardInitial, upgrade,
+                  guarded,                        # R2B-4: the EFFECTIVE flag, not live config
+                  policyChecksum,                 # null when unguarded (BP-1)
+                  envelope: { from: fromState, to: 'complete_backfilled',
+                              artifacts: { operation_id: operationId, request_digest,
+                                           resolver_tags: 'late-registration+backfill',
+                                           ...(commitSha ? { commit_sha: commitSha } : {}) },
+                              modified_files: [], resolved_by: 'agent',
+                              idempotency_key: operationId,
+                              expected_policy_checksum: policyChecksum },   # R2B-7, guarded only
+                  ledgerRef: null }               # an OUTCOME, filled by §5.8
+
 writeIntent(workspaceRoot, featureCode, {
-  operation_id: operationId, feature_code: featureCode, mode,
-  intent: 'backfill', request_digest, reason,
-  commit_sha: commitSha ?? null, files_changed: filesChanged, notes: notes ?? null,
-  tests_attested: attested, started_at: now,
-  guarded,                          # R2B-4: the EFFECTIVE flag, not live config
-  occurrences,                      # MATERIALISED + VALIDATED (§5.5)
-  terminal_occurrence: terminalOcc, # stable timestamps (BP-6)
-  write_plan: { history: probe.history,          # R2B-3: the validated array itself
-                written: probe.written,
-                skipped: probe.skipped },
-  guard_initial: guardInitial,      # R2B-3
-  upgrade,                          # R2B-3
-  policy_checksum: policyChecksum,  # null when unguarded (BP-1)
-  envelope: { from: fromState, to: 'complete_backfilled',
-              artifacts: { operation_id: operationId, request_digest,
-                           resolver_tags: 'late-registration+backfill',
-                           ...(commitSha ? { commit_sha: commitSha } : {}) },
-              modified_files: [], resolved_by: 'agent', idempotency_key: operationId,
-              expected_policy_checksum: policyChecksum },   # R2B-7, guarded only
+  operation_id: writeContext.operationId, feature_code: writeContext.featureCode,
+  mode: writeContext.mode, intent: 'backfill',
+  request_digest: writeContext.requestDigest, reason: writeContext.reason,
+  commit_sha: writeContext.commitSha, files_changed: writeContext.filesChanged,
+  notes: writeContext.notes,                       # R3-4: REQUIRED, nullable
+  tests_attested: writeContext.attested, started_at: writeContext.startedAt,
+  guarded: writeContext.guarded,
+  occurrences: writeContext.occurrences,
+  terminal_occurrence: writeContext.terminalOcc,
+  write_plan: { history: writeContext.history,
+                written: writeContext.writtenKeys,
+                skipped: writeContext.skippedKeys },
+  guard_initial: writeContext.guardInitial,        # R3-4: REQUIRED, nullable
+  upgrade: writeContext.upgrade,                   # R3-4: REQUIRED, nullable
+  policy_checksum: writeContext.policyChecksum,    # R3-4: REQUIRED, nullable
+  envelope: writeContext.envelope,
 })
 ```
+
+`ledgerRef` is deliberately **not** persisted: it is what the transition produced, not what the
+operation intended, and a resume re-derives it from the ledger (§5.9c) rather than trusting a value
+written before the transition returned.
 
 The intent persists the full request and its exact envelope because the ledger holds only a payload
 hash (`stratum/ts/src/guard/store.ts:38-53`) and cannot reconstruct one. An idempotency key is
@@ -1208,31 +1416,57 @@ correlation, not ownership.
 Fresh operations only. A **recovery** never reaches this function — see §5.9a (R2B-2).
 
 ```
-ledgerRef := null
-if guarded:
-    g := await guardedTransition({ featureCode, from: envelope.from, to: envelope.to,
-                                   workspaceRoot, commitSha, resolvedBy: 'agent', mode,
-                                   artifacts: envelope.artifacts,
-                                   modifiedFiles: envelope.modified_files,
-                                   idempotencyKey: envelope.idempotency_key,
-                                   expectedPolicyChecksum: envelope.expected_policy_checksum })
+env := writeContext.envelope
+if writeContext.guarded:
+    #  CAMELCASE ACROSS THE JS SEAM (R3-1): the envelope's keys are snake_case
+    #  because it is a wire document; the CALL is camelCase, and the translation
+    #  back to snake_case happens once, inside stratum-client's guardTransition.
+    g := await guardedTransition({ featureCode: writeContext.featureCode,
+                                   from: env.from, to: env.to,
+                                   workspaceRoot, commitSha: writeContext.commitSha,
+                                   resolvedBy: 'agent', mode: writeContext.mode,
+                                   artifacts: env.artifacts,
+                                   modifiedFiles: env.modified_files,
+                                   idempotencyKey: env.idempotency_key,
+                                   expectedPolicyChecksum: env.expected_policy_checksum })
     if g.error?.error_type == 'policy_checksum_mismatch':
         # R2B-7: refused ATOMICALLY under stratum's resource lock; nothing written.
         clearIntent(workspaceRoot, featureCode)
         REFUSE refusedAt 'guard',
           'the guard policy for <CODE> changed while this backfill was in flight ' +
-          '(expected ' + envelope.expected_policy_checksum + ') — nothing was written; retry'
-    if g.status == 'applied': ledgerRef := g.ledgerRef                   # FRESH apply
+          '(expected ' + env.expected_policy_checksum + ') — nothing was written; retry'
+    if g.status == 'applied': writeContext.ledgerRef := g.ledgerRef      # FRESH apply
     else if g.status == 'replayed' or g.error?.error_type == 'idempotency_conflict':
-        <§5.9b — a fresh attempt that meets an existing entry is a recovery in disguise>
+        <§5.9b/§5.9c — a fresh attempt that meets an existing entry is a recovery in disguise>
     else:
         REFUSE refusedAt 'guard', (g.refused ? 'refused by guard' : 'guard transition failed')
 ```
 
-`guardedTransition` (`server/lifecycle-guard.js:333-382`) gains two optional parameters,
-`idempotencyKey` and `expectedPolicyChecksum`, forwarded to `_client.transition` (`:356-362`) as
-`idempotency_key` and `expected_policy_checksum`. Both are omitted entirely when absent, so live
-callers stay byte-identical. It must also **surface the guard status verbatim** rather than collapsing
+`guardedTransition` (`server/lifecycle-guard.js:333-382`) gains three optional parameters,
+`modifiedFiles`, `idempotencyKey` and `expectedPolicyChecksum`, forwarded to `_client.transition`
+(`:356-362`) **under those exact camelCase names** — `_client.transition` is
+`server/stratum-client.js`'s `guardTransition` (imported as `_guardTransition` at
+`server/lifecycle-guard.js:22` and bound into `_client` at `:230`; defined at
+`server/stratum-client.js:349`), which destructures camelCase and does
+the snake_case translation itself (R3-1, S1-2). Forwarding `idempotency_key` or
+`expected_policy_checksum` from here would be silently discarded by that destructuring: no throw, no
+warning, and the transition would apply with neither replay identity nor checksum protection. The
+wrapper's own signature therefore reads:
+
+```js
+export async function guardedTransition({ featureCode, from, to, workspaceRoot, commitSha,
+                                          resolvedBy = 'agent', mode = 'build',
+                                          artifacts: extraArtifacts,
+                                          modifiedFiles, idempotencyKey, expectedPolicyChecksum }) {
+  …
+  res = await _client.transition({
+    resourceId: rid, fromState: from, toState: to, artifacts, resolvedBy,
+    modifiedFiles, idempotencyKey, expectedPolicyChecksum,   // camelCase, all the way down
+  });
+```
+
+All three are `undefined` for every live caller, `_compact` drops them in the transport, and the
+piped JSON stays byte-identical to today's. It must also **surface the guard status verbatim** rather than collapsing
 it: today `:376` maps `replayed` to `applied: true` with no way to tell the two apart, which is R2B-6.
 Add `status: res.status` to both return shapes (`:371-373`, `:375-381`); existing callers read only
 `applied` and are unaffected. The comment at `:349-353` explains why live completion
@@ -1257,116 +1491,197 @@ neither the policy `buildPhaseGraph` now produces nor its legacy projection, `en
 step is pointless here anyway — the resource demonstrably exists, since a transition against it
 already applied.
 
-So recovery goes **straight to the transport**:
+So recovery goes **straight to the transport** — and it carries the persisted checksum:
 
 ```
 # server/stratum-client.js guardTransition (:349-359) — the raw CLI verb.
 # NO ensureGuard, NO guard policy, NO buildPhaseGraph.
+env := writeContext.envelope
 g := await guardTransition({ resourceId: rid,
-                             fromState: op.envelope.from,
-                             toState:   op.envelope.to,
-                             artifacts: op.envelope.artifacts,
-                             modifiedFiles: op.envelope.modified_files,
-                             idempotencyKey: op.envelope.idempotency_key,
-                             resolvedBy: op.envelope.resolved_by })
-#   No expected_policy_checksum on a replay: the checksum is EXPECTED to have
-#   moved — that is the whole scenario — and stratum's replay lookup is by
-#   idempotency key, which §5.9b then verifies by digest.
+                             fromState: env.from,
+                             toState:   env.to,
+                             artifacts: env.artifacts,
+                             modifiedFiles: env.modified_files,
+                             idempotencyKey: env.idempotency_key,
+                             resolvedBy: env.resolved_by,
+                             expectedPolicyChecksum: env.expected_policy_checksum })  # R3-2
+if g.error?.error_type == 'policy_checksum_mismatch':
+    goto §5.9c — READ-ONLY verification. Nothing was written.
 ```
+
+**Why the checksum must be sent on a recovery too (R3-2).** The first draft omitted it, reasoning that
+a replay is expected to meet a moved policy. That reasoning covers only the crash window *after* the
+transition applied. The dangerous window is the other one: **the intent is persisted, then the process
+dies before the transition runs at all.** No ledger entry exists under the key, so
+`_maybeReplay` returns null (`stratum/ts/src/guard/transition.ts:572-573`, `:467-469`) and, with no expected
+checksum, stratum evaluates and **applies the transition under whatever policy is current now**
+(`:638-664`). The guard moves to `complete_backfilled` under policy Q. §5.9c then recomputes the
+digest under the persisted policy P, finds no matching entry, and refuses — **permanently**, with the
+guard already moved and no path that can ever satisfy the check. A crash window turned into an
+unrecoverable resource.
+
+Sending the checksum makes that impossible by construction: **a recovery can never apply a transition
+except under exactly the policy the intent was written against.** Stratum checks it under the resource
+lock before evaluating anything (`:566-570`) and again under the commit lock before appending
+(`:633-637`), so either the policy still is P and the call is safe to apply, or the call is refused
+atomically with nothing written.
+
+The cost is that a recovery under a moved policy can no longer reach stratum's replay path at all —
+the checksum check runs **before** `_maybeReplay` in both phases — so `policy_checksum_mismatch` is now
+the *expected* outcome of the after-the-fact scenario as well as the before-the-fact one. §5.9c is
+where both land, and it needs no transition to resolve either.
 
 This is the one place outside `server/lifecycle-guard.js` that reaches the guard transport directly,
 and it is deliberate: the recovery path must not re-derive policy. **Test it with the guard cache
 cleared and again in a fresh process**, so the code path that would have called `ensureGuard` is
 genuinely exercised rather than short-circuited by a warm `_registered` entry.
 
-#### 5.9b Every recovery success requires three conditions (R2B-6)
+#### 5.9b Which outcomes route to verification (R2B-6)
 
 `replayed` is **not** the same as `applied`, and the first draft accepted both through one
 `if (g.applied)`. A replay returns the *historical* verdict together with the registry's *current*
-state (`stratum/ts/src/guard/transition.ts:474-483`), so it says nothing about what happened
+state (`stratum/ts/src/guard/transition.ts:479-487`), so it says nothing about what happened
 afterwards: a kill, an override or a migrate could have moved the resource on and the gate would still
 have written COMPLETE. The ledger is therefore read on **every** recovery success, not only on
-`idempotency_conflict`.
+`idempotency_conflict` — and, since R3-2, on `policy_checksum_mismatch` too.
 
 ```
 if g.status == 'applied' and not recovering:
-    ledgerRef := g.ledgerRef                      # fresh apply — no ledger read needed
+    writeContext.ledgerRef := g.ledgerRef         # fresh apply — no ledger read needed
 else:
     # g.status == 'replayed', OR error_type == 'idempotency_conflict'. The policy
-    # checksum is bound into the payload digest (transition.ts:131, :559), so a
+    # checksum is bound into the payload digest (transition.ts:122-131, :571), so a
     # SECOND descriptor applied between attempts makes the conflict the EXPECTED
     # outcome rather than an error.
-    if op.policy_checksum is null: REFUSE refusedAt 'recovery', 'no policy checksum on record'
-    d := await guardDigest({ fromState: op.envelope.from, toState: op.envelope.to,
-                             artifacts: op.envelope.artifacts,
-                             modifiedFiles: op.envelope.modified_files,
-                             resolvedBy: op.envelope.resolved_by,
-                             policyChecksum: op.policy_checksum })
-    if d.error: REFUSE refusedAt 'recovery', 'payload digest could not be computed'
-
-    # ONE ledger read, from server/stratum-client.js guardHistory (:382-384),
-    # which returns resource_id, current_state, graph_version and the full ledger
-    # (transition.ts:1135-1149). All three conditions below are evaluated against
-    # THIS snapshot, so they describe one consistent moment.
-    h := await guardHistory(rid)
-    if h.error: REFUSE refusedAt 'recovery', 'guard history unreadable'
-
-    # (1) THE ENTRY EXISTS AND IS OURS. An applied transition into
-    #     complete_backfilled, under THIS operation's key, whose payload digest is
-    #     the one stratum computes for the persisted envelope under the persisted
-    #     checksum. Matching on id + to_state + outcome alone is exactly R2-1,
-    #     which BP-1 rejected.
-    entry := h.ledger.find(e => e.kind == 'transition'
-                            and e.idempotency_key == op.operation_id
-                            and e.outcome == 'applied'
-                            and e.to_state == 'complete_backfilled'
-                            and e.payload_digest == d.payload_digest)
-    if entry is null: REFUSE refusedAt 'recovery',
-        'no applied ledger entry under this operation id matches the persisted envelope'
-
-    # (2) THE RESOURCE IS STILL WHERE THAT ENTRY LEFT IT.
-    if h.current_state != 'complete_backfilled': REFUSE refusedAt 'recovery',
-        'the guard has moved to "' + h.current_state + '" since this operation applied'
-
-    # (3) NOTHING MUTATED IT AFTERWARDS. The ledger is append-only and ordered,
-    #     so this is a suffix scan from `entry`.
-    if any e in h.ledger AFTER `entry` has e.kind in {transition, override, migrate}:
-        REFUSE refusedAt 'recovery', 'the guard was mutated after this operation applied'
-
-    ledgerRef := entry.entry_digest
+    goto §5.9c — the same read-only verification, on the same three conditions.
 ```
 
-Condition 3 is what makes 2 meaningful: `current_state` alone could have been moved away and back, and
-a `graph_version` entry (an `apply-upgrade`) is deliberately **not** disqualifying because it changes
-the policy without changing the state. Missing material — no persisted checksum, no digest action, no
-readable history — refuses.
+#### 5.9c Read-only verification (R3-2, R3-6)
+
+**No transition is issued here.** Everything is decided from `guard digest` (a pure function) and one
+`guard history` read. This is the sole resolution path for `replayed`, for `idempotency_conflict`, and
+— new in R3-2 — for `policy_checksum_mismatch` on a recovery, which is what a policy change now
+produces in both crash windows.
+
+```
+if writeContext.policyChecksum is null: REFUSE refusedAt 'recovery', 'no policy checksum on record'
+env := writeContext.envelope
+d := await guardDigest({ fromState: env.from, toState: env.to,
+                         artifacts: env.artifacts,
+                         modifiedFiles: env.modified_files,
+                         resolvedBy: env.resolved_by,
+                         policyChecksum: writeContext.policyChecksum })
+if d.error: REFUSE refusedAt 'recovery', 'payload digest could not be computed'
+
+# ONE ledger read, from server/stratum-client.js guardHistory (:382-384), which
+# returns resource_id, current_state, graph_version and the full ledger
+# (transition.ts:1152-1166). All three conditions below are evaluated against THIS
+# snapshot, so they describe one consistent moment.
+h := await guardHistory(rid)
+if h.error: REFUSE refusedAt 'recovery', 'guard history unreadable'
+
+# (1) THE ENTRY EXISTS AND IS OURS. An applied transition into
+#     complete_backfilled, under THIS operation's key, whose payload digest is
+#     the one stratum computes for the persisted envelope under the persisted
+#     checksum. Matching on id + to_state + outcome alone is exactly R2-1,
+#     which BP-1 rejected.
+entry := h.ledger.find(e => e.kind == 'transition'
+                        and e.idempotency_key == writeContext.operationId
+                        and e.outcome == 'applied'
+                        and e.to_state == 'complete_backfilled'
+                        and e.payload_digest == d.payload_digest)
+if entry is null:
+    # R3-2: the operation NEVER applied. On a policy_checksum_mismatch this is the
+    # pre-transition crash window, and it is where the design deliberately stops:
+    # the intent stays, the guard is untouched, and a HUMAN decides. Re-running it
+    # under the new policy would silently complete a feature against a policy
+    # nobody checked it against.
+    REFUSE refusedAt 'recovery',
+      'this backfill never reached the guard, and the policy for <CODE> has changed since the ' +
+      'intent was written (recorded ' + writeContext.policyChecksum + ', now ' + <live checksum> + '). ' +
+      'Nothing has been written. Either clear the intent at ' +
+      '.compose/data/completion-intents/<CODE>.json and re-run the backfill under the current ' +
+      'policy, or restore the policy the intent was written against.'
+    #   On `replayed` / `idempotency_conflict` the same refusal fires with the
+    #   plainer message: 'no applied ledger entry under this operation id matches
+    #   the persisted envelope'.
+
+# (2) THE RESOURCE IS STILL WHERE THAT ENTRY LEFT IT.
+if h.current_state != 'complete_backfilled': REFUSE refusedAt 'recovery',
+    'the guard has moved to "' + h.current_state + '" since this operation applied'
+
+# (3) NOTHING MUTATED IT AFTERWARDS. The ledger is append-only and ordered, so
+#     this is a suffix scan from `entry`. R3-6: the kinds are the ones stratum
+#     ACTUALLY writes — there is no 'override' kind and no 'migrate' kind.
+for e in h.ledger AFTER `entry`:
+    if e.kind == 'transition' or e.kind == 'deviation':
+        REFUSE refusedAt 'recovery',
+          'the guard was mutated after this operation applied (a ' + e.kind + ' entry ' +
+          e.from_state + ' -> ' + e.to_state + ')'
+    if e.kind == 'graph_version':
+        # State-preserving BY CONSTRUCTION: both apply-upgrade (:1047-1048) and
+        # migrate (:835-836) write from_state == to_state == current_state. VERIFY
+        # it rather than assume it — a future stratum that moved state in a policy
+        # entry must break this check loudly, not slip past it.
+        if e.from_state != e.to_state:
+            REFUSE refusedAt 'recovery',
+              'a policy entry moved the guard state after this operation applied'
+        continue                                  # policy changed, state did not — allowed
+    REFUSE refusedAt 'recovery', 'unrecognised ledger entry kind "' + e.kind + '" after this operation'
+
+writeContext.ledgerRef := entry.entry_digest
+```
+
+**The kinds are exactly three (R3-6).** `stratum/ts/src/guard/transition.ts` writes `kind:'transition'`
+(`:653`), `kind:'deviation'` (`:765`, what `guard override` produces — the *status* is `deviation` and
+so is the kind; nothing anywhere writes `kind:'override'`) and `kind:'graph_version'` (`:838` for
+`guard migrate`, `:1050` for `apply-upgrade`, `:1130` for the signed-descriptor path — nothing writes
+`kind:'migrate'`). The first draft scanned for `{transition, override, migrate}`: two of those three
+names do not exist, so **an override — the one mutation an operator performs by hand, and the only one
+that bypasses predicate verification — passed the check silently**, while a policy migration was
+rejected under a name it is never written with. The unknown-kind branch above is there so the next
+kind stratum adds fails closed instead of being waved through.
+
+Condition 3 is what makes 2 meaningful: `current_state` alone can be moved away and back. With the
+kinds corrected that round trip is now caught, because moving away and back requires two `deviation`
+or `transition` entries and either one refuses. A `graph_version` entry is deliberately **not**
+disqualifying — it changes the policy without changing the state, and the entry we matched in
+condition 1 carries the payload digest it was written with, which no later policy change can alter.
+Missing material — no persisted checksum, no digest action, no readable history — refuses.
 
 ### 5.10 The write sequence
 
 Extends `lib/completion-gate.js:412-499`. Steps 6.1–6.2 are durable truth and abort with the intent
 kept; 6.3–6.4 are re-drivable projections whose failures are **collected**.
 
+**Every value below comes from `writeContext` (R3-4).** No `probe`, no `now`, no `request`, no
+`guardEnabled(cwd)`. `wc` abbreviates `writeContext` in the pseudocode; `tracksJson` is
+`getMode(wc.mode).runner.tracksFeatureJson`.
+
 ```
+wc := writeContext                            # fresh (§5.7) or restored (§5.4a) — identical shape
+
 # 6.0 — history + PENDING marker, one store write, through the LIVE store the
 #       server passes in (BP-10). vision-store has no lock and serialises the
 #       whole file on every save (server/vision-store.js:131-143), so a
 #       second process writing here is last-writer-wins.
-history := probe.history                      # the ALREADY-VALIDATED result (BP-4)
-if recovering:
-    # BP-6: never append a second terminal occurrence, never re-stamp.
-    if history already contains an occurrence with operation_id == operationId:
-        <use the persisted history as-is>
-    else:
-        history := insertBackfilledPhases(item, op.occurrences ++ [op.terminal_occurrence]).history
+#       wc.history is the ALREADY-VALIDATED array (BP-4): probe.history on a
+#       fresh operation, and on a resume the persisted plan or lc.phaseHistory,
+#       whichever §5.4a's divergence rule selected. R3-5 is what lets the resume
+#       reach that rule instead of refusing on the terminal occurrence's tie.
 snapshot := deepClone(item.lifecycle)         # BP-5: for rollback
-item.lifecycle.phaseHistory := history
+item.lifecycle.phaseHistory := wc.history
 item.lifecycle.currentPhase := 'complete_backfilled'
-item.lifecycle.completedAt  := op.terminal_occurrence.enteredAt      # stable (BP-6)
-upsert into item.lifecycle.backfills[] keyed by operation_id:
-    { operation_id, request_digest, state:'pending', reason, recordedAt: now,
-      completionEvidence: { commit_sha: commitSha ?? null, tests_attested: attested, verified_at: now },
-      guardRef: ledgerRef, guard_initial: guardInitial, upgrade, actor: 'agent:rest',
-      occurrenceKeys: probe.written ++ probe.skipped }
+item.lifecycle.completedAt  := wc.terminalOcc.enteredAt              # stable (BP-6)
+upsert into item.lifecycle.backfills[] keyed by wc.operationId:
+    { operation_id: wc.operationId, request_digest: wc.requestDigest, state:'pending',
+      reason: wc.reason,
+      recordedAt: wc.startedAt,               # R3-4: the OPERATION's instant, not the retry's
+      completionEvidence: { commit_sha: wc.commitSha, tests_attested: wc.attested,
+                            verified_at: wc.startedAt },
+      guardRef: wc.ledgerRef, guard_initial: wc.guardInitial, upgrade: wc.upgrade,
+      actor: 'agent:rest',
+      occurrenceKeys: wc.writtenKeys ++ wc.skippedKeys }
 store.updateLifecycle(item.id, item.lifecycle)
 if store.lastSaveOk === false:                # _save returns a BOOLEAN (:131-143, :251)
     item.lifecycle := snapshot                # BP-5: roll the in-memory item back so
@@ -1377,22 +1692,35 @@ if store.lastSaveOk === false:                # _save returns a BOOLEAN (:131-14
 failures := []
 rec := null
 if tracksJson:
-    <existing :419-439, unchanged>
+    <existing :419-439, with EVERY argument taken from wc>
+    #   R3-4: recordCompletion reads `notes` (:425), `files_changed` (:424),
+    #   `tests_pass` (:423) and `commit_sha` (:422). `notes` was the one the
+    #   first draft neither persisted nor restored, so a resumed backfill wrote
+    #   a completion record with the notes field silently dropped.
+    rec := await recordCompletion(workspaceRoot, {
+             feature_code: wc.featureCode,
+             ...(wc.commitSha ? { commit_sha: wc.commitSha } : {}),
+             tests_pass: wc.attested, files_changed: wc.filesChanged,
+             ...(wc.notes ? { notes: wc.notes } : {}),
+             idempotency_key: wc.operationId, set_status: false })
 
 # 6.2 status -> COMPLETE, raw — BP-11: guarded on tracksJson
 statusChanged := null
 if tracksJson:
-    <existing :441-465, unchanged>
+    <existing :441-465, with wc.commitSha in place of commitSha>
     # phaseToStatus('complete_backfilled') === 'COMPLETE' (S1-1), so the roadmap reads COMPLETE
 
 # 6.3 ROADMAP regen — BP-11: guarded on tracksJson; collected
 if tracksJson: <existing :467-472>
 
 # 6.4 vision projection — collected. verifiedCompleteProjection must accept the
-#     new terminal (S3-3). R2B-4: on a RESUMED attempt `consultGuard` uses the
-#     PERSISTED guard flag, not live config.
+#     new terminal (S3-3). R2B-4/R3-7: the projection consults the guard iff
+#     wc.guarded, and the VERIFIER is told so explicitly — passing the flag to
+#     the projector is not enough, because both the route callback and the
+#     verifier make their own decision today (see below).
 if tracksJson:
-    <existing :474-483, with consultGuard := guarded>
+    <existing :474-483, passing consultGuard := wc.guarded
+                        and guardEnabledOverride := wc.guarded>
 else:
     # R2B-9: modes without feature.json have no projector — and updateLifecycle
     # (server/vision-store.js:235-253) does NOT touch item.status, so without this
@@ -1415,13 +1743,13 @@ else:
 auditOk := false
 try {
     const provider = await getProvider(workspaceRoot)
-    await provider.appendEvent(featureCode, {
-      tool: 'backfill_completion', code: featureCode,
+    await provider.appendEvent(wc.featureCode, {
+      tool: 'backfill_completion', code: wc.featureCode,
       from: statusChanged?.from ?? null, to: 'COMPLETE',
       reason: 'backfill', via: 'completion_gate',
-      operation_id: operationId, backfill_request_digest: request_digest,
-      ...(commitSha ? { commit_sha: commitSha } : {}),
-      ...(ledgerRef ? { ledger_ref: ledgerRef } : {}),
+      operation_id: wc.operationId, backfill_request_digest: wc.requestDigest,
+      ...(wc.commitSha ? { commit_sha: wc.commitSha } : {}),
+      ...(wc.ledgerRef ? { ledger_ref: wc.ledgerRef } : {}),
     })
     auditOk = true
 } catch (e) { failures.push({ step: 'audit', message: e.message, recover: 'retry the backfill' }) }
@@ -1429,24 +1757,72 @@ try {
 # 6.6 finalize — BP-5: ONLY with an empty failure set AND a confirmed audit write.
 if failures.length == 0 and auditOk:
     snapshot2 := deepClone(item.lifecycle)
+    #   `finalizedAt` is the ONLY timestamp in this section minted at write time,
+    #   deliberately: it records when the operation finished, which on a resume
+    #   really is now. Everything else comes from wc.startedAt (R3-4).
     record.state := 'finalized'; record.finalizedAt := new Date().toISOString()
     store.updateLifecycle(item.id, item.lifecycle)
     if store.lastSaveOk === false:
         item.lifecycle := snapshot2; store.items.set(item.id, item)     # roll back
-        return { ok:true, partial:true, failures: [...], guarded, operationId, ledgerRef }
-    clearIntent(workspaceRoot, featureCode)                             # :501, LAST
-    return { ok:true, guarded, operationId, ledgerRef, recovered: recovering, ... }
-    #   `guarded` here and everywhere in this section is the EFFECTIVE flag
+        return { ok:true, partial:true, failures: [...],
+                 guarded: wc.guarded, operationId: wc.operationId, ledgerRef: wc.ledgerRef }
+    clearIntent(workspaceRoot, wc.featureCode)                          # :501, LAST
+    return { ok:true, guarded: wc.guarded, operationId: wc.operationId,
+             ledgerRef: wc.ledgerRef, recovered: recovering, ... }
+    #   `wc.guarded` here and everywhere in this section is the EFFECTIVE flag
     #   (R2B-4): live config on a fresh operation, the intent's persisted value on
     #   a resumed one.
 else:
     # The record stays `pending`, the intent stays. A retry resumes.
-    return { ok:true, partial:true, failures, guarded, operationId, ledgerRef, ... }
+    return { ok:true, partial:true, failures,
+             guarded: wc.guarded, operationId: wc.operationId, ledgerRef: wc.ledgerRef, ... }
 ```
 
 The invariant: a record is `finalized` only if every write reached disk **and** the audit event was
 positively confirmed, so the `finalized → return` shortcut in §5.3 can never return a half-written
 batch. Anything else is `pending` and resumes.
+
+#### 5.10a The effective guard flag has to reach the verifier, not just the projector (R3-7)
+
+Passing `guarded` into step 6.4 changes nothing on its own, because **two independent places decide
+the same question and neither is asked**:
+
+1. The route's projector callback hardcodes it. `server/vision-routes.js:564` builds the
+   `visionProjector` closure with a literal `consultGuard: true`. The gate calls that closure with the
+   payload at `lib/completion-gate.js:478-479`, and the closure ignores whatever the payload says about
+   the guard. So an operation that ran with the guard **off** — Flow C, or a resume of a guard-off
+   operation after the flag was flipped on — would still spawn a stratum process to read a resource
+   that was never registered.
+2. The verifier re-decides from live config. `server/completion-projection.js:136` short-circuits on
+   `!consultGuard || !guardEnabled(cwd)`. So an operation that ran with the guard **on**, resumed after
+   the flag was flipped off, downgrades from `verified_by: GUARDED` to `CANONICAL` and stamps a weaker
+   verification than the operation actually earned — the persisted flag says otherwise and is ignored.
+
+Both directions are wrong, and each is wrong in the opposite direction, so one fix cannot cover both.
+The change is to thread the flag through both:
+
+- **`lib/completion-gate.js:477-480`** — add `guarded: wc.guarded` to the projector payload. Existing
+  callers of `completionGate` are unaffected: the live path passes its own effective flag, which is
+  what it already computes.
+- **`server/vision-routes.js:564`** — the closure takes the payload's flag:
+  `({ visionItemId, commitSha, ledgerRef, guarded }) => applyVerifiedProjection(store, { …,
+  consultGuard: guarded ?? true, guardEnabledOverride: guarded })`. The `?? true` keeps the live
+  `/lifecycle/complete` path byte-identical for any caller that does not send the field.
+- **`server/completion-projection.js:93-94`, `:136`** — `verifiedCompleteProjection` gains
+  `guardEnabledOverride` (default `undefined`), and `:136` becomes
+  `const guardOn = guardEnabledOverride ?? guardEnabled(cwd); if (!consultGuard || !guardOn) …`. This
+  is an **operation-level override of a workspace-level config read**, and it is the narrowest thing
+  that works: the config answers "is the guard on in this workspace *now*", and a resume needs "was the
+  guard on for *this operation*". `applyVerifiedProjection` (`:180-184`) forwards it unchanged.
+- `undefined` is not `false`. The override must be read with `??`, never `||`, or a persisted `false`
+  would fall through to live config — the exact bug in the other direction.
+
+- **Tests (Flow A step 9, both flips, through the REAL projection path — no fake projector):**
+  - guard **on** at crash, `capabilities.guard` flipped to `false`, resume: the replay still happens,
+    `guardRef` is still stamped, and the projection stamp still reads `verified_by: 'guarded'`.
+  - guard **off** at crash, flipped to `true`, resume: `COMPOSE_STRATUM_TS_CLI_BIN` points at the
+    marker script from Flow C, and the marker file does **not** exist afterwards — proving the verifier
+    consulted no guard, which asserting on `verified_by` alone cannot prove.
 
 ### 5.11 Refusal taxonomy
 
@@ -1455,19 +1831,37 @@ commit_sha, unknown phase), `preflight` (feature or item missing, terminal statu
 SHA, tests not attested), `history` (any merge refusal, future-dated evidence, **or a stored history
 that changed while a backfill was in flight**, R2B-3), `guard` (unreachable, registration failed,
 refused, already terminal, **or `policy_checksum_mismatch`**, R2B-7), `upgrade` (descriptor
-unavailable or mismatched), `recovery` (pending record with no intent, conflicting in-flight
-operation, digest mismatch, guard moved after the entry, guard mutated after the entry), `write` (a
-durable write failed; the intent is kept).
+unavailable or mismatched), `recovery` (pending record with no intent, an intent missing a
+required field, conflicting in-flight operation, no persisted policy checksum, digest mismatch, guard
+moved after the entry, guard mutated after the entry by a `transition` or `deviation`, an
+unrecognised ledger kind after the entry, **or the pre-transition crash window under a changed
+policy**, R3-2), `write` (a durable write failed; the intent is kept).
 
-`policy_checksum_mismatch` is the only refusal that is **retryable without operator action**: stratum
-refused it under its own lock having written nothing, so the next attempt re-reads the policy and
-sends the new checksum. Say so in the message.
+Two refusals are about the same stratum error and mean opposite things, so keep them apart:
+
+- **`guard` / `policy_checksum_mismatch` on a FRESH transition (R2B-7)** is the only refusal that is
+  **retryable without operator action**: stratum refused it under its own lock having written nothing,
+  the intent is cleared, and the next attempt re-reads the policy and sends the new checksum. Say so in
+  the message.
+- **`recovery` / `policy_checksum_mismatch` on a RESUME whose operation never applied (R3-2)** is
+  **not** self-retryable and must not pretend to be. Nothing was written, and nothing this process can
+  do makes the persisted plan valid again: the plan was validated against a policy that no longer
+  exists. The intent stays, the guard is untouched, and the message names the recorded checksum, the
+  current one, and the two things a human can do — clear
+  `.compose/data/completion-intents/<CODE>.json` and re-run under the current policy, or restore the
+  policy the intent was written against. A retry loop here would spin forever; an automatic re-plan
+  would complete a feature against a policy nobody checked it against.
 
 ---
 
 ## 6. Slice S3 — surfaces and readers
 
 ### S3-1 — `POST /api/vision/items/:id/lifecycle/backfill`
+
+The backfill route's `visionProjector` closure follows the R3-7 rule from §5.10a: it reads `guarded`
+off the payload the gate passes and forwards it as **both** `consultGuard` and `guardEnabledOverride`.
+The existing `/lifecycle/complete` closure at `server/vision-routes.js:564` is changed in the same
+edit, with `?? true` so its behaviour is unchanged for callers that send no flag.
 
 - **Test first (new):** `test/lifecycle-backfill-routes.test.js`, following `test/lifecycle-routes.test.js`.
   - 404 on a missing item or missing lifecycle (`server/vision-routes.js:398`).
@@ -1525,6 +1919,15 @@ in-process — its history writes would go to a different `VisionStore` instance
 - `server/completion-projection.js:152-155` accepts only `complete`. Widen to a guarded-terminal set
   `GUARDED_TERMINAL_STATES = new Set(['complete', 'complete_backfilled'])`, stamping `guardState` with
   the **actual** state rather than the literal at `:155`.
+- **`server/completion-projection.js:93-94`, `:136`, `:180-184` — `guardEnabledOverride` (R3-7).** See
+  §5.10a for why: the verifier currently re-reads live config at `:136` and so ignores the operation's
+  persisted guard flag in both directions. `verifiedCompleteProjection` takes the new optional
+  parameter, `:136` reads `guardEnabledOverride ?? guardEnabled(cwd)`, and `applyVerifiedProjection`
+  forwards it. Absent, behaviour is byte-identical to today's.
+- **Test (new):** `verifiedCompleteProjection({…, guardEnabledOverride: false})` in a workspace with
+  `capabilities.guard: true` returns `verified_by: 'canonical'` and spawns nothing;
+  `{…, guardEnabledOverride: true}` in a guard-off workspace does consult the guard. Assert the
+  spawn/no-spawn with the marker-script binary, not by inspecting the return value alone.
 - `server/decision-events-snapshot.js:48-57` — pass `origin: entry.origin`, `recorded_at:
   entry.recordedAt`, `confidence: entry.confidence` **unchanged** (BP-16). No `?? 'live'` default: the
   reader interprets absence, the emitter does not manufacture a value.
@@ -1572,33 +1975,76 @@ Built once in a `before` hook:
    newline. It must be `dist/contracts`: `prepare-dist.mjs:29-37` rewrites `trust.ts:23`'s
    `../../contracts/` to `../contracts/` in the compiled `dist/guard/trust.js`, and `:39-45` copies the
    contracts under `dist`. The published package ships only `dist` (`ts/package.json:19-21`).
-4. **`node_modules` — resolve per dependency, never by location (BP-14, R2B-11).** Two rules have now
-   failed. Resolving `yaml` and walking up to its enclosing `node_modules` breaks under nested
-   installs, where that directory holds `yaml` and nothing else. Assuming `pkgRoot/node_modules` is
-   complete breaks under **partial hoisting**, where a package-local `node_modules` holds one or two
-   conflicting versions and every other dependency lives in the hoisted ancestor — the symlink then
-   satisfies exactly those one or two and the CLI still fails on the rest.
+4. **`node_modules` — mirror the real one, then prove it runs (BP-14, R2B-11, R3-8).** Three rules
+   have now failed, and the third failed for a reason worth stating: **`require.resolve` is not a
+   package-location API.** It answers "what file does this specifier load", and modern `exports` maps
+   are entitled to answer "nothing" for both `<dep>/package.json` and the bare `<dep>`. Measured from
+   `stratum/ts` on node v22.22.3, `createRequire(<pkgRoot>/package.json)`:
 
-   The only rule that cannot be fooled by layout is to ask the resolver, per dependency:
+   | Dependency | `resolve('<dep>/package.json')` | `resolve('<dep>')` |
+   |---|---|---|
+   | `@openai/codex-sdk` | `ERR_PACKAGE_PATH_NOT_EXPORTED` | `ERR_PACKAGE_PATH_NOT_EXPORTED` |
+   | `@anthropic-ai/claude-agent-sdk` | `ERR_PACKAGE_PATH_NOT_EXPORTED` | `…/sdk.mjs` |
+   | `js-tiktoken` | `ERR_PACKAGE_PATH_NOT_EXPORTED` | `…/dist/index.cjs` |
+   | `@modelcontextprotocol/sdk` | `…/dist/cjs/package.json` — **not the package root** | `MODULE_NOT_FOUND` |
+   | the other five | package root | main entry |
+
+   `@openai/codex-sdk` fails **both** legs, so the round-2 fallback ("resolve the bare specifier and
+   walk up") cannot rescue it: its `exports` publishes an `import` condition only, and CommonJS
+   resolution has nothing to return (`stratum/ts/node_modules/@openai/codex-sdk/package.json:24-29`).
+   `@modelcontextprotocol/sdk` fails differently and more quietly — its `"./*"` wildcard
+   (`stratum/ts/node_modules/@modelcontextprotocol/sdk/package.json:62-66`) makes `./package.json` resolve to `dist/cjs/package.json`, so
+   `dirname()` yields `dist/cjs` and a symlink built from it points at a subdirectory. That one
+   produces a *plausible* path, which is why the name check below is not optional.
+   `import.meta.resolve` is not the answer either: node's stable form takes no parent argument, so a
+   helper living in `compose/test/` cannot resolve from stratum's context with it.
+
+   **The rule that works, and that was run:** mirror stratum's own `node_modules` and let node resolve
+   exactly as it does in place.
 
    ```js
-   const req  = createRequire(join(pkgRoot, 'package.json'));
-   const deps = Object.keys(JSON.parse(readFileSync(join(pkgRoot, 'package.json'))).dependencies);
-   //   @ai-sdk/anthropic, @ai-sdk/openai, @anthropic-ai/claude-agent-sdk,
-   //   @modelcontextprotocol/sdk, @openai/codex-sdk, ai, js-tiktoken, yaml, zod
-   const resolved = deps.map(d => ({ dep: d, dir: dirname(req.resolve(`${d}/package.json`)) }));
+   const pkgNm = join(pkgRoot, 'node_modules');
+   if (existsSync(pkgNm)) symlinkSync(pkgNm, join(copy, 'node_modules'), 'dir');
    ```
 
-   Resolve each `<dep>/package.json` **from the real package's context**, then:
-   - if every resolved directory sits under one and the same `node_modules`, symlink
-     `<copy>/node_modules` to that directory — the common, fast case;
-   - otherwise build a **temp `node_modules`** inside the copy and create one symlink per dependency,
-     `<copy>/node_modules/<dep>` to its own resolved directory (creating the `@scope` parent
-     directories for scoped names). This is layout-independent by construction.
+   Demonstrated end to end: `package.json` + `dist` copied to a temp dir, `node_modules` symlinked to
+   `/Users/ruze/reg/my/forge/stratum/ts/node_modules`, then `node <copy>/dist/cli/stratum.js guard` →
+   **exit 1**, stderr `Unknown guard action: (none). Expected one of: apply-upgrade, authorize,
+   descriptors, digest, history, migrate, override, policy, register, transition, upgrade.`, and no
+   `MODULE_NOT_FOUND` anywhere. Node resolves symlinked directories through their real path, so the
+   pnpm layout under `.pnpm/` — where each dependency sits beside its own transitive deps — keeps
+   working unchanged. All nine declared dependencies are present as entries in that directory.
 
-   `package.json/exports` can block `require.resolve('<dep>/package.json')` on strictly-exporting
-   packages; fall back to `req.resolve(dep)` and walk up to the nearest directory containing a
-   `package.json` whose `name` matches.
+   **The fallback, for a partially hoisted install**, where `pkgRoot/node_modules` holds only some
+   dependencies and the rest live in a hoisted ancestor. Resolve each dependency by **directory walk**,
+   never by `require.resolve` — this is node's own lookup at the directory level, and `exports` has no
+   say in it:
+
+   ```js
+   function resolveDepRoot(fromDir, dep) {            // returns the package ROOT, or null
+     for (let d = fromDir; ; d = dirname(d)) {
+       const cand = join(d, 'node_modules', dep);
+       const pj = join(cand, 'package.json');
+       if (existsSync(pj)) {
+         try { if (JSON.parse(readFileSync(pj, 'utf8')).name === dep) return realpathSync(cand); }
+         catch { /* unreadable manifest: keep walking */ }
+       }
+       if (dirname(d) === d) return null;
+     }
+   }
+   ```
+
+   **Verify the name on every resolved root, including the ones that resolved cleanly** — that is what
+   catches the `dist/cjs` case, where the path exists, the manifest parses, and the package is the
+   wrong one. Run against `stratum/ts` this returns a correct root for all nine, `@openai/codex-sdk`
+   included. Build `<copy>/node_modules/<dep>` as one symlink per dependency (creating `@scope`
+   parents), and fail the test loudly on a `null` rather than proceeding to a smoke run that will fail
+   more obscurely.
+
+   The order is: symlink the whole directory, smoke-run (step 5), and fall back to the per-dependency
+   farm only if the smoke run reports `MODULE_NOT_FOUND` — a second smoke run then confirms the farm.
+   The smoke run is the arbiter for both, which is why step 5 is not optional.
+
 5. **Smoke-run the copy before using it (BP-14, R2B-10).** `--help` is not a valid probe: a healthy
    stratum CLI exits **2** on an unknown argument, so `execFileSync` throws and the check reports a
    broken copy that is in fact fine. Use the documented failure instead, and capture all three
@@ -1613,7 +2059,7 @@ Built once in a `before` hook:
 
    `guard` with no action hits `!action || !ACTIONS.has(action)` and writes
    `Unknown guard action: (none). Expected one of: …` to stderr before returning 1
-   (`ts/src/cli/guard.ts:231-234`). A dependency-resolution mistake surfaces here with the real module
+   (`ts/src/cli/guard.ts:235-237`). A dependency-resolution mistake surfaces here with the real module
    name, not later as an unexplained guard error inside a flow.
 6. `process.env.HOME = mkdtempSync(...)` — stratum's guard store is
    `join(homedir(), '.stratum', 'guards')` (`ts/src/guard/store.ts:58`) with no env override, so `$HOME`
@@ -1680,7 +2126,7 @@ Against a real git repo fixture (`test/completion-gate.test.js:38-60`), a real v
    rule proved against the real CLI, not a fake.
 4. **Backfill.** `completionGate({intent:'backfill', …})` with H1's three occurrences. Assert:
    - the ledger holds a `kind:'graph_version'` entry, `resolved_by:'human'`, rationale naming the
-     descriptor id, signer principal and file sha256 (`ts/src/guard/transition.ts:1117-1119`);
+     descriptor id, signer principal and file sha256 (`ts/src/guard/transition.ts:1136-1137`);
    - a `transition` entry `to_state:'complete_backfilled'`, `outcome:'applied'`,
      `idempotency_key === operationId`;
    - `guard policy` reports `graph_version: 2` and `terminal` containing `complete_backfilled`;
@@ -1699,25 +2145,70 @@ Against a real git repo fixture (`test/completion-gate.test.js:38-60`), a real v
    entry), no duplicate terminal occurrence, no re-stamped `recordedAt`, the record flips to
    `finalized`, the audit event is emitted **on this attempt even though `statusChanged` is null**
    (BP-5/R3-1), and the intent is cleared last.
-7. **Digest-verified recovery (BP-1, R2B-2, R2B-6).** From the pending state of step 6, apply a
+6b. **Recovery after a successful step 6.0 (R3-5).** Interrupt *later* than step 6: let the history
+   write and the pending marker reach disk, then fail before the completion record (inject a one-shot
+   `recordCompletion` throw). The stored `phaseHistory` now already contains the terminal occurrence.
+   Re-issue and assert the operation **resumes** — `refusedAt` is absent — and that the merge treated
+   the terminal as already written: `written` is empty, the terminal's key is in `skipped`, and
+   `phaseHistory` has **exactly one** entry carrying `operation_id`. Written against the first draft
+   this test refuses at `history`: the terminal's `origin` is `live`, so the claim index cannot match
+   it, its stored `enteredAt` and the incoming `observedEpochMs` are the same instant by construction,
+   and the tie check fires on every ordinary recovery.
+
+7. **Digest-verified recovery (BP-1, R2B-2, R2B-6, R3-2).** From the pending state of step 6, apply a
    **second** signed descriptor so the policy checksum changes, then re-issue **after
    `_testOnly_resetGuardCache()` and again in a fresh process** — so the path that would call
-   `ensureGuard` is genuinely exercised (R2B-2). The replay goes through the raw
-   `guardTransition` transport, returns `idempotency_conflict`, `guard digest` recomputes the digest
-   under the **persisted** checksum, the ledger entry matches, and the operation resumes. Three
-   negative variants, one per §5.9b condition: mutate an artifact in the persisted envelope
-   (condition 1); drive a `killed` transition after the entry so `current_state` moves (condition 2);
-   drive an override after the entry while leaving the state alone (condition 3). All three assert
-   `refusedAt:'recovery'`, proving the branch is not satisfied by the operation id alone.
+   `ensureGuard` is genuinely exercised (R2B-2). The recovery call goes through the raw
+   `guardTransition` transport **carrying the persisted `expected_policy_checksum`** (R3-2), so stratum
+   refuses it with `policy_checksum_mismatch` under its own lock; §5.9c then recomputes the digest under
+   the **persisted** checksum via `guard digest`, finds the ledger entry, and the operation resumes.
+   Assert the ledger gained **no** entry from this attempt. Four negative variants, one per §5.9c
+   condition:
+   - mutate an artifact in the persisted envelope (condition 1 — the digest no longer matches);
+   - drive a `killed` transition after the entry so `current_state` moves (condition 2);
+   - **an override after the entry that leaves the state where it was (condition 3, R3-6).** An
+     override cannot be a self-transition: `guard override` requires a declared edge
+     (`ts/src/guard/transition.ts:757-759`) and `from_state == current_state` (`:754-756`), and the
+     build graph declares nothing out of `complete_backfilled`. So the setup is a signed
+     `guard migrate` adding the edges `complete_backfilled → killed` and `killed → complete_backfilled`,
+     then **two** signed overrides, out and back. Assert the ledger holds two `kind:'deviation'` entries
+     after ours and that `current_state` is `complete_backfilled` again — the state round trip is
+     invisible to condition 2 and is exactly what condition 3 exists to catch. Written against the
+     first draft this variant **passes recovery**, because that scan looked for `kind:'override'`, a
+     kind stratum never writes.
+   - a `graph_version` entry after ours (the second descriptor of this very step) is **not**
+     disqualifying: assert the resume succeeds with it present, so the allowance is tested and not
+     merely asserted in prose.
+
+7b. **The pre-transition crash window (R3-2).** Fresh workspace. Drive a backfill and interrupt
+   **after `writeIntent` returns and before the transition is issued** — inject the failure into the
+   `guardTransition` call itself so nothing reaches stratum. Assert the intent exists, the ledger has
+   **no** entry for the resource, and `guard policy` still reports the original checksum. Then:
+   - **policy unchanged:** re-issue. The recovery sends the persisted checksum, stratum matches it,
+     no replay exists, the transition applies **under the policy the intent was written against**, and
+     the operation completes. Assert exactly one `applied` transition entry.
+   - **policy moved:** apply a second signed descriptor first, then re-issue. Assert
+     `refusedAt: 'recovery'`, that the ledger still holds **no** transition entry, that `feature.json`
+     is untouched, that `guard policy` reports the *new* checksum with `current_state` **unmoved**, and
+     that the intent is still on disk. Assert the message names the recorded checksum, the current one,
+     and both operator actions (clear the intent and re-run, or restore the policy). Written against
+     the first draft this is the unrecoverable case: with no expected checksum the transition applies
+     under the new policy, moving the guard to `complete_backfilled`, and every subsequent attempt
+     refuses at condition 1 forever.
 8. **Checksum raced under the lock (R2B-7).** Drive a fresh backfill whose `guard policy` read is
    followed by a descriptor apply before the transition. Assert the transition is refused with
    `policy_checksum_mismatch`, that the ledger gained **no** transition entry, that `feature.json` is
    untouched, and that an immediate retry succeeds because it re-reads the policy.
-9. **Guard flag flipped mid-operation (R2B-4).** From the pending state of step 6, flip
+9. **Guard flag flipped mid-operation (R2B-4, R3-7).** From the pending state of step 6, flip
    `capabilities.guard` to `false` in `.compose/compose.json` and re-issue. Assert the resume still
-   replays the guard transition and still stamps `guardRef`, because the effective flag comes from the
-   intent. Repeat with the flag flipped the other way from a guard-off pending operation, asserting no
-   stratum process is spawned.
+   replays the guard transition, still stamps `guardRef`, **and still stamps
+   `verified_by: 'guarded'`** — the last of those is what proves the flag reached the *verifier*
+   (`server/completion-projection.js:136`) and not merely the projector. Repeat with the flag flipped
+   the other way from a guard-off pending operation: point `COMPOSE_STRATUM_TS_CLI_BIN` at Flow C's
+   marker script and assert the marker file does **not** exist afterwards, so "no stratum process was
+   spawned" is proven by the filesystem rather than inferred. Both halves go through the real route
+   closure (`server/vision-routes.js:564`) — a fake projector in this test would hide exactly the
+   hardcoded `consultGuard: true` that R3-7 is about.
 
 ### 7.4 Flow B — fix mode, no feature.json (BP-11)
 
@@ -1768,6 +2259,11 @@ unchanged, no new ledger entry, no new `phaseHistory` entry, no `backfills[]` en
 | R22 | vision item missing or has no lifecycle | `preflight` |
 | R23 | a pending batch record with no matching intent (BP-3) | `recovery` |
 | R24 | a different backfill operation in flight for the same feature | `recovery` |
+| R25 | an intent on disk with `notes` (or `guard_initial`, `upgrade`, `policy_checksum`) **absent** — a corrupt DTO, not a defaultable one (R3-4) | `recovery` |
+| R26 | a stored `phaseHistory` entry carrying this `operation_id` but a different `enteredAt` (R3-5) | `history` |
+| R27 | a `deviation` ledger entry after ours, state round-tripped back to `complete_backfilled` (R3-6) | `recovery` |
+| R28 | a ledger entry after ours with an unrecognised `kind` (R3-6, fail-closed) | `recovery` |
+| R29 | pre-transition crash window plus a changed policy (R3-2) — assert the intent is **kept**, unlike every other row | `recovery` |
 | R25 | `idempotency_conflict` with a ledger digest that does not match the persisted envelope | `recovery` |
 | R26 | **guard unreachable**: `COMPOSE_STRATUM_TS_CLI_BIN` pointed at an existing file that is not a working CLI | `guard` |
 
@@ -1997,6 +2493,16 @@ carried over from the first draft were re-checked, not assumed.
 | `server/stratum-client.js:367-376` | `guardOverride` still sends `override_token` (dead) | OK |
 | `server/stratum-client.js:349-359` | `guardTransition`, the raw recovery transport (R2B-2) | OK |
 | `server/stratum-client.js:382-384` | `guardHistory` | OK |
+| `server/lifecycle-guard.js:22` | `guardTransition as _guardTransition` import (R3-1) | OK |
+| `server/stratum-client.js:349` | `guardTransition` destructures **camelCase** only (R3-1) | OK |
+| `server/completion-projection.js:93-94` | `verifiedCompleteProjection` signature; `consultGuard = true` default (R3-7) | OK |
+| `server/completion-projection.js:136` | `if (!consultGuard \|\| !guardEnabled(cwd))` — the live-config read R3-7 overrides | OK |
+| `server/completion-projection.js:180-184` | `applyVerifiedProjection` forwards `consultGuard` (R3-7) | OK |
+| `server/vision-routes.js:564` | the projector closure hardcodes `consultGuard: true` (R3-7) | OK |
+| `lib/completion-gate.js:425` | `recordCompletion` reads `notes` (R3-4 — the unrestored input; the call opens at `:421`) | OK |
+| `lib/completion-gate.js:477-480` | the `visionProjector` payload, which gains `guarded` (R3-7) | OK |
+| `lib/completion-gate.js:528-536` | `defaultVisionProjector`, the other consumer of that payload | OK |
+| `test/stratum-client-guard.test.js:80-103` | the `guardTransition` wire-shape case R3-1 extends | OK |
 | `server/compose-mcp-tools.js:71-75` | `_overrideOk` | OK |
 | `server/compose-mcp-tools.js:102-116` | `assertTerminalStatusAuthorized` | OK |
 | `server/compose-mcp-tools.js:702-717` | `_postLifecycle` (BP-10) | OK |
@@ -2021,29 +2527,48 @@ carried over from the first draft were re-checked, not assumed.
 
 | Reference | Claim | Verified |
 |---|---|---|
-| `ts/package.json:3` | version `0.4.3` (was 0.4.2 when this blueprint was first drafted) | OK |
+| `ts/package.json:3` | version **`0.4.4`** (0.4.2 at first draft, 0.4.3 at round 2) | OK |
 | `ts/package.json:19-21` | `files: ["dist"]` | OK |
 | `ts/src/cli/guard.ts:21` | ACTIONS includes `apply-upgrade`, `policy` and `digest` | OK |
-| `ts/src/cli/guard.ts:107` | `override` takes `authorization` | OK |
-| `ts/src/cli/guard.ts:128-129` | `apply-upgrade` accepts exactly two keys | OK |
-| `ts/src/cli/guard.ts:183-184` | `policy` accepts exactly `resource_id` | OK |
-| `ts/src/cli/guard.ts:231-234` | unknown action prints usage and exits 1 (BP-14 smoke run) | OK |
-| `ts/src/cli/guard.ts:204-224` | the `digest` action | OK |
-| `ts/src/cli/guard.ts:206` | `digest` accepts exactly the six keys compose sends | OK |
-| `ts/src/cli/guard.ts:208-210` | `policy_checksum` must be 64 lowercase hex | OK |
-| `ts/src/cli/guard.ts:211-223` | response `{status:'ok', payload_digest, payload_digest_version:2}` | OK |
-| `ts/src/guard/transition.ts:131` | the payload digest binds the policy checksum | OK |
-| `ts/src/guard/transition.ts:349` | `initial` must be a graph node or terminal | OK |
-| `ts/src/guard/transition.ts:393-455` | `registerGuard`; a fresh registration may carry any terminal set | OK |
-| `ts/src/guard/transition.ts:435-437` | `GuardAlreadyRegistered` "use migrate" | OK |
-| `ts/src/guard/transition.ts:459-483` | `_maybeReplay` | OK |
-| `ts/src/guard/transition.ts:467-468` | digest mismatch throws `IdempotencyConflict` | OK |
-| `ts/src/guard/transition.ts:559` | payload digest call site | OK |
-| `ts/src/guard/transition.ts:560-562` | replay checked **before** the `from_state` check | OK |
-| `ts/src/guard/transition.ts:1070-1133` | `guardApplyUpgrade` | OK |
-| `ts/src/guard/transition.ts:1117-1119` | ledger rationale names descriptor, principal, digest | OK |
-| `ts/src/guard/transition.ts:474-483` | a replay returns the HISTORICAL verdict + CURRENT state (R2B-6) | OK |
-| `ts/src/guard/transition.ts:1135-1149` | `guardHistory` returns the full ledger | OK |
+| `ts/src/cli/guard.ts:109-113` | `override` takes `authorization` (was `:107`; drifted when `expected_policy_checksum` landed in the `transition` case) | OK |
+| `ts/src/cli/guard.ts:131-132` | `apply-upgrade` accepts exactly two keys (was `:128-129`) | OK |
+| `ts/src/cli/guard.ts:186-187` | `policy` accepts exactly `resource_id` (was `:183-184`, which is now the `history` case) | OK |
+| `ts/src/cli/guard.ts:235-237` | unknown action prints usage and exits 1 (BP-14 smoke run; was `:231-234`) | OK |
+| `ts/src/cli/guard.ts:207-227` | the `digest` action (was `:204-224`) | OK |
+| `ts/src/cli/guard.ts:209` | `digest` accepts exactly the six keys compose sends (was `:206`) | OK |
+| `ts/src/cli/guard.ts:211-213` | `policy_checksum` must be 64 lowercase hex (was `:208-210`) | OK |
+| `ts/src/cli/guard.ts:214-226` | response `{status:'ok', payload_digest, payload_digest_version:2}` (was `:211-223`) | OK |
+| `ts/src/guard/transition.ts:122-130` | `_payloadDigest` binds the policy checksum (was `:131`, which is the closing brace) | OK |
+| `ts/src/guard/transition.ts:352-354` | `initial` must be a graph node or terminal (was `:349`) | OK |
+| `ts/src/guard/transition.ts:396-458` | `registerGuard`; a fresh registration may carry any terminal set (was `:393-455`) | OK |
+| `ts/src/guard/transition.ts:438-440` | `GuardAlreadyRegistered` "use migrate" (was `:435-437`) | OK |
+| `ts/src/guard/transition.ts:462-487` | `_maybeReplay`; returns null when no prior entry carries the key (`:467-469`; was `:459-483`) | OK |
+| `ts/src/guard/transition.ts:470-471` | digest mismatch throws `IdempotencyConflict` (was `:467-468`) | OK |
+| `ts/src/guard/transition.ts:571` | payload digest call site, hashing `registry.checksum` (was `:559`) | OK |
+| `ts/src/guard/transition.ts:572-573` | replay checked **before** the `from_state` check (was `:560-562`) | OK |
+| `ts/src/guard/transition.ts:1087-1150` | `guardApplyUpgrade` (was `:1070-1133`) | OK |
+| `ts/src/guard/transition.ts:1136-1137` | ledger rationale names descriptor, principal, digest (was `:1117-1119`) | OK |
+| `ts/src/guard/transition.ts:479-487` | a replay returns the HISTORICAL verdict + CURRENT state (R2B-6; was `:474-483`) | OK |
+| `ts/src/guard/transition.ts:1152-1166` | `guardHistory` returns resource_id, current_state, graph_version and the full ledger (was `:1135-1149`) | OK |
+| `ts/src/cli/guard.ts:98` | `transition` `assertOnlyKeys` includes `expected_policy_checksum` (0.4.4) | OK |
+| `ts/src/cli/guard.ts:104-105` | the CLI maps it to `expectedPolicyChecksum` | OK |
+| `ts/src/guard/transition.ts:552-553` | `expectedPolicyChecksum` must be 64 lowercase hex, else `TypeError` | OK |
+| `ts/src/guard/transition.ts:566-570` | `PolicyChecksumMismatch` thrown under the FIRST lock, **before** `_maybeReplay` at `:572` (R3-2) | OK |
+| `ts/src/guard/transition.ts:633-637` | the same check again under the commit lock, still before `_maybeReplay` at `:638` (R3-2) | OK |
+| `ts/src/guard/transition.ts:638-664` | with no expected checksum and no replay, the transition is evaluated and applied under the CURRENT policy — `appendLedger` at `:660`, `current_state = toState` at `:662` (R3-2) | OK |
+| `ts/src/guard/errors.ts:80` | `PolicyChecksumMismatch` → `error_type: 'policy_checksum_mismatch'` | OK |
+| `ts/src/guard/transition.ts:653` | `kind: 'transition'` (R3-6) | OK |
+| `ts/src/guard/transition.ts:765` | `kind: 'deviation'` — what `guard override` writes; **no `override` kind exists** (R3-6) | OK |
+| `ts/src/guard/transition.ts:838` | `kind: 'graph_version'` for `guard migrate`; **no `migrate` kind exists** (R3-6) | OK |
+| `ts/src/guard/transition.ts:835-836` | migrate writes `from_state == to_state == current_state` (R3-6) | OK |
+| `ts/src/guard/transition.ts:1050` | `kind: 'graph_version'` for `apply-upgrade` (R3-6) | OK |
+| `ts/src/guard/transition.ts:1047-1048` | apply-upgrade writes `from_state == to_state == current_state` (R3-6) | OK |
+| `ts/src/guard/transition.ts:1130` | `kind: 'graph_version'` for the signed-descriptor path (R3-6) | OK |
+| `ts/src/guard/transition.ts:754-756` | `guard override` requires `from_state == current_state` (R3-6, Flow A step 7) | OK |
+| `ts/src/guard/transition.ts:757-759` | `guard override` requires a **declared edge** — a terminal self-override is impossible (R3-6) | OK |
+| `ts/src/guard/transition.ts:299-394` | `_validatePolicy` — no prohibition on outgoing edges from a terminal state, so Flow A's migrate adding `complete_backfilled → killed` is legal | OK |
+| `stratum/ts/node_modules/@openai/codex-sdk/package.json:24-29` | `exports` publishes an `import` condition only — both `require.resolve` legs fail (R3-8) | OK |
+| `stratum/ts/node_modules/@modelcontextprotocol/sdk/package.json:62-66` | the `"./*"` wildcard makes `./package.json` resolve to `dist/cjs/package.json` (R3-8) | OK |
 | `ts/src/guard/store.ts:38-53` | `LedgerEntryFields`; `idempotency_key` at `:45` | OK |
 | `ts/src/guard/store.ts:58` | `GUARDS_DIR = join(homedir(),'.stratum','guards')` | OK |
 | `ts/src/guard/fingerprint.ts:13-18` | the four checksum fields | OK |
@@ -2070,7 +2595,10 @@ carried over from the first draft were re-checked, not assumed.
 | Installed stratum | `node_modules/@smartmemory/stratum` is a **symlink** to `/Users/ruze/reg/my/forge/stratum/ts` (C13) |
 | `apply-upgrade` in the installed dist | present (`dist/cli/guard.js`) |
 | `guard digest` in the installed dist | **present** — `dist/cli/guard.js` carries the action and `payload_digest_version`. Stratum moved 0.4.2 → 0.4.3 between this blueprint's first draft and this revision |
-| stratum package's own `node_modules` | present at `stratum/ts/node_modules`, so BP-14's first branch fires |
+| stratum package's own `node_modules` | present at `stratum/ts/node_modules`, holding all nine declared dependencies as entries (pnpm symlink farm into `node_modules/.pnpm/`), so BP-14's whole-directory symlink is the branch that fires |
+| BP-14 step 4, run end to end (R3-8) | `package.json` + `dist` copied to a temp dir, `node_modules` symlinked to `stratum/ts/node_modules`, `node <copy>/dist/cli/stratum.js guard` → exit **1**, stderr `Unknown guard action: (none). Expected one of: apply-upgrade, authorize, descriptors, digest, history, migrate, override, policy, register, transition, upgrade.`, no `MODULE_NOT_FOUND` |
+| `require.resolve('@openai/codex-sdk')` from `stratum/ts` | **fails both legs** — `ERR_PACKAGE_PATH_NOT_EXPORTED` for `'@openai/codex-sdk/package.json'` and for the bare specifier (node v22.22.3) |
+| `require.resolve('@modelcontextprotocol/sdk/package.json')` | resolves to `dist/cjs/package.json`, **not** the package root — a plausible-looking wrong answer, which is why BP-14 verifies the resolved manifest's `name` |
 | Trust root signer lines | **0** — 1892 bytes, all comment |
 | `.compose/compose.json` | `capabilities.guard: true`, **no** `guard.testCommand` (C20) |
 
@@ -2078,9 +2606,13 @@ carried over from the first draft were re-checked, not assumed.
 
 Run: `node -e "import('./lib/boundary-map.js').then(async m => { const fs = await import('node:fs'); const p = 'docs/features/COMP-LIFECYCLE-BACKFILL/blueprint.md'; console.log(JSON.stringify(m.validateBoundaryMap({ blueprintText: fs.readFileSync(p,'utf8'), blueprintPath: p, repoRoot: process.cwd() }), null, 2)); })"`
 
-**Result (re-run for round 2):** `{ "ok": true, "violations": [], "warnings": [] }` — zero
-violations, zero warnings. The map gained one symbol this revision, `guardTransition` on
-`server/stratum-client.js`, because R2B-2 makes the raw transport a real dependency of S02.
+**Result (re-run for round 3, 2026-09-05):** `{ "ok": true, "violations": [], "warnings": [] }` — zero
+violations, zero warnings. The map is **unchanged** by the round-3 fixes: they add parameters
+(`expectedPolicyChecksum` on `guardTransition`, `guardEnabledOverride` on
+`verifiedCompleteProjection`/`applyVerifiedProjection`, `guarded` on the projector payload) and a
+schema definition, none of which is a new exported symbol or a new cross-slice edge. Round 2 was the
+revision that gained one, `guardTransition` on `server/stratum-client.js`, because R2B-2 makes the raw
+transport a real dependency of S02.
 
 Two authoring traps are recorded so the next blueprint avoids them: `parseFilePlan` matches the
 heading by exact string (`lib/boundary-map.js:33`, `:228`), so a numbered `## 8. File Plan` is
@@ -2088,18 +2620,36 @@ invisible to it; and any indented line between the last Consumes entry and the n
 parsed as a malformed Consumes entry, so the map's explanatory prose belongs above the first `### S##`
 heading.
 
-### Reference sweep (BP-18, re-run for round 2)
+### Reference sweep (BP-18, re-run for round 3)
 
-**No blanket claim.** All **167** `file:line` rows in the two tables above were re-opened
-programmatically for this revision and each printed line was compared against its claim; the `OK`
-column records that comparison, not an assumption.
+**No blanket claim.** All **198** `file:line` rows in the two tables above were re-opened with
+`sed -n` and each printed line was compared against its claim; the `OK` column records that
+comparison, not an assumption.
 
 | Outcome | Count |
 |---|---|
-| Rows re-opened and matching | 167 |
-| Rows added this revision | 12 |
-| Rows corrected in the round-1 revision | 9 |
+| Rows in the two tables | 198 |
+| Rows added this revision (round 3) | 29 |
+| Rows **corrected** this revision — stratum line drift, 0.4.3 → 0.4.4 | 21 |
+| Rows carried over unchanged | 148 |
 | Rows whose target file was missing, or whose line was empty | 0 |
+
+**The twenty-one round-3 corrections are all one cause.** `STRAT-GUARD-EXPECTED-CHECKSUM` landed in
+stratum between round 2 and round 3, adding `expected_policy_checksum` to `guard transition` in both
+`ts/src/cli/guard.ts` and `ts/src/guard/transition.ts`. Every citation below the insertion point moved:
+the CLI's `override`, `apply-upgrade`, `policy`, `digest` and unknown-action cases (+2 to +3 lines
+each), and in `transition.ts` `registerGuard`, `GuardAlreadyRegistered`, `_maybeReplay`, the
+`IdempotencyConflict` throw, the payload-digest call site, the replay-ordering claim, `guardApplyUpgrade`,
+its rationale, and `guardHistory` (+3 to +17). Four more were wrong independently of the bump:
+`transition.ts:131` pointed at a closing brace rather than `_payloadDigest`'s body (`:122-130`), `:349`
+at a throw rather than the `initial`-node check (`:352-354`), and two prose citations repeated the same
+two errors. Both prose and table are corrected; five prose citations were fixed in this pass, which is
+R2B-13's lesson applied again.
+
+This is the third consecutive revision in which stratum line numbers drifted under a blueprint nobody
+in the session had edited. **Treat every `stratum/ts` citation as perishable and re-open it per
+revision** — the table exists because the alternative is a blueprint that reads as verified and points
+at the wrong lines.
 
 The nine round-1 corrections were seven stratum line drifts caused by `STRAT-GUARD-DIGEST` landing in
 `ts/src/cli/guard.ts` between drafts (`package.json:3` 0.4.2 to 0.4.3; `guard.ts:20` to `:21`, `:90`

@@ -11,9 +11,14 @@ write_blueprint READY dispatchToken `ff97e416-04ed-4008-a952-cb3cad1f6baf`, impl
 - Blueprint written (Opus agent `blueprint-backfill`); gate r1 = 18 findings, r2 = 13 findings, all
   confirmed, adjudications in `reviews/blueprint-r{1,2}-2026-09-05.md` (committed `9289690`, `e98449b`).
 
+- Blueprint gate r3 (astra, run `a9adac34b488`): 8 findings (7 P1 + 1 P2), 8/8 CONFIRMED, folded by
+  Opus (C35-C42, writeContext, §5.9c, StoredHistoryEntry, R25-R29); validator ok; 21 stale
+  verification rows from the 0.4.4 checksum work corrected. `reviews/blueprint-r3-2026-09-05.md`.
+- `plan.md` written (tasks 1-4, checkbox ACs), aligned with the r3 fold.
+
 ## In flight
-- Blueprint r2 revision landed + committed. Next: Codex round 3
-  (last full round per review-budget rule), `stratum_step_done` write_blueprint, then plan.md.
+- Codex round 4, fixes-only (justified by the r3 P1s; review-budget rule says this is the last).
+- Next: fold r4 if needed → `stratum_step_done` write_blueprint → S1 dispatch.
 
 ## Then
 - plan.md (ordered tasks from the blueprint File Plan, S1→S2→S3).
