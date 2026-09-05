@@ -13,7 +13,13 @@ const cache = new Map();
 function load(schemaPath = DEFAULT_SCHEMA_PATH) {
   if (cache.has(schemaPath)) return cache.get(schemaPath);
   const schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
-  const ajv = new Ajv({ strict: false, allErrors: true });
+  // `$data: true` lets a schema pin one field to another's value at validation
+  // time (`{"const": {"$data": "2/policy_checksum"}}` in
+  // contracts/lifecycle-backfill.schema.json). Without the option Ajv treats the
+  // `$data` object as a LITERAL to compare against, so such a schema rejects
+  // every document — including the valid ones. Additive: no other schema here
+  // uses `$data`, and enabling it changes nothing for them.
+  const ajv = new Ajv({ strict: false, allErrors: true, $data: true });
   addFormats(ajv);
   ajv.addSchema(schema);
   const entry = { schema, ajv };

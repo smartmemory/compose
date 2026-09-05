@@ -26,10 +26,22 @@ write_blueprint DONE 2026-09-06, implement READY dispatchToken `e94162a0-6e11-42
   derive∘project == buildPhaseGraph for all 4 modes. Live `compose guard descriptors` → 0 (correct; all 3
   real registered features terminal, 32 registered ids are test fixtures).
 
+- S2 SHIPPED (Opus `impl-s2`; Codex astra reviews r1 = 7 findings (3 P1) all fixed, r2 = 2 P2 residuals fixed,
+  no r3 — `reviews/impl-s2-r{1,2}-2026-09-06.md`). Final targeted set 485/485 unsandboxed; real
+  `~/.stratum/guards` untouched (golden flow isolates HOME + CLI at an isolated stratum copy, no fake client).
+  Accepted deviations: Flow A steps 6/7/8 (mid-op policy-change variants) unbuilt; H7 refuses at §4.1 4e;
+  fresh branch uses raw guardTransition (wrapper collapses replayed→applied); projection widening +
+  allowlist entry landed in S2; `server/schema-validator.js` gains Ajv `$data:true`.
+
 ## In flight
-- S2 → Opus high (gate intent + valid-time history + golden flows) per plan.md Task 2.
+- S3 → Codex terra/high (workspace-write): route, MCP tool, readers, UI per plan.md Task 3. NOTE plan 3.2
+  "no new allowlist entry" is now wrong (the gate's fix/plan status write is registered); 3.3 projection
+  widening already done in S2.
 
 ## Follow-ups (outside this feature)
+- The gate never validates the persisted intent against `contracts/lifecycle-backfill.schema.json` at
+  runtime (only the contract test does, on the intent the gate actually writes). Wiring it in adds a
+  refusal path §5.11 does not name — a design call, deliberately not made in S2.
 - compose test suites pollute the real `~/.stratum/guards` with fixture registrations (32 ids under this
   workspace's hash). Run them with `HOME` → temp dir. Falsifier: `ls ~/.stratum/guards | wc -l` stops growing
   after a `CI=1 npm test`.

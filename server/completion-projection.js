@@ -46,6 +46,14 @@ export const VERIFIED_BY = Object.freeze({
   DOCUMENT: 'document-derived',
 });
 
+/**
+ * The guard states that attest a completion (COMP-LIFECYCLE-BACKFILL S1-1).
+ * `complete` is a walked lifecycle; `complete_backfilled` is one reconstructed
+ * from evidence after the fact. Both are terminal and both verify — the state
+ * itself is what tells a reader which one it was.
+ */
+export const GUARDED_TERMINAL_STATES = new Set(['complete', 'complete_backfilled']);
+
 /** The mode a vision item's lifecycle runs under; build when unstated. */
 export function itemMode(item) {
   return resolveMode(item?.lifecycle?.mode ?? 'build');
@@ -92,6 +100,7 @@ export function canonicalFile(cwd, code) {
  */
 export async function verifiedCompleteProjection({
   item, featureCode, cwd, consultGuard = true, allowDocumentDerived = false,
+  guardEnabledOverride = undefined,
 }) {
   const reasons = [];
   if (!item) return { ok: false, reasons: ['vision item not found'] };
@@ -133,7 +142,13 @@ export async function verifiedCompleteProjection({
   // 2. the guard, only if a resource exists — and only when the workspace has
   //    the guard enabled; with it off no resource can have been created by
   //    compose and there is no stratum to ask.
-  if (!consultGuard || !guardEnabled(cwd)) {
+  // COMP-LIFECYCLE-BACKFILL §5.10a/R3-7: `guardEnabledOverride` is an
+  // OPERATION-level override of a WORKSPACE-level config read. The config
+  // answers "is the guard on in this workspace now"; a resumed completion needs
+  // "was the guard on for THIS operation" — the flag it persisted. Read with
+  // `??`, never `||`: a persisted `false` must not fall through to live config.
+  const guardOn = guardEnabledOverride ?? guardEnabled(cwd);
+  if (!consultGuard || !guardOn) {
     return { ok: true, verified_by: VERIFIED_BY.CANONICAL, reasons: [], guardState: null };
   }
   const rid = resourceId(featureCode, cwd, itemMode(item));
@@ -149,10 +164,14 @@ export async function verifiedCompleteProjection({
   if (g.state === null) {
     return { ok: true, verified_by: VERIFIED_BY.CANONICAL, reasons: [], guardState: null };
   }
-  if (g.state !== 'complete') {
-    return { ok: false, reasons: [`guard for ${featureCode} is in state "${g.state}", not complete`], guardState: g.state };
+  // COMP-LIFECYCLE-BACKFILL: both terminals verify a completion. `complete` is a
+  // walked lifecycle; `complete_backfilled` is one reconstructed from evidence.
+  // The state itself is the provenance signal (Decision 11), so the stamp keeps
+  // the ACTUAL state rather than flattening the two.
+  if (!GUARDED_TERMINAL_STATES.has(g.state)) {
+    return { ok: false, reasons: [`guard for ${featureCode} is in state "${g.state}", not a completion terminal`], guardState: g.state };
   }
-  return { ok: true, verified_by: VERIFIED_BY.GUARDED, reasons: [], guardState: 'complete' };
+  return { ok: true, verified_by: VERIFIED_BY.GUARDED, reasons: [], guardState: g.state };
 }
 
 /**
@@ -179,9 +198,12 @@ export function projectionStamp(verdict, evidence = {}) {
  */
 export async function applyVerifiedProjection(store, {
   itemId, featureCode, cwd, consultGuard = true, allowDocumentDerived = false, evidence = {},
+  guardEnabledOverride = undefined,
 }) {
   const item = store.items.get(itemId);
-  const v = await verifiedCompleteProjection({ item, featureCode, cwd, consultGuard, allowDocumentDerived });
+  const v = await verifiedCompleteProjection({
+    item, featureCode, cwd, consultGuard, allowDocumentDerived, guardEnabledOverride,
+  });
   if (!v.ok) return v;
   const prior = { status: item.status, completion_projection: item.completion_projection ?? null };
   const updated = store.updateItem(itemId, {
