@@ -73,6 +73,8 @@ out of the gate. "Design says" quotes the design doc; "Reality" is what the file
 | **C40** | (round 2) the recovery suffix scan rejects later `transition`, `override` and `migrate` entries | **R3-6:** stratum writes exactly three kinds — `transition` (`transition.ts:653`), `deviation` (`:765`) and `graph_version` (`:838`, `:1050`, `:1130`). `override` and `migrate` are not kinds, so **an override passed the check silently** while a migration was rejected under a name never written | Reject later `transition` and `deviation`; allow `graph_version` only after verifying `from_state == to_state`; refuse an unrecognised kind. Flow A's condition-3 variant is rebuilt: an override needs a declared edge (`:757-759`), so a signed migrate adds `complete_backfilled ↔ killed` and two overrides round-trip the state (§5.9c, §7.3) |
 | **C41** | (round 2) passing the persisted guard flag to the projector makes the projection honour it | **R3-7:** the route closure hardcodes `consultGuard: true` (`server/vision-routes.js:564`) and the verifier independently reads live config (`server/completion-projection.js:136`). false→true spawns stratum on an unguarded resume; true→false silently downgrades the verification tier | Thread the effective flag through the closure **and** add `guardEnabledOverride` to `verifiedCompleteProjection`/`applyVerifiedProjection`, read with `??` so a persisted `false` is honoured. Flow A step 9 asserts both flips through the real projection path, proving the guard-off half with a marker script (§5.10a, S3-1, S3-3) |
 | **C42** | (round 2) `require.resolve('<dep>/package.json')`, falling back to the bare specifier, locates every dependency | **R3-8:** measured — `@openai/codex-sdk` fails **both** legs (`ERR_PACKAGE_PATH_NOT_EXPORTED`; its `exports` publishes an `import` condition only), and `@modelcontextprotocol/sdk`'s `"./*"` wildcard resolves `./package.json` to `dist/cjs/package.json`, a plausible wrong answer. `import.meta.resolve` takes no parent argument, so it cannot resolve from stratum's context either | Symlink stratum's whole `node_modules` into the copy — demonstrated end to end, exit 1 with the expected usage text and no `MODULE_NOT_FOUND` — and keep a directory-walk resolver (which `exports` cannot block) plus a package-`name` check on every resolved root as the partial-hoisting fallback, arbitrated by the smoke run (§7.1) |
+| **C43** | (round 3) the intent schema allowed `expected_policy_checksum: null` and the payload table + schema description still said "not sent on a replay" | **R4-1:** stratum enforces the checksum only when the key is supplied (`ts/src/cli/guard.ts:104-106`, `transition.ts:566`), so the leftover omission re-opened the pre-transition window R3-2 closed | Schema field is `string`, required, equal to `policy_checksum`; payload table row corrected; §5.9a refuses at `recovery` on a null/mismatched checksum BEFORE the transport call and always sends `writeContext.policyChecksum` |
+| **C44** | (round 3) §5.9a/§5.9c and S1-3 checked `.error` on raw transport results | **R4-2:** `runGuard` returns stratum's canonical `{status:'error', error_type, message}` unchanged on a non-zero exit (`server/stratum-client.js:235`; envelope at `ts/src/cli/guard.ts:42-46`) and wraps only spawn/parse failures as `{error}` — so `policy_checksum_mismatch` fell into the success branch and a history error reached `h.ledger.find` as a `TypeError` | Three helpers `isGuardError` / `guardErrorType` / `guardErrorMessage` exported from `server/lifecycle-guard.js`; every raw call site uses them; harness rows R25-R29 run under both shapes |
 
 ### Design points that were not implementable as written
 
@@ -275,8 +277,8 @@ documentation rule.
             "modified_files":  { "type": "array", "items": { "type": "string" } },
             "resolved_by":     { "type": "string", "const": "agent" },
             "idempotency_key": { "type": "string", "format": "uuid" },
-            "expected_policy_checksum": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$",
-                                          "description": "R2B-7: sent on a FRESH transition so stratum can refuse atomically under its own lock if the policy moved. Deliberately NOT sent on a replay — the checksum is expected to have changed there." }
+            "expected_policy_checksum": { "type": "string", "pattern": "^[0-9a-f]{64}$",
+                                          "description": "R2B-7/R3-2/R4-1: ALWAYS present and non-null — equal to the intent's `policy_checksum`. Sent on the fresh transition AND on every recovery replay, so a pre-transition crash followed by a policy change can never apply under the new policy (stratum enforces only when the key is supplied, ts/src/cli/guard.ts:104-106; transition.ts:566). The contract test asserts an envelope without it, or with a value differing from `policy_checksum`, is REJECTED." }
           },
           "additionalProperties": false
         }
@@ -542,7 +544,7 @@ Each unit names its test first (TDD): write the test, watch it fail, then the co
 | `guard apply-upgrade` | `{"resource_id":"compose:<hash>:<CODE>","descriptor_id":"backfill-<mode>-<from_checksum[0..12]>"}` | `STRATUM_GUARD_UPGRADE_DESCRIPTORS=<abs>/.compose/guard-upgrades.json` |
 | `guard digest` | `{"from_state":"<phase>","to_state":"complete_backfilled","artifacts":{…},"modified_files":[],"resolved_by":"agent","policy_checksum":"<64-hex>"}` | none |
 | `guard transition` (fresh backfill) | the existing seven keys plus `"expected_policy_checksum":"<64-hex>"` (R2B-7, stratum 0.4.4) | none |
-| `guard transition` (recovery replay) | the same seven keys **without** `expected_policy_checksum` | none |
+| `guard transition` (recovery replay) | the same eight keys — `expected_policy_checksum` is the **persisted** `writeContext.policyChecksum`, never omitted (R3-2/R4-1) | none |
 
 Any extra key on any of the three is refused with
 `{"status":"error","error_type":"TypeError","message":"unexpected guard argument \"…\""}` and exit 1.
@@ -590,7 +592,7 @@ advance/skip/kill/complete all fail closed on legacy features after a restart.
     ```
     if res.error_type/code is 'guard_already_registered':
         stored := await guardPolicy(rid)
-        if stored.error: return { error: normalise(stored.error) }        # fail closed
+        if isGuardError(stored): return { error: { code: guardErrorType(stored), message: guardErrorMessage(stored) } }   # fail closed (R4-2: raw verb, canonical envelope)
         newProjected := legacyPolicyProjection(policyChecksumFields(newPolicy))
         if policiesEqual(newProjected, policyChecksumFields(stored)):
             _registered.set(rid, 'legacy')
@@ -1497,6 +1499,14 @@ So recovery goes **straight to the transport** — and it carries the persisted 
 # server/stratum-client.js guardTransition (:349-359) — the raw CLI verb.
 # NO ensureGuard, NO guard policy, NO buildPhaseGraph.
 env := writeContext.envelope
+# R4-1: the checksum comes from the intent's own field, and its absence is a
+# refusal BEFORE any transport call — stratum only enforces the checksum when
+# the key is supplied (ts/src/cli/guard.ts:104-106), so an omitted value would
+# silently re-open the pre-transition window this whole section exists to close.
+if writeContext.policyChecksum is null or not /^[0-9a-f]{64}$/:
+    REFUSE refusedAt 'recovery', 'intent has no policy checksum; clear it or re-run'
+if env.expected_policy_checksum != writeContext.policyChecksum:
+    REFUSE refusedAt 'recovery', 'intent envelope checksum disagrees with intent policy_checksum'
 g := await guardTransition({ resourceId: rid,
                              fromState: env.from,
                              toState:   env.to,
@@ -1504,10 +1514,32 @@ g := await guardTransition({ resourceId: rid,
                              modifiedFiles: env.modified_files,
                              idempotencyKey: env.idempotency_key,
                              resolvedBy: env.resolved_by,
-                             expectedPolicyChecksum: env.expected_policy_checksum })  # R3-2
-if g.error?.error_type == 'policy_checksum_mismatch':
+                             expectedPolicyChecksum: writeContext.policyChecksum })  # R3-2/R4-1
+if guardErrorType(g) == 'policy_checksum_mismatch':
     goto §5.9c — READ-ONLY verification. Nothing was written.
+if isGuardError(g):
+    REFUSE refusedAt 'recovery', 'guard transition failed: ' + guardErrorMessage(g)
 ```
+
+**Raw-transport error shape (R4-2).** `guardedTransition` normalises both shapes
+(`server/lifecycle-guard.js:368-370`: `res.error || res.status === 'error'` → `{error}`), but the raw
+verbs in `server/stratum-client.js` do NOT: on a non-zero exit `runGuard` returns stratum's canonical
+envelope **unchanged** (`:235`, `JSON.parse(result.stdout)`), i.e. top-level
+`{status:'error', error_type, message}` (`ts/src/cli/guard.ts:42-46`), and wraps only spawn/parse
+failures as `{error:{code,message}}` (`:230`, `:237`). A check on `.error` alone therefore misses every
+stratum-side refusal — `policy_checksum_mismatch` would fall through to the success branch. Every raw
+call in this blueprint (`guardTransition`, `guardDigest`, `guardHistory`, `guardPolicy`) goes through
+three helpers, exported from `server/lifecycle-guard.js` next to `guardedTransition`:
+
+```js
+export const isGuardError      = r => !r || Boolean(r.error) || r.status === 'error';
+export const guardErrorType    = r => (r && (r.error?.code ?? r.error_type)) ?? null;
+export const guardErrorMessage = r => (r && (r.error?.message ?? r.message)) ?? 'no guard response';
+```
+
+Test (existing file, new cases): `test/lifecycle-guard.test.js` — each helper against a canonical
+envelope, a `{error:{code}}` envelope, `null`, and a success envelope. §5.9c's harness rows R25-R29
+each run twice, once per error shape, so a regression in either branch fails a named test.
 
 **Why the checksum must be sent on a recovery too (R3-2).** The first draft omitted it, reasoning that
 a replay is expected to meet a moved policy. That reasoning covers only the crash window *after* the
@@ -1571,14 +1603,14 @@ d := await guardDigest({ fromState: env.from, toState: env.to,
                          modifiedFiles: env.modified_files,
                          resolvedBy: env.resolved_by,
                          policyChecksum: writeContext.policyChecksum })
-if d.error: REFUSE refusedAt 'recovery', 'payload digest could not be computed'
+if isGuardError(d): REFUSE refusedAt 'recovery', 'payload digest could not be computed: ' + guardErrorMessage(d)
 
 # ONE ledger read, from server/stratum-client.js guardHistory (:382-384), which
 # returns resource_id, current_state, graph_version and the full ledger
 # (transition.ts:1152-1166). All three conditions below are evaluated against THIS
 # snapshot, so they describe one consistent moment.
 h := await guardHistory(rid)
-if h.error: REFUSE refusedAt 'recovery', 'guard history unreadable'
+if isGuardError(h): REFUSE refusedAt 'recovery', 'guard history unreadable: ' + guardErrorMessage(h)
 
 # (1) THE ENTRY EXISTS AND IS OURS. An applied transition into
 #     complete_backfilled, under THIS operation's key, whose payload digest is
@@ -2343,6 +2375,7 @@ pending/finalized invariant are not grep-checkable identifiers and are out of sc
 Produces:
   server/lifecycle-guard.js → buildPhaseGraph, phaseToStatus, ensureGuard, legacyPolicyProjection, policyChecksumFields, policiesEqual, applyBackfillUpgrade, guardedTransition, verifyCompletionEvidenceAsync (function)
   server/lifecycle-guard.js → TERMINAL (const)
+  server/lifecycle-guard.js → isGuardError, guardErrorType, guardErrorMessage (function)
   server/stratum-client.js → guardPolicy, guardApplyUpgrade, guardDigest, guardHistory, guardTransition (function)
   lib/lifecycle-modes.js → terminalOf, genesisOf, transitionsOf (function)
   lib/guard-descriptors.js → descriptorIdFor, deriveBackfillPolicy, buildDescriptorFile, enumerateRegisteredResources, writeDescriptorFile (function)
@@ -2491,6 +2524,9 @@ carried over from the first draft were re-checked, not assumed.
 | `server/stratum-client.js:232-239` | non-zero exit parses stdout as the canonical error dict | OK |
 | `server/stratum-client.js:332-342` | `guardRegister` | OK |
 | `server/stratum-client.js:367-376` | `guardOverride` still sends `override_token` (dead) | OK |
+| `server/stratum-client.js:235` | non-zero exit returns the canonical envelope unchanged (R4-2) | OK |
+| `server/stratum-client.js:230`, `:237` | only spawn/parse failures are wrapped as `{error:{code,message}}` (R4-2) | OK |
+| `server/lifecycle-guard.js:368-370` | wrapper normalises `res.error || res.status === 'error'` (R4-2) | OK |
 | `server/stratum-client.js:349-359` | `guardTransition`, the raw recovery transport (R2B-2) | OK |
 | `server/stratum-client.js:382-384` | `guardHistory` | OK |
 | `server/lifecycle-guard.js:22` | `guardTransition as _guardTransition` import (R3-1) | OK |
@@ -2527,6 +2563,8 @@ carried over from the first draft were re-checked, not assumed.
 
 | Reference | Claim | Verified |
 |---|---|---|
+| `ts/src/cli/guard.ts:42-46` | `errorEnvelope` → top-level `{status:'error', error_type, message}` (R4-2) | OK |
+| `ts/src/cli/guard.ts:104-106` | `expected_policy_checksum` forwarded only when supplied and non-null (R4-1) | OK |
 | `ts/package.json:3` | version **`0.4.4`** (0.4.2 at first draft, 0.4.3 at round 2) | OK |
 | `ts/package.json:19-21` | `files: ["dist"]` | OK |
 | `ts/src/cli/guard.ts:21` | ACTIONS includes `apply-upgrade`, `policy` and `digest` | OK |
@@ -2662,6 +2700,10 @@ added precisely so the claims that matter most live in the swept set.
 
 That drift is the standing argument against a blanket claim: rows verified as correct in the morning
 were wrong by the afternoon, in a sibling repo nobody in this session edited.
+
+### Boundary Map validator (re-run after round 4, 2026-09-06)
+
+`{"ok":true,"violations":[],"warnings":[]}` — S01 gains the three error-shape helpers (R4-2); no other Boundary Map change.
 
 ### Boundary Map validator
 
