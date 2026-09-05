@@ -1,10 +1,10 @@
 {
   "code": "COMP-PLAN-IDEA-UNIFY",
   "description": "Unify ideation storage behind the fluid-store provider seam (owner ruling 2026-07-21, PROVIDER-SEAM in what-to-build 8k): ideabox records become provider records on a zero-install local floor implemented over vision idea-type items; SmartMemory is the capability-rich reference provider backing the same records later. ideabox.md becomes a read-only generated view (ROADMAP.md<-feature.json pattern). Ideabox stays the funnel/UI/CLI. Pilot workload of the provider seam positions/joints/decisions adopt next. Honors COMP-ROADMAP Decision 4 (funnel interface pinned, not storage). One-time markdown->store migration; no bidirectional sync. Rung 1 (keystone) of COMP-PLAN-RIGOR. Anchor: docs/design/2026-07-20-front-funnel-rigor-design.md; ruling: docs/product/2026-07-20-what-to-build-vision.md 8k.",
-  "status": "PARTIAL",
+  "status": "COMPLETE",
   "phase": "COMP-PLAN-RIGOR: Front-of-Funnel Rigor + Parity",
   "created": "2026-07-20",
-  "updated": "2026-08-04",
+  "updated": "2026-09-05",
   "complexity": "L",
   "position": 1,
   "profile": {
@@ -14,12 +14,34 @@
     "needs_report": false
   },
   "impact": "high",
-  "commit_sha": "3ae6a65",
+  "commit_sha": "193897b6571de3756120f578ab29621e496090ab",
   "links": [
     {
       "kind": "follow_up",
       "to_code": "COMP-FLUID-SEAM-GUARANTEES",
       "note": "S3b-1 review round 2 (F3-1/F6-1/F7-1): the lock and reclaimAborted were built into local-provider.js instead of the seam, so smartmemory-provider.js has neither. Latent until fluid.provider is set to smartmemory."
+    }
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-PLAN-IDEA-UNIFY:193897b6571de3756120f578ab29621e496090ab",
+      "feature_code": "COMP-PLAN-IDEA-UNIFY",
+      "commit_sha": "193897b6571de3756120f578ab29621e496090ab",
+      "commit_sha_short": "193897b6",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/fluid/provider.js",
+        "lib/fluid/local-provider.js",
+        "lib/fluid/factory.js",
+        "lib/fluid/schema.js",
+        "lib/fluid/ideabox-view.js",
+        "contracts/fluid-record.schema.json",
+        "test/ideabox-routes.test.js",
+        "docs/features/COMP-PLAN-IDEA-UNIFY/design.md"
+      ],
+      "recorded_at": "2026-09-05T13:21:03.539Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Reconciled 2026-09-05 during /roadmap: all seven design.md acceptance criteria checked (S1 seam, S2 renderer+import, S3/S3b CLI+API cutover, promoted_to edge); follow-up COMP-FLUID-SEAM-GUARANTEES COMPLETE @b18fe5a. Suite at 193897b: 5372 node + 581 ui + 100 tracker, zero failures."
     }
   ]
 }

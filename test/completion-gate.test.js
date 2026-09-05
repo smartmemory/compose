@@ -101,8 +101,13 @@ test('a completion reaches the guard — the transition that has never happened'
     const transition = calls.find(c => c.op === 'transition');
     assert.ok(transition, 'a guarded transition must have been attempted');
     assert.equal(transition.toState, 'complete');
-    // Late registration is stamped so the ledger never implies lifecycle history.
-    assert.match(transition.resolvedBy, /late-registration/);
+    // Stratum >= 0.4.0 accepts only "agent" | "human" for resolved_by; a tagged
+    // resolver is refused as evidence_parse_error (that refusal broke every
+    // completion after the 0.4.0 upgrade, 2026-09-05).
+    assert.equal(transition.resolvedBy, 'agent');
+    // Late registration is stamped in the artifacts so the ledger never implies
+    // lifecycle history, and the stamp still lands in the payload digest.
+    assert.match(transition.artifacts.resolver_tags, /late-registration/);
     // operation_id must ride in the artifacts or two commit-less completions
     // would be indistinguishable in the ledger.
     assert.ok(transition.artifacts.operation_id, 'operation_id must be a guard artifact');
