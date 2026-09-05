@@ -16,9 +16,13 @@ write_blueprint READY dispatchToken `ff97e416-04ed-4008-a952-cb3cad1f6baf`, impl
   verification rows from the 0.4.4 checksum work corrected. `reviews/blueprint-r3-2026-09-05.md`.
 - `plan.md` written (tasks 1-4, checkbox ACs), aligned with the r3 fold.
 
+- Blueprint gate r4 (astra, run `f79ddc7ffbaf`, fixes-only): 2 findings (1 P1 + 1 P2), both residuals
+  of R3-2, both CONFIRMED and folded by the controller (C43/C44, error-shape helpers); validator ok.
+  Reviewer executed §7.1 dep resolution from stratum/ts: works. GATE CLOSED (18→13→8→2).
+  `reviews/blueprint-r4-2026-09-05.md`.
+
 ## In flight
-- Codex round 4, fixes-only (justified by the r3 P1s; review-budget rule says this is the last).
-- Next: fold r4 if needed → `stratum_step_done` write_blueprint → S1 dispatch.
+- `stratum_step_done` write_blueprint → S1 dispatch (Codex terra/high, workspace-write) per plan.md Task 1.
 
 ## Then
 - plan.md (ordered tasks from the blueprint File Plan, S1→S2→S3).
