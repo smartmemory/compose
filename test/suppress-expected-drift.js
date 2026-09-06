@@ -45,6 +45,17 @@ if (!process.env.STRATUM_GUARDS_DIR) {
 // .compose/data/dispatch-ledger.jsonl. Production paths never set this var.
 if (!process.env.NODE_TEST_CONTEXT) process.env.NODE_TEST_CONTEXT = '1';
 
+// COMP-DEPS-AUTOINSTALL (2026-09-06): `compose setup` / `init` / `update` now
+// INSTALL the plugins behind missing required deps. Dozens of tests spawn those
+// commands as subprocesses, so without this the suite would either install
+// plugins into the developer's real ~/.claude (whenever superpowers happens to
+// be absent, e.g. CI or a fresh box) or git-clone a marketplace per test into a
+// redirected HOME. Same failure shape as the STRATUM_GUARDS_DIR leak above: a
+// test run must never mutate global state it did not create. Tests that exercise
+// auto-install inject their own spawn and are unaffected by this flag.
+// Production paths never set this var.
+if (!process.env.COMPOSE_NO_PLUGIN_INSTALL) process.env.COMPOSE_NO_PLUGIN_INSTALL = '1';
+
 const _origStderrWrite = process.stderr.write.bind(process.stderr);
 process.stderr.write = (chunk, ...rest) =>
   (typeof chunk === 'string' && chunk.includes('diverges from rollup'))
