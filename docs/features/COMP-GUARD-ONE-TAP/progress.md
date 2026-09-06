@@ -74,10 +74,13 @@ Owner is not gating: automated gates pass without asking; Codex reviews each gat
 - **S3 r2 fixes landed** (both agents): lstat-based `.sig` presence (dangling symlink refused, nothing written through
   it); enrol preparation failures return the envelope; tests strengthened. **Ship gate:** all 12 feature suites,
   `env -u NODE_ENV`, **141/141**. `stratum_step_done(implement)` recorded.
+- **SHIPPED** compose `ebd98cc` (explicit paths; other sessions' files left in tree), stratum `5106933`. `stratum_audit`:
+  flow completed, 3 dispatches, trace in the commit message. Memory `project_comp_guard_one_tap` updated.
 
 ## Next
 
-1. S4 close: `stratum_audit` → commit (explicit paths) → memory `project_comp_guard_one_tap` → journal entry (T4.1 docs already drafted, T4.2 full suite, T4.3 step_done/audit/commit) (Codex `dc475dd6e024`, barred from guard-descriptors) → controller removes `writeDescriptorFile` + its test row → Codex review (S3 + r2-fix verification) → S4 → S3 → review → S4; one full suite at the
+1. Owner: run `manual-check.md` once, then `compose record-completion` (feature status is still not COMPLETE).
+2. Follow-up: measure `compose guard status` coverage cost; likely `--coverage` opt-in. (T4.1 docs already drafted, T4.2 full suite, T4.3 step_done/audit/commit) (Codex `dc475dd6e024`, barred from guard-descriptors) → controller removes `writeDescriptorFile` + its test row → Codex review (S3 + r2-fix verification) → S4 → S3 → review → S4; one full suite at the
    end (`CI=1 npm test` to a file + `$?`, `npm run test:ui`, `npm run test:tracker`).
 2. Owner runs `manual-check.md` once (`compose guard enrol` needs an interactive terminal + Touch ID).
 
