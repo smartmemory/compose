@@ -22,6 +22,20 @@
 // the de-facto convention for "no compose server here".
 if (!process.env.COMPOSE_PORT) process.env.COMPOSE_PORT = '19997';
 
+// COMP-GUARD-ONE-TAP follow-up (2026-09-06): stratum's guard registry lives in
+// ~/.stratum/guards and, until stratum 2d26986+, could not be redirected. Tests
+// that register guards against the live repo root therefore wrote fixture
+// resources (BUG-1, FEAT-A, ...) into the OWNER'S real store — 32 of them were
+// found by `stratum guard list` and ended up in a signed descriptor generation.
+// Point the whole run at a throwaway store; an older installed stratum ignores
+// the variable (and test/lifecycle-backfill.test.js keeps its isolated copy).
+if (!process.env.STRATUM_GUARDS_DIR) {
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  process.env.STRATUM_GUARDS_DIR = mkdtempSync(join(tmpdir(), 'compose-test-guards-'));
+}
+
 // COMP-TRIAGE-6-2: mark the whole test run as a hermetic test context. Modules
 // that would otherwise fall back to a shared, process-global path when no
 // explicit project root is threaded (the dispatch-ledger connectors →

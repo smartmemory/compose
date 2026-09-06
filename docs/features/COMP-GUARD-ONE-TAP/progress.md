@@ -85,11 +85,22 @@ Owner is not gating: automated gates pass without asking; Codex reviews each gat
   real signature in a throwaway workspace: ONE Touch ID, `signed by ruze (SHA256:oNNK2K…)`, verified, 3.2 s; no cached
   credential after. Adopted generation committed `d667d34`, flat pair removed. `compose record-completion` →
   PLANNED → COMPLETE (`COMP-GUARD-ONE-TAP:ebd98cc…`). Checklist rows 5–7 not run (cancel/SSH/real backfill).
+- **Follow-up started (owner: "now"):** stratum `guard list [--prefix]` action (Codex `3d3ba1f20379`, terra/high) ∥
+  compose `enumerateRegisteredResources` via `guardList` with probe fallback (Sonnet `compose-guard-list`). Contract
+  locked in both briefs: `{status:'ok', resources:[{resource_id, checksum, current_state, terminal, graph_version}], skipped}`.
+- **guard list landed** (stratum `2d26986`, compose `9f4d289`): enumeration 76 s → 7 s; `compose guard sign` 17.7 s
+  incl. one Touch ID. **Finding:** the listing returned **32 legacy resources the probe never saw** — all test
+  fixtures (`BUG-1`, `BUG-A`, `FEAT-A`, `TS-BUILD-*`, mostly 2026-06-07) registered under THIS repo's workspace hash
+  into the real `~/.stratum/guards` because stratum had no store override and older tests used the repo root.
+  They have no feature dir (invisible to the probe) and now sit in signed generation `012728e…` (NOT committed —
+  hold until the orphans are cleaned and a clean generation is re-signed). Fixed: stratum honours
+  `STRATUM_GUARDS_DIR` (`48d1e26`); compose preload points the whole run at a temp store — proven: 65 guard-registering
+  tests ran, real store stayed at 37 entries.
 
 ## Next
 
 1. DONE — feature COMPLETE.
-2. Follow-up: stratum `guard list --prefix` so `sign`/gate enumeration stops probing every feature dir (76 s here). (T4.1 docs already drafted, T4.2 full suite, T4.3 step_done/audit/commit) (Codex `dc475dd6e024`, barred from guard-descriptors) → controller removes `writeDescriptorFile` + its test row → Codex review (S3 + r2-fix verification) → S4 → S3 → review → S4; one full suite at the
+2. Owner decision: delete the 32 orphaned test registrations from `~/.stratum/guards` (list them with `stratum guard list --prefix compose:85154ecf6cdb:`), then `compose guard sign` (one tap), `compose guard status --prune`, commit the generation. (T4.1 docs already drafted, T4.2 full suite, T4.3 step_done/audit/commit) (Codex `dc475dd6e024`, barred from guard-descriptors) → controller removes `writeDescriptorFile` + its test row → Codex review (S3 + r2-fix verification) → S4 → S3 → review → S4; one full suite at the
    end (`CI=1 npm test` to a file + `$?`, `npm run test:ui`, `npm run test:tracker`).
 2. Owner runs `manual-check.md` once (`compose guard enrol` needs an interactive terminal + Touch ID).
 
