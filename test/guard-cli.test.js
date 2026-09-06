@@ -108,6 +108,7 @@ test('signingStatusLines reports all signing state, including no generation and 
     currentGeneration: async () => null,
     enumerateRegisteredResources: async () => [],
     execFile(file, args, options, callback) { callback(null, '', ''); return { on() {} }; },
+    coverage: true,
   });
   assert.deepEqual(result.lines, [
     'signing:',
@@ -124,6 +125,20 @@ test('signingStatusLines reports all signing state, including no generation and 
     '  cached admin credential: unknown',
     '  detail: no signing custody on this platform',
   ]);
+});
+
+test('signingStatusLines skips the coverage probe unless asked (it spawns stratum per feature dir)', { skip: !cli }, async (t) => {
+  const root = workspace(t);
+  _testOnly_setCustodyBackend('none');
+  let enumerated = 0;
+  const result = await cli.signingStatusLines(root, {
+    custodyStatus: async () => ({ backend: 'none', installed: false, rule: 'absent', presence: 'unknown', cachedCredential: 'unknown', publicKeyLine: null, detail: [] }),
+    currentGeneration: async () => null,
+    enumerateRegisteredResources: async () => { enumerated++; return []; },
+    execFile(file, args, options, callback) { callback(null, '', ''); return { on() {} }; },
+  });
+  assert.equal(enumerated, 0);
+  assert.ok(result.lines.includes('  coverage: skipped (pass --coverage)'), result.lines.join('\n'));
 });
 
 test('status prune takes the same descriptor lock before deleting generations', { skip: !cli }, async (t) => {

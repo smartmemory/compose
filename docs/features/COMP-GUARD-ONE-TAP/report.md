@@ -39,7 +39,10 @@ Stratum: `ts/contracts/guard-signers.allowed` header note (stratum `5106933`).
 
 ## Follow-ups
 
-- `compose guard status` coverage enumerates every feature dir × 4 modes through the stratum CLI (blueprint §4.2);
-  on this repo that is hundreds of spawns. Measure at the owner's manual check; likely a `--coverage` opt-in or a
-  registry query.
+- Measured at the owner's manual check (2026-09-06): the coverage probe took **76 s and ~370 stratum spawns** on this
+  repo and logged 363 `guard_not_found` lines. Fixed the same day: coverage is `--coverage` opt-in (status now 0.17 s)
+  and the client no longer logs not-found. **Still open:** `compose guard sign` and the gate's sign-on-demand path
+  still enumerate by probing every feature dir (76 s before the Touch ID sheet here). Stratum stores registries at
+  `~/.stratum/guards/<hash>/registry.json`; the clean fix is a stratum `guard list --prefix <resource-id-prefix>`
+  action so compose discovers registered resources without probing (and without reading stratum's store directly).
 - Owner: run `manual-check.md` once, then `compose record-completion` for this feature.

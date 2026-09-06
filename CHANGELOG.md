@@ -18,7 +18,9 @@ workspace-wide descriptor lock is held through the apply. Refusals carry `error.
 body gains top-level `hint`, and the MCP lifecycle tools now surface `reasons` and `hint` instead of the
 bare `backfill refused`. `compose guard sign`, `compose guard descriptors` (generate + sign + verify,
 one-line verdict; unsigned-candidate manual path when there is no custody) and an extended
-`compose guard status` (custody, enrolment, freshness, committed, `--prune`). Custody never passes a
+`compose guard status` (custody, enrolment, freshness, committed, `--prune`; coverage is `--coverage` opt-in
+because it probes every feature dir through the stratum CLI). The stratum client no longer logs `guard_not_found`
+as an error: it is the normal answer for every never-registered feature. Custody never passes a
 password, never sets an askpass, and calls `sudo -k` so an approval leaves no cached credential.
 Design record: the brief's ssh-agent confirm mode has no askpass on macOS, and every keychain design
 hits the entitlement wall for unsigned CLIs — see `docs/features/COMP-GUARD-ONE-TAP/design.md`.

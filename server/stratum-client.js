@@ -233,12 +233,16 @@ async function runGuard(action, kwargs, timeoutMs = MUTATION_TIMEOUT_MS, extraEn
     return { error: { code: 'SPAWN', message: result.stderr, detail: '' } };
   }
   if (result.code !== 0) {
-    console.error('[stratum-client] guard error stderr:', result.stderr);
-    try {
-      return JSON.parse(result.stdout);   // canonical { status:"error", ... }
-    } catch {
-      return { error: { code: 'UNKNOWN', message: 'Stratum guard failed', detail: '' } };
+    let canonical = null;
+    try { canonical = JSON.parse(result.stdout); } catch { /* not canonical */ }
+    // guard_not_found is a normal answer to a policy/history query (every
+    // never-registered feature returns it); logging it as an error spammed
+    // 363 lines from one `compose guard status` on 2026-09-06.
+    if (canonical?.error_type !== 'guard_not_found') {
+      console.error('[stratum-client] guard error stderr:', result.stderr);
     }
+    if (canonical) return canonical;   // canonical { status:"error", ... }
+    return { error: { code: 'UNKNOWN', message: 'Stratum guard failed', detail: '' } };
   }
   try {
     return JSON.parse(result.stdout);
