@@ -3,7 +3,8 @@
 **Related documents:** [design-foh-7.md](design-foh-7.md) · [blueprint-foh-7.md](blueprint-foh-7.md) ·
 [foh-7-progress.md](foh-7-progress.md)
 
-**Status: SHIPPED** 2026-09-06. Full suite green (6358 node + 620 UI + 100 tracker, 0 failures).
+**Status: SHIPPED** 2026-09-06 @ce1b740; **LIVE-FIRE PASSED** the same day, evidence in
+[livefire-foh7/RESULTS.md](livefire-foh7/RESULTS.md). Full suite green.
 
 ## Summary
 
@@ -98,8 +99,13 @@ nothing had ever entered them from a recoverable state.
 
 Recorded in [blueprint-foh-7.md](blueprint-foh-7.md) and unchanged by implementation:
 
-- **The live cross-product turn and the mixed-provider portfolio are not yet exercised.** They need the
-  SmartMemory setup the owner authorized. Everything else is proven locally.
+- ~~The live cross-product turn and the mixed-provider portfolio are not yet exercised.~~ **Both passed
+  live 2026-09-06** ([livefire-foh7/](livefire-foh7/RESULTS.md)). The first real turn found two defects
+  the green suite could not reach: `has('recall')` against a provider declaring `'RECALL'` (every
+  member listed, never searched — the stubs had replaced `has()` outright), and a hardcoded NDA `v1`
+  after upstream moved to `v2` (every fresh colleague identity failed its first turn). Both fixed and
+  pinned by tests that are red without the fix. A fifth review round would not have found either;
+  the live turn found both in under a minute.
 - **The local floor has no `recall` capability at all**, so a portfolio of local-floor products is
   entirely listed-not-searched. Honest, named per member, and a real constraint on what the feature can
   demonstrate before SmartMemory is standing.

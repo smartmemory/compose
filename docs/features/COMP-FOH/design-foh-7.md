@@ -424,11 +424,11 @@ narrow the feature — it is a reason the blueprint cannot treat member roots as
 - [ ] A member that is unreachable / unauthorized / misconfigured / capability-short yields a **named**
       omission and does not fail the turn (pinned by test, one per reason class)
 - [ ] All-members-failed returns an error, never an empty result set (pinned by test)
-- [ ] Mixed-provider portfolio works: SmartMemory declaring root + local-floor member in one turn,
+- [x] Mixed-provider portfolio works: SmartMemory declaring root + local-floor member in one turn,
       with the local member's intelligence sections omitted **by name** (D-FOH-7-3 table)
 - [ ] A **local declaring root still funnels** even with SmartMemory members declared (pinned by test —
       the portfolio must not rescue it)
-- [ ] `scope: 'portfolio'` reaches the composer, the turn `text` is used as the recall query, and
+- [x] `scope: 'portfolio'` reaches the composer, the turn `text` is used as the recall query, and
       **one real colleague turn returns cross-product findings** — not a dark API (D-FOH-7-8)
 - [ ] Absent `scope` behaves byte-identically to today's turn (pinned by test)
 - [ ] `scope: 'portfolio'` + a `focusId` is **refused** in v1 (pinned by test)
@@ -448,8 +448,9 @@ narrow the feature — it is a reason the blueprint cannot treat member roots as
 - [ ] `scope: 'portfolio'` with no `portfolio` declaration is `misconfigured`, never a silent
       downgrade to a project-scoped answer (pinned by test)
 - [ ] No writes on any portfolio path (pinned by test)
-- [ ] Live-fire on a genuinely populated second product — **unblocked 2026-09-06** (owner gate: migrate
+- [x] Live-fire on a genuinely populated second product — **unblocked 2026-09-06** (owner gate: migrate
       forge-top's ideabox as the second product, and stand up a SmartMemory-backed declaring root)
+      — **PASSED 2026-09-06**, evidence in [livefire-foh7/](livefire-foh7/RESULTS.md); two defects found and fixed
 
 ## Owner gate — RESOLVED 2026-09-06
 

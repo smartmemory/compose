@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### [COMP-FOH FOH-7] Live-fire passed; two defects the suite could not reach
+
+The first real portfolio turn against two SmartMemory tenants plus a local-floor member
+([livefire-foh7/RESULTS.md](docs/features/COMP-FOH/livefire-foh7/RESULTS.md)) passed both
+outstanding acceptance criteria and found two defects on the way:
+
+- `lib/fluid/portfolio.js` — checked `provider.has('recall')` against providers that declare
+  `SEMANTIC_CAP.RECALL` (`'RECALL'`). **Every member, SmartMemory included, was listed and never
+  searched.** The suite was green because its stubs replaced `has()` with `() => true`. Fixed to the
+  declared constant; the tests now grant recall by declaring it in `capabilities()` and a new test
+  pins that a declaring member is searched.
+- `lib/maya-identity.js` — NDA accept hardcoded `v1`; upstream is on `v2`, so every freshly provisioned
+  colleague identity failed its first turn with `NDA accept failed (HTTP 409)`. Now accepts the
+  `current_version` a `409 version_mismatch` names, so the next bump does not repeat this. The stub
+  models the mismatch (`__ndaVersion`) and a new routes test drives v1 → 409 → v2.
+
 ### [COMP-FOH FOH-7] Portfolio: one colleague turn across several products
 
 A colleague turn can now span every product declared in `fluid.portfolio`, answering with findings

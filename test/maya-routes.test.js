@@ -255,6 +255,27 @@ describe('maya routes', () => {
 
   // ── /message ─────────────────────────────────────────────────────────────
 
+  test('message: NDA accept follows the version the server names (upstream bumped v1 → v2)', async () => {
+    // FOH-7 live-fire, 2026-09-06: upstream moved the beta NDA to v2 and every
+    // freshly provisioned colleague identity failed its first turn with
+    // "NDA accept failed (HTTP 409)". The client must accept the version the
+    // 409 names, not the one it was written against.
+    const maya = await makeMayaServer();
+    const sm = await makeSmStub();
+    sm.server.__ndaVersion = 'v2';
+    const root = wiredRoot({ mayaBase: maya.baseUrl, smBase: sm.baseUrl });
+    const srv = await startApp({ root, deps: { composeContext: emptyContext } });
+    track(srv);
+
+    const r1 = await postMessage(srv.baseUrl, { text: 'hello maya' });
+    assert.equal(r1.status, 200, JSON.stringify(r1.body));
+    assert.equal(r1.body.ok, true);
+
+    const ndas = sm.seen.filter((s) => s.path === '/memory/beta/nda/accept');
+    assert.deepEqual(ndas.map((n) => n.body.version), ['v1', 'v2']);
+    assert.equal(loadIdentity(root).ndaAccepted, true);
+  });
+
   test('message: first use provisions (+NDA), persists identity, chats, reuses on second turn', async () => {
     const maya = await makeMayaServer();
     const sm = await makeSmStub();

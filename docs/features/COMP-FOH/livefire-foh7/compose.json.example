@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "paths": { "docs": "docs", "features": "docs/features", "journal": "docs/journal", "context": "docs/context", "ideabox": "docs/product/ideabox.md" },
+  "maya": { "baseUrl": "http://localhost:9005", "auth": { "mode": "provision" } },
+  "smartmemory": { "enabled": true, "baseUrl": "http://localhost:9001", "apiKeyEnv": "LF7_SM_KEY_A", "timeoutMs": 15000 },
+  "fluid": { "provider": "smartmemory", "smartmemory": { "workspaceId": "<team-a>" }, "portfolio": { "members": [ { "id": "harbor", "root": "." }, { "id": "lantern", "root": "../product-b" }, { "id": "forge", "root": "/Users/ruze/reg/my/forge" } ] } }
+}
