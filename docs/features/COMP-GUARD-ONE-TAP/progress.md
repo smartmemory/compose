@@ -81,10 +81,14 @@ Owner is not gating: automated gates pass without asking; Codex reviews each gat
   `1d25be6`. `status` hit the flagged coverage cost: 76 s, 363 not-found log lines. Fixed: `--coverage` opt-in +
   not-found no longer logged (status 0.17 s). Open: `sign`/gate enumeration still probes every dir → stratum
   `guard list` follow-up (report.md).
+- **COMPLETE (2026-09-06):** owner ran `sign` (fresh: legacy pair adopted, 0 descriptors, no sheet by design); I ran a
+  real signature in a throwaway workspace: ONE Touch ID, `signed by ruze (SHA256:oNNK2K…)`, verified, 3.2 s; no cached
+  credential after. Adopted generation committed `d667d34`, flat pair removed. `compose record-completion` →
+  PLANNED → COMPLETE (`COMP-GUARD-ONE-TAP:ebd98cc…`). Checklist rows 5–7 not run (cancel/SSH/real backfill).
 
 ## Next
 
-1. Owner: run `manual-check.md` once, then `compose record-completion` (feature status is still not COMPLETE).
+1. DONE — feature COMPLETE.
 2. Follow-up: stratum `guard list --prefix` so `sign`/gate enumeration stops probing every feature dir (76 s here). (T4.1 docs already drafted, T4.2 full suite, T4.3 step_done/audit/commit) (Codex `dc475dd6e024`, barred from guard-descriptors) → controller removes `writeDescriptorFile` + its test row → Codex review (S3 + r2-fix verification) → S4 → S3 → review → S4; one full suite at the
    end (`CI=1 npm test` to a file + `$?`, `npm run test:ui`, `npm run test:tracker`).
 2. Owner runs `manual-check.md` once (`compose guard enrol` needs an interactive terminal + Touch ID).
