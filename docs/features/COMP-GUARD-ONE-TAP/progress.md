@@ -76,11 +76,16 @@ Owner is not gating: automated gates pass without asking; Codex reviews each gat
   `env -u NODE_ENV`, **141/141**. `stratum_step_done(implement)` recorded.
 - **SHIPPED** compose `ebd98cc` (explicit paths; other sessions' files left in tree), stratum `5106933`. `stratum_audit`:
   flow completed, 3 dispatches, trace in the commit message. Memory `project_comp_guard_one_tap` updated.
+- **Owner manual check, items 1–2 (2026-09-06 09:46):** `enrol` → password once (pam_tid not yet installed on the
+  first run, expected), then Touch ID; `done`, fingerprint `SHA256:oNNK2K…`; trust root line committed in stratum
+  `1d25be6`. `status` hit the flagged coverage cost: 76 s, 363 not-found log lines. Fixed: `--coverage` opt-in +
+  not-found no longer logged (status 0.17 s). Open: `sign`/gate enumeration still probes every dir → stratum
+  `guard list` follow-up (report.md).
 
 ## Next
 
 1. Owner: run `manual-check.md` once, then `compose record-completion` (feature status is still not COMPLETE).
-2. Follow-up: measure `compose guard status` coverage cost; likely `--coverage` opt-in. (T4.1 docs already drafted, T4.2 full suite, T4.3 step_done/audit/commit) (Codex `dc475dd6e024`, barred from guard-descriptors) → controller removes `writeDescriptorFile` + its test row → Codex review (S3 + r2-fix verification) → S4 → S3 → review → S4; one full suite at the
+2. Follow-up: stratum `guard list --prefix` so `sign`/gate enumeration stops probing every feature dir (76 s here). (T4.1 docs already drafted, T4.2 full suite, T4.3 step_done/audit/commit) (Codex `dc475dd6e024`, barred from guard-descriptors) → controller removes `writeDescriptorFile` + its test row → Codex review (S3 + r2-fix verification) → S4 → S3 → review → S4; one full suite at the
    end (`CI=1 npm test` to a file + `$?`, `npm run test:ui`, `npm run test:tracker`).
 2. Owner runs `manual-check.md` once (`compose guard enrol` needs an interactive terminal + Touch ID).
 

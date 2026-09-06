@@ -2360,12 +2360,12 @@ if (cmd === 'guard') {
       for (const line of pruned.lines) console.log(line)
       if (pruned.status === 'refused') process.exit(1)
     }
-    const signing = await signingStatusLines(signingWorkspaceRoot)
+    const signing = await signingStatusLines(signingWorkspaceRoot, { coverage: args.includes('--coverage') })
     for (const line of signing.lines) console.log(line)
     process.exit(0)
   }
 
-  console.error(`Unknown guard subcommand: "${sub}". Use: install | uninstall | status [--prune] | init | verify [--fix] | enrol | sign | descriptors`)
+  console.error(`Unknown guard subcommand: "${sub}". Use: install | uninstall | status [--prune] [--coverage] | init | verify [--fix] | enrol | sign | descriptors`)
   process.exit(1)
 }
 
