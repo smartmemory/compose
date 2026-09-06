@@ -265,6 +265,11 @@ export async function makeSmStub({ teamId = 'team_colleague' } = {}) {
       if (req.url === '/memory/beta/nda/accept' && req.method === 'POST') {
         if (!req.headers.authorization) return json(401, { detail: 'unauthorized' });
         if (server.__ndaFail) return json(500, { detail: 'nda failed' });
+        // __ndaVersion models the real server (beta.py): any other version is a
+        // 409 `version_mismatch` that names the version in force.
+        if (server.__ndaVersion && parsed?.version !== server.__ndaVersion) {
+          return json(409, { detail: { code: 'version_mismatch', current_version: server.__ndaVersion } });
+        }
         return json(200, { accepted: true, version: parsed?.version ?? null });
       }
 

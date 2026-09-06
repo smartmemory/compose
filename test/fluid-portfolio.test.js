@@ -14,7 +14,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { parsePortfolioConfig } from '../lib/fluid/factory.js';
-import { FluidConfigError } from '../lib/fluid/provider.js';
+import { FluidConfigError, SEMANTIC_CAP } from '../lib/fluid/provider.js';
+
+/**
+ * Grant a member recall the way a real provider has it: by DECLARING it in
+ * `capabilities()`, leaving `has()` as the genuine Set lookup. Replacing
+ * `has()` with `() => true` is what let `has('recall')` (wrong case) ship —
+ * the FOH-7 live-fire found every SmartMemory member listed-not-searched.
+ */
+function grantRecall(provider) {
+  const declared = new Set([...provider.capabilities(), SEMANTIC_CAP.RECALL]);
+  provider.capabilities = () => declared;
+}
 
 let base;
 beforeEach(() => { base = mkdtempSync(join(tmpdir(), 'portfolio-')); });
@@ -165,7 +176,7 @@ describe('FOH-7 S1 — the aggregator fans out and names what it could not reach
     // granting it the member would take the listed-not-searched path and never
     // exercise the failure being tested.
     const beta = portfolio.sources.find((s) => s.id === 'beta');
-    beta.provider.has = () => true;
+    grantRecall(beta.provider);
     beta.provider.recall = async () => { throw new Error('connect ECONNREFUSED'); };
 
     const res = await recallAcrossPortfolio(portfolio, 'idea');
@@ -184,7 +195,7 @@ describe('FOH-7 S1 — the aggregator fans out and names what it could not reach
     withPortfolio(a, [{ id: 'alpha', root: '.' }, { id: 'beta', root: '../beta' }]);
     const portfolio = await openPortfolio(a);
     for (const s of portfolio.sources) {
-      s.provider.has = () => true;
+      grantRecall(s.provider);
       s.provider.recall = async () => { throw new Error('down'); };
     }
 
@@ -201,7 +212,7 @@ describe('FOH-7 S1 — the aggregator fans out and names what it could not reach
     withPortfolio(a, [{ id: 'alpha', root: '.' }, { id: 'beta', root: '../beta' }]);
     const portfolio = await openPortfolio(a);
     const slow = portfolio.sources.find((s) => s.id === 'beta');
-    slow.provider.has = () => true;
+    grantRecall(slow.provider);
     slow.provider.recall = () => new Promise((r) => setTimeout(r, 10_000));
 
     const started = Date.now();
@@ -213,6 +224,28 @@ describe('FOH-7 S1 — the aggregator fans out and names what it could not reach
     );
   });
 
+  // The mirror of the listed-not-searched case: a member that DECLARES recall
+  // (as the SmartMemory provider does) must be searched. Pinned because the
+  // live-fire found this branch dead — the check compared against a bare
+  // string that no provider declares.
+  it('searches a member that declares SEMANTIC_CAP.RECALL, and does not list it', async () => {
+    const a = project('alpha'); const b = project('beta');
+    await seed(a, ['Alpha idea']); await seed(b, ['Beta idea']);
+    withPortfolio(a, [{ id: 'alpha', root: '.' }, { id: 'beta', root: '../beta' }]);
+    const portfolio = await openPortfolio(a);
+    const beta = portfolio.sources.find((s) => s.id === 'beta');
+    grantRecall(beta.provider);
+    const queries = [];
+    beta.provider.recall = async (q) => { queries.push(q); return [{ handle: 'IDEA-1', score: 0.9 }]; };
+
+    const res = await recallAcrossPortfolio(portfolio, 'gate retries', {});
+    const betaOut = res.sources.find((s) => s.id === 'beta');
+    assert.deepEqual(queries, ['gate retries'], 'the declared-recall member ran the query');
+    assert.ok(betaOut && !betaOut.listedNotSearched, 'and its hits are a search result, not a listing');
+    assert.ok(!res.omissions.some((o) => /beta/.test(o) && /cannot search/i.test(o)),
+      `no capability omission for a member that can search: ${JSON.stringify(res.omissions)}`);
+  });
+
   // A member on the local floor cannot search. It must contribute what it CAN
   // (its records, listed) and say so — never a synthesized query result.
   it('lists rather than searches a member without recall, and says so by name', async () => {
@@ -221,7 +254,7 @@ describe('FOH-7 S1 — the aggregator fans out and names what it could not reach
     withPortfolio(a, [{ id: 'alpha', root: '.' }, { id: 'beta', root: '../beta' }]);
     const portfolio = await openPortfolio(a);
     const beta = portfolio.sources.find((s) => s.id === 'beta');
-    beta.provider.has = (cap) => cap !== 'recall';
+    // beta stays on the floor: no SEMANTIC_CAP.RECALL declared, has() is real.
 
     const res = await recallAcrossPortfolio(portfolio, 'nothing will match this query', {});
     const betaOut = res.sources.find((s) => s.id === 'beta');
