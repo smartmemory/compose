@@ -44,7 +44,9 @@ import {
   MayaWorkspaceCollisionError,
 } from '../lib/maya-identity.js';
 import { ideaboxContext } from '../lib/fluid/ideabox-ops.js';
-import { composeColleagueContext } from '../lib/colleague/context.js';
+import { composeColleagueContext, composePortfolioContext, toMayaContext } from '../lib/colleague/context.js';
+import { openPortfolio, recallAcrossPortfolio, assertMemberWorkspacesDistinct } from '../lib/fluid/portfolio.js';
+import { parsePortfolioConfig } from '../lib/fluid/factory.js';
 import { writebackReply } from '../lib/colleague/writeback.js';
 
 /**
@@ -67,9 +69,49 @@ const CAPABILITIES = Object.freeze({
 // `author:'maya'` plus the embedded msg marker. `ui:ideabox` is the cockpit
 // door these contexts genuinely come through; a colleague-specific origin
 // joins the contract enum only when the panel gains a record-creating op.
-async function defaultComposeContext(root, { focusId }) {
+async function defaultComposeContext(root, { focusId, scope, text }) {
+  if (scope === 'portfolio') {
+    // The declaring root's ideabox context is NOT built here. A portfolio turn
+    // reads through the members' own providers, so constructing this first made
+    // a failure in the declaring root's provider abort the turn before a single
+    // member was asked — the one product being broken silencing the other N,
+    // which is the whole failure mode this feature exists to avoid.
+    // The portfolio path is a separate composer, not a widened one: the
+    // project-scoped turn must stay byte-identical so a portfolio bug can never
+    // degrade the ordinary one.
+    const portfolio = await openPortfolio(root);
+    return composePortfolioContext({ text }, { portfolio, recallAcross: recallAcrossPortfolio });
+  }
   const ctx = await ideaboxContext(root, { origin: 'ui:ideabox' });
   return composeColleagueContext(ctx, { focusId });
+}
+
+/**
+ * Is a portfolio declared here at all, and is it valid?
+ *
+ * Read through the AUTHORITATIVE validating parser, never the lenient
+ * `maya-config` reader: a portfolio with a typo in it must refuse, not come back
+ * as "none declared" and quietly answer for one product.
+ */
+function portfolioDeclared(root) {
+  try {
+    return parsePortfolioConfig(root) !== null;
+  } catch {
+    // Invalid is not absent. Let the caller name the real reason.
+    return false;
+  }
+}
+
+/** The exact reason, so the funnel points at the setting that is actually wrong. */
+function portfolioMisconfigReason(root) {
+  try {
+    if (parsePortfolioConfig(root) === null) {
+      return 'this project declares no fluid.portfolio, so a portfolio turn has no members to ask';
+    }
+  } catch (e) {
+    return `fluid.portfolio is declared but invalid — ${shortReason(e)}`;
+  }
+  return 'fluid.portfolio is declared but unusable';
 }
 
 /** The real write-back (S4): reconcile-then-append through the shared ops
@@ -168,6 +210,54 @@ export function attachMayaRoutes(app, {
     }
     const focusId = req.body?.focusId ? String(req.body.focusId) : null;
 
+    // A CLOSED enum. Without this a typo ('portoflio') falls through to a
+    // project-scoped answer that looks exactly like a correct one — the silent
+    // downgrade this feature exists to refuse, arriving through the door left
+    // open by not checking.
+    // Validated as the RAW value. Coercing first made `null` look like "absent"
+    // (silently selecting project scope) and turned `["portfolio"]` into the
+    // string "portfolio" — both of which are the silent widening/downgrade this
+    // enum exists to refuse, arriving through the coercion rather than the check.
+    const rawScope = req.body?.scope;
+    const turnScope = rawScope === undefined ? undefined : rawScope;
+    if (turnScope !== undefined && turnScope !== 'project' && turnScope !== 'portfolio') {
+      return {
+        errorBody: {
+          ok: false,
+          error: {
+            kind: 'invalid',
+            message: `unknown scope ${JSON.stringify(turnScope)} — expected "project" or "portfolio"`,
+          },
+        },
+      };
+    }
+    if (turnScope === 'portfolio' && focusId) {
+      return {
+        errorBody: {
+          ok: false,
+          error: {
+            kind: 'invalid',
+            message: 'a portfolio turn spans products and cannot also be focused on one idea',
+          },
+        },
+      };
+    }
+
+    if (turnScope === 'portfolio' && !portfolioDeclared(root)) {
+      // Named, never a silent downgrade. Without its own branch this surfaces as
+      // the generic `context` funnel, which tells the user nothing about
+      // membership — and a portfolio question answered for one product looks
+      // exactly like a correct answer.
+      return {
+        errorBody: {
+          ok: false,
+          error: {
+            kind: 'misconfigured',
+            message: portfolioMisconfigReason(root),
+          },
+        },
+      };
+    }
     try {
       if (!hasSmartmemoryFluidProvider(root)) {
         return { errorBody: { ok: false, error: { kind: 'connect-smartmemory' } } };
@@ -204,11 +294,25 @@ export function attachMayaRoutes(app, {
         await ensureIdentity(root, { smBaseUrl: getSmartmemoryConfig(root)?.baseUrl, mode });
       }
 
+      // BEFORE composition, not after. Composition is what fans out to the
+      // members, so checking afterwards let a member configured at Maya's own
+      // workspace be READ and only then refused — the guard reported a refusal
+      // for an access that had already happened, which is not a guard.
+      if (turnScope === 'portfolio') {
+        try {
+          assertMemberWorkspacesDistinct(root, workspaceClaimOf(identity));
+        } catch (e) {
+          return {
+            errorBody: { ok: false, error: { kind: 'workspace-collision', message: e.message } },
+          };
+        }
+      }
+
       // Context composition is load-bearing: a failure here is a funnel, never
       // a silent fall-through to plain chat (COLLEAGUE-ALL-IN).
       let context;
       try {
-        context = await composeContext(root, { focusId });
+        context = await composeContext(root, { focusId, scope: turnScope, text });
       } catch (e) {
         return {
           errorBody: {
@@ -315,7 +419,7 @@ export function attachMayaRoutes(app, {
 
     if (req.query?.stream !== '1') {
       try {
-        const reply = await client.chat({ message: text, channelContext: context.blocks });
+        const reply = await client.chat({ message: text, channelContext: toMayaContext(context.blocks) });
 
         // Write-back (S4): the chat result is AUTHORITATIVE — her reply renders
         // whatever happens here, and a write-back failure is an outcome field,
@@ -332,7 +436,7 @@ export function attachMayaRoutes(app, {
           memory_available: reply.memory_available ?? null,
           writeback,
           context: {
-            sent: context.blocks.map((b) => b.author),
+            sent: [...new Set(context.blocks.map((b) => b.author))],
             omissions: context.omissions,
             // The composed blocks themselves — the panel's findings accordion
             // renders these (design §4); authors carry the provenance labels.
@@ -382,7 +486,7 @@ export function attachMayaRoutes(app, {
     try {
       const reply = await client.chatStream({
         message: text,
-        channelContext: context.blocks,
+        channelContext: toMayaContext(context.blocks),
         onToken: (token) => {
           openStream();
           writeEvent('token', { text: token });
@@ -395,7 +499,7 @@ export function attachMayaRoutes(app, {
         message_id: reply.message_id,
         memory_available: reply.memory_available ?? null,
         context: {
-          sent: context.blocks.map((b) => b.author),
+          sent: [...new Set(context.blocks.map((b) => b.author))],
           omissions: context.omissions,
           blocks: context.blocks,
         },

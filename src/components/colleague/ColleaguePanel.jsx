@@ -122,10 +122,30 @@ function CapabilityStrip({ capabilities }) {
  *  blocks — conviction, contradictions, challenge — collapsible under the
  *  header, with provenance authors. Record/discussion blocks are context, not
  *  findings, and stay out of it. */
-function FindingsAccordion({ blocks }) {
+export function FindingsAccordion({ blocks }) {
   const findings = (blocks ?? []).filter((b) =>
-    ['compose:conviction', 'compose:contradiction', 'compose:challenge'].includes(b.author));
+    ['compose:conviction', 'compose:contradiction', 'compose:challenge', 'compose:portfolio']
+      .includes(b.author));
   if (!findings.length) return null;
+
+  // Grouped by source, because a portfolio turn returns findings from several
+  // products and their relevance scores are NOT comparable across products
+  // (`RecallHit.score` is the provider's own, passed through untouched). A single
+  // ranked list would imply a calibration that does not exist. A project-scoped
+  // turn has no source on its blocks and falls into one unlabelled group, which
+  // renders exactly as it does today.
+  const groups = [];
+  const byKey = new Map();
+  for (const b of findings) {
+    const key = b.source ? `${b.source.id}\u0000${b.source.root}` : '';
+    if (!byKey.has(key)) {
+      const group = { key, source: b.source ?? null, items: [] };
+      byKey.set(key, group);
+      groups.push(group);
+    }
+    byKey.get(key).items.push(b);
+  }
+
   return (
     <details
       className="px-3 py-1.5 text-[11px]"
@@ -136,12 +156,29 @@ function FindingsAccordion({ blocks }) {
         findings ({findings.length})
       </summary>
       <div className="flex flex-col gap-1.5 mt-1.5">
-        {findings.map((b) => (
-          <div key={b.author}>
-            <div className="text-[9px] uppercase tracking-wider" style={{ color: 'hsl(var(--accent))' }}>
-              {b.author.replace(/^compose:/, '')}
-            </div>
-            <div className="whitespace-pre-wrap" style={{ color: 'hsl(var(--foreground))' }}>{b.text}</div>
+        {groups.map((group) => (
+          <div key={group.key || 'this-project'} data-testid="findings-group">
+            {group.source && (
+              <div
+                className="text-[9px] uppercase tracking-wider"
+                style={{ color: 'hsl(var(--muted-foreground))' }}
+                data-testid="findings-source"
+                title={group.source.root}
+              >
+                {group.source.id}
+              </div>
+            )}
+            {group.items.map((b, i) => (
+              // Keyed on source + author + position, never `b.author` alone:
+              // N products all emit `compose:conviction`, and a bare author key
+              // collides across them.
+              <div key={`${group.key}\u0000${b.author}\u0000${i}`}>
+                <div className="text-[9px] uppercase tracking-wider" style={{ color: 'hsl(var(--accent))' }}>
+                  {b.author.replace(/^compose:/, '')}
+                </div>
+                <div className="whitespace-pre-wrap" style={{ color: 'hsl(var(--foreground))' }}>{b.text}</div>
+              </div>
+            ))}
           </div>
         ))}
       </div>
@@ -151,14 +188,16 @@ function FindingsAccordion({ blocks }) {
 
 /** Per-reply context note: what was sent, and every named omission — a
  *  truncated turn must never look like a clean one. */
-function ContextNote({ context }) {
+export function ContextNote({ context }) {
   if (!context) return null;
-  const sent = (context.sent ?? []).map((a) => a.replace(/^compose:/, '')).join(' · ');
+  // Deduped: N sources emitting the same author would otherwise render
+  // "conviction · conviction · conviction".
+  const sent = [...new Set((context.sent ?? []).map((a) => a.replace(/^compose:/, '')))].join(' · ');
   return (
     <div className="text-[10px] mt-0.5" style={{ color: 'hsl(var(--muted-foreground))' }}>
       {sent && <span>context sent: {sent}</span>}
-      {(context.omissions ?? []).map((o) => (
-        <span key={o} className="ml-1.5" style={{ color: 'hsl(var(--destructive) / 0.9)' }}>— {o}</span>
+      {(context.omissions ?? []).map((o, i) => (
+        <span key={`${i}\u0000${o}`} className="ml-1.5" style={{ color: 'hsl(var(--destructive) / 0.9)' }}>— {o}</span>
       ))}
     </div>
   );
@@ -239,13 +278,28 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
 
   // undefined = follow the cockpit; null = whole ideabox; string = pinned handle
   const [focusOverride, setFocusOverride] = useState(undefined);
-  const focusId = focusOverride === undefined ? (selectedIdeaId ?? null) : focusOverride;
+  // 'project' (or undefined) asks this product; 'portfolio' asks every declared
+  // member. A portfolio turn spans products, so it CANNOT be focused on one
+  // idea and cannot write back — the backend refuses both, and the panel must
+  // not offer what the backend will refuse.
+  const [scope, setScope] = useState('project');
+  const isPortfolio = scope === 'portfolio';
+  const focusId = isPortfolio
+    ? null
+    : (focusOverride === undefined ? (selectedIdeaId ?? null) : focusOverride);
 
   const [messages, setMessages] = useState([]);
   const [pending, setPending] = useState(false);
   const [streamReplyStarted, setStreamReplyStarted] = useState(false);
   const [writebackOn, setWritebackOn] = useState(true); // design §5: toggleable, default on
-  const [authError, setAuthError] = useState(null);   // per-turn 'auth' error → auth funnel
+  const [authError, setAuthError] = useState(null);
+  // Copy for the misconfigured funnel when a TURN routes into it; null means the
+  // startup-probe default (a missing maya baseUrl).
+  // A turn that failed with a kind that HAS a funnel view ('misconfigured',
+  // 'workspace-collision'). Cleared at the start of the next turn, like
+  // `offlineError` — a funnel that outlives the condition that opened it is a
+  // dead end the user cannot leave.
+  const [turnFunnel, setTurnFunnel] = useState(null);
   const [offlineError, setOfflineError] = useState(null);
   const [pasting, setPasting] = useState(false);
   const pasteRef = useRef(null);
@@ -273,6 +327,24 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
   }
 
   function handleTurnError(error) {
+    // `misconfigured` and `workspace-collision` already HAVE funnel views; they
+    // were reachable only from the startup status probe, so a turn that failed
+    // for either reason showed one grey line of chat text instead. Connecting
+    // them is the wiring S4 asks for — with the copy carried from the error, so
+    // the card explains the actual problem.
+    if (error?.kind === 'misconfigured' || error?.kind === 'workspace-collision') {
+      // `view` is DERIVED, not state (see the view derivation below), so a turn
+      // funnel is opened the way `auth` and `offline` are: by setting the error
+      // the derivation reads.
+      setTurnFunnel({
+        kind: error.kind,
+        title: error.kind === 'workspace-collision'
+          ? "This portfolio overlaps the colleague's own memory"
+          : 'This turn is misconfigured',
+        body: error.message,
+      });
+      return;
+    }
     if (error?.kind === 'auth') {
       setAuthError(error);
     } else if (error?.kind === 'offline') {
@@ -290,6 +362,7 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
     setPending(true);
     setStreamReplyStarted(false);
     setOfflineError(null);
+    setTurnFunnel(null);
     setMessages((m) => [...m, { role: 'user', text }]);
     let hasStreamMessage = false;
     let sawFinal = false;
@@ -297,7 +370,7 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
     // Captured at send time: whether this turn owes a terminal writeback
     // event. If the stream dies between `final` and that event, the outcome
     // is UNKNOWN, never silently clean (§5 outcome contract, Codex r1 P2).
-    const expectWriteback = Boolean(focusId) && writebackOn;
+    const expectWriteback = Boolean(focusId) && writebackOn && !isPortfolio;
     const turnFocusId = focusId;
     let sawWriteback = false;
 
@@ -311,7 +384,7 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
       const res = await wsFetch('/api/maya/message?stream=1', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, focusId, writeback: writebackOn }),
+        body: JSON.stringify({ text, focusId, scope, writeback: writebackOn && !isPortfolio }),
       });
       const contentType = (res.headers?.get?.('Content-Type') ?? '')
         .split(';', 1)[0].trim().toLowerCase();
@@ -490,7 +563,8 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
 
   // ── view derivation ──────────────────────────────────────────────────────
   let view;
-  if (authError) view = 'auth';
+  if (turnFunnel) view = turnFunnel.kind;
+  else if (authError) view = 'auth';
   else if (offlineError) view = 'offline';
   else if (!status) view = 'loading';
   else if (status.state === 'misconfigured') view = 'misconfigured';
@@ -571,11 +645,24 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
         )}
 
         {view === 'misconfigured' && (
-          <FunnelCard icon={AlertTriangle} title="Maya is misconfigured">
-            The <code>maya</code> block in <code>.compose/compose.json</code> is present but has
-            no <code>baseUrl</code>. Point it at the Maya deployment
-            (local dev: <code>http://localhost:9005</code>).
-            {status?.error && <div className="mt-1 font-mono text-[10px]">{status.error}</div>}
+          <FunnelCard icon={AlertTriangle} title={turnFunnel?.title ?? 'Maya is misconfigured'}>
+            {/* Parameterized: this card used to state unconditionally that the
+                `maya` block lacks a `baseUrl`. A portfolio misconfiguration
+                routed into it would have sent the reader to fix a setting that
+                is not the problem — worse than the inline error it replaces. */}
+            {turnFunnel?.body ?? (
+              <>
+                The <code>maya</code> block in <code>.compose/compose.json</code> is present but has
+                no <code>baseUrl</code>. Point it at the Maya deployment
+                (local dev: <code>http://localhost:9005</code>).
+              </>
+            )}
+            {!turnFunnel && status?.error && (
+              <div className="mt-1 font-mono text-[10px]">{status.error}</div>
+            )}
+                      {turnFunnel && (
+              <FunnelAction onClick={() => setTurnFunnel(null)}>Back to the conversation</FunnelAction>
+            )}
           </FunnelCard>
         )}
 
@@ -604,12 +691,30 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
         )}
 
         {view === 'workspace-collision' && (
-          <FunnelCard icon={ShieldAlert} title="Refusing this token: workspace collision">
-            The colleague token&apos;s workspace claim IS the fluid workspace. Accepting
-            it would let Maya&apos;s background ingestion write into the fluid records
-            (deep binding — deferred, and never enabled by accident). Provision a
-            dedicated colleague identity or paste a token scoped elsewhere.
-            {status?.error && <div className="mt-1 font-mono text-[10px]">{status.error}</div>}
+          <FunnelCard icon={ShieldAlert} title={turnFunnel?.title ?? 'Refusing this token: workspace collision'}>
+            {/* Parameterized for the same reason as the misconfigured card: a
+                PORTFOLIO collision is a different overlap from a token whose own
+                claim is the fluid workspace, and the startup copy would describe
+                the wrong one. */}
+            {turnFunnel?.body ?? (
+              <>
+                The colleague token&apos;s workspace claim IS the fluid workspace. Accepting
+                it would let Maya&apos;s background ingestion write into the fluid records
+                (deep binding — deferred, and never enabled by accident). Provision a
+                dedicated colleague identity or paste a token scoped elsewhere.
+              </>
+            )}
+            {!turnFunnel && status?.error && (
+              <div className="mt-1 font-mono text-[10px]">{status.error}</div>
+            )}
+            {/* A funnel opened by a TURN must be leaveable. The status-probe
+                funnels describe a condition that is still true, so they
+                correctly have no exit; a failed turn does not — the panel was
+                otherwise usable, and replacing it with a screen that has no way
+                out is worse than the inline error this replaced. */}
+            {turnFunnel && (
+              <FunnelAction onClick={() => setTurnFunnel(null)}>Back to the conversation</FunnelAction>
+            )}
           </FunnelCard>
         )}
 
@@ -705,16 +810,46 @@ export default function ColleaguePanel({ onClose, status, refreshStatus }) {
             </div>
             <label
               className="flex items-center gap-1.5 px-3 py-1 text-[10px] select-none"
-              style={{ color: 'hsl(var(--muted-foreground))', borderTop: '1px solid hsl(var(--border))' }}
-              title="Append her replies about the focused idea to its discussion trail (author: maya)"
+              style={{
+                color: 'hsl(var(--muted-foreground))',
+                borderTop: '1px solid hsl(var(--border))',
+                opacity: isPortfolio ? 0.5 : 1,
+              }}
+              title={isPortfolio
+                ? 'A portfolio turn spans products and is read-only, so there is no single idea to note a reply on'
+                : 'Append her replies about the focused idea to its discussion trail (author: maya)'}
             >
               <input
                 type="checkbox"
-                checked={writebackOn}
+                data-testid="writeback-toggle"
+                checked={writebackOn && !isPortfolio}
+                // Disabled, not merely inert. The backend already refuses a
+                // portfolio writeback; leaving the control live would let the
+                // panel promise something the server will decline, and the
+                // "save unconfirmed" warning would then fire on a turn that was
+                // never going to save anything.
+                disabled={isPortfolio}
                 onChange={(e) => setWritebackOn(e.target.checked)}
                 style={{ accentColor: 'hsl(var(--accent))' }}
               />
               note replies on the idea
+            </label>
+            <label
+              className="flex items-center gap-1.5 px-3 py-1 text-[10px] select-none"
+              style={{ color: 'hsl(var(--muted-foreground))' }}
+              title="Ask this product, or every product declared in fluid.portfolio"
+            >
+              scope
+              <select
+                data-testid="scope-select"
+                value={scope}
+                onChange={(e) => setScope(e.target.value)}
+                className="bg-transparent"
+                style={{ color: 'hsl(var(--foreground))' }}
+              >
+                <option value="project">this product</option>
+                <option value="portfolio">every product</option>
+              </select>
             </label>
             <ChatInput onSend={send} disabled={pending} placeholder="Message Maya…" />
           </>

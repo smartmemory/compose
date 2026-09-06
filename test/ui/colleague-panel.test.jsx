@@ -18,7 +18,7 @@ globalThis.WebSocket = class {
   close() {}
 };
 import { wsFetch } from '../../src/lib/wsFetch.js';
-import ColleaguePanel from '../../src/components/colleague/ColleaguePanel.jsx';
+import ColleaguePanel, { FindingsAccordion, ContextNote } from '../../src/components/colleague/ColleaguePanel.jsx';
 import ViewTabs from '../../src/components/cockpit/ViewTabs.jsx';
 import { useIdeaboxStore } from '../../src/components/vision/useIdeaboxStore.js';
 
@@ -402,5 +402,140 @@ describe('ViewTabs summon button', () => {
     const btn = screen.getByTestId('colleague-summon');
     fireEvent.click(btn);
     expect(onToggle).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FOH-7 S4 — portfolio scope in the panel
+// ---------------------------------------------------------------------------
+
+describe('FOH-7 S4 — findings grouped by source', () => {
+  const portfolioBlocks = [
+    { author: 'compose:portfolio', text: 'From alpha', source: { id: 'alpha', root: '/r/alpha' } },
+    { author: 'compose:portfolio', text: 'From beta', source: { id: 'beta', root: '/r/beta' } },
+  ];
+
+  it('renders one group per source, labelled', async () => {
+    render(<FindingsAccordion blocks={portfolioBlocks} />);
+    const groups = await screen.findAllByTestId('findings-group');
+    expect(groups.length).toBe(2);
+    const labels = screen.getAllByTestId('findings-source').map((n) => n.textContent);
+    expect(labels).toEqual(['alpha', 'beta']);
+  });
+
+  // N products all emit `compose:conviction`. Keyed on the author alone, React
+  // sees duplicate keys and the panel silently drops findings that were computed
+  // and paid for.
+  it('does not collide keys when two sources emit the same author', async () => {
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<FindingsAccordion blocks={[
+      { author: 'compose:conviction', text: 'a', source: { id: 'alpha', root: '/r/a' } },
+      { author: 'compose:conviction', text: 'b', source: { id: 'beta', root: '/r/b' } },
+    ]} />);
+    await screen.findAllByTestId('findings-group');
+    expect(screen.getByText('a')).toBeTruthy();
+    expect(screen.getByText('b')).toBeTruthy();
+    const dupKeyWarning = warn.mock.calls.some((c) => /same key|duplicate key/i.test(String(c[0])));
+    expect(dupKeyWarning).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('renders a project-scoped turn exactly as before, ungrouped and unlabelled', async () => {
+    render(<FindingsAccordion blocks={[
+      { author: 'compose:conviction', text: 'just this project' },
+    ]} />);
+    await screen.findByTestId('findings-accordion');
+    expect(screen.queryAllByTestId('findings-source').length).toBe(0);
+    expect(screen.getByText('just this project')).toBeTruthy();
+  });
+});
+
+describe('FOH-7 S4 — the context note', () => {
+  it('does not repeat an author once per source', () => {
+    render(<ContextNote context={{ sent: ['compose:conviction', 'compose:conviction', 'compose:conviction'] }} />);
+    expect(screen.getByText(/context sent: conviction$/)).toBeTruthy();
+  });
+
+  it('renders two members failing with identical prose as two omissions', () => {
+    const same = 'unreachable: connect ECONNREFUSED';
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<ContextNote context={{ sent: [], omissions: [`alpha ${same}`, `beta ${same}`] }} />);
+    expect(screen.getByText(`— alpha ${same}`)).toBeTruthy();
+    expect(screen.getByText(`— beta ${same}`)).toBeTruthy();
+    warn.mockRestore();
+  });
+});
+
+describe('FOH-7 S4 — a refused portfolio turn reaches a funnel, not one grey line of chat', () => {
+  // `misconfigured` and `workspace-collision` already had funnel views built;
+  // they were reachable only from the startup status probe, so a TURN failing
+  // for either reason rendered as inline chat text. And the card's copy blamed
+  // the maya baseUrl unconditionally, so connecting it unchanged would have
+  // pointed the reader at the wrong setting.
+  it("shows the funnel with the error's own explanation, not the baseUrl copy", async () => {
+    routeFetch([
+      ['/api/maya/message', () => json({
+        ok: false,
+        error: {
+          kind: 'misconfigured',
+          message: 'this project declares no fluid.portfolio, so a portfolio turn has no members to ask',
+        },
+      })],
+    ]);
+    renderPanel();
+
+    const input = await screen.findByPlaceholderText(/Message Maya/i);
+    fireEvent.change(input, { target: { value: 'what did we decide' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(screen.getByText(/no fluid\.portfolio/)).toBeTruthy());
+    expect(screen.queryByText(/has\s+no\s+baseUrl/)).toBeNull();
+  });
+
+  it('routes a workspace collision to its own funnel too', async () => {
+    routeFetch([
+      ['/api/maya/message', () => json({
+        ok: false,
+        error: { kind: 'workspace-collision', message: 'portfolio member(s) beta are configured at the colleague\'s own workspace' },
+      })],
+    ]);
+    renderPanel();
+    const input = await screen.findByPlaceholderText(/Message Maya/i);
+    fireEvent.change(input, { target: { value: 'q' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByText(/configured at the colleague/)).toBeTruthy());
+  });
+});
+
+describe('FOH-7 S4 — a turn funnel does not outlive the turn that opened it', () => {
+  // Set and never cleared, the funnel is a dead end: the panel would keep
+  // showing "this turn is misconfigured" after the configuration was fixed, with
+  // no way back to the chat.
+  it('offers a way back, and a later turn succeeds normally', async () => {
+    let call = 0;
+    routeFetch([
+      ['/api/maya/message', () => {
+        call += 1;
+        return call === 1
+          ? json({ ok: false, error: { kind: 'misconfigured', message: 'no fluid.portfolio declared here' } })
+          : json({ ok: true, reply: 'all better', message_id: 'm2', context: { sent: [], omissions: [], blocks: [] } });
+      }],
+    ]);
+    renderPanel();
+
+    const input = await screen.findByPlaceholderText(/Message Maya/i);
+    fireEvent.change(input, { target: { value: 'first' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByText(/no fluid\.portfolio/)).toBeTruthy());
+
+    // The funnel REPLACES the chat, so without an exit the panel is a dead end
+    // until reload — worse than the inline error this replaced.
+    fireEvent.click(screen.getByRole('button', { name: /back to the conversation/i }));
+
+    const again = await screen.findByPlaceholderText(/Message Maya/i);
+    fireEvent.change(again, { target: { value: 'second' } });
+    fireEvent.keyDown(again, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByText('all better')).toBeTruthy());
+    expect(screen.queryByText(/no fluid\.portfolio/)).toBeNull();
   });
 });

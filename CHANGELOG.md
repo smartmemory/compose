@@ -2,6 +2,50 @@
 
 ## Unreleased
 
+### [COMP-FOH FOH-7] Portfolio: one colleague turn across several products
+
+A colleague turn can now span every product declared in `fluid.portfolio`, answering with findings
+**grouped by source** and **naming every product it could not reach**. Read-only; membership is an
+explicit declared list and nothing is discovered.
+
+- `lib/fluid/factory.js` — `parsePortfolioConfig`, in the authoritative validating reader. Refuses
+  duplicate ids, unresolvable roots, a member without `.compose/compose.json`, and a portfolio that
+  omits its own declaring root. Deliberately NOT parsed in `lib/maya-config.js`, which reads the same
+  file leniently and would turn a typo into "no portfolio declared" — a silent downgrade to a
+  one-product answer.
+- `lib/fluid/portfolio.js` (new) — the aggregator, above the provider seam so members may use different
+  providers. Concurrent open, an explicit per-member deadline (there is no ambient whole-turn bound to
+  inherit), and every absent source named. Every member failing raises rather than returning an empty
+  result set: an empty answer and a total outage must never look the same.
+- `lib/colleague/context.js` — `composePortfolioContext` and `toMayaContext`. The context is budgeted
+  **evenly across sources**, with every truncation named: Maya caps the section at 1,600 tokens and
+  keeps a prefix, so an unbudgeted portfolio silently loses its later products while the panel still
+  reports every source as sent.
+- `server/maya-routes.js` — `scope` as a closed enum validated on the RAW value (`null` and
+  `["portfolio"]` are refused, not coerced); refusals for portfolio+focus and for portfolio without a
+  declaration; member workspace-collision checking; deduped `sent` on both transports.
+- `src/components/colleague/ColleaguePanel.jsx` — findings grouped by source, both duplicate-React-key
+  bugs fixed, writeback genuinely disabled under portfolio scope, and the `misconfigured` /
+  `workspace-collision` funnels connected to turn errors, parameterized so the card explains the actual
+  problem and offers a way back.
+- `lib/smartmemory-client.js` — 401/403 converted at the transport boundary so the upstream
+  `X-SM-Scope-Error` survives. "Not a member" and "the key lacks scope" are different problems with
+  different fixes; every 403 previously collapsed into "reason undetermined".
+
+**Two projections, both pinned by test.** Maya receives flat `{author, text}` because its schema is flat
+and `channel_context` is sent verbatim — so the source identity is written into the prose, where the
+flat projection keeps it. The panel receives structured `source`. A test asserting only "no nested
+source reaches Maya" passes when source is simply dropped; the assertion is that the identity survived.
+
+**Not yet exercised:** the live cross-product turn and the mixed-provider portfolio, both of which need
+a running SmartMemory. Note the local floor has no `recall` capability at all, so a portfolio of
+local-floor products is entirely listed-not-searched — named honestly per member, and a real limit on
+what can be shown before SmartMemory is standing.
+
+Four review rounds, 20 findings, all accepted. See
+[report](docs/features/COMP-FOH/report-foh-7.md) for what they were and why they kept being the same
+mistake.
+
 ### [COMP-IDEABOX-MIGRATE-DIALECT] The ideabox migration gate no-opped on the files it existed to protect
 
 **Critical, silent data loss.** `ensureIdeaboxMigrated` recognised only the current ideabox dialect.
