@@ -29,7 +29,10 @@ import { fileURLToPath } from 'node:url';
 // Never let the gate's default vision projector find a real cockpit on :4001.
 process.env.COMPOSE_PORT = '19994';
 
-import { createTestSigner, DESCRIPTOR_NAMESPACE } from './helpers/sshsig-sign.js';
+import { createTestSigner } from './helpers/sshsig-sign.js';
+
+// The custody test seam refuses outside NODE_ENV=test; `npm test` does not set it.
+process.env.NODE_ENV = 'test';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const require_ = createRequire(import.meta.url);
@@ -239,7 +242,7 @@ async function policyOf(ws, mode = 'build') {
  * Register the resource under the LEGACY policy — the one a resource registered
  * before this feature carries. Note it takes a POLICY, not a graph.
  */
-async function registerLegacy(ws, mode = 'build') {
+async function registerLegacy(ws, mode = 'build', featureCode = CODE) {
   const { buildPhaseGraph, edgePredicates, legacyPolicyProjection, resourceId } =
     await import('../server/lifecycle-guard.js');
   const { terminalOf } = await import('../lib/lifecycle-modes.js');
@@ -247,15 +250,15 @@ async function registerLegacy(ws, mode = 'build') {
   const dir = mode === 'build' ? 'docs/features' : 'docs/bugs';
   const legacy = legacyPolicyProjection({
     graph: buildPhaseGraph(mode),
-    edge_predicates: edgePredicates(`${dir}/${CODE}`, mode),
+    edge_predicates: edgePredicates(`${dir}/${featureCode}`, mode),
     terminal: terminalOf(mode),
     stakes: {},
   });
   const res = await guardRegister({
-    resourceId: resourceId(CODE, ws.root, mode),
+    resourceId: resourceId(featureCode, ws.root, mode),
     graph: legacy.graph,
     edgePredicates: legacy.edge_predicates,
-    initial: 'explore_design',
+    initial: Object.keys(legacy.graph)[0],   // build: explore_design, fix: reproduce
     terminal: legacy.terminal,
     stakes: legacy.stakes,
     workspaceRoot: ws.root,
@@ -263,14 +266,15 @@ async function registerLegacy(ws, mode = 'build') {
   return res;
 }
 
-/** Generate, sign and install the descriptor file the lazy upgrade consumes. */
-async function signDescriptors(ws, signer, { mode = 0o600, namespace = DESCRIPTOR_NAMESPACE } = {}) {
-  const { writeDescriptorFile } = await import('../lib/guard-descriptors.js');
-  const out = await writeDescriptorFile(ws.root);
-  const bytes = readFileSync(out.path);            // the EXACT bytes are signed
-  writeFileSync(`${out.path}.sig`, signer.sign(bytes, namespace));
-  chmodSync(out.path, mode);
-  return out;
+function testCustody(signer, confirmations, result = null) {
+  return {
+    backend: 'test',
+    sign({ bytes, namespace }) {
+      confirmations.push({ namespace, bytes: Buffer.from(bytes) });
+      if (result) return result;
+      return { ok: true, armored: signer.sign(bytes, namespace) };
+    },
+  };
 }
 
 
@@ -353,6 +357,7 @@ let SIGNER;
 let STRATUM;
 let FAKE_HOME;
 let REAL_GUARD_COUNT;
+let CONFIRMATIONS;
 const savedEnv = {};
 
 function countRealGuards() {
@@ -360,20 +365,26 @@ function countRealGuards() {
   try { return readdirSync(dir).length; } catch { return -1; }
 }
 
-before(() => {
+before(async () => {
   savedEnv.HOME = process.env.HOME;
   savedEnv.CLI = process.env.COMPOSE_STRATUM_TS_CLI_BIN;
   REAL_GUARD_COUNT = countRealGuards();
 
   SIGNER = createTestSigner();
   STRATUM = buildStratumCopy(SIGNER.publicKeyLine);
-
+  CONFIRMATIONS = [];
+  const { _testOnly_setCustodyBackend } = await import('../lib/guard-custody.js');
+  _testOnly_setCustodyBackend(testCustody(SIGNER, CONFIRMATIONS));
   FAKE_HOME = mkdtempSync(path.join(tmpdir(), 'bf-home-'));
   process.env.HOME = FAKE_HOME;
   process.env.COMPOSE_STRATUM_TS_CLI_BIN = STRATUM.cliPath;
 });
 
-after(() => {
+after(async () => {
+  // Fixture custody is scoped to this isolated stratum-copy suite only.
+  // The signer key never enters a non-fixture trust root.
+  const { _testOnly_setCustodyBackend } = await import('../lib/guard-custody.js');
+  _testOnly_setCustodyBackend(null);
   process.env.HOME = savedEnv.HOME;
   if (savedEnv.CLI === undefined) delete process.env.COMPOSE_STRATUM_TS_CLI_BIN;
   else process.env.COMPOSE_STRATUM_TS_CLI_BIN = savedEnv.CLI;
@@ -483,31 +494,59 @@ describe('Flow A — build mode, registered legacy resource', () => {
       assert.equal(reg.status, 'registered', JSON.stringify(reg));
       const legacyChecksum = reg.checksum;
       assert.match(legacyChecksum, /^[0-9a-f]{64}$/);
+      mkdirSync(path.join(ws.root, 'docs', 'features', 'BF-2'), { recursive: true });
+      // Edge predicates embed the feature dir, so every legacy resource has its own checksum;
+      // one generation enumerates and covers them all (the blueprint's "same checksum" wording was wrong).
+      const second = await registerLegacy(ws, 'build', 'BF-2');
+      assert.match(second.checksum, /^[0-9a-f]{64}$/);
+      assert.notEqual(second.checksum, legacyChecksum, 'predicates embed the feature path');
 
-      // 2. Generate and sign the descriptor.
-      const desc = await signDescriptors(ws, SIGNER);
-      assert.equal(desc.descriptors.length, 1);
-      assert.equal(desc.descriptors[0].from_checksum, legacyChecksum);
-      assert.equal(statSync(desc.path).mode & 0o777, 0o600);
-      assert.ok(desc.descriptors[0].to_policy.terminal.includes('complete_backfilled'));
-
-      // 3. ensureGuard reports `legacy` — the C3/finding-2 rule proved against
+      // 2. ensureGuard reports `legacy` — the C3/finding-2 rule proved against
       //    the REAL CLI, not a fake.
       const { ensureGuard, _testOnly_resetGuardCache } = await import('../server/lifecycle-guard.js');
       _testOnly_resetGuardCache();
       const probe = await ensureGuard(CODE, 'ship', ws.root, 'build');
       assert.equal(probe.status, 'legacy', JSON.stringify(probe));
 
-      // 4. Backfill.
+      // 3. Backfill signs through test custody, then applies the resolved generation.
       const res = await runBackfill(ws);
       assert.equal(res.ok, true, JSON.stringify(res.reasons));
       assert.equal(res.status, 'finalized');
+      assert.equal(CONFIRMATIONS.length, 1, 'the first candidate needs one confirmation');
+
+      const { currentGeneration } = await import('../lib/guard-descriptors.js');
+      const { guardDescriptors } = await import('../server/stratum-client.js');
+      const generation = await currentGeneration(ws.root);
+      assert.ok(generation, 'a signed generation must be published');
+      assert.equal(path.basename(path.dirname(generation.file)), generation.sha);
+      const descriptors = JSON.parse(readFileSync(generation.file, 'utf8')).descriptors;
+      assert.deepEqual(descriptors.map((d) => d.from_checksum).sort(), [legacyChecksum, second.checksum].sort(),
+        'one generation covers every registered legacy resource');
+      const descriptor = [descriptors.find((d) => d.from_checksum === legacyChecksum)];
+      assert.ok(descriptor[0].to_policy.terminal.includes('complete_backfilled'));
+      const verified = await guardDescriptors(generation.file);
+      assert.match(verified.signature, /^verified:/);
+      const { applyBackfillUpgrade } = await import('../server/lifecycle-guard.js');
+      const secondLegacy = await applyBackfillUpgrade({ featureCode: 'BF-2', workspaceRoot: ws.root });
+      assert.equal(secondLegacy.ok, true);
+      assert.equal(CONFIRMATIONS.length, 1, 'a second legacy resource already covered by the generation never prompts again');
+
+      mkdirSync(path.join(ws.root, 'docs', 'bugs', 'BF-3'), { recursive: true });
+      const changed = await registerLegacy(ws, 'fix', 'BF-3');
+      assert.equal(changed.status, 'registered', JSON.stringify(changed));
+      assert.notEqual(changed.checksum, legacyChecksum, 'a graph change produces a new checksum');
+      const changedUpgrade = await applyBackfillUpgrade({ featureCode: 'BF-3', workspaceRoot: ws.root, mode: 'fix' });
+      assert.equal(changedUpgrade.ok, true, JSON.stringify(changedUpgrade));
+      assert.equal(CONFIRMATIONS.length, 2, 'a graph change requires one new confirmation');
+      const r32Retry = await applyBackfillUpgrade({ featureCode: 'BF-3', workspaceRoot: ws.root, mode: 'fix' });
+      assert.equal(r32Retry.status, 'unchanged', 'R32: a completed upgrade never re-enters descriptor signing');
+      assert.equal(CONFIRMATIONS.length, 2);
 
       const h = await ledgerOf(ws);
       const upgradeEntry = h.ledger.find((e) => e.kind === 'graph_version');
       assert.ok(upgradeEntry, 'the lazy apply-upgrade must be ledgered');
       assert.equal(upgradeEntry.resolved_by, 'human');
-      assert.match(upgradeEntry.rationale ?? '', new RegExp(desc.descriptors[0].id));
+      assert.match(upgradeEntry.rationale ?? '', new RegExp(descriptor[0].id));
 
       const applied = h.ledger.find((e) => e.kind === 'transition'
         && e.to_state === 'complete_backfilled' && e.outcome === 'applied');
@@ -550,6 +589,7 @@ describe('Flow A — build mode, registered legacy resource', () => {
       assert.deepEqual(ws.item.lifecycle.phaseHistory, historyBefore);
       const h2 = await ledgerOf(ws);
       assert.equal(h2.ledger.length, ledgerLenBefore, 'a finalized retry writes no ledger entry');
+      assert.equal(CONFIRMATIONS.length, 2, 'an unchanged checksum never asks again (still the two from BF-1 and BF-3)');
       assert.equal(
         ws.item.lifecycle.phaseHistory.filter((e) => e.operation_id != null).length, 1,
       );
@@ -560,7 +600,6 @@ describe('Flow A — build mode, registered legacy resource', () => {
     const ws = await makeWorkspace({ guard: true, currentPhase: 'ship' });
     try {
       await registerLegacy(ws);
-      await signDescriptors(ws, SIGNER);
 
       // Interrupt LATER than the transition: let the history write and the
       // pending marker reach disk, then fail before the completion record.
@@ -599,7 +638,6 @@ describe('Flow A — build mode, registered legacy resource', () => {
     const ws = await makeWorkspace({ guard: true, currentPhase: 'ship' });
     try {
       await registerLegacy(ws);
-      await signDescriptors(ws, SIGNER);
 
       // Interrupt after writeIntent and BEFORE the transition reaches stratum.
       const priorCli = process.env.COMPOSE_STRATUM_TS_CLI_BIN;
@@ -636,7 +674,6 @@ describe('Flow A — build mode, registered legacy resource', () => {
     const ws = await makeWorkspace({ guard: true, currentPhase: 'ship' });
     try {
       await registerLegacy(ws);
-      await signDescriptors(ws, SIGNER);
 
       const restore = blockCompletionRecord(ws);
       try { await runBackfill(ws); } finally { restore(); }
@@ -817,12 +854,6 @@ describe('§7.6 refusal harness', () => {
       run: (ws) => runBackfill(ws, { occurrences: [occurrence('execute', ws.shas.future)] }),
     },
     {
-      id: 'R18', name: 'registered legacy resource, no descriptor file at all', refusedAt: 'upgrade',
-      before: async (ws) => { await registerLegacy(ws); },
-      run: (ws) => runBackfill(ws),
-      message: /compose guard descriptors/,
-    },
-    {
       id: 'R20', name: 'feature already KILLED (build mode)', refusedAt: 'preflight',
       status: 'KILLED',
       run: (ws) => runBackfill(ws),
@@ -983,30 +1014,53 @@ describe('§7.6 refusal harness', () => {
     } finally { ws.cleanup(); }
   });
 
-  test('R14/R15/R17 — an unsigned, wrongly-signed or group-writable descriptor refuses at upgrade', async () => {
-    for (const variant of ['unsigned', 'wrong-key', 'wrong-namespace', 'group-writable']) {
+  test('R27–R29 — custody refusals preserve code, hint, and the conditional manual recovery line', async () => {
+    const { _testOnly_setCustodyBackend, HINT_ENROL, HINT_APPROVE } = await import('../lib/guard-custody.js');
+    const rows = [
+      { name: 'not approved', result: { ok: false, code: 'signature_not_approved', message: 'approval cancelled', hint: HINT_APPROVE }, hint: HINT_APPROVE, manual: false },
+      { name: 'no backend', result: { ok: false, code: 'upgrade_descriptor_unavailable', message: 'no signing custody', hint: HINT_ENROL }, hint: HINT_ENROL, manual: true, backend: 'none' },
+      { name: 'infrastructure failure', result: { ok: false, code: 'upgrade_descriptor_unavailable', message: 'signer unavailable', hint: HINT_ENROL }, hint: HINT_ENROL, manual: false },
+    ];
+    for (const row of rows) {
       const ws = await makeWorkspace({ guard: true, currentPhase: 'ship' });
       try {
         await registerLegacy(ws);
-        if (variant === 'unsigned') {
-          const { writeDescriptorFile } = await import('../lib/guard-descriptors.js');
-          await writeDescriptorFile(ws.root);
-        } else if (variant === 'wrong-key') {
-          await signDescriptors(ws, createTestSigner());
-        } else if (variant === 'wrong-namespace') {
-          await signDescriptors(ws, SIGNER, { namespace: 'not-the-namespace' });
-        } else {
-          // R17 must be 0o660, not 0o640: stratum tests `stats.mode & 0o022`,
-          // which is group-WRITE and other-write. 0o640 is group-read and would
-          // not be refused at all.
-          await signDescriptors(ws, SIGNER, { mode: 0o660 });
-        }
-        const before = await snapshotOf(ws);
+        _testOnly_setCustodyBackend(row.backend ?? { backend: 'test', sign: () => row.result });
         const res = await runBackfill(ws);
-        assert.equal(res.ok, false, `${variant} must refuse`);
-        assert.equal(res.refusedAt, 'upgrade', `${variant}: ${JSON.stringify(res.reasons)}`);
-        assert.match(res.reasons.join(' '), /compose guard descriptors/);
-        await assertNothingWritten(ws, before);
+        assert.equal(res.ok, false, row.name);
+        assert.equal(res.refusedAt, 'upgrade');
+        assert.equal(res.error.code, row.result.code);
+        assert.equal(res.error.hint, row.hint);
+        assert.equal(res.reasons.includes('regenerate with `compose guard descriptors`, have the operator re-sign it, and commit both files'), row.manual);
+      } finally {
+        _testOnly_setCustodyBackend(testCustody(SIGNER, CONFIRMATIONS));
+        ws.cleanup();
+      }
+    }
+  });
+
+  test('R30/R31 — corrupt or group-writable published generations refuse without moving current or signing', async () => {
+    const { ensureSignedDescriptors, currentGeneration } = await import('../lib/guard-descriptors.js');
+    const { guardDescriptors } = await import('../server/stratum-client.js');
+    for (const variant of ['corrupt-signature', 'group-writable']) {
+      const ws = await makeWorkspace({ guard: true, currentPhase: 'ship' });
+      try {
+        await registerLegacy(ws);
+        const seeded = await ensureSignedDescriptors({
+          workspaceRoot: ws.root, needChecksums: [], custody: testCustody(SIGNER, CONFIRMATIONS), verifier: guardDescriptors,
+        });
+        assert.equal(seeded.status, 'signed');
+        const before = await currentGeneration(ws.root);
+        const logsBefore = CONFIRMATIONS.length;
+        if (variant === 'corrupt-signature') writeFileSync(before.sig, 'not a signature\n');
+        else chmodSync(before.file, 0o660);
+        const res = await runBackfill(ws);
+        assert.equal(res.ok, false, variant);
+        assert.equal(res.refusedAt, 'upgrade');
+        assert.equal(res.error.code, 'upgrade_descriptor_unavailable');
+        assert.equal((await currentGeneration(ws.root)).sha, before.sha, 'current never moves on an invalid generation');
+        assert.equal(CONFIRMATIONS.length, logsBefore, 'invalid published bytes never trigger a replacement signature');
+        if (variant === 'group-writable') assert.match(res.reasons.join(' '), /writable|mode/i);
       } finally { ws.cleanup(); }
     }
   });

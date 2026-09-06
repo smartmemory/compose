@@ -257,7 +257,7 @@ row V-12).
   copy, real apply): replace `signDescriptors` (:267-274) with `_testOnly_setCustodyBackend(testCustody(SIGNER))`
   where `testCustody` records confirmations. Flow A asserts the confirmation log length is **1** after
   the first backfill (the gate drops `prompts` at `lib/completion-gate.js:971`; the log is the
-  observable); a second legacy feature with the same checksum → still 1; graph change → 2; the
+  observable); a second legacy feature already covered by the generation (checksums differ per feature — edge predicates embed the feature dir — but one generation enumerates all registered legacy resources) → still 1; graph change → 2; the
   published generation's `.sig` verifies on the copy and `current` resolves to it. Refusal rows
   R27–R32 per design §4, plus: a generation dir with a **corrupt** `.sig` → refused, `current`
   unchanged, log unchanged; a group-writable generation → not `fresh`, refused with the mode message.

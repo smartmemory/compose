@@ -665,6 +665,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
           error: 'backfill refused', refusedAt: gated.refusedAt, reasons: gated.reasons,
           ...(gated.verdict ? { verdict: gated.verdict } : {}),
           ...(gated.error ? { guardError: gated.error } : {}),
+          ...(gated.error?.hint ? { hint: gated.error.hint } : {}),
         });
       }
 
