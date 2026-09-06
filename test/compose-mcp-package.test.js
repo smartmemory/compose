@@ -12,6 +12,7 @@ const wrapperRoot = resolve(__dirname, '..', 'compose-mcp');
 const composeRoot = resolve(__dirname, '..');
 
 const wrapperPkg = JSON.parse(readFileSync(join(wrapperRoot, 'package.json'), 'utf8'));
+const composePkg = JSON.parse(readFileSync(join(composeRoot, 'package.json'), 'utf8'));
 const wrapperServer = JSON.parse(readFileSync(join(wrapperRoot, 'server.json'), 'utf8'));
 
 test('compose-mcp package.json: identity, version, license', () => {
@@ -24,7 +25,15 @@ test('compose-mcp package.json: identity, version, license', () => {
 
 test('compose-mcp package.json: bin and dependency', () => {
   assert.equal(wrapperPkg.bin['compose-mcp'], './bin/compose-mcp.js');
-  assert.equal(wrapperPkg.dependencies['@smartmemory/compose'], '^0.1.5-beta');
+  // Derived from the parent's real version, never a literal: the wrapper's whole
+  // job is to resolve @smartmemory/compose/mcp, so a hardcoded range silently
+  // rots every time compose is released. It sat at ^0.1.5-beta — nine minor
+  // versions stale — until the 0.3.8 release caught it.
+  assert.equal(
+    wrapperPkg.dependencies['@smartmemory/compose'],
+    `^${composePkg.version}`,
+    'the wrapper must depend on the compose version it ships alongside',
+  );
 });
 
 test('compose-mcp package.json: files allowlist', () => {

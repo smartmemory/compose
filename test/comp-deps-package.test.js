@@ -428,3 +428,60 @@ test('AUTOINSTALL: nothing missing means no spawn at all', () => {
   assert.equal(spawned, false)
   assert.deepEqual(report.installed, [])
 })
+
+test('AUTOINSTALL: installed_plugins.json is authoritative — a cached-but-uninstalled plugin is missing', () => {
+  // The regression this feature was built on top of: `claude plugin uninstall`
+  // drops the plugin from installed_plugins.json but LEAVES its cached tree, so
+  // walking the cache alone reported an uninstalled plugin as present. doctor
+  // then claimed a skill was available that Claude Code would not load, and
+  // auto-install never fired because nothing looked missing.
+  const home = mkdtempSync(join(tmpdir(), 'compose-home-auth-'))
+  try {
+    const cache = join(home, '.claude', 'plugins', 'cache', 'claude-plugins-official')
+    // A: installed AND cached.  B: cached only (the uninstall leftover).
+    const keep = join(cache, 'kept', '1.0.0')
+    mkdirSync(join(keep, 'skills', 'alive'), { recursive: true })
+    writeFileSync(join(keep, 'skills', 'alive', 'SKILL.md'), '# alive\n')
+    const gone = join(cache, 'removed', '1.0.0')
+    mkdirSync(join(gone, 'skills', 'ghost'), { recursive: true })
+    writeFileSync(join(gone, 'skills', 'ghost', 'SKILL.md'), '# ghost\n')
+
+    writeFileSync(
+      join(home, '.claude', 'plugins', 'installed_plugins.json'),
+      JSON.stringify({
+        version: 2,
+        plugins: { 'kept@claude-plugins-official': [{ scope: 'user', installPath: keep }] },
+      }),
+    )
+
+    const deps = {
+      version: 1,
+      external_skills: [
+        { id: 'kept:alive', required_for: ['x'], install: 'c', fallback: null, optional: false },
+        { id: 'removed:ghost', required_for: ['x'], install: 'c', fallback: null, optional: false },
+      ],
+    }
+    const r = checkExternalSkills(deps, home)
+    assert.deepEqual(r.present.map(d => d.id), ['kept:alive'])
+    assert.deepEqual(r.missing.map(d => d.id), ['removed:ghost'],
+      'a plugin absent from installed_plugins.json must be missing even though its cache remains')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('AUTOINSTALL: no installed_plugins.json falls back to the cache walk (older Claude Code)', () => {
+  const home = mkdtempSync(join(tmpdir(), 'compose-home-legacy-'))
+  try {
+    const p = join(home, '.claude', 'plugins', 'cache', 'mkt', 'legacy', '1.0.0', 'skills', 'thing')
+    mkdirSync(p, { recursive: true })
+    writeFileSync(join(p, 'SKILL.md'), '# thing\n')
+    const deps = {
+      version: 1,
+      external_skills: [{ id: 'legacy:thing', required_for: ['x'], install: 'c', fallback: null, optional: false }],
+    }
+    assert.deepEqual(checkExternalSkills(deps, home).present.map(d => d.id), ['legacy:thing'])
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+})
