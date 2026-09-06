@@ -2,6 +2,16 @@
 
 ## 0.3.8 — 2026-09-06
 
+### docs: Stratum is not a prerequisite
+
+README and `docs/install.md` both told a new user to clone Stratum as a sibling directory. That
+predates Stratum being published: `@smartmemory/stratum` is a declared dependency, and the bin
+resolver prefers the installed package over a sibling checkout by design. Verified against the
+published packages — `npm install @smartmemory/compose` in an empty project followed by
+`compose init` reports `Stratum: enabled` with no checkout present, and writes an `.mcp.json`
+pointing at `node_modules/@smartmemory/stratum/dist/mcp/main.js`.
+
+
 ### Released: compose 0.3.8, compose-mcp 0.1.0
 
 `@smartmemory/compose-mcp` — the slim stdio launcher that resolves
