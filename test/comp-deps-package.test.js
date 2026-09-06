@@ -21,7 +21,7 @@ const SKILL_MD_PATH = join(REPO_ROOT, '.claude', 'skills', 'compose', 'SKILL.md'
 const PACKAGE_JSON_PATH = join(REPO_ROOT, 'package.json')
 const COMPOSE_BIN = join(REPO_ROOT, 'bin', 'compose.js')
 
-const { loadDeps, checkExternalSkills, printDepReport } = await import(`${REPO_ROOT}/lib/deps.js`)
+const { loadDeps, checkExternalSkills, printDepReport, installMissingPlugins } = await import(`${REPO_ROOT}/lib/deps.js`)
 
 // ---------------------------------------------------------------------------
 // T1 — Manifest file shape
@@ -251,8 +251,10 @@ test('T5: printDepReport JSON mode emits full dep records (Round 2 fix)', () => 
     }, { json: true })
   })
   const parsed = JSON.parse(out)
-  assert.deepEqual(parsed.present[0], { id: 'a', required_for: ['x'], install: 'i', fallback: 'fb', optional: false })
-  assert.deepEqual(parsed.missing[0], { id: 'b', required_for: ['y'], install: 'j', fallback: null, optional: true })
+  // COMP-DEPS-AUTOINSTALL added `plugin` to the projection: null when the dep has
+  // no automated install path, the `<plugin>@<marketplace>` spec when it does.
+  assert.deepEqual(parsed.present[0], { id: 'a', required_for: ['x'], install: 'i', plugin: null, marketplace_source: null, fallback: 'fb', optional: false })
+  assert.deepEqual(parsed.missing[0], { id: 'b', required_for: ['y'], install: 'j', plugin: null, marketplace_source: null, fallback: null, optional: true })
   assert.deepEqual(parsed.scannedPaths, ['/tmp'])
 })
 
@@ -297,4 +299,132 @@ test('T8: SKILL.md points to manifest as source of truth', () => {
   const skill = readFileSync(SKILL_MD_PATH, 'utf-8')
   assert.ok(skill.includes('.compose-deps.json'), 'SKILL.md must reference the manifest file')
   assert.ok(skill.includes('compose doctor'), 'SKILL.md must reference the doctor command')
+})
+
+// ---------------------------------------------------------------------------
+// COMP-DEPS-AUTOINSTALL — auto-install of missing required plugins
+// ---------------------------------------------------------------------------
+
+/** Build a checkExternalSkills-shaped result from bare dep specs. */
+const asResult = (missing) => ({ present: [], missing, scannedPaths: [] })
+const dep = (id, over = {}) => ({
+  id, required_for: ['x'], install: 'hint', fallback: null, optional: false, ...over,
+})
+
+test('AUTOINSTALL: every superpowers dep carries a plugin spec with an explicit marketplace', () => {
+  const deps = loadDeps(REPO_ROOT)
+  const sp = deps.external_skills.filter(d => d.id.startsWith('superpowers:'))
+  assert.ok(sp.length > 0, 'expected superpowers deps in the manifest')
+  for (const d of sp) {
+    assert.equal(typeof d.plugin, 'string', `${d.id} must declare a plugin spec`)
+    assert.ok(d.plugin.includes('@'), `${d.id} plugin spec must pin a marketplace, got ${d.plugin}`)
+  }
+})
+
+test('AUTOINSTALL: one install per plugin even when many deps share it', () => {
+  const calls = []
+  const report = installMissingPlugins(
+    asResult([
+      dep('superpowers:a', { plugin: 'superpowers@claude-plugins-official' }),
+      dep('superpowers:b', { plugin: 'superpowers@claude-plugins-official' }),
+      dep('superpowers:c', { plugin: 'superpowers@claude-plugins-official' }),
+    ]),
+    { spawn: (cmd, args) => { calls.push([cmd, ...args]); return { status: 0 } } },
+  )
+  assert.equal(calls.length, 1, 'three deps from one plugin must produce one install')
+  assert.deepEqual(calls[0], [
+    'claude', 'plugin', 'install', 'superpowers@claude-plugins-official', '-y', '--scope', 'user',
+  ])
+  assert.deepEqual(report.installed, ['superpowers@claude-plugins-official'])
+  assert.deepEqual(report.failed, [])
+})
+
+test('AUTOINSTALL: optional deps and deps without a plugin spec are never installed', () => {
+  const calls = []
+  const report = installMissingPlugins(
+    asResult([
+      dep('interface-design:init', { plugin: 'interface-design@x', optional: true }),
+      dep('refactor'), // required but no plugin spec — prose install path
+    ]),
+    { spawn: (cmd, args) => { calls.push(args); return { status: 0 } } },
+  )
+  assert.deepEqual(calls, [], 'optional and prose-only deps must not be installed')
+  assert.deepEqual(report.installed, [])
+})
+
+test('AUTOINSTALL: an unregistered marketplace is added, then the install retried once', () => {
+  // The pristine-machine path: the first install fails because no marketplace is
+  // registered yet. Measured against a clean HOME — without the retry every
+  // required dep stays missing.
+  const calls = []
+  const report = installMissingPlugins(
+    asResult([dep('superpowers:a', {
+      plugin: 'superpowers@claude-plugins-official',
+      marketplace_source: 'anthropics/claude-plugins-official',
+    })]),
+    {
+      spawn: (cmd, args) => {
+        calls.push(args.join(' '))
+        if (args[1] === 'marketplace') return { status: 0 }
+        return calls.filter(c => c.startsWith('plugin install')).length === 1
+          ? { status: 1, stderr: 'Plugin "superpowers" not found in marketplace "claude-plugins-official".' }
+          : { status: 0 }
+      },
+    },
+  )
+  assert.deepEqual(calls, [
+    'plugin install superpowers@claude-plugins-official -y --scope user',
+    'plugin marketplace add anthropics/claude-plugins-official',
+    'plugin install superpowers@claude-plugins-official -y --scope user',
+  ])
+  assert.deepEqual(report.installed, ['superpowers@claude-plugins-official'])
+})
+
+test('AUTOINSTALL: no marketplace is added for a failure that is not "not found"', () => {
+  const calls = []
+  installMissingPlugins(
+    asResult([dep('superpowers:a', {
+      plugin: 'superpowers@claude-plugins-official',
+      marketplace_source: 'anthropics/claude-plugins-official',
+    })]),
+    { spawn: (cmd, args) => { calls.push(args[1]); return { status: 1, stderr: 'network unreachable' } } },
+  )
+  assert.deepEqual(calls, ['install'], 'a non-resolution failure must not trigger a marketplace add')
+})
+
+test('AUTOINSTALL: a failing install surfaces the real stderr, not a generic message', () => {
+  const report = installMissingPlugins(
+    asResult([dep('superpowers:a', { plugin: 'superpowers@claude-plugins-official' })]),
+    { spawn: () => ({ status: 1, stderr: 'marketplace not found: claude-plugins-official\n' }) },
+  )
+  assert.deepEqual(report.installed, [])
+  assert.equal(report.failed.length, 1)
+  assert.match(report.failed[0].reason, /marketplace not found/)
+})
+
+test('AUTOINSTALL: a missing claude CLI is a skip with a reason, never a throw', () => {
+  const report = installMissingPlugins(
+    asResult([dep('superpowers:a', { plugin: 'superpowers@claude-plugins-official' })]),
+    { spawn: () => ({ status: null, error: Object.assign(new Error('spawn claude ENOENT'), { code: 'ENOENT' }) }) },
+  )
+  assert.equal(report.installed.length, 0)
+  assert.equal(report.failed.length, 0)
+  assert.match(report.skipped, /claude` CLI is not on PATH/)
+})
+
+test('AUTOINSTALL: enabled:false short-circuits without spawning', () => {
+  let spawned = false
+  const report = installMissingPlugins(
+    asResult([dep('superpowers:a', { plugin: 'superpowers@claude-plugins-official' })]),
+    { enabled: false, spawn: () => { spawned = true; return { status: 0 } } },
+  )
+  assert.equal(spawned, false)
+  assert.equal(report.skipped, 'disabled')
+})
+
+test('AUTOINSTALL: nothing missing means no spawn at all', () => {
+  let spawned = false
+  const report = installMissingPlugins(asResult([]), { spawn: () => { spawned = true; return { status: 0 } } })
+  assert.equal(spawned, false)
+  assert.deepEqual(report.installed, [])
 })

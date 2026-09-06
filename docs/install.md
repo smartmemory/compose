@@ -71,6 +71,9 @@ compose setup     # or: compose sync
 This:
 1. Copies every bundled skill to `~/.claude/skills/` (`/compose`, `/context-budget`, …)
 2. Installs the Stratum skill to all detected agents
+2b. Installs the plugins behind any missing **required** external deps (COMP-DEPS-AUTOINSTALL) — today that is
+   `superpowers`, registering the `claude-plugins-official` marketplace first if it is not configured yet.
+   Optional deps stay printed hints. Opt out with `--no-install-deps` or `COMPOSE_NO_PLUGIN_INSTALL=1`.
 3. Registers the Stratum TS MCP server with Claude Code (the installed `@smartmemory/stratum` dependency, or a sibling checkout via `COMPOSE_STRATUM_TS_MCP_BIN`)
 
 It's idempotent — re-run it (or `compose sync`) after adding/editing skills locally to re-sync them. `sync` is just a clearer-named alias; it does **not** fetch a new version (that's `compose update`).

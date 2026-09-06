@@ -537,7 +537,7 @@ When `/compose` is invoked, always scan first:
 | `refactor` | Phase 7 — when review finds large files |
 | `update-docs` | Phase 9 |
 
-**Note on dependencies:** these skills are referenced by name and must be installed on the user's machine. See `## Dependencies` below for the install contract — `compose setup` only ships compose-owned skills today; external deps are documented but not auto-installed.
+**Note on dependencies:** these skills are referenced by name and must be installed on the user's machine. See `## Dependencies` below for the install contract — `compose setup` ships compose-owned skills and auto-installs the plugins behind missing REQUIRED external deps (COMP-DEPS-AUTOINSTALL); optional deps remain documented hints.
 
 ## Memory
 
@@ -559,11 +559,20 @@ After completing a feature OR bug-fix lifecycle, update project memory:
 | `stratum` | `compose/skills/stratum/` (if present) | Execution substrate |
 | `compose-explorer`, `compose-architect` | agents under `compose/.claude/agents/` | Required by Phases 1, 3, 4 |
 
-### External dependencies (NOT auto-installed)
+### External dependencies
 
 Authoritative list lives in `compose/.compose-deps.json`. Run `compose doctor` to see what's installed locally and `compose doctor --json` for machine-readable output. The manifest is the single source of truth for external dep IDs and per-dep `fallback` behavior — this SKILL.md never duplicates per-dep fallback strings.
 
-The manifest declares 12 external skills/commands across `superpowers:*`, `interface-design:*`, `codex:review`, `refactor`, and `update-docs`. Each entry carries `id`, `required_for`, `install`, `fallback` (or null), and `optional`.
+The manifest declares 12 external skills/commands across `superpowers:*`, `interface-design:*`, `codex:review`, `refactor`, and `update-docs`. Each entry carries `id`, `required_for`, `install`, `fallback` (or null), and `optional`, plus two optional fields used by auto-install: `plugin` (the `<plugin>@<marketplace>` spec passed to `claude plugin install`) and `marketplace_source` (the `owner/repo` registered first when that marketplace is not configured yet).
+
+**Auto-install (COMP-DEPS-AUTOINSTALL).** `compose setup` / `init` / `update` install the plugins behind missing **required** deps before printing the dep report, so the report describes the state you end up in rather than the state you started from. Rules:
+
+- Only deps with a `plugin` spec are installable. Deps whose `install` is prose (`refactor`, `update-docs`) stay hints.
+- **Optional deps are never auto-installed** — the ones we ship live in third-party marketplaces that each need a separate `marketplace add`, a larger consent step than pulling from a marketplace the user already has.
+- Specs are deduped: six `superpowers:*` deps produce one install.
+- On a machine with no marketplaces registered the first install fails; compose registers the declared `marketplace_source` and retries once.
+- Opt out with `--no-install-deps` or `COMPOSE_NO_PLUGIN_INSTALL=1`. Failures print the real stderr and never change the exit code.
+- `compose doctor` stays read-only; it reports, it never installs.
 
 The manifest also has an optional `external_binaries` array for CLI tools (not skills). Today it declares `rtk` ([Rust Token Killer](https://github.com/rtk-ai/rtk), COMP-RTK-INTEROP) — a lossy output compressor compose routes its one LLM-bound `git diff` (the Codex review diff) through when present, degrading byte-identically when absent. `compose doctor` reports binaries alongside skills and surfaces each binary's `recommend` (for rtk: `rtk init -g`, which installs RTK's Claude Code hook so the agent's *own* Bash output is compressed too — the larger token win). Binary entries carry `id`, `detect`, `install`, `recommend` (or null), and `optional`; all are optional and never block the lifecycle.
 
