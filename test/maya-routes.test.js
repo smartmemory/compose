@@ -847,3 +847,177 @@ describe('maya routes', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// FOH-7 S3 — portfolio scope on the turn
+// ---------------------------------------------------------------------------
+
+describe('FOH-7 S3 — scope on a colleague turn', () => {
+  // Own cleanup. The suite above closes `servers` in ITS `after`, which runs
+  // before this sibling suite creates any — so the stubs made here would be left
+  // listening and keep the whole test FILE alive until the runner's timeout
+  // kills it. Close both the app servers and the stubs this suite added.
+  const cleanups = [];
+  const stubsFrom = servers.length;
+  after(() => {
+    for (const close of cleanups.reverse()) close();
+    for (const stub of servers.slice(stubsFrom)) stub.close();
+  });
+
+  /** Add a portfolio to an already-wired root, listing itself as required. */
+  function declarePortfolio(root, extra = []) {
+    const cfgPath = join(root, '.compose', 'compose.json');
+    const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
+    cfg.fluid = { ...cfg.fluid, portfolio: { members: [{ id: 'self', root: '.' }, ...extra] } };
+    writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+    return root;
+  }
+
+  async function wired(deps = {}, { portfolio = false } = {}) {
+    const maya = await makeMayaServer();
+    const sm = await makeSmStub();
+    const root = wiredRoot({ mayaBase: maya.baseUrl, smBase: sm.baseUrl });
+    if (portfolio) declarePortfolio(root);
+    const srv = await startApp({ root, deps: { composeContext: emptyContext, ...deps } });
+    cleanups.push(() => srv.httpServer.close());
+    return { srv, root };
+  }
+
+  // THE FORWARDING SEAM. `attachMayaRoutes` injects fourteen dependencies, which
+  // makes this route easy to test and equally easy to test while its production
+  // wiring is dead: every other assertion here could pass against a stub composer
+  // while `defaultComposeContext` (server/maya-routes.js:70-73) drops `scope` on
+  // the floor. So this asserts what the composer RECEIVES, which is the thing
+  // that actually breaks.
+  test('forwards focusId, scope AND text to the composer', async () => {
+    let received = null;
+    const { srv } = await wired({
+      composeContext: async (_root, args) => { received = args; return { blocks: [], omissions: [] }; },
+    }, { portfolio: true });
+    await postMessage(srv.baseUrl, { text: 'what did we decide', scope: 'portfolio' });
+    assert.ok(received, 'the composer was called');
+    // 'portfolio', not 'project': with 'project' this test stays green even if
+    // the production wrapper drops portfolio scope entirely, which is the exact
+    // thing it exists to catch.
+    assert.equal(received.scope, 'portfolio', 'scope reaches the composer');
+    assert.equal(received.text, 'what did we decide', 'and so does the turn text');
+    assert.ok('focusId' in received, 'focusId still forwarded');
+  });
+
+  test('an absent scope stays absent — no defaulting', async () => {
+    let received = null;
+    const { srv } = await wired({
+      composeContext: async (_root, args) => { received = args; return { blocks: [], omissions: [] }; },
+    });
+    await postMessage(srv.baseUrl, { text: 'hello' });
+    assert.equal(received.scope, undefined, 'today\'s behaviour is preserved exactly');
+  });
+
+  // THE PROJECTION, read from what production SENDS — not rebuilt by the test.
+  // The first version of this test constructed the flat projection itself and
+  // asserted on its own construction, so it passed while the route handed Maya
+  // the raw blocks with a nested `source` it cannot accept. A projection test
+  // that does not observe the client call proves nothing.
+  test('sends Maya flat {author,text} with the source surviving in the prose', async () => {
+    let sentContext = null;
+    const { srv } = await wired({
+      createClient: () => ({
+        chat: async ({ channelContext }) => {
+          sentContext = channelContext;
+          return { success: true, response: 'ok', message_id: 'm1' };
+        },
+      }),
+      composeContext: async () => ({
+        blocks: [
+          { author: 'compose:portfolio', text: 'From alpha (/r/alpha) — IDEA-1', source: { id: 'alpha', root: '/r/alpha' } },
+          { author: 'compose:portfolio', text: 'From beta (/r/beta) — IDEA-1', source: { id: 'beta', root: '/r/beta' } },
+        ],
+        omissions: [],
+      }),
+    });
+    await postMessage(srv.baseUrl, { text: 'q' });
+
+    assert.ok(sentContext, 'the client was called');
+    for (const block of sentContext) {
+      assert.deepEqual(Object.keys(block).sort(), ['author', 'text'], 'Maya accepts only these two keys');
+    }
+    // Asserting only "no nested source" would pass if source were simply
+    // dropped. The property is that the identity SURVIVED.
+    assert.notEqual(sentContext[0].text, sentContext[1].text, 'two products stay distinguishable');
+    assert.ok(sentContext.some((b) => b.text.includes('alpha')));
+    assert.ok(sentContext.some((b) => b.text.includes('beta')));
+  });
+
+  test('the panel still receives the structured source', async () => {
+    const { srv } = await wired({
+      createClient: () => ({ chat: async () => ({ success: true, response: 'ok', message_id: 'm1' }) }),
+      composeContext: async () => ({
+        blocks: [{ author: 'compose:portfolio', text: 'From alpha', source: { id: 'alpha', root: '/r/alpha' } }],
+        omissions: [],
+      }),
+    });
+    const { body } = await postMessage(srv.baseUrl, { text: 'q' });
+    assert.deepEqual(body.context.blocks[0].source, { id: 'alpha', root: '/r/alpha' });
+  });
+
+  test('SSE preserves both projections too, not JSON alone', async () => {
+    let sentContext = null;
+    const { srv } = await wired({
+      createClient: () => ({
+        chatStream: async ({ channelContext, onToken }) => {
+          sentContext = channelContext;
+          onToken?.('ok');
+          return { success: true, response: 'ok', message_id: 'm1' };
+        },
+      }),
+      composeContext: async () => ({
+        blocks: [
+          { author: 'compose:portfolio', text: 'From alpha (/r/alpha) — IDEA-1', source: { id: 'alpha', root: '/r/alpha' } },
+          { author: 'compose:portfolio', text: 'From beta (/r/beta) — IDEA-1', source: { id: 'beta', root: '/r/beta' } },
+        ],
+        omissions: [],
+      }),
+    });
+
+    const res = await fetch(`${srv.baseUrl}/api/maya/message?stream=1`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Connection: 'close' },
+      body: JSON.stringify({ text: 'q' }),
+    });
+    const events = await readSse(res);
+
+    assert.ok(sentContext, 'the streaming client was called');
+    for (const block of sentContext) {
+      assert.deepEqual(Object.keys(block).sort(), ['author', 'text'], 'flat for Maya on the SSE path too');
+    }
+    assert.ok(sentContext.some((b) => b.text.includes('alpha')));
+    assert.ok(sentContext.some((b) => b.text.includes('beta')));
+
+    const final = events.find((e) => e.event === 'final');
+    assert.deepEqual(
+      final.data.context.blocks[0].source, { id: 'alpha', root: '/r/alpha' },
+      'and the panel still gets structured source over SSE',
+    );
+  });
+
+  test('refuses an unrecognised scope rather than answering for one product', async () => {
+    const { srv } = await wired();
+    const { body } = await postMessage(srv.baseUrl, { text: 'hi', scope: 'portoflio' });
+    assert.equal(body.ok, false);
+    assert.equal(body.error.kind, 'invalid', 'a typo must not silently become a project answer');
+  });
+
+  test('refuses portfolio scope combined with a focused idea', async () => {
+    const { srv } = await wired();
+    const { body } = await postMessage(srv.baseUrl, { text: 'hi', scope: 'portfolio', focusId: 'IDEA-1' });
+    assert.equal(body.ok, false);
+    assert.equal(body.error.kind, 'invalid');
+  });
+
+  test('refuses portfolio scope when no portfolio is declared, as misconfigured', async () => {
+    const { srv } = await wired();
+    const { body } = await postMessage(srv.baseUrl, { text: 'hi', scope: 'portfolio' });
+    assert.equal(body.ok, false);
+    assert.equal(body.error.kind, 'misconfigured', 'never a silent downgrade to one product');
+  });
+});
