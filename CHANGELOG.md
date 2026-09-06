@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.3.8 — 2026-09-06
+
+### Released: compose 0.3.8, compose-mcp 0.1.0
+
+`@smartmemory/compose-mcp` — the slim stdio launcher that resolves
+`@smartmemory/compose/mcp` — reaches npm for the first time, with its parent
+dependency corrected from the long-stale `^0.1.5-beta` to `^0.3.8`. Verified by
+installing the tarball from the registry and completing an MCP `initialize`
+handshake. The `@smartmemory/stratum` dependency moves to `^0.4.5`, which is the
+first release carrying `guard list`; without it, guard status falls back to the
+slow per-directory probe.
+
 
 ### One-tap guard authorization (COMP-GUARD-ONE-TAP)
 
