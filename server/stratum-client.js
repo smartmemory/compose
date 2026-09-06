@@ -396,6 +396,11 @@ export async function guardPolicy(resourceId) {
   return runGuard('policy', { resource_id: resourceId }, QUERY_TIMEOUT_MS);
 }
 
+/** List registered guard resources, optionally filtered by resource_id prefix. */
+export async function guardList({ prefix } = {}) {
+  return runGuard('list', prefix ? { prefix } : {}, QUERY_TIMEOUT_MS);
+}
+
 /** Apply a signed, server-owned guard upgrade descriptor. */
 export async function guardApplyUpgrade({ resourceId, descriptorId, descriptorsPath }) {
   return runGuard('apply-upgrade', {

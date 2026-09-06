@@ -23,7 +23,10 @@ because it probes every feature dir through the stratum CLI). The stratum client
 as an error: it is the normal answer for every never-registered feature. Custody never passes a
 password, never sets an askpass, and calls `sudo -k` so an approval leaves no cached credential.
 Design record: the brief's ssh-agent confirm mode has no askpass on macOS, and every keychain design
-hits the entitlement wall for unsigned CLIs — see `docs/features/COMP-GUARD-ONE-TAP/design.md`.
+hits the entitlement wall for unsigned CLIs — see `docs/features/COMP-GUARD-ONE-TAP/design.md`. Registered-resource
+enumeration now asks stratum for a single `guard list` scoped to the workspace's id prefix instead of probing
+every mode's artifact directory one guard spawn at a time, falling back to the old per-directory probe when an
+older stratum doesn't support the action.
 
 ### Lifecycle backfill — record a completion the lifecycle never walked (COMP-LIFECYCLE-BACKFILL)
 
