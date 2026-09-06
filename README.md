@@ -76,7 +76,7 @@ compose plan "a tool that summarizes my team's standups"
 
 ## Quick install
 
-Prerequisites: Node.js 18+ and a [Stratum](https://github.com/smartmemory/stratum) checkout as a sibling directory (the TS engine runs from source; `compose init` detects its MCP entrypoint automatically — the python `stratum-mcp` PyPI package is retired). Codex steps additionally need the OpenAI `codex` CLI. Full prereqs in [docs/install.md](docs/install.md).
+Prerequisites: Node.js 18+. [Stratum](https://github.com/smartmemory/stratum) needs no separate install — `@smartmemory/stratum` is a dependency, and `compose init` registers the installed copy's MCP entrypoint automatically (a sibling `stratum/` checkout is a development convenience, not a requirement; the python `stratum-mcp` PyPI package is retired). Codex steps additionally need the OpenAI `codex` CLI. Full prereqs in [docs/install.md](docs/install.md).
 
 The package is published to npm as `@smartmemory/compose`. Pick one install style:
 
