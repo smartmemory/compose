@@ -1,10 +1,10 @@
 {
   "code": "COMP-FOH",
   "description": "Front of House: Maya (colleague) + SmartMemory (typed memory OS) as Compose's memory & interaction layer. Restaurant model: front-of-house = Maya+SmartMemory (fluid ideation/deliberation/conviction/challenge/calibration/worldview, workspace-per-product); back-of-house = Compose delivery + git feature.json (committed roadmap). Promotion=crystallization (fluid->git), completion=dissolution (exhaust->memory). Discovery Loop is ~80% prebuilt in SmartMemory (challenge_assertion, EvaluationEvolver calibration, decay/strength conviction, decision/plan/opinion types). Hybrid canon clarifies (not violates) COMP-ROADMAP Decision 2. Gaps: no cross-workspace/portfolio, no relational/ACID. Maya drive-vs-follow = gate/flag/skip dial. Anchor: docs/features/COMP-FOH/design.md; vision: docs/product/2026-07-20-discovery-loop-vision.md.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "COMP-FOH: Front of House (Maya + SmartMemory)",
   "created": "2026-07-20",
-  "updated": "2026-08-04",
+  "updated": "2026-09-06",
   "complexity": "XL",
   "position": 1,
   "profile": {
@@ -13,5 +13,34 @@
     "needs_verification": true,
     "needs_report": true
   },
-  "impact": "high"
+  "impact": "high",
+  "completions": [
+    {
+      "completion_id": "COMP-FOH:97fbe6120a9d48ee3a2256c0b2c1344d0e8369a6",
+      "feature_code": "COMP-FOH",
+      "commit_sha": "97fbe6120a9d48ee3a2256c0b2c1344d0e8369a6",
+      "commit_sha_short": "97fbe612",
+      "tests_pass": true,
+      "files_changed": [
+        "CHANGELOG.md",
+        "docs/features/COMP-FOH/design-foh-7.md",
+        "docs/features/COMP-FOH/livefire-foh7/RESULTS.md",
+        "docs/features/COMP-FOH/livefire-foh7/compose.json.example",
+        "docs/features/COMP-FOH/livefire-foh7/provision-fluid.mjs",
+        "docs/features/COMP-FOH/livefire-foh7/seed.mjs",
+        "docs/features/COMP-FOH/livefire-foh7/turn0-prefix.json",
+        "docs/features/COMP-FOH/livefire-foh7/turn1.json",
+        "docs/features/COMP-FOH/report-foh-7.md",
+        "lib/fluid/portfolio.js",
+        "lib/maya-identity.js",
+        "test/fluid-portfolio.test.js",
+        "test/helpers/maya-stub.js",
+        "test/maya-routes.test.js"
+      ],
+      "recorded_at": "2026-09-06T13:41:38.596Z",
+      "recorded_by": "mcp:agent",
+      "notes": "FOH-7 PORTFOLIO shipped @ce1b740; live-fire passed @97fbe61 (2 SmartMemory tenants + local member; 2 suite-invisible defects fixed). Full suite 6364/621/100 green. Closes FOH-1..7."
+    }
+  ],
+  "commit_sha": "97fbe6120a9d48ee3a2256c0b2c1344d0e8369a6"
 }
