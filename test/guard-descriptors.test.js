@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, stat, lstat, writeFile, readdir, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 
 import {
@@ -56,6 +57,87 @@ test('buildDescriptorFile refuses a to_policy with an unknown fifth key before w
     mode: 'build',
     to_policy: { ...stored, unexpected: true },
   }]), /unknown policy key/i);
+});
+
+function workspaceHash(workspaceRoot) {
+  return createHash('sha256').update(path.resolve(workspaceRoot)).digest('hex').slice(0, 12);
+}
+
+test('enumerateRegisteredResources: uses guard list, skips terminal resources, parses a namespaced mode', async () => {
+  const workspace = await mkdtemp(path.join(tmpdir(), 'guard-enumerate-'));
+  const hash = workspaceHash(workspace);
+  const listCalls = [];
+  const policyCalls = [];
+  const deps = {
+    async guardList({ prefix }) {
+      listCalls.push(prefix);
+      return {
+        status: 'ok',
+        resources: [
+          { resource_id: `compose:${hash}:DONE-1`, checksum: 'a'.repeat(64), current_state: 'complete', terminal: ['complete', 'killed'], graph_version: 1 },
+          { resource_id: `compose:${hash}:fix:BUG-1`, checksum: 'b'.repeat(64), current_state: 'triage', terminal: ['complete', 'killed'], graph_version: 1 },
+        ],
+        skipped: 0,
+      };
+    },
+    async guardPolicy(resourceId) {
+      policyCalls.push(resourceId);
+      return { ...stored, checksum: 'b'.repeat(64), current_state: 'triage' };
+    },
+  };
+  const results = await enumerateRegisteredResources(workspace, deps);
+  assert.deepEqual(listCalls, [`compose:${hash}:`]);
+  assert.deepEqual(policyCalls, [`compose:${hash}:fix:BUG-1`]);
+  assert.equal(results.length, 1);
+  assert.equal(results[0].mode, 'fix');
+  assert.equal(results[0].from_checksum, 'b'.repeat(64));
+});
+
+test('enumerateRegisteredResources: falls back to the directory probe when list is unsupported', async () => {
+  const workspace = await mkdtemp(path.join(tmpdir(), 'guard-enumerate-fallback-'));
+  await mkdir(path.join(workspace, 'docs', 'features', 'BUG-1'), { recursive: true });
+  const hash = workspaceHash(workspace);
+  let listCalled = false;
+  const policyCalls = [];
+  const deps = {
+    async guardList() {
+      listCalled = true;
+      return { status: 'error', error_type: 'unknown_action', message: 'list not supported' };
+    },
+    async guardPolicy(resourceId) {
+      policyCalls.push(resourceId);
+      return { ...stored, checksum: 'c'.repeat(64), current_state: 'explore_design' };
+    },
+  };
+  const results = await enumerateRegisteredResources(workspace, deps);
+  assert.equal(listCalled, true);
+  assert.deepEqual(policyCalls, [`compose:${hash}:BUG-1`]);
+  assert.equal(results.length, 1);
+  assert.equal(results[0].mode, 'build');
+});
+
+test('enumerateRegisteredResources: ignores a listed id with an unknown mode segment', async () => {
+  const workspace = await mkdtemp(path.join(tmpdir(), 'guard-enumerate-unknown-mode-'));
+  const hash = workspaceHash(workspace);
+  const policyCalls = [];
+  const deps = {
+    async guardList() {
+      return {
+        status: 'ok',
+        resources: [
+          { resource_id: `compose:${hash}:sandbox:WEIRD-1`, checksum: 'd'.repeat(64), current_state: 'explore_design', terminal: ['complete'], graph_version: 1 },
+        ],
+        skipped: 0,
+      };
+    },
+    async guardPolicy(resourceId) {
+      policyCalls.push(resourceId);
+      return { ...stored, checksum: 'd'.repeat(64) };
+    },
+  };
+  const results = await enumerateRegisteredResources(workspace, deps);
+  assert.deepEqual(policyCalls, []);
+  assert.deepEqual(results, []);
 });
 
 function entry(checksum) {

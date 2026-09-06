@@ -17,7 +17,7 @@ const SERVER_DIR = `${REPO_ROOT}/server`;
 
 const {
   _testOnly_setExecFile,
-  guardRegister, guardTransition, guardOverride, guardHistory, guardPolicy, guardApplyUpgrade, guardDescriptors, guardDigest,
+  guardRegister, guardTransition, guardOverride, guardHistory, guardPolicy, guardList, guardApplyUpgrade, guardDescriptors, guardDigest,
 } = await import(`${SERVER_DIR}/stratum-client.js`);
 
 /** Mock execFile that captures args + piped stdin and replays a response. */
@@ -117,6 +117,24 @@ test('guardPolicy: minimal resource_id payload and canonical not-found envelope'
   assert.deepEqual(JSON.parse(m.lastStdin), { resource_id: 'rid' });
   assert.equal(res.error_type, 'guard_not_found');
   assert.deepEqual(m.lastOpts, { timeout: 5_000 });
+});
+
+test('guardList: sends the prefix kwarg when given one', async () => {
+  const m = makeMock([{ exitCode: 0, stdout: '{"status":"ok","resources":[],"skipped":0}' }]);
+  _testOnly_setExecFile(m.exec);
+  const res = await guardList({ prefix: 'compose:abc:' });
+  assert.deepEqual(m.lastArgs, ['guard', 'list']);
+  assert.deepEqual(JSON.parse(m.lastStdin), { prefix: 'compose:abc:' });
+  assert.deepEqual(m.lastOpts, { timeout: 5_000 });
+  assert.equal(res.status, 'ok');
+});
+
+test('guardList: sends empty kwargs when no prefix is given', async () => {
+  const m = makeMock([{ exitCode: 0, stdout: '{"status":"ok","resources":[],"skipped":0}' }]);
+  _testOnly_setExecFile(m.exec);
+  await guardList();
+  assert.deepEqual(m.lastArgs, ['guard', 'list']);
+  assert.deepEqual(JSON.parse(m.lastStdin), {});
 });
 
 test('guardApplyUpgrade: sends only descriptor identifiers and path through child env', async () => {
