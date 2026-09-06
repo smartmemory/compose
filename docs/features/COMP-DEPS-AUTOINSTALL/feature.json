@@ -2,7 +2,7 @@
   "code": "COMP-DEPS-AUTOINSTALL",
   "phase": "COMP-DEPS-AUTOINSTALL: Auto-install required plugin deps",
   "description": "Install the plugins behind missing REQUIRED external deps during compose setup/init/update instead of printing a hint and running degraded. A clean install reported '6 of 12 deps missing (4 required)' and warned the lifecycle would run degraded, so reaching a working state depended on the user reading the report. Manifest entries gain a structured `plugin` spec and `marketplace_source`; the human `install` string is never executed (several entries are prose, and shelling manifest text is an injection surface). Required only, deduped by plugin, marketplace registered and install retried once on a pristine machine, post-install rescan reported. Opt out via --no-install-deps / COMPOSE_NO_PLUGIN_INSTALL=1; doctor stays read-only. Also fixes a scanner bug found while building it: the plugin cache outlives `claude plugin uninstall`, so an uninstalled plugin read as present and auto-install would never have fired.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "created": "2026-09-06",
   "profile": {
     "needs_prd": true,
@@ -12,5 +12,18 @@
     "language": "node",
     "test_framework": "vitest"
   },
-  "updated": "2026-09-06"
+  "updated": "2026-09-06",
+  "completions": [
+    {
+      "completion_id": "COMP-DEPS-AUTOINSTALL:32678343e8a2cc84d5150daccf4e3d72d40a5276",
+      "feature_code": "COMP-DEPS-AUTOINSTALL",
+      "commit_sha": "32678343e8a2cc84d5150daccf4e3d72d40a5276",
+      "commit_sha_short": "32678343",
+      "tests_pass": true,
+      "files_changed": [],
+      "recorded_at": "2026-09-06T04:22:04.939Z",
+      "recorded_by": "mcp:agent"
+    }
+  ],
+  "commit_sha": "32678343e8a2cc84d5150daccf4e3d72d40a5276"
 }
