@@ -7,13 +7,15 @@
     "url": "https://github.com/smartmemory/compose",
     "source": "github"
   },
-  "version": "0.1.0",
+  "version": "0.4.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@smartmemory/compose-mcp",
-      "version": "0.1.0",
-      "transport": { "type": "stdio" }
+      "version": "0.4.0",
+      "transport": {
+        "type": "stdio"
+      }
     }
   ]
 }

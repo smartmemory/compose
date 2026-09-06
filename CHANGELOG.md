@@ -1,6 +1,23 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-09-06
+
+### Version sync across the three packages
+
+`@smartmemory/compose-mcp` now carries compose's **exact** version and depends on
+`^<that version>`; `@smartmemory/compose` and `@smartmemory/stratum` share a **minor**, with
+patches moving independently. So this release is compose `0.4.0` + compose-mcp `0.4.0` +
+stratum `0.4.x`.
+
+compose-mcp is a four-file shim whose only job is to resolve `@smartmemory/compose/mcp`, so an
+independent version number carried no information and cost real accuracy: it shipped its first
+npm release pinned to `^0.1.5-beta`, nine compose releases stale. Compose and stratum are one
+product in two repos, and compose calls stratum's MCP surface directly, so a shared minor answers
+"does this compose work with that stratum" from the version alone.
+
+The rule is written in `.claude/rules/versioning.md` and enforced by `test/version-sync.test.js`
+— a bump that breaks either constraint fails the suite rather than reaching a tag.
+
 
 ### Missing required plugins are installed, not just reported (COMP-DEPS-AUTOINSTALL)
 

@@ -2,6 +2,14 @@
 
 How to install Compose, initialize a project, and register the global skill.
 
+## Package versions
+
+Three packages ship together: `@smartmemory/compose`, its thin MCP wrapper
+`@smartmemory/compose-mcp` (always the exact same version), and `@smartmemory/stratum` (same
+minor, independent patch). A compose 0.4.x install expects a stratum 0.4.x, which its dependency
+range already pins. The rule and its enforcing test live at `.claude/rules/versioning.md` and
+`test/version-sync.test.js`.
+
 ## Prerequisites
 
 - Node.js 18+
