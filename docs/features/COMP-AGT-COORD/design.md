@@ -38,7 +38,7 @@ These gaps become blocking as builds scale: a 6-task parallel dispatch with one 
 - Transactional agent state machine with long-term persistence (AGT-17)
 
 **Not in scope:**
-- Multi-machine agent distribution (single-host only)
+- Multi-machine agent distribution (single-host only) — lifted by [COMP-DIST-EXEC](/docs/features/COMP-DIST-EXEC/design.md)
 - Agent-to-agent direct communication (all coordination goes through parent or shared blackboard)
 - Real-time streaming of agent output to other agents (relay remains UI-only)
 - Changes to the Claude SDK's query() interface (we work within its async iterator)

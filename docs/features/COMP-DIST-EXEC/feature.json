@@ -1,0 +1,16 @@
+{
+  "code": "COMP-DIST-EXEC",
+  "phase": "COMP-DIST-EXEC: Distributed Execution Across Machines",
+  "description": "Run a build's parallel agent tasks across multiple machines. Today every task in a parallel dispatch is a `child_process` on the orchestrator host, isolated by a git worktree (`server/agent-spawn.js`, `lib/build.js`), so a build's width is capped by one machine's cores and one machine's rate limits, and the host is a single point of failure mid-build. COMP-AGT-COORD deliberately scoped itself to a single host (design.md, Not-in-scope: \"Multi-machine agent distribution\"); this feature lifts that limit and inherits its debts. Three known dependencies, not hand-waving: (1) coordination currently goes through the parent or a shared blackboard in process memory, so a remote executor needs that channel over a network with the AGT-7 ordering and delivery guarantees restated for a partitionable link; (2) merge back into the shared build-stream is last-writer-wins today (batch builds share one build-stream), which is a tolerable gap on one host and a correctness bug the moment two machines finish concurrently \u2014 the merge queue (COMP-PAR-MERGE-QUEUE) has to become the only door; (3) worktree isolation assumes a shared filesystem, so task dispatch must ship a content-addressed workspace and collect a diff rather than assume a path. Open questions for design: executor discovery and enrolment (reuse the guard trust root, or a separate executor identity?), whether a remote executor is trusted to run lifecycle writes at all or only returns diffs for the orchestrator to apply, and what a partial-host failure does to an in-flight batch.",
+  "status": "PLANNED",
+  "created": "2026-09-06",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-09-06"
+}
