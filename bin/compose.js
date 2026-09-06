@@ -90,7 +90,7 @@ function resolveCwdWithWorkspace(args) {
 // --team flag (COMP-TEAMS)
 // ---------------------------------------------------------------------------
 import { parseTeamFlag } from '../lib/team-flag.js';
-import { loadDeps, checkExternalSkills, printDepReport, buildDepReport, checkExternalBinaries, printBinaryReport, buildBinaryReport } from '../lib/deps.js';
+import { loadDeps, checkExternalSkills, printDepReport, buildDepReport, checkExternalBinaries, printBinaryReport, buildBinaryReport, installMissingPlugins, printInstallReport } from '../lib/deps.js';
 import {
   checkLatestVersion,
   checkPackageVersion,
@@ -172,7 +172,7 @@ function detectAgents() {
  *   - PACKAGE_ROOT/.claude/skills/*   (compose skill)
  *   - PACKAGE_ROOT/skills/*           (stratum base skill)
  */
-function syncSkills(agents) {
+function syncSkills(agents, setupFlags = []) {
   // Collect source skills: { name -> sourcePath }
   const sourceSkills = new Map()
   const skillSourceDirs = [
@@ -271,10 +271,26 @@ function syncSkills(agents) {
   // actionable install hints. Soft check: warnings only, exit code unaffected.
   const deps = loadDeps(PACKAGE_ROOT)
   if (deps) {
-    const result = checkExternalSkills(deps)
+    let result = checkExternalSkills(deps)
+    // COMP-DEPS-AUTOINSTALL: close the loop rather than printing a hint and
+    // running degraded. Only required deps with a `plugin` spec are installed.
+    // The report printed below is the POST-install scan, so what the user reads
+    // is the state they actually end up in, never the state we started from.
+    const installReport = installMissingPlugins(result, { enabled: pluginInstallEnabled(setupFlags) })
+    printInstallReport(installReport)
+    if (installReport.installed.length > 0) result = checkExternalSkills(deps)
     printDepReport(result)
     printBinaryReport(checkExternalBinaries(deps))
   }
+}
+
+/**
+ * COMP-DEPS-AUTOINSTALL opt-out. Off for `--no-install-deps` and for
+ * COMPOSE_NO_PLUGIN_INSTALL=1 (CI, sandboxes, anyone who manages plugins by hand).
+ */
+function pluginInstallEnabled(flags = []) {
+  if (process.env.COMPOSE_NO_PLUGIN_INSTALL === '1') return false
+  return !flags.includes('--no-install-deps')
 }
 
 // ---------------------------------------------------------------------------
@@ -578,7 +594,7 @@ async function runInit(flags, cwdOverride) {
   }
 
   // 9. Sync all compose-owned skills to detected agents
-  syncSkills(agents)
+  syncSkills(agents, flags)
 
   // 10. Summary
   console.log('')
@@ -592,7 +608,7 @@ async function runInit(flags, cwdOverride) {
 // compose setup — user-global skill setup
 // ---------------------------------------------------------------------------
 
-function runSetup() {
+function runSetup(setupFlags = []) {
   // 1. Sync all compose-owned skills to detected agents.
   //    If none detected, fall back to Claude — setup is unconditional
   //    "install global skill" per its help text.
@@ -600,7 +616,7 @@ function runSetup() {
   if (agents.length === 0) {
     agents = [{ name: 'claude', skillDir: join(homedir(), '.claude', 'skills', 'stratum') }]
   }
-  syncSkills(agents)
+  syncSkills(agents, setupFlags)
 
 }
 
@@ -713,7 +729,7 @@ async function runUpdate(flags) {
   // Refresh global skills.
   console.log('')
   console.log('Refreshing global skill installation...')
-  runSetup()
+  runSetup(args)
 
   // If invoked from inside a Compose project, refresh project artifacts too
   if (existsSync(join(cwd, '.compose', 'compose.json'))) {
@@ -828,7 +844,7 @@ if (cmd === 'setup' || cmd === 'sync') {
   // agent skill dirs. The name `sync` better signals
   // the idempotent "reconcile local skills with this install" job (run it after
   // editing skills locally, when there's no new version to `update` to).
-  runSetup()
+  runSetup(args)
   process.exit(0)
 }
 
@@ -882,7 +898,7 @@ if (cmd === 'migrate-anon') {
 if (cmd === 'install') {
   // Backwards-compat: run both init + setup
   await runInit(args)
-  runSetup()
+  runSetup(args)
   process.exit(0)
 }
 

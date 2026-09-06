@@ -84,7 +84,7 @@ The package is published to npm as `@smartmemory/compose`. Pick one install styl
 
 ```bash
 npm install -g @smartmemory/compose
-compose setup                # install bundled skills + register the Stratum MCP server (alias: compose sync)
+compose setup                # install bundled skills, auto-install missing required plugins, register the Stratum MCP server (alias: compose sync)
 ```
 
 **Option B — git clone (for development):**

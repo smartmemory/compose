@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### Missing required plugins are installed, not just reported (COMP-DEPS-AUTOINSTALL)
+
+`compose setup` / `init` / `update` used to print `✗ superpowers:… — install: claude plugin install
+superpowers` four times and then tell the user the lifecycle would "run in degraded mode". A fresh
+install therefore reached a working state only if the user read the report and acted on it. Compose
+now installs the plugins behind missing **required** deps itself, then re-scans and prints the
+post-install report, so the summary describes the state the user ends up in.
+
+Manifest entries gain two optional fields: `plugin` (the `<plugin>@<marketplace>` spec handed to
+`claude plugin install`) and `marketplace_source` (the `owner/repo` registered first when that
+marketplace is not configured — the normal state on a new machine, where the un-retried install
+fails with "not found in marketplace"). The human `install` string is never executed: several
+entries are prose, and shelling manifest text is an injection surface. Specs are deduped, so six
+`superpowers:*` deps produce one install. Optional deps are never auto-installed — theirs are
+third-party marketplaces that each need a separate consent step. Opt out with `--no-install-deps`
+or `COMPOSE_NO_PLUGIN_INSTALL=1`; a missing `claude` CLI is a reported skip, and failures print the
+real stderr without changing the exit code. `compose doctor` remains read-only.
+
+### fix(deps): an uninstalled plugin is no longer reported as present
+
+`checkExternalSkills` discovered cached plugins by walking
+`~/.claude/plugins/cache/`, but that tree **survives `claude plugin uninstall`** — so a plugin the
+user had removed still counted as installed, `compose doctor` said "All 12 deps present" for skills
+Claude Code would not load, and auto-install would never re-install them. When
+`~/.claude/plugins/installed_plugins.json` is readable it is now the authority and only its recorded
+`installPath` entries count; the cache walk remains as a fallback for Claude Code versions that
+predate that file.
+
 ## 0.3.8 — 2026-09-06
 
 ### docs: Stratum is not a prerequisite
