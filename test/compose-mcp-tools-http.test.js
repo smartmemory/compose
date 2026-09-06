@@ -15,12 +15,13 @@ import {
   toolGetCurrentSession,
   toolBindSession,
   toolKillFeature,
+  toolBackfillCompletion,
   toolApproveGate,
   toolSetWorkspace,
 } from '../server/compose-mcp-tools.js';
 
 // Helper: spin up an http server that captures every request and replies 200 JSON.
-function startCaptureServer() {
+function startCaptureServer(reply = { status: 200, body: { ok: true } }) {
   const captured = [];
   const server = http.createServer((req, res) => {
     let buf = '';
@@ -32,8 +33,8 @@ function startCaptureServer() {
         headers: { ...req.headers },
         body: buf,
       });
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true }));
+      res.writeHead(reply.status, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(reply.body));
     });
   });
   return new Promise((resolve) => {
@@ -86,6 +87,19 @@ test('T5 _httpRequest: POST callsite (_postLifecycle via toolKillFeature) sends 
   assert.equal(captured[0].url, '/api/vision/items/ITEM-1/lifecycle/kill');
   assert.equal(captured[0].headers['content-type'], 'application/json');
   assert.deepEqual(JSON.parse(captured[0].body), { reason: 'no longer needed' });
+});
+
+test('backfill lifecycle errors include both refusal reasons and the hint', async (t) => {
+  const { server, port } = await startCaptureServer({
+    status: 422,
+    body: { error: 'backfill refused', reasons: ['signature did not verify'], hint: 'compose guard enrol' },
+  });
+  t.after(() => server.close());
+  process.env.COMPOSE_PORT = String(port);
+  await assert.rejects(
+    () => toolBackfillCompletion({ id: 'ITEM-1', reason: 'r' }),
+    /backfill refused.*signature did not verify.*hint: compose guard enrol/,
+  );
 });
 
 test('T5 _httpRequest: POST callsite (_postGate via toolApproveGate) sends JSON body', async (t) => {

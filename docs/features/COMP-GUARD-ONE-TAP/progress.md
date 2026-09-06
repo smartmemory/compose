@@ -24,14 +24,62 @@ Owner is not gating: automated gates pass without asking; Codex reviews each gat
   (1 P1) → all folded in (disposition table in blueprint); boundary map re-validated ok. Gate r2
   fixes-only (`717e09e7de69`): **REVIEW CLEAN**. `stratum_step_done(write_blueprint)` recorded; implement dispatchToken `17d3eed4-aac3-41a4-9484-f70f81fa5184`.
 - `plan.md` written (S1–S4, T1.1–T4.3). `manual-check.md` written.
+- **S1 landed** (Codex `f8e04fd5fefc`, terra/high, 9.7 min): `lib/guard-custody.js`, `acquireDirLock(path,{timeoutMs})`,
+  `guardDescriptors` transport, generations API in `lib/guard-descriptors.js` (+ `prepareUnsignedCandidate`,
+  `pruneGenerations`). Reran all five test files unsandboxed: 31/31. Adjudicated against blueprint §2: try/catch
+  envelope + staging cleanup, realpath returns, invalid signed `<sha>` refused without moving `current`, race
+  re-verified. Deviation accepted: `writeDescriptorFile` kept until S3 removes its only caller (`bin/compose.js:1226`).
+- **S2 landed** (Codex `4a45c199fb52`, terra/high, 14 min): `applyBackfillUpgrade` rewrite (short-circuit, 150 s lock,
+  `_testOnly_setEnsureDescriptors` seam, full envelopes), gate hint line, 422 `hint`, MCP 4xx reasons+hint. Codex could
+  not run 3 of 4 suites (no server bind / ProcessIdentity in sandbox); unsandboxed rerun found **2 real test bugs**, fixed
+  here: (1) routes "real producer failure" row used the guard-OFF ctx (200, `guarded:false`) and a fake policy that
+  diverged from ensureGuard's projection; now its own `setup({guard:true})`, stored policy = real legacy projection,
+  history seam injected so only enumeration reaches the failing CLI. (2) Flow A asserted BF-1/BF-2 share a checksum —
+  false: edge predicates embed the feature dir; the generation covers both, BF-2 is `fresh`. `registerLegacy` also
+  hardcoded `initial: explore_design`, which silently failed fix-mode registration (BF-3); retry count is 2 not 1.
+  All S1+S2 suites green unsandboxed: 31 + 62. Blueprint §3.5 wording corrected.
+- **Impl review r1 (S1+S2)** `9ec05b86ba57`: 3 P2, 0 P1 — see `reviews/impl-s1s2-r1.md`. #1 (adopt without verify)
+  and #2 (path containment / symlinked `<sha>/`) → fixed by a Sonnet agent; #3 (`writeDescriptorFile` still
+  reachable) → deferred to S3 where its caller is replaced. Round 2 = fixes-only review.
+- **Impl review r2 (fixes-only)** `551891f6187c`: 2 P2 on the r1 fixes (adoption trusts a pre-existing `<sha>/`;
+  containment misses file/sig realpaths + race recovery) — `reviews/impl-s1s2-r2.md`. Sent back to the same Sonnet
+  agent; r3 verification folded into the S3 review (review budget).
+- **r2 fixes landed** (Sonnet, verified 20/20 + 40/40): adoption verifies a pre-existing `<sha>/` before `current`;
+  containment covers file + sig realpaths and the race-recovery path; rename race now also catches `ENOTDIR`
+  (renaming a dir onto a planted symlink raises ENOTDIR on macOS, not EEXIST — found empirically by the fix agent).
+- **S3 landed** (Codex `dc475dd6e024`, terra/high, 8 min, ran ∥ with the r2 fixes): `lib/guard-enrol.js`, `lib/guard-cli.js`,
+  `bin/compose.js` dispatcher (`descriptors|sign|enrol`, `status [--prune]` signing block). Unsandboxed: 26/27 — the
+  spawned `status` row assumed `cached admin credential: unknown` (this Mac says `none`). Controller removed
+  `writeDescriptorFile` + its test row (descriptors 19/19). Adjudication vs blueprint §4 found 4 more: `none`-custody
+  `descriptors` never publishes an operator-signed candidate (ensure must run first); enrol plan printed only AFTER
+  the sudo step (must precede Touch ID); `installScript` chmods `/Library` itself; canon `guard status` now dies
+  outside a workspace. All 5 → Sonnet agent `fix-s3-cli`. **Flag:** `status` coverage enumerates every feature dir ×
+  4 modes through the stratum CLI (spec'd in blueprint §4.2) — on this repo that is hundreds of spawns; measure at
+  ship, likely needs a `--coverage` opt-in or a cheaper registry query as a follow-up.
+- **Full suite run 1** (`CI=1 npm test`, outbound keys neutered): 6210/6251 node:test, **2 fail + 39 cancelled, all in
+  `test/lifecycle-backfill.test.js`** — root cause: `npm test` does not set `NODE_ENV`, my targeted runs did; the custody
+  seam correctly refuses without it. Fixed the way the suite's other seam users do (file sets `process.env.NODE_ENV='test'`).
+  Rerun without the var preset: 51/51 across the three seam suites. vitest suites never ran (chain stopped) → launched
+  separately: `test:ui` 613/613, `test:tracker` 100/100.
+- **S3 review r1** `7d30c133b9b3`: **2 P1 + 3 P2**, all real — `reviews/impl-s3-r1.md`. P1: enrol emitter defaulted to
+  no-op (sudo reachable with no plan); packaged signer path interpolated unquoted into the root shell. Fixes split across
+  the two Sonnet agents. r2 fixes-only next, then stop.
+- **S3 r1 fixes landed** (two Sonnet agents ∥, verified locally): enrol/cli 33/33; descriptors + backfill golden + upgrade
+  67/67, all run WITHOUT `NODE_ENV` preset. Emitter mandatory; signer embedded by heredoc (no path in the root shell);
+  manual fallback only on the no-custody refusal; file+sig containment in adoption; symlinked generations dir refused
+  everywhere; `prepareUnsignedCandidate` refuses over an existing `.sig`. r2 fixes-only review dispatched.
+- **S3 review r2** `443411380c02`: 2 P2 + 1 P3 (dangling `.sig` symlink reads as absent via `realpath`; enrol
+  preparation throws outside the envelope; two test weaknesses) — `reviews/impl-s3-r2.md`. Sent to the two agents.
+  **Review budget reached** — after these land: targeted reruns, `stratum_step_done(implement)`, `stratum_audit`, commit.
+- **S3 r2 fixes landed** (both agents): lstat-based `.sig` presence (dangling symlink refused, nothing written through
+  it); enrol preparation failures return the envelope; tests strengthened. **Ship gate:** all 12 feature suites,
+  `env -u NODE_ENV`, **141/141**. `stratum_step_done(implement)` recorded.
 
 ## Next
 
-1. Fold Codex blueprint r2 findings (if any P1 remains → one more fixes round, then stop at 3).
-2. `stratum_step_done(write_blueprint)` with dispatchToken `03c48821-510d-4d5b-9b13-9e2015040934`.
-3. Phase 7: S1 (T1.1–T1.5) → S2 (T2.1–T2.5) → Codex impl review → S3 → review → S4; one full suite at the
+1. S4 close: `stratum_audit` → commit (explicit paths) → memory `project_comp_guard_one_tap` → journal entry (T4.1 docs already drafted, T4.2 full suite, T4.3 step_done/audit/commit) (Codex `dc475dd6e024`, barred from guard-descriptors) → controller removes `writeDescriptorFile` + its test row → Codex review (S3 + r2-fix verification) → S4 → S3 → review → S4; one full suite at the
    end (`CI=1 npm test` to a file + `$?`, `npm run test:ui`, `npm run test:tracker`).
-4. Owner runs `manual-check.md` once (`compose guard enrol` needs an interactive terminal + Touch ID).
+2. Owner runs `manual-check.md` once (`compose guard enrol` needs an interactive terminal + Touch ID).
 
 ## Landmines carried from COMP-LIFECYCLE-BACKFILL
 

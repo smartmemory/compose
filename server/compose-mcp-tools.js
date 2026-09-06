@@ -708,10 +708,14 @@ async function _postLifecycle(itemId, action, body) {
   }
   const { status, body: respBody } = result;
   if (status >= 400) {
-    const errMsg = (respBody && typeof respBody === 'object' && respBody.error)
-      ? respBody.error
-      : `HTTP ${status}: ${typeof respBody === 'string' ? respBody : JSON.stringify(respBody)}`;
-    throw new Error(errMsg);
+    const body = respBody && typeof respBody === 'object' ? respBody : null;
+    if (body) {
+      const parts = [body.error ?? `HTTP ${status}`];
+      if (Array.isArray(body.reasons) && body.reasons.length) parts.push(body.reasons.join('; '));
+      if (body.hint) parts.push(`hint: ${body.hint}`);
+      throw new Error(parts.join(' — '));
+    }
+    throw new Error(`HTTP ${status}: ${typeof respBody === 'string' ? respBody : JSON.stringify(respBody)}`);
   }
   return respBody;
 }

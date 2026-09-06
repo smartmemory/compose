@@ -116,6 +116,60 @@ describe('POST /api/vision/items/:id/lifecycle/backfill', () => {
     assert.ok(Array.isArray(r.body.reasons));
   });
 
+  test('real descriptor enumeration failure stays a 422 with its custody hint', async (t) => {
+    // The shared ctx runs with the guard OFF (its gate never reaches the upgrade path);
+    // this row needs a guard-enabled workspace whose stored policy IS the legacy projection
+    // ensureGuard computes, otherwise it refuses at GUARD_POLICY_DIVERGED before signing.
+    const guarded = await setup({ guard: true });
+    t.after(() => { guarded.server.close(); rmSync(guarded.root, { recursive: true, force: true }); });
+    const {
+      _testOnly_setGuardClient, _testOnly_resetGuardCache, _testOnly_featureRelDir,
+      buildPhaseGraph, edgePredicates, legacyPolicyProjection,
+    } = await import('../server/lifecycle-guard.js');
+    const { terminalOf } = await import('../lib/lifecycle-modes.js');
+    const { _testOnly_setHistoryClient } = await import('../lib/completion-gate.js');
+    const { guardRegister, guardTransition, guardPolicy, guardApplyUpgrade, guardDescriptors } = await import('../server/stratum-client.js');
+    const priorCli = process.env.COMPOSE_STRATUM_TS_CLI_BIN;
+    const failing = join(guarded.root, 'guard-policy-fails.cjs');
+    writeFileSync(failing, '#!/usr/bin/env node\nprocess.stderr.write("policy unavailable\\n"); process.exit(1);\n');
+    chmodSync(failing, 0o755);
+    const legacy = {
+      status: 'ok', checksum: 'a'.repeat(64), current_state: 'explore_design',
+      ...legacyPolicyProjection({
+        graph: buildPhaseGraph('build'),
+        edge_predicates: edgePredicates(_testOnly_featureRelDir('BF-ROUTE-1', guarded.root, 'build'), 'build'),
+        terminal: terminalOf('build'),
+        stakes: {},
+      }),
+    };
+    _testOnly_resetGuardCache();
+    _testOnly_setGuardClient({
+      register: async () => ({ status: 'error', error_type: 'guard_already_registered' }),
+      transition: guardTransition,
+      policy: async () => legacy,
+      applyUpgrade: guardApplyUpgrade,
+      descriptors: guardDescriptors,
+    });
+    // The gate reads guard history BEFORE the upgrade; the failing CLI must only be reached by
+    // descriptor enumeration (the real guardPolicy transport inside ensureSignedDescriptors).
+    _testOnly_setHistoryClient(async () => ({ current_state: 'explore_design' }));
+    process.env.COMPOSE_STRATUM_TS_CLI_BIN = failing;
+    t.after(() => {
+      _testOnly_setHistoryClient(null);
+      _testOnly_resetGuardCache();
+      _testOnly_setGuardClient({ register: guardRegister, transition: guardTransition, policy: guardPolicy, applyUpgrade: guardApplyUpgrade, descriptors: guardDescriptors });
+      if (priorCli === undefined) delete process.env.COMPOSE_STRATUM_TS_CLI_BIN;
+      else process.env.COMPOSE_STRATUM_TS_CLI_BIN = priorCli;
+    });
+    const r = await request(guarded.port, `/api/vision/items/${guarded.item.id}/lifecycle/backfill`, {
+      commit_sha: guarded.sha, tests_pass: true, files_changed: [], reason: 'descriptor producer fails', occurrences: [],
+    });
+    assert.equal(r.status, 422, JSON.stringify(r.body));
+    assert.equal(r.body.guardError?.code, 'upgrade_descriptor_unavailable', JSON.stringify(r.body));
+    assert.equal(r.body.hint, 'compose guard enrol');
+    assert.notEqual(r.body.error, 'policy unavailable');
+  });
+
   test('uses the lifecycle mutation auth guard', async () => {
     const guarded = await setup({ guardAuth: true });
     try {

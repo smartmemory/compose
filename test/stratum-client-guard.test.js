@@ -17,7 +17,7 @@ const SERVER_DIR = `${REPO_ROOT}/server`;
 
 const {
   _testOnly_setExecFile,
-  guardRegister, guardTransition, guardOverride, guardHistory, guardPolicy, guardApplyUpgrade, guardDigest,
+  guardRegister, guardTransition, guardOverride, guardHistory, guardPolicy, guardApplyUpgrade, guardDescriptors, guardDigest,
 } = await import(`${SERVER_DIR}/stratum-client.js`);
 
 /** Mock execFile that captures args + piped stdin and replays a response. */
@@ -127,6 +127,16 @@ test('guardApplyUpgrade: sends only descriptor identifiers and path through chil
   assert.deepEqual(JSON.parse(m.lastStdin), { resource_id: 'rid', descriptor_id: 'backfill-build-abcdef' });
   assert.equal(m.lastOpts.timeout, 10_000);
   assert.equal(m.lastOpts.env.STRATUM_GUARD_UPGRADE_DESCRIPTORS, '/tmp/guard-upgrades.json');
+});
+
+test('guardDescriptors: sends no kwargs and pins the inspected descriptor path in child env', async () => {
+  const m = makeMock([{ exitCode: 0, stdout: '{"status":"ok","signature":"verified: fixture"}' }]);
+  _testOnly_setExecFile(m.exec);
+  await guardDescriptors('/tmp/guard-upgrades/descriptors.json');
+  assert.deepEqual(m.lastArgs, ['guard', 'descriptors']);
+  assert.deepEqual(JSON.parse(m.lastStdin), {});
+  assert.equal(m.lastOpts.timeout, 10_000);
+  assert.equal(m.lastOpts.env.STRATUM_GUARD_UPGRADE_DESCRIPTORS, '/tmp/guard-upgrades/descriptors.json');
 });
 
 test('guardDigest: sends its exact six-key payload', async () => {

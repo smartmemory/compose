@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### One-tap guard authorization (COMP-GUARD-ONE-TAP)
+
+The five manual operator steps behind a guard upgrade descriptor are gone. `compose guard enrol`
+(once per Mac) installs a root-owned Ed25519 signing key and a root-owned signer under
+`/Library/Compose/guard/`, a `sudo` rule pinned to that signer with `timestamp_timeout=0`, and the
+`pam_tid` line so every signature is one Touch ID prompt; it then enrols the public key in stratum's
+trust root and verifies the round trip before the trust root is written. The backfill gate now signs
+on demand: when a registered legacy feature needs a descriptor that is not yet signed, it generates
+the candidate, asks once, verifies through stratum's verifier, and applies — zero prompts when a
+verified generation already covers the checksum. Descriptors are immutable content-addressed
+generations under `.compose/guard-upgrades/<sha256>/` behind one atomic `current` symlink; the
+workspace-wide descriptor lock is held through the apply. Refusals carry `error.code` (
+`signature_not_approved` | `upgrade_descriptor_unavailable`) and `error.hint` end to end, the HTTP 422
+body gains top-level `hint`, and the MCP lifecycle tools now surface `reasons` and `hint` instead of the
+bare `backfill refused`. `compose guard sign`, `compose guard descriptors` (generate + sign + verify,
+one-line verdict; unsigned-candidate manual path when there is no custody) and an extended
+`compose guard status` (custody, enrolment, freshness, committed, `--prune`). Custody never passes a
+password, never sets an askpass, and calls `sudo -k` so an approval leaves no cached credential.
+Design record: the brief's ssh-agent confirm mode has no askpass on macOS, and every keychain design
+hits the entitlement wall for unsigned CLIs — see `docs/features/COMP-GUARD-ONE-TAP/design.md`.
+
 ### Lifecycle backfill — record a completion the lifecycle never walked (COMP-LIFECYCLE-BACKFILL)
 
 A feature finished outside the lifecycle (before compose, or while the guard was

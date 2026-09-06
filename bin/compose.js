@@ -1218,21 +1218,20 @@ _This is a seed design doc created by \`compose feature\`. The \`compose build\`
   process.exit(0)
 }
 
-if (cmd === 'guard' && args[0] === 'descriptors') {
-  // compose guard descriptors — COMP-LIFECYCLE-BACKFILL S1-5. Narrowly gated so
-  // the canon-guard dispatcher below keeps install/uninstall/status/verify.
+if (cmd === 'guard' && ['descriptors', 'sign', 'enrol'].includes(args[0])) {
+  // New signing verbs stay above the canon-guard dispatcher below. They resolve
+  // the target workspace; canon-guard intentionally continues to dogfood this
+  // package root for its own hook state.
+  const sub = args[0]
   const { root: cwd } = resolveCwdWithWorkspace(args)
-  const { writeDescriptorFile } = await import('../lib/guard-descriptors.js')
-  try {
-    const result = await writeDescriptorFile(cwd)
-    console.log(`Wrote ${result.path} (${result.descriptors.length} descriptor(s)). Next:`)
-    console.log(`  ${result.signCommand}`)
-    console.log(`Commit ${result.path} and ${result.path}.sig after signing.`)
-    process.exit(0)
-  } catch (err) {
-    console.error(`guard descriptors: ${err?.message || String(err)}`)
-    process.exit(1)
-  }
+  const { runGuardDescriptors, runGuardSign, runGuardEnrol } = await import('../lib/guard-cli.js')
+  const principalAt = args.indexOf('--principal')
+  const principal = principalAt === -1 ? undefined : (args[principalAt + 1] ?? '')
+  const result = sub === 'descriptors' ? await runGuardDescriptors(cwd)
+    : sub === 'sign' ? await runGuardSign(cwd)
+      : await runGuardEnrol(principal === undefined ? {} : { principal }, { emit: (line) => console.log(line) })
+  for (const line of result.lines) console.log(line)
+  process.exit(result.status === 'refused' ? 1 : 0)
 }
 
 if (cmd === 'roadmap') {
@@ -2339,10 +2338,34 @@ if (cmd === 'guard') {
     for (const pattern of guardedDisplaysFor('hook')) {
       console.log(`  guards: ${pattern} (Write|Edit|NotebookEdit) — Claude-runtime only`)
     }
+    // `compose guard status` must keep working outside a workspace (it always
+    // has, for the canon-guard hook state above); only the newer `signing:`
+    // block needs a resolved workspace, so resolve it tolerantly here instead
+    // of going through resolveCwdWithWorkspace -> dieOnWorkspaceError.
+    let signingWorkspaceRoot = null
+    try {
+      const wsId = getWorkspaceFlag(args)
+      signingWorkspaceRoot = resolveWorkspace({ workspaceId: wsId === '__COMPOSE_WORKSPACE_ID__' ? null : wsId }).root
+    } catch { /* no workspace resolved — signing block is skipped below */ }
+
+    if (!signingWorkspaceRoot) {
+      console.log('signing: (no workspace resolved — run inside a compose workspace or pass --workspace)')
+      if (args.includes('--prune')) process.exit(1)
+      process.exit(0)
+    }
+
+    const { pruneGuardGenerations, signingStatusLines } = await import('../lib/guard-cli.js')
+    if (args.includes('--prune')) {
+      const pruned = await pruneGuardGenerations(signingWorkspaceRoot)
+      for (const line of pruned.lines) console.log(line)
+      if (pruned.status === 'refused') process.exit(1)
+    }
+    const signing = await signingStatusLines(signingWorkspaceRoot)
+    for (const line of signing.lines) console.log(line)
     process.exit(0)
   }
 
-  console.error(`Unknown guard subcommand: "${sub}". Use: install | uninstall | status | init | verify [--fix]`)
+  console.error(`Unknown guard subcommand: "${sub}". Use: install | uninstall | status [--prune] | init | verify [--fix] | enrol | sign | descriptors`)
   process.exit(1)
 }
 

@@ -402,6 +402,13 @@ export async function guardApplyUpgrade({ resourceId, descriptorId, descriptorsP
   });
 }
 
+/** Inspect + verify a descriptor file through stratum's verifier (read-only). */
+export async function guardDescriptors(descriptorsPath) {
+  return runGuard('descriptors', {}, MUTATION_TIMEOUT_MS, {
+    STRATUM_GUARD_UPGRADE_DESCRIPTORS: descriptorsPath,
+  });
+}
+
 /** Compute stratum's canonical transition payload digest without changing state. */
 export async function guardDigest({ fromState, toState, artifacts, modifiedFiles, resolvedBy, policyChecksum }) {
   return runGuard('digest', {

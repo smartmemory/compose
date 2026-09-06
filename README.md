@@ -181,15 +181,12 @@ See [docs/configuration.md](docs/configuration.md) for the full `tracker` config
 
 Sometimes a feature is finished before its lifecycle was ever walked: it shipped before Compose existed, or the guard was switched off at the time. Compose can record that completion with evidence instead of an override token. Call the MCP tool `backfill_completion` (or `POST /api/vision/items/:id/lifecycle/backfill`) with the completing commit, a test attestation, a reason, and dated phase occurrences. The gate verifies the evidence, merges the occurrences into the phase history by their real dates, and moves the guard to `complete_backfilled`. Readers and the UI show which entries were backfilled.
 
-Features that were never registered with the guard need nothing else. Features registered before this release carry an older policy, and the guard will only accept the new one under a signed upgrade descriptor. That signature is an operator step and cannot be automated:
+Features that were never registered with the guard need nothing else. Features registered before this release carry an older policy, and the guard will only accept the new one under a signed upgrade descriptor. The signature is the one thing an agent must never be able to produce on its own, so it is the one thing a human confirms:
 
-1. Create a signing key (keep it out of any agent): `ssh-keygen -t ed25519 -f ~/.stratum/guard-signing -C "<who>"`
-2. Enrol the PUBLIC key in stratum's trust root, `ts/contracts/guard-signers.allowed`, then release stratum and install that version here.
-3. Generate the descriptors: `compose guard descriptors` (writes `.compose/guard-upgrades.json`).
-4. Sign them: `ssh-keygen -Y sign -f ~/.stratum/guard-signing -n stratum-guard-descriptors .compose/guard-upgrades.json`
-5. Commit `.compose/guard-upgrades.json` and `.compose/guard-upgrades.json.sig`.
+- **Once per Mac:** run `compose guard enrol` from a terminal. It installs a root-owned signing key and signer under `/Library/Compose/guard/`, a `sudo` rule that always re-authenticates (Touch ID via `pam_tid`), enrols the public key in stratum's trust root, and verifies the round trip. Two Touch ID prompts, then `done`.
+- **Every later signature is one Touch ID prompt.** When a backfill needs a descriptor that is not yet signed, the gate generates it, asks, verifies, and continues. Nothing else is manual. `compose guard sign` does the same explicitly and `compose guard status` shows custody, enrolment, descriptor freshness and whether the signed generations are committed.
 
-Until step 5 is done, a backfill on a registered feature refuses with `upgrade_descriptor_unavailable` and writes nothing. Re-run steps 3 to 5 whenever the lifecycle graph changes again.
+Signed descriptors live in `.compose/guard-upgrades/<sha256>/` (immutable) with `current` pointing at the live generation; commit them like any other workspace canon. A backfill refuses with `signature_not_approved` when the prompt is cancelled or cannot be shown (SSH session, `tmux` without `pam_reattach`), and with `upgrade_descriptor_unavailable` on a machine that has not run `enrol`. Admins who want the "one approval, one signature" property to hold against their own other `sudo` use can add `Defaults timestamp_timeout=0` to sudoers. Without macOS custody (Linux, CI), `compose guard descriptors` still writes the unsigned candidate and prints the `ssh-keygen -Y sign` command for an operator key.
 
 ## Remote access (mobile PWA from anywhere)
 

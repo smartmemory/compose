@@ -18,13 +18,16 @@ import { execFile, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { descriptorIdFor } from '../lib/guard-descriptors.js';
+import { descriptorIdFor, deriveBackfillPolicy, ensureSignedDescriptors } from '../lib/guard-descriptors.js';
+import { acquireDirLock } from '../lib/dir-lock.js';
+import { custodySign, DESCRIPTOR_LOCK_TIMEOUT_MS, HINT_APPROVE } from '../lib/guard-custody.js';
 
 import {
   guardRegister as _guardRegister,
   guardTransition as _guardTransition,
   guardPolicy as _guardPolicy,
   guardApplyUpgrade as _guardApplyUpgrade,
+  guardDescriptors as _guardDescriptors,
 } from './stratum-client.js';
 import { setFeatureStatus as _setFeatureStatus } from '../lib/feature-writer.js';
 import {
@@ -286,9 +289,17 @@ let _client = {
   transition: _guardTransition,
   policy: _guardPolicy,
   applyUpgrade: _guardApplyUpgrade,
+  descriptors: _guardDescriptors,
 };
 /** @internal test seam */
 export function _testOnly_setGuardClient(c) { _client = c; }
+
+const _custody = { sign: custodySign };
+let _ensureDescriptors = ensureSignedDescriptors;
+/** @internal test seam: real enumeration bypasses the injectable guard client. */
+export function _testOnly_setEnsureDescriptors(ensure) {
+  _ensureDescriptors = ensure ?? ensureSignedDescriptors;
+}
 
 // Per-process registration cache — register is idempotent server-side, but the
 // cache avoids a subprocess per request once a resource is known-registered.
@@ -456,33 +467,79 @@ export async function applyBackfillUpgrade({ featureCode, workspaceRoot, mode = 
   try {
     stored = await _client.policy(rid);
   } catch (error) {
-    return { ok: false, reasons: ['could not read stored guard policy; run compose guard descriptors and re-sign'], error: { code: 'GUARD_UNREACHABLE', message: error.message } };
+    const message = error?.message || String(error);
+    return { ok: false, reasons: ['could not read stored guard policy'], error: { code: 'GUARD_UNREACHABLE', message, hint: HINT_APPROVE } };
   }
   if (isGuardError(stored)) {
-    return { ok: false, reasons: ['could not read stored guard policy; run compose guard descriptors and re-sign'], error: { code: guardErrorType(stored), message: guardErrorMessage(stored) } };
+    const message = guardErrorMessage(stored);
+    return { ok: false, reasons: ['could not read stored guard policy'], error: { code: guardErrorType(stored) ?? 'upgrade_descriptor_unavailable', message, hint: HINT_APPROVE } };
   }
-  const descriptorsPath = path.resolve(workspaceRoot, '.compose', 'guard-upgrades.json');
-  let applied;
+  const expected = deriveBackfillPolicy(policyChecksumFields(stored), mode);
+  if (policiesEqual(expected, policyChecksumFields(stored))) {
+    _registered.set(rid, 'cached');
+    return { ok: true, status: 'unchanged', checksum: stored.checksum };
+  }
+
+  let release;
   try {
-    applied = await _client.applyUpgrade({
-      resourceId: rid,
-      descriptorId: descriptorIdFor(stored.checksum, mode),
-      descriptorsPath,
-    });
+    release = await acquireDirLock(
+      path.join(workspaceRoot, '.compose', 'data', 'locks', 'guard-descriptors'),
+      { timeoutMs: DESCRIPTOR_LOCK_TIMEOUT_MS },
+    );
   } catch (error) {
-    return { ok: false, reasons: ['guard upgrade failed; run compose guard descriptors and re-sign'], error: { code: 'GUARD_UNREACHABLE', message: error.message } };
+    const message = error?.message || String(error);
+    return { ok: false, reasons: [message], error: { code: 'upgrade_descriptor_unavailable', message, hint: HINT_APPROVE } };
   }
-  if (isGuardError(applied)) {
+  try {
+    const ensured = await _ensureDescriptors({
+      workspaceRoot,
+      needChecksums: [stored.checksum],
+      custody: _custody,
+      verifier: _client.descriptors,
+    });
+    if (ensured.status === 'refused') {
+      return {
+        ok: false,
+        reasons: [ensured.message],
+        error: { code: ensured.code ?? 'upgrade_descriptor_unavailable', message: ensured.message, hint: ensured.hint ?? HINT_APPROVE },
+      };
+    }
+
+    let applied;
+    try {
+      applied = await _client.applyUpgrade({
+        resourceId: rid,
+        descriptorId: descriptorIdFor(stored.checksum, mode),
+        descriptorsPath: ensured.path,
+      });
+    } catch (error) {
+      const message = error?.message || String(error);
+      return { ok: false, reasons: ['guard upgrade failed'], error: { code: 'GUARD_UNREACHABLE', message, hint: HINT_APPROVE } };
+    }
+    if (isGuardError(applied)) {
+      const message = guardErrorMessage(applied);
+      return {
+        ok: false,
+        reasons: ['guard upgrade failed'],
+        error: { code: guardErrorType(applied) ?? 'upgrade_descriptor_unavailable', message, hint: HINT_APPROVE },
+      };
+    }
+    if (applied.status !== 'applied' && applied.status !== 'unchanged') {
+      const message = 'guard upgrade returned an unexpected result';
+      return { ok: false, reasons: [message], error: { code: 'upgrade_descriptor_unavailable', message, hint: HINT_APPROVE } };
+    }
+    _registered.set(rid, 'cached');
     return {
-      ok: false,
-      reasons: ['guard upgrade failed; run compose guard descriptors and re-sign'],
-      error: { code: guardErrorType(applied), message: guardErrorMessage(applied) },
+      ok: true,
+      status: applied.status,
+      ledgerRef: applied.ledger_ref,
+      checksum: applied.checksum,
+      descriptorId: descriptorIdFor(stored.checksum, mode),
+      generation: ensured.sha,
     };
+  } finally {
+    await release();
   }
-  if (applied.status !== 'applied' && applied.status !== 'unchanged') {
-    return { ok: false, reasons: ['guard upgrade returned an unexpected result; run compose guard descriptors and re-sign'], error: applied };
-  }
-  return { ok: true, status: applied.status, ledgerRef: applied.ledger_ref, checksum: applied.checksum };
 }
 
 /**
