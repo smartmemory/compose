@@ -118,6 +118,11 @@ One command — auto-detects whether compose was installed via npm or git clone:
 compose update
 ```
 
+Versions across the three published packages move together: `@smartmemory/compose-mcp` carries
+compose's exact version, and `@smartmemory/compose` shares a minor with `@smartmemory/stratum`
+(patches move independently). So compose 0.4.x pairs with stratum 0.4.x. See
+[.claude/rules/versioning.md](.claude/rules/versioning.md).
+
 For npm installs, this runs `npm install -g @smartmemory/compose@latest`. For git clones, it runs `git pull --ff-only && npm install`. Either way it then refreshes the global skill and (if invoked from inside a Compose project) re-runs `compose init` to refresh `.mcp.json` and pipeline templates. Use `compose update --force` to bypass the dirty-tree check on git clones.
 
 Check what you're running:

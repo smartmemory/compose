@@ -17,7 +17,10 @@ const wrapperServer = JSON.parse(readFileSync(join(wrapperRoot, 'server.json'), 
 
 test('compose-mcp package.json: identity, version, license', () => {
   assert.equal(wrapperPkg.name, '@smartmemory/compose-mcp');
-  assert.equal(wrapperPkg.version, '0.1.0');
+  // Version RELATIONSHIPS are owned by test/version-sync.test.js. A literal here
+  // just breaks on every bump — which is what it did at 0.4.0, and what the
+  // '^0.1.5-beta' literal below it did silently for nine releases.
+  assert.match(wrapperPkg.version, /^\d+\.\d+\.\d+/);
   assert.equal(wrapperPkg.license, 'MIT');
   assert.equal(wrapperPkg.type, 'module');
   assert.equal(wrapperPkg.engines.node, '>=18.0.0');
@@ -43,12 +46,11 @@ test('compose-mcp package.json: files allowlist', () => {
 
 test('compose-mcp server.json: registry identity and version match', () => {
   assert.equal(wrapperServer.name, 'io.github.smartmemory/compose-mcp');
-  assert.equal(wrapperServer.version, '0.1.0');
   assert.equal(wrapperServer.version, wrapperPkg.version);
   assert.equal(wrapperServer.packages[0].identifier, '@smartmemory/compose-mcp');
   assert.equal(wrapperServer.packages[0].registryType, 'npm');
   assert.equal(wrapperServer.packages[0].transport.type, 'stdio');
-  assert.equal(wrapperServer.packages[0].version, '0.1.0');
+  assert.equal(wrapperServer.packages[0].version, wrapperPkg.version);
 });
 
 test('compose-mcp LICENSE: present and starts with MIT License', () => {
