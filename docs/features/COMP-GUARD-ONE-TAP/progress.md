@@ -96,11 +96,14 @@ Owner is not gating: automated gates pass without asking; Codex reviews each gat
   hold until the orphans are cleaned and a clean generation is re-signed). Fixed: stratum honours
   `STRATUM_GUARDS_DIR` (`48d1e26`); compose preload points the whole run at a temp store — proven: 65 guard-registering
   tests ran, real store stayed at 37 entries.
+- **Orphans removed (owner: yes):** 32 test registrations deleted from `~/.stratum/guards` (listed in the session);
+  5 real features remain. `sign` on the junk generation was `fresh` (it verifies and covers the empty need set), so
+  `current` was restored to the committed 0-descriptor generation `cd35092…` and the junk dir deleted — no tap needed.
 
 ## Next
 
 1. DONE — feature COMPLETE.
-2. Owner decision: delete the 32 orphaned test registrations from `~/.stratum/guards` (list them with `stratum guard list --prefix compose:85154ecf6cdb:`), then `compose guard sign` (one tap), `compose guard status --prune`, commit the generation. (T4.1 docs already drafted, T4.2 full suite, T4.3 step_done/audit/commit) (Codex `dc475dd6e024`, barred from guard-descriptors) → controller removes `writeDescriptorFile` + its test row → Codex review (S3 + r2-fix verification) → S4 → S3 → review → S4; one full suite at the
+2. DONE — store clean (5 real registrations), `current` = committed `cd35092…`. (T4.1 docs already drafted, T4.2 full suite, T4.3 step_done/audit/commit) (Codex `dc475dd6e024`, barred from guard-descriptors) → controller removes `writeDescriptorFile` + its test row → Codex review (S3 + r2-fix verification) → S4 → S3 → review → S4; one full suite at the
    end (`CI=1 npm test` to a file + `$?`, `npm run test:ui`, `npm run test:tracker`).
 2. Owner runs `manual-check.md` once (`compose guard enrol` needs an interactive terminal + Touch ID).
 
