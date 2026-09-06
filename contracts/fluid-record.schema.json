@@ -122,6 +122,11 @@
           "type": ["string", "null"],
           "description": "Where the idea came from, as free text."
         },
+        "extra_fields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Hand-authored markdown field lines the ideabox parser did not recognise, kept verbatim in serializer order. Exists so migrating a markdown ideabox into records is lossless: this contract is closed and the record shape is an allowlist, so a custom field with nowhere to live is deleted from the user's file by the first render after the upgrade, silently. See COMP-IDEABOX-MIGRATE-DIALECT."
+        },
         "links": {
           "type": "array",
           "items": { "$ref": "#/definitions/link" }
