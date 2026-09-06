@@ -1,5 +1,40 @@
 # Changelog
 
+## Unreleased
+
+### [COMP-IDEABOX-MIGRATE-DIALECT] The ideabox migration gate no-opped on the files it existed to protect
+
+**Critical, silent data loss.** `ensureIdeaboxMigrated` recognised only the current ideabox dialect.
+On the older flat dialect (`### IDEA-N` under plain topic headings, no `## Ideas` wrapper) the parser
+returned zero ideas, and the gate read that silence as "already migrated, proceed". The next write then
+replaced the file with a projection of an empty store.
+
+Measured on a real 162-line, 18-idea ideabox: **one `ideabox add` reduced it to 28 lines**, destroying
+all 18 and allocating the new idea `IDEA-1`, colliding with the original. The gate fired only for
+ideaboxes already in the new dialect — the ones that were never at risk. Every installation upgrading
+from an older ideabox was one keystroke away from this, and where the project is not git-tracked the
+loss was unrecoverable.
+
+Five defects fixed:
+
+- **`lib/ideabox.js`** reads the legacy dialect, mapping its topic headings to clusters so the author's
+  grouping survives the upgrade, and preserving the document's title and preamble.
+- **`lib/fluid/ideabox-migrate.js`** compares what the file *declares* against what the parser
+  *produced* and refuses on any gap (`IdeaboxUnreadable`, HTTP 409) — including the half-converted file
+  that declares one id in both dialects. The detector is punctuation-tolerant on purpose: the first
+  version required the same separator the parser did, so it failed in the same direction as the thing it
+  was checking.
+- **Migration is now lossless.** Hand-authored custom fields survive as `extra_fields`; they were being
+  deleted from the user's file on upgrade. The record's fields were enumerated in four places (the
+  contract, `record-shape.js`, and both providers) and a field missing from any one was dropped on write.
+- **`server/ideabox-routes.js`** no longer bypasses the gate — the cockpit's repair button could erase
+  what the equivalent CLI command refused to touch.
+- **The guard moved to `writeIdeaboxProjection`**, the single boundary every projection write passes
+  through. Guarding each caller is a list that has to stay complete forever.
+
+Found while populating a second product for COMP-FOH FOH-7. Three further findings from the Codex
+adversarial review are reproduced and deferred in `docs/bugs/COMP-IDEABOX-MIGRATE-DIALECT/followups.md`.
+
 ## 0.4.1 — 2026-09-06
 
 ### MCP registry listing (`ai.smartmemory/compose-mcp`)

@@ -51,6 +51,7 @@ import {
   IdeaboxRenderFailed,
 } from '../lib/fluid/ideabox-ops.js'
 import { writeIdeaboxProjection } from '../lib/fluid/render-ideabox.js'
+import { IdeaboxMigrationConflict, IdeaboxUnreadable } from '../lib/fluid/ideabox-migrate.js'
 import { ideaboxView, toClientIdeaWith } from '../lib/fluid/ideabox-view.js'
 import { relForDisplay } from '../lib/project-paths.js'
 
@@ -109,6 +110,12 @@ export function attachIdeaboxRoutes(app, { getProjectRoot, broadcastMessage }) {
       if (err instanceof IdeaboxNotFound) return res.status(404).json({ error: err.message, code: err.code })
       if (err instanceof IdeaboxInvalid) return res.status(400).json({ error: err.message, code: err.code, field: err.field })
       if (err instanceof IdeaboxConflict) return res.status(409).json({ error: err.message, code: err.code })
+      // The migration gate's two refusals. Both mean "the file on disk is in a
+      // state this operation must not write over", which is a conflict, not a
+      // server fault — and the client needs the code to say so.
+      if (err instanceof IdeaboxMigrationConflict || err instanceof IdeaboxUnreadable) {
+        return res.status(409).json({ error: err.message, code: err.code })
+      }
       return res.status(500).json({ error: err.message })
     }
   }
@@ -214,6 +221,9 @@ export function attachIdeaboxRoutes(app, { getProjectRoot, broadcastMessage }) {
   app.post('/api/ideabox/render', async (_req, res) => {
     await send(res, async () => {
       const ctx = await context()
+      // The migration gate is no longer applied here: it lives inside
+      // `writeIdeaboxProjection`, which every projection write goes through.
+      // This route reached that writer without a guard once already.
       await writeIdeaboxProjection(ctx.provider, ctx.ideaboxPath)
       return { body: { ok: true } }
     })

@@ -68,6 +68,29 @@ it('POST /api/ideabox/render rebuilds a deleted projection from the records', as
   assert.ok(idea);
 });
 
+// COMP-IDEABOX-MIGRATE-DIALECT: the HTTP render is the CLI render's twin, and
+// the CLI one runs the migration gate first (lib/ideabox-cli.js). This one did
+// not, so on a project whose ideabox has never been migrated the cockpit's
+// repair button wrote an empty projection over the whole file. The CLI path was
+// safe and the HTTP path was not, which is the failure class where an
+// enumeration of write surfaces would have caught it and a test of one door
+// never could.
+it('POST /api/ideabox/render does not erase an unmigrated ideabox', async () => {
+  const legacy = readFileSync(
+    join(ROOT, 'docs/bugs/COMP-IDEABOX-MIGRATE-DIALECT/repro/flat-dialect-fixture.md'),
+    'utf8',
+  );
+  writeFileSync(ideaboxPath(), legacy);
+
+  const { status } = await post('/api/ideabox/render');
+
+  const after = parseIdeabox(readFileSync(ideaboxPath(), 'utf8'));
+  assert.ok(
+    after.ideas.length >= 18,
+    `the 18 pre-existing ideas must survive a render (status ${status}, found ${after.ideas.length})`,
+  );
+});
+
 before(async () => {
   const app = express();
   app.use(express.json());
