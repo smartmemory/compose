@@ -45,12 +45,30 @@ test('compose-mcp package.json: files allowlist', () => {
 });
 
 test('compose-mcp server.json: registry identity and version match', () => {
-  assert.equal(wrapperServer.name, 'io.github.smartmemory/compose-mcp');
+  // DNS-authenticated namespace (TXT proof on smartmemory.ai), not io.github.* —
+  // the org's directory presence must not depend on a GitHub identity.
+  assert.equal(wrapperServer.name, 'ai.smartmemory/compose-mcp');
   assert.equal(wrapperServer.version, wrapperPkg.version);
   assert.equal(wrapperServer.packages[0].identifier, '@smartmemory/compose-mcp');
   assert.equal(wrapperServer.packages[0].registryType, 'npm');
   assert.equal(wrapperServer.packages[0].transport.type, 'stdio');
   assert.equal(wrapperServer.packages[0].version, wrapperPkg.version);
+});
+
+test('compose-mcp: the npm ownership marker matches the registry listing name', () => {
+  // The MCP registry proves npm ownership by finding this exact value in the
+  // PUBLISHED package.json. If it drifts from server.json's name, publishing is
+  // refused — and the refusal only shows up at release time.
+  assert.equal(wrapperPkg.mcpName, wrapperServer.name);
+});
+
+test('compose-mcp server.json: description fits the registry limit', () => {
+  // The registry caps it at 100 chars and rejects at publish, not at validate-time
+  // in the repo. Caught the hard way on the 0.4.1 release.
+  assert.ok(
+    wrapperServer.description.length <= 100,
+    `description is ${wrapperServer.description.length} chars, registry allows 100`,
+  );
 });
 
 test('compose-mcp LICENSE: present and starts with MIT License', () => {

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.1 — 2026-09-06
+
+### MCP registry listing (`ai.smartmemory/compose-mcp`)
+
+The registry refuses to list a package whose published artifact does not name the server it claims
+to be, so `compose-mcp/package.json` carries `"mcpName": "ai.smartmemory/compose-mcp"`. No code
+change on either package — compose moves only because the version-sync rule binds the two.
+
+The namespace is DNS-authenticated against `smartmemory.ai`, not GitHub. `repository` is omitted
+from `server.json`: the registry validates repository URLs against GitHub/GitLab only and rejects
+`git.smartmemory.ai` under every `source` value tried (gitea, forgejo, generic, git), so pointing
+at the real home is not currently possible.
+
 ## 0.4.0 — 2026-09-06
 
 ### Version sync across the three packages
