@@ -70,7 +70,7 @@ And the other half of session 99's open thread, the "transient stratum-mcp `PARS
 
 ## Open threads
 
-- [ ] `server/vision-routes.js:407` and `:449` return HTTP 422 "transition refused by guard" for every guard error, including TIMEOUT, GUARD_UNREACHABLE and SPAWN. The client-side fix stops the misclassification, but the route still tells a user that evidence was rejected when the guard was never reached. Splitting infrastructure errors to 503 changes a contract several suites assert; owner's call.
+- [x] `server/vision-routes.js` returned HTTP 422 "transition refused by guard" for every guard error, including TIMEOUT, GUARD_UNREACHABLE and SPAWN, so the route still told a user that evidence was rejected when the guard was never reached. **RESOLVED 2026-09-07, same day:** the owner chose the split. Infrastructure errors are 503 "guard unavailable"; refusals stay 422. `test/lifecycle-guard-infra-status.test.js` (9 tests; 6 red under mutation of the split, the 3 refusal cases correctly unaffected).
 - [ ] Under saturation (full suite plus four probe workers), `test/lifecycle-backfill.test.js` and `test/ts-cutover-consumer-fanout-golden.test.js` each failed 1 of 1 load runs and passed 83 of 83 in isolation. Not probed. Per lesson 1, that is a defect report with no load probe yet, not a `flake`.
 - [ ] One run of `test/maya-routes.test.js` failed with `srv` undefined while a peer agent had a draft of the new byte-identity test live; 2 of 2 later runs passed. The shape can only come from a different version of the test, so it is attributed to the draft, and recorded here so a recurrence is not dismissed.
 - [ ] D-TERM-1 did not measure a mixed group (members on more than one uid). The decision record says so.

@@ -87,6 +87,8 @@ Each builds `['guard', <action>, '--json-stdin']`, feeds the JSON kwargs on stdi
 
 **D1.** `advance` (`:263`) — make handler `async`. After the existing `TRANSITIONS` legality check and before mutating `item.lifecycle.currentPhase`, if `capabilities.guard`: `const g = await guardedTransition({featureCode, from, to:targetPhase, workspaceRoot:projectRoot, resolvedBy:'agent'})`. If `!g.applied` → `res.status(422).json({ error:'transition refused by guard', verdict:g.verdict })`; return. Else proceed unchanged.
 
+> **Amended 2026-09-07.** A guard that never answered (`TIMEOUT`, `SPAWN`, `GUARD_UNREACHABLE`, `PARSE_ERROR`, `UNKNOWN`) is now 503 `guard unavailable`; 422 `transition refused by guard` is reserved for a guard that ran. `isGuardInfraError` in `server/lifecycle-guard.js`; pinned by `test/lifecycle-guard-infra-status.test.js`.
+
 **D2.** `skip` (`:294`) — same pattern, `outcome:'skipped'`.
 
 **D3.** `complete` (`:358`, already async) — guard `ship→complete`, passing `commitSha: req.body.commit_sha`. On refuse → 422. Keep the existing best-effort `recordCompletion` afterward.
