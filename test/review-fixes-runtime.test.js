@@ -196,6 +196,70 @@ for (const [platform, wantsHook] of [['win32', false], ['linux', true]]) {
   });
 }
 
+// D-TERM-1 (2026-09-07). `14be1a7` added the group-signal failure stamp with no
+// test at all, and its leader probe cannot discriminate anything: after `close`
+// the leader is reaped, so it reads `gone` in every realistic recurrence. The
+// stamp that answers the question is the GROUP MEMBER LISTING, so it is driven
+// here through the real producer — `processTermination` against a real group
+// that really refuses our signal — never a `ps` double.
+test('a refused group signal is stamped with who is actually in the group', async (t) => {
+  if (process.platform === 'win32') return t.skip('no process groups');
+  if (process.getuid?.() === 0) return t.skip('running as root can signal anything');
+
+  // A root-owned group leader: a group that exists and refuses us, which is
+  // exactly what EPERM means (measured on Darwin: EPERM, not ESRCH).
+  // pgid 1 is EXCLUDED deliberately — `kill(-1, sig)` is not "group 1", it is
+  // the POSIX broadcast to every process we may signal.
+  const { execFileSync } = await import('node:child_process');
+  const table = execFileSync('ps', ['-eo', 'pid=,pgid=,uid='], { encoding: 'utf8' });
+  const foreign = table.split('\n')
+    .map((l) => l.trim().split(/\s+/).map(Number))
+    .find(([pid, pgid, uid]) => pid === pgid && pid > 1 && uid === 0);
+  if (!foreign) return t.skip('no root-owned process group to probe');
+  const [pgid] = foreign;
+
+  const child = Object.assign(new EventEmitter(), { pid: pgid });
+  const mod = await import('../lib/process-termination.js');
+  // SIGTERM at this group is REFUSED by the kernel before delivery — that
+  // refusal is the fixture. The uid guard above is what keeps it a fixture.
+  const error = await mod.processTermination(child, true, 0, 20).terminate().catch((e) => e);
+
+  assert.equal(error.code, 'CANCELLATION_UNCONFIRMED');
+  assert.equal(error.killSite, 'send', 'the failing call site is named');
+  assert.equal(error.killTarget, -pgid);
+  assert.ok(Array.isArray(error.killGroupMembers), 'the group was enumerated');
+  assert.ok(error.killGroupMembers.length > 0, 'and it is not empty — EPERM means a group EXISTS');
+  // The discriminator: a member whose uid is not ours says "we may not signal
+  // this", not "the pgid was recycled". Reading `not-ours` as a recycled pgid
+  // was the wrong inference this stamp replaces.
+  assert.ok(
+    error.killGroupMembers.some((m) => m.uid !== process.getuid()),
+    'a foreign uid in the listing is what separates a refusal from a recycled pgid',
+  );
+  assert.match(error.message, /group members: /);
+  assert.match(error.message, /our uid \d+/);
+});
+
+// The listing runs on an error path, so a failure to read `ps` must be recorded
+// as a field, never raised — a second failure there would replace the first.
+test('an unreadable process table degrades the stamp instead of throwing', async (t) => {
+  if (process.platform === 'win32') return t.skip('no process groups');
+  const child = Object.assign(new EventEmitter(), { pid: 999999 });
+  t.mock.method(process, 'kill', () => { throw Object.assign(new Error('kill EPERM'), { code: 'EPERM' }); });
+  const oldPath = process.env.PATH;
+  process.env.PATH = '/nonexistent';   // `ps` cannot be found
+  try {
+    const mod = await import('../lib/process-termination.js');
+    const error = await mod.processTermination(child, true, 0, 20).terminate().catch((e) => e);
+    assert.equal(error.code, 'CANCELLATION_UNCONFIRMED');
+    assert.equal(Array.isArray(error.killGroupMembers), false);
+    assert.ok(error.killGroupMembers.error, 'the read failure is recorded as a field');
+    assert.match(error.message, /group members: unreadable/);
+  } finally {
+    process.env.PATH = oldPath;
+  }
+});
+
 // C7: process-termination.js is compose's own module now (it was copied
 // compiled TypeScript). Only the export compose uses survives, and the grace
 // period reads a compose-owned env var.

@@ -25,6 +25,7 @@
 - **`--headless` ≠ prompt suppression.** The spec implied suppressing interactive prompts, but `gsd` was already non-interactive — so `--headless` became *supervised auto-resume*, not prompt handling. Documented in design's reality-corrections table.
 - **`state.json` is standalone, not "an extension of the journal."** gsd never journaled; there was nothing to extend. `state.json` is a new continuously-flushed checkpoint (still plain JSON, no SQLite — honoring the spec's constraint).
 - **`pidAlive` moved canonical to `gsd-state.js`** (EPERM=alive) to keep the `gsd.js`↔`gsd-state.js` dependency one-directional; `gsd.js`'s old local copy was removed. `build.js`'s `isProcessAlive` (EPERM=dead) was deliberately *not* reused for crash detection.
+  - **Scope note added 2026-09-07:** this ruling is about a PLAIN pid, where EPERM means "alive but not ours". It does **not** transfer to a process-GROUP probe (`kill(-pgid, …)`), where EPERM means "a group exists and every member refused us" — i.e. unreachable, not alive. See [D-TERM-1](../../decisions/2026-09-07-group-signal-after-leader-reap.md), which measured the difference; applying this ruling there spins the reap loop to its deadline instead.
 
 ## Key Implementation Decisions
 
