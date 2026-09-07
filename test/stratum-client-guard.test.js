@@ -143,7 +143,7 @@ test('guardApplyUpgrade: sends only descriptor identifiers and path through chil
   await guardApplyUpgrade({ resourceId: 'rid', descriptorId: 'backfill-build-abcdef', descriptorsPath: '/tmp/guard-upgrades.json' });
   assert.deepEqual(m.lastArgs, ['guard', 'apply-upgrade']);
   assert.deepEqual(JSON.parse(m.lastStdin), { resource_id: 'rid', descriptor_id: 'backfill-build-abcdef' });
-  assert.equal(m.lastOpts.timeout, 10_000);
+  assert.equal(m.lastOpts.timeout, 30_000);   // the MUTATION budget (raised from 10s, 2026-09-07)
   assert.equal(m.lastOpts.env.STRATUM_GUARD_UPGRADE_DESCRIPTORS, '/tmp/guard-upgrades.json');
 });
 
@@ -153,7 +153,7 @@ test('guardDescriptors: sends no kwargs and pins the inspected descriptor path i
   await guardDescriptors('/tmp/guard-upgrades/descriptors.json');
   assert.deepEqual(m.lastArgs, ['guard', 'descriptors']);
   assert.deepEqual(JSON.parse(m.lastStdin), {});
-  assert.equal(m.lastOpts.timeout, 10_000);
+  assert.equal(m.lastOpts.timeout, 30_000);   // the MUTATION budget (raised from 10s, 2026-09-07)
   assert.equal(m.lastOpts.env.STRATUM_GUARD_UPGRADE_DESCRIPTORS, '/tmp/guard-upgrades/descriptors.json');
 });
 
@@ -220,4 +220,39 @@ test('guard adapter: timeout maps to TIMEOUT error (no retry on mutation)', asyn
   const res = await guardTransition({ resourceId: 'r', fromState: 'a', toState: 'b' });
   assert.equal(m.callCount, 1);
   assert.equal(res.error.code, 'TIMEOUT');
+});
+
+/**
+ * REGRESSION (2026-09-07): a REAL node timeout, not a hand-made `ETIMEDOUT`.
+ *
+ * `child_process.execFile` never delivers `code: 'ETIMEDOUT'` to its CALLBACK on
+ * a `timeout:` kill — it reports `{ code: null, killed: true, signal: 'SIGTERM' }`.
+ * Every mock above manufactures the code that Node does not produce, so they all
+ * passed while the real timeout fell through to `UNKNOWN` and the lifecycle route
+ * rendered it as "transition refused by guard". Measured before the fix: 6/200
+ * lifecycle-guard-e2e runs under full-suite load, all six this shape.
+ *
+ * This test substitutes only the BINARY (a real node child that outlives the
+ * timeout); the error object comes from Node itself.
+ */
+test('guard adapter: a REAL execFile timeout maps to TIMEOUT, not UNKNOWN', async () => {
+  const { execFile: realExecFile } = await import('node:child_process');
+  let captured = null;
+  _testOnly_setExecFile((_bin, _args, opts, callback) => realExecFile(
+    process.execPath,
+    ['-e', 'setTimeout(() => {}, 10000)'],
+    { ...opts, timeout: 250 },
+    (err, out, errOut) => { captured = err; callback(err, out, errOut); },
+  ));
+
+  const res = await guardTransition({ resourceId: 'r', fromState: 'a', toState: 'b' });
+
+  // Pin the real error shape this fix turns on, so a future refactor cannot
+  // silently reintroduce the ETIMEDOUT-only match.
+  assert.equal(captured.code, null, 'node reports code=null on a timeout kill');
+  assert.equal(captured.killed, true);
+  assert.equal(captured.signal, 'SIGTERM');
+
+  assert.equal(res.error.code, 'TIMEOUT', JSON.stringify(res));
+  assert.match(res.error.detail, /exit=-1/);
 });

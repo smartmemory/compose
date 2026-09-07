@@ -7,7 +7,7 @@
  *
  * Contract:
  *   - Query calls:   5s timeout, 1 retry on timeout, no retry on error
- *   - Mutation calls: 10s timeout, no retry (mutations are not idempotent to retry)
+ *   - Mutation calls: 30s timeout, no retry (mutations are not idempotent to retry)
  *   - Exit 0  → parse stdout as JSON, return result
  *   - Exit 2  → conflict (idempotency), return { conflict: true, ... }
  *   - Non-zero → log stderr internally, return { error: { code, message, detail } }
@@ -22,7 +22,13 @@ import { resolveStratumBin, resolveStratumEngine as resolveEngine } from '../lib
 let _execFile = _execFileDefault;
 export function _testOnly_setExecFile(fn) { _execFile = fn; }
 const QUERY_TIMEOUT_MS = 5_000;
-const MUTATION_TIMEOUT_MS = 10_000;
+// Measured 2026-09-07 on this seam: a `guard transition` subprocess costs
+// 1.5-3.9 s idle (node startup + the stratum CLI module graph + guard store IO).
+// A 10 s budget left under 3x headroom, and under full-suite load 6 of 200
+// lifecycle-guard-e2e runs blew it; at 30 s the same probe under the same load
+// was 0 of 200. A mutation timeout is a fail-closed refusal to the caller, so
+// the budget must clear a loaded machine, not just an idle one.
+const MUTATION_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
 // Engine selection (COMP-STRATUM-TS)
@@ -81,8 +87,28 @@ function _spawnResult(bin, err, out, err2) {
   const stdout = out || '';
   let stderr = err2 || '';
   let code;
-  if (err?.code === 'ETIMEDOUT') code = -1;
-  else if (typeof err?.code === 'number') code = err.code;
+  // A timeout kill NEVER reaches the execFile CALLBACK as `code: 'ETIMEDOUT'` —
+  // node kills the child and reports `{ code: null, killed: true, signal:
+  // 'SIGTERM' }`. Matching only on ETIMEDOUT left every real timeout falling
+  // through to the generic `code = 1` branch below, so the TIMEOUT arms of
+  // runQuery/runMutation/runGuard (and runQuery's retry) were unreachable and a
+  // timed-out guard transition surfaced as `UNKNOWN` — rendered by the lifecycle
+  // routes as "transition refused by guard", i.e. an infrastructure timeout
+  // claiming the evidence was evaluated and rejected. Measured 2026-09-07:
+  // 6/200 lifecycle-guard-e2e runs under full-suite load, every one this shape.
+  // (`ETIMEDOUT` is still matched: execFileSync/spawnSync do set it, and
+  // probeStratumBin in lib/stratum-engine.js already checks all three.)
+  // `killed` is set only when NODE killed the child (timeout). A child that
+  // died to an outside signal reports `signal` with `killed: false`; that is
+  // not a timeout and is named as what it was rather than relabelled.
+  if (err?.code === 'ETIMEDOUT' || err?.killed === true) {
+    code = -1;
+    stderr = stderr || err.message || String(err);
+  } else if (typeof err?.code === 'number') code = err.code;
+  else if (err?.signal != null) {
+    code = 1;
+    stderr = stderr || `stratum child killed by ${err.signal}`;
+  }
   else if (typeof err?.code === 'string' && _SPAWN_CODES.has(err.code)) {
     code = -2;
     stderr = _spawnRemedy(bin, err.code);
@@ -103,6 +129,18 @@ function _spawnRemedy(bin, code) {
 }
 
 /**
+ * A bounded, diagnosable tail of what the subprocess actually produced. The
+ * TIMEOUT/PARSE_ERROR envelopes used to carry `detail: ''`, which made every
+ * such failure indistinguishable from every other one in a log. stderr is not
+ * forwarded to REST callers (see the module contract) — this detail is the
+ * process-level shape (exit code + a stdout excerpt), not the child's stderr.
+ */
+function _detail(result) {
+  const out = String(result?.stdout ?? '').trim();
+  return `exit=${result?.code}${out ? ` stdout=${JSON.stringify(out.slice(0, 400))}` : ' stdout=<empty>'}`;
+}
+
+/**
  * Run a query command (read-only). Retries once on timeout.
  *
  * @returns {Promise<any>} parsed JSON result, or throws StratumError
@@ -115,7 +153,7 @@ async function runQuery(args) {
     // Retry once on timeout
     result = await spawnStratum(args, QUERY_TIMEOUT_MS, bin);
     if (result.code === -1) {
-      return { error: { code: 'TIMEOUT', message: 'Stratum query timed out', detail: '' } };
+      return { error: { code: 'TIMEOUT', message: 'Stratum query timed out', detail: _detail(result) } };
     }
   }
 
@@ -136,7 +174,7 @@ async function runQuery(args) {
   try {
     return JSON.parse(result.stdout);
   } catch {
-    return { error: { code: 'PARSE_ERROR', message: 'Stratum returned invalid JSON', detail: '' } };
+    return { error: { code: 'PARSE_ERROR', message: 'Stratum returned invalid JSON', detail: _detail(result) } };
   }
 }
 
@@ -149,7 +187,7 @@ async function runMutation(args) {
   const result = await spawnStratum(args, MUTATION_TIMEOUT_MS, flowGateBin());
 
   if (result.code === -1) {
-    return { error: { code: 'TIMEOUT', message: 'Stratum gate timed out', detail: '' } };
+    return { error: { code: 'TIMEOUT', message: 'Stratum gate timed out', detail: _detail(result) } };
   }
 
   if (result.code === -2) {
@@ -177,7 +215,7 @@ async function runMutation(args) {
   try {
     return JSON.parse(result.stdout);
   } catch {
-    return { error: { code: 'PARSE_ERROR', message: 'Stratum returned invalid JSON', detail: '' } };
+    return { error: { code: 'PARSE_ERROR', message: 'Stratum returned invalid JSON', detail: _detail(result) } };
   }
 }
 
@@ -226,7 +264,7 @@ async function runGuard(action, kwargs, timeoutMs = MUTATION_TIMEOUT_MS, extraEn
   const result = await spawnStratumStdin(['guard', action], JSON.stringify(kwargs), timeoutMs, flowGateBin(), extraEnv);
 
   if (result.code === -1) {
-    return { error: { code: 'TIMEOUT', message: 'Stratum guard timed out', detail: '' } };
+    return { error: { code: 'TIMEOUT', message: 'Stratum guard timed out', detail: _detail(result) } };
   }
   if (result.code === -2) {
     console.error('[stratum-client] guard spawn failure:', result.stderr);
@@ -247,7 +285,7 @@ async function runGuard(action, kwargs, timeoutMs = MUTATION_TIMEOUT_MS, extraEn
   try {
     return JSON.parse(result.stdout);
   } catch {
-    return { error: { code: 'PARSE_ERROR', message: 'Stratum returned invalid JSON', detail: '' } };
+    return { error: { code: 'PARSE_ERROR', message: 'Stratum returned invalid JSON', detail: _detail(result) } };
   }
 }
 
