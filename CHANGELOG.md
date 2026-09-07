@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+### [COMP-IDEABOX-MIGRATE-DIALECT FU-4] A project keeps its own heading through migration
+
+`renderIdeabox` emitted a hardcoded template preamble, so the first projection after a migration
+replaced a project's own title and introductory prose with the standard one. Every idea, cluster,
+custom field and body survived; the document around them did not. Measured on forge-top, where
+`# Forge Ideabox` and its two-line introduction were destroyed.
+
+- `lib/fluid/ideabox-preamble.js` (new) — the captured preamble, stored as plain markdown in a TRACKED
+  sibling of the ideabox: `docs/product/ideabox.md` → `docs/product/ideabox.preamble.md`.
+  `importIdeabox` writes it at migration from the parser's own `preamble` output, never a second scan
+  of the text. `renderIdeaboxFrom` reads it and passes it to the `preamble` argument `renderIdeabox`
+  already accepted. A generated banner is stripped on capture, so a store that re-imports its own
+  projection does not accumulate one banner per migration, and trailing blank lines are dropped on
+  read so a hand-written sidecar does not cost the serializer fixed point.
+- **Tracked, and NOT beside the migration manifest.** The first version put it in gitignored
+  `.compose/data/`, keyed off the provider's lock path. That made a tracked projection depend on
+  untracked input: the heading survived only on the machine that migrated, every other clone rendered
+  the template over it and committed that, and the two machines took turns undoing each other. The
+  owner had already ruled on this shape — records were moved out of gitignored `vision-state.json` in
+  the S3 entry-gate ruling of 2026-08-04 (see the `local-provider.js` header) for the same reason. The
+  manifest is a poor neighbour for a preamble: it is transient, alive only between the start and end
+  of one import, while the preamble is durable content with the records' own lifecycle. Keying off the
+  ideabox path rather than the lock also means SmartMemory, which has no lock, gets a sidecar — the
+  provider whose existence was the argument for a file-side sidecar in the first place.
+- **A sidecar, not a record kind.** Making the preamble canon in the record model means a new ontology
+  type in every SmartMemory tenant and a decision about what a remote store does with per-document
+  text. The preamble is not a property of the idea corpus: it belongs to the projection FILE, which is
+  local whichever provider holds the records.
+- **The render contract is unchanged.** The projection is still a function of the records plus the
+  sidecar and never of its own output, so `render` remains the way back from any hand edit — including
+  a hand edit to the heading, which is discarded and replaced with the captured one. Reading the
+  preamble back from the destination was implemented earlier and rejected for exactly this reason.
+- A project that migrated before this change has no sidecar and gets the standard template, which is
+  what its file already contains. Nothing is destroyed and no record is touched. Its original heading
+  survives in git history, and writing `<ideabox>.preamble.md` by hand restores it — a file beside the
+  document rather than a hashed name under a hidden directory. A project that migrated under the
+  briefly-lived gitignored location keeps that file, orphaned and unread; the same hand-written sibling
+  is the recovery, and the stale file can be deleted.
+
 ### [COMP-IDEABOX-MIGRATE-DIALECT FU-1/FU-2/FU-3] A partial read is never consent
 
 Three follow-ups from the Codex adversarial review of the ideabox migration fix, all the same shape

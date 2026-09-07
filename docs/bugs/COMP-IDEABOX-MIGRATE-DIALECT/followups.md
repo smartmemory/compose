@@ -99,6 +99,46 @@ mismatch. Narrow, but it is a genuine lost-update window on a file the user may 
 
 ## FU-4 (P2) — a project's own title and introduction are replaced by the template on migration
 
+**RESOLVED 2026-09-07 — a tracked sidecar file, chosen by the owner.** The preamble is captured at
+migration into `<ideabox>.preamble.md`, a plain markdown TRACKED SIBLING of the document it describes
+(`lib/fluid/ideabox-preamble.js`). `importIdeabox` writes it from the parser's own `preamble` output;
+`renderIdeaboxFrom` reads it and supplies the `preamble` argument `renderIdeabox` already accepted. No
+sidecar means the standard template, exactly as before.
+
+**Why NOT the gitignored `.compose/data/` location it was first built in.** Putting it beside the
+migration manifest made a TRACKED projection depend on UNTRACKED input, so the heading survived only on
+the machine that ran the migration: every other clone found no sidecar, rendered the template over the
+custom heading and committed that, and the migrating machine restored it on its next render — this very
+defect recurring per clone, plus git churn on a tracked file. The owner had already ruled on exactly
+this shape in the S3 entry-gate ruling of 2026-08-04 (recorded in the header of
+`lib/fluid/local-provider.js`): records were moved OUT of gitignored `vision-state.json` because canon
+that a tracked file is generated from cannot itself be ignored. The manifest is not a comparable
+neighbour — it is TRANSIENT, alive only between the start and the end of one import, while the preamble
+is durable content with the same lifecycle as the records. Keying the path off the ideabox rather than
+off `provider.lockPath` additionally means SmartMemory, which has no lock, gets a sidecar; under the
+first design it silently got none, which was the provider whose existence justified a file-side sidecar
+over a record kind. Pinned by a test that renders on a clone carrying only the tracked files.
+
+**Why not the record-kind option described below.** Making the preamble canon in the record model
+means adding an ontology type to every SmartMemory tenant and deciding what a remote store does with
+per-document text. The preamble is not a property of the idea corpus at all — it belongs to the
+projection FILE, and that file is local whichever provider holds the records. A local sidecar is the
+honest home for it, and it is the smaller change.
+
+**The contract below is intact.** The projection remains a function of the records plus the sidecar and
+never of its own output, so `render` is still the way back from any hand edit; a vandalised heading is
+discarded and the captured one restored. Pinned by tests in `test/fluid-cutover.test.js`, and the
+rejected destination-reading design is distinguishable by test — implementing it turns the contract
+test red along with two pre-existing ones.
+
+**What an already-migrated project gets.** No sidecar, therefore the standard template, which is what
+its file already holds — nothing changes, no record is touched and nothing further is lost. The
+original heading survives in that project's git history; recovering it means writing
+`<ideabox>.preamble.md` by hand, which is a sibling of the document rather than a hashed name under a
+hidden directory. There is no command for that yet. A project that migrated during the brief life of
+the gitignored location keeps that file on disk, orphaned and never read: verified that the render
+falls back to the template and destroys nothing, and the same hand-written sibling is the recovery.
+
 The parser now preserves the legacy document's preamble, but `renderIdeabox`
 (`lib/fluid/render-ideabox.js`) emits a hardcoded `PREAMBLE`, so the first projection after migration
 replaces the project's own heading and introductory prose with the standard template. Ideas, clusters,
