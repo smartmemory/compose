@@ -286,6 +286,7 @@ Files: `package.json` (existing), `CHANGELOG.md` (existing), `README.md` (existi
 - [ ] `@smartmemory/stratum` → `^0.4.4` in `package.json` (symlink stays)
 - [ ] ONE full suite, unsandboxed: `cd compose && CI=1 npm test`, then `npm run test:ui` (611) and
       `npm run test:tracker` (100) separately; only `test/build-stream-smoke.test.js` may flake
+      (no longer expected as of 2026-09-07 @12a357a — that flake was a real bridge defect, now fixed)
 - [ ] CHANGELOG entry + README operator steps (ed25519 key → enrol pubkey in stratum trust root →
       release + install → `compose guard descriptors` → `ssh-keygen -Y sign` → commit json + .sig) in
       the SAME commit as the version bump
