@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+### [COMP-IDEABOX-MIGRATE-DIALECT FU-1/FU-2/FU-3] A partial read is never consent
+
+Three follow-ups from the Codex adversarial review of the ideabox migration fix, all the same shape
+as the bug itself: something that failed or was interrupted being read as "there was nothing there".
+
+- **FU-2 — one readability check, every caller** (`lib/fluid/ideabox-readable.js`, new). The check
+  that distinguishes "I could not read this file" from "this file is empty" lived in the migration
+  gate only, so the two callers that parse independently treated a failed parse as an empty one.
+  Extracted verbatim into a leaf module (the parser's own module has to import it, and the gate
+  imports the parser, so leaving it in the gate would close a cycle) and wired into `importIdeabox`
+  and `readIdeabox`. `compose new --from-idea` now stops on an unreadable ideabox instead of
+  reporting "idea not found" for an idea plainly in the file and building the feature without it.
+- **FU-3 — the projection re-checks inside its own lock** (`lib/fluid/render-ideabox.js`,
+  `assessIdeabox` in `lib/fluid/ideabox-migrate.js`). The gate runs outside the write lock and must
+  stay there, so the file it approved was not necessarily the file being replaced: an editor saving
+  a new idea mid-migration had it destroyed. The gate is now split into a PURE assessment and an
+  executor, and the projection re-runs the assessment under the lock. Deliberately not a fingerprint
+  captured at gate time: a hash cannot tell an edit from a second legitimate render, and would refuse
+  the CLI's write because the REST API's landed first. The window INSIDE the lock is closed
+  separately — reading the records and rendering them takes time, and a person saving a file never
+  acquires this lock — by comparing the destination against ITSELF immediately before the rename.
+  That comparison spans milliseconds under the lock, so a concurrent render, which the lock
+  serializes, cannot trip it.
+- **FU-1 — a durable migration manifest** (`lib/fluid/ideabox-manifest.js`, new). `importIdeabox`
+  writes records one at a time; a crash on idea 2 left ideas 3..N never issued, so they carried no
+  event, so the gate called them hand-added strays and refused — and every recovery it named ran the
+  same gate. The importer now declares its planned handles before the first write, in gitignored
+  `.compose/data/`, and removes the record on success. The resumable set becomes
+  `(issued and not deleted) or planned`, where the manifest half counts only while it is open AND its
+  hash matches the file being read now. A hand-added idea after a completed migration still refuses;
+  an edit during an interrupted one refuses naming the mid-migration edit. An open manifest is a fact
+  about the DOCUMENT, so it is consulted whether or not any handle is missing: editing an idea that
+  already has a record changes no id, and scoping the check to missing ids let exactly that edit
+  through to be projected away. `importIdeabox` re-reads its source after its last write and stops if
+  it changed, leaving the manifest open so nothing is destroyed. The manifest itself is written temp +
+  rename and an identical retry does not rewrite it — the file whose whole job is surviving a crash
+  was being destroyed and recreated by each attempt to recover from one.
+
+The "crashed partway" test was **replaced**, not extended: it deleted record files after a COMPLETED
+import, which constructs a resumable prefix and never touches the unattempted tail it was named for.
+
 ### [COMP-FOH FOH-7] Live-fire passed; two defects the suite could not reach
 
 The first real portfolio turn against two SmartMemory tenants plus a local-floor member
