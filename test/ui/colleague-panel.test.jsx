@@ -539,3 +539,76 @@ describe('FOH-7 S4 — a turn funnel does not outlive the turn that opened it', 
     expect(screen.queryByText(/no fluid\.portfolio/)).toBeNull();
   });
 });
+
+describe('FOH-7 S4 — portfolio scope is read-only in the panel, not just on the server', () => {
+  // Every test here selects an idea FIRST. With none selected `focusId` is
+  // already null and `expectWriteback` already false, so the whole suite would
+  // stay green with the portfolio guards deleted — it would assert the default,
+  // not the suppression.
+  function pickPortfolio() {
+    useIdeaboxStore.setState({ selectedIdeaId: 'IDEA-42' });
+    renderPanel();
+    fireEvent.change(screen.getByTestId('scope-select'), { target: { value: 'portfolio' } });
+  }
+
+  it('disables the write-back toggle and shows it unchecked', () => {
+    pickPortfolio();
+    const toggle = screen.getByTestId('writeback-toggle');
+    // Disabled, not merely inert: a live control promises something the server
+    // will decline.
+    expect(toggle.disabled).toBe(true);
+    expect(toggle.checked).toBe(false);
+  });
+
+  it('drops the focused idea and asks for no write-back on the wire', async () => {
+    const stream = controlledSse();
+    routeFetch([['/api/maya/message?stream=1', () => stream.response]]);
+    pickPortfolio();
+
+    const input = await screen.findByPlaceholderText(/Message Maya/i);
+    fireEvent.change(input, { target: { value: 'what did we decide' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(
+      wsFetch.mock.calls.some(([u]) => u.includes('/api/maya/message')),
+    ).toBe(true));
+    const sent = JSON.parse(
+      wsFetch.mock.calls.find(([u]) => u.includes('/api/maya/message'))[1].body,
+    );
+    expect(sent.scope).toBe('portfolio');
+    // IDEA-42 is selected in the cockpit and is deliberately NOT sent: the
+    // backend refuses portfolio+focusId, and the panel must not offer what the
+    // backend will refuse.
+    expect(sent.focusId).toBe(null);
+    expect(sent.writeback).toBe(false);
+
+    await act(async () => { stream.close(); });
+  });
+
+  it('cannot raise a "save unconfirmed" warning — the half a disabled toggle does not cover', async () => {
+    // Same shape as the UNKNOWN-outcome test above: final arrives, the stream
+    // then dies before any writeback event. On a project turn that is exactly
+    // the case that ends UNKNOWN. On a portfolio turn no save was ever owed, so
+    // warning about one would be a warning about a write that could not happen.
+    const stream = controlledSse();
+    routeFetch([['/api/maya/message?stream=1', () => stream.response]]);
+    pickPortfolio();
+
+    const input = await screen.findByPlaceholderText(/Message Maya/i);
+    fireEvent.change(input, { target: { value: 'what did we decide' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await act(async () => {
+      stream.push(
+        'event: token\ndata: {"text":"partial"}\n\n'
+        + 'event: final\ndata: {"ok":true,"reply":"Full reply.","message_id":"msg_p","memory_available":true,"context":{"sent":[],"omissions":[],"blocks":[]}}\n\n',
+      );
+      stream.close();
+    });
+
+    await waitFor(() => expect(screen.getByText('Full reply.')).toBeTruthy());
+    expect(screen.queryByText(/unconfirmed/i)).toBeNull();
+    expect(screen.queryByText(/noted on/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: /^retry$/i })).toBeNull();
+  });
+});
