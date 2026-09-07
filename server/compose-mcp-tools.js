@@ -68,7 +68,27 @@ function _guardOn(capsOverride) {
   try { return loadProjectConfig()?.capabilities?.guard === true; } catch { return false; }
 }
 
-/** True iff a valid, non-agent-mintable override token accompanies the call. */
+/**
+ * True iff the call carries a token matching this SERVER PROCESS's environment.
+ *
+ * Deliberately NOT described as "not agent-mintable" — that claim was audited on
+ * 2026-09-07 and does not hold. Stratum retired the identical env-var token
+ * (@3647b4c) after proving a CLI caller sets both sides of the comparison; here
+ * the two sides are a tool argument and the server's environment, which is a real
+ * check at CALL time but not at LAUNCH time: `.mcp.json` carries the server's env
+ * block, is writable by anything that can write the repo, and no env block for
+ * compose exists today. So the honest statement is: an out-of-band secret that an
+ * agent cannot supply from a tool call alone, and can arrange across a restart.
+ *
+ * Note also that `STRATUM_GUARD_OVERRIDE_TOKEN` is unset in every environment we
+ * ship, so this gate is currently fail-closed for EVERY caller — the documented
+ * "authorized escape" is not usable by the operator either.
+ *
+ * The durable fix is stratum's replacement: a signed one-shot authorization over
+ * a payload the verifier reconstructs, bound to the resource's ledger head
+ * (`stratum/ts/src/guard/authorization.ts`). Transport-independent, so it cannot
+ * be undone by whoever controls the launch.
+ */
 function _overrideOk(args) {
   const expected = process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
   return !!expected && args?.override_token === expected;
@@ -80,7 +100,8 @@ export function assertForceAuthorized(args, toolName, capsOverride) {
   if (!_overrideOk(args)) {
     const e = new Error(
       `${toolName}: force is disabled under capabilities.guard — supply a valid override_token ` +
-      `(out-of-band STRATUM_GUARD_OVERRIDE_TOKEN; not agent-mintable) to deviate, or drive the ` +
+      `(out-of-band STRATUM_GUARD_OVERRIDE_TOKEN, read from this server's environment) to ` +
+      `deviate, or drive the ` +
       `change through the lifecycle.`,
     );
     e.code = 'FORCE_REQUIRES_OVERRIDE';

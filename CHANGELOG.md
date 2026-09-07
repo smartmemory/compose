@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### The override-token gate no longer claims a property nobody demonstrated
+
+`server/compose-mcp-tools.js` told callers its `STRATUM_GUARD_OVERRIDE_TOKEN` check was "not
+agent-mintable" — the same sentence stratum retired as false when it removed the identical env-var
+token (@3647b4c, signed one-shot authorizations instead). Audited 2026-09-07: the check is real at
+call time, since a tool argument cannot set the server's environment, but not sealed at launch
+time, because `.mcp.json` carries that environment and is writable by anything that can write the
+repo. The escalation was not performed; writability was verified and the mechanism is evident.
+
+Corrected in place and pinned by a test that goes red if the old wording returns. Two things the
+audit also established: the gate is fail-closed for everyone today, since the variable is unset
+everywhere we ship, and for `COMPLETE` the token buys nothing anyway because `lib/feature-writer.js`
+refuses that status unconditionally. What it still unlocks is `KILLED` and `force`.
+Full findings: `docs/decisions/2026-09-07-override-token-audit.md`.
+
 ### `--test-timeout` was killing healthy test files under load
 
 `--test-timeout` applies to every test including the implicit file-level one node wraps around a
