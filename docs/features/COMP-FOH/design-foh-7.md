@@ -416,38 +416,61 @@ narrow the feature — it is a reason the blueprint cannot treat member roots as
 
 ## Acceptance criteria
 
-- [ ] `portfolio.members` parsed and validated; duplicate `id` and unresolvable `root` fail loud as
+> **Audited 2026-09-07 by a Codex pass** (gpt-5.6-terra/high), criterion by criterion against the
+> code and tests, rather than ticked from the report. Twelve came back met with cited file:line
+> evidence and are checked here; five did not and are annotated in place, three of them saying
+> "pinned by test" with no test. **The controller sampled two of the seventeen citations and did not
+> re-derive the rest**, so the twelve rest on that pass, not on an independent second reading — treat
+> a checked box here as "an audit found evidence", not as "two people agree".
+> See [report-foh-7.md](report-foh-7.md) for what shipped.
+
+- [x] `portfolio.members` parsed and validated; duplicate `id` and unresolvable `root` fail loud as
       `FluidConfigError`; absent block preserves exact FOH-6 single-product behavior
-- [ ] N member providers constructed concurrently, each via its own `fluidProviderFor(root)`
-- [ ] A portfolio recall returns source-attributed results; two identical handles in two products
+- [x] N member providers constructed concurrently, each via its own `fluidProviderFor(root)`
+- [x] A portfolio recall returns source-attributed results; two identical handles in two products
       remain distinguishable (pinned by test)
 - [ ] A member that is unreachable / unauthorized / misconfigured / capability-short yields a **named**
       omission and does not fail the turn (pinned by test, one per reason class)
-- [ ] All-members-failed returns an error, never an empty result set (pinned by test)
+      **PARTIAL (verified 2026-09-07).** `unreachable` is pinned (`test/fluid-portfolio.test.js:169`)
+      and `capability-short` is (`:251`). The criterion asks for one per reason class: `unauthorized`
+      and `misconfigured` have implementing code (`lib/fluid/portfolio.js:75-80,202-215`) and no test.
+- [x] All-members-failed returns an error, never an empty result set (pinned by test)
 - [x] Mixed-provider portfolio works: SmartMemory declaring root + local-floor member in one turn,
       with the local member's intelligence sections omitted **by name** (D-FOH-7-3 table)
 - [ ] A **local declaring root still funnels** even with SmartMemory members declared (pinned by test —
       the portfolio must not rescue it)
+      **NOT MET (verified 2026-09-07).** The funnel exists (`lib/maya-config.js:51-53`,
+      `server/maya-routes.js:261-264`); no test combines a local declaring root with declared
+      SmartMemory members, which is the exact case the criterion says must not be rescued.
 - [x] `scope: 'portfolio'` reaches the composer, the turn `text` is used as the recall query, and
       **one real colleague turn returns cross-product findings** — not a dark API (D-FOH-7-8)
 - [ ] Absent `scope` behaves byte-identically to today's turn (pinned by test)
-- [ ] `scope: 'portfolio'` + a `focusId` is **refused** in v1 (pinned by test)
-- [ ] Source reaches the panel as a structured block field; the findings accordion's existing author
+      **PARTIAL (verified 2026-09-07).** `test/maya-routes.test.js:928` pins that an absent scope
+      reaches the composer as `undefined`. Byte-identity of the resulting turn is not asserted
+      anywhere; the report's claim rests on `composeColleagueContext` being untouched, not on a test.
+- [x] `scope: 'portfolio'` + a `focusId` is **refused** in v1 (pinned by test)
+- [x] Source reaches the panel as a structured block field; the findings accordion's existing author
       allowlist still matches every findings block (pinned by test — the suffix trap)
-- [ ] **Two projections pinned:** Maya receives flat `{author, text}` only (no nested `source` — her
+- [x] **Two projections pinned:** Maya receives flat `{author, text}` only (no nested `source` — her
       schema is `List[Dict[str, str]]`), the panel receives `{author, text, source}` (pinned by test)
-- [ ] A storage-only member contributes **listed, not searched** records plus a named
+- [x] A storage-only member contributes **listed, not searched** records plus a named
       `recall unavailable` omission — and never a synthesized query result (pinned by test)
-- [ ] **Workspace-collision validation covers every SmartMemory member**, not only the declaring root
+- [x] **Workspace-collision validation covers every SmartMemory member**, not only the declaring root
       (pinned by test — a member colliding with Maya's identity workspace must be refused)
-- [ ] A member root that is not a Compose project is `misconfigured`, never silently skipped
-- [ ] `unauthorized` is classified from the propagated `X-SM-Scope-Error`, distinguishing
+- [x] A member root that is not a Compose project is `misconfigured`, never silently skipped
+- [x] `unauthorized` is classified from the propagated `X-SM-Scope-Error`, distinguishing
       "not a member" from "key lacks scope"; an unrecognizable 403 names the reason as undetermined
 - [ ] Portfolio scope clears focus and disables the writeback toggle client-side; no
       "save unconfirmed" warning can arise on a portfolio turn (pinned by test)
-- [ ] `scope: 'portfolio'` with no `portfolio` declaration is `misconfigured`, never a silent
+      **NOT MET (verified 2026-09-07).** Implemented client-side
+      (`src/components/colleague/ColleaguePanel.jsx:285-289,373-387,816-832`); no UI test pins it,
+      including the "no save-unconfirmed warning can arise" half.
+- [x] `scope: 'portfolio'` with no `portfolio` declaration is `misconfigured`, never a silent
       downgrade to a project-scoped answer (pinned by test)
 - [ ] No writes on any portfolio path (pinned by test)
+      **NOT MET (verified 2026-09-07).** Writeback is suppressed for a normal portfolio turn
+      (`server/maya-routes.js:335-350`) but nothing pins the no-writes guarantee itself, which is
+      the read-only claim the whole feature rests on.
 - [x] Live-fire on a genuinely populated second product — **unblocked 2026-09-06** (owner gate: migrate
       forge-top's ideabox as the second product, and stand up a SmartMemory-backed declaring root)
       — **PASSED 2026-09-06**, evidence in [livefire-foh7/](livefire-foh7/RESULTS.md); two defects found and fixed
