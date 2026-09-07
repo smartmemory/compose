@@ -7,6 +7,16 @@
 
 Lifecycle phase transitions in compose are now **verdict-gated by stratum's STRAT-GUARD** when `capabilities.guard` is enabled: `advance` / `skip` / `complete` / `kill` apply **only if** the edge's server-read evidence verifies, fail-closed, with every attempt recorded in the tamper-evident guard ledger. No caller — skill, human cockpit, or rogue MCP/REST client — can effect a transition the guard refuses. Default OFF; flag-off behavior is byte-identical to before.
 
+> **Correction — 2026-08-18 (COMP-GUARD-CLAIM-1):** The claim above was not true when written
+> and was not true at ship. The guard covered only HTTP-facing lifecycle transitions in
+> `server/vision-routes.js` — the CLI and build runner run in-process and called no guarded
+> transition. COMP-COMPLETION-GATE's audit (2026-08-18) measured 321 managed features against
+> 31 registered guard resources with zero overlap (all 31 are leaked test fixtures), and
+> 230 COMPLETE features none of which passed a guarded transition. After COMP-COMPLETION-GATE
+> slices 1–2 (2026-08-18), `record_completion` (MCP + CLI) and the build runner are gated;
+> `setFeatureStatus`, the vision PATCH endpoint, stratum-sync, and direct `updateItemStatus`
+> remain open. See `docs/features/COMP-COMPLETION-GATE/design.md` for the full plan.
+
 ## 2. Delivered vs Planned
 
 | Planned (Slice 1) | Delivered |
@@ -54,6 +64,12 @@ Roadmap STATUS is now a projection driven by lifecycle phase. `phaseToStatus()` 
 
 ### Slice 3 — evidence-bound completion + kill the force bypass
 `verifyCompletionEvidence()` substrate-verifies completion: server-read git commit existence (not a syntax check) + test attestation (configured `guard.testCommand` exits 0, OR explicit `tests_pass` true — **no silent default-to-true**). `/lifecycle/complete` verifies before the guarded transition. The MCP boundary is closed against four bypass paths (`set_feature_status`, `add_roadmap_entry`, `propose_followup` reject lifecycle-owned COMPLETE/KILLED; `record_completion` enforces the same evidence) — each requires an out-of-band `STRATUM_GUARD_OVERRIDE_TOKEN` to deviate, the single authorized escape replacing `force`. *(Codex: 4 rounds enumerating every public terminal-write path → CLEAN.)*
+
+> **Correction — 2026-08-18 (COMP-GUARD-CLAIM-1):** The MCP tool boundary above is accurate.
+> The Codex annotation ("every public terminal-write path") is not: COMP-COMPLETION-GATE's
+> audit identified 14 paths (§1.3), of which the CLI and build runner — the paths that account
+> for the majority of real completions — were not covered. The annotation reflects an incomplete
+> enumeration; it does not reflect coverage.
 
 ### Slice 4 Part A — opt-in loopback REST auth
 A `guardAuth` middleware (`capabilities.guardAuth`, default OFF) requires `x-compose-token` on every vision mutation endpoint; reads stay open; fail-closed (503) if enabled without a configured token. Default OFF because the cockpit UI does not yet send the token. *(Codex: 3 findings — coverage of iteration/branch/PATCH, fail-closed semantics → CLEAN.)*
