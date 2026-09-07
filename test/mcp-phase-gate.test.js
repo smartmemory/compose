@@ -59,12 +59,23 @@ test('flag ON but phase unresolved (null) → fail-open for phase-refined tools,
   assert.doesNotThrow(() => assertToolPhaseAllowed('write_journal_entry', {}, ON({ profile: 'implementer', phase: null })));
 });
 
-test('flag ON, denied tool + valid override token → allowed', () => {
+/**
+ * AMENDED 2026-09-07: the override-token escape is GONE from this gate too, with
+ * the other two (docs/decisions/2026-09-07-override-token-audit.md). This test
+ * used to assert the token ADMITTED a denied tool; it now asserts the opposite,
+ * because the behaviour deliberately changed. The env var is deliberately set:
+ * the strongest form of the claim is that a caller holding what used to be the
+ * key is denied anyway.
+ */
+test('flag ON, denied tool + the retired override token → still denied', () => {
   const prev = process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
   process.env.STRATUM_GUARD_OVERRIDE_TOKEN = 'tok';
   try {
-    assert.doesNotThrow(() =>
-      assertToolPhaseAllowed('approve_gate', { override_token: 'tok' }, ON({ profile: 'implementer', phase: 'execute' })));
+    assert.throws(
+      () => assertToolPhaseAllowed('approve_gate', { override_token: 'tok' }, ON({ profile: 'implementer', phase: 'execute' })),
+      (e) => e.code === 'PHASE_TOOL_DENIED' && /no override token/i.test(e.message),
+      'a token matching the server env must not re-open a phase-denied tool',
+    );
   } finally {
     if (prev === undefined) delete process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
     else process.env.STRATUM_GUARD_OVERRIDE_TOKEN = prev;

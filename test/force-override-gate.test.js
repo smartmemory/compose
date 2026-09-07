@@ -1,9 +1,20 @@
 /**
  * COMP-MCP-ENFORCE Slice 3 — kill `force` at the MCP tool boundary. When
  * capabilities.guard is on, a caller-supplied force:true on set_feature_status /
- * add_roadmap_entry is rejected unless it carries a valid out-of-band override
- * token (STRATUM_GUARD_OVERRIDE_TOKEN) — the single authorized deviation. Guard
- * off → legacy behavior (force passes through untouched).
+ * add_roadmap_entry is rejected, FULL STOP. Guard off → legacy behavior (force
+ * passes through untouched).
+ *
+ * AMENDED 2026-09-07: there is no override token any more. The three tests that
+ * used to pin "a matching token is admitted" now pin the opposite, because the
+ * behaviour deliberately changed — see
+ * docs/decisions/2026-09-07-override-token-audit.md. The hatch had no user and
+ * could not have one (the variable was unset everywhere we ship, and
+ * `override_token` was in no tool schema), both statuses it nominally unlocked
+ * have first-class doors, and it was never the real protection: anything that can
+ * call these tools can write the files directly.
+ *
+ * These tests still SET the env var, deliberately. That is the strongest form of
+ * the assertion: even a caller holding what used to be the key is refused.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -36,19 +47,22 @@ test('force under guard without override token → rejected', () => {
   }
 });
 
-test('force under guard with a matching override token → allowed', () => {
+test('force under guard is refused even holding the old key (the hatch is gone)', () => {
   const prev = process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
   process.env.STRATUM_GUARD_OVERRIDE_TOKEN = 'secret';
   try {
-    assert.doesNotThrow(() =>
-      assertForceAuthorized({ force: true, override_token: 'secret' }, 'set_feature_status', { guard: true }));
+    assert.throws(
+      () => assertForceAuthorized({ force: true, override_token: 'secret' }, 'set_feature_status', { guard: true }),
+      (e) => e.code === 'FORCE_REQUIRES_OVERRIDE' && /no override token/i.test(e.message),
+      'a token matching the server env must NOT admit force any more',
+    );
   } finally {
     if (prev === undefined) delete process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
     else process.env.STRATUM_GUARD_OVERRIDE_TOKEN = prev;
   }
 });
 
-test('force under guard with a WRONG override token → rejected', () => {
+test('force under guard with a non-matching token → rejected', () => {
   const prev = process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
   process.env.STRATUM_GUARD_OVERRIDE_TOKEN = 'secret';
   try {
@@ -60,7 +74,7 @@ test('force under guard with a WRONG override token → rejected', () => {
   }
 });
 
-test('force under guard when no override token is configured in env → rejected (cannot mint)', () => {
+test('force under guard with no token configured → rejected', () => {
   const prev = process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
   delete process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
   try {
@@ -84,7 +98,7 @@ test('terminal status: COMPLETE/KILLED allowed when guard off (legacy)', () => {
   assert.doesNotThrow(() => assertTerminalStatusAuthorized({ status: 'KILLED' }, 'add_roadmap_entry', { guard: false }));
 });
 
-test('terminal status: COMPLETE under guard without override → rejected (lifecycle-owned)', () => {
+test('terminal status: COMPLETE and KILLED under guard → rejected (lifecycle-owned)', () => {
   const prev = process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
   process.env.STRATUM_GUARD_OVERRIDE_TOKEN = 'secret';
   try {
@@ -102,12 +116,35 @@ test('terminal status: COMPLETE under guard without override → rejected (lifec
   }
 });
 
-test('terminal status: COMPLETE under guard WITH valid override → allowed', () => {
+test('terminal status: refused even holding the old key, for BOTH statuses', () => {
   const prev = process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
   process.env.STRATUM_GUARD_OVERRIDE_TOKEN = 'secret';
   try {
-    assert.doesNotThrow(() =>
-      assertTerminalStatusAuthorized({ status: 'COMPLETE', override_token: 'secret' }, 'set_feature_status', { guard: true }));
+    for (const status of ['COMPLETE', 'KILLED']) {
+      assert.throws(
+        () => assertTerminalStatusAuthorized({ status, override_token: 'secret' }, 'set_feature_status', { guard: true }),
+        (e) => e.code === 'STATUS_OWNED_BY_LIFECYCLE' && /no override token/i.test(e.message),
+        `${status} must stay lifecycle-owned even for a caller holding the retired token`,
+      );
+    }
+  } finally {
+    if (prev === undefined) delete process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
+    else process.env.STRATUM_GUARD_OVERRIDE_TOKEN = prev;
+  }
+});
+
+test('no environment can re-open the hatch — the token is not read at all', () => {
+  const prev = process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
+  try {
+    // Every combination that used to matter: set/unset env x matching/absent arg.
+    for (const env of ['secret', undefined]) {
+      if (env === undefined) delete process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
+      else process.env.STRATUM_GUARD_OVERRIDE_TOKEN = env;
+      for (const args of [{ force: true }, { force: true, override_token: 'secret' }, { force: true, override_token: '' }]) {
+        assert.throws(() => assertForceAuthorized(args, 'add_roadmap_entry', { guard: true }),
+          `env=${env} args=${JSON.stringify(args)} must be refused`);
+      }
+    }
   } finally {
     if (prev === undefined) delete process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
     else process.env.STRATUM_GUARD_OVERRIDE_TOKEN = prev;

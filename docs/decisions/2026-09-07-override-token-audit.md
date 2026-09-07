@@ -46,11 +46,40 @@ The false sentence is corrected in place and pinned by
 red by restoring the old wording. **The wrong claim was the liability, not the mechanism** — it is
 what a later session would have quoted when deciding how much this gate is worth.
 
-**Not yet decided (owner):** whether to adopt stratum's signed one-shot authorization on this
-surface (transport-independent, already built and already enrolled on this machine via
-COMP-GUARD-ONE-TAP), or to delete the token path outright and let the completion gate and the
-guarded lifecycle be the only doors. Doing nothing is also coherent, since the gate is fail-closed
-today — but then the escape hatch should be documented as unusable rather than as available.
+**DECIDED 2026-09-07 by the owner: the token path is REMOVED.** Not on threat-modelling taste, on
+the three checks above — the hatch had no user and could not have one, both statuses it nominally
+unlocked have first-class doors, and the only capability left to it was `force`, i.e. the exact
+thing these gates exist to refuse. `assertForceAuthorized` and `assertTerminalStatusAuthorized` now
+refuse unconditionally under `capabilities.guard`; nothing in `server/`, `lib/` or `bin/` reads
+`STRATUM_GUARD_OVERRIDE_TOKEN` any more.
+
+Pinned by `test/force-override-gate.test.js`, whose tests deliberately still SET the variable — the
+strongest form of the assertion is that a caller holding what used to be the key is refused anyway.
+Re-introducing the hatch reddens two of them.
+
+**The trigger for building a real break-glass path** is a concrete incident where someone hits one
+of these refusals with nowhere legitimate to go. Then the answer is stratum's signed one-shot
+authorization (already built, and this machine is already enrolled via COMP-GUARD-ONE-TAP), never a
+shared secret.
+
+**THREE gates, not two — found by the full suite, not by the targeted runs.** Removing `_overrideOk`
+left a third caller, `assertToolPhaseAllowed` (the COMP-MCP-ENFORCE-1 profile x phase tool gate),
+referencing a deleted function. Every test that drives the MCP dispatcher hit a `ReferenceError`,
+which is why two consecutive full runs failed 10 each with DIFFERENT-looking lists: one cause,
+scheduled differently. The targeted runs covered the two functions edited, not the module. The
+escape is now gone from that gate too, on the same evidence.
+
+**Lesson, and it is the one this repo keeps relearning:** deleting a shared helper is a
+whole-module change, not a change to the functions you happened to edit. `grep` for the symbol
+before, and let the full suite be the gate — a targeted run cannot see a caller you did not know
+about.
+
+**Found while removing it:** `guardOverride` in `server/stratum-client.js` was still sending
+`override_token` to a stratum that reads `authorization` (`ts/src/mcp/server.ts:270`), so every call
+it could have made was destined to fail on a missing authorization. It has no production caller. The
+field is corrected, and its test now asserts the wire field the OTHER side reads — the old test
+asserted only what our own wrapper wrote, which is a wire-contract test that never consults the
+contract.
 
 ## Related
 

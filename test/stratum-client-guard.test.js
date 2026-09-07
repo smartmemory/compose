@@ -183,16 +183,26 @@ test('guardTransition: refused verdict is a normal (exit 0) result, not an error
   assert.equal(res.error, undefined);
 });
 
-test('guardOverride: passes override_token + rationale', async () => {
+/**
+ * CORRECTED 2026-09-07. This test used to assert `override_token` on the wire —
+ * the shared secret stratum retired in STRAT-GUARD-AUTHZ @3647b4c. Stratum now
+ * reads `authorization` (an sshsig bound to the resource's ledger head;
+ * `stratum/ts/src/mcp/server.ts:270`), so the old field was ignored and every
+ * call this wrapper could make was destined to fail. The test passed throughout,
+ * because it asserted what our own wrapper wrote rather than what the other side
+ * reads — a wire-contract test that never consults the contract.
+ */
+test('guardOverride: sends the signed authorization the guard actually reads', async () => {
   const m = makeMock([{ exitCode: 0, stdout: '{"status":"deviation","current_state":"b","ledger_ref":"r2"}' }]);
   _testOnly_setExecFile(m.exec);
   const res = await guardOverride({
     resourceId: 'r', fromState: 'a', toState: 'b',
-    overrideToken: 'tok', rationale: 'manual', resolvedBy: 'human',
+    authorization: 'sshsig-blob', rationale: 'manual', resolvedBy: 'human',
   });
   assert.deepEqual(m.lastArgs, ['guard', 'override']);
   const piped = JSON.parse(m.lastStdin);
-  assert.equal(piped.override_token, 'tok');
+  assert.equal(piped.authorization, 'sshsig-blob');
+  assert.ok(!('override_token' in piped), 'the retired secret must not travel');
   assert.equal(piped.rationale, 'manual');
   assert.equal(res.status, 'deviation');
 });

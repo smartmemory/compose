@@ -69,44 +69,45 @@ function _guardOn(capsOverride) {
 }
 
 /**
- * True iff the call carries a token matching this SERVER PROCESS's environment.
+ * COMP-MCP-ENFORCE Slice 3, amended 2026-09-07: the override token is GONE.
  *
- * Deliberately NOT described as "not agent-mintable" — that claim was audited on
- * 2026-09-07 and does not hold. Stratum retired the identical env-var token
- * (@3647b4c) after proving a CLI caller sets both sides of the comparison; here
- * the two sides are a tool argument and the server's environment, which is a real
- * check at CALL time but not at LAUNCH time: `.mcp.json` carries the server's env
- * block, is writable by anything that can write the repo, and no env block for
- * compose exists today. So the honest statement is: an out-of-band secret that an
- * agent cannot supply from a tool call alone, and can arrange across a restart.
+ * These gates used to admit a caller who supplied `override_token` matching this
+ * server process's `STRATUM_GUARD_OVERRIDE_TOKEN`. The audit in
+ * docs/decisions/2026-09-07-override-token-audit.md removed it, on evidence
+ * rather than on threat-modelling taste:
  *
- * Note also that `STRATUM_GUARD_OVERRIDE_TOKEN` is unset in every environment we
- * ship, so this gate is currently fail-closed for EVERY caller — the documented
- * "authorized escape" is not usable by the operator either.
+ *   - the hatch had no user and could not have one — the variable was unset in
+ *     every environment we ship, and `override_token` appeared in no MCP tool
+ *     schema, so no agent could discover it and no operator workflow used it;
+ *   - both capabilities it nominally unlocked already have first-class doors:
+ *     KILLED through the guarded lifecycle route (`kill_feature`), COMPLETE
+ *     through the completion gate (which `lib/feature-writer.js` enforces
+ *     unconditionally anyway);
+ *   - what remained was `force`, i.e. skipping the roadmap transition table and
+ *     the prose-loss and duplicate-match refusals — the thing these gates exist
+ *     to stop, kept reachable by a secret harder to use than editing the file;
+ *   - and it was never the real protection. Anything that can call these tools
+ *     can write the files directly. The tamper-EVIDENT ledger and the pre-push
+ *     canon guard are what hold; this gate only ever stopped a well-meaning
+ *     agent from casually passing force:true, and a plain refusal does that
+ *     better than a secret nobody can hold.
  *
- * The durable fix is stratum's replacement: a signed one-shot authorization over
- * a payload the verifier reconstructs, bound to the resource's ledger head
- * (`stratum/ts/src/guard/authorization.ts`). Transport-independent, so it cannot
- * be undone by whoever controls the launch.
+ * If a break-glass path is ever genuinely needed, the answer is stratum's signed
+ * one-shot authorization (`stratum/ts/src/guard/authorization.ts`), not a shared
+ * secret — and the trigger for building it is a real incident where someone hit
+ * one of these refusals with nowhere to go.
  */
-function _overrideOk(args) {
-  const expected = process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
-  return !!expected && args?.override_token === expected;
-}
 
 export function assertForceAuthorized(args, toolName, capsOverride) {
   if (!args?.force) return;
   if (!_guardOn(capsOverride)) return;
-  if (!_overrideOk(args)) {
-    const e = new Error(
-      `${toolName}: force is disabled under capabilities.guard — supply a valid override_token ` +
-      `(out-of-band STRATUM_GUARD_OVERRIDE_TOKEN, read from this server's environment) to ` +
-      `deviate, or drive the ` +
-      `change through the lifecycle.`,
-    );
-    e.code = 'FORCE_REQUIRES_OVERRIDE';
-    throw e;
-  }
+  const e = new Error(
+    `${toolName}: force is disabled under capabilities.guard. There is no override token — ` +
+    `drive the change through the lifecycle (/lifecycle routes, kill_feature) or the completion ` +
+    `gate (record_completion). If neither can express it, that is a gap to fix, not to bypass.`,
+  );
+  e.code = 'FORCE_REQUIRES_OVERRIDE';
+  throw e;
 }
 
 /**
@@ -124,15 +125,13 @@ export function assertTerminalStatusAuthorized(args, toolName, capsOverride) {
   const status = args?.status;
   if (!status || !LIFECYCLE_OWNED_STATUS.has(status)) return;
   if (!_guardOn(capsOverride)) return;
-  if (!_overrideOk(args)) {
-    const e = new Error(
-      `${toolName}: status ${status} is lifecycle-owned under capabilities.guard — drive it through ` +
-      `/lifecycle (evidence-gated for complete, guarded for kill) instead of setting it directly, ` +
-      `or supply a valid override_token.`,
-    );
-    e.code = 'STATUS_OWNED_BY_LIFECYCLE';
-    throw e;
-  }
+  const e = new Error(
+    `${toolName}: status ${status} is lifecycle-owned under capabilities.guard — drive it through ` +
+    `/lifecycle (evidence-gated for complete, guarded for kill) instead of setting it directly. ` +
+    `There is no override token.`,
+  );
+  e.code = 'STATUS_OWNED_BY_LIFECYCLE';
+  throw e;
 }
 import { resolveWorkspace } from '../lib/resolve-workspace.js';
 import { discoverWorkspaces } from '../lib/discover-workspaces.js';
@@ -1023,8 +1022,10 @@ function _targetMatchesBoundFeature(tool, args) {
 
 /**
  * Throw PHASE_TOOL_DENIED if the tool is not allowed for the current
- * profile×phase. No-op when the capability is off (default) or on a valid
- * override token. On unresolved CONTEXT the behavior is graduated, NOT blanket
+ * profile×phase. No-op when the capability is off (default). The override-token
+ * escape was REMOVED 2026-09-07 with the other two (see the note above
+ * `assertForceAuthorized`): same secret, same absence of any caller who could
+ * hold it. On unresolved CONTEXT the behavior is graduated, NOT blanket
  * fail-open: an unresolved PROFILE (no/unknown env) normalizes to orchestrator →
  * unrestricted; an unresolved PHASE only fails open the phase *refinement* — the
  * profile BASE policy (implementer deny / reviewer allowlist) still applies
@@ -1034,7 +1035,6 @@ function _targetMatchesBoundFeature(tool, args) {
 export function assertToolPhaseAllowed(tool, args = {}, _testCtx) {
   const guardOn = _testCtx?.phaseScopedTools ?? (loadProjectConfig()?.capabilities?.phaseScopedTools === true);
   if (!guardOn) return;
-  if (_overrideOk(args)) return;
 
   const profile = _testCtx?.profile ?? sessionContext().profile;
   const phase = _testCtx?.phase ?? resolveBoundPhase();
@@ -1045,7 +1045,7 @@ export function assertToolPhaseAllowed(tool, args = {}, _testCtx) {
     const e = new Error(
       `${tool} is not available to profile '${profile}'` +
       (phase ? ` in phase '${phase}'` : '') + `: ${verdict.reason}. ` +
-      `Supply a valid override_token to deviate.`,
+      `There is no override token; use a session bound to a profile that owns this tool.`,
     );
     e.code = 'PHASE_TOOL_DENIED';
     e.profile = profile;
