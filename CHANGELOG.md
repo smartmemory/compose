@@ -41,6 +41,13 @@ custom field and body survived; the document around them did not. Measured on fo
   briefly-lived gitignored location keeps that file, orphaned and unread; the same hand-written sibling
   is the recovery, and the stale file can be deleted.
 
+### [COMP-IDEABOX-MIGRATE-DIALECT] The generated banner names where the heading lives
+
+FU-4 moved a project's title and introduction into `<ideabox>.preamble.md`, and nothing in the
+document said so. The banner told readers how to change an idea but not how to change the heading,
+so the one edit the file still invites — correcting its own title — was silently discarded on the
+next render with no clue where it went. The banner now names the sidecar and says to edit it there.
+
 ### [COMP-IDEABOX-MIGRATE-DIALECT FU-1/FU-2/FU-3] A partial read is never consent
 
 Three follow-ups from the Codex adversarial review of the ideabox migration fix, all the same shape
