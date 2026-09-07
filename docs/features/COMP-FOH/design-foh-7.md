@@ -425,8 +425,13 @@ narrow the feature — it is a reason the blueprint cannot treat member roots as
 >
 > **2026-09-07, later the same day:** the three "pinned by test with no test" gaps are CLOSED —
 > six tests written, each one shown to go red under a mutation of the exact guard it protects, so
-> those three boxes rest on a demonstrated test and not on an audit. The two remaining PARTIALs
-> (named-omission reason classes, scope-less byte-identity) are untouched and still open.
+> those three boxes rest on a demonstrated test and not on an audit.
+>
+> **2026-09-07, later still:** the two remaining PARTIALs (named-omission reason classes,
+> scope-less byte-identity) are also CLOSED — three more tests written (the `unauthorized`
+> reason class covers all three of `classify()`'s 403 sub-branches in one test), each shown to
+> go red under a mutation of the exact guard it protects. All seventeen criteria now rest on a
+> demonstrated test.
 > See [report-foh-7.md](report-foh-7.md) for what shipped.
 
 - [x] `portfolio.members` parsed and validated; duplicate `id` and unresolvable `root` fail loud as
@@ -434,26 +439,42 @@ narrow the feature — it is a reason the blueprint cannot treat member roots as
 - [x] N member providers constructed concurrently, each via its own `fluidProviderFor(root)`
 - [x] A portfolio recall returns source-attributed results; two identical handles in two products
       remain distinguishable (pinned by test)
-- [ ] A member that is unreachable / unauthorized / misconfigured / capability-short yields a **named**
+- [x] A member that is unreachable / unauthorized / misconfigured / capability-short yields a **named**
       omission and does not fail the turn (pinned by test, one per reason class)
-      **PARTIAL (verified 2026-09-07).** `unreachable` is pinned (`test/fluid-portfolio.test.js:169`)
-      and `capability-short` is (`:251`). The criterion asks for one per reason class: `unauthorized`
-      and `misconfigured` have implementing code (`lib/fluid/portfolio.js:75-80,202-215`) and no test.
+      **MET 2026-09-07 — gap closed.** `unreachable` was already pinned
+      (`test/fluid-portfolio.test.js:169`) and `capability-short` too (`:324`). The two missing
+      classes are now pinned: `unauthorized` at `test/fluid-portfolio.test.js:193` (asserts all
+      three of `classify()`'s 403 sub-branches — `not-a-member`, `missing-scope`, and the
+      undetermined-reason fallback — each producing its own named omission while the reachable
+      member still answers) and `misconfigured` at `test/fluid-portfolio.test.js:247` (a member
+      whose `.compose/compose.json` exists but is malformed JSON, hitting the `Promise.allSettled`
+      rejection branch in `openPortfolio` — `lib/fluid/portfolio.js:75-80` — not the synchronous
+      parse-time throw). Verified by mutation: collapsing `classify()`'s 403 branch to a single
+      `unavailable` result reddened the `unauthorized` test, and dropping the `else` clause that
+      pushes the omission in `openPortfolio` reddened the `misconfigured` test.
 - [x] All-members-failed returns an error, never an empty result set (pinned by test)
 - [x] Mixed-provider portfolio works: SmartMemory declaring root + local-floor member in one turn,
       with the local member's intelligence sections omitted **by name** (D-FOH-7-3 table)
 - [x] A **local declaring root still funnels** even with SmartMemory members declared (pinned by test —
       the portfolio must not rescue it)
-      **MET 2026-09-07 — gap closed.** `test/maya-routes.test.js:1057` declares a portfolio whose
+      **MET 2026-09-07 — gap closed.** `test/maya-routes.test.js:1124` declares a portfolio whose
       member is genuinely SmartMemory-backed on a declaring root that is not, and asserts the
       `connect-smartmemory` funnel plus zero composer calls and zero Maya traffic. Verified by
       mutation: deleting the funnel (`server/maya-routes.js`) turns it red.
 - [x] `scope: 'portfolio'` reaches the composer, the turn `text` is used as the recall query, and
       **one real colleague turn returns cross-product findings** — not a dark API (D-FOH-7-8)
-- [ ] Absent `scope` behaves byte-identically to today's turn (pinned by test)
-      **PARTIAL (verified 2026-09-07).** `test/maya-routes.test.js:928` pins that an absent scope
-      reaches the composer as `undefined`. Byte-identity of the resulting turn is not asserted
-      anywhere; the report's claim rests on `composeColleagueContext` being untouched, not on a test.
+- [x] Absent `scope` behaves byte-identically to today's turn (pinned by test)
+      **MET 2026-09-07 — gap closed.** `test/maya-routes.test.js:932` still pins that an absent
+      scope reaches the composer as `undefined`. Byte-identity itself is now pinned at
+      `test/maya-routes.test.js:948`: two real turns (one with no `scope`, one with
+      `scope: 'project'`) run through the real `defaultComposeContext` — no override on
+      `composeContext`, only `hasSmartmemoryFluidProvider` is stubbed to clear the route's
+      funnel gate (`server/maya-routes.js:262`) — against a root seeded with real ideabox
+      content, and the wire payload Maya received (`channelContext`) is asserted
+      `deepStrictEqual` (via `JSON.stringify`) against an independently computed
+      `composeColleagueContext` + `toMayaContext` call on the same root, and against each other.
+      Verified by mutation: making `defaultComposeContext`'s project branch append an extra
+      block to the composed result reddened the test.
 - [x] `scope: 'portfolio'` + a `focusId` is **refused** in v1 (pinned by test)
 - [x] Source reaches the panel as a structured block field; the findings accordion's existing author
       allowlist still matches every findings block (pinned by test — the suffix trap)
@@ -479,9 +500,9 @@ narrow the feature — it is a reason the blueprint cannot treat member roots as
       downgrade to a project-scoped answer (pinned by test)
 - [x] No writes on any portfolio path (pinned by test)
       **MET 2026-09-07 — gap closed.** The seam on BOTH transports —
-      `test/maya-routes.test.js:1132` (JSON) and `:1147` (SSE, a separate call site) — with the
+      `test/maya-routes.test.js:1199` (JSON) and `:1214` (SSE, a separate call site) — with the
       client asking for a writeback it will not get, because the guarantee is the server's and not
-      the panel's. Plus `:1171`, which runs the REAL write-back dependency and compares a hash of
+      the panel's. Plus `:1238`, which runs the REAL write-back dependency and compares a hash of
       every file under the project root, so a write arriving through any other path on the turn is
       caught too. Verified by mutation: ungating `writebackEnabled` from `focusId` reddens the two
       seam tests, and a stray `writeFileSync` on the portfolio branch reddens the tree snapshot.

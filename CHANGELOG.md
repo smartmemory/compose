@@ -27,6 +27,16 @@ chose it (1.5 to 3.9 s idle per guard transition) in the comment.
 Still open: `server/vision-routes.js` returns 422 "refused by guard" for TIMEOUT, GUARD_UNREACHABLE
 and SPAWN alike. Splitting those to 503 changes an asserted contract; owner's call.
 
+### FOH-7: the last two "pinned by test" criteria now have the test
+
+`unauthorized` (all three 403 sub-branches of `classify()`) and `misconfigured` (a member whose
+config exists but is malformed, so the `Promise.allSettled` rejection branch runs) in
+`test/fluid-portfolio.test.js`; absent `scope` and `scope: 'project'` produce a wire payload
+byte-identical to a direct `composeColleagueContext` + `toMayaContext` call, through the real
+`defaultComposeContext`, in `test/maya-routes.test.js`. Each shown red under a mutation of the guard
+it protects. All seventeen criteria in `design-foh-7.md` now rest on a demonstrated test, and the
+line citations shifted by the new tests were corrected.
+
 ### Receipts gate: a claim written as a fact must carry its receipt
 
 Every wrong fact this sweep found was one habit in five wordings — `known flake`,
