@@ -1,3 +1,4 @@
+<!-- wasGeneratedBy: explore_design -->
 # COMP-GUARD-CLAIM-1 — Correct COMP-MCP-ENFORCE's false guard-coverage claim
 
 **Status:** DESIGN — 2026-08-18
