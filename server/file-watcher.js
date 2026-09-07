@@ -288,6 +288,20 @@ export class FileWatcherServer {
 
           onChanged(relativePath, fullPath);
         });
+        // A watcher can die AFTER construction, and fs.watch reports that as an
+        // 'error' event, not a throw — with no handler Node has historically
+        // treated it as unhandled. Either way the failure was completely silent:
+        // the pane simply stops updating.
+        //
+        // Deliberately NOT given the backstop poll that cc-session-watcher and
+        // the build-stream bridge now carry. Those lose data that never returns
+        // (branch DecisionEvents, a build's live output); this one loses a
+        // hot-reload, and the REST path already serves current content on load,
+        // so a refresh recovers it. A recursive re-stat of docs/** on a timer is
+        // real cost for a recoverable symptom. Logged, so it stops being silent.
+        watcher.on?.('error', (err) => {
+          console.error(`[file-watcher] watch on ${prefix}/ died — changes there stop live-updating until restart: ${err?.message}`);
+        });
         this.watchers.push(watcher);
       } catch (err) {
         console.error(`[file-watcher] Failed to watch ${prefix}/:`, err.message);
