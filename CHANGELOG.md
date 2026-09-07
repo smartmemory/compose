@@ -24,8 +24,14 @@ than relabelled a timeout. TIMEOUT and PARSE_ERROR envelopes now carry a bounded
 plus a stdout excerpt) instead of `''`. `MUTATION_TIMEOUT_MS` is 30 s, with the measurement that
 chose it (1.5 to 3.9 s idle per guard transition) in the comment.
 
-Still open: `server/vision-routes.js` returns 422 "refused by guard" for TIMEOUT, GUARD_UNREACHABLE
-and SPAWN alike. Splitting those to 503 changes an asserted contract; owner's call.
+The route layer is split the same way. `server/vision-routes.js` used to answer 422 "transition
+refused by guard" for every guard failure, so a guard that never answered read as a guard that
+said no. A guard error of `TIMEOUT`, `SPAWN`, `GUARD_UNREACHABLE`, `PARSE_ERROR` or `UNKNOWN`
+(`isGuardInfraError` in `server/lifecycle-guard.js`) is now 503 "guard unavailable" on both
+`lifecycle/advance` and `lifecycle/skip`; a real refusal, and a policy-level error from a guard
+that ran, stay 422. Still fail-closed either way: nothing mutates. Pinned by
+`test/lifecycle-guard-infra-status.test.js`, which drives the real route and the real
+`guardedTransition` with the exact envelopes the subprocess client produces.
 
 ### FOH-7: the last two "pinned by test" criteria now have the test
 

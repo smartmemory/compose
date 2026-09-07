@@ -53,7 +53,7 @@ import { addOpenLoop, resolveOpenLoop, listOpenLoops } from './open-loops-store.
 import {
   TERMINAL,
   guardedTransition, ensureGuard, projectFeatureStatus,
-  verifyCompletionEvidence, guardTestCommand,
+  verifyCompletionEvidence, guardTestCommand, isGuardInfraError,
 } from './lifecycle-guard.js';
 import {
   transitionsOf, skippableOf, completablePhaseOf, getMode, resolveMode,
@@ -85,6 +85,12 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
   // COMP-MCP-ENFORCE: when enabled, lifecycle transitions are verdict-gated by
   // stratum's STRAT-GUARD (fail-closed). Default OFF — legacy behavior intact.
   const guardEnabled = () => capabilities?.guard === true;
+  // A guard that never answered is 503 "guard unavailable"; a guard that
+  // answered no is 422 "transition refused by guard". Collapsing them told the
+  // user their evidence was rejected when the subprocess had merely timed out.
+  const guardFailure = (res, g, from, to) => isGuardInfraError(g)
+    ? res.status(503).json({ error: 'guard unavailable', from, to, guardError: g.error })
+    : res.status(422).json({ error: 'transition refused by guard', from, to, verdict: g.verdict, guardError: g.error });
 
   // COMP-MCP-ENFORCE Slice 4: opt-in loopback REST auth on vision MUTATION
   // endpoints (lifecycle transitions, iterations, gate resolve, item CRUD,
@@ -404,7 +410,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       // COMP-MCP-ENFORCE: verdict-gate the transition (fail-closed) before mutating.
       if (guardEnabled()) {
         const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, workspaceRoot: projectRoot, resolvedBy: 'agent', mode: modeOf(item) });
-        if (!g.applied) return res.status(422).json({ error: 'transition refused by guard', from, to: targetPhase, verdict: g.verdict, guardError: g.error });
+        if (!g.applied) return guardFailure(res, g, from, targetPhase);
       }
 
       item.lifecycle.currentPhase = targetPhase;
@@ -446,7 +452,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       // COMP-MCP-ENFORCE: verdict-gate the skip (fail-closed) before mutating.
       if (guardEnabled()) {
         const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from, to: targetPhase, workspaceRoot: projectRoot, resolvedBy: 'agent', mode: modeOf(item) });
-        if (!g.applied) return res.status(422).json({ error: 'transition refused by guard', from, to: targetPhase, verdict: g.verdict, guardError: g.error });
+        if (!g.applied) return guardFailure(res, g, from, targetPhase);
       }
 
       item.lifecycle.currentPhase = targetPhase;

@@ -71,6 +71,19 @@ export const guardErrorType = (result) => (result && (result.error?.code ?? resu
 export const guardErrorMessage = (result) => (result && (result.error?.message ?? result.message)) ?? 'no guard response';
 
 /**
+ * Infrastructure failures: the guard was never reached, or never answered, so
+ * the evidence was NOT evaluated. Distinct from a refusal (the guard ran and
+ * said no) and from a policy error (the guard ran and could not apply). Routes
+ * must not render these as "refused by guard" — for two months a timed-out
+ * `guard transition` was reported to the user as a rejection of their evidence
+ * (stratum-client.js, f7865d4), and nothing at the surface could tell the two
+ * apart.
+ */
+const GUARD_INFRA_CODES = new Set(['TIMEOUT', 'SPAWN', 'GUARD_UNREACHABLE', 'PARSE_ERROR', 'UNKNOWN']);
+export const isGuardInfraError = (result) =>
+  !!result && result.applied !== true && result.refused !== true && GUARD_INFRA_CODES.has(guardErrorType(result));
+
+/**
  * Assemble the FULL guarded graph the design requires: the forward
  * `BASE_TRANSITIONS` PLUS the `ship → complete` edge and a `<any non-terminal>
  * → killed` edge from every reachable non-terminal phase. The guard graph must
