@@ -58,7 +58,12 @@ That same clean-install run surfaced the real thread: `4 required deps missing` 
 - [ ] `compose init` (a project command) now mutates global plugin state. Defensible for a first-run experience, but it is a scope crossing worth revisiting.
 - [ ] A stale-but-registered marketplace gets the same "not found" error and no retry (`marketplace add` on an existing one likely fails). Soft failure, real stderr shown, but untested.
 - [ ] COMP-DIST-EXEC is PLANNED with a grounded seed; no design work started.
-- [ ] `test/build-stream-smoke.test.js` still flakes under full-suite load; green in isolation every time.
+- [x] `test/build-stream-smoke.test.js` still flakes under full-suite load; green in isolation every time.
+      **RESOLVED 2026-09-07 @12a357a — it was never a test-timing problem.** `fs.watch` is not armed
+      when the call returns, so writes landing between `watch()` and the FSEvents stream actually
+      listening reached nobody, and the bridge had no periodic re-check to recover — it went
+      permanently deaf for that build. Measured 14/450 under load, 0/450 with the safety poll.
+      A live cockpit stream that silently never starts, dismissed as a flake three times.
 
 ---
 

@@ -63,6 +63,9 @@ Then the whole-branch review found the one that mattered most. The ship gate ver
 - [ ] `git push --no-verify` bypasses the pre-push gate. Accepted, stated, not closed.
 - [ ] Commit boundary slip: `9a2c6e0` carries Task 3's production code, so `2e884a9` holds only its tests and docs. Disclosed, owner chose to leave it rather than rewrite history.
 - [ ] Known suite flakes, not regressions: build-stream-smoke retry, transient stratum-mcp PARSE_ERROR in lifecycle-guard-e2e.
+      **build-stream-smoke was NOT a flake — resolved 2026-09-07 @12a357a.** It was a real product
+      defect (an unarmed `fs.watch` left the live build stream permanently deaf); see journal
+      session 115's open threads. The stratum-mcp PARSE_ERROR half is untouched and still open.
 
 ---
 
