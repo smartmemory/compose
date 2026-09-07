@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### [COMP-IDEABOX-MIGRATE-DIALECT] The banner states the sidecar's opposite rule
+
+The generated banner names `<ideabox>.preamble.md` as the place to change the heading, but not what
+that file IS. The two sit side by side under opposite rules — the ideabox is generated output whose
+hand edits are discarded on the next render, the sidecar is hand-authored input whose edits are kept
+untouched forever — and only one of them was stated. Someone who found the sidecar had no way to know
+whether editing it would stick. Two lines, in the file that invites the question.
+
 ### [COMP-IDEABOX-MIGRATE-DIALECT] A supported way out of a stranded ideabox
 
 When an interrupted migration's document changed underneath it, `IDEABOX_MANIFEST_STALE` held and
