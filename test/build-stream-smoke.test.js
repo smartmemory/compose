@@ -335,3 +335,71 @@ describe('Bridge-to-SSE smoke test', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// The safety poll — why this test exists
+// ---------------------------------------------------------------------------
+//
+// `test3` above ("late-connecting client…") flaked under full-suite load for
+// months and was written off as test timing three times. It was not. `fs.watch`
+// is NOT armed when the call returns — libuv registers the macOS FSEvents stream
+// asynchronously — and `start()` arms the watcher and then reads synchronously,
+// so writes landing in that window reach nobody. The bridge had no periodic
+// re-check once its directory existed, so a missed arming window left it
+// PERMANENTLY deaf: a live cockpit stream that silently never starts.
+//
+// Measured with the real bridge, 6 concurrent processes and the full suite as
+// load: 14/450 runs broadcast the pre-existing lines and then nothing at all.
+// The same 450 with a settle delay before the writes: 0. With the safety poll:
+// 0/450 under identical load.
+//
+// A load-dependent race cannot be pinned by a load-dependent test, so this
+// asserts the GUARANTEE instead — events arrive even when the watcher delivers
+// nothing, ever. The only stub is the OS notification whose silence is the whole
+// scenario; the read path, the cursor and the mapping are all real.
+describe('BuildStreamBridge survives a watcher that never delivers', () => {
+  let dir;
+  after(() => { if (dir) rmSync(dir, { recursive: true, force: true }); });
+
+  test('a silent watcher still yields events, via the safety poll', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'bridge-silent-watch-'));
+    const jsonlPath = join(dir, 'build-stream.jsonl');
+    writeFileSync(jsonlPath, '');
+
+    const seen = [];
+    let closed = false;
+    // A watcher that is alive and never fires — exactly the arming window,
+    // made permanent so the assertion cannot depend on machine load.
+    const silentWatcher = { on() { return this; }, close() { closed = true; } };
+
+    const bridge = new BuildStreamBridge(dir, (m) => seen.push(m), {
+      crashTimeoutMs: 60000,
+      pollIntervalMs: 25,
+      watchFn: () => silentWatcher,
+    });
+    bridge.start();
+
+    try {
+      // Written AFTER start(), so the synchronous catch-up read cannot serve
+      // them: only the safety poll can.
+      writeJsonlLine(jsonlPath, { type: 'build_start', featureCode: 'SILENT-1', flowId: 'f9' }, 0);
+      writeJsonlLine(jsonlPath, { type: 'build_end', status: 'complete', featureCode: 'SILENT-1' }, 1);
+
+      await waitUntil(
+        () => seen.filter(m => m.featureCode === 'SILENT-1').length >= 2,
+        'the safety poll to deliver events the watcher never announced',
+        5000,
+      );
+    } finally {
+      bridge.stop();
+    }
+
+    assert.equal(closed, true, 'stop() still closes the watcher');
+    // stop() must also stop the poll, or a torn-down bridge keeps broadcasting.
+    const afterStop = seen.length;
+    writeJsonlLine(jsonlPath, { type: 'build_start', featureCode: 'SILENT-2', flowId: 'f9' }, 2);
+    await new Promise(r => setTimeout(r, 150));
+    assert.equal(seen.length, afterStop, 'a stopped bridge reads nothing more');
+  });
+});
+

@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+### A live build stream could silently never start (the "flaky" smoke test was real)
+
+`BuildStreamBridge` tails `build-stream.jsonl` via `fs.watch` on its directory. Once the directory
+existed that watcher was the ONLY notification path — `_pollForDirectory` covers a missing directory
+and stops as soon as one appears, and the `error` handler does not fire when a watcher simply stops
+delivering. So a single missed notification left the bridge permanently deaf for that build.
+
+**`fs.watch` is not armed when the call returns.** libuv registers the macOS FSEvents stream
+asynchronously, and `start()` arms the watcher and then reads synchronously — writes landing in that
+window are delivered to nobody. Under load the window stretches to cover a build's first events.
+
+Measured with the real bridge (6 concurrent processes, full suite as load): **14 of 450 runs
+broadcast the pre-existing lines and then nothing at all** — not "some events late", zero events,
+forever. The same 450 runs with a settle delay before the writes: 0 failures. With the fix: 0 of 450
+under identical load.
+
+`test/build-stream-smoke.test.js` had been reddening under full-suite load for months and was written
+off as test timing three times (journal sessions 99, 110, 115). It was reporting this defect the whole
+time. A user would have seen a cockpit that never updates during a build, with no error anywhere.
+
+Fixed by making the watcher an optimisation rather than the guarantee: a safety re-read runs on a
+timer for as long as the bridge is tailing, so a missed event is recoverable instead of terminal. It
+also covers the missed file-creation event the smoke test already documented. `_readNewLines` exits on
+one `statSync` when the file has not grown, so the standing cost is a stat per interval.
+
+Regression test pins the guarantee rather than the race — a load-dependent race cannot be pinned by a
+load-dependent test — by injecting a watcher that never delivers and asserting events arrive anyway,
+and that a stopped bridge stops reading. Both halves shown red under mutation.
+
 ### FOH-7's three unpinned acceptance criteria are pinned
 
 A Codex audit of `design-foh-7.md` on 2026-09-07 found three criteria that said "pinned by test" and
