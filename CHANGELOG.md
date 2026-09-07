@@ -23,7 +23,7 @@ had no test. Tests only, no production change:
 Every one of the six was shown to go red under a mutation of the guard it protects — the check the
 last dead-path incident here went without.
 
-### A group-signal failure now says which call site and whose group
+### D-TERM-1: the group is still signalled after the leader is reaped, and a refused signal names the group
 
 `processTermination` signals a spawned child's whole process GROUP by negative pid, tolerating only
 `ESRCH`. Anything else is rethrown, relabelled `CANCELLATION_UNCONFIRMED`, and reaches the caller
@@ -34,17 +34,43 @@ replaced by `kill EPERM`, and it has not reproduced since, in isolation (15 runs
 phase.
 
 A non-ESRCH failure is now stamped with the call site (`send` vs `alive`), the target pgid, our own
-pgid, and a probe of the leader as a plain pid — `ours` / `not-ours` / `gone`. `not-ours` is EPERM on
-the leader, which is this repo's canonical "alive but not ours" reading (COMP-GSD-6 D-C), and it names
-the recycled-pgid case outright: the group is deliberately signalled after `close`, because it outlives
-its leader, and that is exactly the window in which the pid becomes reusable. Diagnostic only — no
-control flow changes, the same error is rethrown.
+pgid and uid, a probe of the leader as a plain pid, and **every process currently in the group**
+(pid, ppid, uid, comm — read from the whole `ps` table and filtered, because `ps -g` means different
+things on BSD and procps). The listing is what makes the failure attributable; a read failure is
+recorded as a field, never raised, since this runs on an error path where a second failure would
+replace the first.
 
-Deliberately NOT changed: making `alive()` return true on EPERM, per the `pidAlive` ruling. For a
-genuinely foreign group that spins the reap loop to its 2s deadline and throws
-`CANCELLATION_TEARDOWN_TIMEOUT` instead — a different wrong answer. Both branches are wrong for a
-recycled pgid, and the real question is whether `-pid` should be signalled at all once the leader has
-been reaped. Left open with evidence-gathering in place rather than guessed at.
+**D-TERM-1 — the open design question is settled: keep signalling `-pid` after the leader is reaped.**
+The fear was that the pgid could name a stranger's group by then. POSIX 4.13 says a pid is not reused
+while it is an active pgid, and a group's lifetime ends only when its LAST member leaves — so while
+our group has any living member, which is exactly the condition teardown waits on, `-pid` provably
+names our own group. Measured on Darwin 25.6.0 rather than assumed: leader reaped and one grandchild
+left, 400,000 fork/exit cycles never got the pgid back (the pid space is ~100k, so four wraps). With
+the group emptied first, the same pid returned at iteration 98,102 — one wrap. The recycled-pgid
+window is therefore ~98,000 process creations wide, inside a 2s reap deadline.
+
+**That retires the hypothesis rather than confirming it, so the previous entry's reading was wrong**
+and is corrected here: `not-ours` on the leader probe does NOT name the recycled-pgid case outright.
+After `close` the leader is reaped, so that probe reads `gone` in every realistic recurrence and
+discriminates nothing. Measured separately: `kill(-pgid, 0)` against a group we may not signal answers
+EPERM, not ESRCH — so EPERM means only *a group exists and every member refused us*, whose causes are
+a member on another uid, a MAC/sandbox policy refusing a member that shares our uid (so "same uid"
+rules nothing out), or, least likely, a recycled pgid. The group listing separates them.
+
+Still deliberately NOT changed: `alive()` returning true on EPERM, per the `pidAlive` ruling. EPERM
+from a GROUP probe does not mean "alive", it means "unreachable", and both readings above are terminal
+for us — so `CANCELLATION_UNCONFIRMED` is the honest label and the throw stays.
+
+**One real defect, found by writing the first test this path has ever had:** the opening `SIGTERM` was
+sent OUTSIDE `terminate`'s `try`, so a refused group signal escaped carrying Node's bare `EPERM` as its
+code. The single failure the caller is told to expect from a group signal was the one code it could
+never receive; only the later `alive()` and SIGKILL sites were labelled. The send is now inside the
+try. The flake that started this (`review-fixes-runtime.test.js`, KILL-escalation variant, one
+occurrence, not reproduced in 15 isolated runs or any full phase since) reported
+`CANCELLATION_UNCONFIRMED`, so it came from one of those two sites, not the opening send.
+
+Full reasoning, the three reproduction programs, and what was NOT measured:
+[docs/decisions/2026-09-07-group-signal-after-leader-reap.md](docs/decisions/2026-09-07-group-signal-after-leader-reap.md).
 
 ### [COMP-IDEABOX-MIGRATE-DIALECT] The banner states the sidecar's opposite rule
 
