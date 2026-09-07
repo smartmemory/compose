@@ -17,14 +17,15 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { withDirLock, acquireDirLock, DirLockTimeout } from '../lib/dir-lock.js';
 import { ensureIdeaboxMigrated } from '../lib/fluid/ideabox-migrate.js';
 import { manifestPath, openManifest } from '../lib/fluid/ideabox-manifest.js';
+import { preamblePath } from '../lib/fluid/ideabox-preamble.js';
 import { toMarkdownDate, toRecordTimestamp } from '../lib/fluid/ideabox-dates.js';
 import { LocalFluidProvider } from '../lib/fluid/local-provider.js';
 import { renderIdeabox, renderIdeaboxFrom, writeIdeaboxProjection } from '../lib/fluid/render-ideabox.js';
@@ -440,7 +441,7 @@ describe('the projection re-checks the file inside its own lock', () => {
     const pending = writeIdeaboxProjection(p, path);
     await settle();
 
-    writeFileSync(path, await renderIdeaboxFrom(p));
+    writeFileSync(path, await renderIdeaboxFrom(p, { outPath: path }));
     release();
 
     const written = await pending;
@@ -584,6 +585,176 @@ describe('round 2 — the windows the ID comparison and the lock left open', () 
     const after = statSync(mpath);
     assert.equal(after.ino, before.ino, 'the manifest file was not replaced');
     assert.equal(after.mtimeMs, before.mtimeMs, 'and it was not rewritten');
+  });
+});
+
+describe("the project's own heading and introduction survive migration", () => {
+  // COMP-IDEABOX-MIGRATE-DIALECT FU-4. The projection emitted a hardcoded
+  // template preamble, so the first render after migration replaced a project's
+  // own title and introductory prose with the standard one. Every idea
+  // survived; the document around them did not. Measured on forge-top.
+  //
+  // The fix is a local sidecar written at migration, NOT the destination file:
+  // a projection that reads its own output cannot be the repair path for it.
+
+  const CUSTOM = [
+    '# Forge Ideabox',
+    '',
+    'Ideas for the Forge pipeline itself, kept separate from product ideas.',
+    'Promoted entries move to the roadmap and are struck through here.',
+    '',
+    '## Conventions',
+    '- **Umbrella:** grouped by the part of the pipeline they touch',
+  ].join('\n');
+
+  const DOC = `${CUSTOM}\n\n## Ideas\n\n`
+    + '#### IDEA-1 — legacy idea 1\n**Status:** NEW | **Priority:** —\n**Idea:** body 1\n'
+    + '\n## Killed Ideas\n';
+
+  it('carries a custom preamble through the migration into the projection', async () => {
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    writeFileSync(path, DOC);
+
+    await ensureIdeaboxMigrated(p, path);
+    assert.ok(existsSync(preamblePath(path)), 'the migration captured the preamble');
+
+    const rendered = await writeIdeaboxProjection(p, path);
+    assert.match(rendered, /^# Forge Ideabox$/m, "the project's own title survives");
+    assert.match(rendered, /Ideas for the Forge pipeline itself/, 'and its introduction');
+    assert.match(rendered, /grouped by the part of the pipeline they touch/,
+      'including its own convention bullets');
+    assert.doesNotMatch(rendered, /\*\*Purpose:\*\* Capture raw ideas/,
+      'and the template preamble does not appear alongside it');
+    assert.equal(readFileSync(path, 'utf8'), rendered);
+
+    // The property the whole cutover rests on, re-checked with a preamble the
+    // template does not know: the projection must be a fixed point of the
+    // legacy serializer.
+    assert.equal(serializeIdeabox(parseIdeabox(rendered)), rendered);
+  });
+
+  it('still discards a hand edit to the preamble in the file', async () => {
+    // THE CONTRACT. `render` is the way back from any hand edit
+    // (`lib/ideabox-cli.js`), which requires the projection to be independent of
+    // its destination. The sidecar satisfies that; reading the file back would
+    // not, and would let a corrupted heading survive the repair that exists to
+    // remove it.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    writeFileSync(path, DOC);
+    await ensureIdeaboxMigrated(p, path);
+    await writeIdeaboxProjection(p, path);
+
+    const corrupted = readFileSync(path, 'utf8').replace('# Forge Ideabox', '# VANDALISED');
+    writeFileSync(path, corrupted);
+
+    const repaired = await writeIdeaboxProjection(p, path);
+    assert.doesNotMatch(repaired, /VANDALISED/, 'the hand edit is discarded');
+    assert.match(repaired, /^# Forge Ideabox$/m, 'and the captured heading is restored');
+  });
+
+  it('carries the real forge-top preamble through the legacy dialect', async () => {
+    // The document this defect was MEASURED on, not a synthetic one. This
+    // suite's standing rule is that a synthetic fixture passes while a real
+    // document loses content, and the legacy flat dialect reaches a different
+    // branch of the preamble collection than the nested one above.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    writeFileSync(path, readFileSync(join(REPO, 'docs/bugs/COMP-IDEABOX-MIGRATE-DIALECT/repro/flat-dialect-fixture.md'), 'utf8'));
+
+    await ensureIdeaboxMigrated(p, path);
+    assert.match(readFileSync(preamblePath(path), 'utf8'), /^# Forge Ideabox$/m);
+
+    const rendered = await writeIdeaboxProjection(p, path);
+    assert.match(rendered, /^# Forge Ideabox$/m, 'the heading the bug destroyed');
+    assert.match(rendered, /Lightweight capture for raw ideas/, 'and the introduction under it');
+  });
+
+  it('keeps the fixed point for a sidecar written by hand', async () => {
+    // The documented recovery for a project that migrated before this existed
+    // is to write the sidecar itself — and every editor ends a file with a
+    // newline. A trailing blank there renders a second blank before `## Ideas`,
+    // which the parser pops on the way back, so `serialize(parse(projection))`
+    // stops being the identity on exactly the path we recommend.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    await p.createRecord({ kind: 'idea', title: 'an idea' });
+    mkdirSync(dirname(preamblePath(path)), { recursive: true });
+    writeFileSync(preamblePath(path), '# Restored By Hand\n\nA heading recovered from git.\n');
+
+    const rendered = await writeIdeaboxProjection(p, path);
+    assert.match(rendered, /^# Restored By Hand$/m);
+    assert.equal(serializeIdeabox(parseIdeabox(rendered)), rendered);
+  });
+
+  it('renders the custom heading on a clone that never ran the migration', async () => {
+    // THE TEST THAT WOULD HAVE CAUGHT THE FIRST VERSION OF THIS.
+    //
+    // The sidecar was originally written to gitignored `.compose/data/`, keyed
+    // off the provider's lock path. The heading then survived only on the
+    // machine that migrated: any other clone found no sidecar, rendered the
+    // template over the custom heading and committed that, and the migrating
+    // machine restored it on its next render — FU-4's own defect recurring on
+    // every clone, with git churn on a tracked file. The owner had already
+    // ruled on this shape (the S3 entry-gate ruling, 2026-08-04): a tracked
+    // projection cannot be generated from untracked canon.
+    //
+    // A clone is modelled by what a clone actually is — the TRACKED files, and
+    // nothing else. Records and the sidecar are copied; `.compose/data/`, which
+    // holds the lock and the manifest, is not, and neither is any provider
+    // state from the first machine.
+    const origin = await provider();
+    const originPath = join(tmp, 'ideabox.md');
+    writeFileSync(originPath, DOC);
+    await ensureIdeaboxMigrated(origin, originPath);
+    await writeIdeaboxProjection(origin, originPath);
+
+    const clone = mkdtempSync(join(tmpdir(), 'fluid-clone-'));
+    try {
+      cpSync(join(tmp, 'records'), join(clone, 'records'), { recursive: true });
+      const clonePath = join(clone, 'ideabox.md');
+      cpSync(originPath, clonePath);
+      cpSync(preamblePath(originPath), preamblePath(clonePath));
+      assert.ok(!existsSync(join(clone, '.compose')),
+        'a clone carries no gitignored machine state');
+
+      const fresh = await new LocalFluidProvider().init(clone, { recordsRoot: join(clone, 'records') });
+      const rendered = await writeIdeaboxProjection(fresh, clonePath);
+      assert.match(rendered, /^# Forge Ideabox$/m,
+        'the clone must not replace the heading with the template');
+      assert.doesNotMatch(rendered, /\*\*Purpose:\*\* Capture raw ideas/);
+      assert.equal(readFileSync(clonePath, 'utf8'), readFileSync(originPath, 'utf8'),
+        'and both machines render identical bytes, so neither undoes the other');
+    } finally {
+      rmSync(clone, { recursive: true, force: true });
+    }
+  });
+
+  it('puts the sidecar beside the ideabox, where git will track it', async () => {
+    // The location IS the fix, so it is asserted rather than left implicit. A
+    // future move back under `.compose/data/` would restore the clone defect
+    // above while every other test still passed.
+    const path = join(tmp, 'docs', 'product', 'ideabox.md');
+    assert.equal(preamblePath(path), join(tmp, 'docs', 'product', 'ideabox.preamble.md'));
+    // Derived from the ideabox alone: no provider is consulted, so SmartMemory —
+    // which has no lock path, and whose existence was the whole argument for a
+    // file-side sidecar — gets one exactly like every other provider.
+    assert.equal(preamblePath.length, 1, 'the path depends on the ideabox, not the provider');
+  });
+
+  it('falls back to the standard template when nothing was captured', async () => {
+    // A project that migrated before this existed, and every project that never
+    // migrated at all. Its file already contains the template, so nothing
+    // changes for it.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    await p.createRecord({ kind: 'idea', title: 'natively captured' });
+    assert.ok(!existsSync(preamblePath(path)), 'no sidecar for this ideabox');
+
+    const rendered = await writeIdeaboxProjection(p, path);
+    assert.match(rendered, /^# Ideabox$/m);
+    assert.match(rendered, /\*\*Purpose:\*\* Capture raw ideas/);
   });
 });
 
