@@ -42,12 +42,16 @@ command -v perl >/dev/null 2>&1 && perl -MFcntl -e '
 ZERO_SHA="0000000000000000000000000000000000000000"
 DOCS_ONLY=1
 SAW_RANGE=0
+RANGES=" "
 while read -r _local_ref local_sha _remote_ref remote_sha; do
   [ "$local_sha" = "$ZERO_SHA" ] && continue   # ref delete — no content pushed
   if [ "$remote_sha" = "$ZERO_SHA" ]; then
-    DOCS_ONLY=0; SAW_RANGE=1; continue          # new ref — range unbounded, fail closed
+    DOCS_ONLY=0; SAW_RANGE=1
+    RANGES="$RANGES $remote_sha:$local_sha"      # receipts gate bounds a new ref itself
+    continue                                     # new ref — range unbounded, fail closed
   fi
   SAW_RANGE=1
+  RANGES="$RANGES $remote_sha:$local_sha"
   CHANGED=$(git diff --name-only "$remote_sha".."$local_sha" 2>/dev/null) || { DOCS_ONLY=0; continue; }
   while IFS= read -r f; do
     [ -z "$f" ] && continue
@@ -89,6 +93,27 @@ if [ "$GUARD_EXIT" -ne 0 ]; then
   exit "$GUARD_EXIT"
 fi
 echo "pre-push: judgment canon drift check green." >&2
+
+# ── Receipts gate ────────────────────────────────────────────────────────────
+# A claim written as a fact must carry its receipt: a CHECKED box saying a test
+# pins something needs the test path; "flake"/"flaky" needs a measurement or a
+# RESOLVED @sha; a commit saying the suite is green needs the counts. Scans only
+# the ADDED lines of the pushed range, so it never blocks on history. Runs on
+# docs-only pushes too — that is where "known flake" notes get written, and one
+# of those sat on a live product defect for two months (12a357a). Quote a phrase
+# in backticks to talk about it without asserting it. Bypass: --no-verify.
+RECEIPTS_GATE="$(dirname "$COMPOSE_BIN")/receipts-gate.js"
+if [ -f "$RECEIPTS_GATE" ]; then
+  for pair in $RANGES; do
+    "$COMPOSE_NODE" "$RECEIPTS_GATE" "${pair%%:*}" "${pair##*:}" 2>&1 | tee -a "$LOG" >&2
+    RECEIPTS_EXIT=${PIPESTATUS[0]}
+    if [ "$RECEIPTS_EXIT" -ne 0 ]; then
+      echo "" >&2
+      echo "pre-push: a claim has no receipt beside it — push aborted (full log: $LOG)." >&2
+      exit "$RECEIPTS_EXIT"
+    fi
+  done
+fi
 
 # ── Test gate (COMP-RESUME follow-up) ───────────────────────────────────────
 # Block the push if the suite is red. This is the gate whose absence let a broken
