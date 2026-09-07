@@ -17,20 +17,21 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { withDirLock, acquireDirLock, DirLockTimeout } from '../lib/dir-lock.js';
 import { ensureIdeaboxMigrated } from '../lib/fluid/ideabox-migrate.js';
+import { manifestPath, openManifest } from '../lib/fluid/ideabox-manifest.js';
 import { toMarkdownDate, toRecordTimestamp } from '../lib/fluid/ideabox-dates.js';
 import { LocalFluidProvider } from '../lib/fluid/local-provider.js';
-import { renderIdeabox, writeIdeaboxProjection } from '../lib/fluid/render-ideabox.js';
+import { renderIdeabox, renderIdeaboxFrom, writeIdeaboxProjection } from '../lib/fluid/render-ideabox.js';
 import { importIdeabox } from '../lib/fluid/import-ideabox.js';
 import { fluidProviderFor } from '../lib/fluid/factory.js';
 import { runIdeaboxCommand } from '../lib/ideabox-cli.js';
-import { parseIdeabox, serializeIdeabox } from '../lib/ideabox.js';
+import { parseIdeabox, readIdeabox, serializeIdeabox } from '../lib/ideabox.js';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 const REAL_IDEABOX = join(REPO, 'docs/product/ideabox.md');
@@ -271,21 +272,88 @@ describe('the first-use migration gate', () => {
     });
   });
 
-  it('resumes an import that crashed partway through the corpus', async () => {
-    // Refusing this state strands the installation: the conflict error names
-    // `compose ideabox add`, and `add` runs this same gate, so every command
-    // fails with no way out. The handles the crash burned carry events and no
-    // `deleted`, which is what makes resuming safe rather than a guess.
+  it('resumes an import that actually crashed partway, tail included', async () => {
+    // REPLACES the previous version of this test, which completed the migration
+    // and then deleted record FILES. That constructs a resumable PREFIX — every
+    // handle it removed had already been issued and carried an event — and so it
+    // never exercised the failure it was named for: the ideas the import never
+    // reached. Those carry no event anywhere, and the gate read them as
+    // hand-added strays and refused, stranding the installation with a recovery
+    // that runs the same gate (COMP-IDEABOX-MIGRATE-DIALECT FU-1).
+    //
+    // A real crash, therefore: the store is made to fail on the second idea, so
+    // ideas 3..6 are never attempted at all.
     const p = await provider();
     const path = writeIdeabox(IDEABOX(6));
-    await ensureIdeaboxMigrated(p, path);
-    rmSync(join(tmp, 'records/records/IDEA-2.json'));
-    rmSync(join(tmp, 'records/records/IDEA-5.json'));
+
+    const realCreate = p.createRecord.bind(p);
+    let ideasSeen = 0;
+    // Throws BEFORE delegating, so IDEA-2's handle is never issued either. A
+    // failure after delegation would leave an event behind and the event log
+    // alone would resume it — which is the case that already worked.
+    p.createRecord = async (input) => {
+      if (input.kind === 'idea' && ++ideasSeen === 2) throw new Error('disk full');
+      return realCreate(input);
+    };
+    await assert.rejects(() => ensureIdeaboxMigrated(p, path), /disk full/);
+    p.createRecord = realCreate;
+
+    assert.equal((await p.listRecords({ kind: 'idea' })).length, 1, 'only IDEA-1 got written');
+    assert.ok(existsSync(manifestPath(p, path)), 'the interrupted migration left its manifest');
 
     const result = await ensureIdeaboxMigrated(p, path);
     assert.equal(result.migrated, true);
-    assert.equal((await p.listRecords({ kind: 'idea' })).length, 6);
-    assert.ok(await p.getRecord('IDEA-2'));
+    const handles = (await p.listRecords({ kind: 'idea' })).map((r) => r.handle).sort();
+    assert.deepEqual(handles, ['IDEA-1', 'IDEA-2', 'IDEA-3', 'IDEA-4', 'IDEA-5', 'IDEA-6'],
+      'the unattempted tail is recovered, not refused as strays');
+    assert.ok(!existsSync(manifestPath(p, path)), 'and the completed migration closes its manifest');
+  });
+
+  it('still refuses a hand-added idea once the migration has completed', async () => {
+    // THE PROTECTION, restated against the manifest. This is the whole reason
+    // the gate exists, and the resume widening must not buy recovery with it:
+    // a completed import removes its manifest, so there is nothing left to
+    // vouch for an idea typed into what is now generated output.
+    const p = await provider();
+    const path = writeIdeabox(IDEABOX(3));
+    await ensureIdeaboxMigrated(p, path);
+    assert.ok(!existsSync(manifestPath(p, path)), 'a completed migration leaves no open manifest');
+
+    writeIdeabox(IDEABOX(3).replace('## Killed Ideas',
+      '#### IDEA-42 — typed in by hand after the migration\n**Status:** NEW | **Priority:** —\n**Idea:** x\n\n## Killed Ideas'));
+    await assert.rejects(ensureIdeaboxMigrated(p, path), (err) => {
+      assert.equal(err.code, 'IDEABOX_MIGRATION_CONFLICT');
+      assert.deepEqual(err.missing, ['IDEA-42']);
+      return true;
+    });
+  });
+
+  it('refuses to resume when the file changed since the migration started', async () => {
+    // The manifest may only widen the resumable set for the document it was
+    // written against. An edit during (or after) an interrupted migration means
+    // the plan and the file disagree, and resuming would import a version
+    // nobody checked while projecting away whatever was added.
+    const p = await provider();
+    const path = writeIdeabox(IDEABOX(4));
+
+    const realCreate = p.createRecord.bind(p);
+    let ideasSeen = 0;
+    p.createRecord = async (input) => {
+      if (input.kind === 'idea' && ++ideasSeen === 2) throw new Error('disk full');
+      return realCreate(input);
+    };
+    await assert.rejects(() => ensureIdeaboxMigrated(p, path), /disk full/);
+    p.createRecord = realCreate;
+
+    // Someone with the file open saves a new idea into it mid-migration.
+    writeIdeabox(IDEABOX(4).replace('## Killed Ideas',
+      '#### IDEA-7 — added while the migration was down\n**Status:** NEW | **Priority:** —\n**Idea:** x\n\n## Killed Ideas'));
+
+    await assert.rejects(ensureIdeaboxMigrated(p, path), (err) => {
+      assert.equal(err.code, 'IDEABOX_MANIFEST_STALE');
+      assert.match(err.message, /edited while the migration was running/);
+      return true;
+    });
   });
 
   it('refuses a handle that was deliberately retired but still listed', async () => {
@@ -307,6 +375,247 @@ describe('the first-use migration gate', () => {
     const p = await provider();
     const result = await ensureIdeaboxMigrated(p, join(tmp, 'absent.md'));
     assert.equal(result.migrated, false);
+  });
+});
+
+describe('the projection re-checks the file inside its own lock', () => {
+  // COMP-IDEABOX-MIGRATE-DIALECT FU-3. The gate runs OUTSIDE the write lock —
+  // it has to, because it can import and importing takes the same
+  // non-reentrant lock — so the file it approves is not necessarily the file
+  // that gets replaced. An editor saving a new idea into the window between
+  // the two had it destroyed: the projection was built from records made out of
+  // the older document.
+  //
+  // Real lock, real files, real waiting. Holding `provider.lockPath` from the
+  // test is exactly the state a concurrent writer produces, and it is the only
+  // way to open the window wide enough to write into.
+
+  const IDEABOX = (n) => '# Ideabox\n\n## Ideas\n\n'
+    + Array.from({ length: n }, (_, i) =>
+      `#### IDEA-${i + 1} — legacy idea ${i + 1}\n**Status:** NEW | **Priority:** —\n**Idea:** body ${i + 1}\n`).join('\n')
+    + '\n## Killed Ideas\n';
+
+  const settle = () => new Promise((r) => setTimeout(r, 150));
+
+  it('refuses the write when an idea was hand-added while it waited', async () => {
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    writeFileSync(path, IDEABOX(3));
+    await ensureIdeaboxMigrated(p, path);
+
+    const release = await acquireDirLock(p.lockPath);
+    const pending = writeIdeaboxProjection(p, path);
+    // The gate has to be allowed to FINISH before the file changes. Editing it
+    // synchronously here would have the gate itself see the new idea and refuse
+    // outside the lock, which passes against unfixed code and proves nothing.
+    await settle();
+
+    const edited = IDEABOX(3).replace('## Killed Ideas',
+      '#### IDEA-77 — saved by a human while the render waited\n**Status:** NEW | **Priority:** —\n**Idea:** keep me\n\n## Killed Ideas');
+    writeFileSync(path, edited);
+    release();
+
+    await assert.rejects(pending, (err) => {
+      assert.equal(err.code, 'IDEABOX_MIGRATION_CONFLICT');
+      assert.deepEqual(err.missing, ['IDEA-77']);
+      return true;
+    });
+    assert.equal(readFileSync(path, 'utf8'), edited,
+      "the editor's save must survive byte for byte");
+  });
+
+  it('does not refuse an ordinary concurrent render', async () => {
+    // THE REASON THIS IS AN ASSESSMENT AND NOT A FINGERPRINT. A hash captured
+    // at gate time and compared under the lock cannot tell an edit from a
+    // second legitimate writer: the CLI and the REST API each re-read the
+    // records, and whichever landed second would refuse for no reason. Here the
+    // file changes under the waiting render — to exactly what another render
+    // would have written — and the write must go through.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    writeFileSync(path, IDEABOX(3));
+    await ensureIdeaboxMigrated(p, path);
+
+    const release = await acquireDirLock(p.lockPath);
+    const pending = writeIdeaboxProjection(p, path);
+    await settle();
+
+    writeFileSync(path, await renderIdeaboxFrom(p));
+    release();
+
+    const written = await pending;
+    assert.match(written, /IDEA-3/);
+    assert.equal(readFileSync(path, 'utf8'), written);
+  });
+});
+
+describe('round 2 — the windows the ID comparison and the lock left open', () => {
+  // Codex adversarial review of the FU-1/2/3 work. All three are the same
+  // family as everything above: content that only ever existed in the user's
+  // file being replaced by a projection built from an older read of it.
+
+  const IDEABOX = (n) => '# Ideabox\n\n## Ideas\n\n'
+    + Array.from({ length: n }, (_, i) =>
+      `#### IDEA-${i + 1} — legacy idea ${i + 1}\n**Status:** NEW | **Priority:** —\n**Idea:** body ${i + 1}\n`).join('\n')
+    + '\n## Killed Ideas\n';
+
+  it('does not erase an edit to an EXISTING idea made during the migration', async () => {
+    // Finding 1. Every check compares IDs, and editing an idea that already has
+    // a record changes no ID: the assessment sees a file whose handles are all
+    // known, calls it consistent, and the projection replaces the edited body
+    // with the one imported from the version read at the start.
+    //
+    // The edit lands mid-import, after IDEA-1's record exists — which is when
+    // the file is still the user's source document and the store holds nothing
+    // that could restore it.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    writeFileSync(path, IDEABOX(4));
+
+    const edited = IDEABOX(4).replace('**Idea:** body 1', '**Idea:** body 1, rewritten by hand');
+    const realCreate = p.createRecord.bind(p);
+    let created = 0;
+    p.createRecord = async (input) => {
+      const rec = await realCreate(input);
+      if (input.kind === 'idea' && ++created === 1) writeFileSync(path, edited);
+      return rec;
+    };
+
+    await assert.rejects(() => ensureIdeaboxMigrated(p, path), (err) => {
+      assert.equal(err.code, 'IDEABOX_SOURCE_CHANGED_DURING_IMPORT');
+      return true;
+    });
+    p.createRecord = realCreate;
+
+    assert.equal(readFileSync(path, 'utf8'), edited, 'the edit survives the interrupted import');
+    assert.ok(existsSync(manifestPath(p, path)), 'and the migration is still recorded as unfinished');
+
+    // The state it leaves is one the gate already refuses, so the projection
+    // that would have erased the edit cannot run either.
+    await assert.rejects(() => writeIdeaboxProjection(p, path), (err) => {
+      assert.equal(err.code, 'IDEABOX_MANIFEST_STALE');
+      return true;
+    });
+    assert.equal(readFileSync(path, 'utf8'), edited, 'and the file is still the human version');
+  });
+
+  it('refuses the write when the file is saved after the locked assessment', async () => {
+    // Finding 2. The assessment closed the window between the gate and the
+    // lock; this is the window INSIDE it. Reading the records and rendering
+    // them takes time, and a person saving a new idea never acquires this lock
+    // — nothing invites them to — so the whole idea was still lost, one step
+    // later than before.
+    //
+    // The save is timed off the cluster listing, which only `renderIdeaboxFrom`
+    // performs: that puts it strictly after the assessment, so a test that
+    // passes here cannot be passing because the assessment caught it.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    writeFileSync(path, IDEABOX(3));
+    await ensureIdeaboxMigrated(p, path);
+
+    const edited = IDEABOX(3).replace('## Killed Ideas',
+      '#### IDEA-77 — saved while the render was reading records\n**Status:** NEW | **Priority:** —\n**Idea:** keep me\n\n## Killed Ideas');
+    const realList = p.listRecords.bind(p);
+    let fired = false;
+    p.listRecords = async (filter = {}) => {
+      if (filter.kind === 'cluster' && !fired) { fired = true; writeFileSync(path, edited); }
+      return realList(filter);
+    };
+
+    await assert.rejects(() => writeIdeaboxProjection(p, path), (err) => {
+      assert.equal(err.code, 'IDEABOX_CHANGED_UNDER_LOCK');
+      return true;
+    });
+    assert.ok(fired, 'the save really did land after the assessment');
+    assert.equal(readFileSync(path, 'utf8'), edited, "the human's save survives byte for byte");
+  });
+
+  it('two concurrent renders both complete', async () => {
+    // The negative for finding 2, and the reason that check compares the
+    // destination against ITSELF rather than against a gate-time snapshot. The
+    // lock serializes every render Compose performs, so no legitimate render
+    // can change this file between the two reads, and none may be refused.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    writeFileSync(path, IDEABOX(3));
+    await ensureIdeaboxMigrated(p, path);
+
+    const [a, b] = await Promise.all([
+      writeIdeaboxProjection(p, path),
+      writeIdeaboxProjection(p, path),
+    ]);
+    assert.equal(a, b);
+    assert.equal(readFileSync(path, 'utf8'), a);
+  });
+
+  it('replaces the manifest atomically instead of truncating it', async () => {
+    // Finding 3. The file whose entire job is surviving a crash was written
+    // with a truncating `writeFileSync`: a crash between the truncate and the
+    // write leaves a manifest that is present and empty, which vouches for
+    // nothing and turns the remaining corpus into strays.
+    //
+    // Inode identity is the observable difference. `writeFileSync` overwrites
+    // in place and keeps it; temp + rename cannot, because the file that lands
+    // is a different one that was already complete before it was named.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    const mpath = openManifest(p, path, { markdown: 'one', planned: ['IDEA-1'] });
+    const before = statSync(mpath).ino;
+
+    openManifest(p, path, { markdown: 'two', planned: ['IDEA-1', 'IDEA-2'] });
+    assert.notEqual(statSync(mpath).ino, before, 'the manifest was replaced, not overwritten');
+    assert.deepEqual(JSON.parse(readFileSync(mpath, 'utf8')).planned, ['IDEA-1', 'IDEA-2']);
+  });
+
+  it('a retry leaves the plan it is retrying untouched', async () => {
+    // The other half of finding 3: every resumed import came back through
+    // `openManifest`, so each attempt to recover from a crash destroyed and
+    // recreated the only record of what it was recovering. An open manifest
+    // already carrying this hash and this plan is correct as it stands.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    const mpath = openManifest(p, path, { markdown: 'one', planned: ['IDEA-1', 'IDEA-2'] });
+    const before = statSync(mpath);
+
+    // Same document, same plan, order deliberately different — a retry is not a
+    // new intention just because it enumerates the same handles differently.
+    openManifest(p, path, { markdown: 'one', planned: ['IDEA-2', 'IDEA-1'] });
+    const after = statSync(mpath);
+    assert.equal(after.ino, before.ino, 'the manifest file was not replaced');
+    assert.equal(after.mtimeMs, before.mtimeMs, 'and it was not rewritten');
+  });
+});
+
+describe('every parser caller reads a failed parse as a failure', () => {
+  // COMP-IDEABOX-MIGRATE-DIALECT FU-2. The readability check lived in the
+  // migration gate only, so the two callers that parse independently treated a
+  // failed parse as an empty one — the same shape as the original bug, one
+  // level up: the guard was on the destructive path, not on the parse.
+  const UNREADABLE = '## Salvage\n\n### IDEA-9 Hand typed with no dash\n';
+
+  it('importIdeabox refuses rather than importing the subset it recognised', async () => {
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    writeFileSync(path, UNREADABLE);
+    await assert.rejects(() => importIdeabox(p, { path }), (err) => {
+      assert.equal(err.code, 'IDEABOX_UNREADABLE');
+      assert.deepEqual(err.unread, ['IDEA-9']);
+      return true;
+    });
+    assert.equal((await p.listRecords({ kind: 'idea' })).length, 0, 'and writes nothing');
+  });
+
+  it('readIdeabox throws instead of reporting an ideabox with no ideas', async () => {
+    // The live surface: `compose new --from-idea IDEA-9` printed "idea not
+    // found" for an idea plainly present in the file, then built a feature
+    // without the content it had been asked for.
+    mkdirSync(join(tmp, 'docs', 'product'), { recursive: true });
+    writeFileSync(join(tmp, 'docs', 'product', 'ideabox.md'), UNREADABLE);
+    assert.throws(() => readIdeabox(tmp, 'docs/product/ideabox.md'), (err) => {
+      assert.equal(err.code, 'IDEABOX_UNREADABLE');
+      return true;
+    });
   });
 });
 

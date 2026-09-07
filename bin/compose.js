@@ -968,6 +968,16 @@ if (cmd === 'new') {
         console.warn(`--from-idea: idea not found: ${fromIdeaId}`)
       }
     } catch (err) {
+      // An unreadable ideabox is not a missing idea, and it must not be
+      // downgraded into a warning that the build then walks straight past.
+      // `--from-idea` is an explicit request for THAT idea's content; building
+      // the feature without it produces a plausible-looking design derived from
+      // nothing the user asked for, while the ideas sit unread on disk
+      // (COMP-IDEABOX-MIGRATE-DIALECT FU-2).
+      if (err?.code === 'IDEABOX_UNREADABLE') {
+        console.error(`--from-idea: ${err.message}`)
+        process.exit(1)
+      }
       console.warn(`--from-idea: could not load idea: ${err.message}`)
     }
   }

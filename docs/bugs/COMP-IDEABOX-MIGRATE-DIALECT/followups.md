@@ -6,6 +6,30 @@ fix. Fixing them inside this bug would have turned a data-loss stop into an open
 
 ## FU-1 (P1) — the resume policy cannot resume an ordinary interrupted migration
 
+**RESOLVED 2026-09-06.** `lib/fluid/ideabox-manifest.js` (new): `importIdeabox` declares the source
+path, a hash of the markdown it parsed, and every planned handle BEFORE its first `createRecord`, and
+removes the record on success. It lives in `.compose/data/` beside the provider's lock — gitignored,
+so nothing strays into the tracked ideabox directory — and a missing manifest degrades to refuse. The
+gate's resumable set is now `(issued and not deleted) or manifest.planned`, with the manifest half
+counting only while it is open AND its hash matches the file being read now; a mismatch refuses as
+`IDEABOX_MANIFEST_STALE`, naming a mid-migration edit. The protection is unweakened: a completed
+import closes its manifest, so a hand-added idea still refuses. The "crashed partway" test named below
+was replaced by one that makes the store fail on the second idea, so the unattempted tail is the thing
+under test.
+
+**Amended after the round-2 review (2026-09-06).** Two gaps in the above, both accepted:
+
+- The manifest was consulted only when a handle was missing. Editing an idea that ALREADY has a record
+  changes no id, so nothing was missing, and the projection replaced the edit with the body imported
+  from the version read at the start of the migration. An open manifest is a fact about the DOCUMENT,
+  not about its ids, so it is now consulted unconditionally: a hash mismatch refuses, and a match with
+  nothing missing resumes, which is what closes the manifest. `importIdeabox` also re-reads its source
+  after its last write and raises `IDEABOX_SOURCE_CHANGED_DURING_IMPORT` on a mismatch, leaving the
+  manifest OPEN. The scope distinction is the point: during a migration the file is the user's source
+  document, after one it is generated output, and `render` still discards hand edits to output.
+- `openManifest` truncated in place, so a crash mid-write destroyed the only record of the plan being
+  recovered. It is now temp + rename, and an identical retry leaves the existing manifest untouched.
+
 `importIdeabox` creates records sequentially (`lib/fluid/import-ideabox.js:110`). If it writes idea 1
 and crashes on idea 2, ideas 3..N were never issued, so the gate classifies them as hand-added strays
 and refuses (`lib/fluid/ideabox-migrate.js`). The recovery the error names is circular: it recommends
@@ -19,6 +43,14 @@ Needs a durable migration manifest tied to the source document, not an inference
 
 ## FU-2 (P2) — other parser callers still read failure as absence
 
+**RESOLVED 2026-09-06.** The check is now `assertIdeaboxReadable` in `lib/fluid/ideabox-readable.js`
+(new), lifted verbatim from the gate and re-exported by `ideabox-migrate.js` so existing importers are
+unaffected. It is a leaf module because `lib/ideabox.js` has to import it while `ideabox-migrate.js`
+imports `parseIdeabox` from `lib/ideabox.js` — keeping it in the gate would close an import cycle.
+Called by `ensureIdeaboxMigrated` (unchanged behaviour), `importIdeabox`, and `readIdeabox`. On the
+live surface, `compose new --from-idea` now exits non-zero naming the readability error instead of
+warning "idea not found" and building the feature without the content it was asked for.
+
 The readability check lives in the migration gate only. Two callers parse independently and treat a
 failed parse as an empty one:
 
@@ -31,6 +63,28 @@ This is the same shape as the original bug, one level up: the fix so far guards 
 not the parse.
 
 ## FU-3 (P1) — no source fingerprint between the check and the replacement
+
+**RESOLVED 2026-09-06 — but NOT as a fingerprint.** The gate is split into a pure `assessIdeabox`
+(reads `listRecords`, `readEvents` and the markdown; writes nothing; returns refusals rather than
+throwing them) and an executor, `ensureIdeaboxMigrated`, whose external behaviour is unchanged.
+`publishProjection` re-runs the assessment INSIDE the write lock and refuses on anything other than
+`action: 'none'`. The gate itself stays outside the lock, as it must.
+
+The fingerprint described below was implemented and rejected: a hash captured at gate time cannot
+distinguish a hand edit from a second legitimate render, so two concurrent writers (CLI and REST) would
+have the second one refuse for no reason. Re-assessing asks the question that actually matters — is
+this file still consistent with the store? — so a concurrent render assesses as `none` and proceeds
+while a hand-added idea assesses as a stray and stops the write. Both cases are pinned by tests in
+`test/fluid-cutover.test.js`.
+
+**Amended after the round-2 review (2026-09-06).** The assessment closed the window between the gate
+and the lock, not the one inside it: reading the records and rendering them takes time, and a person
+saving a new idea never acquires this lock, so a whole new idea was still lost one step later.
+`publishProjection` now captures the destination's bytes at assessment time and re-reads them
+immediately before `renameSync`, refusing as `IDEABOX_CHANGED_UNDER_LOCK` on any difference. This is
+not the rejected fingerprint: it compares the destination against ITSELF across milliseconds with the
+lock held, and the lock serializes every render Compose performs, so no legitimate concurrent render
+can trip it. A test pins that two concurrent renders both complete.
 
 The gate reads the markdown (`lib/fluid/ideabox-migrate.js`); the projection acquires its lock and
 replaces the file later (`lib/fluid/render-ideabox.js:236`). Nothing verifies the file is still the one
