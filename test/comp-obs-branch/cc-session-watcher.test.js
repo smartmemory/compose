@@ -25,8 +25,9 @@ function writeSessions(records) {
   fs.writeFileSync(sessionsFile, JSON.stringify(records, null, 2));
 }
 
-function makeWatcher({ posts, broadcasts, itemMap, now = () => '2026-04-20T10:00:00Z' }) {
+function makeWatcher({ posts, broadcasts, itemMap, now = () => '2026-04-20T10:00:00Z', ...extra }) {
   return new CCSessionWatcher({
+    ...extra,
     projectsRoot,
     sessionsFile,
     featureRoot,
@@ -259,5 +260,65 @@ describe('CCSessionWatcher — restart safety', () => {
       w.stop();
     }
     assert.equal(w._pollTimer, null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The backstop poll — why these exist
+// ---------------------------------------------------------------------------
+//
+// Polling used to be reachable ONLY when `fs.watch` threw synchronously. But a
+// watcher that stops delivering does not throw and does not emit 'error' — it
+// goes quiet, and every later session write is lost with no symptom and no
+// recovery. That is the same defect that made the build-stream bridge go
+// permanently deaf (12a357a); here it means branch DecisionEvents that never
+// fire. A live-but-silent watcher cannot be produced on demand, so these assert
+// the GUARANTEE: work still gets done when the watcher contributes nothing.
+describe('CCSessionWatcher — the watcher is an optimisation, not the guarantee', () => {
+  it('a silent watcher still yields lineage, via the backstop poll', async () => {
+    copyFx('linear-session.jsonl', projectsRoot, 'sess-a.jsonl');
+    writeSessions([{ featureCode: 'FEAT-A', transcriptPath: '/cc/sess-a.jsonl' }]);
+
+    const posts = [], broadcasts = [];
+    const realWatch = fs.watch;
+    // Alive, never fires — the arming window made permanent.
+    fs.watch = () => ({ on() { return this; }, close() {} });
+    const w = makeWatcher({ posts, broadcasts, itemMap: { 'FEAT-A': 'item-A' }, pollIntervalMs: 25 });
+    try {
+      w.start();
+      assert.ok(w._pollTimer, 'the poll is armed alongside the watcher, not only on throw');
+      const deadline = Date.now() + 5000;
+      while (posts.length === 0 && Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 10));
+      }
+      assert.ok(posts.length > 0, 'lineage was posted with no watcher event at all');
+      assert.equal(posts[0].lineage.feature_code, 'FEAT-A');
+    } finally {
+      fs.watch = realWatch;
+      w.stop();
+    }
+    assert.equal(w._pollTimer, null, 'stop() disarms the backstop');
+  });
+
+  it('a watcher that dies after construction is dropped, and polling carries on', () => {
+    const posts = [], broadcasts = [];
+    const realWatch = fs.watch;
+    const handlers = {};
+    fs.watch = () => ({
+      on(evt, fn) { handlers[evt] = fn; return this; },
+      close() {},
+    });
+    const w = makeWatcher({ posts, broadcasts, itemMap: {}, pollIntervalMs: 25 });
+    try {
+      w.start();
+      assert.ok(w._watcher, 'a watcher was constructed');
+      assert.ok(typeof handlers.error === 'function', "an 'error' handler is registered");
+      handlers.error(new Error('watcher exploded'));
+      assert.equal(w._watcher, null, 'the dead handle is dropped rather than kept');
+      assert.ok(w._pollTimer, 'and the backstop is still running');
+    } finally {
+      fs.watch = realWatch;
+      w.stop();
+    }
   });
 });

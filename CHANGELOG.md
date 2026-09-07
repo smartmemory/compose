@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### The same unguarded-watcher defect, swept across the other two watchers
+
+`12a357a` fixed the build-stream bridge. The pattern was not unique to it: compose has three
+`fs.watch` users, and none of the other two could recover from a watcher that stops delivering.
+A watcher that dies does not throw and may only emit `'error'`; one that merely goes quiet does
+neither. Both were relying on that never happening.
+
+**`server/cc-session-watcher.js` — silent, permanent data loss.** Polling existed but was reachable
+only when `fs.watch` threw *synchronously*, and there was no `'error'` handler at all. So the one
+failure that actually needs recovery — a live watcher that has gone quiet — had none, and missed CC
+sessions meant branch DecisionEvents that never fire and never self-heal. The poll is now armed
+alongside the watcher, and a dying watcher drops its handle and keeps polling.
+
+Arming both dispatchers exposed a real concurrency bug that the single-dispatcher arrangement had
+been hiding: `_flush` commits `emitted_event_ids` only *after* `await postBranchLineage`, so two
+overlapping flushes both see the same fork as new and both broadcast its DecisionEvent. (The lineage
+POST itself is a replace-by-key and is idempotent; the broadcast is not.) Dispatch is now serialised
+through a promise chain, which also closes the same pre-existing overlap between `fullScan()` and a
+watcher event. Sequential flushes were always idempotent — that is what makes the backstop safe.
+
+**`server/file-watcher.js` — an `'error'` handler only, deliberately.** It had none, so a dead docs
+watcher was completely silent. It does *not* get a backstop poll: the other two lose data that never
+comes back, this one loses a hot-reload, and the REST path already serves current content, so a
+refresh recovers it. A recursive re-stat of `docs/**` on a timer is real cost for a recoverable
+symptom. The tradeoff is stated at the call site rather than left implicit.
+
+Regression tests assert the guarantee, not the race, since a live-but-silent watcher cannot be
+produced on demand: a watcher stubbed to never fire still yields lineage, and a watcher that emits
+`'error'` after construction is dropped while polling continues. Both shown red under mutation.
+
 ### A live build stream could silently never start (the "flaky" smoke test was real)
 
 `BuildStreamBridge` tails `build-stream.jsonl` via `fs.watch` on its directory. Once the directory

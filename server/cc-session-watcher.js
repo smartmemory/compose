@@ -68,6 +68,8 @@ export class CCSessionWatcher {
     // COMP-OBS-DRIFT: optional deps for post-lineage drift broadcast
     emitDriftAxes = null,
     projectRoot = null,
+    // Backstop-poll cadence. Injectable so a test need not wait 2s for it.
+    pollIntervalMs = 2000,
   }) {
     if (!projectsRoot) throw new Error('projectsRoot required');
     if (!sessionsFile) throw new Error('sessionsFile required');
@@ -87,6 +89,7 @@ export class CCSessionWatcher {
     // COMP-OBS-DRIFT: optional drift emitter
     this._emitDriftAxes = emitDriftAxes;
     this._projectRoot = projectRoot;
+    this.pollIntervalMs = pollIntervalMs;
 
     // featureCode → (cc_session_id → BranchOutcome[])
     this._accum = new Map();
@@ -272,6 +275,29 @@ export class CCSessionWatcher {
     if (scanned) await this._flush([scanned.featureCode]);
   }
 
+  /**
+   * Dispatch one file change, never concurrently with another.
+   *
+   * `_flush` is idempotent SEQUENTIALLY — the lineage POST is a replace-by-key
+   * (`updateLifecycleExt`), and a fork already in `emitted_event_ids` is not
+   * re-broadcast. It is NOT idempotent CONCURRENTLY: `emitted.add(eventId)` runs
+   * only after `await postBranchLineage`, so two overlapping flushes both see
+   * the same fork as new and both broadcast its DecisionEvent.
+   *
+   * With the watcher as the sole dispatcher that overlap was rare. Arming the
+   * safety poll beside it (see `start`) would have made it ordinary, so
+   * dispatch is serialised here rather than left to chance — which also closes
+   * the same pre-existing overlap between `fullScan()` and a watcher event.
+   */
+  _dispatch(jsonlPath) {
+    this._chain = (this._chain ?? Promise.resolve())
+      .then(() => this._onFileChange(jsonlPath))
+      .catch(err => {
+        console.warn(`[cc-watcher] change handler failed: ${err.message}`);
+      });
+    return this._chain;
+  }
+
   start() {
     // C5: the fs.watch fallback leaves `_watcher` null, so guarding on it alone
     // let every resume() start ANOTHER poll interval — one leaked per switch.
@@ -279,6 +305,20 @@ export class CCSessionWatcher {
     if (!fs.existsSync(this.projectsRoot)) {
       fs.mkdirSync(this.projectsRoot, { recursive: true });
     }
+    // The poll is armed ALONGSIDE the watcher, not only when fs.watch throws.
+    //
+    // A watcher that stops delivering does not throw and does not emit 'error';
+    // it simply goes quiet, and every subsequent session write is lost with no
+    // symptom. Polling used to be reachable only from the synchronous throw
+    // below, so the one failure mode that actually needs recovery — a live
+    // watcher that has silently stopped — had none, and missed CC sessions meant
+    // branch DecisionEvents that never fire and never self-heal.
+    //
+    // (Unlike the build-stream bridge, the fs.watch ARMING window is not the
+    // hazard here: CC sessions are written minutes after start, not in the
+    // microseconds between `watch()` returning and the stream listening. The
+    // justification is dead-watcher recovery.)
+    this._startPolling();
     try {
       this._watcher = fs.watch(this.projectsRoot, { recursive: true }, (_evt, filename) => {
         if (!filename || !filename.endsWith('.jsonl')) return;
@@ -287,9 +327,16 @@ export class CCSessionWatcher {
         const now = Date.now();
         if (now - last < DEFAULT_DEBOUNCE_MS) return;
         this._debounce.set(full, now);
-        this._onFileChange(full).catch(err => {
-          console.warn(`[cc-watcher] change handler failed: ${err.message}`);
-        });
+        this._dispatch(full);
+      });
+      // A watcher can die AFTER construction. Without this the failure is
+      // completely silent; the poll below is already running, so recovery is
+      // just dropping the dead handle.
+      this._watcher.on?.('error', (err) => {
+        console.warn(`[cc-watcher] watcher died, polling continues: ${err?.message}`);
+        try { this._watcher?.close(); } catch { /* already gone */ }
+        this._watcher = null;
+        this._startPolling();
       });
     } catch (err) {
       console.warn(`[cc-watcher] fs.watch unavailable, falling back to polling: ${err.message}`);
@@ -297,7 +344,7 @@ export class CCSessionWatcher {
     }
   }
 
-  _startPolling(intervalMs = 2000) {
+  _startPolling(intervalMs = this.pollIntervalMs ?? 2000) {
     if (this._pollTimer) return;
     this._pollTimer = setInterval(async () => {
       const files = listJsonlFiles(this.projectsRoot);
@@ -308,10 +355,12 @@ export class CCSessionWatcher {
         const last = this._debounce.get(key) || 0;
         if (stat.mtimeMs > last) {
           this._debounce.set(key, stat.mtimeMs);
-          await this._onFileChange(f);
+          await this._dispatch(f);
         }
       }
     }, intervalMs);
+    // Never hold the process open on this alone — it is a backstop, not work.
+    this._pollTimer.unref?.();
   }
 
   stop() {
