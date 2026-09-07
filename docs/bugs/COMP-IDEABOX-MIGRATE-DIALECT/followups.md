@@ -185,6 +185,14 @@ rather than a bug fix.
 
 ## FU-5 (P2) — the `books` ideabox uses a hand-authored section the model has no place for
 
+**RESOLVED 2026-09-07 — the owner chose the hand conversion, not a dialect change.** `books`
+@434c6bc ("convert to the supported structure so the 9 ideas are readable") moved the nine ideas
+back under `## Ideas` with `**Status:** PROMOTED (→ ORGANIZER-UI Phase 3)` on each and H3 umbrellas
+for the grouping; the `## Promoted Ideas` section is gone. Checked 2026-09-07: `parseIdeabox` on
+`my/books/docs/product/ideabox.md` returns 9 ideas, 0 killed, all `PROMOTED`. The dialect is
+unchanged. What remains is not a format problem: `books` has no `.compose/compose.json`, so its
+ideabox commands still need `compose init` before they run.
+
 `my/books/docs/product/ideabox.md` declares 9 ideas that the parser still cannot read, so the gate
 refuses it (correctly — nothing is destroyed, and the refusal names every id).
 
