@@ -16,7 +16,8 @@
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request } from 'node:http';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1040,5 +1041,152 @@ describe('FOH-7 S3 — scope on a colleague turn', () => {
     const { body } = await postMessage(srv.baseUrl, { text: 'hi', scope: 'portfolio' });
     assert.equal(body.ok, false);
     assert.equal(body.error.kind, 'misconfigured', 'never a silent downgrade to one product');
+  });
+
+  // -------------------------------------------------------------------------
+  // FOH-7 acceptance: the local declaring root funnels, and nothing writes.
+  // Both were listed as "pinned by test" with no test (design-foh-7.md audit,
+  // 2026-09-07).
+  // -------------------------------------------------------------------------
+
+  // The funnel and the portfolio branch share one pre-flight, and the portfolio
+  // check runs FIRST — so a declaring root on the local floor is exactly the
+  // case where a widened portfolio branch could answer a turn the funnel exists
+  // to refuse. COLLEAGUE-ALL-IN: the colleague never runs degraded, and having
+  // SmartMemory-backed MEMBERS is not the same as being SmartMemory-backed.
+  test('a local declaring root still funnels, even with SmartMemory members declared', async () => {
+    const maya = await makeMayaServer();
+    const sm = await makeSmStub();
+    // A genuinely SmartMemory-backed member. A portfolio of local members would
+    // prove strictly less than the criterion asks.
+    const member = makeProjectRoot({
+      smartmemory: { baseUrl: sm.baseUrl, apiKeyEnv: 'SM_FLUID_KEY', enabled: true },
+      fluid: { provider: 'smartmemory', smartmemory: { workspaceId: 'team_member_ws' } },
+    });
+    // The DECLARING root is on the local floor: maya wired, fluid is not.
+    const root = makeProjectRoot({
+      maya: { baseUrl: maya.baseUrl, auth: { mode: 'provision' } },
+      smartmemory: { baseUrl: sm.baseUrl, apiKeyEnv: 'SM_FLUID_KEY', enabled: true },
+      fluid: { provider: 'local' },
+    });
+    declarePortfolio(root, [{ id: 'member', root: member }]);
+
+    let composed = false;
+    const srv = await startApp({
+      root,
+      deps: {
+        composeContext: async () => { composed = true; return { blocks: [], omissions: [] }; },
+      },
+    });
+    cleanups.push(() => srv.httpServer.close());
+
+    const { body } = await postMessage(srv.baseUrl, { text: 'what did we decide', scope: 'portfolio' });
+    assert.equal(body.ok, false);
+    assert.equal(
+      body.error.kind, 'connect-smartmemory',
+      'a declared portfolio does not rescue a local declaring root',
+    );
+    // Not just the verdict — the members were never asked, so nothing was read
+    // through a floor the funnel had already refused.
+    assert.equal(composed, false, 'no member was asked');
+    assert.equal(
+      maya.seen.filter((r) => String(r.path).startsWith('/api/chat')).length, 0,
+      'and no turn reached Maya',
+    );
+  });
+
+  /** Every regular file under `dir`, as path → sha256. */
+  function snapshotTree(dir) {
+    const out = new Map();
+    const walk = (at, rel) => {
+      for (const entry of readdirSync(at, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+        const full = join(at, entry.name);
+        const key = rel ? `${rel}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) walk(full, key);
+        else if (entry.isFile()) out.set(key, createHash('sha256').update(readFileSync(full)).digest('hex'));
+      }
+    };
+    walk(dir, '');
+    return out;
+  }
+
+  /** A portfolio-ready root whose identity is ALREADY settled, so the only
+   *  writes a turn could make are the ones under test. `static` mode with a
+   *  workspace claim skips both provisioning and the legacy verify-and-migrate
+   *  branch, each of which persists an identity of its own. */
+  async function settledPortfolioRoot(deps = {}) {
+    const maya = await makeMayaServer();
+    const sm = await makeSmStub();
+    const root = wiredRoot({ mayaBase: maya.baseUrl, smBase: sm.baseUrl, mode: 'static' });
+    declarePortfolio(root);
+    saveIdentity(root, { mode: 'static', access_token: 'settled-token', team_id: 'team_colleague' });
+    const srv = await startApp({ root, deps: { composeContext: emptyContext, ...deps } });
+    cleanups.push(() => srv.httpServer.close());
+    return { srv, root, maya, sm };
+  }
+
+  // Read-only is the claim the whole feature rests on. It currently follows from
+  // two separate rules (portfolio refuses a focusId; writeback is gated on one),
+  // which is an inference, not a guarantee — and the client is asked to lie here
+  // (`writeback: true`) because the panel's own suppression is not the server's.
+  test('a portfolio turn performs no write-back — JSON transport', async () => {
+    const writes = [];
+    const { srv } = await settledPortfolioRoot({
+      performWriteback: async (...args) => { writes.push(args); return { outcome: 'ok' }; },
+      createClient: () => ({ chat: async () => ({ success: true, response: 'ok', message_id: 'm1' }) }),
+    });
+
+    const { body } = await postMessage(srv.baseUrl, {
+      text: 'what did we decide', scope: 'portfolio', writeback: true,
+    });
+    assert.equal(body.ok, true, 'the turn itself still answers');
+    assert.deepEqual(writes, [], 'the write-back seam is never reached');
+    assert.equal(body.writeback ?? null, null, 'and no outcome is reported');
+  });
+
+  test('a portfolio turn performs no write-back — SSE transport', async () => {
+    // A SECOND call site (the stream handler emits its own writeback event).
+    // Pinning only the JSON path leaves the streaming one — the one the panel
+    // actually uses — unpinned.
+    const writes = [];
+    const { srv } = await settledPortfolioRoot({
+      performWriteback: async (...args) => { writes.push(args); return { outcome: 'ok' }; },
+      createClient: () => ({
+        chatStream: async ({ onToken }) => {
+          onToken?.('ok');
+          return { success: true, response: 'ok', message_id: 'm1' };
+        },
+      }),
+    });
+
+    const { events } = await postStream(srv.baseUrl, {
+      text: 'what did we decide', scope: 'portfolio', writeback: true,
+    });
+    const final = events.find((e) => e.event === 'final');
+    assert.ok(final?.data?.ok, 'the streamed turn still answers');
+    assert.deepEqual(writes, [], 'the write-back seam is never reached on the stream either');
+    assert.equal(events.some((e) => e.event === 'writeback'), false, 'and no writeback event is emitted');
+  });
+
+  test('a portfolio turn leaves the project tree byte-identical', async () => {
+    // The two tests above pin the injected SEAM. This one runs the REAL
+    // write-back dependency and compares the tree, so a write arriving through
+    // any other path on this turn — a context builder, a journal, a provenance
+    // record — is caught too. `performWriteback` is deliberately NOT injected.
+    const { srv, root } = await settledPortfolioRoot({
+      createClient: () => ({ chat: async () => ({ success: true, response: 'ok', message_id: 'm1' }) }),
+    });
+    const before = snapshotTree(root);
+
+    const { body } = await postMessage(srv.baseUrl, {
+      text: 'what did we decide', scope: 'portfolio', writeback: true, focusId: null,
+    });
+    assert.equal(body.ok, true);
+
+    const after = snapshotTree(root);
+    assert.deepEqual([...after.keys()], [...before.keys()], 'no file added or removed');
+    for (const [path, hash] of before) {
+      assert.equal(after.get(path), hash, `${path} was modified by a read-only turn`);
+    }
   });
 });

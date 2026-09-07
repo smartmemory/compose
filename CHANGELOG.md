@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### FOH-7's three unpinned acceptance criteria are pinned
+
+A Codex audit of `design-foh-7.md` on 2026-09-07 found three criteria that said "pinned by test" and
+had no test. Tests only, no production change:
+
+- **A local declaring root still funnels.** The `connect-smartmemory` funnel and the portfolio branch
+  share one pre-flight and the portfolio check runs first, so a local-floor root that declares
+  SmartMemory-backed members is exactly the case a widened portfolio branch could answer. Pinned with
+  a genuinely SmartMemory-backed member, asserting the funnel plus zero composer calls and zero Maya
+  traffic.
+- **No writes on any portfolio path** — the read-only claim the whole feature rests on, which
+  previously followed only as an inference from two separate rules (portfolio refuses a `focusId`;
+  write-back is gated on one). Pinned on BOTH transports with the client asking for a write-back it
+  will not get, plus a hash-of-every-file comparison of the project root running the REAL write-back
+  dependency, so a write through any other path on the turn is caught too.
+- **Portfolio scope clears focus, disables the write-back toggle, and can raise no "save unconfirmed"
+  warning.** Each test selects an idea first, so it asserts the suppression rather than the default.
+
+Every one of the six was shown to go red under a mutation of the guard it protects — the check the
+last dead-path incident here went without.
+
 ### A group-signal failure now says which call site and whose group
 
 `processTermination` signals a spawned child's whole process GROUP by negative pid, tolerating only

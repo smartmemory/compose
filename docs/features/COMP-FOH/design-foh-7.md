@@ -422,6 +422,11 @@ narrow the feature — it is a reason the blueprint cannot treat member roots as
 > "pinned by test" with no test. **The controller sampled two of the seventeen citations and did not
 > re-derive the rest**, so the twelve rest on that pass, not on an independent second reading — treat
 > a checked box here as "an audit found evidence", not as "two people agree".
+>
+> **2026-09-07, later the same day:** the three "pinned by test with no test" gaps are CLOSED —
+> six tests written, each one shown to go red under a mutation of the exact guard it protects, so
+> those three boxes rest on a demonstrated test and not on an audit. The two remaining PARTIALs
+> (named-omission reason classes, scope-less byte-identity) are untouched and still open.
 > See [report-foh-7.md](report-foh-7.md) for what shipped.
 
 - [x] `portfolio.members` parsed and validated; duplicate `id` and unresolvable `root` fail loud as
@@ -437,11 +442,12 @@ narrow the feature — it is a reason the blueprint cannot treat member roots as
 - [x] All-members-failed returns an error, never an empty result set (pinned by test)
 - [x] Mixed-provider portfolio works: SmartMemory declaring root + local-floor member in one turn,
       with the local member's intelligence sections omitted **by name** (D-FOH-7-3 table)
-- [ ] A **local declaring root still funnels** even with SmartMemory members declared (pinned by test —
+- [x] A **local declaring root still funnels** even with SmartMemory members declared (pinned by test —
       the portfolio must not rescue it)
-      **NOT MET (verified 2026-09-07).** The funnel exists (`lib/maya-config.js:51-53`,
-      `server/maya-routes.js:261-264`); no test combines a local declaring root with declared
-      SmartMemory members, which is the exact case the criterion says must not be rescued.
+      **MET 2026-09-07 — gap closed.** `test/maya-routes.test.js:1057` declares a portfolio whose
+      member is genuinely SmartMemory-backed on a declaring root that is not, and asserts the
+      `connect-smartmemory` funnel plus zero composer calls and zero Maya traffic. Verified by
+      mutation: deleting the funnel (`server/maya-routes.js`) turns it red.
 - [x] `scope: 'portfolio'` reaches the composer, the turn `text` is used as the recall query, and
       **one real colleague turn returns cross-product findings** — not a dark API (D-FOH-7-8)
 - [ ] Absent `scope` behaves byte-identically to today's turn (pinned by test)
@@ -460,17 +466,25 @@ narrow the feature — it is a reason the blueprint cannot treat member roots as
 - [x] A member root that is not a Compose project is `misconfigured`, never silently skipped
 - [x] `unauthorized` is classified from the propagated `X-SM-Scope-Error`, distinguishing
       "not a member" from "key lacks scope"; an unrecognizable 403 names the reason as undetermined
-- [ ] Portfolio scope clears focus and disables the writeback toggle client-side; no
+- [x] Portfolio scope clears focus and disables the writeback toggle client-side; no
       "save unconfirmed" warning can arise on a portfolio turn (pinned by test)
-      **NOT MET (verified 2026-09-07).** Implemented client-side
-      (`src/components/colleague/ColleaguePanel.jsx:285-289,373-387,816-832`); no UI test pins it,
-      including the "no save-unconfirmed warning can arise" half.
+      **MET 2026-09-07 — gap closed.** Three tests, each selecting IDEA-42 first so the assertion is
+      the suppression and not the default: `test/ui/colleague-panel.test.jsx:554` (toggle disabled
+      and unchecked), `:563` (the wire carries `focusId: null`, `writeback: false`), `:588` (a stream
+      that dies after `final` raises no unconfirmed chip and no retry). Verified by mutation:
+      un-disabling the toggle, un-clearing focus, and un-suppressing the wire flag each turn one
+      red; the unconfirmed test needs focus-clearing AND the `!isPortfolio` in `expectWriteback`
+      removed together, which is the defense-in-depth it exists to hold.
 - [x] `scope: 'portfolio'` with no `portfolio` declaration is `misconfigured`, never a silent
       downgrade to a project-scoped answer (pinned by test)
-- [ ] No writes on any portfolio path (pinned by test)
-      **NOT MET (verified 2026-09-07).** Writeback is suppressed for a normal portfolio turn
-      (`server/maya-routes.js:335-350`) but nothing pins the no-writes guarantee itself, which is
-      the read-only claim the whole feature rests on.
+- [x] No writes on any portfolio path (pinned by test)
+      **MET 2026-09-07 — gap closed.** The seam on BOTH transports —
+      `test/maya-routes.test.js:1132` (JSON) and `:1147` (SSE, a separate call site) — with the
+      client asking for a writeback it will not get, because the guarantee is the server's and not
+      the panel's. Plus `:1171`, which runs the REAL write-back dependency and compares a hash of
+      every file under the project root, so a write arriving through any other path on the turn is
+      caught too. Verified by mutation: ungating `writebackEnabled` from `focusId` reddens the two
+      seam tests, and a stray `writeFileSync` on the portfolio branch reddens the tree snapshot.
 - [x] Live-fire on a genuinely populated second product — **unblocked 2026-09-06** (owner gate: migrate
       forge-top's ideabox as the second product, and stand up a SmartMemory-backed declaring root)
       — **PASSED 2026-09-06**, evidence in [livefire-foh7/](livefire-foh7/RESULTS.md); two defects found and fixed
