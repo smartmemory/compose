@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Receipts gate: a claim written as a fact must carry its receipt
+
+Every wrong fact this sweep found was one habit in five wordings — `known flake`,
+`pinned by test`, `verified independently`, `suite green`, a diagnosis called settled — each a
+confident claim with no measurement behind it, each loaded into later sessions and steering them.
+The worst sat on a live product defect for two months (`12a357a`).
+
+`bin/receipts-gate.js` now runs from the pre-push hook on every push, docs-only included, over the
+ADDED lines of the pushed range only. Three shapes, each justified by an incident here: a checked
+box claiming a test needs the test path in the same item; a `flake` label needs a measurement or a
+`RESOLVED` pinned to a sha; a commit calling the suite green needs the counts. Quoting a phrase in
+backticks means talking about it, not asserting it. History is never scanned and there is no
+baseline to reconcile.
+
+Run against the incidents before shipping: today's whole day passes and all six historical
+offending commits fire. Two first drafts let offenders through — a neighbouring checklist item's
+path vouching for a box with none, and lowercase "fixed" plus any sha vouching for an open `flake` —
+so the fixtures in `test/receipts-gate.test.js` (29 tests) are the real lines, verbatim, and the
+range tests drive a real git repository.
+
+Stated limit: a wrong *diagnosis* has no receipt a regex can demand. The gate catches claims of a
+kind that do. Rule: `.claude/rules/receipts.md`.
+
 ### The same unguarded-watcher defect, swept across the other two watchers
 
 `12a357a` fixed the build-stream bridge. The pattern was not unique to it: compose has three
