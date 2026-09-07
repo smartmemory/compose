@@ -405,17 +405,25 @@ export async function guardTransition({ resourceId, fromState, toState, artifact
 }
 
 /**
- * The single sanctioned bypass of predicate verification. Requires an
- * out-of-band override token (server env STRATUM_GUARD_OVERRIDE_TOKEN), a human
- * resolver, and a rationale. Records a 'deviation' ledger entry.
+ * The single sanctioned bypass of predicate verification. Requires a signed
+ * one-shot AUTHORIZATION, a human resolver, and a rationale. Records a
+ * 'deviation' ledger entry.
+ *
+ * Corrected 2026-09-07: this wrapper sent `override_token`, the shared secret
+ * stratum retired in STRAT-GUARD-AUTHZ @3647b4c. Stratum now reads
+ * `authorization` (`ts/src/mcp/server.ts:270`) — an sshsig over a payload it
+ * reconstructs, bound to the resource's ledger head — so every call this wrapper
+ * could have made was destined to fail on a missing authorization. It has no
+ * production caller; the field name is fixed so the first one does not inherit
+ * the break.
  * @returns {Promise<{status:string,ledger_ref:string,current_state:string}|ErrorResult>}
  */
-export async function guardOverride({ resourceId, fromState, toState, overrideToken, rationale, resolvedBy = 'human' }) {
+export async function guardOverride({ resourceId, fromState, toState, authorization, rationale, resolvedBy = 'human' }) {
   return runGuard('override', _compact({
     resource_id: resourceId,
     from_state: fromState,
     to_state: toState,
-    override_token: overrideToken,
+    authorization,
     rationale,
     resolved_by: resolvedBy,
   }));

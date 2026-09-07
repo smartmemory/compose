@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### The override token is removed
+
+Decided after the audit below: `force` and lifecycle-owned statuses are now refused unconditionally
+under `capabilities.guard`, with no token accepted. Nothing in `server/`, `lib/` or `bin/` reads
+`STRATUM_GUARD_OVERRIDE_TOKEN`. The hatch had no user and could not have one (the variable was unset
+in every environment we ship and `override_token` appeared in no tool schema), both statuses it
+nominally unlocked already have first-class doors (`kill_feature` through the guarded lifecycle,
+`record_completion` through the completion gate), and what remained was the ability to skip the
+transition table and the prose-loss refusals. It was never the real protection either: anything that
+can call these tools can write the files directly, and the tamper-evident ledger plus the pre-push
+canon guard are what hold. If a break-glass path is ever genuinely needed, the answer is stratum's
+signed one-shot authorization, and the trigger is a real incident of hitting these refusals with
+nowhere to go.
+
+There were three of these gates, not two: `assertToolPhaseAllowed`, the profile x phase tool gate,
+carried the same escape and is now unconditional as well.
+
+Also corrected: `guardOverride` in `server/stratum-client.js` was sending `override_token` to a
+stratum that reads `authorization`, so every call it could have made would have failed on a missing
+authorization. No production caller. Its test asserted only what our own wrapper wrote, never what
+the other side reads.
+
 ### The override-token gate no longer claims a property nobody demonstrated
 
 `server/compose-mcp-tools.js` told callers its `STRATUM_GUARD_OVERRIDE_TOKEN` check was "not
