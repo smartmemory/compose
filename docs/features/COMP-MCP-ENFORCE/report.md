@@ -71,6 +71,17 @@ Roadmap STATUS is now a projection driven by lifecycle phase. `phaseToStatus()` 
 > for the majority of real completions — were not covered. The annotation reflects an incomplete
 > enumeration; it does not reflect coverage.
 
+> **Correction — 2026-09-07 (override-token removal):** "each requires an out-of-band
+> `STRATUM_GUARD_OVERRIDE_TOKEN` to deviate, the single authorized escape replacing `force`" is no
+> longer true, and this correction is written by the change that made it untrue. The token is
+> REMOVED (@f79e804): `assertForceAuthorized`, `assertTerminalStatusAuthorized` and
+> `assertToolPhaseAllowed` now refuse unconditionally when their capability is on, and nothing in
+> `server/`, `lib/` or `bin/` reads that variable. It was removed because the escape had no user and
+> could not have one — the variable was unset in every environment we ship and `override_token`
+> appeared in no MCP tool schema — while both statuses it nominally unlocked already had
+> first-class doors. Reasoning and evidence:
+> `docs/decisions/2026-09-07-override-token-audit.md`.
+
 ### Slice 4 Part A — opt-in loopback REST auth
 A `guardAuth` middleware (`capabilities.guardAuth`, default OFF) requires `x-compose-token` on every vision mutation endpoint; reads stay open; fail-closed (503) if enabled without a configured token. Default OFF because the cockpit UI does not yet send the token. *(Codex: 3 findings — coverage of iteration/branch/PATCH, fail-closed semantics → CLEAN.)*
 
