@@ -24,7 +24,8 @@ import { fileURLToPath } from 'node:url';
 
 import { withDirLock, acquireDirLock, DirLockTimeout } from '../lib/dir-lock.js';
 import { ensureIdeaboxMigrated } from '../lib/fluid/ideabox-migrate.js';
-import { manifestPath, openManifest } from '../lib/fluid/ideabox-manifest.js';
+import { manifestPath, openManifest, readManifest } from '../lib/fluid/ideabox-manifest.js';
+import { adoptFile, discardEdits, reconcileRecords } from '../lib/fluid/ideabox-recover.js';
 import { preamblePath } from '../lib/fluid/ideabox-preamble.js';
 import { toMarkdownDate, toRecordTimestamp } from '../lib/fluid/ideabox-dates.js';
 import { LocalFluidProvider } from '../lib/fluid/local-provider.js';
@@ -758,6 +759,511 @@ describe("the project's own heading and introduction survive migration", () => {
   });
 });
 
+describe('recovering a stranded ideabox', () => {
+  // The escape hatch FU-1 left open. When an interrupted migration's document
+  // has changed, the gate refuses every ideabox command — correctly — and the
+  // only exit needing no tooling was to delete the manifest, which makes the
+  // partially migrated store canon so the next render destroys the edit.
+  //
+  // Two commands say which document is right. Both refuse unless the project is
+  // actually stranded, which is the constraint everything else here rests on:
+  // without it, `adopt-file` is a general "make the file canon" door that
+  // defeats FU-1, FU-2 and FU-3 together.
+
+  const IDEABOX = (n, body = (i) => `body ${i}`) => '# Ideabox\n\n## Ideas\n\n'
+    + Array.from({ length: n }, (_, i) =>
+      `#### IDEA-${i + 1} — legacy idea ${i + 1}\n**Status:** NEW | **Priority:** —\n**Idea:** ${body(i + 1)}\n`).join('\n')
+    + '\n## Killed Ideas\n';
+
+  /** The real stranded state: crash mid-import, then edit the document. */
+  const strand = async (p, path, { edited }) => {
+    writeFileSync(path, IDEABOX(4));
+    const realCreate = p.createRecord.bind(p);
+    let seen = 0;
+    p.createRecord = async (input) => {
+      if (input.kind === 'idea' && ++seen === 2) throw new Error('disk full');
+      return realCreate(input);
+    };
+    await assert.rejects(() => ensureIdeaboxMigrated(p, path), /disk full/);
+    p.createRecord = realCreate;
+    writeFileSync(path, edited);
+    // The state the user actually meets: every command refuses.
+    await assert.rejects(() => ensureIdeaboxMigrated(p, path),
+      (e) => e.code === 'IDEABOX_MANIFEST_STALE');
+  };
+
+  // IDEA-1 is already imported, so its body is an EDIT to an existing record;
+  // IDEA-99 was never issued at all.
+  const EDITED = IDEABOX(4, (i) => (i === 1 ? 'body 1, rewritten by hand' : `body ${i}`))
+    .replace('## Killed Ideas',
+      '#### IDEA-99 — added by hand during the outage\n**Status:** NEW | **Priority:** —\n**Idea:** keep me\n\n## Killed Ideas');
+
+  it('adopt-file keeps the edit, imports the new idea, and finishes', async () => {
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    await strand(p, path, { edited: EDITED });
+
+    const report = await adoptFile(p, path);
+    assert.deepEqual(report.updated, ['IDEA-1'], 'the already-imported record was corrected');
+    assert.ok(report.imported.includes('IDEA-99'), 'and the hand-added idea was imported');
+
+    assert.equal((await p.getRecord('IDEA-1')).body, 'body 1, rewritten by hand');
+    assert.equal((await p.getRecord('IDEA-99')).title, 'added by hand during the outage');
+    assert.equal((await p.listRecords({ kind: 'idea' })).length, 5);
+    assert.ok(!existsSync(manifestPath(p, path)), 'the migration is finished');
+
+    // And the project is usable again — the state it was stranded out of.
+    await ensureIdeaboxMigrated(p, path);
+  });
+
+  it('discard-edits restores the original, saves a copy, and finishes', async () => {
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    await strand(p, path, { edited: EDITED });
+
+    const { backup } = await discardEdits(p, path);
+    assert.ok(backup && existsSync(backup), 'the discarded text is saved before it is discarded');
+    assert.equal(readFileSync(backup, 'utf8'), EDITED, 'byte for byte');
+
+    assert.equal((await p.getRecord('IDEA-1')).body, 'body 1', 'the original body is canon');
+    assert.equal(await p.getRecord('IDEA-99').catch(() => null), null,
+      'and the hand-added idea is not imported');
+    assert.equal((await p.listRecords({ kind: 'idea' })).length, 4);
+    assert.ok(!existsSync(manifestPath(p, path)), 'the migration is finished');
+    await ensureIdeaboxMigrated(p, path);
+  });
+
+  it('adopt-file refuses on a clean, fully migrated project', async () => {
+    // THE GATE. Without it this is a general "make the file canon" backdoor,
+    // and every protection FU-1..FU-3 built is one command away from being
+    // bypassed. A hand edit to a migrated ideabox is `render`'s job, not this.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    writeFileSync(path, IDEABOX(3));
+    await ensureIdeaboxMigrated(p, path);
+    writeFileSync(path, IDEABOX(3).replace('## Killed Ideas',
+      '#### IDEA-50 — typed into generated output\n**Status:** NEW | **Priority:** —\n**Idea:** x\n\n## Killed Ideas'));
+
+    await assert.rejects(() => adoptFile(p, path), (err) => {
+      assert.equal(err.code, 'IDEABOX_NOT_STRANDED');
+      return true;
+    });
+    assert.equal((await p.listRecords({ kind: 'idea' })).length, 3, 'and it changed nothing');
+  });
+
+  it('discard-edits refuses on a clean, fully migrated project', async () => {
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    writeFileSync(path, IDEABOX(3));
+    await ensureIdeaboxMigrated(p, path);
+    const before = readFileSync(path, 'utf8');
+
+    await assert.rejects(() => discardEdits(p, path), (err) => {
+      assert.equal(err.code, 'IDEABOX_NOT_STRANDED');
+      return true;
+    });
+    assert.equal(readFileSync(path, 'utf8'), before, 'the file is untouched');
+  });
+
+  it('a v1 manifest can be adopted but not discarded', async () => {
+    // v1 stored only a hash, so there is no document to put back and discarding
+    // would delete the current text and restore nothing. Adopting still works,
+    // which is what keeps such a project recoverable at all.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    await strand(p, path, { edited: EDITED });
+
+    const mpath = manifestPath(p, path);
+    const v1 = JSON.parse(readFileSync(mpath, 'utf8'));
+    delete v1.text;
+    v1.version = 1;
+    writeFileSync(mpath, JSON.stringify(v1, null, 2));
+
+    await assert.rejects(() => discardEdits(p, path), (err) => {
+      assert.equal(err.code, 'IDEABOX_NO_STORED_SOURCE');
+      assert.match(err.message, /adopt-file/, 'and it names the recovery that does work');
+      return true;
+    });
+    assert.equal(readFileSync(path, 'utf8'), EDITED, 'the refusal destroyed nothing');
+
+    const report = await adoptFile(p, path);
+    assert.deepEqual(report.updated, ['IDEA-1']);
+    assert.ok(report.imported.includes('IDEA-99'));
+  });
+
+  it('adopt-file interrupted after the reconcile step reruns cleanly', async () => {
+    // The step order is what makes a crash mid-recovery safe, and it only works
+    // because step 2 is idempotent: a crash between 2 and 3 leaves the manifest
+    // stale, so the command reruns and repeats the reconcile over records it
+    // already fixed.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    await strand(p, path, { edited: EDITED });
+
+    const first = await reconcileRecords(p, path, parseIdeabox(readFileSync(path, 'utf8')));
+    assert.deepEqual(first.updated, ['IDEA-1']);
+    // Still stranded: nothing re-planned the manifest.
+    await assert.rejects(() => ensureIdeaboxMigrated(p, path),
+      (e) => e.code === 'IDEABOX_MANIFEST_STALE');
+
+    const report = await adoptFile(p, path);
+    assert.deepEqual(report.updated, [], 'the second pass finds nothing left to change');
+    assert.ok(report.imported.includes('IDEA-99'), 'and it still completes the migration');
+    assert.equal((await p.getRecord('IDEA-1')).body, 'body 1, rewritten by hand');
+  });
+
+  it('adopt-file appends a discussion entry rather than patching the trail', async () => {
+    // Discussion is APPEND-ONLY on the seam: `updateRecord` refuses to patch it,
+    // deliberately, because the deliberation trail is evidence rather than a
+    // mutable blob (`record-shape.js`). So the reconcile cannot treat it like
+    // any other field — patching it makes the whole update throw and the
+    // recovery fails on a document that merely gained a comment.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    await strand(p, path, {
+      edited: IDEABOX(4).replace('**Idea:** body 1',
+        '**Idea:** body 1\n**Discussion:**\n- [2026-09-07] human: still worth doing'),
+    });
+
+    const report = await adoptFile(p, path);
+    assert.equal(report.discussed.length, 1, 'the new entry is reported');
+    const rec = await p.getRecord('IDEA-1');
+    assert.equal(rec.discussion.length, 1);
+    assert.equal(rec.discussion[0].text, 'still worth doing');
+    assert.equal(rec.discussion[0].author, 'human');
+
+    // Idempotent: adopting again must not append the same entry twice.
+    const second = await reconcileRecords(p, path, parseIdeabox(readFileSync(path, 'utf8')));
+    assert.deepEqual(second.discussed, []);
+    assert.equal((await p.getRecord('IDEA-1')).discussion.length, 1);
+  });
+
+  it('adopt-file recaptures the preamble from the document it adopts', async () => {
+    // FU-4 captured the heading from the version this file has now superseded.
+    // Adopting a document whose heading was part of the edit has to take the
+    // heading too, or the render puts the old one back over it.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    const withHeading = (h) => `# ${h}\n\nThe project's own introduction.\n\n`
+      + IDEABOX(4).split('# Ideabox\n\n')[1];
+    writeFileSync(path, withHeading('Original Heading'));
+
+    const realCreate = p.createRecord.bind(p);
+    let seen = 0;
+    p.createRecord = async (input) => {
+      if (input.kind === 'idea' && ++seen === 2) throw new Error('disk full');
+      return realCreate(input);
+    };
+    await assert.rejects(() => ensureIdeaboxMigrated(p, path), /disk full/);
+    p.createRecord = realCreate;
+    writeFileSync(path, withHeading('Renamed While Down'));
+
+    await adoptFile(p, path);
+    assert.match(readFileSync(preamblePath(path), 'utf8'), /^# Renamed While Down$/m);
+    assert.match(readFileSync(path, 'utf8'), /^# Renamed While Down$/m,
+      'and the render keeps it rather than restoring the superseded heading');
+  });
+
+  it('adopt-file files an existing idea into an umbrella that did not exist yet', async () => {
+    // The edit moved an ALREADY-IMPORTED idea under a new umbrella. Clusters
+    // have to be resolved before the mapping runs, exactly as the import does
+    // them first: otherwise the idea's cluster resolves to null, the record is
+    // silently unfiled, and step 4 skips it because the handle already exists.
+    // A null cluster also renders as Unclustered, so the move looks undone.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    const grouped = '# Ideabox\n\n## Ideas\n\n### New Umbrella\n\n**Theme:** things that go together\n\n'
+      + Array.from({ length: 4 }, (_, i) =>
+        `#### IDEA-${i + 1} — legacy idea ${i + 1}\n**Status:** NEW | **Priority:** —\n**Idea:** body ${i + 1}\n`).join('\n')
+      + '\n## Killed Ideas\n';
+    await strand(p, path, { edited: grouped });
+
+    const report = await adoptFile(p, path);
+    assert.ok(report.updated.includes('IDEA-1'), 'the already-imported idea was refiled');
+
+    const clusters = await p.listRecords({ kind: 'cluster' });
+    const umbrella = clusters.find((c) => c.title === 'New Umbrella');
+    assert.ok(umbrella, 'the umbrella was created');
+    assert.equal((await p.getRecord('IDEA-1')).cluster, umbrella.handle,
+      'and the idea points at its handle, not at nothing');
+    assert.match(readFileSync(path, 'utf8'), /### New Umbrella/);
+    assert.doesNotMatch(readFileSync(path, 'utf8'), /### Unclustered/);
+  });
+
+  it('adopt-file keeps and reports a handle the file no longer mentions', async () => {
+    // Never deletes. The line may have been removed by accident, and guessing
+    // that a missing line means "delete this idea" is exactly the silent loss
+    // the gate exists to refuse.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    // IDEA-1 imported, then the user's edit drops it entirely and adds IDEA-99.
+    await strand(p, path, {
+      edited: IDEABOX(4).split('#### IDEA-1')[0]
+        + IDEABOX(4).split('\n\n').filter((b) => !b.startsWith('#### IDEA-1')).slice(1).join('\n\n'),
+    });
+
+    const report = await adoptFile(p, path);
+    assert.deepEqual(report.kept, ['IDEA-1'], 'the absent handle is reported, not removed');
+    assert.ok(await p.getRecord('IDEA-1'), 'and its record survives');
+    assert.match(readFileSync(path, 'utf8'), /IDEA-1/,
+      'the render puts it back in the file, so it is visible rather than a surprise later');
+  });
+
+  it('adopt-file keeps an edit to an EXISTING umbrella\'s theme', async () => {
+    // `findOrCreateRecord` leaves a cluster that already exists exactly as it
+    // was, and step 4's import skips known clusters too — so an edit to the
+    // theme of an umbrella that was already imported reached neither, and the
+    // projection wrote the old theme back over it. Same content loss as an
+    // edited idea body, one record kind over, and the umbrella test above did
+    // not catch it because its umbrella was NEW.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    const grouped = (theme) => '# Ideabox\n\n## Ideas\n\n### Existing Umbrella\n\n'
+      + `**Theme:** ${theme}\n\n`
+      + Array.from({ length: 4 }, (_, i) =>
+        `#### IDEA-${i + 1} — legacy idea ${i + 1}\n**Status:** NEW | **Priority:** —\n**Idea:** body ${i + 1}\n`).join('\n')
+      + '\n## Killed Ideas\n';
+
+    writeFileSync(path, grouped('the theme as first written'));
+    const realCreate = p.createRecord.bind(p);
+    let seen = 0;
+    p.createRecord = async (input) => {
+      if (input.kind === 'idea' && ++seen === 2) throw new Error('disk full');
+      return realCreate(input);
+    };
+    await assert.rejects(() => ensureIdeaboxMigrated(p, path), /disk full/);
+    p.createRecord = realCreate;
+    // The umbrella record already exists; only its theme changes.
+    writeFileSync(path, grouped('the theme as rewritten by hand'));
+    await assert.rejects(() => ensureIdeaboxMigrated(p, path),
+      (e) => e.code === 'IDEABOX_MANIFEST_STALE');
+
+    await adoptFile(p, path);
+    const umbrella = (await p.listRecords({ kind: 'cluster' }))
+      .find((c) => c.title === 'Existing Umbrella');
+    assert.equal(umbrella.body, 'the theme as rewritten by hand', 'the record carries the edit');
+    assert.match(readFileSync(path, 'utf8'), /the theme as rewritten by hand/,
+      'and the projection does not put the old theme back');
+
+    // The step order's crash-safety argument needs EVERY part of the reconcile
+    // to be idempotent, and the cluster pass is a part of it.
+    const second = await reconcileRecords(p, path, parseIdeabox(readFileSync(path, 'utf8')));
+    assert.deepEqual(second.reclustered, [], 'the theme reconcile is idempotent too');
+  });
+
+  it('discard-edits undoes an adoption that was interrupted after the reconcile', async () => {
+    // The two commands can be run in sequence: `adopt-file` crashes after step 2
+    // has already patched records to match the edited file, the project is still
+    // stranded, and the user changes their mind and discards. Restoring the
+    // markdown alone is not enough — the ordinary import skips records that
+    // exist, so the edited body survived in the store and the projection wrote
+    // it straight back into the file the user had just restored. "Discard" that
+    // silently keeps the edits is the loss this whole feature exists to prevent.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    await strand(p, path, { edited: EDITED });
+
+    // Step 2 of an adoption, then the crash.
+    await reconcileRecords(p, path, parseIdeabox(readFileSync(path, 'utf8')));
+    assert.equal((await p.getRecord('IDEA-1')).body, 'body 1, rewritten by hand');
+
+    const { backup } = await discardEdits(p, path);
+    assert.equal(readFileSync(backup, 'utf8'), EDITED, 'the discarded text is still saved');
+    assert.equal((await p.getRecord('IDEA-1')).body, 'body 1',
+      'and the record is back to what the migration read');
+    assert.doesNotMatch(readFileSync(path, 'utf8'), /rewritten by hand/,
+      'so the projection cannot reintroduce the discarded edit');
+  });
+
+  it('discard-edits names what an interrupted adoption left behind', async () => {
+    // Discarding puts back every field it can, but it deletes nothing — so an
+    // umbrella the adoption created and a comment that reached a record both
+    // survive, the first rendering with no ideas under it. Neither loses
+    // anything the user had; both are things they did not ask to keep, and
+    // silence is what would make that a defect.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    const edited = '# Ideabox\n\n## Ideas\n\n### Brand New Umbrella\n\n**Theme:** invented during the outage\n\n'
+      + '#### IDEA-1 — legacy idea 1\n**Status:** NEW | **Priority:** —\n**Idea:** body 1\n'
+      + '**Discussion:**\n- [2026-09-07] human: typed during the outage\n\n'
+      + [2, 3, 4].map((i) =>
+        `#### IDEA-${i} — legacy idea ${i}\n**Status:** NEW | **Priority:** —\n**Idea:** body ${i}\n`).join('\n')
+      + '\n## Killed Ideas\n';
+    await strand(p, path, { edited });
+
+    // An adoption that got as far as step 2, then crashed.
+    await reconcileRecords(p, path, parseIdeabox(edited));
+    const { leftover } = await discardEdits(p, path);
+
+    assert.deepEqual(leftover.clusters, ['Brand New Umbrella'], 'the umbrella is named, not deleted');
+    assert.deepEqual(leftover.discussed, ['IDEA-1'], 'and so is the comment that stays');
+    // Reported because it is real: both are visible in the file the user gets back.
+    assert.match(readFileSync(path, 'utf8'), /Brand New Umbrella/);
+    assert.match(readFileSync(path, 'utf8'), /typed during the outage/);
+    // What discard DOES undo is still undone.
+    assert.equal((await p.getRecord('IDEA-1')).cluster, null, 'the idea is out of that umbrella');
+  });
+
+  it('discard-edits names the saved copy even when the resume then fails', async () => {
+    // The one moment the path matters is the one where it was not printed: the
+    // return value never arrives if the resume throws after the overwrite, so
+    // the user is told their text is gone and not where the copy is. The error
+    // that leads here promises the path is printed; a promise kept only on the
+    // happy path is not kept.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    await strand(p, path, { edited: EDITED });
+
+    const announced = [];
+    p.createRecord = async () => { throw new Error('disk full again'); };
+    await assert.rejects(
+      () => discardEdits(p, path, { onBackup: (b) => announced.push(b) }),
+      /disk full again/,
+    );
+
+    assert.equal(announced.length, 1, 'the path was surfaced before the overwrite, not after');
+    assert.equal(readFileSync(announced[0], 'utf8'), EDITED, 'and it holds the discarded text');
+  });
+
+  it('adopt-file recaptures the preamble when there is nothing left to import', async () => {
+    // The crash-at-the-tail shape: every record landed and only the manifest
+    // close was missed, so step 4 imports nothing. `adoptFile` leaves the
+    // preamble to that import rather than writing it itself, which is only
+    // correct if the resume still runs the writer with an empty import set.
+    // Nothing else covers that branch — every other adopt test has a handle
+    // waiting to be imported.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    const withHeading = (h) => `# ${h}\n\nThe project's own introduction.\n\n`
+      + IDEABOX(4).split('# Ideabox\n\n')[1];
+    writeFileSync(path, withHeading('Original Heading'));
+
+    // Everything imports; then stand in for a crash that landed every record
+    // but missed the manifest close, by re-opening a manifest over the finished
+    // state. That is the state on disk after such a crash.
+    await ensureIdeaboxMigrated(p, path);
+    assert.equal((await p.listRecords({ kind: 'idea' })).length, 4);
+    openManifest(p, path, {
+      markdown: readFileSync(path, 'utf8'),
+      planned: ['IDEA-1', 'IDEA-2', 'IDEA-3', 'IDEA-4'],
+      plannedClusters: [],
+    });
+
+    writeFileSync(path, withHeading('Renamed While Down'));
+
+    await adoptFile(p, path);
+    assert.match(readFileSync(preamblePath(path), 'utf8'), /^# Renamed While Down$/m);
+    assert.match(readFileSync(path, 'utf8'), /^# Renamed While Down$/m,
+      'and the render keeps it rather than restoring the superseded heading');
+  });
+
+  it('adopt-file files an existing idea into an umbrella that did not exist yet', async () => {
+    // The edit moved an ALREADY-IMPORTED idea under a new umbrella. Clusters
+    // have to be resolved before the mapping runs, exactly as the import does
+    // them first: otherwise the idea's cluster resolves to null, the record is
+    // silently unfiled, and step 4 skips it because the handle already exists.
+    // A null cluster also renders as Unclustered, so the move looks undone.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    const grouped = '# Ideabox\n\n## Ideas\n\n### New Umbrella\n\n**Theme:** things that go together\n\n'
+      + Array.from({ length: 4 }, (_, i) =>
+        `#### IDEA-${i + 1} — legacy idea ${i + 1}\n**Status:** NEW | **Priority:** —\n**Idea:** body ${i + 1}\n`).join('\n')
+      + '\n## Killed Ideas\n';
+    await strand(p, path, { edited: grouped });
+
+    const report = await adoptFile(p, path);
+    assert.ok(report.updated.includes('IDEA-1'), 'the already-imported idea was refiled');
+
+    const clusters = await p.listRecords({ kind: 'cluster' });
+    const umbrella = clusters.find((c) => c.title === 'New Umbrella');
+    assert.ok(umbrella, 'the umbrella was created');
+    assert.equal((await p.getRecord('IDEA-1')).cluster, umbrella.handle,
+      'and the idea points at its handle, not at nothing');
+    assert.match(readFileSync(path, 'utf8'), /### New Umbrella/);
+    assert.doesNotMatch(readFileSync(path, 'utf8'), /### Unclustered/);
+  });
+
+  it('adopt-file keeps and reports a handle the file no longer mentions', async () => {
+    // Never deletes. The line may have been removed by accident, and guessing
+    // that a missing line means "delete this idea" is exactly the silent loss
+    // the gate exists to refuse.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    // IDEA-1 imported, then the user's edit drops it entirely and adds IDEA-99.
+    await strand(p, path, {
+      edited: IDEABOX(4).split('#### IDEA-1')[0]
+        + IDEABOX(4).split('\n\n').filter((b) => !b.startsWith('#### IDEA-1')).slice(1).join('\n\n'),
+    });
+
+    const report = await adoptFile(p, path);
+    assert.deepEqual(report.kept, ['IDEA-1'], 'the absent handle is reported, not removed');
+    assert.ok(await p.getRecord('IDEA-1'), 'and its record survives');
+    assert.match(readFileSync(path, 'utf8'), /IDEA-1/,
+      'the render puts it back in the file, so it is visible rather than a surprise later');
+  });
+
+  it('discard-edits names the saved copy even when the resume then fails', async () => {
+    // The one moment the path matters is the one where it was not printed: the
+    // return value never arrives if the resume throws after the overwrite, so
+    // the user is told their text is gone and not where the copy is. The error
+    // that leads here promises the path is printed; a promise kept only on the
+    // happy path is not kept.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    await strand(p, path, { edited: EDITED });
+
+    const announced = [];
+    p.createRecord = async () => { throw new Error('disk full again'); };
+    await assert.rejects(
+      () => discardEdits(p, path, { onBackup: (b) => announced.push(b) }),
+      /disk full again/,
+    );
+
+    assert.equal(announced.length, 1, 'the path was surfaced before the overwrite, not after');
+    assert.equal(readFileSync(announced[0], 'utf8'), EDITED, 'and it holds the discarded text');
+  });
+
+  it('adopt-file recaptures the preamble when there is nothing left to import', async () => {
+    // The crash-at-the-tail shape: every record landed and only the manifest
+    // close was missed, so step 4 imports nothing. `adoptFile` leaves the
+    // preamble to that import rather than writing it itself, which is only
+    // correct if the resume still runs the writer with an empty import set.
+    // Nothing else covers that branch — every other adopt test has a handle
+    // waiting to be imported.
+    const p = await provider();
+    const path = join(tmp, 'ideabox.md');
+    const withHeading = (h) => `# ${h}\n\nThe project's own introduction.\n\n`
+      + IDEABOX(4).split('# Ideabox\n\n')[1];
+    writeFileSync(path, withHeading('Original Heading'));
+
+    // Import everything, then crash before the manifest is closed.
+    const realDelete = p.deleteManifest?.bind(p);
+    await assert.rejects(async () => {
+      const real = p.createRecord.bind(p);
+      await ensureIdeaboxMigrated(p, path).catch(() => {});
+      void real; void realDelete;
+      throw new Error('sentinel');
+    }, /sentinel/);
+    // All four ideas are in the store now; re-open a manifest by hand to stand
+    // in for the close that never happened.
+    assert.equal((await p.listRecords({ kind: 'idea' })).length, 4);
+    openManifest(p, path, {
+      markdown: readFileSync(path, 'utf8'),
+      planned: ['IDEA-1', 'IDEA-2', 'IDEA-3', 'IDEA-4'],
+      plannedClusters: [],
+    });
+
+    writeFileSync(path, withHeading('Renamed While Down'));
+    await assert.rejects(() => ensureIdeaboxMigrated(p, path),
+      (e) => e.code === 'IDEABOX_MANIFEST_STALE');
+
+    const report = await adoptFile(p, path);
+    assert.deepEqual(report.imported, [], 'nothing was left to import');
+    assert.match(readFileSync(preamblePath(path), 'utf8'), /^# Renamed While Down$/m);
+    assert.match(readFileSync(path, 'utf8'), /^# Renamed While Down$/m);
+  });
+});
+
 describe('every parser caller reads a failed parse as a failure', () => {
   // COMP-IDEABOX-MIGRATE-DIALECT FU-2. The readability check lived in the
   // migration gate only, so the two callers that parse independently treated a
@@ -1025,6 +1531,72 @@ describe('the compose ideabox CLI, writing through the record store', () => {
     project = join(tmp, 'project');
     ideabox = join(project, 'docs/product/ideabox.md');
     log = [];
+  });
+
+  it('reports a stranded ideabox as a message, not a stack trace', async () => {
+    // THE PAYOFF, and it was one line from being unreachable. Every migration
+    // refusal escaped `reportOpFailure` and killed the process with a Node
+    // stack trace — so the stale-manifest message, which is the ONLY place the
+    // two recovery commands are named, reached the user buried inside a crash
+    // dump. A supported exit nobody can read is not an exit.
+    const errors = [];
+    const original = console.error;
+    console.error = (...a) => errors.push(a.join(' '));
+    try {
+      mkdirSync(join(project, 'docs/product'), { recursive: true });
+      writeFileSync(ideabox, '# Ideabox\n\n## Ideas\n\n'
+        + '#### IDEA-1 — one\n**Status:** NEW | **Priority:** —\n**Idea:** body 1\n\n'
+        + '#### IDEA-2 — two\n**Status:** NEW | **Priority:** —\n**Idea:** body 2\n\n## Killed Ideas\n');
+      const p = await new LocalFluidProvider().init(project);
+      const realCreate = p.createRecord.bind(p);
+      let seen = 0;
+      p.createRecord = async (input) => {
+        if (input.kind === 'idea' && ++seen === 2) throw new Error('disk full');
+        return realCreate(input);
+      };
+      await assert.rejects(() => ensureIdeaboxMigrated(p, ideabox), /disk full/);
+      writeFileSync(ideabox, readFileSync(ideabox, 'utf8').replace('body 1', 'body 1 edited'));
+
+      // An exit code and a readable message, not an exception.
+      assert.equal(await run('add', 'anything'), 1);
+      assert.match(errors.join('\n'), /compose ideabox adopt-file/);
+      assert.match(errors.join('\n'), /compose ideabox discard-edits/);
+    } finally {
+      console.error = original;
+    }
+  });
+
+  it('runs adopt-file end to end and prints what it did', async () => {
+    // The module-level tests never construct the CLI's report, so a field the
+    // command prints but the command's own return value does not carry is
+    // invisible to them — `reclustered` was exactly that, and `adopt-file`
+    // died on a TypeError while every recovery test stayed green. Driving the
+    // real command is the only thing that covers the reporting.
+    {
+      mkdirSync(join(project, 'docs/product'), { recursive: true });
+      writeFileSync(ideabox, '# Ideabox\n\n## Ideas\n\n### Umbrella\n\n**Theme:** as first written\n\n'
+        + '#### IDEA-1 — one\n**Status:** NEW | **Priority:** —\n**Idea:** body 1\n\n'
+        + '#### IDEA-2 — two\n**Status:** NEW | **Priority:** —\n**Idea:** body 2\n\n## Killed Ideas\n');
+      const p = await new LocalFluidProvider().init(project);
+      const realCreate = p.createRecord.bind(p);
+      let seen = 0;
+      p.createRecord = async (input) => {
+        if (input.kind === 'idea' && ++seen === 2) throw new Error('disk full');
+        return realCreate(input);
+      };
+      await assert.rejects(() => ensureIdeaboxMigrated(p, ideabox), /disk full/);
+      writeFileSync(ideabox, readFileSync(ideabox, 'utf8')
+        .replace('body 1', 'body 1 edited').replace('as first written', 'as rewritten'));
+
+      assert.equal(await run('adopt-file'), 0);
+      // `run` collects the command's stdout into `log`.
+      const out = log.join('\n');
+      assert.match(out, /Updated to match the file: IDEA-1/);
+      assert.match(out, /Umbrellas updated: Umbrella/);
+      assert.match(out, /Imported: IDEA-2/);
+      // And the project is usable again.
+      assert.equal(await run('add', 'after the recovery'), 0);
+    }
   });
 
   it('adds an idea, and the file it writes is a faithful projection', async () => {

@@ -30,6 +30,29 @@ under test.
 - `openManifest` truncated in place, so a crash mid-write destroyed the only record of the plan being
   recovered. It is now temp + rename, and an identical retry leaves the existing manifest untouched.
 
+**Amended again 2026-09-07 — the stranding escape hatch is closed.** The amendment above left one:
+while `IDEABOX_MANIFEST_STALE` held, every ideabox command refused and the only exit needing no
+tooling was to delete the manifest, which makes the partially migrated store canon so the next render
+destroys the edit. That is this finding's own shape with a worse way out. Two commands now supply a
+supported one — `compose ideabox adopt-file` (the file is right) and `compose ideabox discard-edits`
+(the migration is right, and a copy of the current file is saved first) — implemented in
+`lib/fluid/ideabox-recover.js`. Both refuse unless an open manifest's hash actually mismatches the
+file, so neither is a general route to making a hand-edited file canon; that refusal is pinned by its
+own tests because it is the constraint most likely to be argued away later. The manifest is now v2 and
+stores the source text, which is what makes discarding lossless rather than destructive; a v1 manifest
+can still be adopted but not discarded, and says so.
+
+Both commands reconcile RECORDS as well as the file, which review found twice over: `adopt-file` left
+an already-imported umbrella's theme untouched (`findOrCreateRecord` returns a known cluster as-is and
+the import skips it too, so an edited theme reached no writer), and `discard-edits` restored the
+markdown while leaving records an interrupted `adopt-file` had already patched, which the very next
+projection wrote straight back into the file. RULING, so it is not re-litigated: `discard-edits`
+cannot take back a discussion entry appended to a record or an umbrella the adoption created. Deleting
+them was rejected because never deleting is this feature's one invariant and the renderer emits an
+empty umbrella deliberately; refusing was rejected because refusing is the stranding this whole
+follow-up exists to end. It keeps them and NAMES them, exactly as `adopt-file` names a handle the file
+no longer mentions.
+
 `importIdeabox` creates records sequentially (`lib/fluid/import-ideabox.js:110`). If it writes idea 1
 and crashes on idea 2, ideas 3..N were never issued, so the gate classifies them as hand-added strays
 and refuses (`lib/fluid/ideabox-migrate.js`). The recovery the error names is circular: it recommends
