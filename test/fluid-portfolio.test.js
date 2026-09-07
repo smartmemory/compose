@@ -190,6 +190,79 @@ describe('FOH-7 S1 — the aggregator fans out and names what it could not reach
     );
   });
 
+  it('names an unauthorized member by its exact reason class, one assertion per classify() branch', async () => {
+    const a = project('alpha'); const b = project('beta');
+    await seed(a, ['Alpha idea']);
+    withPortfolio(a, [{ id: 'alpha', root: '.' }, { id: 'beta', root: '../beta' }]);
+
+    // "not-a-member": the credential is real but was never granted this workspace.
+    let portfolio = await openPortfolio(a);
+    let beta = portfolio.sources.find((s) => s.id === 'beta');
+    grantRecall(beta.provider);
+    beta.provider.recall = async () => {
+      const err = new Error('403');
+      err.status = 403; err.scopeError = 'not-a-member';
+      throw err;
+    };
+    let res = await recallAcrossPortfolio(portfolio, 'idea');
+    assert.equal(res.sources.length, 1, 'alpha still answers');
+    assert.ok(
+      res.omissions.some((o) => /beta/.test(o) && /unauthorized/.test(o) && /not a member/.test(o)),
+      `not-a-member omission: ${JSON.stringify(res.omissions)}`,
+    );
+
+    // "missing-scope": a real member whose key lacks the required scope.
+    portfolio = await openPortfolio(a);
+    beta = portfolio.sources.find((s) => s.id === 'beta');
+    grantRecall(beta.provider);
+    beta.provider.recall = async () => {
+      const err = new Error('403');
+      err.status = 403; err.scopeError = 'missing-scope';
+      throw err;
+    };
+    res = await recallAcrossPortfolio(portfolio, 'idea');
+    assert.equal(res.sources.length, 1, 'alpha still answers');
+    assert.ok(
+      res.omissions.some((o) => /beta/.test(o) && /unauthorized/.test(o) && /lacks the required scope/.test(o)),
+      `missing-scope omission: ${JSON.stringify(res.omissions)}`,
+    );
+
+    // 403 with no scopeError at all: reason undetermined, never silently reclassified.
+    portfolio = await openPortfolio(a);
+    beta = portfolio.sources.find((s) => s.id === 'beta');
+    grantRecall(beta.provider);
+    beta.provider.recall = async () => {
+      const err = new Error('403');
+      err.status = 403;
+      throw err;
+    };
+    res = await recallAcrossPortfolio(portfolio, 'idea');
+    assert.equal(res.sources.length, 1, 'alpha still answers');
+    assert.ok(
+      res.omissions.some((o) => /beta/.test(o) && /unauthorized/.test(o) && /reason undetermined/.test(o)),
+      `undetermined-reason omission: ${JSON.stringify(res.omissions)}`,
+    );
+  });
+
+  it('names a misconfigured member (its provider fails to open) instead of dropping it, and the other member still opens', async () => {
+    const a = project('alpha'); const b = project('beta');
+    await seed(a, ['Alpha idea']);
+    withPortfolio(a, [{ id: 'alpha', root: '.' }, { id: 'beta', root: '../beta' }]);
+    // beta parses fine (has .compose/compose.json, satisfying parsePortfolioConfig's
+    // existence check) but its config is malformed JSON, so `fluidProviderFor`
+    // rejects it at OPEN time — the `Promise.allSettled` rejection branch in
+    // `openPortfolio`, not the synchronous parse-time throw.
+    writeFileSync(join(b, '.compose', 'compose.json'), '{not valid json');
+
+    const portfolio = await openPortfolio(a);
+    assert.equal(portfolio.sources.length, 1, 'alpha still opens');
+    assert.equal(portfolio.sources[0].id, 'alpha');
+    assert.ok(
+      portfolio.omissions.some((o) => /beta/.test(o) && /misconfigured/.test(o)),
+      `the omission NAMES the misconfigured member: ${JSON.stringify(portfolio.omissions)}`,
+    );
+  });
+
   it('errors when every member failed, rather than returning an empty result set', async () => {
     const a = project('alpha'); const b = project('beta');
     withPortfolio(a, [{ id: 'alpha', root: '.' }, { id: 'beta', root: '../beta' }]);

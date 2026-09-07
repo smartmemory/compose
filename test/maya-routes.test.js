@@ -28,6 +28,9 @@ const { attachMayaRoutes } = await import(`${ROOT}/server/maya-routes.js`);
 const { loadIdentity, saveIdentity, clearIdentity, validateWorkspaceIsolation, MayaWorkspaceCollisionError } =
   await import(`${ROOT}/lib/maya-identity.js`);
 const { makeMayaServer, makeSmStub, servers } = await import(`${ROOT}/test/helpers/maya-stub.js`);
+const { LocalFluidProvider } = await import(`${ROOT}/lib/fluid/local-provider.js`);
+const { ideaboxContext } = await import(`${ROOT}/lib/fluid/ideabox-ops.js`);
+const { composeColleagueContext, toMayaContext } = await import(`${ROOT}/lib/colleague/context.js`);
 
 const FLUID_WS = 'team_fluid_ws';
 
@@ -933,6 +936,70 @@ describe('FOH-7 S3 — scope on a colleague turn', () => {
     });
     await postMessage(srv.baseUrl, { text: 'hello' });
     assert.equal(received.scope, undefined, 'today\'s behaviour is preserved exactly');
+  });
+
+  // "Reaches the composer as undefined" (above) proves the wrapping is
+  // transparent, not that the resulting turn is unchanged — this pins the
+  // latter, against the REAL `defaultComposeContext`. `hasSmartmemoryFluidProvider`
+  // is overridden (not `composeContext`) purely to clear the route's funnel gate
+  // (server/maya-routes.js:262), which is unrelated to FOH-7 and would otherwise
+  // require configuring `fluid.provider: 'smartmemory'` — the root stays on the
+  // local floor, so `defaultComposeContext`'s non-portfolio branch runs for real.
+  test('absent scope is byte-identical to a direct composeColleagueContext call, and scope:"project" matches it too', async () => {
+    const maya = await makeMayaServer();
+    const sm = await makeSmStub();
+    const root = makeProjectRoot({
+      maya: { baseUrl: maya.baseUrl, auth: { mode: 'provision' } },
+      smartmemory: { baseUrl: sm.baseUrl, apiKeyEnv: 'SM_FLUID_KEY', enabled: true },
+    });
+    // Real content, so the comparison proves something rather than matching two
+    // empty payloads.
+    const provider = await new LocalFluidProvider().init(root);
+    await provider.createRecord({
+      kind: 'idea', title: 'Ship the portfolio scope', body: 'body one',
+      provenance: { origin: 'cli:ideabox' },
+    });
+    await provider.createRecord({
+      kind: 'idea', title: 'Byte-identical turns', body: 'body two',
+      provenance: { origin: 'cli:ideabox' },
+    });
+
+    const sent = [];
+    const srv = await startApp({
+      root,
+      deps: {
+        hasSmartmemoryFluidProvider: () => true,
+        createClient: () => ({
+          chat: async ({ channelContext }) => {
+            sent.push(channelContext);
+            return { success: true, response: 'ok', message_id: `m${sent.length}` };
+          },
+        }),
+      },
+    });
+    cleanups.push(() => srv.httpServer.close());
+
+    const r1 = await postMessage(srv.baseUrl, { text: 'hello' });
+    assert.equal(r1.status, 200, JSON.stringify(r1.body));
+    const r2 = await postMessage(srv.baseUrl, { text: 'hello', scope: 'project' });
+    assert.equal(r2.status, 200, JSON.stringify(r2.body));
+    assert.equal(sent.length, 2, 'both turns reached Maya');
+
+    // The expected value, computed independently with the SAME real modules
+    // against the SAME root — never hand-rebuilt.
+    const ctx = await ideaboxContext(root, { origin: 'ui:ideabox' });
+    const expected = await composeColleagueContext(ctx, { focusId: null });
+    const expectedWire = toMayaContext(expected.blocks);
+
+    assert.ok(expectedWire.length > 0, 'the fixture produced real content — this proves something');
+    assert.deepStrictEqual(
+      JSON.stringify(sent[0]), JSON.stringify(expectedWire),
+      'absent scope: byte-identical to a direct composeColleagueContext + toMayaContext call',
+    );
+    assert.deepStrictEqual(
+      JSON.stringify(sent[1]), JSON.stringify(sent[0]),
+      'scope: "project" produces the exact same wire payload as absent scope',
+    );
   });
 
   // THE PROJECTION, read from what production SENDS — not rebuilt by the test.
