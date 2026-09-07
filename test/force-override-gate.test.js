@@ -113,3 +113,36 @@ test('terminal status: COMPLETE under guard WITH valid override → allowed', ()
     else process.env.STRATUM_GUARD_OVERRIDE_TOKEN = prev;
   }
 });
+
+/**
+ * AUDIT 2026-09-07. The gate's error text used to tell the caller the token was
+ * "not agent-mintable". That is the same sentence stratum retired as false when
+ * it removed the identical env-var token (@3647b4c): there, a CLI caller set both
+ * sides of the comparison. Here the check is real at CALL time (the token is a
+ * tool argument compared against the SERVER's environment) but not at LAUNCH
+ * time — `.mcp.json` carries that environment and is writable by anything that
+ * can write the repo.
+ *
+ * The wrong sentence is the liability, not the mechanism: it is what a later
+ * session quotes when deciding how much this gate is worth. This test pins the
+ * corrected claim so the comfortable one cannot come back.
+ */
+test('the refusal does not claim the token is un-mintable (audited 2026-09-07)', () => {
+  const prev = process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
+  process.env.STRATUM_GUARD_OVERRIDE_TOKEN = 'secret';
+  try {
+    for (const [fn, args] of [
+      [assertForceAuthorized, { force: true }],
+      [assertTerminalStatusAuthorized, { status: 'KILLED' }],
+    ]) {
+      let msg = '';
+      try { fn(args, 'set_feature_status', { guard: true }); } catch (e) { msg = e.message; }
+      assert.ok(msg, 'the gate still refuses');
+      assert.doesNotMatch(msg, /not agent-mintable|cannot be minted|un-?forgeable/i,
+        `the refusal asserts a property nobody has demonstrated: ${msg}`);
+    }
+  } finally {
+    if (prev === undefined) delete process.env.STRATUM_GUARD_OVERRIDE_TOKEN;
+    else process.env.STRATUM_GUARD_OVERRIDE_TOKEN = prev;
+  }
+});
