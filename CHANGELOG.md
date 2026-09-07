@@ -2,6 +2,54 @@
 
 ## Unreleased
 
+### [COMP-IDEABOX-MIGRATE-DIALECT] A supported way out of a stranded ideabox
+
+When an interrupted migration's document changed underneath it, `IDEABOX_MANIFEST_STALE` held and
+every ideabox command refused. The refusal is right, but the only exit that needed no tooling was
+destructive: deleting the manifest makes the partially migrated store canon, so the next render
+replaced the file and destroyed whatever the user had typed. That is the stranding shape FU-1 closed
+for crashes, reopened for edits.
+
+Two commands, both meaning "I have decided which document is right":
+
+- `compose ideabox adopt-file` — the file on disk is right. Asserts it is readable, updates the
+  already-imported records to match it, re-plans the manifest against it, then lets the ordinary
+  resume path import the rest. It NEVER deletes: a handle in the store and absent from the file is
+  kept and reported. Every handle updated, imported and kept is printed.
+- `compose ideabox discard-edits` — the migration is right. Saves a copy of the current file first and
+  prints its path, restores the document the migration read, and lets the ordinary resume path finish.
+
+- **Both refuse unless the project is actually stranded** — an open manifest whose hash does not match
+  the file. Without that check `adopt-file` would be a general "make the file canon" door that defeats
+  what FU-1, FU-2 and FU-3 built together, so the refusal is pinned by its own tests. A hand edit to a
+  migrated ideabox is still `render`'s job.
+- `lib/fluid/ideabox-manifest.js` — manifest v2 stores the source markdown, not only its hash. That is
+  what makes `discard-edits` lossless. A v1 manifest still resumes and can still be adopted, but
+  cannot be discarded, and the refusal says so and names `adopt-file`. A v1 manifest whose document is
+  unchanged is upgraded in place, so a migration already in flight gains the recovery for free.
+- `lib/fluid/import-ideabox.js` — the idea-to-record mapping is extracted as `ideaToRecord` and shared
+  with the recovery. A second mapping of the same shape is the two-readers pattern that produced this
+  whole bug class.
+- The `IDEABOX_MANIFEST_STALE` and `IDEABOX_SOURCE_CHANGED_DURING_IMPORT` messages named a manual file
+  dance. They now name the two commands and what each one means; a supported exit nobody is told about
+  is not an exit.
+- Both commands reconcile RECORDS, not only the file. `adopt-file` also updates an umbrella that
+  already existed: `findOrCreateRecord` returns a known cluster untouched and the import skips it too,
+  so an edited `**Theme:**` reached neither writer and the projection wrote the old one back.
+  `discard-edits` puts the records back to the migrated version before restoring the file, because an
+  `adopt-file` that crashed after patching them left the edits in the store, where the import skips
+  existing records and the next projection reintroduced them into the file just restored.
+- `discard-edits` names what it cannot take back. An interrupted adoption may have created an umbrella
+  and appended a comment; deleting records is the one thing this feature refuses to do, and the
+  renderer emits an empty umbrella on purpose, so both survive the discard and are visible in the
+  restored file. Neither loses anything the user had, and the command reports both rather than
+  claiming a clean restore.
+- `lib/ideabox-cli.js` — every refusal in the migration family reached the user as a Node stack trace,
+  because `reportOpFailure` rethrew anything outside three ops error classes. The stale-manifest
+  message is the only place the recovery commands are named, so the guidance arrived buried in a crash
+  dump. Any error whose code begins `IDEABOX_` is now reported as a message with exit 1, matched by
+  prefix so a refusal added later does not have to be remembered here.
+
 ### [COMP-IDEABOX-MIGRATE-DIALECT FU-4] A project keeps its own heading through migration
 
 `renderIdeabox` emitted a hardcoded template preamble, so the first projection after a migration
