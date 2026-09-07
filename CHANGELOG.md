@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### `--test-timeout` was killing healthy test files under load
+
+`--test-timeout` applies to every test including the implicit file-level one node wraps around a
+file, so it caps a file's TOTAL wall time rather than each test. Compose's two slowest files
+(`ts-cutover-consumer-fanout-golden`, `lifecycle-backfill`) run 40-80 s idle and 120-300 s on a
+loaded machine, so the 300 s ceiling killed them while every test inside them passed. Measured
+2026-09-07 with the full suite plus concurrent workers as load: 5 of 42 for the fanout file,
+0 of 67 isolated; per-iteration wall time reached 301 s (clipped) and 274 s.
+
+The kill is near-silent, which is why two earlier sightings went unexplained and were nearly
+written off: a file-level timeout emits only a file-level `not ok` with `# fail 0` and no subtest
+message, so the log shows a failing file and no failing test. Both prior sightings left exactly
+that trace.
+
+The three node-test scripts now use 900000, roughly 3x headroom over the worst loaded run.
+`test/test-timeout-budget.test.js` pins the semantics with a real subprocess (four 300 ms tests
+under a 500 ms budget kill the file, reporting zero failed tests) and the consequence for our
+config, so if a future node exempts the file-level test the ceiling can safely come back down.
+No product or test defect was found in either suite.
+
 ### A guard timeout was being reported as "transition refused by guard"
 
 `server/stratum-client.js` classified a subprocess timeout only on `err.code === 'ETIMEDOUT'`.
