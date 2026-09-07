@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### A group-signal failure now says which call site and whose group
+
+`processTermination` signals a spawned child's whole process GROUP by negative pid, tolerating only
+`ESRCH`. Anything else is rethrown, relabelled `CANCELLATION_UNCONFIRMED`, and reaches the caller
+carrying Node's bare `kill EPERM` and nothing more — which is unattributable, because two call sites
+send group signals and the question that decides the answer is not in the message. Observed once in a
+full-suite run (`review-fixes-runtime.test.js`, KILL-escalation variant): the abort reason `stop` was
+replaced by `kill EPERM`, and it has not reproduced since, in isolation (15 runs) or in a full node
+phase.
+
+A non-ESRCH failure is now stamped with the call site (`send` vs `alive`), the target pgid, our own
+pgid, and a probe of the leader as a plain pid — `ours` / `not-ours` / `gone`. `not-ours` is EPERM on
+the leader, which is this repo's canonical "alive but not ours" reading (COMP-GSD-6 D-C), and it names
+the recycled-pgid case outright: the group is deliberately signalled after `close`, because it outlives
+its leader, and that is exactly the window in which the pid becomes reusable. Diagnostic only — no
+control flow changes, the same error is rethrown.
+
+Deliberately NOT changed: making `alive()` return true on EPERM, per the `pidAlive` ruling. For a
+genuinely foreign group that spins the reap loop to its 2s deadline and throws
+`CANCELLATION_TEARDOWN_TIMEOUT` instead — a different wrong answer. Both branches are wrong for a
+recycled pgid, and the real question is whether `-pid` should be signalled at all once the leader has
+been reaped. Left open with evidence-gathering in place rather than guessed at.
+
 ### [COMP-IDEABOX-MIGRATE-DIALECT] The banner states the sidecar's opposite rule
 
 The generated banner names `<ideabox>.preamble.md` as the place to change the heading, but not what
