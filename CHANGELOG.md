@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### A guard timeout was being reported as "transition refused by guard"
+
+`server/stratum-client.js` classified a subprocess timeout only on `err.code === 'ETIMEDOUT'`.
+Node's `execFile` callback never reports that: a `timeout:` kill arrives as
+`{ code: null, killed: true, signal: 'SIGTERM' }`. So every real timeout fell through to the
+generic branch, the TIMEOUT arms of `runQuery`, `runMutation` and `runGuard` (and the query
+retry) were unreachable, and a `guard transition` that outran its 10 s budget came back as
+`UNKNOWN`, which the lifecycle routes render as HTTP 422 "transition refused by guard" — an
+infrastructure timeout claiming the evidence was evaluated and rejected. This is the two-month
+"transient stratum-mcp `PARSE_ERROR`" in `lifecycle-guard-e2e` (journal session 99); an earlier
+refactor had the same `code: null` falling into the exit-0 arm instead, which is where the old
+name came from.
+
+Measured, not argued: 6 of 200 e2e runs failed under full-suite load plus four concurrent probes
+before the fix, 0 of 200 after, 0 of 3 isolated either way. Every existing timeout test had
+hand-built the `ETIMEDOUT` code Node does not produce, so the mock suite was green against a
+shape that never occurs; the new regression test drives a real child past a real timeout and pins
+`code === null`, `killed`, `signal`. A child killed by an outside signal is named as such rather
+than relabelled a timeout. TIMEOUT and PARSE_ERROR envelopes now carry a bounded detail (exit code
+plus a stdout excerpt) instead of `''`. `MUTATION_TIMEOUT_MS` is 30 s, with the measurement that
+chose it (1.5 to 3.9 s idle per guard transition) in the comment.
+
+Still open: `server/vision-routes.js` returns 422 "refused by guard" for TIMEOUT, GUARD_UNREACHABLE
+and SPAWN alike. Splitting those to 503 changes an asserted contract; owner's call.
+
 ### Receipts gate: a claim written as a fact must carry its receipt
 
 Every wrong fact this sweep found was one habit in five wordings — `known flake`,
