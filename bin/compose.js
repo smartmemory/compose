@@ -2323,7 +2323,8 @@ if (cmd === 'guard') {
   if (sub === 'install') {
     if (!exSync(hookScript)) {
       console.error(`Error: hook script missing at ${hookScript}`)
-      console.error('It is a tracked source file — ensure your checkout includes .claude/hooks/canon-guard.mjs')
+      console.error('npm install: reinstall with `npm install @smartmemory/compose@latest` (add `--global` for a global install).')
+      console.error('source checkout: update the checkout, or restore the tracked .claude/hooks/canon-guard.mjs file.')
       process.exit(1)
     }
     const { settings, changed } = installGuardHook(readSettings())

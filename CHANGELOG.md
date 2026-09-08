@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### npm installs include the canon guard hook and vendored agents
+
+The package allowlist shipped `.claude/skills/**` but omitted two other runtime inputs under
+`.claude/`: the `canon-guard.mjs` PreToolUse hook consumed by `compose guard install`, and the
+`compose-explorer` / `compose-architect` definitions consumed by `compose setup` and `compose
+init`. Source checkouts had all three files, while npm installs had neither the grant-consuming
+hook nor the agents the installed Compose skill dispatches.
+
+The npm package now includes `.claude/hooks/**` and `.claude/agents/**`. The missing-hook refusal
+now gives separate recovery actions for npm installs and source checkouts. The regression test in
+`test/package-publish-contents.test.js` runs `npm pack --dry-run --json` and checks npm's produced
+file list for each required runtime path.
+
 ### `compareVersions` stops answering questions it cannot parse
 
 `lib/version-check.js` parsed each semver component with `Number.parseInt`, which reads the leading
