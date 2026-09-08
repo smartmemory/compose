@@ -527,31 +527,6 @@ export const TOOLS = [
       },
     },
   },
-  // -------------------------------------------------------------------------
-  // Canon override — COMP-CANON-OVERRIDE (COMP-CANON-GUARD Decision 4)
-  // -------------------------------------------------------------------------
-  {
-    name: 'canon_override_grant',
-    effect: 'mutating',
-    writes: ["override-ledger", "override-attest", "override-grants"],
-    description:
-      'Mint a single-use, path-scoped grant permitting ONE direct write to a guarded canon path. '
-      + 'The bypass row is appended to .compose/canon-overrides.jsonl BEFORE the grant exists, so a grant '
-      + 'cannot be unrecorded. The token expires in 5 minutes and is burned by the first write. '
-      + 'Governance state (the bypass ledger, its baseline, the grant directory) is deliberately NOT grantable. '
-      + 'SCOPE: this is audit and careless-drift tooling for the Claude Write/Edit path — it is not enforcement. '
-      + 'Bash and Codex writes never reach the guard, and `operation` is a declared label recorded for later '
-      + 'analysis, never verified against the write that follows.',
-    inputSchema: {
-      type: 'object',
-      required: ['path', 'reason'],
-      properties: {
-        path: { type: 'string', description: 'Repo-relative path to grant one write for. Must be guarded at the write-time hook and override-eligible.' },
-        reason: { type: 'string', description: 'Why the bypass is justified. Empty or whitespace-only is rejected — the recorded reason is the point.' },
-        operation: { type: 'string', description: 'Caller-declared intent label (e.g. "repair-malformed-record"). Recorded for analysis; unverifiable by construction.' },
-      },
-    },
-  },
   {
     name: 'get_changelog_entries',
     effect: 'read',

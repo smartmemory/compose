@@ -2357,10 +2357,10 @@ if (cmd === 'guard') {
     else if (st.state === 'stale') console.log('canon-guard: installed (stale — re-run `compose guard install`)')
     else console.log('canon-guard: absent — run `compose guard install`')
     console.log(`  hook script: ${scriptState} (${hookScript})`)
-    // Derived from the registry, never hardcoded: a literal string here
-    // silently under-reported the guarded set as soon as COMP-CANON-OVERRIDE
-    // widened it. "Claude-runtime only" is not modesty — Bash and Codex writes
-    // never reach this hook (drift detection, not enforcement).
+    // Derived from the registry, never hardcoded, so registry changes cannot
+    // silently desynchronize status output. "Claude-runtime only" is not
+    // modesty — Bash and Codex writes never reach this hook (drift detection,
+    // not enforcement).
     const { guardedDisplaysFor } = await import('../lib/canon-registry.js')
     for (const pattern of guardedDisplaysFor('hook')) {
       console.log(`  guards: ${pattern} (Write|Edit|NotebookEdit) — Claude-runtime only`)

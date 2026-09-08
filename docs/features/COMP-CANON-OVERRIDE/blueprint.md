@@ -1,6 +1,6 @@
 # COMP-CANON-OVERRIDE: Implementation Blueprint
 
-**Status:** BLUEPRINT
+**Status:** **RETIRED 2026-09-08 — DO NOT IMPLEMENT.** The grant machinery was removed; the historical blueprint below is retained for the decision trail. See [the retirement decision](../../decisions/2026-09-08-canon-override-grant-retired.md).
 **Date:** 2026-07-25
 **Design:** [design.md](design.md) — gate rounds 1 and 2 folded; positioning is **audit tooling, not enforcement**
 

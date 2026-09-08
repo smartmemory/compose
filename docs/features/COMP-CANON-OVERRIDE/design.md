@@ -1,8 +1,8 @@
 # COMP-CANON-OVERRIDE: The Canon Override — grant-then-write, ledger-first
 
-**Status:** DESIGN — gate rounds 1 and 2 folded (Codex `sol/xhigh`). **Owner decision 2026-07-25: ship as audit tooling**, per *The in-workspace ceiling* below.
+**Status:** **RETIRED 2026-09-08.** The grant tool and its ledger, baseline, and token machinery were removed after the production-caller audit. The canon-guard PreToolUse hook remains and denies direct writes unconditionally. See [the retirement decision](../../decisions/2026-09-08-canon-override-grant-retired.md). The design below is retained as history and must not be treated as an implementation plan.
 **Date:** 2026-07-25
-**Was:** COMP-CANON-GUARD Decision 4 — specified in the epic, explicitly deferred at S4, never built
+**Was:** COMP-CANON-GUARD Decision 4 — specified in the epic, deferred at S4, later built and now retired
 
 > **Positioning, decided and binding.** This is **audit and careless-drift tooling, not enforcement.** It makes the cooperative path logged and the accidental path hard. It does not stop a determined actor, and cannot: `Bash` writes the workspace without touching the hook, and every piece of governance state lives in that same workspace. Every guarantee here is **Claude-runtime-scoped**. Naming, help text, tool descriptions and reports must say so — the same discipline S5 adopted (R1) for exactly the same reason.
 

@@ -4,6 +4,8 @@
 **Date:** 2026-07-25
 **Was:** COMP-CANON-GUARD S6, carved out at epic close (2026-07-25)
 
+**Dependency update 2026-09-08:** `canon_override_grant` was built after this design and has now been retired. COMP-CANON-ATTEST no longer depends on it. Before this feature can leave PLANNED, its reconcile path must be designed independently; exceptional repair currently requires an authorized write outside the PreToolUse hook, with restricted agents escalating. See [the retirement decision](../../decisions/2026-09-08-canon-override-grant-retired.md).
+
 ## Related Documents
 
 - [COMP-CANON-GUARD design](../COMP-CANON-GUARD/design.md) — the parent epic; S6 row and the Scope Verdict
@@ -172,9 +174,9 @@ The problem is also harder than the first draft assumed, in two ways the gate id
 
 What must NOT happen: a `guard verify --accept` that re-stamps on request. That is the laundering step R1 bans, wearing a flag.
 
-**Owner decision 2026-07-25: build `canon_override_grant` first.** Filed as [COMP-CANON-OVERRIDE](../COMP-CANON-OVERRIDE/design.md); this feature `depends_on` it and keeps refusal.
+**Historical owner decision 2026-07-25, superseded 2026-09-08:** build `canon_override_grant` first. The tool was later built, then retired after its production-caller audit; this feature no longer depends on it.
 
-**Carried constraint from the override's design — a bare grant must NOT be sufficient to re-attest.** The override is self-service for the agent (no owner-proof mechanism exists on the MCP surface). If this feature accepts "a grant was issued" as authorization to re-stamp a drifted record, an agent can launder tampered content in two steps — grant, then re-attest — and the permanent chain break this feature exists to create becomes erasable again. A grant may authorize *writing the file*; re-attestation must remain a separate deliberate operation carrying its own record. Resolving exactly what that operation is remains open and is the first thing to settle when this unblocks.
+**Current constraint:** re-attestation must remain a separate, deliberate operation carrying its own authorization record; a generic write authorization is insufficient. Otherwise an agent can launder tampered content by re-stamping it, erasing the permanent chain break this feature exists to expose. Resolving that independent operation remains open and is the first thing to settle before implementation.
 
 ### Decision 3: how is `ledger.jsonl` attested?
 

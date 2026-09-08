@@ -83,15 +83,16 @@ test('CONTRACT: every live tool declares an effect', () => {
 
 test('CONTRACT: the live partition matches the authored classification', () => {
   const inv = loadToolInventory(TOOLS);
-  // Pinned 2026-08-24 against the 51-tool array. These counts are a tripwire:
+  // Pinned 2026-09-08 after retiring `canon_override_grant`. These counts are a tripwire:
   // adding a tool SHOULD break this, forcing an explicit classification review.
-  // Re-pinned 2026-09-06: +1 mutating — `backfill_completion`
-  // (COMP-LIFECYCLE-BACKFILL S3-2, HTTP delegation through the completion gate,
-  // writes feature-json). Classification reviewed: mutating, not read/setup.
-  assert.equal(TOOLS.length, 52, 'tool count changed — re-review the classification');
+  assert.equal(TOOLS.length, 51, 'tool count changed — re-review the classification');
   assert.equal(inv.setup.length, 4);
   assert.equal(inv.read.length, 21);
-  assert.equal(inv.mutating.length, 27);
+  assert.equal(inv.mutating.length, 26);
+});
+
+test('CONTRACT: the retired canon override grant is absent from the live MCP surface', () => {
+  assert.ok(!TOOLS.some((tool) => tool.name === 'canon_override_grant'));
 });
 
 test('CONTRACT: setup set matches mcp-tool-policy SETUP_TOOLS', async () => {

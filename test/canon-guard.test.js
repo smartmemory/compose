@@ -249,9 +249,7 @@ describe('guardHookStatus', () => {
   });
 });
 
-// --- COMP-COVERAGE-GATE C4: profile-aware escape sentence -------------------
-
-describe('deny message escape sentence adapts to the caller profile', () => {
+describe('deny message has no in-hook escape', () => {
   const args = {
     toolName: 'Write',
     toolInput: { file_path: 'docs/judgment/records/x.json' },
@@ -259,47 +257,23 @@ describe('deny message escape sentence adapts to the caller profile', () => {
     cwd: '/repo',
   };
 
-  test('unrestricted caller is told to mint a grant', () => {
-    const d = decideCanonGuard(args);
-    assert.equal(d.deny, true);
-    assert.match(d.reason, /mint a single-use grant with canon_override_grant/);
-  });
-
-  test('implementer is told to escalate, NOT to call a tool it is denied', () => {
-    const d = decideCanonGuard({ ...args, profile: 'implementer' });
-    assert.equal(d.deny, true);
-    assert.match(d.reason, /not available to the 'implementer' profile/);
-    assert.match(d.reason, /Escalate/);
-    assert.ok(!/mint a single-use grant/.test(d.reason),
-      'must not point a restricted profile at a tool its MCP gate denies');
-  });
-
-  test('reviewer gets the same escalation wording', () => {
-    const d = decideCanonGuard({ ...args, profile: 'reviewer' });
-    assert.match(d.reason, /not available to the 'reviewer' profile/);
-  });
-
-  test('unknown profile falls back to the unrestricted wording (fail-open)', () => {
-    const d = decideCanonGuard({ ...args, profile: 'wizard' });
-    assert.match(d.reason, /mint a single-use grant/);
-  });
-
-  test('profile never changes the VERDICT, only the wording', () => {
+  test('every caller is denied with the same repair and escalation direction', () => {
+    const reasons = new Set();
     for (const profile of [undefined, 'implementer', 'reviewer', 'orchestrator']) {
-      assert.equal(decideCanonGuard({ ...args, profile }).deny, true);
-      assert.equal(decideCanonGuard({
-        ...args, profile, toolInput: { file_path: 'README.md' },
-      }).deny, false);
+      const d = decideCanonGuard({ ...args, profile });
+      assert.equal(d.deny, true);
+      assert.match(d.reason, /authorized write outside this hook's reach/);
+      assert.match(d.reason, /restricted agent must escalate/);
+      assert.doesNotMatch(d.reason, /grant|override/i);
+      reasons.add(d.reason);
     }
+    assert.equal(reasons.size, 1, 'profile hints no longer alter the denial');
   });
 
-  test('ungrantable governance state keeps its own wording for every profile', () => {
-    for (const profile of [undefined, 'implementer']) {
-      const d = decideCanonGuard({
-        ...args, profile, toolInput: { file_path: '.compose/canon-overrides.jsonl' },
-      });
-      assert.equal(d.overrideEligible, false);
-      assert.match(d.reason, /governance state, so it cannot be overridden/);
-    }
+  test('the fallback direction does not change the verdict', () => {
+    assert.equal(decideCanonGuard(args).deny, true);
+    assert.equal(decideCanonGuard({
+      ...args, toolInput: { file_path: 'README.md' },
+    }).deny, false);
   });
 });

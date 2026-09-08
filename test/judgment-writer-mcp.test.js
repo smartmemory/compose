@@ -189,7 +189,7 @@ const ratifiedGoalCut = {
 };
 
 describe('compose-mcp judgment registry parity', () => {
-  test('has 52 tool definitions, 52 dispatch cases, and ten exact judgment names', () => {
+  test('has 51 tool definitions, 51 dispatch cases, and ten exact judgment names', () => {
     const source = readFileSync(MCP_SERVER, 'utf8');
     const defsSource = readFileSync(MCP_TOOL_DEFS, 'utf8');
     const toolsStart = defsSource.indexOf('export const TOOLS = [');
@@ -206,8 +206,8 @@ describe('compose-mcp judgment registry parity', () => {
       ...source.slice(switchStart, switchEnd).matchAll(/^\s*case '([^']+)'/gm),
     ].map((match) => match[1]);
 
-    assert.equal(definitionNames.length, 52, 'TOOLS definition count'); // 52 since COMP-LIFECYCLE-BACKFILL (backfill_completion)
-    assert.equal(dispatchNames.length, 52, 'dispatch case count');
+    assert.equal(definitionNames.length, 51, 'TOOLS definition count');
+    assert.equal(dispatchNames.length, 51, 'dispatch case count');
     assert.deepEqual(
       [...definitionNames].sort(),
       [...dispatchNames].sort(),
@@ -434,7 +434,7 @@ describe('compose-mcp judgment writer (end-to-end)', () => {
 });
 
 describe('COMP-JUDGMENT-GOAL-MIGRATE S3 — MCP reachability', () => {
-  test('judgment_goal_write advertises migrate on the existing 52/52 registry', async () => {
+  test('judgment_goal_write advertises migrate on the existing 51/51 registry', async () => {
     const source = readFileSync(MCP_SERVER, 'utf8');
     const defsSource = readFileSync(MCP_TOOL_DEFS, 'utf8');
     const toolsStart = defsSource.indexOf('export const TOOLS = [');
@@ -449,10 +449,10 @@ describe('COMP-JUDGMENT-GOAL-MIGRATE S3 — MCP reachability', () => {
     ].map((match) => match[1]);
 
     // Adding an op must not add a tool: the registry stays at its pinned size.
-    // Pin moved 50 -> 51 by COMP-JUDGMENT-PRECEDENT, which adds one READ tool
-    // (get_judgment_trace). The invariant under test is unchanged.
-    assert.equal(definitionNames.length, 52, 'TOOLS definition count'); // 52 since COMP-LIFECYCLE-BACKFILL (backfill_completion)
-    assert.equal(dispatchNames.length, 52, 'dispatch case count');
+    // The invariant is unchanged; this was re-pinned after retiring the
+    // unrelated canon_override_grant tool on 2026-09-08.
+    assert.equal(definitionNames.length, 51, 'TOOLS definition count');
+    assert.equal(dispatchNames.length, 51, 'dispatch case count');
     assert.deepEqual(
       definitionNames.filter((name) => name.startsWith('judgment_') || name.startsWith('get_judgment_')).sort(),
       [...JUDGMENT_TOOLS].sort(),
