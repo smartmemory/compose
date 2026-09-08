@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### `compareVersions` stops answering questions it cannot parse
+
+`lib/version-check.js` parsed each semver component with `Number.parseInt`, which reads the leading
+digits and discards the rest, so `parseInt('3garbage')` is `3`. The `NaN` guard right below it
+therefore never fired for trailing junk: `compareVersions('1.2.3garbage', '1.2.4')` returned `-1`
+("behind") rather than `null`, contradicting the function's own documented contract. Components are
+now accepted only if they are entirely decimal digits, which is what makes that guard reachable.
+
+The parser now removes SemVer build metadata before checking the core, so metadata does not affect
+precedence, and splits prerelease data at the first hyphen only, preserving later hyphens inside the
+prerelease. Strict all-digit validation still rejects malformed core components rather than
+inventing an ordering for input it does not understand.
+
 ### The override token is removed
 
 Decided after the audit below: `force` and lifecycle-owned statuses are now refused unconditionally

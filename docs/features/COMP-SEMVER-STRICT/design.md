@@ -2,14 +2,14 @@
 # COMP-SEMVER-STRICT — Strict semver parsing in `compareVersions`
 
 **Status:** DESIGN — 2026-08-30
-**Complexity:** S (single function, one source line + tests)
+**Complexity:** S (single parser + focused tests)
 **Phase:** Distribution
 
 ## Related Documents
 
-- Defective function: `lib/version-check.js:75–95` (`compareVersions`, bug at line 79)
-- Existing tests: `test/version-check.test.js` (18 tests; `compareVersions` not yet directly imported)
-- Doctor golden test: `test/comp-deps-package.test.js:263` (must pass unchanged)
+- Defective function: `lib/version-check.js` (`compareVersions`)
+- Direct tests: `test/version-check.test.js`
+- Doctor shape smoke test: `test/comp-deps-package.test.js`
 - Feature spec: `docs/features/COMP-SEMVER-STRICT/feature.json`
 - ROADMAP.md:1557 (Distribution section, COMP-SEMVER-STRICT row)
 
@@ -32,7 +32,7 @@ unparseable"*).
 The current guard on line 80 only catches `NaN` — it never fires for trailing-junk inputs
 because `parseInt` never produces `NaN` for a string that starts with a digit.
 
-### Inputs already handled correctly (no regression risk)
+### Strict-core inputs pinned by tests
 
 | Input | `parseInt` result | Guard fires? | Returns |
 |---|---|---|---|
@@ -46,49 +46,59 @@ because `parseInt` never produces `NaN` for a string that starts with a digit.
 |---|---|---|---|
 | `'1.2.3garbage'` | `3` (junk stripped) | no | wrong numeric result ✗ |
 
+The first strict-parser implementation also exposed two decomposition defects. Build metadata
+remained attached to the patch component, so a valid version such as `1.2.3+build1` became
+unparseable. Separately, splitting on every hyphen discarded part of a prerelease such as
+`alpha-1`, causing `1.2.3-alpha-1` and `1.2.3-alpha-2` to compare equal.
+
 ---
 
 ## 2. Scope and blast radius
 
-`compareVersions` is called internally by `checkPackageVersion` (lines 109 and 128), which
-feeds every `compose doctor` / version-nudge path. All callers already null-guard the return
-value, so changing `'1.2.3garbage'` from "wrong number" to `null` changes no real code path:
-npm registry strings and `package.json` version fields are well-formed in practice.
+`compareVersions` is called internally by `checkPackageVersion`, which feeds the version-nudge
+path. Callers null-guard malformed versions, but build metadata is valid SemVer and must remain
+comparable; returning `null` for it can suppress a version result rather than merely reject junk.
 
-The fix is contained to one inner expression at line 79. No API surface, no type signature,
-no downstream caller needs to change.
+The correction remains contained to the parser inside `compareVersions`. No API surface, type
+signature, or downstream caller changes.
 
 ---
 
 ## 3. The fix
 
-Replace the `parseInt`-based mapper with a strict numeric predicate:
+Decompose `<core>-<prerelease>+<build>` before applying the strict numeric predicate:
 
 ```js
-// Before (line 79)
+// Before
+const [core, pre] = s.split('-')
 const parts = core.split('.').map(n => Number.parseInt(n, 10))
 
 // After
+const buildIndex = s.indexOf('+')
+const withoutBuild = buildIndex === -1 ? s : s.slice(0, buildIndex)
+const prereleaseIndex = withoutBuild.indexOf('-')
+const core = prereleaseIndex === -1 ? withoutBuild : withoutBuild.slice(0, prereleaseIndex)
+const pre = prereleaseIndex === -1 ? null : withoutBuild.slice(prereleaseIndex + 1)
 const parts = core.split('.').map(n => (/^\d+$/.test(n) ? Number(n) : NaN))
 ```
 
-`/^\d+$/` accepts only strings that are entirely decimal digits. `'3garbage'` fails the
-test; the mapper returns `NaN`; the existing guard on line 80 (`parts.some(n => Number.isNaN(n))`)
-catches it and returns `null`. No other lines change.
-
-The prerelease-tag path (lines 78, 91–94) is unaffected: the tag is split off before
-component parsing and is never passed through the strict predicate.
+Build metadata is removed first because it never participates in precedence. The first hyphen
+then separates the core from the complete prerelease string, including any later hyphens.
+`/^\d+$/` still accepts only core components made entirely of decimal digits, so `'3garbage'`
+continues to return `null` through the existing `NaN` guard.
 
 ---
 
 ## 4. Implementation
 
-**One file changes, one file gains tests:**
+**Implementation and supporting records:**
 
 | File | Change |
 |---|---|
-| `lib/version-check.js` (existing) | Line 79: swap `parseInt` for `/^\d+$/` predicate |
-| `test/version-check.test.js` (existing) | Add `compareVersions` to import; add 4 direct test cases |
+| `lib/version-check.js` | Decompose build and prerelease before strict core parsing |
+| `test/version-check.test.js` | Cover strict core parsing, build metadata on either/both operands, and embedded prerelease hyphens |
+| `CHANGELOG.md` | Describe the observable parser behavior without claiming downstream byte identity |
+| `docs/features/COMP-SEMVER-STRICT/design.md` | Keep acceptance claims aligned with their tests and gate state |
 
 ### New test cases (added to `test/version-check.test.js`)
 
@@ -112,16 +122,26 @@ test('compareVersions: empty component returns null', () => {
 })
 ```
 
+Follow-up regression cases cover build metadata on the left, on the right, and on both
+operands; `1.2.3-alpha-1` versus `1.2.3-alpha-2`; and the combined prerelease-plus-build form.
+
 ---
 
 ## 5. Acceptance criteria
 
-- [ ] `compareVersions('1.2.3garbage', '1.2.4')` returns `null` (was `-1`)
-- [ ] `compareVersions('1.2.x', '1.2.3')` returns `null` (already correct; regression guard)
-- [ ] `compareVersions('v1.2.3', '1.2.3')` returns `null` (already correct; regression guard)
-- [ ] `compareVersions('1..3', '1.2.3')` returns `null` (already correct; regression guard)
-- [ ] All 18 existing tests in `test/version-check.test.js` continue to pass
-- [ ] `compose doctor --json` output is byte-identical before and after the fix
-  (verified by `test/comp-deps-package.test.js:263`)
-- [ ] `CHANGELOG.md` entry added in the same commit as the code change
-- [ ] `docs/features/COMP-SEMVER-STRICT/feature.json` status updated to `COMPLETE`
+- [x] `compareVersions('1.2.3garbage', '1.2.4')` returns `null` (was `-1`) — `test/version-check.test.js`
+- [x] `compareVersions('1.2.x', '1.2.3')` returns `null` (already correct; regression guard) — `test/version-check.test.js`
+- [x] `compareVersions('v1.2.3', '1.2.3')` returns `null` (already correct; regression guard) — `test/version-check.test.js`
+- [x] `compareVersions('1..3', '1.2.3')` returns `null` (already correct; regression guard) — `test/version-check.test.js`
+- [x] Build metadata is ignored on the left, right, and both operands — `test/version-check.test.js`
+- [x] Hyphens inside prerelease identifiers are preserved for comparison — `test/version-check.test.js`
+- [x] Build metadata following a hyphenated prerelease is decomposed in the correct order — `test/version-check.test.js`
+- [x] All 38 tests in `test/version-check.test.js` pass — `test/version-check.test.js`
+- [x] `compose doctor --json` runs successfully and emits parseable dependency JSON with the expected field types — `test/comp-deps-package.test.js`
+- [x] `CHANGELOG.md` entry added in the same commit as the code change
+- [ ] Separate completion gate updates `docs/features/COMP-SEMVER-STRICT/feature.json` status to `COMPLETE`
+
+Mutation-checked 2026-09-08: replacing the strict mapper with `Number.parseInt` makes the named
+trailing-junk test fail. Restoring the old `s.split('-')` decomposition makes each of the five
+new decomposition tests fail independently (0 pass / 1 fail); copy-back restoration is
+byte-identical by `diff -q`.
