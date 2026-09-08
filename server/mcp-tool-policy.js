@@ -26,18 +26,12 @@ export const SETUP_TOOLS = new Set([
 /**
  * Management/approval/completion tools an implementer context must not wield.
  *
- * COMP-COVERAGE-GATE (2026-08-24) added the last two, found by
+ * COMP-COVERAGE-GATE (2026-08-24) added `roadmap_xref_push`, found by
  * `checkAuthorizationCoverage`'s C4 check — mutating tools this list had never
- * been asked about. Both postdate COMP-MCP-ENFORCE-1's charter ("cannot
- * self-approve, self-complete, or mutate roadmap status") and no design ever
- * ruled that an implementer may call them:
+ * been asked about. It postdates COMP-MCP-ENFORCE-1's charter ("cannot
+ * self-approve, self-complete, or mutate roadmap status"), and no design ever
+ * ruled that an implementer may call it:
  *
- *  - `canon_override_grant` — the escape hatch FROM canon enforcement was
- *    callable by the profile SUBJECT to it. COMP-CANON-OVERRIDE already reasoned
- *    that the override must not be grantable for its own governance state
- *    (`overrideEligible: false`); this is the same argument one level up, at the
- *    caller instead of the target. An implementer that hits a canon block must
- *    escalate, not self-authorise.
  *  - `roadmap_xref_push` — writes EXTERNAL trackers (github issues, sibling
  *    repos). An implementer session should not be reaching outside the repo.
  *
@@ -47,8 +41,8 @@ export const SETUP_TOOLS = new Set([
  * recorded decision, not an omission. That ruling is now recorded machine-side
  * in `C4_EXCEPTIONS` (lib/coverage-gate.js) so the gate stops re-raising it.
  *
- * Verified before adding the two: no pipeline spec, prompt template or server
- * flow invokes either from an implementer-profile session.
+ * Verified before adding it: no pipeline spec, prompt template or server flow
+ * invokes it from an implementer-profile session.
  */
 const IMPLEMENTER_DENY = [
   'approve_gate', 'complete_feature', 'kill_feature',
@@ -56,7 +50,6 @@ const IMPLEMENTER_DENY = [
   // COMP-LIFECYCLE-BACKFILL: a completion is a management act, backfilled or not.
   'backfill_completion',
   // ── added by COMP-COVERAGE-GATE C4 ──
-  'canon_override_grant',
   'roadmap_xref_push',
 ];
 

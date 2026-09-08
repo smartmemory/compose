@@ -36,29 +36,15 @@ try {
     cwd: payload?.cwd,
     projectRoot,
     canonicalize: realpathCanonicalize,
-    // Spawn-injected and un-rewritable by the agent. Only steers the deny
-    // message's escape sentence — a restricted profile cannot call
-    // canon_override_grant, so it must be told to escalate instead.
-    profile: process.env.COMPOSE_SESSION_PROFILE,
   });
   if (decision.deny) {
-    // The atomic claim lives here, not in decideCanonGuard: consuming a grant
-    // is destructive, and the decision function must stay pure. A successful
-    // claim burns the token (single-use, path-scoped) and allows this one write.
-    let claimed = false;
-    if (decision.overrideEligible) {
-      const { claimGrant } = await import('../../lib/canon-override.js');
-      claimed = claimGrant(projectRoot, decision.path);
-    }
-    if (!claimed) {
-      process.stdout.write(JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: 'PreToolUse',
-          permissionDecision: 'deny',
-          permissionDecisionReason: decision.reason,
-        },
-      }));
-    }
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: decision.reason,
+      },
+    }));
   }
 } catch {
   // fall through to allow

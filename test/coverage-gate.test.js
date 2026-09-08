@@ -216,10 +216,10 @@ describe('GATE — live tool definitions, registry and policy', () => {
 
   test('zero UNGATED_MUTATION — the ten C4 findings were closed in IMPLEMENTER_DENY', () => {
     // The gate's first run found ten mutating tools named by no profile list:
-    // canon_override_grant (an implementer could mint its own canon bypass),
-    // the eight judgment_* writers (the decision record was writable by the
-    // profile whose decisions it records), and roadmap_xref_push (writes
-    // external trackers). All ten were added to IMPLEMENTER_DENY.
+    // eight judgment_* writers (the decision record was writable by the profile
+    // whose decisions it records), roadmap_xref_push (writes external trackers),
+    // and canon_override_grant. The grant tool was retired on 2026-09-08 after
+    // its audit found no production caller; the other nine remain explicitly ruled.
     //
     // This assertion is the standing guard: a NEW mutating tool that nobody
     // rules on fails here, rather than appearing as a warning nobody reads.

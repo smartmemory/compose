@@ -4,7 +4,7 @@
   "status": "PLANNED",
   "phase": "Judgment Layer",
   "created": "2026-07-25",
-  "updated": "2026-07-25",
+  "updated": "2026-09-08",
   "complexity": "M",
   "position": 6,
   "parent": "COMP-CANON-GUARD",
@@ -14,11 +14,6 @@
       "kind": "surfaced_by",
       "to_code": "COMP-CANON-GUARD",
       "note": "S6 of the guard epic, carved out at close 2026-07-25"
-    },
-    {
-      "kind": "depends_on",
-      "to_code": "COMP-CANON-OVERRIDE",
-      "note": "Owner decision 2026-07-25: ATTEST keeps refusal, so it needs a governed reconcile path; the override is built first"
     }
   ]
 }

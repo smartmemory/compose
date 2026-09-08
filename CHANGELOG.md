@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### The canon override grant is retired; the write guard remains
+
+`canon_override_grant` and its ledger, attestation baseline, and single-use token machinery have
+been removed. The audit found no production caller or recorded incident needing the capability;
+only the PreToolUse hook consumed grants, while the promised ship-time ledger staging and
+`compose guard verify` coverage never landed. Most of the state therefore had no reader.
+
+The grant path also had a latent integrity defect: each mint replaced the ledger baseline without
+first verifying the previous baseline, so minting could erase evidence of earlier ledger drift.
+`lib/append-integrity.js` was removed with the feature because its verifier had no production
+caller; git retains it if content attestation later establishes a real consumer.
+
+The canon-guard hook is still installed and still unconditionally denies direct Write/Edit access
+to `docs/judgment/**`. Exceptional repair uses an authorized write outside the hook's reach; a
+restricted agent escalates. The real-hook regression test is mutation-checked against the dangerous
+partial removal: restoring the now-dangling grant import makes the denial fail open and the test go
+red. Full decision: `docs/decisions/2026-09-08-canon-override-grant-retired.md`.
+
 ### `compose start` works from npm installs without shipping a dev server
 
 The published CLI always launched `node_modules/.bin/vite`, even though Vite is a development
@@ -21,8 +39,8 @@ runs that installed `compose start` path.
 The package allowlist shipped `.claude/skills/**` but omitted two other runtime inputs under
 `.claude/`: the `canon-guard.mjs` PreToolUse hook consumed by `compose guard install`, and the
 `compose-explorer` / `compose-architect` definitions consumed by `compose setup` and `compose
-init`. Source checkouts had all three files, while npm installs had neither the grant-consuming
-hook nor the agents the installed Compose skill dispatches.
+init`. Source checkouts had all three files, while npm installs had neither the canon-guard
+PreToolUse hook nor the agents the installed Compose skill dispatches.
 
 The npm package now includes `.claude/hooks/**` and `.claude/agents/**`. The missing-hook refusal
 now gives separate recovery actions for npm installs and source checkouts. The regression test in

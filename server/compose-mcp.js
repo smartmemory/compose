@@ -55,7 +55,6 @@ import {
   toolGetFeatureLinks,
   toolProposeFollowup,
   toolAddChangelogEntry,
-  toolCanonOverrideGrant,
   toolGetChangelogEntries,
   toolWriteJournalEntry,
   toolGetJournalEntries,
@@ -175,7 +174,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         case 'get_feature_artifacts':    result = await toolGetFeatureArtifacts(args); break;
         case 'get_feature_links':        result = await toolGetFeatureLinks(args); break;
         case 'add_changelog_entry':      result = await toolAddChangelogEntry(args); break;
-        case 'canon_override_grant':     result = await toolCanonOverrideGrant(args); break;
         case 'get_changelog_entries':    result = await toolGetChangelogEntries(args); break;
         case 'write_journal_entry':      result = await toolWriteJournalEntry(args); break;
         case 'get_journal_entries':      result = await toolGetJournalEntries(args); break;
