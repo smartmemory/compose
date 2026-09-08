@@ -55,6 +55,8 @@
   },
   "files": [
     ".compose-deps.json",
+    ".claude/agents/**",
+    ".claude/hooks/**",
     ".claude/skills/**",
     "bin/**",
     "server/**",
