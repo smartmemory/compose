@@ -389,6 +389,8 @@ COMPOSE_TARGET=/path/to/project compose start
 
 Resolves the project root from the current working directory upward, or uses `COMPOSE_TARGET` when set. Errors out if the resolved root has no `.compose/compose.json`.
 
+For npm installs, the API server serves the prebuilt cockpit at `http://localhost:4001`; Vite is not installed or needed. Source checkouts run the Vite development server at `http://localhost:5195` for HMR and require their development dependencies to be installed with `npm install`.
+
 `render` rewrites `docs/product/ideabox.md` from the records without changing any of them. It is
 the repair path: every command writes its record before regenerating the file, so if the file is
 stale, missing, or was edited by hand, `render` brings it back into line.

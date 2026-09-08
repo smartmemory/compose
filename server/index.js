@@ -222,7 +222,11 @@ const _distExists = () => {
   catch { return false; }
 };
 
-app.use(express.static(_distDir, { index: false }));
+// Source checkouts keep Vite/HMR on :5195. Published installs have no Vite or
+// src/ by design, so compose start serves the prebuilt desktop shell on :4001.
+app.use(express.static(_distDir, {
+  index: process.env.COMPOSE_PACKAGED_UI === '1' ? 'index.html' : false,
+}));
 
 // /m/* SPA fallback — paths matching /m or /m/...
 app.get(/^\/m(\/|$)/, (_req, res) => {

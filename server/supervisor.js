@@ -22,6 +22,8 @@ import { COMPOSE_HOME, getTargetRoot, ensureDataDir } from './project-root.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 console.log('[supervisor] Target project:', getTargetRoot());
 const PID_FILE = path.join(COMPOSE_HOME, '.compose-supervisor.pid');
+const VITE_BIN = path.join(COMPOSE_HOME, 'node_modules', '.bin', 'vite');
+const IS_SOURCE_CHECKOUT = fs.existsSync(path.join(COMPOSE_HOME, '.git'));
 
 const PROCESSES = [
   {
@@ -36,13 +38,25 @@ const PROCESSES = [
     port: process.env.AGENT_PORT || 4002,
     type: 'fork',
   },
-  {
+];
+
+if (IS_SOURCE_CHECKOUT) {
+  delete process.env.COMPOSE_PACKAGED_UI;
+  if (!fs.existsSync(VITE_BIN)) {
+    console.error(`[supervisor] Vite is required in a Compose source checkout but was not found at ${VITE_BIN}`);
+    console.error(`[supervisor] Run \`npm install\` in ${COMPOSE_HOME}, then retry \`compose start\`.`);
+    process.exit(1);
+  }
+  PROCESSES.push({
     name: 'vite',
-    command: path.join(COMPOSE_HOME, 'node_modules', '.bin', 'vite'),
+    command: VITE_BIN,
     port: process.env.VITE_PORT || 5195,
     type: 'spawn',
-  },
-];
+  });
+} else {
+  process.env.COMPOSE_PACKAGED_UI = '1';
+  console.log('[supervisor] Packaged install: serving cockpit from dist/ through the API server');
+}
 
 const MIN_BACKOFF = 500;
 const MAX_BACKOFF = 10_000;

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### `compose start` works from npm installs without shipping a dev server
+
+The published CLI always launched `node_modules/.bin/vite`, even though Vite is a development
+dependency and npm does not install a package's development dependencies. A real tarball install
+therefore exited immediately with an unhandled `spawn .../.bin/vite ENOENT`. Its API child also
+imported a browser-source module under unshipped `src/`, producing a second startup failure.
+
+`compose start` now uses Vite only in source checkouts, where it provides HMR and a missing local
+install gets an actionable `npm install` error. Published installs serve the already-shipped
+`dist/` cockpit through the API server on port 4001, avoiding Vite and its build-chain dependency
+surface in production. The shared decision-block parser now lives under shipped `lib/`. A
+regression test packs the repository, installs the tarball with production dependencies only, and
+runs that installed `compose start` path.
+
 ### npm installs include the canon guard hook and vendored agents
 
 The package allowlist shipped `.claude/skills/**` but omitted two other runtime inputs under

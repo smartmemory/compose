@@ -13,7 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { parseDecisionBlocks } from '../src/components/vision/designSessionState.js';
+import { parseDecisionBlocks } from '../lib/decision-blocks.js';
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 import { KNOWN_VERSIONS } from '../lib/build-stream-schema.js';
 import { getTargetRoot, resolveProjectPath, trackProjectWork } from './project-root.js';
