@@ -3,6 +3,8 @@
  * No React, no Node-specific APIs. Fully testable.
  */
 
+export { parseDecisionBlocks } from '../../../lib/decision-blocks.js';
+
 /**
  * Create a new design session.
  * @param {'product'|'feature'} scope
@@ -57,45 +59,6 @@ export function reviseDecision(session, decisionIndex) {
     i === decisionIndex ? { ...d, superseded: true } : d
   );
   return { ...session, decisions };
-}
-
-/**
- * Parse markdown text containing ```decision fenced blocks.
- * Returns { parts: Array<{ type: 'text'|'decision', content: string|object }> }.
- */
-export function parseDecisionBlocks(text) {
-  const parts = [];
-  const regex = /```decision\n([\s\S]*?)```/g;
-  let lastIndex = 0;
-  let match;
-
-  while ((match = regex.exec(text)) !== null) {
-    // Text before this block
-    if (match.index > lastIndex) {
-      parts.push({ type: 'text', content: text.slice(lastIndex, match.index) });
-    }
-
-    const raw = match[1].trim();
-    try {
-      parts.push({ type: 'decision', content: JSON.parse(raw) });
-    } catch {
-      parts.push({ type: 'text', content: raw });
-    }
-
-    lastIndex = match.index + match[0].length;
-  }
-
-  // Remaining text after last block
-  if (lastIndex < text.length) {
-    parts.push({ type: 'text', content: text.slice(lastIndex) });
-  }
-
-  // If no blocks found at all, return the whole text
-  if (parts.length === 0) {
-    parts.push({ type: 'text', content: text });
-  }
-
-  return { parts };
 }
 
 /**

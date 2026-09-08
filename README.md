@@ -198,7 +198,7 @@ Signed descriptors live in `.compose/guard-upgrades/<sha256>/` (immutable) with 
 The mobile cockpit at `/m` can be reached from outside localhost — bring your own tunnel, compose handles auth and pairing:
 
 ```bash
-npm run build                                  # remote serves the built PWA from the API server
+npm run build                                  # source checkouts only; the npm package already ships dist/
 COMPOSE_REMOTE_AUTH=enabled compose start --host=0.0.0.0
 compose remote pair --public-host=https://your-tunnel-host   # prints a QR — scan it with your phone
 compose remote status                          # bind, devices, tunnel reachability
