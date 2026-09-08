@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { checkPackageVersion, checkLatestVersion, cachePath,
-  resolveStratumVersion, formatDriftNudge } from '../lib/version-check.js';
+  resolveStratumVersion, formatDriftNudge, compareVersions } from '../lib/version-check.js';
 
 function tmpCache(t) {
   const dir = mkdtempSync(join(tmpdir(), 'version-cache-'));
@@ -301,4 +301,52 @@ test('cacheOnly still reports a hit from a fresh cache', async (t) => {
   assert.equal(r.behind, true);
   assert.equal(r.source, 'cache');
   assert.deepEqual(calls, []);
+});
+
+// --- compareVersions: strict parsing (COMP-SEMVER-STRICT) ---
+// The JSDoc contract is "null if either unparseable". parseInt used to strip
+// trailing junk silently, so '1.2.3garbage' compared as 1.2.3 and reported
+// "behind" instead of refusing to answer.
+
+test('compareVersions: trailing junk returns null', () => {
+  assert.strictEqual(compareVersions('1.2.3garbage', '1.2.4'), null);
+});
+
+test('compareVersions: alpha component returns null', () => {
+  assert.strictEqual(compareVersions('1.2.x', '1.2.3'), null);
+});
+
+test('compareVersions: v-prefixed string returns null', () => {
+  assert.strictEqual(compareVersions('v1.2.3', '1.2.3'), null);
+});
+
+test('compareVersions: empty component returns null', () => {
+  assert.strictEqual(compareVersions('1..3', '1.2.3'), null);
+});
+
+test('compareVersions: well-formed versions still order correctly', () => {
+  assert.strictEqual(compareVersions('1.2.3', '1.2.4'), -1);
+  assert.strictEqual(compareVersions('1.2.4', '1.2.3'), 1);
+  assert.strictEqual(compareVersions('1.2.3', '1.2.3'), 0);
+  assert.strictEqual(compareVersions('0.1.7-beta', '0.1.7'), -1);
+});
+
+test('compareVersions: build metadata on the left is ignored', () => {
+  assert.strictEqual(compareVersions('1.2.3+build1', '1.2.4'), -1);
+});
+
+test('compareVersions: build metadata on the right is ignored', () => {
+  assert.strictEqual(compareVersions('1.2.3', '1.2.4+build2'), -1);
+});
+
+test('compareVersions: build metadata on both versions is ignored', () => {
+  assert.strictEqual(compareVersions('1.2.3+build1', '1.2.3+build2'), 0);
+});
+
+test('compareVersions: prerelease identifiers retain embedded hyphens', () => {
+  assert.strictEqual(compareVersions('1.2.3-alpha-1', '1.2.3-alpha-2'), -1);
+});
+
+test('compareVersions: build metadata follows the complete prerelease', () => {
+  assert.strictEqual(compareVersions('1.2.3-alpha-1+build1', '1.2.3-alpha-2+build2'), -1);
 });
