@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### COMP-ROADMAP-ARCHIVE blueprint written and verified
+
+- **COMP-ROADMAP-ARCHIVE** (still PLANNED): implementation blueprint at
+  `docs/features/COMP-ROADMAP-ARCHIVE/blueprint.md`, grounded against the current code with 144
+  verified `path:line` references and a clean Boundary Map. Its corrections table records 72
+  places where the design assumed something the code does not have: no per-workspace lock,
+  no per-row anchors, anonymous rows carry no parsed status, four parsers that disagree on
+  phase identity, the residue guard would flag every moved row as prose loss, and five more
+  producers of ROADMAP.md than the design listed (`compose triage`, ideabox promotion,
+  `roadmap migrate`, `migrate-anon`, `setRoadmapRowStatus`). Three Codex review rounds (30
+  findings, all folded in) reshaped the service into one `withRoadmapSet` transaction that
+  holds the roadmap-set lock across repair, canonical mutation and publication, with a
+  documented lock order (idempotency, feature, roadmap-set), pure readers with a
+  generation-bracketed snapshot, fail-closed repair keyed on pre/post hashes, and redirects
+  derived by set algebra over the parsed `## Moved` section so they survive an unchanged pass.
+  Two decisions surfaced for the owner: `PARTIAL -> PARKED` is added to the transition table,
+  and the local-only predicate lives in the tracker factory. No Stratum change is involved.
+
 ### Two design-stage features filed, reviewed and revised
 
 - **COMP-ROADMAP-ARCHIVE** (PLANNED): automatic roadmap archival during normal feature
