@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.2 — 2026-09-09
+
 ### The canon override grant is retired; the write guard remains
 
 `canon_override_grant` and its ledger, attestation baseline, and single-use token machinery have
