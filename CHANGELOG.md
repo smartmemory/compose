@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Two design-stage features filed, reviewed and revised
+
+- **COMP-ROADMAP-ARCHIVE** (PLANNED): automatic roadmap archival during normal feature
+  processing. The Codex/astra draft bundled five features under one ticket; the revision cuts v1
+  to generated-mode workspaces, the local provider, no new status (PARKED plus a persisted
+  `status_reason` covers deferral), in-document link rewriting with redirect anchors, and an
+  ordered document-set loader that COMP-ROADMAP-SHARD later reuses. Two Codex review rounds
+  added the missing producers (`compose feature`, build start reactivating PARKED features,
+  lane-gate, follow-up recovery), a stage-then-intent-then-rename publication with a persisted
+  baseline, and explicit placement rules for anonymous rows, rowless phase blocks and item rows.
+- **COMP-FABLE-ASTRA** (PLANNED, XL): a `team-fable-astra` preset where Fable plans and assesses
+  as ordinary steps, Astra workers implement in bounded waves and a fresh Astra reviewer drives
+  a repair wave. Review established the loop is not expressible in the current engine: it needs
+  STRAT-LOOP-CARRY (a persisted flow variable updated on gate revise) and STRAT-FLOW-CANCEL-FG
+  (foreground flow cancel), plus output-driven gate resolution, wave-checkpoint commits and
+  `files_owned` enforcement at merge on the Compose side. Both Stratum tickets are filed.
+- COMP-ROADMAP-SHARD's active/archived shape is recorded as superseded by COMP-ROADMAP-ARCHIVE.
+
 ## 0.4.2 — 2026-09-09
 
 ### The canon override grant is retired; the write guard remains
