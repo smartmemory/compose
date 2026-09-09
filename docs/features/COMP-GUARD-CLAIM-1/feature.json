@@ -1,10 +1,10 @@
 {
   "code": "COMP-GUARD-CLAIM-1",
   "description": "**Correct COMP-MCP-ENFORCE's false guard-coverage claim (COMP-COMPLETION-GATE AC-14).** `docs/features/COMP-MCP-ENFORCE/report.md:8` states \"No caller — skill, human cockpit, or rogue MCP/REST client — can effect a transition the guard refuses\", and the Slice 3 section repeats it. This has never been true: the COMP-COMPLETION-GATE audit measured 321 managed features against 31 registered guard resources with ZERO overlap (all 31 leaked test fixtures), and 230 COMPLETE features none of which passed a guarded transition. The report describes the MCP boundary it genuinely closed and then generalises that to ALL callers — the CLI and build runner ran in-process, never called a guarded transition, and were never covered. Replace the absolute claim with what was actually delivered (the MCP/REST boundary), state the measured coverage, and forward-reference COMP-COMPLETION-GATE for the paths that remained open. Doc-only, no code. Scope note: state slice-1+2 reality only — after those slices `setFeatureStatus`, the vision PATCH endpoint, stratum-sync and direct `updateItemStatus` are STILL unguarded, so the correction must not swap one overclaim for a smaller one.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "COMP-PARITY: UI↔CLI Parity",
   "created": "2026-08-18",
-  "updated": "2026-08-18",
+  "updated": "2026-09-09",
   "complexity": "S",
   "position": 15,
   "profile": {
@@ -12,5 +12,22 @@
     "needs_architecture": false,
     "needs_verification": false,
     "needs_report": false
-  }
+  },
+  "completions": [
+    {
+      "completion_id": "COMP-GUARD-CLAIM-1:f3cd93acb5e9a874deacddfd98b5fef4aa112e71",
+      "feature_code": "COMP-GUARD-CLAIM-1",
+      "commit_sha": "f3cd93acb5e9a874deacddfd98b5fef4aa112e71",
+      "commit_sha_short": "f3cd93ac",
+      "tests_pass": true,
+      "files_changed": [
+        "docs/features/COMP-MCP-ENFORCE/report.md",
+        "docs/context/decisions.md"
+      ],
+      "recorded_at": "2026-09-09T09:00:18.289Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Doc-only feature. Deliverable: two dated corrections (2026-08-18) in docs/features/COMP-MCP-ENFORCE/report.md retiring the \"no caller can effect a transition the guard refuses\" claim and stating the measured coverage (321 managed features vs 31 registered guard resources, zero overlap), plus the pipeline's gate log in docs/context/decisions.md. Landed by f3cd93a on 2026-09-07; the 08-18 pipeline run that produced them failed at execute_merge (audit.json), which is why feature.json sat IN_PROGRESS then PLANNED. tests_pass reflects \"no code changed\"; suite state at f3cd93a was not re-run for this record."
+    }
+  ],
+  "commit_sha": "f3cd93acb5e9a874deacddfd98b5fef4aa112e71"
 }

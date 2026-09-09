@@ -22,6 +22,14 @@
   engine's `agent` field is a literal enum, so per-item tier is resolved compose-side and
   cross-provider per-item routing is a follow-up.
 - COMP-ROADMAP-SHARD's active/archived shape is recorded as superseded by COMP-ROADMAP-ARCHIVE.
+- Follow-ups filed with typed links so the roadmap shows the chain: COMP-ROADMAP-ARCHIVE-GH,
+  COMP-ROADMAP-ARCHIVE-NARRATIVE, COMP-ROADMAP-ARCHIVE-LINKS (cut from ARCHIVE v1) and
+  COMP-FABLE-CALIBRATE (receipt-calibrated task estimation, after FABLE-ASTRA). Stratum side:
+  STRAT-AGENT-INTERP-TS, because STRAT-AGENT-INTERP's interpolatable `agent` field shipped in the
+  Python engine only and the row here is corrected to say so (status kept as history).
+- COMP-GUARD-CLAIM-1 recorded COMPLETE through the completion gate, bound to f3cd93a, which
+  landed its deliverable (the two dated corrections in the COMP-MCP-ENFORCE report) on
+  2026-09-07 while the feature record sat IN_PROGRESS from a failed 08-18 pipeline run.
 
 ## 0.4.2 — 2026-09-09
 

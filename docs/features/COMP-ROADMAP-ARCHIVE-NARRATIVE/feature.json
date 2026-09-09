@@ -1,0 +1,26 @@
+{
+  "code": "COMP-ROADMAP-ARCHIVE-NARRATIVE",
+  "description": "Automatic row moves for narrative-owned roadmaps. COMP-ROADMAP-ARCHIVE v1 leaves narrative-owned workspaces (forge-top) to the manual split because the narrative guard exists so no writer edits hand-authored prose. Design identity-based, lossless row and owned-note moves against explicit narrative status tokens, with an ambiguous identity blocking the move with an actionable diagnostic and the existing regeneration guard untouched. Fixture: the forge-top ROADMAP.md / ROADMAP-ARCHIVE.md split of 2026-09-09. Features M medium",
+  "status": "PLANNED",
+  "created": "2026-09-09",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-09-09",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-ROADMAP-ARCHIVE",
+      "note": "cut from v1 at design review 2026-09-09"
+    },
+    {
+      "kind": "depends_on",
+      "to_code": "COMP-ROADMAP-ARCHIVE"
+    }
+  ]
+}

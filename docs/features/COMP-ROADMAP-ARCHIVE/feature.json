@@ -12,6 +12,18 @@
       "kind": "related",
       "to_code": "COMP-ROADMAP-SHARD",
       "note": "supersedes its active/archived shard shape; SHARD keeps size and per-phase splitting"
+    },
+    {
+      "kind": "follow_up",
+      "to_code": "COMP-ROADMAP-ARCHIVE-GH"
+    },
+    {
+      "kind": "follow_up",
+      "to_code": "COMP-ROADMAP-ARCHIVE-NARRATIVE"
+    },
+    {
+      "kind": "follow_up",
+      "to_code": "COMP-ROADMAP-ARCHIVE-LINKS"
     }
   ]
 }

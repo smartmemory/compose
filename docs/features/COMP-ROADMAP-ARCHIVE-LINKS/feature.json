@@ -1,0 +1,26 @@
+{
+  "code": "COMP-ROADMAP-ARCHIVE-LINKS",
+  "description": "Incoming-link rewriting across registered consumer roots after archival. COMP-ROADMAP-ARCHIVE v1 rewrites links inside the two roadmap documents and leaves redirect anchors for everyone else. Extend relocation to explicitly registered consumer roots (feature folders, docs, journal) using the relocation map, confined to configured roots, excluding generated and vendor trees, never sweeping other repositories or external issue bodies. Features S low",
+  "status": "PLANNED",
+  "created": "2026-09-09",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-09-09",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-ROADMAP-ARCHIVE",
+      "note": "cut from v1 at design review 2026-09-09"
+    },
+    {
+      "kind": "depends_on",
+      "to_code": "COMP-ROADMAP-ARCHIVE"
+    }
+  ]
+}
