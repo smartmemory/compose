@@ -1,0 +1,26 @@
+{
+  "code": "COMP-FABLE-CALIBRATE",
+  "description": "Receipt-calibrated task estimation for Fable-led teams. COMP-FABLE-ASTRA has Fable assign a tier per task (critical / standard / fast) from its own judgment. Close the loop: after each wave compare every task's planned tier with its receipt (STRAT-USAGE-SPLIT token split, cost, retries, review findings against that task), record the miss, and feed a compact calibration table into Fable's planning prompt for the next wave and the next run. Consumer of STRAT-LEARN-COST; the E3 complexity-triage idea in the ideabox is the shape. Depends on COMP-FABLE-ASTRA shipping. COMP-TEAMS: Agent Team Presets M medium",
+  "status": "PLANNED",
+  "created": "2026-09-09",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-09-09",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-FABLE-ASTRA",
+      "note": "owner question 2026-09-09: estimate workload and pick a model"
+    },
+    {
+      "kind": "depends_on",
+      "to_code": "COMP-FABLE-ASTRA"
+    }
+  ]
+}

@@ -360,12 +360,12 @@ publish. The enclosing workflow's policy governs those, as today.
 
 Two follow-ups filed from the tier-routing addition, not in v1:
 
-- **Cross-provider per-item routing** (claude for one task, codex for the next in
-  the same wave). Needs the engine's fanout stage `agent` to accept a per-item
-  value; that is a Stratum change and the honest successor to the Python-only
-  STRAT-AGENT-INTERP. Until then a preset that wants both providers uses two
-  fanout stages.
-- **Receipt-calibrated estimation.** Compare each task's planned `tier` with its
+- **Cross-provider per-item routing**, filed as **STRAT-AGENT-INTERP-TS**
+  (stratum): claude for one task, codex for the next in the same wave. Needs the
+  engine's fanout stage `agent` to accept a per-item value; the honest successor
+  to the Python-only STRAT-AGENT-INTERP. Until then a preset that wants both
+  providers uses two fanout stages.
+- **Receipt-calibrated estimation**, filed as **COMP-FABLE-CALIBRATE**. Compare each task's planned `tier` with its
   receipt (STRAT-USAGE-SPLIT tokens and cost), and feed the misses back into
   Fable's planning prompt or a calibration table. Consumer of STRAT-LEARN-COST;
   the E3 complexity-triage idea in the ideabox is the shape.
