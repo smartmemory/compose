@@ -18,6 +18,9 @@
   STRAT-LOOP-CARRY (a persisted flow variable updated on gate revise) and STRAT-FLOW-CANCEL-FG
   (foreground flow cancel), plus output-driven gate resolution, wave-checkpoint commits and
   `files_owned` enforcement at merge on the Compose side. Both Stratum tickets are filed.
+  Fable also assigns a tier per task, so a wave mixes Astra with terra or spark; the TS
+  engine's `agent` field is a literal enum, so per-item tier is resolved compose-side and
+  cross-provider per-item routing is a follow-up.
 - COMP-ROADMAP-SHARD's active/archived shape is recorded as superseded by COMP-ROADMAP-ARCHIVE.
 
 ## 0.4.2 — 2026-09-09

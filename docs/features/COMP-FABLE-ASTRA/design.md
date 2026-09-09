@@ -46,6 +46,16 @@ carries explicit dependencies instead of a "one new thing in the preset" story.
    cross-repo. This is an epic with a Stratum prerequisite, not an L.
 4. **Budget defaults are numeric** (Roles, models and budget), and the
    wave-count semantics are the engine's, not a paraphrase.
+5. **Per-task tier routing is in scope (added 2026-09-09).** Fable already sizes
+   each task when it bounds it; the same judgment picks a tier, so a wave mixes
+   Astra on the hard tasks and terra or spark on the mechanical ones instead of
+   paying Astra for everything. Provider stays fixed per stage (the TS engine's
+   `agent` is a `claude | codex` literal, `ts/src/ir/schema.ts`; the
+   STRAT-AGENT-INTERP roadmap row marked COMPLETE describes the retired Python
+   engine and does not hold for TS). Tier is resolved compose-side from the
+   sidecar today, so per-item tier needs the engine-recorded item from D1 and one
+   Compose seam (D6), not a new Stratum ticket. Cross-provider per-item routing
+   and receipt-calibrated estimation are follow-ups, not v1.
 
 ## Intent
 
@@ -56,8 +66,11 @@ flag, in which:
   emits a task graph; after each wave it reads the merged diff, verification
   output and reviewer findings and emits the next graph (a repair wave, another
   implementation wave, or completion).
-- **Astra workers** (`codex`, `critical` tier, `gpt-6-astra`) each implement one
-  bounded task in an isolated worktree and return a patch plus evidence.
+- **Astra workers** (`codex`, tier chosen per task by Fable, default `critical` =
+  `gpt-6-astra`) each implement one bounded task in an isolated worktree and
+  return a patch plus evidence. Mechanical tasks run on `standard` (terra) or
+  `fast` (spark); the wave is still "Astra-led" because the hard tasks and the
+  reviewer are Astra.
 - **A fresh Astra reviewer** (`codex`, `critical`, read-only template) reviews the
   integrated result against the goal, not the workers' summaries.
 - **Compose and Stratum** own dispatch, worktrees, merge, retries, cancellation,
@@ -188,6 +201,16 @@ change). Neither the rendered prompt nor the worker's self-reported
 `files_changed` is trusted. Any path outside fails the task with a named finding.
 Plan-time overlap detection stays.
 
+**D6 (Compose, needs D1): per-item tier resolution.** Today
+`loadPipelineProfiles` keys the sidecar by step id and `resolveAgentConfig` turns
+one `provider:template:tier` string into one model for the whole fanout stage.
+D6 lets the sidecar declare a per-item override for a fanout step
+(`"execute": { "default": "codex:implementer:critical", "tier_from": "item.tier" }`)
+and resolves the tier from the engine-recorded item (D1's descriptor field) at
+dispatch, falling back to the default when the item has no tier. Provider and
+template stay per stage. The resolved model is written to the run record per item
+so the completion evidence can show it.
+
 **D5 (Stratum + Compose): real cancellation.** Compose runs consumer fanout in a
 foreground flow; Stratum's only durable flow cancel is for background flows, and
 foreground agent cancellation needs the per-call cancellation id held by the MCP
@@ -212,9 +235,15 @@ currently `tasks: object[]`; the nested task, finding and decision shapes become
 named contracts so the validators have a schema to check against.
 
 - **TaskGraph** (exists, task shape now named): tasks with `id`, `description`,
-  `files_owned`, `files_read`, `depends_on`. Ensure: `len(result.tasks)` in 1..6.
+  `files_owned`, `files_read`, `depends_on`, and **`tier: critical | standard |
+  fast`** with a one-line `tier_rationale`. Ensure: `len(result.tasks)` in 1..6.
   Compose validators before dispatch: pairwise ownership (`filesOwnedConflict`),
-  and `depends_on` empty for every task (waves carry dependencies).
+  `depends_on` empty for every task (waves carry dependencies), and `tier` in the
+  allow-list (unknown tier fails the wave before dispatch, never silently
+  defaults). Fable's planning prompt carries the tier guidance from the routing
+  rules: `critical` for tasks with design judgment or root-causing, `standard`
+  for brief-bounded implementation, `fast` for transcription-level edits; repair
+  waves default to the tier of the task being repaired or higher, never lower.
 - **TaskResult** (exists): `outcome`, `summary`, `files_changed`, plus
   `verification` (commands and outcomes) so `assess` reads evidence, not prose.
 - **VerifyResult** (exists): `tests_pass`, details.
@@ -238,7 +267,7 @@ Profiles sidecar for this preset (target state, after slice 1):
 | Step | Agent string | Model |
 |---|---|---|
 | plan, assess | `claude:orchestrator:coordinator` | `claude-fable-5-1` |
-| execute (fanout) | `codex:implementer:critical` | `gpt-6-astra` / high |
+| execute (fanout) | `codex:implementer:critical` default, tier from `item.tier` (D6) | `gpt-6-astra` / high, or `gpt-5.6-terra` / high, or `gpt-5.3-codex-spark` / medium |
 | review | `codex:read-only-reviewer:critical` | `gpt-6-astra` / high |
 | verify | `claude:orchestrator:standard` | `claude-sonnet-5` |
 
@@ -272,7 +301,10 @@ Before this feature is COMPLETE, demonstrate on a live run and record commands,
 outcomes and artifact references with the report:
 
 - [ ] Run record shows `claude-fable-5-1` for plan/assess and `gpt-6-astra` for
-      execute/review; the installed compose-to-stratum path was used.
+      review; the installed compose-to-stratum path was used.
+- [ ] In one wave with mixed tiers, the run record shows each worker's resolved
+      model matching its task's `tier`; a task with an unknown tier fails the
+      wave before any dispatch (D6).
 - [ ] A sidecar with an unknown tier or an unavailable model fails before the first
       dispatch.
 - [ ] Independent tasks in one wave overlap in wall time; a task in wave 2 starts
@@ -306,7 +338,8 @@ outcomes and artifact references with the report:
    slices 3 to 6 is started before it.
 3. **Compose seams** (D2 output-driven gate with its validators, D3 wave branch
    with journal reconciliation and ship squash, D4 ownership at merge from the
-   recorded item), each with its own tests, usable by other presets.
+   recorded item, D6 per-item tier resolution from the recorded item), each with
+   its own tests, usable by other presets.
 4. **Contracts and preset**: `ReviewFindings`, `WaveDecision`, extended
    `TaskResult`; `team-fable-astra.stratum.yaml` and its sidecar; `--team
    fable-astra`; assess and review prompts with MUST checklists; the cost ceiling.
@@ -325,6 +358,18 @@ Multi-machine execution (COMP-DIST-EXEC), mid-wave reassignment and peer messagi
 (COMP-AGT-COORD), automatic tier changes for other presets, automatic push or
 publish. The enclosing workflow's policy governs those, as today.
 
+Two follow-ups filed from the tier-routing addition, not in v1:
+
+- **Cross-provider per-item routing** (claude for one task, codex for the next in
+  the same wave). Needs the engine's fanout stage `agent` to accept a per-item
+  value; that is a Stratum change and the honest successor to the Python-only
+  STRAT-AGENT-INTERP. Until then a preset that wants both providers uses two
+  fanout stages.
+- **Receipt-calibrated estimation.** Compare each task's planned `tier` with its
+  receipt (STRAT-USAGE-SPLIT tokens and cost), and feed the misses back into
+  Fable's planning prompt or a calibration table. Consumer of STRAT-LEARN-COST;
+  the E3 complexity-triage idea in the ideabox is the shape.
+
 ## Review log
 
 **Round 1, Codex gpt-5.6-sol/high, 2026-09-09.** Nine findings, all accepted:
@@ -338,6 +383,13 @@ fail-open sidecar (Revision note 1, slice 1); ensures see only `result`, so
 `blocking` moved onto `WaveDecision` and `verify` moved before `review` and
 `assess`; budget defaults were not numeric and COMP-ITER-BUDGET is unshipped
 (Budget, now the preset's own ceiling).
+
+**Addition, 2026-09-09 (owner question: can the workflow estimate the next
+workload and pick a model?).** Not before this change: routing was static per
+stage. Added Revision note 5, `tier` on the task contract, D6, one evidence item
+and two follow-ups. Verified the TS `agent` field is a literal enum, so per-item
+tier is compose-side and needs no third Stratum ticket; STRAT-LOOP-CARRY's
+descriptor item now has two consumers (D4, D6) and its ticket says so.
 
 **Round 2, Codex gpt-5.6-sol/high, 2026-09-09.** Six findings on the fixes, all
 accepted: a bare revise payload has no first-epoch or merge-retry value, so D1
