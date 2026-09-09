@@ -8,7 +8,7 @@
 **Related Documents:**
 - [`forge/ROADMAP.md`](../../../../ROADMAP.md) — Standalone Tickets table
 - [`COMP-MCP-ROADMAP-WRITER`](../COMP-MCP-ROADMAP-WRITER/) — Existing roadmap *writer* tools (`add_roadmap_entry`, `set_feature_status`, `roadmap_diff`); this feature is the *renderer* sibling.
-- [`COMP-XREF-SCHEMA`](../../../../ROADMAP.md#standalone-tickets--planned) — External-reference shape, used so product-repo adoptions can cite this feature without status sync.
+- [`COMP-XREF-SCHEMA`](../../../../ROADMAP-ARCHIVE.md#archived-standalone-tickets--planned) — External-reference shape, used so product-repo adoptions can cite this feature without status sync.
 - First consumer: SmartMemory's [META-GRAPH-1](../../../../../smart-memory/smart-memory-docs/docs/features/META-GRAPH-1/plan.md) (thin adoption — populates `deps.yaml` + frontmatter, wires the generator into its CI).
 - SmartMemory [META-GRAPH-2](../../../../../smart-memory/smart-memory-docs/docs/features/META-GRAPH-2/plan.md) (PARKED bidirectional sibling — would also migrate here if un-parked).
 
