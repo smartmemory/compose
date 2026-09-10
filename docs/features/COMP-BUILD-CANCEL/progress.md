@@ -26,3 +26,12 @@ Stratum side: STRAT-FLOW-CANCEL-FG (stratum @7bd4c08), STRAT-LOOP-CARRY (@c7478f
 - 2026-09-10: Codex r2: 10 must-fix + 1 should-fix, all accepted → codex-round2.md. Round 3 = cap (split S05 if must-fix remain). Revision 3 sent.
 - 2026-09-10: revision 3 landed (1973 lines, C34-C44). Verification r2: 1 off-by-8 fixed in r3. Codex r3 (cap) runId da0ee7b9e46d pid 41242.
 - 2026-09-10: Codex r3: 6 must-fix + 1 should-fix (converging) → codex-round3.md. Revision 4 = final; no r4 review (budget). S05 not split.
+- 2026-09-10: blueprint committed fc4e821; plan.md committed. Starting implementation: slice 1 (S01) on sonnet.
+- 2026-09-10: S01 fedd91e, S02 a254a55, S03-1 16c1c0f committed (sonnet); verified locally 56/56. Opus dispatched for S06 then S03-rest.
+
+## Deviations
+- S06: `lib/build.js:2307` creates `buildCancel` (blueprint lists this under S03-5) — the S06 handler cannot exist without the handle, so it moves up with the slice that first needs it.
+- S06: `lib/build.js:1469` adds `claimActiveBuild` (blueprint's Boundary Map lists it under S04) — S06-2 requires `writeTerminal` to go through the §3.7 claim, so the helper lands with its first caller.
+- S06: `lib/build-cancel.js:100,119` export `withDeadline` and `cancelBudgets` (not in the S06 Boundary Map) — the outermost-finally join in `lib/build.js` needs the same primitive and the derived bound, and C46 requires the bound be computed in one place rather than restated.
+- S06: `lib/build.js:5075` defers `stratum.close()` until a pending teardown settles — the blueprint's inner-finally duties do not mention the client, and closing it underneath the teardown's in-flight `flowCancel` would abandon the cancel.
+- S06: `test/build-signal-teardown.test.js:250` child case asserts exit 130 + the `aborted` record only; the C21 process-group receipt needs a TAGGED dispatch and therefore lands with S03.

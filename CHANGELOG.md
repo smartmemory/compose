@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### COMP-BUILD-CANCEL S06: SIGINT/SIGTERM does a real teardown
+
+- **COMP-BUILD-CANCEL S06**: Ctrl-C on a running build now tears it down instead of setting a
+  variable. The handler cancels the flow (bounded by `COMPOSE_CANCEL_TIMEOUT_MS`), aborts the
+  build-level controller so local `isolation: none` agents die, kills the vision item, writes
+  `active-build.json` `aborted` and exits 130 (SIGINT) / 143 (SIGTERM). A second signal during
+  teardown exits immediately. The teardown, the outer catch and the build's own finally now have
+  one ordering and one terminal owner between them, so a cancelled build cannot be terminalized
+  twice or have the process exit out from under its own cleanup.
+
 ### COMP-BUILD-CANCEL S03-1: the build-level cancel handle
 
 - **COMP-BUILD-CANCEL S03-1**: new `lib/build-cancel.js` with `createBuildCancel()` — the

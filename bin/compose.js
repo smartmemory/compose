@@ -98,6 +98,8 @@ import {
   formatDriftNudge,
 } from '../lib/version-check.js';
 import { computeHooksStatus, formatHookStatusLines, HOOK_MARKERS } from '../lib/hooks-status.js';
+// COMP-BUILD-CANCEL S06-3: the CLI must not exit out from under a live teardown (C46).
+import { pendingTeardown } from '../lib/build-cancel.js';
 
 const [,, cmd, ...args] = process.argv
 
@@ -2857,9 +2859,11 @@ if (cmd === 'build') {
       if (fresh) singleOpts.fresh = true
       if (nonInteractiveBuild) singleOpts.gateOpts = { nonInteractive: true }
       if (resumeFlowId) singleOpts.resumeFlowId = resumeFlowId
-      runBuild(featureCode, singleOpts).then(() => {
+      runBuild(featureCode, singleOpts).then(async () => {
+        await pendingTeardown()
         process.exit(0)
-      }).catch((err) => {
+      }).catch(async (err) => {
+        await pendingTeardown()
         console.error(`Build failed: ${err.message}`)
         process.exit(1)
       })
@@ -2974,9 +2978,11 @@ if (cmd === 'build') {
     if (agentWorkDir) opts.workingDirectory = agentWorkDir
     if (bugDescription) opts.description = bugDescription
     if (resumeFlowId) opts.resumeFlowId = resumeFlowId
-    runBuild(bugCode, opts).then(() => {
+    runBuild(bugCode, opts).then(async () => {
+      await pendingTeardown()
       process.exit(0)
-    }).catch((err) => {
+    }).catch(async (err) => {
+      await pendingTeardown()
       console.error(`Fix failed: ${err.message}`)
       process.exit(1)
     })
@@ -3085,9 +3091,11 @@ if (cmd === 'build') {
     const opts = { abort, template: 'plan', mode: 'plan', description: intent }
     if (agentWorkDir) opts.workingDirectory = agentWorkDir
     if (resumeFlowId) opts.resumeFlowId = resumeFlowId
-    runBuild(planCode, opts).then(() => {
+    runBuild(planCode, opts).then(async () => {
+      await pendingTeardown()
       process.exit(0)
-    }).catch((err) => {
+    }).catch(async (err) => {
+      await pendingTeardown()
       console.error(`Plan failed: ${err.message}`)
       process.exit(1)
     })
