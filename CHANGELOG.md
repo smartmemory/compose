@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### COMP-BUILD-CANCEL S03-1: the build-level cancel handle
+
+- **COMP-BUILD-CANCEL S03-1**: new `lib/build-cancel.js` with `createBuildCancel()` — the
+  per-build cancel handle backing a `runBuild`'s `AbortController`, with two independent
+  states (`cancelled`, set by anyone; `teardownStarted`, set only by the S06 teardown) and
+  the `teardown`/`drained` promise pair the S06 handshake coordinates on — plus the
+  in-process `flowId -> handle` registry (`registerBuildCancel`/`unregisterBuildCancel`/
+  `lookupBuildCancel`) an HTTP abort needs to reach a same-process build's local agents,
+  `pendingTeardown()` for the CLI to await before exiting, and `isRunCancelled()`, the
+  audit-based authority on whether a run actually stopped. No caller wired yet — driver
+  tagging and the abort chain land in the rest of S03.
+
 ### COMP-BUILD-CANCEL S02: client flow tag and flowCancel()
 
 - **COMP-BUILD-CANCEL S02**: `stratum_agent_run` requests can carry `flow: {runId, stepId?,
