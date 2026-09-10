@@ -156,3 +156,56 @@ each) dispatched: astra 5da3396efa14 → reports/slice1a-d1-review-r2.md.
 shared walker) → fixed by astra 3eada73e344d (`stage.out ?? null` once + Stratum-validated regression).
 Host targeted run: 98/98. Full suite running on host before the d1 commit.
 Full suite on host: node 6849/6849, UI 624/624, tracker 100/100. Committing d1.
+
+## 2026-09-11 — S1a dispatch 2 impl (astra 19c5ba43734a, 36 min, 9.77M tok)
+build.js/gsd.js wiring, both bundled specs declare optional routing inputs, fable-astra preset ships
+`_routing:{mode:"shadow"}` + plan/execute `route.learn`. Astra: 164/165 — the 1 failure was
+test/pipeline-profiles.test.js wrapping the (now already wrapped) preset a second time; Fable rewrote that test
+to derive the legacy shape FROM the shipped preset (intent unchanged: off mode == 0.5.1 digest). Host: 165/165.
+Impl review r1 dispatched: astra d6c99518d67f → reports/slice1a-d2-review-r1.md.
+
+## 2026-09-11 — S1a d2 impl review r1 (astra d6c99518d67f) → 4 HIGH / 1 MEDIUM — ALL ACCEPTED
+Report: reports/slice1a-d2-review-r1.md. Independent off-identity: bundled Build + carry traces match frozen
+0.5.1 fixtures on the ENTIRE serialized call objects after substituting only cwd/UUID/TAP-duration values;
+GSD fixture holds inputs only (no calls/digest) — cannot certify calls. Shadow = same 5 calls, identical args.
+1. HIGH fresh-after-terminal-old-flow inherits the OLD routing mode (build.js:3773–4055): active mode dispatched
+   instead of ROUTING_SLICE_UNAVAILABLE; no journal for a valid shadow request. Fix: re-resolve mode/roles/
+   overrides once the verdict is fresh; public-runner test.
+2. HIGH routing transport can be interpolated into prompts by a custom spec (`${input.routing_start}` in `do`).
+   Fix: validate model-facing interpolation/forwarding before a participating plan; refuse; real-engine negative.
+3. HIGH existing multi-stage consumer waves BREAK in shadow (ROUTING_BINDING_MISSING / ROUTING_SCHEMA_INVALID
+   on execute/0 provenance). Fix: deferred multi-stage steps keep legacy bindings; start construction and journal
+   validation distinguish supported vs deferred; test mixed ordinary/single/multi-stage runs through both runners.
+4. HIGH `fresh:true` old-wave inspection constructs ConsumerFanoutArtifacts, silently recreating a lost
+   participating journal as legacy. Fix: read-only inspection; witness check before any constructor.
+5. MEDIUM frozen-oracle tests replay expected prompts instead of running producers; overstated names. Fix: drive
+   real producers with controlled nondeterminism or rename to what they compare; goldens remain dispatch 3.
+Next: astra fix run → r2 targets fixes → host run → full suite → commit d2.
+
+## 2026-09-11 — S1a d2 fix run r1 (astra 1b0061ff66f5, 17 min, 6.93M tok) → host 184/184
+All 5 fixed; persisted deferred-step identity validated on reload; explicit bare-provider overrides aligned into
+shared-plan preflight; fresh-only overrides kept out of historical resumes. Full frozen-producer oracle
+comparisons stay dispatch 3; test names corrected. r2 (targets fixes + off-identity re-check) dispatched:
+astra ece0e97a6020 → reports/slice1a-d2-review-r2.md.
+
+## 2026-09-11 — S1a d2 review r2 (astra ece0e97a6020) → 5/5 FIXED (1 with new issue); 1 new HIGH — ACCEPTED
+Off-identity re-check: bundled Build (5 calls) + carry (12 calls) complete serialized call objects match frozen
+fixtures after cwd/UUID/TAP substitution; digests unchanged. Deferred identity refuses ROOT_DRIFT 4/4.
+NEW HIGH: fresh config records BARE provider role flags as runtime overrides in every mode (build.js:3846–3870);
+HEAD kept the sidecar tier (`claude::critical` → opus/xhigh), current dispatches bare `{provider:'claude'}`
+with modelID/effort absent under route_mode:off. Fix: bare role strings must not replace sidecar defaults
+(historical merge semantics, stratum-mcp-client.js:94); provenance separate from effective overrides;
+public fresh-off test with tiered sidecar + same-provider bare flag.
+Next: astra fix → r3 targeted at this fix (round cap) → full suite → commit d2.
+
+## 2026-09-11 — S1a d2 fix run r2 (astra 7fa71915977a, 6 min) → host 186/186; r3 (astra 565bb53a3e6e) → REVIEW CLEAN
+r3 caveat: one carry producer run swapped concurrent execute/1 vs execute/2 connector arrival order (matched on
+rerun) — cross-run scheduling is not deterministic; dispatch-3 oracle must tolerate concurrent-arrival order.
+FULL SUITE on host: 19 FAILURES the targeted set + three astra reviews all missed — build.js:734
+`artifacts.journal.routing` dereferenced unconditionally in reportConsumerStepDone; non-participating callers
+(build-emission, gsd-dispatch-instrumentation, review-fixes-runtime, ts-cutover-e3-round3, usage-receipts,
+integration/agent-lanes-pipeline) pass artifact stubs without `journal` → TypeError, and the agent-lanes
+integration test hung to its 900s timeout. Fable fix: `artifacts?.journal?.routing`. The 6 files → 77/77.
+Lesson: the review probes "non-participating callers" only through the bundled goldens; stub-artifact callers
+are a distinct population. Second full suite running before commit.
+Full suite after guard: node 6914/6914, UI 624/624, tracker 100/100. Committing d2.

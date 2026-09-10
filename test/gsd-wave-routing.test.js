@@ -35,3 +35,37 @@ for (const invalid of [false, true]) test(`public GSD whole-wave admission ${inv
     assert.equal(JSON.stringify(timing).includes('STALE-ID'), false);
   }
 });
+
+for (const invalid of [false, true]) test(`GSD routing-only no-tier/no-consumer ${invalid ? 'whole-wave refusal' : 'admission'}`, async t => {
+  const { routingDigest } = await import('../lib/model-router.js');
+  const { resolvePlanSpecValues } = await import('../lib/stratum-mcp-client.js');
+  const spec = waveSpec({ gsd: true });
+  Object.assign(spec.flows.gsd.input, Object.fromEntries(['route_mode', 'routing_start', 'routing_root', 'routing_plan_intent', 'routing_continuation'].map(k => [k, 'string?'])));
+  const profiles = { execute: { default: 'codex:implementer:standard', route: { learn: true } } };
+  const f = buildWaveFixture(t, { spec, profiles, tasks: Array.from({ length: invalid ? 6 : 2 }, (_, i) => task(i + 1)) });
+  mkdirSync(join(f.cwd, 'docs/features', f.code), { recursive: true });
+  writeFileSync(join(f.cwd, 'docs/features', f.code, 'blueprint.md'), blueprint);
+  writeFileSync(join(f.cwd, 'pipelines/gsd.stratum.yaml'), YAML.stringify(spec));
+  writeFileSync(join(f.cwd, 'pipelines/gsd.profiles.json'), JSON.stringify(profiles));
+  const old = process.env.STRATUM_STATE_ROOT; process.env.STRATUM_STATE_ROOT = f.stateRoot;
+  t.after(() => { if (old === undefined) delete process.env.STRATUM_STATE_ROOT; else process.env.STRATUM_STATE_ROOT = old; });
+  const plan = f.stratum.plan;
+  const digest = routingDigest(resolvePlanSpecValues(spec, {}));
+  f.descriptors.forEach(d => Object.assign(d, { flow: 'gsd', revisionDigest: digest }));
+  f.state.steps.execute.fanout.items.forEach((item, index) => Object.assign(item, { epoch: 0, index }));
+  if (invalid) f.state.steps.execute.fanout.items[5].index = 99;
+  f.stratum.plan = async (text, flow, input, options) => {
+    f.state.spec = resolvePlanSpecValues(YAML.parse(text), input); f.state.revisionDigest = routingDigest(f.state.spec);
+    f.state.workspaceRoot = options.workspaceRoot; f.state.input = input;
+    const token = f.state.steps.plan.acceptedDispatchToken; delete f.state.steps.plan.acceptedDispatchToken;
+    const response = await plan(text, flow, input, options); response.revisionDigest = f.state.revisionDigest; f.persist();
+    const audit = f.stratum.audit;
+    f.stratum.audit = async (...args) => { f.state.steps.plan.acceptedDispatchToken = token; f.persist(); return audit(...args); };
+    return response;
+  };
+  const run = () => runGsd(f.code, { cwd: f.cwd, stratum: f.stratum, route_mode: 'shadow', allowDirtyWorkspace: true,
+    preMergeGate: [], consumerArtifactsRoot: f.artifactRoot });
+  if (invalid) await assert.rejects(run(), { code: 'WAVE_INPUT_INVALID' }); else await run();
+  assert.equal(f.stratum.calls.filter(c => c.type === 'agentRun').length, invalid ? 0 : 2);
+  assert.equal(f.journal().waveAdmissions, undefined);
+});

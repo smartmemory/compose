@@ -343,3 +343,15 @@ for (const path of ['presets/team-fable-astra.stratum.yaml', 'pipelines/gsd.stra
     assert.deepEqual(start.spec.effective, effective);
   });
 }
+
+test('multi-stage starts use fanout-level provenance for sidecar profiles and stage provenance otherwise', t => {
+  const f = fixture(t);
+  const multi = structuredClone(spec);
+  multi.flows.main.steps = [{ id: 'wave', fanout: { dispatch: 'consumer', steps: [{ agent: 'claude' }, { agent: 'claude' }] } }];
+  for (const profiles of [{}, { wave: { default: 'claude', tier_from: 'item.tier' } }]) {
+    const preflight = preflightPipelineProfiles(profiles, multi);
+    const start = createRoutingStart({ ...f.args, spec: multi, originalProfiles: profiles, preflight });
+    for (const stage of [0, 1]) assert.deepEqual(start.staticResolutions[`main/wave/stage-${stage}`],
+      preflight.staticProvenance[profiles.wave ? 'wave' : `wave/${stage}`]);
+  }
+});

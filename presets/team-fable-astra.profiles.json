@@ -1,6 +1,6 @@
 {
-  "plan": "claude:orchestrator:coordinator",
-  "execute": { "default": "codex:implementer:critical", "tier_from": "item.tier" },
+  "plan": { "default": "claude:orchestrator:coordinator", "route": { "learn": true } },
+  "execute": { "default": "codex:implementer:critical", "tier_from": "item.tier", "route": { "learn": true } },
   "verify": "claude:orchestrator:standard",
   "review": "codex:read-only-reviewer:critical",
   "assess": "claude:orchestrator:coordinator",
@@ -11,6 +11,7 @@
     },
     "validators": [{ "name": "WaveDecision", "review_step": "review", "tasks_field": "tasks" }]
   },
+  "_routing": { "mode": "shadow" },
   "_consumer": {
     "execute": { "ownership": "item.files_owned", "independent": true, "checkpoint_gate": "execute_merge" }
   },

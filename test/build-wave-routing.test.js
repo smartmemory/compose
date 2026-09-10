@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync, readFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildWaveFixture, task, waveSpec } from './helpers/build-wave-fixture.js';
 import { resolveConsumerProfile } from '../lib/pipeline-profiles.js';
@@ -145,4 +145,52 @@ test('direct runConsumerIssuance validates the whole recorded list, not just its
     progress: { warn() {}, stepDone() {} }, streamWriter: { write() {} } });
   assert.equal(stratum.calls.some(c => c.type === 'agentRun'), false);
   assert.match(stratum.calls.find(c => c.type === 'stepDone').envelope.failure, /^WAVE_TIER_INVALID:/);
+});
+
+for (const invalid of [false, true]) test(`routing-only whole-wave Build ${invalid ? 'sixth-item refusal' : 'stage admission and static shadow'}`, async t => {
+  const { routingDigest } = await import('../lib/model-router.js');
+  const { resolvePlanSpecValues } = await import('../lib/stratum-mcp-client.js');
+  const YAML = (await import('yaml')).default;
+  const spec = waveSpec();
+  Object.assign(spec.flows.bug_fix.input, Object.fromEntries(['route_mode', 'routing_start', 'routing_root', 'routing_plan_intent', 'routing_continuation'].map(k => [k, 'string?'])));
+  const profiles = { execute: { default: 'codex:implementer:standard', route: { learn: true } } };
+  const tasks = Array.from({ length: invalid ? 6 : 2 }, (_, i) => task(i + 1));
+  const f = buildWaveFixture(t, { profiles, spec, tasks });
+  const old = process.env.STRATUM_STATE_ROOT; process.env.STRATUM_STATE_ROOT = f.stateRoot;
+  t.after(() => { if (old === undefined) delete process.env.STRATUM_STATE_ROOT; else process.env.STRATUM_STATE_ROOT = old; });
+  const plan = f.stratum.plan;
+  const digest = routingDigest(resolvePlanSpecValues(spec, { task: 'task' }));
+  for (const d of f.descriptors) d.revisionDigest = digest;
+  f.state.steps.execute.fanout.items.forEach((item, index) => Object.assign(item, { epoch: 0, index }));
+  if (invalid) f.state.steps.execute.fanout.items[5].epoch = 1;
+  f.stratum.plan = async (text, flow, input, options) => {
+    f.state.spec = resolvePlanSpecValues(YAML.parse(text), input); f.state.revisionDigest = routingDigest(f.state.spec);
+    f.state.workspaceRoot = options.workspaceRoot; f.state.input = input;
+    // Initial binding precedes all Compose execution. The fixture's plan output is intercepted, not a paid call.
+    const sourceToken = f.state.steps.plan.acceptedDispatchToken; delete f.state.steps.plan.acceptedDispatchToken;
+    const response = await plan(text, flow, input, options); response.revisionDigest = f.state.revisionDigest;
+    f.persist();
+    // Publish the source when audit is first requested, after first journal initialization.
+    const audit = f.stratum.audit;
+    f.stratum.audit = async (...args) => { f.state.steps.plan.acceptedDispatchToken = sourceToken; f.persist(); return audit(...args); };
+    return response;
+  };
+  if (invalid) await assert.rejects(f.run({ route_mode: 'shadow' }), { code: 'WAVE_INPUT_INVALID' });
+  else await f.run({ route_mode: 'shadow' });
+  assert.equal(f.stratum.calls.filter(c => c.type === 'agentRun').length, invalid ? 0 : 2);
+  const journal = f.journal();
+  assert.equal(journal.wave, undefined); assert.equal(journal.waveAdmissions, undefined);
+  if (!invalid) {
+    const admissions = Object.values(journal.routing.records).filter(r => r.type === 'admission');
+    assert.equal(admissions.length, 2); assert.ok(admissions.every(a => a.stage === 0));
+    for (const a of admissions) assert.deepEqual(a.would, a.baseline);
+    assert.ok(Object.values(journal.dispatchBindings).every(b => b.routing?.recordId));
+    const { routingJournalPath } = await import('../lib/consumer-fanout.js');
+    const path = routingJournalPath({ runId: f.runId, targetCwd: f.cwd, artifactRoot: f.artifactRoot });
+    rmSync(path);
+    const calls = f.stratum.calls.filter(c => ['plan', 'agentRun'].includes(c.type)).length;
+    await assert.rejects(f.run({ fresh: true, route_mode: 'off' }), { code: 'ROUTING_BINDING_MISSING' });
+    assert.equal(f.stratum.calls.filter(c => ['plan', 'agentRun'].includes(c.type)).length, calls);
+    assert.equal(existsSync(path), false, 'fresh cleanup must not recreate lost consumer evidence');
+  }
 });

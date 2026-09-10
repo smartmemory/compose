@@ -90,9 +90,16 @@ test('routing policy validates closed shapes, refuses runtime policy overrides a
   assert.throws(() => mergeRuntimeProfiles(raw, { execute: { ...entry, route: { learn: true } } }), { code: 'ROUTING_POLICY_OVERRIDE' });
 });
 test('off projection pins bundled 0.5.1 digest and preserves legacy object representation', () => {
-  const raw = JSON.parse(readFileSync('presets/team-fable-astra.profiles.json', 'utf8'));
+  // The shipped preset carries routing fields (plan/execute `route`, `_routing`); the 0.5.1 legacy
+  // shape is derived from it here, never the other way round.
+  const wrapped = JSON.parse(readFileSync('presets/team-fable-astra.profiles.json', 'utf8'));
   const yaml = readFileSync('presets/team-fable-astra.stratum.yaml', 'utf8');
-  const wrapped = { ...raw, plan: { default: raw.plan, route: { learn: true } }, execute: { ...raw.execute, route: { learn: true } }, _routing: { mode: 'shadow' } };
+  assert.deepEqual(wrapped.plan.route, { learn: true }); assert.deepEqual(wrapped.execute.route, { learn: true });
+  assert.deepEqual(wrapped._routing, { mode: 'shadow' });
+  const { _routing, ...rest } = wrapped;
+  const { route: planRoute, ...planRest } = rest.plan;
+  const { route: executeRoute, ...executeRest } = rest.execute;
+  const raw = { ...rest, plan: Object.keys(planRest).length === 1 ? planRest.default : planRest, execute: executeRest };
   const expected = '310f9698e97212f695ce2ca752d724f90c1f233ab5855dcb33a26bd3ad786205';
   assert.equal(preflightPipelineProfiles(raw, yaml).profilesDigest, expected);
   const result = preflightPipelineProfiles(wrapped, yaml, {}, { mode: 'off' });
