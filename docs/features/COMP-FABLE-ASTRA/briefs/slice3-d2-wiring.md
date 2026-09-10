@@ -1,0 +1,30 @@
+# Brief: COMP-FABLE-ASTRA slice 3 — dispatch 2 (runner wiring)
+
+Repo: /Users/ruze/reg/my/forge/compose. Sibling stratum READ-ONLY. Do NOT git commit. Do NOT `npm install`.
+Contract: `docs/features/COMP-FABLE-ASTRA/blueprint-slice3.md` §3 (D2), §4 (D4/D6), §5 (D3) and the dispatch-2 row of §6, as amended by the "Slice 3 blueprint adjudication" block in `progress.md` (progress.md wins on conflict). Dispatch 1 landed the primitives — READ `docs/features/COMP-FABLE-ASTRA/reports/slice3-d1-impl.md` first: it names the exact functions and signatures you must call. Do not re-implement anything that report says exists; if a primitive is missing or wrong, say so in your report and stop that seam rather than working around it in build.js.
+
+## Scope of THIS dispatch (2 of 3)
+Wire the four seams into the real runners so they work end to end through public entry points. Files you own:
+- `lib/build.js` (runBuild: preflight integration for the object-form sidecar via dispatch 1's normalizer; gate pump D2 insertion; admission fence in `enqueueConsumerReady`; per-item profile into `runConsumerDescriptor`/`runConsumerIssuance`; D4 failure envelope before the successful step_done; D3 checkpoint protocol in the merge-gate wrapper post-ack section; resume reconciliation call sites; `--fresh` ref cleanup; `executeShipStep` squash entry; the cost-ceiling pause path + `waiting_gate` return + finalizer skip; ONE evidence helper for zero-usage metadata receipts).
+- `lib/gsd.js` (sidecar into ctx; admission before the first descriptor; descriptor.item for task identity; ship/gate call sites).
+- `lib/build-stream-writer.js` (`pause()` = close without `build_end`, `build_paused` event).
+- `bin/compose.js` (`--cost-ceiling-usd`, single-build only, rejected for batch).
+- `lib/flow-state.js` strict snapshot reader ONLY if dispatch 1 did not provide the spend reader (check its report).
+- Tests: extend `test/profile-preflight.test.js` for object-form sidecars; NEW `test/build-output-gate.test.js`, `test/build-wave-routing.test.js`, `test/build-wave-ship.test.js`, `test/gsd-wave-routing.test.js`. Reuse `fakeBuildStratum`/`makeBuildWorkspace` from `test/usage-receipts.test.js:165-227` (lift them into a shared helper if needed — that helper file is yours) and `test/helpers/consumer-wave-fixture.js` from dispatch 1.
+
+## Rulings you must honour (from progress.md adjudication + slice 1 review)
+- D2 precedence: policy integrity + reentry cap preserved; the whole `review_gate` branch preserved untouched; D2 sits between it and `evaluatePolicy`; `decide_from` on `review_gate` is refused at preflight; every outcome goes through `resolveGateWithConsumerMerge`, never `stratum.gateResolve` directly; `maybeEmitSectionsAfterPlanGate` still fires on a final approve.
+- Cost ceiling breach ⇒ human hold EVEN under policy skip/flag; noninteractive ⇒ return `{status:'waiting_gate', flowId, gateToken, reason}` WITHOUT entering `promptGate`'s nonInteractive auto-approve (gate-prompt.js:237-241) and WITHOUT the finalizer marking the run failed (build.js ~2466-2473; both `finally` callers). Raising the ceiling on resume does not auto-resolve; a human decision is still required for that token.
+- Admission (C13): validate the WHOLE recorded input list before the first dispatch of a wave; unknown tier at item 6 with concurrency 3 ⇒ zero `agentRun` calls; rejected wave's descriptors go through the existing prepared-failure path with `{failure:"WAVE_TIER_INVALID: ..."}`, never `flowCancel`, never fabricated outputs.
+- D6: only `item.tier`; absent ⇒ default; null/empty/unknown ⇒ error; provider+template per stage; pass the resolved STRING profile to `runAndNormalize`; emit per-item `step_model`; intended vs observed model kept distinct in evidence.
+- D4: the failure envelope replaces the worker's success envelope BEFORE the successful step_done; replay of a prepared failure sends the same envelope once with no second agent call; a finding receipt is written before reporting.
+- D3: checkpoint from `transaction.witnessChain.at(-1)`; prepared record fsynced BEFORE the ref CAS publish; cleanup of diff payloads only AFTER durable publication; never touch HEAD/index/user branch; cancellation after a confirmed approval preserves the checkpoint; `--fresh` deletes only that flow's ref with expected-old CAS.
+- Ship: `prepareWaveShip` at `executeShipStep` entry; net tree computed in a temp index and compared to the checkpoint tree; the real index is not staged by you; `context.filesChanged` from authoritative captured paths (deletes + both rename endpoints), persisted for resume; ship's own filtering/commit unchanged.
+- Evidence: zero-usage metadata receipts via `stratum.usageReport` with stable ids `compose:<kind>:<flowId>:<token>[:<state>]`; ONE helper in build.js; never via step_done fields; cancellation refuses receipts — retain locally and report incomplete replication, do not fake acks.
+- Slice 4 owns the real preset/contracts/prompts: your tests use TEST presets (fixture yaml + sidecars in the test helper), not files under presets/.
+
+## Gate
+- `node --test --test-timeout=180000 test/profile-preflight.test.js test/build-output-gate.test.js test/build-wave-routing.test.js test/build-wave-ship.test.js test/gsd-wave-routing.test.js test/ts-cutover-build-golden.test.js test/ts-cutover-consumer-fanout-golden.test.js test/gate-round-reentry.test.js test/build-ship-gate.test.js > /tmp/d2.log 2>&1; echo $?` = 0 (verify those existing file names exist; substitute the real ones if not).
+- Full suite once: `RESEND_API_KEY= STRIPE_API_KEY= npm test > /tmp/d2-full.log 2>&1; echo $?`. Sandbox cannot bind ports / run `ps`; `test/package-start.test.js` spawns its own npm install by design. List sandbox failures separately from real ones.
+- CHANGELOG.md Unreleased entry for slice 3 dispatch 2.
+- Report `docs/features/COMP-FABLE-ASTRA/reports/slice3-d2-impl.md` ≤ 100 lines: insertion points (file:line after your edit), the pause/resume contract, what a caller must pass for each seam, test counts, deviations from the blueprint with reasons, anything left for dispatch 3.
