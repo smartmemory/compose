@@ -80,6 +80,8 @@ test('dispatch routing link checks token/root/admission/identity and stays out o
   const args = { dispatchToken: 'token', itemBinding: { item: { id: 'T' }, itemDigest: profilesDigest({ id: 'T' }) }, resolvedProfile: route.resolution,
     routing: { rootDigest: pin.rootDigest, recordId: issuance().id, admissionId: 'admission', logicalTaskId: null, logicalWaveId: logical.logicalWaveId, logicalEpoch: 0 } };
   assert.deepEqual(f.artifacts.recordDispatchBinding(args).routing, args.routing);
+  assert.throws(() => f.artifacts.recordDispatchBinding({ ...args, routing: undefined,
+    deferred: { flow: 'main', step: 'other-wave', stage: 0 } }), { code: 'ROUTING_BINDING_MISSING' });
   assert.throws(() => f.artifacts.recordDispatchBinding({ ...args, resolvedProfile: { ...route.resolution, modelID: 'different' } }), { code: 'ROUTING_BINDING_DRIFT' });
   assert.throws(() => f.artifacts.recordDispatchBinding({ ...args, routing: { ...args.routing, logicalEpoch: 1 } }));
   assert.throws(() => f.artifacts.recordDispatchBinding({ ...args, dispatchToken: 'other' }));
@@ -131,6 +133,8 @@ test('journal reopening detects a missing dispatch routing link and missing prep
     routing: { rootDigest: pin.rootDigest, recordId: issuance().id, admissionId: 'admission', logicalTaskId: null, logicalWaveId: logical.logicalWaveId, logicalEpoch: 0 } };
   f.artifacts.recordDispatchBinding(args);
   const missing = JSON.parse(f.bytes()); delete missing.dispatchBindings.token.routing;
+  writeFileSync(f.artifacts.journalPath, JSON.stringify(missing)); assert.throws(f.reopen, { code: 'ROUTING_BINDING_MISSING' });
+  missing.dispatchBindings.token.deferred = { flow: 'main', step: 'other-wave', stage: 0 };
   writeFileSync(f.artifacts.journalPath, JSON.stringify(missing)); assert.throws(f.reopen, { code: 'ROUTING_BINDING_MISSING' });
 });
 test('same-admission reissuance cannot omit its prior link or fork an issuance chain', t => {
