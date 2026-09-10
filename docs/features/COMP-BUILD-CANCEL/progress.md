@@ -42,3 +42,5 @@ Stratum side: STRAT-FLOW-CANCEL-FG (stratum @7bd4c08), STRAT-LOOP-CARRY (@c7478f
 - 2026-09-10: S06 6667a23, S03 9a9ebb2 (opus, in-flight when owner reaffirmed Codex-only). Verified 74/74 locally. From here ALL delegation → codex gpt-6-astra/high. Review r1 of 052345a..9a9ebb2: runId 6a32d19b0f76 pid 28091. S04 impl: runId 77be504216bf pid 28524 (workspace-write, no commit).
 - 2026-09-10: impl review r1 (astra): 4 must-fix reproduced + 2 should-fix → impl-review1.md. Fix queued behind S04.
 - 2026-09-10: S04 committed d0a07c1 (astra impl, 108/108 local). Review-1 fixer (astra) runId f218a5207a06 pid 33698.
+- 2026-09-10: review-1 fixes committed e2ac599 (astra fixer; 128/128 local). Next: S05 (astra), then review r2 of the fixes + S04 + S05.
+- 2026-09-10: S05 impl (astra) runId 4290f36f2bd0 pid 38274.
