@@ -567,8 +567,9 @@ async function runInit(flags, cwdOverride) {
   // and then fails with "Lifecycle spec not found" because init never copied it —
   // so the command was unavailable in every fresh workspace independently of the
   // spec's dialect. Each spec's `<name>.profiles.json` sidecar travels WITH it:
-  // loadPipelineProfiles fails open, so a spec copied without its sidecar runs on
-  // bare defaults and silently drops the tool restrictions it declares.
+  // loadPipelineProfiles treats a missing string-only sidecar as bare defaults (the
+  // tool restrictions it declares silently vanish), and runBuild REFUSES a local copy
+  // of a preset whose sidecar configures execution (team-fable-astra) without it.
   const pipelinesDir = join(cwd, 'pipelines')
   mkdirSync(pipelinesDir, { recursive: true })
   const DEFAULT_PIPELINES = [
@@ -2619,6 +2620,20 @@ if (cmd === 'build') {
   }
   let filteredArgs = args.filter((a, i) => i !== cwdIdx && (cwdIdx === -1 || i !== cwdIdx + 1))
 
+  // Extract value-taking build flags before --team counts positional features.
+  // --cwd is already removed; leave --template for the explicit team conflict.
+  const ceilingIdx = filteredArgs.findIndex(a => a === '--cost-ceiling-usd' || a.startsWith('--cost-ceiling-usd='))
+  let costCeilingUsd
+  if (ceilingIdx !== -1) {
+    const inline = filteredArgs[ceilingIdx].includes('=')
+    costCeilingUsd = Number(inline ? filteredArgs[ceilingIdx].split('=')[1] : filteredArgs[ceilingIdx + 1])
+    if (!Number.isFinite(costCeilingUsd) || costCeilingUsd <= 0) {
+      console.error('--cost-ceiling-usd requires a finite positive USD amount')
+      process.exit(1)
+    }
+    filteredArgs.splice(ceilingIdx, inline ? 1 : 2)
+  }
+
   // --team flag (COMP-TEAMS)
   let teamTemplate = null
   try {
@@ -2668,17 +2683,6 @@ if (cmd === 'build') {
     templateName = teamTemplate
   }
   let filteredArgs2 = filteredArgs.filter((a, i) => i !== templateIdx && (templateIdx === -1 || i !== templateIdx + 1))
-  const ceilingIdx = filteredArgs2.findIndex(a => a === '--cost-ceiling-usd' || a.startsWith('--cost-ceiling-usd='))
-  let costCeilingUsd
-  if (ceilingIdx !== -1) {
-    const inline = filteredArgs2[ceilingIdx].includes('=')
-    costCeilingUsd = Number(inline ? filteredArgs2[ceilingIdx].split('=')[1] : filteredArgs2[ceilingIdx + 1])
-    if (!Number.isFinite(costCeilingUsd) || costCeilingUsd <= 0) {
-      console.error('--cost-ceiling-usd requires a finite positive USD amount')
-      process.exit(1)
-    }
-    filteredArgs2.splice(ceilingIdx, inline ? 1 : 2)
-  }
 
   const featureCodes = filteredArgs2.filter(a => !a.startsWith('-'))
   const featureCode = featureCodes[0]

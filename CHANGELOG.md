@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **COMP-FABLE-ASTRA slice 4**: add the `fable-astra` team preset with named task/verification/finding/decision contracts, per-task Codex tiers, enforced ownership, fresh read-only Astra review, Fable output-driven repair waves, a $150 default ceiling and one-commit ship. Register the team name and document its loop/limits. Add a real Stratum validator and production-preset one-wave golden using recorded Claude outputs and fake Codex. Concurrency is literal 3 under the slice-4 ruling; live model and installed-package evidence remains slice 6.
+
 - **COMP-FABLE-ASTRA slice 3 dispatch 3**: add real Stratum MCP/fake Codex wave goldens for carry repair, model argv/receipts, admission, ownership, checkpoint crash recovery and squash ship, plus strict fake-executable fixture checks. Document object sidecars, failure codes, cost-ceiling holds and recovery. Cross-seam verification currently stops at a real MCP receipt-contract defect; see `reports/slice3-d3-impl.md` under the feature for unverified assertions. No production function changes.
 
 - **COMP-FABLE-ASTRA slice 3 dispatch 2**: wire object-form profile sidecars, whole-wave tier admission, ownership failure envelopes, output-driven gates and durable receipt evidence into build/GSD. Add resumable cost-ceiling holds (`--cost-ceiling-usd` for single builds), checkpoint publication/recovery and selective wave ship preparation. Production presets remain slice 4 work.

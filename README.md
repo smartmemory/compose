@@ -74,6 +74,20 @@ compose plan "a tool that summarizes my team's standups"
 
 `compose build` then picks up a plan-authored feature and ratifies its design rather than rewriting it.
 
+Bundled [team presets](docs/team-presets.md): `feature` (parallel implementation),
+`research` (parallel exploration), `review` (parallel review), and `fable-astra`:
+
+```bash
+compose build FEAT-1 --team fable-astra
+```
+
+Fable plans independent tasks, Codex workers implement in isolated worktrees, and
+a fresh read-only Astra reviewer checks the merged result after verification.
+Fable then requests another implementation or repair wave, declares the work
+blocked, or approves ship into one base-parent commit. Concurrency is 3; the
+$150 cost ceiling is overridable with `--cost-ceiling-usd`. See the
+[loop and limits](docs/pipelines.md#fable-astra-wave-loop).
+
 ## Quick install
 
 Prerequisites: Node.js 18+. [Stratum](https://github.com/smartmemory/stratum) needs no separate install — `@smartmemory/stratum` is a dependency, and `compose init` registers the installed copy's MCP entrypoint automatically (a sibling `stratum/` checkout is a development convenience, not a requirement; the python `stratum-mcp` PyPI package is retired). Codex steps additionally need the OpenAI `codex` CLI. Full prereqs in [docs/install.md](docs/install.md).

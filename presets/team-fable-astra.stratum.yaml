@@ -1,0 +1,236 @@
+# TEAM PRESET: fable-astra
+#
+# Purpose:     Fable plans and assesses bounded waves; Astra implements and reviews.
+# Pattern:     Plan → parallel execute → merge → verify → fresh review → assess
+#              → repair/implement another wave, ship on complete, or kill on blocked.
+# Capability:  Per-task Codex tiers; fresh read-only Astra reviewer; Fable decisions.
+# Isolation:   worktree, literal file ownership; sequential merge and checkpoints.
+# Use with:    compose build <feature-code> --team fable-astra
+# Customize:   Copy BOTH team-fable-astra.stratum.yaml AND its .profiles.json
+#              sidecar into your project's pipelines/ and edit them together.
+# Ruling:      Concurrency is literal 3, customized by copying this preset, rather
+#              than an input as designed (TS schema accepts numeric literals only).
+#              cost_ceiling_usd remains an optional flow input, default 150 in the
+#              sidecar; compose build --cost-ceiling-usd overrides that ceiling.
+# Carry rules: References use ${} only, never when/set/ensure/iterate.until.
+#              Every wave consumer must descend from plan, be reset by the
+#              assess_gate revise closure, and precede that gate through after.
+#              execute_merge retries preserve wave; assess_gate replaces it.
+
+version: 1
+
+contracts:
+  Task:
+    id: string
+    description: string
+    files_owned: string[]
+    files_read: string[]
+    depends_on: string[]
+    tier: critical|standard|fast
+    tier_rationale: string
+  TaskGraph:
+    tasks: Task[]
+  Verification:
+    commands: string[]
+    outcomes: string[]
+  TaskResult:
+    outcome: string
+    summary: string
+    files_changed: string[]
+    verification: Verification
+  VerifyResult:
+    tests_pass: boolean
+    summary: string
+    verification: Verification
+    merged_diff: string
+  Finding:
+    severity: string
+    files: string[]
+    claim: string
+    evidence: string
+  ReviewFindings:
+    findings: Finding[]
+    blocking: boolean
+  WaveDecision:
+    action: repair|implement|complete|blocked
+    tasks: Task[]
+    rationale: string
+    addressed_findings: Finding[]
+    open_findings: Finding[]
+    blocking: boolean
+    open_count: integer
+  ShipResult:
+    phase: string
+    artifact: string
+    outcome: string
+    summary: string
+    files_changed: string[]?
+    commit_hash: string?
+
+flows:
+  entry: team_fable_astra
+  team_fable_astra:
+    input:
+      featureCode: string
+      description: string
+      # Accept the existing feature-build envelope; providers stay pinned below.
+      implementer_agent: string?
+      reviewer_agent: string?
+      pre_merge_gate: string[]?
+      cost_ceiling_usd: number?
+    output:
+      from: "${ship.output}"
+      contract: ShipResult
+    max_rounds: 4
+    carry:
+      wave:
+        initial: "${plan.output.tasks}"
+        on_revise:
+          assess_gate: "${assess.output.tasks}"
+    steps:
+      - id: plan
+        agent: claude
+        do: |
+          Plan wave 1 for ${input.featureCode}. Goal and acceptance criteria:
+          ${input.description}
+          Read the feature's design, brief, plan and acceptance criteria before planning.
+          MUST checklist:
+          - Return TaskGraph with 1..6 tasks, each with id, description, files_owned,
+            files_read, depends_on, tier and a one-line tier_rationale.
+          - Wave 1 must contain only mutually independent tasks: depends_on is empty
+            for every task. Waves carry dependencies; dependent work goes in later
+            waves after its prerequisite checkpoint, not into this wave.
+          - No two tasks may share files_owned. Redo the graph if ownership overlaps.
+          - files_owned must be literal repo-relative paths, never globs or directories.
+          - Use critical for tasks with design judgment or root-causing, standard
+            for brief-bounded implementation, fast for transcription-level edits; repair
+            waves default to the tier of the task being repaired or higher, never lower.
+          - Each task must fit one focused session; target 2-4 tasks for a typical feature.
+          Return the task graph only; do not implement or commit.
+        out: TaskGraph
+        ensure:
+          - expr: "len(result.tasks) >= 1"
+          - expr: "len(result.tasks) <= 6"
+        attempts: 3
+
+      - id: execute
+        after: [plan]
+        fanout:
+          over: "${wave}"
+          dispatch: consumer
+          concurrency: 3
+          isolation: worktree
+          require: all
+          merge: sequential
+          steps:
+            - agent: codex
+              do: |
+                Implement the task described by ${item} using TDD. Write the test
+                first, watch it fail, implement, and watch it pass. Honor the
+                item's id, description, files_owned (you may create/modify these)
+                and files_read (you may read but NOT modify these).
+                MUST touch only files_owned — anything else fails the task at merge.
+                MUST return {outcome, summary, files_changed, verification}, with
+                verification {commands, outcomes}: exact commands and corresponding
+                observed outcomes, including failures. Do not commit.
+              out: TaskResult
+
+      - id: execute_merge
+        after: [execute]
+        gate:
+          on_approve: verify
+          on_revise: execute
+          on_kill: null
+          max_rounds: 2
+
+      - id: verify
+        after: [execute_merge]
+        agent: claude
+        do: |
+          Verify the integrated tree for ${input.featureCode} against the goal and
+          acceptance criteria: ${input.description}
+          MUST run the project's relevant tests and integration checks on the merged
+          tree, check for merge conflicts, and record exact commands and outcomes.
+          MUST capture the full cumulative merged diff: git diff HEAD -- for tracked
+          files, plus git ls-files --others --exclude-standard and added-file diffs
+          using git diff --no-index -- /dev/null <path> for each new feature file
+          (exit 1 means differences). HEAD remains the build base until ship; new
+          merged files can still be untracked. Return VerifyResult with tests_pass,
+          summary, verification {commands, outcomes}, and merged_diff. Describe only
+          observed verification evidence; never copy worker summaries. Do not edit.
+          Report failures truthfully so review and assess can request a repair wave.
+        out: VerifyResult
+        ensure:
+          - expr: "len(result.summary) > 0"
+
+      - id: review
+        after: [verify]
+        agent: codex
+        do: |
+          Fresh independent read-only review of ${input.featureCode}.
+          Goal and acceptance criteria: ${input.description}
+          VerifyResult (including the cumulative merged diff): ${verify.output}
+          MUST checklist:
+          - Read the feature's design, brief and plan for its acceptance criteria.
+            Read the merged diff against the goal, those criteria and VerifyResult;
+            inspect the integrated source and affected callers.
+          - Probe cross-module wiring: a green unit suite is not evidence that the
+            user-facing path reaches the implementation. Cite the actual call path.
+          - Never read worker summaries, TaskResults, worker journals or transcripts.
+            Form your judgment from the diff, source, criteria and verification only.
+          - Return one finding per defect, with severity, files (literal repo-relative
+            paths), claim and concrete evidence. Include failed verification and unmet
+            criteria as findings; set blocking when any defect prevents completion.
+          - Return ReviewFindings {findings, blocking}. Do not edit or commit.
+        out: ReviewFindings
+
+      - id: assess
+        after: [review]
+        agent: claude
+        do: |
+          Assess ${input.featureCode} against its goal and acceptance criteria:
+          ${input.description}
+          Current tasks: ${wave}
+          TaskResults with verification evidence: ${execute.output}
+          VerifyResult and cumulative merged diff: ${verify.output}
+          Fresh ReviewFindings: ${review.output}
+          MUST checklist:
+          - Address every finding: reproduce its full finding object in exactly one
+            of addressed_findings or open_findings; justify dispositions in rationale.
+          - Copy blocking from review. Set open_count to len(open_findings).
+          - repair tasks must each own at least one file named by an open finding.
+            Dispatch only affected work; do not repeat accepted unaffected tasks.
+          - For repair or implement return 1..6 mutually independent tasks with empty
+            depends_on, disjoint literal repo-relative files_owned, and all Task fields.
+            Later waves start from the previous checkpoint containing prerequisites.
+          - Use critical for tasks with design judgment or root-causing, standard
+            for brief-bounded implementation, fast for transcription-level edits; repair
+            waves default to the tier of the task being repaired or higher, never lower.
+          - Choose implement when additional scoped work is needed; repair for defects.
+          - complete only when all acceptance criteria are met, verification passes,
+            there are zero open findings and blocking is false; return tasks: [].
+          - blocked when repair cannot proceed; retain the open findings (open_count
+            must be positive), explain why, and return tasks: [].
+          Return WaveDecision only. Do not edit or commit.
+        out: WaveDecision
+        ensure:
+          - expr: "result.action != 'complete' || (result.open_count == 0 && result.blocking == false)"
+          - expr: "result.action != 'blocked' || result.open_count > 0"
+          - expr: "result.open_count >= 0"
+
+      - id: assess_gate
+        after: [assess]
+        gate:
+          on_approve: ship
+          on_revise: execute
+          on_kill: null
+          max_rounds: 2
+
+      # Compose intercepts ship: squash the wave checkpoints and selectively commit.
+      - id: ship
+        after: [assess_gate]
+        agent: claude
+        do: |
+          Ship ${input.featureCode}: run final tests and squash the accepted wave
+          changes into one commit whose parent is the build base. Return ShipResult.
+        out: ShipResult

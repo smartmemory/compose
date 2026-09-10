@@ -329,6 +329,18 @@ outcomes and artifact references with the report:
 
 ## Implementation slices
 
+Slice 4 source review (2026-09-10): the brief's concurrency ruling supersedes the
+"Limits as preset inputs" table for concurrency: literal 3, customized by copying
+the preset. TS supports named nested contracts, pipe enums and integer fields;
+flow inputs are type declarations without defaults, so `cost_ceiling_usd: number?`
+uses `_costCeiling.default: 150`. Q1/Q2 in progress.md settle `tasks: Task[]` and
+approve → ship. The existing feature input envelope also includes optional role
+and pre-merge fields. Register `fable-astra` in `KNOWN_TEAMS`; parser/resolver
+functions are unchanged. Verification must include added-file diffs because new
+merged files can remain untracked before ship; failed verification reaches assess
+for repair rather than failing an ensure before review. Scalar implications use
+the runtime expression dialect's `||` and `&&`, not `or` and `and`.
+
 Slice 1 source review (2026-09-10): `build.js` starts flows through `startFresh`
 → `stratum.plan`, and previously merged runtime profiles after that start.
 The implementation moves runtime validation before fresh flow creation and

@@ -162,7 +162,7 @@ compose build --all                     # build all PLANNED features in dependen
 compose build --all --dry-run           # print the planned batch order, do not execute
 compose build FEAT-1 --skip-triage
 compose build FEAT-1 --cwd /path/to/repo
-compose build FEAT-1 --team frontend
+compose build FEAT-1 --team fable-astra   # Fable planning/assessment, Codex waves, fresh Astra review
 compose build FEAT-1 --template api
 compose build --abort                   # abort the active single build
 compose build FEAT-1 --abort            # abort a specific feature's build
@@ -175,7 +175,7 @@ compose build FEAT-1 --abort            # abort a specific feature's build
 - `--dry-run` — print the build order; valid only with `--all`, multiple codes, or a prefix match (batch mode)
 - `--skip-triage` — skip the triage step (single build only)
 - `--cwd <path>` — agent working directory, for cross-repo features
-- `--team <name>` — team template (single build only; mutually exclusive with batch builds)
+- `--team <name>` — bundled team preset: `feature`, `research`, `review`, or `fable-astra` (single build only; mutually exclusive with batch builds and `--template`). `fable-astra` loops through independent implementation/repair waves and ships one base-parent commit on completion; see [the loop and limits](pipelines.md#fable-astra-wave-loop).
 - `--template <name>` — pipeline template name (single build only)
 - `--cost-ceiling-usd <amount>` (or `--cost-ceiling-usd=<amount>`) — finite positive USD limit for a single build whose sidecar enables `_costCeiling`; rejected for batch builds. Overrides the configured input/default without changing the profile revision digest. Exceeding it pauses at the configured gate for a human, including under skip/flag policies. Resume interactively with `compose build FEAT-1 --resume --cost-ceiling-usd 200`, then explicitly choose approve/revise/kill; raising the limit alone does not resolve the held token. See [wave accounting and integration status](pipelines.md#cost-ceiling-and-checkpoint-recovery).
 - `--resume` — resume the feature's active/resumable flow, preserving its pinned profiles and checkpoint evidence.
