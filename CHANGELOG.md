@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- COMP-BUILD-CANCEL review-1 fixes: arm CLI signals before Codex preflight, bound vision teardown and retain pending cancellation until settlement, claim ownership before both terminal mutations, preserve aborted completion history, verify abort listener cleanup, and report unknown untagged Codex transport.
+
 - **COMP-BUILD-CANCEL S04**: `compose build --abort` calls `stratum_flow_cancel` before local
   cleanup and reports refusals (including transport failures and unknown flows) with exit 1
   across build, fix and plan. Settled cancellations reach same-process drivers through their

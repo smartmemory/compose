@@ -11,6 +11,7 @@ process.env.NODE_ENV = 'test';
 
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { getEventListeners } from 'node:events';
 
 const { StratumMcpClient } = await import('../lib/stratum-mcp-client.js');
 const { runAndNormalize } = await import('../lib/result-normalizer.js');
@@ -109,7 +110,7 @@ describe('buildSignal chains into runAndNormalize', () => {
     client.onEvent = () => () => {};
     client.agentRun = async () => ({ text: '{}', usage: { tokens: 1 } });
 
-    const before = buildCancel.signal.listenerCount?.('abort');
+    const before = getEventListeners(buildCancel.signal, 'abort').length;
     for (let i = 0; i < 5; i += 1) {
       await runAndNormalize(null, 'work', DISPATCH, {
         stratum: client,
@@ -117,7 +118,7 @@ describe('buildSignal chains into runAndNormalize', () => {
         telemetry: { site: 'build-step' },
       });
     }
-    const after = buildCancel.signal.listenerCount?.('abort');
+    const after = getEventListeners(buildCancel.signal, 'abort').length;
     assert.equal(after, before, 'N sequential runs must leave no accumulated abort listeners');
   });
 
