@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### COMP-BUILD-CANCEL S02: client flow tag and flowCancel()
+
+- **COMP-BUILD-CANCEL S02**: `stratum_agent_run` requests can carry `flow: {runId, stepId?,
+  itemIndex?}`, a `cancellationId` is minted whenever `flow` is set (stratum refuses `flow`
+  without one), and a new `StratumMcpClient.flowCancel(runId)` calls `stratum_flow_cancel`,
+  unwrapping the `flow_cancel_unacknowledged` envelope into a `StratumError` carrying
+  `flowSettled`, `reason`, `holderPid` and the agent-sweep counters.
+
 ### COMP-BUILD-CANCEL S01: version train and version guard
 
 - **COMP-BUILD-CANCEL S01**: version train to `0.5.0` (compose, compose-mcp, server.json) with
