@@ -64,16 +64,21 @@ describe('transport_derived on a persisted ledger row', () => {
     }
   });
 
-  test('an untagged, signal-less codex dispatch derives sdk', async () => {
-    const project = mkdtempSync(join(tmpdir(), 'ledger-transport-sdk-'));
+  for (const transport of [undefined, 'exec']) test(`an untagged, signal-less codex dispatch derives unknown (env=${transport})`, async () => {
+    const project = mkdtempSync(join(tmpdir(), 'ledger-transport-unknown-'));
+    const previous = process.env.STRATUM_CODEX_TRANSPORT;
+    if (transport === undefined) delete process.env.STRATUM_CODEX_TRANSPORT;
+    else process.env.STRATUM_CODEX_TRANSPORT = transport;
     try {
       const { client, requests } = makeClient();
       await client.runAgentText('codex', 'probe', {
         telemetry: { site: 'preflight', project_cwd: project, build_id: 'b1', feature_code: 'COMP-X' },
       });
       assert.equal(requests[0].args.cancellationId, undefined);
-      assert.equal(dispatchRows(project)[0].transport_derived, 'sdk');
+      assert.equal(dispatchRows(project)[0].transport_derived, 'unknown');
     } finally {
+      if (previous === undefined) delete process.env.STRATUM_CODEX_TRANSPORT;
+      else process.env.STRATUM_CODEX_TRANSPORT = previous;
       rmSync(project, { recursive: true, force: true });
     }
   });
