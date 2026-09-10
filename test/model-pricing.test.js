@@ -135,3 +135,19 @@ test('calculateCost returns 0 for undefined token counts', () => {
   const cost = calculateCost('claude-sonnet-4-6', undefined, undefined);
   assert.equal(cost, 0);
 });
+
+
+for (const [model, input, output] of [
+  ['claude-fable-5-1', 10, 50],
+  ['claude-opus-5', 5, 25],
+  ['claude-sonnet-5', 2, 10],
+]) {
+  test(`${model} prices input, output, cache tokens and dated variants`, () => {
+    assert.deepEqual(MODEL_PRICING[model], { inputPerMTok: input, outputPerMTok: output });
+    assert.equal(calculateCost(model, 1_000_000, 0), input);
+    assert.equal(calculateCost(model, 0, 1_000_000), output);
+    assert.equal(calculateCost(`${model}-20260909`, 1_000_000, 1_000_000), input + output);
+    assert.equal(calculateCost(model, 0, 0, 1_000_000, 0), input * 1.25);
+    assert.equal(calculateCost(model, 0, 0, 0, 1_000_000), input * 0.1);
+  });
+}
