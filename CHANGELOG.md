@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **COMP-BUILD-CANCEL S04**: `compose build --abort` calls `stratum_flow_cancel` before local
+  cleanup and reports refusals (including transport failures and unknown flows) with exit 1
+  across build, fix and plan. Settled cancellations reach same-process drivers through their
+  cancel handle and foreign live drivers through SIGTERM. A bounded wait gives the driver
+  ownership of terminal writes; fallback cleanup claims the build identity before changing
+  vision, active state or actuals and preserves the driver's pid. Lock refusals retry with a
+  short server lock wait, teardown timeouts get one re-sweep, and already-finished records
+  are preserved. Unique temp files prevent concurrent active-build writers from colliding.
+
 ### COMP-BUILD-CANCEL S03: driver tagging and the build-level abort chain
 
 - **COMP-BUILD-CANCEL S03**: every agent a build dispatches while its flow is running is now

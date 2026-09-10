@@ -2859,9 +2859,9 @@ if (cmd === 'build') {
       if (fresh) singleOpts.fresh = true
       if (nonInteractiveBuild) singleOpts.gateOpts = { nonInteractive: true }
       if (resumeFlowId) singleOpts.resumeFlowId = resumeFlowId
-      runBuild(featureCode, singleOpts).then(async () => {
+      runBuild(featureCode, singleOpts).then(async (result) => {
         await pendingTeardown()
-        process.exit(0)
+        process.exit(abort && result?.ok === false ? 1 : 0)
       }).catch(async (err) => {
         await pendingTeardown()
         console.error(`Build failed: ${err.message}`)
@@ -2978,9 +2978,9 @@ if (cmd === 'build') {
     if (agentWorkDir) opts.workingDirectory = agentWorkDir
     if (bugDescription) opts.description = bugDescription
     if (resumeFlowId) opts.resumeFlowId = resumeFlowId
-    runBuild(bugCode, opts).then(async () => {
+    runBuild(bugCode, opts).then(async (result) => {
       await pendingTeardown()
-      process.exit(0)
+      process.exit(abort && result?.ok === false ? 1 : 0)
     }).catch(async (err) => {
       await pendingTeardown()
       console.error(`Fix failed: ${err.message}`)
@@ -3091,9 +3091,9 @@ if (cmd === 'build') {
     const opts = { abort, template: 'plan', mode: 'plan', description: intent }
     if (agentWorkDir) opts.workingDirectory = agentWorkDir
     if (resumeFlowId) opts.resumeFlowId = resumeFlowId
-    runBuild(planCode, opts).then(async () => {
+    runBuild(planCode, opts).then(async (result) => {
       await pendingTeardown()
-      process.exit(0)
+      process.exit(abort && result?.ok === false ? 1 : 0)
     }).catch(async (err) => {
       await pendingTeardown()
       console.error(`Plan failed: ${err.message}`)

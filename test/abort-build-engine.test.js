@@ -29,6 +29,7 @@ function fakeStratum(record) {
   return {
     connect: async (conn) => { record.conn = conn; },
     audit: async () => ({ status: 'completed' }), // terminal → no flow-file deletion
+    flowCancel: async () => ({ status: 'cancelled', flowSettled: true, acknowledged: true }),
     close: async () => {},
   };
 }
