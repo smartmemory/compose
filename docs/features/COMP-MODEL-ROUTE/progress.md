@@ -82,3 +82,40 @@ dispatched: astra run 63034084e627 → reports/design-review-r3.md.
 ## 2026-09-10 — design review r3 (astra, run 63034084e627) → REVIEW CLEAN (4/4 checks PASS)
 Design gate closed at round 3 (cap). Total astra spend this gate: 3 reviews + 2 fix runs, ~2.4M tokens.
 Feature stays PLANNED. Next step when ordered: blueprint for S1a (recorded routing lifecycle + recovery).
+
+## 2026-09-10 — S1a blueprint (astra run 04600eef258f, 16 min; stream dropped after the file was written)
+blueprint-slice1a.md, 208 lines, 15 checked claims (C1–C15), 3 dispatches. Corrections worth carrying:
+- C2: Build preflight wrapper is build.js:1588–1664 (the ~1249 anchor in the brief was the consumer call try block).
+- C8: GSD preflights the profile sidecar (gsd.js:156–158) but its ordinary agentRun passes cwd/telemetry only
+  (gsd.js:606–619) — the sidecar is NOT applied on GSD ordinary steps today. Latent gap, pre-existing.
+- C13: converting the preset's `plan` string entry to an object (to add `route`) changes the profile digest;
+  off mode must restore the legacy string representation before hashing to stay byte-identical.
+RULING Q1 (Fable): S1a REFUSES a participating GSD configuration whose preflighted profile differs from the bare
+ordinary call (`ROUTING_STATIC_DISPATCH_MISMATCH`); bundled bare GSD proceeds unchanged. The GSD sidecar gap
+(C8) is a separate follow-up bug, NOT fixed inside this slice — fixing it would break zero-call-change shadow.
+Follow-up to file: COMP-GSD-SIDECAR-APPLY (GSD ordinary steps ignore the preflighted profile sidecar).
+Next: astra blueprint review (1 round), then dispatch 1.
+
+## 2026-09-10 — S1a blueprint review r1 (astra run b3ed1edd8893) → 2 HIGH / 2 MEDIUM / 1 LOW — ALL ACCEPTED
+Report: reports/blueprint-slice1a-review-r1.md.
+1. HIGH source-epoch equality (build.js:845–849) rejects bundled GSD merge-revise (gsd.yaml revises execute, not
+   decompose; decompose stays epoch 0). Fix: bind source identity/token/output digest independently of consumer
+   epoch; keep item epoch/index/generation fences; add GSD merge-revise case.
+2. HIGH graph-membership rule rejects a 2nd+ continuation (completed ids cumulative, graph already filtered).
+   Fix: cumulative completed ids vs ids removed on THIS transition; validate earlier completions against the
+   continuation chain; three-run continuation test.
+3. MEDIUM baseline capture used the test fixture, not the bundled preset. Fix: dispatch 1 also freezes the
+   bundled preset's digest/envelope/call projections via the production golden BEFORE edits; named baselines.
+4. MEDIUM receipt spooling pulled forward from S1b. Fix: move routing metadata spool + prelaunch delivery to S1b;
+   S1a keeps immutable local admission/issuance/events + shadow record assertions.
+5. LOW C3 anchor: 3312–3326 is unconditional refresh; conditional pins are 3361–3363, 3433–3439, 3812–3823.
+Off identity probe (reviewer): projected legacy digest 310f9698… equals current; wrapped plan would give 29c060da….
+Next: astra blueprint fix run, then r2 targeted at findings 1–2, then dispatch 1.
+
+## 2026-09-10 — S1a blueprint fix run (astra da2bea96dce5, 6 min, 774K tok) → 212 lines, all 5 findings in
+Source binding independent of consumer epoch; cumulative vs removed completed ids; three named frozen baselines
+(bundled Build, carry fixture, GSD input identity); routing receipts deferred to S1b; C3 anchors corrected.
+r2 targeted check (findings 1, 2, 4) dispatched: astra ab6b12781070 → reports/blueprint-slice1a-review-r2.md.
+
+## 2026-09-10 — S1a blueprint review r2 (astra ab6b12781070) → REVIEW CLEAN (3/3 PASS). Blueprint gate closed.
+Next: dispatch 1 (contracts + pure/durable primitives + frozen baselines) → astra implementation.
