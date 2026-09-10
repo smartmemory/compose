@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- **COMP-MODEL-ROUTE filed (design, PLANNED)**: dynamic model routing framework for agent dispatches — one resolver per dispatch key with an ordered value chain (manual fallback, opt-in learned, preset, spec default), immutable start record and root-bound route journal, receipt joins with downstream acceptance labels, executed-tier repair floor as an admission rail, recorded cold-start trials, separately gated planner calibration feedback. Slices S1a/S1b/S2/S3; bundled preset ships shadow. Supersedes COMP-FABLE-CALIBRATE (lifecycle kill pending, needs the compose server). Design gate: three Codex gpt-6-astra review rounds, REVIEW CLEAN at round 3; reports under `docs/features/COMP-MODEL-ROUTE/reports/`.
+
 ## [0.5.1] — 2026-09-10
 
 - Requires `@smartmemory/stratum` ^0.5.2 (MCP surface 20: `receipt.detail` on usage receipts; codex success results carry their reported cost). compose-mcp moves to 0.5.1 with compose.
