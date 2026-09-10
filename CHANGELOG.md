@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### COMP-BUILD-CANCEL S01: version train and version guard
+
+- **COMP-BUILD-CANCEL S01**: version train to `0.5.0` (compose, compose-mcp, server.json) with
+  `@smartmemory/stratum ^0.5.0`, and the agent-run version guard now names the real floor —
+  execution surface 19, `@smartmemory/stratum >=0.5.0` — from `REQUIRED_STRATUM_SURFACE` /
+  `REQUIRED_STRATUM_RANGE` rather than a literal buried in a template string.
+
 ### COMP-ROADMAP-ARCHIVE blueprint written and verified
 
 - **COMP-ROADMAP-ARCHIVE** (still PLANNED): implementation blueprint at
