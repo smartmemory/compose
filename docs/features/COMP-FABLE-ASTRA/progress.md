@@ -42,3 +42,11 @@ Accepted as the implementation contract with these rulings:
 | 2026-09-10 | full suite (host) + d2 review r1 (astra, read-only, probes under /tmp) running concurrently | run 037f69ca46bb |
 | 2026-09-10 | full suite (host) after d2: node 6777/6777, UI 624/624, tracker 100/100 | scratch d2-full.log |
 | 2026-09-10 | d2 review r1 (astra): P1 resumed ship commits twice + replays receipt with changed payload; P2 `_costCeiling.gates:[review_gate]` silently ignored; P2 legacy plan gates gain an extra audit call. Fix run dispatched. | reports/slice3-d2-review-r1.md; run 26add7a170d8 |
+| 2026-09-10 | d2 fixes r1 DONE (astra, 6 min): 3/3 fixed + regressions; legacy audit count equals 9e1fa25 baseline; host 196/196 | reports/slice3-d2-impl.md "Fixes r1" |
+| 2026-09-10 | **slice 3 d2 COMMITTED @b41811b** | git |
+| 2026-09-10 | slice 3 d3 (real-engine cross-seam golden + docs) dispatched | run fbada5120b44; brief briefs/slice3-d3-golden.md |
+| 2026-09-10 | slice 3 d3 DONE by astra (19 min, 4.5M tok): six-test real-engine golden + fake-codex extensions + docs; 4 of 6 goldens STOPPED on real integration defects (not sandbox): (1) stratum wire contract omitted `receipt.detail`; (2) admission demanded a top-level fanout epoch a fresh audit lacks; (3) finding code OWNERSHIP_VIOLATION vs blueprint's FILES_OWNED_VIOLATION | reports/slice3-d3-impl.md |
+| 2026-09-10 | **stratum @428d79f**: surface 19→20, `stratum_usage_report` request declares `receipt.detail?` (typecheck clean, 170/170) — fixes d3 defect 1. Not yet released (needs stratum 0.5.2; versions bumped at release). | stratum git |
+| 2026-09-10 | d3 fix run dispatched (astra): surface 20 pin, epoch derivation, rename, golden assertion vs persisted record | run 0f800b844df5 |
+| 2026-09-10 | d3 fix run (astra, 10 min): surface-20 pin, epoch derivation at admission, FILES_OWNED_VIOLATION rename, golden reads persisted receipts; STOPPED on a second stratum defect (codex success result drops usd) | reports/slice3-d3-impl.md "Fixes r1" |
+| 2026-09-10 | **stratum @9e6363a + @db8666c** (Fable inline): codex success result carries usd/usdSource/cacheRead; step_usage event carries real cost or omits it. compose: normalizer adopts the result's reported cost; gate normalises `epoch ?? 0`. **Real-engine wave golden 6/6 on the host.** | reports/slice3-d3-impl.md "Fixes r2" |

@@ -177,6 +177,9 @@ compose build FEAT-1 --abort            # abort a specific feature's build
 - `--cwd <path>` — agent working directory, for cross-repo features
 - `--team <name>` — team template (single build only; mutually exclusive with batch builds)
 - `--template <name>` — pipeline template name (single build only)
+- `--cost-ceiling-usd <amount>` (or `--cost-ceiling-usd=<amount>`) — finite positive USD limit for a single build whose sidecar enables `_costCeiling`; rejected for batch builds. Overrides the configured input/default without changing the profile revision digest. Exceeding it pauses at the configured gate for a human, including under skip/flag policies. Resume interactively with `compose build FEAT-1 --resume --cost-ceiling-usd 200`, then explicitly choose approve/revise/kill; raising the limit alone does not resolve the held token. See [wave accounting and integration status](pipelines.md#cost-ceiling-and-checkpoint-recovery).
+- `--resume` — resume the feature's active/resumable flow, preserving its pinned profiles and checkpoint evidence.
+- `--fresh` — start a new flow and remove only the previous flow's recorded `compose/wave/<flowId>` ref with an expected-tip check. Mutually exclusive with `--resume`; both are single-build options.
 
 A "prefix" feature code is one without a trailing digit; it matches every feature whose code begins with that string. Single-code build dispatches via `lib/build.js`; batch dispatches via `lib/build-all.js`. Auto-runs `compose init` if the project lacks `.compose/compose.json` or `pipelines/build.stratum.yaml` (or, with `--quick`, `pipelines/build-quick.stratum.yaml` — so a workspace initialized before the quick pipeline existed re-seeds it). Active build state lives in `.compose/data/active-build.json`.
 

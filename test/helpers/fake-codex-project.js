@@ -28,7 +28,8 @@ import { join } from 'node:path';
 const FAKE_CODEX = `#!/usr/bin/env node
 // A fake \`codex\`. Reads the prompt on stdin (the real CLI is invoked with \`-\`),
 // records its pid, then behaves per the lane whose \`match\` the prompt contains.
-const { appendFileSync, writeFileSync, mkdirSync } = require('node:fs');
+const { appendFileSync, writeFileSync, mkdirSync, readFileSync } = require('node:fs');
+const { spawnSync } = require('node:child_process');
 const { dirname } = require('node:path');
 
 const behavior = JSON.parse(process.env.COMPOSE_FAKE_CODEX_BEHAVIOR ?? '{}');
@@ -44,14 +45,34 @@ function emit(obj) { process.stdout.write(JSON.stringify(obj) + '\\n'); }
 
 function run() {
   const lanes = Array.isArray(behavior.lanes) ? behavior.lanes : [];
-  const lane = lanes.find((entry) => entry.match && prompt.includes(entry.match))
+  const matchText = behavior.intentOnly ? (prompt.split('## Intent\\n')[1]?.split('\\n\\n')[0] ?? prompt) : prompt;
+  const lane = lanes.find((entry) => entry.match && matchText.includes(entry.match))
     ?? lanes.find((entry) => !entry.match)
     ?? { sleep: true };
   if (pidsFile) {
     try {
       mkdirSync(dirname(pidsFile), { recursive: true });
-      appendFileSync(pidsFile, JSON.stringify({ pid: process.pid, lane: lane.name ?? null, cwd: process.cwd() }) + '\\n');
+      const argv = process.argv.slice(2);
+      const modelIndex = argv.findIndex(arg => arg === '--model' || arg === '-m');
+      appendFileSync(pidsFile, JSON.stringify({ pid: process.pid, lane: lane.name ?? null, cwd: process.cwd(),
+        ...(behavior.recordModel ? { argv, model: modelIndex < 0 ? null : argv[modelIndex + 1] } : {}) }) + '\\n');
     } catch { /* best-effort */ }
+  }
+  // Opt-in strict golden operations. A failed prerequisite must prevent ALL writes.
+  try {
+    for (const prerequisite of lane.prerequisites ?? []) {
+      if (readFileSync(prerequisite.path, 'utf8') !== prerequisite.content) {
+        throw new Error('prerequisite content differs: ' + prerequisite.path);
+      }
+    }
+    for (const file of lane.writes ?? []) {
+      mkdirSync(dirname(file.path), { recursive: true });
+      writeFileSync(file.path, file.content);
+    }
+  } catch (error) {
+    process.stderr.write('FAKE_CODEX_PREREQUISITE_OR_WRITE_FAILED: ' + error.message + '\\n');
+    process.exitCode = 23;
+    return;
   }
   if (lane.marker) {
     try {
@@ -64,8 +85,16 @@ function run() {
     setInterval(() => {}, 1 << 30);
     return;
   }
-  emit({ type: 'item.completed', item: { type: 'agent_message', text: lane.text ?? '{"value":"done"}' } });
-  emit({ type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1 } });
+  let text = lane.text ?? '{"value":"done"}';
+  if (lane.review) {
+    const check = spawnSync(process.execPath, ['-e', lane.review.check], { cwd: process.cwd(), encoding: 'utf8' });
+    if (check.error) throw check.error;
+    const blocking = check.status !== 0;
+    text = JSON.stringify({ blocking, findings: blocking ? [lane.review.finding] : [] });
+  }
+  emit({ type: 'item.completed', item: { type: 'agent_message', text } });
+  emit({ type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1,
+    ...(behavior.costUsd !== undefined ? { total_cost_usd: behavior.costUsd } : {}) } });
   // Live at least as long as the server's libproc start-time probe (~40ms on darwin).
   // stratum 0.5.0 registers a tagged agent in onSpawn and fails the whole run with
   // REGISTRY_WRITE_FAILED ("agent would be uncancellable") when the pid is already
@@ -84,9 +113,14 @@ function run() {
  * @param {string} options.featureCode
  * @param {string} options.spec            the `pipelines/<template>.stratum.yaml` body
  * @param {string} [options.template]      pipeline file basename (default 'build')
- * @param {Array<{name?:string,match?:string,sleep?:boolean,marker?:string,markerBody?:string,text?:string}>} [options.lanes]
+ * @param {Array<object>} [options.lanes] Optional strict prerequisites/writes/review plus legacy marker/text/sleep.
  * @param {string} [options.description]
  * @param {boolean} [options.git] initialize a disposable HEAD for real worktree capture
+ * @param {boolean} [options.recordModel] Include model (-m/--model) and argv in invocation log.
+ * @param {boolean} [options.intentOnly] Match lanes only against the Compose Intent section.
+ * @param {number} [options.costUsd] Deterministic fake cost in the connector's JSONL usage.
+ * @param {object} [options.profiles] Adjacent test sidecar, committed with the fixture base.
+ * @param {object} [options.files] Initial relative file paths and contents, committed with the base.
  */
 export async function makeFakeCodexProject({
   featureCode,
@@ -95,6 +129,11 @@ export async function makeFakeCodexProject({
   lanes = [{ sleep: true }],
   description = '# fake codex fixture\n',
   git = false,
+  recordModel = false,
+  intentOnly = false,
+  costUsd,
+  profiles,
+  files = {},
 }) {
   const workspace = await mkdtemp(join(tmpdir(), 'compose-fakecodex-ws-'));
   const stateRoot = await mkdtemp(join(tmpdir(), 'compose-fakecodex-state-'));
@@ -109,6 +148,11 @@ export async function makeFakeCodexProject({
   );
   await writeFile(join(workspace, 'pipelines', `${template}.stratum.yaml`), spec);
   await writeFile(join(workspace, 'docs', 'features', featureCode, 'description.md'), description);
+  if (profiles) await writeFile(join(workspace, 'pipelines', `${template}.profiles.json`), JSON.stringify(profiles, null, 2));
+  for (const [path, content] of Object.entries(files)) {
+    await mkdir(join(workspace, path, '..'), { recursive: true });
+    await writeFile(join(workspace, path), content);
+  }
 
   if (git) {
     await writeFile(join(workspace, '.gitignore'), '.compose/data/\n.compose/build-stream.jsonl\ndocs/features/*/audit.json\n');
@@ -139,7 +183,7 @@ export async function makeFakeCodexProject({
     STRATUM_STATE_ROOT: stateRoot,
     STRATUM_AGENT_FG_ROOT: fgRoot,
     COMPOSE_FAKE_CODEX_PIDS: pidsFile,
-    COMPOSE_FAKE_CODEX_BEHAVIOR: JSON.stringify({ lanes }),
+    COMPOSE_FAKE_CODEX_BEHAVIOR: JSON.stringify({ lanes, recordModel, intentOnly, costUsd }),
   };
   delete env.COMPOSE_BUILD_ID;
 

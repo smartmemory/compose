@@ -105,7 +105,7 @@ re-authoring a spec as `version: 1` is the whole of what makes it runnable.
 
 The three bundled presets in `presets/` (`team-feature`, `team-research`, `team-review`)
 are v1 as well. Each pairs with a `<name>.profiles.json` sidecar holding the agent
-profile strings (tool restrictions and model tiers) that v1 strips from the spec, which
+profiles (tool restrictions and model tiers) that v1 strips from the spec, which
 compose re-applies at invocation — these are load-bearing wherever a fanout runs at
 `isolation: none`, since the read-only restriction lives only there.
 
@@ -126,13 +126,143 @@ adaptive thinking and high effort. Omitting the tier, as in
 Profiles fail closed: a missing sidecar is legal, but an existing sidecar with
 invalid JSON or a non-object value stops the build. Preflight rejects unknown
 tiers, unavailable provider/tier combinations, invalid profile values, and keys
-that name no step in any flow. Keys beginning with `_` are metadata and skipped.
+that name no step in any flow. Keys beginning with `_` are metadata, not agent entries;
+recognized `_consumer` and `_costCeiling` configuration is validated.
 Fanout profiles use the enclosing step id and apply to its agent stages.
 Static profiles and merged runtime role overrides are checked before a fresh
 flow starts; restored resume roles are checked again before dispatch. One
 `profile_preflight` event records `{ steps: { stepId: { profile, provider, tier,
 modelID } } }` when the build stream opens, before step dispatch. Multi-stage
 fanout entries use `stepId/stageIndex` so every stage is recorded.
+
+### Wave profiles, ownership and output gates
+
+An agent entry can be a string (`"codex:implementer:critical"`) or an object:
+`{"default":"codex:implementer:critical","tier_from":"item.tier"}`.
+Only consumer fanouts support `tier_from`, and only `item.tier` is accepted.
+An absent tier uses the default; explicit null, empty or unknown tiers fail.
+The provider and template stay fixed for the stage. The whole recorded wave is
+validated before any worker starts, including items beyond the concurrency limit.
+Runtime agent overrides replace `default` while preserving `tier_from`.
+
+Example sidecar for a custom wave pipeline (the production team preset is separate work):
+
+```json
+{
+  "plan": "claude:orchestrator:coordinator",
+  "execute": {"default": "codex:implementer:critical", "tier_from": "item.tier"},
+  "review": "codex:reviewer:critical",
+  "assess": "claude:orchestrator:coordinator",
+  "assess_gate": {
+    "decide_from": {
+      "step": "assess", "field": "action",
+      "approve": ["complete"], "revise": ["repair", "implement"], "kill": ["blocked"]
+    },
+    "validators": [{"name": "WaveDecision", "review_step": "review", "tasks_field": "tasks"}]
+  },
+  "_consumer": {
+    "execute": {"ownership": "item.files_owned", "independent": true, "checkpoint_gate": "execute_merge"}
+  },
+  "_costCeiling": {"input": "cost_ceiling_usd", "default": 150, "gates": ["assess_gate"]}
+}
+```
+
+`_consumer` opts a fanout into ownership, independent task admission and/or wave
+checkpoints. Ownership and checkpoints require worktree isolation; the checkpoint
+gate must depend directly and unconditionally on that fanout. `files_owned` lists
+literal repository-relative file paths, such as `src/adapter.js`. Globs, absolute
+paths, `..`, `.git` components and directory paths are invalid. Independent tasks
+have empty `depends_on` arrays and disjoint ownership. Renames require both source
+and destination paths. Ownership is checked against the retained Git patch;
+the worker's `files_changed` claim is not evidence of permission.
+
+Gate objects map recorded output values to decisions. `WaveDecision` checks task
+and finding shapes, open counts, blocking state against the recorded review, and
+repair ownership. Sources must precede the gate and match its current epoch/token.
+The reserved `review_gate` retains its existing behavior and cannot use
+`decide_from` or appear in `_costCeiling.gates`. Other `_` metadata (including
+`_comment` and `_reduceSteps`) retains its existing interpretation; unknown metadata
+is inert and is not an agent profile.
+
+### Cost ceiling and checkpoint recovery
+
+`_costCeiling` enables accounting from acknowledged, attributed usage receipts.
+Its `input` names the flow input override; `default` is used otherwise.
+`--cost-ceiling-usd` overrides the effective limit for a single build, outside the
+profile revision digest. USD equal to the limit is allowed. Greater spend, unknown
+cost, unreadable state or unacknowledged receipts requires a human even under
+`skip`/`flag` gate policies. A noninteractive build returns `waiting_gate`, retaining
+the flow ID, gate token and reason in `.compose/data/active-build.json`; its stream
+ends with `build_paused` instead of a terminal `build_end`.
+
+For an initialized project with a custom `waves` pipeline and matching sidecar:
+
+```bash
+compose build FEAT-1 --template waves --cost-ceiling-usd 150
+# After a ceiling pause, raise the limit and resume interactively:
+compose build FEAT-1 --resume --cost-ceiling-usd 200
+```
+
+Raising the limit does not approve the held token. Choose an explicit human
+`approve`, `revise`, or `kill` at the resumed gate; `revise` continues with the
+pipeline's revision route. Resuming noninteractively keeps the human hold pending.
+Repair evidence/configuration failures before resuming; increasing the limit alone
+does not repair missing receipts or invalid outputs.
+
+Approved waves publish to `compose/wave/<flowId>` (full ref
+`refs/heads/compose/wave/<flowId>`), leaving HEAD and the real index unchanged.
+The next wave starts from that checkpoint. Recovery reconciles the prepared
+journal, ref and retained patch evidence before dispatch or cleanup. Ship squashes
+the net checkpoint tree into one commit parented by the pinned base; intermediate
+wave commits are outside its ancestry. Kill retains the checkpoint ref.
+`compose build FEAT-1 --fresh` discards the previous flow's recorded ref using an
+expected-tip check and starts a new flow; it does not delete other flow refs.
+`--fresh` and `--resume` are mutually exclusive. Profile changes on resume fail
+with `CONSUMER_PROFILE_REVISION_MISMATCH`.
+
+**Integration status:** the dispatch-3 fixes pass four of six goldens, including
+real worker dispatch, whole-wave tier rejection and ownership failures. Repair
+and crash/resume shipping stop at the cost gate because Stratum's successful
+Codex response omits USD cost/provenance. Per-item receipt metadata is read from
+the persisted run record, not public audit events. See **Fixes r1** in the
+[dispatch-3 report](features/COMP-FABLE-ASTRA/reports/slice3-d3-impl.md) for the
+reproduction and assertions still unverified.
+
+### Wave failure codes
+
+| Code | Meaning / response |
+|---|---|
+| `WAVE_INPUT_INVALID` | Recorded input, descriptor, wave length or epoch is inconsistent; no wave dispatch. |
+| `WAVE_TIER_INVALID` | Explicit item tier is invalid; fix the task list before dispatch. |
+| `WAVE_DEPENDENCIES_NOT_EMPTY` | An independent task declares dependencies. |
+| `WAVE_OWNERSHIP_INVALID` | Missing/invalid literal ownership paths or incompatible isolation. |
+| `WAVE_OWNERSHIP_CONFLICT` | Multiple tasks own the same path in an independent wave. |
+| `FILES_OWNED_VIOLATION` | Retained patch edits outside the allowed paths; failed worker output is removed. |
+| `OWNERSHIP_EVIDENCE_MISMATCH` | Binding, digest or retained patch no longer matches captured evidence; merge is refused. |
+| `WAVE_DECISION_SHAPE` | Malformed decision, task or finding fields. |
+| `WAVE_OPEN_COUNT_MISMATCH` | `open_count` disagrees with the open finding list. |
+| `WAVE_BLOCKING_MISMATCH` | Decision blocking state disagrees with the recorded review. |
+| `WAVE_COMPLETE_WITH_OPEN_FINDINGS` | Completion requested despite open findings or blocking. |
+| `WAVE_BLOCKED_WITHOUT_FINDINGS` | Blocked decision contains no open findings. |
+| `WAVE_REPAIR_EMPTY` | Repair/implement list has fewer than one or more than six tasks. |
+| `WAVE_REPAIR_UNOWNED_FINDING` | A repair task owns none of the open findings' paths. |
+| `GATE_CONFIG_INVALID` | Invalid mapping/validator or missing execute profile/provider. |
+| `GATE_SOURCE_MISSING` | Decision source has no succeeded object output. |
+| `GATE_SOURCE_STALE` | Source, review or waiting gate evidence has the wrong epoch/token. |
+| `GATE_ACTION_UNKNOWN` | Recorded action has no configured mapping. |
+| `GATE_VALIDATION_FAILED` | Decision validators returned findings; gate holds for a human. |
+| `COST_CEILING_INVALID` | Pure gate helper received invalid spend/limit values. |
+| `COST_CEILING_BREACHED` | Pure gate helper observed spend greater than the limit. |
+| `WAVE_COST_CEILING_EXCEEDED` | Runner's persisted spend exceeds its effective limit; human hold. |
+| `WAVE_COST_UNVERIFIED` | Receipt attribution, acknowledgement, snapshot or revision cannot be verified; human hold. |
+| `WAVE_COST_CEILING_RESERVED_GATE` | `_costCeiling.gates` includes reserved `review_gate`; preflight refuses it. |
+| `WAVE_EVIDENCE_INCOMPLETE` | Evidence receipt remains local after failed/unavailable replication; do not treat it as acknowledged. |
+| `WAVE_CHECKPOINT_DIVERGED` | Ref, HEAD, checkpoint chain or tree differs from pinned evidence; reconcile before retrying. |
+| `WAVE_CHECKPOINT_EVIDENCE_MISSING` | Required checkpoint object, patch, ship result or acknowledged evidence is unavailable; recovery/ship is refused. |
+
+Malformed sidecar configuration otherwise uses `PIPELINE_PROFILE_INVALID`.
+The `GATE_*` holds retain their recorded reason; they do not authorize automatic
+approval under a permissive policy.
 
 `test/pipeline-ts-engine-guard.test.js` iterates both directories and enforces this:
 every spec must be v1, every v1 spec must actually plan on the engine, and a spec on an

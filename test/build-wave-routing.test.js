@@ -5,6 +5,45 @@ import { join } from 'node:path';
 import { buildWaveFixture, task, waveSpec } from './helpers/build-wave-fixture.js';
 import { resolveConsumerProfile } from '../lib/pipeline-profiles.js';
 process.env.NODE_ENV = 'test';
+
+for (const source of ['carry', 'plan']) test(`fresh audit item epochs admit the full ${source} wave without a parent epoch`, async t => {
+  const tasks = [task(1), task(2)];
+  const spec = waveSpec();
+  if (source === 'carry') spec.flows.bug_fix.steps[1].fanout.over = '${wave}';
+  const f = buildWaveFixture(t, { spec, tasks });
+  delete f.state.steps.execute.epoch;
+  delete f.state.steps.plan.epoch;
+  f.state.steps.execute.fanout.items.forEach((item, index) => Object.assign(item, { index, epoch: 0 }));
+  if (source === 'carry') f.state.carry = { wave: { value: tasks, provenance: { kind: 'initial', sourceStep: 'plan', sourceEpoch: 0 } } };
+  await f.run();
+  assert.equal(f.stratum.calls.filter(c => c.type === 'agentRun').length, 2);
+  assert.equal(f.journal().waveAdmissions[0].epoch, 0);
+});
+
+for (const defect of ['missing epoch', 'pending epoch', 'parent epoch', 'descriptor epoch', 'index', 'generation', 'length']) {
+  test(`admission rejects inconsistent ${defect} evidence before any worker`, async t => {
+    const tasks = Array.from({ length: ['descriptor epoch', 'generation'].includes(defect) ? 3 : 4 }, (_, i) => task(i + 1));
+    const spec = waveSpec();
+    spec.flows.bug_fix.steps[1].fanout.over = '${wave}';
+    const f = buildWaveFixture(t, { tasks, spec });
+    const state = f.state.steps.execute;
+    delete state.epoch;
+    state.fanout.items.forEach((item, index) => Object.assign(item, { index, epoch: 0 }));
+    f.state.carry = { wave: { value: tasks } };
+    if (defect === 'missing epoch') state.fanout.items.forEach(item => delete item.epoch);
+    if (defect === 'pending epoch') state.fanout.items[3].epoch = 1;
+    if (defect === 'parent epoch') state.epoch = 1;
+    if (defect === 'descriptor epoch') f.descriptors[0].epoch = 1;
+    if (defect === 'index') state.fanout.items[3].index = 2;
+    if (defect === 'generation') state.fanout.items[0].generation = 99;
+    if (defect === 'length') f.state.carry.wave.value = tasks.slice(0, 3);
+    await f.run();
+    assert.equal(f.stratum.calls.filter(c => c.type === 'agentRun').length, 0);
+    assert.ok(f.stratum.calls.filter(c => c.type === 'stepDone').every(c => /^WAVE_INPUT_INVALID:/.test(c.envelope.failure)));
+    assert.equal(f.state.status, 'failed');
+  });
+}
+
 test('legacy builds retain baseline audit counts for consumer admission and plan gates', async t => {
   // Measured with the reviewer's 9e1fa25 baseline loader: consumer=5, plan gate=2.
   for (const [gate, expectedAudits] of [[false, 5], [true, 2]]) {
@@ -58,7 +97,7 @@ test('ownership failure replaces success before step_done and prepared replay ca
   assert.equal(f.stratum.calls.filter(c => c.type === 'agentRun').length, 1);
   const reports = f.stratum.calls.filter(c => c.type === 'stepDone');
   assert.equal(reports.length, 1);
-  assert.match(reports[0].envelope.failure, /OWNERSHIP_VIOLATION/);
+  assert.match(reports[0].envelope.failure, /FILES_OWNED_VIOLATION/);
   assert.equal(f.state.receipts.some(r => r.source === 'compose:ownership'), true);
 });
 
