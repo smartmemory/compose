@@ -1,11 +1,44 @@
 {
   "code": "COMP-BUILD-CANCEL",
   "description": "Compose adoption of Stratum 0.5.0 cancellation (COMP-FABLE-ASTRA D5 compose half, plus the D1 consumer tagging it needs): every consumer `stratum_agent_run` carries `flow:{runId,stepId,itemIndex}` and a `cancellationId` (client version guard bumped to surface 19), `compose build --abort` and the SIGINT/SIGTERM handler call `stratum_flow_cancel` before the existing kill/active-build/actuals writes, Compose kills its own in-process isolation:none agents, and no patch captured after a cancel is merged. Compose moves to 0.5.0 with `@smartmemory/stratum ^0.5.0` (shared minor). Preset carry/verify ordering stays in the COMP-FABLE-ASTRA preset slice. Design: [design.md](docs/features/COMP-FABLE-ASTRA/design.md) §D5.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "COMP-TEAMS: Agent Team Presets",
   "created": "2026-09-09",
-  "updated": "2026-09-09",
+  "updated": "2026-09-10",
   "complexity": "M",
   "position": 152,
-  "parent": "COMP-FABLE-ASTRA"
+  "parent": "COMP-FABLE-ASTRA",
+  "completions": [
+    {
+      "completion_id": "COMP-BUILD-CANCEL:5606314bf1f5e8d399026fd8d7a178786ea660c6",
+      "feature_code": "COMP-BUILD-CANCEL",
+      "commit_sha": "5606314bf1f5e8d399026fd8d7a178786ea660c6",
+      "commit_sha_short": "5606314b",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/build-cancel.js",
+        "lib/build.js",
+        "lib/stratum-mcp-client.js",
+        "lib/result-normalizer.js",
+        "lib/consumer-fanout.js",
+        "lib/dispatch-ledger.js",
+        "lib/codex-preflight.js",
+        "lib/gate-prompt.js",
+        "bin/compose.js",
+        "package.json",
+        "compose-mcp/package.json",
+        "compose-mcp/server.json",
+        "docs/cli.md",
+        "CHANGELOG.md",
+        "test/build-cancel-review2.test.js",
+        "test/integration/flow-cancel-golden.test.js",
+        "test/integration/build-abort-golden.test.js",
+        "test/helpers/fake-codex-project.js"
+      ],
+      "recorded_at": "2026-09-10T03:22:39.732Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Compose adoption of stratum 0.5.0 cancellation (COMP-FABLE-ASTRA D5 compose half + D1 consumer tagging). Slices S01-S07 over fc4e821..5606314: version train 0.5.0, flow-tagged agent dispatch with unconditional cancellationId, in-process cancel handle/registry, real SIGINT/SIGTERM teardown, honest --abort (engine cancel first, keyed on flowSettled), driver cancel detection + merge fence + cancelled resume refusal, two goldens against a real stratum mcp server. Two astra implementation reviews (10 must-fix, all reproduced and fixed). Full suite green: node 6606, ui 624, tracker 100. Follow-up (stratum): a flow-tagged agent exiting <40ms fails REGISTRY_WRITE_FAILED on darwin (server.ts:340 libproc probe race) — see s07-report.md."
+    }
+  ],
+  "commit_sha": "5606314bf1f5e8d399026fd8d7a178786ea660c6"
 }
