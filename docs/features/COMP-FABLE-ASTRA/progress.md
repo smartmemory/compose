@@ -35,3 +35,10 @@ Accepted as the implementation contract with these rulings:
 | 2026-09-10 | slice 3 d1 review r1 dispatched (astra) — Fable pre-flag: output-gate validateDecision hardcodes the execute stage profile | stratum run 44815f7d13e5 |
 | 2026-09-10 | review run 44815f7d13e5 REJECTED by Codex's cyber content filter after 61s ("Adversarial review ... bypasses ... hunt ... CAS races" wording). Re-dispatched as 431f2ea1d87e with neutral wording ("independent correctness review", "correctly refused"). Landmine: avoid bypass/adversarial/hunt/exploit phrasing in astra review briefs. | — |
 | 2026-09-10 | d1 review r1 (astra): 3×P1 + 1×P2 confirmed — exact-ref checkpoint recovery skips materialization; missing gate state skips the epoch fence; caller `reviewOutput` overrides the recorded review; admission validates a hardcoded codex profile (Fable's pre-flag). Fix run dispatched to astra with the reviewer's probes as acceptance. | reports/slice3-d1-review-r1.md; fix run e8c17ecfde5e |
+| 2026-09-10 | d1 fixes r1 DONE (astra, 5.5 min): 4/4 fixed, one regression each, reviewer probes re-run green; host 181/181 incl. fanout + GSD goldens | reports/slice3-d1-impl.md "Fixes r1" |
+| 2026-09-10 | **slice 3 d1 COMMITTED @9e1fa25** | git |
+| 2026-09-10 | slice 3 d2 (runner wiring) dispatched to astra | stratum run 4705d2df4b74; brief briefs/slice3-d2-wiring.md |
+| 2026-09-10 | slice 3 d2 DONE by astra (38 min, 14.2M tok): build.js +492, gsd.js +140, flow-state spend reader, stream pause, --cost-ceiling-usd; host targeted 281/281 (incl. all sandbox-blocked suites) | reports/slice3-d2-impl.md |
+| 2026-09-10 | full suite (host) + d2 review r1 (astra, read-only, probes under /tmp) running concurrently | run 037f69ca46bb |
+| 2026-09-10 | full suite (host) after d2: node 6777/6777, UI 624/624, tracker 100/100 | scratch d2-full.log |
+| 2026-09-10 | d2 review r1 (astra): P1 resumed ship commits twice + replays receipt with changed payload; P2 `_costCeiling.gates:[review_gate]` silently ignored; P2 legacy plan gates gain an extra audit call. Fix run dispatched. | reports/slice3-d2-review-r1.md; run 26add7a170d8 |

@@ -2667,7 +2667,18 @@ if (cmd === 'build') {
   if (teamTemplate && !templateName) {
     templateName = teamTemplate
   }
-  const filteredArgs2 = filteredArgs.filter((a, i) => i !== templateIdx && (templateIdx === -1 || i !== templateIdx + 1))
+  let filteredArgs2 = filteredArgs.filter((a, i) => i !== templateIdx && (templateIdx === -1 || i !== templateIdx + 1))
+  const ceilingIdx = filteredArgs2.findIndex(a => a === '--cost-ceiling-usd' || a.startsWith('--cost-ceiling-usd='))
+  let costCeilingUsd
+  if (ceilingIdx !== -1) {
+    const inline = filteredArgs2[ceilingIdx].includes('=')
+    costCeilingUsd = Number(inline ? filteredArgs2[ceilingIdx].split('=')[1] : filteredArgs2[ceilingIdx + 1])
+    if (!Number.isFinite(costCeilingUsd) || costCeilingUsd <= 0) {
+      console.error('--cost-ceiling-usd requires a finite positive USD amount')
+      process.exit(1)
+    }
+    filteredArgs2.splice(ceilingIdx, inline ? 1 : 2)
+  }
 
   const featureCodes = filteredArgs2.filter(a => !a.startsWith('-'))
   const featureCode = featureCodes[0]
@@ -2725,6 +2736,10 @@ if (cmd === 'build') {
     console.error('Error: --abort and --all/prefix/multi are mutually exclusive')
     process.exit(1)
   }
+  if (costCeilingUsd !== undefined && isBatch) {
+    console.error('--cost-ceiling-usd is single-build only; batch is not supported')
+    process.exit(1)
+  }
   if (resume && fresh) {
     console.error('--resume and --fresh are mutually exclusive')
     process.exit(1)
@@ -2780,6 +2795,7 @@ if (cmd === 'build') {
     console.error('  --abort        Abort the active build')
     console.error('  --resume       Resume the active build for <feature-code>')
     console.error('  --fresh        Start a fresh build, discarding stale failed/resumable state')
+    console.error('  --cost-ceiling-usd <amount>  Override a configured ceiling (single build; holds still require a human)')
     console.error('  --all          Build all PLANNED features in dependency order')
     console.error('  --dry-run      Print build order without executing')
     console.error('  --cwd <path>   Agent working directory (for cross-repo features)')
@@ -2856,6 +2872,7 @@ if (cmd === 'build') {
       if (implementerArg) singleOpts.implementer = implementerArg   // COMP-MODEL-AB
       if (reviewerArg) singleOpts.reviewer = reviewerArg             // COMP-MODEL-AB
       if (resume) singleOpts.resume = true
+      if (costCeilingUsd !== undefined) singleOpts.costCeilingUsd = costCeilingUsd
       if (fresh) singleOpts.fresh = true
       if (nonInteractiveBuild) singleOpts.gateOpts = { nonInteractive: true }
       if (resumeFlowId) singleOpts.resumeFlowId = resumeFlowId
