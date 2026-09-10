@@ -27,7 +27,7 @@ import {
   unregisterBuildCancel,
   pendingTeardown,
 } from '../lib/build-cancel.js';
-import { makeFakeCodexProject } from './helpers/fake-codex-project.js';
+import { makeFakeCodexProject, processGroupGone } from './helpers/fake-codex-project.js';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -285,8 +285,14 @@ describe('a real child build torn down by SIGINT', () => {
     const final = JSON.parse(await readFile(activePath, 'utf8'));
     assert.equal(final.status, 'aborted', 'the teardown must write the terminal record');
     assert.equal(final.pid, child.pid, "the driver's own pid stays stamped on its record");
-    // The C21 process-group receipt is added by S03: only a TAGGED dispatch is
-    // reachable by `stratum_flow_cancel`, so before tagging there is no agent for
-    // the teardown's flow cancel to kill.
+    // The C21 receipt. The agent is TAGGED (S03), so it is detached into its own
+    // process group and the terminal's SIGINT never reaches it by group delivery —
+    // only the teardown's `stratum_flow_cancel` can kill it.
+    const groupDeadline = Date.now() + 20000;
+    while (Date.now() < groupDeadline && !processGroupGone(agents[0].pid)) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    assert.ok(processGroupGone(agents[0].pid),
+      'the tagged agent process group must be swept by the flow cancel');
   });
 });

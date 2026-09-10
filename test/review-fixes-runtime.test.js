@@ -26,7 +26,7 @@ const mode=${JSON.stringify(mode)};
 const server=new Server({name:'fixture-stratum',version:mode==='old'?'0.3.4':'0.4.0'}, {capabilities:{tools:{}}});
 server.setRequestHandler(ListToolsRequestSchema, async()=> {
   if(mode==='probe-hang') return new Promise(()=>{});
-  const fields=mode==='old'?['agent','prompt','cwd']:['agent','prompt','cwd','model','effort','sandboxMode','cancellationId','allowedTools','disallowedTools','thinking'];
+  const fields=mode==='old'?['agent','prompt','cwd']:['agent','prompt','cwd','model','effort','sandboxMode','cancellationId','allowedTools','disallowedTools','thinking','flow'];
   return {tools:[{name:'stratum_agent_run',inputSchema:{type:'object',properties:Object.fromEntries(fields.map(k=>[k,{}]))}}]};
 });
 let finish;

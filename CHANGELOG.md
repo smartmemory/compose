@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### COMP-BUILD-CANCEL S03: driver tagging and the build-level abort chain
+
+- **COMP-BUILD-CANCEL S03**: every agent a build dispatches while its flow is running is now
+  flow-tagged — including the two gate-time ones, the gate Q&A agent and the review-repair
+  fixer, since a gate pause leaves the run `running` and admission succeeds — so
+  `stratum_flow_cancel` can find and kill any of them from another process. A build-level
+  `AbortController` (`lib/build-cancel.js`) chains into every `runAndNormalize` dispatch, so
+  compose's own `isolation: none` local agents, which never enter Stratum, die with the build.
+  Note that tagging detaches each agent into its own process group, so a terminal Ctrl-C no
+  longer reaches them by group delivery — the S06 teardown is what replaces that.
+
 ### COMP-BUILD-CANCEL S06: SIGINT/SIGTERM does a real teardown
 
 - **COMP-BUILD-CANCEL S06**: Ctrl-C on a running build now tears it down instead of setting a
