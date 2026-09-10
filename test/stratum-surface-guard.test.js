@@ -57,5 +57,5 @@ test('SURFACE-GUARD: neither constant value appears as a version literal in test
   const source = readFileSync(join(REPO_ROOT, 'test', 'review-fixes-runtime.test.js'), 'utf8');
   assert.ok(!source.includes('surface: 17'), 'expected no hardcoded "surface: 17" literal');
   assert.equal(REQUIRED_STRATUM_SURFACE, 20);
-  assert.equal(REQUIRED_STRATUM_RANGE, '>=0.5.0');
+  assert.equal(REQUIRED_STRATUM_RANGE, '>=0.5.2');
 });

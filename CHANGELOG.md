@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## [0.5.1] — 2026-09-10
+
+- Requires `@smartmemory/stratum` ^0.5.2 (MCP surface 20: `receipt.detail` on usage receipts; codex success results carry their reported cost). compose-mcp moves to 0.5.1 with compose.
 
 - **COMP-FABLE-ASTRA slice 4**: add the `fable-astra` team preset with named task/verification/finding/decision contracts, per-task Codex tiers, enforced ownership, fresh read-only Astra review, Fable output-driven repair waves, a $150 default ceiling and one-commit ship. Register the team name and document its loop/limits. Add a real Stratum validator and production-preset one-wave golden using recorded Claude outputs and fake Codex. Concurrency is literal 3 under the slice-4 ruling; live model and installed-package evidence remains slice 6.
 
