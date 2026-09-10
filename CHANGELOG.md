@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- COMP-BUILD-CANCEL: full-suite sweep — the resume probe no longer runs on a locally terminal record and an unknown flow only counts as "over" when the driver pid is dead (S05 had widened both, defeating the same-feature live-pid conflict guard); two pre-0.5 abort tests updated to the S04 contract (refused abort exits 1 and writes nothing). `docs/cli.md` documents the 0.5 `--abort` semantics, exit codes and env knobs.
 - **COMP-BUILD-CANCEL S07**: two golden integration tests against a real `stratum mcp` server.
   The first proves the contract — a flow-tagged agent run registers a real detached process
   group, a cancel issued from a SECOND client settles the run and kills that group, the audit
