@@ -433,7 +433,7 @@ SmartMemory egress/cross-project learning; hand dispatches outside a pipeline.
 
 ## Completion evidence
 
-- [ ] Off-mode golden pins 0.5.1 profile digest and legacy input/dispatch bytes; no routing writes.
+- [x] Off-mode golden pins 0.5.1 profile digest and legacy input/dispatch bytes; no routing writes. Receipts: `test/build-team-fable-astra.test.js:47`, `test/integration/build-wave-golden.test.js:268`, `test/integration/gsd-route-continuation-golden.test.js:204`.
 - [ ] Manual fast fallback + critical item still dispatches critical; provenance identifies both.
 - [ ] Same-key items, same-epoch retries and different stages produce distinct record/receipt ids.
 - [ ] Fresh/resume Build and GSD pin identical start bytes; ledger edits cannot affect unseen waves.
