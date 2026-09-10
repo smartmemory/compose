@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **COMP-BUILD-CANCEL S07**: two golden integration tests against a real `stratum mcp` server.
+  The first proves the contract — a flow-tagged agent run registers a real detached process
+  group, a cancel issued from a SECOND client settles the run and kills that group, the audit
+  reports `cancelled`, and a further tagged run is refused `flow_not_running`. The second proves
+  the wiring — a real child `compose build` is stopped by a real `compose build --abort` from
+  another process, ending with the flow `cancelled`, the agent's process group gone, the driver
+  pid preserved in `active-build.json`, and the file the agent wrote after the cancel **not**
+  merged into the target tree. Both use a fake `codex` executable on the server's PATH, so no
+  model is called.
+
 - COMP-BUILD-CANCEL: review-2 fixes — merge fence rechecks after the audit, ownership re-claimed after every await, web-gate poll honours the build signal, health finalization cannot downgrade aborted
 
 - **COMP-BUILD-CANCEL S05**: a build whose flow was cancelled from another process now notices,

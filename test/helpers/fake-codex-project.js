@@ -18,8 +18,10 @@
  * cancel has to kill.
  */
 
-import { mkdtemp, mkdir, writeFile, readFile, rm, chmod } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, chmod } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { setTimeout as delay } from 'node:timers/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -48,7 +50,7 @@ function run() {
   if (pidsFile) {
     try {
       mkdirSync(dirname(pidsFile), { recursive: true });
-      appendFileSync(pidsFile, JSON.stringify({ pid: process.pid, lane: lane.name ?? null }) + '\\n');
+      appendFileSync(pidsFile, JSON.stringify({ pid: process.pid, lane: lane.name ?? null, cwd: process.cwd() }) + '\\n');
     } catch { /* best-effort */ }
   }
   if (lane.marker) {
@@ -64,7 +66,13 @@ function run() {
   }
   emit({ type: 'item.completed', item: { type: 'agent_message', text: lane.text ?? '{"value":"done"}' } });
   emit({ type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1 } });
-  process.exit(0);
+  // Live at least as long as the server's libproc start-time probe (~40ms on darwin).
+  // stratum 0.5.0 registers a tagged agent in onSpawn and fails the whole run with
+  // REGISTRY_WRITE_FAILED ("agent would be uncancellable") when the pid is already
+  // gone by the time the probe returns — a fixture that exits the instant stdin
+  // closes trips it deterministically; no real agent exits that fast. Stratum
+  // follow-up: an agent that exited before registration is finished, not uncancellable.
+  setTimeout(() => process.exit(0), 150);
 }
 `;
 
@@ -76,8 +84,9 @@ function run() {
  * @param {string} options.featureCode
  * @param {string} options.spec            the `pipelines/<template>.stratum.yaml` body
  * @param {string} [options.template]      pipeline file basename (default 'build')
- * @param {Array<{name?:string,match?:string,sleep?:boolean,marker?:string,text?:string}>} [options.lanes]
+ * @param {Array<{name?:string,match?:string,sleep?:boolean,marker?:string,markerBody?:string,text?:string}>} [options.lanes]
  * @param {string} [options.description]
+ * @param {boolean} [options.git] initialize a disposable HEAD for real worktree capture
  */
 export async function makeFakeCodexProject({
   featureCode,
@@ -85,6 +94,7 @@ export async function makeFakeCodexProject({
   template = 'build',
   lanes = [{ sleep: true }],
   description = '# fake codex fixture\n',
+  git = false,
 }) {
   const workspace = await mkdtemp(join(tmpdir(), 'compose-fakecodex-ws-'));
   const stateRoot = await mkdtemp(join(tmpdir(), 'compose-fakecodex-state-'));
@@ -99,6 +109,21 @@ export async function makeFakeCodexProject({
   );
   await writeFile(join(workspace, 'pipelines', `${template}.stratum.yaml`), spec);
   await writeFile(join(workspace, 'docs', 'features', featureCode, 'description.md'), description);
+
+  if (git) {
+    await writeFile(join(workspace, '.gitignore'), '.compose/data/\n.compose/build-stream.jsonl\ndocs/features/*/audit.json\n');
+    const runGit = (args) => execFileSync('git', args, {
+      cwd: workspace, encoding: 'utf8', stdio: 'pipe',
+      env: { ...process.env, GIT_AUTHOR_NAME: 'S07 Fixture', GIT_AUTHOR_EMAIL: 's07@example.test',
+        GIT_COMMITTER_NAME: 'S07 Fixture', GIT_COMMITTER_EMAIL: 's07@example.test' },
+    }).trim();
+    runGit(['init', '-q']);
+    runGit(['add', '-A']);
+    // Only the disposable fixture needs a HEAD for real detached worktrees.
+    const tree = runGit(['write-tree']);
+    const commit = runGit(['commit-tree', tree, '-m', 'fake codex fixture']);
+    runGit(['update-ref', 'HEAD', commit]);
+  }
 
   const codexPath = join(binDir, 'codex');
   await writeFile(codexPath, FAKE_CODEX);
@@ -132,6 +157,14 @@ export async function makeFakeCodexProject({
       const raw = await readFile(pidsFile, 'utf8');
       return raw.split('\n').filter(Boolean).map((line) => JSON.parse(line));
     },
+    async readForegroundEntries() {
+      const entries = [];
+      for (const name of await readdir(fgRoot)) {
+        try { entries.push(JSON.parse(await readFile(join(fgRoot, name, 'meta.json'), 'utf8'))); }
+        catch (error) { if (error.code !== 'ENOENT') throw error; }
+      }
+      return entries;
+    },
     async cleanup() {
       for (const entry of await this.readAgentPids()) {
         try { process.kill(-entry.pid, 'SIGKILL'); } catch { /* already gone */ }
@@ -143,6 +176,62 @@ export async function makeFakeCodexProject({
     },
   };
 }
+
+/** Bounded receipt polling; failures include the caller's live child diagnostics. */
+export async function waitForReceipt(read, description, { timeout = 30000, diagnostics = () => '' } = {}) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const value = await read();
+    if (value) return value;
+    await delay(50);
+  }
+  throw new Error(`Timed out waiting for ${description}\n${diagnostics()}`);
+}
+
+/** Purpose-written S07 dialect fixture; never depends on a shipped preset. */
+export const CANCEL_FANOUT_SPEC = `version: 1
+contracts:
+  Batch:
+    items: string[]
+  Result:
+    value: string
+flows:
+  entry: main
+  main:
+    max_rounds: 3
+    input:
+      featureCode: string
+      description: string
+      implementer_agent: string
+      reviewer_agent: string
+    output:
+      from: \${fan.output[0]}
+      contract: Result
+    steps:
+      - id: enumerate
+        agent: codex
+        do: S07_ENUMERATE
+        out: Batch
+      - id: fan
+        after: [enumerate]
+        fanout:
+          over: \${enumerate.output.items}
+          dispatch: consumer
+          concurrency: 2
+          isolation: worktree
+          require: all
+          merge: sequential
+          steps:
+            - agent: codex
+              do: "execute \${item}"
+              out: Result
+      - id: merge
+        after: [fan]
+        gate:
+          on_approve: null
+          on_revise: fan
+          on_kill: null
+`;
 
 /** True when no process in `pid`'s group is reachable. EPERM on a GROUP probe means
  *  unreachable, not alive (reference_pid_vs_pgid_eperm). */
