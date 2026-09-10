@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **COMP-BUILD-CANCEL S05**: a build whose flow was cancelled from another process now notices,
+  wherever the cancel lands. Stratum reports a swept agent as a generic `agent_run_failed` and a
+  cancelled run's `step_done` as an uncoded error, so compose confirms with `stratum_audit`
+  before acting, through one shared boundary that covers the consumer items, ordinary steps, the
+  fixers and the gate Q&A agent alike. On a confirmed cancel it stops the pump, skips every
+  pending retry, refuses to merge any patch captured after the cancel — and, if the cancel lands
+  mid-merge, reverses the whole merge transaction back to its baseline tree. The build now ends
+  `aborted` with its vision item `killed`, instead of being terminalized as `failed`/`blocked`
+  by the outer catch. `isTerminalFlow` finally knows about `cancelled`, so recovery no longer
+  tries to resume a cancelled run.
+
 - COMP-BUILD-CANCEL review-1 fixes: arm CLI signals before Codex preflight, bound vision teardown and retain pending cancellation until settlement, claim ownership before both terminal mutations, preserve aborted completion history, verify abort listener cleanup, and report unknown untagged Codex transport.
 
 - **COMP-BUILD-CANCEL S04**: `compose build --abort` calls `stratum_flow_cancel` before local
