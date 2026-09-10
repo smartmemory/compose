@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import YAML from 'yaml';
-import { loadPipelineProfiles, preflightPipelineProfiles } from '../lib/build.js';
+import { loadPipelineProfiles, preflightPipelineProfiles, requirePipelineSidecar, sidecarCarriesExecutionConfig, runBuild } from '../lib/build.js';
 
 const repo = fileURLToPath(new URL('../', import.meta.url));
 const spec = { version: 1, flows: { entry: 'main', main: { steps: [
@@ -159,4 +159,70 @@ test('object-form sidecars normalize defaults, tier routing, metadata and gate m
   assert.throws(() => preflightPipelineProfiles({ ...profiles, execute: { ...profiles.execute, tier_from: 'item.model' } }, spec), /tier_from/);
   const reserved = structuredClone(spec); reserved.flows.main.steps[2].id = 'review_gate';
   assert.throws(() => preflightPipelineProfiles({ review_gate: profiles.gate }, reserved), /not an available output gate/);
+});
+
+
+test('local team-fable-astra requires its bundled sidecar (execution configuration)', t => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'required-sidecar-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const name = 'team-fable-astra';
+  const bundled = resolve(repo, 'presets', `${name}.stratum.yaml`);
+  assert.doesNotThrow(() => requirePipelineSidecar(bundled));
+  for (const ext of ['yaml', 'yml']) {
+    const local = resolve(dir, `${name}.stratum.${ext}`);
+    writeFileSync(local, readFileSync(bundled));
+    assert.throws(() => requirePipelineSidecar(local), { code: 'PROFILE_SIDECAR_REQUIRED' });
+  }
+  writeFileSync(resolve(dir, `${name}.profiles.json`), '{}');
+  assert.doesNotThrow(() => requirePipelineSidecar(resolve(dir, `${name}.stratum.yaml`)));
+});
+
+test('a string-only bundled sidecar (tool restrictions) keeps missing → defaults for a same-named local spec', t => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'optional-string-sidecar-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  for (const [directory, name] of [['presets', 'team-feature'], ['pipelines', 'build']]) {
+    const bundledSidecar = JSON.parse(readFileSync(resolve(repo, directory, `${name}.profiles.json`), 'utf-8'));
+    assert.equal(sidecarCarriesExecutionConfig(bundledSidecar), false, `${name} sidecar is string-only`);
+    const local = resolve(dir, `${name}.stratum.yaml`);
+    writeFileSync(local, readFileSync(resolve(repo, directory, `${name}.stratum.yaml`)));
+    assert.doesNotThrow(() => requirePipelineSidecar(local));
+  }
+  assert.equal(sidecarCarriesExecutionConfig(JSON.parse(readFileSync(resolve(repo, 'presets/team-fable-astra.profiles.json'), 'utf-8'))), true);
+  assert.equal(sidecarCarriesExecutionConfig({ execute: { default: 'codex', tier_from: 'item.tier' } }), true);
+  assert.equal(sidecarCarriesExecutionConfig({ _costCeiling: { default: 1, gates: [] } }), true);
+  assert.equal(sidecarCarriesExecutionConfig({ plan: 'claude::critical', _comment: { any: 1 }, _reduceSteps: ['x'] }), false);
+});
+
+test('sidecars remain optional for custom specs and bundled counterparts without sidecars', t => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'optional-sidecar-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  assert.ok(existsSync(resolve(repo, 'pipelines/content.stratum.yaml')));
+  assert.ok(!existsSync(resolve(repo, 'pipelines/content.profiles.json')));
+  for (const name of ['content', 'custom-with-no-bundled-counterpart']) {
+    const local = resolve(dir, `${name}.stratum.yaml`);
+    writeFileSync(local, YAML.stringify(spec));
+    assert.doesNotThrow(() => requirePipelineSidecar(local));
+    assert.deepEqual(loadPipelineProfiles(local), {});
+  }
+});
+
+test('runBuild refuses a local preset without its required sidecar before any plan call', async t => {
+  const cwd = mkdtempSync(resolve(tmpdir(), 'required-sidecar-build-'));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  mkdirSync(resolve(cwd, '.compose/data'), { recursive: true });
+  mkdirSync(resolve(cwd, 'pipelines'));
+  writeFileSync(resolve(cwd, '.compose/compose.json'), JSON.stringify({ version: 2 }));
+  writeFileSync(resolve(cwd, 'pipelines/team-fable-astra.stratum.yaml'),
+    readFileSync(resolve(repo, 'presets/team-fable-astra.stratum.yaml')));
+  const calls = [];
+  const stratum = {
+    async plan() { calls.push('plan'); throw new Error('unexpected plan'); },
+    async resume() { calls.push('resume'); throw new Error('unexpected resume'); },
+    async agentRun() { calls.push('agentRun'); throw new Error('unexpected agent'); },
+    async close() {},
+  };
+  await assert.rejects(runBuild('X', { cwd, template: 'team-fable-astra', stratum,
+    skipTriage: true, description: 'Missing sidecar regression' }),
+  { code: 'PROFILE_SIDECAR_REQUIRED' });
+  assert.deepEqual(calls, [], 'zero plans, resumed flows, or agents');
 });

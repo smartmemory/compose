@@ -1,0 +1,18 @@
+{
+  "plan": "claude:orchestrator:coordinator",
+  "execute": { "default": "codex:implementer:critical", "tier_from": "item.tier" },
+  "verify": "claude:orchestrator:standard",
+  "review": "codex:read-only-reviewer:critical",
+  "assess": "claude:orchestrator:coordinator",
+  "assess_gate": {
+    "decide_from": {
+      "step": "assess", "field": "action",
+      "approve": ["complete"], "revise": ["repair", "implement"], "kill": ["blocked"]
+    },
+    "validators": [{ "name": "WaveDecision", "review_step": "review", "tasks_field": "tasks" }]
+  },
+  "_consumer": {
+    "execute": { "ownership": "item.files_owned", "independent": true, "checkpoint_gate": "execute_merge" }
+  },
+  "_costCeiling": { "input": "cost_ceiling_usd", "default": 150, "gates": ["assess_gate"] }
+}

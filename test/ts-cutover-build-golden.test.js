@@ -215,6 +215,7 @@ describe('build.js consumes TS-native Stratum responses', () => {
         JSON.stringify({ version: 2, capabilities: { stratum: true } }),
       );
       await writeFile(join(workspace, 'pipelines', 'build.stratum.yaml'), SIDE_EFFECT_BUILD_SPEC);
+      await writeFile(join(workspace, 'pipelines', 'build.profiles.json'), '{}');
       await writeFile(
         join(workspace, 'docs', 'features', 'TS-BUILD-NO-OUT', 'description.md'),
         '# TS no-out cutover\n',
@@ -263,6 +264,7 @@ describe('build.js consumes TS-native Stratum responses', () => {
         JSON.stringify({ version: 2, capabilities: { stratum: true } }),
       );
       await writeFile(join(workspace, 'pipelines', 'build.stratum.yaml'), FAILING_BUILD_SPEC);
+      await writeFile(join(workspace, 'pipelines', 'build.profiles.json'), '{}');
       await writeFile(
         join(workspace, 'docs', 'features', 'TS-BUILD-FAILED', 'description.md'),
         '# TS failed cutover\n',
@@ -321,6 +323,7 @@ describe('build.js consumes TS-native Stratum responses', () => {
         JSON.stringify({ version: 2, capabilities: { stratum: true } }),
       );
       await writeFile(join(workspace, 'pipelines', 'build.stratum.yaml'), POINTER_BUILD_SPEC);
+      await writeFile(join(workspace, 'pipelines', 'build.profiles.json'), '{}');
       await writeFile(
         join(workspace, 'docs', 'features', 'TS-BUILD-POINTER', 'description.md'),
         '# TS entry-pointer cutover\n',
@@ -369,6 +372,7 @@ describe('profile failures stop real runBuild before any Stratum flow or agent c
       const agent = scenario === 'runtime' ? '$.input.implementer_agent' : 'claude';
       await writeFile(join(workspace, 'pipelines', 'build.stratum.yaml'),
         SIMPLE_BUILD_SPEC.replace('- id: work', `- id: work\n        agent: "${agent}"`));
+      await writeFile(join(workspace, 'pipelines', 'build.profiles.json'), '{}');
       if (scenario !== 'runtime') {
         await writeFile(join(workspace, 'pipelines', 'build.profiles.json'),
           scenario === 'invalid JSON' ? '{broken' : JSON.stringify({ work: 'claude::bogus' }));

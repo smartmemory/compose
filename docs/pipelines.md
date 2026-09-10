@@ -103,7 +103,7 @@ re-authoring a spec as `version: 1` is the whole of what makes it runnable.
 | `research.stratum.yaml` | `research` | Standalone research: gather → analyze → report |
 | `review-fix.stratum.yaml` | `review_fix` | Two-phase loop: implement then review/fix until clean |
 
-The three bundled presets in `presets/` (`team-feature`, `team-research`, `team-review`)
+The four bundled presets in `presets/` (`team-feature`, `team-research`, `team-review`, `team-fable-astra`)
 are v1 as well. Each pairs with a `<name>.profiles.json` sidecar holding the agent
 profiles (tool restrictions and model tiers) that v1 strips from the spec, which
 compose re-applies at invocation — these are load-bearing wherever a fanout runs at
@@ -123,8 +123,15 @@ For example, `claude:orchestrator:coordinator` explicitly selects Fable with
 adaptive thinking and high effort. Omitting the tier, as in
 `claude:orchestrator`, keeps the connector default (`modelID: null`).
 
-Profiles fail closed: a missing sidecar is legal, but an existing sidecar with
-invalid JSON or a non-object value stops the build. Preflight rejects unknown
+Profiles fail closed where it changes outcomes: a local spec whose bundled preset
+counterpart (same basename) ships a sidecar that configures execution (per-item
+tiers, output-driven gates, ownership, a cost ceiling: today `team-fable-astra`)
+must have an adjacent `<name>.profiles.json`, or `PROFILE_SIDECAR_REQUIRED`
+refuses the build before any plan or flow;
+[copy both files](team-presets.md#customization). A missing string-only sidecar
+(tool restrictions and tiers) still means bare defaults, and a custom spec with no
+bundled counterpart never needs one.
+An existing sidecar with invalid JSON or a non-object value stops the build. Preflight rejects unknown
 tiers, unavailable provider/tier combinations, invalid profile values, and keys
 that name no step in any flow. Keys beginning with `_` are metadata, not agent entries;
 recognized `_consumer` and `_costCeiling` configuration is validated.
@@ -134,6 +141,28 @@ flow starts; restored resume roles are checked again before dispatch. One
 `profile_preflight` event records `{ steps: { stepId: { profile, provider, tier,
 modelID } } }` when the build stream opens, before step dispatch. Multi-stage
 fanout entries use `stepId/stageIndex` so every stage is recorded.
+
+### Fable-Astra wave loop
+
+`compose build FEAT-1 --team fable-astra` selects `team-fable-astra` through the
+existing named-template resolver. Fable plans 1–6 independent tasks with disjoint
+literal file ownership; Codex workers use each task's critical/standard/fast tier
+in isolated worktrees. Merge approval checkpoints the integrated tree before
+Sonnet verifies it. A fresh read-only Astra reviewer receives the goal, acceptance
+criteria, cumulative merged diff (including new files) and verification evidence,
+never worker summaries. Fable assesses the evidence and every finding, then
+requests another implementation wave, affected-only repair, completion or blocking.
+Completion routes to ship, producing one commit parented by the build base.
+
+The carried `wave` starts at `plan.output.tasks`; only an `assess_gate` revise
+replaces it with `assess.output.tasks`. Merge retries reuse the recorded wave.
+Both gates allow two revisions each, sharing the flow's four-revision limit.
+Exhaustion or a blocked decision ends the flow failed. Failed verification reaches
+review and assessment so defects can be repaired rather than merely retested.
+Worker concurrency is the numeric literal 3; copy the YAML and sidecar together
+to change it. `cost_ceiling_usd` is an optional numeric flow input with a $150
+Compose-side default; `--cost-ceiling-usd` overrides it. A ceiling breach pauses
+at `assess_gate` for an explicit human decision; see recovery below.
 
 ### Wave profiles, ownership and output gates
 
@@ -145,13 +174,14 @@ The provider and template stay fixed for the stage. The whole recorded wave is
 validated before any worker starts, including items beyond the concurrency limit.
 Runtime agent overrides replace `default` while preserving `tier_from`.
 
-Example sidecar for a custom wave pipeline (the production team preset is separate work):
+Example sidecar for a custom wave pipeline (see `presets/team-fable-astra.profiles.json`
+for the complete bundled configuration):
 
 ```json
 {
   "plan": "claude:orchestrator:coordinator",
   "execute": {"default": "codex:implementer:critical", "tier_from": "item.tier"},
-  "review": "codex:reviewer:critical",
+  "review": "codex:read-only-reviewer:critical",
   "assess": "claude:orchestrator:coordinator",
   "assess_gate": {
     "decide_from": {
@@ -220,13 +250,14 @@ expected-tip check and starts a new flow; it does not delete other flow refs.
 `--fresh` and `--resume` are mutually exclusive. Profile changes on resume fail
 with `CONSUMER_PROFILE_REVISION_MISMATCH`.
 
-**Integration status:** the dispatch-3 fixes pass four of six goldens, including
-real worker dispatch, whole-wave tier rejection and ownership failures. Repair
-and crash/resume shipping stop at the cost gate because Stratum's successful
-Codex response omits USD cost/provenance. Per-item receipt metadata is read from
-the persisted run record, not public audit events. See **Fixes r1** in the
-[dispatch-3 report](features/COMP-FABLE-ASTRA/reports/slice3-d3-impl.md) for the
-reproduction and assertions still unverified.
+**Integration status:** the controller recorded all six dispatch-3 real-engine
+goldens passing after the cost/epoch fixes (Compose `53e3710`, Stratum `db8666c`).
+See **Fixes r2** in the [dispatch-3 report](features/COMP-FABLE-ASTRA/reports/slice3-d3-impl.md).
+Per-item receipt metadata is read from the persisted run record, not public audit
+events. The bundled preset has a real-engine one-wave ship golden with recorded
+Claude outputs and fake Codex. Real model quality, cancellation/recovery scenarios
+and clean global-install parity remain slice-6 live-fire obligations; the Stratum
+release must include the surface-20 and cost fixes before Compose ships.
 
 ### Wave failure codes
 
