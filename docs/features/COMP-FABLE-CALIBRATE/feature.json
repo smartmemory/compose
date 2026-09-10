@@ -1,7 +1,7 @@
 {
   "code": "COMP-FABLE-CALIBRATE",
-  "description": "Receipt-calibrated task estimation for Fable-led teams. COMP-FABLE-ASTRA has Fable assign a tier per task (critical / standard / fast) from its own judgment. Close the loop: after each wave compare every task's planned tier with its receipt (STRAT-USAGE-SPLIT token split, cost, retries, review findings against that task), record the miss, and feed a compact calibration table into Fable's planning prompt for the next wave and the next run. Consumer of STRAT-LEARN-COST; the E3 complexity-triage idea in the ideabox is the shape. Depends on COMP-FABLE-ASTRA shipping. COMP-TEAMS: Agent Team Presets M medium",
-  "status": "PLANNED",
+  "description": "Receipt-calibrated task estimation for Fable-led teams. COMP-FABLE-ASTRA has Fable assign a tier per task (critical / standard / fast) from its own judgment. Close the loop: after each wave compare every task's planned tier with its receipt (STRAT-USAGE-SPLIT token split, cost, retries, review findings against that task), record the miss, and feed a compact calibration table into Fable's planning prompt for the next wave and the next run. Consumer of STRAT-LEARN-COST; the E3 complexity-triage idea in the ideabox is the shape. Depends on COMP-FABLE-ASTRA shipping. COMP-TEAMS: Agent Team Presets M medium KILLED 2026-09-11: superseded by COMP-MODEL-ROUTE (receipt join lands in slice S1b, the planning-prompt calibration table in slice S2 behind `calibration_feedback`). See docs/features/COMP-FABLE-CALIBRATE/killed.md",
+  "status": "KILLED",
   "created": "2026-09-09",
   "profile": {
     "needs_prd": true,
@@ -11,7 +11,7 @@
     "language": "node",
     "test_framework": "vitest"
   },
-  "updated": "2026-09-09",
+  "updated": "2026-09-10",
   "links": [
     {
       "kind": "surfaced_by",
