@@ -15,11 +15,11 @@ import { parseAgentString, resolveAgentConfig } from '../lib/agent-string.js';
 
 describe('resolveTierModel', () => {
   test('critical resolves to Opus', () => {
-    assert.strictEqual(resolveTierModel('critical'), 'claude-opus-4-7');
+    assert.strictEqual(resolveTierModel('critical'), 'claude-opus-5');
   });
 
   test('standard resolves to Sonnet', () => {
-    assert.strictEqual(resolveTierModel('standard'), 'claude-sonnet-4-6');
+    assert.strictEqual(resolveTierModel('standard'), 'claude-sonnet-5');
   });
 
   test('fast resolves to Haiku', () => {
@@ -44,10 +44,11 @@ describe('resolveTierModel', () => {
 // ---------------------------------------------------------------------------
 
 describe('MODEL_TIERS', () => {
-  test('exports the three expected tiers', () => {
+  test('exports the four expected tiers', () => {
     assert.ok('critical' in MODEL_TIERS);
     assert.ok('standard' in MODEL_TIERS);
     assert.ok('fast' in MODEL_TIERS);
+    assert.ok('coordinator' in MODEL_TIERS);
   });
 });
 
@@ -81,10 +82,11 @@ describe('resolveTierThinking', () => {
 });
 
 describe('TIER_THINKING', () => {
-  test('exports config for all three tiers', () => {
+  test('exports config for all four tiers', () => {
     assert.ok('critical' in TIER_THINKING);
     assert.ok('standard' in TIER_THINKING);
     assert.ok('fast' in TIER_THINKING);
+    assert.ok('coordinator' in TIER_THINKING);
   });
 });
 
@@ -152,7 +154,7 @@ describe('resolveAgentConfig — modelID', () => {
   test('"claude::critical" returns Opus modelID', () => {
     const cfg = resolveAgentConfig('claude::critical');
     assert.strictEqual(cfg.tier, 'critical');
-    assert.strictEqual(cfg.modelID, 'claude-opus-4-7');
+    assert.strictEqual(cfg.modelID, 'claude-opus-5');
   });
 
   test('"claude" → modelID=null (no tier, uses connector default)', () => {
@@ -172,7 +174,7 @@ describe('resolveAgentConfig — modelID', () => {
     assert.strictEqual(cfg.provider, 'claude');
     assert.strictEqual(cfg.template, 'read-only-reviewer');
     assert.strictEqual(cfg.tier, 'critical');
-    assert.strictEqual(cfg.modelID, 'claude-opus-4-7');
+    assert.strictEqual(cfg.modelID, 'claude-opus-5');
     assert.deepStrictEqual(cfg.allowedTools, ['Read', 'Grep', 'Glob', 'Agent']);
     assert.deepStrictEqual(cfg.disallowedTools, ['Edit', 'Write', 'Bash']);
   });
@@ -194,4 +196,22 @@ describe('resolveAgentConfig — modelID', () => {
     assert.strictEqual(cfg.thinking, null);
     assert.strictEqual(cfg.effort, null);
   });
+});
+
+
+test('coordinator routes only Claude to Fable with adaptive high thinking', () => {
+  assert.equal(resolveTierModel('coordinator', 'claude'), 'claude-fable-5-1');
+  assert.equal(resolveTierModel('coordinator', 'codex'), null);
+  assert.deepEqual(resolveTierThinking('coordinator'), { mode: 'adaptive', effort: 'high' });
+  assert.equal(resolveTierThinking('coordinator', 'codex'), null);
+  const config = resolveAgentConfig('claude:orchestrator:coordinator');
+  assert.equal(config.modelID, 'claude-fable-5-1');
+  assert.deepEqual(config.thinking, { type: 'adaptive' });
+  assert.equal(config.effort, 'high');
+});
+
+test('existing Codex model routes are unchanged', () => {
+  assert.equal(resolveTierModel('critical', 'codex'), 'gpt-6-astra');
+  assert.equal(resolveTierModel('standard', 'codex'), 'gpt-5.6-terra');
+  assert.equal(resolveTierModel('fast', 'codex'), 'gpt-5.3-codex-spark');
 });

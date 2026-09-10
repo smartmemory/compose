@@ -109,6 +109,31 @@ profile strings (tool restrictions and model tiers) that v1 strips from the spec
 compose re-applies at invocation — these are load-bearing wherever a fanout runs at
 `isolation: none`, since the read-only restriction lives only there.
 
+Agent profiles use `provider:template:tier`; template and tier are optional.
+The tier allow-list comes from `server/model-tiers.js`:
+
+| Tier | Claude | Codex |
+|------|--------|-------|
+| `critical` | `claude-opus-5` | `gpt-6-astra` |
+| `standard` | `claude-sonnet-5` | `gpt-5.6-terra` |
+| `fast` | `claude-haiku-4-5-20251001` | `gpt-5.3-codex-spark` |
+| `coordinator` | `claude-fable-5-1` | unavailable (validation error) |
+
+For example, `claude:orchestrator:coordinator` explicitly selects Fable with
+adaptive thinking and high effort. Omitting the tier, as in
+`claude:orchestrator`, keeps the connector default (`modelID: null`).
+
+Profiles fail closed: a missing sidecar is legal, but an existing sidecar with
+invalid JSON or a non-object value stops the build. Preflight rejects unknown
+tiers, unavailable provider/tier combinations, invalid profile values, and keys
+that name no step in any flow. Keys beginning with `_` are metadata and skipped.
+Fanout profiles use the enclosing step id and apply to its agent stages.
+Static profiles and merged runtime role overrides are checked before a fresh
+flow starts; restored resume roles are checked again before dispatch. One
+`profile_preflight` event records `{ steps: { stepId: { profile, provider, tier,
+modelID } } }` when the build stream opens, before step dispatch. Multi-stage
+fanout entries use `stepId/stageIndex` so every stage is recorded.
+
 `test/pipeline-ts-engine-guard.test.js` iterates both directories and enforces this:
 every spec must be v1, every v1 spec must actually plan on the engine, and a spec on an
 older dialect must actually be refused by it.

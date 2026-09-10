@@ -529,7 +529,15 @@ test('runBuild reports retry-fixer and both main attempts with receipt ownership
 test('the review-repair fixer runs under the sidecar fix profile', async () => {
   const code = 'BUG-FIX-PROFILE';
   const cwd = makeBuildWorkspace(code, {
-    spec: SCOPED_RETRY_SPEC,
+    // A fix profile must name a declared step, as the shipped bug-fix preset
+    // does. This fixture exercises the retry fixer, not a scheduled fix step.
+    spec: `${SCOPED_RETRY_SPEC}      - id: fix
+        after: [work]
+        when: "false"
+        agent: claude
+        do: stub
+        out: R
+`,
     profiles: { fix: 'claude:read-only-reviewer:critical' },
   });
   let agentCall = 0;

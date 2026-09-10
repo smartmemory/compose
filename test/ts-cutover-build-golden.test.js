@@ -15,6 +15,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { runBuild } from '../lib/build.js';
@@ -117,10 +118,10 @@ flows:
 `;
 
 function stubAgentFactory(onRun, output = { value: 'built' }) {
-  return function factory() {
+  return function factory(agentType, agentOptions) {
     return {
       async *run() {
-        onRun();
+        onRun(agentType, agentOptions);
         yield { type: 'assistant', content: JSON.stringify(output) };
         yield { type: 'system', subtype: 'complete', agent: 'stub' };
       },
@@ -145,7 +146,8 @@ describe('build.js consumes TS-native Stratum responses', () => {
         join(workspace, '.compose', 'compose.json'),
         JSON.stringify({ version: 2, capabilities: { stratum: true } }),
       );
-      await writeFile(join(workspace, 'pipelines', 'build.stratum.yaml'), SIMPLE_BUILD_SPEC);
+      await writeFile(join(workspace, 'pipelines', 'build.stratum.yaml'), SIMPLE_BUILD_SPEC.replace('- id: work', '- id: work\n        agent: claude'));
+      await writeFile(join(workspace, 'pipelines', 'build.profiles.json'), JSON.stringify({ work: 'claude::coordinator' }));
       await writeFile(
         join(workspace, 'docs', 'features', 'TS-BUILD-1', 'description.md'),
         '# TS build cutover\n',
@@ -157,7 +159,20 @@ describe('build.js consumes TS-native Stratum responses', () => {
         env: { ...process.env, STRATUM_STATE_ROOT: stateRoot },
       });
 
-      installAgentHarness(client, stubAgentFactory(() => { agentRuns += 1; }), workspace);
+      installAgentHarness(client, stubAgentFactory((agentType, agentOptions) => {
+        agentRuns += 1;
+        assert.equal(agentType, 'claude');
+        assert.equal(agentOptions.modelID, 'claude-fable-5-1');
+        assert.deepEqual(agentOptions.thinking, { type: 'adaptive' });
+        assert.equal(agentOptions.effort, 'high');
+        const events = readFileSync(join(workspace, '.compose', 'build-stream.jsonl'), 'utf8')
+          .trim().split('\n').map(line => JSON.parse(line));
+        const preflights = events.filter(event => event.type === 'profile_preflight');
+        assert.equal(preflights.length, 1, 'one preflight event exists before the first dispatch');
+        assert.deepEqual(preflights[0].steps.work, {
+          profile: 'claude::coordinator', provider: 'claude', tier: 'coordinator', modelID: 'claude-fable-5-1',
+        });
+      }), workspace);
 
       await runBuild('TS-BUILD-1', {
         cwd: workspace,
@@ -339,4 +354,40 @@ describe('build.js consumes TS-native Stratum responses', () => {
       await rm(stateRoot, { recursive: true, force: true });
     }
   });
+});
+
+
+describe('profile failures stop real runBuild before any Stratum flow or agent call', () => {
+  for (const scenario of ['sidecar', 'runtime', 'invalid JSON']) {
+    test(`${scenario} profile failure starts zero flows and dispatches zero agents`, async t => {
+      const workspace = await mkdtemp(join(tmpdir(), 'compose-preflight-build-'));
+      t.after(() => rm(workspace, { recursive: true, force: true }));
+      await mkdir(join(workspace, '.compose', 'data'), { recursive: true });
+      await mkdir(join(workspace, 'pipelines'), { recursive: true });
+      await mkdir(join(workspace, 'docs', 'features', 'PREFLIGHT-1'), { recursive: true });
+      await writeFile(join(workspace, '.compose', 'compose.json'), JSON.stringify({ version: 2, capabilities: { stratum: true } }));
+      const agent = scenario === 'runtime' ? '$.input.implementer_agent' : 'claude';
+      await writeFile(join(workspace, 'pipelines', 'build.stratum.yaml'),
+        SIMPLE_BUILD_SPEC.replace('- id: work', `- id: work\n        agent: "${agent}"`));
+      if (scenario !== 'runtime') {
+        await writeFile(join(workspace, 'pipelines', 'build.profiles.json'),
+          scenario === 'invalid JSON' ? '{broken' : JSON.stringify({ work: 'claude::bogus' }));
+      }
+      const calls = [];
+      const fakeClient = {
+        async plan() { calls.push('plan'); throw new Error('unexpected plan'); },
+        async resume() { calls.push('resume'); throw new Error('unexpected resume'); },
+        async agentRun() { calls.push('agentRun'); throw new Error('unexpected agent'); },
+        async runAgentText() { calls.push('runAgentText'); throw new Error('unexpected agent'); },
+        async close() {},
+      };
+      await assert.rejects(() => runBuild('PREFLIGHT-1', {
+        cwd: workspace, stratum: fakeClient, template: 'build', skipTriage: true,
+        description: 'profile failure', ...(scenario === 'runtime' ? { implementer: 'claude::bogus' } : {}),
+      }), scenario === 'invalid JSON'
+        ? /Profile sidecar .*build.profiles.json is invalid:/
+        : /Profile preflight failed for .*build.stratum.yaml: step "work": .*unknown tier "bogus"/);
+      assert.deepEqual(calls, [], 'a rejected profile must never reach plan, resume or an agent');
+    });
+  }
 });

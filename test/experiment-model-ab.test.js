@@ -663,3 +663,19 @@ describe('COMP-MODEL-AB S4: experiment-judge', () => {
     });
   });
 });
+
+
+for (const [model, input, output] of [
+  ['claude-fable-5-1', 10, 50],
+  ['claude-opus-5', 5, 25],
+  ['claude-sonnet-5', 2, 10],
+]) {
+  test(`experiment pricing: ${model} and dated variants`, () => {
+    const expected = { inputPerMTok: input, outputPerMTok: output };
+    assert.deepEqual(lookupExperimentPricing(model), expected);
+    assert.deepEqual(lookupExperimentPricing(`${model}-20260909`), expected);
+    assert.equal(deriveUsd(model, 1_000_000, 0), input);
+    assert.equal(deriveUsd(model, 0, 1_000_000), output);
+    assert.equal(deriveUsd(`${model}-20260909`, 1_000_000, 1_000_000), input + output);
+  });
+}

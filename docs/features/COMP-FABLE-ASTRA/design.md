@@ -329,6 +329,14 @@ outcomes and artifact references with the report:
 
 ## Implementation slices
 
+Slice 1 source review (2026-09-10): `build.js` starts flows through `startFresh`
+→ `stratum.plan`, and previously merged runtime profiles after that start.
+The implementation moves runtime validation before fresh flow creation and
+rechecks restored resume roles. Agent declarations also occur inside fanout
+stages and use runtime input references; preflight covers these via the existing
+`resolvePlanSpecValues` resolver. The stream opens after plan/resume to preserve
+active-run ownership, so the resolved event is emitted there before dispatch.
+
 1. **Routing** (small, independent, ships first): `MODEL_TIERS` to the Claude 5
    family; `coordinator` in both the model table and `KNOWN_TIERS`; sidecar and
    model preflight that fails closed; tests.
