@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **COMP-MODEL-ROUTE S1a dispatch 1**: routing primitives with runtime participation still disabled — `lib/model-router.js` (statistical key, contract fingerprint over Stratum's real contract grammar, issuance identity, static shadow decision), `lib/routing-ledger.js` (immutable routing start record with pinned table/seed/provenance, plan binding with uncertain-plan hold, GSD continuation intent with logical task/wave identity and monotonic cumulative history), consumer-journal routing records/events with per-issuance event tips, `route` sidecar field validation with inert underscore metadata preserved, and `contracts/routing-{start,record}.schema.json`. Off-mode bundled profile digest pinned; three frozen 0.5.1 baselines under `test/fixtures/model-route-off-*.json` (bundled Build, carry, GSD input) with the recorder in `test/helpers/`. Astra impl review r1 (5 HIGH, all fixed), r2 (1 MEDIUM, fixed). No Build/GSD wiring, presets or receipts yet (dispatch 2, S1b).
+
 - **COMP-MODEL-ROUTE filed (design, PLANNED)**: dynamic model routing framework for agent dispatches — one resolver per dispatch key with an ordered value chain (manual fallback, opt-in learned, preset, spec default), immutable start record and root-bound route journal, receipt joins with downstream acceptance labels, executed-tier repair floor as an admission rail, recorded cold-start trials, separately gated planner calibration feedback. Slices S1a/S1b/S2/S3; bundled preset ships shadow. Supersedes COMP-FABLE-CALIBRATE (lifecycle kill pending, needs the compose server). Design gate: three Codex gpt-6-astra review rounds, REVIEW CLEAN at round 3; reports under `docs/features/COMP-MODEL-ROUTE/reports/`.
 
 ## [0.5.1] — 2026-09-10

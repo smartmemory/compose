@@ -1,9 +1,12 @@
+/** Sidecar validation, static precedence, routing policy projection and off digest identity. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { normalizePipelineProfiles, mergeRuntimeProfiles, resolveConsumerProfile, validateWaveAdmission,
-  profilesDigest, preflightPipelineProfiles, PipelineProfileError } from '../lib/pipeline-profiles.js';
+  profilesDigest, preflightPipelineProfiles, routingProfileProjection, PipelineProfileError } from '../lib/pipeline-profiles.js';
 const spec = { flows: { main: { steps: [
   { id: 'plan', agent: 'claude' },
   { id: 'execute', after: ['plan'], fanout: { dispatch: 'consumer', isolation: 'worktree', steps: [{ agent: 'codex' }] } },
@@ -76,4 +79,64 @@ test('preflight checks unprofiled stage defaults and rejects malformed runtime o
   assert.throws(() => preflightPipelineProfiles({}, invalidSpec));
   assert.throws(() => mergeRuntimeProfiles({ execute: entry }, { execute: { default: 'codex', typo: true } }));
   assert.equal(preflightPipelineProfiles({}, spec).resolved.execute.provider, 'codex');
+});
+
+test('routing policy validates closed shapes, refuses runtime policy overrides and gate routes', () => {
+  const raw = { execute: { ...entry, route: { learn: true } }, _routing: { mode: 'shadow' } };
+  assert.deepEqual(normalizePipelineProfiles(raw, spec), raw);
+  for (const route of [null, [], {}, { learn: 1 }, { learn: true, extra: false }]) assert.throws(() => normalizePipelineProfiles({ execute: { ...entry, route } }, spec));
+  assert.throws(() => normalizePipelineProfiles({ assess_gate: { ...gate, route: { learn: true } } }, spec));
+  for (const metadata of [null, [], {}, { mode: 'off' }, { mode: 'shadow', extra: 1 }]) assert.throws(() => normalizePipelineProfiles({ _routing: metadata }, spec));
+  assert.throws(() => mergeRuntimeProfiles(raw, { execute: { ...entry, route: { learn: true } } }), { code: 'ROUTING_POLICY_OVERRIDE' });
+});
+test('off projection pins bundled 0.5.1 digest and preserves legacy object representation', () => {
+  const raw = JSON.parse(readFileSync('presets/team-fable-astra.profiles.json', 'utf8'));
+  const yaml = readFileSync('presets/team-fable-astra.stratum.yaml', 'utf8');
+  const wrapped = { ...raw, plan: { default: raw.plan, route: { learn: true } }, execute: { ...raw.execute, route: { learn: true } }, _routing: { mode: 'shadow' } };
+  const expected = '310f9698e97212f695ce2ca752d724f90c1f233ab5855dcb33a26bd3ad786205';
+  assert.equal(preflightPipelineProfiles(raw, yaml).profilesDigest, expected);
+  const result = preflightPipelineProfiles(wrapped, yaml, {}, { mode: 'off' });
+  assert.equal(result.profilesDigest, expected); assert.deepEqual(result.normalized, raw);
+  assert.deepEqual(preflightPipelineProfiles({ plan: { default: 'claude' } }, spec).normalized.plan, { default: 'claude' });
+  assert.equal(Object.keys(result).includes('routingPolicy'), false);
+  assert.equal(result.routingPolicy.mode, 'off');
+});
+test('provenance retains original prior, equal-valued explicit override and item-tier fallback semantics', () => {
+  const raw = { execute: { ...entry, route: { learn: true } } };
+  const result = preflightPipelineProfiles(raw, spec, { execute: 'codex:implementer:fast' });
+  const p = result.staticProvenance.execute;
+  assert.equal(p.prior, 'critical'); assert.equal(p.source, 'manual'); assert.equal(p.manualFallback.supplied, true);
+  assert.equal(result.resolved.execute.tier, 'fast');
+  assert.equal(resolveConsumerProfile(result.normalized.execute, { tier: 'critical' }).tier, 'critical');
+  assert.equal(p.itemTier.source, 'preset'); assert.equal(p.itemTier.via, 'item.tier');
+  assert.equal(preflightPipelineProfiles(raw, spec, { execute: entry.default }).staticProvenance.execute.source, 'manual');
+  const role = preflightPipelineProfiles(raw, spec, { execute: entry.default }, { runtimeOrigins: { execute: { supplied: false, origin: 'default-role', recordedRole: entry.default } } });
+  assert.equal(role.staticProvenance.execute.source, 'preset'); assert.equal(role.staticProvenance.execute.manualFallback.origin, 'default-role');
+  assert.equal(result.staticProvenance.plan.source, 'default'); assert.equal(result.staticProvenance.plan.prior, null);
+});
+test('manual override without a sidecar retains the original literal spec prior', () => {
+  const plain = { flows: { main: { steps: [{ id: 'work', agent: 'codex' }] } } };
+  const p = preflightPipelineProfiles({}, plain, { work: 'codex::critical' });
+  assert.equal(p.staticProvenance.work.prior, null); assert.equal(p.staticProvenance.work.source, 'manual');
+  assert.equal(p.resolved.work.tier, 'critical');
+});
+
+test('off preflight preserves inert underscore metadata and equals HEAD output and digest', async () => {
+  const raw = { plan: 'claude', execute: entry,
+    _comment: { default: 'label', route: { learn: true } },
+    _unknown: { route: 'some metadata', inert: true } };
+  const original = structuredClone(raw);
+  assert.deepEqual(routingProfileProjection(raw, { mode: 'off' }).staticProfiles, raw);
+  // Read the real legacy implementation without creating or regenerating a baseline fixture.
+  let source = execFileSync('git', ['show', 'HEAD:lib/pipeline-profiles.js'], { encoding: 'utf8' });
+  source = source.replace("from 'yaml'", `from '${import.meta.resolve('yaml')}'`)
+    .replace("from './agent-string.js'", `from '${pathToFileURL(resolve('lib/agent-string.js')).href}'`);
+  const legacy = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+  const expected = legacy.preflightPipelineProfiles(raw, spec);
+  const actual = preflightPipelineProfiles(raw, spec, {}, { mode: 'off' });
+  assert.deepEqual(actual.normalized._comment, original._comment);
+  assert.deepEqual(actual.normalized._unknown, original._unknown);
+  assert.equal(JSON.stringify(actual), JSON.stringify(expected));
+  assert.equal(actual.profilesDigest, expected.profilesDigest);
+  assert.deepEqual(raw, original);
 });

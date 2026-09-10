@@ -119,3 +119,40 @@ r2 targeted check (findings 1, 2, 4) dispatched: astra ab6b12781070 → reports/
 
 ## 2026-09-10 — S1a blueprint review r2 (astra ab6b12781070) → REVIEW CLEAN (3/3 PASS). Blueprint gate closed.
 Next: dispatch 1 (contracts + pure/durable primitives + frozen baselines) → astra implementation.
+
+## 2026-09-10 — S1a dispatch 1 impl (astra f25be110f2a1, 29 min, 4.66M tok)
+New: lib/model-router.js, lib/routing-ledger.js, contracts/routing-{start,record}.schema.json, 3 test files,
+3 baseline fixtures, test/helpers/record-model-route-baselines.mjs. Changed: pipeline-profiles.js, flow-state.js,
+consumer-fanout.js, test/pipeline-profiles.test.js. Off-mode bundled digest 310f9698… pinned.
+Host targeted run: 90/90 pass (test/{model-router,routing-ledger,routing-journal,pipeline-profiles,
+build-team-fable-astra,build-wave-routing,gsd-wave-routing}.test.js). GSD baseline could not capture in the
+sandbox (EPERM on ~/.stratum flow lock) — captured on the HOST from frozen revision 5fbf8e0 via the recorder:
+gsd-input captured=true. Impl review r1 dispatched: astra 55023bb8d260 → reports/slice1a-d1-review-r1.md.
+
+## 2026-09-10 — S1a d1 impl review r1 (astra 55023bb8d260) → 5 HIGH — ALL ACCEPTED
+Report: reports/slice1a-d1-review-r1.md. Every finding probe-reproduced with production APIs + actual presets.
+1. Fingerprint treats `a|b` enum literals as contract refs → both bundled presets refused
+   (`Missing referenced contract critical` / `complete`). Test used `string|number` (both primitives) — the
+   fake-producer pattern again. Fix: parse the real contract grammar (validate.ts:63–92), share traversal
+   with reachableContracts, test closures from BOTH actual presets.
+2. No public API can initialize a continuation journal with ancestry; constructor writes an invalid journal.
+   Test mutated plain objects, bypassing the journal API. Fix: validated atomic first-journal initializer.
+3. Continuation validation checks only the immediate graph and caller-supplied ids: drops A from cumulative
+   completions, accepts an unexplained description change. Fix: enforce graph == predecessor filteredGraph
+   and monotonic cumulative history through reachable ancestors.
+4. Losing the LAST launch event resets an issuance to `prepared` → re-launchable. Test deleted a middle event.
+   Fix: per-issuance event tip/count validated on reload; test loss of the final event.
+5. routingProfileProjection iterates `_underscore` metadata as policy: off mode rewrites `_comment` and can
+   throw on inert metadata → off NOT byte-identical for custom sidecars. Fix: skip underscore ids except `_routing`.
+Also: report's GSD-blocked text is stale (host captured); `createContinuationIntent` needs
+`resumeDetails.verifiedCompletedTaskIds` — dispatch 2 must supply validated bookkeeping.
+Next: astra fix run → r2 targets the fixes → host targeted run → commit d1.
+
+## 2026-09-10 — S1a d1 fix run r1 (astra aac14adccdfa, 8 min, 1.73M tok) → host targeted run 97/97
+All five fixed within d1 ownership; diff +338/-11 over the r1 state. r2 review (targets the fixes, re-probes
+each) dispatched: astra 5da3396efa14 → reports/slice1a-d1-review-r2.md.
+
+## 2026-09-10 — S1a d1 review r2 (astra 5da3396efa14) → 5/5 FIXED, 1 new MEDIUM (omitted `out` rejected by
+shared walker) → fixed by astra 3eada73e344d (`stage.out ?? null` once + Stratum-validated regression).
+Host targeted run: 98/98. Full suite running on host before the d1 commit.
+Full suite on host: node 6849/6849, UI 624/624, tracker 100/100. Committing d1.

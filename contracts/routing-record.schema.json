@@ -1,0 +1,1271 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "routing-record.schema.json",
+  "_source": "docs/features/COMP-MODEL-ROUTE/design.md",
+  "_roadmap": "COMP-MODEL-ROUTE",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "phase",
+        "planIntentId",
+        "input",
+        "inputDigest",
+        "specDigest",
+        "featureCode",
+        "workspaceRoot",
+        "previousRunId",
+        "continuationIntentId"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "plan-intent"
+        },
+        "phase": {
+          "enum": [
+            "prepared",
+            "requested"
+          ]
+        },
+        "planIntentId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "input": {
+          "type": "object"
+        },
+        "inputDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "specDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "featureCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workspaceRoot": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previousRunId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "continuationIntentId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "runId",
+        "revisionDigest",
+        "specDigest",
+        "inputDigest",
+        "planIntentId",
+        "previousRunId",
+        "continuationIntentId"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "run-binding"
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "revisionDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "specDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "inputDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "planIntentId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "previousRunId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "continuationIntentId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "previousRunId",
+        "previousRevisionDigest",
+        "sourceGraph",
+        "sourceGraphDigest",
+        "filteredGraph",
+        "filteredGraphDigest",
+        "completedTaskIds",
+        "removedTaskIds",
+        "completionChain",
+        "removedDependencies",
+        "indexMap",
+        "bindings"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "continuation-intent"
+        },
+        "previousRunId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "previousRevisionDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceGraph": {
+          "type": "object"
+        },
+        "sourceGraphDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "filteredGraph": {
+          "type": "object"
+        },
+        "filteredGraphDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "completedTaskIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "removedTaskIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "completionChain": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+          }
+        },
+        "removedDependencies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "taskId",
+              "dependency"
+            ],
+            "properties": {
+              "taskId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "dependency": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "indexMap": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "taskId",
+              "oldIndex",
+              "newIndex"
+            ],
+            "properties": {
+              "taskId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "oldIndex": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "newIndex": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "bindings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "scopedStep",
+              "stage",
+              "logicalWaveId",
+              "logicalEpoch",
+              "logicalTaskId",
+              "allocationId",
+              "priorEngineEpoch",
+              "admissionId",
+              "priorRecordId"
+            ],
+            "properties": {
+              "scopedStep": {
+                "type": "string",
+                "minLength": 1
+              },
+              "stage": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "logicalWaveId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "logicalEpoch": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "logicalTaskId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "allocationId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "priorEngineEpoch": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "admissionId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+              },
+              "priorRecordId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "scopedStep",
+        "stage",
+        "logicalWaveId",
+        "logicalEpoch",
+        "logicalTaskId",
+        "runId",
+        "epoch",
+        "priorEpochBindingId",
+        "admissionIds",
+        "issuanceIds",
+        "sourceBinding",
+        "graph",
+        "graphDigest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "epoch-binding"
+        },
+        "scopedStep": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "logicalWaveId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "logicalEpoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "logicalTaskId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "priorEpochBindingId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "admissionIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+          }
+        },
+        "issuanceIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+          }
+        },
+        "sourceBinding": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "runId",
+                "scopedStep",
+                "epoch",
+                "acceptedDispatchToken",
+                "output",
+                "outputDigest"
+              ],
+              "properties": {
+                "runId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                },
+                "scopedStep": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "epoch": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "acceptedDispatchToken": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "output": {
+                  "type": "object"
+                },
+                "outputDigest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              }
+            }
+          ]
+        },
+        "graph": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object"
+            }
+          ]
+        },
+        "graphDigest": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "scopedStep",
+        "stage",
+        "logicalWaveId",
+        "logicalEpoch",
+        "logicalTaskId",
+        "allocationId",
+        "runId",
+        "epoch",
+        "itemIndex",
+        "generation",
+        "inputDigest",
+        "inputProvenance",
+        "candidate",
+        "baseline",
+        "proposal",
+        "admitted",
+        "refusal",
+        "would",
+        "repairContext"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "admission"
+        },
+        "scopedStep": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "logicalWaveId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "logicalEpoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "logicalTaskId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "allocationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "itemIndex": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "generation": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "inputDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "inputProvenance": {
+          "type": "object"
+        },
+        "candidate": {
+          "$ref": "#/$defs/Route"
+        },
+        "baseline": {
+          "$ref": "#/$defs/Route"
+        },
+        "proposal": {
+          "$ref": "#/$defs/Route"
+        },
+        "admitted": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/Route"
+            }
+          ]
+        },
+        "refusal": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "would": {
+          "$ref": "#/$defs/Route"
+        },
+        "repairContext": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state"
+          ],
+          "properties": {
+            "state": {
+              "const": "not-evaluated-s1a"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "scopedStep",
+        "stage",
+        "logicalWaveId",
+        "logicalEpoch",
+        "logicalTaskId",
+        "key",
+        "admissionId",
+        "runId",
+        "revisionDigest",
+        "epoch",
+        "itemIndex",
+        "generation",
+        "issuanceToken",
+        "priorRecordId",
+        "selected",
+        "would"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "issuance"
+        },
+        "scopedStep": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "logicalWaveId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "logicalEpoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "logicalTaskId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "admissionId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "revisionDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "itemIndex": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "generation": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "issuanceToken": {
+          "type": "string",
+          "minLength": 1
+        },
+        "priorRecordId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "selected": {
+          "$ref": "#/$defs/Route"
+        },
+        "would": {
+          "$ref": "#/$defs/Route"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "event",
+        "issuanceId",
+        "issuanceToken",
+        "sequence"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "issuance-event"
+        },
+        "event": {
+          "const": "launch-intent"
+        },
+        "issuanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "issuanceToken": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "event",
+        "issuanceId",
+        "issuanceToken",
+        "sequence",
+        "envelope"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "issuance-event"
+        },
+        "event": {
+          "const": "result-prepared"
+        },
+        "issuanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "issuanceToken": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "envelope": {
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "event",
+        "issuanceId",
+        "issuanceToken",
+        "sequence",
+        "evidence"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "issuance-event"
+        },
+        "event": {
+          "const": "settled"
+        },
+        "issuanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "issuanceToken": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runId",
+            "revisionDigest",
+            "scopedStep",
+            "epoch",
+            "itemIndex",
+            "generation",
+            "issuanceToken",
+            "acceptedDispatchToken",
+            "status"
+          ],
+          "properties": {
+            "runId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            "revisionDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "scopedStep": {
+              "type": "string",
+              "minLength": 1
+            },
+            "epoch": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "itemIndex": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "generation": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "issuanceToken": {
+              "type": "string",
+              "minLength": 1
+            },
+            "acceptedDispatchToken": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "enum": [
+                "succeeded",
+                "failed",
+                "cancelled"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "event",
+        "issuanceId",
+        "issuanceToken",
+        "sequence",
+        "reason"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "issuance-event"
+        },
+        "event": {
+          "const": "uncertain"
+        },
+        "issuanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "issuanceToken": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "Resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "template",
+        "tier",
+        "modelID",
+        "allowedTools",
+        "disallowedTools",
+        "thinking",
+        "effort",
+        "profile"
+      ],
+      "properties": {
+        "provider": {
+          "enum": [
+            "claude",
+            "codex"
+          ]
+        },
+        "template": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tier": {
+          "enum": [
+            null,
+            "critical",
+            "standard",
+            "fast",
+            "coordinator"
+          ]
+        },
+        "modelID": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "allowedTools": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "disallowedTools": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "thinking": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "enum": [
+                    "adaptive",
+                    "disabled"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "effort": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "profile": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "Provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prior",
+        "winner",
+        "source",
+        "via",
+        "manualFallback",
+        "itemTier"
+      ],
+      "properties": {
+        "prior": {
+          "enum": [
+            null,
+            "critical",
+            "standard",
+            "fast",
+            "coordinator"
+          ]
+        },
+        "winner": {
+          "$ref": "#/$defs/Resolution"
+        },
+        "source": {
+          "enum": [
+            "manual",
+            "preset",
+            "default"
+          ]
+        },
+        "via": {
+          "enum": [
+            "manual.fallback",
+            "preset.default",
+            "spec.agent",
+            "item.tier"
+          ]
+        },
+        "manualFallback": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "supplied",
+            "origin",
+            "profile",
+            "recordedRole"
+          ],
+          "properties": {
+            "supplied": {
+              "type": "boolean"
+            },
+            "origin": {
+              "type": "string",
+              "minLength": 1
+            },
+            "profile": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "recordedRole": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "itemTier": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "source",
+                "via"
+              ],
+              "properties": {
+                "source": {
+                  "const": "preset"
+                },
+                "via": {
+                  "const": "item.tier"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "Route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resolution",
+        "provenance"
+      ],
+      "properties": {
+        "resolution": {
+          "$ref": "#/$defs/Resolution"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        }
+      }
+    }
+  }
+}

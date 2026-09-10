@@ -1,0 +1,467 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "routing-start.schema.json",
+  "_source": "docs/features/COMP-MODEL-ROUTE/design.md",
+  "_roadmap": "COMP-MODEL-ROUTE",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "policyVersion",
+    "fingerprintVersion",
+    "startId",
+    "rootDigest",
+    "seed",
+    "mode",
+    "createdAt",
+    "policy",
+    "table",
+    "presetId",
+    "workspaceRoot",
+    "spec",
+    "originalInput",
+    "inputDigest",
+    "originalProfiles",
+    "runtimeOverrides",
+    "mergedProfiles",
+    "profilesDigest",
+    "mappings",
+    "contracts",
+    "staticResolutions",
+    "ordinaryInitialCandidates",
+    "calibration_feedback",
+    "calibration",
+    "cohort"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "policyVersion": {
+      "const": "s1a-static-v1"
+    },
+    "fingerprintVersion": {
+      "const": 1
+    },
+    "startId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+    },
+    "rootDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "seed": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "mode": {
+      "const": "shadow"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tolerance",
+        "candidateLadders",
+        "route_trials",
+        "route_explore"
+      ],
+      "properties": {
+        "tolerance": {
+          "const": 0.05
+        },
+        "candidateLadders": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "rungs",
+              "coordinator"
+            ],
+            "properties": {
+              "rungs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Resolution"
+                }
+              },
+              "coordinator": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/$defs/Resolution"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "route_trials": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "route_explore": {
+          "const": 0
+        }
+      }
+    },
+    "table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "contents",
+        "contentDigest",
+        "ledgerCutoff"
+      ],
+      "properties": {
+        "version": {
+          "const": "s1a-empty-v1"
+        },
+        "contents": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "ledgerCutoff": {
+          "type": "null"
+        }
+      }
+    },
+    "presetId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workspaceRoot": {
+      "type": "string",
+      "minLength": 1
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "original",
+        "effective",
+        "originalDigest",
+        "effectiveDigest"
+      ],
+      "properties": {
+        "original": {},
+        "effective": {},
+        "originalDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "effectiveDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "originalInput": {
+      "type": "object"
+    },
+    "inputDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "originalProfiles": {
+      "type": "object"
+    },
+    "runtimeOverrides": {
+      "type": "object"
+    },
+    "mergedProfiles": {
+      "type": "object"
+    },
+    "profilesDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "mappings": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Resolution"
+      }
+    },
+    "contracts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "root",
+          "contracts",
+          "options",
+          "paths",
+          "fingerprint"
+        ],
+        "properties": {
+          "root": {
+            "type": [
+              "string",
+              "object",
+              "null"
+            ]
+          },
+          "contracts": {
+            "type": "object"
+          },
+          "options": {
+            "type": "array",
+            "items": {}
+          },
+          "paths": {
+            "type": "array",
+            "items": {}
+          },
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "staticResolutions": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Provenance"
+      }
+    },
+    "ordinaryInitialCandidates": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Resolution"
+      }
+    },
+    "calibration_feedback": {
+      "const": false
+    },
+    "calibration": {
+      "const": ""
+    },
+    "cohort": {
+      "const": "static"
+    }
+  },
+  "$defs": {
+    "Resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "template",
+        "tier",
+        "modelID",
+        "allowedTools",
+        "disallowedTools",
+        "thinking",
+        "effort",
+        "profile"
+      ],
+      "properties": {
+        "provider": {
+          "enum": [
+            "claude",
+            "codex"
+          ]
+        },
+        "template": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tier": {
+          "enum": [
+            null,
+            "critical",
+            "standard",
+            "fast",
+            "coordinator"
+          ]
+        },
+        "modelID": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "allowedTools": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "disallowedTools": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "thinking": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "enum": [
+                    "adaptive",
+                    "disabled"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "effort": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "profile": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "Provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prior",
+        "winner",
+        "source",
+        "via",
+        "manualFallback",
+        "itemTier"
+      ],
+      "properties": {
+        "prior": {
+          "enum": [
+            null,
+            "critical",
+            "standard",
+            "fast",
+            "coordinator"
+          ]
+        },
+        "winner": {
+          "$ref": "#/$defs/Resolution"
+        },
+        "source": {
+          "enum": [
+            "manual",
+            "preset",
+            "default"
+          ]
+        },
+        "via": {
+          "enum": [
+            "manual.fallback",
+            "preset.default",
+            "spec.agent",
+            "item.tier"
+          ]
+        },
+        "manualFallback": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "supplied",
+            "origin",
+            "profile",
+            "recordedRole"
+          ],
+          "properties": {
+            "supplied": {
+              "type": "boolean"
+            },
+            "origin": {
+              "type": "string",
+              "minLength": 1
+            },
+            "profile": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "recordedRole": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "itemTier": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "source",
+                "via"
+              ],
+              "properties": {
+                "source": {
+                  "const": "preset"
+                },
+                "via": {
+                  "const": "item.tier"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "Route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resolution",
+        "provenance"
+      ],
+      "properties": {
+        "resolution": {
+          "$ref": "#/$defs/Resolution"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        }
+      }
+    }
+  }
+}
