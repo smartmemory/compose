@@ -44,3 +44,8 @@ Stratum side: STRAT-FLOW-CANCEL-FG (stratum @7bd4c08), STRAT-LOOP-CARRY (@c7478f
 - 2026-09-10: S04 committed d0a07c1 (astra impl, 108/108 local). Review-1 fixer (astra) runId f218a5207a06 pid 33698.
 - 2026-09-10: review-1 fixes committed e2ac599 (astra fixer; 128/128 local). Next: S05 (astra), then review r2 of the fixes + S04 + S05.
 - 2026-09-10: S05 impl (astra) runId 4290f36f2bd0 pid 38274.
+- 2026-09-10: S05 committed 7014c13 (astra; 142/142 + goldens 101/101 local). Next: review r2 (astra) of d0a07c1..HEAD, then S07.
+- 2026-09-10: impl review r2 (astra) runId dc1d1c8577e8 pid 6001 on 9a9ebb2..7014c13.
+- 2026-09-10: /flush written to compose/.claude/session-context.741c7076-cd41-4154-8ffb-5f4c3dcdef45.md while review r2 (dc1d1c8577e8) still running.
+- 2026-09-10: impl review r2 (astra, 6.4 min, 2.1M tok): 4 must-fix, all reproduced by probes, all accepted → impl-review2.md. Fixer (astra) runId 5971b5704312 pid 15062. S07 waits on this.
+- 2026-09-10: review-2 fixes (astra fixer, 12 min, 3.0M tok) → review2-fix-report.md; 10 new regressions red-before/green-after; 152/152 local (sandbox blocks `ps` for one test). Committed. Note: killOwnedBuildVision overrides VisionWriter's private _direct/_restUpdateItemStatus via a prototype receiver — works, but couples build.js to private names (nit, not re-reviewed; round 3 is the cap). Next: S07 goldens (astra).

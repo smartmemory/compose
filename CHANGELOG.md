@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- COMP-BUILD-CANCEL: review-2 fixes — merge fence rechecks after the audit, ownership re-claimed after every await, web-gate poll honours the build signal, health finalization cannot downgrade aborted
+
 - **COMP-BUILD-CANCEL S05**: a build whose flow was cancelled from another process now notices,
   wherever the cancel lands. Stratum reports a swept agent as a generic `agent_run_failed` and a
   cancelled run's `step_done` as an uncoded error, so compose confirms with `stratum_audit`
