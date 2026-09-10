@@ -4,7 +4,11 @@ import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
-import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
+import {
+  StratumMcpClient,
+  REQUIRED_STRATUM_SURFACE,
+  REQUIRED_STRATUM_RANGE,
+} from '../lib/stratum-mcp-client.js';
 import { runAndNormalize, AgentTimeoutError, UserInterruptError } from '../lib/result-normalizer.js';
 import { runConsumerIssuance, reportUsageReceipts } from '../lib/build.js';
 import { runLocalClaudeAgent } from '../lib/local-claude-connector.js';
@@ -70,7 +74,11 @@ test('old surface accepts a basic call and names installed versus required surfa
   assert.equal((await client.agentRun('codex', 'basic', {cwd:root})).text, 'done');
   await assert.rejects(client.agentRun('claude', 'restricted', {cwd:root,allowedTools:[]}), error => {
     assert.equal(error.code, 'UNSUPPORTED_AGENT_OPTIONS');
-    assert.match(error.message, /Installed Stratum 0.3.4.*allowedTools.*surface: 17.*0.4.0/);
+    const rangeEsc = REQUIRED_STRATUM_RANGE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const expected = new RegExp(
+      `Installed Stratum 0.3.4.*allowedTools.*surface: ${REQUIRED_STRATUM_SURFACE}.*${rangeEsc}`,
+    );
+    assert.match(error.message, expected);
     return true;
   });
   assert.equal((await readFile(join(root,'calls'),'utf8')).trim().split('\n').length, 1);
