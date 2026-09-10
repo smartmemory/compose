@@ -1,0 +1,43 @@
+{
+  "sourceRevision": "5fbf8e0bd5dae18eb92a08197b5a9a50743722dc",
+  "captured": true,
+  "harness": "test/gsd-stuck-resume-golden.test.js",
+  "command": "RESEND_API_KEY= STRIPE_API_KEY= node test/helpers/record-model-route-baselines.mjs",
+  "profileDigest": null,
+  "events": [
+    {
+      "kind": "plan",
+      "spec": "# metadata:\n#   id: gsd\n#   label: \"GSD — Per-Task Fresh-Context Dispatch\"\n#   description: \"Decompose a blueprint and dispatch each task in a fresh worktree context\"\n#   category: development\n#   steps: 4\n#   estimated_minutes: 60\n\nversion: 1\n\ncontracts:\n  PhaseResult:\n    phase: string\n    artifact: string\n    outcome: complete|skipped|failed\n    summary: string\n    files_changed: string[]?\n    commit_hash: string?\n\n  TaskGraph:\n    tasks: object[]\n\n  TaskResult:\n    outcome: string\n    summary: string\n    files_changed: string[]?\n\nflows:\n  entry: gsd\n  gsd:\n    input:\n      featureCode: string\n      gateCommands: string[]\n      pre_merge_gate: string[]?\n    output:\n      from: \"${ship_gsd.output}\"\n      contract: PhaseResult\n    max_rounds: 10\n    steps:\n      - id: decompose_gsd\n        agent: claude\n        do: >\n          Read docs/features/${input.featureCode}/blueprint.md including its Boundary\n          Map. Decompose it into independent tasks. Each task must contain id,\n          description, files_owned, files_read, and depends_on. Put the matching\n          produces/consumes entries, verbatim Boundary Map slice, upstream summaries,\n          and required pre-merge commands ${input.pre_merge_gate} into description.\n          Each slice maps to exactly one task and its File Plan is owned by that task.\n          Reject file ownership conflicts and return {tasks}.\n        out: TaskGraph\n        ensure:\n          - expr: \"len(result.tasks) >= 1\"\n        attempts: 2\n\n      # v0.3 parallel_dispatch -> TS v1 consumer fanout. Each item writes code,\n      # so Compose supplies an isolated worktree and retains its cumulative diff.\n      - id: execute\n        after: [decompose_gsd]\n        attempts: 2\n        fanout:\n          over: \"${decompose_gsd.output.tasks}\"\n          dispatch: consumer\n          concurrency: 1\n          isolation: worktree\n          require: all\n          merge: sequential\n          pre_merge: \"$.input.pre_merge_gate\"\n          steps:\n            - agent: claude\n              do: >\n                Implement the task described by ${item} using TDD. Honor its id,\n                files_owned, files_read, depends_on, and description fields. Write the\n                TaskResult JSON under .compose/gsd/${input.featureCode}/results/ using\n                the task id as its filename, and include it in your diff. Return\n                {outcome, summary, files_changed}.\n              out: TaskResult\n\n      - id: execute_merge\n        after: [execute]\n        gate:\n          on_approve: ship_gsd\n          on_revise: execute\n          on_kill: null\n          max_rounds: 10\n\n      - id: ship_gsd\n        agent: claude\n        do: >\n          Final verification and ship for ${input.featureCode}. Run all gate commands\n          ${input.gateCommands}; fix failures. Update ROADMAP.md and CHANGELOG.md, update\n          CLAUDE.md only for a new convention, stage only GSD-produced files, and commit\n          with message \"feat(COMP-GSD-2): per-task fresh-context dispatch\". Do not push.\n          Return PhaseResult with files_changed and commit_hash.\n        out: PhaseResult\n        ensure:\n          - expr: \"result.outcome == 'complete'\"\n        attempts: 2\n",
+      "flow": "gsd",
+      "input": {
+        "featureCode": "COMP-GSD-5-FIX",
+        "gateCommands": [
+          "true"
+        ],
+        "pre_merge_gate": [
+          "true"
+        ]
+      },
+      "opts": {
+        "workspaceRoot": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/gsd-stuck-resume-HwevLZ"
+      }
+    },
+    {
+      "kind": "plan",
+      "spec": "# metadata:\n#   id: gsd\n#   label: \"GSD — Per-Task Fresh-Context Dispatch\"\n#   description: \"Decompose a blueprint and dispatch each task in a fresh worktree context\"\n#   category: development\n#   steps: 4\n#   estimated_minutes: 60\n\nversion: 1\n\ncontracts:\n  PhaseResult:\n    phase: string\n    artifact: string\n    outcome: complete|skipped|failed\n    summary: string\n    files_changed: string[]?\n    commit_hash: string?\n\n  TaskGraph:\n    tasks: object[]\n\n  TaskResult:\n    outcome: string\n    summary: string\n    files_changed: string[]?\n\nflows:\n  entry: gsd\n  gsd:\n    input:\n      featureCode: string\n      gateCommands: string[]\n      pre_merge_gate: string[]?\n    output:\n      from: \"${ship_gsd.output}\"\n      contract: PhaseResult\n    max_rounds: 10\n    steps:\n      - id: decompose_gsd\n        agent: claude\n        do: >\n          Read docs/features/${input.featureCode}/blueprint.md including its Boundary\n          Map. Decompose it into independent tasks. Each task must contain id,\n          description, files_owned, files_read, and depends_on. Put the matching\n          produces/consumes entries, verbatim Boundary Map slice, upstream summaries,\n          and required pre-merge commands ${input.pre_merge_gate} into description.\n          Each slice maps to exactly one task and its File Plan is owned by that task.\n          Reject file ownership conflicts and return {tasks}.\n        out: TaskGraph\n        ensure:\n          - expr: \"len(result.tasks) >= 1\"\n        attempts: 2\n\n      # v0.3 parallel_dispatch -> TS v1 consumer fanout. Each item writes code,\n      # so Compose supplies an isolated worktree and retains its cumulative diff.\n      - id: execute\n        after: [decompose_gsd]\n        attempts: 2\n        fanout:\n          over: \"${decompose_gsd.output.tasks}\"\n          dispatch: consumer\n          concurrency: 1\n          isolation: worktree\n          require: all\n          merge: sequential\n          pre_merge: \"$.input.pre_merge_gate\"\n          steps:\n            - agent: claude\n              do: >\n                Implement the task described by ${item} using TDD. Honor its id,\n                files_owned, files_read, depends_on, and description fields. Write the\n                TaskResult JSON under .compose/gsd/${input.featureCode}/results/ using\n                the task id as its filename, and include it in your diff. Return\n                {outcome, summary, files_changed}.\n              out: TaskResult\n\n      - id: execute_merge\n        after: [execute]\n        gate:\n          on_approve: ship_gsd\n          on_revise: execute\n          on_kill: null\n          max_rounds: 10\n\n      - id: ship_gsd\n        agent: claude\n        do: >\n          Final verification and ship for ${input.featureCode}. Run all gate commands\n          ${input.gateCommands}; fix failures. Update ROADMAP.md and CHANGELOG.md, update\n          CLAUDE.md only for a new convention, stage only GSD-produced files, and commit\n          with message \"feat(COMP-GSD-2): per-task fresh-context dispatch\". Do not push.\n          Return PhaseResult with files_changed and commit_hash.\n        out: PhaseResult\n        ensure:\n          - expr: \"result.outcome == 'complete'\"\n        attempts: 2\n",
+      "flow": "gsd",
+      "input": {
+        "featureCode": "COMP-GSD-5-FIX",
+        "gateCommands": [
+          "true"
+        ],
+        "pre_merge_gate": [
+          "true"
+        ]
+      },
+      "opts": {
+        "workspaceRoot": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/gsd-stuck-resume-2rZK2k"
+      }
+    }
+  ]
+}
