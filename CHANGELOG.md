@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **COMP-FABLE-ASTRA slice 3 dispatch 2**: wire object-form profile sidecars, whole-wave tier admission, ownership failure envelopes, output-driven gates and durable receipt evidence into build/GSD. Add resumable cost-ceiling holds (`--cost-ceiling-usd` for single builds), checkpoint publication/recovery and selective wave ship preparation. Production presets remain slice 4 work.
+
 - **COMP-FABLE-ASTRA slice 3 dispatch 1**: add reusable profile/admission, output-gate and Git checkpoint primitives, plus durable consumer ownership evidence and checkpoint recovery. Runner wiring is deferred to dispatch 2; the new wave and gate behavior is not yet enabled.
 
 - **COMP-FABLE-ASTRA slice 1**: route Claude critical/standard to Opus 5/Sonnet 5 and add the explicit Fable coordinator tier (unavailable for Codex). Derive tier validation from the model table, retain historical pricing, reject malformed profile sidecars and invalid step profiles before flow start, and record resolved models in a `profile_preflight` build-stream event. Review r1 closed three routing holes the first preflight certified: a fanout-keyed profile over a multi-stage fanout whose stages declare different agents, an implicit-agent stage consuming the sidecar, and a tiered/templated profile on a `dispatch: engine` fanout (compose profiles are not applied there) all now fail before `stratum.plan`.

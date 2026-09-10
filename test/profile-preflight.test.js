@@ -142,3 +142,21 @@ test('r1 #3: a tiered or templated profile on an engine-dispatched fanout fails 
     /dispatch: engine/);
   assert.equal(preflightPipelineProfiles({ fan: 'codex' }, spec).ok, true);
 });
+
+test('object-form sidecars normalize defaults, tier routing, metadata and gate mappings', () => {
+  const spec = { version: 1, flows: { entry: 'main', main: { steps: [
+    { id: 'plan', agent: 'claude' },
+    { id: 'execute', after: ['plan'], fanout: { dispatch: 'consumer', isolation: 'worktree', steps: [{ agent: 'codex' }] } },
+    { id: 'gate', after: ['execute'], gate: {} },
+  ] } } };
+  const profiles = { execute: { default: 'codex:implementer:standard', tier_from: 'item.tier' },
+    _consumer: { execute: { ownership: 'item.files_owned', independent: true, checkpoint_gate: 'gate' } },
+    gate: { decide_from: { step: 'plan', field: 'action', approve: ['done'], revise: ['retry'], kill: ['stop'] } } };
+  const result = preflightPipelineProfiles(profiles, spec);
+  assert.equal(result.normalized.execute.tier_from, 'item.tier');
+  assert.equal(result.resolved.execute.modelID, 'gpt-5.6-terra');
+  assert.match(result.profilesDigest, /^[a-f0-9]{64}$/);
+  assert.throws(() => preflightPipelineProfiles({ ...profiles, execute: { ...profiles.execute, tier_from: 'item.model' } }, spec), /tier_from/);
+  const reserved = structuredClone(spec); reserved.flows.main.steps[2].id = 'review_gate';
+  assert.throws(() => preflightPipelineProfiles({ review_gate: profiles.gate }, reserved), /not an available output gate/);
+});
