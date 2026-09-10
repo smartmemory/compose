@@ -1,7 +1,7 @@
 /** Production preset golden: real engine/connector, recorded Claude and fake Codex. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync, execFileSync } from 'node:child_process';
@@ -12,12 +12,14 @@ import { TS_CLI_BIN, TS_MCP_BIN } from './helpers/stratum-test-bin.js';
 import { makeFakeCodexProject } from './helpers/fake-codex-project.js';
 import { fakeBuildStratum, agentResult } from './helpers/build-stratum-fixture.js';
 import { decision } from './helpers/build-wave-fixture.js';
-import { readGoldenJournal } from './helpers/build-wave-golden-fixture.js';
+import { readGoldenJournal, frozenRoutingBaseline, serializeGolden, normalizedGoldenCalls, readRoutingEvidence, assertRoutingGolden, ROUTING_INPUTS } from './helpers/build-wave-golden-fixture.js';
 import { git } from './helpers/consumer-wave-fixture.js';
 
 const presetPath = fileURLToPath(new URL('../presets/team-fable-astra.stratum.yaml', import.meta.url));
 const spec = readFileSync(presetPath, 'utf8');
 const profiles = loadPipelineProfiles(presetPath);
+import { preflightPipelineProfiles as corePreflight } from '../lib/pipeline-profiles.js';
+const frozen = frozenRoutingBaseline('bundled-build');
 const code = 'S4-PRESET-1';
 const core = 'module.exports = x => x * 2;\n';
 const workerSummary = 'WORKER_SUMMARY_MUST_NEVER_REACH_REVIEW';
@@ -34,13 +36,15 @@ test('fable-astra: real Stratum validator, CLI rewrite, bundled resolution and s
   assert.equal(resolveTemplatePath(parsed.template, '/tmp/no-s4-project'), presetPath);
   const preflight = preflightPipelineProfiles(profiles, spec);
   assert.equal(preflight.ok, true);
+  assert.deepEqual(profiles._routing, { mode: 'shadow' });
+  assert.deepEqual(Object.entries(profiles).filter(([, p]) => p?.route?.learn).map(([id]) => id), ['plan', 'execute']);
   assert.equal(preflight.resolved.plan.modelID, 'claude-fable-5-1');
   assert.equal(preflight.resolved.assess.modelID, 'claude-fable-5-1');
   assert.equal(preflight.resolved.verify.modelID, 'claude-sonnet-5');
   assert.equal(preflight.resolved.review.modelID, 'gpt-6-astra');
 });
 
-test('fable-astra: one real preset wave → complete → ship is one base-parent commit', { timeout: 180000 }, async t => {
+for (const mode of ['default shadow', 'off']) test(`fable-astra: ${mode} real preset wave → complete → ship and frozen oracle`, { timeout: 180000 }, async t => {
   const f = await makeFakeCodexProject({ featureCode: code, spec, profiles, git: true,
     recordModel: true, intentOnly: true, costUsd: 0.001,
     description: '# Goal\nImplement doubling.\n\n## Acceptance criteria\ncore(3) equals 6.\n',
@@ -75,6 +79,8 @@ test('fable-astra: one real preset wave → complete → ship is one base-parent
   process.env.NODE_ENV = 'test';
   let flowId;
   const inference = [];
+  const events = [];
+  const roots = [];
   const completions = [];
   const fake = fakeBuildStratum({ agentRun: async (_provider, prompt, opts) => {
     const step = prompt.match(/executing step "([^"]+)"/)?.[1];
@@ -100,10 +106,13 @@ test('fable-astra: one real preset wave → complete → ship is one base-parent
   } });
   const stratum = new Proxy(client, { get(target, key) {
     if (key === 'plan') return async (...args) => {
+      events.push(serializeGolden({ kind: 'plan', spec: args[0], flow: args[1], input: args[2], opts: args[3] }));
       assert.equal(args[0], spec, 'runBuild uses the unmodified bundled YAML');
       const result = await target.plan(...args); flowId = result.runId; return result;
     };
     if (key === 'agentRun') return async (provider, prompt, opts) => {
+      events.push(serializeGolden({ kind: 'call', provider, prompt, opts }));
+      if (mode === 'default shadow') roots.push(readRoutingEvidence(f, flowId));
       inference.push({ provider, prompt, opts });
       return provider === 'claude' ? fake.agentRun(provider, prompt, opts) : target.agentRun(provider, prompt, opts);
     };
@@ -120,7 +129,7 @@ test('fable-astra: one real preset wave → complete → ship is one base-parent
     assert.equal(resolveTemplatePath(template, f.workspace), presetPath, 'bundled preset selected without a local team copy');
     await runBuild(code, { cwd: f.workspace, template, stratum, skipTriage: true,
       description: 'Implement doubling. Acceptance criteria: core(3) equals 6.',
-      consumerArtifactsRoot: f.artifactRoot, gateOpts: { nonInteractive: true } });
+      consumerArtifactsRoot: f.artifactRoot, ...(mode === 'off' ? { route_mode: 'off' } : {}), gateOpts: { nonInteractive: true } });
     await client.connect(connection); // runBuild closes injected clients too.
     const audit = await client.audit(flowId);
     assert.equal(audit.status, 'completed', JSON.stringify(audit));
@@ -132,6 +141,24 @@ test('fable-astra: one real preset wave → complete → ship is one base-parent
     assert.ok(completions.every(c => !c.envelope.failure), JSON.stringify(completions));
     const journal = await readGoldenJournal(f);
     assert.equal(journal.wave.checkpoints.length, 1);
+    assert.equal(corePreflight(profiles, spec, {}, { mode: 'off' }).profilesDigest, frozen.profileDigest);
+    const plan = events.find(e => e.kind === 'plan');
+    if (mode === 'off') {
+      assert.deepEqual(plan.input, frozen.events[0].input);
+      assert.equal(plan.flow, frozen.events[0].flow);
+      assert.deepEqual(plan.opts, { ...frozen.events[0].opts, workspaceRoot: f.workspace });
+      assert.equal(journal.routing, undefined);
+      assert.equal(existsSync(join(f.workspace, '.compose/routing')), false);
+      assert.doesNotMatch(readFileSync(join(f.workspace, '.git/info/exclude'), 'utf8'), /routing/);
+    } else {
+      assert.deepEqual(Object.fromEntries(Object.entries(plan.input).filter(([k]) => !ROUTING_INPUTS.includes(k))), frozen.events[0].input);
+      assertRoutingGolden(readRoutingEvidence(f, flowId), 5);
+      assert.equal(new Set(roots.map(r => r.rootBytes)).size, 1);
+      for (const earlier of roots) for (const [id, record] of Object.entries(earlier.journal.routing.records)) {
+        assert.deepEqual(journal.routing.records[id], record, 'records present before launch remain immutable');
+      }
+    }
+    assert.deepEqual(normalizedGoldenCalls(events), normalizedGoldenCalls(frozen.events));
     assert.equal(git(f.workspace, ['rev-parse', 'HEAD^']), base);
     assert.equal(git(f.workspace, ['rev-list', '--count', `${base}..HEAD`]), '1');
     assert.ok(!git(f.workspace, ['rev-list', 'HEAD']).split('\n').includes(journal.wave.checkpoints[0].commit));

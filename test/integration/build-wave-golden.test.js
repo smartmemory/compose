@@ -7,6 +7,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { makeWaveGoldenProject, runWaveGolden, readGoldenJournal, readGoldenTrace,
+  frozenRoutingBaseline, normalizedGoldenCalls, readRoutingEvidence, assertRoutingGolden, ROUTING_INPUTS,
   WAVE_GOLDEN_SPEC, PROFILES, CORE, BROKEN, FIXED, REPAIR, FINDING } from '../helpers/build-wave-golden-fixture.js';
 import { preflightPipelineProfiles } from '../../lib/pipeline-profiles.js';
 import { StratumMcpClient } from '../../lib/stratum-mcp-client.js';
@@ -17,8 +18,8 @@ import { git } from '../helpers/consumer-wave-fixture.js';
 const DRIVER = fileURLToPath(new URL('../helpers/build-wave-golden-fixture.js', import.meta.url));
 const MODELS = { CORE: 'gpt-6-astra', BROKEN: 'gpt-5.6-terra', FAST: 'gpt-5.3-codex-spark',
   DEFAULT: 'gpt-6-astra', REPAIR: 'gpt-6-astra' };
-async function fixtureFor(t, scenario) {
-  const fixture = await makeWaveGoldenProject(scenario);
+async function fixtureFor(t, scenario, options) {
+  const fixture = await makeWaveGoldenProject(scenario, options);
   t.after(() => fixture.cleanup());
   return fixture;
 }
@@ -222,14 +223,15 @@ async function childAttempt(t, f, options) {
   } finally { clearTimeout(timer); }
 }
 
-test('real engine + connector: SIGKILL after ref CAS before journal acknowledgement resumes one checkpoint and one ship', { timeout: 360000 }, async t => {
-  const f = await fixtureFor(t, 'crash');
+for (const route_mode of ['off', 'shadow']) test(`real engine + connector ${route_mode}: SIGKILL after ref CAS before journal acknowledgement resumes one checkpoint and one ship`, { timeout: 360000 }, async t => {
+  const f = await fixtureFor(t, 'crash', { routingInputs: route_mode === 'shadow' });
   const index = await readFile(join(f.workspace, '.git/index'));
-  const crashed = await childAttempt(t, f, { crash: true });
+  const crashed = await childAttempt(t, f, { crash: true, route_mode });
   assert.equal(crashed.signal, 'SIGKILL', crashed.output);
   assert.ok(existsSync(f.crashPath), `must reach publication boundary, not timeout\n${crashed.output}`);
   const receipt = JSON.parse(await readFile(f.crashPath, 'utf8'));
   const prepared = await readGoldenJournal(f);
+  const routingBefore = route_mode === 'shadow' ? readRoutingEvidence(f, receipt.flowId) : null;
   assert.equal(prepared.wave.checkpoints.length, 1);
   assert.equal(prepared.wave.checkpoints[0].state, 'prepared');
   assert.equal(prepared.wave.checkpoints[0].evidenceReceiptId, undefined);
@@ -237,12 +239,19 @@ test('real engine + connector: SIGKILL after ref CAS before journal acknowledgem
   assert.equal(git(f.workspace, ['rev-parse', 'HEAD']), f.base);
   assert.deepEqual(await readFile(join(f.workspace, '.git/index')), index);
   assert.equal(await readFile(join(f.workspace, 'core.cjs'), 'utf8'), CORE);
-  const resumed = await childAttempt(t, f, { resumeFlowId: receipt.flowId });
+  const resumed = await childAttempt(t, f, { resumeFlowId: receipt.flowId, route_mode: 'off' });
   assert.equal(resumed.code, 0, resumed.output);
   const { audit } = JSON.parse(await readFile(f.resultPath, 'utf8'));
   assert.equal(audit.status, 'completed');
   const journal = await readGoldenJournal(f);
   assert.equal(journal.wave.checkpoints.length, 1);
+  if (routingBefore) {
+    const after = readRoutingEvidence(f, receipt.flowId);
+    assert.equal(after.rootBytes, routingBefore.rootBytes);
+    assert.deepEqual(after.input, routingBefore.input);
+    for (const [id, record] of Object.entries(routingBefore.journal.routing.records)) assert.deepEqual(after.journal.routing.records[id], record);
+    assertRoutingGolden(after, 5);
+  }
   const checkpoint = journal.wave.checkpoints[0];
   assert.equal(checkpoint.commit, receipt.checkpoint.commit);
   assert.equal(checkpoint.state, 'published');
@@ -253,4 +262,69 @@ test('real engine + connector: SIGKILL after ref CAS before journal acknowledgem
   assert.equal((await recordedReceipts(f, receipt.flowId)).filter(r => r.source === 'compose:checkpoint').length, 1);
   assert.equal(await readFile(join(f.workspace, 'core.cjs'), 'utf8'), CORE, 'accepted diff not applied twice');
   assertShip(f, journal);
+});
+
+
+test('routing carry off oracle: frozen digest/input/full calls and no routing writes', { timeout: 480000 }, async t => {
+  const frozen = frozenRoutingBaseline('carry');
+  const off = await fixtureFor(t, 'repair');
+  const beforeExclude = await readFile(join(off.workspace, '.git/info/exclude'), 'utf8');
+  const a = await runWaveGolden(off, { route_mode: 'off' });
+  assert.equal(a.audit.status, 'completed');
+  assert.equal(preflightPipelineProfiles(PROFILES, WAVE_GOLDEN_SPEC).profilesDigest, frozen.profileDigest);
+  assert.deepEqual(a.events[0].input, frozen.events[0].input);
+  assert.equal(a.events[0].flow, frozen.events[0].flow);
+  assert.deepEqual(a.events[0].opts, { ...frozen.events[0].opts, workspaceRoot: off.workspace });
+  assert.deepEqual(normalizedGoldenCalls(a.events), normalizedGoldenCalls(frozen.events));
+  assert.equal((await readGoldenJournal(off)).routing, undefined);
+  assert.equal(existsSync(join(off.workspace, '.compose/routing')), false);
+  assert.equal(await readFile(join(off.workspace, '.git/info/exclude'), 'utf8'), beforeExclude);
+
+});
+
+test('routing carry shadow oracle: immutable two-wave and ordinary epochs with identical full calls', { timeout: 240000 }, async t => {
+  const frozen = frozenRoutingBaseline('carry');
+  const shadow = await makeWaveGoldenProject('repair', { routingInputs: true });
+  t.after(() => shadow.cleanup());
+  let b;
+  await assert.doesNotReject(async () => {
+    b = await runWaveGolden(shadow, { route_mode: 'shadow', traceRouting: true });
+  }, 'concurrent shadow carry must finish both waves without re-admitting a settled token');
+  assert.equal(b.audit.status, 'completed');
+  assert.deepEqual(normalizedGoldenCalls(b.events), normalizedGoldenCalls(frozen.events));
+  assert.deepEqual(Object.fromEntries(Object.entries(b.events[0].input).filter(([k]) => !ROUTING_INPUTS.includes(k))), frozen.events[0].input);
+  const final = readRoutingEvidence(shadow, b.flowId);
+  const records = assertRoutingGolden(final, 12);
+  assert.equal(JSON.parse(final.rootBytes).profilesDigest, frozen.profileDigest);
+  assert.equal(new Set(b.routingSnapshots.map(r => r.rootBytes)).size, 1);
+  for (const earlier of b.routingSnapshots) for (const [id, record] of Object.entries(earlier.journal.routing.records)) {
+    assert.deepEqual(final.journal.routing.records[id], record, 'later waves never rewrite earlier records');
+  }
+  const ordinary = records.filter(r => r.type === 'admission' && r.stage === null);
+  for (const step of ['verify', 'review', 'assess']) {
+    assert.deepEqual(ordinary.filter(r => r.scopedStep === step).map(r => r.epoch), [0, 1]);
+  }
+  assert.equal(ordinary.filter(r => r.scopedStep === 'plan').length, 1);
+  assert.deepEqual(records.filter(r => r.type === 'admission' && r.stage === 0).map(r => r.logicalTaskId).sort(),
+    ['BROKEN', 'CORE', 'DEFAULT', 'FAST', 'REPAIR']);
+  assertShip(shadow, final.journal);
+});
+
+
+test('full-call oracle tolerates concurrent arrivals only; prompt/options and step/wave order remain pinned', () => {
+  const frozen = frozenRoutingBaseline('carry');
+  const expected = normalizedGoldenCalls(frozen.events);
+  const swap = structuredClone(frozen.events);
+  [swap[2], swap[3]] = [swap[3], swap[2]];
+  assert.deepEqual(normalizedGoldenCalls(swap), expected);
+  for (const mutate of [
+    events => { events[1].prompt += 'changed'; },
+    events => { events[2].opts.sandboxMode = 'read-only'; },
+    events => { events[2].opts.newOption = true; },
+    events => { const i = events.findIndex(e => e.opts?.flow?.stepId === 'review'); [events[i], events[i - 1]] = [events[i - 1], events[i]]; },
+    events => { const i = events.findLastIndex(e => e.opts?.telemetry?.step_id === 'execute/0'); [events[2], events[i]] = [events[i], events[2]]; },
+  ]) {
+    const changed = structuredClone(frozen.events); mutate(changed);
+    assert.notDeepEqual(normalizedGoldenCalls(changed), expected);
+  }
 });

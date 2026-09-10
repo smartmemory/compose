@@ -209,3 +209,26 @@ integration test hung to its 900s timeout. Fable fix: `artifacts?.journal?.routi
 Lesson: the review probes "non-participating callers" only through the bundled goldens; stub-artifact callers
 are a distinct population. Second full suite running before commit.
 Full suite after guard: node 6914/6914, UI 624/624, tracker 100/100. Committing d2.
+
+## 2026-09-11 — S1a dispatch 3 (astra 3745abcfbade, 19 min, 4.92M tok) → real-engine goldens: 61/63, 2 PRODUCTION DEFECTS
+Host reproduces both (63 tests, 61 pass, 2 fail). Report: reports/slice1a-d3-impl.md.
+- D3-1 build.js:4524/1290/1099 — shadow admission re-validates EVERY descriptor in a returned ready batch,
+  including concurrently settled siblings whose token moved to acceptedDispatchToken → ROUTING_BINDING_DRIFT
+  aborts wave 0 at concurrency 3. Off is unaffected (matches frozen 12-call carry trace).
+- D3-2 gsd.js:343/405/411/1277/1291 — stale pause.json outranks the newer crashed continuation's state.json;
+  run 3 binds previousRunId = run 1, C issuance chain [2,0] instead of [2,1,0]. Pre-existing GSD precedence
+  gap surfaced by routing lineage.
+Only design box ticked: off-mode golden (3 receipts). Both fixes routed to astra (dispatch-2 ownership).
+
+## 2026-09-11 — D3-1 + D3-2 fixed (astra 1b3e6831c4b6, 6.5 min) → host 112/112 over 8 files
+D3-1: unseen-token admission filter, gated to participating single-stage routing waves (a first attempt filtered
+legacy batches too and regressed whole-batch refusal — caught by the fix run's own test pass). D3-2: GSD resume
+precedence by recorded run lineage, gated on durable routing participation; non-participating off-mode GSD
+resume unchanged (pause-first). d3 review r1 dispatched: astra fc20c54f5a7c → reports/slice1a-d3-review-r1.md.
+
+## 2026-09-11 — d3 review r1 (astra fc20c54f5a7c) → 0 HIGH / 1 MEDIUM / 1 LOW — both fixed inline by Fable
+MEDIUM: GSD off oracle inserted the only frozen option key (workspaceRoot) on both sides → could not fail on a
+missing `opts`. Fix: assert each actual plan's opts.workspaceRoot === cwd and the option key-set equals the
+frozen key-set before substituting. LOW: CHANGELOG/report opening still said the two defects were open → updated.
+No re-review (trivial). GSD golden 10/10 after fix. Full suite running before the d3 commit.
+Full suite: node 6929/6929, UI 624/624, tracker 100/100. Committing d3 — S1a COMPLETE (all three dispatches).

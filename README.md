@@ -88,6 +88,32 @@ blocked, or approves ship into one base-parent commit. Concurrency is 3; the
 $150 cost ceiling is overridable with `--cost-ceiling-usd`. See the
 [loop and limits](docs/pipelines.md#fable-astra-wave-loop).
 
+### Model routing (shadow)
+
+`fable-astra` defaults to shadow routing; only `plan` and `execute` opt into
+future learning with `route: { learn: true }` on their profile entries. Bundled
+GSD defaults to off. Programmatic `runBuild` / `runGsd` callers select
+`route_mode: 'off'` or `'shadow'`; there is no routing CLI flag.
+
+Shadow retains an immutable start, admissions and issuance journal while keeping
+static model options and prompts. GSD continuation shares that start across new
+engine runs; unresolved calls hold before redispatch. Manual overrides replace
+the fallback; an item's explicit tier still wins. Off preserves legacy input and
+dispatch identity and makes no routing writes. A participating resume keeps its
+recorded mode even if the caller requests off.
+
+Custom sidecars use `{ default: 'claude::critical', route: { learn: true } }` and
+optional `_routing: { mode: 'shadow' }`. A route-only wrapper projects to the
+legacy string for hashing; entries with `tier_from` retain object form, as do
+existing objects without `route`. Custom flow inputs must declare
+`route_mode`, `routing_start`, `routing_root`, `routing_plan_intent`, and
+`routing_continuation` as optional strings (`string?`), without defaults or
+model-facing interpolation. Shadow GSD refuses customized ordinary profiles
+that differ from its bare dispatch (`ROUTING_STATIC_DISPATCH_MISMATCH`).
+
+S1a records static choices only: no attributable ledger, report, learned
+selection, trials, exploration, or calibration feedback yet.
+
 ## Quick install
 
 Prerequisites: Node.js 18+. [Stratum](https://github.com/smartmemory/stratum) needs no separate install — `@smartmemory/stratum` is a dependency, and `compose init` registers the installed copy's MCP entrypoint automatically (a sibling `stratum/` checkout is a development convenience, not a requirement; the python `stratum-mcp` PyPI package is retired). Codex steps additionally need the OpenAI `codex` CLI. Full prereqs in [docs/install.md](docs/install.md).
