@@ -1,0 +1,11 @@
+{
+  "code": "COMP-BUILD-CANCEL",
+  "description": "Compose adoption of Stratum 0.5.0 cancellation (COMP-FABLE-ASTRA D5 compose half, plus the D1 consumer tagging it needs): every consumer `stratum_agent_run` carries `flow:{runId,stepId,itemIndex}` and a `cancellationId` (client version guard bumped to surface 19), `compose build --abort` and the SIGINT/SIGTERM handler call `stratum_flow_cancel` before the existing kill/active-build/actuals writes, Compose kills its own in-process isolation:none agents, and no patch captured after a cancel is merged. Compose moves to 0.5.0 with `@smartmemory/stratum ^0.5.0` (shared minor). Preset carry/verify ordering stays in the COMP-FABLE-ASTRA preset slice. Design: [design.md](docs/features/COMP-FABLE-ASTRA/design.md) §D5.",
+  "status": "IN_PROGRESS",
+  "phase": "COMP-TEAMS: Agent Team Presets",
+  "created": "2026-09-09",
+  "updated": "2026-09-09",
+  "complexity": "M",
+  "position": 152,
+  "parent": "COMP-FABLE-ASTRA"
+}
