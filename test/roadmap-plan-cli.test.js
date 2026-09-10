@@ -47,9 +47,9 @@ describe('compose plan CLI guard paths (T15)', () => {
     assert.match(r.stderr, /No active plan build to resume/);
   });
 
-  test('--abort with no active build → clean no-op, exit 0', () => {
+  test('--abort with no active build → refusal, exit 1 (COMP-BUILD-CANCEL S04-3)', () => {
     const r = runPlan(makeProject(), ['--abort']);
-    assert.equal(r.status, 0);
+    assert.equal(r.status, 1);
     assert.match(`${r.stdout}${r.stderr}`, /No active build to abort/);
   });
 

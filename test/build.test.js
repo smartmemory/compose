@@ -153,7 +153,7 @@ describe('build.js', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  test('abort deletes active-build.json', async () => {
+  test('abort of an unknown flow is refused and writes nothing', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'build-test-'));
     createTestProject(tmpDir);
 
@@ -168,12 +168,16 @@ describe('build.js', () => {
       })
     );
 
-    await runBuild('TEST-1', { cwd: tmpDir, abort: true });
+    // COMP-BUILD-CANCEL C28: the engine does not know this flow, so the abort is
+    // refused honestly — ok:false, reason flow_not_found — and NOTHING is written.
+    const result = await runBuild('TEST-1', { cwd: tmpDir, abort: true });
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, 'flow_not_found');
+    assert.equal(result.localCleanup, false);
 
     const abortState = JSON.parse(readFileSync(join(dataDir, 'active-build.json'), 'utf-8'));
-    assert.equal(abortState.status, 'aborted',
-      'active-build.json should have terminal status "aborted"');
-    assert.ok(abortState.completedAt, 'active-build.json should have completedAt');
+    assert.equal(abortState.status, undefined, 'a refused abort writes no terminal status');
+    assert.equal(abortState.completedAt, undefined, 'a refused abort writes no completedAt');
 
     rmSync(tmpDir, { recursive: true, force: true });
   });
