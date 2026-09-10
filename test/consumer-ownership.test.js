@@ -16,7 +16,7 @@ test('actual unowned edit fails despite forged files_changed, retains patch and 
   const f = consumerWaveFixture(t);
   const before = snapshotWorkingTree(f.cwd);
   const { descriptor, issuance } = capture(f, { id: 'T1', files_owned: ['owned.txt'] }, cwd => f.write('other.txt', 'unauthorized\n', cwd));
-  assert.equal(issuance.state, 'failed'); assert.equal(issuance.findings[0].code, 'OWNERSHIP_VIOLATION');
+  assert.equal(issuance.state, 'failed'); assert.equal(issuance.findings[0].code, 'FILES_OWNED_VIOLATION');
   assert.deepEqual(issuance.findings[0].files, ['other.txt']); assert.equal(issuance.envelope.usage.usd, 1);
   assert.ok(issuance.diff.includes('unauthorized')); assert.equal(issuance.envelope.output, undefined);
   const recovered = new ConsumerFanoutArtifacts(f.options);
@@ -80,7 +80,7 @@ test('configured missing files_owned fails', t => {
   const f = consumerWaveFixture(t); const d = f.descriptor({ id: 'T1', tier: 'fast' });
   f.artifacts.reconcileDescriptor(d, f.audit(d, 'running'));
   const entry = f.artifacts.prepareIssuance(d, success, { finalStage: true, ownership: true });
-  assert.equal(entry.state, 'failed'); assert.equal(entry.findings[0].code, 'OWNERSHIP_VIOLATION');
+  assert.equal(entry.state, 'failed'); assert.equal(entry.findings[0].code, 'FILES_OWNED_VIOLATION');
 });
 
 test('legacy descriptor items remain inert until dispatch 2 supplies a binding', t => {

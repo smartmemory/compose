@@ -1,5 +1,10 @@
 # COMP-FABLE-ASTRA — Slice 3 implementation blueprint
 
+> **Implemented — 2026-09-10 (dispatches 1–3; cross-seam verification blocked).**
+> Actual APIs: `normalizePipelineProfiles`, `mergeRuntimeProfiles`, `resolveConsumerProfile`, `validateWaveAdmission`, `decideGateFromOutput`, `admitConsumerWave`, `runConsumerIssuance`, `reportWaveEvidence`, `flushWaveReceipts`, `resolveGateWithConsumerMerge`, `prepareWaveShip`, `executeShipStep`, `ConsumerFanoutArtifacts.recoverCheckpoint`, `readFlowSnapshot`, `readFlowSpend`, and checkpoint `prepareCheckpoint`/`publishCheckpoint`/`reconcileCheckpoint`/`squashOntoBase`.
+> Tests: `test/{pipeline-profiles,output-gate,consumer-ownership,wave-checkpoint,build-output-gate,build-wave-routing,build-wave-ship,gsd-wave-routing}.test.js`; new `test/integration/build-wave-golden.test.js`, `test/helpers/build-wave-golden-fixture.js`, extended `test/helpers/fake-codex-project.js`.
+> Source corrections: the connector spells the model flag `-m` (the fake accepts both spellings); Claude inference uses the d2 fake-client result path while Codex uses the untouched real client's connector. The checkpoint crash hook is test-local, immediately before `markCheckpointPublished` acknowledges the ref CAS. No production functions or body text below were rewritten. Golden runtime failures and remaining live evidence: [dispatch-3 report](reports/slice3-d3-impl.md).
+
 Date: 2026-09-10. Status: BLUEPRINT ONLY; no implementation or test execution in this task.
 Scope: D2, D3, D4, D6 from [design.md](design.md), governed by [the brief](briefs/slice3-blueprint.md).
 Paths are Compose-relative; `stratum/` means the read-only sibling `/Users/ruze/reg/my/forge/stratum`.

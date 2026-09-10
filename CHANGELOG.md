@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **COMP-FABLE-ASTRA slice 3 dispatch 3**: add real Stratum MCP/fake Codex wave goldens for carry repair, model argv/receipts, admission, ownership, checkpoint crash recovery and squash ship, plus strict fake-executable fixture checks. Document object sidecars, failure codes, cost-ceiling holds and recovery. Cross-seam verification currently stops at a real MCP receipt-contract defect; see `reports/slice3-d3-impl.md` under the feature for unverified assertions. No production function changes.
+
 - **COMP-FABLE-ASTRA slice 3 dispatch 2**: wire object-form profile sidecars, whole-wave tier admission, ownership failure envelopes, output-driven gates and durable receipt evidence into build/GSD. Add resumable cost-ceiling holds (`--cost-ceiling-usd` for single builds), checkpoint publication/recovery and selective wave ship preparation. Production presets remain slice 4 work.
 
 - **COMP-FABLE-ASTRA slice 3 dispatch 1**: add reusable profile/admission, output-gate and Git checkpoint primitives, plus durable consumer ownership evidence and checkpoint recovery. Runner wiring is deferred to dispatch 2; the new wave and gate behavior is not yet enabled.
