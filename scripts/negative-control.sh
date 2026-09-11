@@ -9,6 +9,7 @@
 #
 # Usage:
 #   scripts/negative-control.sh [--ref HEAD] [--timeout 300000] \
+#       [--test-name-pattern '<selector>'] \
 #       --prod lib/a.js lib/b.js -- --test test/x.test.js test/y.test.js
 #
 # Verdicts (four, deliberately — collapsing them is how this tool lies):
@@ -25,11 +26,12 @@
 # (removing it breaks imports, which proves nothing); check those by hand.
 set -uo pipefail
 
-REF=HEAD; TIMEOUT=300000; PROD=(); TESTS=(); mode=""
+REF=HEAD; TIMEOUT=300000; PATTERN=""; PROD=(); TESTS=(); mode=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --ref) REF="$2"; shift 2;;
     --timeout) TIMEOUT="$2"; shift 2;;
+    --test-name-pattern) PATTERN="$2"; shift 2;;
     --prod) mode=prod; shift;;
     --test) mode=test; shift;;
     --) shift;;
@@ -53,7 +55,14 @@ classify () {
   [ "$p" -eq 0 ] && { echo DID-NOT-RUN; return; }
   echo GREEN
 }
-run () { RESEND_API_KEY= STRIPE_API_KEY= node --test --test-timeout="$TIMEOUT" "$1" > "$2" 2>&1; }
+run () {
+  local args=(--test --test-timeout="$TIMEOUT") status
+  [ -z "$PATTERN" ] || args+=("--test-name-pattern=$PATTERN")
+  RESEND_API_KEY= STRIPE_API_KEY= node "${args[@]}" "$1" > "$2" 2>&1
+  status=$?
+  echo "  exit: $status"
+  grep -E '^# (tests|pass|fail|cancelled) ' "$2"
+}
 
 echo "=== baseline (a test that is not green proves nothing by turning red) ==="
 for t in "${TESTS[@]}"; do
@@ -67,7 +76,9 @@ rc=0
 for p in "${PROD[@]}"; do
   git diff --quiet "$REF" -- "$p" && { printf '%-34s %s\n' "$p" "SKIP (unchanged vs $REF)"; continue; }
   cp "$p" "$WORK/keep"
-  git checkout "$REF" -- "$p" || { echo "revert failed: $p" >&2; continue; }
+  # Read the historical bytes without changing the index (checkout stages them).
+  git show "$REF:$p" > "$WORK/revert" || { echo "revert failed: $p" >&2; rc=1; continue; }
+  cp "$WORK/revert" "$p"
   covered=no
   for t in "${TESTS[@]}"; do
     run "$t" "$WORK/m.log"; v=$(classify "$WORK/m.log")
