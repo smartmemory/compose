@@ -339,7 +339,7 @@ that reached a repair is not a random sample of the key); ladder demoted to cold
 unchanged; floor derived from the same evidence as the learned source so they cannot contradict.
 Deliberately NOT decided now — the shadow corpus should settle it before S3 builds enforcement.
 
-## 2026-09-11 — S1b ledger row gains `context` (repair stratum) @95a85c4
+## 2026-09-11 — S1b ledger row gains `context` (repair stratum) @b5382d3
 Found while answering Q3: the blueprinted ledger row had `key`, `source` and `outcome` but NOTHING marking a row as
 repair-context, so once a row reached the ledger a repair-wave sample was indistinguishable from a fresh-wave one and
 the journal that could re-derive it is per-run/per-artifact-root (consumer-fanout.js:282–296) and not retained for the
