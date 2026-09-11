@@ -299,3 +299,27 @@ ticked by deterministic real-engine tests.
    (output-gate.js:12–39), so a structurally valid decision need not partition the findings the prompt demands.
 4. Stale comment "Build mode passes no onUsage sink" (build.js:1865–1866) contradicts :4376.
 5. Still open from S1a: GSD preflights the profile sidecar (gsd.js:161–166) but never applies it (:651–660).
+
+## 2026-09-11 — S1b owner questions Q1 + Q2 BOTH RULED; no owner action outstanding
+Q2: CLOSED as already ruled (failure-only token-absent settlement stays in S1b; cancellation settles on run-cancellation
+audit + bound per-call termination, never a stepDone acknowledgement; lost failure ack → ROUTING_ISSUANCE_UNCERTAIN).
+The r1 fix run settled it and r2 reviewed the execution clean.
+
+Q1 (executed-tier evidence on the local SDK path): **no later slice scheduled; conditional trigger instead.**
+Measured, not assumed: `localExecution` has exactly ONE setter (build.js:1797, `policy.isolation === 'none'`) and
+pairs with `cfg.provider === 'claude'` (result-normalizer.js:425). The other five runAndNormalize call sites
+(build.js:1766,4782,4879,4971,5736) never pass it → ORDINARY steps can NEVER take the local path; it is
+consumer-fanout-only. Bundled census of `isolation: none` + `agent: claude`: only the `review_lenses` fanouts
+(pipelines/build.stratum.yaml:260, build-quick:238, presets/team-review:88, team-research:89).
+**team-fable-astra does not reach it** — its fanout is `isolation: worktree` (:127) over `agent: codex` (:131), and
+its two learn-opted keys are `plan` (ordinary) and `execute` (that worktree fanout). So the null-executed-tier gap
+affects ZERO rows in every configuration S1b and S2 ship.
+It bites only if a `review_lenses`-shaped key is opted into learning (a plausible S3 candidate: high-volume,
+uniform-contract, repeated across runs — where learned routing pays most). Then every such row is
+executed-tier-unknown and cannot certify a repair floor.
+**Trigger to revisit:** any spec adding `route.learn` to a key whose fanout is `isolation: none` with a `claude` agent.
+**Work required then:** check whether the Claude Agent SDK response surfaces applied thinking/effort; if it does,
+plumb it through local-claude-connector.js:287–300 as execution evidence. Relabelling configured `appliedEffort`
+(:68–90,151) stays forbidden — that is intent, and substituting intent for evidence is what Decision 6 prevents.
+Deliberately NOT filed as a scheduled follow-up: a follow-up against an inert gap is exactly the perishable
+forward-looking claim that rots.
