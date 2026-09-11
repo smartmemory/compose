@@ -22,11 +22,12 @@ import { ConsumerFanoutArtifacts } from '../lib/consumer-fanout.js';
 import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
 import { routingDigest } from '../lib/model-router.js';
 import { sealRoutingEpochs, resumeRouting } from '../lib/build.js';
+process.env.NODE_ENV = 'test';
 const code = 'COMP-GSD-5-FIX';
 const blueprint = `# Routing\n\n## File Plan\n\n| File | Action | Purpose |\n|------|--------|---------|\n| \`a.txt\` | new | A |\n| \`b.txt\` | new | B |\n| \`c.txt\` | new | C |\n\n## Boundary Map\n\n### S01: A\n\nFile Plan: \`a.txt\` (new)\n\nProduces:\n  a.txt → a (function)\n\nConsumes: nothing\n\n### S02: B\n\nFile Plan: \`b.txt\` (new)\n\nProduces:\n  b.txt → b (function)\n\nConsumes: nothing\n\n### S03: C\n\nFile Plan: \`c.txt\` (new)\n\nProduces:\n  c.txt → c (function)\n\nConsumes: nothing\n`;
 const taskResult = id => ({ status: 'passed', files_changed: [`${id.toLowerCase()}.txt`], summary: `${id} done`, produces: {},
   gates: [{ command: 'true', status: 'pass', output: '' }], attempts: 1 });
-async function gsdFixture(t, { route = 'shadow', runner = 'GSD', spec, profiles = {} } = {}) {
+async function gsdFixture(t, { route = 'shadow', runner = 'GSD', spec, profiles = {}, receiptsOffline = () => false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'gsd-route-'));
   const cwd = join(root, 'workspace'); const stateRoot = join(root, 'engine'); const artifactRoot = join(root, 'artifacts');
   mkdirSync(cwd); mkdirSync(stateRoot);
@@ -52,7 +53,10 @@ async function gsdFixture(t, { route = 'shadow', runner = 'GSD', spec, profiles 
     env: { ...process.env, STRATUM_STATE_ROOT: stateRoot, RESEND_API_KEY: '', STRIPE_API_KEY: '' } });
   t.after(async () => { await client.close(); if (old === undefined) delete process.env.STRATUM_STATE_ROOT; else process.env.STRATUM_STATE_ROOT = old;
     rmSync(root, { recursive: true, force: true }); });
-  const calls = [], plans = [];
+  const calls = [], plans = [], receiptDeliveries = [];
+  const connector = new StratumMcpClient();
+  let nextOutput;
+  connector._testClient = { callTool: async () => ({ content: [{ type: 'text', text: JSON.stringify({ text: JSON.stringify(nextOutput), usage: { tokens: 5, ms: 7, usd: 0.1 }, usdSource: 'reported' }) }] }) };
   let stopAtMerge = true;
   const stratum = new Proxy(client, { get(target, key) {
     if (key === 'agentRun') return async (provider, prompt, opts) => {
@@ -60,7 +64,13 @@ async function gsdFixture(t, { route = 'shadow', runner = 'GSD', spec, profiles 
       const output = opts.telemetry?.step_id === 'decompose_gsd' ? { tasks: ['A', 'B', 'C'].map((id, i) => ({ id,
         description: `Task ${id}`, files_owned: [`${id.toLowerCase()}.txt`], files_read: [], depends_on: i ? ['A'] : [] })) }
         : { outcome: 'complete', summary: 'done', files_changed: [] };
-      return { text: JSON.stringify(output), result: output, dispatchId: `call-${calls.length}` };
+      nextOutput = output;
+      return connector.agentRun(provider, prompt, opts);
+    };
+    if (key === 'usageReport') return async (...args) => {
+      receiptDeliveries.push(structuredClone(args));
+      if (args[1].detail?.routing?.kind === 'paid-call' && receiptsOffline(args[0])) throw Error('receipt delivery offline');
+      return target.usageReport(...args);
     };
     if (key === 'plan') return async (...args) => {
       plans.push(structuredClone(args));
@@ -99,7 +109,7 @@ async function gsdFixture(t, { route = 'shadow', runner = 'GSD', spec, profiles 
       writeFileSync(join(dir, 'state.json'), JSON.stringify({ ...state, status: 'running', pid: 2147483647, completedTaskIds: completed, decomposedTasks: tasks, resumeReady: true }));
     } else writeFileSync(join(dir, 'pause.json'), JSON.stringify({ mode: 'gsd', flowId: runId, decomposedTasks: tasks, completedTaskIds: completed, pid: 2147483647 }));
   };
-  return { cwd, git, client, stratum, stateRoot, artifactRoot, run, calls, plans, snapshot, journal, pause,
+  return { cwd, git, client, stratum, stateRoot, artifactRoot, run, calls, plans, receiptDeliveries, snapshot, journal, pause,
     allowMerge() { stopAtMerge = false; } };
 }
 test('real GSD three-run continuation preserves C allocation through 2→1→0, pause and crash bridge', async t => {
@@ -167,7 +177,7 @@ test('bundled GSD merge error revises execute to epoch 1 while source stays at e
   const admissions = Object.values(journal.routing.records).filter(r => r.type === 'admission' && r.logicalTaskId === 'A');
   assert.equal(admissions.length, 2); assert.equal(admissions[1].logicalEpoch, oldAdmission.logicalEpoch + 1);
   assert.equal(admissions[1].logicalWaveId, oldAdmission.logicalWaveId);
-  const epochs = Object.values(journal.routing.records).filter(r => r.type === 'epoch-binding' && r.stage === 0);
+  const epochs = Object.values(journal.routing.records).filter(r => r.type === 'epoch-binding' && !r.id.startsWith('capture_') && r.stage === 0);
   assert.deepEqual(epochs.map(r => r.epoch), [0, 1]);
   assert.ok(epochs.every(r => r.sourceBinding.epoch === 0 && r.sourceBinding.acceptedDispatchToken === oldSource.acceptedDispatchToken));
   assert.equal(epochs[1].priorEpochBindingId, epochs[0].id);
@@ -282,3 +292,25 @@ for (const runner of ['GSD', 'Build']) for (const policy of ['consumer', 'tier']
     }
   });
 }
+
+test('GSD continuation recovers late paid receipts at their original owner without replaying completed work', async t => {
+  let offline = true;
+  const f = await gsdFixture(t, { receiptsOffline: () => offline });
+  const first = await f.run(), owner = first.runId;
+  const oldPaid = f.journal(owner).pendingUsageReceipts.filter(p => p.receipt.detail?.routing?.kind === 'paid-call');
+  assert.equal(oldPaid.length, 4); assert.ok(oldPaid.every(p => p.state === 'pending'));
+  f.pause(owner, ['A']);
+  const second = await f.run({ resume: true });
+  assert.notEqual(second.runId, owner);
+  const count = f.calls.length;
+  offline = false;
+  const { recoverRoutingEvidence } = await import('../lib/routing-runtime.js');
+  const localSpec = YAML.parse(readFileSync('pipelines/gsd.stratum.yaml', 'utf8'));
+  const routing = await resumeRouting({ runId: second.runId, cwd: f.cwd, artifactRoot: f.artifactRoot, localSpec, profiles: {}, stratum: f.stratum });
+  await recoverRoutingEvidence({ routing, stratum: f.stratum });
+  assert.equal(f.calls.length, count);
+  const ids = new Set(oldPaid.map(p => p.dispatchId));
+  assert.ok(f.receiptDeliveries.filter(([, receipt]) => ids.has(receipt.dispatchId)).every(([run]) => run === owner));
+  assert.ok(f.journal(owner).pendingUsageReceipts.filter(p => ids.has(p.dispatchId)).every(p => p.state === 'acknowledged'));
+  assert.equal(f.calls.filter(c => c.opts.telemetry?.step_id === 'decompose_gsd').length, 1);
+});

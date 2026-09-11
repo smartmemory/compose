@@ -30,6 +30,7 @@ function fixture(t, extra = {}) {
   const ready = () => ({ status: 'ready', runId: 'run', revisionDigest: snapshot.revisionDigest,
     ready: [{ id: 'work', flow: 'feature', agent: snapshot.spec.flows.feature.steps[0].agent, do: 'unchanged prompt', dispatchToken: snapshot.steps.work.dispatchToken, epoch: snapshot.steps.work.epoch ?? 0 }] });
   const stratum = {
+    async usageReport() { return { status: 'ok' }; },
     async plan(text, flow, input, opts) {
       calls.push({ method: 'plan', input: structuredClone(input), opts });
       const effective = resolvePlanSpecValues(YAML.parse(text), input);

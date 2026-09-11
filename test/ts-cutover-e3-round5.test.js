@@ -1,3 +1,4 @@
+import { checkedConsumerAdapter } from './helpers/routing-adapter-check.js';
 /**
  * E3 cutover — round-5 regression fixes (H1, H2).
  *
@@ -17,7 +18,6 @@ import {
   resolveStepOutputContract,
   deriveOrdinaryReviewScaffold,
   loadPipelineProfiles,
-  runConsumerIssuance,
 } from '../lib/build.js';
 import { buildStepPrompt } from '../lib/step-prompt.js';
 import { buildReviewPrompt } from '../lib/review-prompt.js';
@@ -235,7 +235,7 @@ describe('H2 late-resolving run bills usage on timeout', () => {
       policy: { isolation: 'none' }, contract: REVIEW_CLOSURE,
     };
     const localSpec = { flows: { build: { steps: [{ id: 'review_lenses', fanout: { steps: [{ agent: 'claude', do: 'x', out: 'ReviewResult' }] } }] } } };
-    await runConsumerIssuance({
+    await checkedConsumerAdapter({
       descriptor, flowId: 'flow-1', stratum, artifacts, localSpec,
       context: { cwd: process.cwd() },
       progress: { stepStart() {}, stepDone() {}, info() {}, debug() {}, warn() {}, toolUse() {}, toolSummary() {}, findings() {} },

@@ -1,3 +1,4 @@
+import { checkedConsumerAdapter } from './helpers/routing-adapter-check.js';
 /**
  * E3 cutover — round-3 review fixes (F1–F4).
  *
@@ -18,7 +19,6 @@ import { runLocalClaudeAgent } from '../lib/local-claude-connector.js';
 import {
   resolveStepOutputContract,
   deriveConsumerReviewOptions,
-  runConsumerIssuance,
 } from '../lib/build.js';
 
 process.env.NODE_ENV = 'test';
@@ -74,7 +74,7 @@ async function driveConsumerIssuance({ descriptor, localQuery, onUsage }) {
   const localSpec = {
     flows: { build: { steps: [{ id: descriptor.step, fanout: { steps: [{ agent: 'claude', do: 'x', out: 'ReviewResult' }] } }] } },
   };
-  await runConsumerIssuance({
+  await checkedConsumerAdapter({
     descriptor,
     flowId: 'flow-1',
     stratum,

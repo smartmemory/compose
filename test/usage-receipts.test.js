@@ -1,3 +1,4 @@
+import { checkedConsumerAdapter } from './helpers/routing-adapter-check.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -14,7 +15,6 @@ import {
   makeAskAgent,
   reportUsageReceipts,
   runBuild,
-  runConsumerIssuance,
 } from '../lib/build.js';
 import { runGsd } from '../lib/gsd.js';
 import { tier1CodexReview, tier2FreshAgent } from '../lib/bug-escalation.js';
@@ -704,7 +704,7 @@ test('fanout envelope omits usage in receipts mode and preserves it on the old s
     };
     const receiptContext = { stratum, flowId: 'flow-1', receiptsMode };
     try {
-      await runConsumerIssuance({
+      await checkedConsumerAdapter({
         descriptor, flowId: 'flow-1', stratum, artifacts,
         localSpec: { flows: { build: { steps: [{ id: 'items', fanout: { steps: [{ agent: 'claude', do: 'x', out: 'R' }] } }] } }, contracts: { R: { outcome: 'string', summary: 'string' } } },
         context: {
@@ -777,7 +777,7 @@ test('consumer abort reports usage at the real consumer seam before propagating 
   };
   try {
     await assert.rejects(
-      () => runConsumerIssuance({
+      () => checkedConsumerAdapter({
         descriptor, flowId: 'flow-1', stratum, artifacts,
         localSpec: { flows: { build: { steps: [{ id: 'execute', fanout: { steps: [{ agent: 'claude', do: 'x', out: 'R' }] } }] } }, contracts: { R: { outcome: 'string', summary: 'string' } } },
         context: {
@@ -1088,7 +1088,7 @@ for (const [control, receiptsMode] of [
     };
     const seenUsage = [];
     try {
-      const running = runConsumerIssuance({
+      const running = checkedConsumerAdapter({
         descriptor, flowId: 'flow-1', stratum, artifacts, perItemTimeoutMs: control === 'timeout' ? 30 : 1_000,
         localSpec: { flows: { build: { steps: [{ id: 'review', fanout: { steps: [{ agent: 'codex', do: 'review', out: 'ReviewResult' }] } }] } }, contracts: descriptor.contract.contracts },
         context: { cwd, flowId: 'flow-1', receiptsMode, onUsage: (usage, meta) => {
@@ -1116,3 +1116,85 @@ for (const [control, receiptsMode] of [
     } finally { rmSync(cwd, { recursive: true, force: true }); }
   });
 }
+
+// S1b: canonical receipt bytes originate at the real connector boundary.
+for (const streamed of [false, true]) for (const [field, change] of Object.entries({
+  cost: r => { r.cost_usd = 99; }, tokens: r => { r.output_tokens += 1; },
+  duration: r => { r.duration_ms += 1; }, model: r => { r.model = 'changed-model'; },
+  'embedded effort': r => { r.model = 'gpt-5.4/low'; },
+  effort: r => { r.effort = 'low'; }, provenance: r => { r.usd_source = 'estimated'; },
+  split: r => { r.input_tokens += 1; r.output_tokens -= 1; }, cache: r => { r.cache_read += 1; },
+})) test(`real normalizer forwarding refuses contradictory ${field}, streamed=${streamed}`, async t => {
+  const { fixture } = await import('./helpers/routing-s1b-fixture.js');
+  const { callsForRouting } = await import('../lib/routing-runtime.js');
+  const f = fixture(t); const issuance = f.issue();
+  const client = new StratumMcpClient(); let deliveries = 0;
+  f.context.stratum = { usageReport: async () => { deliveries++; return { status: 'ok' }; } };
+  const { realCodexTool } = await import('./helpers/real-codex-tool.js');
+  let progressEvents = 0, connectorResult;
+  client._testClient = { callTool: realCodexTool({ streamed, onResult: value => { connectorResult = value; } }) };
+  const returned = await runAndNormalize(null, 'work', { step_id: 'work', agent: 'codex' }, {
+    stratum: client, routingCalls: callsForRouting(f.context, issuance),
+    onAgentEvent(event) { if (event.kind === 'step_usage') progressEvents++; },
+  });
+  assert.equal(progressEvents, streamed ? 1 : 0);
+  // Forward the producer's normalized shape, never the stored canonical receipt.
+  const original = structuredClone(returned.usages);
+  await reportUsageReceipts(f.context, returned.usages);
+  const before = deliveries; change(returned.usages[0]);
+  await assert.rejects(reportUsageReceipts(f.context, returned.usages), { code: 'ROUTING_CALL_EVIDENCE_CONFLICT' });
+  assert.equal(deliveries, before);
+  await reportUsageReceipts(f.context, original);
+  const paid = f.reopen().journal.pendingUsageReceipts.find(p => p.receipt.detail?.routing?.kind === 'paid-call').receipt;
+  assert.deepEqual(paid.usage, { tokens: 8, ms: connectorResult.telemetry.durationMs, usd: 0.2 });
+  assert.deepEqual(paid.split, { input: 3, output: 5, cacheRead: 2 });
+});
+for (const transport of ['mcp-streamed', 'mcp-returned', 'local-sdk']) {
+  test(`real Claude ${transport} forwarding preserves duration, provenance and token splits`, async t => {
+    const { fixture } = await import('./helpers/routing-s1b-fixture.js');
+    const { callsForRouting } = await import('../lib/routing-runtime.js');
+    const { ClaudeConnector } = await import('../../stratum/ts/dist/connectors/claude.js');
+    const f = fixture(t); const issuance = f.issue();
+    f.context.stratum = { usageReport: async () => ({ status: 'ok' }) };
+    const query = async function* () {
+      yield { type: 'system', subtype: 'init', model: 'claude-sonnet-4-6' };
+      yield { type: 'result', subtype: 'success', result: 'done', total_cost_usd: 0.2, duration_ms: 31,
+        usage: { input_tokens: 3, output_tokens: 5, cache_read_input_tokens: 2, cache_creation_input_tokens: 1 } };
+    };
+    const client = new StratumMcpClient();
+    client._testClient = { callTool: async ({ arguments: args }, _schema, request) => {
+      let seq = 0;
+      const producer = new ClaudeConnector({ model: 'claude-sonnet-4-6', query, env: {}, onEvent(event) {
+        if (transport === 'mcp-streamed') request.onprogress({ message: JSON.stringify({ schema_version: '0.2.8',
+          step_id: '_agent_run', seq: seq++, ts: new Date().toISOString(), kind: event.kind,
+          metadata: { ...event.metadata, stepId: '_agent_run' } }) });
+      } });
+      return mcpResult(await producer.run(args.prompt));
+    } };
+    const returned = await runAndNormalize(null, 'work', { step_id: 'work', agent: 'claude' }, {
+      stratum: client, localExecution: transport === 'local-sdk', localQuery: query,
+      routingCalls: callsForRouting(f.context, issuance),
+    });
+    await reportUsageReceipts(f.context, returned.usages);
+    const paid = f.reopen().journal.pendingUsageReceipts.find(p => p.receipt.detail?.routing?.kind === 'paid-call').receipt;
+    assert.deepEqual(paid.usage, { tokens: 8, ms: 31, usd: 0.2 });
+    assert.equal(paid.usdSource, 'reported');
+    assert.deepEqual(paid.split, transport === 'local-sdk' ? { input: 3, output: 5 }
+      : { input: 3, output: 5, cacheRead: 2, cacheCreation: 1 });
+    for (const field of ['duration_ms', 'input_tokens', 'output_tokens', ...(transport === 'local-sdk' ? [] : ['cache_read', 'cache_creation'])]) {
+      const changed = structuredClone(returned.usages); changed[0][field] += 1;
+      await assert.rejects(reportUsageReceipts(f.context, changed), { code: 'ROUTING_CALL_EVIDENCE_CONFLICT' });
+    }
+    const changed = structuredClone(returned.usages); changed[0].usd_source = 'estimated';
+    await assert.rejects(reportUsageReceipts(f.context, changed), { code: 'ROUTING_CALL_EVIDENCE_CONFLICT' });
+  });
+}
+test('participating receipt entry refuses missing owner journal while legacy no-artifacts calls remain valid', async () => {
+  const { flushWaveReceipts, publishConsumerCheckpoint } = await import('../lib/build.js');
+  let calls = 0; const context = { routing: {}, receiptsMode: true, flowId: 'r', stratum: { usageReport: async () => { calls++; } } };
+  await assert.rejects(reportUsageReceipts(context, normalizedUsage()), { code: 'ROUTING_BINDING_MISSING' });
+  await assert.rejects(flushWaveReceipts(context), { code: 'ROUTING_BINDING_MISSING' });
+  await assert.rejects(publishConsumerCheckpoint(context, {}), { code: 'ROUTING_BINDING_MISSING' });
+  assert.equal(calls, 0);
+  await flushWaveReceipts({ artifacts: {} }); await publishConsumerCheckpoint({ artifacts: {} }, {});
+});
