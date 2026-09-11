@@ -1,0 +1,19 @@
+{
+  "code": "COMP-ROADMAP-PROSE-READ",
+  "description": "Prose-roadmap reader: parse a hand-authored narrative ROADMAP.md into structured feature rows. `parseRoadmap` (lib/roadmap-parser.js:54) recognizes only `## ` headings, `### ` headings and `|…|` table rows; every other line hits `continue` at :125-131. A `### CODE — Title` section therefore becomes a phaseId STRING and never a feature. Measured on SmartMemory's docs/ROADMAP.md (6,917 lines): 114 entries parsed, 0 real feature codes, all `_anon_`, 0 files written, exit 0 — and it scraped prose tables out of feature bodies, one yielding {\"code\":\"_anon_0\",\"status\":\"enqueued `{}`\"}. Scope: handle the 421 `### CODE — Title` sections whose bodies carry bold-label lines (`**Status:**`, `**Priority:**`, `**Depends On:**`, `**Blocks:**` — e.g. ROADMAP.md:2294-2299) and ~289 list-only entries (313,827 B) with irregular ordinals, some 3.6 KB single lines holding full implementation reports (ROADMAP.md:350, :627); never a silent zero-row parse. Bonus: those bodies hold 387 `Depends on:` + 130 `Blocks:` — the only place 228 graph edges exist outside the hand-built HTML, so the same reader also generates deps.yaml. forge-top never hit this because its 99 rows were already tables with real codes. Secondary compose-side finding (measured here 2026-09-11): compose/ROADMAP.md itself mixes table headers — 74 `Feature`, 7 `Item`, 1 `Layer`, 6 `Feature | Items` — so header-synonym handling belongs in the same reader. Source of record: /Users/ruze/reg/my/SmartMemory/smart-memory-docs/docs/features/ROADMAP-MIGRATE-1/design.md.",
+  "status": "PLANNED",
+  "phase": "COMP-ROADMAP-MODEL: Structured + Composable Roadmaps",
+  "created": "2026-09-11",
+  "updated": "2026-09-11",
+  "complexity": "L",
+  "position": 6,
+  "links": [
+    {
+      "kind": "external",
+      "provider": "local",
+      "repo": "smart-memory-docs",
+      "to_code": "ROADMAP-MIGRATE-1",
+      "note": "SmartMemory investigation that surfaced this; design.md carries every citation and measurement."
+    }
+  ]
+}
