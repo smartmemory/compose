@@ -272,3 +272,101 @@ For A, `<saved-source>` is `r2-before/routing-runtime`, selector `unchanged real
 The whole-file `output-gate.js` reversion removes the required `observeRoutingDecision` export, so its tally is a test-file import failure. The additional executable multiple-owner mutation described above verifies the relevant behavioral assertion separately, also with `# fail 1`.
 
 Syntax checks and `git diff --check` passed. All three `test/fixtures/model-route-off-*.json` files remain byte-identical to HEAD with the hashes already recorded above; none was edited or regenerated. No staging, repository commit, sibling edit, GUI launch or live provider call was performed. The excluded COMP-ROADMAP files and `COMP-GUARD-CLAIM-1/audit.json` were not edited. These are per-file regression results, not a full `npm test` or live-provider qualification.
+
+## Full-suite regression
+
+The first child in `test/integration/gsd-route-continuation-golden.test.js` reproduced the reported failure: **10 tests, 9 pass, 1 fail, 0 cancelled** (`/tmp/gsd-stuck-before.log`). The real detector's repeated `Edit` events produced `AgentAbortedError` with `reason.stuck:true`; the new `routingCalls && !routingCalls.terminated()` guard in `runConsumerIssuance` threw it before the existing `ConsumerStuckError` conversion. GSD catches the latter to write `.compose/gsd/<feature>/stuck.json` and return `status:'stuck'`. This was the unconfirmed-termination escape added with dispatch 2, not the routing-integrity predicate misclassifying the abort. The supplied round-2 bisect was not repeated.
+
+The fix in `lib/build.js` exempts only `error instanceof AgentAbortedError && error.reason?.stuck === true` from that termination guard. It retains the earlier uncertainty event, cancellation precedence, usage accounting and existing stuck handler; it does not settle, synthesize a failure envelope or retry the issuance. The routing-integrity check executes **before** this exception. `routingIntegrityError` recognizes `ROUTING_*` and `CONSUMER_EVIDENCE_MISMATCH`; persistence failures are branded `ROUTING_PERSISTENCE_FAILED` by the existing write boundary. Even an integrity error that also has the `AgentAbortedError` prototype and `reason.stuck:true` is rethrown first. Neither an error name/message nor a stuck-shaped reason can override that code check. All primary, repair, tolerant-review, usage, retry, probe and terminal integrity escapes remain unchanged.
+
+The existing golden test is the regression test; no test or frozen fixture was changed. It drives `runGsd`, the real engine and stuck detector with controlled inference events, then checks exit 0, B's stuck diagnostic, B's unsettled issuance and resume refusal before any additional plan/model call. Its focused fixed run reports **1 test, 1 pass, 0 fail, 0 cancelled** (`/tmp/gsd-stuck-fixed-focused.log`).
+
+Commands (all test output is redirected directly to files; Node TAP tallies, not exit status alone, determine the result):
+
+```sh
+RESEND_API_KEY= STRIPE_API_KEY= node --test --test-timeout=900000 \
+  test/integration/gsd-route-continuation-golden.test.js > /tmp/gsd-stuck-before.log 2>&1
+echo $?
+
+STRATUM_STATE_ROOT=$(mktemp -d /tmp/gsd-stuck-state.XXXXXX) RESEND_API_KEY= STRIPE_API_KEY= \
+  node --test --test-timeout=900000 test/<file>.test.js \
+  > /tmp/gsd-stuck-verification/<file>.log 2>&1
+route_status=$?
+echo "$route_status"
+rg '^# (tests|pass|fail|cancelled)' /tmp/gsd-stuck-verification/<file>.log
+```
+
+`/tmp/gsd-stuck-verification/run.py` instantiates the second command separately for every file below, with two independent processes at most. Integration log names replace `/` with `-`.
+
+| File | `# tests` | `# pass` | `# fail` | `# cancelled` | Exit |
+|---|---:|---:|---:|---:|---:|
+| `test/routing-calls.test.js` | 20 | 20 | 0 | 0 | 0 |
+| `test/build-model-route-outcomes.test.js` | 34 | 34 | 0 | 0 | 0 |
+| `test/gsd-model-route-outcomes.test.js` | 8 | 8 | 0 | 0 | 0 |
+| `test/usage-receipts.test.js` | 52 | 52 | 0 | 0 | 0 |
+| `test/routing-join.test.js` | 11 | 11 | 0 | 0 | 0 |
+| `test/routing-outcome.test.js` | 19 | 19 | 0 | 0 | 0 |
+| `test/routing-ledger.test.js` | 19 | 19 | 0 | 0 | 0 |
+| `test/routing-journal.test.js` | 16 | 16 | 0 | 0 | 0 |
+| `test/build-model-route.test.js` | 41 | 41 | 0 | 0 | 0 |
+| `test/gsd-model-route.test.js` | 20 | 20 | 0 | 0 | 0 |
+| `test/build-cancel-unit.test.js` | 19 | 19 | 0 | 0 | 0 |
+| `test/integration/gsd-route-continuation-golden.test.js` | 10 | 10 | 0 | 0 | 0 |
+
+The specified eleven files total **259/259 passed**; including the full continuation golden file gives **269/269 passed**, with zero failures or cancellations.
+
+Negative controls use `scripts/negative-control.sh`. The script now reads historical bytes with `git show` instead of `git checkout`, avoiding index writes; it also accepts a test-name selector and prints each Node exit status plus tests/pass/fail/cancelled tallies. Every selected baseline was GREEN before its reversion, and `/tmp/gsd-stuck-verification/controls.py` verified byte-for-byte restoration after every invocation. These mutations ran sequentially after the positive test processes finished.
+
+```sh
+STRATUM_STATE_ROOT=$(mktemp -d /tmp/gsd-control-state.XXXXXX) RESEND_API_KEY= STRIPE_API_KEY= \
+  bash scripts/negative-control.sh --ref ecea9db --timeout 900000 \
+  --test-name-pattern='<selector>' --prod lib/<module>.js -- \
+  --test test/<file>.test.js > /tmp/gsd-stuck-verification/control-<module>.log 2>&1
+echo $?
+```
+
+Each row below uses that command with the listed module, test and selector. All ten verdicts are **RED**, with Node exit 1 and zero cancelled tests; the script itself exits 0 because the negative control succeeded.
+
+| Reverted production file | Test file | Selector | Reverted tests / pass / fail / cancelled |
+|---|---|---|---:|
+| `lib/bug-escalation.js` | `test/routing-calls.test.js` | `real escalation-` | 2 / 0 / 2 / 0 |
+| `lib/build-cancel.js` | `test/build-cancel-unit.test.js` | `teardown finalizes routing evidence` | 1 / 0 / 1 / 0 |
+| `lib/build.js` | `test/build-model-route-outcomes.test.js` | `policy revision transport disconnect` | 1 / 0 / 1 / 0 |
+| `lib/codex-preflight.js` | `test/routing-calls.test.js` | `real codex-preflight producer` | 1 / 0 / 1 / 0 |
+| `lib/gsd.js` | `test/gsd-model-route-outcomes.test.js` | `ordinary-only no-ceiling GSD` | 1 / 0 / 1 / 0 |
+| `lib/local-claude-connector.js` | `test/routing-calls.test.js` | `local SDK raw presence` | 2 / 0 / 2 / 0 |
+| `lib/output-gate.js` | `test/build-model-route-outcomes.test.js` | `two real carry repairs retain A` | 1 / 0 / 1 / 0 |
+| `lib/result-normalizer.js` | `test/routing-calls.test.js` | `full normalizer repair` | 2 / 0 / 2 / 0 |
+| `lib/review-normalize.js` | `test/routing-calls.test.js` | `full normalizer repair` | 2 / 0 / 2 / 0 |
+| `lib/stratum-mcp-client.js` | `test/routing-calls.test.js` | `real MCP boundary owns` | 1 / 0 / 1 / 0 |
+
+The `output-gate.js` whole-file revert removes the imported `observeRoutingDecision` export, so its RED tally is an import failure, not independent behavioral proof of ownership rejection. The executable multiple-owner mutation below supplies that separate proof.
+
+**Negative control for this fix:** the same script, with `--ref 975ff50 --prod lib/build.js --test-name-pattern='GSD real stuck detector leaves uncertain B' --test test/integration/gsd-route-continuation-golden.test.js`, records baseline **1 test / 1 pass / 0 fail / 0 cancelled**, then reverted **1 test / 0 pass / `# fail 1` / 0 cancelled** (`/tmp/gsd-stuck-verification/control-stuck-fix.log`). The historical Build file differs from the fixed file only by this fix. No test supplies an abort, stuck artifact or expected routing state; the existing event-driven producer creates them.
+
+The two required check-removal controls were also rerun. The saved mutation sources were compared with current production: the first removes only the added evidence comparisons, the second only the multiple-owner refusal. The existing process-local load hook substitutes those bytes at the original module URL without changing working-tree files:
+
+```sh
+R2_REVERT_FILE=lib/routing-runtime.js R2_REVERT_SOURCE=/tmp/r2-no-extra-comparisons.js \
+  STRATUM_STATE_ROOT=$(mktemp -d /tmp/stuck-evidence-state.XXXXXX) RESEND_API_KEY= STRIPE_API_KEY= \
+  node --import /tmp/r2-revert-loader.mjs --test --test-timeout=900000 \
+  --test-name-pattern='real normalizer forwarding|real Claude .* forwarding' \
+  test/usage-receipts.test.js > /tmp/gsd-stuck-verification/no-evidence-comparisons.log 2>&1
+echo $?
+rg '^# (tests|pass|fail|cancelled)' /tmp/gsd-stuck-verification/no-evidence-comparisons.log
+
+R2_REVERT_FILE=lib/output-gate.js R2_REVERT_SOURCE=/tmp/r2-no-multiple-owner.js \
+  STRATUM_STATE_ROOT=$(mktemp -d /tmp/stuck-owner-state.XXXXXX) RESEND_API_KEY= STRIPE_API_KEY= \
+  node --import /tmp/r2-revert-loader.mjs --test --test-timeout=900000 \
+  --test-name-pattern='residual B0 ownership for a.txt' \
+  test/build-model-route-outcomes.test.js > /tmp/gsd-stuck-verification/no-multiple-owner.log 2>&1
+echo $?
+rg '^# (tests|pass|fail|cancelled)' /tmp/gsd-stuck-verification/no-multiple-owner.log
+```
+
+| Mutation | Test file | Tests | Pass | Fail | Cancelled | Exit |
+|---|---|---:|---:|---:|---:|---:|
+| Remove added evidence comparisons | `test/usage-receipts.test.js` | 21 | 4 | **17** | 0 | 1 |
+| Remove multiple-owner refusal | `test/build-model-route-outcomes.test.js` | 1 | 0 | **1** | 0 | 1 |
+
+Final checks: `git diff --check`, `node --check lib/build.js`, and `bash -n scripts/negative-control.sh` passed. All three frozen `test/fixtures/model-route-off-*.json` files remain byte-identical to HEAD. No tests were edited. Nothing was staged, committed or pushed. The separately owned branch-lineage failure was neither run nor modified; COMP-ROADMAP files and the existing untracked audit file were left alone. No port binding, process inspection, GUI launch or dependency installation was performed. This verifies the requested regression scope; it does not claim a new full-suite run.
