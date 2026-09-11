@@ -323,3 +323,33 @@ plumb it through local-claude-connector.js:287–300 as execution evidence. Rela
 (:68–90,151) stays forbidden — that is intent, and substituting intent for evidence is what Decision 6 prevents.
 Deliberately NOT filed as a scheduled follow-up: a follow-up against an inert gap is exactly the perishable
 forward-looking claim that rots.
+
+## 2026-09-11 — Q3 raised by owner: the repair floor may be measuring the wrong thing (OPEN, S3)
+Owner objection: Decision 7's floor is a TIER comparison ("never redo below the rung that executed"), which treats
+ladder position as a proxy for "likely to succeed here". The proxy inverts — a stronger model can follow a tightly
+specified task WORSE. Second example (Codex vs Claude on reviews) is ALREADY handled: cross-provider evidence refuses
+admission and provider ladders are explicit policy, not a global ordering (design.md:318,350–353); `coordinator` is
+not a rung. Within-provider monotonicity is NOT handled.
+Structural tension: the floor applies after EVERY source and rejects anything below it (design.md:320–322), so it
+overrides the learned value. The feature's premise is "stop assuming which model is right, measure it" — and the one
+hardcoded prior outranks the measurement.
+Candidate shape (NOT ruled): evidence-based floor where durable evidence exists (never redo with a candidate whose
+measured accepted-rate is worse than the executed one's), evaluated on the REPAIR STRATUM not the key overall (work
+that reached a repair is not a random sample of the key); ladder demoted to cold-start prior; cross-provider refusal
+unchanged; floor derived from the same evidence as the learned source so they cannot contradict.
+Deliberately NOT decided now — the shadow corpus should settle it before S3 builds enforcement.
+
+## 2026-09-11 — S1b ledger row gains `context` (repair stratum) @95a85c4
+Found while answering Q3: the blueprinted ledger row had `key`, `source` and `outcome` but NOTHING marking a row as
+repair-context, so once a row reached the ledger a repair-wave sample was indistinguishable from a fresh-wave one and
+the journal that could re-derive it is per-run/per-artifact-root (consumer-fanout.js:282–296) and not retained for the
+ledger's lifetime. Design already scopes the eligible population by "key/tier/cohort and source stratum"
+(design.md:296–298) — the field is what makes that stratum expressible.
+Added `context:{waveKind, repairOfRecordId, repairDepth, repairLineageRefs}`, `waveKind ∈ {fresh,repair,retry,unknown}`.
+RECOMPUTED at materialization from persisted admission repairContext/epoch (build.js:1060) + validated `lineage-link`
+records, then frozen into the row (the row IS the durable sample); never from task names or in-memory state. Ambiguous
+lineage → `unknown`, censored, never defaulted to `fresh`. `repairDepth` stops a third-round repair being pooled with a
+first attempt. S1b RECORDS only — no floor computed, compared or enforced (that stays S3).
+One-line schema change now vs re-materializing the ledger after S1b ships. Dispatch-1 checkbox + a Tests-table row added.
+NOTE: this edit post-dates the r2 CLEAN review; it is additive recording with no floor logic, but it has NOT itself been
+through a review round.
