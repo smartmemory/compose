@@ -1,3 +1,4 @@
+import { checkedConsumerAdapter } from '../helpers/routing-adapter-check.js';
 /**
  * COMP-AGENT-LANES — end-to-end pipeline smoke (Phase 7 step 2).
  *
@@ -16,7 +17,6 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { runConsumerIssuance } from '../../lib/build.js';
 import { BuildStreamBridge } from '../../server/build-stream-bridge.js';
 import { applyLaneEvent, deriveParallelSummary, laneKey } from '../../src/components/agent-stream-lanes.js';
 
@@ -79,7 +79,7 @@ async function driveItem({ itemIndex, query, streamWriter }) {
   const localSpec = {
     flows: { build: { steps: [{ id: 'execute_tasks', fanout: { steps: [{ agent: 'claude', do: 'x', out: 'TaskResult' }] } }] } },
   };
-  await runConsumerIssuance({
+  await checkedConsumerAdapter({
     descriptor, flowId: 'flow-lanes', stratum, artifacts, localSpec,
     context: { cwd: process.cwd() },
     progress: stubProgress(), streamWriter,

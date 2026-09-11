@@ -1,3 +1,4 @@
+import { checkedConsumerAdapter } from './helpers/routing-adapter-check.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
@@ -10,7 +11,7 @@ import {
   REQUIRED_STRATUM_RANGE,
 } from '../lib/stratum-mcp-client.js';
 import { runAndNormalize, AgentTimeoutError, UserInterruptError } from '../lib/result-normalizer.js';
-import { runConsumerIssuance, reportUsageReceipts } from '../lib/build.js';
+import { reportUsageReceipts } from '../lib/build.js';
 import { runLocalClaudeAgent } from '../lib/local-claude-connector.js';
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -133,7 +134,7 @@ test('billable MCP failure reaches the real consumer failureUsageFields and debi
   client.audit=async()=>({});
   const descriptor={id:'work/0',step:'work',flow:'build',itemIndex:0,stage:0,generation:1,attempt:1,epoch:1,dispatchToken:'tok',agent:'codex',do:'fixture',item:{id:'T1'},policy:{isolation:'none'},contract:{root:'R',contracts:{R:{summary:'string'}}}};
   const usage=[];
-  await runConsumerIssuance({descriptor,flowId:'flow-1',stratum:client,
+  await checkedConsumerAdapter({descriptor,flowId:'flow-1',stratum:client,
     artifacts:{hooks:{},reconcileDescriptor:()=>({action:'execute',worktree:root}),prepareIssuance:()=>({diff:''}),reconcileAudit(){},restoreToPreStageWitness(){}},
     localSpec:{flows:{build:{steps:[{id:'work',fanout:{steps:[{agent:'codex',do:'fixture',out:'R'}]}}]}},contracts:descriptor.contract.contracts},
     context:{cwd:root,flowId:'flow-1',receiptsMode:false,onUsage:value=>usage.push(value)},

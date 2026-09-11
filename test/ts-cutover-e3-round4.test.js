@@ -1,3 +1,4 @@
+import { checkedConsumerAdapter } from './helpers/routing-adapter-check.js';
 /**
  * E3 cutover — round-4 review fixes (G1–G3).
  *
@@ -13,7 +14,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import YAML from 'yaml';
 
-import { resolveStepOutputContract, runConsumerIssuance } from '../lib/build.js';
+import { resolveStepOutputContract } from '../lib/build.js';
 import { runAndNormalize, AgentTimeoutError, AgentAbortedError } from '../lib/result-normalizer.js';
 
 process.env.NODE_ENV = 'test';
@@ -67,7 +68,7 @@ async function driveConsumerIssuance({ descriptor, localQuery }) {
   const localSpec = {
     flows: { build: { steps: [{ id: descriptor.step, fanout: { steps: [{ agent: 'claude', do: 'x', out: 'ReviewResult' }] } }] } },
   };
-  await runConsumerIssuance({
+  await checkedConsumerAdapter({
     descriptor, flowId: 'flow-1', stratum, artifacts, localSpec,
     context: { cwd: process.cwd() }, progress: stubProgress(), streamWriter: { write() {} },
   });

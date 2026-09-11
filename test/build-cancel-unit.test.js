@@ -150,3 +150,92 @@ describe('isRunCancelled (the authority on "was this run cancelled")', () => {
     assert.equal(await isRunCancelled(stratum, 'flow-1'), false);
   });
 });
+
+test('teardown finalizes routing evidence after drain and before terminal ownership writes', async () => {
+  const { runCancelTeardown } = await import('../lib/build-cancel.js');
+  const buildCancel = createBuildCancel(), order = [];
+  buildCancel.resolveDrained();
+  await runCancelTeardown({ buildCancel, signal: 'SIGINT', flowId: 'run', timeoutMs: 50, drainMs: 50,
+    flowCancel: async () => { order.push('cancel'); }, finalizeEvidence: async () => { order.push('evidence'); },
+    killVision: async () => { order.push('vision'); }, writeTerminal: () => { order.push('terminal'); },
+    removeListeners: () => {}, exit: () => { order.push('exit'); }, log: () => {} });
+  assert.deepEqual(order, ['cancel', 'evidence', 'vision', 'terminal', 'exit']);
+});
+test('teardown routing-integrity failure escapes and cannot become a clean terminal write', async () => {
+  const { runCancelTeardown } = await import('../lib/build-cancel.js');
+  const buildCancel = createBuildCancel(); buildCancel.resolveDrained(); let terminals = 0;
+  await assert.rejects(runCancelTeardown({ buildCancel, signal: 'SIGTERM', flowId: 'run', timeoutMs: 50, drainMs: 50,
+    flowCancel: async () => {}, finalizeEvidence: async () => { throw Object.assign(Error('disk failed'), { code: 'ROUTING_PERSISTENCE_FAILED' }); },
+    killVision: async () => {}, writeTerminal: () => { terminals++; }, removeListeners: () => {}, exit: () => {}, log: () => {} }), { code: 'ROUTING_PERSISTENCE_FAILED' });
+  assert.equal(terminals, 0);
+});
+
+test('routing evidence recovery shares the bounded teardown allowance and cannot grant terminal success on timeout', async () => {
+  const { runCancelTeardown } = await import('../lib/build-cancel.js');
+  const buildCancel = createBuildCancel(); buildCancel.resolveDrained(); let terminal = 0;
+  await assert.rejects(runCancelTeardown({ buildCancel, signal: 'SIGINT', flowId: 'f', timeoutMs: 5, drainMs: 5,
+    flowCancel: async () => {}, finalizeEvidence: () => new Promise(() => {}),
+    killVision: async () => {}, writeTerminal: () => { terminal++; }, removeListeners() {}, exit() {}, log() {},
+  }), { code: 'ROUTING_RECOVERY_INCOMPLETE' });
+  assert.equal(terminal, 0);
+});
+
+
+test('public Build signal deadline persists unknown call ownership before exit and refuses reissue', { timeout: 15000 }, async t => {
+  const { runtimeFixture } = await import('./helpers/routing-runtime-fixture.js');
+  const { resumeRouting } = await import('../lib/build.js');
+  const { seedCanonicalCatalog } = await import('./helpers/policy-catalog-stub.js');
+  const { _clearCatalogCache } = await import('../lib/policy-catalog.js');
+  const { writeFileSync, rmSync } = await import('node:fs'); const { join } = await import('node:path');
+  const memoryDir = seedCanonicalCatalog(); t.after(() => { _clearCatalogCache(); rmSync(memoryDir, { recursive: true, force: true }); });
+  const prior = [process.env.COMPOSE_CANCEL_TIMEOUT_MS, process.env.COMPOSE_TEARDOWN_DRAIN_MS];
+  process.env.COMPOSE_CANCEL_TIMEOUT_MS = '2000'; process.env.COMPOSE_TEARDOWN_DRAIN_MS = '5';
+  t.after(() => ['COMPOSE_CANCEL_TIMEOUT_MS', 'COMPOSE_TEARDOWN_DRAIN_MS'].forEach((key, n) => {
+    if (prior[n] === undefined) delete process.env[key]; else process.env[key] = prior[n];
+  }));
+  let announceLaunch, release;
+  const launched = new Promise(resolve => { announceLaunch = resolve; });
+  const f = await runtimeFixture(t, {
+    setup({ cwd }) { writeFileSync(join(cwd, '.compose/compose.json'), JSON.stringify({ version: 2, policyCheck: { memoryDir } })); },
+    intercept(method, args) { if (method === 'before:usageReport' && args[1].detail?.routing?.kind === 'paid-call') throw Error('paid receipt delivery unavailable'); },
+    inference: async (_args, _f, ordinal) => {
+    if (ordinal === 0) return { text: '{"outcome":"complete","summary":"Want me to continue with the tests?"}',
+      usage: { tokens: 4, ms: 5, usd: 0.3 }, usdSource: 'reported' };
+    announceLaunch(); await new Promise(resolve => { release = resolve; });
+    return { text: '{"outcome":"complete","summary":"late"}', usage: { tokens: 4, ms: 5, usd: 0.3 }, usdSource: 'reported' };
+  } });
+  // The actual connector cannot confirm termination within the drain budget.
+  f.connector.cancelAgentRun = async () => ({ status: 'cancelled' });
+  let finishExit;
+  const exited = new Promise(resolve => { finishExit = resolve; });
+  t.mock.method(process, 'exit', code => {
+    // Capture before the suspended pump's catch/finally can recover anything.
+    finishExit({ code, rows: f.rows(), journal: f.journal(), reports: structuredClone(f.reports) });
+  });
+  const running = f.run().catch(error => error);
+  await launched;
+  const handle = lookupBuildCancel(f.flowId);
+  let drained = false; handle.drained.then(() => { drained = true; });
+  process.emit('SIGINT');
+  try {
+    const atExit = await exited;
+    assert.equal(atExit.code, 130); assert.equal(drained, false, 'drain deadline expired with the call outstanding');
+    assert.equal(f.snapshot().status, 'cancelled');
+    const parent = atExit.rows.find(r => r.issuance?.scopedStep === 'work');
+    assert.ok(parent); assert.equal(parent.outcome.label, 'unknown'); assert.equal(parent.outcome.binary, 'excluded');
+    assert.deepEqual(parent.calls.map(c => c.resolution.outcome).sort(), ['resolved', 'unresolved']);
+    assert.equal(parent.cost.usd, 0.3);
+    const records = Object.values(atExit.journal.routing.records);
+    assert.equal(records.some(r => r.event === 'settled'), false); assert.equal(atExit.reports.length, 0);
+    const call = records.find(r => r.type === 'call-intent');
+    const metadata = records.find(r => r.type === 'issuance-metadata' && r.issuanceId === call.issuanceId);
+    const owner = records.find(r => r.id === metadata.ownerId);
+    assert.ok(owner); assert.equal(owner.ownerRunId, f.flowId);
+    const paid = atExit.journal.pendingUsageReceipts.find(p => p.receipt.detail?.routing?.kind === 'paid-call');
+    assert.equal(paid.state, 'pending'); assert.equal(paid.receipt.detail.routing.ownerRunId, f.flowId);
+    assert.equal(paid.receipt.dispatchId, call.callId); assert.equal(paid.receipt.usage.usd, 0.3);
+    await assert.rejects(resumeRouting({ runId: f.flowId, cwd: f.cwd, localSpec: f.spec, profiles: f.profiles,
+      stratum: f.stratum, artifactRoot: f.artifactRoot }), { code: 'ROUTING_ISSUANCE_UNCERTAIN' });
+    assert.equal(f.calls.length, 2);
+  } finally { release(); await running; }
+});

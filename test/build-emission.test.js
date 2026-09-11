@@ -1,3 +1,4 @@
+import { checkedConsumerAdapter } from './helpers/routing-adapter-check.js';
 /**
  * Tests for build_step_done emission sites in lib/build.js.
  *
@@ -14,7 +15,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { runConsumerIssuance, buildLaneEnvelope } from '../lib/build.js';
+import { buildLaneEnvelope } from '../lib/build.js';
 
 process.env.NODE_ENV = 'test';
 
@@ -275,7 +276,7 @@ async function driveConsumerItem(writer, itemIndex, overrides = {}) {
   const localSpec = {
     flows: { build: { steps: [{ id: 'execute_tasks', fanout: { steps: [{ agent: 'claude', do: 'x', out: 'TaskResult' }] } }] } },
   };
-  await runConsumerIssuance({
+  await checkedConsumerAdapter({
     descriptor, flowId: 'flow-1', stratum, artifacts, localSpec,
     context: { cwd: process.cwd() },
     progress: stubProgress(), streamWriter: writer,

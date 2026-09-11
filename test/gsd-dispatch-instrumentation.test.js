@@ -1,9 +1,10 @@
+import { checkedConsumerAdapter } from './helpers/routing-adapter-check.js';
 /**
  * gsd-dispatch-instrumentation.test.js — COMP-GSD-7 S3 (TS re-expression).
  *
  * Spec source: the pre-deletion test/gsd-dispatch-instrumentation.test.js at
  * cc390a7, which drove the (now-removed) executeParallelDispatchServer poll loop.
- * The TS v1 GSD path fans out per ITEM through runConsumerIssuance, so this
+ * The TS v1 GSD path fans out per ITEM through so this
  * re-expression drives that function directly and asserts the same sidecars:
  *   - GSD mode (context.gsd === true) persists per-task timing.json + per-task
  *     diffs/<id>.diff (the diff tapped read-only from the artifacts journal entry);
@@ -15,7 +16,6 @@ import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'no
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { runConsumerIssuance } from '../lib/build.js';
 
 process.env.NODE_ENV = 'test';
 
@@ -79,7 +79,7 @@ async function driveItem(cwd, { descriptor, diffText }, context) {
   const localSpec = {
     flows: { build: { steps: [{ id: 'execute_tasks', fanout: { steps: [{ agent: 'claude', do: 'x', out: 'TaskResult' }] } }] } },
   };
-  await runConsumerIssuance({
+  await checkedConsumerAdapter({
     descriptor, flowId: 'flow-1', stratum, artifacts, localSpec,
     context: { cwd, ...context },
     progress: stubProgress(), streamWriter: { write() {} },
