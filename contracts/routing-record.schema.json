@@ -649,16 +649,44 @@
           "$ref": "#/$defs/Route"
         },
         "repairContext": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "state"
-          ],
-          "properties": {
-            "state": {
-              "const": "not-evaluated-s1a"
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "state"
+              ],
+              "properties": {
+                "state": {
+                  "const": "not-evaluated-s1a"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "state",
+                "evidenceRefs"
+              ],
+              "properties": {
+                "state": {
+                  "enum": [
+                    "fresh",
+                    "repair",
+                    "unknown"
+                  ]
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                  }
+                }
+              }
             }
-          }
+          ]
         }
       }
     },
@@ -781,6 +809,9 @@
         },
         "would": {
           "$ref": "#/$defs/Route"
+        },
+        "observationVersion": {
+          "const": 1
         }
       }
     },
@@ -1057,6 +1088,864 @@
           "minLength": 1
         }
       }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "event",
+        "issuanceId",
+        "issuanceToken",
+        "sequence",
+        "evidence"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "issuance-event"
+        },
+        "event": {
+          "const": "settled"
+        },
+        "issuanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "issuanceToken": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runId",
+            "revisionDigest",
+            "scopedStep",
+            "epoch",
+            "itemIndex",
+            "generation",
+            "issuanceToken",
+            "acceptedDispatchToken",
+            "status",
+            "proofKind",
+            "request",
+            "requestDigest",
+            "response"
+          ],
+          "properties": {
+            "runId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            "revisionDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "scopedStep": {
+              "type": "string",
+              "minLength": 1
+            },
+            "epoch": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "itemIndex": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "generation": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "issuanceToken": {
+              "type": "string",
+              "minLength": 1
+            },
+            "acceptedDispatchToken": {
+              "type": "null"
+            },
+            "status": {
+              "const": "failed"
+            },
+            "proofKind": {
+              "const": "failure-acknowledgement"
+            },
+            "request": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "runId",
+                "revisionDigest",
+                "scopedStep",
+                "epoch",
+                "itemIndex",
+                "generation",
+                "dispatchToken",
+                "envelope"
+              ],
+              "properties": {
+                "runId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                },
+                "revisionDigest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "scopedStep": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "epoch": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "itemIndex": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "generation": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dispatchToken": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "envelope": {}
+              }
+            },
+            "requestDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "response": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "acknowledged",
+                "status",
+                "result"
+              ],
+              "properties": {
+                "acknowledged": {
+                  "const": true
+                },
+                "status": {
+                  "const": "failed"
+                },
+                "result": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "event",
+        "issuanceId",
+        "issuanceToken",
+        "sequence",
+        "evidence"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "issuance-event"
+        },
+        "event": {
+          "const": "settled"
+        },
+        "issuanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "issuanceToken": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runId",
+            "revisionDigest",
+            "scopedStep",
+            "epoch",
+            "itemIndex",
+            "generation",
+            "issuanceToken",
+            "acceptedDispatchToken",
+            "status",
+            "proofKind",
+            "audit",
+            "terminationRefs"
+          ],
+          "properties": {
+            "runId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            "revisionDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "scopedStep": {
+              "type": "string",
+              "minLength": 1
+            },
+            "epoch": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "itemIndex": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "generation": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "issuanceToken": {
+              "type": "string",
+              "minLength": 1
+            },
+            "acceptedDispatchToken": {
+              "type": "null"
+            },
+            "status": {
+              "const": "cancelled"
+            },
+            "proofKind": {
+              "const": "cancellation-audit"
+            },
+            "audit": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "runId",
+                "revisionDigest",
+                "status",
+                "evidence"
+              ],
+              "properties": {
+                "runId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                },
+                "revisionDigest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "status": {
+                  "const": "cancelled"
+                },
+                "evidence": {}
+              }
+            },
+            "terminationRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "ownerRunId",
+        "revisionDigest",
+        "journalLocator",
+        "runBindingId"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "receipt-owner"
+        },
+        "ownerRunId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "revisionDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "journalLocator": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runBindingId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "issuanceId",
+        "ownerId",
+        "dispatchId",
+        "payloadDigest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "issuance-metadata"
+        },
+        "issuanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "ownerId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "dispatchId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "payloadDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "ownerRunId",
+        "heads",
+        "outcomeIds"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "evidence-checkpoint"
+        },
+        "ownerRunId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "heads": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+          }
+        },
+        "outcomeIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+          }
+        }
+      }
+    },
+    {
+      "$ref": "routing-join.schema.json"
+    },
+    {
+      "$ref": "routing-outcome.schema.json"
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "recordId",
+        "version",
+        "materializedAt",
+        "source",
+        "key",
+        "context",
+        "issuance",
+        "observation",
+        "outcome",
+        "evidenceRefs",
+        "calls",
+        "cost",
+        "completeness"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "recordId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "materializedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "enum": [
+            "preset",
+            "manual",
+            "default",
+            "unsupported"
+          ]
+        },
+        "key": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "waveKind",
+            "repairOfRecordId",
+            "repairDepth",
+            "repairLineageRefs"
+          ],
+          "properties": {
+            "waveKind": {
+              "enum": [
+                "fresh",
+                "repair",
+                "retry",
+                "unknown"
+              ]
+            },
+            "repairOfRecordId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "repairDepth": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "repairLineageRefs": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "issuance": {
+          "anyOf": [
+            {
+              "$ref": "#/oneOf/5"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observation": {
+          "anyOf": [
+            {
+              "$ref": "routing-join.schema.json#/oneOf/2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outcome": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "label",
+            "binary",
+            "derivation",
+            "censorReason"
+          ],
+          "properties": {
+            "label": {
+              "enum": [
+                "accepted",
+                "repaired",
+                "re-implemented",
+                "retried-same-epoch",
+                "failed-or-cancelled",
+                "unknown"
+              ]
+            },
+            "binary": {
+              "enum": [
+                "positive",
+                "negative",
+                "excluded"
+              ]
+            },
+            "derivation": {
+              "type": "string",
+              "minLength": 1
+            },
+            "censorReason": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+          }
+        },
+        "calls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "intent",
+              "resolution",
+              "executedTier"
+            ],
+            "properties": {
+              "intent": {
+                "$ref": "routing-join.schema.json#/oneOf/0"
+              },
+              "resolution": {
+                "anyOf": [
+                  {
+                    "$ref": "routing-join.schema.json#/oneOf/1"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "executedTier": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "value",
+                  "source",
+                  "evidenceRefs"
+                ],
+                "properties": {
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "source": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "evidenceRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tokens",
+            "durationMs",
+            "usd",
+            "provenance",
+            "paidReceiptRefs"
+          ],
+          "properties": {
+            "tokens": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "durationMs": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "usd": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "provenance": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "reported",
+                  "estimated"
+                ]
+              }
+            },
+            "paidReceiptRefs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "ownerRunId",
+                  "dispatchId",
+                  "payloadDigest"
+                ],
+                "properties": {
+                  "ownerRunId": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                  },
+                  "dispatchId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "payloadDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "completeness": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "reasons"
+          ],
+          "properties": {
+            "state": {
+              "enum": [
+                "complete",
+                "incomplete"
+              ]
+            },
+            "reasons": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
     }
   ],
   "$defs": {
@@ -1264,6 +2153,369 @@
         },
         "provenance": {
           "$ref": "#/$defs/Provenance"
+        }
+      }
+    },
+    "ledgerRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "recordId",
+        "version",
+        "materializedAt",
+        "source",
+        "key",
+        "context",
+        "issuance",
+        "observation",
+        "outcome",
+        "evidenceRefs",
+        "calls",
+        "cost",
+        "completeness"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "recordId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "materializedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "enum": [
+            "preset",
+            "manual",
+            "default",
+            "unsupported"
+          ]
+        },
+        "key": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "waveKind",
+            "repairOfRecordId",
+            "repairDepth",
+            "repairLineageRefs",
+            "ancestryUnknown"
+          ],
+          "properties": {
+            "waveKind": {
+              "enum": [
+                "fresh",
+                "repair",
+                "retry",
+                "unknown"
+              ]
+            },
+            "repairOfRecordId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "repairDepth": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "repairLineageRefs": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ancestryUnknown": {
+              "type": "boolean"
+            }
+          }
+        },
+        "issuance": {
+          "anyOf": [
+            {
+              "$ref": "#/oneOf/5"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observation": {
+          "anyOf": [
+            {
+              "$ref": "routing-join.schema.json#/oneOf/2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outcome": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "label",
+            "binary",
+            "derivation",
+            "censorReason"
+          ],
+          "properties": {
+            "label": {
+              "enum": [
+                "accepted",
+                "repaired",
+                "re-implemented",
+                "retried-same-epoch",
+                "failed-or-cancelled",
+                "unknown"
+              ]
+            },
+            "binary": {
+              "enum": [
+                "positive",
+                "negative",
+                "excluded"
+              ]
+            },
+            "derivation": {
+              "type": "string",
+              "minLength": 1
+            },
+            "censorReason": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+          }
+        },
+        "calls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "intent",
+              "resolution",
+              "executedTier"
+            ],
+            "properties": {
+              "intent": {
+                "$ref": "routing-join.schema.json#/oneOf/0"
+              },
+              "resolution": {
+                "anyOf": [
+                  {
+                    "$ref": "routing-join.schema.json#/oneOf/1"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "executedTier": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "value",
+                  "source",
+                  "evidenceRefs"
+                ],
+                "properties": {
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "source": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "evidenceRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tokens",
+            "durationMs",
+            "usd",
+            "provenance",
+            "paidReceiptRefs"
+          ],
+          "properties": {
+            "tokens": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "durationMs": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "usd": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "provenance": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "reported",
+                  "estimated",
+                  "legacy"
+                ]
+              },
+              "$comment": "legacy is engine-only; the ledger validator requires retained engine receipt evidence and an incomplete excluded row."
+            },
+            "paidReceiptRefs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "ownerRunId",
+                  "dispatchId",
+                  "payloadDigest"
+                ],
+                "properties": {
+                  "ownerRunId": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                  },
+                  "dispatchId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "payloadDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "completeness": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "reasons"
+          ],
+          "properties": {
+            "state": {
+              "enum": [
+                "complete",
+                "incomplete"
+              ]
+            },
+            "reasons": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
         }
       }
     }

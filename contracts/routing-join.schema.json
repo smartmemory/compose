@@ -1,0 +1,1422 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "routing-join.schema.json",
+  "_source": "docs/features/COMP-MODEL-ROUTE/design.md",
+  "_roadmap": "COMP-MODEL-ROUTE",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "ownerRunId",
+        "ownerJournal",
+        "issuanceId",
+        "observationId",
+        "recordId",
+        "parentRecordId",
+        "callSlot",
+        "callId",
+        "callIdSource",
+        "purpose",
+        "transport",
+        "intendedAt",
+        "profileIntent"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "call-intent"
+        },
+        "ownerRunId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "ownerJournal": {
+          "type": "string",
+          "minLength": 1
+        },
+        "issuanceId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observationId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recordId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "parentRecordId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "callSlot": {
+          "type": "string",
+          "minLength": 1
+        },
+        "callId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "callIdSource": {
+          "enum": [
+            "connector-invocation",
+            "absent"
+          ]
+        },
+        "purpose": {
+          "enum": [
+            "primary",
+            "normalization-repair",
+            "auxiliary"
+          ]
+        },
+        "transport": {
+          "enum": [
+            "mcp",
+            "local-sdk"
+          ]
+        },
+        "intendedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "profileIntent": {
+          "$ref": "routing-start.schema.json#/$defs/ProfileIntent"
+        }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "callIdSource": {
+                  "const": "absent"
+                },
+                "callId": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "properties": {
+                "callIdSource": {
+                  "const": "connector-invocation"
+                },
+                "callId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "not": {
+                    "pattern": "^(legacy:|compose:|engine:)"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "issuanceId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "observationId": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "properties": {
+                "issuanceId": {
+                  "type": "null"
+                },
+                "observationId": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "intentId",
+        "sequence",
+        "previousResolutionId",
+        "outcome",
+        "callId",
+        "callIdSource",
+        "launchOutcome",
+        "reportedModel",
+        "reportedEffort",
+        "usageEvidence",
+        "usageRef",
+        "terminationEvidence",
+        "resolvedAt",
+        "incompleteReasons"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "call-resolution"
+        },
+        "intentId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "previousResolutionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outcome": {
+          "enum": [
+            "resolved",
+            "errored",
+            "unresolved"
+          ]
+        },
+        "callId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "callIdSource": {
+          "enum": [
+            "connector-invocation",
+            "absent"
+          ]
+        },
+        "launchOutcome": {
+          "enum": [
+            "not-executed",
+            "executed",
+            "uncertain"
+          ]
+        },
+        "reportedModel": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reportedEffort": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "usageEvidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tokens",
+            "durationMs",
+            "usd",
+            "model",
+            "effort",
+            "presence",
+            "provenance",
+            "raw"
+          ],
+          "properties": {
+            "tokens": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "durationMs": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "usd": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "effort": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "presence": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "tokens",
+                "durationMs",
+                "usd",
+                "model",
+                "effort"
+              ],
+              "properties": {
+                "tokens": {
+                  "type": "boolean"
+                },
+                "durationMs": {
+                  "type": "boolean"
+                },
+                "usd": {
+                  "type": "boolean"
+                },
+                "model": {
+                  "type": "boolean"
+                },
+                "effort": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "provenance": {
+              "enum": [
+                "reported",
+                "estimated",
+                null
+              ]
+            },
+            "raw": {}
+          }
+        },
+        "usageRef": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ownerRunId",
+                "dispatchId",
+                "payloadDigest"
+              ],
+              "properties": {
+                "ownerRunId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                },
+                "dispatchId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "payloadDigest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "terminationEvidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "intentId",
+            "callId",
+            "evidence"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "return",
+                "acknowledged-termination",
+                "uncertain"
+              ]
+            },
+            "intentId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            "callId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "evidence": {}
+          }
+        },
+        "resolvedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "incompleteReasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "callIdSource": {
+                  "const": "absent"
+                },
+                "callId": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "properties": {
+                "callIdSource": {
+                  "const": "connector-invocation"
+                },
+                "callId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "not": {
+                    "pattern": "^(legacy:|compose:|engine:)"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "recordId",
+        "source",
+        "unsupportedReason",
+        "ownerRunId",
+        "ownerJournal",
+        "issuanceId",
+        "issuanceToken",
+        "parentRecordId",
+        "parentIntentId",
+        "scopedStep",
+        "stage",
+        "epoch",
+        "itemIndex",
+        "generation",
+        "logicalTaskId",
+        "logicalWaveId",
+        "itemBindingRef",
+        "evidenceSource",
+        "evidenceRef",
+        "observedDispatchToken",
+        "incompleteReasons",
+        "engineReceiptEvidence"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "unsupported-observation"
+        },
+        "recordId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "source": {
+          "const": "unsupported"
+        },
+        "unsupportedReason": {
+          "enum": [
+            "engine-fanout",
+            "engine-judged",
+            "multi-stage-consumer",
+            "normalization-repair",
+            "gate-qa",
+            "review-fixer",
+            "codex-preflight",
+            "scoped-fixer",
+            "policy-revision",
+            "bug-escalation",
+            "engine-evidence-unavailable"
+          ]
+        },
+        "ownerRunId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "ownerJournal": {
+          "type": "string",
+          "minLength": 1
+        },
+        "issuanceId": {
+          "type": "null"
+        },
+        "issuanceToken": {
+          "type": "null"
+        },
+        "parentRecordId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parentIntentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scopedStep": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stage": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "epoch": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "itemIndex": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "generation": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "logicalTaskId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "logicalWaveId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "itemBindingRef": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidenceSource": {
+          "enum": [
+            "connector",
+            "engine-receipt",
+            "engine-audit"
+          ]
+        },
+        "evidenceRef": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ownerRunId",
+                "dispatchId",
+                "sequence",
+                "payloadDigest"
+              ],
+              "properties": {
+                "ownerRunId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                },
+                "dispatchId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "sequence": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "payloadDigest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observedDispatchToken": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "incompleteReasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "engineReceiptEvidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/engineReceiptEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "intentId",
+        "sequence",
+        "resolutionId",
+        "previousHeadId",
+        "count"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "call-evidence-head"
+        },
+        "intentId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "resolutionId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "previousHeadId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "receiptRouting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "kind",
+        "startId",
+        "rootDigest",
+        "ownerRunId",
+        "recordId",
+        "issuanceId",
+        "issuanceToken",
+        "observationId",
+        "parentRecordId",
+        "intentId",
+        "callId",
+        "callIdSource",
+        "scopedStep",
+        "stage",
+        "epoch",
+        "itemIndex",
+        "generation",
+        "logicalTaskId",
+        "logicalWaveId",
+        "admissionId",
+        "itemBindingRef",
+        "selectedRouteRef"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "enum": [
+            "route-metadata",
+            "paid-call"
+          ]
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "ownerRunId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "recordId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "issuanceId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "issuanceToken": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observationId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parentRecordId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "intentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "callId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "callIdSource": {
+          "enum": [
+            "connector-invocation",
+            "absent"
+          ]
+        },
+        "scopedStep": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stage": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "epoch": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "itemIndex": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "generation": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "logicalTaskId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "logicalWaveId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "admissionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "itemBindingRef": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selectedRouteRef": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "callIdSource": {
+                  "const": "absent"
+                },
+                "callId": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "properties": {
+                "callIdSource": {
+                  "const": "connector-invocation"
+                },
+                "callId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "not": {
+                    "pattern": "^(legacy:|compose:|engine:)"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "issuanceId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "observationId": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "properties": {
+                "issuanceId": {
+                  "type": "null"
+                },
+                "observationId": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "route-metadata"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "issuanceId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "issuanceToken": {
+                "type": "string",
+                "minLength": 1
+              },
+              "observationId": {
+                "type": "null"
+              },
+              "intentId": {
+                "type": "null"
+              },
+              "callId": {
+                "type": "null"
+              },
+              "parentRecordId": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "intentId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "callId": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "usageEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tokens",
+        "durationMs",
+        "usd",
+        "model",
+        "effort",
+        "presence",
+        "provenance",
+        "raw"
+      ],
+      "properties": {
+        "tokens": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "durationMs": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "usd": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effort": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "presence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tokens",
+            "durationMs",
+            "usd",
+            "model",
+            "effort"
+          ],
+          "properties": {
+            "tokens": {
+              "type": "boolean"
+            },
+            "durationMs": {
+              "type": "boolean"
+            },
+            "usd": {
+              "type": "boolean"
+            },
+            "model": {
+              "type": "boolean"
+            },
+            "effort": {
+              "type": "boolean"
+            }
+          }
+        },
+        "provenance": {
+          "enum": [
+            "reported",
+            "estimated",
+            null
+          ]
+        },
+        "raw": {}
+      }
+    },
+    "usageRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ownerRunId",
+        "dispatchId",
+        "payloadDigest"
+      ],
+      "properties": {
+        "ownerRunId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "dispatchId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "payloadDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "engineReceiptEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ownerRunId",
+        "sequence",
+        "receipt",
+        "usageEvidence"
+      ],
+      "properties": {
+        "ownerRunId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "sequence": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "receipt": {
+          "type": "object",
+          "required": [
+            "dispatchId"
+          ],
+          "properties": {
+            "dispatchId": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "usageEvidence": {
+          "$ref": "#/$defs/engineUsageEvidence"
+        }
+      }
+    },
+    "engineUsageEvidence": {
+      "$comment": "Engine receipts admit legacy pricing provenance. Connector usageEvidence remains reported/estimated/null.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tokens",
+        "durationMs",
+        "usd",
+        "model",
+        "effort",
+        "presence",
+        "provenance",
+        "raw"
+      ],
+      "properties": {
+        "tokens": {
+          "$ref": "#/$defs/usageEvidence/properties/tokens"
+        },
+        "durationMs": {
+          "$ref": "#/$defs/usageEvidence/properties/durationMs"
+        },
+        "usd": {
+          "$ref": "#/$defs/usageEvidence/properties/usd"
+        },
+        "model": {
+          "$ref": "#/$defs/usageEvidence/properties/model"
+        },
+        "effort": {
+          "$ref": "#/$defs/usageEvidence/properties/effort"
+        },
+        "presence": {
+          "$ref": "#/$defs/usageEvidence/properties/presence"
+        },
+        "provenance": {
+          "enum": [
+            "reported",
+            "estimated",
+            "legacy",
+            null
+          ]
+        },
+        "raw": {
+          "$ref": "#/$defs/usageEvidence/properties/raw"
+        }
+      }
+    }
+  }
+}
