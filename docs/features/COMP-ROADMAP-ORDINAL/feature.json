@@ -1,0 +1,19 @@
+{
+  "code": "COMP-ROADMAP-ORDINAL",
+  "description": "Preserve human force-rank ordinals through migration. feature.json has `position` (within-parent index 0-5) and `phase` (string), with no initiative/nesting type. SmartMemory's docs/ROADMAP.md carries 336 ordinals / ~170 distinct labels encoding a hand-maintained force-rank that exists in NO other artifact (roadmap-graph.html has no ordinal field; FEATURES.md is unordered). Sharp edge: the ordinals are used as IDENTIFIERS by documents that survive migration — CORE-VEC-DOMAINS-1/plan.md:9 and :174, and design-1b.md:11 and :292, all cite `25f6` by name (verified 2026-09-11). Dropping them breaks inbound references, not merely sort order. A flat `position` carries total order but cannot express sub-ranking under a parent (`19a`–`19v`), post-hoc insertion (`9b'''''`, `25a2`) or cluster tags (`3o-C3`). Minimum viable: a preserved `legacyOrdinal` string field. Source of record: /Users/ruze/reg/my/SmartMemory/smart-memory-docs/docs/features/ROADMAP-MIGRATE-1/design.md.",
+  "status": "PLANNED",
+  "phase": "COMP-ROADMAP-MODEL: Structured + Composable Roadmaps",
+  "created": "2026-09-11",
+  "updated": "2026-09-11",
+  "complexity": "M",
+  "position": 7,
+  "links": [
+    {
+      "kind": "external",
+      "provider": "local",
+      "repo": "smart-memory-docs",
+      "to_code": "ROADMAP-MIGRATE-1",
+      "note": "336 ordinals cited as identifiers by surviving docs; source of the legacyOrdinal requirement."
+    }
+  ]
+}
