@@ -232,3 +232,70 @@ missing `opts`. Fix: assert each actual plan's opts.workspaceRoot === cwd and th
 frozen key-set before substituting. LOW: CHANGELOG/report opening still said the two defects were open → updated.
 No re-review (trivial). GSD golden 10/10 after fix. Full suite running before the d3 commit.
 Full suite: node 6929/6929, UI 624/624, tracker 100/100. Committing d3 — S1a COMPLETE (all three dispatches).
+
+## 2026-09-11 — COMP-FABLE-CALIBRATE killed as superseded @a341b58
+Owner ruling: CALIBRATE's whole surface is a strict subset of this feature (receipt/planned-tier join = S1b;
+planning-prompt calibration table = S2 behind `calibration_feedback`). Killed through the guarded lifecycle path
+(`explore_design` → `killed`), not a forced status flip — `set_feature_status` refuses KILLED under
+capabilities.guard (STATUS_OWNED_BY_LIFECYCLE) and PLANNED→SUPERSEDED is not a legal transition.
+Gotcha for next time: `kill_feature` needs the tracker item's UUID, not the feature code, AND the item had no
+lifecycle record until the server's startup feature scan created one — the first attempt failed with "No
+lifecycle on this item" against a stale MCP-side view. Rationale + re-file condition: ../COMP-FABLE-CALIBRATE/killed.md.
+
+## 2026-09-11 — S1b evidence pass (astra bcc8e7d4b941, 21 min, 4.84M tok) → reports/slice1b-evidence.md
+Read-only anchor verification + seam census before blueprinting. **Of the 14 code anchors design.md Decisions 5/6/7
+cite, 5 are outright stale (D5 build.js:1263–1268 / :1352–1357 / :1741–1765, consumer-fanout.js:710–721,
+D7 preset :206–208), 1 partially stale (pipeline-profiles.js:151–171), 1 misdescribed.** The misdescription is the
+important one: D5 implies result-normalizer.js:777–805 is a second MCP/local fork, but `repairFn` ALWAYS calls
+`stratum.agentRun` — normalization repair has exactly ONE transport even behind a local-SDK primary. A brief written
+from the design would have specified a local repair hook for a path that does not exist.
+Also found: the no-journal artifact-stub population is LARGER than the S1a incident recorded (ts-cutover-e3-round4
+and round5 were never in the postmortem list); Stratum's usageReport dedups on id only, without payload comparison
+(engine.ts:890–892), so Compose's spool is the authoritative one; `readFlowSpend` is NOT a ready-made completeness
+rule (skips no-USD/no-positive-usage rows); and the local connector structurally cannot report effort.
+
+## 2026-09-11 — S1b blueprint r1 (astra 4c9160dadc7e, 7.7 min) → 5 HIGH / 6 MEDIUM / 1 LOW — ALL ACCEPTED
+All 14 anchor corrections from the evidence pass were independently confirmed. The findings were against the plan
+built on them. Rulings made by Fable, implemented in the fix run (not re-litigated by astra):
+- H5 call identity: the connector-minted wrapper id IS the call identity on BOTH transports (minted once at the
+  invocation boundary, attached to success and error). My "never use the local wrapper id" rule would have excluded
+  every ordinary local-path call from attribution. Forbidden is a FALLBACK id minted later because the real one was
+  lost, plus dispatchToken/`legacy:<seq>` substitution. New `callIdSource ∈ {connector-invocation, absent}`;
+  identity, launch outcome and usage evidence are separate fields.
+- H3 cancellation: settling cancellation on an acknowledged `stepDone` is IMPOSSIBLE — `stepDoneLocked` rejects a
+  cancelled run before token handling (engine.ts:746–748). Cancellation settles on durable run-cancellation audit
+  (build-cancel.js:98–106) PLUS per-call termination evidence; unconfirmed teardown stays `unknown`. The token-absent
+  settlement path stays in S1b for FAILURE only, preserving S1a success-path token equality.
+- H1 receipts: participating paid receipts spool independently of `_costCeiling` (the spool is currently only used
+  when that flag is set, so "authoritative dedup" held for ceiling runs only). S1a-deferred `compose:route` metadata
+  receipts and prelaunch delivery are S1b and were missing from the draft entirely.
+- H2: unsupported observations are an S1b deliverable; the draft let implementers waive them "by name". Own record
+  branch, null issuance, explicit unsupportedReason, never an invented issuance.
+- H4: the call sink had no issuance binding — under concurrent consumers item A's repair could bind to item B.
+  Now an immutable per-issuance observer, one intent-owning layer.
+- M1: wave selection comes from the gate's RESET DEPENDENCY CLOSURE, not the adjacent merge fanout — the bundled
+  adjudication gate follows `assess`, not `execute`, so the adjacent reading captures nothing there.
+Also corrected in the draft by Fable before the gate: the pre-reset capture point. The first draft put it at
+build.js:5821/5906 and gsd.js:784, which are all POST-RPC — it would have captured state the engine had already
+destroyed. Correct point is closure entry at `resolveGateWithConsumerMerge` (build.js:5486, gsd.js:734); the RPC is
+inside at build.js:5586 / gsd.js:764 (NOT gsd.js:775, which is recovery resume).
+
+## 2026-09-11 — S1b blueprint fix run (astra 9ade03c35a9d, 12.7 min, 2.86M tok) → r2 (astra 33ea8d485b26, 5.5 min) REVIEW CLEAN
+All 12 findings fixed, no new findings, no scope drift into S2/S3, off-mode gating intact, `ROUTING_STATIC_DISPATCH_MISMATCH`
+untouched. Blueprint 156 → 243 lines. The journal-dereference hardening list grew from the 4 sites Fable found to
+5 sites / 7 dereferences (adds publishConsumerCheckpoint build.js:1424 and replicateCheckpoints :1437,:1444 with a
+guard needed before capturedWavePaths :1429–1432). Two owner questions remain open (Q1 executed-tier evidence on
+the local SDK path, Q2 failure-settlement scope). Live-fire shadow build stays explicitly OUTSTANDING and cannot be
+ticked by deterministic real-engine tests.
+
+## S1b follow-ups — FILED, not fixed (do not repair inside S1b)
+1. GSD direct receipt conversion drops sibling `usdSource`/`split` the normalizer path preserves (gsd.js:673–683 vs
+   result-normalizer.js:788–794); direct error handling passes usage+id without telemetry/split adaptation
+   (gsd.js:663–668); JSON parsing sits outside the call catch (:661–670,691).
+2. GSD's status loop excludes completed/failed/stuck/waiting_gate/budget_exhausted but NOT cancelled (gsd.js:348–355);
+   runOneStep returns the unchanged response for other statuses (:791) — a cancelled response can loop instead of
+   reaching terminal accounting.
+3. `validateDecision` never compares the disposition union/multiplicity against the original `review.findings`
+   (output-gate.js:12–39), so a structurally valid decision need not partition the findings the prompt demands.
+4. Stale comment "Build mode passes no onUsage sink" (build.js:1865–1866) contradicts :4376.
+5. Still open from S1a: GSD preflights the profile sidecar (gsd.js:161–166) but never applies it (:651–660).
