@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { makeWaveGoldenProject, runWaveGolden, readGoldenJournal, readGoldenTrace,
-  frozenRoutingBaseline, normalizedGoldenCalls, readRoutingEvidence, assertRoutingGolden, ROUTING_INPUTS,
+  frozenRoutingBaseline, normalizedGoldenCalls, readRoutingEvidence, assertRoutingGolden, assertShadowGoldenInput,
   WAVE_GOLDEN_SPEC, PROFILES, CORE, BROKEN, FIXED, REPAIR, FINDING } from '../helpers/build-wave-golden-fixture.js';
 import { preflightPipelineProfiles } from '../../lib/pipeline-profiles.js';
 import { StratumMcpClient } from '../../lib/stratum-mcp-client.js';
@@ -269,6 +269,7 @@ test('routing carry off oracle: frozen digest/input/full calls and no routing wr
   const frozen = frozenRoutingBaseline('carry');
   const off = await fixtureFor(t, 'repair');
   const beforeExclude = await readFile(join(off.workspace, '.git/info/exclude'), 'utf8');
+  const beforeIgnore = await readFile(join(off.workspace, '.gitignore'), 'utf8');
   const a = await runWaveGolden(off, { route_mode: 'off' });
   assert.equal(a.audit.status, 'completed');
   assert.equal(preflightPipelineProfiles(PROFILES, WAVE_GOLDEN_SPEC).profilesDigest, frozen.profileDigest);
@@ -279,6 +280,7 @@ test('routing carry off oracle: frozen digest/input/full calls and no routing wr
   assert.equal((await readGoldenJournal(off)).routing, undefined);
   assert.equal(existsSync(join(off.workspace, '.compose/routing')), false);
   assert.equal(await readFile(join(off.workspace, '.git/info/exclude'), 'utf8'), beforeExclude);
+  assert.equal(await readFile(join(off.workspace, '.gitignore'), 'utf8'), beforeIgnore);
 
 });
 
@@ -292,7 +294,7 @@ test('routing carry shadow oracle: immutable two-wave and ordinary epochs with i
   }, 'concurrent shadow carry must finish both waves without re-admitting a settled token');
   assert.equal(b.audit.status, 'completed');
   assert.deepEqual(normalizedGoldenCalls(b.events), normalizedGoldenCalls(frozen.events));
-  assert.deepEqual(Object.fromEntries(Object.entries(b.events[0].input).filter(([k]) => !ROUTING_INPUTS.includes(k))), frozen.events[0].input);
+  assertShadowGoldenInput(b.events[0].input, frozen.events[0].input);
   const final = readRoutingEvidence(shadow, b.flowId);
   const records = assertRoutingGolden(final, 12);
   assert.equal(JSON.parse(final.rootBytes).profilesDigest, frozen.profileDigest);
@@ -321,10 +323,125 @@ test('full-call oracle tolerates concurrent arrivals only; prompt/options and st
     events => { events[1].prompt += 'changed'; },
     events => { events[2].opts.sandboxMode = 'read-only'; },
     events => { events[2].opts.newOption = true; },
+    events => { events[2].opts.modelID = 'different-model'; },
+    events => { events[2].opts.effort = 'different-effort'; },
     events => { const i = events.findIndex(e => e.opts?.flow?.stepId === 'review'); [events[i], events[i - 1]] = [events[i - 1], events[i]]; },
     events => { const i = events.findLastIndex(e => e.opts?.telemetry?.step_id === 'execute/0'); [events[2], events[i]] = [events[i], events[2]]; },
   ]) {
     const changed = structuredClone(frozen.events); mutate(changed);
     assert.notDeepEqual(normalizedGoldenCalls(changed), expected);
+  }
+});
+
+import { paidWaveGolden } from '../helpers/build-wave-golden-fixture.js';
+import { resumeRouting } from '../../lib/build.js';
+import { recoverRoutingEvidence } from '../../lib/routing-runtime.js';
+import { reconcileRoutingPaidReceipts, routingEligible } from '../../lib/routing-ledger.js';
+
+for (const repair of [null, 'success', 'failed', 'uncredited']) test(`d3 paid carry ${repair ?? 'primary'}: independent ownership survives reset and late receipt delivery`, { timeout: 180000 }, async t => {
+  const f = await paidWaveGolden(t, { repair, late: true });
+  await f.run();
+  assert.equal(f.snapshot().status, 'completed');
+  // LAUNCH order of A0/B0 is a race the harness deliberately leaves free: the
+  // parallel execute/N scheduler decides who reaches the tool first (execute/1
+  // can precede execute/0), and the latch at build-wave-golden-fixture.js:413
+  // only waits until BOTH have arrived before forcing the RETURN order. Gate 3
+  // requires ownership to survive adversarial A/B ordering, so launch order is
+  // compared as a multiset -- membership and multiplicity, not sequence. The
+  // `returned` assertion below IS a forced sequence and stays exact.
+  assert.deepEqual(f.paidCalls.filter(k => /^[AB]/.test(k)).slice(0, repair ? 4 : 2).sort(),
+    (repair ? ['A0', 'B0', 'B0repair', 'A0repair'] : ['A0', 'B0']).sort());
+  if (repair) for (const report of f.reports.filter(r => r[1].startsWith('execute/'))) {
+    assert.equal(report[2].output.summary, repair === 'success' ? 'repaired JSON' : '0 findings (0 must-fix, 0 should-fix, 0 nit).');
+  }
+  assert.deepEqual(f.returned.filter(k => /^[AB]/.test(k)), repair
+    ? ['B0', 'A0', 'A0repair', 'B0repair', 'B1', 'B1repair'] : ['B0', 'A0', 'B1']);
+  const before = f.rows(); assert.ok(before.length > 0);
+  assert.ok(before.some(r => r.completeness.reasons.includes('unacknowledged-paid-receipt')));
+  const original = f.journal();
+  const expected = repair ? ['A0', 'B0', 'A0repair', 'B0repair', 'B1', 'B1repair'] : ['A0', 'B0', 'B1'];
+  const callsBefore = [...f.paidCalls];
+  f.enableDelivery();
+  const routing = await resumeRouting({ runId: f.flowId, cwd: f.cwd, artifactRoot: f.artifactRoot,
+    localSpec: f.spec, profiles: f.profiles, stratum: f.stratum });
+  await recoverRoutingEvidence({ routing, artifacts: routing.artifacts, stratum: f.stratum, flowId: f.flowId, cwd: f.cwd, localSpec: f.spec });
+  const rows = f.rows(), journal = f.journal(), all = Object.values(journal.routing.records);
+  assert.deepEqual(f.paidCalls, callsBefore, 'recovery never reruns inference');
+  for (const name of expected) {
+    const issuance = all.find(r => r.type === 'issuance' && r.logicalTaskId === name[0] && r.epoch === Number(name[1]));
+    const intent = all.find(r => r.type === 'call-intent' && r.callId === f.ids[name]);
+    assert.ok(intent, name); assert.ok(issuance, name);
+    assert.equal(intent.issuanceId ?? intent.parentRecordId, issuance.id, name);
+    assert.equal(issuance.itemIndex, name === 'B0' || name === 'B0repair' ? 1 : 0, name);
+    assert.equal(intent.issuanceId === null, name.endsWith('repair'));
+    const receipt = f.snapshot().receipts.find(r => r.dispatchId === f.ids[name]);
+    assert.ok(receipt, name); assert.equal(receipt.amount.usd, f.costs[name], name);
+    assert.equal(receipt.detail.routing.intentId, intent.id);
+    assert.equal(receipt.detail.routing.ownerRunId, f.flowId);
+    assert.equal(receipt.detail.routing.issuanceId, intent.issuanceId);
+    assert.equal(journal.pendingUsageReceipts.find(r => r.dispatchId === f.ids[name]).state, 'acknowledged');
+    const call = rows.flatMap(r => r.calls).find(c => c.intent.id === intent.id);
+    assert.equal(call.resolution.usageEvidence.usd, f.costs[name]);
+    assert.equal(call.resolution.usageEvidence.tokens, 8);
+    assert.deepEqual(receipt.split, { input: 3, output: 5, cacheRead: 2 });
+    assert.equal(call.resolution.reportedModel, 'gpt-5.6-terra');
+    assert.equal(call.resolution.reportedEffort, 'high');
+    assert.equal(call.executedTier.value, 'standard');
+    if (name.endsWith('repair')) assert.equal(call.resolution.outcome, repair === 'failed' ? 'errored' : 'resolved');
+  }
+  const owners = rows.filter(r => r.issuance?.scopedStep === 'execute');
+  assert.equal(owners.length, 3);
+  const byTask = (id, epoch) => owners.find(r => r.issuance.logicalTaskId === id && r.issuance.epoch === epoch);
+  assert.equal(byTask('A', 0).cost.usd, repair ? 5 : 1);
+  assert.equal(byTask('B', 0).cost.usd, repair ? 10 : 2);
+  assert.equal(byTask('B', 1).cost.usd, repair ? 48 : 16);
+  assert.equal(byTask('A', 0).outcome.label, 'accepted');
+  assert.equal(byTask('B', 0).outcome.label, 'repaired');
+  assert.equal(byTask('B', 1).context.repairOfRecordId, byTask('B', 0).recordId);
+  assert.ok(owners.every(r => r.completeness.state === 'complete'));
+  const unsupported = rows.filter(r => r.source === 'unsupported');
+  assert.equal(unsupported.length, repair ? 3 : 0);
+  assert.ok(unsupported.every(r => r.issuance === null && r.outcome.binary === 'excluded'));
+  // Parent rows include child cost. Reconcile by unique original receipt, not row sums.
+  const refs = new Map(rows.flatMap(r => r.calls).filter(c => c.resolution?.usageRef)
+    .map(c => [c.resolution.usageRef.dispatchId, c.resolution.usageEvidence.usd]));
+  const paid = f.snapshot().receipts.filter(r => r.detail?.routing?.kind === 'paid-call');
+  assert.equal(refs.size, paid.length);
+  const reconciled = reconcileRoutingPaidReceipts(rows);
+  assert.equal(reconciled.length, paid.length);
+  const completeRefs = new Set(rows.filter(r => routingEligible(r)).flatMap(r => r.cost.paidReceiptRefs).map(r => r.dispatchId));
+  for (const name of ['A0', 'B0', 'B1']) assert.ok(completeRefs.has(f.ids[name]), name);
+  const completeUsd = paid.filter(r => completeRefs.has(r.dispatchId)).reduce((sum, r) => sum + r.amount.usd, 0);
+  const excludedUsd = paid.filter(r => !completeRefs.has(r.dispatchId)).reduce((sum, r) => sum + r.amount.usd, 0);
+  assert.ok(completeUsd > 0); assert.ok(excludedUsd > 0);
+  assert.equal(completeUsd + excludedUsd, (repair ? 63 : 19) + 1.75);
+  assert.equal([...refs.values()].reduce((a, b) => a + b, 0), (repair ? 63 : 19) + 7 * 0.25);
+  assert.equal(paid.reduce((sum, r) => sum + r.amount.usd, 0), [...refs.values()].reduce((a, b) => a + b, 0));
+  for (const [id, record] of Object.entries(original.routing.records)) assert.deepEqual(journal.routing.records[id], record);
+  const ledgerBytes = await readFile(join(f.cwd, '.compose/routing/ledger.jsonl'));
+  await recoverRoutingEvidence({ routing, artifacts: routing.artifacts, stratum: f.stratum, flowId: f.flowId, cwd: f.cwd, localSpec: f.spec });
+  assert.deepEqual(await readFile(join(f.cwd, '.compose/routing/ledger.jsonl')), ledgerBytes);
+});
+
+for (const scenario of ['unknown', 'failed-primary']) test(`d3 paid carry ${scenario} keeps incomplete and failed spend`, { timeout: 180000 }, async t => {
+  const f = await paidWaveGolden(t, { unknown: scenario === 'unknown', failPrimary: scenario === 'failed-primary' });
+  await f.run();
+  const rows = f.rows(); assert.ok(rows.length > 0);
+  const name = scenario === 'unknown' ? 'B1' : 'B0';
+  const call = rows.flatMap(r => r.calls).find(c => c.intent.callId === f.ids[name]);
+  assert.ok(call);
+  const receipt = f.snapshot().receipts.find(r => r.dispatchId === f.ids[name]);
+  assert.ok(receipt);
+  if (scenario === 'unknown') {
+    assert.equal(call.resolution.usageEvidence.usd, null);
+    assert.equal(receipt.amount.usd, undefined);
+    const row = rows.find(r => r.issuance?.logicalTaskId === 'B' && r.issuance.epoch === 1);
+    assert.equal(row.cost.usd, null); assert.equal(row.completeness.state, 'incomplete');
+    assert.ok(row.completeness.reasons.includes('missing-usd'));
+  } else {
+    assert.equal(call.resolution.outcome, 'errored'); assert.equal(receipt.amount.usd, 2);
+    const row = rows.find(r => r.issuance?.logicalTaskId === 'B');
+    assert.equal(row.cost.usd, 2); assert.equal(row.outcome.label, 'failed-or-cancelled');
+    assert.equal(row.outcome.binary, 'negative');
   }
 });

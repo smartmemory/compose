@@ -65,6 +65,34 @@ Both gates allow two revisions, sharing a four-revision flow limit. Concurrency
 is literal 3; the optional `cost_ceiling_usd` input defaults to $150 in the
 sidecar and `--cost-ceiling-usd` overrides it. See [wave loop and recovery](pipelines.md#fable-astra-wave-loop).
 
+
+### Shadow evidence
+
+`fable-astra` defaults to shadow routing. It preserves static prompts, model,
+effort and tool/sandbox options while recording connector-owned call identities,
+paid receipt joins and gate evidence captured before carry resets. Outcomes can
+be accepted, repaired, re-implemented, retried in the same epoch, failed or
+cancelled, or unknown. Completing a call alone does not prove acceptance.
+
+The append-only `.compose/routing/ledger.jsonl` stores attributable samples and
+incomplete observations. `readRoutingLedger({ cwd })` selects the latest validated
+revision of each record. GSD continuation shares one logical start and recovers
+late receipts from their original owner journals. Normalization repairs and
+other unsupported calls retain explicit excluded rows with available parent
+links; a parent can include a child's cost. Count unique owner-run/receipt ids
+when reconciling complete plus excluded spend, rather than summing all rows.
+Unknown cost or missing call, receipt or gate evidence stays incomplete/censored.
+Model and effort must both match the pinned mapping for executed-tier evidence;
+local SDK calls do not report effort and cannot certify an executed tier.
+
+Programmatic callers can select `route_mode: 'off'` for legacy behavior with no
+routing writes. Shadow GSD still refuses custom ordinary profiles that differ
+from its bare dispatch (`ROUTING_STATIC_DISPATCH_MISMATCH`). No routing report,
+calibration prompt/feedback, learned or active selection, trials, exploration or
+repair-floor enforcement has shipped. Live-fire shadow completion evidence is
+**outstanding**; deterministic real-engine tests cannot satisfy it. The parent
+feature remains incomplete pending S2/S3.
+
 ## Customization
 
 To customize a preset, copy its YAML and adjacent profiles sidecar to your project's `pipelines/` directory:

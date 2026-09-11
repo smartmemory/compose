@@ -14,10 +14,10 @@ import { resumeRouting, admitConsumerWave } from '../../lib/build.js';
 import { ConsumerFanoutArtifacts, ConsumerMergeDecisionError } from '../../lib/consumer-fanout.js';
 import { StratumMcpClient } from '../../lib/stratum-mcp-client.js';
 import { routingDigest } from '../../lib/model-router.js';
-import { routingIssuanceState } from '../../lib/routing-ledger.js';
+import { readRoutingLedger, latestRoutingOutcome, latestRoutingCall, routingIssuanceState } from '../../lib/routing-ledger.js';
 import { installAgentHarness } from '../helpers/ts-agent-harness.js';
 import { TS_MCP_BIN } from '../helpers/stratum-test-bin.js';
-import { frozenRoutingBaseline, serializeGolden } from '../helpers/build-wave-golden-fixture.js';
+import { frozenRoutingBaseline, serializeGolden, goldenProviderTool, normalizedGoldenCalls } from '../helpers/build-wave-golden-fixture.js';
 
 const SELF = fileURLToPath(import.meta.url);
 const CODE = 'COMP-GSD-5-FIX';
@@ -64,7 +64,7 @@ async function drive(f, options) {
   const client = new StratumMcpClient();
   await client.connect({ command: process.env.COMPOSE_STRATUM_TS_NODE || process.execPath, args: [TS_MCP_BIN], cwd: f.cwd,
     env: { ...process.env, STRATUM_STATE_ROOT: f.stateRoot, RESEND_API_KEY: '', STRIPE_API_KEY: '' } });
-  installAgentHarness(client, (_provider, opts) => ({
+  if (!options.paid) installAgentHarness(client, (_provider, opts) => ({
     async *run(prompt) {
       const id = prompt.match(/"id":"([ABC])"/)?.[1];
       record({ kind: 'call', id: id ?? 'decompose', prompt });
@@ -88,6 +88,30 @@ async function drive(f, options) {
       yield { type: 'assistant', content: JSON.stringify({ outcome: 'complete', summary: `${id} settled`, files_changed: changed }) };
     }, interrupt() {}, get isRunning() { return false; },
   }), f.cwd);
+  const connector = new StratumMcpClient();
+  if (options.paid) {
+    process.env.NODE_ENV = 'test';
+    connector._testClient = { callTool: await goldenProviderTool(async args => {
+      const id = args.prompt.match(/"id":"([ABC])"/)?.[1];
+      record({ kind: 'call', id: id ?? 'decompose', prompt: args.prompt });
+      if (!id) {
+        if (options.cancel) await client.flowCancel(flowId);
+        return { text: options.parseError ? 'not JSON' : JSON.stringify(options.providerFailure ? { wrong: true } : {
+          tasks: f.ids.map((id, i) => ({ id, description: `Task ${id}`, files_owned: [`${id.toLowerCase()}.txt`, resultPath(id)],
+            files_read: [], depends_on: i ? ['A'] : [] })) }), usd: 0.5, failed: options.providerFailure };
+      }
+      if (options.failure) return { text: JSON.stringify({ outcome: 'failed', summary: `${id} declined` }), usd: 1 };
+      const changed = [];
+      if ((options.complete ?? []).includes(id)) {
+        writeFileSync(join(args.cwd, `${id.toLowerCase()}.txt`), `${id} done\n`);
+        mkdirSync(dirname(join(args.cwd, resultPath(id))), { recursive: true });
+        writeFileSync(join(args.cwd, resultPath(id)), JSON.stringify(taskResult(id)));
+        changed.push(`${id.toLowerCase()}.txt`, resultPath(id));
+      }
+      return { text: JSON.stringify({ outcome: 'complete', summary: `${id} settled`, files_changed: changed }),
+        usd: { A: 1, B: 2, C: 4 }[id] };
+    }, args => { const { agent, prompt, ...opts } = args; record({ kind: 'connector-call', provider: agent, prompt, opts }); }) };
+  }
   let flowId;
   let mergeFailed = false;
   const realPrepare = ConsumerFanoutArtifacts.prototype.prepareMerge;
@@ -108,6 +132,11 @@ async function drive(f, options) {
     return realPrepare.call(this, args);
   };
   const stratum = new Proxy(client, { get(target, key) {
+    if (options.paid && ['agentRun', 'runAgentText', 'onEvent'].includes(key)) return connector[key].bind(connector);
+    if (key === 'usageReport' && options.late) return async (...args) => {
+      if (args[1].detail?.routing?.kind === 'paid-call') throw Error('controlled old-owner receipt outage');
+      return target.usageReport(...args);
+    };
     if (key === 'plan') return async (...args) => {
       record({ kind: 'plan', input: args[2], flow: args[1], opts: args[3] });
       if (args[2].routing_continuation) {
@@ -116,6 +145,7 @@ async function drive(f, options) {
         assert.equal(intent.type, 'continuation-intent', 'intent exists before the real plan RPC');
       }
       const next = await target.plan(...args); flowId = next.runId;
+      if (options.cancelAtPlan) { record({ kind: 'planned', runId: flowId }); await target.flowCancel(flowId); return { ...next, status: 'cancelled' }; }
       record({ kind: 'planned', runId: flowId });
       if (options.ambiguousPlan) record({ kind: 'duplicate-plan', runId: (await target.plan(...args)).runId });
       if (options.crashPlan || options.ambiguousPlan) {
@@ -200,6 +230,112 @@ if (process.argv[1] === SELF && process.argv[2] === '--driver') {
   const { f, options } = json(process.argv[3]);
   try { await drive(f, options); } catch (error) { console.error(error); process.exitCode = 1; }
 } else {
+
+  test('d3 GSD production off/shadow connector identity and old-owner paid continuation', { timeout: 240000 }, async t => {
+    const modes = [];
+    for (const route of ['off', 'shadow']) {
+      const f = fixture(t);
+      const exclude = readFileSync(join(f.cwd, '.git/info/exclude'), 'utf8');
+      const ignore = readFileSync(join(f.cwd, '.gitignore'), 'utf8');
+      const first = await child(t, f, { paid: true, route, complete: ['A'], stop: 'halt', late: route === 'shadow' });
+      assert.equal(first.code, 0, first.output);
+      const oldRun = latestRun(f), oldJournal = journal(f, oldRun);
+      const oldRows = readRoutingLedger({ cwd: f.cwd });
+      const second = await child(t, f, { paid: true, route, resume: true, complete: ['B'] });
+      assert.equal(second.code, 0, second.output);
+      const newRun = latestRun(f);
+      assert.equal(trace(f).at(-1).result.status, 'complete');
+      assert.deepEqual(trace(f).filter(e => e.kind === 'call').map(c => c.id), ['decompose', 'A', 'B', 'B']);
+      const events = trace(f);
+      modes.push(normalizedGoldenCalls(events.map(e => e.kind === 'connector-call' ? { ...e, kind: 'call' } : e).filter(e => e.kind === 'plan' || e.opts)));
+      if (route === 'off') {
+        assert.equal(existsSync(join(f.cwd, '.compose/routing')), false);
+        assert.equal(oldJournal.routing, undefined); assert.equal(journal(f, newRun).routing, undefined);
+        assert.equal(readFileSync(join(f.cwd, '.git/info/exclude'), 'utf8'), exclude);
+        assert.equal(readFileSync(join(f.cwd, '.gitignore'), 'utf8'), ignore);
+      } else {
+        const current = journal(f, newRun), owner = journal(f, oldRun), rows = readRoutingLedger({ cwd: f.cwd });
+        assert.equal(current.routing.startId, oldJournal.routing.startId);
+        assert.equal(new Set(rows.map(r => r.startId)).size, 1);
+        assert.equal(rows.filter(r => r.issuance).length, 4);
+        assert.equal(oldRows.length, 3);
+        assert.ok(oldRows.every(r => r.completeness.state === 'incomplete'));
+        const oldPaid = owner.pendingUsageReceipts.filter(p => p.receipt.detail?.routing?.kind === 'paid-call');
+        assert.equal(oldPaid.length, 3); assert.ok(oldPaid.every(p => p.state === 'acknowledged'));
+        assert.equal(current.pendingUsageReceipts.filter(p => p.receipt.detail?.routing?.kind === 'paid-call').length, 1);
+        for (const receipt of oldPaid) {
+          assert.equal(receipt.receipt.detail.routing.ownerRunId, oldRun);
+          assert.equal(snapshot(f, oldRun).receipts.filter(p => p.dispatchId === receipt.dispatchId).length, 1);
+          assert.equal(snapshot(f, newRun).receipts.some(p => p.dispatchId === receipt.dispatchId), false);
+          const intentId = receipt.receipt.detail.routing.intentId;
+          const oldCall = records(owner).find(r => r.id === intentId);
+          assert.deepEqual(current.routing.records[intentId], oldCall);
+          const ownerHeads = records(owner).filter(r => r.type === 'call-evidence-head' && r.intentId === intentId);
+          for (const head of ownerHeads) assert.deepEqual(current.routing.records[head.id], head);
+        }
+        for (const row of rows) {
+          const id = row.issuance.logicalTaskId;
+          assert.equal(row.cost.usd, id === 'A' ? 1 : id === 'B' ? 2 : 0.5);
+          assert.equal(row.calls.length, 1);
+          assert.equal(row.calls[0].resolution.usageRef.ownerRunId, row.issuance.runId);
+          const outcomes = records(current).filter(r => r.type === 'outcome' && r.issuanceId === row.recordId);
+          assert.ok(outcomes.length > 0);
+          const latest = latestRoutingOutcome(current.routing, row.recordId);
+          assert.equal(row.outcome.label, latest.label);
+          assert.ok(row.evidenceRefs.includes(latest.id));
+          assert.deepEqual(row.calls[0].resolution, latestRoutingCall(current.routing, row.calls[0].intent.id).resolution);
+          const prior = oldRows.find(r => r.recordId === row.recordId);
+          if (prior) assert.ok(row.version > prior.version, 'late acknowledgement improves the original sample');
+        }
+        assert.equal(rows.reduce((s, r) => s + r.cost.usd, 0), 5.5);
+      }
+    }
+    assert.equal(modes[0].length, 4); assert.deepEqual(modes[1], modes[0]);
+  });
+
+  for (const terminal of ['normal', 'failure', 'providerFailure', 'cancel', 'cancelAtPlan', 'parseError']) test(`d3 GSD real producer terminal ${terminal} materializes evidence`, { timeout: 120000 }, async t => {
+    const f = fixture(t, ['A']);
+    const result = await child(t, f, { paid: true, complete: ['A'], [terminal]: true });
+    assert.equal(result.code, ['cancel', 'parseError', 'providerFailure'].includes(terminal) ? 1 : 0, result.output);
+    const run = latestRun(f), rows = readRoutingLedger({ cwd: f.cwd });
+    if (terminal === 'cancelAtPlan') {
+      assert.equal(rows.length, 0);
+      const replay = await child(t, f, { paid: true });
+      assert.equal(replay.code, 1, replay.output);
+      assert.match(trace(f).at(-1).message, /cancelled; resume is not permitted/);
+      assert.equal(trace(f).filter(e => e.kind === 'plan').length, 1, 'already-terminal plan is recovered');
+      assert.equal(trace(f).filter(e => e.kind === 'connector-call').length, 0);
+      assert.equal(readRoutingLedger({ cwd: f.cwd }).length, 0);
+      return;
+    }
+    assert.ok(rows.length > 0);
+    const decompose = rows.find(r => r.issuance.scopedStep === 'decompose_gsd');
+    assert.equal(decompose.cost.usd, 0.5);
+    if (['providerFailure', 'parseError', 'cancel'].includes(terminal)) {
+      assert.equal(decompose.outcome.label, 'failed-or-cancelled');
+      assert.equal(decompose.outcome.binary, terminal === 'cancel' ? 'excluded' : 'negative');
+    }
+    assert.equal(records(journal(f, run)).filter(r => r.type === 'call-intent').length,
+      trace(f).filter(e => e.kind === 'connector-call').length);
+    if (terminal === 'failure') {
+      assert.equal(snapshot(f, run).status, 'failed');
+      assert.equal(trace(f).at(-1).result.status, 'failed');
+      const attempts = rows.filter(r => r.issuance.logicalTaskId === 'A').sort((a, b) => a.issuance.attempt - b.issuance.attempt);
+      assert.equal(attempts.length, 2);
+      assert.ok(attempts.every(r => r.cost.usd === 1));
+      assert.ok(attempts.some(r => r.outcome.label === 'failed-or-cancelled' && r.outcome.binary === 'negative'));
+    }
+    if (terminal === 'normal') {
+      const before = trace(f).filter(e => ['connector-call', 'plan'].includes(e.kind));
+      const ledger = readFileSync(join(f.cwd, '.compose/routing/ledger.jsonl'));
+      const replay = await child(t, f, { paid: true, resume: true });
+      assert.equal(replay.code, 1, replay.output);
+      assert.match(trace(f).at(-1).message, /no pause.json to resume.*Nothing to resume/);
+      assert.deepEqual(trace(f).filter(e => ['connector-call', 'plan'].includes(e.kind)), before);
+      assert.deepEqual(readFileSync(join(f.cwd, '.compose/routing/ledger.jsonl')), ledger);
+    }
+  });
+
   for (const route of ['off', 'shadow']) test(`GSD ${route}: real halt writer → filtered B 1→0 continuation and frozen input`, { timeout: 240000 }, async t => {
     const f = fixture(t);
     const first = await child(t, f, { route, complete: ['A'], stop: 'halt' });

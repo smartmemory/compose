@@ -111,8 +111,20 @@ existing objects without `route`. Custom flow inputs must declare
 model-facing interpolation. Shadow GSD refuses customized ordinary profiles
 that differ from its bare dispatch (`ROUTING_STATIC_DISPATCH_MISMATCH`).
 
-S1a records static choices only: no attributable ledger, report, learned
-selection, trials, exploration, or calibration feedback yet.
+Shadow now joins each supported issuance to connector-owned primary and repair
+calls, preserves pre-reset gate evidence, and records acceptance outcomes in
+`.compose/routing/ledger.jsonl`. Late receipts stay with their original run,
+including across GSD continuation. The append-only ledger retains revisions;
+`readRoutingLedger({ cwd })` returns the latest validated row per record.
+Unsupported calls retain separate excluded observations; their cost may also
+appear in a parent row, so reconcile spend by unique paid receipt, not row sums.
+Missing cost, attribution, acknowledgement or outcome evidence stays explicit
+and incomplete or censored; it is not a zero-cost success.
+
+Deterministic engine tests do not certify provider execution. Live-fire shadow
+completion evidence remains **outstanding**. There is no routing report,
+calibration prompt or feedback, learned/active selection, trial or exploration
+implementation yet; the parent feature remains incomplete pending S2/S3.
 
 ## Quick install
 

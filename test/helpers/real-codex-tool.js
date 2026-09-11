@@ -2,7 +2,7 @@ import { CodexConnector } from '../../../stratum/ts/dist/connectors/codex.js';
 
 // Control SDK input only. The real connector creates every usage event, token
 // split, duration, model/effort pair and price provenance consumed by Compose.
-export function realCodexTool({ streamed = true, onResult, onCall } = {}) {
+export function realCodexTool({ streamed = true, onResult, onCall, sdkEvents } = {}) {
   return async ({ arguments: args }, _schema, request) => {
     onCall?.(args);
     let seq = 0;
@@ -10,6 +10,7 @@ export function realCodexTool({ streamed = true, onResult, onCall } = {}) {
       model: args.model ?? 'gpt-5.4', effort: args.effort ?? 'high', transport: 'sdk', env: {},
       sdkFactory: () => ({ startThread: () => ({ runStreamed: async () => ({
         events: (async function* () {
+          if (sdkEvents) { yield* sdkEvents(args); return; }
           yield { type: 'item.completed', item: { type: 'agent_message', text: '{"outcome":"complete","summary":"done"}' } };
           yield { type: 'turn.completed', usage: { input_tokens: 3, output_tokens: 5, cached_input_tokens: 2, total_cost_usd: 0.2 } };
         })(),

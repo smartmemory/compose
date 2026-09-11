@@ -1,6 +1,6 @@
 # COMP-MODEL-ROUTE — S1b implementation blueprint
 
-Date: 2026-09-11. Status: BLUEPRINT ONLY; implementation and tests have not run.
+Date: 2026-09-11. Updated 2026-09-12 with dispatch-3 deterministic verification; live-fire gate 5 remains OUTSTANDING. See `reports/slice1b-d3-impl.md`.
 Scope: design Decisions 5, 6 and the recording half of 7, plus slice S1b. Rulings in `progress.md`, all three `reports/design-review-r*.md` and the S1a blueprint govern. Structure follows `blueprint-slice1a.md`.
 Evidence base: `reports/slice1b-evidence.md` and independent `reports/blueprint-slice1b-review-r1.md`; all 12 review findings are accepted. Source anchors rechecked by reading the current tree; sibling `../stratum/` is read-only evidence. `(new)` means proposed, including new methods on existing classes. Re-anchor by symbol at implementation time.
 Deliver attributable shadow outcomes: every routing issuance joins to every actual paid model call, the pre-reset wave/gate state that decides its fate is captured before the engine destroys it, each issuance has one latest evidence-derived acceptance label, and terminal outcomes materialize into an idempotent append-only ledger. S1b is the first slice permitted to claim complete attributable shadow samples. S2 owns the report and calibration feedback; S3 owns learned selection, trials, exploration and repair-floor ENFORCEMENT. S1b records floor history only.
@@ -182,11 +182,13 @@ Each dispatch owns its functions exclusively; dispatch 3 is tests/docs only. The
 
 **Dispatch 3 — real-engine goldens and documentation.** Extends `test/integration/build-wave-golden.test.js`, `test/integration/gsd-route-continuation-golden.test.js`, `test/build-team-fable-astra.test.js`, `test/helpers/build-wave-golden-fixture.js`. Consume all three frozen fixtures unchanged; never regenerate expectations from changed code. Production defects return to dispatch 1/2.
 
-- [ ] Off matches frozen Build/carry dispatch traces and GSD input/options exactly, with no routing subtree/ledger/ignore mutation. Add actual production GSD off/shadow connector trace equality for prompts, model/effort/tool/sandbox options and call counts; the input fixture alone does not certify calls.
-- [ ] Deterministic real-engine shadow carry produces a nonempty ledger with complete plus excluded spend reconciled to unique receipts. Independent expected ownership/amounts include primary, failed, successful/failed/uncredited repairs, unsupported calls and unknown costs; never seed the joins/outcomes/acks being proved.
-- [ ] Primary/failure/repair receipt ids still bind after reset and late delivery. The golden helper's contiguous execute/N sort (`test/helpers/build-wave-golden-fixture.js:234–263`) only tolerates scheduling; assert receipt ownership separately with adversarial A/B ordering.
-- [ ] GSD continuation follows original owner journals, carries latest call/outcome evidence across old→new runs and retains one logical-start identity; completed work is not rerun. Exercise normal/failure/cancel/already-terminal/pause/continuation/post-call exception producer matrix.
+- [x] Off matches frozen Build/carry dispatch traces and GSD input/options exactly, with no routing subtree/ledger/ignore mutation. Add actual production GSD off/shadow connector trace equality for prompts, model/effort/tool/sandbox options and call counts; the input fixture alone does not certify calls.
+- [x] Deterministic real-engine shadow carry produces a nonempty ledger with complete plus excluded spend reconciled to unique receipts. Independent expected ownership/amounts include primary, failed, successful/failed/uncredited repairs, unsupported calls and unknown costs; never seed the joins/outcomes/acks being proved.
+- [x] Primary/failure/repair receipt ids still bind after reset and late delivery. The golden helper's contiguous execute/N sort (`test/helpers/build-wave-golden-fixture.js:234–263`) only tolerates scheduling; assert receipt ownership separately with adversarial A/B ordering.
+- [x] GSD continuation follows original owner journals, carries latest call/outcome evidence across old→new runs and retains one logical-start identity; completed work is not rerun. Exercise normal/failure/cancel/already-terminal/pause/continuation/post-call exception producer matrix.
 - [ ] LIVE-FIRE COMPLETION EVIDENCE — OUTSTANDING: after implementation and appropriate authorization, run a real-provider shadow build, retain original call/receipt/ledger evidence, demonstrate at least one complete attributable sample and reconcile complete plus excluded cost to unique receipt totals. Deterministic controlled-inference real-engine tests do NOT satisfy this requirement. No live-fire result is claimed here.
+
+**Verified API correction (2026-09-12):** `realCodexTool({ sdkEvents })` controls SDK input; `goldenProviderTool` runs the real Codex/Claude connectors. `resumeRouting` / `recoverRoutingEvidence` recover original owners; `readRoutingLedger`, `latestRoutingCall`, `latestRoutingOutcome` and `reconcileRoutingPaidReceipts` validate the retained evidence. The full golden set passes 37/37 with zero failures/cancellations. Exact controls and limits are in the dispatch report; LIVE-FIRE gate 5 remains OUTSTANDING.
 
 ## 8. Owner questions — BOTH RULED 2026-09-11; retained for provenance
 
@@ -243,7 +245,7 @@ correct under either rule.
 
 ## Tests
 
-Tests are specified, NOT RUN. Future tests use disposable Git repositories and disposable STRATUM_STATE_ROOT, never ~/.stratum; controlled inference may drive a real engine but must not seed the join, acknowledgement or outcome under test. Both bundled presets (`presets/team-fable-astra.stratum.yaml`, `pipelines/gsd.stratum.yaml`) must exercise production producers. No GUI launch or test suite run is part of this revision.
+The matrix defines required evidence. Dispatch-3 deterministic results are recorded in `reports/slice1b-d3-impl.md`; live-fire evidence remains OUTSTANDING. Tests use disposable Git repositories and disposable STRATUM_STATE_ROOT, never ~/.stratum; controlled inference may drive a real engine but must not seed the join, acknowledgement or outcome under test. Both bundled presets (`presets/team-fable-astra.stratum.yaml`, `pipelines/gsd.stratum.yaml`) must exercise production producers. Dispatch 3 ran scoped deterministic tests; no GUI, full npm suite or live provider was run.
 
 | Changed code | Test file / action | Required evidence |
 |---|---|---|
@@ -260,14 +262,14 @@ Tests are specified, NOT RUN. Future tests use disposable Git repositories and d
 | Live-fire shadow completion | Separate retained real-provider evidence after implementation | OUTSTANDING until a real shadow build produces nonempty ledger with complete attributable samples and complete/excluded spend reconciled to unique receipts. Controlled real-engine tests cannot tick this box. |
 
 Future targeted command (after owning implementation): `RESEND_API_KEY= STRIPE_API_KEY= node --test --test-timeout=300000 test/routing-join.test.js test/routing-outcome.test.js test/routing-ledger-materialize.test.js test/routing-calls.test.js test/routing-ledger.test.js test/routing-journal.test.js test/build-model-route-outcomes.test.js test/gsd-model-route-outcomes.test.js test/usage-receipts.test.js`.
-Future golden command: `RESEND_API_KEY= STRIPE_API_KEY= node --test --test-timeout=900000 test/integration/build-wave-golden.test.js test/integration/gsd-route-continuation-golden.test.js test/build-team-fable-astra.test.js`.
+Golden command (RAN 2026-09-12, host: 37 / 37 / 0 / 0 in 271s): `RESEND_API_KEY= STRIPE_API_KEY= node --test --test-timeout=900000 test/integration/build-wave-golden.test.js test/integration/gsd-route-continuation-golden.test.js test/build-team-fable-astra.test.js`. This command previously HUNG to the 900s cap whenever a Compose server was listening, because the gate at `lib/build.js:5915` delegates to the web UI and only `npm test` preloads the `COMPOSE_PORT` suppressor (`package.json:23`). `test/helpers/build-wave-golden-fixture.js` now sets `COMPOSE_PORT=19997` when unset, so the command is safe as written; see the d3 report's host-adjudication section.
 Set disposable STRATUM_STATE_ROOT for these future commands. Required compatibility population runs and full npm test remain future implementation-dispatch checks in a permitted environment; no test result is claimed by this blueprint revision.
 
 ## Documentation
 
 - [ ] Dispatch 3: `docs/team-presets.md` and `README.md` explain shadow joins/outcomes/unsupported rows/ledger and incomplete evidence; no report, calibration prompt, feedback or learned/active selection yet.
 - [ ] `CHANGELOG.md`: describe S1b changes and verification honestly, including unresolved live-fire evidence. No commit is authorized by this task.
-- [ ] Blueprint and `progress.md`: record actual API names, verified commands, accepted rulings and remaining evidence blocks during implementation; parent remains incomplete pending S2/S3. This revision changes ONLY this blueprint.
+- [ ] Blueprint and `progress.md`: record actual API names, verified commands, accepted rulings and remaining evidence blocks during implementation; parent remains incomplete pending S2/S3. Dispatch-3 documentation and verification are recorded in the dispatch report; live-fire gate 5 stays outstanding.
 - [ ] Four schema files are Compose-owned; inventory every reader in implementation review, including the dedicated receiptRouting validator and original-owner recovery. No sibling Stratum edits.
 
 ## Follow-ups to file, not fix
