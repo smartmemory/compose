@@ -12,7 +12,7 @@ import { TS_CLI_BIN, TS_MCP_BIN } from './helpers/stratum-test-bin.js';
 import { makeFakeCodexProject } from './helpers/fake-codex-project.js';
 import { fakeBuildStratum, agentResult } from './helpers/build-stratum-fixture.js';
 import { decision } from './helpers/build-wave-fixture.js';
-import { readGoldenJournal, frozenRoutingBaseline, serializeGolden, normalizedGoldenCalls, readRoutingEvidence, assertRoutingGolden, ROUTING_INPUTS } from './helpers/build-wave-golden-fixture.js';
+import { readGoldenJournal, frozenRoutingBaseline, serializeGolden, normalizedGoldenCalls, readRoutingEvidence, assertRoutingGolden, assertShadowGoldenInput, goldenProviderTool } from './helpers/build-wave-golden-fixture.js';
 import { git } from './helpers/consumer-wave-fixture.js';
 
 const presetPath = fileURLToPath(new URL('../presets/team-fable-astra.stratum.yaml', import.meta.url));
@@ -44,7 +44,7 @@ test('fable-astra: real Stratum validator, CLI rewrite, bundled resolution and s
   assert.equal(preflight.resolved.review.modelID, 'gpt-6-astra');
 });
 
-for (const mode of ['default shadow', 'off']) test(`fable-astra: ${mode} real preset wave → complete → ship and frozen oracle`, { timeout: 180000 }, async t => {
+for (const mode of ['default shadow', 'off', 'paid shadow']) test(`fable-astra: ${mode} real preset wave → complete → ship and frozen oracle`, { timeout: 180000 }, async t => {
   const f = await makeFakeCodexProject({ featureCode: code, spec, profiles, git: true,
     recordModel: true, intentOnly: true, costUsd: 0.001,
     description: '# Goal\nImplement doubling.\n\n## Acceptance criteria\ncore(3) equals 6.\n',
@@ -69,6 +69,7 @@ for (const mode of ['default shadow', 'off']) test(`fable-astra: ${mode} real pr
   git(f.workspace, ['config', 'user.name', 'Preset Golden']);
   git(f.workspace, ['config', 'user.email', 'preset@example.test']);
   const base = git(f.workspace, ['rev-parse', 'HEAD']);
+  const ignoreBefore = Object.fromEntries(['.gitignore', '.git/info/exclude'].map(p => [p, existsSync(join(f.workspace, p)) ? readFileSync(join(f.workspace, p), 'utf8') : null]));
   f.artifactRoot = join(f.stateRoot, 'artifacts');
   const client = new StratumMcpClient();
   const connection = { command: process.env.COMPOSE_STRATUM_TS_NODE || process.execPath,
@@ -104,7 +105,12 @@ for (const mode of ['default shadow', 'off']) test(`fable-astra: ${mode} real pr
     } else throw new Error(`Unexpected Claude step: ${step}`);
     return { ...agentResult(output, `s4:${step}`), usdSource: 'reported' };
   } });
+  const paidConnector = new StratumMcpClient();
+  paidConnector._testClient = { callTool: await goldenProviderTool(async args => ({
+    text: (await fake.agentRun('claude', args.prompt, { cwd: args.cwd })).text, usd: 0.25,
+  })) };
   const stratum = new Proxy(client, { get(target, key) {
+    if (key === 'onEvent' && mode === 'paid shadow') return (...args) => { const a = target.onEvent(...args), b = paidConnector.onEvent(...args); return () => { a(); b(); }; };
     if (key === 'plan') return async (...args) => {
       events.push(serializeGolden({ kind: 'plan', spec: args[0], flow: args[1], input: args[2], opts: args[3] }));
       assert.equal(args[0], spec, 'runBuild uses the unmodified bundled YAML');
@@ -112,9 +118,9 @@ for (const mode of ['default shadow', 'off']) test(`fable-astra: ${mode} real pr
     };
     if (key === 'agentRun') return async (provider, prompt, opts) => {
       events.push(serializeGolden({ kind: 'call', provider, prompt, opts }));
-      if (mode === 'default shadow') roots.push(readRoutingEvidence(f, flowId));
+      if (mode !== 'off') roots.push(readRoutingEvidence(f, flowId));
       inference.push({ provider, prompt, opts });
-      return provider === 'claude' ? fake.agentRun(provider, prompt, opts) : target.agentRun(provider, prompt, opts);
+      return provider === 'claude' ? (mode === 'paid shadow' ? paidConnector : fake).agentRun(provider, prompt, opts) : target.agentRun(provider, prompt, opts);
     };
     if (key === 'stepDone') return async (...args) => {
       completions.push({ step: args[1], envelope: args[2] });
@@ -149,9 +155,9 @@ for (const mode of ['default shadow', 'off']) test(`fable-astra: ${mode} real pr
       assert.deepEqual(plan.opts, { ...frozen.events[0].opts, workspaceRoot: f.workspace });
       assert.equal(journal.routing, undefined);
       assert.equal(existsSync(join(f.workspace, '.compose/routing')), false);
-      assert.doesNotMatch(readFileSync(join(f.workspace, '.git/info/exclude'), 'utf8'), /routing/);
+      for (const [p, bytes] of Object.entries(ignoreBefore)) assert.equal(existsSync(join(f.workspace, p)) ? readFileSync(join(f.workspace, p), 'utf8') : null, bytes);
     } else {
-      assert.deepEqual(Object.fromEntries(Object.entries(plan.input).filter(([k]) => !ROUTING_INPUTS.includes(k))), frozen.events[0].input);
+      assertShadowGoldenInput(plan.input, frozen.events[0].input);
       assertRoutingGolden(readRoutingEvidence(f, flowId), 5);
       assert.equal(new Set(roots.map(r => r.rootBytes)).size, 1);
       for (const earlier of roots) for (const [id, record] of Object.entries(earlier.journal.routing.records)) {
@@ -159,6 +165,19 @@ for (const mode of ['default shadow', 'off']) test(`fable-astra: ${mode} real pr
       }
     }
     assert.deepEqual(normalizedGoldenCalls(events), normalizedGoldenCalls(frozen.events));
+    if (mode === 'paid shadow') {
+      const { readRoutingLedger } = await import('../lib/routing-ledger.js');
+      const rows = readRoutingLedger({ cwd: f.workspace });
+      assert.equal(rows.length, 5);
+      const expected = { plan: 0.25, execute: 0.001, verify: 0.25, review: 0.001, assess: 0.25 };
+      for (const row of rows) {
+        assert.equal(row.cost.usd, expected[row.issuance.scopedStep]);
+        assert.equal(row.calls.length, 1);
+        assert.equal(row.completeness.state, 'complete');
+      }
+      assert.equal(rows.find(r => r.issuance.scopedStep === 'execute').outcome.label, 'accepted');
+      assert.equal(rows.find(r => r.issuance.scopedStep === 'execute').calls[0].executedTier.value, 'critical');
+    }
     assert.equal(git(f.workspace, ['rev-parse', 'HEAD^']), base);
     assert.equal(git(f.workspace, ['rev-list', '--count', `${base}..HEAD`]), '1');
     assert.ok(!git(f.workspace, ['rev-list', 'HEAD']).split('\n').includes(journal.wave.checkpoints[0].commit));

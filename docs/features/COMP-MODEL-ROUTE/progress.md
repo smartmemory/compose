@@ -401,3 +401,118 @@ named after a review round records process history, not subject). review-r2.md s
 **LESSON — a review probe is a producer, and fitting a fix to a probe is fitting to a fake producer.** This is the
 THIRD distinct appearance of the fake-producer class in this feature and the first one level up the stack. Fix briefs
 must say "drive the real producer, and do not fit the new probe either".
+
+## 2026-09-12 — S1b dispatch 3: deterministic goldens and documentation
+
+Implementation extends `test/integration/build-wave-golden.test.js`,
+`test/integration/gsd-route-continuation-golden.test.js`,
+`test/build-team-fable-astra.test.js` and `test/helpers/build-wave-golden-fixture.js`.
+`realCodexTool` gains an optional `sdkEvents` input generator; its existing default
+behavior is unchanged. `goldenProviderTool` drives real Codex/Claude connectors,
+and `paidWaveGolden` drives real Build/carry/normalization/receipt/gate producers.
+No routing joins, acknowledgements, outcomes or ledger rows are seeded.
+
+Actual APIs used: `resumeRouting`, `recoverRoutingEvidence`, `readRoutingLedger`,
+`reconcileRoutingPaidReceipts`, `routingEligible`, `latestRoutingCall`,
+`latestRoutingOutcome`, and `routingIssuanceState`. The connector entropy wrapper
+preserves non-enumerable routing options. Off assertions check full input/options
+and both ignore files. A/B same-profile receipt ownership is asserted independently
+of the frozen helper's contiguous execute-call sorting. GSD continuation checks
+original-owner spools and latest call/outcome evidence, with one logical start and
+no rerun of decomposition or completed A.
+
+No production defect was found; d1/d2 production files remain unchanged. Test
+fixture corrections and all gate evidence are detailed in
+`reports/slice1b-d3-impl.md`. The canonical ReviewResult contract and no-ceiling
+late-delivery configuration are explicit; frozen expectations were not refreshed.
+
+Blueprint Dispatch-3 checkboxes 1–4 are now closed. Final golden run:
+**37 tests / 37 pass / 0 fail / 0 cancelled**, exit 0. Forwarding/local-effort
+regressions: **23 / 23 / 0 / 0**. Multiple-owner baseline: **1 / 1 / 0 / 0**.
+Each reversion of `lib/build.js`, `lib/stratum-mcp-client.js`,
+`lib/result-normalizer.js`, or `lib/gsd.js` gives **1 / 0 / 1 / 0**, after a
+**1 / 1 / 0 / 0** baseline. Removing additional forwarding checks gives
+**21 / 4 / 17 / 0**; removing the multiple-owner refusal gives **1 / 0 / 1 / 0**.
+All reversion scripts exit 0 (successful controls); the reverted/mutated Node
+runs exit 1 with nonzero TAP fail counts and zero cancellations.
+
+Exact final golden command (main checkout):
+
+```sh
+STRATUM_STATE_ROOT=$(mktemp -d /tmp/d3-state.XXXXXX) RESEND_API_KEY= STRIPE_API_KEY= node --test --test-timeout=900000 test/integration/build-wave-golden.test.js test/integration/gsd-route-continuation-golden.test.js test/build-team-fable-astra.test.js > /tmp/d3-evidence/golden-verified.log 2>&1
+```
+
+Exact reversion commands (cwd `/tmp/d3-evidence/negative-workspace/compose`, a
+local shared clone with all five final test/helper files byte-identical to this
+checkout, separate from concurrently running positive tests):
+
+```sh
+STRATUM_STATE_ROOT=$(mktemp -d /tmp/d3-state.XXXXXX) RESEND_API_KEY= STRIPE_API_KEY= bash scripts/negative-control.sh --ref ecea9db --timeout 900000 --test-name-pattern 'd3 paid carry primary' --prod lib/build.js lib/stratum-mcp-client.js -- --test test/integration/build-wave-golden.test.js > /tmp/d3-evidence/revert-build-connector.log 2>&1
+STRATUM_STATE_ROOT=$(mktemp -d /tmp/d3-state.XXXXXX) RESEND_API_KEY= STRIPE_API_KEY= bash scripts/negative-control.sh --ref ecea9db --timeout 900000 --test-name-pattern 'd3 paid carry success' --prod lib/result-normalizer.js -- --test test/integration/build-wave-golden.test.js > /tmp/d3-evidence/revert-normalizer.log 2>&1
+STRATUM_STATE_ROOT=$(mktemp -d /tmp/d3-state.XXXXXX) RESEND_API_KEY= STRIPE_API_KEY= bash scripts/negative-control.sh --ref ecea9db --timeout 900000 --test-name-pattern 'd3 GSD production off/shadow' --prod lib/gsd.js -- --test test/integration/gsd-route-continuation-golden.test.js > /tmp/d3-evidence/revert-gsd.log 2>&1
+```
+
+Exact preserved-check controls and positives (main checkout; process-local load
+hook substitutes the retained mutation source without working-tree changes):
+
+```sh
+STRATUM_STATE_ROOT=$(mktemp -d /tmp/d3-state.XXXXXX) RESEND_API_KEY= STRIPE_API_KEY= node --test --test-timeout=900000 --test-name-pattern='real normalizer forwarding|real Claude .* forwarding|local SDK raw presence' test/usage-receipts.test.js test/routing-calls.test.js > /tmp/d3-evidence/forwarding-positive.log 2>&1
+D3_MODULE=lib/routing-runtime.js D3_SOURCE=/tmp/d3-evidence/no-evidence-checks.js STRATUM_STATE_ROOT=$(mktemp -d /tmp/d3-state.XXXXXX) RESEND_API_KEY= STRIPE_API_KEY= node --import /tmp/d3-evidence/substitute.mjs --test --test-timeout=900000 --test-name-pattern='real normalizer forwarding|real Claude .* forwarding' test/usage-receipts.test.js > /tmp/d3-evidence/no-evidence-checks.log 2>&1
+STRATUM_STATE_ROOT=$(mktemp -d /tmp/d3-state.XXXXXX) RESEND_API_KEY= STRIPE_API_KEY= node --test --test-timeout=900000 --test-name-pattern='residual B0 ownership for a.txt' test/build-model-route-outcomes.test.js > /tmp/d3-evidence/owner-positive.log 2>&1
+D3_MODULE=lib/output-gate.js D3_SOURCE=/tmp/d3-evidence/no-owner-check.js STRATUM_STATE_ROOT=$(mktemp -d /tmp/d3-state.XXXXXX) RESEND_API_KEY= STRIPE_API_KEY= node --import /tmp/d3-evidence/substitute.mjs --test --test-timeout=900000 --test-name-pattern='residual B0 ownership for a.txt' test/build-model-route-outcomes.test.js > /tmp/d3-evidence/no-owner-check.log 2>&1
+```
+
+The report inventories every development test invocation and TAP tally, including
+two early fixture-barrier timeouts; cancelled runs are not evidence. The first
+full golden run (36 / 35 / 1 / 0) and strengthened subset (17 / 16 / 1 / 0) exposed
+an incorrect test expectation for completed GSD's no-pause resume refusal; the
+final 37/37 run supersedes them. All five changed JS files pass `node --check`;
+`git diff --check` passes. All three frozen fixtures equal HEAD byte-for-byte.
+The 259-test dispatch-2 production set was not rerun because production did not
+change. No source change was needed to weaken an evidence check.
+**LIVE-FIRE gate 5 remains OUTSTANDING.** No provider authorization was granted or
+provider run performed. The parent feature remains incomplete pending S2/S3, with
+no status change. Host full-suite verification remains outstanding; no full
+`npm test` is claimed. README and team-presets describe only shipped recording,
+unsupported/incomplete evidence and ledger behavior, without report/calibration/
+feedback/learned-selection claims.
+
+## Host adjudication — d3, 2026-09-12
+
+Astra d3 run `512bf65e3708` (28m, 13.5M tok) reported 37/37. Verified independently: no production
+file touched, three frozen fixtures byte-identical to HEAD, negative controls red in both
+directions (four production reverts 1/0/1/0; removing the added duration/model/effort/provenance/
+split comparisons 21/4/17/0; removing the multiple-owner refusal 1/0/1/0).
+
+**The first HOST run was 36 / 31 / fail 0 / cancelled 5 at duration_ms 900008** — the whole-file
+timeout cap, i.e. a HANG wearing the mask of four failures. Two test defects, neither in
+production code:
+
+1. **Hermeticity.** The goldens reach a real `execute_merge` gate; `lib/build.js:5915` delegates
+   to the web UI whenever `probeServer()` answers. Only `npm test` escapes it, via the
+   `--import ./test/suppress-expected-drift.js` preload (`package.json:23`) that sets
+   `COMPOSE_PORT=19997`. The targeted golden command in `blueprint-slice1b.md` omits the preload,
+   so with the dev server up on 4001 the DOCUMENTED command is the one that hangs. Astra could not
+   see it: its sandbox cannot bind ports. Fixed as a control in
+   `test/helpers/build-wave-golden-fixture.js` (sets `COMPOSE_PORT=19997` when unset; all three
+   golden files import it; explicit values never overridden).
+2. **Ordering assertion over a schedule the harness leaves free.** RESOLVED 2026-09-12 @66cee92.
+   `build-wave-golden.test.js:344` pinned LAUNCH order of A0/B0, which the harness latch at
+   `build-wave-golden-fixture.js:413` deliberately leaves free (it waits for both, then forces
+   only RETURN order). Contradicted this gate's own adversarial-ordering requirement. Measured on
+   the host 2026-09-12, selector `d3 paid carry` with `COMPOSE_PORT=19997`: pre-fix **2 of 6
+   failed** (the `success` and `failed` variants, `fail 2 / cancelled 0`, 169s); post-fix **6/6**
+   (185s) and **37/37** across the three files (271s). The same pre-fix code passed 37/37 in the
+   astra sandbox, so this is not a measured flake RATE — it is an order-dependent assertion whose
+   outcome tracks the scheduler, and the two environments disagreed. Now compared as a multiset;
+   forced `returned` sequence stays exact. Negative control on wrong membership: 1/0/1/0.
+
+**Final host tally: 37 / 37 / 0 / 0 in 271s, server UP on 4001, `env -u COMPOSE_PORT -u PORT`** —
+the hang is gone and the count matches the dispatch. Gates 1-4 CLOSED. Gate 5 (live-fire)
+OUTSTANDING: needs owner authorization and a real-provider shadow build; no deterministic result
+closes it.
+
+**LESSON — a sandbox that cannot bind ports cannot observe a live-server code path.** The
+dispatch's 37/37 was true for its environment and false for the owner's. Astra sandbox results are
+never the arbiter; the host is. Related: the documented targeted command was itself the trap, so
+the fix belongs in the helper every golden imports, not in a note someone must remember.

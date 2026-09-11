@@ -1,4 +1,18 @@
 /** Test-only carry preset and hybrid inference driver. All engine RPCs are real. */
+// HERMETICITY GUARD. These goldens reach a real `execute_merge` gate, and
+// lib/build.js:5915 delegates a gate to the web UI whenever probeServer() finds
+// a Compose server (resolvePort(): COMPOSE_PORT > PORT > 4001). With a dev
+// server up on 4001 the run then polls for a human resolution and the file dies
+// on its whole-file --test-timeout, reporting `fail 0 / cancelled N` -- a hang
+// wearing the mask of a flake. `npm test` avoids it only because it preloads
+// test/suppress-expected-drift.js; a targeted `node --test <file>` invocation
+// does not, so the guard belongs with the tests that need it rather than with
+// whoever remembers the flag. ESM hoists the imports below above this
+// assignment, which is harmless: resolvePort() reads process.env at CALL time
+// (lib/resolve-port.js:12), during the gate, not at module load. All three
+// golden files import this helper, so the guard covers each of them. An
+// explicit COMPOSE_PORT (e.g. a live-server test) is never overridden.
+if (!process.env.COMPOSE_PORT) process.env.COMPOSE_PORT = '19997';
 import assert from 'node:assert/strict';
 import { appendFileSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { writeFile, readdir, readFile } from 'node:fs/promises';
@@ -294,4 +308,144 @@ export function assertRoutingGolden(evidence, callCount) {
     assert.deepEqual(events.map(e => e.event), ['launch-intent', 'result-prepared', 'settled']);
   }
   return records;
+}
+
+/** SDK inputs only: both production connectors own output/error/telemetry shapes. */
+export async function goldenProviderTool(respond, onCall = () => {}) {
+  const { realCodexTool } = await import('./real-codex-tool.js');
+  const { ClaudeConnector } = await import('../../../stratum/ts/dist/connectors/claude.js');
+  const { McpError, ErrorCode } = await import('@modelcontextprotocol/sdk/types.js');
+  return async (request, schema, progress) => {
+    const args = request.arguments;
+    onCall(serializeGolden(args));
+    const input = await respond(args);
+    try {
+      if (args.agent === 'codex') return await realCodexTool({ sdkEvents: async function* () {
+        yield { type: 'item.completed', item: { type: 'agent_message', text: input.text } };
+        if (!input.unknown) yield { type: 'turn.completed', usage: { input_tokens: 3, output_tokens: 5,
+          cached_input_tokens: 2, total_cost_usd: input.usd } };
+        if (input.failed) throw Error('controlled SDK failure');
+      } })(request, schema, progress);
+      let seq = 0;
+      const producer = new ClaudeConnector({ model: args.model ?? 'claude-sonnet-4-6', effort: args.effort,
+        env: {}, query: async function* () {
+          yield { type: 'system', subtype: 'init', model: args.model ?? 'claude-sonnet-4-6' };
+          yield { type: 'result', subtype: input.failed ? 'error_max_turns' : 'success', result: input.text,
+            ...(input.unknown ? {} : { total_cost_usd: input.usd, duration_ms: 31, usage: { input_tokens: 3, output_tokens: 5 } }) };
+        }, onEvent(event) { progress.onprogress({ message: JSON.stringify({ schema_version: '0.2.8',
+          step_id: '_agent_run', seq: seq++, ts: new Date().toISOString(), kind: event.kind,
+          metadata: { ...event.metadata, stepId: '_agent_run' } }) }); } });
+      return { content: [{ type: 'text', text: JSON.stringify(await producer.run(args.prompt)) }] };
+    } catch (error) {
+      // The MCP server's error boundary carries the real connector's own evidence.
+      throw new McpError(ErrorCode.InternalError, error.message, { code: 'AGENT_FAILED',
+        ...Object.fromEntries(['usage', 'usdSource', 'split', 'telemetry'].filter(k => error[k] !== undefined).map(k => [k, error[k]])) });
+    }
+  };
+}
+
+/** A real carry runner with independent A/B SDK amounts and receipt identities. */
+export async function paidWaveGolden(t, { repair = null, unknown = false, failPrimary = false, late = false } = {}) {
+  const { runtimeFixture } = await import('./routing-runtime-fixture.js');
+  const { syncBuiltinESMExports } = await import('node:module');
+  const crypto = (await import('node:crypto')).default;
+  const authored = YAML.parse(WAVE_GOLDEN_SPEC);
+  Object.assign(authored.flows.bug_fix.input, Object.fromEntries(ROUTING_INPUTS.map(k => [k, 'string?'])));
+  if (failPrimary) authored.flows.bug_fix.steps[1].attempts = 1;
+  const tasks = ['A', 'B'].map(id => ({ id, description: id, files_owned: [`${id.toLowerCase()}.txt`],
+    files_read: [], depends_on: [], tier: 'standard' }));
+  if (repair) {
+    authored.contracts.ReviewResult = YAML.parse(readFileSync(new URL('../../presets/team-review.stratum.yaml', import.meta.url), 'utf8')).contracts.ReviewResult;
+    authored.flows.bug_fix.steps[1].fanout.steps[0].out = 'ReviewResult';
+  }
+  const finding = { severity: 'error', files: ['b.txt'], claim: 'B needs repair', evidence: 'B0 differs from B1' };
+  let deliver = !late;
+  const calls = [], returned = [], gates = [], submissions = [];
+  const releases = new Map();
+  let stopHolding = false;
+  const costs = { A0: 1, B0: 2, A0repair: 4, B0repair: 8, B1: 16, B1repair: 32 };
+  const ids = Object.fromEntries(Object.keys(costs).map((k, i) => [k, `d3000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`]));
+  const label = prompt => {
+    const id = prompt.match(/"id"\s*:\s*"([AB])"/)?.[1];
+    const child = /TEXT-([AB][01])/.exec(prompt);
+    if (child) return `${child[1]}repair`;
+    if (id) return `${id}${f.snapshot().steps.execute.epoch ?? 0}`;
+    return prompt.match(/executing step "([^"]+)"/)?.[1] ?? 'other';
+  };
+  const { _costCeiling, ...paidProfiles } = PROFILES;
+  const f = await runtimeFixture(t, { spec: authored, profiles: paidProfiles, intercept(method, args, response) {
+    if (method === 'before:usageReport' && args[1].detail?.routing?.kind === 'paid-call') {
+      submissions.push(structuredClone(args));
+      if (!deliver) throw Error('controlled receipt delivery outage');
+    }
+    if (method === 'before:gateResolve') gates.push({ args, snapshot: f.snapshot(), journal: f.journal() });
+  } });
+  const tool = await goldenProviderTool(async args => {
+    const name = label(args.prompt); calls.push(name);
+    const epoch = f.snapshot().steps.execute?.epoch ?? 0;
+    if (!stopHolding && ['A0', 'B0', 'A0repair', 'B0repair'].includes(name)) await new Promise(resolve => releases.set(name, resolve));
+    let output;
+    if (name === 'plan') output = { tasks };
+    else if (name === 'verify') output = { tests_pass: true, summary: 'verified' };
+    else if (name === 'review') output = { blocking: epoch === 0, findings: epoch === 0 ? [finding] : [] };
+    else if (name === 'assess') output = epoch === 0 ? decision('repair', { blocking: true, tasks: [tasks[1]], open_findings: [finding], open_count: 1 }) : decision('complete');
+    else if (name.endsWith('repair')) output = repair === 'success' ? { clean: true, findings: [], summary: 'repaired JSON' } : null;
+    else if (/^[AB][01]$/.test(name)) {
+      writeFileSync(join(args.cwd, `${name[0].toLowerCase()}.txt`), `${name}\n`);
+      output = { outcome: 'complete', summary: name, files_changed: [`${name[0].toLowerCase()}.txt`] };
+    } else throw Error(`Unexpected golden call ${name}`);
+    returned.push(name);
+    return { text: name.endsWith('repair') && !output ? 'still malformed' : repair && /^[AB][01]$/.test(name) ? `TEXT-${name}` : JSON.stringify(output),
+      usd: costs[name] ?? 0.25, unknown: unknown && name === 'B1',
+      failed: repair === 'failed' && name.endsWith('repair') || failPrimary && name === 'B0' };
+  });
+  f.connector._testClient = { callTool: tool };
+  const originalRun = f.connector.agentRun.bind(f.connector);
+  f.connector.agentRun = (provider, prompt, opts = {}) => {
+    const name = label(prompt), originalUUID = crypto.randomUUID;
+    if (!ids[name]) return originalRun(provider, prompt, opts);
+    // Pin entropy at the connector boundary, never write an intent/join ourselves.
+    let first = true;
+    crypto.randomUUID = () => first ? (first = false, ids[name]) : originalUUID();
+    syncBuiltinESMExports();
+    try {
+      const pinned = Object.create(Object.getPrototypeOf(opts), Object.getOwnPropertyDescriptors(opts));
+      pinned.correlationId = `d3-${name}`;
+      return originalRun(provider, prompt, pinned);
+    }
+    finally { crypto.randomUUID = originalUUID; syncBuiltinESMExports(); }
+  };
+  const until = async name => {
+    for (let n = 0; n < 1000 && !releases.has(name); n++) await new Promise(r => setTimeout(r, 10));
+    assert.ok(releases.has(name), `producer reached ${name}; calls=${calls.join(',')}`);
+  };
+  const runBuildFixture = f.run;
+  const run = async () => {
+    const pending = runBuildFixture(); pending.catch(() => {});
+    let scheduleError;
+    try {
+      await until('A0'); await until('B0'); releases.get('B0')();
+      if (repair) await until('B0repair');
+      releases.get('A0')();
+      if (repair) { await until('A0repair'); releases.get('A0repair')(); releases.get('B0repair')(); }
+    } catch (error) {
+      scheduleError = error; stopHolding = true;
+      for (const release of releases.values()) release();
+    }
+    const result = await pending;
+    if (scheduleError) throw scheduleError;
+    return result;
+  };
+  return Object.assign(f, { paidCalls: calls, returned, costs, ids, gates, submissions, run,
+    enableDelivery() { deliver = true; } });
+}
+
+/** Check every input key; shadow's declared transport is separately validated. */
+export function assertShadowGoldenInput(actual, frozenInput) {
+  const start = JSON.parse(actual.routing_start);
+  assert.deepEqual(start.originalInput, frozenInput);
+  assert.equal(actual.routing_root, start.rootDigest);
+  assert.match(actual.routing_plan_intent, /^[0-9a-f-]{36}$/);
+  assert.deepEqual(actual, { ...frozenInput, route_mode: 'shadow', routing_start: actual.routing_start,
+    routing_root: start.rootDigest, routing_plan_intent: actual.routing_plan_intent });
 }
