@@ -289,16 +289,21 @@ the local SDK path, Q2 failure-settlement scope). Live-fire shadow build stays e
 ticked by deterministic real-engine tests.
 
 ## S1b follow-ups — FILED, not fixed (do not repair inside S1b)
-1. GSD direct receipt conversion drops sibling `usdSource`/`split` the normalizer path preserves (gsd.js:673–683 vs
-   result-normalizer.js:788–794); direct error handling passes usage+id without telemetry/split adaptation
-   (gsd.js:663–668); JSON parsing sits outside the call catch (:661–670,691).
-2. GSD's status loop excludes completed/failed/stuck/waiting_gate/budget_exhausted but NOT cancelled (gsd.js:348–355);
-   runOneStep returns the unchanged response for other statuses (:791) — a cancelled response can loop instead of
-   reaching terminal accounting.
-3. `validateDecision` never compares the disposition union/multiplicity against the original `review.findings`
-   (output-gate.js:12–39), so a structurally valid decision need not partition the findings the prompt demands.
-4. Stale comment "Build mode passes no onUsage sink" (build.js:1865–1866) contradicts :4376.
-5. Still open from S1a: GSD preflights the profile sidecar (gsd.js:161–166) but never applies it (:651–660).
+CORRECTED 2026-09-11 after the blueprint fix run: this list was first written with FIVE entries; the revised
+blueprint reduced it to THREE because two of them turn out to be HANDLED by S1b's own lifecycle hooks rather than
+deferred. Authoritative list is the blueprint tail; kept in sync here.
+1. Legacy GSD direct conversion drops sibling `usdSource`/`split` (gsd.js:673–683 vs result-normalizer.js:788–794),
+   and error usage lacks that adaptation (gsd.js:663–668). S1b's raw connector evidence bypasses this loss for
+   PARTICIPATING attribution; changing the legacy conversion stays a follow-up.
+2. `validateDecision` does not compare original `review.findings` multiplicities (output-gate.js:12–39) despite the
+   prompt demanding an exhaustive partition (team-fable-astra.stratum.yaml:203–204). S1b records observation-only
+   partition/ownership checks and censors ambiguity; stronger gate-dispatch enforcement stays a follow-up.
+3. GSD preflights the sidecar (gsd.js:161–166) while ordinary calls stay bare (:651–660). Preserve
+   ROUTING_STATIC_DISPATCH_MISMATCH; do NOT fix sidecar dispatch in S1b.
+NO LONGER deferred (handled by S1b lifecycle hooks, previously listed here in error): GSD post-call parsing outside
+the call catch (gsd.js:689–693) and participating cancellation-loop reachability (gsd.js:348–355). The stale
+"Build mode passes no onUsage sink" comment (build.js:1865–1866, contradicted by :4376) is a d2 cleanup, not a
+standalone follow-up.
 
 ## 2026-09-11 — S1b owner questions Q1 + Q2 BOTH RULED; no owner action outstanding
 Q2: CLOSED as already ruled (failure-only token-absent settlement stays in S1b; cancellation settles on run-cancellation
@@ -353,3 +358,46 @@ first attempt. S1b RECORDS only — no floor computed, compared or enforced (tha
 One-line schema change now vs re-materializing the ledger after S1b ships. Dispatch-1 checkbox + a Tests-table row added.
 NOTE: this edit post-dates the r2 CLEAN review; it is additive recording with no floor logic, but it has NOT itself been
 through a review round.
+
+## 2026-09-11 — S1b DISPATCH 1 implemented and committed
+astra impl fef0c0b97e9d (42 min, 9.68M tok) → review r1 ba57b097b2bc (7.9 min) → fix cc6777e0e8b6 (13 min) →
+review r2 fec8fb4e7d06 (9.7 min) → fix e182a5c110c0 (8.6 min). Host: node 6983/6983, UI 624/624, tracker 100/100;
+targeted 132/132; goldens 23/23; three frozen off fixtures byte-unchanged. Runtime observation still DISABLED.
+
+**r1 — 3 HIGH / 1 MEDIUM, all reproduced with probes, all accepted:**
+1. A seeded lineage `relation` overrode contradictory gate evidence: `validateLineage` checked existence/digest/scope
+   but never that the link agreed with the referenced disposition's per-issuance relation and defect evidence. Probe
+   built an APPROVED/retained gate for A, attached a repair link anyway, and got A→`repaired`/negative plus fabricated
+   repair ancestry for B. Fixed at routing-ledger.js:847 (validate relation+predecessor against the disposition and
+   bind the completed target to a retained proposal).
+   The test oracle was the same defect: it passed the desired scenario into BOTH `gateEvidence` and `linkRepair` then
+   asserted the label it had supplied, and every ordinary fixture used `routingDigest(null)` as its item digest, making
+   digest binding vacuous. Fixed with rejection cases built independently of the assertion.
+2. Engine-receipt observations retained only a reference, so independently known spend vanished from reconciliation.
+3. A retry erased unknown-ancestry censoring: the same-epoch branch overwrote `waveKind` with `retry`, and censoring
+   keyed only on `waveKind === 'unknown'`, so unknown-ancestry work became complete and ELIGIBLE. RULING: keep `retry`
+   (it is true) and make ancestry-unknown explicit and independent — `ancestryUnknown` at routing-ledger.js:1090,
+   consumed by completeness/eligibility/ledger validation. This one attacked the `context` field added @b5382d3.
+4. MEDIUM: the embedded ledger outcome skipped the label/cause/binary invariant the journal validator enforces, so a
+   malformed censored revision could be selected as "latest validated" and trusted by eligibility.
+
+**r2 — 3 of 4 FIXED clean; finding 2 PARTIAL with 2 new HIGH, both reproduced through the REAL producer:**
+R2-1 the engine fix read `receipt.usage` (the Compose SUBMISSION shape) but persisted engine receipts store costs in
+`ReceiptRecord.amount` (../stratum/ts/src/engine/receipts.ts:52) → real receipts materialized with null costs.
+R2-2 engine evidence reused the connector provenance domain `reported|estimated|null` and refused `legacy`, which the
+engine actually emits (receipts.ts:38, engine.ts:2762) → a legitimate receipt could not enter the journal at all.
+**Root cause of both: the r1 PROBE was itself a synthetic producer, and the fix was fitted to the probe.** Fixed by
+projecting both shapes explicitly and keeping engine provenance a separate domain from connector provenance. Driving
+the real `buildReceipt` in the tests then exposed a THIRD instance neither review round found — partial estimated
+receipts losing their known amounts the same way.
+r2 also CONFIRMED: the initial-fresh interpretation holds (a real continuation probe at physical AND logical epoch 0
+with a predecessor stays `unknown`, never `fresh`); journal-vs-ledger idempotency unconflated; off-mode identity
+intact; S1a success-token equality exact; the ancestry check's narrowing to routed issuances is correct, not a
+relocated hole.
+
+Controller rename post-r2: `test/routing-review-r1.test.js` → `test/routing-evidence-validation.test.js` (a test file
+named after a review round records process history, not subject). review-r2.md still cites the original name as history.
+
+**LESSON — a review probe is a producer, and fitting a fix to a probe is fitting to a fake producer.** This is the
+THIRD distinct appearance of the fake-producer class in this feature and the first one level up the stack. Fix briefs
+must say "drive the real producer, and do not fit the new probe either".

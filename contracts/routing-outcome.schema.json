@@ -1,0 +1,1511 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "routing-outcome.schema.json",
+  "_source": "docs/features/COMP-MODEL-ROUTE/design.md",
+  "_roadmap": "COMP-MODEL-ROUTE",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "runId",
+        "revisionDigest",
+        "gateStepId",
+        "gateToken",
+        "capturedAt",
+        "resetTarget",
+        "resetClosure",
+        "sourceRefs",
+        "waves",
+        "ordinaryIssuances",
+        "priorSnapshotIds"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "wave-snapshot"
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "revisionDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "gateStepId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gateToken": {
+          "type": "string",
+          "minLength": 1
+        },
+        "capturedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resetTarget": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resetClosure": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "sourceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+          }
+        },
+        "waves": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "runId",
+              "scopedStep",
+              "stage",
+              "epoch",
+              "logicalWaveId",
+              "logicalEpoch",
+              "epochBindingId",
+              "sourceRef",
+              "items"
+            ],
+            "properties": {
+              "runId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+              },
+              "scopedStep": {
+                "type": "string",
+                "minLength": 1
+              },
+              "stage": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "epoch": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "logicalWaveId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "logicalEpoch": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "epochBindingId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+              },
+              "sourceRef": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "logicalTaskId",
+                    "fullItem",
+                    "itemDigest",
+                    "itemIndex",
+                    "generation",
+                    "stage",
+                    "status",
+                    "admissionId",
+                    "issuanceId",
+                    "issuanceToken",
+                    "acceptedDispatchToken",
+                    "chosenTier",
+                    "executedTier",
+                    "priorSnapshotId"
+                  ],
+                  "properties": {
+                    "logicalTaskId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "fullItem": {},
+                    "itemDigest": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "itemIndex": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "generation": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "stage": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "admissionId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "issuanceId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "issuanceToken": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "acceptedDispatchToken": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "chosenTier": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "executedTier": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "value",
+                        "source",
+                        "evidenceRefs"
+                      ],
+                      "properties": {
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "source": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "evidenceRefs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                          }
+                        }
+                      }
+                    },
+                    "priorSnapshotId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "ordinaryIssuances": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "logicalTaskId",
+              "fullItem",
+              "itemDigest",
+              "itemIndex",
+              "generation",
+              "stage",
+              "status",
+              "admissionId",
+              "issuanceId",
+              "issuanceToken",
+              "acceptedDispatchToken",
+              "chosenTier",
+              "executedTier",
+              "priorSnapshotId",
+              "runId",
+              "scopedStep",
+              "epoch",
+              "epochBindingId"
+            ],
+            "properties": {
+              "logicalTaskId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fullItem": {},
+              "itemDigest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "itemIndex": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "generation": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "stage": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "status": {
+                "type": "string",
+                "minLength": 1
+              },
+              "admissionId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "issuanceId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "issuanceToken": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "acceptedDispatchToken": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "chosenTier": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "executedTier": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "value",
+                  "source",
+                  "evidenceRefs"
+                ],
+                "properties": {
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "source": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "evidenceRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                    }
+                  }
+                }
+              },
+              "priorSnapshotId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "runId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+              },
+              "scopedStep": {
+                "type": "string",
+                "minLength": 1
+              },
+              "epoch": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "epochBindingId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+              }
+            }
+          }
+        },
+        "priorSnapshotIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "snapshotId",
+        "runId",
+        "gateStepId",
+        "gateToken",
+        "gateOrdinal",
+        "requestedDecision",
+        "finalProposedDecision",
+        "findingsRef",
+        "dispositions",
+        "partitionCheck",
+        "ownershipCheck",
+        "lineage"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "gate-disposition"
+        },
+        "snapshotId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "gateStepId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gateToken": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gateOrdinal": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requestedDecision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "decision",
+            "rationale",
+            "resolver"
+          ],
+          "properties": {
+            "decision": {
+              "enum": [
+                "approve",
+                "revise",
+                "kill"
+              ]
+            },
+            "rationale": {
+              "type": "string"
+            },
+            "resolver": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "finalProposedDecision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "decision",
+            "rationale",
+            "resolver"
+          ],
+          "properties": {
+            "decision": {
+              "enum": [
+                "approve",
+                "revise",
+                "kill"
+              ]
+            },
+            "rationale": {
+              "type": "string"
+            },
+            "resolver": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "findingsRef": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dispositions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "issuanceId",
+              "relation",
+              "defective"
+            ],
+            "properties": {
+              "issuanceId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+              },
+              "relation": {
+                "enum": [
+                  "retained",
+                  "repaired",
+                  "re-implemented"
+                ]
+              },
+              "defective": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "partitionCheck": {
+          "enum": [
+            "valid",
+            "ambiguous"
+          ]
+        },
+        "ownershipCheck": {
+          "enum": [
+            "valid",
+            "ambiguous"
+          ]
+        },
+        "lineage": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "dispositionId",
+              "relation",
+              "fromSnapshotId",
+              "fromAdmissionId",
+              "fromIssuanceId",
+              "proposedTaskDigest",
+              "toSnapshotId",
+              "toAdmissionId",
+              "toIssuanceId"
+            ],
+            "properties": {
+              "dispositionId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+              },
+              "relation": {
+                "enum": [
+                  "retained",
+                  "repaired",
+                  "re-implemented",
+                  "added"
+                ]
+              },
+              "fromSnapshotId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fromAdmissionId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fromIssuanceId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "proposedTaskDigest": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "toSnapshotId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "toAdmissionId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "toIssuanceId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "dispositionId",
+        "requestDigest",
+        "witness",
+        "reconciliation",
+        "acknowledgedAt"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "gate-acknowledgement"
+        },
+        "dispositionId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "requestDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "witness": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "request",
+                "response",
+                "engineEvidence"
+              ],
+              "properties": {
+                "request": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "runId",
+                    "revisionDigest",
+                    "gateStepId",
+                    "gateToken",
+                    "gateOrdinal",
+                    "decision"
+                  ],
+                  "properties": {
+                    "runId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                    },
+                    "revisionDigest": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "gateStepId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "gateToken": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "gateOrdinal": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "decision": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "decision",
+                        "rationale",
+                        "resolver"
+                      ],
+                      "properties": {
+                        "decision": {
+                          "enum": [
+                            "approve",
+                            "revise",
+                            "kill"
+                          ]
+                        },
+                        "rationale": {
+                          "type": "string"
+                        },
+                        "resolver": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    }
+                  }
+                },
+                "response": {},
+                "engineEvidence": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "runId",
+                        "revisionDigest",
+                        "gateStepId",
+                        "consumedGateToken",
+                        "gateOrdinal",
+                        "decision"
+                      ],
+                      "properties": {
+                        "runId": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+                        },
+                        "revisionDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "gateStepId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "consumedGateToken": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "gateOrdinal": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "decision": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "decision",
+                            "rationale",
+                            "resolver"
+                          ],
+                          "properties": {
+                            "decision": {
+                              "enum": [
+                                "approve",
+                                "revise",
+                                "kill"
+                              ]
+                            },
+                            "rationale": {
+                              "type": "string"
+                            },
+                            "resolver": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reconciliation": {
+          "enum": [
+            "token-response",
+            "token-engine-witness",
+            "ordinal",
+            "unconfirmed"
+          ]
+        },
+        "acknowledgedAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "dispositionId",
+        "relation",
+        "fromSnapshotId",
+        "fromAdmissionId",
+        "fromIssuanceId",
+        "proposedTaskDigest",
+        "toSnapshotId",
+        "toAdmissionId",
+        "toIssuanceId"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "lineage-link"
+        },
+        "dispositionId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "relation": {
+          "enum": [
+            "retained",
+            "repaired",
+            "re-implemented",
+            "added"
+          ]
+        },
+        "fromSnapshotId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fromAdmissionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fromIssuanceId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "proposedTaskDigest": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toSnapshotId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toAdmissionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toIssuanceId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "startId",
+        "rootDigest",
+        "id",
+        "type",
+        "issuanceId",
+        "previousOutcomeId",
+        "evidenceRefs",
+        "label",
+        "binary",
+        "derivation",
+        "censorReason"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "startId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "rootDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "type": {
+          "const": "outcome"
+        },
+        "issuanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "previousOutcomeId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+          }
+        },
+        "label": {
+          "enum": [
+            "accepted",
+            "repaired",
+            "re-implemented",
+            "retried-same-epoch",
+            "failed-or-cancelled",
+            "unknown"
+          ]
+        },
+        "binary": {
+          "enum": [
+            "positive",
+            "negative",
+            "excluded"
+          ]
+        },
+        "derivation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "censorReason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "executedTier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "source",
+        "evidenceRefs"
+      ],
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+          }
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "logicalTaskId",
+        "fullItem",
+        "itemDigest",
+        "itemIndex",
+        "generation",
+        "stage",
+        "status",
+        "admissionId",
+        "issuanceId",
+        "issuanceToken",
+        "acceptedDispatchToken",
+        "chosenTier",
+        "executedTier",
+        "priorSnapshotId"
+      ],
+      "properties": {
+        "logicalTaskId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fullItem": {},
+        "itemDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "itemIndex": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "generation": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stage": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "admissionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "issuanceId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "issuanceToken": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "acceptedDispatchToken": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "chosenTier": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "executedTier": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "source",
+            "evidenceRefs"
+          ],
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1
+            },
+            "evidenceRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+              }
+            }
+          }
+        },
+        "priorSnapshotId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "gateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runId",
+        "revisionDigest",
+        "gateStepId",
+        "gateToken",
+        "gateOrdinal",
+        "decision"
+      ],
+      "properties": {
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
+        },
+        "revisionDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "gateStepId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gateToken": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gateOrdinal": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "decision",
+            "rationale",
+            "resolver"
+          ],
+          "properties": {
+            "decision": {
+              "enum": [
+                "approve",
+                "revise",
+                "kill"
+              ]
+            },
+            "rationale": {
+              "type": "string"
+            },
+            "resolver": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}

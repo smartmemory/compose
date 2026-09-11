@@ -272,7 +272,7 @@ Set disposable STRATUM_STATE_ROOT for these future commands. Required compatibil
 
 ## Follow-ups to file, not fix
 
-This list is NOT yet recorded in current progress.md; only the older GSD sidecar follow-up is already there. File the remaining items during authorized documentation work, not this blueprint-only revision.
+Recorded in `progress.md` under "S1b follow-ups" as of 2026-09-11 (that entry carries a correction note: an earlier five-entry version of this list over-claimed deferral, and was reduced to the three below).
 
 1. Legacy GSD direct conversion drops sibling usdSource/split (`lib/gsd.js:673–683` vs `lib/result-normalizer.js:788–794`), and error usage lacks that adaptation (`lib/gsd.js:663–668`). S1b's raw connector evidence bypasses this loss for participating attribution; changing legacy conversion remains follow-up. Post-call parsing (`:689–693`) and participating cancellation loop reachability (`:348–355`) ARE handled by this slice's lifecycle hooks, not deferred.
 2. Stronger dispatch-time finding partition validation: `validateDecision` does not compare original review.findings multiplicities (`lib/output-gate.js:12–39`) despite the prompt (`presets/team-fable-astra.stratum.yaml:203–204`). S1b records observation-only partition/ownership checks and censors ambiguity; stronger gate-dispatch enforcement is follow-up.

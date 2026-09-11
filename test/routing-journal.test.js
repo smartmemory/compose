@@ -171,3 +171,48 @@ test('event tip cannot be lost, detached or reset independently of retained even
     assert.throws(f.reopen, { code: 'ROUTING_BINDING_MISSING' });
   }
 });
+
+// New S1b coverage uses the actual S1a start/admission/issuance producers.
+import { fixture as s1bFixture } from './helpers/routing-s1b-fixture.js';
+for (const boundary of ['beforeRoutingWrite', 'afterRoutingWrite']) {
+  test(`S1b atomic issuance/metadata/owner/index/tip survives ${boundary} crash`, t => {
+    let enabled = false;
+    const f = s1bFixture(t, { hooks: { [boundary](journal) {
+      if (enabled && Object.values(journal?.routing?.records ?? {}).some(r => r.type === 'issuance')) throw Error('atomic publication crash');
+    } } });
+    enabled = true;
+    assert.throws(() => f.issue({ token: 'atomic-token' }), /atomic publication crash/); enabled = false;
+    let reopened = f.reopen();
+    const before = reopened.exportRoutingJournal();
+    assert.equal(Boolean(before.tokenIndex['atomic-token']), boundary === 'afterRoutingWrite');
+    const issuance = f.issue({ token: 'atomic-token' }); reopened = f.reopen();
+    assert.equal(issuance.observationVersion, 1);
+    const routing = reopened.exportRoutingJournal();
+    assert.deepEqual(routing.eventTips[issuance.id], { count: 0, eventId: null });
+    const metadata = Object.values(routing.records).find(r => r.type === 'issuance-metadata');
+    const owner = routing.records[metadata.ownerId];
+    assert.equal(owner.ownerRunId, f.binding.runId); assert.equal(owner.journalLocator, f.artifacts.journalPath);
+    const pending = reopened.journal.pendingUsageReceipts;
+    assert.equal(pending.length, 1);
+    assert.equal(pending[0].dispatchId, `compose:route:${f.binding.runId}:atomic-token`);
+    assert.deepEqual(Object.keys(pending[0].receipt).sort(), ['detail', 'dispatchId', 'source', 'stepId', 'usage']);
+    assert.deepEqual(pending[0].receipt.usage, {}); assert.equal(pending[0].receipt.source, 'compose:route');
+    assert.equal(pending[0].receipt.detail.routing.callId, null); assert.equal(pending[0].receipt.detail.routing.intentId, null);
+    assert.equal(pending[0].receipt.detail.routing.selectedRouteRef, issuance.id);
+    assert.equal(metadata.payloadDigest, routingDigest(pending[0].receipt));
+    const bytes = f.bytes(); reopened.recordRoutingIssuance({ issuance, prepareMetadata: true }); assert.equal(f.bytes(), bytes);
+    for (const corrupt of [j => delete j.pendingUsageReceipts, j => delete j.routing.records[metadata.id], j => delete j.routing.records[owner.id],
+      j => j.pendingUsageReceipts[0].receipt.usage.tokens = 0, j => j.pendingUsageReceipts[0].dispatchId = 'wrong']) {
+      const j = JSON.parse(bytes); corrupt(j); writeFileSync(f.artifacts.journalPath, JSON.stringify(j)); assert.throws(f.reopen);
+    }
+    writeFileSync(f.artifacts.journalPath, bytes);
+  });
+}
+test('S1a unlaunched metadata upgrade is atomic; launched historical evidence is never certified retroactively', t => {
+  const f = s1bFixture(t, { observation: false }); const i = f.issue({ metadata: false });
+  assert.equal(i.observationVersion, undefined); assert.equal(f.artifacts.journal.pendingUsageReceipts, undefined);
+  f.artifacts.prepareRoutingMetadata(i.id); assert.equal(f.reopen().journal.pendingUsageReceipts.length, 1);
+  f.launch(i); f.settle(i);
+  const retry = f.issue({ metadata: false }); f.launch(retry);
+  assert.throws(() => f.artifacts.prepareRoutingMetadata(retry.id), { code: 'ROUTING_ISSUANCE_UNCERTAIN' });
+});

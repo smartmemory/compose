@@ -1,7 +1,7 @@
 /** Routing start/plan/continuation persistence over disposable Git repositories. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, symlinkSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -284,11 +284,14 @@ test('requested and run-binding before/after publication faults recover the orig
 });
 test('published contracts carry feature metadata and refuse outcome extensions in v1 records', t => {
   const f = planned(t);
-  for (const name of ['routing-start', 'routing-record']) {
+  for (const name of ['routing-start', 'routing-record', 'routing-join', 'routing-outcome']) {
     const schema = JSON.parse(readFileSync(`contracts/${name}.schema.json`, 'utf8'));
     assert.equal(schema._source, 'docs/features/COMP-MODEL-ROUTE/design.md'); assert.equal(schema._roadmap, 'COMP-MODEL-ROUTE');
     assert.equal(schema.$id, `${name}.schema.json`); assert.ok(schema.$schema);
-    for (const shape of schema.oneOf ?? [schema]) assert.equal(shape.additionalProperties, false);
+    for (const shape of schema.oneOf ?? [schema]) {
+      if (shape.$ref) assert.ok(['routing-join.schema.json', 'routing-outcome.schema.json'].includes(shape.$ref));
+      else assert.equal(shape.additionalProperties, false);
+    }
   }
   for (const field of ['acceptance', 'cost', 'paidCall', 'usageReport']) assert.throws(() => validateRoutingRecord({ ...f.intent, [field]: true }), { code: 'ROUTING_SCHEMA_INVALID' });
 });
@@ -354,4 +357,18 @@ test('multi-stage starts use fanout-level provenance for sidecar profiles and st
     for (const stage of [0, 1]) assert.deepEqual(start.staticResolutions[`main/wave/stage-${stage}`],
       preflight.staticProvenance[profiles.wave ? 'wave' : `wave/${stage}`]);
   }
+});
+
+import { acquireRoutingLock } from '../lib/routing-ledger.js';
+test('project and owner lock reclamation requires a verified dead process; live or unknown owners refuse', t => {
+  const f = fixture(t); const lock = join(realpathSync(f.cwd), '.test-routing-lock');
+  const release = acquireRoutingLock(lock);
+  assert.throws(() => acquireRoutingLock(lock, { timeoutMs: 0 }), { code: 'ROUTING_STORAGE_LOCKED' });
+  release();
+  // The child uses the production lock acquisition and exits without release.
+  execFileSync(process.execPath, ['--input-type=module', '-e',
+    `import {acquireRoutingLock} from ${JSON.stringify(new URL('../lib/routing-ledger.js', import.meta.url).href)}; acquireRoutingLock(process.argv[1]);`, lock], { cwd: process.cwd() });
+  acquireRoutingLock(lock)();
+  mkdirSync(lock); writeFileSync(join(lock, 'owner.json'), JSON.stringify({ pid: null }));
+  assert.throws(() => acquireRoutingLock(lock, { timeoutMs: 0 }), { code: 'ROUTING_STORAGE_LOCKED' });
 });
