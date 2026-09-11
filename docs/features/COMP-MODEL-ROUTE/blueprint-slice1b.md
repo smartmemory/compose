@@ -185,9 +185,33 @@ Each dispatch owns its functions exclusively; dispatch 3 is tests/docs only. The
 - [ ] GSD continuation follows original owner journals, carries latest call/outcome evidence across old→new runs and retains one logical-start identity; completed work is not rerun. Exercise normal/failure/cancel/already-terminal/pause/continuation/post-call exception producer matrix.
 - [ ] LIVE-FIRE COMPLETION EVIDENCE — OUTSTANDING: after implementation and appropriate authorization, run a real-provider shadow build, retain original call/receipt/ledger evidence, demonstrate at least one complete attributable sample and reconcile complete plus excluded cost to unique receipt totals. Deterministic controlled-inference real-engine tests do NOT satisfy this requirement. No live-fire result is claimed here.
 
-## 8. Owner questions — genuine design ambiguities only
+## 8. Owner questions — BOTH RULED 2026-09-11; retained for provenance
+
+**RULING (owner, 2026-09-11): no later slice is scheduled; this becomes a blocker only under one named,
+checkable condition.** Measured on the current tree: the local SDK path has exactly ONE trigger —
+`localExecution: descriptor.policy?.isolation === 'none'` at `lib/build.js:1797`, the single setter, combined
+with `cfg.provider === 'claude'` (`lib/result-normalizer.js:425`). The other five `runAndNormalize` call sites
+(`lib/build.js:1766,4782,4879,4971,5736`) never pass it, so ORDINARY steps can never take the local path; it is
+reachable only from consumer fanouts. Bundled census: `isolation: none` with `agent: claude` occurs only in the
+`review_lenses` fanouts (`pipelines/build.stratum.yaml:260`, `pipelines/build-quick.stratum.yaml:238`,
+`presets/team-review.stratum.yaml:88`, `presets/team-research.stratum.yaml:89`). The routing-participating
+preset does NOT reach it — `presets/team-fable-astra.stratum.yaml:127` is `isolation: worktree` over
+`agent: codex` (`:131`), and its two learning-opted keys are `plan` (ordinary) and `execute` (that worktree
+fanout). **So for every configuration S1b and S2 actually ship, the null-executed-tier gap affects zero rows.**
+It stops being inert the moment a `review_lenses`-shaped key is opted into learning — a plausible S3 candidate,
+since those dispatches are high-volume, uniform-contract and repeated across runs, which is exactly where
+learned routing pays. Every such row would be executed-tier-unknown and unable to certify a repair floor.
+**Trigger to revisit:** any spec adding `route.learn` to a key whose fanout is `isolation: none` with a `claude`
+agent. **Work it would require then:** determine whether the Claude Agent SDK response surfaces the applied
+thinking/effort and, if so, plumb that reported value through `lib/local-claude-connector.js:287–300` as
+execution evidence. Relabelling the configured `appliedEffort` (`:68–90,151`) remains forbidden — it is intent,
+and substituting intent for evidence is the exact failure Decision 6 exists to prevent. Do not schedule this
+work now; a follow-up filed against an inert gap rots (see the repair-floor evidence rule in Decision 7).
 
 **Q1 — executed-tier evidence on the local SDK path.** Returned local telemetry omits effort (`lib/local-claude-connector.js:287–300`); the separate effort field uses configured appliedEffort (`:68–90,151`). For S1b the ruling is record executedTier null with `local-transport-omits-effort`, preserve valid connector callId/cost attribution and exclude local rows from executed-tier/floor certification. The remaining owner question is whether a later slice should add genuinely reported local effort evidence. Relabelling appliedEffort is not an alternative; no off-path telemetry change is authorized here.
+
+**RULING (owner, 2026-09-11): CLOSED as already ruled — no owner action outstanding.** The r1 fix run settled
+this in-slice and r2 reviewed the execution clean; it is retained below for provenance, not as an open question.
 
 **Q2 — failure-settlement scope (ruled in S1b).** Keep the failure-only token-absent settlement extension in S1b, since failure outcomes and safe retry reachability are deliverables. It changes S1a-owned validation at `lib/routing-ledger.js:480–484` only through explicit proof branches while preserving success token equality. Cancellation is separately settled using durable run-cancellation audit plus bound per-call termination; it never uses stepDone acknowledgement. Lost failure acknowledgement recovers only with original live-token envelope replay or genuine token-bound proof, otherwise ROUTING_ISSUANCE_UNCERTAIN. This owner question is retained with the accepted scope ruling, not reopened or offered for deferral. No additional owner question is needed for r1.
 
