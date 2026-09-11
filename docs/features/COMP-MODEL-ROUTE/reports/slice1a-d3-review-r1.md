@@ -70,7 +70,12 @@ Review conclusions and evidence:
   order, and cross-wave worker swap. An `execute/1`↔`execute/2` swap passed.
   Other concurrent worker/receipt assertions sort or match by identity.
   Bundled worker/review order is sequential; GSD chooses and awaits one ready
-  consumer at a time (`lib/gsd.js:533`). No connector-arrival-order flake found.
+  consumer at a time (`lib/gsd.js:533`). This review reproduced no
+  `connector-arrival-order flake` — CORRECTED 2026-09-11, the general claim is
+  false at 1/2 carry producer runs (d2-r3 swapped `execute/1`↔`execute/2`, matched
+  on rerun; ../progress.md, "S1a d2 fix run r2"). Cross-run arrival order is NOT
+  deterministic, which is why the oracle sorts only contiguous `execute/N` within
+  a wave (`test/helpers/build-wave-golden-fixture.js:239`).
 - **Producer authenticity:** no new fake-engine producer oracle was found.
   Build uses real plan/stepDone/connector calls with substituted Claude inference
   and a fake Codex executable (`test/helpers/build-wave-golden-fixture.js:153`).
