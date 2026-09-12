@@ -78,10 +78,13 @@ radius is bounded: this path fires only when a history record carries no `cost_u
 One internal pricing component, correct across dialects, reproducible across time, with an
 external freshness alarm that can never reach runtime.
 
-**In scope:** the effective-dated contract, one pricer, both compose tables as callers,
-stratum aligned behind a drift test, the CI freshness diff, and the prefix-precedence fix.
+**In scope:** the effective-dated contract; one pricer serving the HISTORICAL path; removal
+of the live consumer-side pricing path (see amended Decision 2); a narrow drift test over the
+one remaining overlap; the CI freshness diff; and the prefix-precedence fix.
 
-**Not in scope:** a new npm package; stratum as a library; any runtime price lookup;
+**Not in scope:** a new npm package; stratum as a library (nothing to import — Decision 2);
+any runtime price lookup; changes to `stratum/ts/src/judge/pricing.ts`, which becomes the
+authority for live Codex rates and is left alone;
 reconciling `gpt-5.3-codex-spark` (subscription-billed, no external source exists — it stays
 explicitly flagged as unverified); and COMP-MODEL-ROUTE Q3.
 
@@ -107,25 +110,60 @@ branches on a `/^(gpt-|o3|o4)/` regex over the model ID — a provider's reporti
 encoded as a naming convention, which breaks silently the first time a vendor renames or a
 third provider appears.
 
-## Decision 2: One contract file, owned by compose, mirrored by drift test
+## Decision 2 (AMENDED 2026-09-12): the two repos do not need the same table
 
-Follows the existing `contracts/` convention (`_source`, `_changelog`, `_consumers`,
-versioned, additive) — the same mechanism `comp-obs-contract.schema.json` already uses for
-the cross-repo producer/consumer data model where stratum produces and compose consumes.
+**The original Decision 2 asked the wrong question.** It asked who should own a shared
+price table, and answered "compose owns it, stratum keeps a copy, a drift test holds them
+together." Re-examined after the owner asked why the table could not simply be exported from
+stratum, and the answer is better than either option: **after the `usd_source` fix landed
+this morning, compose has no live need for Codex prices at all.**
 
-**Rejected: export the table from stratum and have compose import it.** Unreachable as
-stated. Stratum's `ts/package.json` carries `main: null`, `types: null`, `exports: null`,
-`files: ["dist"]`, and compose consumes stratum by spawning its bin over MCP, never by
-`import`. Taking this option means establishing stratum as a dual CLI-plus-library package
-with a public API surface and its own semver discipline, on top of the existing three-package
-version-sync rules. That is a project, not an export line.
+Every producer now states its own cost:
 
-**Rejected: a new shared npm package.** Same version-sync cost, plus a third publish target,
-for one JSON file and one function.
+| Producer | Where the cost comes from | Table needed? |
+|---|---|---|
+| stratum `claude.ts` | Claude SDK's `total_cost_usd`, emitted `usd_source: "reported"` | no |
+| compose `local-claude-connector.js` | same SDK field (`:276`, `:295`) | no |
+| stratum `codex.ts` | OpenAI's figure when present, else `usdFromTokens` marked `estimated` (`:488`, `:623`) | **yes, stratum's** |
+| any unpriced model | both keys deliberately OMITTED so cost stays UNKNOWN | n/a |
 
-So stratum keeps its own copy, and a drift test fails when its numbers disagree with the
-contract for overlapping models — the same pattern as the tier-enum drift test landed
-2026-09-12 in `test/model-tiers.test.js`.
+Consumer-side pricing in `result-normalizer.js:489` is therefore reachable only when a
+producer sends tokens with no cost — which now happens only for a model stratum cannot
+price. **And compose cannot price it either: the two tables hold the identical key set**
+(`gpt-5.3-codex-spark`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`), with
+every rate in agreement, verified by direct diff 2026-09-12.
+
+So compose's Codex rows are exactly redundant, the fallback that reads them cannot fire, and
+the only thing it could ever do is silently mask a divergence between the two tables. A
+fallback whose sole function is to hide the drift it also causes is worse than no fallback.
+
+**Decision: delete the live consumer-side pricing path rather than unify it.** No export from
+stratum, and not because exporting is hard — because there is nothing compose needs to import.
+The duplication dissolves instead of being managed.
+
+What each repo then owns, for genuinely different jobs:
+
+- **stratum** owns live Codex pricing. It is the only place a live call is ever priced, it
+  prices at "now", and it needs no dates.
+- **compose** owns historical repricing of build artifacts that recorded no cost
+  (`experiment-pricing.js` via `experiment-metrics.js`). Different job, different shape:
+  Claude and Codex, retired models included, and it genuinely needs dates.
+
+**The dialect complexity does not leave compose — it moves.** `deriveUsd` is cache-blind, so
+it prices OpenAI-dialect `input_tokens` (which already include the cached portion) at full
+rate with no discount. Measured on the same live-fire call: **$0.46037775 against the
+authoritative $0.17813775, 2.58x over** — the identical class of error just fixed on the live
+path, still present and unfixed on the historical one. So Decision 1's dated, dialect-aware
+pricer is still needed in compose. It is needed for `experiment-pricing.js`, not for
+`model-pricing.js`.
+
+**On the deep import.** `import('@smartmemory/stratum/dist/judge/pricing.js')` from compose
+*works today* — verified 2026-09-12. With no `exports` field there is no contract, so stratum
+could break it silently at any time. That makes it unacceptable in production and fine in a
+**test**, where a break surfaces loudly in compose's own suite. This is the mechanism for the
+narrow drift test that survives in S2.
+
+---
 
 ## Decision 3: Reproducible, never live
 
@@ -148,30 +186,57 @@ spark, verified 2026-09-12.
 
 ---
 
+## Decision 4: two different contracts for "unknown cost"
+
+The same words mean opposite policies on the two paths, and the difference must be stated or
+someone will "fix" one to match the other.
+
+- **Live receipts are evidence.** No producer-stated cost means REFUSE: record `missing-usd`
+  and never guess. An estimate that nobody asked for is indistinguishable downstream from a
+  measurement.
+- **Experiment metrics are analytics.** No recorded cost means ESTIMATE at the record's own
+  timestamp, labelled as an estimate. A missing number here costs a data point, not an audit.
+
+Deleting the live fallback (Decision 2) is what makes the first contract true. It is not a
+loss of coverage: the fallback could not fire.
+
+---
+
 ## Slices
 
-### S1 — Contract + one pricer
+### S1 — Dated contract, one pricer, live fallback removed
 
-- [ ] `contracts/model-rates.schema.json` + the rates data, effective-dated, with `_source` / `_changelog` / `_consumers`
+- [ ] `contracts/model-rates.schema.json` + data, effective-dated, with `_source` / `_changelog` / `_consumers`
 - [ ] `priceCall(model, usage, at)` with `dialect` read from the rate row, never from a model-ID regex
-- [ ] Exact-match-plus-explicit-alias lookup; the first-prefix-wins rule is removed, closing the `gpt-5` precedence defect
-- [ ] `lib/model-pricing.js` and `lib/experiment-pricing.js` become callers; public signatures preserved for their existing consumers
-- [ ] `KNOWN_DIVERGENT` retired, with terra/sol expressed as dated rows
-- [ ] **Negative control:** the retained live-fire figure reproduces to floating-point noise ($0.17813775); reverting the dialect row reintroduces the 2.76x error
+- [ ] Exact-match-plus-explicit-alias lookup; first-prefix-wins removed, closing the `gpt-5` precedence defect
+- [ ] `experiment-pricing.js` becomes a caller; `deriveUsd` gains `at` and stops being cache-blind
+- [ ] **`model-pricing.js`'s live path is REMOVED, not made a caller** — `calculateEventCost` and the Codex rows go with it; `result-normalizer.js` records `missing-usd` when a producer states no cost
+- [ ] `KNOWN_DIVERGENT` retired, terra/sol expressed as dated rows
+- [ ] **Negative control:** the historical path reproduces $0.17813775 on the live-fire call; reverting the dialect row restores the measured 2.58x
 - [ ] **Negative control:** a `gpt-5.x` model with no exact key resolves to null, not to `gpt-5`'s 10/40
+- [ ] **Negative control:** a `step_usage` event with tokens and no cost yields `missing-usd`, never an invented figure
 
-### S2 — Stratum alignment
+### S2 — The narrow overlap drift test
 
-- [ ] Stratum's `judge/pricing.ts` reshaped to the same effective-dated rows (own copy, no new package)
-- [ ] Drift test fails when stratum and the contract disagree for any overlapping model
-- [ ] **Negative control:** mutating one stratum rate turns the drift test red
+Smaller than originally filed: the only overlap left is *current Codex rates*, and stratum is
+authoritative for them.
+
+- [ ] compose test deep-imports `@smartmemory/stratum/dist/judge/pricing.js` and asserts the dated contract's CURRENT Codex rows equal stratum's
+- [ ] Same test asserts every routable tier model is priced in **stratum's** table — with compose's fallback gone, a stratum-side omission now surfaces as `missing-usd` instead of being masked
+- [ ] **Negative control:** mutating one stratum rate, and separately removing one stratum key, each turn the test red
+- [ ] No dated rows in stratum, no new package, no `exports` field required
 
 ### S3 — CI freshness check
 
 - [ ] Scheduled diff of the pinned snapshot against the LiteLLM registry; opens an item on divergence
-- [ ] Never invoked at runtime, and no build or test path may reach the network for a price
+- [ ] **Covers stratum's table first** — post-S1 it is the only table on a live path, so it is the only one whose staleness can misprice a real call
+- [ ] Never invoked at runtime; no build or test path may reach the network for a price
 - [ ] Spark excluded by name with its reason recorded (subscription-billed, no cost fields upstream)
-- [ ] **Negative control:** a deliberately stale snapshot entry is reported by the check
+- [ ] **Negative control:** a deliberately stale snapshot entry is reported
+
+**Sequencing.** S3 does not depend on S1 and can be pulled forward: the live-path bug is
+dormant (producers state their own cost) while the staleness bug is active (terra/sol were
+wrong for ~6 weeks and nothing watches). Recommended order is **S3 → S1 → S2**.
 
 ---
 
@@ -181,21 +246,36 @@ spark, verified 2026-09-12.
 |------|--------|---------|
 | `contracts/model-rates.schema.json` | new | Effective-dated rates contract + data |
 | `lib/model-rates.js` | new | `priceCall(model, usage, at)`; dialect as data |
-| `lib/model-pricing.js` | existing | Becomes a caller; keeps `calculateCost` / `calculateEventCost` signatures |
-| `lib/experiment-pricing.js` | existing | Becomes a caller; `deriveUsd` gains an `at` argument |
+| `lib/experiment-pricing.js` | existing | Becomes a caller; `deriveUsd` gains `at`, stops being cache-blind |
 | `lib/experiment-metrics.js` | existing | Supplies the receipt timestamp to `deriveUsd` |
+| `lib/model-pricing.js` | existing | **Live pricing path removed**; Codex rows and `calculateEventCost` deleted |
+| `lib/result-normalizer.js` | existing | Records `missing-usd` rather than pricing tokens itself |
 | `test/model-tiers.test.js` | existing | `KNOWN_DIVERGENT` retired; precedence control retargeted |
-| `stratum/ts/src/judge/pricing.ts` | existing (stratum) | Reshaped to dated rows; drift-tested against the contract |
-| `scripts/check-rate-freshness.mjs` | new | CI-only registry diff |
+| `test/model-pricing.test.js` | existing | Rewritten against the dated pricer; live-fallback cases removed |
+| `scripts/check-rate-freshness.mjs` | new | CI-only registry diff, stratum's table first |
+| `stratum/ts/src/judge/pricing.ts` | existing (stratum) | **Unchanged**; becomes the authority for live Codex rates |
 
 ## Open Questions
 
 1. **Where does `at` come from for an experiment record with no timestamp?** `experiment-metrics.js`
    reads sandbox artifacts; if a history record carries no date, S1 must choose between the
-   file mtime and refusing to price. Refusing is the honest default (yields `usd: null`,
-   which that function already handles) but reduces coverage on old records.
-2. **Does stratum need dates at all, or only compose?** Stratum prices a call as it happens,
-   so "now" is always correct there. Dated rows may be dead weight on the producer side — but
-   a single shape across both is what makes the drift test trivial.
+   file mtime and refusing to price. Refusing is the honest default (`usd: null`, already
+   handled) but reduces coverage on old records.
+2. **Does removing the live fallback need a deprecation interval?** It cannot fire today, but
+   that rests on the two key sets being identical. If stratum ever prices a model compose does
+   not, nothing changes; the reverse is what the S2 test now catches.
 3. **Spark's cache rate stays inferred.** Both its 1.75/14 and its 0.175 cache rate have no
    external source. S3 cannot check it. Recorded, not solved.
+
+---
+
+## Amendment history
+
+- **2026-09-12 (same day as filing).** Decision 2 reversed and Decision 4 added, after the
+  owner asked why the table could not be exported from stratum. The original answer ("copies
+  plus a drift test, because stratum exports nothing") was correct on its narrow point and
+  answered the wrong question. Investigation found that no live path in either repo prices a
+  Claude call from a table, that compose's Codex fallback is unreachable because the two key
+  sets are identical, and that the dialect defect is still live on the historical path at
+  2.58x. S1 changed from "both tables become callers" to "the live path is removed", S2
+  narrowed to the overlap, S3 retargeted at stratum's table. No code changed.
