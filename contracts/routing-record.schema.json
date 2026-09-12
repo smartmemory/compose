@@ -1982,6 +1982,7 @@
             "critical",
             "standard",
             "fast",
+            "budget",
             "coordinator"
           ]
         },
@@ -2063,6 +2064,7 @@
             "critical",
             "standard",
             "fast",
+            "budget",
             "coordinator"
           ]
         },
