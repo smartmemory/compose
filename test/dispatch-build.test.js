@@ -227,12 +227,18 @@ describe('build accumulator v1 → v2 migration', () => {
     writeFileSync(buildAccumulatorPath(cwd, record.feature_code), JSON.stringify(record));
   }
 
-  test("a v1 sidecar on disk reads as v2 with tests_attested='no-signal'", () => {
+  test("a v1 sidecar on disk migrates forward with tests_attested='no-signal'", () => {
     const cwd = freshProject();
     try {
       seed(cwd, V1);
       const migrated = readBuildAccumulator(cwd, 'COMP-MIG');
-      assert.equal(migrated.v, 2);
+      // v3 as of COMP-COST-OWNER S1. The chain runs v1 -> v2 -> v3, so a v1 record
+      // still lands on the current version rather than stopping at an intermediate.
+      assert.equal(migrated.v, 3);
+      // It cannot know its token split, and says so rather than inventing one.
+      assert.equal(migrated.input_tokens, null);
+      assert.equal(migrated.output_tokens, null);
+      assert.equal(migrated.usd_unknown_count, null);
       assert.equal(migrated.tests_attested, 'no-signal');
       assert.equal(migrated.evidence_root, null);
       // Everything else survives untouched — this is an additive migration, not
@@ -265,7 +271,7 @@ describe('build accumulator v1 → v2 migration', () => {
     const cwd = freshProject();
     try {
       const fresh = newBuildAccumulatorRecord('COMP-MIG');
-      assert.equal(fresh.v, 2);
+      assert.equal(fresh.v, 3);
       assert.equal(fresh.tests_attested, 'no-signal');
       assert.equal(fresh.evidence_root, null);
       writeBuildAccumulator(cwd, fresh);
@@ -305,11 +311,16 @@ describe('build accumulator v1 → v2 migration', () => {
     }
   });
 
-  test('an unknown future version still refuses (migration is v1-only, not a catch-all)', () => {
+  test('an unknown future version still refuses (the chain is v1->v2->v3, not a catch-all)', () => {
     const cwd = freshProject();
     try {
-      seed(cwd, { ...V1, v: 3, tests_attested: 'passed', evidence_root: null });
-      assert.throws(() => readBuildAccumulator(cwd, 'COMP-MIG'), /unsupported version 3/);
+      // v3 became the CURRENT version in COMP-COST-OWNER S1, so the probe moves to v4.
+      // Seeded with the full v3 field set on purpose: without it the validator would
+      // refuse for a MISSING FIELD and this test would pass without ever reaching the
+      // version check it exists to exercise.
+      seed(cwd, { ...V1, v: 4, tests_attested: 'passed', evidence_root: null,
+        input_tokens: 0, output_tokens: 0, usd_unknown_count: 0 });
+      assert.throws(() => readBuildAccumulator(cwd, 'COMP-MIG'), /unsupported version 4/);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

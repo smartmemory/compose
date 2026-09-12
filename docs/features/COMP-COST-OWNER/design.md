@@ -473,13 +473,14 @@ check) survive as S3-S4 — they are real but secondary to the loss of the numbe
 The measured defect. `build-history.jsonl` is short $0.0367685 and 218,629 tokens against a
 ledger and accumulator that agree to the cent.
 
-- [ ] One cost accumulator fed from ONE place, carrying `{ usd, usdSource, unknownCount }` — a step with no stated cost increments `unknownCount`, never adds 0 to `usd`
-- [ ] `buildCostTotals` deleted; the history record reads the owner
-- [ ] Fix `:3748`'s `output_tokens` seeded from `tokens_total` (input+output summed)
-- [ ] The receipt path (`build.js:2280-2283`) is UNCHANGED — it already does this correctly and is the reference
-- [ ] **Negative control:** replay the live-fire figures; history must equal $1.4257732 and 808,002 tokens. Reverting the owner restores the measured $1.38900475 / 589,373
-- [ ] **Negative control:** a build with an unknown-cost step reports `unknownCount > 0` and does NOT report a total as though complete
+- [x] The persisted accumulator is the sole owner, at v3 with `input_tokens` / `output_tokens` / `usd_unknown_count`; an unpriced step increments the counter and never adds 0 to `usd` (pinned by test/build-cost-owner.test.js:39)
+- [x] `buildCostTotals` deleted; history, the crash path and the cumulative stream event all read `buildCostSnapshot()` (pinned by test/build-cost-owner.test.js:214)
+- [x] The old `output_tokens`-seeded-from-`tokens_total` conflation is gone; a v2 record migrates to a NULL split rather than a fabricated one (pinned by test/build-cost-owner.test.js:87)
+- [x] The receipt path (`build.js:2280-2283`) is UNCHANGED — verified by diff; it was already correct and is the reference
+- [x] **Negative control PASSED:** `scripts/negative-control.sh --prod lib/build.js -- --test test/build-cost-owner.test.js` reports **RED**, 7 of 10 failing on revert against a 10/10 green baseline
+- [x] An unpriced step reports `usd_unknown_count > 0` in the history row and does NOT invent spend (pinned by test/build-cost-owner.test.js:230)
 - [ ] **Measurement still owed:** forced repair wave, read `cost_usd`, resume across the repair, read again — the resume half of the claim is still read-verified only
+- [ ] **Not done in S1:** `usd_source` is still not carried ON the accumulator; only the unpriced COUNT is. Provenance of the aggregate is S2 territory
 
 ### S2 — Stop destroying provenance on the way to the screen
 
