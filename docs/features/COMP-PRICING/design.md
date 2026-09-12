@@ -90,25 +90,38 @@ explicitly flagged as unverified); and COMP-MODEL-ROUTE Q3.
 
 ---
 
-## Decision 1: Effective-dated rates, not a flat map
+## Decision 1 (AMENDED 2026-09-12, second pass): ONE pricer, dating DEFERRED
 
-A flat `model → rate` map cannot express "terra was 2.5/15 until 2026-07-30, then 2/12."
-Prices change; receipts span time. The shape is:
+The original Decision 1 made effective dating "the modeling core" on the assumption that
+compose reprices historical records. **It does not. Nothing in either repo reprices
+anything.**
 
-```
-model → [{ from, until, input, output, cacheRead, cacheWrite, dialect, source }]
-```
+Verified 2026-09-12:
 
-and **a receipt prices at its own timestamp**: `priceCall(model, usage, at)`.
+- The routing ledger is append-only and tamper-evident. Receipts carry the cost stated at
+  dispatch and are never recomputed — `routing-ledger.js`, `routing-runtime.js` and
+  `consumer-fanout.js` contain no call to any pricing function; they only READ a persisted
+  `usd`.
+- `experiment-metrics.js`'s `collect()` is invoked exactly once, INLINE, at
+  `lib/experiment.js:404` — immediately after the build it measures, before the run record is
+  written at `:431`. Its only other callers are tests. There is no path that re-reads old
+  sandbox artifacts and re-derives a cost.
 
-Once dates exist, the terra/sol "divergence" stops being a divergence and becomes two query
-dates against one history. `KNOWN_DIVERGENT` is a hand-rolled two-element approximation of
-exactly this, which is why Decision 1 retires it rather than ruling on it.
+So every pricing event in the system happens at the moment of the call, or seconds after it.
+`at` is always "now". **Dating solves a problem this codebase does not have**, and building
+it would be speculative generality.
 
-`dialect` is carried as DATA on the rate row, not inferred. Today `reportsInclusiveInput()`
-branches on a `/^(gpt-|o3|o4)/` regex over the model ID — a provider's reporting convention
-encoded as a naming convention, which breaks silently the first time a vendor renames or a
-third provider appears.
+What survives from the original Decision 1, and is the actual core:
+
+- **One pricer, with `dialect` carried as DATA on the rate row** rather than inferred from a
+  `/^(gpt-|o3|o4)/` regex over the model ID. The regex encodes a provider's reporting
+  convention as a naming convention and breaks silently on a rename or a third provider.
+- **One current rate table**, correct, with exact-match-plus-alias lookup.
+
+Effective dating moves to an open question. If a repricing or audit-from-tokens requirement
+ever appears, the rate rows gain `from`/`until` then — additively, and with a real caller.
+
+---
 
 ## Decision 2 (AMENDED 2026-09-12): the two repos do not need the same table
 
@@ -165,24 +178,31 @@ narrow drift test that survives in S2.
 
 ---
 
-## Decision 3: Reproducible, never live
+## Decision 3 (ARGUMENT CORRECTED 2026-09-12): pin the rates, never fetch them live
 
-**Receipts are evidence.** The routing ledger is tamper-evident, and
-`lib/routing-runtime.js:187-196` refuses any forwarded field that differs from the
-connector's own evidence. COMP-MODEL-ROUTE gate 5 rests on `$1.4257732` being that number
-again next month.
+**The conclusion stands. The original argument for it was wrong, and it shipped in
+`b600901`'s commit message and CHANGELOG entry before being caught.**
 
-A runtime registry lookup would make historical receipts silently non-reproducible: re-run
-`evidence/livefire-2026-09-12/reconcile.mjs` after an upstream price change and it yields a
-different total, while still exiting 0. **The falsifier would stop falsifying without
-failing.** That is the worst available outcome and it rules out a live feed categorically,
-independent of which registry.
+What was claimed: a live price feed would make
+`evidence/livefire-2026-09-12/reconcile.mjs` yield a total other than $1.4257732 while still
+exiting 0, so "the falsifier would stop falsifying without failing."
 
-Therefore the external source is a **pinned, checked-in snapshot**, and the only external
-touch is a scheduled CI diff that opens an item on divergence. Nothing consults the network
-at runtime. The LiteLLM community registry (`BerriAI/litellm`,
-`model_prices_and_context_window.json`, 3889 keys) covers every model dispatched except
-spark, verified 2026-09-12.
+**That is false.** The reconciler reads `r.cost.usd` from persisted ledger rows (`:35`,
+`:38`, `:40`). It never recomputes a price, so no upstream rate change can move its output.
+The ledger's immutability already protects it — which is exactly the point the owner raised.
+
+The correct argument is at WRITE time, not read time:
+
+- A live feed makes the same call price differently depending on *when it was dispatched*,
+  with **no record of which rate was in effect**. The receipt freezes a number whose
+  derivation is then unrecoverable.
+- A pinned, checked-in table means a receipt's figure can always be re-derived from its token
+  counts and audited. That is what makes the number evidence rather than an assertion.
+- Secondary and still real: a network fetch in the dispatch hot path is a latency and
+  failure-mode cost paid on every call, to obtain data that changes monthly.
+
+Immutability freezes whatever the feed happened to say; it does not make it reproducible.
+So: pinned snapshot, CI-checked, never consulted at runtime.
 
 ---
 
@@ -206,13 +226,13 @@ loss of coverage: the fallback could not fire.
 
 ### S1 — Dated contract, one pricer, live fallback removed
 
-- [ ] `contracts/model-rates.schema.json` + data, effective-dated, with `_source` / `_changelog` / `_consumers`
-- [ ] `priceCall(model, usage, at)` with `dialect` read from the rate row, never from a model-ID regex
+- [ ] `contracts/model-rates.schema.json` + data, ONE current rate set, with `_source` / `_changelog` / `_consumers`
+- [ ] `priceCall(model, usage)` with `dialect` read from the rate row, never from a model-ID regex — no `at` parameter (Decision 1, amended)
 - [ ] Exact-match-plus-explicit-alias lookup; first-prefix-wins removed, closing the `gpt-5` precedence defect
-- [ ] `experiment-pricing.js` becomes a caller; `deriveUsd` gains `at` and stops being cache-blind
+- [ ] `experiment-pricing.js` becomes a caller and stops being cache-blind (measured 2.58x over on the live-fire call)
 - [ ] **`model-pricing.js`'s live path is REMOVED, not made a caller** — `calculateEventCost` and the Codex rows go with it; `result-normalizer.js` records `missing-usd` when a producer states no cost
-- [ ] `KNOWN_DIVERGENT` retired, terra/sol expressed as dated rows
-- [ ] **Negative control:** the historical path reproduces $0.17813775 on the live-fire call; reverting the dialect row restores the measured 2.58x
+- [ ] `KNOWN_DIVERGENT` retired — terra/sol reconciled to the single correct current rate, since nothing prices historically
+- [ ] **Negative control:** the experiment path reproduces $0.17813775 on the live-fire call; reverting the dialect row restores the measured 2.58x
 - [ ] **Negative control:** a `gpt-5.x` model with no exact key resolves to null, not to `gpt-5`'s 10/40
 - [ ] **Negative control:** a `step_usage` event with tokens and no cost yields `missing-usd`, never an invented figure
 
@@ -245,9 +265,8 @@ wrong for ~6 weeks and nothing watches). Recommended order is **S3 → S1 → S2
 | File | Action | Purpose |
 |------|--------|---------|
 | `contracts/model-rates.schema.json` | new | Effective-dated rates contract + data |
-| `lib/model-rates.js` | new | `priceCall(model, usage, at)`; dialect as data |
-| `lib/experiment-pricing.js` | existing | Becomes a caller; `deriveUsd` gains `at`, stops being cache-blind |
-| `lib/experiment-metrics.js` | existing | Supplies the receipt timestamp to `deriveUsd` |
+| `lib/model-rates.js` | new | `priceCall(model, usage)`; dialect as data, no dating |
+| `lib/experiment-pricing.js` | existing | Becomes a caller; stops being cache-blind |
 | `lib/model-pricing.js` | existing | **Live pricing path removed**; Codex rows and `calculateEventCost` deleted |
 | `lib/result-normalizer.js` | existing | Records `missing-usd` rather than pricing tokens itself |
 | `test/model-tiers.test.js` | existing | `KNOWN_DIVERGENT` retired; precedence control retargeted |
@@ -257,10 +276,11 @@ wrong for ~6 weeks and nothing watches). Recommended order is **S3 → S1 → S2
 
 ## Open Questions
 
-1. **Where does `at` come from for an experiment record with no timestamp?** `experiment-metrics.js`
-   reads sandbox artifacts; if a history record carries no date, S1 must choose between the
-   file mtime and refusing to price. Refusing is the honest default (`usd: null`, already
-   handled) but reduces coverage on old records.
+1. **Does effective dating ever earn its place?** Deferred in the amended Decision 1 because
+   nothing reprices today. It would become real if either appears: a requirement to re-derive
+   a historical receipt's figure from its token counts for audit, or a consumer that reads old
+   sandbox artifacts after a rate change. Neither exists. Add `from`/`until` to the rate rows
+   then — additively, with a real caller.
 2. **Does removing the live fallback need a deprecation interval?** It cannot fire today, but
    that rests on the two key sets being identical. If stratum ever prices a model compose does
    not, nothing changes; the reverse is what the S2 test now catches.
@@ -279,3 +299,16 @@ wrong for ~6 weeks and nothing watches). Recommended order is **S3 → S1 → S2
   sets are identical, and that the dialect defect is still live on the historical path at
   2.58x. S1 changed from "both tables become callers" to "the live path is removed", S2
   narrowed to the overlap, S3 retargeted at stratum's table. No code changed.
+
+- **2026-09-12, second amendment (same day).** Owner asked why anything would reprice months
+  later given the ledger is immutable. It does not, and the ledger is. Two corrections, both
+  found by that question. (a) Decision 1's effective dating was speculative: nothing in either
+  repo reprices — the ledger only reads persisted `usd`, and `experiment-metrics.collect()`
+  runs once inline at `lib/experiment.js:404`. Dating deferred to an open question; the pricer
+  loses its `at` parameter. (b) Decision 3's ARGUMENT was wrong and had already shipped in
+  `b600901`: `reconcile.mjs` reads persisted `cost.usd` and never recomputes, so an upstream
+  price change cannot move its output. The conclusion (pin, never fetch live) stands on a
+  corrected write-time argument: a live feed leaves no record of which rate priced a call, so
+  the receipt's figure becomes unauditable. "Historical repricing" was also the wrong name for
+  what `experiment-pricing.js` does — it prices records that never carried a cost, in the same
+  run that produced them. No code changed.
