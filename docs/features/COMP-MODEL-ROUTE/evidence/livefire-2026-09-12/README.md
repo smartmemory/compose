@@ -29,6 +29,34 @@ and provenance `estimated`. Zero `missing-usd` on any post-fix row.
 
 Total attributed across all 16 rows: **$1.4258**.
 
+## Reconciliation (added 2026-09-12, after the run)
+
+`node reconcile.mjs` re-derives every claim below from `ledger.jsonl` and **exits non-zero if any
+invariant fails**, so this section is checkable in one command rather than asserted:
+
+```
+rows                 16
+complete / excluded  13 / 3  (exhaustive, disjoint)
+receipt refs         16 total, 16 unique digests, 1 per row
+exclusion reasons    missing-cost-provenance, missing-usd
+excluded usd         null (never 0)
+reported             n=10  $1.0815650
+estimated            n=3   $0.3442082
+TOTAL ATTRIBUTED     $1.4257732
+```
+
+Invariants checked: the partition is exhaustive AND disjoint; every paid receipt ref is unique by
+both `payloadDigest` and `dispatchId` (so no row can double-count another's receipt); every row
+carries exactly one receipt ref; excluded rows contribute nothing and keep `usd: null` rather than
+a coerced 0; and the sum over complete rows equals the sum over all non-null `usd` in the file.
+
+The script is a genuine falsifier, verified by tampering: duplicating one row's `payloadDigest`
+onto another exits 1 with `duplicate payloadDigest — double-count possible`, and flipping one
+excluded row's `usd` from `null` to `0.0` exits 1 with `an excluded row carries a non-null usd`.
+
+**Row numbering note:** the "Result" table above refers to rows by ZERO-based index. Its rows
+1/2/5 are file lines 2/3/6, and rows 9/10/13 are lines 10/11/14. Verified against the file.
+
 ## What this does and does not close
 
 CLOSES: at least one complete attributable sample (many), on BOTH providers, from a real
@@ -36,9 +64,10 @@ provider run with original call/receipt/ledger evidence retained here.
 
 DOES NOT close on its own: full complete-plus-excluded reconciliation against unique
 receipt totals was not recomputed from this ledger. The run also produced no repair wave,
-so uncredited/failed-repair exclusion paths are unexercised by this evidence. Treat gate 5
-as SUBSTANTIALLY demonstrated, not ticked, until a reconciliation pass is run over
-`ledger.jsonl` and recorded here.
+so uncredited/failed-repair exclusion paths are unexercised by this evidence. The reconciliation pass is now DONE and recorded above (`reconcile.mjs`, all invariants hold), so
+that half of the outstanding work is closed. The repair-wave gap is NOT closed and cannot be closed
+by this ledger: the run produced no repair wave, so the uncredited and failed-repair exclusion paths
+have no evidence here either way. Closing it needs a run that actually produces a repair wave.
 
 ## Root cause chain (all four were true, only the last unblocked it)
 
