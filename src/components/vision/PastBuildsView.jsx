@@ -5,6 +5,7 @@ import RelativeTime from './shared/RelativeTime.jsx';
 import EmptyState from './shared/EmptyState.jsx';
 import { startBuild } from '../../lib/startBuild.js';
 import { notify } from '../cockpit/NotificationBar.jsx';
+import { formatCost as sharedFormatCost } from '../../lib/format-cost.js';
 
 /**
  * PastBuildsView — COMP-COCKPIT-3 run history / past builds.
@@ -39,10 +40,8 @@ function formatDuration(ms) {
   return `${h}h ${m % 60}m`;
 }
 
-function formatCost(usd) {
-  if (typeof usd !== 'number' || usd <= 0) return null;
-  return `$${usd.toFixed(usd < 1 ? 4 : 2)}`;
-}
+// COMP-COST-OWNER S2: one shared formatter; null keeps the row's cost chip unrendered.
+const formatCost = (usd) => (usd === 0 ? null : sharedFormatCost(usd, { unknown: null }));
 
 export default function PastBuildsView({ builds = [], items = [], onSelectItem }) {
   const [search, setSearch] = useState('');

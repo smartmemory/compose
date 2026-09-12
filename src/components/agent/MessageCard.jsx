@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { TOOL_CATEGORY_COLORS } from '../vision/constants.js';
 import StepOutcome from './StepOutcome.jsx';
 import ToolResultBlock from './ToolResultBlock.jsx';
+import { formatCost as sharedFormatCost } from '../../lib/format-cost.js';
 
 /**
  * MessageCard — renders a single SDK message in the stream.
@@ -37,11 +38,9 @@ function formatMs(ms) {
   return `${s}s`;
 }
 
-function formatCost(usd) {
-  if (usd == null) return '';
-  if (usd < 0.001) return '<$0.001';
-  return `$${usd.toFixed(3)}`;
-}
+// COMP-COST-OWNER S2: one shared formatter. This surface hides the element when the
+// cost is unknown, which is why it passes an empty unknown marker rather than '—'.
+const formatCost = (usd) => sharedFormatCost(usd, { digits: 3, unknown: '' });
 
 /** Collapsible JSON viewer for tool inputs */
 function ToolInput({ input }) {

@@ -484,11 +484,12 @@ ledger and accumulator that agree to the cent.
 
 ### S2 — Stop destroying provenance on the way to the screen
 
-- [ ] `build-stream-writer.js:149` omits `cost_usd` when it has none, and carries `usd_source`
-- [ ] `build-stream-bridge.js:481` stops coercing and carries `usd_source` into the projection
-- [ ] `formatCost`'s existing `usd == null` branch is reached; unknown renders as unknown, never `<$0.001`
-- [ ] `PastBuildsView.jsx:43` and `MessageCard.jsx:40` agree on how unknown renders
-- [ ] **Negative control:** an unknown-cost step renders as unknown; restoring any one `?? 0` brings back `<$0.001`
+- [x] `writeUsage` omits `cost_usd` when no provenance can be stated, and carries `usd_source` when it can — the amount and its provenance travel together or not at all, the receipt path's rule applied to the stream (pinned by test/build-stream-usage-provenance.test.js:44)
+- [x] `build-stream-bridge.js` stops coercing the cost and carries `usd_source`; tokens still default to 0 because a missing token count genuinely IS zero tokens (pinned by test/build-stream-usage-provenance.test.js:82)
+- [x] `build.js` derives step provenance with `aggregateUsdSource` — sticky, unknown dominates, an unlabelled dollar refuses
+- [x] FOUR formatters (not two) collapsed into `src/lib/format-cost.js`, which can finally say unknown; `ContextStepDetail`'s `$0.00`-for-unknown is gone (pinned by test/build-stream-usage-provenance.test.js:92)
+- [x] `ContextStepDetail.jsx:280`'s `cost_usd != null` filter stops being vacuous, with no change to it — the bridge no longer destroys the answer it asks for
+- [x] **Negative control PASSED:** both `lib/build-stream-writer.js` and `server/build-stream-bridge.js` go **RED** on revert (4 and 2 failures respectively) against a 10/10 green baseline
 
 ### S3 — One pricer, dialect as data
 

@@ -2,6 +2,7 @@
  * opsStripLogic.js — Pure logic for OpsStrip, testable without React/JSX.
  */
 import { GATE_STEP_LABELS } from '../vision/constants.js';
+import { formatCost as sharedFormatCost } from '../../lib/format-cost.js';
 
 /**
  * Format a USD cost for display in the ops strip.
@@ -10,9 +11,11 @@ import { GATE_STEP_LABELS } from '../vision/constants.js';
  * @param {number} cost
  * @returns {string}
  */
+// COMP-COST-OWNER S2: one shared formatter. The ops strip hides a zero or unknown
+// cost rather than showing a dollar sign with nothing behind it.
 export function formatCost(cost) {
-  if (!cost || cost <= 0) return '';
-  return `$${cost.toFixed(2)}`;
+  if (cost === 0) return '';
+  return sharedFormatCost(cost, { digits: 2, unknown: '' });
 }
 
 /**
