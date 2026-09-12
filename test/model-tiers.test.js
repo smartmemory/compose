@@ -6,8 +6,10 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { MODEL_TIERS, resolveTierModel, TIER_THINKING, resolveTierThinking } from '../server/model-tiers.js';
+import { MODEL_TIERS, CODEX_MODEL_TIERS, resolveTierModel, TIER_THINKING, resolveTierThinking } from '../server/model-tiers.js';
 import { parseAgentString, resolveAgentConfig } from '../lib/agent-string.js';
+import recordSchema from '../contracts/routing-record.schema.json' with { type: 'json' };
+import startSchema from '../contracts/routing-start.schema.json' with { type: 'json' };
 
 // ---------------------------------------------------------------------------
 // resolveTierModel
@@ -44,10 +46,11 @@ describe('resolveTierModel', () => {
 // ---------------------------------------------------------------------------
 
 describe('MODEL_TIERS', () => {
-  test('exports the four expected tiers', () => {
+  test('exports the five expected tiers', () => {
     assert.ok('critical' in MODEL_TIERS);
     assert.ok('standard' in MODEL_TIERS);
     assert.ok('fast' in MODEL_TIERS);
+    assert.ok('budget' in MODEL_TIERS);
     assert.ok('coordinator' in MODEL_TIERS);
   });
 });
@@ -82,10 +85,11 @@ describe('resolveTierThinking', () => {
 });
 
 describe('TIER_THINKING', () => {
-  test('exports config for all four tiers', () => {
+  test('exports config for all five tiers', () => {
     assert.ok('critical' in TIER_THINKING);
     assert.ok('standard' in TIER_THINKING);
     assert.ok('fast' in TIER_THINKING);
+    assert.ok('budget' in TIER_THINKING);
     assert.ok('coordinator' in TIER_THINKING);
   });
 });
@@ -214,4 +218,108 @@ test('existing Codex model routes are unchanged', () => {
   assert.equal(resolveTierModel('critical', 'codex'), 'gpt-6-astra');
   assert.equal(resolveTierModel('standard', 'codex'), 'gpt-5.6-terra');
   assert.equal(resolveTierModel('fast', 'codex'), 'gpt-5.3-codex-spark');
+});
+
+
+// ---------------------------------------------------------------------------
+// budget — the Codex-only mirror of coordinator (COMP-MODEL-ROUTE, 2026-09-12)
+// ---------------------------------------------------------------------------
+
+test('budget routes only Codex, to luna, at medium effort', () => {
+  assert.equal(resolveTierModel('budget', 'codex'), 'gpt-5.6-luna');
+  assert.equal(resolveTierModel('budget', 'claude'), null);
+  assert.deepEqual(resolveTierThinking('budget', 'codex'), { mode: null, effort: 'medium' });
+  assert.equal(resolveTierThinking('budget', 'claude'), null);
+  const config = resolveAgentConfig('codex:reviewer:budget');
+  assert.equal(config.modelID, 'gpt-5.6-luna');
+  assert.equal(config.effort, 'medium');
+});
+
+// budget is ADDRESSABLE, not LADDERED: it is deliberately absent from the cost ladder
+// in lib/routing-ledger.js, so it is nameable but is not an auto-escalation candidate
+// and does not enter floor computation. Ladder membership is an S2/S3 decision (Q3).
+test('budget is priced, so a luna dispatch is attributable', async () => {
+  const { MODEL_PRICING, calculateCost } = await import('../lib/model-pricing.js');
+  const luna = MODEL_PRICING[resolveTierModel('budget', 'codex')];
+  assert.deepEqual(luna, { inputPerMTok: 0.2, outputPerMTok: 1.2 });
+  // A priced model yields a non-zero cost, so the ledger never marks it missing-usd.
+  assert.ok(calculateCost('gpt-5.6-luna', 1_000_000, 1_000_000) > 0);
+});
+
+// ---------------------------------------------------------------------------
+// Contract drift: the tier vocabulary is frozen into persisted routing records.
+// A tier added to the table but not to the schemas makes every record carrying it
+// fail validation at the ledger boundary — this test is the control for that.
+// ---------------------------------------------------------------------------
+
+describe('tier enums in the routing contracts track the model table', () => {
+  const expected = [null, ...Object.keys(MODEL_TIERS)].sort((a, b) => String(a).localeCompare(String(b)));
+
+  /** Every `enum` in the schema that looks like a tier enum (contains 'critical'). */
+  function tierEnums(node, found = []) {
+    if (Array.isArray(node)) { for (const v of node) tierEnums(v, found); return found; }
+    if (node && typeof node === 'object') {
+      if (Array.isArray(node.enum) && node.enum.includes('critical')) found.push(node.enum);
+      for (const v of Object.values(node)) tierEnums(v, found);
+    }
+    return found;
+  }
+
+  for (const [name, schema] of [['routing-record', recordSchema], ['routing-start', startSchema]]) {
+    test(`${name} tier enums equal the model table`, () => {
+      const enums = tierEnums(schema);
+      assert.ok(enums.length > 0, `no tier enum found in ${name}`);
+      for (const e of enums) {
+        assert.deepEqual(
+          [...e].sort((a, b) => String(a).localeCompare(String(b))),
+          expected,
+          `${name} tier enum drifted from MODEL_TIERS`
+        );
+      }
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Every routable tier model must be priced in BOTH tables, by an EXACT key.
+//
+// experiment-pricing.js falls back to the first key that PREFIXES the model ID, and the
+// legacy `gpt-5` key prefixes every gpt-5.x model. `gpt-5.6-luna` hit that fallback and
+// priced at 10/40 instead of 0.2/1.2 — a silent 35.7x overstatement, no null to flag it.
+// This test is the control: a new tier model with no exact key fails here, loudly.
+// ---------------------------------------------------------------------------
+
+describe('routable tier models are priced in both tables', () => {
+  // KNOWN DIVERGENCE, filed not fixed: experiment-pricing retains pre-cut rates
+  // (terra 2.5/15, sol 5/30) while model-pricing carries the 2026-09-12 verified
+  // figures (terra 2/12, sol 4/20). Reconciling them is an owner decision because the
+  // experiment table is documented as retaining historical rates for old receipts.
+  const KNOWN_DIVERGENT = new Set(['gpt-5.6-terra', 'gpt-5.6-sol']);
+
+  const routable = [...new Set(
+    [...Object.values(MODEL_TIERS), ...Object.values(CODEX_MODEL_TIERS)].filter(m => m !== null)
+  )];
+
+  test('every tier model has a non-null price in model-pricing', async () => {
+    const { MODEL_PRICING } = await import('../lib/model-pricing.js');
+    for (const model of routable) {
+      if (!model.startsWith('gpt-')) continue; // Claude rates live on the prefix path
+      assert.ok(MODEL_PRICING[model], `${model} is routable but unpriced in model-pricing.js`);
+    }
+  });
+
+  test('every Codex tier model resolves to an EXACT experiment-pricing key, not a prefix', async () => {
+    const { MODEL_PRICING } = await import('../lib/model-pricing.js');
+    const { lookupExperimentPricing } = await import('../lib/experiment-pricing.js');
+    for (const model of Object.values(CODEX_MODEL_TIERS)) {
+      if (model === null) continue;
+      const experiment = lookupExperimentPricing(model);
+      assert.ok(experiment, `${model} is routable but unpriced in experiment-pricing.js`);
+      if (KNOWN_DIVERGENT.has(model)) continue;
+      assert.deepEqual(
+        experiment, MODEL_PRICING[model],
+        `${model} prices differ between the two tables — a prefix fallback is the usual cause`
+      );
+    }
+  });
 });
