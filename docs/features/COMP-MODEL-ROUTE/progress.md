@@ -516,3 +516,108 @@ closes it.
 dispatch's 37/37 was true for its environment and false for the owner's. Astra sandbox results are
 never the arbiter; the host is. Related: the documented targeted command was itself the trap, so
 the fix belongs in the helper every golden imports, not in a note someone must remember.
+
+## Pre-live-fire finding 2026-09-12 — Codex is unpriced, so no Codex call can be a complete sample
+
+**CORRECTION 2026-09-12, same session:** the first version of this note (below) claimed an
+unpriced model produces a COMPLETE attributable sample worth $0.00 and that gate 5 would pass
+vacuously. **That was wrong at the last step, and the error was mine, not the code's.** Verified
+empirically with a direct probe of `routingUsageEvidence`: a zero total makes
+`result-normalizer.js:733-735` OMIT `cost_usd` from the usage record entirely, so
+`routing-runtime.js:55` (`u.usd ?? u.cost_usd ?? null`) yields `null`, `presence.usd` is `false`,
+and `routing-ledger.js:1286` marks the sample INCOMPLETE with `missing-usd`. Probe output:
+`usd = null, presence.usd = false` for an omitted cost; `usd = 0.0021, missing-usd fires: false`
+for a priced one.
+
+So the real state is the opposite of a false pass: the ledger is honest, and it currently BLOCKS
+gate 5 on the Codex side because no Codex call can ever be complete. The fix below is therefore an
+ENABLING fix, not a safety fix. The `calculateCost` return value was left at 0 deliberately:
+returning null would change nothing at its single caller (`total += null` coerces to 0) while
+breaking a documented contract pinned by `test/model-pricing.test.js:100`.
+
+### Original note (retained; its final inference was wrong)
+
+
+Found while selecting models for the gate-5 live-fire run. NOT yet observed in a live ledger;
+this is a source-verified hazard, and confirming or refuting it is now an explicit objective of
+the live-fire run itself.
+
+Two independent pricing tables both return **0** for a model they do not know, rather than null:
+
+- `stratum/ts/src/judge/pricing.ts:26` — `usdFromTokens` returns `0` when `MODEL_PRICING` has no
+  entry. Table holds exactly four models: `gpt-5.3-codex-spark`, `gpt-5.6-terra`, `gpt-5.6-sol`,
+  `gpt-6-astra`.
+- `compose/lib/model-pricing.js:57` — `calculateCost` returns `0` when `lookupPricing` misses.
+  **This table contains ZERO `gpt-` entries; it is Claude-only** (verified: `grep -c 'gpt-'` = 0).
+  This is the table that feeds routing usage evidence, via `lib/result-normalizer.js:492`.
+
+Why that corrupts gate 5 rather than merely annoying: `result-normalizer.js:494-496` stamps the
+computed value `usd_source: 'estimated'` whenever the provider did not report `cost_usd`. The
+routing completeness check accepts it — `lib/routing-ledger.js:1286` flags `missing-usd` only when
+the value is `=== null`, and `:1288` accepts `estimated` as valid provenance. A $0.00 estimate is
+therefore a COMPLETE attributable sample, and "complete plus excluded reconciles to unique receipt
+totals" holds vacuously at zero.
+
+Consequence for the gate: a live-fire run whose Codex costs are estimated rather than reported
+would tick gate 5 while proving nothing about spend attribution. **The run must verify, per row,
+that Codex usage carries `provenance: 'reported'` with a non-zero `usd` — and a `provenance:
+'estimated'` Codex row with `usd: 0` is a FAILED live-fire, not a passed one.**
+
+Falsifier: resolved when either table refuses an unknown model (null/throw) instead of returning 0,
+or when the routing completeness check treats an estimated-zero cost as incomplete. Check
+`lib/model-pricing.js::calculateCost` and `lib/routing-ledger.js:1286`.
+
+Also relevant to model selection: `server/model-tiers.js:14,22` maps tier `fast` to
+`claude-haiku-4-5-20251001` and `gpt-5.3-codex-spark`, so a fast-tier preset yields the
+Haiku + Spark pairing natively. No model named `luna` exists anywhere in compose or stratum
+(searched `lib`, `presets`, `contracts`, `pipelines`, `stratum/ts/src`), and it is absent from both
+pricing tables — so running it today would land exactly in the $0.00-estimated hazard above.
+Owner ruling 2026-09-12: run Spark first, then add Luna to the pricing table and run it properly.
+
+### Pricing verified against external sources 2026-09-12 (prompted by owner: "did you search?")
+
+I had NOT searched before hardcoding prices. The owner asked. Searching changed two things.
+
+**1. The diagnosis is confirmed externally, and the workaround is standard.** Codex CLI has no
+built-in cost tracking and the feature request was closed without shipping; token counts land in
+`~/.codex/` rollout files "with nothing pricing them"; `/status` shows requests but no tokens or
+cost. OpenAI's own billing views aggregate by day and model, hours later, with no per-session or
+per-agent attribution — which is the attribution this feature exists to produce. Third-party tools
+(`ccusage`, `whoburnedmore`, agenticcontrolplane) all do exactly what we do: read local token
+counts, multiply by a table. There is no mechanism we missed.
+
+**2. Our prices were STALE, and so is the owner's routing rules doc.** Verified against the
+LiteLLM community registry (3,889 keys, downloaded and grepped directly — a WebFetch of it
+returns a truncated fragment and wrongly reports these models absent) and OpenAI's published
+rate card:
+
+| Model | Repo tables held | Actual | Note |
+|---|---|---|---|
+| `gpt-6-astra` | 10 / 50 | 10 / 50 | correct |
+| `gpt-5.6-terra` | 2.5 / 15 | **2 / 12** | cut 2026-07-30 |
+| `gpt-5.6-sol` | 5 / 30 | **4 / 20** | promotional from 2026-08-21, stated through >= 2026-11-21 |
+| `gpt-5.3-codex-spark` | 1.75 / 14 | unpriced upstream | registry entry is subscription-billed (`chatgpt/…`, no cost fields); our figure is inherited and UNCONFIRMED |
+| `gpt-5.6-luna` | absent everywhere | **0.2 / 1.2** | real model, budget tier of the 5.6 family; now priced, NOT yet routable |
+
+`lib/model-pricing.js` now carries the corrected figures, pinned by
+`test/model-pricing.test.js` (30/30; the four codex-coverage assertions go RED 4/0/4/0 when the
+entries are removed, 23 pre-existing stay green).
+
+**Follow-ups, NOT fixed here:**
+1. **Two other tables remain stale.** `lib/experiment-pricing.js` and
+   `stratum/ts/src/judge/pricing.ts` still hold terra 2.5/15 and sol 5/30, overstating by
+   ~20-33%. Neither carries `gpt-6-astra` (experiment-pricing) — the flagship dispatch model.
+2. **Three hand-maintained tables is the class defect.** compose has two, stratum a third, all
+   drifting independently, and this incident is what drift looks like. The LiteLLM registry
+   covers every model we dispatch except spark; a sync script plus a drift test would replace
+   three hand-kept lists with one checked source. Not built — needs a decision on taking the
+   dependency.
+3. **Sol's rate is promotional and WILL move.** Re-check `gpt-5.6-sol` against the registry on or
+   after 2026-11-21. Falsifier: `node -e` compare `lib/model-pricing.js` against
+   `model_prices_and_context_window.json`.
+4. **Luna is priced but not routable.** `server/model-tiers.js` has no luna entry, so nothing
+   dispatches to it. Wiring it is a separate decision.
+
+**Test-timeout correction:** `test/build-model-route-outcomes.test.js` needs **428s**; the 300s
+cap in the operational kit and in a batch run reports it as `fail 0 / cancelled 1`, which reads as
+a failure and is not one. Isolated at 900s it is **34 / 34 / 0 / 0**.

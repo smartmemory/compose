@@ -151,3 +151,60 @@ for (const [model, input, output] of [
     assert.equal(calculateCost(model, 0, 0, 0, 1_000_000), input * 0.1);
   });
 }
+
+// ---------------------------------------------------------------------------
+// Codex / GPT pricing — COMP-MODEL-ROUTE gate-5 prerequisite (added 2026-09-12)
+//
+// This table feeds routing usage evidence through result-normalizer.js, and it
+// held NO gpt- entry, so every Codex call priced at 0. Codex reports no cost of
+// its own (its usage events carry token counts only), so this estimate is the
+// only cost a Codex call ever gets. A 0 total makes result-normalizer.js:733-735
+// omit cost_usd, which routing-ledger.js:1286 marks `missing-usd` / incomplete —
+// honest, but it means no Codex call can be a COMPLETE attributable sample,
+// which is exactly what gate 5 requires.
+// ---------------------------------------------------------------------------
+
+test('calculateCost prices every Codex model compose dispatches (non-zero)', () => {
+  for (const model of ['gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.3-codex-spark']) {
+    const cost = calculateCost(model, 1_000_000, 100_000);
+    assert.ok(cost > 0, `${model} must carry a non-zero price; 0 makes it indistinguishable from an unpriced model`);
+  }
+});
+
+test('calculateCost codex spark: 1M input + 100k output', () => {
+  // 1.75/MTok input, 14/MTok output → 1.75 + 1.4
+  assert.equal(calculateCost('gpt-5.3-codex-spark', 1_000_000, 100_000).toFixed(4), '3.1500');
+});
+
+test('calculateCost codex astra: 1M input + 100k output', () => {
+  // 10/MTok input, 50/MTok output → 10 + 5
+  assert.equal(calculateCost('gpt-6-astra', 1_000_000, 100_000), 15);
+});
+
+// Terra and sol carry the CURRENT rates, verified 2026-09-12 against the LiteLLM
+// registry and OpenAI's rate card. The repo's two other pricing tables still hold
+// the pre-cut figures (terra 2.5/15, sol 5/30) and overstate spend by ~20-33%.
+// These assertions exist so a copy-paste from those stale tables fails loudly.
+test('calculateCost codex terra uses the post-2026-07-30 rate, not the stale 2.5/15', () => {
+  // 2/MTok input, 12/MTok output → 2 + 1.2
+  assert.equal(calculateCost('gpt-5.6-terra', 1_000_000, 100_000).toFixed(4), '3.2000');
+});
+
+test('calculateCost codex sol uses the promotional 4/20, not the stale 5/30', () => {
+  // 4/MTok input, 20/MTok output → 4 + 2. Promotional through at least 2026-11-21.
+  assert.equal(calculateCost('gpt-5.6-sol', 1_000_000, 100_000), 6);
+});
+
+test('calculateCost prices gpt-5.6-luna', () => {
+  // 0.2/MTok input, 1.2/MTok output → 0.2 + 0.12
+  assert.equal(calculateCost('gpt-5.6-luna', 1_000_000, 100_000).toFixed(4), '0.3200');
+});
+
+test('MODEL_PRICING covers the tier map so no dispatched model is unpriced', async () => {
+  const { MODEL_TIERS, CODEX_MODEL_TIERS } = await import(`${REPO_ROOT}/server/model-tiers.js`);
+  const dispatched = [...Object.values(MODEL_TIERS), ...Object.values(CODEX_MODEL_TIERS)].filter(Boolean);
+  for (const model of dispatched) {
+    assert.ok(calculateCost(model, 1_000_000, 0) > 0,
+      `tier map dispatches ${model} but MODEL_PRICING cannot price it — it would reach the ledger as missing-usd`);
+  }
+});
