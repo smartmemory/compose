@@ -93,16 +93,21 @@ test('runAndNormalize: returns usage totals when connector emits usage events', 
     },
   ];
   const stratum = fakeStratum(events);
-  const { text, usage } = await runAndNormalize(null, 'prompt', { step_id: 's', output_fields: {} }, { stratum });
+  const { text, usage, usages } = await runAndNormalize(null, 'prompt', { step_id: 's', output_fields: {} }, { stratum });
 
   assert.equal(text, 'Hello');
   assert.ok(usage, 'usage should be returned');
   assert.equal(usage.input_tokens, 1000);
   assert.equal(usage.output_tokens, 500);
   assert.equal(usage.model, 'claude-sonnet-4-6');
-  // cost_usd: 1000 × $3/MTok + 500 × $15/MTok = 0.003 + 0.0075 = $0.0105
-  assert.ok(usage.cost_usd > 0, 'cost_usd should be positive');
-  assert.ok(Math.abs(usage.cost_usd - 0.0105) < 0.0001, `expected ~$0.0105 got ${usage.cost_usd}`);
+  // COMP-COST-OWNER S3: this used to assert $0.0105, priced here from the tokens. It was a
+  // fake-producer assertion -- a real Claude step_usage ALWAYS carries cost_usd (stratum
+  // claude.ts:171, lib/local-claude-connector.js:276 both emit it unconditionally), so no
+  // producer can deliver this shape. The consumer no longer prices anything: an event that
+  // states no cost leaves the cost UNKNOWN, and the omission on usages[0] is the signal.
+  assert.equal(usage.cost_usd, 0, 'the merged object seeds at 0 and nothing was added to it');
+  assert.ok(!Object.hasOwn(usages[0], 'cost_usd'),
+    'the honest unknown-cost signal rides usages[], never the merged aggregate');
 });
 
 test('runAndNormalize: accumulates multiple usage events', async () => {

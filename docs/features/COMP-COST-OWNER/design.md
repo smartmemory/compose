@@ -455,8 +455,16 @@ someone will "fix" one to match the other.
 - **Live receipts are evidence.** No producer-stated cost means REFUSE: record `missing-usd`
   and never guess. An estimate that nobody asked for is indistinguishable downstream from a
   measurement.
-- **Experiment metrics are analytics.** No recorded cost means ESTIMATE at the record's own
-  timestamp, labelled as an estimate. A missing number here costs a data point, not an audit.
+- **Experiment metrics are analytics.** ~~No recorded cost means ESTIMATE at the record's own
+  timestamp, labelled as an estimate.~~ **AMENDED by S3 (2026-09-12): the analytics path no
+  longer estimates either, because nothing reaches it with tokens and no cost.** The estimator
+  was deleted with `experiment-pricing.js`; `usd` is the history record's own number or `null`.
+  This half was written assuming a record could arrive carrying tokens and no cost. Probe 1
+  showed it cannot: with a record present `cost_usd` is always numeric, and with no record
+  present the token inputs are 0 too. **Do not restore `deriveUsd` on the strength of the
+  struck sentence** — that is precisely the "someone will fix one to match the other" this
+  decision exists to prevent. Measured: the S3 negative control has the restored estimator
+  pricing a call at `actual: 18` that no producer can deliver.
 
 Deleting the live fallback (Decision 2) is what makes the first contract true. It is not a
 loss of coverage: the fallback could not fire.
@@ -491,15 +499,65 @@ ledger and accumulator that agree to the cent.
 - [x] `ContextStepDetail.jsx:280`'s `cost_usd != null` filter stops being vacuous, with no change to it — the bridge no longer destroys the answer it asks for
 - [x] **Negative control PASSED:** both `lib/build-stream-writer.js` and `server/build-stream-bridge.js` go **RED** on revert (4 and 2 failures respectively) against a 10/10 green baseline
 
-### S3 — One pricer, dialect as data
+### S3 — No pricer. compose stops pricing anything.
 
-- [ ] `contracts/model-rates.schema.json` + one current rate set
-- [ ] `priceCall(model, usage)` with `dialect` on the rate row, not a model-ID regex
-- [ ] Exact-match-plus-alias lookup, closing the `gpt-5` prefix defect
-- [ ] Live consumer-side fallback removed (unreachable — Decision 2)
-- [ ] **Negative control:** a `gpt-5.x` model with no exact key resolves to null, not `gpt-5`'s 10/40
+**Re-scoped 2026-09-12 (third amendment) after both filed deliverables probed unreachable.**
+The original checklist is kept below, struck, because which items dissolved is the finding.
 
-### S4 — Freshness check
+- [x] **Probe 1:** `deriveUsd` is still dead after S1 — and for a second, independent reason.
+      Both `appendBuildHistory` sites (`lib/build.js:3336`, `:6438`) spread
+      `buildCostSnapshot()`, whose amount is the accumulator's `usd`, always a finite number
+      because S1 routes unpriced spend to `usd_unknown_count`. And with NO history record the
+      token inputs read from that same absent record via `?? 0`, so the fallback could only
+      ever be called as `deriveUsd(model, 0, 0)`. No input reaches it with non-zero tokens.
+- [x] **Probe 2:** the `result-normalizer.js` fallback is REACHABLE but could only ever return
+      0. `codex.ts:492` omits `cost_usd` exactly when stratum cannot price the model, and both
+      tables carried the identical Codex key set (rates now agreeing — stratum's terra/sol are
+      no longer the stale 2.5/15 and 5/30 recorded earlier in this doc). Claude never reaches
+      it at all: `claude.ts:171` and `local-claude-connector.js:276` emit `cost_usd`
+      unconditionally.
+- [x] Evidence: `evidence/s3-reachability-probes-2026-09-12.md`
+- [x] Live consumer-side fallback removed (Decision 2) — and with it `lib/model-pricing.js`
+      and `lib/experiment-pricing.js`, which had no remaining caller
+- [x] An unpriced step is COUNTED, never priced: the primary usage record OMITS `cost_usd`,
+      so `recordBuildUsage` counts it and `reportUsageReceipts` refuses to stamp provenance
+      (pinned by `test/unpriced-step-cost.test.js`)
+- [x] One unpriced step poisons the run total to unknown. Previously it added 0 and the run
+      still called itself an estimate — a sum SHORT by that step, presented as the total.
+      This was the last instance of the S1 defect, one layer up
+- [x] The connector result's authoritative total is still adopted when some steps were
+      unpriced — widened from "the events totalled 0", so deleting the fallback never LOSES a
+      figure the connector actually knew
+- [x] The prefix defect DISSOLVES rather than being fixed: stratum's lookup is exact after
+      `baseModel()` strips `/effort`, with no `gpt-5` catch-all to fall through to
+- [x] The "every routable model is priced" invariant RETARGETED at stratum's table via the
+      test-only deep import this design blessed (`test/model-tiers.test.js`), plus a control
+      that fails if either compose table comes back
+- [x] **Negative control PASSED (run by hand):** the script reverts one production file at a
+      time, which here would break an import and prove nothing — the deleted-file mirror of
+      the new-file case its own header calls out. Reverting `lib/result-normalizer.js` AND
+      restoring `lib/model-pricing.js` to HEAD reports **RED**, 3 of 5 failing against a 5/5
+      green baseline
+- [x] **Second negative control PASSED (run by hand):** restoring `lib/experiment-metrics.js`
+      and `lib/experiment-pricing.js` to HEAD reports **RED**, 2 failing — `actual: 18` where
+      the new contract requires `null`. That is the empirical half the original "2.58x" claim
+      never had: the arithmetic WAS real, and no producer can reach it
+- [x] Two existing assertions were FAKE-PRODUCER tests and were corrected, not weakened:
+      `cost-tracking.test.js` asserted $0.0105 derived here from a Claude event carrying no
+      cost, and `usage-receipts.test.js` asserted an `estimated` label on the same. No real
+      Claude producer can emit that shape
+
+~~Filed, now dissolved:~~ ~~`contracts/model-rates.schema.json` + one current rate set;
+`priceCall(model, usage)` with `dialect` on the rate row; exact-match-plus-alias lookup.~~
+**Not built.** Both candidate consumers were dead code (Probe 1) and a fallback the same
+slice deletes (Probe 2), so the pricer would have shipped with zero live callers — the
+speculative generality this design's own first two amendments already killed twice.
+
+### S4 — Freshness check (now a STRATUM-side slice)
+
+**S3 moved the ground under this.** compose no longer ships a price table, so there is nothing
+here to keep fresh. The pinned snapshot to diff is `stratum/ts/src/judge/pricing.ts` and the
+scheduled job belongs in that repo. Retarget before starting.
 
 - [ ] Scheduled diff of the pinned snapshot against the LiteLLM registry; opens an item
 - [ ] Never at runtime. ccusage ships exactly this shape — see the prior-art section
@@ -517,17 +575,24 @@ end; S3 and S4 are the original feature and can wait. S5 is independent of all o
 
 ## Files
 
+**Rewritten 2026-09-12 to what S3 ACTUALLY did.** The filed rows named two new files that
+were never built; leaving them would read as a plan outstanding rather than one retired.
+
 | File | Action | Purpose |
 |------|--------|---------|
-| `contracts/model-rates.schema.json` | new | Effective-dated rates contract + data |
-| `lib/model-rates.js` | new | `priceCall(model, usage)`; dialect as data, no dating |
-| `lib/experiment-pricing.js` | existing | Becomes a caller; stops being cache-blind |
-| `lib/model-pricing.js` | existing | **Live pricing path removed**; Codex rows and `calculateEventCost` deleted |
-| `lib/result-normalizer.js` | existing | Records `missing-usd` rather than pricing tokens itself |
-| `test/model-tiers.test.js` | existing | `KNOWN_DIVERGENT` retired; precedence control retargeted |
-| `test/model-pricing.test.js` | existing | Rewritten against the dated pricer; live-fallback cases removed |
-| `scripts/check-rate-freshness.mjs` | new | CI-only registry diff, stratum's table first |
-| `stratum/ts/src/judge/pricing.ts` | existing (stratum) | **Unchanged**; becomes the authority for live Codex rates |
+| ~~`contracts/model-rates.schema.json`~~ | **not built** | Dissolved with the pricer — no live caller (Probe 1 + Probe 2) |
+| ~~`lib/model-rates.js`~~ | **not built** | Same |
+| `lib/experiment-pricing.js` | **DELETED** | Its only consumer was unreachable; the `gpt-5` prefix defect goes with it |
+| `lib/model-pricing.js` | **DELETED** | Its only live caller was the fallback removed in the same slice |
+| `test/model-pricing.test.js` | **DELETED** | Tested a deleted module |
+| `lib/result-normalizer.js` | changed | Counts an unpriced step instead of pricing it; omits the cost rather than reporting a short total |
+| `lib/experiment-metrics.js` | changed | `usd` is the record's own number or `null`; no token-derived fallback |
+| `test/unpriced-step-cost.test.js` | new | Pins the above; negative control RED 3/5 |
+| `test/model-tiers.test.js` | changed | `KNOWN_DIVERGENT` retired; the priced-model invariant retargeted at stratum via the test-only deep import |
+| `test/experiment-model-ab.test.js` | changed | Pricing-table tests replaced by cost-axis behaviour tests; negative control RED |
+| `test/cost-tracking.test.js`, `test/usage-receipts.test.js` | changed | Two FAKE-PRODUCER assertions corrected — both asserted a cost derived here from a Claude event carrying none, a shape no real producer emits |
+| ~~`scripts/check-rate-freshness.mjs`~~ | **moves to stratum** | compose holds no table to keep fresh, so S4 is a stratum-side slice |
+| `stratum/ts/src/judge/pricing.ts` | existing (stratum) | **Unchanged**; is now the ONLY table on any live path |
 
 ## Open Questions
 
@@ -539,12 +604,39 @@ end; S3 and S4 are the original feature and can wait. S5 is independent of all o
 2. **Does removing the live fallback need a deprecation interval?** It cannot fire today, but
    that rests on the two key sets being identical. If stratum ever prices a model compose does
    not, nothing changes; the reverse is what the S2 test now catches.
-3. **Spark's cache rate stays inferred.** Both its 1.75/14 and its 0.175 cache rate have no
+3. **stratum's Claude connector can still stamp a REPORTED $0.** `claude.ts:171` does
+   `costUsd = finiteNonnegative(raw.total_cost_usd)` and emits `cost_usd: costUsd`
+   UNCONDITIONALLY, so an SDK turn omitting `total_cost_usd` becomes a provider-reported $0 —
+   the defect S2 fixed on compose's own stream writer, still live one repo over. Found while
+   running S3's Probe 2; it is WHY the fallback is unreachable for Claude. Out of scope here
+   (stratum-side) and it needs a measurement first: does the SDK ever actually omit the field?
+   Falsifier: `stratum/ts/src/connectors/claude.ts:171`.
+4. **The bare `type: 'usage'` stream event is WRITE-ONLY.** Traced 2026-09-12, closing the
+   "untraced lead" recorded earlier in this doc: `lib/result-normalizer.js:526` is its only
+   writer, nothing in `lib/`, `server/` or `src/` reads it, and `lib/build-stream-schema.js`
+   does not define it, so `BuildStreamWriter` never validates it. S3 changed it to omit an
+   unstated cost for consistency with `writeUsage`; that change is inert either way. Either
+   give it a reader or delete it — it is currently neither.
+5. **Spark's cache rate stays inferred.** Both its 1.75/14 and its 0.175 cache rate have no
    external source. S3 cannot check it. Recorded, not solved.
 
 ---
 
 ## Amendment history
+
+- **2026-09-12, third amendment (same day).** S3 inverted from "build one pricer" to "delete
+  the pricing". Both claims it rested on were read-verified only, so both were probed before
+  any code was written; both came back against the filed plan (see the S3 slice and
+  `evidence/s3-reachability-probes-2026-09-12.md`). compose now prices nothing at all: every
+  producer states its own cost, stratum is the sole authority for the one case that needs a
+  table, and `lib/model-pricing.js` + `lib/experiment-pricing.js` are gone. This is the THIRD
+  time this design has replaced a build with a deletion after tracing reachability — Decision
+  1's effective dating, Decision 2's shared table, now S3's pricer. The pattern is worth
+  naming: each was justified by a defect that was real in the arithmetic and unreachable on
+  the value path. The one live defect the slice DID fix was found the same way, and was not
+  about pricing at all — an unpriced step made the run total short while still labelling
+  itself an estimate.
+
 
 - **2026-09-12 (same day as filing).** Decision 2 reversed and Decision 4 added, after the
   owner asked why the table could not be exported from stratum. The original answer ("copies

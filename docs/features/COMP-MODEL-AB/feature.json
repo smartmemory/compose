@@ -25,7 +25,6 @@
         "lib/experiment.js",
         "lib/experiment-judge.js",
         "lib/experiment-metrics.js",
-        "lib/experiment-pricing.js",
         "lib/experiment-report.js",
         "lib/experiment-sandbox.js",
         "test/build-history.test.js",
