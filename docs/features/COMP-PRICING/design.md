@@ -206,6 +206,54 @@ So: pinned snapshot, CI-checked, never consulted at runtime.
 
 ---
 
+## Finding (2026-09-12): compose's own writer stamps a REPORTED $0
+
+Found while auditing what else had been asserted without tracing. **The defect fixed at the
+stratum boundary this morning is still live on compose's own stream writer**, and the schema
+comment that justified this morning's change names it as the reason the change was safe:
+"Compose's own writer always sets cost_usd." It does — including when it does not know it.
+
+Traced by reading (not yet by running):
+
+1. `result-normalizer.js:750` deliberately OMITS `cost_usd` from `usages[0]` when the total is
+   0. That omission is the honest "cost unknown" signal, and it is the whole point of the
+   morning's work.
+2. `build.js:5281` passes the merged `stepUsage` to `streamWriter.writeUsage(stepId, ...)`.
+3. `build-stream-writer.js:149` writes `cost_usd: usage.cost_usd ?? 0` — **coercing the
+   omission back into an explicit 0** — and writes no `usd_source` at all.
+4. A consumer then applies the presence fallback added this morning
+   (`result-normalizer.js:506`): `cost_usd` is present, so the step is labelled
+   **`'reported'`**. An unknown cost has become a provider-reported $0.
+
+**Reachability confirmed by reading:** the `toEngineUsage(stepUsage)` gate at `build.js:5271`
+returns non-null when `tokens > 0` OR `usd > 0` OR `ms > 0` (`:2225-2227`), so a step with
+tokens and no known cost passes it on the token branch alone. This is the same reachability
+argument I got wrong three times today, so it is stated as read-verified and NOT as measured.
+
+**Blast radius, bounded:** the routing ledger reads `usages` and connector evidence, not the
+build stream (`routing-runtime.js:55` reads `u.usd ?? u.cost_usd ?? null`), and `usages[0]`
+omits correctly. So receipts look safe and the observability surface (`COMP-OBS-COST`, the
+cockpit via `server/build-stream-bridge.js:473`) is what can show a false reported $0.
+**"Looks safe" is read-verified, not measured** — pin it with a test before trusting it.
+
+A softer second instance on the same line: `build.js:5274` does
+`buildCostTotals.cost_usd += stepUsage.cost_usd ?? 0`, so a build's cost total cannot
+distinguish "this step was free" from "we do not know what this step cost". The total
+silently undercounts rather than reporting itself incomplete.
+
+**This contradicts Decision 4 as written** (live paths REFUSE and record `missing-usd`), so it
+is in scope for S1: `writeUsage` must omit `cost_usd` when it has none and carry `usd_source`
+through, and the build total must track an unknown-cost count.
+
+### Untraced lead, recorded rather than guessed
+
+`result-normalizer.js:514` writes `{ type: 'usage', ... }` while `build-stream-writer.js:147`
+writes `{ type: 'step_usage', ... }`. A grep for `case 'usage'` / `.type === 'usage'` across
+`lib/` and `server/` returns nothing, so the first event kind may be written and read by
+nobody, or may be normalized somewhere not found. Not chased; do not act on it until traced.
+
+---
+
 ## Decision 4: two different contracts for "unknown cost"
 
 The same words mean opposite policies on the two paths, and the difference must be stated or
