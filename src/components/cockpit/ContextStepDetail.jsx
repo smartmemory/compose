@@ -24,6 +24,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useVisionStore } from '../vision/useVisionStore.js';
 import { useShallow } from 'zustand/react/shallow';
 import { wsFetch } from '../../lib/wsFetch.js';
+import { formatCost as sharedFormatCost } from '../../lib/format-cost.js';
 import {
   selectRetriesSummary,
   selectViolations,
@@ -36,10 +37,10 @@ import {
  * @param {number} cost
  * @returns {string}
  */
-function formatCost(cost) {
-  if (!cost || cost <= 0) return '$0.00';
-  return `$${cost.toFixed(4)}`;
-}
+// COMP-COST-OWNER S2: this is the surface that rendered an UNKNOWN cost as '$0.00',
+// an affirmative claim of a measured zero. It now shows '—' for unknown and keeps
+// '$0.00' for a cost that really was zero.
+const formatCost = (cost) => sharedFormatCost(cost, { digits: 4 });
 
 // ---------------------------------------------------------------------------
 // COMP-OBS-GATES: Tier pipeline constants

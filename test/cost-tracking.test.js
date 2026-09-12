@@ -178,7 +178,12 @@ test('BuildStreamWriter.writeUsage emits step_usage event with correct shape', (
       cache_read_input_tokens: 50,
       cost_usd: 0.018,
       model: 'claude-sonnet-4-6',
-    });
+    }, { usdSource: 'reported' });
+    // COMP-COST-OWNER S2: the amount and its provenance travel together. A bare
+    // cost_usd with no usdSource is now DROPPED rather than emitted unlabelled --
+    // the same rule reportUsageReceipts (build.js:2280-2283) already applied to
+    // receipts, now applied to the stream. Pinned by
+    // test/build-stream-usage-provenance.test.js:60.
 
     const lines = readFileSync(join(tempDir, 'build-stream.jsonl'), 'utf-8')
       .trim().split('\n').map(l => JSON.parse(l));
@@ -192,6 +197,7 @@ test('BuildStreamWriter.writeUsage emits step_usage event with correct shape', (
     assert.equal(ev.cache_creation_input_tokens, 100);
     assert.equal(ev.cache_read_input_tokens, 50);
     assert.equal(ev.cost_usd, 0.018);
+    assert.equal(ev.usd_source, 'reported');
     assert.equal(ev.model, 'claude-sonnet-4-6');
     assert.ok(typeof ev._seq === 'number', '_seq should be set');
     assert.ok(typeof ev._ts === 'number', '_ts should be set');

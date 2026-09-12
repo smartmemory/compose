@@ -478,7 +478,14 @@ export class BuildStreamBridge {
           output_tokens: event.output_tokens ?? 0,
           cache_creation_input_tokens: event.cache_creation_input_tokens ?? 0,
           cache_read_input_tokens: event.cache_read_input_tokens ?? 0,
-          cost_usd: event.cost_usd ?? 0,
+          // COMP-COST-OWNER S2. Tokens default to 0 because a missing token count
+          // genuinely IS zero tokens. A missing COST is not zero dollars -- it is an
+          // unknown, and `?? 0` here was the last of the coercions that turned it into
+          // an affirmative claim of near-zero spend on the cockpit. Provenance rides
+          // along so the surface can say which it is; the old projection dropped
+          // `usd_source` entirely, so even a correctly labelled amount arrived bare.
+          cost_usd: typeof event.cost_usd === 'number' ? event.cost_usd : null,
+          usd_source: ['reported', 'estimated'].includes(event.usd_source) ? event.usd_source : null,
           model: event.model ?? null,
           _source: 'build',
         };
