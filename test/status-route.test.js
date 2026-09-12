@@ -149,6 +149,28 @@ describe('GET /api/lifecycle/status', () => {
     assert.ok(Array.isArray(body.snapshot.drift_alerts));
   });
 
+  // The incident this route's 500 handler turned into a test failure on 2026-09-12: the
+  // gate log read hit the existsSync/readFileSync TOCTOU under full-suite load and the
+  // ENOENT escaped as a 500, so `body.snapshot` was undefined and EVERY assertion in this
+  // suite that dereferences it failed with a TypeError naming an unrelated field.
+  // A directory reproduces the same unreadable-log condition deterministically.
+  test('an unreadable gate log degrades gate_load_24h, it does not 500 the snapshot', async () => {
+    const blocker = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'status-route-gatelog-')), 'gate-log.jsonl');
+    fs.mkdirSync(blocker, { recursive: true });
+    const prev = process.env.COMPOSE_GATE_LOG;
+    process.env.COMPOSE_GATE_LOG = blocker;
+    try {
+      const { status, body } = await httpGet(ctx.port, '/api/lifecycle/status?featureCode=COMP-OBS-STATUS-ROUTE-TEST');
+      assert.equal(status, 200, `expected 200, got ${status}: ${JSON.stringify(body)}`);
+      assert.ok(body.snapshot, 'the snapshot must survive an unreadable gate log');
+      assert.equal(body.snapshot.gate_load_24h, 0, 'the unreadable counter degrades to 0');
+      assert.ok(Array.isArray(body.snapshot.drift_alerts), 'the rest of the snapshot is intact');
+    } finally {
+      if (prev === undefined) delete process.env.COMPOSE_GATE_LOG;
+      else process.env.COMPOSE_GATE_LOG = prev;
+    }
+  });
+
   test('computed_at is a valid ISO datetime', async () => {
     const { body } = await httpGet(ctx.port, '/api/lifecycle/status?featureCode=COMP-OBS-STATUS-ROUTE-TEST');
     assert.ok(!isNaN(Date.parse(body.snapshot.computed_at)), `invalid computed_at: ${body.snapshot.computed_at}`);
