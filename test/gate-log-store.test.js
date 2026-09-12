@@ -9,7 +9,7 @@
 
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, appendFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, appendFileSync, mkdirSync, chmodSync, readFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -20,7 +20,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // Import non-path-dependent exports statically
 const { mapResolveOutcomeToSchema } = await import(`${REPO_ROOT}/server/gate-log-store.js`);
 // readGateLog supports a logPath option for tests
-const { readGateLog } = await import(`${REPO_ROOT}/server/gate-log-store.js`);
+const { readGateLog, appendGateLogEntry } = await import(`${REPO_ROOT}/server/gate-log-store.js`);
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -91,6 +91,61 @@ describe('readGateLog — empty/missing', () => {
     writeFileSync(logPath, '', 'utf8');
     const entries = readGateLog({ logPath });
     assert.deepEqual(entries, []);
+  });
+
+  // A read that FAILS is not the same as a file that is absent, and this module guarded
+  // `readFileSync` with nothing but an earlier `existsSync`. Between those two calls the
+  // file can go away: a full-suite run tears down `.compose/data` under other tests while
+  // the server is still serving, and `readFileSync` then throws ENOENT.
+  //
+  // readGateLog KEEPS throwing, deliberately. lib/smartmemory-sync.js:66 counts a surface
+  // it cannot read as SKIPPED, which is how an unreadable gate log stays visible rather
+  // than masquerading as an empty one -- pinned by test/smartmemory-sync.test.js:475, which
+  // is what caught the first attempt at this fix when it swallowed the error here.
+  // Tolerance belongs at the callers that must degrade, and is asserted there.
+  test('readGateLog propagates a read failure rather than reporting an empty log', () => {
+    const dir = makeTmpDir();
+    const logPath = join(dir, 'a-directory-where-a-file-should-be');
+    mkdirSync(logPath, { recursive: true });
+    assert.throws(() => readGateLog({ logPath }),
+      'swallowing this would make an unreadable surface indistinguishable from an empty one');
+  });
+
+  test('an unreadable log does not lose the entry being appended', (t) => {
+    // Same unguarded read in appendGateLogEntry's idempotency scan. There the cost is
+    // worse: the throw escapes BEFORE the append, so a gate decision is lost outright.
+    // Failing open is right for the race that actually happens -- if the file vanished
+    // there are no prior entries, so nothing can be a duplicate of one.
+    //
+    // Modelled with a WRITE-ONLY file rather than a directory: the race makes the SCAN
+    // fail while the append itself is still fine (mkdirSync recreates the dir). A
+    // directory would block the write too and would be testing a different thing.
+    const dir = makeTmpDir();
+    const logPath = join(dir, 'gate-log.jsonl');
+    writeFileSync(logPath, '', 'utf8');
+    chmodSync(logPath, 0o222);
+    let readable = true;
+    try { readFileSync(logPath, 'utf8'); } catch { readable = false; }
+    if (readable) {
+      // Running as root, or a filesystem that ignores the mode bit. Skip rather than
+      // pass vacuously -- a green tick here would claim coverage this run did not get.
+      t.skip('filesystem does not enforce the write-only mode; scan cannot be made to fail');
+      return;
+    }
+
+    const prev = process.env.COMPOSE_GATE_LOG;
+    process.env.COMPOSE_GATE_LOG = logPath;
+    try {
+      assert.doesNotThrow(() => appendGateLogEntry(makeEntry()),
+        'an unreadable idempotency scan must not discard the gate decision');
+      chmodSync(logPath, 0o644);
+      assert.equal(readGateLog({ logPath }).length, 1,
+        'the entry must actually be on disk, not merely un-thrown');
+    } finally {
+      if (prev === undefined) delete process.env.COMPOSE_GATE_LOG;
+      else process.env.COMPOSE_GATE_LOG = prev;
+      chmodSync(logPath, 0o644);
+    }
   });
 });
 

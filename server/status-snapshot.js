@@ -132,6 +132,33 @@ function buildStatusSentence({
  * @param {string} now — ISO timestamp (injected for testability)
  * @returns {StatusSnapshot}
  */
+/**
+ * Gate decisions in the last 24h, or 0 when the log cannot be read.
+ *
+ * `readGateLog` throws on a read failure and that is correct for its other caller
+ * (lib/smartmemory-sync.js counts an unreadable surface as skipped). It is wrong HERE:
+ * this is a display counter on a snapshot served by GET /api/lifecycle/status, whose
+ * route turns any throw into a 500. Observed 2026-09-12 on a full-suite run -- another
+ * test tore down `.compose/data` while the server was serving, `readFileSync` hit the
+ * TOCTOU window after `existsSync`, and the ENOENT surfaced as a 500 that failed
+ * test/status-route.test.js with "Cannot read properties of undefined (reading
+ * 'drift_alerts')". That test had passed in all 228 previous logged full-suite runs.
+ *
+ * Degrading one counter to 0 is strictly better than losing the whole snapshot, and it
+ * mirrors what decision-events-snapshot.js:146 already does at its own call site.
+ *
+ * @param {number} nowMs
+ * @returns {number}
+ */
+function gateLoad24h(nowMs) {
+  try {
+    return readGateLog({ since: nowMs - 86400000 }).length;
+  } catch (err) {
+    console.warn('[status-snapshot] gate log unreadable; reporting gate_load_24h as 0:', err?.code ?? err?.message);
+    return 0;
+  }
+}
+
 export function computeStatusSnapshot(state, featureCode, now) {
   const nowStr = now || new Date().toISOString();
 
@@ -212,7 +239,7 @@ export function computeStatusSnapshot(state, featureCode, now) {
     pending_gates: pendingGateIds,
     drift_alerts: driftAlerts,
     open_loops_count: openLoopsCount,
-    gate_load_24h: readGateLog({ since: nowMs - 86400000 }).length,
+    gate_load_24h: gateLoad24h(nowMs),
     cta: null,
     computed_at: nowStr,
   };
