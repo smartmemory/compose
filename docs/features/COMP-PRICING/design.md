@@ -326,6 +326,63 @@ The live-path work is the accumulator chain, the stream writer and the bridge �
 
 ---
 
+## Prior art (2026-09-12): ccusage already ships this design
+
+Checked against the real package (`npm pack ccusage`, v20.0.20) and the live transcripts on
+this machine, not from recall.
+
+**VERIFIED here:**
+
+- **Claude Code's own transcripts carry NO cost field.** Inspected
+  `~/.claude/projects/-Users-ruze-reg-my-forge/*.jsonl`: the `usage` object is
+  `{input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens,
+  output_tokens_details:{thinking_tokens}}` plus a sibling `model`. A grep for any
+  `*[Cc]ost*` key returns nothing. So ccusage **must** compute from tokens — it has no
+  reported figure to read.
+- ccusage v20.0.20 is a native-binary launcher with **zero JS dependencies**; the pricing
+  logic is compiled, so it cannot be read from the tarball.
+- Its shipped README states the mechanism (lines 122, 184-186, 231-239):
+  - `--mode display` — cost MODES exist as a user-facing flag
+  - `--offline` — "use **pre-cached** pricing data without network connectivity"
+  - "Custom Pricing Overrides: override token pricing per raw model name in `ccusage.json`"
+  - "Cache Token Support: tracks and displays cache creation and cache read tokens separately"
+  - "Nix builds **embed the LiteLLM pricing file** from the **locked** `litellm flake input`,
+    so sandboxed builds **do not fetch pricing at build time**"
+  - "Non-Nix Cargo builds read the same **locked LiteLLM revision** from `flake.lock`"
+  - "The **scheduled `update pricing` workflow** runs the same update and validation, then
+    **opens a PR** when the pricing snapshot changes"
+
+**That is S3 as filed, already in production in a tool this project's owner uses:** a PINNED
+registry snapshot, never fetched at runtime, refreshed by a scheduled job that opens a PR on
+divergence. The design was arrived at independently; the convergence is corroboration, and it
+retires any remaining doubt about taking that shape.
+
+The cost MODES are also our `usd_source` under another name — reported versus computed — with
+one decisive difference: **ccusage surfaces the distinction to the user as a flag, where we
+destroy it at `build-stream-bridge.js:481`.**
+
+**NOT verified (compiled binary, stated so rather than assumed):** the exact semantics of each
+mode, and how it resolves the OpenAI/Anthropic cached-token dialect. Do not cite those
+without checking the Rust source.
+
+### The structural lesson, which is the real one
+
+**ccusage proves pricing from tokens is tractable. Our problem was never pricing.** ccusage is
+a READER: file to parse to report, one hop, with no opportunity to lose provenance. Ours is a
+five-layer pipeline (connector, normalizer, accumulator, history, bridge, UI) with a `?? 0` at
+nearly every hop. The defect is the plumbing, not the arithmetic.
+
+### Follow-up worth more than the rest of this feature
+
+**Those transcripts are an independent oracle we have never used.** Claude Code writes a
+per-call token record, provider-side, outside compose entirely. A ccusage-shaped computation
+over them is a cross-check on our own ledger that does not share a single line of code with
+it. If our receipts say $X for a run and the transcript says $Y, that is a real falsifier —
+the kind COMP-MODEL-ROUTE gate 5 currently lacks, since `reconcile.mjs` only checks our
+numbers against themselves. Filed as a follow-up, not scoped here.
+
+---
+
 ## Decision 4: two different contracts for "unknown cost"
 
 The same words mean opposite policies on the two paths, and the difference must be stated or
