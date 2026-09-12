@@ -11,6 +11,12 @@ import { parseAgentString, resolveAgentConfig } from '../lib/agent-string.js';
 import recordSchema from '../contracts/routing-record.schema.json' with { type: 'json' };
 import startSchema from '../contracts/routing-start.schema.json' with { type: 'json' };
 
+// COMP-COST-OWNER S3. TEST-ONLY deep import: stratum's package.json declares no `exports`,
+// so this path is not a contract and stratum may move it without notice. That is precisely
+// why it is confined to a test -- a break fails compose's own suite loudly instead of
+// degrading a production path silently. Never import this from lib/ or server/.
+const STRATUM_PRICING = '@smartmemory/stratum/dist/judge/pricing.js';
+
 // ---------------------------------------------------------------------------
 // resolveTierModel
 // ---------------------------------------------------------------------------
@@ -239,11 +245,18 @@ test('budget routes only Codex, to luna, at medium effort', () => {
 // in lib/routing-ledger.js, so it is nameable but is not an auto-escalation candidate
 // and does not enter floor computation. Ladder membership is an S2/S3 decision (Q3).
 test('budget is priced, so a luna dispatch is attributable', async () => {
-  const { MODEL_PRICING, calculateCost } = await import('../lib/model-pricing.js');
-  const luna = MODEL_PRICING[resolveTierModel('budget', 'codex')];
-  assert.deepEqual(luna, { inputPerMTok: 0.2, outputPerMTok: 1.2 });
+  // COMP-COST-OWNER S3: the authority is stratum's table, not a compose copy. compose no
+  // longer prices anything -- every producer states its own cost -- so the question "is a
+  // luna dispatch attributable?" is now a question about the producer that prices it.
+  const { MODEL_PRICING, usdFromTokens } = await import(STRATUM_PRICING);
+  // The KEY must exist; the RATES are stratum's to own. Asserting the numbers here would
+  // recreate in compose's suite the second table COMP-COST-OWNER S3 just deleted -- and a
+  // legitimate upstream price cut would then fail compose for no reason.
+  assert.ok(MODEL_PRICING[resolveTierModel('budget', 'codex')], 'luna must have an exact key');
   // A priced model yields a non-zero cost, so the ledger never marks it missing-usd.
-  assert.ok(calculateCost('gpt-5.6-luna', 1_000_000, 1_000_000) > 0);
+  assert.ok(usdFromTokens('gpt-5.6-luna', {
+    inputTokens: 1_000_000, cachedInputTokens: 0, outputTokens: 1_000_000,
+  }) > 0);
 });
 
 // ---------------------------------------------------------------------------
@@ -281,45 +294,60 @@ describe('tier enums in the routing contracts track the model table', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Every routable tier model must be priced in BOTH tables, by an EXACT key.
+// Every routable tier model must be priced, by an EXACT key, in the ONE table that
+// prices it: stratum's.
 //
-// experiment-pricing.js falls back to the first key that PREFIXES the model ID, and the
-// legacy `gpt-5` key prefixes every gpt-5.x model. `gpt-5.6-luna` hit that fallback and
-// priced at 10/40 instead of 0.2/1.2 — a silent 35.7x overstatement, no null to flag it.
-// This test is the control: a new tier model with no exact key fails here, loudly.
+// The original form of this test guarded compose's `experiment-pricing.js`, which fell
+// back to the first key that PREFIXED the model ID -- and the legacy `gpt-5` key prefixes
+// every gpt-5.x model, so `gpt-5.6-luna` priced at 10/40 instead of 0.2/1.2, a silent 35.7x
+// overstatement with no null to flag it. COMP-COST-OWNER S3 deleted both compose tables as
+// unreachable, which dissolves the prefix hazard rather than fixing it: stratum's lookup is
+// exact after `baseModel()` strips `/effort`, with no prefix path to fall through.
+//
+// The INVARIANT is what matters and it survives the deletion: a tier model compose can
+// dispatch but nobody can price reaches the ledger as missing-usd. The import below is the
+// deep path the design blesses for TESTS ONLY -- stratum publishes no `exports` field, so
+// there is no contract here, and a break must surface loudly in compose's own suite rather
+// than silently in production.
 // ---------------------------------------------------------------------------
 
-describe('routable tier models are priced in both tables', () => {
-  // KNOWN DIVERGENCE, filed not fixed: experiment-pricing retains pre-cut rates
-  // (terra 2.5/15, sol 5/30) while model-pricing carries the 2026-09-12 verified
-  // figures (terra 2/12, sol 4/20). Reconciling them is an owner decision because the
-  // experiment table is documented as retaining historical rates for old receipts.
-  const KNOWN_DIVERGENT = new Set(['gpt-5.6-terra', 'gpt-5.6-sol']);
-
+describe('every routable tier model is priced by an exact key in stratum', () => {
   const routable = [...new Set(
     [...Object.values(MODEL_TIERS), ...Object.values(CODEX_MODEL_TIERS)].filter(m => m !== null)
   )];
 
-  test('every tier model has a non-null price in model-pricing', async () => {
-    const { MODEL_PRICING } = await import('../lib/model-pricing.js');
-    for (const model of routable) {
-      if (!model.startsWith('gpt-')) continue; // Claude rates live on the prefix path
-      assert.ok(MODEL_PRICING[model], `${model} is routable but unpriced in model-pricing.js`);
+  test('every Codex tier model resolves to an EXACT stratum key, not a prefix', async () => {
+    const { MODEL_PRICING, baseModel } = await import(STRATUM_PRICING);
+    for (const model of Object.values(CODEX_MODEL_TIERS)) {
+      if (model === null) continue;
+      assert.ok(MODEL_PRICING[baseModel(model)],
+        `${model} is routable but unpriced in stratum -- every dispatch to it reaches the ledger as missing-usd`);
     }
   });
 
-  test('every Codex tier model resolves to an EXACT experiment-pricing key, not a prefix', async () => {
-    const { MODEL_PRICING } = await import('../lib/model-pricing.js');
-    const { lookupExperimentPricing } = await import('../lib/experiment-pricing.js');
-    for (const model of Object.values(CODEX_MODEL_TIERS)) {
-      if (model === null) continue;
-      const experiment = lookupExperimentPricing(model);
-      assert.ok(experiment, `${model} is routable but unpriced in experiment-pricing.js`);
-      if (KNOWN_DIVERGENT.has(model)) continue;
-      assert.deepEqual(
-        experiment, MODEL_PRICING[model],
-        `${model} prices differ between the two tables — a prefix fallback is the usual cause`
+  test('a gpt-5.x model with no exact key prices to nothing, rather than inheriting gpt-5', async () => {
+    // The negative control for the defect this slice retired. There is no `gpt-5` catch-all
+    // to inherit from any more, so an unknown 5.x model is UNPRICED -- which is the honest
+    // answer and the one the ledger can act on.
+    const { MODEL_PRICING, usdFromTokens } = await import(STRATUM_PRICING);
+    assert.ok(!MODEL_PRICING['gpt-5'], 'a gpt-5 catch-all key would resurrect the prefix defect');
+    assert.equal(
+      usdFromTokens('gpt-5.9-unreleased', {
+        inputTokens: 1_000_000, cachedInputTokens: 0, outputTokens: 1_000_000,
+      }),
+      0,
+      'an unknown gpt-5.x model must price to nothing, never to a sibling key\'s rate',
+    );
+  });
+
+  test('compose ships no price table of its own for a tier model to drift against', async () => {
+    for (const relative of ['../lib/model-pricing.js', '../lib/experiment-pricing.js']) {
+      await assert.rejects(
+        () => import(relative),
+        (err) => err.code === 'ERR_MODULE_NOT_FOUND',
+        `${relative} is back; a second table is how terra and sol went stale for six weeks`,
       );
     }
+    assert.ok(routable.length > 0, 'guard against the routable set silently emptying');
   });
 });

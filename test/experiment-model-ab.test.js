@@ -29,7 +29,6 @@ const BUILD_PATH = join(COMPOSE_ROOT, 'pipelines', 'build.stratum.yaml');
 const { provision } = await import('../lib/experiment-sandbox.js');
 const { collect }   = await import('../lib/experiment-metrics.js');
 const { _scaffoldSandboxProject } = await import('../lib/experiment.js');
-const { lookupExperimentPricing, deriveUsd } = await import('../lib/experiment-pricing.js');
 const { judge }     = await import('../lib/experiment-judge.js');
 const { startFresh } = await import('../lib/build.js');
 
@@ -558,39 +557,81 @@ describe('COMP-MODEL-AB S3: experiment-metrics collect', () => {
 });
 
 // ---------------------------------------------------------------------------
-// S3 — experiment-pricing
+// S3 — the cost axis after COMP-COST-OWNER S3
+//
+// `lib/experiment-pricing.js` and its `deriveUsd` are GONE. They were the token-derived
+// fallback for a history record carrying no cost, and they were unreachable: with a record
+// present, `cost_usd` is always a finite number (both appendBuildHistory sites spread
+// buildCostSnapshot(), whose amount is the accumulator's `usd`), and with NO record present
+// tokensIn/tokensOut read from that same absent record, so the fallback could only ever be
+// called as deriveUsd(model, 0, 0). Its cited "2.58x overcharge" was a fake-producer result.
+//
+// These pin the contract that replaced it: `usd` is the record's own number, or NULL. Never
+// a number this consumer derived, and never a 0 standing in for "we do not know".
 // ---------------------------------------------------------------------------
 
-describe('COMP-MODEL-AB S3: experiment-pricing', () => {
-  test('exact match returns pricing', () => {
-    const p = lookupExperimentPricing('claude-sonnet-4-6');
-    assert.ok(p, 'pricing must be found for claude-sonnet-4-6');
-    assert.equal(p.inputPerMTok,  3);
-    assert.equal(p.outputPerMTok, 15);
+describe('COMP-MODEL-AB S3: the cost axis never derives a price', () => {
+  function makeWorkspace() {
+    const ws = mkdtempSync(join(tmpdir(), 'comp-ab-px-'));
+    mkdirSync(join(ws, '.compose', 'data'), { recursive: true });
+    execSync('git init -q', { cwd: ws });
+    execSync('git config user.email "t@t"', { cwd: ws });
+    execSync('git config user.name "test"', { cwd: ws });
+    writeFileSync(join(ws, 'init.txt'), 'init\n');
+    execSync('git add -A && git commit -q -m "init"', { cwd: ws });
+    return ws;
+  }
+
+  function writeBuildHistory(ws, record) {
+    writeFileSync(
+      join(ws, '.compose', 'data', 'build-history.jsonl'),
+      JSON.stringify(record) + '\n'
+    );
+  }
+
+  test('a history record with no cost yields usd NULL, not a token-derived estimate', () => {
+    const ws = makeWorkspace();
+    try {
+      // Tokens and a model are both present -- everything the deleted fallback needed.
+      writeBuildHistory(ws, {
+        status: 'complete', input_tokens: 1_000_000, output_tokens: 1_000_000,
+        stepCount: 3, durationMs: 1_000, model: 'claude-sonnet-4-6',
+      });
+      writeFileSync(
+        join(ws, '.compose', 'build-stream.jsonl'),
+        JSON.stringify({ type: 'step_model', modelID: 'claude-sonnet-4-6' }) + '\n',
+      );
+
+      const result = collect({ sandbox: { workspace: ws, runDir: ws } });
+
+      assert.equal(result.cost.usd, null,
+        'a cost nobody recorded is unknown; deriving $18 from the tokens would invent it');
+      assert.equal(result.cost.tokensIn, 1_000_000, 'tokens are still reported');
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
+    }
   });
 
-  test('prefix match returns pricing for dated variant', () => {
-    const p = lookupExperimentPricing('claude-sonnet-4-6-20250514');
-    assert.ok(p, 'prefix match must resolve dated variants');
-    assert.equal(p.inputPerMTok, 3);
+  test("a recorded cost is passed through exactly, including a genuine zero", () => {
+    const ws = makeWorkspace();
+    try {
+      writeBuildHistory(ws, {
+        status: 'complete', input_tokens: 10, output_tokens: 10,
+        stepCount: 1, durationMs: 1, cost_usd: 0,
+      });
+      const result = collect({ sandbox: { workspace: ws, runDir: ws } });
+      assert.equal(result.cost.usd, 0, 'a recorded 0 is a measurement and stays 0, not null');
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
+    }
   });
 
-  test('unknown model returns null (degrade, not crash)', () => {
-    const p = lookupExperimentPricing('gemini-ultra');
-    assert.equal(p, null);
-  });
-
-  test('deriveUsd returns null for unknown model', () => {
-    const usd = deriveUsd('unknown-model', 10_000, 2_000);
-    assert.equal(usd, null);
-  });
-
-  test('deriveUsd computes correctly for known model', () => {
-    // claude-sonnet-4-6: $3/MTok input, $15/MTok output
-    // 1M in + 1M out = $3 + $15 = $18
-    const usd = deriveUsd('claude-sonnet-4-6', 1_000_000, 1_000_000);
-    assert.equal(typeof usd, 'number');
-    assert.equal(usd, 18);
+  test('compose ships no experiment price table any more', async () => {
+    await assert.rejects(
+      () => import('../lib/experiment-pricing.js'),
+      (err) => err.code === 'ERR_MODULE_NOT_FOUND',
+      'the table is back -- with it comes the gpt-5 prefix fallback that mispriced luna 35.7x',
+    );
   });
 });
 
@@ -663,19 +704,3 @@ describe('COMP-MODEL-AB S4: experiment-judge', () => {
     });
   });
 });
-
-
-for (const [model, input, output] of [
-  ['claude-fable-5-1', 10, 50],
-  ['claude-opus-5', 5, 25],
-  ['claude-sonnet-5', 2, 10],
-]) {
-  test(`experiment pricing: ${model} and dated variants`, () => {
-    const expected = { inputPerMTok: input, outputPerMTok: output };
-    assert.deepEqual(lookupExperimentPricing(model), expected);
-    assert.deepEqual(lookupExperimentPricing(`${model}-20260909`), expected);
-    assert.equal(deriveUsd(model, 1_000_000, 0), input);
-    assert.equal(deriveUsd(model, 0, 1_000_000), output);
-    assert.equal(deriveUsd(`${model}-20260909`, 1_000_000, 1_000_000), input + output);
-  });
-}

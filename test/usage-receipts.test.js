@@ -277,13 +277,17 @@ test('runAndNormalize emits one primary UsageRecord and preserves the merged usa
   const out = await runAndNormalize(null, 'p', { step_id: 'work', output_fields: {} }, { stratum });
   assert.deepEqual(out.usage, {
     input_tokens: 10, output_tokens: 5, cache_creation_input_tokens: 1,
-    cache_read_input_tokens: 2, cost_usd: out.usage.cost_usd, model: 'claude-sonnet-4-6',
+    cache_read_input_tokens: 2, cost_usd: 0, model: 'claude-sonnet-4-6',
   });
   assert.equal(out.usages.length, 1);
+  // COMP-COST-OWNER S3: the event states no cost, so the record carries NO cost_usd key.
+  // It previously carried one the consumer derived from the tokens and labelled 'estimated'
+  // -- provenance for a number no producer ever reported. The omission is what
+  // recordBuildUsage counts as unpriced and what reportUsageReceipts refuses to stamp.
   assert.deepEqual(out.usages[0], {
     dispatch_id: 'primary-1', model: 'claude-sonnet-4-6', duration_ms: 21,
     input_tokens: 10, output_tokens: 5, cache_read: 2, cache_creation: 1,
-    cost_usd: out.usage.cost_usd, usd_source: 'estimated',
+    usd_source: 'estimated',
   });
 });
 
