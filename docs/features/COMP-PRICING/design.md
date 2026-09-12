@@ -383,6 +383,66 @@ numbers against themselves. Filed as a follow-up, not scoped here.
 
 ---
 
+## Root cause (2026-09-12): it is not a pipeline, it is an uncoordinated fan-out
+
+The `?? 0`s are the symptom. The cause is that **nothing owns the number.** One measurement at
+the connector fans out to five independent running totals, each accumulating a different
+subset of events, and nothing reconciles them.
+
+| # | Total | Lives | Population | Fails closed? |
+|---|---|---|---|---|
+| 1 | `usageTotals` | `result-normalizer.js` | one step's dispatches | omits at 0 — yes |
+| 2 | `accumulator.usd` | `.compose/data` sidecar, persisted | **all 9 `recordBuildUsage` sites** incl. every repair | no, `?? 0` |
+| 3 | `buildCostTotals` | in-memory `build.js` | **main steps only — one site, `:5273-5275`** | no, `?? 0` |
+| 4 | routing receipts | the ledger | per dispatch | **yes — strips unprovenanced usd** |
+| 5 | stream events | `build-stream.jsonl` → cockpit | per step | no, `?? 0` twice |
+
+### The measurable consequence: the same build costs two different amounts
+
+`recordBuildUsage` is called from **nine** sites (`:4849`, `:4861`, `:4985`, `:5043`, `:5079`,
+`:5270`, `:5276`, `:5815`, `:5827`) — main step plus every fix, revise, gate-fix and
+error-carried usage. `buildCostTotals` is incremented from **exactly one** (`:5273-5275`), the
+main step, gated on `toEngineUsage`.
+
+So repair spend reaches total 2 and never total 3. But total 3 is **seeded from total 2** at
+`:3746-3749` on every invocation, including resume. Therefore:
+
+- **Fresh run:** `build-history.jsonl`'s `cost_usd` omits all repair spend.
+- **Resumed run:** it inherits the repairs banked before the resume, then omits the ones after.
+
+**The history record's cost therefore depends on whether the build was resumed**, for
+identical work. READ-VERIFIED from the call sites; NOT measured by running a build — the
+measurement is a build with a forced repair wave, read `cost_usd`, resume across the repair,
+read it again.
+
+Same line carries a second conflation: `:3748` seeds `output_tokens` from
+`selectedAccumulator.tokens_total`, and `tokens_total` is `input + output` summed
+(`recordBuildUsage:4334-4339`). After a resume, `output_tokens` starts at the combined total
+while `input_tokens` starts at 0, so the history record's split is wrong.
+
+### Why it got this way
+
+Each sink arrived with a different feature — the stream with COMP-OBS-COST, the history record
+with COMP-MODEL-AB, receipts and the ledger with COMP-MODEL-ROUTE, the sidecar with resume
+support. Each needed "what did this build cost", none found an existing owner to read from,
+and each built its own accumulator plus its own defensive `?? 0` against a shape it did not
+own. **Five features needed one number and there was never a single owner of it.**
+
+That is also exactly what ccusage gets for free by being a reader rather than a pipeline: one
+hop, one total, nowhere to diverge.
+
+### What this does to the feature
+
+**COMP-PRICING is misnamed.** Pricing is the small part and is nearly solved: the registry
+shape is settled, the receipt path is already correct, and the table duplication turned out to
+be dead code. The real work is **ownership of the cost number** — one accumulator that
+distinguishes known from unknown, that every sink READS rather than re-derives, with the
+receipt path's fail-closed discipline as the model.
+
+Renaming and re-slicing on that basis is an owner call; the finding is recorded either way.
+
+---
+
 ## Decision 4: two different contracts for "unknown cost"
 
 The same words mean opposite policies on the two paths, and the difference must be stated or
