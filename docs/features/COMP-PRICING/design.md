@@ -254,6 +254,78 @@ nobody, or may be normalized somewhere not found. Not chased; do not act on it u
 
 ---
 
+## Trace (2026-09-12): the two untraced paths, followed value-first
+
+Both traced by following the number from where it is set to where it is read, rather than
+from the import graph. That method is what found all of this; the import graph is what hid it.
+
+### Path B1 — receipts and the ledger: SAFE, and deliberately so
+
+`reportUsageReceipts` (`build.js:2260`) **reads and never derives**, and it fails closed:
+`:2280-2283` accepts `usd_source` only as a literal `'reported'|'estimated'` and **DELETES
+`usd` from the receipt** when it is absent, rather than manufacturing provenance. `:2310`
+stamps `detail: { costUnknown: true }` under a cost ceiling. A coerced 0 cannot reach a
+receipt anyway, because `toEngineUsage` (`:2226`) only emits `usd` when `usd > 0`.
+
+**This is the correct pattern and the model for everything below.** Decision 4's live-path
+contract is already implemented here.
+
+### Path B2 — the accumulator chain: five coercions ending in a false number
+
+| Step | Site | What it does |
+|---|---|---|
+| 1 | `build.js:4341` | `usd = accumulatorUsage.cost_usd ?? accumulatorUsage.usd ?? 0` |
+| 2 | `build.js:4347` | `usd: accumulator.usd + usd` — unknown adds 0, no incompleteness marker |
+| 3 | `build.js:3749` | `buildCostTotals.cost_usd = selectedAccumulator.usd` |
+| 4 | `build.js:5275` | `buildCostTotals.cost_usd += stepUsage.cost_usd ?? 0` |
+| 5 | `build.js:3288`, `:6328` | written to the history record as `cost_usd` |
+
+So `build-history.jsonl` **always carries a numeric `cost_usd`**, and an unknown-cost step is
+indistinguishable from a free one.
+
+**Consequence — `deriveUsd` is unreachable with non-zero inputs.**
+`experiment-metrics.js:216` reads `typeof historyRecord?.cost_usd === 'number'` and takes that
+branch whenever a history record exists — which is always, by the chain above. `deriveUsd`
+runs only in the `else`, i.e. when there is no history record; and in that case its inputs
+`tokensIn`/`tokensOut` come from the same absent record (`:206-207`, `?? 0`), so it is called
+as `deriveUsd(model, 0, 0)` and returns 0.
+
+**This corrects a claim made earlier in this same design.** The "2.58x over, still unfixed on
+the historical path" figure was produced by calling `deriveUsd` directly with live-fire token
+counts — inputs the real producer path can never deliver. That is the fake-producer pattern,
+and making it while documenting a fix for the same class of error is the point worth keeping.
+The arithmetic is real; the reachability was not checked. `deriveUsd`'s cache-blindness is
+therefore a latent defect in dead code, NOT a live overcharge, and its priority drops
+accordingly.
+
+### Path A — the cockpit: never derives, but destroys provenance
+
+No rate arithmetic anywhere in `src/` (the only `1_000_000` is a token humanizer in
+`branchComparePanelLogic.js:16`). There is no sixth table. But the provenance is destroyed in
+transit and the final render makes an affirmative false claim:
+
+1. `server/build-stream-bridge.js:481` — `cost_usd: event.cost_usd ?? 0`, and the projected
+   object **omits `usd_source` entirely**. Whatever the producer stated is discarded here.
+2. `src/components/cockpit/ContextStepDetail.jsx:280` filters `allSteps.filter(s => s.cost_usd != null)`
+   — the UI asks exactly the right question, and the bridge has already made it vacuous.
+3. `formatCost` (`src/components/agent/MessageCard.jsx:40`) **already has the correct branch**:
+   `if (usd == null) return ''`. It can never fire, because of 1.
+4. `:42` — `if (usd < 0.001) return '<$0.001'`. So an unknown-cost step renders as
+   **`<$0.001`**: an affirmative claim of near-zero spend for a call that may have cost
+   dollars. Worse than a blank, and worse than `$0.00`.
+5. The two surfaces disagree: `PastBuildsView.jsx:43` returns `null` for `usd <= 0` and renders
+   nothing.
+
+**Fix shape is small and already modelled by Path B1:** stop coercing at the bridge, carry
+`usd_source` through the projection, and let `formatCost`'s existing null branch do its job.
+
+### Scope consequence
+
+The live-path work is the accumulator chain, the stream writer and the bridge — not
+`experiment-pricing.js`, which is dead. S1 is re-ordered accordingly.
+
+---
+
 ## Decision 4: two different contracts for "unknown cost"
 
 The same words mean opposite policies on the two paths, and the difference must be stated or
