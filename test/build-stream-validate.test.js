@@ -82,6 +82,71 @@ describe('validateBuildStreamEvent — valid envelopes', () => {
     assert.equal(result.valid, true, `expected valid but got: ${result.error}`);
   });
 
+  // REGRESSION (2026-09-12): cost_usd is OPTIONAL. Codex reports no cost of its own,
+  // so stratum's connector omits the key rather than stamping a false reported $0.
+  // While this validator required it, stratum-mcp-client.js:477 warn-and-DROPPED every
+  // codex usage event -- observed 6x in the 2026-09-12 live-fire run as
+  // `dropping invalid BuildStreamEvent kind=step_usage ... must have required property
+  // 'cost_usd'`. This is the real producer's shape, copied from that run.
+  it('accepts a step_usage envelope with cost_usd OMITTED (the codex producer shape)', () => {
+    const result = validateBuildStreamEvent(makeEnvelope({
+      kind: 'step_usage',
+      metadata: {
+        stepId: 'review',
+        input_tokens: 216385,
+        output_tokens: 5836,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 214016,
+        model: 'gpt-5.3-codex-spark',
+      },
+    }));
+    assert.equal(result.valid, true, `codex step_usage must not be dropped, got: ${result.error}`);
+  });
+
+  // The three token fields stay REQUIRED: an event with no counts carries no
+  // information and must still be rejected, so the relaxation above is narrow.
+  it('still rejects step_usage missing a required token field', () => {
+    for (const omit of ['stepId', 'input_tokens', 'output_tokens']) {
+      const metadata = {
+        stepId: 'review', input_tokens: 10, output_tokens: 20, model: 'gpt-5.6-luna',
+      };
+      delete metadata[omit];
+      const result = validateBuildStreamEvent(makeEnvelope({ kind: 'step_usage', metadata }));
+      assert.equal(result.valid, false, `omitting ${omit} must still be rejected`);
+    }
+  });
+
+  // The producer STATES how it knows the amount. Before this field existed, the consumer
+  // inferred provenance from cost_usd's presence, so an honest estimate was relabelled as
+  // provider-reported spend -- which left an estimating producer no safe option but to omit
+  // the cost, and this validator then dropped the event outright.
+  it('accepts a step_usage envelope carrying an ESTIMATED cost with stated provenance', () => {
+    const result = validateBuildStreamEvent(makeEnvelope({
+      kind: 'step_usage',
+      metadata: {
+        stepId: 'review',
+        input_tokens: 216385,
+        output_tokens: 5836,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 179200,
+        cost_usd: 0.17813775,
+        usd_source: 'estimated',
+        model: 'gpt-5.3-codex-spark',
+      },
+    }));
+    assert.equal(result.valid, true, `codex step_usage must not be dropped, got: ${result.error}`);
+  });
+
+  it('rejects a usd_source outside the stated vocabulary', () => {
+    for (const bad of ['guessed', 'REPORTED', '', null, 0]) {
+      const result = validateBuildStreamEvent(makeEnvelope({
+        kind: 'step_usage',
+        metadata: { stepId: 's', input_tokens: 1, output_tokens: 1, usd_source: bad },
+      }));
+      assert.equal(result.valid, false, `usd_source ${JSON.stringify(bad)} must be rejected`);
+    }
+  });
+
   it('accepts a valid build_end metadata envelope', () => {
     const result = validateBuildStreamEvent(makeEnvelope({
       kind: 'build_end',

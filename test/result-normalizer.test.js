@@ -235,6 +235,57 @@ test('aggregates step_usage envelopes into usage totals', async () => {
   assert.equal(usage.cost_usd, 0.001);
 });
 
+// ---------------------------------------------------------------------------
+// Stated provenance (2026-09-12). The consumer used to infer provenance from whether
+// cost_usd was present, so a producer sending an honest estimate had it relabelled as
+// provider-reported spend. Its only safe alternative was to omit the cost -- which the
+// stream validator then rejected, dropping the event entirely. The producer now STATES
+// `usd_source`, and these tests pin that the label survives.
+// ---------------------------------------------------------------------------
+
+test('an ESTIMATED step_usage cost is never relabelled as reported', async () => {
+  const stratum = fakeStratum({
+    text: 'ok',
+    events: [
+      { kind: 'step_usage', metadata: {
+        input_tokens: 216385, output_tokens: 5836, model: 'gpt-5.3-codex-spark',
+        cache_creation_input_tokens: 0, cache_read_input_tokens: 179200,
+        cost_usd: 0.17813775, usd_source: 'estimated',
+      } },
+    ],
+  });
+  const { usage, usages } = await runAndNormalize(null, 'p', { step_id: 's', output_fields: {} }, { stratum });
+  assert.equal(usage.cost_usd, 0.17813775, 'the producer-stated amount is used as-is');
+  // usd_source rides the per-dispatch usage RECORD (usages[0]), which is the payload the
+  // routing ledger reads -- not the aggregate totals object.
+  assert.equal(usages[0].usd_source, 'estimated', 'the stated label must survive to the usage record');
+  // Token counts stay RAW: identical to what the connector reported, which is the
+  // identity compose's routing evidence guard enforces.
+  assert.equal(usage.input_tokens, 216385, 'input_tokens must NOT have cached subtracted');
+  assert.equal(usage.cache_read_input_tokens, 179200);
+});
+
+test('one estimated step makes the whole run an estimate, not a report', async () => {
+  const stratum = fakeStratum({
+    text: 'ok',
+    events: [
+      { kind: 'step_usage', metadata: {
+        input_tokens: 10, output_tokens: 5, model: 'claude-haiku-4-5-20251001',
+        cache_creation_input_tokens: 0, cache_read_input_tokens: 0,
+        cost_usd: 0.001, usd_source: 'reported',
+      } },
+      { kind: 'step_usage', metadata: {
+        input_tokens: 20, output_tokens: 5, model: 'gpt-5.3-codex-spark',
+        cache_creation_input_tokens: 0, cache_read_input_tokens: 0,
+        cost_usd: 0.002, usd_source: 'estimated',
+      } },
+    ],
+  });
+  const { usage, usages } = await runAndNormalize(null, 'p', { step_id: 's', output_fields: {} }, { stratum });
+  assert.ok(Math.abs(usage.cost_usd - 0.003) < 1e-12, 'both amounts are summed');
+  assert.equal(usages[0].usd_source, 'estimated', 'a mixed sum cannot honestly be called reported');
+});
+
 // STRAT-USAGE-SPLIT: before surface 16 the TS envelope carried only an
 // aggregate ({usd?, tokens, ms}) and the fold filed it all as output —
 // input_tokens read 0 on every record ever written. The envelope now carries

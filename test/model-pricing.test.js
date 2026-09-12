@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-const { MODEL_PRICING, calculateCost } = await import(`${REPO_ROOT}/lib/model-pricing.js`);
+const { MODEL_PRICING, calculateCost, calculateEventCost } = await import(`${REPO_ROOT}/lib/model-pricing.js`);
 
 // ---------------------------------------------------------------------------
 // MODEL_PRICING table
@@ -206,5 +206,57 @@ test('MODEL_PRICING covers the tier map so no dispatched model is unpriced', asy
   for (const model of dispatched) {
     assert.ok(calculateCost(model, 1_000_000, 0) > 0,
       `tier map dispatches ${model} but MODEL_PRICING cannot price it — it would reach the ledger as missing-usd`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// calculateEventCost — the PRODUCER token dialect (2026-09-12)
+//
+// OpenAI reports input_tokens INCLUDING cached_input_tokens; Anthropic reports it
+// EXCLUDING them, with the cache fields additional. calculateCost implements the
+// Anthropic reading, so pricing raw OpenAI numbers with it bills the cached portion
+// twice. The fix lives HERE and not in the stratum emitter because compose's routing
+// evidence guard (lib/routing-runtime.js:187-196) refuses with
+// ROUTING_CALL_EVIDENCE_CONFLICT when any forwarded field differs from the connector's
+// own evidence -- translating at the producer was tried (stratum d006278) and reverted
+// (1c2646c) after failing 15 tests here.
+// ---------------------------------------------------------------------------
+
+// Real numbers from the retained 2026-09-12 live-fire review call, whose connector
+// estimate was $0.17813775.
+const LIVEFIRE = { model: 'gpt-5.3-codex-spark', input: 216385, output: 5836, cacheRead: 179200 };
+
+test('calculateEventCost subtracts cached tokens for OpenAI-dialect models', () => {
+  const { model, input, output, cacheRead } = LIVEFIRE;
+  const priced = calculateEventCost(model, input, output, 0, cacheRead);
+  assert.ok(Math.abs(priced - 0.17813775) < 1e-9,
+    `expected the connector's $0.17813775, got ${priced}`);
+});
+
+test('pricing the RAW OpenAI numbers double-bills the cache — the bug this prevents', () => {
+  const { model, input, output, cacheRead } = LIVEFIRE;
+  const raw = calculateCost(model, input, output, 0, cacheRead);
+  const fixed = calculateEventCost(model, input, output, 0, cacheRead);
+  assert.ok(raw > fixed * 2.5,
+    `raw pricing must be the inflated one (raw ${raw} vs fixed ${fixed})`);
+  assert.ok(Math.abs(raw - 0.49173775) < 1e-9, `expected the 2.76x figure, got ${raw}`);
+});
+
+test('calculateEventCost leaves Anthropic-dialect models untouched', () => {
+  // Real claude row from the same run: input EXCLUDES the 422,507 cached tokens.
+  const args = ['claude-haiku-4-5-20251001', 66, 2310, 29325, 422507];
+  assert.equal(calculateEventCost(...args), calculateCost(...args),
+    'claude pricing must not change — its input_tokens is already the uncached portion');
+});
+
+test('every Codex tier model is treated as OpenAI dialect', async () => {
+  const { CODEX_MODEL_TIERS } = await import(`${REPO_ROOT}/server/model-tiers.js`);
+  for (const model of Object.values(CODEX_MODEL_TIERS)) {
+    if (model === null) continue;
+    // 1000 input of which 1000 cached => the uncached portion is 0, so the input term
+    // vanishes entirely. Under the Anthropic reading it would still be charged.
+    const ev = calculateEventCost(model, 1000, 0, 0, 1000);
+    const raw = calculateCost(model, 1000, 0, 0, 1000);
+    assert.ok(ev < raw, `${model} must be treated as OpenAI dialect (ev ${ev} vs raw ${raw})`);
   }
 });
