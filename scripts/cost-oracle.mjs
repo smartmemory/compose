@@ -33,6 +33,8 @@ function parseArgs(args) {
 function readLedger() {
   const historyPath = resolve('.compose', 'data', 'build-history.jsonl');
   const flows = new Map();
+  const accumulatorGroups = new Map();
+  const legacyFlows = new Set();
   const lines = readFileSync(historyPath, 'utf8').split('\n');
   for (const [index, line] of lines.entries()) {
     if (!line.trim()) continue;
@@ -46,15 +48,7 @@ function readLedger() {
       || !Number.isFinite(row.cost_usd) || row.cost_usd < 0) {
       throw new Error(`${historyPath}:${index + 1}: expected flowId and non-negative numeric cost_usd`);
     }
-    // A history row is a CUMULATIVE snapshot of the flow, not a per-segment
-    // delta: on resume the accumulator is seeded from active-build.json
-    // (lib/build.js:3798-3823), so the latest row already contains every earlier
-    // row's spend. Summing therefore DOUBLE-COUNTS every resumed segment.
-    // Measured 2026-09-13 on the controlled repro (flow 64f8c243): rows of
-    // $0.261692 and $7.194031, where the second equals stratum's flowSpent.usd
-    // ($7.1940315) and the full-coverage transcript oracle ($7.1940) to the cent,
-    // while their sum ($7.455723) overstates by exactly the killed segment.
-    // Take the LAST row by startedAt.
+    // Retain both legacy readings for diagnostics and the conservative fallback.
     const flow = flows.get(row.flowId)
       ?? { flowId: row.flowId, ledger_sum_usd: 0, ledger_last_usd: 0, ledger_usd: 0,
            ledger_rows: 0, _startedAt: null };
@@ -63,15 +57,33 @@ function readLedger() {
       flow.ledger_last_usd = row.cost_usd;
       flow._startedAt = String(row.startedAt ?? '');
     }
-    // Neither reading is universally correct, so take the MOST GENEROUS and flag
+    if (row.accumulator_build_id == null) {
+      legacyFlows.add(row.flowId);
+    } else {
+      const groups = accumulatorGroups.get(row.flowId) ?? new Map();
+      // Group rows by (flowId, accumulator_build_id), take the LAST row within a
+      // group (JSONL append order), SUM across groups. A terminal auto-resume
+      // rotation correctly starts a new accumulator lifetime and therefore group.
+      groups.set(row.accumulator_build_id, row.cost_usd);
+      accumulatorGroups.set(row.flowId, groups);
+    }
+    flow.ledger_rows += 1;
+    flows.set(row.flowId, flow);
+  }
+  for (const flow of flows.values()) {
+    if (!legacyFlows.has(flow.flowId)) {
+      flow.ledger_usd = [...accumulatorGroups.get(flow.flowId).values()]
+        .reduce((sum, cost) => sum + cost, 0);
+      continue;
+    }
+    // If ANY row lacks an identity, neither reading is universally correct.
+    // Keep the legacy max(sum, last) fallback: take the MOST GENEROUS and flag
     // UNDER only when even that falls short. Measured 2026-09-13: 44c575e7's SUM
     // ($11.6007) exceeds its own flow's total spend ($4.0447), which is
     // impossible, while 4122e695's LAST ($0.6974) is BELOW its earlier row
     // ($1.6045) and so cannot be a running total. Rows are cumulative only
     // within one accumulator lifetime; clearBuildAccumulator resets it.
     flow.ledger_usd = Math.max(flow.ledger_sum_usd, flow.ledger_last_usd);
-    flow.ledger_rows += 1;
-    flows.set(row.flowId, flow);
   }
   return flows;
 }
