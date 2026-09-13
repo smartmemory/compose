@@ -46,8 +46,30 @@ function readLedger() {
       || !Number.isFinite(row.cost_usd) || row.cost_usd < 0) {
       throw new Error(`${historyPath}:${index + 1}: expected flowId and non-negative numeric cost_usd`);
     }
-    const flow = flows.get(row.flowId) ?? { flowId: row.flowId, ledger_usd: 0, ledger_rows: 0 };
-    flow.ledger_usd += row.cost_usd;
+    // A history row is a CUMULATIVE snapshot of the flow, not a per-segment
+    // delta: on resume the accumulator is seeded from active-build.json
+    // (lib/build.js:3798-3823), so the latest row already contains every earlier
+    // row's spend. Summing therefore DOUBLE-COUNTS every resumed segment.
+    // Measured 2026-09-13 on the controlled repro (flow 64f8c243): rows of
+    // $0.261692 and $7.194031, where the second equals stratum's flowSpent.usd
+    // ($7.1940315) and the full-coverage transcript oracle ($7.1940) to the cent,
+    // while their sum ($7.455723) overstates by exactly the killed segment.
+    // Take the LAST row by startedAt.
+    const flow = flows.get(row.flowId)
+      ?? { flowId: row.flowId, ledger_sum_usd: 0, ledger_last_usd: 0, ledger_usd: 0,
+           ledger_rows: 0, _startedAt: null };
+    flow.ledger_sum_usd += row.cost_usd;
+    if (flow._startedAt === null || String(row.startedAt ?? '') >= flow._startedAt) {
+      flow.ledger_last_usd = row.cost_usd;
+      flow._startedAt = String(row.startedAt ?? '');
+    }
+    // Neither reading is universally correct, so take the MOST GENEROUS and flag
+    // UNDER only when even that falls short. Measured 2026-09-13: 44c575e7's SUM
+    // ($11.6007) exceeds its own flow's total spend ($4.0447), which is
+    // impossible, while 4122e695's LAST ($0.6974) is BELOW its earlier row
+    // ($1.6045) and so cannot be a running total. Rows are cumulative only
+    // within one accumulator lifetime; clearBuildAccumulator resets it.
+    flow.ledger_usd = Math.max(flow.ledger_sum_usd, flow.ledger_last_usd);
     flow.ledger_rows += 1;
     flows.set(row.flowId, flow);
   }
@@ -97,6 +119,19 @@ function readOracle(cachePath) {
   return sessions;
 }
 
+// stratum's own per-flow tally, a SECOND independent accounting path (different
+// repo, different code). Absent on flows written before stratum recorded usd
+// (e.g. 13fd190e, 2026-08-30), which is why it is optional rather than required.
+function readFlowSpent(flowId) {
+  const flowPath = join(homedir(), '.stratum', 'ts', 'flows', `${flowId}.json`);
+  try {
+    const usd = JSON.parse(readFileSync(flowPath, 'utf8'))?.flowSpent?.usd;
+    return Number.isFinite(usd) && usd >= 0 ? usd : null;
+  } catch {
+    return null;
+  }
+}
+
 function projectDirectories(projectsPath) {
   try {
     return readdirSync(projectsPath, { withFileTypes: true }).filter((entry) => entry.isDirectory());
@@ -121,14 +156,25 @@ function compareFlow(flow, sessions, projectsPath, directories, tolerance) {
   }
   // The same UUID in multiple directories is still one ccusage session.
   const oracle = [...joined].reduce((sum, id) => sum + sessions.get(id).totalCost, 0);
-  const under = flow.ledger_usd < oracle * (1 - tolerance);
-  const verdict = under ? 'UNDER' : joined.size < 3 ? 'INSUFFICIENT-COVERAGE' : 'OK';
+  // Best available lower bound: the transcript oracle misses main-source steps,
+  // stratum's flowSpent misses nothing but is absent on older flows. Where both
+  // exist they corroborate closely (44c575e7: $4.0316 vs $4.0447).
+  const flowSpent = readFlowSpent(flow.flowId);
+  const bound = Math.max(oracle, flowSpent ?? 0);
+  const under = flow.ledger_usd < bound * (1 - tolerance);
+  // flowSpent needs no transcripts at all, so when it is present coverage is
+  // never thin — only a flow with neither flowSpent nor 3+ joined sessions is
+  // genuinely unjudgeable.
+  const thin = flowSpent === null && joined.size < 3;
+  const verdict = under ? 'UNDER' : thin ? 'INSUFFICIENT-COVERAGE' : 'OK';
   return {
     ...flow,
     oracle_usd_lower_bound: oracle,
     oracle_is_strict_lower_bound: true,
     coverage_note: coverageNote,
-    ledger_oracle_ratio: oracle > 0 ? flow.ledger_usd / oracle : null,
+    stratum_flow_spent_usd: flowSpent,
+    bound_usd: bound,
+    ledger_oracle_ratio: bound > 0 ? flow.ledger_usd / bound : null,
     sessions_joined: joined.size,
     unjoined,
     tolerance,
@@ -148,7 +194,9 @@ function printReport(reports, json) {
       ? 'INSUFFICIENT-COVERAGE (NOT a finding)' : report.verdict;
     console.log(`flow=${report.flowId} ledger=$${report.ledger_usd.toFixed(4)} `
       + `oracle=$${report.oracle_usd_lower_bound.toFixed(4)} (strict lower bound; main-source transcripts excluded) `
-      + `ledger/oracle=${ratio} ledger_rows=${report.ledger_rows} sessions_joined=${report.sessions_joined} `
+      + `stratum_flow_spent=$${report.stratum_flow_spent_usd === null ? 'n/a' : report.stratum_flow_spent_usd.toFixed(4)} `
+      + `[sum=$${report.ledger_sum_usd.toFixed(4)} last=$${report.ledger_last_usd.toFixed(4)}] `
+      + `ledger/bound=${ratio} ledger_rows=${report.ledger_rows} sessions_joined=${report.sessions_joined} `
       + `unjoined=${report.unjoined} (unknown cost) ${verdict}`);
   }
 }

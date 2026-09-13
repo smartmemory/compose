@@ -369,3 +369,95 @@ Killed at flow spend `$0.2617`. Post-kill state:
 3. The three-way agreement above is a **free calibration point** and it is exact, which is
    evidence the per-segment accounting is sound. The defect is about what survives ACROSS
    segments, not within one.
+
+
+## VERDICT — controlled repro, flow `64f8c243`
+
+### Pre-registered outcome 1: the resumed row carries the cumulative total. Correctly.
+
+**Three independent sources agree to the cent** on a build that was killed mid-flight and
+resumed to completion:
+
+| source | figure |
+|---|---|
+| ccusage over transcripts — **full coverage** ($4.0210 main-source + $3.1730 fanout) | **$7.1940** |
+| stratum `flowSpent.usd` | **$7.1940315** |
+| compose ledger, resumed row | **$7.194031** |
+
+Attempt 1 corroborates independently: its two main-source sessions total **$0.5738** against
+row 1's **$0.573726**.
+
+This is the one run where the oracle is a FULL accounting rather than a lower bound, because
+the scratch project's transcript directory contains only this build. **Per-flow, per-segment
+cost accounting is exact — including across a kill and a resume.** The seeding design works.
+
+**As pre-registered, this is NOT a clean bill of health.** It relocates the cause: `13fd190e`
+lost its money because the resumed run was **killed before its terminal write**, not because
+the resume computed a wrong number. Those are different defects with different fixes.
+
+### The repro also falsified my own tool
+
+Rows 2 and 3 belong to the SAME flow, and row 2 ($0.261692) is contained in row 3
+($7.194031). `scripts/cost-oracle.mjs` summed `cost_usd` across a flow's rows, so it
+**double-counted every resumed segment**. The sum, $7.455723, overstates by exactly the
+killed segment.
+
+Correcting it changed three of five verdicts — and **removed the "ledger is high" direction
+entirely**:
+
+| flow | old (SUM) | corrected | stratum `flowSpent` | verdict |
+|---|---|---|---|---|
+| `af922492` | 0.28x | **0.28x** (sum) / 0.15x (last) | $16.4574 | **UNDER** |
+| `13fd190e` | 0.60x | **0.60x** | n/a (old flow) | **UNDER** |
+| `4122e695` | 4.00x "high" | **0.92x** | $2.5118 | **UNDER** — was never high |
+| `44c575e7` | 2.88x "high" | **2.87x** | $4.0447 | OK — but see below |
+
+**Both flows I reported as "ledger higher, uninformative" were artifacts of my own summing
+bug.** One is actually UNDER; the other is fine. My caution about not quoting them as
+over-charging was right, but for the wrong reason.
+
+### Rows are cumulative only within an accumulator lifetime
+
+Neither aggregation rule is universally correct, and the evidence is mutually exclusive:
+
+- `44c575e7`'s row SUM ($11.6007) **exceeds its own flow's total spend** ($4.0447). A sum
+  cannot be right.
+- `4122e695`'s LAST row ($0.6974) is **below its earlier row** ($1.6045), so it cannot be a
+  running total.
+
+`clearBuildAccumulator` (`lib/build.js:2820`) deletes the accumulator on a terminal, so a
+later run starts from zero. Rows are cumulative *within* one accumulator lifetime and
+disjoint *across* lifetimes, **with nothing on the row saying which** — so a consumer cannot
+compute a build's cost from `build-history.jsonl` at all. That is the deeper defect, and it
+is worse than either mis-aggregation.
+
+The script now takes the **most generous** reading (`max(sum, last)`) and flags UNDER only
+when even that falls short. `44c575e7` therefore reads OK despite an impossible sum; the
+over-count is recorded here rather than asserted by the tool.
+
+### stratum `flowSpent.usd` is now a second oracle in the tool
+
+It needs no transcripts, so it also fixes the thin-coverage blind spot (`4122e695` joined one
+session; `flowSpent` judged it anyway). Where both exist they corroborate closely — `44c575e7`
+$4.0316 vs $4.0447 (0.3%), `af922492` $16.0008 vs $16.4574 (2.8%, and the oracle is a lower
+bound there). Two accounting paths in different repos agreeing that far is strong evidence
+both are sound and the ledger is the outlier.
+
+### What is now established
+
+1. **Per-flow accounting is exact** — three sources to the cent, across a resume.
+2. **The ledger loses money when a run dies before its terminal write.** Three of four real
+   flows under-record; the worst retains **15-28%** of a spend two independent sources agree on.
+3. **`build-history.jsonl` cannot be aggregated per flow** — cumulative and disjoint rows are
+   indistinguishable.
+4. The mechanism for `13fd190e` is a killed resume, **not** faulty resume arithmetic.
+
+### Still owed
+
+- **Part B, not run:** kill the RESUME mid-flight and confirm no row appears. That is
+  `13fd190e`'s exact shape. This run killed the FIRST segment, and a row was written anyway
+  (SIGKILL notwithstanding), so the write path is more robust than expected — which makes
+  Part B the interesting case.
+- A row field distinguishing cumulative from disjoint, or a documented aggregation rule.
+
+**Cost of this measurement: $8.03** ($0.5737 + $0.2617 + $7.1940, less the shared segment).
