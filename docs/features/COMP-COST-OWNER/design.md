@@ -647,7 +647,12 @@ were never built; leaving them would read as a plan outstanding rather than one 
      `:409-410`. Reading the aggregate reports **no caching on a fully cached build**. The
      existing comment beside `unknownEntries` warns about this exact trap ("same trap as
      `usd_source` riding `usages[0]`") and the first draft walked into it anyway; the
-     end-to-end producer-path test is what caught it, not review.
+     end-to-end producer-path test is what caught it, not review. **The non-event path is the
+     production path** — traced afterwards rather than assumed, because the first write-up
+     asserted the blast radius without checking it: `usageTotals` is filled only by
+     `step_usage` events (`:484-492`), and `:697-699` records that the TS `agent_run` route
+     returns a synchronous envelope and streams NO `step_usage` events, while only the retired
+     python/factory-shim route did. Post-cutover that is every real dispatch.
    - **A cache-ONLY usage is reachable, so it joins the write guard.** Settled by tracing, not
      assumed: `hasReportedUsage` (`result-normalizer:282-283`) returns true on cache tokens
      alone, so `usageRecordFromRaw` builds a record with `input_tokens: 0`,
