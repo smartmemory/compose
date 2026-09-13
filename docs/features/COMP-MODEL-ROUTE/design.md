@@ -413,6 +413,16 @@ admission and broadened consumer admission. Implement Build replay and GSD conti
 filtered-graph persistence and uncertain-issuance reconciliation. Pin off-mode byte identity;
 reserve feedback fields as disabled/empty. No complete shadow-sample claim in this slice.
 
+**Configuration (added 2026-09-13).** Mode precedence is `--route-mode` flag >
+`.compose/compose.json#routing.mode` > preset `_routing.mode` > `off`, resolved once in
+`routingOptionsFor`, which both Build and GSD call. The project-config term exists because
+without it no ordinary run could record: the default is `off`, there was no CLI flag, and the
+only shipped `_routing` setting was the `team-fable-astra` preset — so the shadow corpus that
+S2's report and Decision 7's Q3 ruling both consume was never written outside tests. Only `off`
+and `shadow` are accepted; anything else is refused by name at the resolver. Refusal semantics are
+unchanged by this: a `ROUTING_*` integrity error still refuses the run per the S1a criteria, and
+the CLI surfaces the code plus both ways to switch the observation off.
+
 **S1b — Attributable shadow outcomes (depends on S1a).** Add primary/failure/normalization
 call hooks, joins and receipt intents; capture pre-reset gate/task bindings and accepted
 tokens. Derive acceptance and unsupported observations; implement idempotent ledger and

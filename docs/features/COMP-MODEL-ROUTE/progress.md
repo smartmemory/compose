@@ -621,3 +621,46 @@ entries are removed, 23 pre-existing stay green).
 **Test-timeout correction:** `test/build-model-route-outcomes.test.js` needs **428s**; the 300s
 cap in the operational kit and in a batch run reports it as `fail 0 / cancelled 1`, which reads as
 a failure and is not one. Isolated at 900s it is **34 / 34 / 0 / 0**.
+
+## 2026-09-13 — ordinary builds can record a shadow corpus (`routing.mode` in compose.json)
+
+**Why:** Q3 (repair floor) was deferred with "the shadow corpus should settle it before S3 builds
+enforcement", and S2's hindsight report reports over the same corpus. **The corpus was empty** —
+`.compose/routing/` did not exist in this repo, and it never would have: `route_mode` defaults to
+`off` (`lib/build.js` `routingOptionsFor`), `bin/compose.js` had **no** `--route-mode` flag (zero
+matches), and the ONLY shipped config setting `_routing` was
+`presets/team-fable-astra.profiles.json` — the preset whose slice-6 live-fire the owner HELD. So
+both S2 and Q3 were blocked behind a run that was paused, and nothing about ordinary work would
+ever have filled the gap.
+
+**Change:** mode precedence becomes
+`--route-mode flag > .compose/compose.json#routing.mode > preset _routing.mode > 'off'`.
+One `??` term added to `routingOptionsFor`, which is the single resolver both Build
+(`lib/build.js` x2 call sites) and GSD (`lib/gsd.js`) already call, so both entry points are
+covered by the one change. `--route-mode=<off|shadow>` added to `compose build`. This repo's
+`.compose/compose.json` now sets `routing.mode: "shadow"`, so the corpus accumulates during
+ordinary work at no extra model spend.
+
+**Verified BEFORE building, not assumed:** shadow on an ordinary preset is an already-tested path.
+`test/helpers/routing-runtime-fixture.js` defaults `mode = 'shadow'` and drives `runBuild` with
+`template: 'bug-fix'` (not the team preset), and asserts ledger rows via `readRoutingLedger`. Had
+that been team-preset-only, this slice would have been a flag that turns on a refusal, and the
+right next step would have been an S1b rail slice instead.
+
+**Refusal semantics DELIBERATELY unchanged.** A `ROUTING_*` error still fails the run, including an
+ordinary-only one — `routingIntegrityError` (`lib/routing-runtime.js:7`) rethrows anything with a
+`ROUTING_` code, and design.md's acceptance criteria say "Missing/drifted roots or issuance bindings
+refuse even ordinary-only runs". Degrading to "record what we can" was considered and REJECTED: a
+censored sample silently corrupts the corpus Q3 depends on, which is the same failure class as
+COMP-COST-OWNER's `?? 0` turning "unknown" into "free". The escape hatch is the switch, not a
+downgrade — and because a bare refusal names neither the cause nor the cure, `bin/compose.js` now
+prints the `ROUTING_*` code plus both `--route-mode=off` and the config key on any routing refusal.
+
+**Tests:** `test/routing-mode-config.test.js` — 8 precedence cases plus three END-TO-END through the
+real `runBuild`: the project setting alone produces rows on an ordinary build (the claim that
+matters; a resolver test would pass with the corpus still empty), `off` stays byte-silent, and the
+flag overrides a shadow-configured project. Negative control RED against `lib/build.js`.
+
+**Does NOT settle Q3.** It makes Q3 answerable. The corpus still has to accumulate before the
+repair floor can be ruled on evidence rather than argument — which is what the 2026-09-11 entry
+asked for.
