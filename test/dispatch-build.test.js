@@ -435,7 +435,7 @@ test('complete, failed, and health-downgraded attempts each emit one final actua
     const visionWriter = fakeVisionWriter();
     const { runBuild } = await import('../lib/build.js');
 
-    await runBuild('COMP-OK', {
+    const okResult = await runBuild('COMP-OK', {
       cwd,
       stratum,
       visionWriter,
@@ -443,7 +443,7 @@ test('complete, failed, and health-downgraded attempts each emit one final actua
       skipTriage: true,
       description: 'complete',
     });
-    await runBuild('COMP-FAIL', {
+    const failResult = await runBuild('COMP-FAIL', {
       cwd,
       stratum,
       visionWriter,
@@ -456,7 +456,7 @@ test('complete, failed, and health-downgraded attempts each emit one final actua
       join(cwd, '.compose', 'data', 'settings.json'),
       JSON.stringify({ health: { gate_threshold: 101 } }),
     );
-    await runBuild('COMP-HEALTH', {
+    const healthResult = await runBuild('COMP-HEALTH', {
       cwd,
       stratum,
       visionWriter,
@@ -464,6 +464,18 @@ test('complete, failed, and health-downgraded attempts each emit one final actua
       skipTriage: true,
       description: 'health downgrade',
     });
+
+    // COMP-COST-OWNER 0d-1: the terminal result must agree with the terminal status on
+    // all three paths. The health case is the subtle one — the FLOW completed and the
+    // build already printed "Build complete." before the gate downgraded it, so an `ok`
+    // derived from the flow's own status (rather than the final buildStatus) would be
+    // wrong here and nowhere else.
+    assert.deepEqual(
+      [okResult, failResult, healthResult].map(r => [r.ok, r.status]),
+      [[true, 'complete'], [false, 'failed'], [false, 'failed']],
+    );
+    assert.equal(okResult.failureReason, null);
+    assert.ok(healthResult.failureReason, 'a health-downgraded build must state a reason');
 
     const actuals = readEvents(cwd, { kind: 'build-actuals' });
     assert.deepEqual(
