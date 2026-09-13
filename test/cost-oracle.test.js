@@ -65,6 +65,21 @@ test('ledger cost is the LAST row per build_id, summed across build_ids', t => {
   assert.equal(feature.builds, 2);
 });
 
+test('per-build rows are emitted, so a roll-up cannot hide an outlier build', t => {
+  // Measured 2026-09-13: build 3e95eb77 sits at 0.28x of its own flow's bound
+  // while its feature roll-up reads OK. A count alone makes that invisible.
+  const [feature] = features(t, {
+    ledger: [
+      actuals('big', 'F-1', 20, '2026-09-13T01:00:00Z', { tokens_total: 1000 }),
+      actuals('small', 'F-1', 0.5, '2026-09-13T02:00:00Z', { tokens_total: 400, terminal_status: 'aborted' }),
+    ],
+  });
+  assert.equal(feature.builds, 2);
+  assert.deepEqual(feature.build_rows.map((b) => b.build_id).sort(), ['big', 'small']);
+  const small = feature.build_rows.find((b) => b.build_id === 'small');
+  assert.deepEqual(small, { build_id: 'small', usd: 0.5, tokens_total: 400, terminal_status: 'aborted' });
+});
+
 test('rows for different features do not merge', t => {
   const rows = features(t, {
     ledger: [

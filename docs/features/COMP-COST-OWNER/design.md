@@ -707,12 +707,43 @@ were never built; leaving them would read as a plan outstanding rather than one 
 
    | feature | ledger | history | flowSpent | ccusage (lower bnd) | ledger/bound |
    |---|---|---|---|---|---|
-   | COMP-GUARD-CLAIM-1 | $30.5862 (4 builds) | $18.4576 | $23.0139 | $20.6084 | 1.33x OK |
+   | COMP-GUARD-CLAIM-1 | $30.5862 (4 builds) | $18.4576 | $23.0139 | $20.6084 | 1.33x OK* |
    | COMP-SEMVER-STRICT | $4.5037 (2 builds) | $1.8407 | n/a | $3.0870 | 1.46x OK |
 
-   **S5's three UNDER flows are gone** — including `13fd190e`, previously the worst at 0.28x,
-   now 1.46x above its lower bound. The under-recording defect does not survive contact with
-   the real ledger.
+   *\*The COMP-GUARD-CLAIM-1 OK is a roll-up artifact — see the correction below.*
+
+   **CORRECTED 2026-09-13, same day — "zero UNDER" is a ROLL-UP ARTIFACT, do not quote it.**
+   The feature total masks a per-build UNDER that the ledger makes WORSE. Pairing builds to
+   flows by exact cost match (7 s.f.), against each flow's own `flowSpent`:
+
+   | build | flow | ledger | flowSpent | ratio | vs the old history surface |
+   |---|---|---|---|---|---|
+   | `f9309dc4` | `af922492` | $18.9301 | $16.4574 | 1.15x | RESOLVED (was UNDER) |
+   | `678e6a58` | `44c575e7` | $6.9342 | $4.0447 | **1.71x over** | over-count WIDENED (was 1.08x) |
+   | `3e95eb77` | `4122e695` | $0.6974 | $2.5118 | **0.28x UNDER** | **WORSE** (was 0.92x) |
+
+   So of S5's three UNDER flows: `13fd190e` genuinely resolved (its feature has one flow, so
+   no masking), `af922492` resolved, **`4122e695` did NOT** — and on the ledger it falls from
+   0.92x to 0.28x. The COMP-GUARD-CLAIM-1 roll-up reads 1.33x OK only because `f9309dc4`'s
+   $18.93 hides it. The tool now emits `build_rows` so this is visible; the verdict is still
+   computed per feature, which is a known limitation, because build↔flow pairing rests on a
+   cost-match heuristic rather than a key.
+
+   **`3e95eb77` is the surviving defect and both signals point at it:** 0.28x UNDER against
+   its flow, and 436,736 tokens for $0.6974. That row is internally inconsistent — more
+   tokens than every flow's `flowSpent` combined, at 1/26th the feature's rate. Either
+   `tokens_total` is inflated (retries summed?) or most of its steps carry no dollars (the
+   S1/S2 unpriced family). **Next: trace `tokens_total` accumulation for that build.**
+
+   **Also corrected: the ledger is NOT a superset of history.** History carries $1.6044701,
+   $2.4726621 and $2.8894888 with no ledger counterpart; the ledger carries $4.0245686,
+   $4.5037144, $6.9341944 and $18.9300601 with no history counterpart. **Both surfaces leak**,
+   so the defect is non-atomic terminal writes across two surfaces, not "history is the bad
+   one". The tool's message is `SURFACE-DISAGREEMENT` and names no mechanism; the $1.6044701
+   row matters most, since 0c already established it is a separate accumulator lifetime from
+   $0.6973779, and the ledger has no row for it at all. Three candidate exits at
+   `finalizeBuildAttempt` (`lib/build.js:3496`) are untraced: `suspended`, `alreadyEmitted`,
+   `attemptFinalized`.
 
    Two things DO survive, both now reported by the tool:
    - **HISTORY-GAP, $14.79 total** ($12.13 + $2.66) — the Part B defect, quantified. Not a
@@ -724,11 +755,12 @@ were never built; leaving them would read as a plan outstanding rather than one 
      carried) surfacing on a second surface, and it is the most likely remaining real defect.
      Flagged as a labelled heuristic; it does NOT set the exit code.
 
-   **Open question 0d does not dissolve and is superseded in scope:** at feature level the
-   ledger sits 1.33x above `flowSpent`, i.e. compose records MORE than stratum's tally, not
-   less. Expected in direction (compose counts spend stratum never sees) but unquantified —
-   the two sides also disagree on tokens (741k vs 217k), so they are not measuring the same
-   scope and the ratio is not yet a finding either way.
+   **Open question 0d does not dissolve — it WIDENS.** Per flow, `678e6a58`/`44c575e7` goes
+   from 1.08x on the history surface to **1.71x** on the ledger (2.71x if `fbf89460`'s $4.02,
+   which has no history row and no confidently paired flow, belongs to the same flow). The
+   earlier gloss "compose counts spend stratum never sees" was shape reasoning and is
+   withdrawn: it was never traced, and the two sides also disagree on tokens (741k vs 217k),
+   so they are not measuring the same scope.
 
    Falsifier: `test/cost-oracle.test.js` (15 tests; negative control RED 15/15 against
    `scripts/cost-oracle.mjs` on a 15/15 GREEN baseline).
