@@ -182,6 +182,14 @@ Printing all 9 `build-history` rows surfaced problems independent of the oracle:
    only 1-3 tokens per turn, so a near-zero value is not itself absurd. The real defect is
    that **the cache tokens — which are 95%+ of the actual input, and are billed — have no
    field in the ledger row at all.** The row cannot represent what the build consumed.
+
+   **Set-site traced 2026-09-13.** The accumulator DOES maintain them: `lib/build.js:2238-2246`
+   accumulates `cache_creation_input_tokens` and `cache_read_input_tokens`. They are dropped
+   one layer up — `buildCostSnapshot()` at **`lib/build.js:3825`** copies only `usd`,
+   `input_tokens`, `output_tokens` and `usd_unknown_count` out of the accumulator, and both
+   `appendBuildHistory` call sites (`lib/build.js:3336` and `:6438`) spread only that. So the
+   data exists and is discarded at the history-write boundary.
+   **Falsifier: add the two fields to `buildCostSnapshot` and they appear in new rows.**
 2. **Two adjacent rows carry byte-identical totals.** `14:47:10` (`stepCount: 0`, $4.3556,
    out=25638) and `14:50:19` (`stepCount: 2`, $4.3556, out=25638). A run with **zero steps**
    recorded $4.36, and the next run recorded exactly the same figures — consistent with an
