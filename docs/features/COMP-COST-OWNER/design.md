@@ -487,7 +487,7 @@ ledger and accumulator that agree to the cent.
 - [x] The receipt path (`build.js:2280-2283`) is UNCHANGED — verified by diff; it was already correct and is the reference
 - [x] **Negative control PASSED:** `scripts/negative-control.sh --prod lib/build.js -- --test test/build-cost-owner.test.js` reports **RED**, 7 of 10 failing on revert against a 10/10 green baseline
 - [x] An unpriced step reports `usd_unknown_count > 0` in the history row and does NOT invent spend (pinned by test/build-cost-owner.test.js:230)
-- [ ] **Measurement still owed:** forced repair wave, read `cost_usd`, resume across the repair, read again — the resume half of the claim is still read-verified only
+- [x] **Measurement DONE.** Part A (`c9bd15a`, $7.77): resume seeding exact, three sources to the cent. Part B (2026-09-13, $0, by tracing, no build run): the resumed segment's spend IS recorded — in `dispatch-ledger.jsonl`, not `build-history.jsonl`. Two paths write the ledger and not history (`abortBuild` `:7745-7750`; `terminalizeThrownBuild`'s `!flowId` bail `:3365`); which one fired here is undetermined. See open question 0b and `evidence/part-b-abort-path-2026-09-13.md`
 - [ ] **Not done in S1:** `usd_source` is still not carried ON the accumulator; only the unpriced COUNT is. Provenance of the aggregate is S2 territory
 
 ### S2 — Stop destroying provenance on the way to the screen
@@ -673,8 +673,37 @@ were never built; leaving them would read as a plan outstanding rather than one 
    to the cent on the resumed row (transcripts $7.1940, stratum `flowSpent.usd` $7.1940315,
    ledger $7.194031), so resume seeding is correct and per-segment accounting is exact. The
    cause of the loss is relocated: a run that **dies before its terminal write** leaves its
-   spend unrecorded. **Part B still owed:** kill the RESUME mid-flight (not the first
-   segment) and check whether a row appears — that is `13fd190e`'s exact shape.
+   spend unrecorded.
+
+   **PART B RESOLVED 2026-09-13 — by tracing, at $0, no build run, and it INVERTS the
+   finding.** `13fd190e`'s resumed segment IS recorded — in `dispatch-ledger.jsonl`
+   (`aborted`, **$4.5037144**, **36354** tokens, the same 36354 `project_strat_learn_cost`
+   records as a three-way census PASS). What is missing is only its `build-history.jsonl`
+   row. **S5 measured `build-history` and read a surface gap as a loss;** its "the ledger
+   loses money" should be restated as a history-completeness gap. Same shape on four more
+   build_ids, incl. `fbf89460` ($4.02 ledger row, **no history row at all**).
+   **Money-not-lost is proven for `13fd190e` only** — the others are ledger > history, which
+   is not the same as ledger ≈ truth.
+
+   Mechanism: there are exactly two history writers (`:6543`, `:3379`), both in-process, so a
+   mid-step death leaves no row; the ledger is written from `finalizeBuildAttempt`'s `finally`
+   (`:3532`) and from `abortBuild` (`:7748`). **Two paths record to the ledger and not to
+   history, and which one produced `13fd190e` is NOT determined:** `abortBuild`
+   (`:7745-7750`) never calls `appendBuildHistory` at all (but the flow file still reads
+   `status: running`, which argues against it here), and `terminalizeThrownBuild` bails at
+   `if (!flowId) return false` (`:3365`, `flowId = response?.runId`) before both its
+   active-build write and its history append, while the enclosing `finally` still emits the
+   ledger actuals. Evidence: `evidence/part-b-abort-path-2026-09-13.md`.
+
+   **Next: re-run `scripts/cost-oracle.mjs` against the ledger, not `build-history.jsonl`** —
+   cheap but NOT free (ledger rows carry `build_id`, not `flowId`; legacy history rows carry
+   no `accumulator_build_id`, so the join must be built). **Open question 0d must be
+   recomputed and its direction is unknown** — the ledger figure for the paired build
+   ($6.9342) is *further* from `flowSpent` ($4.0447) than the history row was, so the
+   over-count may widen. **Do not add an `appendBuildHistory` call to `abortBuild` before
+   that:** a third writer is the shape this design has replaced with a deletion three times;
+   price "history becomes a read over the ledger" against it.
+
 0c. **FIXED 2026-09-13 — rows now carry `accumulator_build_id`.** Group by
    `(flowId, accumulator_build_id)`, LAST within a group, SUM across groups.
    Written at all THREE `lastOwnerCost` sites (`lib/build.js:3820`, `:3833`, and the

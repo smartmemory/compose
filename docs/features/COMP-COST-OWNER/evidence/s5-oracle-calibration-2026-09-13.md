@@ -455,18 +455,25 @@ both are sound and the ledger is the outlier.
 ### What is now established
 
 1. **Per-flow accounting is exact** — three sources to the cent, across a resume.
-2. **The ledger loses money when a run dies before its terminal write.** Three of four real
-   flows under-record; the worst retains **15-28%** of a spend two independent sources agree on.
+2. ~~**The ledger loses money when a run dies before its terminal write.**~~ **SUPERSEDED
+   2026-09-13 — see `part-b-abort-path-2026-09-13.md`.** The money is recorded; it is
+   `build-history.jsonl` that is missing rows, and this file measured `build-history`. For
+   `13fd190e` the full $4.5037144/36354-token spend is in `dispatch-ledger.jsonl`. Restate as
+   a history-completeness gap. The under-record percentages below are history-vs-oracle, not
+   truth-vs-oracle.
 3. **`build-history.jsonl` cannot be aggregated per flow** — cumulative and disjoint rows are
    indistinguishable.
 4. The mechanism for `13fd190e` is a killed resume, **not** faulty resume arithmetic.
+   **Refined 2026-09-13:** and the consequence is a missing `build-history` row, not missing
+   money — the spend is in the ledger (`part-b-abort-path-2026-09-13.md`).
 
 ### Still owed
 
-- **Part B, not run:** kill the RESUME mid-flight and confirm no row appears. That is
-  `13fd190e`'s exact shape. This run killed the FIRST segment, and a row was written anyway
-  (SIGKILL notwithstanding), so the write path is more robust than expected — which makes
-  Part B the interesting case.
+- ~~**Part B, not run**~~ — **DONE 2026-09-13 at $0, no build run**, by tracing plus data
+  already on disk: `part-b-abort-path-2026-09-13.md`. Confirmed "no row appears", and
+  inverted the cause — the spend is in `dispatch-ledger.jsonl`; two paths write the ledger and
+  not history (`abortBuild` `lib/build.js:7745-7750`; `terminalizeThrownBuild`'s
+  `if (!flowId) return false` at `:3365`), and which fired for `13fd190e` is undetermined.
 - A row field distinguishing cumulative from disjoint, or a documented aggregation rule.
 
 ### Three caveats on the verdict
