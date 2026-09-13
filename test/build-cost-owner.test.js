@@ -107,7 +107,10 @@ describe('COMP-COST-OWNER S1: migration is honest about what it cannot know', ()
     writeFileSync(buildAccumulatorPath(cwd, 'LEGACY-1'), JSON.stringify(v2));
 
     const read = readBuildAccumulator(cwd, 'LEGACY-1');
-    assert.equal(read.v, 3);
+    // Chains v2 -> v3 -> v4: each hop nulls only what THAT hop cannot recover.
+    assert.equal(read.v, 4);
+    assert.equal(read.cache_read_tokens, null);
+    assert.equal(read.cache_creation_tokens, null);
     // What it DOES know is carried forward untouched.
     assert.equal(read.usd, 0.5410395000000001);
     assert.equal(read.tokens_total, 352394);
@@ -120,7 +123,7 @@ describe('COMP-COST-OWNER S1: migration is honest about what it cannot know', ()
     assert.equal(read.usd_unknown_count, null);
   });
 
-  test('a v1 record migrates all the way to v3', (t) => {
+  test('a v1 record migrates all the way to the current version', (t) => {
     const cwd = workspace(t);
     const v1 = {
       v: 1,
@@ -139,10 +142,12 @@ describe('COMP-COST-OWNER S1: migration is honest about what it cannot know', ()
     mkdirSync(join(cwd, '.compose', 'data', 'build-accumulator'), { recursive: true });
     writeFileSync(buildAccumulatorPath(cwd, 'LEGACY-2'), JSON.stringify(v1));
     const read = readBuildAccumulator(cwd, 'LEGACY-2');
-    assert.equal(read.v, 3);
+    assert.equal(read.v, 4);
     assert.equal(read.tests_attested, 'no-signal');   // v1 -> v2 still applies
     assert.equal(read.input_tokens, null);            // v2 -> v3
     assert.equal(read.usd_unknown_count, null);
+    assert.equal(read.cache_read_tokens, null);       // v3 -> v4
+    assert.equal(read.cache_creation_tokens, null);
   });
 });
 
@@ -161,7 +166,7 @@ describe('COMP-COST-OWNER S1: the validator refuses a fabricated shape', () => {
     assert.throws(() => writeBuildAccumulator(cwd, record), /usd_unknown_count/);
   });
 
-  test('an unknown field is still refused, so v3 cannot drift open', (t) => {
+  test('an unknown field is still refused, so the record cannot drift open', (t) => {
     const cwd = workspace(t);
     const record = { ...newBuildAccumulatorRecord('COST-BAD3'), surprise: 1 };
     assert.throws(() => writeBuildAccumulator(cwd, record), /unknown field "surprise"/);
@@ -173,6 +178,52 @@ describe('COMP-COST-OWNER S1: the validator refuses a fabricated shape', () => {
 // wild: the history record's cost must equal the owner's, because it is now read
 // from it rather than tallied a second time.
 // ---------------------------------------------------------------------------
+describe('COMP-COST-OWNER Open Question 0: a v3 record cannot invent its cache split', () => {
+  test('a v3 record migrates with NULL cache totals, never a fabricated zero', (t) => {
+    const cwd = workspace(t);
+    // A v3 record, shaped exactly as the shipped v3 factory wrote it.
+    const v3 = {
+      v: 3,
+      build_id: '61a01101-4c86-4554-b585-457b72b4cce4',
+      feature_code: 'LEGACY-3',
+      last_terminal: 'failed',
+      review_iterations: 0,
+      escalations: 0,
+      files_changed: [],
+      ship_files_changed: null,
+      test_count: null,
+      pass_rate: null,
+      tests_attested: 'no-signal',
+      evidence_root: null,
+      tokens_total: 352394,
+      usd: 0.54,
+      input_tokens: 120,
+      output_tokens: 352274,
+      usd_unknown_count: 0,
+    };
+    mkdirSync(join(cwd, '.compose', 'data', 'build-accumulator'), { recursive: true });
+    writeFileSync(buildAccumulatorPath(cwd, 'LEGACY-3'), JSON.stringify(v3));
+
+    const read = readBuildAccumulator(cwd, 'LEGACY-3');
+    assert.equal(read.v, 4);
+    // What it DOES know is carried forward untouched.
+    assert.equal(read.usd, 0.54);
+    assert.equal(read.input_tokens, 120);
+    assert.equal(read.output_tokens, 352274);
+    // What it CANNOT know stays null. A 0 here would read downstream as a measured
+    // "nothing was cached", which on a real build is the opposite of the truth.
+    assert.equal(read.cache_read_tokens, null);
+    assert.equal(read.cache_creation_tokens, null);
+  });
+
+  test('a fresh record starts cache at a measured zero, not null', (t) => {
+    const record = newBuildAccumulatorRecord('FRESH-1');
+    assert.equal(record.v, 4);
+    assert.equal(record.cache_read_tokens, 0);
+    assert.equal(record.cache_creation_tokens, 0);
+  });
+});
+
 describe('COMP-COST-OWNER S1: history reads the owner, end to end', () => {
   async function runOneStep(t, usage) {
     const YAML = (await import('yaml')).default;
@@ -225,6 +276,23 @@ describe('COMP-COST-OWNER S1: history reads the owner, end to end', () => {
     assert.equal((row.input_tokens ?? 0) + (row.output_tokens ?? 0), 60, 'history lost the tokens');
     // Nothing went unpriced, and history says so rather than staying silent.
     assert.equal(row.usd_unknown_count, 0);
+  });
+
+  // COMP-COST-OWNER Open Question 0. The real producer path: a connector usage record
+  // carrying cache tokens, through result-normalizer, recordBuildUsage and the accumulator,
+  // onto the row. Before this the row had no cache field at all, so `input_tokens: 0` on a
+  // cached build read as "no input" when it meant "all of it was cached".
+  test('cache tokens reported by the producer reach the history row', async (t) => {
+    const { rows } = await runOneStep(t, {
+      tokens: 60, usd: 0.25, ms: 4, usd_source: 'reported',
+      cache_read_input_tokens: 900, cache_creation_input_tokens: 100,
+    });
+    const row = rows.at(-1);
+    assert.equal(row.cache_read_tokens, 900, 'history lost the cache-read tokens');
+    assert.equal(row.cache_creation_tokens, 100, 'history lost the cache-creation tokens');
+    // tokens_total keeps meaning input+output. Folding cache in would break the S1
+    // ledger/accumulator reconciliation, which is why these are separate fields.
+    assert.equal((row.input_tokens ?? 0) + (row.output_tokens ?? 0), 60);
   });
 
   test('an UNPRICED step is counted, never added as a zero', async (t) => {

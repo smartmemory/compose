@@ -41,7 +41,8 @@ test('history persists the current owner identity and unchanged cost and token f
   const stratum = fakeBuildStratum({});
   stratum.resume = async () => {
     owner = { ...readBuildAccumulator(f.cwd, f.code), usd: 1.25,
-      input_tokens: 10, output_tokens: 20, tokens_total: 30, usd_unknown_count: 2 };
+      input_tokens: 10, output_tokens: 20, tokens_total: 30, usd_unknown_count: 2,
+      cache_read_tokens: 900, cache_creation_tokens: 100 };
     writeBuildAccumulator(f.cwd, owner);
     return { status: 'failed', runId: 'snapshot-flow', failure: { reason: 'fixture failure' } };
   };
@@ -53,12 +54,16 @@ test('history persists the current owner identity and unchanged cost and token f
   assert.equal(row.input_tokens, 10);
   assert.equal(row.output_tokens, 20);
   assert.equal(row.usd_unknown_count, 2);
+  // COMP-COST-OWNER Open Question 0: the snapshot mirror carries cache onto the row.
+  assert.equal(row.cache_read_tokens, 900);
+  assert.equal(row.cache_creation_tokens, 100);
 });
 
 test('auto-resume terminal flow rotation persists the NEW identity from the zeroed mirror', async t => {
   const f = fixture(t);
   const prior = { ...newBuildAccumulatorRecord(f.code), usd: 4, tokens_total: 30,
-    input_tokens: 10, output_tokens: 20, last_terminal: 'failed' };
+    input_tokens: 10, output_tokens: 20, cache_read_tokens: 900, cache_creation_tokens: 100,
+    last_terminal: 'failed' };
   writeBuildAccumulator(f.cwd, prior);
   writeFileSync(join(f.cwd, '.compose/data/active-build.json'), JSON.stringify({
     featureCode: f.code, flowId: 'rotating-flow', status: 'failed', mode: 'bug',
@@ -90,5 +95,10 @@ test('auto-resume terminal flow rotation persists the NEW identity from the zero
   assert.equal(rows[0].input_tokens, 0);
   assert.equal(rows[0].output_tokens, 0);
   assert.equal(rows[0].usd_unknown_count, 0);
+  // COMP-COST-OWNER Open Question 0. The rotation site zeroes the WHOLE mirror, cache
+  // included. A rotation installs a fresh record, so 0 is a measured nothing here, not
+  // the migrated-unknown null -- and the prior lifetime's 900/100 must not leak across.
+  assert.equal(rows[0].cache_read_tokens, 0);
+  assert.equal(rows[0].cache_creation_tokens, 0);
   assert.equal(rows[0].accumulator_build_id, rotated.build_id);
 });
