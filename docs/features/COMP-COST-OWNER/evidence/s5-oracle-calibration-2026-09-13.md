@@ -1,7 +1,8 @@
 # S5 — the external oracle: calibration and first run (2026-09-13)
 
-Status: **oracle calibrated and run once, by hand. A repeatable script is OWED — do not tick
-the S5 checkboxes in design.md on the strength of this file.**
+Status: **DONE.** Oracle calibrated (`729f213`) and repeatable via
+`scripts/cost-oracle.mjs` (`5b2d2e4`). Run it with `node scripts/cost-oracle.mjs --all`;
+**exit 1 means at least one flow is UNDER**, i.e. findings are present.
 Nothing in this file changes code. It records measurements and their confidence.
 
 ## What S5 is for
@@ -169,9 +170,16 @@ before each row is written and drops the rest. **An earlier draft of this file c
 two distinct defects on the strength of a timestamp comparison; the token accounting shows
 one defect.**
 
-**Confidence:** figures and timings are measured, and the 25 ms boundary makes the mechanism
-for `13fd190e` as close to demonstrated as observation gets. It is still not reproduced
-**under control** — a forced repair-wave run is owed before this is called proven.
+### A second process was driving the flow
+
+The receipt timeline settles that this is a *resume*, not merely orphaned workers: the first
+missing receipt is `decompose`, a **`main`-source** step, settled at `06:58:19` — 75 seconds
+after the row closed. Orphaned fanout workers cannot run a main-source step. Something was
+driving the flow from the top after the ledger row was written, and it wrote no row of its own.
+
+**Confidence:** figures and timings are measured, and the mechanism is **demonstrated from
+the receipt timeline**. It is still not reproduced **under control** — a forced repair-wave
+run is owed before this is called proven.
 
 ## Three further defects visible in the ledger itself
 
@@ -208,12 +216,14 @@ and neither reconciles the other** — the COMP-COST-OWNER thesis, now with exte
 ## Reproduction
 
 ```sh
-npx -y ccusage@latest session --json > /tmp/ccu.json     # the oracle
-# join a flow's fanout sessions:
-#   dirs = ~/.claude/projects/*<flowId>*   → each *.jsonl basename is a ccusage `period`
-# ledger side:
-#   .compose/data/build-history.jsonl  → row(s) with that flowId
+node scripts/cost-oracle.mjs --all          # exit 1 = at least one flow UNDER
+node scripts/cost-oracle.mjs --flow <id> --json
 ```
+
+The script holds no rate table and does no price arithmetic beyond summing ccusage's own
+totals. It labels the oracle a strict lower bound on every line, counts files with no
+ccusage entry as `unjoined` (unknown cost, never zero), and reports thin coverage as
+INSUFFICIENT-COVERAGE without setting a non-zero exit.
 
 ## Landmines paid for here
 
