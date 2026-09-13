@@ -241,3 +241,67 @@ INSUFFICIENT-COVERAGE without setting a non-zero exit.
    `cost_usd`, resume, read again, oracle both.
 2. `input_tokens: 0` is a separate, universal, and cheap defect — trace its set-site.
 3. Adjudicate the duplicate-totals rows (accumulator reset between runs).
+
+
+---
+
+# Controlled repro — PRE-REGISTERED 2026-09-13, before the run
+
+Written and committed **before** spending anything, so no outcome can be reinterpreted as a
+pass after the fact.
+
+## What the free evidence already changed
+
+Reading `.compose/build-stream.jsonl` and `active-build.json` for `13fd190e` (no cost, done
+first) moved the diagnosis:
+
+- There **is** a `build_resume` event. The flow WAS resumed.
+- The last three events are `build_step_start` at generations 7, 8, 9 with **no matching
+  `build_step_done` and no terminal event** of any kind.
+- `.compose/data/active-build.json` still reads
+  `{featureCode: COMP-SEMVER-STRICT, flowId: 13fd190e…, status: "aborted"}`.
+
+So the resumed segment **never reached its terminal write**. The single history row is the
+FIRST segment's (`status: failed`, 06:57:04). The money was still spent and still went
+unrecorded — that part is unchanged and is measured — but the mechanism is now
+"the resumed run did not reach the write" rather than "the resumed run wrote a wrong row."
+**Those are different defects with different fixes,** and the earlier framing conflated them.
+
+## Prediction
+
+`runBuild` seeds `lastOwnerCost` from `selectedAccumulator` on resume (`lib/build.js:3798-3823`),
+whose comment states the accumulator is the sole owner and preserves pre-resume totals. So a
+resume that **completes normally** should write a row carrying the CUMULATIVE total.
+
+## Pre-registered outcomes — three, not two
+
+| Outcome | Reading |
+|---|---|
+| Row 2 carries the cumulative total | Seeding works as designed. **This is NOT a clean bill of health** — it would mean `13fd190e`'s missing row is caused by the resume being killed before its terminal write, a *separate* defect that this run does not exercise. |
+| Row 2 carries only the resumed segment | Seeding is broken; totals under-report by exactly the pre-resume spend. |
+| No row 2 at all | Directly reproduces `13fd190e`. |
+
+## Method
+
+Scratch project (fresh git repo, own `.compose`), so nothing touches this repo and the
+transcript directory contains only this build's sessions.
+
+1. `COMPOSE_PORT=19997` on **every** phase. The dev server on :4001 is up and a non-TTY gate
+   would route to it and **hang waiting for a human** rather than fail. An unreachable server
+   is what made `13fd190e` abort, so this reproduces the real failure reason.
+2. Build with no `--all` → aborts at the first gate. Record row 1.
+3. **Before resuming**, dump `active-build.json` and `build-accumulator/<F>.json`. The
+   accumulator is DELETED by `finalizeBuildAttempt` on a terminal (`lib/build.js:2820`); if it
+   is gone and `active-build.json` carries no cost, the seed is already broken and the resume
+   need not finish to show it.
+4. Resume with `--all` → completes. Record row 2.
+5. Oracle both. **For this run only the oracle is a FULL accounting, not a lower bound** — the
+   scratch project's own transcript directory holds only this build, so main-source steps are
+   joinable for once. Sum it alongside the fanout dirs by hand.
+
+No cost ceiling is configured (`.compose/compose.json` has no ceiling key), so no budget hold
+can hang the run.
+
+**Deviation from the owed spec, stated up front:** the spec said "forced repair wave." A
+trivial feature under `--all` may pass review with no repair. What S5 actually observed was a
+gate-abort-then-resume, and that is what this reproduces.
