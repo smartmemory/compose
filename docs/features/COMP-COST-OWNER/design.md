@@ -626,7 +626,43 @@ were never built; leaving them would read as a plan outstanding rather than one 
    ship_files_changed, test_count, pass_rate, tests_attested, evidence_root, tokens_total,
    usd, input_tokens, output_tokens, usd_unknown_count`. So a fix is additive across four
    layers (reduce → accumulator → `buildCostSnapshot` → row), not a one-line copy.
-   **Falsifier: dump `.compose/data/build-accumulator/<F>.json` and look for a cache key.**
+
+   **RESOLVED 2026-09-13.** The row now carries `cache_read_tokens` and
+   `cache_creation_tokens`. Three corrections to the plan filed above, each found by tracing
+   rather than by reading:
+
+   - **It was not additive — it needed a version bump.** The accumulator is strict-validated
+     both ways (an unknown field AND a missing field are "corrupt", and `v` must match
+     exactly), so adding two fields to a v3 record makes every in-flight sidecar on disk
+     unreadable. `BUILD_ACCUMULATOR_VERSION` is now **4**, with a v3→v4 migration that sets
+     both to **null** — a v3 record cannot recover its cache totals, and a 0 there would read
+     downstream as a measured "nothing was cached", which on a real build is the opposite of
+     the truth. Same reasoning, and same shape, as v2→v3's refusal to invent the input/output
+     split. A rotation writes **0**, not null: a fresh record's cache total is a measured
+     nothing.
+   - **The aggregate `usage` object is the wrong source, and the first implementation used
+     it.** Cache is summed per ENTRY, selected exactly as `unknownEntries` is — because in the
+     non-event path `result-normalizer` fills the cache fields on the RECORD
+     (`usageRecordFromRaw:306-310`) while `usageTotals` keeps the 0 it was seeded with at
+     `:409-410`. Reading the aggregate reports **no caching on a fully cached build**. The
+     existing comment beside `unknownEntries` warns about this exact trap ("same trap as
+     `usd_source` riding `usages[0]`") and the first draft walked into it anyway; the
+     end-to-end producer-path test is what caught it, not review.
+   - **A cache-ONLY usage is reachable, so it joins the write guard.** Settled by tracing, not
+     assumed: `hasReportedUsage` (`result-normalizer:282-283`) returns true on cache tokens
+     alone, so `usageRecordFromRaw` builds a record with `input_tokens: 0`,
+     `output_tokens: 0` and a cache field, and `:521` already treats that case as real when
+     counting an unpriced step. Without the guard term such a usage would be dropped silently.
+
+   `tokens_total` still means input+output. Cache is billed at a different rate and the S1
+   ledger/accumulator reconciliation depends on that field keeping its meaning — do not fold
+   cache in. **Scoped out, deliberately:** the stream's `build_end` event still emits
+   input/output/cost only (`build-stream-writer.js:218` cherry-picks rather than spreading, so
+   it was unaffected); adding cache totals there is a schema change with no current reader.
+   **Falsifier: `test/build-cost-owner.test.js` — "cache tokens reported by the producer reach
+   the history row", which drives a connector usage record through the real normalizer,
+   `recordBuildUsage` and the accumulator onto the row. Negative control RED against
+   `lib/build.js`.**
 0b. **RESOLVED 2026-09-13 (`c9bd15a`) — the controlled repro ran.** A build was killed
    mid-flight and resumed to completion in a scratch project. Three independent sources agree
    to the cent on the resumed row (transcripts $7.1940, stratum `flowSpent.usd` $7.1940315,
