@@ -8,6 +8,9 @@
     "lifecycle": true,
     "guard": true
   },
+  "routing": {
+    "mode": "shadow"
+  },
   "agents": {
     "claude": {
       "detected": true,

@@ -2711,6 +2711,17 @@ if (cmd === 'build') {
   const reviewerFlagMatch = filteredArgs2.find(a => a.startsWith('--reviewer='))
   const reviewerArg = reviewerFlagMatch ? reviewerFlagMatch.slice('--reviewer='.length) : null
 
+  // COMP-MODEL-ROUTE: --route-mode=<off|shadow> overrides .compose/compose.json#routing.mode
+  // for ONE run. Highest-precedence term; the project setting is what accumulates a corpus
+  // across ordinary builds, this is the per-run override and the way to turn it off after a
+  // routing refusal without editing config.
+  const routeModeFlagMatch = filteredArgs2.find(a => a.startsWith('--route-mode='))
+  const routeModeArg = routeModeFlagMatch ? routeModeFlagMatch.slice('--route-mode='.length) : null
+  if (routeModeArg !== null && !['off', 'shadow'].includes(routeModeArg)) {
+    console.error(`Error: --route-mode must be "off" or "shadow" (got "${routeModeArg}")`)
+    process.exit(1)
+  }
+
   if (implementerArg) {
     try { validateAgentString(implementerArg) } catch (err) {
       console.error(`Error: --implementer: ${err.message}`)
@@ -2803,6 +2814,7 @@ if (cmd === 'build') {
     console.error('  --all          Build all PLANNED features in dependency order')
     console.error('  --dry-run      Print build order without executing')
     console.error('  --cwd <path>   Agent working directory (for cross-repo features)')
+    console.error('  --route-mode <off|shadow>  Override routing observation for this run')
     process.exit(1)
   }
 
@@ -2880,12 +2892,25 @@ if (cmd === 'build') {
       if (fresh) singleOpts.fresh = true
       if (nonInteractiveBuild) singleOpts.gateOpts = { nonInteractive: true }
       if (resumeFlowId) singleOpts.resumeFlowId = resumeFlowId
+      if (routeModeArg !== null) singleOpts.route_mode = routeModeArg
       runBuild(featureCode, singleOpts).then(async (result) => {
         await pendingTeardown()
         process.exit(result?.ok === false ? 1 : 0)
       }).catch(async (err) => {
         await pendingTeardown()
         console.error(`Build failed: ${err.message}`)
+        // COMP-MODEL-ROUTE: routing observation refuses rather than recording a censored
+        // sample (design.md: missing/drifted roots refuse even ordinary-only runs). Without
+        // this line the user sees only the refusal text and has no way to know a SETTING
+        // caused it, or how to proceed.
+        if (typeof err?.code === 'string' && err.code.startsWith('ROUTING_')) {
+          console.error('')
+          console.error(`Routing observation refused this run (${err.code}).`)
+          console.error('It records a shadow corpus and never changes which model runs, but it refuses')
+          console.error('rather than store an incomplete sample. To continue without it:')
+          console.error('  compose build <feature> --route-mode=off     (this run only)')
+          console.error('  or set routing.mode to "off" in .compose/compose.json  (persistently)')
+        }
         process.exit(1)
       })
     })
