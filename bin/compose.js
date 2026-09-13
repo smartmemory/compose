@@ -2882,7 +2882,7 @@ if (cmd === 'build') {
       if (resumeFlowId) singleOpts.resumeFlowId = resumeFlowId
       runBuild(featureCode, singleOpts).then(async (result) => {
         await pendingTeardown()
-        process.exit(abort && result?.ok === false ? 1 : 0)
+        process.exit(result?.ok === false ? 1 : 0)
       }).catch(async (err) => {
         await pendingTeardown()
         console.error(`Build failed: ${err.message}`)
@@ -3001,7 +3001,7 @@ if (cmd === 'build') {
     if (resumeFlowId) opts.resumeFlowId = resumeFlowId
     runBuild(bugCode, opts).then(async (result) => {
       await pendingTeardown()
-      process.exit(abort && result?.ok === false ? 1 : 0)
+      process.exit(result?.ok === false ? 1 : 0)
     }).catch(async (err) => {
       await pendingTeardown()
       console.error(`Fix failed: ${err.message}`)
@@ -3114,7 +3114,7 @@ if (cmd === 'build') {
     if (resumeFlowId) opts.resumeFlowId = resumeFlowId
     runBuild(planCode, opts).then(async (result) => {
       await pendingTeardown()
-      process.exit(abort && result?.ok === false ? 1 : 0)
+      process.exit(result?.ok === false ? 1 : 0)
     }).catch(async (err) => {
       await pendingTeardown()
       console.error(`Plan failed: ${err.message}`)

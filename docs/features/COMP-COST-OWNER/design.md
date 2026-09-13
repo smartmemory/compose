@@ -650,17 +650,33 @@ were never built; leaving them would read as a plan outstanding rather than one 
    impossible; `4122e695`'s last row ($0.6974) is below its earlier row ($1.6045), so it
    cannot be a running total. Any consumer summing or last-picking is wrong somewhere.
    **Falsifier: add a field distinguishing the two, or document the rule.**
-0d-1. **A failed build still exits 0, and the obvious fix is INERT.** `bin/compose.js:2885`
-   reads `result?.ok === false`, but **`runBuild()` never returns that on a terminal failure**
-   — it writes the failed history row, prints "Build failed", and falls through its cleanup
-   blocks (`lib/build.js:6531`) resolving `undefined`. So simply dropping the `abort &&`
-   guard changes nothing; it was tried, proved inert by an integration test (`0 !== 1`), and
-   REVERTED rather than shipped as a dead path. **Real fix: give `runBuild` an explicit
-   terminal result.** That is a return-contract change with multiple callers and needs its own
-   slice. **Falsifier: a test asserting `compose build <failing>` exits 1.**
-0d-2. **Batch builds count every resolved result as success**, including `{ok:false}` —
-   `lib/build-all.js:128`. Independent of the CLI exit code; untouched by the above. Sibling
-   of 0d-1, same slice.
+0d-1. **RESOLVED 2026-09-13 — `runBuild` has an explicit terminal result.** Was: a failed
+   build exits 0, and the obvious fix is INERT. `bin/compose.js:2885` read
+   `result?.ok === false`, but `runBuild()` never returned that on a terminal failure — it
+   wrote the failed history row, printed "Build failed", and fell through its cleanup blocks
+   resolving `undefined`. Dropping the `abort &&` guard was therefore inert; it was tried,
+   caught by an integration test (`0 !== 1`), and reverted rather than shipped as a dead path.
+   **Fix:** `runBuild` now returns
+   `{ ok, status, featureCode, flowId, failureReason }` as the last statement of its inner
+   `try`, assembled beside the `build-history.jsonl` append so it shares that row's already
+   computed `failureReason` and is read AFTER the health gate may have downgraded the build.
+   A build that THROWS still rejects; this is the contract for terminal states the loop
+   reaches without throwing, and it matches the shape `abortBuild` already returned. The three
+   CLI exit sites (`build`, `fix`, `plan`) dropped their `abort &&` guard.
+   **`ok` is true ONLY for `status === 'complete'`** — `killed` (the gate rejected the work)
+   and `aborted` (the flow was cancelled) did not ship, so a caller gating CI on this must see
+   them as failures. Do not re-litigate that to "any terminal state".
+   **Falsifier: `test/build-exit-code.test.js`** drives the real CLI to a real process exit
+   code with a loader stub at the `lib/build.js` boundary; negative control RED against
+   `bin/compose.js`. The subtle case — flow completed, health gate downgraded, so `ok:false`
+   — is pinned in `test/dispatch-build.test.js` (RED against `lib/build.js`).
+0d-2. **RESOLVED 2026-09-13 — batch builds no longer count a failure as built.**
+   `lib/build-all.js:128` counted every resolved result as success, including `{ok:false}`.
+   It now branches on `ok`. Consequence worth stating: because a failure lands in `failed`,
+   it also **blocks its dependents**, which same-phase roadmap entries implicitly are —
+   previously a failed feature was reported as built and its dependents ran on top of it.
+   Falsifier: `test/build-exit-code.test.js` drives the real `runBuildAll`; negative control
+   RED against `lib/build-all.js`.
 0d. **Unexplained ~8% over-count on `44c575e7`.** Its last row ($4.3556) sits 7.7% above two
    independent sources that agree with each other ($4.0316 ccusage, $4.0447 `flowSpent`).
    Outside the 5% tolerance and not accounted for by the summing bug.
@@ -669,8 +685,9 @@ were never built; leaving them would read as a plan outstanding rather than one 
    `outcome: "success"` but HAD committed (`ffab7f2`); attempt 2 returned a valid outcome with
    `commit_hash: null` because nothing was left to commit, and the strict contract rejects the
    null, failing the whole flow terminally. Evidence:
-   `evidence/s5-oracle-calibration-2026-09-13.md` run log. Also: `compose build` exits **0**
-   while printing "Build failed."
+   `evidence/s5-oracle-calibration-2026-09-13.md` run log. (The second half of that
+   observation — `compose build` exits **0** while printing "Build failed." — was split out as
+   `0d-1` and is RESOLVED; the contract half below is what remains open.)"
 1. **Does effective dating ever earn its place?** Deferred in the amended Decision 1 because
    nothing reprices today. It would become real if either appears: a requirement to re-derive
    a historical receipt's figure from its token counts for audit, or a consumer that reads old

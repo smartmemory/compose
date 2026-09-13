@@ -174,13 +174,18 @@ describe('build.js consumes TS-native Stratum responses', () => {
         });
       }), workspace);
 
-      await runBuild('TS-BUILD-1', {
+      const result = await runBuild('TS-BUILD-1', {
         cwd: workspace,
         stratum: client,
         template: 'build',
         skipTriage: true,
         description: 'the TS cutover',
       });
+
+      // COMP-COST-OWNER 0d-1: a clean build resolves an explicit ok terminal result.
+      assert.equal(result.ok, true, 'a completed build must resolve ok:true');
+      assert.equal(result.status, 'complete');
+      assert.equal(result.failureReason, null, 'a completed build states no failure reason');
 
       assert.equal(
         agentRuns,
@@ -282,13 +287,21 @@ describe('build.js consumes TS-native Stratum responses', () => {
         workspace,
       );
 
-      await runBuild('TS-BUILD-FAILED', {
+      const result = await runBuild('TS-BUILD-FAILED', {
         cwd: workspace,
         stratum: client,
         template: 'build',
         skipTriage: true,
         description: 'the failing cutover',
       });
+
+      // COMP-COST-OWNER 0d-1: this is the whole defect. A terminal flow failure does NOT
+      // throw, so before the explicit terminal result runBuild resolved `undefined` here
+      // and every caller — the CLI exit code included — read it as a success.
+      assert.equal(result.ok, false, 'a terminally failed build must resolve ok:false');
+      assert.equal(result.status, 'failed');
+      assert.match(result.failureReason, /Required|contract/i,
+        'the terminal result carries the same failure reason as the persisted state');
 
       assert.equal(agentRuns, 2, 'the TS engine must exhaust both declared attempts');
       const active = JSON.parse(
