@@ -565,8 +565,18 @@ scheduled job belongs in that repo. Retarget before starting.
 
 ### S5 — The independent oracle (optional, highest value per effort)
 
-- [ ] A ccusage-shaped computation over `~/.claude/projects/*.jsonl` cross-checking our ledger
-- [ ] Shares no code with the ledger, so it is a real external falsifier — which gate 5 lacks
+- [x] A ccusage-shaped computation over `~/.claude/projects/*.jsonl` cross-checking our ledger
+      — **SHIPPED** as `scripts/cost-oracle.mjs` (`5b2d2e4`). Satisfied more strictly than
+      filed: it invokes **ccusage itself** rather than reimplementing its shape, so no rate
+      table re-enters compose.
+- [x] Shares no code with the ledger, so it is a real external falsifier — which gate 5 lacks
+      — calibrated against Claude Code's own `cost-state.totalCostUSD` before use (2.57%
+      aggregate, n=160). Evidence:
+      `evidence/s5-oracle-calibration-2026-09-13.md` (`729f213`).
+
+**S5 found two flows where the ledger records less than a strict lower bound** (0.28x, 0.60x):
+the history row snapshots cumulative usage at the instant it is written, and work settling
+afterwards never gets a row. See the evidence file; a controlled repro is still owed.
 
 **Sequencing: S1 → S2 → S3 → S4.** S1 and S2 are the measured defect and its user-visible
 end; S3 and S4 are the original feature and can wait. S5 is independent of all of them.
@@ -593,9 +603,24 @@ were never built; leaving them would read as a plan outstanding rather than one 
 | `test/cost-tracking.test.js`, `test/usage-receipts.test.js` | changed | Two FAKE-PRODUCER assertions corrected — both asserted a cost derived here from a Claude event carrying none, a shape no real producer emits |
 | ~~`scripts/check-rate-freshness.mjs`~~ | **moves to stratum** | compose holds no table to keep fresh, so S4 is a stratum-side slice |
 | `stratum/ts/src/judge/pricing.ts` | existing (stratum) | **Unchanged**; is now the ONLY table on any live path |
+| `scripts/cost-oracle.mjs` | new (S5) | External falsifier. Shells to `ccusage`; **no rate table, no price arithmetic**. Oracle is a strict lower bound (main-source steps unjoinable) |
 
 ## Open Questions
 
+0. **The history row drops the cache tokens the accumulator already has.** Found by S5:
+   `input_tokens` is 0 on 9/9 `build-history` rows, and with 1h caching on, genuinely
+   uncached input really is 1-3 tokens per turn — so the near-zero is not itself the bug.
+   The bug is that **cache tokens, 95%+ of the billed input, have no field on the row at all.**
+   `lib/build.js:2238-2246` accumulates `cache_creation_input_tokens` and
+   `cache_read_input_tokens`; `buildCostSnapshot()` (`lib/build.js:3825`) copies only `usd`,
+   `input_tokens`, `output_tokens`, `usd_unknown_count`, and both `appendBuildHistory` sites
+   (`:3336`, `:6438`) spread just that. The data exists and is discarded at the write
+   boundary. **Falsifier: add the two fields to `buildCostSnapshot` and they appear in new
+   rows.**
+0b. **The post-abort undercount needs a controlled repro.** S5 demonstrated it from the
+   receipt timeline on two flows (0.28x, 0.60x). Owed: forced repair wave → read `cost_usd`
+   → resume across the repair → read again → `node scripts/cost-oracle.mjs --flow <id>` on
+   both. Until that runs, the mechanism is demonstrated but not proven.
 1. **Does effective dating ever earn its place?** Deferred in the amended Decision 1 because
    nothing reprices today. It would become real if either appears: a requirement to re-derive
    a historical receipt's figure from its token counts for audit, or a consumer that reads old
