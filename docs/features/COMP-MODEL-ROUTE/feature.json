@@ -1,10 +1,10 @@
 {
   "code": "COMP-MODEL-ROUTE",
   "description": "Dynamic model routing framework for agent dispatches. Every pipeline dispatch (plan, execute items, verify, review, assess) resolves its provider tier through ONE resolver over a dispatch key (preset, step, provider, planner tier for fanout items). Each key's value comes from an ordered chain of sources: manual override, learned value (only where the preset opts the key in and cross-run evidence clears a breadth bar), preset, default; the winning source and reason are recorded per dispatch as flow state before dispatch so resume/replay see the same choice. The learned source is an outcome-based policy over STRAT-LEARN-COST receipts joined with downstream acceptance from flow state (epoch>0 / repair = not accepted), keyed by contract fingerprint, evidence recomputed from an append-only ledger, breadth-not-volume durability per STRAT-TS-LEARN. Not failure-based escalation. Ladder: S1 resolver + ledger + shadow decisions on all steps; S2 hindsight report fed into Fable's planning prompt (absorbs COMP-FABLE-CALIBRATE); S3 active learned routing on plan + execute only, bounded exploration, never below a repaired task's tier, never on ship-deciding gates, default-off per preset. Provider axis stays static until STRAT-AGENT-INTERP-TS. Design: [design.md](docs/features/COMP-MODEL-ROUTE/design.md).",
-  "status": "PLANNED",
+  "status": "PARTIAL",
   "phase": "COMP-TEAMS: Agent Team Presets",
   "created": "2026-09-10",
-  "updated": "2026-09-10",
+  "updated": "2026-09-13",
   "complexity": "L",
   "position": 153,
   "tags": [

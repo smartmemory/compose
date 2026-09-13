@@ -1,11 +1,30 @@
 {
   "code": "COMP-UPDATE-NUDGE",
   "description": "**Tell the user they're behind — never update in place.** `compose update` already does the whole job (install-style detection, reinstall/ff-pull, skill refresh, state migration, `healStratumWiring`, MCP-restart warning), but nothing tells you to run it: you learn you're behind only if you happen to run `compose doctor`. A second gap opened when compose 0.3.7 moved stratum from an exact pin to `^0.3.3` — npm won't re-resolve a caret unless something triggers an install, so \"compose is current\" no longer implies \"stratum is current\" and a compose-only check calls that state healthy. This slice generalizes `lib/version-check.js` to any package, reads the RESOLVED stratum version from `node_modules` (not the declared range — the range is what drifts), and prints ONE line at three entry points (`init`, `doctor`, `build`/`plan`) naming whichever is behind. Silent when current or on any failure. Deliberately never self-updates: `bin/compose.js` + `lib/**` hold 109 lazy `await import()` sites, so an in-place npm reinstall over a running process lazily loads NEW modules into an OLD graph — mixed-version code in one process, with the long-lived MCP server most exposed. Safe auto-update needs a versioned install (COMP-UPDATE-VERSIONED-INSTALL), not a timing guardrail.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "Distribution",
   "created": "2026-07-25",
-  "updated": "2026-07-25",
+  "updated": "2026-09-13",
   "complexity": "S",
   "position": 1,
-  "impact": "medium"
+  "impact": "medium",
+  "completions": [
+    {
+      "completion_id": "COMP-UPDATE-NUDGE:fab4461f8f0715a8cfdc916ece802a79ac45dba1",
+      "feature_code": "COMP-UPDATE-NUDGE",
+      "commit_sha": "fab4461f8f0715a8cfdc916ece802a79ac45dba1",
+      "commit_sha_short": "fab4461f",
+      "tests_pass": true,
+      "files_changed": [
+        "bin/compose.js",
+        "lib/version-check.js",
+        "test/version-check.test.js",
+        "CHANGELOG.md"
+      ],
+      "recorded_at": "2026-09-13T12:17:26.630Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Status reconciliation 2026-09-13. The row said PLANNED; the feature has been fully shipped since fab4461. Verified against the described scope rather than the plan's checkboxes (24 of which were never ticked - a drafting artifact the commits supersede): lib/version-check.js exists and is generalized past compose, and emitDriftNudge is wired at ALL THREE specified entry points in bin/compose.js (init :840, build :2609, plan :3012), defined at :798. Two dedicated suites cover it: test/version-check.test.js and test/version-nudge-cli.test.js. Commit history shows the full task sequence plus per-task review fixes, a final review (984e88f: honor capabilities.stratum, pin the placement), the accepted-limits record (6990695), and a post-hoc safety fix (fab4461: the nudge could kill compose init with no network off a TTY). tests_pass attested from the full suite on af76de7 (7117/7117, 0 fail, 0 cancelled), which contains this commit as an ancestor."
+    }
+  ],
+  "commit_sha": "fab4461f8f0715a8cfdc916ece802a79ac45dba1"
 }
