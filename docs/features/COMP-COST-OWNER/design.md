@@ -574,9 +574,12 @@ scheduled job belongs in that repo. Retarget before starting.
       aggregate, n=160). Evidence:
       `evidence/s5-oracle-calibration-2026-09-13.md` (`729f213`).
 
-**S5 found two flows where the ledger records less than a strict lower bound** (0.28x, 0.60x):
-the history row snapshots cumulative usage at the instant it is written, and work settling
-afterwards never gets a row. See the evidence file; a controlled repro is still owed.
+**S5 found THREE flows where the ledger records less than the best available lower bound**
+(0.28x, 0.60x, 0.92x) — corroborated by stratum's `flowSpent.usd`, a second independent
+accounting path. The controlled repro RAN (`c9bd15a`): per-flow accounting is **exact** (three
+sources agree to the cent across a kill and resume), so the loss happens when a run **dies
+before its terminal write**, not because a resume computes a wrong number. The repro also
+falsified the tool's own SUM-across-rows aggregation. See the evidence file's VERDICT.
 
 **Sequencing: S1 → S2 → S3 → S4.** S1 and S2 are the measured defect and its user-visible
 end; S3 and S4 are the original feature and can wait. S5 is independent of all of them.
@@ -617,10 +620,30 @@ were never built; leaving them would read as a plan outstanding rather than one 
    (`:3336`, `:6438`) spread just that. The data exists and is discarded at the write
    boundary. **Falsifier: add the two fields to `buildCostSnapshot` and they appear in new
    rows.**
-0b. **The post-abort undercount needs a controlled repro.** S5 demonstrated it from the
-   receipt timeline on two flows (0.28x, 0.60x). Owed: forced repair wave → read `cost_usd`
-   → resume across the repair → read again → `node scripts/cost-oracle.mjs --flow <id>` on
-   both. Until that runs, the mechanism is demonstrated but not proven.
+0b. **RESOLVED 2026-09-13 (`c9bd15a`) — the controlled repro ran.** A build was killed
+   mid-flight and resumed to completion in a scratch project. Three independent sources agree
+   to the cent on the resumed row (transcripts $7.1940, stratum `flowSpent.usd` $7.1940315,
+   ledger $7.194031), so resume seeding is correct and per-segment accounting is exact. The
+   cause of the loss is relocated: a run that **dies before its terminal write** leaves its
+   spend unrecorded. **Part B still owed:** kill the RESUME mid-flight (not the first
+   segment) and check whether a row appears — that is `13fd190e`'s exact shape.
+0c. **`build-history.jsonl` cannot be aggregated per flow.** Rows are cumulative WITHIN one
+   accumulator lifetime and disjoint ACROSS lifetimes (`clearBuildAccumulator`,
+   `lib/build.js:2820`), and **no field on the row says which**. Proof that neither rule works:
+   `44c575e7`'s row sum ($11.6007) exceeds its own flow's total spend ($4.0447), which is
+   impossible; `4122e695`'s last row ($0.6974) is below its earlier row ($1.6045), so it
+   cannot be a running total. Any consumer summing or last-picking is wrong somewhere.
+   **Falsifier: add a field distinguishing the two, or document the rule.**
+0d. **Unexplained ~8% over-count on `44c575e7`.** Its last row ($4.3556) sits 7.7% above two
+   independent sources that agree with each other ($4.0316 ccusage, $4.0447 `flowSpent`).
+   Outside the 5% tolerance and not accounted for by the summing bug.
+0e. **A retried step cannot satisfy the contract if the failed attempt already committed.**
+   Not a cost defect; found during the repro. `explore_design` attempt 1 returned an invalid
+   `outcome: "success"` but HAD committed (`ffab7f2`); attempt 2 returned a valid outcome with
+   `commit_hash: null` because nothing was left to commit, and the strict contract rejects the
+   null, failing the whole flow terminally. Evidence:
+   `evidence/s5-oracle-calibration-2026-09-13.md` run log. Also: `compose build` exits **0**
+   while printing "Build failed."
 1. **Does effective dating ever earn its place?** Deferred in the amended Decision 1 because
    nothing reprices today. It would become real if either appears: a requirement to re-derive
    a historical receipt's figure from its token counts for audit, or a consumer that reads old

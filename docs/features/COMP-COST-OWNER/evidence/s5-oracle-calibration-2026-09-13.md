@@ -139,6 +139,12 @@ original defect (owed item 1), measured from outside rather than read off the co
 
 ### Mechanism, pinned to the millisecond
 
+> **SUPERSEDED by the VERDICT section below (2026-09-13).** The timing observation stands,
+> but "the row snapshots usage at the instant it is written" is not the cause. The controlled
+> repro showed a resumed row is correctly cumulative; the money is lost when a run dies
+> before its terminal write.
+
+
 The ledger row's `output_tokens` is **exactly** the cumulative receipt total at the instant
 the row was written, and everything settled afterwards is lost:
 
@@ -198,7 +204,10 @@ Printing all 9 `build-history` rows surfaced problems independent of the oracle:
    `appendBuildHistory` call sites (`lib/build.js:3336` and `:6438`) spread only that. So the
    data exists and is discarded at the history-write boundary.
    **Falsifier: add the two fields to `buildCostSnapshot` and they appear in new rows.**
-2. **Two adjacent rows carry byte-identical totals.** `14:47:10` (`stepCount: 0`, $4.3556,
+2. **SUPERSEDED — see VERDICT.** ~~Two adjacent rows carry byte-identical totals.~~ Now
+   understood as cumulative seeding working **by design**: a resumed segment that added no
+   spend reports the same running total. Not an accumulator-reset bug. Original text:
+   Two adjacent rows carry byte-identical totals. `14:47:10` (`stepCount: 0`, $4.3556,
    out=25638) and `14:50:19` (`stepCount: 2`, $4.3556, out=25638). A run with **zero steps**
    recorded $4.36, and the next run recorded exactly the same figures — consistent with an
    accumulator not being reset between runs.
@@ -460,4 +469,31 @@ both are sound and the ledger is the outlier.
   Part B the interesting case.
 - A row field distinguishing cumulative from disjoint, or a documented aggregation rule.
 
-**Cost of this measurement: $8.03** ($0.5737 + $0.2617 + $7.1940, less the shared segment).
+### Three caveats on the verdict
+
+- **The $7.77 total.** `$0.5737263` (attempt 1) + `$7.1940315` (attempt 2, which already
+  CONTAINS the killed segment's `$0.2617`) = **$7.7678**, which is exactly the independent
+  transcript total for the scratch project. Adding the `$0.2617` separately would repeat the
+  very double-count this section is about.
+- **"Removed the ledger-is-high direction" applies to the LARGE over-counts only.**
+  `44c575e7`'s last row (`$4.3556`) still sits **7.7% above** two sources that agree with each
+  other (`$4.0316`, `$4.0447`). That is outside the 5% tolerance and is **unexplained**. What
+  the correction removed was the 2.88x and 4.00x artifacts, not every over-count.
+- **The 5% tolerance was calibrated for ccusage (n=160), not for `flowSpent`,** which has one
+  exact data point plus two close corroborations. `4122e695`'s 0.92x UNDER rests **entirely**
+  on `flowSpent` — its transcript oracle joined a single session — making it the weakest of
+  the three UNDER findings.
+
+### Why a row survived SIGKILL
+
+Not because the write is signal-robust. `appendBuildHistory` at `lib/build.js:3336` sits in
+**`terminalizeThrownBuild`** (`:3303`), the throw path. The step had already failed (the same
+strict-contract defect as attempt 1) and the row was written before the kill landed. So this
+run did NOT test whether a killed run loses its row.
+
+**That sharpens Part B:** the question is not "does SIGKILL lose the row" but "when the
+RESUME's own step-failure path throws, does it write?" `13fd190e` says no row appeared — so
+either its resume never threw (killed while a step was in flight, which its three
+`build_step_start` events with no `done` support) or the throw path did not run.
+
+**Cost of this measurement: $7.77.**
