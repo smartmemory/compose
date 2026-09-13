@@ -634,13 +634,33 @@ were never built; leaving them would read as a plan outstanding rather than one 
    cause of the loss is relocated: a run that **dies before its terminal write** leaves its
    spend unrecorded. **Part B still owed:** kill the RESUME mid-flight (not the first
    segment) and check whether a row appears — that is `13fd190e`'s exact shape.
-0c. **`build-history.jsonl` cannot be aggregated per flow.** Rows are cumulative WITHIN one
+0c. **FIXED 2026-09-13 — rows now carry `accumulator_build_id`.** Group by
+   `(flowId, accumulator_build_id)`, LAST within a group, SUM across groups.
+   Written at all THREE `lastOwnerCost` sites (`lib/build.js:3820`, `:3833`, and the
+   **rotation path `:3885`**, which zeroes the mirror and would otherwise silently drop the
+   field exactly when a build auto-resumes). Auto-resume of a terminal flow rotates the
+   accumulator (`:4151`) and that is CORRECT for the rule: a new lifetime is a new group.
+   `scripts/cost-oracle.mjs` uses the exact rule when every row carries the field and keeps
+   the conservative `max(sum, last)` fallback for legacy rows (all existing data). Negative
+   control RED 3/3 against a 3/3 green baseline. **Original problem statement:**
+   `build-history.jsonl` cannot be aggregated per flow. Rows are cumulative WITHIN one
    accumulator lifetime and disjoint ACROSS lifetimes (`clearBuildAccumulator`,
    `lib/build.js:2820`), and **no field on the row says which**. Proof that neither rule works:
    `44c575e7`'s row sum ($11.6007) exceeds its own flow's total spend ($4.0447), which is
    impossible; `4122e695`'s last row ($0.6974) is below its earlier row ($1.6045), so it
    cannot be a running total. Any consumer summing or last-picking is wrong somewhere.
    **Falsifier: add a field distinguishing the two, or document the rule.**
+0d-1. **A failed build still exits 0, and the obvious fix is INERT.** `bin/compose.js:2885`
+   reads `result?.ok === false`, but **`runBuild()` never returns that on a terminal failure**
+   — it writes the failed history row, prints "Build failed", and falls through its cleanup
+   blocks (`lib/build.js:6531`) resolving `undefined`. So simply dropping the `abort &&`
+   guard changes nothing; it was tried, proved inert by an integration test (`0 !== 1`), and
+   REVERTED rather than shipped as a dead path. **Real fix: give `runBuild` an explicit
+   terminal result.** That is a return-contract change with multiple callers and needs its own
+   slice. **Falsifier: a test asserting `compose build <failing>` exits 1.**
+0d-2. **Batch builds count every resolved result as success**, including `{ok:false}` —
+   `lib/build-all.js:128`. Independent of the CLI exit code; untouched by the above. Sibling
+   of 0d-1, same slice.
 0d. **Unexplained ~8% over-count on `44c575e7`.** Its last row ($4.3556) sits 7.7% above two
    independent sources that agree with each other ($4.0316 ccusage, $4.0447 `flowSpent`).
    Outside the 5% tolerance and not accounted for by the summing bug.
