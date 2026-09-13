@@ -102,12 +102,24 @@ test('real stdio transport failure preserves the original RPC error and does not
 });
 
 for (const mode of ['not-found','ack-hang']) {
-  test(`${mode}: explicit cancellation settles or diagnoses the original RPC deadline`, {timeout:3000}, async t => {
+  // This asserts cancellation SEMANTICS, not latency, so its budget is generous: the old
+  // 3000ms was an unstated assumption about machine load, not a property under test.
+  test(`${mode}: explicit cancellation settles or diagnoses the original RPC deadline`, {timeout:30000}, async t => {
     const {client, root} = await fixture(t, mode);
     const controller = new AbortController();
     const running = client.agentRun('codex','p',{cwd:root,signal:controller.signal,cancellationTimeoutMs:40});
     const outcome = running.catch(error=>error);
-    for(let i=0;i<100;i++){if(await readFile(join(root,'calls')).catch(()=>null))break;await delay(5);}
+    // The original RPC must have REACHED the fixture server before we cancel — this test is
+    // about cancelling an IN-FLIGHT call. The poll used to give up after 100*5ms and abort
+    // anyway, with nothing asserting the precondition held, so a slow child spawn silently
+    // turned it into a different test (cancel-BEFORE-dispatch) that then failed on the
+    // outcome assertion with nothing pointing at the real cause. Observed twice under a
+    // loaded full suite at duration_ms 535, i.e. the poll had just exhausted its 500ms;
+    // production was right both times (no original RPC in flight, so it reported the
+    // acknowledgement timeout rather than the original RPC's deadline).
+    let dispatched = false;
+    for(let i=0;i<400;i++){if(await readFile(join(root,'calls')).catch(()=>null)){dispatched=true;break;}await delay(5);}
+    assert.ok(dispatched, 'fixture server never recorded the agent_run call within 2s — nothing was in flight to cancel');
     controller.abort();
     const error = await outcome;
     if(mode==='not-found') { assert.equal(error.name,'AbortError'); assert.notEqual(error.code,'CANCELLATION_UNCONFIRMED'); }
