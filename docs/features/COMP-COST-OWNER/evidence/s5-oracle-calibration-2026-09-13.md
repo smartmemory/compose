@@ -305,3 +305,67 @@ can hang the run.
 **Deviation from the owed spec, stated up front:** the spec said "forced repair wave." A
 trivial feature under `--all` may pass review with no repair. What S5 actually observed was a
 gate-abort-then-resume, and that is what this reproduces.
+
+
+## Run log — deviations recorded as they happened
+
+Pre-registration only means something if the deviations are logged when they occur, not
+reconstructed afterwards.
+
+### Attempt 1 (flow `d99082ba`) — never reached a gate
+
+The plan assumed the build would pause at a gate the way `13fd190e` did. It did not: it died
+at the FIRST step on a strict-contract rejection, and the stratum flow went `status: failed`,
+which is terminal. **A terminal flow is not resumable** — `runBuild`'s
+`decideBuildStart` probes stratum (`lib/build.js:4031-4040`) and refuses with "Nothing to
+resume", even though `active-build.json` said `status: failed` and looked resumable to the
+CLI-level guard. Row 1: `$0.5737263`, `in=14 out=3618`, `stepCount: 2`.
+
+**A real defect found on the way, unrelated to cost.** `explore_design` failed twice for two
+different reasons and the second is the interesting one:
+
+- attempt 1 returned `outcome: "success"` — not in the enum `complete|skipped|failed` — but
+  **had already committed** (`commit_hash: 'ffab7f2'`).
+- attempt 2 returned a valid `outcome: "complete"` with `commit_hash: null`, because the work
+  was already committed on attempt 1 and there was nothing left to commit. The strict
+  contract rejects the null.
+
+So **a schema-invalid first attempt makes the retry structurally unable to satisfy the
+contract**: the commit it must report was consumed by the attempt that failed validation.
+`13fd190e` hit the identical attempt-1 enum error and recovered only because its attempt 1
+had not committed. Worth filing separately (`feedback_strict_contract_seams` shape).
+
+Also: `compose build` exited **0** while printing "Build failed."
+
+### Attempt 2 (flow `64f8c243`) — deliberate kill, which is `13fd190e`'s real shape
+
+Since the natural pause is unreliable, the pause was forced. **SIGKILL, not SIGINT** —
+SIGINT runs the cancel handler and sets `active-build.status = 'aborted'`, which the resume
+guard refuses outright. Killed the **process group** (via `perl setpgrp`; macOS has no
+`setsid`) so the runtime children died with it rather than orphaning — the
+`compose-switch-runtime` landmine. Verified zero orphans afterwards.
+
+Killed at flow spend `$0.2617`. Post-kill state:
+
+| | |
+|---|---|
+| history rows | 2 — **a row WAS written despite SIGKILL** (`$0.261692`, `in=7 out=1489`, `stepCount: 1`) |
+| accumulator | survived, `usd: 0.26169239999999994` — exactly the row |
+| `active-build.json` | `status: failed`, `cumulative_cost_usd: 0.2617`, `pid` dead |
+| stratum flow | **`status: running`** — NOT terminal, therefore resumable |
+
+### Three corrections to earlier claims in this file
+
+1. **`input_tokens: 0` is weaker than stated.** These runs recorded `input_tokens` of **14**
+   and **7** — small but non-zero. So the zeros on compose's 9 rows may be honest (with
+   caching, uncached input really is a handful of tokens) rather than a broken field. **The
+   defect that survives is the one already traced: cache tokens have no field on the row at
+   all.** The "a build cannot consume zero input" framing was wrong and is withdrawn.
+2. **Newer stratum flow files carry `usd`.** `64f8c243` and `d99082ba` both have
+   `flowSpent.usd`, and it agrees with the accumulator AND the history row **to the cent**
+   ($0.26169239999999994 three ways). `13fd190e` (2026-08-30) has no `usd` key at all. That
+   is why `cost-census.mjs` compares tokens rather than dollars — a limitation of the old
+   records, not a design choice. On new flows a dollar-level census is now possible.
+3. The three-way agreement above is a **free calibration point** and it is exact, which is
+   evidence the per-segment accounting is sound. The defect is about what survives ACROSS
+   segments, not within one.
