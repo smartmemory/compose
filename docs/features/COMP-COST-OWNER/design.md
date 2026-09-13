@@ -695,14 +695,46 @@ were never built; leaving them would read as a plan outstanding rather than one 
    active-build write and its history append, while the enclosing `finally` still emits the
    ledger actuals. Evidence: `evidence/part-b-abort-path-2026-09-13.md`.
 
-   **Next: re-run `scripts/cost-oracle.mjs` against the ledger, not `build-history.jsonl`** —
-   cheap but NOT free (ledger rows carry `build_id`, not `flowId`; legacy history rows carry
-   no `accumulator_build_id`, so the join must be built). **Open question 0d must be
-   recomputed and its direction is unknown** — the ledger figure for the paired build
-   ($6.9342) is *further* from `flowSpent` ($4.0447) than the history row was, so the
-   over-count may widen. **Do not add an `appendBuildHistory` call to `abortBuild` before
-   that:** a third writer is the shape this design has replaced with a deletion three times;
-   price "history becomes a read over the ledger" against it.
+   **DONE 2026-09-13 — the oracle now reads the ledger, and NO under-recording survives.**
+   `scripts/cost-oracle.mjs` was rewritten: its `readLedger()` read `build-history.jsonl`,
+   a function named for a file it did not open. It now reads `dispatch-ledger.jsonl`
+   `build-actuals` rows, keyed by FEATURE (the ledger carries `build_id` + `feature_code` and
+   no flow id, so a per-flow join does not exist for legacy rows). Rule: **LAST row per
+   `build_id`, SUMMED across `build_id`s** — no heuristic needed, since `build_id` is on every
+   row, unlike the history surface's `accumulator_build_id`. The flow inventory comes from
+   stratum flow files filtered by `workspaceRoot`, so it still sees builds whose history row
+   was never written. Measured, `--all`, **exit 0, zero UNDER**:
+
+   | feature | ledger | history | flowSpent | ccusage (lower bnd) | ledger/bound |
+   |---|---|---|---|---|---|
+   | COMP-GUARD-CLAIM-1 | $30.5862 (4 builds) | $18.4576 | $23.0139 | $20.6084 | 1.33x OK |
+   | COMP-SEMVER-STRICT | $4.5037 (2 builds) | $1.8407 | n/a | $3.0870 | 1.46x OK |
+
+   **S5's three UNDER flows are gone** — including `13fd190e`, previously the worst at 0.28x,
+   now 1.46x above its lower bound. The under-recording defect does not survive contact with
+   the real ledger.
+
+   Two things DO survive, both now reported by the tool:
+   - **HISTORY-GAP, $14.79 total** ($12.13 + $2.66) — the Part B defect, quantified. Not a
+     money loss; a surface-completeness defect.
+   - **UNPRICED-SUSPECT** on build `3e95eb77`: **$0.6974 for 436,736 tokens = $0.0016/1k vs
+     the feature mean $0.0413/1k** (~26x low). It cannot be adjudicated from the ledger
+     because **the `build-actuals` row carries no `usd_unknown_count`** — so cheap and
+     unpriced are indistinguishable there. That is owed item 2 (`usd_source`/provenance not
+     carried) surfacing on a second surface, and it is the most likely remaining real defect.
+     Flagged as a labelled heuristic; it does NOT set the exit code.
+
+   **Open question 0d does not dissolve and is superseded in scope:** at feature level the
+   ledger sits 1.33x above `flowSpent`, i.e. compose records MORE than stratum's tally, not
+   less. Expected in direction (compose counts spend stratum never sees) but unquantified —
+   the two sides also disagree on tokens (741k vs 217k), so they are not measuring the same
+   scope and the ratio is not yet a finding either way.
+
+   Falsifier: `test/cost-oracle.test.js` (15 tests; negative control RED 15/15 against
+   `scripts/cost-oracle.mjs` on a 15/15 GREEN baseline).
+   **Still do not add an `appendBuildHistory` call to `abortBuild`:** a third writer is the
+   shape this design has replaced with a deletion three times; price "history becomes a read
+   over the ledger" against it.
 
 0c. **FIXED 2026-09-13 — rows now carry `accumulator_build_id`.** Group by
    `(flowId, accumulator_build_id)`, LAST within a group, SUM across groups.
