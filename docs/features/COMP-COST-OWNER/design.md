@@ -614,12 +614,19 @@ were never built; leaving them would read as a plan outstanding rather than one 
    `input_tokens` is 0 on 9/9 `build-history` rows, and with 1h caching on, genuinely
    uncached input really is 1-3 tokens per turn — so the near-zero is not itself the bug.
    The bug is that **cache tokens, 95%+ of the billed input, have no field on the row at all.**
-   `lib/build.js:2238-2246` accumulates `cache_creation_input_tokens` and
-   `cache_read_input_tokens`; `buildCostSnapshot()` (`lib/build.js:3825`) copies only `usd`,
-   `input_tokens`, `output_tokens`, `usd_unknown_count`, and both `appendBuildHistory` sites
-   (`:3336`, `:6438`) spread just that. The data exists and is discarded at the write
-   boundary. **Falsifier: add the two fields to `buildCostSnapshot` and they appear in new
-   rows.**
+   **CORRECTED 2026-09-13 — the first trace named the wrong site.** `lib/build.js:2238-2246`
+   is `failureUsageFields`, a per-error aggregation for repair failures, NOT the persisted
+   accumulator; and `buildCostSnapshot` cannot drop what it never receives. The real loss is
+   upstream, in **`recordBuildUsage`** (`lib/build.js:4412`): its `accumulatorUsage` reduce
+   (`:4414-4419`) collapses each entry to `input_tokens`/`output_tokens`/`cost_usd`, and the
+   `updateBuildAccumulator` call (`:4457-4467`) writes only `tokens_total`, `usd`,
+   `input_tokens`, `output_tokens`, `usd_unknown_count`. **The persisted accumulator has no
+   cache fields at all** — confirmed by dumping a live one, whose complete key set is
+   `v, build_id, feature_code, last_terminal, review_iterations, escalations, files_changed,
+   ship_files_changed, test_count, pass_rate, tests_attested, evidence_root, tokens_total,
+   usd, input_tokens, output_tokens, usd_unknown_count`. So a fix is additive across four
+   layers (reduce → accumulator → `buildCostSnapshot` → row), not a one-line copy.
+   **Falsifier: dump `.compose/data/build-accumulator/<F>.json` and look for a cache key.**
 0b. **RESOLVED 2026-09-13 (`c9bd15a`) — the controlled repro ran.** A build was killed
    mid-flight and resumed to completion in a scratch project. Three independent sources agree
    to the cent on the resumed row (transcripts $7.1940, stratum `flowSpent.usd` $7.1940315,
