@@ -756,7 +756,23 @@ were never built; leaving them would read as a plan outstanding rather than one 
    null on 36/39 stratum-routed claude rows and 6/6 codex rows. So a ledger row carries a
    TOTAL only, and the 449,116 unpriced historical tokens (56% of this project's ledger) can
    never be repriced — input and output differ by 6x on terra.
-   **Falsifier: `lib/stratum-mcp-client.js:240-241`.**
+   The SAME call site also drops `usdSource`, so post-`00ff4db` rows will carry an ESTIMATED
+   figure with no flag saying so — owed item 2 on a second surface. **One call site, three
+   fields** (`tokens_in`, `tokens_out`, `usd_source`), all present on the envelope and all read
+   at `:873` for the routing record. **Falsifier: `lib/stratum-mcp-client.js:240-246`.**
+
+   **Two limits on the above, both stated rather than papered over.** (a) The upstream fix is
+   verified by code read plus a `usdFromTokens` unit probe, NOT by a real post-fix codex
+   dispatch — no codex row of real volume exists after 2026-09-12 in this ledger, so it is
+   consistent with fixed and not yet demonstrated. The next ordinary build with a codex step
+   settles it free. (b) **NEW OPEN QUESTION: compose and stratum disagree about tokens by
+   ~15x.** The build↔flow pairing is now confirmed by STEP IDENTITY (`test_review`,
+   `codex_review`, `docs`-failed all match), yet `4122e695`'s own
+   `flowSpent` reads `{dispatches: 15, tokens: 28279}` while compose records 425,284 for a
+   single dispatch inside it. Candidate, unverified: `codexUsageFields` sets
+   `tokens: input + output` and OpenAI's `input_tokens` INCLUDES `cached_input_tokens`
+   (`codex.ts:481`, "TOKENS STAY RAW"), which `BudgetLedger` may exclude. **Until settled, do
+   not quote 425,284 as a token count and never put the two tallies in one ratio.**
 
    **Also corrected: the ledger is NOT a superset of history.** History carries $1.6044701,
    $2.4726621 and $2.8894888 with no ledger counterpart; the ledger carries $4.0245686,
