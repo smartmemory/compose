@@ -126,6 +126,62 @@ describe('connector-owned dispatch capture', () => {
     }
   });
 
+  // COMP-COST-OWNER: the connector reports the input/output split and the cost's
+  // provenance BESIDE the Budget-shaped usage (STRAT-USAGE-SPLIT, the same seam
+  // lib/stratum-mcp-client.js:873 already prefers for the routing record). The
+  // ledger row dropped all three, so every stratum-routed row carried a bare
+  // total. Measured 2026-09-14: tokens_in null on 36/39 claude rows and 6/6 codex
+  // rows, which is why 449,116 historical unpriced tokens can never be repriced.
+  test('a dispatch row carries the connector split and the cost provenance', async () => {
+    const project = tempDir('dispatch-split-');
+    const worktree = tempDir('dispatch-split-wt-');
+    try {
+      const { client } = makeClient([{
+        text: 'ok',
+        usage: { tokens: 428663, usd: 0.4194, ms: 120 },
+        split: { input: 403379, output: 25284, cacheRead: 380000 },
+        usdSource: 'estimated',
+        telemetry: { model: 'gpt-5.6-terra', effort: 'high', durationMs: 118 },
+      }]);
+      await client.agentRun('codex', 'prompt', {
+        cwd: worktree,
+        telemetry: { project_cwd: project, site: 'build-step', step_id: 'test_review' },
+      });
+
+      const [row] = readEvents(project);
+      assert.equal(row.tokens_in, 403379);
+      assert.equal(row.tokens_out, 25284);
+      // The reported total stays the connector's own number; it is not recomputed
+      // from the split, which excludes nothing and would silently change meaning.
+      assert.equal(row.tokens_total, 428663);
+      // An ESTIMATED dollar must never reach a consumer looking like a reported one.
+      assert.equal(row.usd, 0.4194);
+      assert.equal(row.usd_source, 'estimated');
+    } finally {
+      cleanup(project, worktree);
+    }
+  });
+
+  test('a dispatch with no split or provenance still records nulls, not zeros', async () => {
+    const project = tempDir('dispatch-nosplit-');
+    const worktree = tempDir('dispatch-nosplit-wt-');
+    try {
+      const { client } = makeClient([{ text: 'ok', usage: { tokens: 12, ms: 9 } }]);
+      await client.agentRun('codex', 'prompt', {
+        cwd: worktree,
+        telemetry: { project_cwd: project, site: 'build-step' },
+      });
+      const [row] = readEvents(project);
+      // A missing split is UNKNOWN, never a measured zero — the S2 lesson.
+      assert.equal(row.tokens_in, null);
+      assert.equal(row.tokens_out, null);
+      assert.equal(row.usd, null);
+      assert.equal(row.usd_source, null);
+    } finally {
+      cleanup(project, worktree);
+    }
+  });
+
   test('runAgentText remains a primitive string and records one dispatch', async () => {
     const project = tempDir('dispatch-text-');
     try {
