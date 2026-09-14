@@ -756,10 +756,19 @@ were never built; leaving them would read as a plan outstanding rather than one 
    null on 36/39 stratum-routed claude rows and 6/6 codex rows. So a ledger row carries a
    TOTAL only, and the 449,116 unpriced historical tokens (56% of this project's ledger) can
    never be repriced — input and output differ by 6x on terra.
-   The SAME call site also drops `usdSource`, so post-`00ff4db` rows will carry an ESTIMATED
-   figure with no flag saying so — owed item 2 on a second surface. **One call site, three
-   fields** (`tokens_in`, `tokens_out`, `usd_source`), all present on the envelope and all read
-   at `:873` for the routing record. **Falsifier: `lib/stratum-mcp-client.js:240-246`.**
+   The SAME call site also dropped `usdSource`, so post-`00ff4db` rows would have carried an
+   ESTIMATED figure with no flag saying so — owed item 2 on a second surface.
+   **RESOLVED 2026-09-14 @`e849aa1`: one call site, three fields** (`tokens_in`, `tokens_out`,
+   `usd_source`). Registering `usd_source` in `lib/dispatch-ledger.js` was required rather than
+   cosmetic — the event shape is an allow-list and an unknown field drops the WHOLE event
+   (reverting that file alone fails 10 of 15 dispatch-capture tests, not 2). `tokens_total` is
+   deliberately not recomputed from the split: codex keeps OpenAI's raw dialect where
+   `input_tokens` INCLUDES `cached_input_tokens`, so deriving it would change the field's
+   meaning silently. **This fixes the record going forward only — historical rows remain
+   unrepriceable.** Owed item 2 is now closed for the stratum-routed writer;
+   `lib/local-claude-connector.js` still emits no `usd_source` and is a stated follow-up.
+   Pinned by `test/dispatch-capture.test.js`; negative control RED against BOTH
+   `lib/stratum-mcp-client.js` and `lib/dispatch-ledger.js` on a GREEN 15/15 baseline.
 
    **Two limits on the above, both stated rather than papered over.** (a) The upstream fix is
    verified by code read plus a `usdFromTokens` unit probe, NOT by a real post-fix codex
