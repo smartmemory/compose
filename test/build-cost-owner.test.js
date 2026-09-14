@@ -47,6 +47,7 @@ describe('COMP-COST-OWNER S1: the accumulator owns the whole cost shape', () => 
     // Unknown cost is COUNTED, never folded into usd as a zero. A build that spent
     // money we cannot price must not report a total as though it were complete.
     assert.equal(record.usd_unknown_count, 0);
+    assert.equal(record.usd_source, null);
   });
 
   test('the new fields survive a write/read round trip', (t) => {
@@ -107,10 +108,11 @@ describe('COMP-COST-OWNER S1: migration is honest about what it cannot know', ()
     writeFileSync(buildAccumulatorPath(cwd, 'LEGACY-1'), JSON.stringify(v2));
 
     const read = readBuildAccumulator(cwd, 'LEGACY-1');
-    // Chains v2 -> v3 -> v4: each hop nulls only what THAT hop cannot recover.
-    assert.equal(read.v, 4);
+    // Chains v2 -> v3 -> v4 -> v5: each hop nulls only what THAT hop cannot recover.
+    assert.equal(read.v, 5);
     assert.equal(read.cache_read_tokens, null);
     assert.equal(read.cache_creation_tokens, null);
+    assert.equal(read.usd_source, null);
     // What it DOES know is carried forward untouched.
     assert.equal(read.usd, 0.5410395000000001);
     assert.equal(read.tokens_total, 352394);
@@ -142,12 +144,13 @@ describe('COMP-COST-OWNER S1: migration is honest about what it cannot know', ()
     mkdirSync(join(cwd, '.compose', 'data', 'build-accumulator'), { recursive: true });
     writeFileSync(buildAccumulatorPath(cwd, 'LEGACY-2'), JSON.stringify(v1));
     const read = readBuildAccumulator(cwd, 'LEGACY-2');
-    assert.equal(read.v, 4);
+    assert.equal(read.v, 5);
     assert.equal(read.tests_attested, 'no-signal');   // v1 -> v2 still applies
     assert.equal(read.input_tokens, null);            // v2 -> v3
     assert.equal(read.usd_unknown_count, null);
     assert.equal(read.cache_read_tokens, null);       // v3 -> v4
     assert.equal(read.cache_creation_tokens, null);
+    assert.equal(read.usd_source, null);              // v4 -> v5
   });
 });
 
@@ -205,7 +208,7 @@ describe('COMP-COST-OWNER Open Question 0: a v3 record cannot invent its cache s
     writeFileSync(buildAccumulatorPath(cwd, 'LEGACY-3'), JSON.stringify(v3));
 
     const read = readBuildAccumulator(cwd, 'LEGACY-3');
-    assert.equal(read.v, 4);
+    assert.equal(read.v, 5);
     // What it DOES know is carried forward untouched.
     assert.equal(read.usd, 0.54);
     assert.equal(read.input_tokens, 120);
@@ -218,22 +221,65 @@ describe('COMP-COST-OWNER Open Question 0: a v3 record cannot invent its cache s
 
   test('a fresh record starts cache at a measured zero, not null', (t) => {
     const record = newBuildAccumulatorRecord('FRESH-1');
-    assert.equal(record.v, 4);
+    assert.equal(record.v, 5);
     assert.equal(record.cache_read_tokens, 0);
     assert.equal(record.cache_creation_tokens, 0);
   });
 });
 
+describe('COMP-COST-OWNER S1: a v4 record cannot invent aggregate provenance', () => {
+  test('v4 -> v5 preserves the total and migrates usd_source to null', (t) => {
+    const cwd = workspace(t);
+    const v4 = {
+      v: 4,
+      build_id: '61a01101-4c86-4554-b585-457b72b4cce4',
+      feature_code: 'LEGACY-4',
+      last_terminal: 'failed',
+      review_iterations: 0,
+      escalations: 0,
+      files_changed: [],
+      ship_files_changed: null,
+      test_count: null,
+      pass_rate: null,
+      tests_attested: 'no-signal',
+      evidence_root: null,
+      tokens_total: 40,
+      usd: 0.75,
+      input_tokens: 10,
+      output_tokens: 30,
+      cache_read_tokens: 100,
+      cache_creation_tokens: 5,
+      usd_unknown_count: 0,
+    };
+    mkdirSync(join(cwd, '.compose', 'data', 'build-accumulator'), { recursive: true });
+    writeFileSync(buildAccumulatorPath(cwd, 'LEGACY-4'), JSON.stringify(v4));
+
+    const read = readBuildAccumulator(cwd, 'LEGACY-4');
+    assert.equal(read.v, 5);
+    assert.equal(read.usd, 0.75);
+    assert.equal(read.usd_source, null);
+  });
+});
+
 describe('COMP-COST-OWNER S1: history reads the owner, end to end', () => {
   async function runOneStep(t, usage) {
+    const dispatchUsages = Array.isArray(usage) ? usage : [usage];
     const YAML = (await import('yaml')).default;
     const { readFileSync, writeFileSync } = await import('node:fs');
     const { buildWaveFixture, waveSpec } = await import('./helpers/build-wave-fixture.js');
     const { agentResult } = await import('./helpers/build-stratum-fixture.js');
     const spec = waveSpec();
-    spec.flows.bug_fix.steps = [{ id: 'work', agent: 'codex', do: 'Return a complete result.', out: 'R' }];
-    spec.flows.bug_fix.output = { from: '${work.output}', contract: 'R' };
-    const f = buildWaveFixture(t, { spec, profiles: { work: { default: 'codex:implementer:standard' } } });
+    const stepIds = dispatchUsages.map((_, index) => `work${index + 1}`);
+    spec.flows.bug_fix.steps = stepIds.map((id, index) => ({
+      id,
+      ...(index > 0 ? { after: [stepIds[index - 1]] } : {}),
+      agent: 'codex',
+      do: 'Return a complete result.',
+      out: 'R',
+    }));
+    spec.flows.bug_fix.output = { from: `\${${stepIds.at(-1)}.output}`, contract: 'R' };
+    const profiles = Object.fromEntries(stepIds.map((id) => [id, { default: 'codex:implementer:standard' }]));
+    const f = buildWaveFixture(t, { spec, profiles });
     const old = process.env.STRATUM_STATE_ROOT;
     process.env.STRATUM_STATE_ROOT = f.stateRoot;
     t.after(() => { if (old === undefined) delete process.env.STRATUM_STATE_ROOT; else process.env.STRATUM_STATE_ROOT = old; });
@@ -241,14 +287,33 @@ describe('COMP-COST-OWNER S1: history reads the owner, end to end', () => {
     f.stratum.plan = async (yaml, flow, input, options) => {
       id = 'cost-owner-1';
       Object.assign(f.state, { id, spec: YAML.parse(yaml), input, workspaceRoot: options.workspaceRoot,
-        status: 'running', steps: { work: { status: 'ready', dispatchToken: `${id}-token` } } });
+        status: 'running', steps: Object.fromEntries(stepIds.map((stepId, index) => [
+          stepId,
+          index === 0
+            ? { status: 'ready', dispatchToken: `${id}-token-${index}` }
+            : { status: 'pending' },
+        ])) });
       writeFileSync(join(f.stateRoot, `${id}.json`), JSON.stringify(f.state));
       return { status: 'ready', runId: id, revisionDigest: f.state.revisionDigest,
-        ready: [{ id: 'work', agent: 'codex', do: 'Return a complete result.', epoch: 0, dispatchToken: `${id}-token` }] };
+        ready: [{ id: stepIds[0], agent: 'codex', do: 'Return a complete result.', epoch: 0, dispatchToken: `${id}-token-0` }] };
     };
-    f.stratum.agentRun = async () => agentResult({ outcome: 'complete', summary: 'done' }, 'dispatch-1', usage);
-    f.stratum.stepDone = async () => {
-      f.state.steps.work = { status: 'succeeded', epoch: 0 };
+    let dispatchIndex = 0;
+    f.stratum.agentRun = async () => agentResult(
+      { outcome: 'complete', summary: 'done' },
+      `dispatch-${dispatchIndex + 1}`,
+      dispatchUsages[dispatchIndex++],
+    );
+    f.stratum.stepDone = async (_flowId, stepId) => {
+      const index = stepIds.indexOf(stepId);
+      f.state.steps[stepId] = { status: 'succeeded', epoch: 0 };
+      const nextId = stepIds[index + 1];
+      if (nextId) {
+        const dispatchToken = `${id}-token-${index + 1}`;
+        f.state.steps[nextId] = { status: 'ready', dispatchToken };
+        writeFileSync(join(f.stateRoot, `${id}.json`), JSON.stringify(f.state));
+        return { status: 'ready', runId: id, revisionDigest: f.state.revisionDigest,
+          ready: [{ id: nextId, agent: 'codex', do: 'Return a complete result.', epoch: 0, dispatchToken }] };
+      }
       f.state.status = 'completed';
       writeFileSync(join(f.stateRoot, `${id}.json`), JSON.stringify(f.state));
       return { status: 'completed', runId: id };
@@ -305,5 +370,61 @@ describe('COMP-COST-OWNER S1: history reads the owner, end to end', () => {
     // build with unpriced spend, and a reader can now tell the two apart.
     assert.ok(row.usd_unknown_count > 0,
       `an unpriced step must be COUNTED, got usd_unknown_count=${row.usd_unknown_count}`);
+  });
+
+  test('all reported dispatches make the build provenance reported', async (t) => {
+    const { rows } = await runOneStep(t, [
+      { tokens: 20, usd: 0.1, ms: 4, usd_source: 'reported' },
+      { tokens: 40, usd: 0.2, ms: 4, usd_source: 'reported' },
+    ]);
+    const row = rows.at(-1);
+    assert.ok(Math.abs(row.cost_usd - 0.3) < 1e-12);
+    assert.equal(row.usd_source, 'reported');
+  });
+
+  test('one estimated dispatch makes build provenance sticky estimated', async (t) => {
+    const { rows } = await runOneStep(t, [
+      { tokens: 20, usd: 0.1, ms: 4, usd_source: 'reported' },
+      { tokens: 20, usd: 0.1, ms: 4, usd_source: 'estimated' },
+      { tokens: 20, usd: 0.1, ms: 4, usd_source: 'reported' },
+    ]);
+    const row = rows.at(-1);
+    assert.ok(Math.abs(row.cost_usd - 0.3) < 1e-12);
+    assert.equal(row.usd_source, 'estimated');
+  });
+
+  test('one unknown dispatch makes build provenance sticky null', async (t) => {
+    const { rows } = await runOneStep(t, [
+      { tokens: 20, usd: 0.1, ms: 4, usd_source: 'reported' },
+      { tokens: 20, ms: 4 },
+      { tokens: 20, usd: 0.1, ms: 4, usd_source: 'reported' },
+    ]);
+    const row = rows.at(-1);
+    assert.equal(row.cost_usd, 0.2);
+    assert.equal(row.usd_source, null);
+  });
+
+  test('a labelled zero-dollar dispatch remains a reported cost observation', async (t) => {
+    const { rows } = await runOneStep(t, { tokens: 0, usd: 0, ms: 4, usd_source: 'reported' });
+    const row = rows.at(-1);
+    assert.equal(row.cost_usd, 0);
+    assert.equal(row.usd_source, 'reported');
+  });
+
+  test('estimated zero dollars with zero tokens and duration makes provenance sticky', async (t) => {
+    const { rows } = await runOneStep(t, [
+      { tokens: 0, usd: 0, ms: 4, usd_source: 'estimated' },
+      { tokens: 20, usd: 0.1, ms: 4, usd_source: 'reported' },
+    ]);
+    const row = rows.at(-1);
+    assert.equal(row.cost_usd, 0.1);
+    assert.equal(row.usd_source, 'estimated');
+  });
+
+  test('the accumulator never carries provenance without a cost', async (t) => {
+    const { rows } = await runOneStep(t, { tokens: 0, ms: 4, usd_source: 'reported' });
+    const row = rows.at(-1);
+    assert.equal(row.cost_usd, 0);
+    assert.equal(row.usd_source, null);
   });
 });
