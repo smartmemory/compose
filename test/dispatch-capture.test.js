@@ -241,7 +241,7 @@ describe('connector-owned dispatch capture', () => {
     }
   });
 
-  test('local Claude success and failure each record one event with returned-only model/usage', async () => {
+  test('local Claude records reported provenance only when success or failure has a cost', async () => {
     const project = tempDir('dispatch-local-');
     const worktree = tempDir('dispatch-local-worktree-');
     try {
@@ -256,6 +256,35 @@ describe('connector-owned dispatch capture', () => {
         query: successQuery({ model: 'returned-model' }),
       });
       assertHiddenCarrier(success);
+      assert.equal(success.usage.usd_source, 'reported');
+
+      const unknownCost = await runLocalClaudeAgent('prompt', {
+        telemetry: { project_cwd: project, site: 'consumer' },
+        query: successQuery({ model: 'unknown-cost-model', costUsd: null }),
+      });
+      assert.deepEqual(
+        { cost_usd: unknownCost.usage.cost_usd, usd: unknownCost.usage.usd },
+        { cost_usd: null, usd: null },
+      );
+      assert.equal(unknownCost.usage.usd_source ?? null, null);
+
+      const sdkFailureQuery = async function* sdkFailureQuery() {
+        yield { type: 'system', subtype: 'init', model: 'failed-model' };
+        yield {
+          type: 'result', subtype: 'error_during_execution', errors: ['billable failure'],
+          total_cost_usd: 0.03, usage: { input_tokens: 4, output_tokens: 1 }, duration_ms: 8,
+        };
+      };
+      await assert.rejects(
+        runLocalClaudeAgent('prompt', {
+          telemetry: { project_cwd: project, site: 'consumer' },
+          query: sdkFailureQuery,
+        }),
+        (error) => {
+          assert.equal(error.usage.usd_source, 'reported');
+          return true;
+        },
+      );
 
       const original = new Error('sdk transport failed');
       const failingQuery = async function* failingQuery() { throw original; };
@@ -272,19 +301,90 @@ describe('connector-owned dispatch capture', () => {
       assertHiddenCarrier(thrown);
 
       const rows = readEvents(project);
-      assert.equal(rows.length, 2);
+      assert.equal(rows.length, 4);
       assert.deepEqual(
         rows.map((row) => [row.outcome, row.model, row.tokens_in, row.tokens_out, row.tokens_total]),
         [
           ['ok', 'returned-model', 3, 2, 5],
+          ['ok', 'unknown-cost-model', 3, 2, 5],
+          ['error', 'failed-model', 4, 1, 5],
           ['error', null, null, null, null],
         ],
       );
+      assert.deepEqual(rows.map((row) => row.usd), [0.02, null, 0.03, null]);
+      assert.deepEqual(rows.map((row) => row.usd_source ?? null), ['reported', null, 'reported', null]);
       assert.equal(rows[0].effort_intended, 'medium');
       assert.equal(rows[0].effort_executed, null);
       assert.equal(rows[1].effort_executed, null);
+      assert.equal(rows[2].effort_executed, null);
+      assert.equal(rows[3].effort_executed, null);
     } finally {
       cleanup(project, worktree);
+    }
+  });
+
+  test('local Claude normalizer keeps an SDK failure with unknown cost unlabelled', async () => {
+    const project = tempDir('dispatch-local-normalizer-failure-');
+    try {
+      const { client } = makeClient([]);
+      const unknownCostFailureQuery = async function* unknownCostFailureQuery() {
+        yield { type: 'system', subtype: 'init', model: 'failed-model' };
+        yield {
+          type: 'result', subtype: 'error_during_execution', errors: ['unpriced failure'],
+          usage: { input_tokens: 4, output_tokens: 1 }, duration_ms: 8,
+        };
+      };
+
+      await assert.rejects(
+        runAndNormalize(null, 'prompt', {
+          step_id: 'work', agent: 'claude', output_fields: {},
+        }, {
+          stratum: client,
+          localExecution: true,
+          localQuery: unknownCostFailureQuery,
+          telemetry: { project_cwd: project, site: 'consumer' },
+        }),
+        (error) => {
+          assert.ok(error instanceof AgentError);
+          assert.deepEqual(
+            {
+              cost_usd: error.usage.cost_usd,
+              usd: error.usage.usd,
+              has_usd_source: Object.hasOwn(error.usage, 'usd_source'),
+            },
+            { cost_usd: null, usd: null, has_usd_source: false },
+          );
+          return true;
+        },
+      );
+    } finally {
+      cleanup(project);
+    }
+  });
+
+  test('local Claude normalizer preserves a provider-reported zero cost', async () => {
+    const project = tempDir('dispatch-local-normalizer-zero-');
+    try {
+      const { client } = makeClient([]);
+      const normalized = await runAndNormalize(null, 'prompt', {
+        step_id: 'work', agent: 'claude', output_fields: {},
+      }, {
+        stratum: client,
+        localExecution: true,
+        localQuery: successQuery({ costUsd: 0 }),
+        telemetry: { project_cwd: project, site: 'consumer' },
+      });
+
+      assert.equal(normalized.usages.length, 1);
+      assert.deepEqual(
+        {
+          cost_usd: normalized.usages[0].cost_usd,
+          usd_source: normalized.usages[0].usd_source,
+        },
+        { cost_usd: 0, usd_source: 'reported' },
+      );
+    } finally {
+      cleanup(project);
     }
   });
 

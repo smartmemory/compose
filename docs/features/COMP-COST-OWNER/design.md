@@ -487,7 +487,7 @@ ledger and accumulator that agree to the cent.
 - [x] The receipt path (`build.js:2280-2283`) is UNCHANGED — verified by diff; it was already correct and is the reference
 - [x] **Negative control PASSED:** `scripts/negative-control.sh --prod lib/build.js -- --test test/build-cost-owner.test.js` reports **RED**, 7 of 10 failing on revert against a 10/10 green baseline
 - [x] An unpriced step reports `usd_unknown_count > 0` in the history row and does NOT invent spend (pinned by test/build-cost-owner.test.js:230)
-- [x] **Measurement DONE.** Part A (`c9bd15a`, $7.77): resume seeding exact, three sources to the cent. Part B (2026-09-13, $0, by tracing, no build run): the resumed segment's spend IS recorded — in `dispatch-ledger.jsonl`, not `build-history.jsonl`. Two paths write the ledger and not history (`abortBuild` `:7745-7750`; `terminalizeThrownBuild`'s `!flowId` bail `:3365`); which one fired here is undetermined. See open question 0b and `evidence/part-b-abort-path-2026-09-13.md`
+- [x] **Measurement DONE.** Part A (`c9bd15a`, $7.77): resume seeding exact, three sources to the cent. Part B (2026-09-13, $0, by tracing, no build run): the resumed segment's spend IS recorded — in `dispatch-ledger.jsonl`, not `build-history.jsonl`. Two paths write the ledger and not history (`abortBuild` `:7745-7750`; `terminalizeThrownBuild`'s `!flowId` bail `:3365`); **attributed 2026-09-14: `abortBuild`** (`evidence/13fd190e-writer-attributed-2026-09-14.md`). See open question 0b and `evidence/part-b-abort-path-2026-09-13.md`
 - [ ] **Not done in S1:** `usd_source` is still not carried ON the accumulator; only the unpriced COUNT is. Provenance of the aggregate is S2 territory
 
 ### S2 — Stop destroying provenance on the way to the screen
@@ -783,6 +783,15 @@ were never built; leaving them would read as a plan outstanding rather than one 
    (`codex.ts:481`, "TOKENS STAY RAW"), which `BudgetLedger` may exclude. **Until settled, do
    not quote 425,284 as a token count and never put the two tallies in one ratio.**
 
+   **(b) RESOLVED 2026-09-14 — reconciled exactly, cached-input candidate REFUTED.** 425,284 is
+   nine model requests' input+output for ONE codex dispatch (cache reads counted once); 28,279
+   is the sum of the only FOUR usage reports stratum received, because at `a48c40a9` compose's
+   ordinary step-completion envelopes carried no `usage` (only fanout items did). `BudgetLedger`
+   filters nothing. 425,284 may now be quoted, with that meaning; the two tallies still never
+   share a ratio, because one is complete-for-one-dispatch and the other an incomplete subtotal.
+   Whether the envelope omission is still live on `main` is NOT established.
+   Evidence: `evidence/token-tally-15x-reconciled-2026-09-14.md`.
+
    **Also corrected: the ledger is NOT a superset of history.** History carries $1.6044701,
    $2.4726621 and $2.8894888 with no ledger counterpart; the ledger carries $4.0245686,
    $4.5037144, $6.9341944 and $18.9300601 with no history counterpart. **Both surfaces leak**,
@@ -792,6 +801,16 @@ were never built; leaving them would read as a plan outstanding rather than one 
    $0.6973779, and the ledger has no row for it at all. Three candidate exits at
    `finalizeBuildAttempt` (`lib/build.js:3496`) are untraced: `suspended`, `alreadyEmitted`,
    `attemptFinalized`.
+
+   **RESOLVED 2026-09-14 — `13fd190e`'s writer is `abortBuild`, and the three exits are
+   traced.** The session transcript pins the `--abort` command (07:03:52) and its "Build
+   aborted." result (07:03:56.601) around the ledger row (07:03:56.455); at checkout `44e54cf`
+   `abortBuild` emits actuals at `:5751` and never calls history. The earlier "flow reads
+   `running`, so not `abortBuild`" inference was unsound: the settle-before-write guard is
+   `d0a07c1` (2026-09-10), post-dating the event. `suspended` / `alreadyEmitted` /
+   `attemptFinalized` produce NO actuals-without-history on their own. The other three
+   ledger-only amounts remain unattributed. No fix — a third history writer stays rejected.
+   Evidence: `evidence/13fd190e-writer-attributed-2026-09-14.md`.
 
    Two things DO survive, both now reported by the tool:
    - **HISTORY-GAP, $14.79 total** ($12.13 + $2.66) — the Part B defect, quantified. Not a
@@ -933,3 +952,15 @@ were never built; leaving them would read as a plan outstanding rather than one 
   the receipt's figure becomes unauditable. "Historical repricing" was also the wrong name for
   what `experiment-pricing.js` does — it prices records that never carried a cost, in the same
   run that produced them. No code changed.
+
+- **2026-09-14, third pass.** Three residues closed, all by Codex read-only traces adjudicated
+  against the persisted records they cite, none by argument. (a) The ~15x token disagreement
+  reconciles exactly and the cached-input hypothesis is refuted — stratum received four usage
+  reports because ordinary step-completion envelopes carried none at `a48c40a9`. (b)
+  `13fd190e`'s ledger-only row was written by `abortBuild`; the "`running` rules it out"
+  counter-evidence applied September code (`d0a07c1`) to an August event. (c)
+  `lib/local-claude-connector.js` now stamps `usd_source: 'reported'` — and the suspected
+  consequence (unlabelled dollars refused at `build.js:2291`) was FALSE: those rows feed
+  `collectDispatchMetrics`, never the refusal; no money was dropped, only provenance.
+  One code change (connector); two new evidence files; no fix to the history gap.
+
