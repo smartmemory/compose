@@ -488,7 +488,7 @@ ledger and accumulator that agree to the cent.
 - [x] **Negative control PASSED:** `scripts/negative-control.sh --prod lib/build.js -- --test test/build-cost-owner.test.js` reports **RED**, 7 of 10 failing on revert against a 10/10 green baseline
 - [x] An unpriced step reports `usd_unknown_count > 0` in the history row and does NOT invent spend (pinned by test/build-cost-owner.test.js:230)
 - [x] **Measurement DONE.** Part A (`c9bd15a`, $7.77): resume seeding exact, three sources to the cent. Part B (2026-09-13, $0, by tracing, no build run): the resumed segment's spend IS recorded — in `dispatch-ledger.jsonl`, not `build-history.jsonl`. Two paths write the ledger and not history (`abortBuild` `:7745-7750`; `terminalizeThrownBuild`'s `!flowId` bail `:3365`); **attributed 2026-09-14: `abortBuild`** (`evidence/13fd190e-writer-attributed-2026-09-14.md`). See open question 0b and `evidence/part-b-abort-path-2026-09-13.md`
-- [ ] **Not done in S1:** `usd_source` is still not carried ON the accumulator; only the unpriced COUNT is. Provenance of the aggregate is S2 territory
+- [x] `usd_source` is carried on the v5 accumulator and through `buildCostSnapshot()`: v4 migrates to honest `null`, while live per-dispatch entries fold with the existing sticky rule (unknown dominates; `estimated` beats `reported`). Pinned by `test/build-cost-owner.test.js` migration, reported/estimated/unknown, labelled `$0`, duration-only estimated `$0`, and no-cost/no-label cases; focused negative control RED 7/7 and GREEN 7/7 (2026-09-14)
 
 ### S2 — Stop destroying provenance on the way to the screen
 
@@ -984,4 +984,3 @@ were never built; leaving them would read as a plan outstanding rather than one 
   consequence (unlabelled dollars refused at `build.js:2291`) was FALSE: those rows feed
   `collectDispatchMetrics`, never the refusal; no money was dropped, only provenance.
   One code change (connector); two new evidence files; no fix to the history gap.
-

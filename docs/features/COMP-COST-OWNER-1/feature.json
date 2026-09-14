@@ -1,7 +1,7 @@
 {
   "code": "COMP-COST-OWNER-1",
   "description": "Every ordinary dispatch settles with stratum via an acknowledged receipt OR a usage-bearing stepDone; kickoff (lib/new.js) stops discarding usage",
-  "status": "PLANNED",
+  "status": "BLOCKED",
   "phase": "COMP-COST-OWNER: One owner for the cost number",
   "created": "2026-09-14",
   "updated": "2026-09-14",
