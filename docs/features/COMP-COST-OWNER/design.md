@@ -798,6 +798,21 @@ were never built; leaving them would read as a plan outstanding rather than one 
    feature's slice. Evidence: `evidence/step-envelope-usage-2026-09-14.md`,
    `evidence/token-tally-15x-reconciled-2026-09-14.md`.
 
+   **`usageRecordFromRaw` guard relaxed to `cost >= 0` (`583b14f`) — CONDITIONAL, and the
+   condition is recorded here.** The `> 0` guard existed because producers used to coerce an
+   unknown cost to `0`. It was relaxed only after tracing EVERY envelope that reaches the helper
+   (local success/failure/primary-failure, stratum claude/codex success/failure, repair): all
+   now null an unknown cost and label only a real number. **One unsafe producer remains
+   upstream and is NOT on that path:** stratum's Claude connector initialises
+   `let costUsd = 0` (`stratum/ts/src/connectors/claude.ts:71`) and emits the streamed
+   `step_usage` event with `cost_usd: costUsd, usd_source: "reported"` (`:180-186`) — a
+   labelled `$0` whenever the SDK reported no cost, rationalised in its comment as "a 0 total
+   means a genuinely free turn". That event feeds the stream/metadata channel, not
+   `usageRecordFromRaw`. **If it is ever routed into the receipt path, the `>= 0` guard admits
+   a false labelled zero — the S2 defect, reintroduced.** Falsifier: those two stratum lines;
+   the fix belongs in stratum (null until reported), not in a compose guard. Filed as
+   COMP-COST-OWNER-1's sibling concern, stratum-side.
+
    **Also corrected: the ledger is NOT a superset of history.** History carries $1.6044701,
    $2.4726621 and $2.8894888 with no ledger counterpart; the ledger carries $4.0245686,
    $4.5037144, $6.9341944 and $18.9300601 with no history counterpart. **Both surfaces leak**,
