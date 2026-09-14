@@ -1,10 +1,10 @@
 {
   "code": "COMP-COST-OWNER",
   "description": "One owner for \"what did this cost\", which every sink READS rather than re-derives. Supersedes COMP-PRICING: that feature was filed as a pricing problem, and tracing proved pricing is the small part. One measurement at the connector currently fans out to FIVE independent running totals over different event populations with nothing reconciling them — `usageTotals` (result-normalizer, per step), `accumulator.usd` (persisted sidecar, all nine `recordBuildUsage` sites), `buildCostTotals` (in-memory, ONE site: `build.js:5273-5275`, main steps only), routing receipts (per dispatch), and build-stream events. MEASURED on the retained live-fire run: the ledger and the accumulators agree to the cent at $1.4257732 (delta 0.0000000000) while `build-history.jsonl` reports $1.38900475 and 589,373 tokens against the accumulator's 808,002 — short $0.0367685 (2.6% of spend) and 218,629 tokens (27.1%). Evidence: `docs/features/COMP-COST-OWNER/evidence/three-totals-2026-09-12.md`. Cause: fix/revise/gate-fix/error-carried spend reaches the accumulator and the ledger but never `buildCostTotals`, and `buildCostTotals` is SEEDED from the accumulator at `:3746-3749` on every invocation including resume, so the history cost depends on whether the build was resumed (read-verified, not yet measured). Each sink arrived with a different feature (COMP-OBS-COST, COMP-MODEL-AB, COMP-MODEL-ROUTE, resume support), none found an owner to read from, and each added a defensive `?? 0` that silently converts \"unknown\" to \"free\" — five times between measurement and display, ending at `<$0.001` on the cockpit for a call of unknown cost. The receipt path (`build.js:2280-2283`) already does this correctly, stripping an unprovenanced dollar rather than inventing provenance, and is the model. Carries forward from COMP-PRICING: the dialect-as-data pricer, the pinned-registry freshness check (ccusage ships exactly this shape), and deleting the unreachable consumer-side fallback.",
-  "status": "PARTIAL",
+  "status": "COMPLETE",
   "phase": "COMP-COST-OWNER: One owner for the cost number",
   "created": "2026-09-12",
-  "updated": "2026-09-13",
+  "updated": "2026-09-14",
   "complexity": "M",
   "position": 1,
   "tags": [
@@ -25,5 +25,26 @@
       "to_code": "COMP-MODEL-ROUTE",
       "note": "Surfaced 2026-09-12 during COMP-MODEL-ROUTE S1b gate-5 work. The usd_source fix exposed the dialect disagreement; tracing it exposed the ownership defect. The gate-5 ledger is also the measuring stick that proved history diverges, and the receipt path is the reference implementation this feature copies."
     }
-  ]
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-COST-OWNER:5b9ffd15ae48dad0000fa3c9a3c96d7375d16eaa",
+      "feature_code": "COMP-COST-OWNER",
+      "commit_sha": "5b9ffd15ae48dad0000fa3c9a3c96d7375d16eaa",
+      "commit_sha_short": "5b9ffd15",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/build.js",
+        "test/build-cost-owner.test.js",
+        "test/build-history-accumulator.test.js",
+        "test/dispatch-build.test.js",
+        "CHANGELOG.md",
+        "docs/features/COMP-COST-OWNER/design.md"
+      ],
+      "recorded_at": "2026-09-14T16:12:55.741Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Slice acceptance audited criterion-by-criterion 2026-09-14 against main (Codex sol/high, read-only), then the last gap closed at 5b9ffd1.\n\nS1 SATISFIED — ownership contract (39d90e8), buildCostTotals deleted, v2 migration with null split, receipt path unchanged and fail-closed, unpriced steps counted as unknown not zero, resume/Part-B attribution (c9bd15a; 13fd190e attributed to abortBuild at 583b14f). The final criterion, aggregate usd_source on the accumulator, shipped at 5b9ffd1: schema v5, sticky fold mirroring aggregateUsdSource (unknown dominates, estimated beats reported), v4 migrates to null rather than backfilling 'reported', duration-only observations made sticky. Note the v3 claim in earlier CHANGELOG text is superseded by v4 and now v5.\n\nS2 SATISFIED (86f6e51) — writer emits cost and provenance together or neither; bridge stops coercing; sticky aggregateUsdSource; four formatters collapsed into format-cost.js; both negative controls red.\n\nS3 SATISFIED (5d3027c) — both compose pricing tables and the unreachable consumer fallback deleted after two reachability probes; unpriced steps counted, never consumer-priced; one unpriced step invalidates a partial total; pricing invariant retargeted at stratum's exact lookup. The struck \"build one pricer\" text was superseded by S3's third amendment.\n\nS4 OWNED ELSEWHERE — transferred to stratum by design.md:556-560 and never delivered there. Filed 2026-09-14 as STRAT-LEARN-COST-1 (scheduled LiteLLM diff of the pinned table, spark excluded by name), together with a stratum-side defect this audit surfaced: connectors/claude.ts:71 initialises costUsd = 0 and :180-186 emits step_usage with usd_source \"reported\" — a labelled $0 whenever the SDK reported none. It reaches only the streamed channel, not the receipt path, which is the condition under which compose relaxed usageRecordFromRaw to cost >= 0 at 583b14f; recorded in design.md with its falsifier.\n\nS5 SATISFIED — the oracle's first version (5b2d2e4) read build-history despite its name; e8f4b6b repointed it at dispatch-ledger.jsonl, calibrated at 729f213 (160 sessions, 2.57% aggregate disagreement against ccusage).\n\nNOT included here: COMP-COST-OWNER-1 (envelope settlement + kickoff usage), filed as a follow-up and now BLOCKED on a stratum surface bump — stratum_step_done.request.result declares only {output?, failure?, usage?, telemetry?}, so the envelope cannot carry provenance; an attempt failed 10 real-engine golden tests and was reverted.\n\nVerification at 5b9ffd1: full suite 7153/7153; targeted 94/94 + 3/3; negative control RED 7/7 against lib/build.js on a GREEN baseline; every new test proven red before green."
+    }
+  ],
+  "commit_sha": "5b9ffd15ae48dad0000fa3c9a3c96d7375d16eaa"
 }
