@@ -61,6 +61,13 @@ ledger but not to history.**
 
 ## Two such paths exist. Which one produced `13fd190e` is NOT determined.
 
+> **RESOLVED 2026-09-14: `abortBuild`.** The session transcript records the `--abort` command at
+> 07:03:52 and "Build aborted." at 07:03:56.601; the ledger row is stamped 07:03:56.455. The
+> "`status: running` argues against it" point below is UNSOUND for this event: the
+> settle-before-write guard arrived in `d0a07c1` (2026-09-10), six weeks after the build.
+> Candidate 2 is eliminated by the persisted `build_resume` event carrying `runId`. See
+> `evidence/13fd190e-writer-attributed-2026-09-14.md`. Text below kept as written.
+
 Stated honestly because the first draft of this document asserted `abortBuild` and the
 evidence does not support a unique attribution.
 
