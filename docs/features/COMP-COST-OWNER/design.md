@@ -729,11 +729,34 @@ were never built; leaving them would read as a plan outstanding rather than one 
    computed per feature, which is a known limitation, because build↔flow pairing rests on a
    cost-match heuristic rather than a key.
 
-   **`3e95eb77` is the surviving defect and both signals point at it:** 0.28x UNDER against
-   its flow, and 436,736 tokens for $0.6974. That row is internally inconsistent — more
-   tokens than every flow's `flowSpent` combined, at 1/26th the feature's rate. Either
-   `tokens_total` is inflated (retries summed?) or most of its steps carry no dollars (the
-   S1/S2 unpriced family). **Next: trace `tokens_total` accumulation for that build.**
+   **`3e95eb77` TRACED 2026-09-14 at $0 — MISSING DOLLARS, not inflated tokens.** Evidence:
+   `evidence/build-3e95eb77-trace-2026-09-14.md`. Three dispatches reconcile EXACTLY with the
+   terminal row (436,736 tokens, $0.6973779), so the accumulator arithmetic is exonerated
+   again. **One dispatch is 97.4% of the volume and carries no dollars:** `test_review` via
+   **codex/gpt-5.6-terra, 425,284 tokens, `usd: null`**. Cause: Codex reports no cost of its
+   own, so stratum's accumulated `costUsd` stayed 0 and `codexUsageFields` omitted the key —
+   correctly, since omitting keeps an unknown cost unknown rather than stamping a false $0.
+   **Not a stale rate table:** terra has been priced since `4ac7ad3` (2026-07-10), five weeks
+   earlier; the rate existed and nothing multiplied by it.
+
+   **Already fixed upstream and verified live: stratum `00ff4db` (2026-09-12)** added the
+   `usdFromTokens` fallback labelled `usdSource: "estimated"`. The resolved stratum (0.5.2
+   sibling checkout) carries it; that dispatch would price at **$0.42–$1.10** today, so the
+   build would record ~$1.12–$1.81 instead of $0.6974.
+
+   **The 0.28x is withdrawn as an apples-to-apples figure:** it compared build `3e95eb77`
+   (3 dispatches) against flow `4122e695` (15 dispatches). The under-record is real; the ratio
+   was a scope mismatch.
+
+   **Live residue — one item, and it is why the history cannot be repaired:**
+   `lib/stratum-mcp-client.js:240-241` hardcodes `tokens_in: null, tokens_out: null` on every
+   stratum-routed dispatch row, while the SAME FILE at `:873` reads `value.split` off the same
+   envelope and prefers it (`STRAT-USAGE-SPLIT`, whose comment says the legacy reconstruction
+   "filed the whole aggregate as output for every record ever written"). Measured: `tokens_in`
+   null on 36/39 stratum-routed claude rows and 6/6 codex rows. So a ledger row carries a
+   TOTAL only, and the 449,116 unpriced historical tokens (56% of this project's ledger) can
+   never be repriced — input and output differ by 6x on terra.
+   **Falsifier: `lib/stratum-mcp-client.js:240-241`.**
 
    **Also corrected: the ledger is NOT a superset of history.** History carries $1.6044701,
    $2.4726621 and $2.8894888 with no ledger counterpart; the ledger carries $4.0245686,
