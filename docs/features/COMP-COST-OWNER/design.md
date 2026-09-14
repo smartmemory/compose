@@ -789,8 +789,14 @@ were never built; leaving them would read as a plan outstanding rather than one 
    ordinary step-completion envelopes carried no `usage` (only fanout items did). `BudgetLedger`
    filters nothing. 425,284 may now be quoted, with that meaning; the two tallies still never
    share a ratio, because one is complete-for-one-dispatch and the other an incomplete subtotal.
-   Whether the envelope omission is still live on `main` is NOT established.
-   Evidence: `evidence/token-tally-15x-reconciled-2026-09-14.md`.
+   **Envelope omission on `main`: MODE-DEPENDENT (traced same day).** The bare envelope is
+   still built at `build.js:5466`, but since `44e54cf` (08-30) every dispatch is receipted via
+   `stratum_usage_report` first and that debits the same ledger — recent flows' `flowSpent`
+   equals their receipts to the cent. `4122e695` (08-19) simply predates receipts. Residual
+   leaks: `lib/new.js:139` discards kickoff usage outright; a swallowed receipt failure
+   (`build.js:2360`) has no envelope fallback; legacy no-receipt mode. Follow-up, not this
+   feature's slice. Evidence: `evidence/step-envelope-usage-2026-09-14.md`,
+   `evidence/token-tally-15x-reconciled-2026-09-14.md`.
 
    **Also corrected: the ledger is NOT a superset of history.** History carries $1.6044701,
    $2.4726621 and $2.8894888 with no ledger counterpart; the ledger carries $4.0245686,
