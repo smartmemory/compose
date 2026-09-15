@@ -16,7 +16,7 @@
   ],
   "artifacts": [
     {
-      "type": "finding",
+      "type": "report",
       "path": "docs/features/COMP-MODEL-ROUTE-1/evidence/hypothesis-controls-2026-09-15.md",
       "status": "current"
     }
