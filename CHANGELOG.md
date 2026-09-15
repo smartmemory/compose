@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **Claude model defaults:** update live Claude connector and settings defaults from Sonnet 4.6 to `claude-sonnet-5`, with matching contract example, focused assertions, and living documentation.
+
 - **COMP-MODEL-ROUTE: every shipped model-dispatching lifecycle can participate in shadow observation.** All 15 shipped pipeline and preset entry flows now declare the five optional routing transport strings required by the refusal-safe ledger contract, including the ordinary `build` and `build-quick` paths. A shipped-file oracle inventories every spec against an explicit participation decision, rejects undeclared participants and accidentally declared non-participants, and drives `createRoutingStart` in `shadow` mode against the real parsed build specs so fixture-authored replacements cannot mask the contract again.
 
 - **COMP-COST-OWNER: the build-cost owner now carries aggregate dollar provenance.** The accumulator advances from v4 to v5 with `usd_source`; legacy v4 records migrate to `null` because their provenance cannot be recovered, while fresh dispatches fold their stated per-entry sources with the existing sticky rule (unknown dominates, `estimated` beats `reported`). The fold includes settleable duration-only observations, so an estimated `$0` with zero tokens cannot disappear before a later reported dispatch. `buildCostSnapshot()` and the fresh-accumulator rotation mirror pass the field through without changing consumer behavior. Focused negative control: RED 7/7 against the pre-change implementation, GREEN 7/7 after the fix.

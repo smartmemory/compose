@@ -189,7 +189,7 @@ export function createAgentWorkspace(binding, { query }) {
     return {
       cwd: binding.targetRoot,
       env: { ...process.env, COMPOSE_TARGET: binding.targetRoot },
-      model: _readModelSetting() || 'claude-sonnet-4-6',
+      model: _readModelSetting() || 'claude-sonnet-5',
       permissionMode: 'acceptEdits',
       settingSources: ['project'],
       tools: { type: 'preset', preset: 'claude_code' },

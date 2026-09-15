@@ -18,7 +18,7 @@ Compose dispatches work to AI agents through a connector abstraction. All connec
 
 ## ClaudeSDKConnector
 
-Wraps `@anthropic-ai/claude-agent-sdk`'s `query()` function. Default model: `claude-sonnet-4-6` (override via `CLAUDE_MODEL` env var). Runs in `acceptEdits` permission mode with full `claude_code` tool access.
+Wraps `@anthropic-ai/claude-agent-sdk`'s `query()` function. Default model: `claude-sonnet-5` (override via `CLAUDE_MODEL` env var). Runs in `acceptEdits` permission mode with full `claude_code` tool access.
 
 Key behaviors:
 - Strips `CLAUDECODE` env var to allow spawning nested Claude Code sessions

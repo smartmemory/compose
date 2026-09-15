@@ -192,7 +192,7 @@ describe('settings E2E', () => {
     const { status, body } = await post('/api/settings/reset');
     assert.equal(status, 200);
     assert.equal(body.ui.theme, 'system'); // back to default
-    assert.equal(body.models.interactive, 'claude-sonnet-4-6');
+    assert.equal(body.models.interactive, 'claude-sonnet-5');
 
     const msg = await updatePromise;
     assert.equal(msg.settings.ui.theme, 'system');
