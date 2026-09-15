@@ -1,7 +1,7 @@
 {
   "code": "COMP-TUI-4",
   "description": "Parallel task grid: live 2-4 row grid during `parallel_dispatch` showing per-task status (spinner/done/failed) with agent and elapsed time.",
-  "status": "PLANNED",
+  "status": "IN_PROGRESS",
   "phase": "COMP-TUI: CLI Terminal UI",
   "position": 131,
   "created": "2026-05-29",

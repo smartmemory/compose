@@ -1,0 +1,24 @@
+{
+  "code": "COMP-MODEL-ROUTE-1",
+  "description": "Root-cause the review_triage \"Usage credits required for 1M context\" failure (flow 05f660fe): missing-model, prompt-size, and model-eligibility hypotheses all refuted by controls; mechanism unproven; decisive test is a real review_triage run.",
+  "status": "PLANNED",
+  "phase": "COMP-TEAMS: Agent Team Presets",
+  "created": "2026-09-15",
+  "updated": "2026-09-15",
+  "complexity": "M",
+  "position": 154,
+  "parent": "COMP-MODEL-ROUTE",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-MODEL-ROUTE"
+    }
+  ],
+  "artifacts": [
+    {
+      "type": "finding",
+      "path": "docs/features/COMP-MODEL-ROUTE-1/evidence/hypothesis-controls-2026-09-15.md",
+      "status": "current"
+    }
+  ]
+}
