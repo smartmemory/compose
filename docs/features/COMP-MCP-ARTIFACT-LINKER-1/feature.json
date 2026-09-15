@@ -1,0 +1,17 @@
+{
+  "code": "COMP-MCP-ARTIFACT-LINKER-1",
+  "description": "`link_artifact` advertises artifact_type values the feature.json schema enum rejects; align tool description, validation, and schema.",
+  "status": "PLANNED",
+  "phase": "Phase 7: MCP Writers",
+  "created": "2026-09-15",
+  "updated": "2026-09-15",
+  "complexity": "S",
+  "position": 17,
+  "parent": "COMP-MCP-ARTIFACT-LINKER",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-MCP-ARTIFACT-LINKER"
+    }
+  ]
+}
