@@ -472,6 +472,7 @@ Rich terminal interface for `compose build`. Replaces raw text output with struc
 | 133 | COMP-TUI-6 | Build summary: completion report with step durations, retries, total cost/tokens, pass/fail per step. | PLANNED |
 | 134 | COMP-TUI-7 | Split pane layout: top pane for pipeline progress, bottom for tool output. Terminal equivalent of cockpit main area + agent bar. | PLANNED |
 | 135 | COMP-TUI-8 | Item detail on gate: pull item connections, lifecycle phase, related artifacts into the gate review panel. | PLANNED |
+| 136 | COMP-TUI-4-1 | Do not retry a consumer fanout item whose failure is deterministic (ownership violations) | PLANNED |
 
 **Support features (complete):**
 - Heartbeat timer: 5s elapsed time tick during silent agent runs
