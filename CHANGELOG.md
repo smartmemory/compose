@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **Review profile D6 regression:** retain `4efe988`'s explicit `standard` tiers and update the build sidecar's exact reviewer/orchestrator assertions; the read-only reviewer template and tool-restriction assertions remain intact. Tier pinning chooses Sonnet 5 with adaptive/high effort, not a 200K context limit. Both Claude connectors supply a fallback model for an untiered profile, so null `modelID` does not imply an absent SDK model. The cause of flow `05f660fe`'s 1M usage-credit error remains unproven; neither automatic size-based escalation nor resolution by this commit has been established.
+
 - **Claude model defaults:** update live Claude connector and settings defaults from Sonnet 4.6 to `claude-sonnet-5`, with matching contract example, focused assertions, and living documentation.
 
 - **COMP-MODEL-ROUTE: every shipped model-dispatching lifecycle can participate in shadow observation.** All 15 shipped pipeline and preset entry flows now declare the five optional routing transport strings required by the refusal-safe ledger contract, including the ordinary `build` and `build-quick` paths. A shipped-file oracle inventories every spec against an explicit participation decision, rejects undeclared participants and accidentally declared non-participants, and drives `createRoutingStart` in `shadow` mode against the real parsed build specs so fixture-authored replacements cannot mask the contract again.

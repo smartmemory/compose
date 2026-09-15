@@ -668,9 +668,9 @@ describe('deterministic file_exists ensures on ordinary steps (D4)', () => {
 describe('profile sidecar restores tool restrictions (D6)', () => {
   test('the build profile sidecar maps the review fanout to the read-only reviewer', () => {
     const profiles = loadPipelineProfiles(join(ROOT, 'pipelines', 'build.stratum.yaml'));
-    assert.equal(profiles.review_lenses, 'claude:read-only-reviewer');
+    assert.equal(profiles.review_lenses, 'claude:read-only-reviewer:standard');
     assert.equal(profiles.blueprint, 'claude::critical');
-    assert.equal(profiles.review_merge, 'claude:orchestrator');
+    assert.equal(profiles.review_merge, 'claude:orchestrator:standard');
   });
 
   test('a read-only profile makes the agent invocation carry read-only tool restrictions', async () => {
