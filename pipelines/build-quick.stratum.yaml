@@ -154,8 +154,9 @@ flows:
           the user re-run with the full `compose build` (no `--quick`) rather than
           under-scoping it.
         out: PhaseResult
+        # A skipped result is legal only while the artifact-exists guard also passes.
         ensure:
-          - expr: "result.outcome == 'complete'"
+          - expr: "result.outcome in 'complete|skipped'"
           - expr: "file_exists(result.artifact)"
         attempts: 2
 

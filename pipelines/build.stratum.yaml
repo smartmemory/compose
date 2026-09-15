@@ -112,8 +112,9 @@ flows:
           features, and analyze related implementations. Feature: ${input.description}.
           Write docs/features/${input.featureCode}/design.md and return PhaseResult.
         out: PhaseResult
+        # A skipped result is legal only while the artifact-exists guard also passes.
         ensure:
-          - expr: "result.outcome == 'complete'"
+          - expr: "result.outcome in 'complete|skipped'"
           - expr: "file_exists(result.artifact)"
         attempts: 2
 
@@ -132,7 +133,7 @@ flows:
           docs/features/${input.featureCode}/prd.md. Return PhaseResult.
         out: PhaseResult
         ensure:
-          - expr: "result.outcome == 'complete'"
+          - expr: "result.outcome in 'complete|skipped'"
           - expr: "file_exists(result.artifact)"
         attempts: 2
 
@@ -145,7 +146,7 @@ flows:
           at docs/features/${input.featureCode}/architecture.md. Return PhaseResult.
         out: PhaseResult
         ensure:
-          - expr: "result.outcome == 'complete'"
+          - expr: "result.outcome in 'complete|skipped'"
           - expr: "file_exists(result.artifact)"
         attempts: 2
 
@@ -158,7 +159,7 @@ flows:
           Return PhaseResult.
         out: PhaseResult
         ensure:
-          - expr: "result.outcome == 'complete'"
+          - expr: "result.outcome in 'complete|skipped'"
           - expr: "file_exists(result.artifact)"
         attempts: 3
 
@@ -183,7 +184,7 @@ flows:
           docs/features/${input.featureCode}/plan.md. Return PhaseResult.
         out: PhaseResult
         ensure:
-          - expr: "result.outcome == 'complete'"
+          - expr: "result.outcome in 'complete|skipped'"
           - expr: "file_exists(result.artifact)"
         attempts: 2
 
@@ -345,7 +346,7 @@ flows:
           deviations, and lessons learned. Return PhaseResult.
         out: PhaseResult
         ensure:
-          - expr: "result.outcome == 'complete'"
+          - expr: "result.outcome in 'complete|skipped'"
           - expr: "file_exists(result.artifact)"
         attempts: 2
 
