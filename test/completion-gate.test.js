@@ -35,7 +35,7 @@ import {
 // exercised against git rather than mocked away.
 // ---------------------------------------------------------------------------
 
-function makeWorkspace({ guard = true, status = 'PLANNED' } = {}) {
+function makeWorkspace({ guard = true, status = 'PLANNED', testCommand } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), 'compgate-'));
   const git = (...a) => execFileSync('git', a, { cwd: root, encoding: 'utf8' });
   git('init', '-q');
@@ -49,7 +49,11 @@ function makeWorkspace({ guard = true, status = 'PLANNED' } = {}) {
   mkdirSync(path.join(root, '.compose'), { recursive: true });
   writeFileSync(
     path.join(root, '.compose', 'compose.json'),
-    JSON.stringify({ paths: { features: 'docs/features' }, capabilities: { guard } }, null, 2),
+    JSON.stringify({
+      paths: { features: 'docs/features' },
+      capabilities: { guard },
+      ...(testCommand ? { guard: { testCommand } } : {}),
+    }, null, 2),
   );
 
   const fdir = path.join(root, 'docs', 'features', 'GATE-1');
@@ -134,6 +138,164 @@ test('a nonexistent commit refuses, and nothing is written', async () => {
   } finally { reset(); ws.cleanup(); }
 });
 
+test('[COMP-COMPLETION-GATE-1] a 7-char SHA prefix refuses before acquiring a held lock', async () => {
+  const ws = makeWorkspace();
+  const calls = [];
+  const lockDir = path.join(ws.root, '.compose', 'data', 'locks', 'completion-GATE-1');
+  mkdirSync(lockDir, { recursive: true });
+  writeFileSync(path.join(lockDir, 'owner'), 'pre-held-by-test');
+  const releaseHeldLock = setTimeout(() => rmSync(lockDir, { recursive: true, force: true }), 1000);
+  _testOnly_setGuardClient(applyingGuard(calls));
+  _testOnly_setHistoryClient(async (rid) => {
+    calls.push({ op: 'history', rid });
+    return { error: { code: 'guard_not_found' } };
+  });
+  try {
+    const started = Date.now();
+    const r = await completionGate({
+      featureCode: 'GATE-1', commitSha: ws.sha.slice(0, 7), testsPass: true,
+      workspaceRoot: ws.root, filesChanged: ['README.md'],
+    });
+    const elapsed = Date.now() - started;
+    assert.equal(r.ok, false);
+    assert.equal(r.refusedAt, 'evidence');
+    assert.ok(elapsed < 700, `SHA refusal waited on the held lock (${elapsed}ms)`);
+    assert.match(r.reasons.join(' '), /full 40-char hex SHA/);
+    assert.equal(readIntent(ws.root, 'GATE-1'), null, 'invalid SHA must not write an intent');
+    assert.deepEqual(calls, [], 'invalid SHA must not read or transition the guard');
+    assert.equal(featureStatus(ws.root), 'PLANNED');
+  } finally {
+    clearTimeout(releaseHeldLock);
+    rmSync(lockDir, { recursive: true, force: true });
+    reset();
+    ws.cleanup();
+  }
+});
+
+for (const { name, over, reason } of [
+  {
+    name: 'feature_code must match the strict feature-code shape',
+    over: { featureCode: 'lowercase-1' },
+    reason: /invalid feature_code/,
+  },
+  {
+    name: 'files_changed must be an array',
+    over: { filesChanged: 'README.md' },
+    reason: /files_changed must be an array/,
+  },
+  {
+    name: 'files_changed entries must be strings',
+    over: { filesChanged: [42] },
+    reason: /each entry must be a non-empty string/,
+  },
+  {
+    name: 'files_changed entries must be non-empty',
+    over: { filesChanged: [''] },
+    reason: /each entry must be a non-empty string/,
+  },
+  {
+    name: 'files_changed entries must not contain NUL',
+    over: { filesChanged: ['bad\0path'] },
+    reason: /contains NUL byte/,
+  },
+  {
+    name: 'files_changed entries must be repo-relative',
+    over: { filesChanged: ['/etc/passwd'] },
+    reason: /absolute paths not allowed/,
+  },
+  {
+    name: 'files_changed entries must use POSIX separators',
+    over: { filesChanged: ['lib\\completion-gate.js'] },
+    reason: /POSIX separators/,
+  },
+  {
+    name: 'files_changed entries must already be normalized',
+    over: { filesChanged: ['./lib/completion-gate.js'] },
+    reason: /must already be normalized/,
+  },
+  {
+    name: 'files_changed entries must not escape with dot-dot',
+    over: { filesChanged: ['../outside.js'] },
+    reason: /escape rejected/,
+  },
+  {
+    name: 'notes must be a string when present',
+    over: { notes: 42 },
+    reason: /notes must be a string/,
+  },
+  {
+    name: 'notes must not contain NUL',
+    over: { notes: 'bad\0note' },
+    reason: /notes must not contain NUL bytes/,
+  },
+  {
+    name: 'built_via must be a lowercase template slug',
+    over: { builtVia: 'Build Quick!' },
+    reason: /built_via must be a lowercase template slug/,
+  },
+  {
+    name: 'force must be a strict boolean',
+    over: { force: 1 },
+    reason: /force must be a boolean/,
+  },
+  {
+    name: 'idempotency_key must be a non-empty string when used',
+    over: { idempotencyKey: 1 },
+    reason: /idempotency: key must be a non-empty string/,
+  },
+]) {
+  test(`[COMP-COMPLETION-GATE-1] shape: ${name}; zero guard traffic`, async () => {
+    const ws = makeWorkspace();
+    const calls = [];
+    _testOnly_setGuardClient(applyingGuard(calls));
+    _testOnly_setHistoryClient(async (rid) => {
+      calls.push({ op: 'history', rid });
+      return { error: { code: 'guard_not_found' } };
+    });
+    try {
+      const r = await completionGate({
+        featureCode: 'GATE-1', commitSha: ws.sha, testsPass: true,
+        workspaceRoot: ws.root, filesChanged: ['README.md'], ...over,
+      });
+      assert.equal(r.ok, false);
+      assert.equal(r.refusedAt, 'request');
+      assert.match(r.reasons.join(' '), reason);
+      assert.equal(readIntent(ws.root, over.featureCode || 'GATE-1'), null,
+        'shape refusal must not write an intent');
+      assert.deepEqual(calls, [], 'shape refusal must not read or transition the guard');
+      assert.equal(featureStatus(ws.root), 'PLANNED');
+    } finally { reset(); ws.cleanup(); }
+  });
+}
+
+for (const { name, commitSha, reason } of [
+  { name: 'non-string SHA', commitSha: 123, reason: /non-empty 40-char hex SHA/ },
+  { name: 'empty SHA', commitSha: '   ', reason: /non-empty 40-char hex SHA/ },
+  { name: 'non-hex SHA', commitSha: 'g'.repeat(40), reason: /full 40-char hex SHA/ },
+]) {
+  test(`[COMP-COMPLETION-GATE-1] evidence shape: ${name}; zero guard traffic`, async () => {
+    const ws = makeWorkspace();
+    const calls = [];
+    _testOnly_setGuardClient(applyingGuard(calls));
+    _testOnly_setHistoryClient(async (rid) => {
+      calls.push({ op: 'history', rid });
+      return { error: { code: 'guard_not_found' } };
+    });
+    try {
+      const r = await completionGate({
+        featureCode: 'GATE-1', commitSha, testsPass: true,
+        workspaceRoot: ws.root, filesChanged: ['README.md'],
+      });
+      assert.equal(r.ok, false);
+      assert.equal(r.refusedAt, 'evidence');
+      assert.match(r.reasons.join(' '), reason);
+      assert.equal(readIntent(ws.root, 'GATE-1'), null, 'invalid SHA must not write an intent');
+      assert.deepEqual(calls, [], 'invalid SHA must not read or transition the guard');
+      assert.equal(featureStatus(ws.root), 'PLANNED');
+    } finally { reset(); ws.cleanup(); }
+  });
+}
+
 test('tests_pass that is not explicitly true is not an attestation', async () => {
   const ws = makeWorkspace();
   _testOnly_setGuardClient(applyingGuard([]));
@@ -145,6 +307,30 @@ test('tests_pass that is not explicitly true is not an attestation', async () =>
     assert.equal(r.ok, false);
     assert.equal(r.refusedAt, 'evidence');
     assert.equal(featureStatus(ws.root), 'PLANNED');
+  } finally { reset(); ws.cleanup(); }
+});
+
+test('[COMP-COMPLETION-GATE-1] a passing configured command attests an omitted tests_pass', async () => {
+  const ws = makeWorkspace({
+    guard: true,
+    testCommand: [process.execPath, '-e', 'process.exit(0)'],
+  });
+  const calls = [];
+  _testOnly_setGuardClient(applyingGuard(calls));
+  _testOnly_setHistoryClient(async () => ({ error: { code: 'guard_not_found' } }));
+  try {
+    const r = await completionGate({
+      featureCode: 'GATE-1', commitSha: ws.sha, testsPass: undefined,
+      workspaceRoot: ws.root, filesChanged: ['README.md'],
+    });
+    assert.equal(r.ok, true, r.reasons?.join('; '));
+    assert.equal(r.attestedTestsPass, true);
+    const stored = JSON.parse(readFileSync(
+      path.join(ws.root, 'docs', 'features', 'GATE-1', 'feature.json'), 'utf8',
+    ));
+    assert.equal(stored.completions[0].tests_pass, true,
+      'the writer receives the derived attestation');
+    assert.equal(featureStatus(ws.root), 'COMPLETE');
   } finally { reset(); ws.cleanup(); }
 });
 
@@ -219,6 +405,34 @@ test('crash after the guard applied, before the record: same commit RECOVERS', a
     assert.equal(r.ok, true, r.reasons?.join('; '));
     assert.equal(r.recovered, true);
     assert.equal(r.operationId, 'op-abc', 'recovery adopts the recorded operation, not a new one');
+    assert.equal(featureStatus(ws.root), 'COMPLETE');
+    assert.equal(readIntent(ws.root, 'GATE-1'), null);
+  } finally { reset(); ws.cleanup(); }
+});
+
+test('[COMP-COMPLETION-GATE-1] crash after guard: uppercase retry of the same commit RECOVERS', async () => {
+  const ws = makeWorkspace();
+  const calls = [];
+  _testOnly_setGuardClient(applyingGuard(calls));
+  try {
+    const intentDir = path.join(ws.root, '.compose', 'data', 'completion-intents');
+    mkdirSync(intentDir, { recursive: true });
+    writeFileSync(path.join(intentDir, 'GATE-1.json'), JSON.stringify({
+      operation_id: 'op-uppercase-retry', feature_code: 'GATE-1', commit_sha: ws.sha,
+      tests_attested: true, started_at: new Date().toISOString(),
+    }));
+    _testOnly_setHistoryClient(async () => ({ current_state: 'complete' }));
+
+    const r = await completionGate({
+      featureCode: 'GATE-1', commitSha: ws.sha.toUpperCase(), testsPass: true,
+      workspaceRoot: ws.root, filesChanged: ['README.md'],
+    });
+    assert.equal(r.ok, true, r.reasons?.join('; '));
+    assert.equal(r.recovered, true);
+    assert.equal(r.operationId, 'op-uppercase-retry');
+    assert.equal(r.result.commit_sha, ws.sha, 'writer receives the canonical lowercase SHA');
+    assert.equal(calls.filter((c) => c.op === 'transition').length, 0,
+      'recovery must not apply a second guard transition');
     assert.equal(featureStatus(ws.root), 'COMPLETE');
     assert.equal(readIntent(ws.root, 'GATE-1'), null);
   } finally { reset(); ws.cleanup(); }
