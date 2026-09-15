@@ -44,14 +44,24 @@ flows:
     steps:
       - id: decompose_gsd
         agent: claude
-        do: >
+        do: |
           Read docs/features/${input.featureCode}/blueprint.md including its Boundary
-          Map. Decompose it into independent tasks. Each task must contain id,
-          description, files_owned, files_read, and depends_on. Put the matching
-          produces/consumes entries, verbatim Boundary Map slice, upstream summaries,
-          and required pre-merge commands ${input.pre_merge_gate} into description.
-          Each slice maps to exactly one task and its File Plan is owned by that task.
-          Reject file ownership conflicts and return {tasks}.
+          Map. Decompose it into independent tasks.
+
+          MUST checklist:
+          - Every task must identify id, description, files_owned, files_read, and
+            depends_on.
+          - Every task's files_owned MUST include every test file that task will create
+            or modify, because the implementer is required to write tests and may not
+            touch unowned paths.
+          - A task that legitimately writes no test MUST say why in its description.
+          - Reject file ownership conflicts: files_owned MUST remain pairwise disjoint
+            across tasks. Redo the decomposition if ownership overlaps.
+          - Put the matching produces/consumes entries, verbatim Boundary Map slice,
+            upstream summaries, and required pre-merge commands
+            ${input.pre_merge_gate} into description.
+          - Each slice maps to exactly one task and its File Plan is owned by that task.
+          Return {tasks}.
         out: TaskGraph
         ensure:
           - expr: "len(result.tasks) >= 1"

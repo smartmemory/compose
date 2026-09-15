@@ -168,10 +168,19 @@ flows:
 
       - id: decompose
         agent: claude
-        do: >
+        do: |
           Read the design doc at docs/features/${input.featureCode}/design.md and
-          decompose it into independent tasks. For each task identify id, description,
-          files_owned, files_read, and depends_on. Reject file ownership conflicts.
+          decompose it into independent tasks.
+
+          MUST checklist:
+          - Every task must identify id, description, files_owned, files_read, and
+            depends_on.
+          - Every task's files_owned MUST include every test file that task will create
+            or modify, because the implementer is required to write tests and may not
+            touch unowned paths.
+          - A task that legitimately writes no test MUST say why in its description.
+          - Reject file ownership conflicts: files_owned MUST remain pairwise disjoint
+            across tasks. Redo the decomposition if ownership overlaps.
           Return {tasks}.
 
           QUICK-PATH GUARDRAIL: if decomposition reveals the work is actually

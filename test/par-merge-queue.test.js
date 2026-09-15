@@ -28,7 +28,7 @@ describe('TS consumer pre-merge gate', () => {
     assert.ok(failure.excerpt.length <= 2048);
   });
 
-  it('reports changed files and bridges node_modules from the base tree', () => {
+  it('reports changed files and bridges node_modules only while gates run', () => {
     const cwd = temp();
     execSync('git init -q', { cwd });
     writeFileSync(join(cwd, 'foo.txt'), 'work\n');
@@ -37,8 +37,11 @@ describe('TS consumer pre-merge gate', () => {
     const base = temp();
     const worktree = temp();
     mkdirSync(join(base, 'node_modules', 'pkg'), { recursive: true });
-    runPreMergeGateLocal(worktree, ['git --version'], base, 30000);
-    assert.ok(existsSync(join(worktree, 'node_modules', 'pkg')));
+    // The gate command itself proves the bridge was present WHILE gates ran; the
+    // null return is what pins that — without it this test also passes when the
+    // bridge is never created at all.
+    assert.equal(runPreMergeGateLocal(worktree, ['test -d node_modules/pkg'], base, 30000), null);
+    assert.equal(existsSync(join(worktree, 'node_modules')), false);
   });
 });
 
