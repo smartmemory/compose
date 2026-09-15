@@ -1,0 +1,17 @@
+{
+  "code": "COMP-COMPLETION-GATE-1",
+  "description": "record_completion ledgers the guard transition before the writer rejects a short commit_sha, leaving an unrecoverable intent; validate the full-SHA rule before the guard.",
+  "status": "PLANNED",
+  "phase": "COMP-PARITY: UI↔CLI Parity",
+  "created": "2026-09-15",
+  "updated": "2026-09-15",
+  "complexity": "S",
+  "position": 16,
+  "parent": "COMP-COMPLETION-GATE",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-COMPLETION-GATE"
+    }
+  ]
+}
