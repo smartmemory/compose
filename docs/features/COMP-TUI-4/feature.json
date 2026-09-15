@@ -5,5 +5,17 @@
   "phase": "COMP-TUI: CLI Terminal UI",
   "position": 131,
   "created": "2026-05-29",
-  "updated": "2026-05-29"
+  "updated": "2026-09-14",
+  "complexity": "S",
+  "triageTier": 0,
+  "lane": "standard",
+  "estimateSource": "front",
+  "triageConfidence": "low",
+  "profile": {
+    "needs_prd": false,
+    "needs_architecture": false,
+    "needs_verification": true,
+    "needs_report": false
+  },
+  "triageTimestamp": "2026-09-14T16:13:56.627Z"
 }
