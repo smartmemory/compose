@@ -663,6 +663,49 @@ describe('deterministic file_exists ensures on ordinary steps (D4)', () => {
     );
     assert.equal(res.status, 'completed', 'a written artifact must satisfy file_exists');
   });
+
+  test('a guarded artifact step accepts skipped when the artifact already exists', async (t) => {
+    const stateRoot = await mkdtemp(join(tmpdir(), 'compose-ts-d4c-state-'));
+    const workspace = await mkdtemp(join(tmpdir(), 'compose-ts-d4c-cwd-'));
+    const client = new StratumMcpClient();
+    t.after(async () => {
+      await client.close();
+      await rm(stateRoot, { recursive: true, force: true });
+      await rm(workspace, { recursive: true, force: true });
+    });
+    await client.connect({
+      command: process.env.COMPOSE_STRATUM_TS_NODE || process.execPath,
+      args: [TS_MCP_BIN],
+      cwd: workspace,
+      env: { ...process.env, STRATUM_STATE_ROOT: stateRoot },
+    });
+    const spec = {
+      version: 1,
+      contracts: { R: { artifact: 'string', outcome: 'complete|skipped|failed' } },
+      flows: {
+        entry: 'm',
+        m: {
+          input: {}, output: { from: '${s.output}', contract: 'R' },
+          steps: [{
+            id: 's', agent: 'claude', do: 'x', out: 'R', attempts: 1,
+            ensure: [
+              { expr: "result.outcome in 'complete|skipped'" },
+              { expr: 'file_exists(result.artifact)' },
+            ],
+          }],
+        },
+      },
+    };
+    await mkdir(join(workspace, 'docs'), { recursive: true });
+    await writeFile(join(workspace, 'docs', 'approved.md'), '# approved\n');
+    const planned = await client.plan(spec, 'm', {}, { workspaceRoot: workspace });
+    const ready = planned.ready[0];
+    const res = await client.stepDone(
+      planned.runId, 's', { output: { artifact: 'docs/approved.md', outcome: 'skipped' } },
+      ready.dispatchToken,
+    );
+    assert.equal(res.status, 'completed');
+  });
 });
 
 describe('profile sidecar restores tool restrictions (D6)', () => {

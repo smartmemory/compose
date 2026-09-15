@@ -65,6 +65,33 @@ test('every shipped spec has an explicit routing-participation decision and matc
   assert.deepEqual(violations, []);
 });
 
+test('artifact-producing phase steps permit skipped only behind an artifact-exists guard', () => {
+  const skipEnsure = "result.outcome in 'complete|skipped'";
+  const artifactEnsure = 'file_exists(result.artifact)';
+  const expected = {
+    'build.stratum.yaml': ['explore_design', 'prd', 'architecture', 'blueprint', 'plan', 'report'],
+    'build-quick.stratum.yaml': ['explore_design'],
+    'bug-fix.stratum.yaml': [],
+    'content.stratum.yaml': [],
+    'gsd.stratum.yaml': [],
+    'research.stratum.yaml': [],
+  };
+
+  for (const [file, expectedIds] of Object.entries(expected)) {
+    const spec = YAML.parse(readFileSync(join(REPO_ROOT, 'pipelines', file), 'utf8'));
+    const steps = spec.flows[spec.flows.entry].steps;
+    const skippable = steps.filter(step => step.ensure?.some(({ expr }) => expr === skipEnsure));
+    assert.deepEqual(skippable.map(step => step.id), expectedIds);
+    for (const step of skippable) {
+      assert.ok(spec.contracts[step.out].outcome.split('|').includes('skipped'));
+      assert.ok(
+        step.ensure.some(({ expr }) => expr === artifactEnsure),
+        `${file} step ${step.id} must retain its artifact-exists guard`,
+      );
+    }
+  }
+});
+
 for (const name of ['build', 'build-quick']) {
   test(`createRoutingStart accepts the real parsed pipelines/${name}.stratum.yaml in shadow mode`, t => {
     const cwd = mkdtempSync(join(tmpdir(), `routing-real-${name}-`));
