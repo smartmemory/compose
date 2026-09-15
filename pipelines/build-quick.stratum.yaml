@@ -126,6 +126,11 @@ flows:
 
   build:
     input:
+      route_mode: string?
+      routing_start: string?
+      routing_root: string?
+      routing_plan_intent: string?
+      routing_continuation: string?
       featureCode: string
       description: string
       pre_merge_gate: string[]?
