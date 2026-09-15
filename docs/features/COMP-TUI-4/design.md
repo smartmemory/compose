@@ -1,3 +1,4 @@
+<!-- wasGeneratedBy: explore_design -->
 # COMP-TUI-4 — Parallel Task Grid
 
 **Status:** DESIGN

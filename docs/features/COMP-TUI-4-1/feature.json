@@ -1,0 +1,17 @@
+{
+  "code": "COMP-TUI-4-1",
+  "description": "Do not retry a consumer fanout item whose failure is deterministic (ownership violations)",
+  "status": "PLANNED",
+  "phase": "COMP-TUI: CLI Terminal UI",
+  "created": "2026-09-15",
+  "updated": "2026-09-15",
+  "complexity": "S",
+  "position": 136,
+  "parent": "COMP-TUI-4",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-TUI-4"
+    }
+  ]
+}
