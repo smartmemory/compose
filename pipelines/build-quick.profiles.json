@@ -4,9 +4,9 @@
     "review_merge"
   ],
   "_reduceSteps_comment": "H1: ReviewResult-out steps that MERGE/deduplicate rather than review. They get review normalization (confidence handling) but NOT the reviewer scaffold. This is python's stripped reduce_mode input, restored compose-side.",
-  "review_triage": "claude:orchestrator",
-  "review_lenses": "claude:read-only-reviewer",
-  "review_merge": "claude:orchestrator",
+  "review_triage": "claude:orchestrator:standard",
+  "review_lenses": "claude:read-only-reviewer:standard",
+  "review_merge": "claude:orchestrator:standard",
   "run_tests": "claude::fast",
   "ship": "claude::critical"
 }
