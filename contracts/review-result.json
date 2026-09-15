@@ -73,7 +73,7 @@
         },
         "model_id": {
           "type": ["string", "null"],
-          "description": "Model identifier (e.g. 'claude-sonnet-4-5'). Null if not available."
+          "description": "Model identifier (e.g. 'claude-sonnet-5'). Null if not available."
         }
       },
       "additionalProperties": true

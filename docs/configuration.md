@@ -161,7 +161,7 @@ Scaffolded from `templates/ROADMAP.md` with project name, date, and placeholder 
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `CLAUDE_MODEL` | `claude-sonnet-4-6` | Default model for ClaudeSDKConnector |
+| `CLAUDE_MODEL` | `claude-sonnet-5` | Default model for ClaudeSDKConnector |
 | `CODEX_MODEL` | `gpt-5.6-terra/high` | Default model for CodexConnector. Canonical source: `stratum/src/stratum/judge/codex_models.py` (see its docstring for how to change this or add a model) |
 | `COMPOSE_DEBUG` | (unset) | Enable verbose event logging to stderr |
 | `COMPOSE_TARGET` | (unset) | Override project root for `compose start` |

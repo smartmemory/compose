@@ -66,7 +66,7 @@ describe('defaults', () => {
   test('get() returns model defaults', () => {
     const store = makeStore();
     const settings = store.get();
-    assert.equal(settings.models.interactive, 'claude-sonnet-4-6');
+    assert.equal(settings.models.interactive, 'claude-sonnet-5');
     assert.ok(settings.models.summarizer);
   });
 
@@ -161,7 +161,7 @@ describe('reset', () => {
     store.update({ policies: { prd: 'gate' }, models: { interactive: 'opus' } });
     const result = store.reset();
     assert.equal(result.policies.prd, 'skip'); // back to contract default
-    assert.equal(result.models.interactive, 'claude-sonnet-4-6');
+    assert.equal(result.models.interactive, 'claude-sonnet-5');
   });
 
   test('reset(section) clears only that section', () => {

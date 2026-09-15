@@ -190,7 +190,7 @@ describe('POST /api/settings/reset', () => {
     await patch('/api/settings', { models: { interactive: 'opus' } });
     const { status, body } = await post('/api/settings/reset');
     assert.equal(status, 200);
-    assert.equal(body.models.interactive, 'claude-sonnet-4-6');
+    assert.equal(body.models.interactive, 'claude-sonnet-5');
   });
 
   test('reset broadcasts settingsUpdated', async () => {
