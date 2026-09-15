@@ -30,3 +30,10 @@ error: test/version-check.test.js: patch does not apply
 error: patch failed: test/version-check.test.js:5
 error: test/version-check.test.js: patch does not apply
 
+## [2026-09-15] COMP-TUI-4 — design_gate
+**Outcome:** approve
+**Rationale:** Approved by the controller after verifying the design's file:line anchors against the tree rather than trusting them: lib/cli-progress.js is 483 lines; build.js:1768 forms parallelStepNum; :1775 calls progress.stepStart; :1781 already has `descriptor.agent ?? 'claude'` in scope but unforwarded; :2011 calls progress.stepDone with no status. All four correct — which is the thing agent-written designs most often get wrong on this project.
+
+Scope matches the ROADMAP row exactly (live 2-4 row grid during parallel_dispatch, per-task status + agent + elapsed). Two files, no new modules, no new dependencies, no protocol change; explicit non-goals covering NOOP_PROGRESS/GSD headless, the web cockpit, and sub-heartbeat animation. Backward-compatible signature extensions on both methods. Quick path is the right call for an S.
+
+The three open questions carry stated defaults (use descriptor.id for the label; keep the existing toggle contract; leave an all-done grid standing until the next sequential stepStart) and none of them blocks implementation.
