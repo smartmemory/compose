@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **COMP-MCP-ARTIFACT-LINKER-1 filed: `link_artifact` advertises artifact types the schema rejects.** The tool description (`server/mcp-tool-defs.js`) lists `finding`, `report-supplement`, `link`, `external`, but `contracts/feature-json.schema.json` only allows `design|prd|architecture|blueprint|plan|report|journal|snapshot`, so a linked `finding` writes successfully and then fails the pre-push schema gate (bit COMP-MODEL-ROUTE-1 on 2026-09-15; worked around in `8f5e33f`). Until fixed, use only `report`, `journal`, or `snapshot`.
+
 - **Artifact-producing pipeline phases may preserve approved work.** A `PhaseResult` step now accepts `skipped` only when the same step also requires `file_exists(result.artifact)`, so an existing approved artifact can advance while reproduce, fix, verify, and ship-style steps remain completion-only. Because the shipped spec digests changed, routing starts sealed against the old digests will correctly refuse `--resume` with `ROUTING_ROOT_DRIFT`; affected flows must start fresh.
 
 - **Review profile D6 regression:** retain `4efe988`'s explicit `standard` tiers and update the build sidecar's exact reviewer/orchestrator assertions; the read-only reviewer template and tool-restriction assertions remain intact. Tier pinning chooses Sonnet 5 with adaptive/high effort, not a 200K context limit. Both Claude connectors supply a fallback model for an untiered profile, so null `modelID` does not imply an absent SDK model. The cause of flow `05f660fe`'s 1M usage-credit error remains unproven; neither automatic size-based escalation nor resolution by this commit has been established.
