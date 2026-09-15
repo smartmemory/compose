@@ -620,7 +620,7 @@ export const TOOLS = [
       required: ['feature_code', 'commit_sha', 'tests_pass', 'files_changed'],
       properties: {
         feature_code:    { type: 'string' },
-        commit_sha:      { type: 'string', description: 'Full 40-char hex SHA (Decision 9). Short prefixes are rejected on write. Stored verbatim; commit_sha_short is derived for display only.' },
+        commit_sha:      { type: 'string', description: 'Full 40-char hex SHA (Decision 9). Short prefixes are rejected before any guard write. Stored lowercase; commit_sha_short is derived for display only.' },
         tests_pass:      { type: 'boolean' },
         files_changed:   { type: 'array', items: { type: 'string' } },
         notes:           { type: 'string' },

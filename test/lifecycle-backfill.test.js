@@ -734,6 +734,164 @@ test('the lock directory mtime advances while a slow test command runs (R2B-12)'
   } finally { clearInterval(sampler); ws.cleanup(); }
 });
 
+test('[COMP-COMPLETION-GATE-1] backfill short SHA refuses before a held lock or guard traffic', async () => {
+  const ws = await makeWorkspace({ guard: true, currentPhase: 'ship' });
+  const { marker, script } = spawnMarkerCli(ws);
+  const priorCli = process.env.COMPOSE_STRATUM_TS_CLI_BIN;
+  const lockDir = path.join(ws.root, '.compose', 'data', 'locks', `completion-${CODE}`);
+  let releaseHeldLock;
+  try {
+    process.env.COMPOSE_STRATUM_TS_CLI_BIN = script;
+    await assertMarkerDetectsASpawn(ws, marker);
+
+    mkdirSync(lockDir, { recursive: true });
+    writeFileSync(path.join(lockDir, 'owner'), 'pre-held-by-test');
+    releaseHeldLock = setTimeout(
+      () => rmSync(lockDir, { recursive: true, force: true }),
+      1000,
+    );
+    const historyBefore = JSON.stringify(ws.item.lifecycle);
+    const started = Date.now();
+    const res = await runBackfill(ws, { commitSha: ws.shas.head.slice(0, 7) });
+    const elapsed = Date.now() - started;
+
+    assert.equal(res.ok, false);
+    assert.equal(res.refusedAt, 'evidence');
+    assert.match(res.reasons.join(' '), /full 40-char hex SHA/);
+    assert.ok(elapsed < 700, `SHA refusal waited on the held lock (${elapsed}ms)`);
+    assert.equal(existsSync(marker), false, 'pre-lock SHA refusal must not spawn the guard');
+    assert.equal(JSON.stringify(ws.item.lifecycle), historyBefore, 'lifecycle history must not change');
+    assert.equal(existsSync(ws.intentPath), false, 'pre-lock SHA refusal must not write an intent');
+  } finally {
+    if (releaseHeldLock) clearTimeout(releaseHeldLock);
+    rmSync(lockDir, { recursive: true, force: true });
+    process.env.COMPOSE_STRATUM_TS_CLI_BIN = priorCli;
+    ws.cleanup();
+  }
+});
+
+test('[COMP-COMPLETION-GATE-1] malformed restored intent refuses before replay or history writes', async () => {
+  const ws = await makeWorkspace({ guard: false, currentPhase: 'ship' });
+  const priorCli = process.env.COMPOSE_STRATUM_TS_CLI_BIN;
+  try {
+    const restore = blockCompletionRecord(ws);
+    let first;
+    try { first = await runBackfill(ws, { notes: 'valid on the first attempt' }); }
+    finally { restore(); }
+    assert.equal(first.ok, false, JSON.stringify(first));
+    assert.equal(first.refusedAt, 'write');
+
+    const persisted = JSON.parse(readFileSync(ws.intentPath, 'utf8'));
+    const { backfillRequestDigest } = await import('../lib/completion-gate.js');
+    assert.equal(persisted.request_digest, backfillRequestDigest({
+      featureCode: CODE,
+      commitSha: ws.shas.head,
+      testsPass: true,
+      mode: 'build',
+      filesChanged: ['lib/a.js'],
+      reason: 'built before the lifecycle existed',
+      occurrences: h1Occurrences(ws.shas),
+    }), 'the seeded intent must match the retry request digest');
+    persisted.notes = 42;
+    writeFileSync(ws.intentPath, JSON.stringify(persisted, null, 2));
+
+    const historyBefore = JSON.stringify(ws.item.lifecycle);
+    const intentBefore = readFileSync(ws.intentPath, 'utf8');
+    const { marker, script } = spawnMarkerCli(ws);
+    process.env.COMPOSE_STRATUM_TS_CLI_BIN = script;
+    await assertMarkerDetectsASpawn(ws, marker);
+
+    const retry = await runBackfill(ws);
+    assert.equal(retry.ok, false);
+    assert.equal(retry.refusedAt, 'recovery');
+    assert.match(retry.reasons.join(' '), /notes must be a string/);
+    assert.ok(retry.reasons.join(' ').includes(ws.intentPath),
+      'the recovery refusal must name the persisted intent path');
+    assert.equal(existsSync(marker), false, 'malformed recovery must make zero guard calls');
+    assert.equal(JSON.stringify(ws.item.lifecycle), historyBefore,
+      'malformed recovery must not change lifecycle history');
+    assert.equal(readFileSync(ws.intentPath, 'utf8'), intentBefore,
+      'malformed recovery must not rewrite the intent');
+  } finally {
+    process.env.COMPOSE_STRATUM_TS_CLI_BIN = priorCli;
+    ws.cleanup();
+  }
+});
+
+test('[COMP-COMPLETION-GATE-1] malformed guarded intent refuses before guard replay', async () => {
+  const ws = await makeWorkspace({ guard: true, currentPhase: 'ship' });
+  const priorCli = process.env.COMPOSE_STRATUM_TS_CLI_BIN;
+  try {
+    await registerLegacy(ws);
+
+    process.env.COMPOSE_STRATUM_TS_CLI_BIN = transitionKillingCli(ws);
+    let first;
+    try { first = await runBackfill(ws); } finally {
+      process.env.COMPOSE_STRATUM_TS_CLI_BIN = priorCli;
+    }
+    assert.equal(first.ok, false, JSON.stringify(first));
+    assert.equal(first.refusedAt, 'guard');
+
+    const persisted = JSON.parse(readFileSync(ws.intentPath, 'utf8'));
+    // The intent must be guarded so moving validation below replay becomes observable guard traffic.
+    assert.equal(persisted.guarded, true);
+    const { backfillRequestDigest } = await import('../lib/completion-gate.js');
+    assert.equal(persisted.request_digest, backfillRequestDigest({
+      featureCode: CODE,
+      commitSha: ws.shas.head,
+      testsPass: true,
+      mode: 'build',
+      filesChanged: ['lib/a.js'],
+      reason: 'built before the lifecycle existed',
+      occurrences: h1Occurrences(ws.shas),
+    }), 'the seeded guarded intent must match the retry request digest');
+    persisted.tests_attested = 'true';
+    writeFileSync(ws.intentPath, JSON.stringify(persisted, null, 2));
+
+    const historyBefore = JSON.stringify(ws.item.lifecycle);
+    const { marker, script } = spawnMarkerCli(ws);
+    process.env.COMPOSE_STRATUM_TS_CLI_BIN = script;
+    await assertMarkerDetectsASpawn(ws, marker);
+
+    const retry = await runBackfill(ws);
+    assert.equal(retry.ok, false);
+    assert.equal(retry.refusedAt, 'recovery');
+    assert.match(retry.reasons.join(' '), /tests_pass must be a boolean/);
+    assert.equal(existsSync(marker), false,
+      'malformed guarded recovery must make zero guard transition or replay calls');
+    assert.equal(JSON.stringify(ws.item.lifecycle), historyBefore,
+      'malformed guarded recovery must not change lifecycle history');
+  } finally {
+    process.env.COMPOSE_STRATUM_TS_CLI_BIN = priorCli;
+    ws.cleanup();
+  }
+});
+
+test('[COMP-COMPLETION-GATE-1] backfill SHA case shares one digest and lowercase intent evidence', async () => {
+  const ws = await makeWorkspace({ guard: false, currentPhase: 'ship' });
+  try {
+    const restore = blockCompletionRecord(ws);
+    let first;
+    try { first = await runBackfill(ws, { commitSha: ws.shas.head.toUpperCase() }); }
+    finally { restore(); }
+    assert.equal(first.ok, false, JSON.stringify(first));
+    assert.equal(first.refusedAt, 'write');
+
+    const persisted = JSON.parse(readFileSync(ws.intentPath, 'utf8'));
+    assert.equal(persisted.commit_sha, ws.shas.head);
+    assert.equal(persisted.envelope.artifacts.commit_sha, ws.shas.head);
+    const canonicalDigest = persisted.request_digest;
+
+    const retry = await runBackfill(ws, { commitSha: ws.shas.head });
+    assert.equal(retry.ok, true, JSON.stringify(retry.reasons));
+    assert.equal(retry.recovered, true);
+    assert.equal(retry.operationId, persisted.operation_id);
+    assert.equal(ws.item.lifecycle.backfills.length, 1, 'case-only retry must not create a second operation');
+    assert.equal(ws.item.lifecycle.backfills[0].request_digest, canonicalDigest);
+    assert.equal(ws.item.lifecycle.backfills[0].completionEvidence.commit_sha, ws.shas.head);
+  } finally { ws.cleanup(); }
+});
+
 // ===========================================================================
 // §7.6 Table-driven refusal harness
 // ===========================================================================
