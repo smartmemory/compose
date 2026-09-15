@@ -79,6 +79,11 @@ flows:
   entry: review_fix
   review_fix:
     input:
+      route_mode: string?
+      routing_start: string?
+      routing_root: string?
+      routing_plan_intent: string?
+      routing_continuation: string?
       featureCode: string
       description: string
       # REQUIRED, not optional: the review step interpolates reviewer_agent, and

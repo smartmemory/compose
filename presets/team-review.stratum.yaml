@@ -53,6 +53,11 @@ flows:
   entry: team_review
   team_review:
     input:
+      route_mode: string?
+      routing_start: string?
+      routing_root: string?
+      routing_plan_intent: string?
+      routing_continuation: string?
       featureCode: string
       description: string
     output:

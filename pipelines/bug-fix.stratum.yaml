@@ -113,6 +113,11 @@ flows:
   entry: bug_fix
   bug_fix:
     input:
+      route_mode: string?
+      routing_start: string?
+      routing_root: string?
+      routing_plan_intent: string?
+      routing_continuation: string?
       task: string
     output:
       from: "${ship.output}"

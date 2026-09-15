@@ -75,6 +75,26 @@ participate — at minimum `build` and `build-quick`. Then pin it with a test th
 SHIPPED spec files rather than a fixture-authored one: assert every spec intended to participate
 satisfies the `:202` predicate. That test is the missing oracle, and it is cheap.
 
+## FIXED 2026-09-15 — and one limitation that survives the fix
+
+All 15 shipped specs now declare the five keys on the flow the PRODUCTION resolver selects
+(verified independently against `createRoutingStart`'s own expression, not a grep). The missing
+oracle shipped too: `test/routing-shipped-spec-participation.test.js` reads the real files,
+applies production's resolver, and compares an explicit participation registry against the
+on-disk inventory — so a new spec fails the test until someone decides, and declarations moved
+to a subflow fail it as well. Red-before-green: 0/3 with the YAML reverted, naming all 13.
+Full suite 7156/7156.
+
+**Limitation, NOT fixed:** `compose init` copies only ABSENT specs (`bin/compose.js:584`) and a
+local copy wins over the packaged one. **A workspace that already initialised keeps its old
+specs and will still refuse shadow mode.** No local workspace is affected (checked: compose,
+forge, compose-develop, compose-lab, stratum all carry 0 copied specs), but any distributed
+install that ran `init` before this fix needs its copies refreshed or deleted. Falsifier:
+`ls <workspace>/.compose/pipelines/*.stratum.yaml` non-empty AND those files lack `route_mode`.
+
+Spec digests DO change, but `legacyRoutingSpecPin` already strips these declarations before
+comparing old specs, so resume compatibility for pre-existing non-routing runs is handled.
+
 ## Falsifiers
 
 - `grep -c route_mode pipelines/build.stratum.yaml` returns 0 → still broken.
