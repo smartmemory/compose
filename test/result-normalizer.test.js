@@ -15,6 +15,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const {
   outputFieldsToJsonSchema,
+  contractClosureToJsonSchema,
   runAndNormalize,
   AgentError,
 } = await import(`${REPO_ROOT}/lib/result-normalizer.js`);
@@ -84,6 +85,42 @@ test('outputFieldsToJsonSchema maps "any" type to unconstrained {}', () => {
   assert.deepEqual(schema.properties.data, {});
   assert.deepEqual(schema.properties.extra, {});
   assert.deepEqual(schema.required, ['data', 'extra']);
+});
+
+test('outputFieldsToJsonSchema converts a bare pipe type to a string enum only', () => {
+  const schema = outputFieldsToJsonSchema({
+    outcome: 'complete|skipped|failed',
+    label: 'string',
+    score: 'number',
+    active: 'boolean',
+    tags: 'string[]',
+    spaced: 'complete |skipped|failed',
+    enumArray: '(complete|skipped|failed)[]',
+    recordLike: '{complete|skipped|failed}',
+  });
+
+  assert.deepEqual(schema.properties, {
+    outcome: { type: 'string', enum: ['complete', 'skipped', 'failed'] },
+    label: { type: 'string' },
+    score: { type: 'number' },
+    active: { type: 'boolean' },
+    tags: {},
+    spaced: {},
+    enumArray: {},
+    recordLike: {},
+  });
+});
+
+test('flat and closure-root pipe enums use the same JSON Schema shape', () => {
+  const flat = outputFieldsToJsonSchema({ outcome: 'complete|skipped|failed' });
+  const closure = contractClosureToJsonSchema({
+    root: 'PhaseResult',
+    contracts: {
+      PhaseResult: { outcome: 'complete|skipped|failed' },
+    },
+  });
+
+  assert.deepEqual(closure.properties.outcome, flat.properties.outcome);
 });
 
 // ---------------------------------------------------------------------------
