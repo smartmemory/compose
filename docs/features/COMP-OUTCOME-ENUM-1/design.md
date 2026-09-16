@@ -1,6 +1,6 @@
 # COMP-OUTCOME-ENUM-1: PhaseResult outcome vocabulary
 
-**Status:** PLANNED
+**Status:** COMPLETE (72e2cbd, 2026-09-17)
 
 **Created:** 2026-09-16
 
