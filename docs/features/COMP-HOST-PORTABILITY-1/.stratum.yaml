@@ -1,0 +1,54 @@
+version: 1
+
+contracts:
+  AuditArtifact:
+    report_path: string
+    findings: number
+
+flows:
+  entry: host_portability_audit
+  host_portability_audit:
+    input:
+      feature: string
+    output:
+      from: "${synthesize.output}"
+      contract: AuditArtifact
+    steps:
+      - id: static_inventory
+        agent: codex
+        do: "Read-only sweep of compose/lib, compose/bin, skills and installed agent definitions: enumerate every CLI command from bin/compose.js and inventory every Claude Code host assumption with file:line, plus every fallback branch that could exit 0 while doing less, for ${input.feature}."
+        out: AuditArtifact
+        ensure:
+          - file_exists: "docs/features/COMP-HOST-PORTABILITY-1/audit/static-inventory.md"
+          - expr: "result.findings > 0"
+        attempts: 2
+      - id: host_c_matrix
+        agent: codex
+        do: "Measure host C: run every compose CLI command standalone in a throwaway scratch project, record exit code, output and files touched, classify each command works/degrades-loudly/degrades-silently/fails/n-a, for ${input.feature}."
+        out: AuditArtifact
+        ensure:
+          - file_exists: "docs/features/COMP-HOST-PORTABILITY-1/audit/host-c-matrix.md"
+        attempts: 2
+      - id: host_b_lifecycle
+        agent: codex
+        do: "Measure host B: drive Compose through its MCP server and CLI from codex exec in the scratch project, run one feature through compose build, record where it stops and whether stopping was loud, for ${input.feature}."
+        out: AuditArtifact
+        ensure:
+          - file_exists: "docs/features/COMP-HOST-PORTABILITY-1/audit/host-b-lifecycle.md"
+        attempts: 2
+      - id: connector_diff
+        agent: codex
+        do: "Run the same Stratum flow through the claude and codex connectors and diff the audit traces; list every capability present on one connector only, for ${input.feature}."
+        out: AuditArtifact
+        ensure:
+          - file_exists: "docs/features/COMP-HOST-PORTABILITY-1/audit/connector-diff.md"
+        attempts: 2
+      - id: synthesize
+        after: [static_inventory, host_c_matrix, host_b_lifecycle, connector_diff]
+        agent: codex
+        do: "Synthesize the four audit artifacts into report.md: command matrix, silent-degradation inventory, Claude-coupling inventory, Stratum layer verdict, ranked gap list and recommendation, for ${input.feature}."
+        out: AuditArtifact
+        ensure:
+          - file_exists: "docs/features/COMP-HOST-PORTABILITY-1/report.md"
+          - expr: "result.findings > 0"
+        attempts: 2
