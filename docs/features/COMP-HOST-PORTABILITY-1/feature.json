@@ -1,7 +1,7 @@
 {
   "code": "COMP-HOST-PORTABILITY-1",
   "description": "Host portability audit across three hosts (Claude Code baseline, Codex CLI host, standalone compose CLI). Classify every CLI command as works/degrades-loudly/degrades-silently/fails per host; inventory Claude-coupling and silent fallbacks with file:line; verdict on whether the Stratum connector layer is genuinely host-agnostic; ranked gap list. Audit only, no porting.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "created": "2026-09-16",
   "profile": {
     "needs_prd": true,
@@ -12,5 +12,28 @@
     "test_framework": "vitest"
   },
   "updated": "2026-09-16",
-  "priority": "high"
+  "priority": "high",
+  "completions": [
+    {
+      "completion_id": "COMP-HOST-PORTABILITY-1:2afbdb6223a5812e65b8d993f1ddfb8f680c76d1",
+      "feature_code": "COMP-HOST-PORTABILITY-1",
+      "commit_sha": "2afbdb6223a5812e65b8d993f1ddfb8f680c76d1",
+      "commit_sha_short": "2afbdb62",
+      "tests_pass": true,
+      "files_changed": [
+        "CHANGELOG.md",
+        "docs/features/COMP-HOST-PORTABILITY-1/report.md",
+        "docs/features/COMP-HOST-PORTABILITY-1/progress.md",
+        "docs/features/COMP-HOST-PORTABILITY-1/.stratum.yaml",
+        "docs/features/COMP-HOST-PORTABILITY-1/audit/static-inventory.md",
+        "docs/features/COMP-HOST-PORTABILITY-1/audit/host-c-matrix.md",
+        "docs/features/COMP-HOST-PORTABILITY-1/audit/host-b-lifecycle.md",
+        "docs/features/COMP-HOST-PORTABILITY-1/audit/connector-diff.md"
+      ],
+      "recorded_at": "2026-09-16T13:50:14.399Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Audit-only feature: report.md plus four measurement artifacts, no source or test files changed. tests_pass basis: docs-only commit; the compose pre-push hook applied its docs-only rule and skipped the test gate; no test suite was run by the controller because no test is affected. Stratum flow 05e46af9-0d1e-4009-acce-65c7fc5672c7 completed (5 Codex dispatches, 0 retries). Headline: 14-row silent-degradation inventory; Stratum connector neutrality REFUTED; both lifecycle runs spawned only Claude regardless of host; recommendation is the staged path (declare limits, fix G1-G4/G6-G10, then a bounded Codex pilot). Incident during measurement: compose start killed the machine-wide supervisor (gap G8)."
+    }
+  ],
+  "commit_sha": "2afbdb6223a5812e65b8d993f1ddfb8f680c76d1"
 }
