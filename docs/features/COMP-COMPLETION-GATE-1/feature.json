@@ -1,10 +1,10 @@
 {
   "code": "COMP-COMPLETION-GATE-1",
   "description": "record_completion ledgers the guard transition before the writer rejects a short commit_sha, leaving an unrecoverable intent; validate the full-SHA rule before the guard.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-PARITY: UI↔CLI Parity",
   "created": "2026-09-15",
-  "updated": "2026-09-15",
+  "updated": "2026-09-16",
   "complexity": "S",
   "position": 16,
   "parent": "COMP-COMPLETION-GATE",
@@ -13,5 +13,27 @@
       "kind": "surfaced_by",
       "to_code": "COMP-COMPLETION-GATE"
     }
-  ]
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-COMPLETION-GATE-1:e3191ced690460fae261a07b07bede18b17c5a83",
+      "feature_code": "COMP-COMPLETION-GATE-1",
+      "commit_sha": "e3191ced690460fae261a07b07bede18b17c5a83",
+      "commit_sha_short": "e3191ced",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/completion-gate.js",
+        "lib/completion-writer.js",
+        "lib/idempotency.js",
+        "server/mcp-tool-defs.js",
+        "test/completion-gate.test.js",
+        "test/lifecycle-backfill.test.js",
+        "CHANGELOG.md"
+      ],
+      "recorded_at": "2026-09-16T09:45:44.400Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Short SHAs and malformed input shapes are refused before any lock, intent, or guard write, on live and backfill paths, with one shared rule exported by completion-writer; backfill recovery validates the restored intent before guard replay; tests_pass stays attested by the evidence step (not hoisted). Codex sol/high, three review rounds. RED 0/20 -> GREEN 20/20; unsandboxed 244/244 across gate/backfill/writer/idempotency suites; pre-push gate green 7212/7212 on e3191ce."
+    }
+  ],
+  "commit_sha": "e3191ced690460fae261a07b07bede18b17c5a83"
 }
