@@ -18,6 +18,35 @@ test('buildStepPrompt renders a complete TS ready dispatch', () => {
   assert.match(prompt, /Feature: AUTH-1/);
 });
 
+test('buildStepPrompt renders expected output for measured explore_design object fields', () => {
+  const prompt = buildStepPrompt({
+    step_id: 'explore_design',
+    intent: 'Explore the approved design and return PhaseResult',
+    inputs: { featureCode: 'COMP-OUTCOME-ENUM-1' },
+    output_fields: {
+      outcome: 'complete|skipped|failed',
+      artifact: 'string',
+    },
+  }, context);
+
+  assert.match(prompt, /## Expected Output/);
+  assert.match(prompt, /- outcome \(complete\|skipped\|failed\)/);
+  assert.match(prompt, /- artifact \(string\)/);
+});
+
+test('buildStepPrompt keeps rendering legacy array output fields', () => {
+  const prompt = buildStepPrompt({
+    step_id: 'legacy-step',
+    intent: 'Return the result',
+    output_fields: [
+      { name: 'artifact', type: 'string' },
+    ],
+  }, context);
+
+  assert.match(prompt, /## Expected Output/);
+  assert.match(prompt, /- artifact \(string\)/);
+});
+
 test('buildStepPrompt omits optional sections for a minimal TS ready dispatch', () => {
   const prompt = buildStepPrompt({ step_id: 'noop', intent: 'Do nothing' }, context);
   assert.match(prompt, /## Intent/);
