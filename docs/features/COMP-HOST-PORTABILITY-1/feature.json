@@ -1,0 +1,16 @@
+{
+  "code": "COMP-HOST-PORTABILITY-1",
+  "description": "Host portability audit across three hosts (Claude Code baseline, Codex CLI host, standalone compose CLI). Classify every CLI command as works/degrades-loudly/degrades-silently/fails per host; inventory Claude-coupling and silent fallbacks with file:line; verdict on whether the Stratum connector layer is genuinely host-agnostic; ranked gap list. Audit only, no porting.",
+  "status": "PLANNED",
+  "created": "2026-09-16",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-09-16",
+  "priority": "high"
+}
