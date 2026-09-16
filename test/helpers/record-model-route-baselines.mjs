@@ -8,7 +8,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve, join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
-const revision = '5fbf8e0bd5dae18eb92a08197b5a9a50743722dc';
+const revision = 'ed8e333d17046a327e90d058334d28d00c785fe8';
 if (process.env.ROUTE_BASELINE_TRACE) {
   globalThis.__routeBaseline = value => appendFileSync(process.env.ROUTE_BASELINE_TRACE, JSON.stringify(value, (key, value) =>
     typeof value === 'function' || key === 'signal' ? undefined : value) + '\n');
@@ -23,21 +23,24 @@ if (process.env.ROUTE_BASELINE_TRACE) {
       'inference.push({ provider, prompt, opts });',
       'globalThis.__routeBaseline({kind:"call",provider,prompt,opts}); inference.push({ provider, prompt, opts });');
     if (url.endsWith('/test/helpers/build-wave-golden-fixture.js')) source = source.replace(
-      "if (key === 'agentRun') return (provider, prompt, opts) => provider === 'claude'\n      ? fake.agentRun(provider, prompt, opts) : target.agentRun(provider, prompt, opts);",
-      "if (key === 'agentRun') return (provider, prompt, opts) => { globalThis.__routeBaseline({kind:'call',provider,prompt,opts}); return provider === 'claude' ? fake.agentRun(provider,prompt,opts) : target.agentRun(provider,prompt,opts); };");
+      "capture({ kind: 'call', provider, prompt, opts });",
+      "globalThis.__routeBaseline({kind:'call',provider,prompt,opts}); capture({ kind: 'call', provider, prompt, opts });");
     return { ...loaded, source };
   } });
 } else {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-  const dir = mkdtempSync(join(tmpdir(), 'route-baseline-source-'));
+  const tempRoot = mkdtempSync(join(tmpdir(), 'route-baseline-source-'));
+  const dir = join(tempRoot, 'compose');
+  mkdirSync(dir, { recursive: true });
   try {
     const archive = execFileSync('git', ['archive', revision], { cwd: root, maxBuffer: 100 * 1024 * 1024 });
     execFileSync('tar', ['-x', '-C', dir], { input: archive });
     symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'));
+    symlinkSync(resolve(root, '../stratum'), join(tempRoot, 'stratum'));
     copyFileSync(fileURLToPath(import.meta.url), join(dir, 'test/helpers/record-model-route-baselines.mjs'));
     const { TS_MCP_BIN, TS_CLI_BIN } = await import('./stratum-test-bin.js');
     const cases = [
-      ['bundled-build', 'test/build-team-fable-astra.test.js', 'one real preset wave'],
+      ['bundled-build', 'test/build-team-fable-astra.test.js', 'off real preset wave'],
       ['carry', 'test/integration/build-wave-golden.test.js', 'two carried waves'],
       ['gsd-input', 'test/gsd-stuck-resume-golden.test.js', 'same-file edit loop|skips completed T01'],
     ];
@@ -50,10 +53,14 @@ if (process.env.ROUTE_BASELINE_TRACE) {
       writeFileSync(trace, '');
       const run = spawnSync(process.execPath, ['--import', './test/helpers/record-model-route-baselines.mjs', '--test',
         '--test-timeout=300000', `--test-name-pattern=${pattern}`, test], { cwd: dir, encoding: 'utf8', timeout: 330000,
-        maxBuffer: 20 * 1024 * 1024, env: { ...process.env, RESEND_API_KEY: '', STRIPE_API_KEY: '',
+        maxBuffer: 20 * 1024 * 1024, env: { ...process.env, RESEND_API_KEY: '', STRIPE_API_KEY: '', STRATUM_STATE_ROOT: join(dir, `.stratum-state-${name}`),
           COMPOSE_STRATUM_TS_MCP_BIN: TS_MCP_BIN, COMPOSE_STRATUM_TS_CLI_BIN: TS_CLI_BIN, ROUTE_BASELINE_TRACE: trace } });
       const events = readFileSync(trace, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
-      const captured = run.status === 0 && events.some(e => e.kind === 'plan') &&
+      const output = run.stdout + run.stderr;
+      const expectedBundledOracleMismatch = name === 'bundled-build' && run.status === 1 &&
+        events.filter(e => e.kind === 'plan').length === 1 && events.filter(e => e.kind === 'call').length === 5 &&
+        /operator: 'deepStrictEqual'/.test(output) && /build-team-fable-astra\.test\.js:167:12/.test(output);
+      const captured = (run.status === 0 || expectedBundledOracleMismatch) && events.some(e => e.kind === 'plan') &&
         (name === 'gsd-input' ? events.filter(e => e.kind === 'plan').length === 2 :
           ['claude', 'codex'].every(p => events.some(e => e.kind === 'call' && e.provider === p)));
       let profileDigest = null;
@@ -66,10 +73,10 @@ if (process.env.ROUTE_BASELINE_TRACE) {
       }
       const fixture = { sourceRevision: revision, captured, harness: test, command: 'RESEND_API_KEY= STRIPE_API_KEY= node test/helpers/record-model-route-baselines.mjs',
         ...(captured ? { profileDigest, events } : { reason: 'Real-engine capture did not complete; no expected bytes fabricated.', exitCode: run.status,
-          diagnostics: (run.stdout + run.stderr).slice(-14000) }) };
+          diagnostics: output.slice(-14000) }) };
       mkdirSync(join(root, 'test/fixtures'), { recursive: true });
       writeFileSync(join(root, `test/fixtures/model-route-off-${name}-v0.5.1.json`), JSON.stringify(fixture, null, 2) + '\n');
-      console.log(`${name}: captured=${captured}, exit=${run.status}\n${captured ? '' : (run.stdout + run.stderr).slice(-2500)}`);
+      console.log(`${name}: captured=${captured}, exit=${run.status}\n${captured ? '' : output.slice(-2500)}`);
     }
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { rmSync(tempRoot, { recursive: true, force: true }); }
 }

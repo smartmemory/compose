@@ -237,7 +237,7 @@ export function serializeGolden(value) {
 export function frozenRoutingBaseline(name) {
   const frozen = JSON.parse(readFileSync(new URL(`../fixtures/model-route-off-${name}-v0.5.1.json`, import.meta.url)));
   assert.equal(frozen.captured, true);
-  assert.equal(frozen.sourceRevision, '5fbf8e0bd5dae18eb92a08197b5a9a50743722dc');
+  assert.equal(frozen.sourceRevision, 'ed8e333d17046a327e90d058334d28d00c785fe8');
   return frozen;
 }
 

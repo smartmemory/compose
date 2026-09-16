@@ -1,5 +1,5 @@
 {
-  "sourceRevision": "5fbf8e0bd5dae18eb92a08197b5a9a50743722dc",
+  "sourceRevision": "ed8e333d17046a327e90d058334d28d00c785fe8",
   "captured": true,
   "harness": "test/integration/build-wave-golden.test.js",
   "command": "RESEND_API_KEY= STRIPE_API_KEY= node test/helpers/record-model-route-baselines.mjs",
@@ -13,13 +13,13 @@
         "task": "# Deterministic wave golden"
       },
       "opts": {
-        "workspaceRoot": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT"
+        "workspaceRoot": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4"
       }
     },
     {
       "kind": "call",
       "provider": "claude",
-      "prompt": "You are executing step \"plan\" in a Stratum workflow.\n\n## Intent\nD3_PLAN\n\n## Inputs\nundefined\n\n## Context\nWorking directory: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT/docs/bugs/D3-GOLDEN-1\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"tasks\"\n  ],\n  \"properties\": {\n    \"tasks\": {}\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
+      "prompt": "You are executing step \"plan\" in a Stratum workflow.\n\n## Intent\nD3_PLAN\n\n## Inputs\nundefined\n\n## Expected Output\nReturn a JSON object with these fields:\n- tasks (object[])\n\n## Context\nWorking directory: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4/docs/bugs/D3-GOLDEN-1\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"tasks\"\n  ],\n  \"properties\": {\n    \"tasks\": {}\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
       "opts": {
         "modelID": "claude-fable-5-1",
         "allowedTools": [
@@ -37,16 +37,16 @@
           "type": "adaptive"
         },
         "effort": "high",
-        "cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+        "cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
         "flow": {
-          "runId": "5c2b7d75-8c32-4f60-8339-de59252acc5c",
+          "runId": "340e04f1-a86a-4db2-9a16-44db620991ec",
           "stepId": "plan"
         },
-        "correlationId": "5c2b7d75-8c32-4f60-8339-de59252acc5c:plan:37d98014-a2ee-4600-a5da-0c05dd6d015a",
+        "correlationId": "340e04f1-a86a-4db2-9a16-44db620991ec:plan:b553c8d7-888a-4a66-8a95-bc1a273e28ce",
         "telemetry": {
-          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
           "site": "build-step",
-          "build_id": "b9100717-ed7f-43db-990f-78b556e77aac",
+          "build_id": "5e519c89-b1a2-46b1-bb3c-efb8a6d349a4",
           "feature_code": "D3-GOLDEN-1",
           "step_id": "plan",
           "attempt": 1,
@@ -57,22 +57,22 @@
     {
       "kind": "call",
       "provider": "codex",
-      "prompt": "You are executing step \"execute/0\" in a Stratum workflow.\n\n## Intent\nD3_WORK {\"id\":\"CORE\",\"description\":\"CORE\",\"files_owned\":[\"core.cjs\"],\"files_read\":[],\"depends_on\":[],\"tier\":\"critical\"}\n\n## Inputs\nundefined\n\n## Context\nWorking directory: /private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-D45Bea/artifacts/5c2b7d75-8c32-4f60-8339-de59252acc5c-c01b29abcc2b/worktrees/27eba3f1558455b2b990b7b7486ebf7c\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"outcome\",\n    \"summary\"\n  ],\n  \"properties\": {\n    \"outcome\": {\n      \"type\": \"string\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"files_changed\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
+      "prompt": "You are executing step \"execute/0\" in a Stratum workflow.\n\n## Intent\nD3_WORK {\"id\":\"CORE\",\"description\":\"CORE\",\"files_owned\":[\"core.cjs\"],\"files_read\":[],\"depends_on\":[],\"tier\":\"critical\"}\n\n## Inputs\nundefined\n\n## Expected Output\nReturn a JSON object with these fields:\n- outcome (string)\n- summary (string)\n- files_changed (string[]?)\n\n## Context\nWorking directory: /private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-cvw9Ze/artifacts/340e04f1-a86a-4db2-9a16-44db620991ec-f0e6826edfe1/worktrees/27eba3f1558455b2b990b7b7486ebf7c\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"outcome\",\n    \"summary\"\n  ],\n  \"properties\": {\n    \"outcome\": {\n      \"type\": \"string\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"files_changed\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
       "opts": {
         "modelID": "gpt-6-astra",
         "effort": "high",
         "sandboxMode": "workspace-write",
-        "cwd": "/private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-D45Bea/artifacts/5c2b7d75-8c32-4f60-8339-de59252acc5c-c01b29abcc2b/worktrees/27eba3f1558455b2b990b7b7486ebf7c",
+        "cwd": "/private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-cvw9Ze/artifacts/340e04f1-a86a-4db2-9a16-44db620991ec-f0e6826edfe1/worktrees/27eba3f1558455b2b990b7b7486ebf7c",
         "flow": {
-          "runId": "5c2b7d75-8c32-4f60-8339-de59252acc5c",
+          "runId": "340e04f1-a86a-4db2-9a16-44db620991ec",
           "stepId": "execute",
           "itemIndex": 0
         },
-        "correlationId": "5c2b7d75-8c32-4f60-8339-de59252acc5c:execute/0:47163391-eaaa-4e18-a82c-93c293e64335",
+        "correlationId": "340e04f1-a86a-4db2-9a16-44db620991ec:execute/0:49d13c62-1f23-425d-92b5-cd88cf2cd74f",
         "telemetry": {
-          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
           "site": "consumer",
-          "build_id": "b9100717-ed7f-43db-990f-78b556e77aac",
+          "build_id": "5e519c89-b1a2-46b1-bb3c-efb8a6d349a4",
           "feature_code": "D3-GOLDEN-1",
           "step_id": "execute/0",
           "attempt": 1,
@@ -83,48 +83,22 @@
     {
       "kind": "call",
       "provider": "codex",
-      "prompt": "You are executing step \"execute/1\" in a Stratum workflow.\n\n## Intent\nD3_WORK {\"id\":\"BROKEN\",\"description\":\"BROKEN\",\"files_owned\":[\"adapter.cjs\"],\"files_read\":[],\"depends_on\":[],\"tier\":\"standard\"}\n\n## Inputs\nundefined\n\n## Context\nWorking directory: /private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-D45Bea/artifacts/5c2b7d75-8c32-4f60-8339-de59252acc5c-c01b29abcc2b/worktrees/0b6959c078b810933cb98b409070fa1c\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"outcome\",\n    \"summary\"\n  ],\n  \"properties\": {\n    \"outcome\": {\n      \"type\": \"string\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"files_changed\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
-      "opts": {
-        "modelID": "gpt-5.6-terra",
-        "effort": "high",
-        "sandboxMode": "workspace-write",
-        "cwd": "/private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-D45Bea/artifacts/5c2b7d75-8c32-4f60-8339-de59252acc5c-c01b29abcc2b/worktrees/0b6959c078b810933cb98b409070fa1c",
-        "flow": {
-          "runId": "5c2b7d75-8c32-4f60-8339-de59252acc5c",
-          "stepId": "execute",
-          "itemIndex": 1
-        },
-        "correlationId": "5c2b7d75-8c32-4f60-8339-de59252acc5c:execute/1:3c0d9831-8d1c-4a6f-a073-9ea85d9369bc",
-        "telemetry": {
-          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
-          "site": "consumer",
-          "build_id": "b9100717-ed7f-43db-990f-78b556e77aac",
-          "feature_code": "D3-GOLDEN-1",
-          "step_id": "execute/1",
-          "attempt": 1,
-          "effort_intended": "high"
-        }
-      }
-    },
-    {
-      "kind": "call",
-      "provider": "codex",
-      "prompt": "You are executing step \"execute/2\" in a Stratum workflow.\n\n## Intent\nD3_WORK {\"id\":\"FAST\",\"description\":\"FAST\",\"files_owned\":[\"fast.txt\"],\"files_read\":[],\"depends_on\":[],\"tier\":\"fast\"}\n\n## Inputs\nundefined\n\n## Context\nWorking directory: /private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-D45Bea/artifacts/5c2b7d75-8c32-4f60-8339-de59252acc5c-c01b29abcc2b/worktrees/10485465422f28081a23065680591466\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"outcome\",\n    \"summary\"\n  ],\n  \"properties\": {\n    \"outcome\": {\n      \"type\": \"string\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"files_changed\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
+      "prompt": "You are executing step \"execute/2\" in a Stratum workflow.\n\n## Intent\nD3_WORK {\"id\":\"FAST\",\"description\":\"FAST\",\"files_owned\":[\"fast.txt\"],\"files_read\":[],\"depends_on\":[],\"tier\":\"fast\"}\n\n## Inputs\nundefined\n\n## Expected Output\nReturn a JSON object with these fields:\n- outcome (string)\n- summary (string)\n- files_changed (string[]?)\n\n## Context\nWorking directory: /private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-cvw9Ze/artifacts/340e04f1-a86a-4db2-9a16-44db620991ec-f0e6826edfe1/worktrees/10485465422f28081a23065680591466\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"outcome\",\n    \"summary\"\n  ],\n  \"properties\": {\n    \"outcome\": {\n      \"type\": \"string\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"files_changed\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
       "opts": {
         "modelID": "gpt-5.3-codex-spark",
         "effort": "medium",
         "sandboxMode": "workspace-write",
-        "cwd": "/private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-D45Bea/artifacts/5c2b7d75-8c32-4f60-8339-de59252acc5c-c01b29abcc2b/worktrees/10485465422f28081a23065680591466",
+        "cwd": "/private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-cvw9Ze/artifacts/340e04f1-a86a-4db2-9a16-44db620991ec-f0e6826edfe1/worktrees/10485465422f28081a23065680591466",
         "flow": {
-          "runId": "5c2b7d75-8c32-4f60-8339-de59252acc5c",
+          "runId": "340e04f1-a86a-4db2-9a16-44db620991ec",
           "stepId": "execute",
           "itemIndex": 2
         },
-        "correlationId": "5c2b7d75-8c32-4f60-8339-de59252acc5c:execute/2:3d7d68c7-bd6e-4e38-a79e-61f4868cc8c9",
+        "correlationId": "340e04f1-a86a-4db2-9a16-44db620991ec:execute/2:66203a60-c646-43b2-b499-c3cfd9afee5d",
         "telemetry": {
-          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
           "site": "consumer",
-          "build_id": "b9100717-ed7f-43db-990f-78b556e77aac",
+          "build_id": "5e519c89-b1a2-46b1-bb3c-efb8a6d349a4",
           "feature_code": "D3-GOLDEN-1",
           "step_id": "execute/2",
           "attempt": 1,
@@ -135,22 +109,48 @@
     {
       "kind": "call",
       "provider": "codex",
-      "prompt": "You are executing step \"execute/3\" in a Stratum workflow.\n\n## Intent\nD3_WORK {\"id\":\"DEFAULT\",\"description\":\"DEFAULT\",\"files_owned\":[\"default.txt\"],\"files_read\":[],\"depends_on\":[]}\n\n## Inputs\nundefined\n\n## Context\nWorking directory: /private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-D45Bea/artifacts/5c2b7d75-8c32-4f60-8339-de59252acc5c-c01b29abcc2b/worktrees/e77e1d1ed93582934ca96e3120a42063\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"outcome\",\n    \"summary\"\n  ],\n  \"properties\": {\n    \"outcome\": {\n      \"type\": \"string\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"files_changed\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
+      "prompt": "You are executing step \"execute/1\" in a Stratum workflow.\n\n## Intent\nD3_WORK {\"id\":\"BROKEN\",\"description\":\"BROKEN\",\"files_owned\":[\"adapter.cjs\"],\"files_read\":[],\"depends_on\":[],\"tier\":\"standard\"}\n\n## Inputs\nundefined\n\n## Expected Output\nReturn a JSON object with these fields:\n- outcome (string)\n- summary (string)\n- files_changed (string[]?)\n\n## Context\nWorking directory: /private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-cvw9Ze/artifacts/340e04f1-a86a-4db2-9a16-44db620991ec-f0e6826edfe1/worktrees/0b6959c078b810933cb98b409070fa1c\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"outcome\",\n    \"summary\"\n  ],\n  \"properties\": {\n    \"outcome\": {\n      \"type\": \"string\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"files_changed\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
+      "opts": {
+        "modelID": "gpt-5.6-terra",
+        "effort": "high",
+        "sandboxMode": "workspace-write",
+        "cwd": "/private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-cvw9Ze/artifacts/340e04f1-a86a-4db2-9a16-44db620991ec-f0e6826edfe1/worktrees/0b6959c078b810933cb98b409070fa1c",
+        "flow": {
+          "runId": "340e04f1-a86a-4db2-9a16-44db620991ec",
+          "stepId": "execute",
+          "itemIndex": 1
+        },
+        "correlationId": "340e04f1-a86a-4db2-9a16-44db620991ec:execute/1:3bf1edd3-c227-4962-8911-a5a1a70ae6d2",
+        "telemetry": {
+          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
+          "site": "consumer",
+          "build_id": "5e519c89-b1a2-46b1-bb3c-efb8a6d349a4",
+          "feature_code": "D3-GOLDEN-1",
+          "step_id": "execute/1",
+          "attempt": 1,
+          "effort_intended": "high"
+        }
+      }
+    },
+    {
+      "kind": "call",
+      "provider": "codex",
+      "prompt": "You are executing step \"execute/3\" in a Stratum workflow.\n\n## Intent\nD3_WORK {\"id\":\"DEFAULT\",\"description\":\"DEFAULT\",\"files_owned\":[\"default.txt\"],\"files_read\":[],\"depends_on\":[]}\n\n## Inputs\nundefined\n\n## Expected Output\nReturn a JSON object with these fields:\n- outcome (string)\n- summary (string)\n- files_changed (string[]?)\n\n## Context\nWorking directory: /private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-cvw9Ze/artifacts/340e04f1-a86a-4db2-9a16-44db620991ec-f0e6826edfe1/worktrees/e77e1d1ed93582934ca96e3120a42063\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"outcome\",\n    \"summary\"\n  ],\n  \"properties\": {\n    \"outcome\": {\n      \"type\": \"string\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"files_changed\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
       "opts": {
         "modelID": "gpt-6-astra",
         "effort": "high",
         "sandboxMode": "workspace-write",
-        "cwd": "/private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-D45Bea/artifacts/5c2b7d75-8c32-4f60-8339-de59252acc5c-c01b29abcc2b/worktrees/e77e1d1ed93582934ca96e3120a42063",
+        "cwd": "/private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-cvw9Ze/artifacts/340e04f1-a86a-4db2-9a16-44db620991ec-f0e6826edfe1/worktrees/e77e1d1ed93582934ca96e3120a42063",
         "flow": {
-          "runId": "5c2b7d75-8c32-4f60-8339-de59252acc5c",
+          "runId": "340e04f1-a86a-4db2-9a16-44db620991ec",
           "stepId": "execute",
           "itemIndex": 3
         },
-        "correlationId": "5c2b7d75-8c32-4f60-8339-de59252acc5c:execute/3:9d3b90fb-64a3-409d-af30-a4d03a8a6af3",
+        "correlationId": "340e04f1-a86a-4db2-9a16-44db620991ec:execute/3:a1a68d43-3fbd-481f-81a7-bb0bbfecbc60",
         "telemetry": {
-          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
           "site": "consumer",
-          "build_id": "b9100717-ed7f-43db-990f-78b556e77aac",
+          "build_id": "5e519c89-b1a2-46b1-bb3c-efb8a6d349a4",
           "feature_code": "D3-GOLDEN-1",
           "step_id": "execute/3",
           "attempt": 1,
@@ -161,7 +161,7 @@
     {
       "kind": "call",
       "provider": "claude",
-      "prompt": "You are executing step \"verify\" in a Stratum workflow.\n\n## Intent\nD3_VERIFY\n\n## Previous Attempt Failed (attempt 0)\nYour previous attempt was rejected. Fix the cause before finishing:\ngate approve\n\n## Inputs\nundefined\n\n## Context\nWorking directory: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n\n## Files Changed by This Feature\n- adapter.cjs\n- core.cjs\n- default.txt\n- fast.txt\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"tests_pass\",\n    \"summary\"\n  ],\n  \"properties\": {\n    \"tests_pass\": {\n      \"type\": \"boolean\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
+      "prompt": "You are executing step \"verify\" in a Stratum workflow.\n\n## Intent\nD3_VERIFY\n\n## Previous Attempt Failed (attempt 0)\nYour previous attempt was rejected. Fix the cause before finishing:\ngate approve\n\n## Inputs\nundefined\n\n## Expected Output\nReturn a JSON object with these fields:\n- tests_pass (boolean)\n- summary (string)\n\n## Context\nWorking directory: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n\n## Files Changed by This Feature\n- adapter.cjs\n- core.cjs\n- default.txt\n- fast.txt\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"tests_pass\",\n    \"summary\"\n  ],\n  \"properties\": {\n    \"tests_pass\": {\n      \"type\": \"boolean\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
       "opts": {
         "modelID": "claude-fable-5-1",
         "allowedTools": [
@@ -179,16 +179,16 @@
           "type": "adaptive"
         },
         "effort": "high",
-        "cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+        "cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
         "flow": {
-          "runId": "5c2b7d75-8c32-4f60-8339-de59252acc5c",
+          "runId": "340e04f1-a86a-4db2-9a16-44db620991ec",
           "stepId": "verify"
         },
-        "correlationId": "5c2b7d75-8c32-4f60-8339-de59252acc5c:verify:089149e1-15d8-4284-91cc-db39ad724ce6",
+        "correlationId": "340e04f1-a86a-4db2-9a16-44db620991ec:verify:138473c4-5756-4500-8424-8dbea92c25c1",
         "telemetry": {
-          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
           "site": "build-step",
-          "build_id": "b9100717-ed7f-43db-990f-78b556e77aac",
+          "build_id": "5e519c89-b1a2-46b1-bb3c-efb8a6d349a4",
           "feature_code": "D3-GOLDEN-1",
           "step_id": "verify",
           "attempt": 1,
@@ -199,21 +199,21 @@
     {
       "kind": "call",
       "provider": "codex",
-      "prompt": "You are executing step \"review\" in a Stratum workflow.\n\n## Intent\nD3_REVIEW\n\n## Inputs\nundefined\n\n## Context\nWorking directory: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n- **verify**: core unit test passes\n\n## Files Changed by This Feature\n- adapter.cjs\n- core.cjs\n- default.txt\n- fast.txt\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"blocking\",\n    \"findings\"\n  ],\n  \"properties\": {\n    \"blocking\": {\n      \"type\": \"boolean\"\n    },\n    \"findings\": {}\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
+      "prompt": "You are executing step \"review\" in a Stratum workflow.\n\n## Intent\nD3_REVIEW\n\n## Inputs\nundefined\n\n## Expected Output\nReturn a JSON object with these fields:\n- blocking (boolean)\n- findings (object[])\n\n## Context\nWorking directory: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n- **verify**: core unit test passes\n\n## Files Changed by This Feature\n- adapter.cjs\n- core.cjs\n- default.txt\n- fast.txt\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"blocking\",\n    \"findings\"\n  ],\n  \"properties\": {\n    \"blocking\": {\n      \"type\": \"boolean\"\n    },\n    \"findings\": {}\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
       "opts": {
         "modelID": "gpt-6-astra",
         "effort": "high",
         "sandboxMode": "read-only",
-        "cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+        "cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
         "flow": {
-          "runId": "5c2b7d75-8c32-4f60-8339-de59252acc5c",
+          "runId": "340e04f1-a86a-4db2-9a16-44db620991ec",
           "stepId": "review"
         },
-        "correlationId": "5c2b7d75-8c32-4f60-8339-de59252acc5c:review:6eaa5b36-c6b8-41f2-936c-3a83b5c5d533",
+        "correlationId": "340e04f1-a86a-4db2-9a16-44db620991ec:review:ed60ef99-245b-4a86-8e15-4fdbc663b129",
         "telemetry": {
-          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
           "site": "build-step",
-          "build_id": "b9100717-ed7f-43db-990f-78b556e77aac",
+          "build_id": "5e519c89-b1a2-46b1-bb3c-efb8a6d349a4",
           "feature_code": "D3-GOLDEN-1",
           "step_id": "review",
           "attempt": 1,
@@ -224,7 +224,7 @@
     {
       "kind": "call",
       "provider": "claude",
-      "prompt": "You are executing step \"assess\" in a Stratum workflow.\n\n## Intent\nD3_ASSESS\n\n## Inputs\nundefined\n\n## Context\nWorking directory: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n- **verify**: core unit test passes\n- **review**: Step complete\n\n## Files Changed by This Feature\n- adapter.cjs\n- core.cjs\n- default.txt\n- fast.txt\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"action\",\n    \"rationale\",\n    \"addressed_findings\",\n    \"open_findings\",\n    \"open_count\",\n    \"blocking\",\n    \"tasks\"\n  ],\n  \"properties\": {\n    \"action\": {\n      \"type\": \"string\"\n    },\n    \"rationale\": {\n      \"type\": \"string\"\n    },\n    \"addressed_findings\": {},\n    \"open_findings\": {},\n    \"open_count\": {\n      \"type\": \"number\"\n    },\n    \"blocking\": {\n      \"type\": \"boolean\"\n    },\n    \"tasks\": {}\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
+      "prompt": "You are executing step \"assess\" in a Stratum workflow.\n\n## Intent\nD3_ASSESS\n\n## Inputs\nundefined\n\n## Expected Output\nReturn a JSON object with these fields:\n- action (string)\n- rationale (string)\n- addressed_findings (object[])\n- open_findings (object[])\n- open_count (number)\n- blocking (boolean)\n- tasks (object[])\n\n## Context\nWorking directory: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n- **verify**: core unit test passes\n- **review**: Step complete\n\n## Files Changed by This Feature\n- adapter.cjs\n- core.cjs\n- default.txt\n- fast.txt\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"action\",\n    \"rationale\",\n    \"addressed_findings\",\n    \"open_findings\",\n    \"open_count\",\n    \"blocking\",\n    \"tasks\"\n  ],\n  \"properties\": {\n    \"action\": {\n      \"type\": \"string\"\n    },\n    \"rationale\": {\n      \"type\": \"string\"\n    },\n    \"addressed_findings\": {},\n    \"open_findings\": {},\n    \"open_count\": {\n      \"type\": \"number\"\n    },\n    \"blocking\": {\n      \"type\": \"boolean\"\n    },\n    \"tasks\": {}\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
       "opts": {
         "modelID": "claude-fable-5-1",
         "allowedTools": [
@@ -242,16 +242,16 @@
           "type": "adaptive"
         },
         "effort": "high",
-        "cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+        "cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
         "flow": {
-          "runId": "5c2b7d75-8c32-4f60-8339-de59252acc5c",
+          "runId": "340e04f1-a86a-4db2-9a16-44db620991ec",
           "stepId": "assess"
         },
-        "correlationId": "5c2b7d75-8c32-4f60-8339-de59252acc5c:assess:8618b146-fdb1-4d45-bede-1b9d096ee8d2",
+        "correlationId": "340e04f1-a86a-4db2-9a16-44db620991ec:assess:a3004907-3965-4f70-8545-2637147c4b08",
         "telemetry": {
-          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
           "site": "build-step",
-          "build_id": "b9100717-ed7f-43db-990f-78b556e77aac",
+          "build_id": "5e519c89-b1a2-46b1-bb3c-efb8a6d349a4",
           "feature_code": "D3-GOLDEN-1",
           "step_id": "assess",
           "attempt": 1,
@@ -262,22 +262,22 @@
     {
       "kind": "call",
       "provider": "codex",
-      "prompt": "You are executing step \"execute/0\" in a Stratum workflow.\n\n## Intent\nD3_WORK {\"id\":\"REPAIR\",\"description\":\"REPAIR\",\"files_owned\":[\"adapter.cjs\"],\"files_read\":[\"core.cjs\"],\"depends_on\":[],\"tier\":\"critical\"}\n\n## Inputs\nundefined\n\n## Context\nWorking directory: /private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-D45Bea/artifacts/5c2b7d75-8c32-4f60-8339-de59252acc5c-c01b29abcc2b/worktrees/440573673a0bc71b9c24a44ed4d194c1\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n- **verify**: core unit test passes\n- **review**: Step complete\n- **assess**: Step complete\n- **assess_gate**: Gate output: repair\n\n## Files Changed by This Feature\n- adapter.cjs\n- core.cjs\n- default.txt\n- fast.txt\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"outcome\",\n    \"summary\"\n  ],\n  \"properties\": {\n    \"outcome\": {\n      \"type\": \"string\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"files_changed\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
+      "prompt": "You are executing step \"execute/0\" in a Stratum workflow.\n\n## Intent\nD3_WORK {\"id\":\"REPAIR\",\"description\":\"REPAIR\",\"files_owned\":[\"adapter.cjs\"],\"files_read\":[\"core.cjs\"],\"depends_on\":[],\"tier\":\"critical\"}\n\n## Inputs\nundefined\n\n## Expected Output\nReturn a JSON object with these fields:\n- outcome (string)\n- summary (string)\n- files_changed (string[]?)\n\n## Context\nWorking directory: /private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-cvw9Ze/artifacts/340e04f1-a86a-4db2-9a16-44db620991ec-f0e6826edfe1/worktrees/440573673a0bc71b9c24a44ed4d194c1\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n- **verify**: core unit test passes\n- **review**: Step complete\n- **assess**: Step complete\n- **assess_gate**: Gate output: repair\n\n## Files Changed by This Feature\n- adapter.cjs\n- core.cjs\n- default.txt\n- fast.txt\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"outcome\",\n    \"summary\"\n  ],\n  \"properties\": {\n    \"outcome\": {\n      \"type\": \"string\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"files_changed\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
       "opts": {
         "modelID": "gpt-6-astra",
         "effort": "high",
         "sandboxMode": "workspace-write",
-        "cwd": "/private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-D45Bea/artifacts/5c2b7d75-8c32-4f60-8339-de59252acc5c-c01b29abcc2b/worktrees/440573673a0bc71b9c24a44ed4d194c1",
+        "cwd": "/private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-cvw9Ze/artifacts/340e04f1-a86a-4db2-9a16-44db620991ec-f0e6826edfe1/worktrees/440573673a0bc71b9c24a44ed4d194c1",
         "flow": {
-          "runId": "5c2b7d75-8c32-4f60-8339-de59252acc5c",
+          "runId": "340e04f1-a86a-4db2-9a16-44db620991ec",
           "stepId": "execute",
           "itemIndex": 0
         },
-        "correlationId": "5c2b7d75-8c32-4f60-8339-de59252acc5c:execute/0:1f417b6d-e8ba-4c2c-ad2f-8c48e1564608",
+        "correlationId": "340e04f1-a86a-4db2-9a16-44db620991ec:execute/0:cac877d9-c45e-46c9-89f2-33fa89414a2a",
         "telemetry": {
-          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
           "site": "consumer",
-          "build_id": "b9100717-ed7f-43db-990f-78b556e77aac",
+          "build_id": "5e519c89-b1a2-46b1-bb3c-efb8a6d349a4",
           "feature_code": "D3-GOLDEN-1",
           "step_id": "execute/0",
           "attempt": 1,
@@ -288,7 +288,7 @@
     {
       "kind": "call",
       "provider": "claude",
-      "prompt": "You are executing step \"verify\" in a Stratum workflow.\n\n## Intent\nD3_VERIFY\n\n## Previous Attempt Failed (attempt 0)\nYour previous attempt was rejected. Fix the cause before finishing:\ngate approve\n\n## Inputs\nundefined\n\n## Context\nWorking directory: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n- **verify**: core unit test passes\n- **review**: Step complete\n- **assess**: Step complete\n- **assess_gate**: Gate output: repair\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n\n## Files Changed by This Feature\n- adapter.cjs\n- core.cjs\n- default.txt\n- fast.txt\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"tests_pass\",\n    \"summary\"\n  ],\n  \"properties\": {\n    \"tests_pass\": {\n      \"type\": \"boolean\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
+      "prompt": "You are executing step \"verify\" in a Stratum workflow.\n\n## Intent\nD3_VERIFY\n\n## Previous Attempt Failed (attempt 0)\nYour previous attempt was rejected. Fix the cause before finishing:\ngate approve\n\n## Inputs\nundefined\n\n## Expected Output\nReturn a JSON object with these fields:\n- tests_pass (boolean)\n- summary (string)\n\n## Context\nWorking directory: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n- **verify**: core unit test passes\n- **review**: Step complete\n- **assess**: Step complete\n- **assess_gate**: Gate output: repair\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n\n## Files Changed by This Feature\n- adapter.cjs\n- core.cjs\n- default.txt\n- fast.txt\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"tests_pass\",\n    \"summary\"\n  ],\n  \"properties\": {\n    \"tests_pass\": {\n      \"type\": \"boolean\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
       "opts": {
         "modelID": "claude-fable-5-1",
         "allowedTools": [
@@ -306,16 +306,16 @@
           "type": "adaptive"
         },
         "effort": "high",
-        "cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+        "cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
         "flow": {
-          "runId": "5c2b7d75-8c32-4f60-8339-de59252acc5c",
+          "runId": "340e04f1-a86a-4db2-9a16-44db620991ec",
           "stepId": "verify"
         },
-        "correlationId": "5c2b7d75-8c32-4f60-8339-de59252acc5c:verify:65b75ee2-585e-42d2-bfe1-c5c8a9ef472a",
+        "correlationId": "340e04f1-a86a-4db2-9a16-44db620991ec:verify:a54027bc-dc75-497b-8046-de07972b237a",
         "telemetry": {
-          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
           "site": "build-step",
-          "build_id": "b9100717-ed7f-43db-990f-78b556e77aac",
+          "build_id": "5e519c89-b1a2-46b1-bb3c-efb8a6d349a4",
           "feature_code": "D3-GOLDEN-1",
           "step_id": "verify",
           "attempt": 1,
@@ -326,21 +326,21 @@
     {
       "kind": "call",
       "provider": "codex",
-      "prompt": "You are executing step \"review\" in a Stratum workflow.\n\n## Intent\nD3_REVIEW\n\n## Inputs\nundefined\n\n## Context\nWorking directory: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n- **verify**: core unit test passes\n- **review**: Step complete\n- **assess**: Step complete\n- **assess_gate**: Gate output: repair\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n- **verify**: core unit test passes\n\n## Files Changed by This Feature\n- adapter.cjs\n- core.cjs\n- default.txt\n- fast.txt\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"blocking\",\n    \"findings\"\n  ],\n  \"properties\": {\n    \"blocking\": {\n      \"type\": \"boolean\"\n    },\n    \"findings\": {}\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
+      "prompt": "You are executing step \"review\" in a Stratum workflow.\n\n## Intent\nD3_REVIEW\n\n## Inputs\nundefined\n\n## Expected Output\nReturn a JSON object with these fields:\n- blocking (boolean)\n- findings (object[])\n\n## Context\nWorking directory: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n- **verify**: core unit test passes\n- **review**: Step complete\n- **assess**: Step complete\n- **assess_gate**: Gate output: repair\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n- **verify**: core unit test passes\n\n## Files Changed by This Feature\n- adapter.cjs\n- core.cjs\n- default.txt\n- fast.txt\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"blocking\",\n    \"findings\"\n  ],\n  \"properties\": {\n    \"blocking\": {\n      \"type\": \"boolean\"\n    },\n    \"findings\": {}\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
       "opts": {
         "modelID": "gpt-6-astra",
         "effort": "high",
         "sandboxMode": "read-only",
-        "cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+        "cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
         "flow": {
-          "runId": "5c2b7d75-8c32-4f60-8339-de59252acc5c",
+          "runId": "340e04f1-a86a-4db2-9a16-44db620991ec",
           "stepId": "review"
         },
-        "correlationId": "5c2b7d75-8c32-4f60-8339-de59252acc5c:review:ffdc3a13-0d9c-4837-a8c5-a325286cd8c2",
+        "correlationId": "340e04f1-a86a-4db2-9a16-44db620991ec:review:92b498a0-2595-47d3-bec6-d01e1515904f",
         "telemetry": {
-          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
           "site": "build-step",
-          "build_id": "b9100717-ed7f-43db-990f-78b556e77aac",
+          "build_id": "5e519c89-b1a2-46b1-bb3c-efb8a6d349a4",
           "feature_code": "D3-GOLDEN-1",
           "step_id": "review",
           "attempt": 1,
@@ -351,7 +351,7 @@
     {
       "kind": "call",
       "provider": "claude",
-      "prompt": "You are executing step \"assess\" in a Stratum workflow.\n\n## Intent\nD3_ASSESS\n\n## Inputs\nundefined\n\n## Context\nWorking directory: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n- **verify**: core unit test passes\n- **review**: Step complete\n- **assess**: Step complete\n- **assess_gate**: Gate output: repair\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n- **verify**: core unit test passes\n- **review**: Step complete\n\n## Files Changed by This Feature\n- adapter.cjs\n- core.cjs\n- default.txt\n- fast.txt\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"action\",\n    \"rationale\",\n    \"addressed_findings\",\n    \"open_findings\",\n    \"open_count\",\n    \"blocking\",\n    \"tasks\"\n  ],\n  \"properties\": {\n    \"action\": {\n      \"type\": \"string\"\n    },\n    \"rationale\": {\n      \"type\": \"string\"\n    },\n    \"addressed_findings\": {},\n    \"open_findings\": {},\n    \"open_count\": {\n      \"type\": \"number\"\n    },\n    \"blocking\": {\n      \"type\": \"boolean\"\n    },\n    \"tasks\": {}\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
+      "prompt": "You are executing step \"assess\" in a Stratum workflow.\n\n## Intent\nD3_ASSESS\n\n## Inputs\nundefined\n\n## Expected Output\nReturn a JSON object with these fields:\n- action (string)\n- rationale (string)\n- addressed_findings (object[])\n- open_findings (object[])\n- open_count (number)\n- blocking (boolean)\n- tasks (object[])\n\n## Context\nWorking directory: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n- **verify**: core unit test passes\n- **review**: Step complete\n- **assess**: Step complete\n- **assess_gate**: Gate output: repair\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n- **verify**: core unit test passes\n- **review**: Step complete\n\n## Files Changed by This Feature\n- adapter.cjs\n- core.cjs\n- default.txt\n- fast.txt\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"action\",\n    \"rationale\",\n    \"addressed_findings\",\n    \"open_findings\",\n    \"open_count\",\n    \"blocking\",\n    \"tasks\"\n  ],\n  \"properties\": {\n    \"action\": {\n      \"type\": \"string\"\n    },\n    \"rationale\": {\n      \"type\": \"string\"\n    },\n    \"addressed_findings\": {},\n    \"open_findings\": {},\n    \"open_count\": {\n      \"type\": \"number\"\n    },\n    \"blocking\": {\n      \"type\": \"boolean\"\n    },\n    \"tasks\": {}\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
       "opts": {
         "modelID": "claude-fable-5-1",
         "allowedTools": [
@@ -369,16 +369,16 @@
           "type": "adaptive"
         },
         "effort": "high",
-        "cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+        "cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
         "flow": {
-          "runId": "5c2b7d75-8c32-4f60-8339-de59252acc5c",
+          "runId": "340e04f1-a86a-4db2-9a16-44db620991ec",
           "stepId": "assess"
         },
-        "correlationId": "5c2b7d75-8c32-4f60-8339-de59252acc5c:assess:3ecd77d9-fc1d-4787-acc2-def1c92444b5",
+        "correlationId": "340e04f1-a86a-4db2-9a16-44db620991ec:assess:36737064-89e7-479b-84ae-8a95995a61d2",
         "telemetry": {
-          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-9Q09TT",
+          "project_cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4",
           "site": "build-step",
-          "build_id": "b9100717-ed7f-43db-990f-78b556e77aac",
+          "build_id": "5e519c89-b1a2-46b1-bb3c-efb8a6d349a4",
           "feature_code": "D3-GOLDEN-1",
           "step_id": "assess",
           "attempt": 1,
