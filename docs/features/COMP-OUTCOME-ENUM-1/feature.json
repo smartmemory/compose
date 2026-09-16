@@ -1,0 +1,22 @@
+{
+  "code": "COMP-OUTCOME-ENUM-1",
+  "description": "Agents return outcome success/done/approved/pass where the PhaseResult contract allows only complete|skipped|failed, forcing a full extra dispatch per occurrence (measured on host B and host C in COMP-HOST-PORTABILITY-1; 23 occurrences across stratum+compose via learn harvest). Decide: fix the step instructions/schema vocabulary, or normalize equivalent completion words before the costly retry. Check the steps first; do not loosen the contract blind. Gap G6.",
+  "status": "PLANNED",
+  "created": "2026-09-16",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-09-16",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-HOST-PORTABILITY-1",
+      "note": "Gap G6 in the audit report; measured on host B and host C"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "code": "COMP-VERIFY-POLICY-1",
+  "description": "Build triage silently downgrades a feature's requested verification: feature.json needs_verification true became false at runtime and Stratum recorded the step skipped with no warning (COMP-HOST-PORTABILITY-1 SD08, host B). Preserve explicit feature requirements, or require a visible recorded override before skipping verification. Gap G9.",
+  "status": "PLANNED",
+  "created": "2026-09-16",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-09-16",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-HOST-PORTABILITY-1",
+      "note": "Gap G9; SD08 on host B"
+    }
+  ]
+}
