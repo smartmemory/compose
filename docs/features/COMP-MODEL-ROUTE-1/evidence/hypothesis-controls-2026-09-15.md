@@ -81,3 +81,11 @@ Differences between the probes and the failing dispatch that were NOT controlled
   sidecars had before `4efe988`. Not changed.
 - The failed `--fresh` run flipped `docs/features/COMP-TUI-4/feature.json` status `PLANNED →
   IN_PROGRESS` on start and did not revert on failure.
+
+## CORRECTED 2026-09-16 — see `root-cause-toolsearch-deferral-2026-09-16.md`
+
+Root cause found: explicit SDK `tools` list (from compose `allowedTools`) omits `ToolSearch`,
+so MCP schemas are inlined on the post-connect turn (511K tokens) and Sonnet 4.6 escalates to 1M.
+Two statements above are wrong: the 64,118-token record is the successful FIRST turn (the failing
+continuation has no usage record), and the dispatch used the explicit orchestrator tool list, not
+the preset. The four refutations stand.
