@@ -1,0 +1,22 @@
+{
+  "code": "COMP-EXPLORER-EVIDENCE-1",
+  "description": "The design phase prompt requires 2-3 explorer subagents but the accepted design ran one or none on both hosts (COMP-HOST-PORTABILITY-1 SD05) with no cardinality check or warning. Specify the required exploration evidence in the PhaseResult, validate it before accepting the phase, and make the subagent dispatch host-portable instead of Claude Agent/subagent_type semantics. Gap G10.",
+  "status": "PLANNED",
+  "created": "2026-09-16",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-09-16",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-HOST-PORTABILITY-1",
+      "note": "Gap G10; SD05 on both hosts"
+    }
+  ]
+}
