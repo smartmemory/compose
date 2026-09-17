@@ -1,10 +1,10 @@
 {
   "code": "COMP-MODEL-ROUTE-1",
-  "description": "Root-cause the review_triage \"Usage credits required for 1M context\" failure (flow 05f660fe): missing-model, prompt-size, and model-eligibility hypotheses all refuted by controls; mechanism unproven; decisive test is a real review_triage run.",
-  "status": "PLANNED",
+  "description": "Root-cause the review_triage \"Usage credits required for 1M context\" failure (flow 05f660fe). Cause: an explicit allowedTools omitting ToolSearch disables MCP tool-schema deferral, inlining every schema on the post-connect turn (511,214 cache-creation tokens for a one-line echo) and pushing sonnet-4-6 onto the 1M tier. Fixed in stratum f250d9e.",
+  "status": "COMPLETE",
   "phase": "COMP-TEAMS: Agent Team Presets",
   "created": "2026-09-15",
-  "updated": "2026-09-16",
+  "updated": "2026-09-17",
   "complexity": "M",
   "position": 154,
   "parent": "COMP-MODEL-ROUTE",
@@ -25,5 +25,23 @@
       "path": "docs/features/COMP-MODEL-ROUTE-1/evidence/root-cause-toolsearch-deferral-2026-09-16.md",
       "status": "current"
     }
-  ]
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-MODEL-ROUTE-1:c5c2dc6bad5a39f324572ba38c73d8f7c45c0f37",
+      "feature_code": "COMP-MODEL-ROUTE-1",
+      "commit_sha": "c5c2dc6bad5a39f324572ba38c73d8f7c45c0f37",
+      "commit_sha_short": "c5c2dc6b",
+      "tests_pass": true,
+      "files_changed": [
+        "docs/features/COMP-MODEL-ROUTE-1/design.md",
+        "docs/features/COMP-MODEL-ROUTE-1/evidence/root-cause-toolsearch-deferral-2026-09-16.md",
+        "docs/features/COMP-MODEL-ROUTE-1/feature.json"
+      ],
+      "recorded_at": "2026-09-17T00:19:51.532Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Root cause of flow 05f660fe's \"Usage credits required for 1M context\" found and fixed. An explicit allowedTools omitting ToolSearch turns off MCP tool-schema deferral, inlining every configured schema on the post-connect turn: 511,214 cache-creation tokens for a one-line echo, which pushes sonnet-4-6 past its 200K window onto the 1M tier. Also a cost defect: ~$3.26/trivial turn on sonnet-5 since stratum 603ec78.\n\nFix landed in stratum f250d9e6746276cfc79ef311fe56d1f2008ea503 (origin/main): append ToolSearch once to an explicit allowedTools, never duplicate, explicit disallow still wins, preset branch untouched. 4 RED->GREEN SDK-boundary tests; 39/39 green unsandboxed across the three touched files (tests/connectors/claude.test.ts, tests/connectors/runner.test.ts, tests/mcp/agent-run.test.ts). Rebuilt dist verified to carry the fix.\n\nLive-fire A/B against the rebuilt dist, same process/prompt, sonnet-4-6, compose's real orchestrator list: control (ToolSearch disallowed = pre-fix) 156,992 cache-creation tokens / $0.943; treatment 53,620 / $0.323. Both PROBE_OK. Harness limit stated in the evidence: a bare node process loads a smaller MCP roster than a full session, so the probe confirms the token mechanism and cost, not the 1M refusal itself.\n\nCodex review (sol/high) REVIEW CLEAN: precedence correct for all six allow/deny combinations; ToolSearch cannot recover an explicitly denied tool so the security boundary does not widen; the one other SDK-options builder (stratum app/server/agent-server.js:153) uses the preset and needs nothing.\n\ntests_pass attests the targeted stratum suites above, run unsandboxed. compose side is docs-only (pre-push gate skipped the suite accordingly).\n\nTwo follow-ups deliberately NOT taken, recorded in design.md as open decisions: (1) whether stratum should pass settingSources/--strict-mcp-config so a compose step does not inherit the account's whole MCP roster; (2) re-pricing dispatch-ledger rows since 603ec78."
+    }
+  ],
+  "commit_sha": "c5c2dc6bad5a39f324572ba38c73d8f7c45c0f37"
 }
