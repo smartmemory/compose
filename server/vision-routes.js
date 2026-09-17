@@ -34,6 +34,7 @@ import { emitDecisionEvent, buildPhaseTransitionEvent, buildIterationEvent, buil
 import { emitStatusSnapshot } from './status-emit.js';
 import { computeStatusSnapshot } from './status-snapshot.js';
 import { emitDriftAxes } from './drift-emit.js';
+import { resolveGateTimeoutMs } from '../lib/gate-timeout.js';
 
 let _schemaValidator = null;
 function getSchemaValidator() {
@@ -1022,7 +1023,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       const gate = store.gates.get(req.params.id);
       if (!gate) return res.status(404).json({ error: `Gate not found: ${req.params.id}` });
       // Lazy gate expiry
-      const gateTimeout = Number(process.env.COMPOSE_GATE_TIMEOUT) || 30 * 60 * 1000;
+      const gateTimeout = resolveGateTimeoutMs();
       if (gate.status === 'pending' && (Date.now() - new Date(gate.createdAt).getTime()) > gateTimeout) {
         gate.status = 'expired';
         store._save();
@@ -1049,7 +1050,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       const gate = store.gates.get(req.params.id);
       if (!gate) return res.status(404).json({ error: `Gate not found: ${req.params.id}` });
       // Lazy expiry parity with GET — expired gates can't be resolved or audited.
-      const gateTimeout = Number(process.env.COMPOSE_GATE_TIMEOUT) || 30 * 60 * 1000;
+      const gateTimeout = resolveGateTimeoutMs();
       if (gate.status === 'pending' && (Date.now() - new Date(gate.createdAt).getTime()) > gateTimeout) {
         gate.status = 'expired';
         store._save();
