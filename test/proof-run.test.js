@@ -173,6 +173,13 @@ function getStepResult(stepId, featureDir) {
   if (stepId.startsWith('review_lenses/')) return lensResult;
 
   switch (bareStepId) {
+    case 'explore_design': return {
+      ...phaseResult,
+      explorations: [
+        { focus: 'architecture', findings: 'Mapped the main build path', files_examined: ['lib/build.js'] },
+        { focus: 'related implementations', findings: 'Found the pipeline contract', files_examined: ['pipelines/build.stratum.yaml'] },
+      ],
+    };
     case 'decompose': return taskGraph;
     case 'review': return reviewResult;
     case 'triage':
