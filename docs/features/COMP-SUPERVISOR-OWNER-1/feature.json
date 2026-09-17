@@ -1,7 +1,7 @@
 {
   "code": "COMP-SUPERVISOR-OWNER-1",
   "description": "compose start SIGTERMs whatever supervisor the machine-wide PID file names (server/supervisor.js:80-93 killExistingSupervisor) before binding :4001, so starting the app from any project replaces another project's running server. Took down the owner's server during COMP-HOST-PORTABILITY-1. Verify ownership (same target project) and require explicit takeover, or scope supervisor identity per project. Gap G8.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "created": "2026-09-16",
   "profile": {
     "needs_prd": true,
@@ -11,12 +11,32 @@
     "language": "node",
     "test_framework": "vitest"
   },
-  "updated": "2026-09-16",
+  "updated": "2026-09-17",
   "links": [
     {
       "kind": "surfaced_by",
       "to_code": "COMP-HOST-PORTABILITY-1",
       "note": "Gap G8; incident during the host C arm"
     }
-  ]
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-SUPERVISOR-OWNER-1:bc0561b262fd482dd07ec6302fcf36e2bc4322cd",
+      "feature_code": "COMP-SUPERVISOR-OWNER-1",
+      "commit_sha": "bc0561b262fd482dd07ec6302fcf36e2bc4322cd",
+      "commit_sha_short": "bc0561b2",
+      "tests_pass": true,
+      "files_changed": [
+        "server/supervisor.js",
+        "server/supervisor-ownership.js",
+        "bin/compose.js",
+        "test/supervisor-ownership.test.js",
+        "CHANGELOG.md"
+      ],
+      "recorded_at": "2026-09-17T01:45:00.095Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Gap G8 from COMP-HOST-PORTABILITY-1, the operability incident that took down the owner's :4001 server during the audit. killExistingSupervisor() SIGTERMed whatever PID the install-wide .compose-supervisor.pid named, with no ownership check, because the file is keyed on COMPOSE_HOME rather than the target project. The file now holds an ownership record (pid, targetRoot, startedAt) at the same path; same-project restart is unchanged, a stale record proceeds silently, and a cross-project start exits non-zero naming the owning project and PID unless compose start --takeover is passed. The decision is a pure exported function, so it is tested without launching a supervisor. Accepted residual, stated in the CHANGELOG: a legacy bare-PID file carries no project identity, so one post-upgrade restart keeps the old kill behavior. Verified with COMPOSE_PORT=19997: supervisor-ownership 6/6 (no existing test imports server/supervisor.js); full suite 7236/7238 (one load-only flake, one pre-existing red owned by another session). No probe ever ran compose start, per the standing rule. Codex run 78f5bebecf45 (sol/high)."
+    }
+  ],
+  "commit_sha": "bc0561b262fd482dd07ec6302fcf36e2bc4322cd"
 }

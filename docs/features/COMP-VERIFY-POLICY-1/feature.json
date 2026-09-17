@@ -1,7 +1,7 @@
 {
   "code": "COMP-VERIFY-POLICY-1",
   "description": "Build triage silently downgrades a feature's requested verification: feature.json needs_verification true became false at runtime and Stratum recorded the step skipped with no warning (COMP-HOST-PORTABILITY-1 SD08, host B). Preserve explicit feature requirements, or require a visible recorded override before skipping verification. Gap G9.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "created": "2026-09-16",
   "profile": {
     "needs_prd": true,
@@ -11,12 +11,33 @@
     "language": "node",
     "test_framework": "vitest"
   },
-  "updated": "2026-09-16",
+  "updated": "2026-09-17",
   "links": [
     {
       "kind": "surfaced_by",
       "to_code": "COMP-HOST-PORTABILITY-1",
       "note": "Gap G9; SD08 on host B"
     }
-  ]
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-VERIFY-POLICY-1:1d94be7eb33ba0433317cee50cc4e0afb1466d30",
+      "feature_code": "COMP-VERIFY-POLICY-1",
+      "commit_sha": "1d94be7eb33ba0433317cee50cc4e0afb1466d30",
+      "commit_sha_short": "1d94be7e",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/triage.js",
+        "lib/lane-gate.js",
+        "lib/build.js",
+        "bin/compose.js",
+        "test/triage-front-golden.test.js",
+        "CHANGELOG.md"
+      ],
+      "recorded_at": "2026-09-17T01:44:51.291Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Gap G9 from COMP-HOST-PORTABILITY-1 (SD08). Root cause confirmed by the controller in source: deriveProfile() builds a profile from repo signals alone and never reads the feature's own recorded requirement, and its tier 0 branch returns needs_verification false, so an explicit requirement was overwritten rather than honored. A stored needs_* of true now floors the derived profile, following the existing floorProfileToLane precedent, applied at the effective-profile persistence seam in lane-gate.js and at the cached-profile read in build.js (feature.json is excluded from the mtime staleness scan, so an override on an otherwise-fresh feature would never reconcile otherwise). Preservation and deliberate lowering both land in triageRationale, the latter via an explicit profileOverrides map. Controller confirmed validateFeatureFields checks only known fields, so the new triageRationale key persists without schema changes. Verified with COMPOSE_PORT=19997: triage-front-golden 9/9, triage 13/13, triage-stale-feature-json 4/4, triage-escalation-golden 4/4, estimate-scope 16/16; full suite 7236/7238 (one load-only flake, one pre-existing red owned by another session). Codex run 7c7662f6a42f (sol/high)."
+    }
+  ],
+  "commit_sha": "1d94be7eb33ba0433317cee50cc4e0afb1466d30"
 }
