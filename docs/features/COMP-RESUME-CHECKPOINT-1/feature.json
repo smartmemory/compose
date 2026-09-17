@@ -1,0 +1,17 @@
+{
+  "code": "COMP-RESUME-CHECKPOINT-1",
+  "description": "Checkpoint the build flow at the post-merge pre-triage boundary so a failed review can be recovered by revert without losing completed implementation work",
+  "status": "PLANNED",
+  "created": "2026-09-17",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-09-17",
+  "surfaced_by": "COMP-HOST-PORTABILITY-1",
+  "supersedes": "STRAT-REOPEN-FAILED-1"
+}
