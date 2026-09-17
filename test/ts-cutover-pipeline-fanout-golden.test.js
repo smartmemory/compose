@@ -59,7 +59,16 @@ function productionAgentFactory(invocations) {
         if (intent.includes('Explore the codebase')) {
           await mkdir(join(cwd, 'docs', 'features', 'PROD-FANOUT'), { recursive: true });
           await writeFile(join(cwd, 'docs', 'features', 'PROD-FANOUT', 'design.md'), '# Design\n');
-          payload = { phase: 'design', artifact: 'docs/features/PROD-FANOUT/design.md', outcome: 'complete', summary: 'designed' };
+          payload = {
+            phase: 'design',
+            artifact: 'docs/features/PROD-FANOUT/design.md',
+            outcome: 'complete',
+            summary: 'designed',
+            explorations: [
+              { focus: 'architecture', findings: 'Mapped the build flow', files_examined: ['lib/build.js'] },
+              { focus: 'related implementations', findings: 'Found the production pipeline', files_examined: ['pipelines/build.stratum.yaml'] },
+            ],
+          };
         } else if (intent.includes('implementation blueprint')) {
           await mkdir(join(cwd, 'docs', 'features', 'PROD-FANOUT'), { recursive: true });
           await writeFile(join(cwd, 'docs', 'features', 'PROD-FANOUT', 'blueprint.md'), '# Blueprint\n');

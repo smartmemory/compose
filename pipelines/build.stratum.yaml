@@ -14,9 +14,15 @@ contracts:
     artifact: string
     outcome: complete|skipped|failed
     summary: string
+    explorations: ExplorationEvidence[]?
     plan_items: array?
     files_changed: string[]?
     commit_hash: string?
+
+  ExplorationEvidence:
+    focus: string
+    findings: string
+    files_examined: string[]
 
   ReviewResult:
     clean: boolean
@@ -111,11 +117,14 @@ flows:
           Launch 2-3 explorer subagents in parallel to map architecture, find similar
           features, and analyze related implementations. Feature: ${input.description}.
           Write docs/features/${input.featureCode}/design.md and return PhaseResult.
+          For a completed exploration, include one explorations entry per explorer
+          with its focus, findings, and files_examined.
         out: PhaseResult
         # A skipped result is legal only while the artifact-exists guard also passes.
         ensure:
           - expr: "result.outcome in 'complete|skipped'"
           - expr: "file_exists(result.artifact)"
+          - expr: "result.outcome == 'skipped' || len(result.explorations) >= 2"
         attempts: 2
 
       - id: design_gate
