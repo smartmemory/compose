@@ -1,0 +1,22 @@
+{
+  "code": "COMP-MODEL-ROUTE-2",
+  "description": "Re-price or exclude dispatch-ledger rows since stratum 603ec78, whose Claude turns carry ~500K cache-creation tokens caused by the ToolSearch deferral defect (fixed in stratum f250d9e)",
+  "status": "PLANNED",
+  "phase": "COMP-TEAMS: Agent Team Presets",
+  "created": "2026-09-17",
+  "updated": "2026-09-17",
+  "complexity": "S",
+  "position": 155,
+  "parent": "COMP-MODEL-ROUTE",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-MODEL-ROUTE"
+    },
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-MODEL-ROUTE-1",
+      "note": "The ToolSearch deferral root-cause (COMP-MODEL-ROUTE-1, fixed in stratum f250d9e) is what revealed that ledger rows since 603ec78 carry ~500K-token turns. Filed as a flat sibling rather than COMP-MODEL-ROUTE-1-1 per the flat-feature-codes convention, so this link carries the lineage instead of the code."
+    }
+  ]
+}
