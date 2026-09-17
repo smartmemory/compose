@@ -1,0 +1,15 @@
+{
+  "code": "COMP-PROMPT-SECRETS-1",
+  "description": "Scan and redact assembled prompt bytes for credentials before any provider dispatch. lib/step-prompt.js concatenates every docs/context/*.md in full into the prompt and ships it to a paid provider; nothing in compose scans or redacts prompt CONTENT (stratum scrubs env vars only, ts/src/connectors/base.ts:16). A credential in any context doc silently leaves the machine. Needs a pre-dispatch scan of the final assembled bytes, redaction with a visible marker, and a loud local failure rather than a silent send. Sized S.",
+  "status": "PLANNED",
+  "created": "2026-09-17",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-09-17"
+}
