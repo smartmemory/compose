@@ -890,7 +890,15 @@ if (cmd === 'migrate-anon') {
   const dryRun = args.includes('--dry-run')
   const { runMigrateAnon } = await import('../lib/migrate-anon.js')
   try {
-    await runMigrateAnon(cwd, { nonInteractive, dryRun })
+    const result = await runMigrateAnon(cwd, { nonInteractive, dryRun })
+    if (!dryRun && nonInteractive && result.listed > 0 && result.promoted.length === 0) {
+      console.error(
+        `migrate-anon incomplete: ${result.listed} anonymous row(s) found, zero promoted because ` +
+        'non-interactive mode cannot assign feature codes. Run interactively in a TTY, or use ' +
+        '--dry-run for a successful listing-only check.'
+      )
+      process.exit(1)
+    }
   } catch (err) {
     console.error(`\nError: ${err.message}`)
     process.exit(1)
@@ -1639,6 +1647,7 @@ if (cmd === 'roadmap') {
   const { readdirSync, statSync } = await import('fs')
 
   const SYM = { COMPLETE: '\x1b[32m✓\x1b[0m', PLANNED: '\x1b[90m○\x1b[0m', IN_PROGRESS: '\x1b[33m◐\x1b[0m', PARTIAL: '\x1b[33m◐\x1b[0m', SUPERSEDED: '\x1b[90m✗\x1b[0m', PARKED: '\x1b[90m⏸\x1b[0m' }
+  const unrenderedRoadmaps = []
 
   function showRoadmap(roadmapPath, fallbackLabel) {
     const text = readFileSync(roadmapPath, 'utf-8')
@@ -1648,7 +1657,7 @@ if (cmd === 'roadmap') {
     const allEntries = parseRoadmap(text)
     const named = allEntries.filter(e => !e.code.startsWith('_anon_'))
 
-    if (named.length === 0) return
+    if (named.length === 0) return false
 
     // Group by phase
     const phases = new Map()
@@ -1706,6 +1715,7 @@ if (cmd === 'roadmap') {
         console.log(`  ... and ${buildOrder.length - 5} more`)
       }
     }
+    return true
   }
 
   const { root: cwd } = resolveCwdWithWorkspace(args)
@@ -1713,7 +1723,7 @@ if (cmd === 'roadmap') {
 
   if (existsSync(roadmapPath)) {
     // Show cwd roadmap
-    showRoadmap(roadmapPath, basename(cwd))
+    if (!showRoadmap(roadmapPath, basename(cwd))) unrenderedRoadmaps.push(roadmapPath)
 
     // Also scan immediate subdirs for sibling roadmaps
     const subdirs = []
@@ -1728,7 +1738,7 @@ if (cmd === 'roadmap') {
     } catch { /* ignore permission errors */ }
 
     for (const { name, path } of subdirs) {
-      showRoadmap(path, name)
+      if (!showRoadmap(path, name)) unrenderedRoadmaps.push(path)
     }
   } else {
     // No roadmap in cwd — scan subdirs (parent folder of multiple projects)
@@ -1749,8 +1759,18 @@ if (cmd === 'roadmap') {
     }
 
     for (const { name, path } of subdirs) {
-      showRoadmap(path, name)
+      if (!showRoadmap(path, name)) unrenderedRoadmaps.push(path)
     }
+  }
+
+  if (unrenderedRoadmaps.length > 0) {
+    for (const path of unrenderedRoadmaps) {
+      console.error(
+        `roadmap: nothing rendered for ${path}: no named feature rows were parsed; ` +
+        'check that the feature-code column header uses "Feature" or "ID".'
+      )
+    }
+    process.exit(1)
   }
 
   console.log('')
@@ -2598,6 +2618,16 @@ if (cmd === 'experiment') {
     const result = await runExperiment(specPath, { pruneWorkspaces })
     console.log(`Results: ${result.resultsPath}`)
     console.log(`Report:  ${result.reportPath}`)
+    const incompleteRuns = result.runs.filter((run) => run.metrics?.outcome?.completed !== true)
+    if (incompleteRuns.length > 0) {
+      console.error(
+        `Experiment incomplete: ${incompleteRuns.length} of ${result.runs.length} run(s) did not complete.`
+      )
+      for (const run of incompleteRuns) {
+        console.error(`  ${run.runId}: ${run._error || 'completed=false'}`)
+      }
+      process.exit(1)
+    }
   } catch (err) {
     console.error(`Error: ${err.message}`)
     process.exit(1)
