@@ -59,7 +59,33 @@ failing request was not.
 
 stratum `ClaudeConnector`: when `allowedTools` is given, include `ToolSearch` in the SDK `tools`
 list (unless the caller disallowed it). Preserves the caller's restriction, restores deferral.
-Dispatched to Codex 2026-09-16; commit recorded in `../design.md` and stratum CHANGELOG when landed.
+**Landed** as stratum `f250d9e6746276cfc79ef311fe56d1f2008ea503` (`origin/main`, 2026-09-17):
+append `ToolSearch` once to an explicit `allowedTools`, never duplicate it, and let an explicit
+`disallowedTools: ["ToolSearch"]` still win and strip it. The preset branch is untouched.
+Background dispatch needed no separate fix (`claude-bg-worker` instantiates `ClaudeConnector`).
+4 RED->GREEN tests at the SDK boundary; 39/39 green unsandboxed across the three touched files.
+
+### Live-fire verification (2026-09-17, against the rebuilt `dist`)
+
+Same process, same prompt, same `dist`, `claude-sonnet-4-6`, compose's real orchestrator list
+`[Read,Grep,Glob,Agent,Bash]`. The control disallows `ToolSearch`, which makes the fixed connector
+strip it and reproduce pre-fix behavior exactly:
+
+| Arm | cache-creation tokens | cost | result |
+|---|---|---|---|
+| CONTROL — `ToolSearch` disallowed (= pre-fix) | 156,992 | $0.943 | PROBE_OK |
+| TREATMENT — fix appends `ToolSearch` | 53,620 | $0.323 | PROBE_OK |
+
+A 66% reduction on an `echo`. This harness is a bare node process, so it loads a smaller MCP roster
+than a full Claude Code session (157K here vs 511K there) and therefore stays under the 200K window
+in BOTH arms — it confirms the token mechanism and the cost, not the 1M-tier refusal itself. The
+refusal is the downstream consequence of the same growth at the larger roster, already evidenced in
+the six-row control table above.
+
+Codex review (sol/high) returned REVIEW CLEAN: precedence correct for all six allow/deny
+combinations; `ToolSearch` discovers schemas but cannot invoke a tool the caller explicitly denied,
+so the security boundary does not widen; the one other SDK-options builder
+(`stratum/app/server/agent-server.js:153`) uses the Claude Code preset and needs nothing.
 
 Follow-ups worth a separate decision (not done here): whether stratum should pass
 `settingSources`/`--strict-mcp-config` so a compose step does not inherit the account's entire

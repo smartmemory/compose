@@ -4,7 +4,7 @@
   "status": "PLANNED",
   "phase": "COMP-TEAMS: Agent Team Presets",
   "created": "2026-09-15",
-  "updated": "2026-09-15",
+  "updated": "2026-09-16",
   "complexity": "M",
   "position": 154,
   "parent": "COMP-MODEL-ROUTE",
@@ -18,6 +18,11 @@
     {
       "type": "report",
       "path": "docs/features/COMP-MODEL-ROUTE-1/evidence/hypothesis-controls-2026-09-15.md",
+      "status": "current"
+    },
+    {
+      "type": "report",
+      "path": "docs/features/COMP-MODEL-ROUTE-1/evidence/root-cause-toolsearch-deferral-2026-09-16.md",
       "status": "current"
     }
   ]
