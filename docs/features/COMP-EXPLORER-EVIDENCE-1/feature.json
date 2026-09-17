@@ -1,7 +1,7 @@
 {
   "code": "COMP-EXPLORER-EVIDENCE-1",
   "description": "The design phase prompt requires 2-3 explorer subagents but the accepted design ran one or none on both hosts (COMP-HOST-PORTABILITY-1 SD05) with no cardinality check or warning. Specify the required exploration evidence in the PhaseResult, validate it before accepting the phase, and make the subagent dispatch host-portable instead of Claude Agent/subagent_type semantics. Gap G10.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "created": "2026-09-16",
   "profile": {
     "needs_prd": true,
@@ -11,12 +11,32 @@
     "language": "node",
     "test_framework": "vitest"
   },
-  "updated": "2026-09-16",
+  "updated": "2026-09-17",
   "links": [
     {
       "kind": "surfaced_by",
       "to_code": "COMP-HOST-PORTABILITY-1",
       "note": "Gap G10; SD05 on both hosts"
     }
-  ]
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-EXPLORER-EVIDENCE-1:e64ff87104cadb56f7546b736d7b38b197e25622",
+      "feature_code": "COMP-EXPLORER-EVIDENCE-1",
+      "commit_sha": "e64ff87104cadb56f7546b736d7b38b197e25622",
+      "commit_sha_short": "e64ff871",
+      "tests_pass": true,
+      "files_changed": [
+        "pipelines/build.stratum.yaml",
+        "test/explore-design-evidence.test.js",
+        "test/proof-run.test.js",
+        "test/ts-cutover-pipeline-fanout-golden.test.js",
+        "CHANGELOG.md"
+      ],
+      "recorded_at": "2026-09-17T01:44:34.676Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Gap G10 from COMP-HOST-PORTABILITY-1 (SD05). PhaseResult gains optional explorations[] (focus, findings, files_examined); a third ensure expr requires at least 2 for a complete result, while skipped-with-artifact stays legal. Scope is the audit's S half only; portable subagent delegation (the M half) deliberately not built. Controller verified the absent-field case (agent omits explorations entirely, the measured host B/C behavior) evaluates to holds=false rather than throwing, and dispatched a follow-up run to cover it. Verified with COMPOSE_PORT=19997: explore-design-evidence 5/5, ts-cutover-pipeline-fanout-golden 28/28; full suite 7236/7238 (one load-only flake in lifecycle-routes that passes 19/19 in isolation, one pre-existing red in execution-runtime owned by another session's committed stratum ToolSearch change). Codex runs 2a9ab41af6bf (sol/high) and c3d1e6c1f9e4 (luna/medium)."
+    }
+  ],
+  "commit_sha": "e64ff87104cadb56f7546b736d7b38b197e25622"
 }
