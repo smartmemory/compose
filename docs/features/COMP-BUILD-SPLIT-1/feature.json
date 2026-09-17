@@ -1,0 +1,16 @@
+{
+  "code": "COMP-BUILD-SPLIT-1",
+  "description": "Split lib/build.js (7845 lines) into cohesive modules so the build orchestrator fits in an agent context window and concurrent briefs can touch disjoint files",
+  "status": "PLANNED",
+  "created": "2026-09-17",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-09-17",
+  "surfaced_by": "COMP-HOST-PORTABILITY-1"
+}
