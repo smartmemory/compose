@@ -1,0 +1,32 @@
+{
+  "code": "COMP-RESUME-FAILED-PHASE-1",
+  "description": "Terminal review failure strands completed implementation work with no recovery path: COMP-HOST-PORTABILITY-1 host B lost a 18m51s, 208080-token, $14.04 flow at review and could not resume it by any measured route. Compose MCP resume failed; CLI --resume exited 1 with 'Nothing to resume'; stratum_resume completed at the Stratum layer but did not restore Compose resumability, so the Stratum call itself did not fail; --fresh restarted from design rather than review. Earlier post-gate CLI resume DID work, so this is specific to a terminal failed phase and is NOT covered by COMP-RESUME or COMP-BUILD-RESUME (both COMPLETE, both about crash and environment resume). Preserve the failed cursor and phase history and reconcile Compose against Stratum resume rather than forcing a fresh design. Sized M and BLOCKS recovery. Gap G2.",
+  "status": "PLANNED",
+  "created": "2026-09-17",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-09-17",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-HOST-PORTABILITY-1",
+      "note": "Gap G2; §8 failed review unresumable through every measured recovery path on host B"
+    },
+    {
+      "kind": "blocks",
+      "to_code": "COMP-CODEX-PROVIDER-1",
+      "note": "G2 is a BLOCKS-level prerequisite; the pilot test requires resume from a deliberately failed review"
+    },
+    {
+      "kind": "related",
+      "to_code": "COMP-BUILD-RESUME",
+      "note": "COMP-BUILD-RESUME and COMP-RESUME are both COMPLETE and cover crash and environment resume; the measured terminal review failure was still unresumable, so this is a distinct path rather than a regression of either"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "code": "COMP-GATE-HEADLESS-1",
+  "description": "A gate delegated to the web UI has no headless resolution path and no application timeout: COMP-HOST-PORTABILITY-1 host C waited after 'Gate delegated to web UI. Waiting for resolution...' until an operator killed it, while gate queries returned 'HTTP 400: Unknown workspaceId: proj' because that server could not resolve the scratch workspace ('forever' means no built-in termination was observed, not an infinite-duration measurement). Host B resolved the same gate externally through Stratum, after which the foreground Compose runner tried to resolve an already-resolved gate and failed loudly. Every headless or external gate client is affected. Needs stable workspace, run and gate IDs, an explicit headless resolution path, a single wake-and-reconcile step, and a visible failure when the UI is unavailable instead of an unbounded wait. Sized M and BLOCKS. Gap G1.",
+  "status": "PLANNED",
+  "created": "2026-09-17",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-09-17",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-HOST-PORTABILITY-1",
+      "note": "Gap G1; §8 unresolvable UI gate on host C, already-resolved gate failure on host B"
+    },
+    {
+      "kind": "blocks",
+      "to_code": "COMP-CODEX-PROVIDER-1",
+      "note": "G1 is a BLOCKS-level prerequisite; the pilot test requires gates controlled without an available web UI"
+    }
+  ]
+}

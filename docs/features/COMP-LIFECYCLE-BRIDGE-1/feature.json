@@ -1,0 +1,27 @@
+{
+  "code": "COMP-LIFECYCLE-BRIDGE-1",
+  "description": "Two lifecycle state planes disagree, so a host cannot discover or control its own running build: COMP-HOST-PORTABILITY-1 host B saw the Compose tracker return count:0 gates and 'Item not found: HOSTB-HELLO' during a LIVE design_gate, while Stratum flow poll and audit exposed the real active flow (SD06). Process-local workspace selection succeeded without making session binding usable. An outer driver can connect both MCP servers and still not rely on Compose to find its own CLI lifecycle. This is SD06 plus the loud bind, reconciliation and recovery failures, and is NOT a claim that every tracker tool fails. Establish one source of truth, or a run-ID bridge, across tracker, flow, session and active-build state. Sized M and BLOCKS reliable host control. Gap G4.",
+  "status": "PLANNED",
+  "created": "2026-09-17",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-09-17",
+  "links": [
+    {
+      "kind": "surfaced_by",
+      "to_code": "COMP-HOST-PORTABILITY-1",
+      "note": "Gap G4; SD06 plus §8 two disagreeing lifecycle state planes on host B"
+    },
+    {
+      "kind": "blocks",
+      "to_code": "COMP-CODEX-PROVIDER-1",
+      "note": "G4 is a BLOCKS-level prerequisite; an outer driver cannot rely on Compose to discover and control its own CLI lifecycle"
+    }
+  ]
+}
