@@ -3385,7 +3385,10 @@ if (cmd === 'build') {
     startEnv.COMPOSE_HOST = args[hostFlagIdx].slice('--host='.length)
   }
 
-  const child = spawn('node', [join(PACKAGE_ROOT, 'server', 'supervisor.js')], {
+  const supervisorArgs = [join(PACKAGE_ROOT, 'server', 'supervisor.js')]
+  if (args.includes('--takeover')) supervisorArgs.push('--takeover')
+
+  const child = spawn('node', supervisorArgs, {
     stdio: 'inherit',
     cwd: PACKAGE_ROOT,
     env: startEnv,

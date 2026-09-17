@@ -8,8 +8,9 @@
  * Each process gets independent restart with exponential backoff.
  * If a process keeps crashing for > 1 minute, the supervisor gives up on it.
  *
- * Singleton enforcement: Uses a PID file to ensure only one supervisor runs.
- * Starting a new supervisor kills the old one and all its children first.
+ * Singleton enforcement: Uses an ownership record to ensure only one supervisor
+ * runs. Same-project restarts replace the old process; cross-project starts must
+ * be explicit takeovers.
  */
 
 import { fork, spawn, execFileSync } from 'node:child_process';
@@ -18,6 +19,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { COMPOSE_HOME, getTargetRoot, ensureDataDir } from './project-root.js';
+import {
+  decideSupervisorOwnership,
+  readSupervisorRecord,
+  writeSupervisorRecord,
+} from './supervisor-ownership.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 console.log('[supervisor] Target project:', getTargetRoot());
@@ -77,28 +83,62 @@ function ensureComposeApiToken() {
 
 // --- Singleton enforcement ---
 
-function killExistingSupervisor() {
+function isProcessAlive(pid) {
   try {
-    const oldPid = parseInt(fs.readFileSync(PID_FILE, 'utf8').trim(), 10);
-    if (oldPid && oldPid !== process.pid) {
-      try {
-        // Check if process exists
-        process.kill(oldPid, 0);
-        console.log(`[supervisor] Killing previous supervisor (PID ${oldPid})...`);
-        process.kill(oldPid, 'SIGTERM');
-        // Give it time to clean up children
-        execFileSync('sleep', ['2']);
-      } catch {
-        // Process doesn't exist — stale PID file
-      }
-    }
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    // EPERM still proves that the process exists; only ESRCH means it is stale.
+    return err?.code !== 'ESRCH';
+  }
+}
+
+function killExistingSupervisor() {
+  const record = readSupervisorRecord(PID_FILE);
+  const targetRoot = getTargetRoot();
+  const decision = decideSupervisorOwnership({
+    record,
+    currentPid: process.pid,
+    currentTargetRoot: targetRoot,
+    takeover: process.argv.includes('--takeover'),
+    processAlive: record ? isProcessAlive(record.pid) : false,
+  });
+
+  if (decision.action === 'refuse') {
+    console.error(
+      `[supervisor] Refusing to start: supervisor PID ${decision.pid} is already serving ${decision.targetRoot}.`,
+    );
+    console.error(
+      `[supervisor] Re-run with \`compose start --takeover\` to stop it and serve ${targetRoot}.`,
+    );
+    process.exit(1);
+  }
+
+  if (decision.action === 'takeover') {
+    console.log(
+      `[supervisor] Taking over from ${decision.targetRoot} (PID ${decision.pid})...`,
+    );
+  } else if (decision.action === 'restart') {
+    console.log(`[supervisor] Killing previous supervisor (PID ${decision.pid})...`);
+  } else {
+    return;
+  }
+
+  try {
+    process.kill(decision.pid, 'SIGTERM');
+    // Give it time to clean up children
+    execFileSync('sleep', ['2']);
   } catch {
-    // No PID file — first run
+    // The process exited between the liveness check and the signal.
   }
 }
 
 function writePidFile() {
-  fs.writeFileSync(PID_FILE, String(process.pid));
+  writeSupervisorRecord(PID_FILE, {
+    pid: process.pid,
+    targetRoot: getTargetRoot(),
+    startedAt: new Date().toISOString(),
+  });
 }
 
 function removePidFile() {
