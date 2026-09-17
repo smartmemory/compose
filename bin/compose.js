@@ -3344,6 +3344,7 @@ if (cmd === 'build') {
             status: 'PLANNED',
             complexity: String(result.tier),
             profile: result.profile,
+            triageRationale: result.rationale,
             triageTimestamp,
           })
           console.log(`\nCreated feature.json for ${triageCode}`)
@@ -3351,6 +3352,7 @@ if (cmd === 'build') {
           updateFeature(trCwd, triageCode, {
             complexity: String(result.tier),
             profile: result.profile,
+            triageRationale: result.rationale,
             triageTimestamp,
           })
           console.log(`\nUpdated feature.json for ${triageCode}`)

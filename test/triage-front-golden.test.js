@@ -74,6 +74,79 @@ describe('COMP-TRIAGE-5 front-seam golden', () => {
     const saved = provider._get();
     assert.ok(!/^[0-4]$/.test(String(saved.complexity)), `complexity must not be a bare tier string, got "${saved.complexity}"`);
   });
+
+  test('preserves a stored verification requirement when tier 0 would lower it', async () => {
+    const existing = {
+      code: 'VERIFY-1',
+      status: 'PLANNED',
+      description: 'fix typo in src/utils/format.js',
+      profile: { needs_verification: true },
+    };
+    const provider = fakeProvider(existing);
+
+    const front = await applyFrontTriage({
+      featureCode: 'VERIFY-1',
+      request: existing.description,
+      provider,
+      cachedFeature: existing,
+    });
+
+    assert.equal(front.tier, 0, 'fixture must exercise the measured tier-0 downgrade');
+    assert.equal(front.buildProfile.needs_verification, true);
+    assert.equal(provider._get().profile.needs_verification, true);
+    assert.match(
+      provider._get().triageRationale,
+      /Preserved stored requirement: needs_verification=true/,
+    );
+  });
+
+  test('leaves tier-0 verification disabled when the feature never requested it', async () => {
+    const existing = {
+      code: 'VERIFY-2',
+      status: 'PLANNED',
+      description: 'fix typo in src/utils/format.js',
+    };
+    const provider = fakeProvider(existing);
+
+    const front = await applyFrontTriage({
+      featureCode: 'VERIFY-2',
+      request: existing.description,
+      provider,
+      cachedFeature: existing,
+    });
+
+    assert.equal(front.tier, 0);
+    assert.equal(front.buildProfile.needs_verification, false);
+    assert.equal(provider._get().profile.needs_verification, false);
+    assert.doesNotMatch(provider._get().triageRationale, /stored requirement|profile override/i);
+  });
+
+  test('an explicit profile override can lower a stored requirement and is recorded', async () => {
+    const existing = {
+      code: 'VERIFY-3',
+      status: 'PLANNED',
+      description: 'fix typo in src/utils/format.js',
+      profile: { needs_verification: true },
+      profileOverrides: { needs_verification: false },
+    };
+    const provider = fakeProvider(existing);
+
+    const front = await applyFrontTriage({
+      featureCode: 'VERIFY-3',
+      request: existing.description,
+      provider,
+      cachedFeature: existing,
+    });
+
+    assert.equal(front.tier, 0);
+    assert.equal(front.buildProfile.needs_verification, false);
+    assert.equal(provider._get().profile.needs_verification, false);
+    assert.deepEqual(provider._get().profileOverrides, { needs_verification: false });
+    assert.match(
+      provider._get().triageRationale,
+      /Explicit profile override: needs_verification=false/,
+    );
+  });
 });
 
 describe('COMP-TRIAGE-5 refinement (narrow-only, doc-gated)', () => {
