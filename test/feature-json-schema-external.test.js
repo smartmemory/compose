@@ -189,3 +189,41 @@ describe('#16 carrier parity — roadmap-citation and feature-json-link consumed
     rmSync(cwd, { recursive: true, force: true });
   });
 });
+
+
+describe('schema provider registration and derive_expect scope', () => {
+  const v = validator();
+  for (const provider of ['github', 'forgejo']) {
+    const base = { kind: 'external', provider, repo: 'owner/repo', issue: 7 };
+    test(`${provider}: accepts optional tracker fields and booleans`, () => {
+      for (const extra of [{}, { derive_expect: true }, { derive_expect: false },
+        { push: true, expect: 'open', expect_labels: ['tracked'], derive_expect: true },
+        { push: false, expect: 'closed', expect_labels: [] }]) {
+        assert.equal(ok(v, link({ ...base, ...extra })).valid, true);
+      }
+    });
+    test(`${provider}: rejects invalid tracker fields`, () => {
+      for (const extra of [
+        { repo: undefined }, { repo: 'owner' }, { repo: 'ow#ner/repo' }, { repo: 'o/r/x' },
+        { issue: undefined }, { issue: 0 }, { issue: -1 }, { issue: 1.5 }, { issue: '7' },
+        { expect: 'COMPLETE' }, { push: 'true' }, { expect_labels: 'done' },
+        { expect_labels: [''] }, { expect_labels: [5] },
+        { derive_expect: 'true' }, { derive_expect: 1 }, { derive_expect: null },
+      ]) {
+        assert.equal(ok(v, link({ ...base, ...extra })).valid, false, JSON.stringify(extra));
+      }
+    });
+  }
+  for (const provider of ['local', 'url', 'jira', 'linear', 'notion', 'obsidian']) {
+    test(`${provider}: rejects derive_expect and expect_labels`, () => {
+      const target = provider === 'local' ? { repo: 'compose', to_code: 'COMP-X', expect: 'COMPLETE' }
+        : { url: 'https://example.com' };
+      const base = { kind: 'external', provider, ...target };
+      assert.equal(ok(v, link(base)).valid, true);
+      for (const derive_expect of [true, false, null, 'true']) {
+        assert.equal(ok(v, link({ ...base, derive_expect })).valid, false);
+      }
+      assert.equal(ok(v, link({ ...base, expect_labels: ['done'] })).valid, false);
+    });
+  }
+});

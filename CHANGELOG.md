@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- **COMP-TRACKER-FORGEJO T3**: registers `forgejo` as a first-class external-link provider across
+  all four surfaces that were GitHub-only — `XREF_PROVIDERS`/`validateExternalArgs`/identity-key
+  computation in `lib/feature-writer.js`, citation grammar in `lib/xref-citation.js`, and its own
+  schema conditional branch in `contracts/feature-json.schema.json` (with its own `expect_labels`
+  declaration — it is not inherited from `github`'s). `derive_expect` (boolean) is now plumbed
+  through and typed, scoped to github/forgejo only (explicitly rejected for local/url links, both
+  in the schema and in `validateExternalArgs`). `linkFeatureExternal` now carries `derive_expect`
+  through instead of silently dropping it. `addRoadmapEntry` also gains `promoted_from` on its
+  typed create field list, ahead of the promotion command that will use it. 218/218 tests pass
+  across the full `xref-*`/`feature-writer*`/`feature-json-*external` suites (existing GitHub-path
+  tests unaffected).
 - **COMP-TRACKER-FORGEJO T1+T2**: `lib/tracker/forgejo-api.js` (new) implements the Forgejo/Gitea
   transport (`getIssueResult`, `updateStateResult`, `addLabelResult` additive, `listIssueComments`,
   `addIssueComment`) with the base URL pinned/validated at construction and the bearer token never

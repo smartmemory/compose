@@ -150,3 +150,26 @@ describe('parseCitations — rejects (structured ParseError)', () => {
     });
   }
 });
+
+
+describe('Forgejo citation grammar', () => {
+  for (const options of ['', ' expect=open', ' expect=closed note="shipped"', ' note="shipped" expect=closed']) {
+    test(`parses issue target with options: ${options || '(none)'}`, () => {
+      const r = only(`<!-- xref: forgejo owner/repo#123${options} -->`);
+      const github = only(`<!-- xref: github owner/repo#123${options} -->`);
+      assert.deepEqual({ ...r, provider: 'github', raw: github.raw }, github);
+      assert.equal(r.provider, 'forgejo');
+      assert.equal(r.url, null);
+    });
+  }
+  for (const target of ['owner/repo', 'o/r#abc', 'ow#ner/r#1', 'o/re#po#1',
+    'o/r/x#1', 'https://example.com/issue/1', 'o/r#1 expect=COMPLETE']) {
+    test(`rejects malformed issue citation: ${target}`, () => {
+      const { refs, errors } = parseCitations(`<!-- xref: forgejo ${target} -->`);
+      assert.equal(refs.length, 0);
+      assert.equal(errors.length, 1);
+      assert.ok(errors[0] instanceof ParseError);
+      assert.match(errors[0].reason, /forgejo/);
+    });
+  }
+});
