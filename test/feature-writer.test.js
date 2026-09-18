@@ -12,6 +12,7 @@ import {
   addRoadmapEntry,
   setFeatureStatus,
   roadmapDiff,
+  linkFeatures,
 } from '../lib/feature-writer.js';
 import { readFeature, writeFeature } from '../lib/feature-json.js';
 import { readEvents } from '../lib/feature-events.js';
@@ -422,4 +423,69 @@ describe('write-time roundtrip guard', () => {
     const r = await addRoadmapEntry(cwd, { code: 'FOO-2', description: 'y', phase: 'Phase 0' });
     assert.equal(r.roundtrip.fixedPoint, true);
   });
+});
+
+
+describe('Forgejo provider registration', () => {
+  test('create preserves promotion provenance on disk', async () => {
+    const cwd = freshCwd();
+    const promoted_from = { provider: 'forgejo', repo: 'owner/repo', issue: 7 };
+    await addRoadmapEntry(cwd, { code: 'PROMO-1', description: 'promoted', phase: 'P', promoted_from });
+    assert.deepEqual(readFeature(cwd, 'PROMO-1').promoted_from, promoted_from);
+  });
+
+  for (const provider of ['github', 'forgejo']) {
+    test(`${provider}: persists fields, dedupes by identity, force replaces only the target`, async () => {
+      const cwd = freshCwd();
+      seedFeature(cwd, { code: 'EXT-1', description: 'external', status: 'PLANNED', phase: 'P' });
+      const args = { from_code: 'EXT-1', kind: 'external', provider, repo: 'owner/repo', issue: 7,
+        push: true, derive_expect: true, expect_labels: ['tracked'], note: 'accepted' };
+      await linkFeatures(cwd, args);
+      assert.deepEqual(readFeature(cwd, 'EXT-1').links[0], {
+        kind: 'external', provider, repo: 'owner/repo', issue: 7,
+        push: true, derive_expect: true, expect_labels: ['tracked'], note: 'accepted',
+      });
+      assert.equal((await linkFeatures(cwd, { ...args, derive_expect: false })).noop, true);
+      await linkFeatures(cwd, { ...args, issue: 8 });
+      await linkFeatures(cwd, { ...args, repo: 'other/repo' });
+      await linkFeatures(cwd, { ...args, provider: provider === 'github' ? 'forgejo' : 'github' });
+      const before = readFeature(cwd, 'EXT-1').links;
+      assert.equal(before.length, 4);
+      await linkFeatures(cwd, { ...args, force: true, derive_expect: false, expect: 'closed', expect_labels: [] });
+      const after = readFeature(cwd, 'EXT-1').links;
+      assert.equal(after.length, 4);
+      assert.equal(after[0].derive_expect, false);
+      assert.equal(after[0].expect, 'closed');
+      assert.deepEqual(after[0].expect_labels, []);
+      assert.deepEqual(after.slice(1), before.slice(1));
+    });
+
+    test(`${provider}: rejects malformed fields before writing`, async () => {
+      const cwd = freshCwd();
+      seedFeature(cwd, { code: 'EXT-1', description: 'external', status: 'PLANNED', phase: 'P' });
+      const args = { from_code: 'EXT-1', kind: 'external', provider, repo: 'owner/repo', issue: 7 };
+      for (const bad of [
+        { repo: '' }, { repo: 'owner' }, { repo: 'ow#ner/repo' }, { repo: 'o/r/x' },
+        { issue: undefined }, { issue: 0 }, { issue: -1 }, { issue: 1.5 }, { issue: '7' },
+        { expect: 'COMPLETE' }, { push: 'true' }, { expect_labels: 'done' },
+        { expect_labels: [''] }, { expect_labels: [5] },
+        { derive_expect: 'true' }, { derive_expect: 1 }, { derive_expect: null },
+      ]) {
+        await assert.rejects(() => linkFeatures(cwd, { ...args, ...bad }), /feature-writer:/);
+      }
+      assert.equal(readFeature(cwd, 'EXT-1').links, undefined);
+    });
+  }
+
+  for (const provider of ['local', 'url', 'jira', 'linear', 'notion', 'obsidian']) {
+    test(`${provider}: rejects derive_expect, including false`, async () => {
+      const cwd = freshCwd();
+      const target = provider === 'local' ? { repo: 'compose', to_code: 'EXT-2' } : { url: 'https://example.com' };
+      for (const derive_expect of [true, false, null, 'true']) {
+        await assert.rejects(() => linkFeatures(cwd, {
+          from_code: 'EXT-1', kind: 'external', provider, ...target, derive_expect,
+        }), /derive_expect.*github\/forgejo/);
+      }
+    });
+  }
 });
