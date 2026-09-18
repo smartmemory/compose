@@ -15,7 +15,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { planPush, planLabels, isGithubState, pushExternalRefs, defaultResolve, defaultWrite } from '../lib/xref-push.js';
-import { writeFeature } from '../lib/feature-json.js';
+import { writeFeature, readFeature } from '../lib/feature-json.js';
+import { recordCompletion } from '../lib/completion-writer.js';
 
 function freshCwd() {
   const cwd = mkdtempSync(join(tmpdir(), 'xref-push-'));
@@ -23,14 +24,15 @@ function freshCwd() {
   return cwd;
 }
 
-function seed(cwd, code, links) {
+function seed(cwd, code, links, status = 'PLANNED') {
   writeFeature(cwd, {
-    code, description: 'd', status: 'PLANNED', phase: 'P', position: 1,
+    code, description: 'd', status, phase: 'P', position: 1,
     created: '2026-06-07', updated: '2026-06-07', links,
   }, 'docs/features', { validate: false });
 }
 
 const ghLink = (over = {}) => ({ kind: 'external', provider: 'github', repo: 'o/r', issue: 7, ...over });
+const forgejoLink = (over = {}) => ({ kind: 'external', provider: 'forgejo', repo: 'o/r', issue: 7, ...over });
 
 describe('planPush (pure)', () => {
   test('writes external when expect contradicts live state', () => {
@@ -336,5 +338,165 @@ describe('pushExternalRefs end-to-end via real default resolve+write (stubbed tr
     const res = await pushExternalRefs(cwd, { apply: true, githubTransport: t, githubAuth: AUTH });
     assert.equal(res.pushed.length, 1);
     assert.deepEqual(calls, ['GET', 'PATCH']);
+  });
+});
+
+const FORGEJO_AUTH = { token: 'forgejo-test-token' };
+
+describe('pushExternalRefs — Forgejo', () => {
+  test('golden flow: record_completion flips COMPLETE, then --apply derives closed and PATCHes Forgejo', async () => {
+    const cwd = freshCwd();
+    seed(cwd, 'A-1', [forgejoLink({ derive_expect: true, push: true })], 'IN_PROGRESS');
+
+    const completion = await recordCompletion(cwd, {
+      feature_code: 'A-1', commit_sha: null, tests_pass: true, files_changed: [],
+    });
+    assert.deepEqual(completion.status_changed, { from: 'IN_PROGRESS', to: 'COMPLETE' });
+    assert.equal(readFeature(cwd, 'A-1').status, 'COMPLETE');
+
+    const calls = [];
+    let liveState = 'open';
+    const t = transport((method, path, body) => {
+      calls.push({ method, path, body });
+      if (method === 'GET') return { status: 200, body: { state: liveState, labels: [] } };
+      if (method === 'PATCH') {
+        liveState = body.state;
+        return { status: 200, body: { state: liveState } };
+      }
+      throw new Error(`unexpected ${method}`);
+    });
+
+    const res = await pushExternalRefs(cwd, {
+      apply: true, forgejoTransport: t, forgejoAuth: FORGEJO_AUTH,
+    });
+
+    assert.equal(liveState, 'closed');
+    assert.deepEqual(calls.map(({ method, body }) => ({ method, body })), [
+      { method: 'GET', body: undefined },
+      { method: 'PATCH', body: { state: 'closed' } },
+    ]);
+    assert.equal(res.skipped.length, 0);
+    assert.equal(res.pushed.length, 1);
+    assert.deepEqual(
+      { statePushed: res.pushed[0].statePushed, labelsPushed: res.pushed[0].labelsPushed, errors: res.pushed[0].errors },
+      { statePushed: true, labelsPushed: false, errors: [] },
+    );
+  });
+
+  test('dry-run resolves drift but makes zero Forgejo write calls', async () => {
+    const cwd = freshCwd();
+    seed(cwd, 'A-1', [forgejoLink({ expect: 'closed', push: true })]);
+    const calls = [];
+    const t = transport((method) => {
+      calls.push(method);
+      return { status: 200, body: { state: 'open', labels: [] } };
+    });
+
+    const res = await pushExternalRefs(cwd, {
+      apply: false, forgejoTransport: t, forgejoAuth: FORGEJO_AUTH,
+    });
+
+    assert.deepEqual(calls, ['GET']);
+    assert.equal(calls.filter((method) => method === 'PATCH' || method === 'POST').length, 0);
+    assert.deepEqual(
+      { statePushed: res.pushed[0].statePushed, labelsPushed: res.pushed[0].labelsPushed, errors: res.pushed[0].errors },
+      { statePushed: false, labelsPushed: false, errors: [] },
+    );
+  });
+
+  test('without push:true Forgejo is never touched, even under --apply', async () => {
+    const cwd = freshCwd();
+    seed(cwd, 'A-1', [forgejoLink({ expect: 'closed' })]);
+    const calls = [];
+    const res = await pushExternalRefs(cwd, {
+      apply: true,
+      forgejoTransport: transport((method) => { calls.push(method); return { status: 200, body: {} }; }),
+      forgejoAuth: FORGEJO_AUTH,
+    });
+    assert.equal(res.scanned, 0);
+    assert.deepEqual(calls, []);
+  });
+
+  test('derive_expect skips the whole PARKED link for this run', async () => {
+    const cwd = freshCwd();
+    seed(cwd, 'A-1', [forgejoLink({ derive_expect: true, expect_labels: ['done'], push: true })], 'PARKED');
+    const calls = [];
+    const res = await pushExternalRefs(cwd, {
+      apply: true,
+      forgejoTransport: transport((method) => { calls.push(method); return { status: 200, body: {} }; }),
+      forgejoAuth: FORGEJO_AUTH,
+    });
+    assert.equal(res.scanned, 0);
+    assert.deepEqual(calls, []);
+  });
+
+  test('PR-backed issue is skipped before any write', async () => {
+    const cwd = freshCwd();
+    seed(cwd, 'A-1', [forgejoLink({ expect: 'closed', push: true })]);
+    const calls = [];
+    const res = await pushExternalRefs(cwd, {
+      apply: true,
+      forgejoTransport: transport((method) => {
+        calls.push(method);
+        return { status: 200, body: { state: 'open', pull_request: { url: 'x' } } };
+      }),
+      forgejoAuth: FORGEJO_AUTH,
+    });
+    assert.deepEqual(calls, ['GET']);
+    assert.equal(res.pushed.length, 0);
+    assert.equal(res.skipped.length, 1);
+    assert.match(res.skipped[0].reason, /pull request/);
+  });
+
+  test('partial success preserves a 2xx state write when the independent label call fails', async () => {
+    const cwd = freshCwd();
+    seed(cwd, 'A-1', [forgejoLink({ expect: 'closed', expect_labels: ['done'], push: true })]);
+    const calls = [];
+    const t = transport((method, path, body) => {
+      calls.push({ method, body });
+      if (method === 'GET') return { status: 200, body: { state: 'open', labels: [] } };
+      if (method === 'PATCH') return { status: 200, body: { state: 'closed' } };
+      if (method === 'POST') return { status: 503, body: {} };
+      throw new Error(`unexpected ${method}`);
+    });
+
+    const res = await pushExternalRefs(cwd, {
+      apply: true, forgejoTransport: t, forgejoAuth: FORGEJO_AUTH,
+    });
+
+    assert.deepEqual(calls.map(({ method, body }) => ({ method, body })), [
+      { method: 'GET', body: undefined },
+      { method: 'PATCH', body: { state: 'closed' } },
+      { method: 'POST', body: { labels: ['done'] } },
+    ]);
+    assert.equal(res.skipped.length, 0, 'the successful state write must never be relabeled skipped');
+    assert.equal(res.pushed.length, 1);
+    assert.equal(res.pushed[0].statePushed, true);
+    assert.equal(res.pushed[0].labelsPushed, false);
+    assert.equal(res.pushed[0].errors.length, 1);
+    assert.match(res.pushed[0].errors[0], /label "done" write HTTP 503/);
+  });
+
+  test('state failure does not prevent the independent label call from succeeding', async () => {
+    const cwd = freshCwd();
+    seed(cwd, 'A-1', [forgejoLink({ expect: 'closed', expect_labels: ['done'], push: true })]);
+    const calls = [];
+    const t = transport((method) => {
+      calls.push(method);
+      if (method === 'GET') return { status: 200, body: { state: 'open', labels: [] } };
+      if (method === 'PATCH') return { status: 503, body: {} };
+      if (method === 'POST') return { status: 201, body: {} };
+      throw new Error(`unexpected ${method}`);
+    });
+
+    const res = await pushExternalRefs(cwd, {
+      apply: true, forgejoTransport: t, forgejoAuth: FORGEJO_AUTH,
+    });
+
+    assert.deepEqual(calls, ['GET', 'PATCH', 'POST']);
+    assert.equal(res.skipped.length, 0, 'the successful label write must never be relabeled skipped');
+    assert.equal(res.pushed[0].statePushed, false);
+    assert.equal(res.pushed[0].labelsPushed, true);
+    assert.deepEqual(res.pushed[0].errors, ['state write HTTP 503']);
   });
 });
