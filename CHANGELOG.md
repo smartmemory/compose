@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- **COMP-TRACKER-FORGEJO T1+T2**: `lib/tracker/forgejo-api.js` (new) implements the Forgejo/Gitea
+  transport (`getIssueResult`, `updateStateResult`, `addLabelResult` additive, `listIssueComments`,
+  `addIssueComment`) with the base URL pinned/validated at construction and the bearer token never
+  forwarded across a redirect to a different origin (16 tests, `test/tracker/forgejo-api.test.js`).
+  `lib/status-projection.js` gains `featureStatusToExternalExpect(status)`, a pure read-time
+  lifecycle→issue-state mapping (`PLANNED/IN_PROGRESS/PARTIAL/BLOCKED → open`,
+  `COMPLETE/KILLED/SUPERSEDED → closed`, `PARKED → null`) used later by promotion-created links
+  instead of a stored, write-time-synced `expect` (4 tests, `test/status-projection.test.js`).
+  Design/blueprint/plan at `docs/features/COMP-TRACKER-FORGEJO/`.
+
 ## [0.6.1] — 2026-09-18
 
 - **`@anthropic-ai/claude-agent-sdk` bumped from `^0.2.47` (installed 0.2.114) to `^0.3.0`

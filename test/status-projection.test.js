@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { featureStatusToVisionStatus } from '../lib/status-projection.js';
+import {
+  featureStatusToExternalExpect,
+  featureStatusToVisionStatus,
+} from '../lib/status-projection.js';
 
 test('status-projection: maps every feature/roadmap status to its vision status', () => {
   const cases = [
@@ -32,4 +35,20 @@ test('status-projection: returns null for null/undefined/unknown', () => {
   // null as "no opinion" — validator falls back to identity, writer skips).
   assert.equal(featureStatusToVisionStatus('READY'), null);
   assert.equal(featureStatusToVisionStatus('REVIEW'), null);
+});
+
+test('status-projection: maps every feature/roadmap status to its external issue state', () => {
+  const cases = [
+    ['PLANNED', 'open'],
+    ['IN_PROGRESS', 'open'],
+    ['PARTIAL', 'open'],
+    ['COMPLETE', 'closed'],
+    ['BLOCKED', 'open'],
+    ['PARKED', null], // parked features leave their external issue unchanged
+    ['KILLED', 'closed'],
+    ['SUPERSEDED', 'closed'],
+  ];
+  for (const [input, expected] of cases) {
+    assert.equal(featureStatusToExternalExpect(input), expected, `${input} → ${expected}`);
+  }
 });

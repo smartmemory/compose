@@ -1,0 +1,12 @@
+{
+  "code": "COMP-TRACKER-FORGEJO",
+  "description": "Extend COMP-ROADMAP-XREF-PUSH to Forgejo: transport (forgejo-api.js), read-time lifecycle→issue-state derivation (derive_expect), 4-surface provider registration, and a promotion command (issue → feature.json with acceptance write-back). Design/blueprint/plan done (5 Codex review rounds); implementation starting.",
+  "status": "IN_PROGRESS",
+  "phase": "Phase 6: MCP Writers",
+  "created": "2026-09-18",
+  "updated": "2026-09-18",
+  "complexity": "L",
+  "position": 7,
+  "parent": "COMP-ROADMAP-XREF-PUSH-2",
+  "impact": "medium"
+}
