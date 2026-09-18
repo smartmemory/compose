@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- **COMP-TRACKER-FORGEJO T7**: `link_features`'s MCP tool schema (`server/mcp-tool-defs.js`) gains
+  `forgejo` in the provider enum plus `push`/`expect_labels`/`derive_expect` fields — previously
+  missing entirely, a real capability gap for MCP clients regardless of Forgejo. `roadmap_xref_push`'s
+  description now documents Forgejo support and the `{statePushed, labelsPushed, errors[]}`
+  partial-success result shape (no schema change — it has no provider param). Contract test pins the
+  advertised fields and description text against actual behavior. 21/21 tests pass
+  (`tool-inventory`, `feature-linker-mcp`).
 - **COMP-TRACKER-FORGEJO T4**: `runExternalRefChecks` (`lib/feature-validator.js`) resolves `forgejo`
   refs via `ForgejoApi`, preserving the exact GitHub degrade posture (confirmed 404 →
   `XREF_TARGET_MISSING` error; offline/no-token/rate-limit/ambiguous → `XREF_RESOLUTION_SKIPPED`).

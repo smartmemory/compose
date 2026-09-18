@@ -7,14 +7,18 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolve, dirname } from 'node:path';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import Ajv from 'ajv';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const { loadToolInventory, mutatingTools, toolsWritingCanon, CANON_IDS } =
   await import(`${REPO_ROOT}/lib/tool-inventory.js`);
 const { TOOLS } = await import(`${REPO_ROOT}/server/mcp-tool-defs.js`);
 const { _internals: CANON } = await import(`${REPO_ROOT}/lib/canon-registry.js`);
+const { pushExternalRefs } = await import(`${REPO_ROOT}/lib/xref-push.js`);
 
 // --- pure partition behavior ---
 
@@ -118,6 +122,94 @@ test('CONTRACT: every declared canon id exists in the registry', () => {
     assert.ok(ids.has(id), `CANON_IDS names '${id}' which is not a canon-registry entry id`);
   }
   assert.equal(CANON_IDS.size, ids.size, 'CANON_IDS drifted from the registry entry set');
+});
+
+test('CONTRACT: link_features advertises the Forgejo push fields it accepts', () => {
+  const definition = TOOLS.find((tool) => tool.name === 'link_features');
+  assert.ok(definition, 'link_features must remain on the MCP surface');
+
+  // Tool schemas intentionally allow extra properties. Tighten only this test
+  // copy so a field missing from the advertised surface cannot pass as an
+  // unvalidated unknown property.
+  const validate = new Ajv({ strict: false }).compile({
+    ...definition.inputSchema,
+    additionalProperties: false,
+  });
+  const input = {
+    from_code: 'COMP-TRACKER-FORGEJO',
+    kind: 'external',
+    provider: 'forgejo',
+    repo: 'smartmemory/compose',
+    issue: 7,
+    push: true,
+    expect_labels: ['roadmap-tracked'],
+    derive_expect: true,
+  };
+
+  assert.equal(validate(input), true, JSON.stringify(validate.errors));
+  assert.deepEqual(definition.inputSchema.properties.provider.enum, [
+    'github', 'forgejo', 'local', 'url', 'jira', 'linear', 'notion', 'obsidian',
+  ]);
+  assert.equal(definition.inputSchema.properties.push.type, 'boolean');
+  assert.deepEqual(definition.inputSchema.properties.expect_labels, {
+    type: 'array',
+    items: { type: 'string', minLength: 1 },
+    description: 'Optional labels to add without removing existing labels. Supported by github and forgejo links.',
+  });
+  assert.equal(definition.inputSchema.properties.derive_expect.type, 'boolean');
+});
+
+test('CONTRACT: roadmap_xref_push documents the actual Forgejo partial-success row', async () => {
+  const definition = TOOLS.find((tool) => tool.name === 'roadmap_xref_push');
+  assert.ok(definition, 'roadmap_xref_push must remain on the MCP surface');
+
+  const cwd = mkdtempSync(join(tmpdir(), 'compose-mcp-xref-contract-'));
+  const featureDir = join(cwd, 'docs', 'features', 'COMP-XREF-1');
+  mkdirSync(featureDir, { recursive: true });
+  writeFileSync(join(featureDir, 'feature.json'), JSON.stringify({
+    code: 'COMP-XREF-1',
+    status: 'IN_PROGRESS',
+    links: [{
+      kind: 'external', provider: 'forgejo', repo: 'smartmemory/compose', issue: 7,
+      expect: 'closed', expect_labels: ['roadmap-tracked'], push: true,
+    }],
+  }));
+
+  try {
+    const result = await pushExternalRefs(cwd, {
+      apply: true,
+      forgejoResolve: async () => ({ state: 'open', labels: [] }),
+      forgejoWrite: async () => ({
+        statePushed: true,
+        labelsPushed: false,
+        errors: ['label "roadmap-tracked" write HTTP 503'],
+      }),
+    });
+    const row = result.pushed[0];
+    const outcomeKeys = ['statePushed', 'labelsPushed', 'errors']
+      .filter((key) => Object.hasOwn(row, key));
+    const actualShape = `{${outcomeKeys
+      .map((key) => Array.isArray(row[key]) ? `${key}[]` : key)
+      .join(', ')}}`;
+
+    assert.deepEqual(
+      { statePushed: row.statePushed, labelsPushed: row.labelsPushed, errors: row.errors },
+      {
+        statePushed: true,
+        labelsPushed: false,
+        errors: ['label "roadmap-tracked" write HTTP 503'],
+      },
+    );
+    assert.equal(actualShape, '{statePushed, labelsPushed, errors[]}');
+    assert.match(definition.description, /Forgejo/);
+    assert.match(definition.description, /partial-success/);
+    assert.ok(
+      definition.description.includes(actualShape),
+      `roadmap_xref_push description must document its actual Forgejo outcome ${actualShape}`,
+    );
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
 });
 
 // --- derived helpers ---
