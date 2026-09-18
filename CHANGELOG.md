@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- **pre-push hook: a repeat push of an already-verified commit no longer re-runs the full test
+  suite.** `bin/git-hooks/pre-push.template`'s test gate now caches a green `npm test` result
+  keyed by `git rev-parse HEAD` under `.compose/data/pre-push-verified/<sha>` (60-minute TTL,
+  bounding staleness risk from environment/dependency drift that isn't tied to the commit, since
+  this repo doesn't commit a lockfile). A push whose HEAD has a fresh marker skips `npm test`
+  entirely instead of re-running the ~9-minute suite for a byte-identical tree — the common case
+  being a retry after GitHub drops the SSH connection right after a green run. Measured three
+  times (2026-09-11, 2026-09-12, 2026-09-18) before being fixed at the source instead of relied
+  on as a `--no-verify` judgment call each time. Four new regression cases in
+  `test/pre-push-hook.test.js` (19/19 pass): first push runs+writes the marker, an identical
+  repeat push skips and is measurably faster, a new commit re-runs, an expired marker re-runs and
+  refreshes.
+
 ## [0.6.0] — 2026-09-18
 
 - **COMP-RESUME-FAILED-PHASE-1 (gap G2), parts B and C: the resume refusal no longer lies, and a resumed run keeps its context.** COMP-HOST-PORTABILITY-1 host B lost a flow at review and every recovery route refused it, `--resume` exiting 1 with `Nothing to resume`. That message was factually wrong: the Stratum run persists in full (`stratum/ts/src/engine/state.ts:306-342`) and Compose keeps the active record and its `flowId`, flipping only its status to `failed`. The run had not vanished — it had FAILED, and the refusal named the wrong reason. `decideBuildStart` now takes the failed step from the authoritative Stratum audit (falling back to `active-build.json.currentStepId`) and refuses with `The run failed at step "<id>" and cannot be resumed.`; the genuinely-no-active-record case keeps its existing `Nothing to resume (no in-progress or failed build found)` message byte for byte. Exit code and refusal behaviour are unchanged — this is a truthfulness fix, not a behaviour change. Separately, every `runBuild` invocation cleared `stepHistory` even though summarized steps persist in `active-build.json`, so a resumed run silently lost prior-step context a fresh run would have had; `stepHistory` is now rehydrated from those persisted summaries on resume only, and a fresh start still begins empty. **Part A (actually reopening the failed run) is NOT shipped and is not deferred sloppily: it was found to be impossible from the Compose side, and the engine feature proposed to enable it was reviewed and KILLED.** See `stratum/docs/features/STRAT-REOPEN-FAILED-1/design.md` for the kill and its reasoning, and `COMP-RESUME-CHECKPOINT-1` for the approach that replaces it. Verified at node 24/24 across `test/build-resume-state.test.js`, `test/build-decide-start.test.js`, `test/ts-cutover-build-resume-golden.test.js` and `test/build-modes.test.js`.

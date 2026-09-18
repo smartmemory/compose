@@ -133,10 +133,52 @@ function gitSha(root, ref) {
 
 function runHookWithStdin(root, stdinLine) {
   const hookPath = join(root, '.git', 'hooks', 'pre-push');
+  const startedAt = Date.now();
   const r = spawnSync('bash', [hookPath, 'origin', 'file:///dev/null'], {
     cwd: root, input: stdinLine, timeout: 60_000,
   });
-  return { code: r.status, stderr: r.stderr.toString() };
+  return {
+    code: r.status,
+    stdout: r.stdout.toString(),
+    stderr: r.stderr.toString(),
+    durationMs: Date.now() - startedAt,
+  };
+}
+
+function setupPassingTestGateFixture({ delayMs = 0 } = {}) {
+  const root = setupGitFixture();
+  writeFileSync(join(root, 'package.json'), JSON.stringify({
+    name: 'fx',
+    scripts: { test: 'node test-gate-probe.cjs' },
+  }));
+  writeFileSync(join(root, 'test-gate-probe.cjs'), [
+    "const { appendFileSync } = require('node:fs');",
+    "appendFileSync('.test-suite-runs', 'run\\n');",
+    `setTimeout(() => {}, ${delayMs});`,
+    '',
+  ].join('\n'));
+  spawnSync('git', ['add', '-A'], { cwd: root });
+  spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-m', 'base'], { cwd: root });
+  const base = gitSha(root, 'HEAD');
+  commitSpecificFile(root, 'lib/code.js', 'code change');
+  return { root, base, head: gitSha(root, 'HEAD') };
+}
+
+function commitSpecificFile(root, rel, message) {
+  mkdirSync(dirname(join(root, rel)), { recursive: true });
+  writeFileSync(join(root, rel), 'x\n');
+  spawnSync('git', ['add', '--', rel], { cwd: root });
+  spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-m', message], { cwd: root });
+}
+
+function testSuiteRunCount(root) {
+  const path = join(root, '.test-suite-runs');
+  if (!existsSync(path)) return 0;
+  return readFileSync(path, 'utf-8').trim().split('\n').filter(Boolean).length;
+}
+
+function hookRefLine(base, head) {
+  return `refs/heads/main ${head} refs/heads/main ${base}\n`;
 }
 
 test('docs-only push skips the test gate', async () => {
@@ -178,6 +220,73 @@ test('empty stdin fails closed and runs the gate', async () => {
   await runHooks(['install', '--pre-push'], root);
   const r = runHookWithStdin(root, '');
   assert.notEqual(r.code, 0, 'no ref lines must fail closed to the (red) test gate');
+});
+
+// ── Verified-HEAD test-gate cache ───────────────────────────────────────────
+test('first push runs the suite and writes a verified-HEAD marker', async () => {
+  const { root, base, head } = setupPassingTestGateFixture();
+  await runHooks(['install', '--pre-push'], root);
+
+  const r = runHookWithStdin(root, hookRefLine(base, head));
+
+  assert.equal(r.code, 0, `first push must pass, stderr: ${r.stderr}`);
+  assert.match(r.stderr, /running full test suite/);
+  assert.match(r.stderr, /test suite green/);
+  assert.equal(testSuiteRunCount(root), 1, 'first push must invoke npm test once');
+  const marker = join(root, '.compose', 'data', 'pre-push-verified', head);
+  assert.ok(existsSync(marker), 'passing suite must write a marker named for HEAD');
+  assert.match(readFileSync(marker, 'utf-8'), /^verified_at_epoch=\d+$/m);
+  assert.match(readFileSync(marker, 'utf-8'), /^verified_at_utc=\d{4}-\d{2}-\d{2}T/m);
+});
+
+test('immediate repeat push of identical HEAD skips npm test quickly', async () => {
+  const { root, base, head } = setupPassingTestGateFixture({ delayMs: 1_500 });
+  await runHooks(['install', '--pre-push'], root);
+  const first = runHookWithStdin(root, hookRefLine(base, head));
+
+  const second = runHookWithStdin(root, hookRefLine(base, head));
+
+  assert.equal(first.code, 0, `first push must pass, stderr: ${first.stderr}`);
+  assert.equal(second.code, 0, `repeat push must pass, stderr: ${second.stderr}`);
+  assert.match(`${second.stdout}\n${second.stderr}`, new RegExp(`test suite already verified for ${head.slice(0, 12)} .* skipping .*TTL 60min`));
+  assert.equal(testSuiteRunCount(root), 1, 'repeat push must not invoke npm test again');
+  assert.ok(second.durationMs < first.durationMs - 1_000,
+    `cached push should avoid the deliberate test delay (first ${first.durationMs}ms, second ${second.durationMs}ms)`);
+});
+
+test('push after a new commit runs the suite again', async () => {
+  const { root, base, head } = setupPassingTestGateFixture();
+  await runHooks(['install', '--pre-push'], root);
+  const first = runHookWithStdin(root, hookRefLine(base, head));
+  assert.equal(first.code, 0, `first push must pass, stderr: ${first.stderr}`);
+  commitSpecificFile(root, 'lib/next.js', 'next code change');
+  const nextHead = gitSha(root, 'HEAD');
+
+  const second = runHookWithStdin(root, hookRefLine(head, nextHead));
+
+  assert.equal(second.code, 0, `new-commit push must pass, stderr: ${second.stderr}`);
+  assert.match(second.stderr, /running full test suite/);
+  assert.doesNotMatch(second.stderr, /test suite already verified/);
+  assert.equal(testSuiteRunCount(root), 2, 'different HEAD must invoke npm test again');
+});
+
+test('expired verified-HEAD marker is stale and runs the suite again', async () => {
+  const { root, base, head } = setupPassingTestGateFixture();
+  await runHooks(['install', '--pre-push'], root);
+  const markerDir = join(root, '.compose', 'data', 'pre-push-verified');
+  const marker = join(markerDir, head);
+  const staleEpoch = Math.floor(Date.now() / 1_000) - 3_601;
+  mkdirSync(markerDir, { recursive: true });
+  writeFileSync(marker, `verified_at_epoch=${staleEpoch}\nverified_at_utc=2000-01-01T00:00:00Z\n`);
+
+  const r = runHookWithStdin(root, hookRefLine(base, head));
+
+  assert.equal(r.code, 0, `stale-marker push must pass, stderr: ${r.stderr}`);
+  assert.match(r.stderr, /running full test suite/);
+  assert.doesNotMatch(r.stderr, /test suite already verified/);
+  assert.equal(testSuiteRunCount(root), 1, 'stale marker must not suppress npm test');
+  const refreshedEpoch = Number(readFileSync(marker, 'utf-8').match(/^verified_at_epoch=(\d+)$/m)?.[1]);
+  assert.ok(refreshedEpoch > staleEpoch, 'passing suite must refresh the stale marker');
 });
 
 // ── Judgment drift gate (COMP-CANON-GUARD S5 Task 6) ───────────────────────

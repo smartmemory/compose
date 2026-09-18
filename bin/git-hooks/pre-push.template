@@ -121,6 +121,8 @@ fi
 # suite before push. Heavy (full `npm test`) but authoritative. Auto-skips in a
 # repo with no npm `test` script, and for docs-only pushes (docs/** + *.md,
 # detected fail-closed above). Emergency bypass (sparingly): git push --no-verify
+TEST_CACHE_TTL_SECONDS=3600
+TEST_CACHE_DIR=".compose/data/pre-push-verified"
 if [ "$DOCS_ONLY" -eq 1 ]; then
   echo "pre-push: docs-only push (docs/** and *.md) — skipping test gate." >&2
 elif [ -f package.json ]; then
@@ -131,17 +133,48 @@ elif [ -f package.json ]; then
   "$COMPOSE_NODE" -e "let s={};try{s=require(process.cwd()+'/package.json').scripts||{}}catch(e){process.exit(3)};process.exit(s.test?0:1)" 2>/dev/null
   PROBE=$?
   if [ "$PROBE" -ne 1 ]; then
-    echo "pre-push: running full test suite (npm test)…" >&2
-    PATH="$(dirname "$COMPOSE_NODE"):$PATH" npm test >> "$LOG" 2>&1
-    TEST_EXIT=$?
-    if [ "$TEST_EXIT" -ne 0 ]; then
-      tail -n 40 "$LOG" >&2
-      echo "" >&2
-      echo "npm test failed — push aborted (full log: $LOG)." >&2
-      echo "Bypass at your own risk: git push --no-verify" >&2
-      exit "$TEST_EXIT"
+    HEAD_SHA=$(git rev-parse HEAD 2>/dev/null) || HEAD_SHA=""
+    TEST_CACHE_HIT=0
+    if [ -n "$HEAD_SHA" ]; then
+      TEST_CACHE_FILE="$TEST_CACHE_DIR/$HEAD_SHA"
+      if [ -f "$TEST_CACHE_FILE" ]; then
+        VERIFIED_AT_EPOCH=$(sed -n 's/^verified_at_epoch=//p' "$TEST_CACHE_FILE" | head -n 1)
+        VERIFIED_AT_UTC=$(sed -n 's/^verified_at_utc=//p' "$TEST_CACHE_FILE" | head -n 1)
+        NOW_EPOCH=$(date +%s)
+        case "$VERIFIED_AT_EPOCH" in
+          ''|*[!0-9]*) ;;
+          *)
+            TEST_CACHE_AGE_SECONDS=$((NOW_EPOCH - VERIFIED_AT_EPOCH))
+            if [ "$TEST_CACHE_AGE_SECONDS" -ge 0 ] && [ "$TEST_CACHE_AGE_SECONDS" -lt "$TEST_CACHE_TTL_SECONDS" ]; then
+              TEST_CACHE_HIT=1
+              SHORT_HEAD_SHA=${HEAD_SHA:0:12}
+              [ -n "$VERIFIED_AT_UTC" ] || VERIFIED_AT_UTC="$VERIFIED_AT_EPOCH"
+              echo "pre-push: test suite already verified for $SHORT_HEAD_SHA at $VERIFIED_AT_UTC — skipping (cache $TEST_CACHE_DIR/, TTL 60min)." >&2
+            fi
+            ;;
+        esac
+      fi
     fi
-    echo "pre-push: test suite green." >&2
+
+    if [ "$TEST_CACHE_HIT" -eq 0 ]; then
+      echo "pre-push: running full test suite (npm test)…" >&2
+      PATH="$(dirname "$COMPOSE_NODE"):$PATH" npm test >> "$LOG" 2>&1
+      TEST_EXIT=$?
+      if [ "$TEST_EXIT" -ne 0 ]; then
+        tail -n 40 "$LOG" >&2
+        echo "" >&2
+        echo "npm test failed — push aborted (full log: $LOG)." >&2
+        echo "Bypass at your own risk: git push --no-verify" >&2
+        exit "$TEST_EXIT"
+      fi
+      echo "pre-push: test suite green." >&2
+      if [ -n "$HEAD_SHA" ]; then
+        VERIFIED_AT_EPOCH=$(date +%s)
+        VERIFIED_AT_UTC=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+        mkdir -p "$TEST_CACHE_DIR" 2>/dev/null &&
+          printf 'verified_at_epoch=%s\nverified_at_utc=%s\n' "$VERIFIED_AT_EPOCH" "$VERIFIED_AT_UTC" > "$TEST_CACHE_FILE" 2>/dev/null || true
+      fi
+    fi
   fi
 fi
 
