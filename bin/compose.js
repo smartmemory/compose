@@ -1552,6 +1552,31 @@ if (cmd === 'roadmap') {
     process.exit(1)
   }
 
+  // compose roadmap promote-issue — retry-safe Forgejo acceptance, dry-run by default.
+  if (subcmd === 'promote-issue') {
+    const { promoteIssue } = await import('../lib/xref-promote.js')
+    const { root: cwd } = resolveCwdWithWorkspace(args)
+    const value = (flag) => {
+      const index = args.indexOf(flag)
+      return index >= 0 && args[index + 1] && !args[index + 1].startsWith('--') ? args[index + 1] : undefined
+    }
+    try {
+      const issue = value('--issue')
+      const res = await promoteIssue(cwd, {
+        provider: value('--provider'), repo: value('--repo'),
+        issue: /^\d+$/.test(issue ?? '') ? Number(issue) : NaN,
+        code: value('--code'), phase: value('--phase'), apply: args.includes('--apply'),
+      })
+      console.log(JSON.stringify(res, null, 2))
+      if (!res.apply) console.log('Dry-run — pass --apply to write these changes.')
+      process.exit(res.ok ? 0 : 1)
+    } catch (e) {
+      if (e.promotion) console.log(JSON.stringify(e.promotion, null, 2))
+      console.error(`roadmap promote-issue failed: ${e.message}`)
+      process.exit(1)
+    }
+  }
+
   // compose roadmap xref-sync — pull-reconcile feature.json external links'
   // expect= to live target state (COMP-ROADMAP-XREF-SYNC v1). Never writes external.
   if (subcmd === 'xref-sync') {

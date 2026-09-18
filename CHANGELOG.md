@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+- **COMP-TRACKER-FORGEJO T4**: `runExternalRefChecks` (`lib/feature-validator.js`) resolves `forgejo`
+  refs via `ForgejoApi`, preserving the exact GitHub degrade posture (confirmed 404 →
+  `XREF_TARGET_MISSING` error; offline/no-token/rate-limit/ambiguous → `XREF_RESOLUTION_SKIPPED`).
+  `derive_expect` now survives into the normalized ref and is resolved via
+  `featureStatusToExternalExpect`, so the validator's drift check and `xref-push`'s actual push can
+  never disagree about a derived link's target state. 69/69 tests pass across the validator/degrade/
+  golden-flow suites.
+- **COMP-TRACKER-FORGEJO T5**: `lib/xref-push.js` extends push eligibility to `provider === 'forgejo'`.
+  `derive_expect: true` links compute `expect` from the feature's current status (not a stored field);
+  `PARKED`/unresolved derivation skips the whole link for that run. Forgejo pushes dispatch as two
+  independent calls (state PATCH, additive label POST) and report `{statePushed, labelsPushed,
+  errors[]}` — a successful write is never later collapsed into "skipped." Golden-flow test exercises
+  the real `record_completion` → `xref-push --apply` → issue-closes path (not the easier
+  `set_feature_status` path, per the design finding this was written to catch). 49/49 tests pass.
+- **COMP-TRACKER-FORGEJO T6**: new `lib/xref-promote.js` + `compose roadmap promote-issue` CLI
+  (`bin/compose.js`) triages a Forgejo issue into a `feature.json` entry. Dry-run by default (zero
+  writes, local or remote); `--apply` performs four idempotency-checked phases (create with
+  `promoted_from` provenance stamp → attach link with `push:true`/`derive_expect:true` → additively
+  apply the acceptance label → post an acceptance comment carrying a hidden
+  `<!-- compose-promotion:<code> -->` marker, checked via paginated comment listing before posting).
+  A PR-backed issue is refused before any write. A retried `--apply` on the same code is resumable
+  (each phase re-checked, not re-run); a different issue reusing the same code is refused as a
+  collision (`promoted_from` absent or mismatched). Issue title becomes the feature's one-line
+  `description` (control characters stripped); the full body is preserved in a `notes` field, never
+  injected into the roadmap description cell. 19/19 tests pass.
 - **COMP-TRACKER-FORGEJO T3**: registers `forgejo` as a first-class external-link provider across
   all four surfaces that were GitHub-only — `XREF_PROVIDERS`/`validateExternalArgs`/identity-key
   computation in `lib/feature-writer.js`, citation grammar in `lib/xref-citation.js`, and its own
