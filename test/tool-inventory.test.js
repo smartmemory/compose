@@ -142,7 +142,7 @@ test('CONTRACT: link_features advertises the Forgejo push fields it accepts', ()
     repo: 'smartmemory/compose',
     issue: 7,
     push: true,
-    expect_labels: ['roadmap-tracked'],
+    expect_labels: ['Roadmap Tracked'],
     derive_expect: true,
   };
 
@@ -171,7 +171,7 @@ test('CONTRACT: roadmap_xref_push documents the actual Forgejo partial-success r
     status: 'IN_PROGRESS',
     links: [{
       kind: 'external', provider: 'forgejo', repo: 'smartmemory/compose', issue: 7,
-      expect: 'closed', expect_labels: ['roadmap-tracked'], push: true,
+      expect: 'closed', expect_labels: ['Roadmap Tracked'], push: true,
     }],
   }));
 
@@ -182,7 +182,7 @@ test('CONTRACT: roadmap_xref_push documents the actual Forgejo partial-success r
       forgejoWrite: async () => ({
         statePushed: true,
         labelsPushed: false,
-        errors: ['label "roadmap-tracked" write HTTP 503'],
+        errors: ['label "Roadmap Tracked" write HTTP 503'],
       }),
     });
     const row = result.pushed[0];
@@ -197,7 +197,7 @@ test('CONTRACT: roadmap_xref_push documents the actual Forgejo partial-success r
       {
         statePushed: true,
         labelsPushed: false,
-        errors: ['label "roadmap-tracked" write HTTP 503'],
+        errors: ['label "Roadmap Tracked" write HTTP 503'],
       },
     );
     assert.equal(actualShape, '{statePushed, labelsPushed, errors[]}');
