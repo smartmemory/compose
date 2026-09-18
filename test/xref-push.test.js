@@ -10,8 +10,13 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { linkFeatures } from '../lib/feature-writer.js';
+import { validateProject } from '../lib/feature-validator.js';
+import { featureStatusToExternalExpect } from '../lib/status-projection.js';
 import { tmpdir } from 'node:os';
 
 import { planPush, planLabels, isGithubState, pushExternalRefs, defaultResolve, defaultWrite } from '../lib/xref-push.js';
@@ -498,5 +503,108 @@ describe('pushExternalRefs — Forgejo', () => {
     assert.equal(res.pushed[0].statePushed, false);
     assert.equal(res.pushed[0].labelsPushed, true);
     assert.deepEqual(res.pushed[0].errors, ['state write HTTP 503']);
+  });
+});
+
+
+describe('Forgejo review regressions', () => {
+  for (const mode of ['none', 'partial', 'all', 'throw']) {
+    test(`per-label evidence and summary: ${mode}`, async (t) => {
+      const cwd = freshCwd();
+      t.after(() => rmSync(cwd, { recursive: true, force: true }));
+      seed(cwd, 'A-1', [forgejoLink({ expect: 'closed', expect_labels: ['first', 'second'], push: true })]);
+      const res = await pushExternalRefs(cwd, {
+        apply: true, forgejoAuth: FORGEJO_AUTH,
+        forgejoTransport: transport((method, path, body) => {
+          if (method === 'GET') return { status: 200, body: { state: 'open', labels: [] } };
+          if (method === 'PATCH') return { status: 503, body: {} };
+          if (mode === 'throw' && body.labels[0] === 'second') throw new Error('offline');
+          return { status: mode === 'all' || (mode !== 'none' && body.labels[0] === 'first') ? 200 : 503, body: {} };
+        }),
+      });
+      const row = res.pushed[0];
+      const added = mode === 'all' ? ['first', 'second'] : mode === 'none' ? [] : ['first'];
+      assert.deepEqual(row.labelsAdded, added);
+      assert.deepEqual(row.labels.added, added);
+      assert.equal(row.labelsPushed, mode === 'all');
+      assert.equal(res.skipped.length, 0);
+      assert.match(row.summary, /state open → closed \(FAILED\)/);
+      assert.match(row.summary, new RegExp(`${added.length}/2 written`));
+      assert.match(row.summary, /FAILED: state write HTTP 503/);
+      if (mode !== 'all') assert.match(row.summary, /not written: \+.*second/);
+    });
+  }
+
+  for (const mode of ['failed', 'partial', 'success', 'dry-run']) {
+    test(`CLI reports ${mode} writes and exit status`, (t) => {
+      const cwd = freshCwd();
+      t.after(() => rmSync(cwd, { recursive: true, force: true }));
+      seed(cwd, 'A-1', [forgejoLink({ expect: 'closed', expect_labels: ['first', 'second'], push: true })]);
+      const preload = join(cwd, 'forgejo-stub.mjs');
+      writeFileSync(preload, `
+        import { ForgejoApi } from ${JSON.stringify(new URL('../lib/tracker/forgejo-api.js', import.meta.url).href)};
+        ForgejoApi.prototype.getIssueResult = async () => ({ status: 200, body: { state: 'open', labels: [] } });
+        ForgejoApi.prototype.updateStateResult = async () => ({ status: ${mode === 'success' ? 200 : 503} });
+        ForgejoApi.prototype.addLabelResult = async (_, label) => ({ status: ${JSON.stringify(mode)} === 'success' || (${JSON.stringify(mode)} === 'partial' && label === 'first') ? 200 : 503 });
+      `);
+      const result = spawnSync(process.execPath, ['--import', preload,
+        fileURLToPath(new URL('../bin/compose.js', import.meta.url)), 'roadmap', 'xref-push',
+        ...(mode === 'dry-run' ? [] : ['--apply'])], {
+        cwd, encoding: 'utf8', env: { ...process.env, COMPOSE_FORGEJO_TOKEN: 'test', COMPOSE_TARGET: cwd },
+      });
+      assert.equal(result.status, ['failed', 'partial'].includes(mode) ? 1 : 0, result.stdout + result.stderr);
+      if (mode === 'failed' || mode === 'partial') {
+        assert.match(result.stdout, /FAILED: state write HTTP 503/);
+        assert.match(result.stdout, new RegExp(`${mode === 'partial' ? 1 : 0}/2 written`));
+        assert.doesNotMatch(result.stdout, /\(wrote\)/);
+        assert.doesNotMatch(result.stdout, /^Pushed /m);
+      } else if (mode === 'success') {
+        assert.match(result.stdout, /Pushed 1 external target/);
+        assert.match(result.stdout, /\(wrote\)/);
+        assert.doesNotMatch(result.stdout, /FAILED/);
+      } else {
+        assert.match(result.stdout, /Would push 1 external target/);
+        assert.match(result.stdout, /labels \+first,second \(would write\)/);
+        assert.doesNotMatch(result.stdout, /FAILED|not written/);
+      }
+    });
+  }
+
+  test('MCP link writer persists derive_expect and both consumers agree across lifecycle statuses', async (t) => {
+    const cwd = freshCwd();
+    t.after(() => rmSync(cwd, { recursive: true, force: true }));
+    seed(cwd, 'A-1', [], 'IN_PROGRESS');
+    // The real implementation called by the MCP link_features handler.
+    await linkFeatures(cwd, { from_code: 'A-1', ...forgejoLink({ derive_expect: true, push: true }) });
+    const path = join(cwd, 'docs', 'features', 'A-1', 'feature.json');
+    const persisted = JSON.parse(readFileSync(path, 'utf8'));
+    assert.equal(persisted.links[0].derive_expect, true);
+    assert.equal(persisted.links[0].push, true);
+    assert.equal(persisted.links[0].provider, 'forgejo');
+    assert.equal(persisted.links[0].expect, undefined);
+    for (const status of ['IN_PROGRESS', 'COMPLETE', 'KILLED']) {
+      writeFileSync(path, JSON.stringify({ ...persisted, status }));
+      const before = readFileSync(path, 'utf8');
+      const expected = featureStatusToExternalExpect(status);
+      let live = expected === 'open' ? 'closed' : 'open';
+      const opts = {
+        forgejoAuth: FORGEJO_AUTH,
+        forgejoTransport: transport((method) => {
+          assert.equal(method, 'GET');
+          return { status: 200, body: { state: live, labels: [] } };
+        }),
+      };
+      const validation = await validateProject(cwd, { ...opts, external: true });
+      const drift = validation.findings.filter(f => f.kind === 'XREF_DRIFT');
+      assert.equal(drift.length, 1, status);
+      const push = await pushExternalRefs(cwd, opts);
+      assert.equal(push.pushed.length, 1, status);
+      assert.equal(push.pushed[0].to, expected);
+      assert.ok(drift[0].detail.includes(`expected o/r#7 to be ${push.pushed[0].to} but it is ${live}`));
+      live = expected;
+      assert.equal((await validateProject(cwd, { ...opts, external: true })).findings.filter(f => f.kind === 'XREF_DRIFT').length, 0);
+      assert.equal((await pushExternalRefs(cwd, opts)).unchanged, 1);
+      assert.equal(readFileSync(path, 'utf8'), before);
+    }
   });
 });

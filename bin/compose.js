@@ -1607,11 +1607,12 @@ if (cmd === 'roadmap') {
     const apply = args.includes('--apply')
     const res = await pushExternalRefs(cwd, { apply })
     const verb = apply ? 'wrote' : 'would write'
+    const failed = res.pushed.filter(s => s.errors?.length > 0).length
     if (res.pushed.length === 0) {
       console.log(`No external trackers to push (${res.scanned} push-opted link(s) checked, ${res.unchanged} already in sync).`)
     } else {
-      console.log(`${apply ? 'Pushed' : 'Would push'} ${res.pushed.length} external target(s):`)
-      for (const s of res.pushed) console.log(`  ${s.code}  ${s.provider} ${s.target}: ${s.summary} (${verb})`)
+      console.log(`${apply ? (failed ? 'Attempted to push' : 'Pushed') : 'Would push'} ${res.pushed.length} external target(s):`)
+      for (const s of res.pushed) console.log(`  ${s.code}  ${s.provider} ${s.target}: ${s.summary} (${s.errors?.length ? 'write errors' : verb})`)
     }
     if (res.skipped.length > 0) {
       console.log(`\nSkipped ${res.skipped.length} link(s):`)
@@ -1620,7 +1621,7 @@ if (cmd === 'roadmap') {
     if (!apply && res.pushed.length > 0) {
       console.log(`\nDry-run — pass --apply to write these changes.`)
     }
-    process.exit(0)
+    process.exit(failed ? 1 : 0)
   }
 
   // compose roadmap graph — generate a self-contained dependency-graph HTML

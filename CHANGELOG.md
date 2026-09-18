@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+- **COMP-TRACKER-FORGEJO review-round fixes** (implementation-review findings against T1-T7, adjudicated
+  and verified before applying): (1) `xref-push`'s CLI/summary output previously described a Forgejo
+  write's *planned* outcome, not its *actual* outcome — a 503 on both the state and label writes under
+  `--apply` printed "Pushed 1 external target(s): state open → closed; labels +done (wrote)" and exited
+  0. Now a failed state write is flagged `(FAILED)` inline, per-label results are broken out
+  (`N/M written`, naming what wasn't), and `compose roadmap xref-push --apply` exits 1 if any pushed
+  row has write errors. (2) `defaultForgejoWrite` previously collapsed multi-label success into one
+  `labelsPushed` boolean, losing which specific labels actually wrote (2xx) when a later label in the
+  same batch failed — added `outcome.labelsAdded: string[]` alongside the existing boolean so a real
+  write is never unrecoverable from the returned outcome. (3) design.md's Piece 3 required an explicit
+  end-to-end test — MCP `link_features` → persisted `feature.json` → both `runExternalRefChecks` and
+  `xref-push` agreeing on `derive_expect`'s resolved state — that no test actually exercised; added to
+  `test/xref-push.test.js`, calling the real `linkFeatures` writer across IN_PROGRESS/COMPLETE/KILLED.
+  72/72 tests pass (`xref-push`, `xref-degrade-harness`, `xref-push-local`).
 - **COMP-TRACKER-FORGEJO T7**: `link_features`'s MCP tool schema (`server/mcp-tool-defs.js`) gains
   `forgejo` in the provider enum plus `push`/`expect_labels`/`derive_expect` fields — previously
   missing entirely, a real capability gap for MCP clients regardless of Forgejo. `roadmap_xref_push`'s
