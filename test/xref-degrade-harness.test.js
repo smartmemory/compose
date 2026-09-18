@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { validateProject } from '../lib/feature-validator.js';
+import { featureStatusToExternalExpect } from '../lib/status-projection.js';
 
 function cwdWith(rows) {
   const cwd = mkdtempSync(join(tmpdir(), 'xref-dh-'));
@@ -26,6 +27,7 @@ function cwdWith(rows) {
 const xr = (r) => r.findings.filter((f) => f.kind && f.kind.startsWith('XREF_'));
 const auth = { token: 't' };
 const ONE = ['| 1 | XR-DH-1 | a <!-- xref: github smartmemory/compose#7 expect=closed --> | COMPLETE |'];
+const FORGEJO_ONE = ['| 1 | XR-DH-1 | a <!-- xref: forgejo smartmemory/compose#7 expect=closed --> | COMPLETE |'];
 
 describe('xref degrade matrix (spec §6)', () => {
   test('offline / fetch reject → per-ref XREF_RESOLUTION_SKIPPED (warning), run continues', async () => {
@@ -122,6 +124,153 @@ describe('xref degrade matrix (spec §6)', () => {
     const f = xr(r);
     assert.ok(f.some((x) => x.kind === 'XREF_RESOLUTION_SKIPPED'));
     assert.ok(f.some((x) => x.kind === 'XREF_URL_UNCHECKED'));
+    rmSync(cwd, { recursive: true, force: true });
+  });
+});
+
+describe('forgejo validator resolution', () => {
+  test('network gate off → XREF_RESOLUTION_SKIPPED without transport call', async () => {
+    const cwd = cwdWith(FORGEJO_ONE);
+    let called = false;
+    const r = await validateProject(cwd, {
+      external: false,
+      forgejoAuth: auth,
+      forgejoTransport: { async request() { called = true; return { status: 200, body: { state: 'closed' } }; } },
+    });
+    const skipped = xr(r).filter((x) => x.kind === 'XREF_RESOLUTION_SKIPPED');
+    assert.equal(called, false);
+    assert.equal(skipped.length, 1);
+    assert.equal(skipped[0].severity, 'warning');
+    assert.match(skipped[0].detail, /network off/);
+    rmSync(cwd, { recursive: true, force: true });
+  });
+
+  test('offline / fetch reject → per-ref XREF_RESOLUTION_SKIPPED', async () => {
+    const cwd = cwdWith(FORGEJO_ONE);
+    const r = await validateProject(cwd, {
+      external: true,
+      forgejoAuth: auth,
+      forgejoTransport: { async request() { throw new Error('ENOTFOUND git.smartmemory.ai'); } },
+    });
+    const f = xr(r);
+    assert.ok(f.some((x) => x.kind === 'XREF_RESOLUTION_SKIPPED' && x.severity === 'warning'));
+    assert.equal(f.filter((x) => x.severity === 'error').length, 0);
+    assert.equal(r.scope, 'project');
+    rmSync(cwd, { recursive: true, force: true });
+  });
+
+  for (const [label, response, detail] of [
+    ['ambiguous HTTP response', { status: 503, body: {}, headers: new Map() }, /HTTP 503/],
+    ['unparseable successful response', { status: 200, body: {}, headers: new Map() }, /no parseable issue state/],
+  ]) {
+    test(`${label} → XREF_RESOLUTION_SKIPPED`, async () => {
+      const cwd = cwdWith(FORGEJO_ONE);
+      const r = await validateProject(cwd, {
+        external: true,
+        forgejoAuth: auth,
+        forgejoTransport: { async request() { return response; } },
+      });
+      const skipped = xr(r).filter((x) => x.kind === 'XREF_RESOLUTION_SKIPPED');
+      assert.equal(skipped.length, 1);
+      assert.equal(skipped[0].severity, 'warning');
+      assert.match(skipped[0].detail, detail);
+      assert.equal(xr(r).filter((x) => x.severity === 'error').length, 0);
+      rmSync(cwd, { recursive: true, force: true });
+    });
+  }
+
+  test('confirmed HTTP 404 → XREF_TARGET_MISSING error', async () => {
+    const cwd = cwdWith(FORGEJO_ONE);
+    const r = await validateProject(cwd, {
+      external: true,
+      forgejoAuth: auth,
+      forgejoTransport: { async request() { return { status: 404, body: {}, headers: new Map() }; } },
+    });
+    const missing = xr(r).filter((x) => x.kind === 'XREF_TARGET_MISSING');
+    assert.equal(missing.length, 1);
+    assert.equal(missing[0].severity, 'error');
+    assert.equal(xr(r).filter((x) => x.kind === 'XREF_RESOLUTION_SKIPPED').length, 0);
+    rmSync(cwd, { recursive: true, force: true });
+  });
+
+  test('no token → one aggregate XREF_RESOLUTION_SKIPPED warning', async () => {
+    const previous = process.env.COMPOSE_FORGEJO_TOKEN;
+    delete process.env.COMPOSE_FORGEJO_TOKEN;
+    const cwd = cwdWith([
+      '| 1 | XR-DH-1 | a <!-- xref: forgejo smartmemory/compose#1 expect=closed --> | COMPLETE |',
+      '| 2 | XR-DH-2 | b <!-- xref: forgejo smartmemory/compose#2 expect=closed --> | COMPLETE |',
+    ]);
+    try {
+      const r = await validateProject(cwd, {
+        external: true,
+        forgejoAuth: { tokenEnv: 'COMPOSE_FORGEJO_TOKEN' },
+      });
+      const skipped = xr(r).filter((x) => x.kind === 'XREF_RESOLUTION_SKIPPED');
+      assert.equal(skipped.length, 1);
+      assert.equal(skipped[0].severity, 'warning');
+      assert.match(skipped[0].detail, /no Forgejo token/);
+      assert.equal(xr(r).filter((x) => x.severity === 'error').length, 0);
+    } finally {
+      if (previous === undefined) delete process.env.COMPOSE_FORGEJO_TOKEN;
+      else process.env.COMPOSE_FORGEJO_TOKEN = previous;
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test('rate limit → aggregate warning and short-circuit remaining forgejo refs', async () => {
+    const cwd = cwdWith([
+      '| 1 | XR-DH-1 | a <!-- xref: forgejo smartmemory/compose#1 expect=closed --> | COMPLETE |',
+      '| 2 | XR-DH-2 | b <!-- xref: forgejo smartmemory/compose#2 expect=closed --> | COMPLETE |',
+    ]);
+    let calls = 0;
+    const r = await validateProject(cwd, {
+      external: true,
+      forgejoAuth: auth,
+      forgejoTransport: {
+        async request() {
+          calls += 1;
+          const e = new Error('rate limited');
+          e.rateLimit = { resetMs: 1000 };
+          throw e;
+        },
+      },
+    });
+    const skipped = xr(r).filter((x) => x.kind === 'XREF_RESOLUTION_SKIPPED');
+    assert.equal(skipped.length, 1);
+    assert.equal(skipped[0].severity, 'warning');
+    assert.match(skipped[0].detail, /rate-limited/);
+    assert.equal(calls, 1);
+    assert.equal(xr(r).filter((x) => x.severity === 'error').length, 0);
+    rmSync(cwd, { recursive: true, force: true });
+  });
+
+  test('derive_expect drift uses featureStatusToExternalExpect for the same status', async () => {
+    const status = 'KILLED';
+    const expected = featureStatusToExternalExpect(status);
+    const actual = expected === 'open' ? 'closed' : 'open';
+    const cwd = cwdWith([]);
+    const featureDir = join(cwd, 'docs', 'features', 'XR-DH-9');
+    mkdirSync(featureDir, { recursive: true });
+    writeFileSync(join(featureDir, 'feature.json'), JSON.stringify({
+      code: 'XR-DH-9',
+      status,
+      links: [{
+        kind: 'external',
+        provider: 'forgejo',
+        repo: 'smartmemory/compose',
+        issue: 9,
+        derive_expect: true,
+      }],
+    }));
+
+    const r = await validateProject(cwd, {
+      external: true,
+      forgejoAuth: auth,
+      forgejoTransport: { async request() { return { status: 200, body: { state: actual }, headers: new Map() }; } },
+    });
+    const drift = xr(r).filter((x) => x.kind === 'XREF_DRIFT');
+    assert.equal(drift.length, 1);
+    assert.match(drift[0].detail, new RegExp(`expected smartmemory/compose#9 to be ${expected} but it is ${actual}`));
     rmSync(cwd, { recursive: true, force: true });
   });
 });
