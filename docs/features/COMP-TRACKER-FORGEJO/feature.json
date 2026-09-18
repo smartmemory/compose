@@ -1,12 +1,46 @@
 {
   "code": "COMP-TRACKER-FORGEJO",
   "description": "Extend COMP-ROADMAP-XREF-PUSH to Forgejo: transport (forgejo-api.js), read-time lifecycle→issue-state derivation (derive_expect), 4-surface provider registration, and a promotion command (issue → feature.json with acceptance write-back). Design/blueprint/plan done (5 Codex review rounds); implementation starting.",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "Phase 6: MCP Writers",
   "created": "2026-09-18",
   "updated": "2026-09-18",
   "complexity": "L",
   "position": 7,
   "parent": "COMP-ROADMAP-XREF-PUSH-2",
-  "impact": "medium"
+  "impact": "medium",
+  "completions": [
+    {
+      "completion_id": "COMP-TRACKER-FORGEJO:ad05f8ec7feee260e0f27f467aeac312204edd82",
+      "feature_code": "COMP-TRACKER-FORGEJO",
+      "commit_sha": "ad05f8ec7feee260e0f27f467aeac312204edd82",
+      "commit_sha_short": "ad05f8ec",
+      "tests_pass": true,
+      "files_changed": [
+        "bin/compose.js",
+        "contracts/feature-json.schema.json",
+        "lib/feature-validator.js",
+        "lib/feature-writer.js",
+        "lib/status-projection.js",
+        "lib/tracker/forgejo-api.js",
+        "lib/xref-citation.js",
+        "lib/xref-promote.js",
+        "lib/xref-push.js",
+        "server/mcp-tool-defs.js",
+        "test/feature-json-schema-external.test.js",
+        "test/feature-writer.test.js",
+        "test/status-projection.test.js",
+        "test/tool-inventory.test.js",
+        "test/tracker/forgejo-api.test.js",
+        "test/xref-citation.test.js",
+        "test/xref-degrade-harness.test.js",
+        "test/xref-promote.test.js",
+        "test/xref-push.test.js"
+      ],
+      "recorded_at": "2026-09-18T15:23:11.557Z",
+      "recorded_by": "mcp:agent",
+      "notes": "T1-T7 implemented per plan.md (Forgejo transport, lifecycle derivation, provider registration, validator resolution, push extension, promotion command, MCP surface). Adversarial implementation review (gpt-6-astra/medium) found 3 real gaps (CLI silently reported failed Forgejo writes as successful; multi-label partial-success evidence loss; missing design-required MCP->validator/push derive_expect agreement test) — all fixed and round-2 verified REVIEW CLEAN. 567/567 tests pass across the feature's full cross-cutting suite."
+    }
+  ],
+  "commit_sha": "ad05f8ec7feee260e0f27f467aeac312204edd82"
 }
