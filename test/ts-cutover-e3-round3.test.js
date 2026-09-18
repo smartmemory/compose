@@ -242,6 +242,8 @@ describe('F2 local connector restricts tool availability', () => {
     await runLocalClaudeAgent('p', { query: makeQueryStub(successResult, captured) });
     assert.deepEqual(captured.options.tools, { type: 'preset', preset: 'claude_code' });
     assert.equal(captured.options.allowedTools, undefined);
+    assert.deepEqual(captured.options.settingSources, [],
+      'controlled executions must not inherit user/project settings after the SDK default changed');
   });
 });
 
