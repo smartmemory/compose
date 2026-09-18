@@ -4,6 +4,35 @@
 
 ## [0.6.1] — 2026-09-18
 
+- **`@anthropic-ai/claude-agent-sdk` bumped from `^0.2.47` (installed 0.2.114) to `^0.3.0`
+  (tested at 0.3.276)**, crossing the SDK's 0.2→0.3 line (~4 months / ~300 published
+  versions). `lib/local-claude-connector.js` is the only file that wraps the SDK's `query()`
+  directly; its touched surface (`query({prompt, options})`, async iteration, streamed
+  `system`/`assistant`/`result` shapes, `abortController`/`cwd`/`model`/`permissionMode`/
+  `env`/`thinking`/`effort`/`tools`/`allowedTools`/`disallowedTools`, custom
+  `spawnClaudeCodeProcess`) is unchanged between the two lines. One real behavior drift found
+  and fixed: 0.3 loads user/project/local filesystem settings sources when `settingSources` is
+  omitted from `query()` options, where 0.2 documented omission as full SDK isolation.
+  `local-claude-connector.js` now explicitly passes `settingSources: []` to preserve Compose's
+  controlled-execution contract (no filesystem-injected hooks/tools/permissions/env), with a
+  regression assertion in `test/ts-cutover-e3-round3.test.js`. Separately, the SDK's new
+  peer-dependency chain (via `@modelcontextprotocol/sdk`'s bundled `zod-to-json-schema`) tripped
+  an npm arborist bug (`Cannot read properties of null (reading 'edgesOut')`) on a plain `npm
+  install`, unrelated to any real semver conflict; two targeted `overrides` entries
+  (`@modelcontextprotocol/sdk`'s `zod-to-json-schema` pinned to its already-resolved `3.25.2`,
+  and `vitest`'s `vite` peer pinned to this repo's own `^6.1.0` range via `$vite`) fix the
+  install without `--legacy-peer-deps` or a committed lockfile. A residual `npm ls` `ELSPROBLEMS`
+  diagnostic remains (reports the deduped `zod@4.6.5` as "invalid" against a `3.25.76` provenance
+  annotation) — checked against both packages' actual manifests and it is cosmetic: neither
+  `@anthropic-ai/claude-agent-sdk@0.3.276` nor `@anthropic-ai/sdk@0.126.0` declares a hard
+  `zod@3.25.76` requirement (their `peerDependencies` are `^4.0.0` and `^3.25.0 || ^4.0.0`,
+  both satisfied by the resolved `4.6.5`); stratum's own `zod@3.25.76` pin is untouched and
+  unaffected. Verified: plain `npm install` (no flags) exits 0 with zero warnings; the full
+  connector-relevant suite (`test/execution-runtime.test.js` and 11 other files exercising
+  `local-claude-connector.js`) is 202/202 against the real installed `0.3.276`, run unsandboxed
+  after a Codex sandbox pass without network access had only verified against a cached SDK
+  shim and missed the install-breaking peer-dependency bug entirely.
+
 - **pre-push hook: a repeat push of an already-verified commit no longer re-runs the full test
   suite.** `bin/git-hooks/pre-push.template`'s test gate now caches a green `npm test` result
   keyed by `git rev-parse HEAD` under `.compose/data/pre-push-verified/<sha>` (60-minute TTL,

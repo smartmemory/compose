@@ -72,7 +72,7 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.47",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.0",
     "@dagrejs/dagre": "^2.0.4",
     "@hello-pangea/dnd": "^18.0.1",
     "@modelcontextprotocol/sdk": "^1.26.0",
@@ -128,7 +128,13 @@
     "vitest": "^4.1.4"
   },
   "overrides": {
+    "vitest": {
+      "vite": "$vite"
+    },
     "zod": "^4.0.0",
+    "@modelcontextprotocol/sdk": {
+      "zod-to-json-schema": "3.25.2"
+    },
     "@smartmemory/stratum": {
       "zod": "3.25.76"
     }
