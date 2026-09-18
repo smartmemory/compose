@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-09-18
+
 - **pre-push hook: a repeat push of an already-verified commit no longer re-runs the full test
   suite.** `bin/git-hooks/pre-push.template`'s test gate now caches a green `npm test` result
   keyed by `git rev-parse HEAD` under `.compose/data/pre-push-verified/<sha>` (60-minute TTL,
