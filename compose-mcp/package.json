@@ -1,6 +1,6 @@
 {
   "name": "@smartmemory/compose-mcp",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "mcpName": "ai.smartmemory/compose-mcp",
   "description": "MCP stdio server for @smartmemory/compose: typed feature management tools (roadmap, changelog, artifact linking, and more). Requires a compose-initialized project.",
   "type": "module",
@@ -8,7 +8,7 @@
     "compose-mcp": "./bin/compose-mcp.js"
   },
   "dependencies": {
-    "@smartmemory/compose": "^0.6.0"
+    "@smartmemory/compose": "^0.6.1"
   },
   "files": [
     "bin/**",
