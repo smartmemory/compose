@@ -129,7 +129,7 @@ export async function resolve(specifier, context, nextResolve) {
       stratum, profile:'claude:read-only-reviewer:critical', cwd:root,
     });
     const actual = JSON.parse(await readFile(join(root, 'sdk-options.json'), 'utf8'));
-    assert.deepEqual(actual.tools, ['Read','Grep','Glob','Agent']);
+    assert.deepEqual(actual.tools, ['Read','Grep','Glob','Agent','ToolSearch']);
     assert.deepEqual(actual.disallowedTools, ['Edit','Write','Bash']);
     assert.deepEqual(actual.thinking, {type:'adaptive'});
     assert.equal(actual.effort, 'xhigh');
