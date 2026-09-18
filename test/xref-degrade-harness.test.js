@@ -273,4 +273,37 @@ describe('forgejo validator resolution', () => {
     assert.match(drift[0].detail, new RegExp(`expected smartmemory/compose#9 to be ${expected} but it is ${actual}`));
     rmSync(cwd, { recursive: true, force: true });
   });
+
+  test('PARKED derive_expect has no state drift but still checks expected labels', async () => {
+    const cwd = cwdWith([]);
+    const featureDir = join(cwd, 'docs', 'features', 'XR-DH-10');
+    mkdirSync(featureDir, { recursive: true });
+    writeFileSync(join(featureDir, 'feature.json'), JSON.stringify({
+      code: 'XR-DH-10',
+      status: 'PARKED',
+      links: [{
+        kind: 'external',
+        provider: 'forgejo',
+        repo: 'smartmemory/compose',
+        issue: 10,
+        derive_expect: true,
+        expect_labels: ['Roadmap Tracked'],
+      }],
+    }));
+
+    const r = await validateProject(cwd, {
+      external: true,
+      forgejoAuth: auth,
+      forgejoTransport: {
+        async request() {
+          return { status: 200, body: { state: 'closed', labels: [{ name: 'Bug' }] }, headers: new Map() };
+        },
+      },
+    });
+    const drift = xr(r).filter((x) => x.kind === 'XREF_DRIFT');
+    assert.equal(drift.length, 1);
+    assert.match(drift[0].detail, /missing expected label Roadmap Tracked/);
+    assert.doesNotMatch(drift[0].detail, /expected .* to be (open|closed)/);
+    rmSync(cwd, { recursive: true, force: true });
+  });
 });

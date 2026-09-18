@@ -76,17 +76,17 @@ describe('ForgejoApi', () => {
   test('addLabelResult uses the additive issue-label endpoint', async () => {
     const response = {
       status: 200,
-      body: [{ id: 3, name: 'roadmap-tracked' }],
+      body: [{ id: 3, name: 'Roadmap Tracked' }],
       headers: new Headers(),
     };
     const { api, transport } = makeApi(response);
 
-    assert.strictEqual(await api.addLabelResult(17, 'roadmap-tracked'), response);
+    assert.strictEqual(await api.addLabelResult(17, 'Roadmap Tracked'), response);
     assert.deepEqual(transport.calls[0], {
       ...expectedCall(
         'POST',
         '/repos/smartmemory/compose/issues/17/labels',
-        { labels: ['roadmap-tracked'] },
+        { labels: ['Roadmap Tracked'] },
       ),
       options: {
         headers: {
@@ -150,7 +150,7 @@ describe('ForgejoApi', () => {
     const cases = [
       ['getIssueResult', (api) => api.getIssueResult(404)],
       ['updateStateResult', (api) => api.updateStateResult(404, { state: 'closed' })],
-      ['addLabelResult', (api) => api.addLabelResult(404, 'roadmap-tracked')],
+      ['addLabelResult', (api) => api.addLabelResult(404, 'Roadmap Tracked')],
       ['listIssueComments', (api) => api.listIssueComments(404)],
       ['addIssueComment', (api) => api.addIssueComment(404, 'comment')],
     ];

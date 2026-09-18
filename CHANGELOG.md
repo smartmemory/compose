@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+- **COMP-TRACKER-FORGEJO open-questions resolution** (design.md's 4 deployment-verification/owner
+  questions, resolved and implemented): (1) confirmed against `git.smartmemory.ai`'s live version
+  (`16.0.3+gitea-1.22.0`) and its own served swagger that the additive label endpoint
+  (`POST .../issues/{index}/labels`) exists as documented, and that the transport's `Bearer` auth
+  header is accepted identically to the swagger-documented `token` scheme. (2) Acceptance label
+  renamed from `roadmap-tracked` to `Roadmap Tracked` (`lib/xref-promote.js::ACCEPTANCE_LABEL`) to
+  match the Title Case house style already live on `smartmemory/{compose,stratum,smart-memory}` —
+  no existing triage-label convention was found to reuse instead. (3) Confirmed PAT scope grammar
+  from the instance's own swagger: `write:issue` (covers issue + label read/write) plus
+  `read:repository`, no separate label scope exists. (4) Owner decision on `PARKED → null`: a
+  parked feature's issue state now freezes (never pushed) but its labels still sync normally —
+  previously the whole link was skipped, silently also suppressing label intent. Fixed in
+  `lib/xref-push.js` (removed the early bail on `derivesExpect && expect == null`) and
+  `lib/feature-validator.js`, which had a broader latent gap: it discarded `expect_labels` for
+  *every* external ref, not just PARKED/derived ones, so `compose roadmap validate` could never flag
+  label drift at all. Added `issueTrackerLabelDrift` so validate and push agree on label state, same
+  as they already did for open/closed state. 175/175 tests pass across the touched suites
+  (`xref-push`, `xref-promote`, `tool-inventory`, `tracker/forgejo-api`, `status-projection`,
+  `xref-degrade-harness`, `feature-validator`, `feature-validator.integration`, `xref-golden-flow`).
 - **COMP-TRACKER-FORGEJO review-round fixes** (implementation-review findings against T1-T7, adjudicated
   and verified before applying): (1) `xref-push`'s CLI/summary output previously described a Forgejo
   write's *planned* outcome, not its *actual* outcome — a 503 on both the state and label writes under
@@ -32,7 +51,9 @@
   golden-flow suites.
 - **COMP-TRACKER-FORGEJO T5**: `lib/xref-push.js` extends push eligibility to `provider === 'forgejo'`.
   `derive_expect: true` links compute `expect` from the feature's current status (not a stored field);
-  `PARKED`/unresolved derivation skips the whole link for that run. Forgejo pushes dispatch as two
+  `PARKED`/unresolved derivation skips the state write but not label sync (see the open-questions
+  resolution entry above — this was later corrected from an earlier "skips the whole link" behavior).
+  Forgejo pushes dispatch as two
   independent calls (state PATCH, additive label POST) and report `{statePushed, labelsPushed,
   errors[]}` — a successful write is never later collapsed into "skipped." Golden-flow test exercises
   the real `record_completion` → `xref-push --apply` → issue-closes path (not the easier

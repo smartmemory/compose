@@ -422,15 +422,43 @@ describe('pushExternalRefs — Forgejo', () => {
     assert.deepEqual(calls, []);
   });
 
-  test('derive_expect skips the whole PARKED link for this run', async () => {
+  test('PARKED derive_expect freezes state but still adds missing labels', async () => {
     const cwd = freshCwd();
     seed(cwd, 'A-1', [forgejoLink({ derive_expect: true, expect_labels: ['done'], push: true })], 'PARKED');
+    const calls = [];
+    const res = await pushExternalRefs(cwd, {
+      apply: true,
+      forgejoTransport: transport((method, path, body) => {
+        calls.push({ method, body });
+        if (method === 'GET') return { status: 200, body: { state: 'open', labels: [] } };
+        if (method === 'POST') return { status: 201, body: {} };
+        throw new Error(`unexpected ${method}`);
+      }),
+      forgejoAuth: FORGEJO_AUTH,
+    });
+
+    assert.deepEqual(calls, [
+      { method: 'GET', body: undefined },
+      { method: 'POST', body: { labels: ['done'] } },
+    ]);
+    assert.equal(res.scanned, 1);
+    assert.equal(res.pushed.length, 1);
+    assert.equal(res.pushed[0].state, undefined);
+    assert.equal(res.pushed[0].statePushed, false);
+    assert.equal(res.pushed[0].labelsPushed, true);
+    assert.deepEqual(res.pushed[0].labelsAdded, ['done']);
+  });
+
+  test('PARKED derive_expect with no label intent still has nothing to do', async () => {
+    const cwd = freshCwd();
+    seed(cwd, 'A-1', [forgejoLink({ derive_expect: true, push: true })], 'PARKED');
     const calls = [];
     const res = await pushExternalRefs(cwd, {
       apply: true,
       forgejoTransport: transport((method) => { calls.push(method); return { status: 200, body: {} }; }),
       forgejoAuth: FORGEJO_AUTH,
     });
+
     assert.equal(res.scanned, 0);
     assert.deepEqual(calls, []);
   });
