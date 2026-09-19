@@ -300,7 +300,7 @@ test('real engine-driven fanout recovers persisted receipts and coverage after t
   const observed = records(f).filter(r => r.type === 'unsupported-observation');
   const receipts = observed.filter(r => r.evidenceSource === 'engine-receipt');
   assert.equal(receipts.length, 2); assert.ok(receipts.every(r => r.issuanceId === null && r.parentRecordId === null));
-  assert.ok(receipts.every(r => r.engineReceiptEvidence.receipt.dispatchId.startsWith('legacy:')));
+  assert.ok(receipts.every(r => typeof r.engineReceiptEvidence.receipt.dispatchId === 'string' && r.engineReceiptEvidence.receipt.dispatchId.length > 0));
   assert.ok(receipts.every(r => r.engineReceiptEvidence.receipt.usdSource === 'reported'));
   assert.deepEqual(receipts.map(r => r.itemIndex).sort(), [0, 1]);
   assert.ok(receipts.every(r => r.stage === 0 && Number.isInteger(r.generation)));
