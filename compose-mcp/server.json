@@ -3,12 +3,12 @@
   "name": "ai.smartmemory/compose-mcp",
   "title": "Compose MCP",
   "description": "Typed feature management for compose projects: roadmap, changelog, artifacts, journal.",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@smartmemory/compose-mcp",
-      "version": "0.6.1",
+      "version": "0.6.2",
       "transport": {
         "type": "stdio"
       }
