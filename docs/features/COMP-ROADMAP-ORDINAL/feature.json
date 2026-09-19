@@ -4,16 +4,8 @@
   "status": "PLANNED",
   "phase": "COMP-ROADMAP-MODEL: Structured + Composable Roadmaps",
   "created": "2026-09-11",
-  "updated": "2026-09-11",
+  "updated": "2026-09-19",
   "complexity": "M",
   "position": 7,
-  "links": [
-    {
-      "kind": "external",
-      "provider": "local",
-      "repo": "smart-memory-docs",
-      "to_code": "ROADMAP-MIGRATE-1",
-      "note": "336 ordinals cited as identifiers by surviving docs; source of the legacyOrdinal requirement."
-    }
-  ]
+  "links": []
 }

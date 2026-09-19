@@ -51,6 +51,12 @@ the refusal as a blocker. **The real-engine goldens were the only thing that cau
    dispatch cannot be deduplicated — which makes exactly-once unachievable from compose's side
    alone. This is also the fix for the residual lost-response window below.
 
+Tracked as **`STRAT-STEPDONE-PROVENANCE-1`** (stratum repo, filed 2026-09-19). **Correction:**
+this document previously cited `STRAT-LEARN-COST-1` as the stratum-side tracker for this work —
+verified wrong on 2026-09-19: that ticket's actual scope is a price-table freshness job plus a
+Claude-connector false-labelled-$0 fix, unrelated to this blocker. `STRAT-STEPDONE-PROVENANCE-1`
+is the correct pointer.
+
 Filed with the other stratum-side cost work: **STRAT-LEARN-COST-1**.
 
 ## Defects the first attempt hit — the next one must not reintroduce them
@@ -108,4 +114,4 @@ other two files in, and it manufactured acknowledged routing evidence
 
 - Parent: [COMP-COST-OWNER](../COMP-COST-OWNER/design.md)
 - Trace: [step-envelope-usage-2026-09-14.md](../COMP-COST-OWNER/evidence/step-envelope-usage-2026-09-14.md)
-- Stratum side: STRAT-LEARN-COST-1
+- Stratum side: STRAT-STEPDONE-PROVENANCE-1 (corrected 2026-09-19; was mistakenly STRAT-LEARN-COST-1)
