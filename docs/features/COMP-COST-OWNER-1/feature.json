@@ -4,7 +4,7 @@
   "status": "BLOCKED",
   "phase": "COMP-COST-OWNER: One owner for the cost number",
   "created": "2026-09-14",
-  "updated": "2026-09-14",
+  "updated": "2026-09-19",
   "complexity": "S",
   "position": 2,
   "parent": "COMP-COST-OWNER",
@@ -12,6 +12,13 @@
     {
       "kind": "surfaced_by",
       "to_code": "COMP-COST-OWNER"
+    },
+    {
+      "kind": "external",
+      "provider": "local",
+      "repo": "stratum",
+      "to_code": "STRAT-STEPDONE-PROVENANCE-1",
+      "note": "Blocked on this stratum ticket (contract bump: usdSource/split on stepDone + real dispatch ids). Corrects the design doc's earlier mistaken reference to STRAT-LEARN-COST-1, which covers unrelated work."
     }
   ]
 }

@@ -4,16 +4,8 @@
   "status": "PLANNED",
   "phase": "Phase 6: MCP Writers",
   "created": "2026-09-11",
-  "updated": "2026-09-11",
+  "updated": "2026-09-19",
   "complexity": "M",
   "position": 6,
-  "links": [
-    {
-      "kind": "external",
-      "provider": "local",
-      "repo": "smart-memory-docs",
-      "to_code": "ROADMAP-MIGRATE-1",
-      "note": "All three silent no-op instances were found during that investigation."
-    }
-  ]
+  "links": []
 }
