@@ -364,7 +364,7 @@ describe('linkFeatures', () => {
     assert.deepEqual(f.links[0].expect_labels, ['done', 'shipped']);
   });
 
-  test('expect_labels rejected on a local provider (github-only)', async () => {
+  test('expect_labels rejected on a local provider (github/forgejo-only)', async () => {
     const cwd = freshCwd();
     await seed(cwd, 'XR-LBLLOC');
     await assert.rejects(
@@ -372,7 +372,7 @@ describe('linkFeatures', () => {
         from_code: 'XR-LBLLOC', kind: 'external', provider: 'local',
         repo: 'sib', to_code: 'COMP-X', expect_labels: ['done'],
       }),
-      /expect_labels is github-only/,
+      /expect_labels is github\/forgejo-only/,
     );
   });
 
