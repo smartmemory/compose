@@ -6,6 +6,7 @@ import { join } from 'node:path';
 
 import { runLocalClaudeAgent } from '../lib/local-claude-connector.js';
 import { runConsumerIssuance } from '../lib/build.js';
+import { runtimeFixture } from './helpers/routing-runtime-fixture.js';
 
 process.env.NODE_ENV = 'test';
 
@@ -67,6 +68,37 @@ function progressRecorder() {
     warn(message) { warnings.push(message); },
     toolUse() {}, toolSummary() {}, findings() {},
   };
+}
+
+function ordinaryReviewSpec(intent) {
+  return {
+    version: 1,
+    contracts: REVIEW_CLOSURE.contracts,
+    flows: {
+      entry: 'bug_fix',
+      bug_fix: {
+        input: {
+          task: 'string',
+          route_mode: 'string?',
+          routing_start: 'string?',
+          routing_root: 'string?',
+          routing_plan_intent: 'string?',
+          routing_continuation: 'string?',
+        },
+        steps: [{ id: 'review', agent: 'claude', do: intent, out: 'ReviewResult' }],
+        output: { from: '${review.output}', contract: 'ReviewResult' },
+      },
+    },
+  };
+}
+
+function setReviewPromptBudget(t, maxChars) {
+  const previous = process.env.COMPOSE_REVIEW_PROMPT_MAX_CHARS;
+  process.env.COMPOSE_REVIEW_PROMPT_MAX_CHARS = String(maxChars);
+  t.after(() => {
+    if (previous === undefined) delete process.env.COMPOSE_REVIEW_PROMPT_MAX_CHARS;
+    else process.env.COMPOSE_REVIEW_PROMPT_MAX_CHARS = previous;
+  });
 }
 
 async function driveConsumer({ descriptor, localQuery, context = {}, progress = progressRecorder() }) {
@@ -224,5 +256,55 @@ describe('review prompt size budget', () => {
     assert.equal(dispatches, 0);
     assert.match(result.envelope.failure, /prompt budget/i);
     assert.match(result.envelope.failure, /before provider dispatch/i);
+  });
+
+  it('drops ambient context from an oversized ordinary review prompt before dispatch', async (t) => {
+    const maxChars = 8_000;
+    setReviewPromptBudget(t, maxChars);
+    const fixture = await runtimeFixture(t, {
+      spec: ordinaryReviewSpec('ORDINARY_REVIEW_SENTINEL: inspect the requested implementation'),
+      setup: async ({ cwd }) => {
+        const contextDir = join(cwd, 'docs', 'context');
+        await mkdir(contextDir, { recursive: true });
+        await writeFile(join(contextDir, 'bulk.md'), `AMBIENT_SENTINEL\n${'x'.repeat(20_000)}`);
+      },
+      inference: () => ({
+        text: JSON.stringify({
+          clean: true, summary: 'ok', findings: [], meta: {}, lenses_run: [], auto_fixes: [], asks: [],
+        }),
+        usage: { tokens: 1, ms: 1, usd: 0 },
+        usdSource: 'reported',
+      }),
+    });
+
+    await fixture.run();
+
+    assert.equal(fixture.calls.length, 1);
+    const dispatched = fixture.calls[0].prompt;
+    assert.ok(dispatched.length <= maxChars, `prompt length was ${dispatched.length}`);
+    assert.doesNotMatch(dispatched, /AMBIENT_SENTINEL/);
+    assert.match(dispatched, /ORDINARY_REVIEW_SENTINEL/);
+    assert.match(dispatched, /Severity Vocabulary/);
+    assert.match(dispatched, /"clean"/);
+    assert.match(dispatched, /The JSON block must be the last thing/);
+  });
+
+  it('refuses an ordinary review locally when required content alone exceeds the budget', async (t) => {
+    setReviewPromptBudget(t, 1_000);
+    const fixture = await runtimeFixture(t, {
+      spec: ordinaryReviewSpec(`ORDINARY_REVIEW_SENTINEL:${'y'.repeat(8_000)}`),
+    });
+
+    await assert.rejects(
+      () => fixture.run(),
+      error => {
+        assert.equal(error?.name, 'PromptBudgetExceededError');
+        assert.equal(error?.code, 'REVIEW_PROMPT_BUDGET_EXCEEDED');
+        assert.match(error?.message ?? '', /Review prompt budget exceeded before provider dispatch/);
+        assert.match(error?.message ?? '', /required task, contract, and schema/);
+        return true;
+      },
+    );
+    assert.equal(fixture.calls.length, 0, 'the provider must not see required content above the budget');
   });
 });

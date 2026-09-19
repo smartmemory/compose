@@ -1,0 +1,15 @@
+{
+  "code": "COMP-REVIEW-BUDGET-2",
+  "description": "COMP-REVIEW-BUDGET-1 wired its prompt budget to consumer review items only (lib/build.js:1923-1928, gated on reviewOpts.reviewMode); ordinary review and build steps (lib/build.js:5350-5372) pass no promptBudget, so the unbudgeted-prompt failure that feature was filed to prevent can still kill a run on the more common path. Pass a budget at the ordinary dispatch site with an ambient-free requiredPrompt built the same way the consumer path builds it. Sized S.",
+  "status": "PLANNED",
+  "created": "2026-09-19",
+  "profile": {
+    "needs_prd": true,
+    "needs_architecture": true,
+    "needs_verification": true,
+    "needs_report": true,
+    "language": "node",
+    "test_framework": "vitest"
+  },
+  "updated": "2026-09-19"
+}
