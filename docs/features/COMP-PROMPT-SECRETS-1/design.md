@@ -67,13 +67,66 @@ key in it passes the budget check and ships.
 5. **Configurable ruleset with a conservative default.** High-confidence provider key shapes
    and obvious credential syntax first. This must not become a general DLP engine.
 
+## Grounding: question 1 is ANSWERED (2026-09-19)
+
+**There is no single choke point. `lib/step-prompt.js` is one of roughly 30 paths, and it does
+not even fully cover the ones it touches.** A read-only call-graph sweep (Codex `gpt-5.6-sol/high`,
+run `8aab975267e0`) inventoried every path by which Compose-assembled bytes reach a provider.
+Three of its load-bearing claims were independently re-verified before acceptance:
+
+1. **The existing prompt budget covers far less than assumed.** `promptBudget` is passed only on
+   consumer review items (`lib/build.js:1923-1928`, gated on `reviewOpts.reviewMode`). Ordinary
+   review steps (`lib/build.js:5350-5372`) pass none. Confirmed by direct read.
+2. **There are three separate direct Claude CLI spawns**, each building its own prompt with no
+   shared helper: `server/agent-spawn.js`, `server/summarizer.js`, `server/vision-utils.js:116`.
+   Confirmed: three independent `child_process.spawn` sites.
+3. **Codex's scrub list omits `OPENAI_API_KEY` by design** (`stratum/ts/src/connectors/codex.ts:66`)
+   — correct, since Codex needs it, but it means the scrub lists are provider-specific and cannot
+   be reasoned about as one policy.
+
+### What this changes
+
+The feature as filed assumed a seam that does not exist. `lib/step-prompt.js` only feeds the
+ordinary step path, and even there the bytes it produces are added to afterwards: JSON schema
+injection happens downstream (`lib/result-normalizer.js:399-418`, `lib/inject-schema.js:11-20`),
+so a scanner placed at prompt assembly misses schema-derived and interpolated content.
+
+Compose is also not the only owner. The final provider-specific bytes for most dispatches are
+assembled in **Stratum**, after Compose has handed off: `stratum/ts/src/connectors/claude.ts:131-137`,
+and for Codex after a sandbox preamble is prepended at `stratum/ts/src/connectors/codex.ts:263-281`.
+Stratum-native fanout appends contract and prior-failure text at `engine.ts:3672-3688`. Two further
+sibling services (Maya, SmartMemory) receive Compose-originated content and dispatch it themselves.
+
+### The hard limit, which must be stated in the feature's own claim
+
+**Tool-result turns cannot be covered from these repositories.** On any agentic path, the SDK or
+CLI transmits later turns itself; Compose and Stratum observe tool events only after the query has
+begun (`stratum/ts/src/connectors/claude.ts:137-173`, `server/agent-hooks.js:45-62`). There is no
+pre-send boundary in our source for those bytes.
+
+So this feature must claim **initial-prompt scanning**, never "every provider-bound byte". Claiming
+the latter would be the exact false-confidence failure the feature was filed to avoid.
+
+### Revised shape: a seam set, not a seam
+
+Compose-owned seams: `lib/result-normalizer.js:399-442` (after schema injection, where the budget
+already runs), `server/agent-workspace.js:201-202` (HTTP-body prompts, which never touch
+`step-prompt.js`), the three CLI argv sites above, the Maya/SmartMemory HTTP bodies, and MCP result
+serialization at `server/compose-mcp.js:207-243`.
+
+Stratum-owned seams: the two connector send points and the direct OpenAI judge
+(`stratum/ts/src/judge/judged.ts:78-89`).
+
+That answers question 4 below as well: **both repos**, with a split by who holds the final bytes.
+It likely wants a shared scanner module with two call sites rather than one feature in one repo,
+and a companion `STRAT-*` row for the Stratum half.
+
+Full inventory in the run stream: `~/.stratum/ts/agent_runs/8aab975267e0/stream.jsonl`.
+
 ## Open questions for the design phase
 
-1. **Where exactly is the choke point?** Is `lib/step-prompt.js` the single seam through which
-   every provider-bound byte passes, or do the fanout, review and routing paths assemble
-   prompts elsewhere? If there is more than one, this must be enforced at the connector
-   boundary instead, or it is a partial control. **Answer this before designing anything else**
-   — a scanner on one of three paths is worse than none, because it manufactures confidence.
+1. ~~Where exactly is the choke point?~~ **ANSWERED above: there isn't one.** Superseded by
+   the seam-set question: which seams ship in v1, and does the Stratum half block the Compose half?
 2. **Redact or refuse?** Redaction keeps the build moving and risks a mangled prompt; refusal is
    safer and noisier. The budget path chose refusal for the unfixable case and silent-with-
    warning degradation for the fixable one. The same split may apply here.
