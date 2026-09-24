@@ -3,7 +3,7 @@
   "captured": true,
   "harness": "test/integration/build-wave-golden.test.js",
   "command": "RESEND_API_KEY= STRIPE_API_KEY= node test/helpers/record-model-route-baselines.mjs",
-  "profileDigest": "247791ff900ad8b6e0bbcba7408591d1a74adbdce1ab9c8833ab6621589cc1cd",
+  "profileDigest": "11b9bebfd94c1db66b033547791272cb0893edc3200fa2dc5ee46ea260ae51cd",
   "events": [
     {
       "kind": "plan",
@@ -85,7 +85,7 @@
       "provider": "codex",
       "prompt": "You are executing step \"execute/2\" in a Stratum workflow.\n\n## Intent\nD3_WORK {\"id\":\"FAST\",\"description\":\"FAST\",\"files_owned\":[\"fast.txt\"],\"files_read\":[],\"depends_on\":[],\"tier\":\"fast\"}\n\n## Inputs\nundefined\n\n## Expected Output\nReturn a JSON object with these fields:\n- outcome (string)\n- summary (string)\n- files_changed (string[]?)\n\n## Context\nWorking directory: /private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-cvw9Ze/artifacts/340e04f1-a86a-4db2-9a16-44db620991ec-f0e6826edfe1/worktrees/10485465422f28081a23065680591466\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"outcome\",\n    \"summary\"\n  ],\n  \"properties\": {\n    \"outcome\": {\n      \"type\": \"string\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"files_changed\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
       "opts": {
-        "modelID": "gpt-5.3-codex-spark",
+        "modelID": "gpt-6-luna",
         "effort": "medium",
         "sandboxMode": "workspace-write",
         "cwd": "/private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-cvw9Ze/artifacts/340e04f1-a86a-4db2-9a16-44db620991ec-f0e6826edfe1/worktrees/10485465422f28081a23065680591466",
@@ -111,8 +111,8 @@
       "provider": "codex",
       "prompt": "You are executing step \"execute/1\" in a Stratum workflow.\n\n## Intent\nD3_WORK {\"id\":\"BROKEN\",\"description\":\"BROKEN\",\"files_owned\":[\"adapter.cjs\"],\"files_read\":[],\"depends_on\":[],\"tier\":\"standard\"}\n\n## Inputs\nundefined\n\n## Expected Output\nReturn a JSON object with these fields:\n- outcome (string)\n- summary (string)\n- files_changed (string[]?)\n\n## Context\nWorking directory: /private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-cvw9Ze/artifacts/340e04f1-a86a-4db2-9a16-44db620991ec-f0e6826edfe1/worktrees/0b6959c078b810933cb98b409070fa1c\nFeature: D3-GOLDEN-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-I1TSf4/docs/bugs/D3-GOLDEN-1\n\n## Prior Steps\n- **plan**: Step complete\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"outcome\",\n    \"summary\"\n  ],\n  \"properties\": {\n    \"outcome\": {\n      \"type\": \"string\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"files_changed\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
       "opts": {
-        "modelID": "gpt-5.6-terra",
-        "effort": "high",
+        "modelID": "gpt-6-sol",
+        "effort": "medium",
         "sandboxMode": "workspace-write",
         "cwd": "/private/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-state-cvw9Ze/artifacts/340e04f1-a86a-4db2-9a16-44db620991ec-f0e6826edfe1/worktrees/0b6959c078b810933cb98b409070fa1c",
         "flow": {
@@ -128,7 +128,7 @@
           "feature_code": "D3-GOLDEN-1",
           "step_id": "execute/1",
           "attempt": 1,
-          "effort_intended": "high"
+          "effort_intended": "medium"
         }
       }
     },

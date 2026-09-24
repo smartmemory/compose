@@ -109,7 +109,7 @@ test('bundled off digest and synthetic Build input keys remain stable without ro
     const frozen = JSON.parse(readFileSync(`test/fixtures/model-route-off-${name}-v0.5.1.json`));
     if (path) {
       const check = preflightPipelineProfiles(JSON.parse(readFileSync(`${path}.profiles.json`)), readFileSync(`${path}.stratum.yaml`, 'utf8'), path, undefined, { mode: 'off' });
-      assert.equal(check.profilesDigest, '310f9698e97212f695ce2ca752d724f90c1f233ab5855dcb33a26bd3ad786205');
+      assert.equal(check.profilesDigest, '0a7792f6228420b553b6852f89b3d3f45a32cbf11e524a271bca49f9f45e5843');
     }
     assert.equal(frozen.captured, true);
   }

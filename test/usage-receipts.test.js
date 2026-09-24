@@ -1125,7 +1125,7 @@ for (const [control, receiptsMode] of [
 for (const streamed of [false, true]) for (const [field, change] of Object.entries({
   cost: r => { r.cost_usd = 99; }, tokens: r => { r.output_tokens += 1; },
   duration: r => { r.duration_ms += 1; }, model: r => { r.model = 'changed-model'; },
-  'embedded effort': r => { r.model = 'gpt-5.4/low'; },
+  'embedded effort': r => { r.model = 'gpt-6-sol/low'; },
   effort: r => { r.effort = 'low'; }, provenance: r => { r.usd_source = 'estimated'; },
   split: r => { r.input_tokens += 1; r.output_tokens -= 1; }, cache: r => { r.cache_read += 1; },
 })) test(`real normalizer forwarding refuses contradictory ${field}, streamed=${streamed}`, async t => {

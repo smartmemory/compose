@@ -113,7 +113,7 @@ test('r1 #2: a fanout stage with no explicit agent still has its sidecar profile
   assert.throws(() => preflightPipelineProfiles({ fan: 'codex:x:coordinator' }, spec, 's'),
     /step "fan": .*coordinator.*not available for provider "codex"/);
   const ok = preflightPipelineProfiles({ fan: 'claude::critical' }, spec);
-  assert.equal(ok.resolved.fan.modelID, 'claude-opus-5');
+  assert.equal(ok.resolved.fan.modelID, 'claude-opus-5-5');
 });
 
 test('r1 #1: a multi-stage fanout whose stages declare different agents fails closed', () => {
@@ -154,7 +154,7 @@ test('object-form sidecars normalize defaults, tier routing, metadata and gate m
     gate: { decide_from: { step: 'plan', field: 'action', approve: ['done'], revise: ['retry'], kill: ['stop'] } } };
   const result = preflightPipelineProfiles(profiles, spec);
   assert.equal(result.normalized.execute.tier_from, 'item.tier');
-  assert.equal(result.resolved.execute.modelID, 'gpt-5.6-terra');
+  assert.equal(result.resolved.execute.modelID, 'gpt-6-sol');
   assert.match(result.profilesDigest, /^[a-f0-9]{64}$/);
   assert.throws(() => preflightPipelineProfiles({ ...profiles, execute: { ...profiles.execute, tier_from: 'item.model' } }, spec), /tier_from/);
   const reserved = structuredClone(spec); reserved.flows.main.steps[2].id = 'review_gate';

@@ -3,7 +3,7 @@
   "captured": true,
   "harness": "test/build-team-fable-astra.test.js",
   "command": "RESEND_API_KEY= STRIPE_API_KEY= node test/helpers/record-model-route-baselines.mjs",
-  "profileDigest": "310f9698e97212f695ce2ca752d724f90c1f233ab5855dcb33a26bd3ad786205",
+  "profileDigest": "0a7792f6228420b553b6852f89b3d3f45a32cbf11e524a271bca49f9f45e5843",
   "events": [
     {
       "kind": "plan",
@@ -88,7 +88,7 @@
       "provider": "claude",
       "prompt": "You are executing step \"verify\" in a Stratum workflow.\n\n## Intent\nVerify the integrated tree for S4-PRESET-1 against the goal and\nacceptance criteria: Implement doubling. Acceptance criteria: core(3) equals 6.\nMUST run the project's relevant tests and integration checks on the merged\ntree, check for merge conflicts, and record exact commands and outcomes.\nMUST capture the full cumulative merged diff: git diff HEAD -- for tracked\nfiles, plus git ls-files --others --exclude-standard and added-file diffs\nusing git diff --no-index -- /dev/null <path> for each new feature file\n(exit 1 means differences). HEAD remains the build base until ship; new\nmerged files can still be untracked. Return VerifyResult with tests_pass,\nsummary, verification {commands, outcomes}, and merged_diff. Describe only\nobserved verification evidence; never copy worker summaries. Do not edit.\nReport failures truthfully so review and assess can request a repair wave.\n\n\n## Previous Attempt Failed (attempt 0)\nYour previous attempt was rejected. Fix the cause before finishing:\ngate approve\n\n## Inputs\nundefined\n\n## Expected Output\nReturn a JSON object with these fields:\n- tests_pass (boolean)\n- summary (string)\n- verification (Verification)\n- merged_diff (string)\n\n## Context\nWorking directory: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-S6fo22\nFeature: S4-PRESET-1\nFeature docs: /var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-S6fo22/docs/features/S4-PRESET-1\n\n## Prior Steps\n- **plan**: Step complete\n- **execute_merge**: Gate skip: phase 'execute_merge' policy is 'skip'\n\n## Files Changed by This Feature\n- core.cjs\n\nIMPORTANT: After completing the task, include a JSON code block at the very end of your response matching this schema:\n```json\n{\n  \"type\": \"object\",\n  \"required\": [\n    \"tests_pass\",\n    \"summary\",\n    \"verification\",\n    \"merged_diff\"\n  ],\n  \"properties\": {\n    \"tests_pass\": {\n      \"type\": \"boolean\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"verification\": {},\n    \"merged_diff\": {\n      \"type\": \"string\"\n    }\n  }\n}\n```\nThe JSON block must be the last thing in your response.",
       "opts": {
-        "modelID": "claude-sonnet-5",
+        "modelID": "claude-opus-5-5",
         "allowedTools": [
           "Read",
           "Grep",
@@ -103,7 +103,7 @@
         "thinking": {
           "type": "adaptive"
         },
-        "effort": "high",
+        "effort": "medium",
         "cwd": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/compose-fakecodex-ws-S6fo22",
         "flow": {
           "runId": "0c7cfdf1-82e8-4e67-8c8a-c80814af9426",
@@ -117,7 +117,7 @@
           "feature_code": "S4-PRESET-1",
           "step_id": "verify",
           "attempt": 1,
-          "effort_intended": "high"
+          "effort_intended": "medium"
         }
       }
     },

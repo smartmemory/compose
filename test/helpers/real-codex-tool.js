@@ -7,7 +7,7 @@ export function realCodexTool({ streamed = true, onResult, onCall, sdkEvents } =
     onCall?.(args);
     let seq = 0;
     const producer = new CodexConnector({
-      model: args.model ?? 'gpt-5.4', effort: args.effort ?? 'high', transport: 'sdk', env: {},
+      model: args.model ?? 'gpt-6-sol', effort: args.effort ?? 'high', transport: 'sdk', env: {},
       sdkFactory: () => ({ startThread: () => ({ runStreamed: async () => ({
         events: (async function* () {
           if (sdkEvents) { yield* sdkEvents(args); return; }

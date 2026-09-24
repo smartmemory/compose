@@ -38,11 +38,11 @@ test('runtime default replacement preserves tier_from and enforces stage provide
   assert.throws(() => preflightPipelineProfiles({ execute: entry }, spec, { execute: 'claude:implementer:fast' }));
 });
 test('item routing fixes provider/template, resolves exact models and effort, default when absent', () => {
-  const models = ['gpt-6-astra', 'gpt-5.6-terra', 'gpt-5.3-codex-spark'];
+  const models = ['gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna'];
   ['critical', 'standard', 'fast'].forEach((tier, i) => {
     const result = resolveConsumerProfile(entry, { tier, provider: 'claude', template: 'orchestrator' }, 'codex');
     assert.equal(result.modelID, models[i]); assert.equal(result.template, 'implementer');
-    assert.equal(result.effort, tier === 'fast' ? 'medium' : 'high');
+    assert.equal(result.effort, tier === 'critical' ? 'high' : 'medium');
   });
   assert.equal(resolveConsumerProfile(entry, {}, 'codex').tier, 'critical');
   assert.equal(resolveConsumerProfile('claude:orchestrator', {}).modelID, null);
@@ -100,7 +100,7 @@ test('off projection pins bundled 0.5.1 digest and preserves legacy object repre
   const { route: planRoute, ...planRest } = rest.plan;
   const { route: executeRoute, ...executeRest } = rest.execute;
   const raw = { ...rest, plan: Object.keys(planRest).length === 1 ? planRest.default : planRest, execute: executeRest };
-  const expected = '310f9698e97212f695ce2ca752d724f90c1f233ab5855dcb33a26bd3ad786205';
+  const expected = '0a7792f6228420b553b6852f89b3d3f45a32cbf11e524a271bca49f9f45e5843';
   assert.equal(preflightPipelineProfiles(raw, yaml).profilesDigest, expected);
   const result = preflightPipelineProfiles(wrapped, yaml, {}, { mode: 'off' });
   assert.equal(result.profilesDigest, expected); assert.deepEqual(result.normalized, raw);
