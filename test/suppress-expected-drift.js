@@ -1,3 +1,13 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+// Always replace inherited state roots (even a shell pointing at the real store).
+// Each Node test worker owns its directory; only that process removes it.
+const testStateRoot = mkdtempSync(join(tmpdir(), 'compose-test-flows-'));
+process.env.STRATUM_STATE_ROOT = testStateRoot;
+process.once('exit', () => rmSync(testStateRoot, { recursive: true, force: true }));
+
 // Shared test preload: silence the ONE expected stderr line that many tests trip
 // on purpose. Loaded by both suites — the node --test runner (via `--import` in
 // the package.json `test` script) and the vitest tracker config (via setupFiles).

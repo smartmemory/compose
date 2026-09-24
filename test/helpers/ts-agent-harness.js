@@ -7,6 +7,10 @@
  * It dispatches test events through StratumMcpClient's TS onEvent pathway.
  */
 
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { StratumMcpClient } from '../../lib/stratum-mcp-client.js';
 import { resolveStratumMcpConnection } from '../../lib/stratum-engine.js';
 
@@ -201,18 +205,30 @@ export function installAgentHarness(stratum, factory, defaultCwd) {
   };
 }
 
+/** Each invocation owns its MCP store, including callers without a fake agent. */
+async function runWithIsolatedStratum(run, featureCode, options) {
+  const { connectorFactory, ...runtimeOptions } = options;
+  const stateRoot = mkdtempSync(join(tmpdir(), 'compose-harness-flows-'));
+  const stratum = new StratumMcpClient();
+  try {
+    await stratum.connect({
+      ...resolveStratumMcpConnection(runtimeOptions.cwd),
+      env: { ...process.env, STRATUM_STATE_ROOT: stateRoot },
+    });
+    if (connectorFactory) installAgentHarness(stratum, connectorFactory, runtimeOptions.cwd);
+    return await run(featureCode, { ...runtimeOptions, stratum });
+  } finally {
+    try {
+      await stratum.close();
+    } finally {
+      rmSync(stateRoot, { recursive: true, force: true });
+    }
+  }
+}
+
 /** Run build code with a live TS engine and a test-only agent implementation. */
 export async function runBuildWithAgentFactory(runBuild, featureCode, options) {
-  const { connectorFactory, ...runtimeOptions } = options;
-  if (!connectorFactory) return runBuild(featureCode, runtimeOptions);
-  const stratum = new StratumMcpClient();
-  await stratum.connect(resolveStratumMcpConnection(runtimeOptions.cwd));
-  installAgentHarness(stratum, connectorFactory, runtimeOptions.cwd);
-  try {
-    return await runBuild(featureCode, { ...runtimeOptions, stratum });
-  } finally {
-    await stratum.close();
-  }
+  return runWithIsolatedStratum(runBuild, featureCode, options);
 }
 
 /**
@@ -229,17 +245,8 @@ export async function runBuildWithAgentFactory(runBuild, featureCode, options) {
  * @param {string}   featureCode
  * @param {object}   options       - runGsd opts, plus `connectorFactory(agentType,{cwd})`.
  *                                    When connectorFactory is omitted, runGsd is
- *                                    invoked as-is (it owns its own client).
+ *                                    invoked with an isolated client and real agents.
  */
 export async function runGsdWithAgentFactory(runGsd, featureCode, options) {
-  const { connectorFactory, ...runtimeOptions } = options;
-  if (!connectorFactory) return runGsd(featureCode, runtimeOptions);
-  const stratum = new StratumMcpClient();
-  await stratum.connect(resolveStratumMcpConnection(runtimeOptions.cwd));
-  installAgentHarness(stratum, connectorFactory, runtimeOptions.cwd);
-  try {
-    return await runGsd(featureCode, { ...runtimeOptions, stratum });
-  } finally {
-    await stratum.close();
-  }
+  return runWithIsolatedStratum(runGsd, featureCode, options);
 }
