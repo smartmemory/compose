@@ -5,7 +5,7 @@
  * Tiers let pipeline specs declare intent (critical / standard / fast / budget / coordinator)
  * without hard-coding model strings — the map here is the single source of truth,
  * including the agent-string tier allow-list. Coordinator lets one preset role
- * explicitly name Fable while critical stays Opus 5; other presets do not move
+ * explicitly name Fable while critical stays Opus 5.5; other presets do not move
  * silently to Fable.
  *
  * Tier names describe INTENT, never a model. `budget` is the Codex-only mirror of
@@ -26,22 +26,20 @@
  * @type {Record<string, string|null>}
  */
 export const MODEL_TIERS = {
-  critical: 'claude-opus-5',
-  standard: 'claude-sonnet-5',
+  critical: 'claude-opus-5-5',
+  standard: 'claude-opus-5-5',
   fast: 'claude-haiku-4-5-20251001',
-  // Codex-only tier: no Claude model is priced near gpt-5.6-luna (0.2/1.2).
+  // Codex-only tier: fast and budget currently resolve to the same gpt-6-luna model
+  // (0.10/0.50 per MTok in stratum's ts/src/judge/pricing.ts); the tier names remain distinct.
   budget: null,
   coordinator: 'claude-fable-5-1',
 };
 
 export const CODEX_MODEL_TIERS = {
   critical: 'gpt-6-astra',
-  standard: 'gpt-5.6-terra',
-  fast: 'gpt-5.3-codex-spark',
-  // ~10x cheaper than terra on both axes. Distinct from `fast`: spark draws a SEPARATE
-  // upstream quota (effectively free capacity), so fast stays spark and budget is the
-  // cheapest tier that bills against the main pool.
-  budget: 'gpt-5.6-luna',
+  standard: 'gpt-6-sol',
+  fast: 'gpt-6-luna',
+  budget: 'gpt-6-luna',
   coordinator: null,
 };
 
@@ -50,7 +48,7 @@ export const CODEX_MODEL_TIERS = {
 // reasoning-quality choice. Fast runs the cheap model at routine effort.
 const CODEX_TIER_THINKING = {
   critical: { mode: null, effort: 'high' },
-  standard: { mode: null, effort: 'high' },
+  standard: { mode: null, effort: 'medium' },
   fast: { mode: null, effort: 'medium' },
   // Same convention as fast: the tier picks a cheap MODEL, it does not floor reasoning.
   budget: { mode: null, effort: 'medium' },
@@ -59,7 +57,7 @@ const CODEX_TIER_THINKING = {
 
 /**
  * Default thinking config per tier.
- * - Opus 5 / Sonnet 5 support adaptive thinking and the effort parameter.
+ * - Opus 5.5 supports adaptive thinking and the effort parameter.
  * - Fable 5.1 thinking is always on; adaptive thinking uses effort to control depth.
  * - Haiku 4.5 doesn't accept the effort parameter (400 error), so fast tier stays off.
  *
@@ -67,7 +65,7 @@ const CODEX_TIER_THINKING = {
  */
 export const TIER_THINKING = {
   critical: { mode: 'adaptive', effort: 'xhigh' },
-  standard: { mode: 'adaptive', effort: 'high' },
+  standard: { mode: 'adaptive', effort: 'medium' },
   fast:     { mode: 'off',      effort: null   },
   budget:   null,
   coordinator: { mode: 'adaptive', effort: 'high' },

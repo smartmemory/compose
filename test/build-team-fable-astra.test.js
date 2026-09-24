@@ -40,7 +40,7 @@ test('fable-astra: real Stratum validator, CLI rewrite, bundled resolution and s
   assert.deepEqual(Object.entries(profiles).filter(([, p]) => p?.route?.learn).map(([id]) => id), ['plan', 'execute']);
   assert.equal(preflight.resolved.plan.modelID, 'claude-fable-5-1');
   assert.equal(preflight.resolved.assess.modelID, 'claude-fable-5-1');
-  assert.equal(preflight.resolved.verify.modelID, 'claude-sonnet-5');
+  assert.equal(preflight.resolved.verify.modelID, 'claude-opus-5-5');
   assert.equal(preflight.resolved.review.modelID, 'gpt-6-astra');
 });
 
@@ -195,7 +195,7 @@ for (const mode of ['default shadow', 'off', 'paid shadow']) test(`fable-astra: 
     assert.match(review.prompt, /module.exports = x => x \* 2/);
     assert.match(review.prompt, /Integrated doubling test passed/);
     assert.deepEqual(inference.filter(c => c.provider === 'claude').map(c => c.opts.modelID),
-      ['claude-fable-5-1', 'claude-sonnet-5', 'claude-fable-5-1']);
+      ['claude-fable-5-1', 'claude-opus-5-5', 'claude-fable-5-1']);
   } finally {
     await client.close();
     if (oldRoot === undefined) delete process.env.STRATUM_STATE_ROOT; else process.env.STRATUM_STATE_ROOT = oldRoot;

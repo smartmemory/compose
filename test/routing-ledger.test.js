@@ -265,7 +265,7 @@ test('start pins unseen item-tier mappings and separate same-named scoped defaul
   const start = createRoutingStart({ ...f.args, spec: authored, preflight });
   assert.equal(start.staticResolutions['main/work'].winner.provider, 'codex');
   assert.equal(start.staticResolutions['other/work'].winner.provider, 'claude');
-  assert.equal(start.mappings['candidate/codex/standard'].modelID, 'gpt-5.6-terra');
+  assert.equal(start.mappings['candidate/codex/standard'].modelID, 'gpt-6-sol');
   assert.equal(start.mappings['candidate/claude/coordinator'].modelID, 'claude-fable-5-1');
 });
 test('requested and run-binding before/after publication faults recover the original intent exactly', t => {

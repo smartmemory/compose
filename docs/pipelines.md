@@ -114,9 +114,10 @@ The tier allow-list comes from `server/model-tiers.js`:
 
 | Tier | Claude | Codex |
 |------|--------|-------|
-| `critical` | `claude-opus-5` | `gpt-6-astra` |
-| `standard` | `claude-sonnet-5` | `gpt-5.6-terra` |
-| `fast` | `claude-haiku-4-5-20251001` | `gpt-5.3-codex-spark` |
+| `critical` | `claude-opus-5-5` | `gpt-6-astra` |
+| `standard` | `claude-opus-5-5` | `gpt-6-sol` |
+| `fast` | `claude-haiku-4-5-20251001` | `gpt-6-luna` |
+| `budget` | unavailable (validation error) | `gpt-6-luna` |
 | `coordinator` | `claude-fable-5-1` | unavailable (validation error) |
 
 For example, `claude:orchestrator:coordinator` explicitly selects Fable with

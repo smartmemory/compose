@@ -23,11 +23,11 @@ const STRATUM_PRICING = '@smartmemory/stratum/dist/judge/pricing.js';
 
 describe('resolveTierModel', () => {
   test('critical resolves to Opus', () => {
-    assert.strictEqual(resolveTierModel('critical'), 'claude-opus-5');
+    assert.strictEqual(resolveTierModel('critical'), 'claude-opus-5-5');
   });
 
-  test('standard resolves to Sonnet', () => {
-    assert.strictEqual(resolveTierModel('standard'), 'claude-sonnet-5');
+  test('standard resolves to Opus', () => {
+    assert.strictEqual(resolveTierModel('standard'), 'claude-opus-5-5');
   });
 
   test('fast resolves to Haiku', () => {
@@ -69,8 +69,8 @@ describe('resolveTierThinking', () => {
   test('critical → adaptive + xhigh', () => {
     assert.deepStrictEqual(resolveTierThinking('critical'), { mode: 'adaptive', effort: 'xhigh' });
   });
-  test('standard → adaptive + high', () => {
-    assert.deepStrictEqual(resolveTierThinking('standard'), { mode: 'adaptive', effort: 'high' });
+  test('standard → adaptive + medium', () => {
+    assert.deepStrictEqual(resolveTierThinking('standard'), { mode: 'adaptive', effort: 'medium' });
   });
   test('fast → off + null (Haiku does not accept effort)', () => {
     assert.deepStrictEqual(resolveTierThinking('fast'), { mode: 'off', effort: null });
@@ -79,7 +79,7 @@ describe('resolveTierThinking', () => {
   // picks the cheap model, it does not drop reasoning to the floor.
   test('codex tiers run high effort, and fast runs medium — never low', () => {
     assert.deepStrictEqual(resolveTierThinking('critical', 'codex'), { mode: null, effort: 'high' });
-    assert.deepStrictEqual(resolveTierThinking('standard', 'codex'), { mode: null, effort: 'high' });
+    assert.deepStrictEqual(resolveTierThinking('standard', 'codex'), { mode: null, effort: 'medium' });
     assert.deepStrictEqual(resolveTierThinking('fast', 'codex'), { mode: null, effort: 'medium' });
   });
   test('unknown tier returns null', () => {
@@ -164,7 +164,7 @@ describe('resolveAgentConfig — modelID', () => {
   test('"claude::critical" returns Opus modelID', () => {
     const cfg = resolveAgentConfig('claude::critical');
     assert.strictEqual(cfg.tier, 'critical');
-    assert.strictEqual(cfg.modelID, 'claude-opus-5');
+    assert.strictEqual(cfg.modelID, 'claude-opus-5-5');
   });
 
   test('"claude" → modelID=null (no tier, uses connector default)', () => {
@@ -184,7 +184,7 @@ describe('resolveAgentConfig — modelID', () => {
     assert.strictEqual(cfg.provider, 'claude');
     assert.strictEqual(cfg.template, 'read-only-reviewer');
     assert.strictEqual(cfg.tier, 'critical');
-    assert.strictEqual(cfg.modelID, 'claude-opus-5');
+    assert.strictEqual(cfg.modelID, 'claude-opus-5-5');
     assert.deepStrictEqual(cfg.allowedTools, ['Read', 'Grep', 'Glob', 'Agent']);
     assert.deepStrictEqual(cfg.disallowedTools, ['Edit', 'Write', 'Bash']);
   });
@@ -222,8 +222,8 @@ test('coordinator routes only Claude to Fable with adaptive high thinking', () =
 
 test('existing Codex model routes are unchanged', () => {
   assert.equal(resolveTierModel('critical', 'codex'), 'gpt-6-astra');
-  assert.equal(resolveTierModel('standard', 'codex'), 'gpt-5.6-terra');
-  assert.equal(resolveTierModel('fast', 'codex'), 'gpt-5.3-codex-spark');
+  assert.equal(resolveTierModel('standard', 'codex'), 'gpt-6-sol');
+  assert.equal(resolveTierModel('fast', 'codex'), 'gpt-6-luna');
 });
 
 
@@ -232,12 +232,12 @@ test('existing Codex model routes are unchanged', () => {
 // ---------------------------------------------------------------------------
 
 test('budget routes only Codex, to luna, at medium effort', () => {
-  assert.equal(resolveTierModel('budget', 'codex'), 'gpt-5.6-luna');
+  assert.equal(resolveTierModel('budget', 'codex'), 'gpt-6-luna');
   assert.equal(resolveTierModel('budget', 'claude'), null);
   assert.deepEqual(resolveTierThinking('budget', 'codex'), { mode: null, effort: 'medium' });
   assert.equal(resolveTierThinking('budget', 'claude'), null);
   const config = resolveAgentConfig('codex:reviewer:budget');
-  assert.equal(config.modelID, 'gpt-5.6-luna');
+  assert.equal(config.modelID, 'gpt-6-luna');
   assert.equal(config.effort, 'medium');
 });
 
