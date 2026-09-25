@@ -21,7 +21,7 @@ test('compose-mcp package.json: identity, version, license', () => {
   // just breaks on every bump — which is what it did at 0.4.0, and what the
   // '^0.1.5-beta' literal below it did silently for nine releases.
   assert.match(wrapperPkg.version, /^\d+\.\d+\.\d+/);
-  assert.equal(wrapperPkg.license, 'MIT');
+  assert.equal(wrapperPkg.license, 'PolyForm-Noncommercial-1.0.0');
   assert.equal(wrapperPkg.type, 'module');
   assert.equal(wrapperPkg.engines.node, '>=18.0.0');
 });
@@ -71,9 +71,9 @@ test('compose-mcp server.json: description fits the registry limit', () => {
   );
 });
 
-test('compose-mcp LICENSE: present and starts with MIT License', () => {
+test('compose-mcp LICENSE: present and carries the PolyForm Noncommercial terms', () => {
   const license = readFileSync(join(wrapperRoot, 'LICENSE'), 'utf8');
-  assert.match(license, /^MIT License/);
+  assert.match(license, /^# PolyForm Noncommercial License 1\.0\.0$/m);
   // Byte-identical to root LICENSE
   const rootLicense = readFileSync(join(composeRoot, 'LICENSE'), 'utf8');
   assert.equal(license, rootLicense);

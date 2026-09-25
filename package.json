@@ -3,7 +3,7 @@
   "version": "0.6.3",
   "description": "Structured AI dev pipeline: your agent writes the code, Compose makes it prove it. Gated design decisions, enforced postconditions, and independent review from goal to shipped code.",
   "author": "SmartMemory",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "bin": {
     "compose": "./bin/compose.js"
@@ -69,7 +69,8 @@
     "scripts/**",
     "skills/**",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.0",

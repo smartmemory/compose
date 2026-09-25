@@ -335,3 +335,9 @@ Topic-scoped reference:
 - [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/taxonomy.md](docs/taxonomy.md)
 - [docs/compose-one-pager.md](docs/compose-one-pager.md)
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE). Free for personal and other noncommercial use. Commercial use, including use inside a business, requires a commercial license: help@smartmemory.ai
+
+Versions released before 2026-09-25 were distributed under the MIT License and remain available under those terms. See [NOTICE](NOTICE).

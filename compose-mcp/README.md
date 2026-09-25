@@ -47,4 +47,4 @@ Discovery: published as `io.github.smartmemory/compose-mcp` on the [official MCP
 
 ## License
 
-MIT — same as the compose root.
+PolyForm Noncommercial 1.0.0, same as the compose root. Free for personal and other noncommercial use. Commercial use requires a license: help@smartmemory.ai
