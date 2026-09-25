@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **compose 0.6.5 / compose-mcp 0.6.5: fixes 0.6.4's `ROUTING_SCHEMA_INVALID`.** 0.6.4 rejected every routing outcome whose executed tier carried the new `status` field (entry below). Requires `@smartmemory/stratum` `^0.6.3` (unchanged).
+
 - **Fix routing outcome schema regression from `a9d4695`, shipped in 0.6.4.** Accept optional `executedTier.status` (`known` or `unknown`), matching the routing record schema while preserving compatibility with older records that omit it.
 
 - **compose 0.6.4 / compose-mcp 0.6.4: Business Source License 1.1, requires `@smartmemory/stratum` `^0.6.3`** (was `^0.6.1`). First release under BUSL-1.1 (entry below), licensed by Regression Analytics LLC. Stratum 0.6.3 is the first stratum release naming the same Licensor.
