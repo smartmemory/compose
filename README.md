@@ -338,6 +338,6 @@ Topic-scoped reference:
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE). Free for personal and other noncommercial use. Commercial use, including use inside a business, requires a commercial license: help@smartmemory.ai
+[Business Source License 1.1](LICENSE), licensed by Regression Analytics LLC. Free for non-production use by anyone, and for production use by organizations whose total annual revenue (with affiliates) was USD 250,000 or less in their last fiscal year. Larger organizations need a commercial license: help@smartmemory.ai. Each version converts to Apache 2.0 four years after its release.
 
 Versions released before 2026-09-25 were distributed under the MIT License and remain available under those terms. See [NOTICE](NOTICE).

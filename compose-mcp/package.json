@@ -1,6 +1,6 @@
 {
   "name": "@smartmemory/compose-mcp",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "mcpName": "ai.smartmemory/compose-mcp",
   "description": "MCP stdio server for @smartmemory/compose: typed feature management tools (roadmap, changelog, artifact linking, and more). Requires a compose-initialized project.",
   "type": "module",
@@ -8,7 +8,7 @@
     "compose-mcp": "./bin/compose-mcp.js"
   },
   "dependencies": {
-    "@smartmemory/compose": "^0.6.3"
+    "@smartmemory/compose": "^0.6.4"
   },
   "files": [
     "bin/**",
@@ -18,7 +18,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "BUSL-1.1",
   "engines": {
     "node": ">=18.0.0"
   },
