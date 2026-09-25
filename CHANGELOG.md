@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **License: MIT → PolyForm Noncommercial 1.0.0 (compose, compose-mcp, vendored stratum-mcp kernel).** Free for personal and other noncommercial use. Commercial use, including use inside a business, needs a commercial license from SmartMemory (help@smartmemory.ai). `LICENSE` carries the official PolyForm text under a `Required Notice:` copyright line, `package.json` / `pyproject.toml` use SPDX `PolyForm-Noncommercial-1.0.0`, and the new `NOTICE` (shipped in the npm tarball) keeps the prior MIT notice for code contributed under it. Releases before this change stay MIT. `test/compose-mcp-package.test.js` now asserts the new license id and text.
+
 - **Routing ledger labels executed-tier knowledge explicitly.** Every observed call recorded `executedTier: null` because the only dispatches seen (24, all Claude via stratum MCP) carry no reported effort — stratum's Claude connector does not echo it (fixed in stratum separately). Compose already propagated supplied telemetry; it now records `executedTier.status: "known" | "unknown"` so an unknown execution is never mistaken for, or filled from, the selected tier. Schema change is backward compatible (`status` optional).
 
 - **Isolate Stratum test flow stores.** Build/GSD harness calls now pass a fresh temporary `STRATUM_STATE_ROOT` to each MCP child and clean it up after closing. The shared test preload also overrides inherited state roots with a process-owned temporary store. A hermetic GSD golden regression checks that the inherited decoy root remains unchanged and no `.stratum` directory appears in a fresh decoy home, without reading the production store. Production code is unchanged.
