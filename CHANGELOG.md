@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **Fix routing outcome schema regression from `a9d4695`, shipped in 0.6.4.** Accept optional `executedTier.status` (`known` or `unknown`), matching the routing record schema while preserving compatibility with older records that omit it.
+
 - **compose 0.6.4 / compose-mcp 0.6.4: Business Source License 1.1, requires `@smartmemory/stratum` `^0.6.3`** (was `^0.6.1`). First release under BUSL-1.1 (entry below), licensed by Regression Analytics LLC. Stratum 0.6.3 is the first stratum release naming the same Licensor.
 
 - **License: MIT → Business Source License 1.1 (compose, compose-mcp, vendored stratum-mcp kernel), licensed by Regression Analytics LLC** (replaces the unreleased PolyForm Noncommercial 1.0.0 change, matching stratum 0.6.3). Free for non-production use by anyone. Production use is free for organizations whose total revenue, with affiliates, was USD 250,000 or less in their most recently completed fiscal year (Additional Use Grant). Larger organizations need a commercial license (help@smartmemory.ai). Each version converts to Apache 2.0 four years after its first public release (Change Date). `LICENSE`, `compose-mcp/LICENSE` and `stratum-mcp/LICENSE` carry the verbatim BUSL-1.1 terms (SPDX text) under the parameter block. `package.json`, `compose-mcp/package.json` and `stratum-mcp/pyproject.toml` use SPDX `BUSL-1.1`. `NOTICE` (shipped in the npm tarball) keeps the prior MIT notice for code contributed under it. Releases before 2026-09-25 stay MIT. `test/compose-mcp-package.test.js` asserts the new license id and text.
