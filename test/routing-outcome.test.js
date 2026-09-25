@@ -1,11 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveRoutingOutcome, deriveRoutingContext, routingIssuanceState, materializeRoutingLedger, routingEligible } from '../lib/routing-ledger.js';
+import { deriveRoutingOutcome, deriveRoutingContext, routingIssuanceState, materializeRoutingLedger, routingEligible, validateRoutingOutcome } from '../lib/routing-ledger.js';
 import { routingEvent } from '../lib/build.js';
 import { routingDigest } from '../lib/model-router.js';
 import { fixture, beginCall, finishCall, acknowledgeAll, gateEvidence, linkRepair, evidenceRecord } from './helpers/routing-s1b-fixture.js';
 
 function completed(f, epoch = 0) { const i = f.issue({ epoch }); f.launch(i); const c = beginCall(f, i); finishCall(f, c); f.settle(i); return { i, c }; }
+
+for (const status of ['known', 'unknown', undefined, 'invalid']) {
+  test(`outcome schema executedTier.status: ${status ?? 'legacy omission'}`, t => {
+    const f = fixture(t); const { i } = completed(f);
+    const { snapshot } = gateEvidence(f, [i]);
+    const record = structuredClone(snapshot);
+    const tier = record.ordinaryIssuances[0].executedTier;
+    tier.value = status === 'known' ? 'standard' : null;
+    if (status !== undefined) tier.status = status;
+    if (status === 'invalid') {
+      assert.throws(() => validateRoutingOutcome(record), { code: 'ROUTING_SCHEMA_INVALID' });
+    } else {
+      assert.doesNotThrow(() => validateRoutingOutcome(record));
+    }
+  });
+}
+
 function failure(f, i, patch = {}) {
   const envelope = { dispatchToken: i.issuanceToken, output: null, failure: { message: 'provider failed' } };
   routingEvent(f.context, i, 'result-prepared', { envelope });

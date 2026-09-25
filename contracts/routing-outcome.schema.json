@@ -312,6 +312,13 @@
                             "type": "string",
                             "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
                           }
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "known",
+                            "unknown"
+                          ]
                         }
                       }
                     },
@@ -496,6 +503,13 @@
                       "type": "string",
                       "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
                     }
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "known",
+                      "unknown"
+                    ]
                   }
                 }
               },
@@ -1271,6 +1285,13 @@
             "type": "string",
             "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
           }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "known",
+            "unknown"
+          ]
         }
       }
     },
@@ -1432,6 +1453,13 @@
                 "type": "string",
                 "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$"
               }
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "known",
+                "unknown"
+              ]
             }
           }
         },
