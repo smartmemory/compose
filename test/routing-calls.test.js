@@ -242,3 +242,37 @@ for (const producer of ['normalizer', 'runAgentText']) test(`${producer} fallbac
   assert.equal(row.calls.length, 1); assert.equal(row.cost.usd, 0.3);
   assert.equal(row.calls[0].intent.callId, connectorId);
 });
+
+// Fake only the remote agent response; agentRun, decoding, routing observation,
+// receipt persistence and ledger materialization are the production path.
+for (const provider of ['codex', 'claude']) {
+  for (const reporting of ['complete', 'model-only', 'absent']) {
+    test(`MCP ${provider} ${reporting} telemetry determines executed tier independently of intent`, async t => {
+      const f = fixture(t); const issuance = f.issue(); f.launch(issuance);
+      const selected = f.start.mappings[`candidate/${provider}/standard`];
+      const executed = f.start.mappings[`candidate/${provider}/critical`];
+      const telemetry = reporting === 'absent' ? undefined : {
+        model: executed.modelID, durationMs: 50,
+        ...(reporting === 'complete' ? { effort: executed.effort } : {}),
+      };
+      const client = connector(f, args => {
+        assert.equal(args.model, selected.modelID);
+        assert.equal(args.effort, selected.effort);
+        return { text: 'done', usage: { tokens: 20, ms: 50, usd: 3 }, usdSource: 'reported', telemetry };
+      });
+      await client.agentRun(provider, 'work', { modelID: selected.modelID, effort: selected.effort,
+        routingCalls: callsForRouting(f.context, issuance) });
+      const row = materializeRoutingLedger({ cwd: f.cwd, artifacts: f.reopen() }).find(r => r.recordId === issuance.id);
+      const call = row.calls[0];
+      assert.equal(row.issuance.selected.resolution.tier, 'standard');
+      assert.equal(call.intent.profileIntent.model, selected.modelID);
+      assert.equal(call.intent.profileIntent.effort, selected.effort);
+      assert.equal(call.resolution.reportedModel, telemetry?.model ?? null);
+      assert.equal(call.resolution.reportedEffort, telemetry?.effort ?? null);
+      assert.equal(call.executedTier.value, reporting === 'complete' ? 'critical' : null);
+      assert.equal(call.executedTier.status, reporting === 'complete' ? 'known' : 'unknown');
+      assert.equal(call.executedTier.source, reporting === 'complete'
+        ? 'reported-primary-pinned-mapping' : 'missing-reported-execution');
+    });
+  }
+}
