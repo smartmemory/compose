@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **Routing ledger labels executed-tier knowledge explicitly.** Every observed call recorded `executedTier: null` because the only dispatches seen (24, all Claude via stratum MCP) carry no reported effort — stratum's Claude connector does not echo it (fixed in stratum separately). Compose already propagated supplied telemetry; it now records `executedTier.status: "known" | "unknown"` so an unknown execution is never mistaken for, or filled from, the selected tier. Schema change is backward compatible (`status` optional).
+
 - **Isolate Stratum test flow stores.** Build/GSD harness calls now pass a fresh temporary `STRATUM_STATE_ROOT` to each MCP child and clean it up after closing. The shared test preload also overrides inherited state roots with a process-owned temporary store. A hermetic GSD golden regression checks that the inherited decoy root remains unchanged and no `.stratum` directory appears in a fresh decoy home, without reading the production store. Production code is unchanged.
 
 - **compose 0.6.3 / compose-mcp 0.6.3: requires `@smartmemory/stratum` `^0.6.1`** (was `^0.6.0`). The model tiers above select `gpt-6-sol` and `gpt-6-luna`, which stratum first prices and validates in 0.6.1; 0.6.0 has neither in `MODEL_PRICING`.
