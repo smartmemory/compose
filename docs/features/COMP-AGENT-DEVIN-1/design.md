@@ -1,6 +1,6 @@
 # COMP-AGENT-DEVIN-1: Compose accepts Devin as an agent — Design
 
-**Status:** DESIGN r2 (Codex design review r1: 1H 6M 1L, all upheld and folded in) · **Date:** 2026-09-26 · **Scope:** narrow v1 (owner, 2026-09-26)
+**Status:** DESIGN r3 — gate passed (Codex design review r1: 1H 6M 1L, all upheld and folded in; r2: 1L, fixed) · **Date:** 2026-09-26 · **Scope:** narrow v1 (owner, 2026-09-26)
 
 ## Related Documents
 
@@ -181,7 +181,8 @@ as for Claude.
 (`lib/gsd.js:673`) passes only the agent string, cwd and telemetry — no sidecar profile, model, effort
 or sandbox (the MCP client strips the string to its provider, `lib/stratum-mcp-client.js:185-196`) —
 and copies only `usage.usd_source`, dropping the top-level `usdSource` stratum returns
-(`lib/gsd.js:698-710`). A Devin step there would run the default model, read-only, and lose its
+(`lib/gsd.js:698-710`). A Devin step there would run the default model, in whatever sandbox mode stratum's
+config selects (not the one the step needs — see D3), and lose its
 cost provenance. The profile gap is pre-existing for every provider; the provenance gap bites only a
 producer that reports provenance at the top level, which Devin does. v1 therefore refuses a Devin
 **ordinary** GSD step before dispatch with a named error (`devin is not supported for GSD direct
