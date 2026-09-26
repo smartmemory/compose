@@ -55,12 +55,53 @@ ${gated ? `      - id: review
 
 const INPUTS = { featureCode: 'LEARN-SUM', description: 'x', implementer_agent: 'claude', reviewer_agent: 'claude' };
 
+// D7 Compose row "consumer fan-out item": the step-agnostic lesson (same contract, same
+// root flow) reaches each consumer item's descriptor `do`, which Compose renders as `## Intent`.
+const FANOUT_SPEC = `
+version: 1
+contracts:
+  Batch:
+    items: string[]
+  Result:
+    outcome: "complete|failed|skipped"
+flows:
+  entry: build
+  build:
+    max_rounds: 2
+    input:
+      featureCode: string
+      description: string
+      implementer_agent: string
+      reviewer_agent: string
+    output:
+      from: \${fan.output[0]}
+      contract: Result
+    steps:
+      - id: enumerate
+        do: "enumerate the consumer items"
+        out: Batch
+      - id: fan
+        after: [enumerate]
+        fanout:
+          over: \${enumerate.output.items}
+          dispatch: consumer
+          concurrency: 1
+          isolation: none
+          require: all
+          merge: sequential
+          steps:
+            - do: "item \${item}"
+              out: Result
+`;
+
 const prompts = [];
 function agent(output) {
   return () => ({
     async *run(prompt) {
-      prompts.push(String(prompt));
-      yield { type: 'assistant', content: JSON.stringify(output) };
+      const text = typeof prompt === 'string' ? prompt : JSON.stringify(prompt) ?? String(prompt);
+      prompts.push(text);
+      const answer = text.includes('enumerate the consumer items') ? { items: ['a'] } : output;
+      yield { type: 'assistant', content: JSON.stringify(answer) };
       yield { type: 'system', subtype: 'complete', agent: 'stub' };
     },
     interrupt() {},
@@ -96,10 +137,10 @@ describe('Compose build summary shows lessons awaiting the owner', () => {
     if (value === undefined) delete process.env[key]; else process.env[key] = value;
   };
 
-  async function build(featureCode, { gated = false, output = { outcome: 'complete' }, gateLine } = {}) {
+  async function build(featureCode, { gated = false, output = { outcome: 'complete' }, gateLine, pipeline } = {}) {
     await mkdir(join(workspace, 'docs', 'features', featureCode), { recursive: true });
     await writeFile(join(workspace, 'docs', 'features', featureCode, 'description.md'), `# ${featureCode}\n`);
-    await writeFile(join(workspace, 'pipelines', 'build.stratum.yaml'), spec(gated));
+    await writeFile(join(workspace, 'pipelines', 'build.stratum.yaml'), pipeline ?? spec(gated));
     await writeFile(join(workspace, '.compose', 'data', 'settings.json'), JSON.stringify({ policies: { review: 'gate' } }));
     // runBuild owns (and closes) the client it is given: one fresh connection per build.
     const client = await connected();
@@ -133,6 +174,11 @@ describe('Compose build summary shows lessons awaiting the owner', () => {
   before(async () => {
     workspace = await mkdtemp(join(tmpdir(), 'compose-learn-summary-'));
     stateRoot = await mkdtemp(join(tmpdir(), 'compose-learn-summary-state-'));
+    // REQUIRED: consumer fan-out items run on Compose's local Claude path, which uses the
+    // stub (stratum._localQuery) only under NODE_ENV=test — otherwise it spawns a REAL claude
+    // (result-normalizer.js). Other fixtures set this themselves; so must this one.
+    env('NODE_ENV', 'test');
+    assert.equal(process.env.NODE_ENV, 'test', 'refusing to run: a real agent would be dispatched');
     env('STRATUM_STATE_ROOT', stateRoot);
     env('COMPOSE_PORT', '65534');
     env('STRATUM_CONFIG_FILE', join(stateRoot, 'no-user-config.toml'));
@@ -213,6 +259,23 @@ describe('Compose build summary shows lessons awaiting the owner', () => {
       assert.match(intent, /## Intent[\s\S]*## Lessons from prior runs\n- When `outcome` has a non-null value/, intent);
       assert.match(printed, /Lesson reviews \(1\):\n {2}retire-candidate/);
       assert.doesNotMatch(printed, /Lessons to review/, 'an applied lesson is no longer unreviewed');
+
+      // D7 Compose row "consumer fan-out item".
+      prompts.length = 0;
+      const fan = await build('LEARN-SUM-FANOUT', { pipeline: FANOUT_SPEC });
+      assert.equal(fan.result.status, 'complete');
+      const itemPrompt = prompts.find((prompt) => prompt.includes('item a'))
+        ?? assert.fail(`no item prompt among ${prompts.length}: ${prompts.map((p) => p.slice(0, 160)).join(' | ')}`);
+      assert.match(itemPrompt, /## Intent\nitem a\n\n## Lessons from prior runs\n- When `outcome` has a non-null value/, itemPrompt);
+
+      // D7 Compose row "ambient-free re-render": build.js re-renders review prompts with
+      // contextDir nulled (build.js requiredPrompt); the intent — and so the block — survives.
+      const { buildStepPrompt } = await import('../lib/step-prompt.js');
+      const itemIntent = itemPrompt.match(/## Intent\n([\s\S]*?)(?=\n## (?!Lessons)|$)/)?.[1] ?? '';
+      assert.match(itemIntent, /## Lessons from prior runs/);
+      const reRendered = buildStepPrompt({ step_id: 'fan', intent: itemIntent, inputs: {}, output_fields: {}, ensure: [] },
+        { cwd: workspace, featureCode: 'LEARN-SUM-FANOUT', contextDir: null });
+      assert.ok(reRendered.includes(`## Intent\n${itemIntent}`), reRendered);
     } finally {
       await writeFile(join(workspace, 'stratum.toml'), '[learn]\ninline = true\n');
     }
