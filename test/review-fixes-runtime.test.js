@@ -107,7 +107,10 @@ for (const mode of ['not-found','ack-hang']) {
   test(`${mode}: explicit cancellation settles or diagnoses the original RPC deadline`, {timeout:30000}, async t => {
     const {client, root} = await fixture(t, mode);
     const controller = new AbortController();
-    const running = client.agentRun('codex','p',{cwd:root,signal:controller.signal,cancellationTimeoutMs:40});
+    // The budget must cover a real stdio round trip for the acknowledgement. At 40ms a loaded
+    // machine missed it (7366/7367, pre-push 2026-09-26: "Cancellation acknowledgement did not
+    // settle after 40ms") and production correctly reported the ack phase, not the RPC phase.
+    const running = client.agentRun('codex','p',{cwd:root,signal:controller.signal,cancellationTimeoutMs:2000});
     const outcome = running.catch(error=>error);
     // The original RPC must have REACHED the fixture server before we cancel — this test is
     // about cancelling an IN-FLIGHT call. The poll used to give up after 100*5ms and abort
@@ -123,7 +126,7 @@ for (const mode of ['not-found','ack-hang']) {
     controller.abort();
     const error = await outcome;
     if(mode==='not-found') { assert.equal(error.name,'AbortError'); assert.notEqual(error.code,'CANCELLATION_UNCONFIRMED'); }
-    else { assert.equal(error.code,'CANCELLATION_TEARDOWN_TIMEOUT'); assert.match(error.message,/Original agent RPC.*40ms/); }
+    else { assert.equal(error.code,'CANCELLATION_TEARDOWN_TIMEOUT'); assert.match(error.message,/Original agent RPC.*2000ms/); }
   });
 }
 

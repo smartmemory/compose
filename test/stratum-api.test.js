@@ -34,7 +34,7 @@ function makeApp(clientStubs) {
 function request(app, method, path, body) {
   return new Promise((resolve, reject) => {
     const server = http.createServer(app);
-    server.listen(0, () => {
+    server.listen(0, '127.0.0.1', () => {
       const { port } = server.address();
       const bodyStr = body ? JSON.stringify(body) : undefined;
       const options = {

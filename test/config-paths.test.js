@@ -194,7 +194,7 @@ describe('file-watcher config paths', () => {
       const fw = new FileWatcherServer();
       fw.attach(server, app);
 
-      server.listen(0, () => {
+      server.listen(0, '127.0.0.1', () => {
         const port = server.address().port;
         http.get('http://127.0.0.1:' + port + '/api/files', (res) => {
           let body = '';
@@ -242,7 +242,7 @@ describe('file-watcher config paths', () => {
       const fw = new FileWatcherServer();
       fw.attach(server, app);
 
-      server.listen(0, () => {
+      server.listen(0, '127.0.0.1', () => {
         const port = server.address().port;
         http.get('http://127.0.0.1:' + port + '/api/files', (res) => {
           let body = '';

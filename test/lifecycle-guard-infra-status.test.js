@@ -52,7 +52,7 @@ async function appWithGuardAnswering(transitionResult, { phase = 'explore_design
   const app = express();
   app.use(express.json());
   attachVisionRoutes(app, { store, scheduleBroadcast: () => {}, broadcastMessage: () => {}, projectRoot: tmp, capabilities: { guard: true, guardAuth: false } });
-  const s = await new Promise((res) => { const s = app.listen(0, () => res(s)); servers.push(s); });
+  const s = await new Promise((res) => { const s = app.listen(0, '127.0.0.1', () => res(s)); servers.push(s); });
   return { port: s.address().port, item, store };
 }
 

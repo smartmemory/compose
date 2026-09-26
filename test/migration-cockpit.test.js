@@ -49,7 +49,7 @@ async function setupServer() {
   });
 
   return new Promise((resolve) => {
-    const server = app.listen(0, () => {
+    const server = app.listen(0, '127.0.0.1', () => {
       resolve({ tmpDir, store, item, server, port: server.address().port, broadcasts, decisionEvents });
     });
   });

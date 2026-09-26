@@ -54,7 +54,7 @@ function setup() {
   });
 
   return new Promise((resolve) => {
-    const server = app.listen(0, () => {
+    const server = app.listen(0, '127.0.0.1', () => {
       const port = server.address().port;
       resolve({ tmp, dataDir, projectsRoot, sessionsFile, featureRoot, store, item, server, port, broadcasts });
     });
@@ -238,7 +238,7 @@ function setupTimeline() {
   });
 
   return new Promise((resolve) => {
-    const server = app.listen(0, () => {
+    const server = app.listen(0, '127.0.0.1', () => {
       const port = server.address().port;
       resolve({ tmp, store, server, port, broadcasts });
     });
@@ -387,7 +387,7 @@ function setupStatus() {
   });
 
   return new Promise((resolve) => {
-    const server = app.listen(0, () => {
+    const server = app.listen(0, '127.0.0.1', () => {
       const port = server.address().port;
       resolve({ tmp, store, server, port, broadcasts });
     });
@@ -548,7 +548,7 @@ function setupGatelog() {
   });
 
   return new Promise((resolve) => {
-    const server = app.listen(0, () => {
+    const server = app.listen(0, '127.0.0.1', () => {
       const port = server.address().port;
       resolve({ tmp, dataDir, gateLogPath, store, broadcasts, server, port });
     });
@@ -656,7 +656,7 @@ function setupLoops() {
     projectRoot: tmp,
   });
   return new Promise((resolve) => {
-    const server = app.listen(0, () => {
+    const server = app.listen(0, '127.0.0.1', () => {
       const port = server.address().port;
       resolve({ tmp, dataDir, store, broadcasts, server, port });
     });
@@ -837,7 +837,7 @@ function setupDrift() {
   });
 
   return new Promise((resolve) => {
-    const server = app.listen(0, () => {
+    const server = app.listen(0, '127.0.0.1', () => {
       const port = server.address().port;
       resolve({ tmp, dataDir, store, broadcasts, server, port, featurePath, FC, git });
     });
@@ -1068,7 +1068,7 @@ function setupBudget(settingsContract) {
   });
 
   return new Promise((resolve) => {
-    const server = app.listen(0, () => {
+    const server = app.listen(0, '127.0.0.1', () => {
       const port = server.address().port;
       const composeDir = path.join(tmp, '.compose');
       resolve({ tmp, store, server, port, broadcasts, composeDir });

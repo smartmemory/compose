@@ -79,7 +79,7 @@ function setupServer(projectRoot, settingsContract) {
   });
 
   const server = http.createServer(app);
-  return new Promise(resolve => server.listen(0, () => resolve({ server, store, get lastBroadcast() { return lastBroadcast; } })));
+  return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve({ server, store, get lastBroadcast() { return lastBroadcast; } })));
 }
 
 function post(server, urlPath, body = {}) {

@@ -88,7 +88,7 @@ describe('VisionServer stratum conditional', () => {
       const hasSync = vs._stratumSync != null;
 
       // Test the stub route by making a request
-      const server = app.listen(0, () => {
+      const server = app.listen(0, '127.0.0.1', () => {
         const port = server.address().port;
         http.get('http://127.0.0.1:' + port + '/api/stratum/anything', (res) => {
           let body = '';

@@ -31,7 +31,7 @@ function setupServer() {
   });
 
   return new Promise((resolve) => {
-    const server = app.listen(0, () => {
+    const server = app.listen(0, '127.0.0.1', () => {
       const port = server.address().port;
       resolve({ tmpDir, store, item, server, port, broadcasts });
     });

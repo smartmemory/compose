@@ -43,7 +43,7 @@ function makeApp(capabilities) {
 
 let servers = [];
 function listen(app) {
-  return new Promise((res) => { const s = app.listen(0, () => res(s)); servers.push(s); });
+  return new Promise((res) => { const s = app.listen(0, '127.0.0.1', () => res(s)); servers.push(s); });
 }
 
 const prevToken = process.env.COMPOSE_API_TOKEN;
