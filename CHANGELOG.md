@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **Tests: ephemeral test servers bind `127.0.0.1`, not the wildcard.** 38 `listen(0, …)` sites in 31 test files bound `[::]` and then requested `127.0.0.1`. On macOS another process may bind `127.0.0.1` on that same port and it then receives those requests (reproduced: wildcard bind + foreign `127.0.0.1` bind → request answered by the foreign server; explicit `127.0.0.1` bind → foreign bind refused `EADDRINUSE`). That produced wrong-server answers (`404`, `503 "Proxy key is incorrect"`) and, when the foreign listener never replied, a request with no timeout that held `test/wave-6-integration.test.js` until the 900s file timeout (full suite 2026-09-25). Measured on `wave-6-integration`, 40 runs 12-parallel: 7/40 failing before, 0/40 after. `cli-resolve-workspace` and `loops-cli` now point `COMPOSE_URL` at `127.0.0.1` too. Separately, `test/review-fixes-runtime.test.js:107` gives cancellation 2000ms instead of 40ms: 40ms had to cover a real stdio round trip for the acknowledgement and missed it under load (pre-push 7366/7367). 24/24 parallel runs pass after.
+
 - **compose 0.6.5 / compose-mcp 0.6.5: fixes 0.6.4's `ROUTING_SCHEMA_INVALID`.** 0.6.4 rejected every routing outcome whose executed tier carried the new `status` field (entry below). Requires `@smartmemory/stratum` `^0.6.3` (unchanged).
 
 - **Fix routing outcome schema regression from `a9d4695`, shipped in 0.6.4.** Accept optional `executedTier.status` (`known` or `unknown`), matching the routing record schema while preserving compatibility with older records that omit it.

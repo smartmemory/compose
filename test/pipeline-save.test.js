@@ -77,7 +77,7 @@ before(() => new Promise(res => {
   });
 
   httpServer = createServer(app);
-  httpServer.listen(0, () => {
+  httpServer.listen(0, '127.0.0.1', () => {
     baseUrl = `http://127.0.0.1:${httpServer.address().port}`;
     res();
   });

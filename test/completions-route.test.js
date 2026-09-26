@@ -97,7 +97,7 @@ describe('GET /api/completions (PARITY-5)', () => {
     });
     return new Promise(res => {
       server = http.createServer(app);
-      server.listen(0, () => res());
+      server.listen(0, '127.0.0.1', () => res());
     });
   });
 

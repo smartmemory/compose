@@ -62,7 +62,7 @@ function setupCaptureServer() {
     res.json({ loops: [] });
   });
   return new Promise((resolveSrv) => {
-    const server = app.listen(0, () => {
+    const server = app.listen(0, '127.0.0.1', () => {
       const port = server.address().port;
       resolveSrv({ server, port, captured });
     });
@@ -111,7 +111,7 @@ describe('compose loops CLI — X-Compose-Workspace-Id header (T7)', () => {
       const r = await runLoopsCLI(
         ['list', '--feature', 'WS-CLI'],
         wsDir,
-        { COMPOSE_URL: `http://localhost:${srv.port}` },
+        { COMPOSE_URL: `http://127.0.0.1:${srv.port}` },
       );
       assert.equal(r.status, 0, `CLI failed: ${r.stderr}`);
       assert.ok(srv.captured.length > 0, 'expected server to receive at least one request');
@@ -136,7 +136,7 @@ describe('compose loops CLI — X-Compose-Workspace-Id header (T7)', () => {
         ['list', '--feature', 'WS-CLI'],
         noWsDir,
         {
-          COMPOSE_URL: `http://localhost:${srv.port}`,
+          COMPOSE_URL: `http://127.0.0.1:${srv.port}`,
           // Ensure no inherited COMPOSE_TARGET points at a real workspace.
           COMPOSE_TARGET: '',
         },

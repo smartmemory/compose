@@ -41,7 +41,7 @@ function makeApp(deps) {
 function listen(app) {
   return new Promise((res) => {
     const server = http.createServer(app);
-    server.listen(0, () => res(server));
+    server.listen(0, '127.0.0.1', () => res(server));
   });
 }
 

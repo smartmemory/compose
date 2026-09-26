@@ -56,7 +56,7 @@ function makeProjectRoot(settingsContract) {
 
   return new Promise(resolve => {
     const server = http.createServer(app);
-    server.listen(0, () => resolve({ server, composeDir, projectRoot }));
+    server.listen(0, '127.0.0.1', () => resolve({ server, composeDir, projectRoot }));
   });
 }
 

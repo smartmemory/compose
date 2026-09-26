@@ -75,7 +75,7 @@ before(async () => {
   _testOnly_resetGuardCache();
 
   await new Promise((r) => {
-    const server = app.listen(0, () => r());
+    const server = app.listen(0, '127.0.0.1', () => r());
     ctx = { tmpDir, store, item, server, get port() { return server.address().port; } };
   });
 });

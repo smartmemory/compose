@@ -44,7 +44,7 @@ function setupServer() {
   });
 
   return new Promise((resolve) => {
-    const server = app.listen(0, () => {
+    const server = app.listen(0, '127.0.0.1', () => {
       const port = server.address().port;
       resolve({ tmp, store, server, port });
     });
@@ -131,7 +131,7 @@ describe('compose loops add', () => {
     await httpPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: 'CLI-LOOPS' });
 
     const r = await runCLI(['add', '--feature', 'CLI-LOOPS', '--kind', 'deferred', '--summary', 'verify X'], {
-      COMPOSE_URL: `http://localhost:${ctx.port}`,
+      COMPOSE_URL: `http://127.0.0.1:${ctx.port}`,
     });
     assert.equal(r.status, 0, `CLI failed: ${r.stderr}`);
     assert.ok(r.stdout.includes('Created loop'), `expected "Created loop": ${r.stdout}`);
@@ -143,7 +143,7 @@ describe('compose loops add', () => {
     await httpPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: 'CLI-LOOPS-JSON' });
 
     const r = await runCLI(['add', '--feature', 'CLI-LOOPS-JSON', '--kind', 'blocked', '--summary', 'dep waiting', '--format', 'json'], {
-      COMPOSE_URL: `http://localhost:${ctx.port}`,
+      COMPOSE_URL: `http://127.0.0.1:${ctx.port}`,
     });
     assert.equal(r.status, 0, `CLI failed: ${r.stderr}`);
     let parsed;
@@ -164,7 +164,7 @@ describe('compose loops list', () => {
     await httpPost(ctx.port, `/api/vision/items/${item.id}/loops`, { kind: 'deferred', summary: 'loop one' });
 
     const r = await runCLI(['list', '--feature', 'CLI-LIST'], {
-      COMPOSE_URL: `http://localhost:${ctx.port}`,
+      COMPOSE_URL: `http://127.0.0.1:${ctx.port}`,
     });
     assert.equal(r.status, 0, `CLI failed: ${r.stderr}`);
     assert.ok(r.stdout.includes('loop one') || r.stdout.includes('[open]'), `expected loop in output: ${r.stdout}`);
@@ -176,7 +176,7 @@ describe('compose loops list', () => {
     await httpPost(ctx.port, `/api/vision/items/${item.id}/loops`, { kind: 'open_question', summary: 'should we X?' });
 
     const r = await runCLI(['list', '--feature', 'CLI-LIST-JSON', '--format', 'json'], {
-      COMPOSE_URL: `http://localhost:${ctx.port}`,
+      COMPOSE_URL: `http://127.0.0.1:${ctx.port}`,
     });
     assert.equal(r.status, 0, `CLI stderr: ${r.stderr}`);
     let parsed;
@@ -202,7 +202,7 @@ describe('compose loops list', () => {
     ctx.store.updateLifecycleExt(item.id, 'open_loops', [staleLoop]);
 
     const r = await runCLI(['list', '--feature', 'CLI-STALE'], {
-      COMPOSE_URL: `http://localhost:${ctx.port}`,
+      COMPOSE_URL: `http://127.0.0.1:${ctx.port}`,
     });
     assert.equal(r.status, 0, `CLI stderr: ${r.stderr}`);
     assert.ok(r.stdout.includes('>TTL') || r.stdout.includes('TTL'), `expected >TTL badge: ${r.stdout}`);
@@ -221,7 +221,7 @@ describe('compose loops resolve', () => {
     const loopId = addR.body.loop.id;
 
     const r = await runCLI(['resolve', loopId, '--feature', 'CLI-RESOLVE', '--note', 'dep shipped'], {
-      COMPOSE_URL: `http://localhost:${ctx.port}`,
+      COMPOSE_URL: `http://127.0.0.1:${ctx.port}`,
     });
     assert.equal(r.status, 0, `CLI failed: ${r.stderr}`);
     assert.ok(r.stdout.includes('Resolved loop') || r.stdout.includes(loopId.slice(0, 8)), `expected resolved message: ${r.stdout}`);
