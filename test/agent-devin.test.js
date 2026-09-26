@@ -6,7 +6,7 @@ import { PROVIDERS, validateAgentString, resolveAgentConfig } from '../lib/agent
 import { resolveTierModel, resolveTierThinking } from '../server/model-tiers.js';
 import { runAndNormalize } from '../lib/result-normalizer.js';
 import { resolvePlanSpecValues } from '../lib/stratum-mcp-client.js';
-import { preflightPipelineProfiles } from '../lib/build.js';
+import { preflightPipelineProfiles, resolveRoleCollision } from '../lib/build.js';
 import { routingExecutedTier } from '../lib/routing-ledger.js';
 import { devinBuildFixture } from './agent-devin-golden.live.test.js';
 import { runOneStep } from '../lib/gsd.js';
@@ -67,12 +67,32 @@ for (const tiers of [['fast'], ['fast','budget']]) test(`executed attribution ${
   assert.equal(actual.status, tiers.length === 1 ? 'known' : 'unknown');
   assert.equal(actual.value, tiers.length === 1 ? 'fast' : null);
 });
-test('GSD refuses ordinary Devin before routing issuance or dispatch', async () => {
-  let calls = 0;
-  await assert.rejects(runOneStep({ status: 'ready', runId: 'flow', ready: [{ id: 'work', agent: 'devin', do: 'work' }] }, {
-    stratum: { async agentRun() { calls++; throw new Error('unexpected dispatch'); } }, localSpec: spec('devin'),
-  }), /devin is not supported for GSD direct steps yet \(COMP-AGENT-DEVIN-1\); use a consumer fan-out stage/);
-  assert.equal(calls, 0);
+for (const authoredAgent of ['devin', 'devin::fast', '$.input.implementer_agent']) {
+  test(`GSD refuses ordinary ${authoredAgent} before routing issuance or dispatch`, async () => {
+    const localSpec = { version: 1, flows: { entry: 'main', main: { steps: [{ id: 'work', agent: authoredAgent, do: 'work' }] } } };
+    const resolved = resolvePlanSpecValues(localSpec, { implementer_agent: 'devin::fast' });
+    let calls = 0;
+    await assert.rejects(runOneStep({ status: 'ready', runId: 'flow', ready: [resolved.flows.main.steps[0]] }, {
+      stratum: { async agentRun() { calls++; throw new Error('unexpected dispatch'); } }, localSpec,
+    }), /devin is not supported for GSD direct steps yet \(COMP-AGENT-DEVIN-1\); use a consumer fan-out stage/);
+    assert.equal(calls, 0);
+  });
+}
+
+for (const [provider, fallback] of [['claude', 'codex'], ['codex', 'claude'], ['devin', 'codex']]) {
+  test(`role collision resolves ${provider} to ${fallback} through build role resolver`, () => {
+    assert.deepEqual(resolveRoleCollision(provider, provider, { implementerExplicit: true }), {
+      implementerAgent: provider, reviewerAgent: fallback,
+    });
+  });
+}
+for (const [roles, expected] of [
+  [{ reviewer: 'claude' }, { implementer_agent: 'codex', reviewer_agent: 'claude' }],
+  [{ implementer: 'codex' }, { implementer_agent: 'codex', reviewer_agent: 'claude' }],
+]) test(`build invocation resolves ${JSON.stringify(roles)} collision`, async () => {
+  const { planInputs } = await devinBuildFixture({ roles });
+  assert.equal(planInputs.implementer_agent, expected.implementer_agent);
+  assert.equal(planInputs.reviewer_agent, expected.reviewer_agent);
 });
 
 test('programmatic Devin implementer and consumer build use fake dispatch', async () => {

@@ -11,9 +11,13 @@ import { runBuild, readBuildAccumulator } from '../lib/build.js';
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 import { readFlowSpend } from '../lib/flow-state.js';
 import { readRoutingLedger } from '../lib/routing-ledger.js';
+import { lookupBuildCancel } from '../lib/build-cancel.js';
 import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
 
-export async function devinBuildFixture({ live = false, roles = {}, authoredAgent = 'devin' } = {}) {
+const TRANSIENT_DEVIN_ERROR = 'devin fetched an empty model list (transient devin-service degradation); retry the run';
+
+export async function devinBuildFixture({ live = false, roles = {}, authoredAgent = 'devin', signal = null,
+  agentRun: injectedAgentRun = null, onRoot = null, onDispatch = null } = {}) {
   if (live) assert.equal(process.env.COMPOSE_DEVIN_LIVE, '1');
   process.env.NODE_ENV = 'test';
   assert.equal(process.env.NODE_ENV, 'test');
@@ -24,10 +28,21 @@ export async function devinBuildFixture({ live = false, roles = {}, authoredAgen
   const config = join(homedir(), '.config/devin/config.json');
   const beforeConfig = live && existsSync(config) ? readFileSync(config) : null;
   const previousState = process.env.STRATUM_STATE_ROOT;
+  const previousCodexProbe = process.env.COMPOSE_SKIP_CODEX_PROBE;
   const client = new StratumMcpClient();
   const receipts = [], calls = [], reports = [];
   let flowId, planInputs, accumulated;
+  let closing = null;
+  const abortError = () => signal?.reason ?? new Error('Devin golden fixture aborted');
+  const onAbort = () => {
+    lookupBuildCancel(flowId)?.cancel('devin_golden_timeout');
+    closing ??= client.close();
+  };
+  signal?.addEventListener('abort', onAbort, { once: true });
   try {
+    onRoot?.(root);
+    if (signal?.aborted) throw abortError();
+    if (!live) process.env.COMPOSE_SKIP_CODEX_PROBE = '1';
     for (const dir of [cwd, stateRoot, home, join(cwd, '.compose/data'), join(cwd, 'pipelines')]) mkdirSync(dir, { recursive: true });
     if (live) {
       mkdirSync(join(home, '.local/share/devin'), { recursive: true });
@@ -63,15 +78,33 @@ export async function devinBuildFixture({ live = false, roles = {}, authoredAgen
         split: { input: 10, output: 1 }, telemetry: { model: 'swe-2-medium', effort: 'medium', durationMs: 7 },
       }) }] };
     } };
-    const agentRun = live ? client.agentRun.bind(client) : fakeConnector.agentRun.bind(fakeConnector);
+    const agentRun = injectedAgentRun ?? (live ? client.agentRun.bind(client) : fakeConnector.agentRun.bind(fakeConnector));
     const stratum = new Proxy(client, { get(target, key) {
       if (key === 'close') return async () => {};
       if (key === 'agentRun') return async (agent, prompt, opts) => {
         assert.equal(agent, 'devin');
         assert.equal(opts.modelID, 'swe-2-medium'); assert.equal(opts.effort, 'medium');
         assert.equal(opts.sandboxMode, 'workspace-write'); assert.notEqual(opts.cwd, cwd);
-        calls.push({ agent, opts });
-        return agentRun(agent, prompt, opts);
+        const attempt = { agent, opts, identity: { flow: opts.flow, stepId: opts.telemetry?.step_id,
+          issuanceId: opts.routingCalls?.binding?.issuanceId, recordId: opts.routingCalls?.binding?.recordId } };
+        calls.push(attempt);
+        onDispatch?.();
+        let abortListener;
+        const aborted = signal && new Promise((_resolve, reject) => {
+          abortListener = () => reject(abortError());
+          signal.addEventListener('abort', abortListener, { once: true });
+          if (signal.aborted) abortListener();
+        });
+        try {
+          const result = await (aborted ? Promise.race([agentRun(agent, prompt, opts), aborted]) : agentRun(agent, prompt, opts));
+          attempt.result = result;
+          return result;
+        } catch (error) {
+          attempt.error = { message: error?.message ?? String(error), code: error?.data?.code ?? error?.code };
+          throw error;
+        } finally {
+          if (abortListener) signal.removeEventListener('abort', abortListener);
+        }
       };
       if (key === 'plan') return async (...args) => { planInputs = args[2]; let result; try { result = await target.plan(...args); } catch (error) { throw new Error(JSON.stringify({ input: args[2], data: error.data, message: error.message })); } flowId = result.runId ?? result.flow_id; return result; };
       if (key === 'usageReport') return async (...args) => { receipts.push(args[1]); return target.usageReport(...args); };
@@ -80,9 +113,26 @@ export async function devinBuildFixture({ live = false, roles = {}, authoredAgen
     } });
     const input = new PassThrough(), output = new PassThrough();
     output.on('data', chunk => { if (chunk.toString().includes('> ')) queueMicrotask(() => input.write('a\n')); });
-    await runBuild('DEVIN-1', { cwd, stratum, template: 'build', skipTriage: true, description: 'Devin consumer golden', preMergeGate: ['true'],
-      consumerArtifactsRoot: join(root, 'artifacts'), route_mode: 'shadow', gateOpts: { input, output }, ...roles });
-    assert.equal(calls.length, 1); assert.ok(reports.length > 0);
+    let buildError;
+    try {
+      await runBuild('DEVIN-1', { cwd, stratum, template: 'build', skipTriage: true, description: 'Devin consumer golden', preMergeGate: ['true'],
+        consumerArtifactsRoot: join(root, 'artifacts'), route_mode: 'shadow', gateOpts: { input, output }, ...roles });
+    } catch (error) { buildError = error; }
+    if (signal?.aborted) throw abortError();
+    if (buildError && calls.length > 0 && calls.every(call => call.error?.code === 'agent_run_failed' && call.error.message?.endsWith(TRANSIENT_DEVIN_ERROR))) {
+      assert.fail(`All Devin attempts failed with transient: ${TRANSIENT_DEVIN_ERROR}`);
+    }
+    if (buildError) throw buildError;
+    assert.ok(calls.length > 0, 'Devin was never dispatched');
+    const successes = calls.filter(call => call.result !== undefined);
+    assert.equal(successes.length, 1, 'exactly one Devin attempt must succeed');
+    assert.equal(calls.at(-1), successes[0], 'the successful attempt must be last; no dispatch after success');
+    for (const attempt of calls.slice(0, -1)) {
+      assert.ok(attempt.error?.code === 'agent_run_failed' && attempt.error.message?.endsWith(TRANSIENT_DEVIN_ERROR), `non-final attempt must fail only with the named transient: ${JSON.stringify(attempt.error)}`);
+    }
+    for (const attempt of calls.slice(1)) assert.deepEqual({ flow: attempt.identity?.flow, stepId: attempt.identity?.stepId }, { flow: calls[0].identity?.flow, stepId: calls[0].identity?.stepId }, 'retry changed stage identity');
+    assert.equal(new Set(calls.map(call => call.identity?.issuanceId)).size, calls.length, 'each attempt must carry its own issuance');
+    assert.ok(reports.length > 0);
     assert.equal(readFileSync(join(cwd, 'devin-proof.txt'), 'utf8'), 'DEVIN_OK\n');
     const receipt = receipts.find(r => r.telemetry?.model === 'swe-2-medium');
     assert.ok(receipt); assert.equal(receipt.usage.usd, 0); assert.equal(receipt.usdSource, 'estimated');
@@ -101,8 +151,11 @@ export async function devinBuildFixture({ live = false, roles = {}, authoredAgen
     }
     return { planInputs, receipts };
   } finally {
-    try { await client.close(); } finally {
+    signal?.removeEventListener('abort', onAbort);
+    try { await (closing ?? client.close()); } finally {
       if (previousState === undefined) delete process.env.STRATUM_STATE_ROOT; else process.env.STRATUM_STATE_ROOT = previousState;
+      if (previousCodexProbe === undefined) delete process.env.COMPOSE_SKIP_CODEX_PROBE;
+      else process.env.COMPOSE_SKIP_CODEX_PROBE = previousCodexProbe;
       rmSync(root, { recursive: true, force: true });
       if (live) {
         assert.deepEqual(existsSync(config) ? readFileSync(config) : null, beforeConfig, 'real Devin config must remain unchanged');
@@ -116,4 +169,22 @@ export async function devinBuildFixture({ live = false, roles = {}, authoredAgen
 
 test('live Devin consumer worktree build, known zero cost and executed tier', {
   skip: process.env.COMPOSE_DEVIN_LIVE !== '1', timeout: 90000,
-}, () => devinBuildFixture({ live: true }));
+}, t => devinBuildFixture({ live: true, signal: t.signal }));
+
+test('aborted non-live Devin fixture closes and removes its private root', { timeout: 10000 }, async () => {
+  const controller = new AbortController();
+  let root, dispatchStarted;
+  const started = new Promise(resolve => { dispatchStarted = resolve; });
+  const fixture = devinBuildFixture({ signal: controller.signal, onRoot: value => { root = value; },
+    onDispatch: dispatchStarted, agentRun: () => new Promise(() => {}) });
+  await Promise.race([started, fixture.then(() => { throw new Error('fixture completed before dispatch'); })]);
+  controller.abort(new Error('fixture timeout'));
+  let deadline;
+  try {
+    await Promise.race([
+      assert.rejects(fixture, /fixture timeout/),
+      new Promise((_resolve, reject) => { deadline = setTimeout(() => reject(new Error('fixture did not reject promptly')), 4000); }),
+    ]);
+  } finally { clearTimeout(deadline); }
+  assert.equal(existsSync(root), false, 'private root must be removed before the fixture rejects');
+});

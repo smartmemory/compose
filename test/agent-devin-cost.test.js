@@ -27,6 +27,7 @@ const rows = [
   ['Claude event-only stated zero', 'claude', { telemetry: { model: 'claude-opus-5-5', durationMs: 7 } }, [{ input_tokens: 10, output_tokens: 1, cost_usd: 0, usd_source: 'reported' }], 0, 'reported'],
   ['legacy unlabeled zero', 'devin', {}, [{ input_tokens: 10, output_tokens: 1, cost_usd: 0 }], undefined],
   ['partially unpriced', 'devin', devin, [{ input_tokens: 10, cost_usd: 0, usd_source: 'estimated' }, { output_tokens: 1 }], undefined],
+  ['cache-only unpriced event before raw zero', 'devin', { usage: { tokens: 10, ms: 7, usd: 0 }, usdSource: 'estimated' }, [{ cache_read_input_tokens: 10 }], undefined],
   ['mixed unlabeled zero', 'devin', {}, [{ input_tokens: 10, cost_usd: 0, usd_source: 'estimated' }, { output_tokens: 1, cost_usd: 0 }], undefined],
   ['Claude stated zero', 'claude', { ...devin, usdSource: 'reported', telemetry: { model: 'claude-opus-5-5', durationMs: 7 } }, [], 0, 'reported'],
 ];
@@ -51,22 +52,45 @@ for (const [name, agent, result, events, cost, source] of rows) test(name + ' th
   else assert.throws(() => readFlowSpend('flow', { revisionDigest: 'rev' }), /Paid call cost missing/);
 });
 
+test('usage-bearing rejection after an unpriced event has unknown cost and no receipt USD', async () => {
+  let handler;
+  const stratum = {
+    onEvent(_flow, _step, fn) { handler = fn; return () => {}; },
+    async agentRun() {
+      handler({ schema_version: '0.2.5', kind: 'step_usage', metadata: { input_tokens: 10 } });
+      throw Object.assign(new Error('producer rejected'), { usage: { tokens: 10, ms: 7, usd: 0 }, usdSource: 'estimated' });
+    },
+  };
+  let failure;
+  try {
+    await runAndNormalize(null, 'work', { step_id: 'work', agent: 'devin' }, { stratum, executionRuntime: 'stratum' });
+  } catch (error) { failure = error; }
+  assert.match(failure?.message ?? '', /producer rejected/);
+  assert.equal(failure.usages?.[0]?.cost_usd, undefined);
+  const receipts = [];
+  await reportUsageReceipts({ receiptsMode: true, flowId: 'flow', stratum: {
+    async usageReport(_flow, receipt) { receipts.push(receipt); return {}; },
+  } }, failure.usages);
+  assert.equal(receipts.length, 1);
+  assert.equal(receipts[0].usage.usd, undefined);
+});
+
 test('receipt conversion never invents zero or provenance', () => {
   assert.deepEqual(toEngineUsage({ tokens: 1, usd_source: 'estimated' }), { tokens: 1 });
   assert.deepEqual(toEngineUsage({ tokens: 1, usd: 0 }), { tokens: 1 });
   assert.deepEqual(toEngineUsage({ tokens: 1, usd: 0, usdSource: 'estimated' }), { tokens: 1, usd: 0 });
-  assert.deepEqual(toEngineUsage({ tokens: 1, usd: 0, usd_source: 'estimated', usdUnknownSteps: 1 }), { tokens: 1 });
 });
 
-test('positive Claude and Codex records are byte-identical to HEAD 2106e32', async () => {
+test('positive records for every provider are byte-identical to HEAD 2106e32', async () => {
   const base = new URL('../lib/result-normalizer.js', import.meta.url);
   const source = execFileSync('git', ['show', '2106e32:lib/result-normalizer.js'], { encoding: 'utf8' })
     .replace(/from '(\.\.?\/[^']+)'/g, (_all, path) => `from '${new URL(path, base).href}'`);
   const baseline = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
-  for (const agent of ['claude', 'codex']) for (const streamed of [false, true]) {
-    const result = { ...devin, usage: { ...devin.usage, usd: 0.25 }, usdSource: 'reported',
-      telemetry: { model: agent === 'claude' ? 'claude-opus-5-5' : 'gpt-6-astra', effort: 'high', durationMs: 7 } };
-    const events = streamed ? [{ input_tokens: 10, output_tokens: 1, cost_usd: 0.25, usd_source: 'reported' }] : [];
+  for (const agent of ['claude', 'codex', 'devin']) for (const streamed of [false, true]) for (const provenance of [undefined, 'reported', 'estimated']) {
+    const result = { ...devin, usage: { ...devin.usage, usd: 0.25 }, usdSource: provenance,
+      telemetry: { model: ({ claude: 'claude-opus-5-5', codex: 'gpt-6-astra', devin: 'swe-2-medium' })[agent], effort: 'high', durationMs: 7 } };
+    const events = streamed ? [{ input_tokens: 10, output_tokens: 1, cost_usd: 0.25,
+      ...(provenance ? { usd_source: provenance } : {}) }] : [];
     const run = fn => fn(null, 'work', { step_id: 'work', agent }, { stratum: fake(result, events), executionRuntime: 'stratum' });
     const before = (await run(baseline.runAndNormalize)).usages;
     const after = (await run(runAndNormalize)).usages;
