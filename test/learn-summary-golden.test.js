@@ -258,6 +258,32 @@ describe('Compose build summary shows lessons awaiting the owner', () => {
     assert.ok(printed.includes(lessonRevision.slice(0, 12)), printed);
   });
 
+  test('a build-body failure prints the summary once before signal handlers are removed', async () => {
+    const beforeBuild = process.listenerCount('SIGTERM');
+    const summaryListenerCounts = [];
+    const log = console.log;
+    console.log = (...args) => {
+      if (args.join(' ').includes('Lessons to review')) {
+        summaryListenerCounts.push(process.listenerCount('SIGTERM'));
+      }
+      log(...args);
+    };
+    const exploding = () => ({
+      async *run() { yield { type: 'error', message: 'agent exploded inside build body' }; },
+      interrupt() {},
+      get isRunning() { return false; },
+    });
+    try {
+      const { error, printed } = await build('LEARN-SUM-THROW-SIGNALS', { agentFactory: exploding });
+      assert.ok(error, 'a thrown dispatch rejects runBuild');
+      assert.equal((printed.match(/Lessons to review/g) ?? []).length, 1, printed);
+      assert.equal(summaryListenerCounts.length, 1, 'the summary log is called exactly once');
+      assert.ok(summaryListenerCounts[0] > beforeBuild, 'the build SIGTERM handler is still installed when the summary logs');
+    } finally {
+      console.log = log;
+    }
+  });
+
   test('a setup-phase YAML failure prints the summary exactly once', async () => {
     const { error, printed } = await build('LEARN-SUM-SETUP', { pipeline: 'flows: [invalid' });
     assert.match(error?.message, /^This pipeline cannot run: .*\/pipelines\/build\.stratum\.yaml\n  spec is not parseable YAML:/, 'invalid pipeline YAML rejects during setup');
