@@ -298,7 +298,7 @@
       "allOf": [
         {
           "if":   { "properties": { "kind": { "const": "agent_started" } } },
-          "then": { "properties": { "metadata": { "type": "object", "required": ["agent", "model"], "properties": { "agent": { "type": "string", "enum": ["claude", "codex"] }, "model": { "type": "string" }, "prompt_chars": { "type": "integer", "minimum": 0 } }, "additionalProperties": false } } }
+          "then": { "properties": { "metadata": { "type": "object", "required": ["agent", "model"], "properties": { "agent": { "type": "string", "enum": ["claude", "codex", "devin"] }, "model": { "type": "string" }, "prompt_chars": { "type": "integer", "minimum": 0 } }, "additionalProperties": false } } }
         },
         {
           "if":   { "properties": { "kind": { "const": "tool_use_summary" } } },

@@ -14,7 +14,7 @@ An agent finishes, reports done, and the suite is green. Weeks later you find th
 
 Nobody lied. The agent did what it was asked, the tests assert what they assert, and no step in between ever had to prove the thing was wired to anything. That gap does not show up in a diff review. It shows up in production, or it never shows up at all, which is worse.
 
-Compose sits above Claude Code and Codex rather than in place of them. It decides what the next step is, hands it to whichever agent should do it, and will not advance until the step proves it finished.
+Compose sits above Claude Code, Codex, and Devin rather than in place of them. It decides what the next step is, hands it to whichever agent should do it, and will not advance until the step proves it finished.
 
 ## Who it's for
 
@@ -41,7 +41,7 @@ Compose sits above Claude Code and Codex rather than in place of them. It decide
 
 - **Gates everywhere.** Every phase transition (design, plan, ship) is approve, revise, or kill. Human or Codex review at any point.
 - **Stratum-backed.** Pipelines are declarative `.stratum.yaml` specs with typed contracts, `ensure` postconditions, and retry/`on_fail` routing. Specs are editable.
-- **Multi-agent.** Claude (via the Anthropic Agent SDK) and Codex (via the OpenAI CLI) plug in through a uniform connector interface. Reviews can run on a different model than implementation.
+- **Multi-agent.** Claude (via the Anthropic Agent SDK) Codex (via the OpenAI CLI), and Devin (via Stratum on macOS) plug in through a uniform connector interface. Reviews can run on a different model than implementation.
 
 ## 30-second example
 
@@ -341,3 +341,23 @@ Topic-scoped reference:
 [Business Source License 1.1](LICENSE), licensed by Regression Analytics LLC. Free for non-production use by anyone, and for production use by organizations whose total annual revenue (with affiliates) was USD 250,000 or less in their last fiscal year. Larger organizations need a commercial license: help@smartmemory.ai. Each version converts to Apache 2.0 four years after its release.
 
 Versions released before 2026-09-25 were distributed under the MIT License and remain available under those terms. See [NOTICE](NOTICE).
+
+### Explicit Devin agents
+
+Use `--implementer devin::fast` or `--reviewer devin::standard`, or author a
+bare `agent: devin` stage with a matching profile sidecar (`"execute": "devin::fast"`).
+Literal `agent: "devin::fast"` in YAML is unsupported; a sidecar must match the stage's provider.
+Devin tiers are critical (`swe-2-max`/max), standard (`swe-2-high`/high), and
+fast/budget (`swe-2-medium`/medium). Bare `devin` leaves model and effort to Stratum;
+coordinator is unavailable. Defaults, automatic routing, and preset assignments are unchanged.
+A Devin-capable Stratum runtime and authenticated Devin CLI on macOS are required.
+
+Consumer fan-out stages support Devin; ordinary GSD direct steps refuse it with a
+named error. Claude tool templates are not enforced for Codex or Devin: their
+boundary is the requested OS sandbox (`read-only` or `workspace-write`). Devin
+currently supplies final message/usage events, without per-tool observability.
+
+A zero USD cost is known only with producer-stated `reported` or `estimated`
+provenance and no unpriced steps. This includes Devin's estimated $0 and Claude's
+explicit reported $0. Legacy unlabeled zeros remain unknown. A dollar ceiling
+cannot limit zero-priced work; token, time, and action limits still apply.

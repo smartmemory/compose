@@ -1974,7 +1974,7 @@
         "provider": {
           "enum": [
             "claude",
-            "codex"
+            "codex", "devin"
           ]
         },
         "template": {

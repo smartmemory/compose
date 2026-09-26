@@ -8,8 +8,8 @@
  * explicitly name Fable while critical stays Opus 5.5; other presets do not move
  * silently to Fable.
  *
- * Tier names describe INTENT, never a model. `budget` is the Codex-only mirror of
- * `coordinator`: it appears in BOTH maps so the shared vocabulary admits the name
+ * Tier names describe INTENT, never a model. `budget` is the Codex/Devin mirror of
+ * `coordinator`: it appears in all provider maps so the shared vocabulary admits the name
  * (agent-string.js derives KNOWN_TIERS from MODEL_TIERS), and is null on the Claude side
  * because no Claude model sits at that price point — so `claude::budget` fails with the
  * standard "not available for provider" message rather than "unknown tier".
@@ -29,7 +29,7 @@ export const MODEL_TIERS = {
   critical: 'claude-opus-5-5',
   standard: 'claude-opus-5-5',
   fast: 'claude-haiku-4-5-20251001',
-  // Codex-only tier: fast and budget currently resolve to the same gpt-6-luna model
+  // Codex/Devin-only tier: fast and budget currently resolve to the same gpt-6-luna model
   // (0.10/0.50 per MTok in stratum's ts/src/judge/pricing.ts); the tier names remain distinct.
   budget: null,
   coordinator: 'claude-fable-5-1',
@@ -40,6 +40,22 @@ export const CODEX_MODEL_TIERS = {
   standard: 'gpt-6-sol',
   fast: 'gpt-6-luna',
   budget: 'gpt-6-luna',
+  coordinator: null,
+};
+
+export const DEVIN_MODEL_TIERS = {
+  critical: 'swe-2-max',
+  standard: 'swe-2-high',
+  fast: 'swe-2-medium',
+  budget: 'swe-2-medium',
+  coordinator: null,
+};
+
+export const DEVIN_TIER_THINKING = {
+  critical: { mode: null, effort: 'max' },
+  standard: { mode: null, effort: 'high' },
+  fast: { mode: null, effort: 'medium' },
+  budget: { mode: null, effort: 'medium' },
   coordinator: null,
 };
 
@@ -79,7 +95,7 @@ export const TIER_THINKING = {
  */
 export function resolveTierModel(tier, provider = 'claude') {
   if (!tier) return null;
-  const models = provider === 'codex' ? CODEX_MODEL_TIERS : provider === 'claude' ? MODEL_TIERS : {};
+  const models = provider === 'codex' ? CODEX_MODEL_TIERS : provider === 'claude' ? MODEL_TIERS : provider === 'devin' ? DEVIN_MODEL_TIERS : {};
   return models[tier] ?? null;
 }
 
@@ -91,6 +107,6 @@ export function resolveTierModel(tier, provider = 'claude') {
  */
 export function resolveTierThinking(tier, provider = 'claude') {
   if (!tier) return null;
-  const thinking = provider === 'codex' ? CODEX_TIER_THINKING : provider === 'claude' ? TIER_THINKING : {};
+  const thinking = provider === 'codex' ? CODEX_TIER_THINKING : provider === 'claude' ? TIER_THINKING : provider === 'devin' ? DEVIN_TIER_THINKING : {};
   return thinking[tier] ?? null;
 }
