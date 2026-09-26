@@ -8,7 +8,7 @@ import { runAndNormalize } from '../lib/result-normalizer.js';
 import { resolvePlanSpecValues } from '../lib/stratum-mcp-client.js';
 import { preflightPipelineProfiles, resolveRoleCollision } from '../lib/build.js';
 import { routingExecutedTier } from '../lib/routing-ledger.js';
-import { devinBuildFixture } from './agent-devin-golden.live.test.js';
+import { devinBuildFixture } from './helpers/devin-build-fixture.js';
 import { runOneStep } from '../lib/gsd.js';
 
 for (const raw of ['devin', 'devin::fast', 'devin::critical']) test(`accept ${raw}`, () => validateAgentString(raw));
