@@ -32,7 +32,8 @@ runs the live golden. Nothing is dispatched to Devin except by the golden.
   `node --import ./test/suppress-expected-drift.js --test --test-timeout=90000 <files>`;
   vitest trees via `npm run test:ui` and `npm run test:tracker`.
 - Tripwire `devin` first on `PATH` under the real `HOME` for every non-live run; report `CALLED`
-  absent. Known load flakes (rerun alone): proof-run, lifecycle-guard-e2e, cli-remote, auth-store,
+  absent. Earlier sessions saw these fail under load and pass alone, with no counts recorded, so
+  rerun one alone before calling it red: proof-run, lifecycle-guard-e2e, cli-remote, auth-store,
   lifecycle-routes.
 
 ## Slice 1 — D1–D7
