@@ -1,6 +1,6 @@
 # COMP-AGENT-DEVIN-1: Compose accepts Devin as an agent — Design
 
-**Status:** DESIGN · **Date:** 2026-09-26 · **Scope:** narrow v1 (owner, 2026-09-26)
+**Status:** DESIGN r2 (Codex design review r1: 1H 6M 1L, all upheld and folded in) · **Date:** 2026-09-26 · **Scope:** narrow v1 (owner, 2026-09-26)
 
 ## Related Documents
 
@@ -84,14 +84,25 @@ per-provider lookup over the three tables (unknown provider ⇒ null, as today).
 `thinking` block — that stays Claude-only (`lib/agent-string.js:115`); stratum rejects `thinking` for
 devin.
 
+**Attribution collision, same as Codex today (review r1 M5).** `fast` and `budget` both resolve to
+`swe-2-medium`/`medium`. `routingExecutedTier` matches a reported identity against every mapping in
+the routing start and needs exactly one distinct tier (`lib/routing-ledger.js:1161-1163`), so a start
+whose profiles name **both** `devin::fast` and `devin::budget` records a medium/medium Devin run as
+`unknown` (`unmapped-or-conflicting-execution`), never as the wrong tier. Codex has the identical
+overlap (`gpt-6-luna`/`medium` at both, `server/model-tiers.js:38-55`). v1 keeps the owner's map and
+this semantics, and tests it; a start naming only one of them attributes normally.
+
 A **bare** `devin` (no tier) sends no model and no effort, so stratum applies its own default
 `swe-2-high` — the same "provider default" meaning a bare `codex` has today.
 
 ### D3 — Sandbox reaches Devin
 
 `lib/result-normalizer.js:384` forwards `sandboxMode` for codex only, so a Devin implementer or
-consumer worker asking for `workspace-write` (`lib/build.js:1899,5270,6268`) would silently run
-read-only. The rule becomes an exhaustive switch: `codex` and `devin` ⇒ `opts.sandboxMode ??
+consumer worker asking for `workspace-write` (`lib/build.js:1899,5270,6268`) loses the boundary it
+requested: stratum then resolves Devin's mode from its own config layers (built-in default
+`read-only`, but a user or project `stratum.toml` can change it — `stratum/ts/src/connectors/runner.ts:109-120`,
+`config/index.ts:108-133`), so the run gets whatever that config says rather than what Compose asked
+for (review r1 L8). The rule becomes an exhaustive switch: `codex` and `devin` ⇒ `opts.sandboxMode ??
 'read-only'`; `claude` ⇒ none (unchanged). Tool filters and `thinking` stay Claude-only
 (`:389`); `local` execution stays Claude-only (`:472,640,663`) — Devin always goes through
 `stratum.agentRun`.
@@ -104,14 +115,36 @@ README states it. Enforcing templates for sandbox agents is out of scope for bot
 
 ### D4 — A reported $0 is a known cost
 
-Devin reports `usd: 0` with `usdSource: "estimated"` (`stratum/ts/src/connectors/devin.ts:399`). Compose
-treats only a **positive** total as known: the fallback adoption at `lib/result-normalizer.js:788` and
-the per-dispatch record at `:817` both require `> 0`, so a Devin dispatch's record loses `cost_usd`,
-counts as unknown spend, and can fail cost verification (`lib/build.js:2390,2417`). The rule becomes: a
-total is known when it is a finite number **≥ 0 reported with provenance** (`reported`/`estimated`) and
-no step is unpriced (`usdUnknownSteps === 0`). A zero that comes only from the absence of usage events
-stays unknown — the guard's original purpose. Claude and Codex records must be byte-identical before
-and after (their costs are positive, or genuinely unknown).
+Devin reports `usd: 0` with `usdSource: "estimated"` (`stratum/ts/src/connectors/devin.ts:399,412-416`).
+Compose drops a zero at **three** points, and all three must change or the fix fails one layer later
+(review r1 H1):
+
+1. **Normalizer** — the fallback adoption at `lib/result-normalizer.js:788` and the per-dispatch
+   record at `:817` require `> 0`, so the record loses `cost_usd`.
+2. **Receipt conversion** — `lib/build.js:2346` keeps `usd` only when `> 0`; `reportUsageReceipts`
+   (`:2417`) then attaches provenance only when USD survived (`:2452`).
+3. **Spend verification** — `lib/flow-state.js:67-69` rejects a receipt with tokens or time but no
+   `usd` as `Paid call cost missing`. This check is **kept as is**: it is correct once 1 and 2 stop
+   dropping a known zero.
+
+**The rule: a zero is known only when the producer stated it with provenance.** Concretely, a USD
+value of `0` survives 1 and 2 only when it arrived together with a `usdSource`/`usd_source` of
+`reported` or `estimated` **set by the producer** (the connector result or the usage event itself),
+and no step is unpriced (`usdUnknownSteps === 0`). Provenance that Compose **synthesizes** — the
+`?? 'reported'` / `?? 'estimated'` defaults (`lib/result-normalizer.js:555-565` and `:817`'s
+`primaryUsdSource ?? 'estimated'`) — never makes a zero known (review r1 M6). Exact regression
+fixtures: a `step_usage` event `{input_tokens:10, output_tokens:1, cost_usd:0}` with **no**
+`usd_source`, followed by a result with no authoritative USD ⇒ stays **unknown** (older servers
+hardcode zero — `:779-780`); a stream where one step is unpriced ⇒ stays unknown; Devin's real
+result shape (`usage.usd: 0`, `usdSource: "estimated"`) ⇒ known `0`, `usd_source: "estimated"`, and the
+receipt carries `amount.usd: 0` with `usdSource: "estimated"` and passes `flow-state.js`.
+
+**Stated exception to "Claude/Codex unchanged" (review r1 M7):** stratum's Claude connector already
+emits a producer-stated `total_cost_usd: 0` with `"reported"` provenance
+(`stratum/ts/src/connectors/claude.ts:182-196`). Under the rule that record changes from unknown to a
+known zero — the correct outcome, and the only intended change for Claude or Codex. Codex omits
+unpriced amounts (`codex.ts:565-589,732-734`), so its unknowns stay unknown. Every other Claude/Codex
+record (positive, or no stated provenance) is byte-identical; a test pins both halves.
 
 Consequence, stated: a dollar ceiling cannot limit zero-priced Devin work; token, time and action
 limits still apply (no divide-by-price site exists — `lib/flow-state.js:71`, `lib/output-gate.js:55`,
@@ -142,8 +175,33 @@ The detached-worktree write probe is Codex-specific (`lib/build.js:4541`, `lib/c
 and is not extended. Stratum already refuses a sandboxed Devin run off macOS, a missing login, and a
 worktree grant overlapping `~/.stratum`, each with a named error before spawn; Compose surfaces those
 as the step's failure. Transport reporting (`lib/stratum-mcp-client.js:180`) reports `null` for Devin,
-as for Claude. The GSD direct dispatch (`lib/gsd.js:673`) needs no change for an explicitly named
-Devin step (it already forwards the agent string to `stratum.agentRun`).
+as for Claude.
+
+**GSD ordinary steps refuse Devin in v1 (review r1 M2, M3).** GSD's direct dispatch
+(`lib/gsd.js:673`) passes only the agent string, cwd and telemetry — no sidecar profile, model, effort
+or sandbox (the MCP client strips the string to its provider, `lib/stratum-mcp-client.js:185-196`) —
+and copies only `usage.usd_source`, dropping the top-level `usdSource` stratum returns
+(`lib/gsd.js:698-710`). A Devin step there would run the default model, read-only, and lose its
+cost provenance. The profile gap is pre-existing for every provider; the provenance gap bites only a
+producer that reports provenance at the top level, which Devin does. v1 therefore refuses a Devin
+**ordinary** GSD step before dispatch with a named error (`devin is not supported for GSD direct
+steps yet (COMP-AGENT-DEVIN-1); use a consumer fan-out stage`). GSD consumer fan-out items go through
+the consumer executor (`runAndNormalize`) and are supported. Fixing GSD's direct path for all
+providers is a follow-up.
+
+### D7 — Supported authoring forms (review r1 M4)
+
+Stratum's IR accepts only a bare agent name (`stratum/ts/src/ir/schema.ts:42,66`), and Compose strips
+`provider:template:tier` down to the provider **only** for runtime role references
+(`lib/stratum-mcp-client.js:105-113,125-135`). So, exactly as for Codex today:
+
+- **Supported:** a spec step or stage with bare `agent: devin`, optionally tiered through a matching
+  profile sidecar entry (`"devin::fast"`); and the role references `$.input.implementer_agent` /
+  `$.input.reviewer_agent` fed `devin` or `devin::<tier>` via `--implementer` / `--reviewer`.
+- **Not supported (unchanged behaviour, named error from planning):** a literal tiered agent in the
+  spec (`agent: "devin::fast"`), and a sidecar naming Devin for a stage whose agent is omitted or names
+  another provider — the existing provider-equality check (`lib/pipeline-profiles.js:37,98`) rejects it.
+  The design widens the provider list; it does not change these rules.
 
 ## Out of scope (follow-ups)
 
@@ -162,26 +220,36 @@ Devin step (it already forwards the agent string to `stratum.agentRun`).
 
 ## Tests (testing.md hierarchy)
 
-- **Golden (live, controller-run, macOS, real devin `swe-2-medium`, requires P0):** a consumer-dispatch
-  worktree fan-out whose stage is `devin::fast` runs through Compose's real consumer executor
-  (`runConsumerIssuance` → `runAndNormalize` → `stratum_agent_run`), edits a file in its worktree
-  (proves D3), and its dispatch record carries `model: "swe-2-medium"`, `effort: "medium"`,
-  `cost_usd: 0`, `usd_source: "estimated"` (proves D2 and D4). Cleanup of worktrees, run dirs and the
-  devin config check as in stratum's goldens.
+- **Golden (live, controller-run, macOS, real devin `swe-2-medium`, requires P0):** an authored spec
+  whose consumer-dispatch worktree fan-out stage is bare `agent: devin` with a sidecar entry
+  `devin::fast` goes through the **whole** Compose path — plan (`resolvePlanSpecValues`, profile
+  preflight) → `runConsumerIssuance` → `runAndNormalize` → `stratum_agent_run` → `stratum_step_done`
+  (not a direct call into the executor). It edits a file in its worktree (D3); its dispatch record
+  carries `model: "swe-2-medium"`, `effort: "medium"`, `cost_usd: 0`, `usd_source: "estimated"`; its
+  **receipt** carries `amount.usd: 0`, `usdSource: "estimated"` and the flow's spend verification
+  (`lib/flow-state.js`) passes (D4); the routing record's executed tier is `fast`, status `known`
+  (D2). Cleanup of worktrees, run dirs and the devin config check as in stratum's goldens.
 - **Error harness (table-driven, no network):** `validateAgentString` accepts `devin`, `devin::fast`,
   `devin::critical`, rejects `devin::coordinator` ("not available for provider devin") and `gemini`
   (error lists all three); `build.js` programmatic role checks accept Devin; runtime role references
-  resolve `devin:…` to `devin`.
+  resolve `devin:…` to `devin`; the authoring table of D7 through planning — bare `agent: devin` +
+  sidecar plans, literal `agent: "devin::fast"` and a Devin sidecar on a Claude stage are rejected with
+  their existing named errors; a Devin ordinary GSD step is refused with D6's named error before any
+  dispatch (fake client records no `agentRun` call).
 - **Contract:** each widened schema accepts `devin` and still rejects an unknown provider.
 - **Unit (replace several integration tests):** tier tables (`swe-2-*` + effort per tier, no
-  thinking); sandbox forwarding table over the three providers; the cost rule — Devin `0` +
-  `estimated` ⇒ `cost_usd: 0`; no usage events ⇒ still unknown; Claude/Codex records unchanged; the
-  role map — every provider maps, `--implementer devin` alone ⇒ reviewer Codex, both explicit Devin ⇒
-  warning.
+  thinking); sandbox forwarding table over the three providers, including explicit `workspace-write`
+  forwarded when a (fake) stratum config would say `read-only`; the D4 fixtures — Devin's real result
+  shape ⇒ known `0` through normalizer **and** receipt conversion; legacy zero without `usd_source` ⇒
+  unknown; partially unpriced stream ⇒ unknown; Claude stated `0`/`reported` ⇒ known zero (the stated
+  exception); a positive Claude and a positive Codex record byte-identical to today's; the attribution
+  collision — a start naming both `devin::fast` and `devin::budget` ⇒ `unknown`, only one ⇒ `known`;
+  the role map — every provider maps, `--implementer devin` alone ⇒ reviewer Codex, both explicit
+  Devin ⇒ warning.
 - **Hermetic rule (stratum S2 landmine):** no non-live test may reach a real devin — every Devin
   dispatch in a unit or integration test uses a fake `stratum` client, and the suite is run once with a
   tripwire `devin` first on `PATH` under the real `HOME`.
 
 ## Slices
 
-One slice: D1–D6 with their tests; the golden is controller-run after P0.
+One slice: D1–D7 with their tests; the golden is controller-run (P0 done 2026-09-26: `stratum/ts/dist` rebuilt from `6103f5e`, contains devin).
