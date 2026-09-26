@@ -190,7 +190,7 @@ describe('Compose build summary shows lessons awaiting the owner', () => {
     env('NODE_ENV', 'test');
     assert.equal(process.env.NODE_ENV, 'test', 'refusing to run: a real agent would be dispatched');
     env('STRATUM_STATE_ROOT', stateRoot);
-    env('COMPOSE_PORT', '65534');
+    env('COMPOSE_PORT', process.env.COMPOSE_PORT ?? '65534');
     env('STRATUM_CONFIG_FILE', join(stateRoot, 'no-user-config.toml'));
     env('STRATUM_LEARN_INLINE', undefined);
     env('STRATUM_LEARN_DELIVER', undefined);
@@ -201,16 +201,19 @@ describe('Compose build summary shows lessons awaiting the owner', () => {
     // Three real failing runs through one server; its INLINE pass stages the lesson.
     // The pass is fire-and-forget inside the server, so the sidecar is polled below.
     const trainer = await connected();
-    for (let i = 0; i < 3; i += 1) {
-      const planned = await trainer.plan(spec(false), 'build', INPUTS, { workspaceRoot: workspace });
-      await trainer.stepDone(planned.runId, 'work', { output: { outcome: 'done' } }, planned.ready[0].dispatchToken);
+    try {
+      for (let i = 0; i < 3; i += 1) {
+        const planned = await trainer.plan(spec(false), 'build', INPUTS, { workspaceRoot: workspace });
+        await trainer.stepDone(planned.runId, 'work', { output: { outcome: 'done' } }, planned.ready[0].dispatchToken);
+      }
+      const sidecar = join(workspace, '.stratum', 'learn', 'candidates.jsonl');
+      for (let waited = 0; !existsSync(sidecar) && waited < 10_000; waited += 50) await new Promise((r) => setTimeout(r, 50));
+      const rows = readFileSync(sidecar, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+      lessonRevision = rows.find((row) => row.rendered.guidance)?.revisionId;
+      assert.ok(lessonRevision, 'the INLINE pass staged a guided lesson');
+    } finally {
+      await trainer.close();
     }
-    const sidecar = join(workspace, '.stratum', 'learn', 'candidates.jsonl');
-    for (let waited = 0; !existsSync(sidecar) && waited < 10_000; waited += 50) await new Promise((r) => setTimeout(r, 50));
-    const rows = readFileSync(sidecar, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
-    lessonRevision = rows.find((row) => row.rendered.guidance)?.revisionId;
-    assert.ok(lessonRevision, 'the INLINE pass staged a guided lesson');
-    await trainer.close();
   });
 
   after(async () => {
@@ -253,6 +256,60 @@ describe('Compose build summary shows lessons awaiting the owner', () => {
     assert.ok(error, 'a thrown dispatch rejects runBuild');
     assert.equal((printed.match(/Lessons to review/g) ?? []).length, 1, printed);
     assert.ok(printed.includes(lessonRevision.slice(0, 12)), printed);
+  });
+
+  test('a setup-phase YAML failure prints the summary exactly once', async () => {
+    const { error, printed } = await build('LEARN-SUM-SETUP', { pipeline: 'flows: [invalid' });
+    assert.match(error?.message, /^This pipeline cannot run: .*\/pipelines\/build\.stratum\.yaml\n  spec is not parseable YAML:/, 'invalid pipeline YAML rejects during setup');
+    assert.equal((printed.match(/Lessons to review/g) ?? []).length, 1, printed);
+    assert.ok(printed.includes(lessonRevision.slice(0, 12)), printed);
+  });
+
+  test('cancelling pending summary queries is silent and returns promptly', async () => {
+    const fakeCli = join(stateRoot, 'pending-summary.mjs');
+    const marker = join(stateRoot, 'pending-summary');
+    // Both queries announce that they are pending; without cancellation they would
+    // return printable rows after 10 s (still below the production 20 s timeout).
+    await writeFile(fakeCli, `
+      import { writeFileSync } from 'node:fs';
+      const reviews = process.argv.includes('--reviews');
+      writeFileSync(${JSON.stringify(marker)} + (reviews ? '-reviews' : '-unreviewed'), 'ready');
+      setTimeout(() => console.log(JSON.stringify(reviews
+        ? [{ kind: 'retire-candidate', clusterId: 'pending', detail: 'pending review' }]
+        : [{ revisionId: 'pending', claim: 'pending lesson' }])), 10000);
+    `);
+    const priorCli = process.env.COMPOSE_STRATUM_TS_CLI_BIN;
+    let runId;
+    let cancelledAt;
+    const watcher = setInterval(() => {
+      if (!cancelledAt && existsSync(marker + '-reviews') && existsSync(marker + '-unreviewed')) {
+        const handle = lookupBuildCancel(runId);
+        if (handle) {
+          cancelledAt = Date.now();
+          handle.cancel('cancel pending summary');
+        }
+      }
+    }, 10);
+    process.env.COMPOSE_STRATUM_TS_CLI_BIN = fakeCli;
+    try {
+      const { printed } = await build('LEARN-SUM-PENDING', {
+        configureClient: (client) => {
+          const realPlan = client.plan.bind(client);
+          client.plan = async (...args) => {
+            const planned = await realPlan(...args);
+            runId = planned.runId;
+            return planned;
+          };
+        },
+      });
+      assert.ok(cancelledAt, 'cancelled only after both summary queries started');
+      assert.ok(Date.now() - cancelledAt < 3000, 'build drains within 3 s of cancellation');
+      assert.doesNotMatch(printed, /Lessons to review|Lesson reviews|pending lesson|pending review/);
+    } finally {
+      clearInterval(watcher);
+      if (priorCli === undefined) delete process.env.COMPOSE_STRATUM_TS_CLI_BIN;
+      else process.env.COMPOSE_STRATUM_TS_CLI_BIN = priorCli;
+    }
   });
 
   // C1: a throw AFTER the summary already printed must not print it a second
@@ -374,8 +431,9 @@ flows:
       const { result, printed } = await build('LEARN-SUM-REVIEW');
       assert.equal(result.status, 'complete');
       // D7 Compose row "ordinary dispatch": the guidance rides stratum's `do` into `## Intent`.
-      const intent = prompts.find((prompt) => prompt.includes('## Intent')) ?? '';
-      assert.match(intent, /## Intent[\s\S]*## Lessons from prior runs\n- When `outcome` has a non-null value/, intent);
+      const ordinaryPrompt = prompts.find((prompt) => prompt.includes('## Intent')) ?? '';
+      const intent = ordinaryPrompt.match(/## Intent\n([\s\S]*?)(?=\n## (?!Lessons from prior runs(?:\n|$))|$)/)?.[1] ?? '';
+      assert.match(intent, /## Lessons from prior runs\n- When `outcome` has a non-null value/, intent);
       assert.match(printed, /Lesson reviews \(1\):\n {2}retire-candidate/);
       assert.doesNotMatch(printed, /Lessons to review/, 'an applied lesson is no longer unreviewed');
 
@@ -388,7 +446,10 @@ flows:
       assert.match(itemPrompt, /## Intent\nitem a\n\n## Lessons from prior runs\n- When `outcome` has a non-null value/, itemPrompt);
 
       // D7 Compose row "ambient-free re-render": build.js re-renders review prompts with
-      // contextDir nulled (build.js requiredPrompt); the intent — and so the block — survives.
+      // contextDir nulled (build.js requiredPrompt). This is only a renderer check:
+      // this harness's work/fan steps do not enter build.js's isReviewMain branch,
+      // so it does NOT cover the review branch's requiredPrompt re-render or handoff.
+      // It checks only that explicitly passing the captured intent preserves the block.
       const { buildStepPrompt } = await import('../lib/step-prompt.js');
       const itemIntent = itemPrompt.match(/## Intent\n([\s\S]*?)(?=\n## (?!Lessons)|$)/)?.[1] ?? '';
       assert.match(itemIntent, /## Lessons from prior runs/);
