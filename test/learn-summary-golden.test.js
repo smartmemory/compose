@@ -18,6 +18,8 @@ import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import { runBuild } from '../lib/build.js';
+import { lookupBuildCancel } from '../lib/build-cancel.js';
+import { learnSummaryLines } from '../lib/learn-summary.js';
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 import { installAgentHarness } from './helpers/ts-agent-harness.js';
 import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
@@ -137,28 +139,36 @@ describe('Compose build summary shows lessons awaiting the owner', () => {
     if (value === undefined) delete process.env[key]; else process.env[key] = value;
   };
 
-  async function build(featureCode, { gated = false, output = { outcome: 'complete' }, gateLine, pipeline } = {}) {
+  async function build(featureCode, {
+    gated = false, output = { outcome: 'complete' }, gateLine, pipeline,
+    agentFactory, configureClient, mode, template, visionWriter,
+  } = {}) {
     await mkdir(join(workspace, 'docs', 'features', featureCode), { recursive: true });
     await writeFile(join(workspace, 'docs', 'features', featureCode, 'description.md'), `# ${featureCode}\n`);
-    await writeFile(join(workspace, 'pipelines', 'build.stratum.yaml'), pipeline ?? spec(gated));
+    await writeFile(join(workspace, 'pipelines', `${template ?? 'build'}.stratum.yaml`), pipeline ?? spec(gated));
     await writeFile(join(workspace, '.compose', 'data', 'settings.json'), JSON.stringify({ policies: { review: 'gate' } }));
     // runBuild owns (and closes) the client it is given: one fresh connection per build.
     const client = await connected();
-    installAgentHarness(client, agent(output), workspace);
+    await configureClient?.(client);
+    installAgentHarness(client, agentFactory ?? agent(output), workspace);
     const lines = [];
     const log = console.log;
     console.log = (...args) => { lines.push(args.join(' ')); log(...args); };
-    let result;
+    let result, error;
     try {
       result = await runBuild(featureCode, {
-        cwd: workspace, stratum: client, template: 'build', skipTriage: true, description: featureCode,
+        cwd: workspace, stratum: client, template: template ?? 'build', skipTriage: true, description: featureCode,
+        ...(mode ? { mode } : {}),
+        ...(visionWriter ? { visionWriter } : {}),
         ...(gateLine ? { gateOpts: gateIO(gateLine) } : {}),
       });
+    } catch (err) {
+      error = err;
     } finally {
       console.log = log;
       await client.close();
     }
-    return { result, printed: lines.join('\n') };
+    return { result, error, printed: lines.join('\n') };
   }
 
   async function connected() {
@@ -229,6 +239,115 @@ describe('Compose build summary shows lessons awaiting the owner', () => {
     const { printed } = await build('LEARN-SUM-KILL', { gated: true, gateLine: 'k' });
     assert.match(printed, /Build killed\./);
     assert.ok(printed.includes(lessonRevision.slice(0, 12)), printed);
+  });
+
+  // C1: a build that throws before the terminal-status line still exits — the
+  // summary prints from the catch, exactly once.
+  test('a thrown build prints it too', async () => {
+    const exploding = () => ({
+      async *run() { yield { type: 'error', message: 'agent exploded' }; },
+      interrupt() {},
+      get isRunning() { return false; },
+    });
+    const { error, printed } = await build('LEARN-SUM-THROW', { agentFactory: exploding });
+    assert.ok(error, 'a thrown dispatch rejects runBuild');
+    assert.equal((printed.match(/Lessons to review/g) ?? []).length, 1, printed);
+    assert.ok(printed.includes(lessonRevision.slice(0, 12)), printed);
+  });
+
+  // C1: a throw AFTER the summary already printed must not print it a second
+  // time. Bug mode reaches `visionWriter.updateItemStatus(itemId, 'complete')`
+  // after the summary (build.js pendingCompletion, tracksFeatureJson:false) —
+  // a writer that throws there lands in the same catch with the flag already set.
+  test('a throw after the printed summary does not print it again', async () => {
+    const { VisionWriter } = await import('../lib/vision-writer.js');
+    const real = new VisionWriter(join(workspace, '.compose', 'data'));
+    const sentinel = new Error('post-summary failure');
+    const visionWriter = new Proxy(real, {
+      get(target, prop, receiver) {
+        if (prop === 'updateItemStatus') {
+          return (id, status) => (status === 'complete' ? Promise.reject(sentinel) : target.updateItemStatus(id, status));
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+    const bugSpec = `
+version: 1
+contracts:
+  Result:
+    outcome: "complete|failed|skipped"
+flows:
+  entry: fix
+  fix:
+    max_rounds: 2
+    input:
+      task: string
+    output:
+      from: \${work.output}
+      contract: Result
+    steps:
+      - id: work
+        do: "fix \${input.task}"
+        out: Result
+        attempts: 1
+`;
+    const { error, printed } = await build('LEARN-SUM-LATETHROW', {
+      mode: 'bug', template: 'bug-fix', pipeline: bugSpec, visionWriter,
+    });
+    assert.equal(error, sentinel, 'runBuild rethrows the post-summary failure');
+    assert.match(printed, /Build complete\./);
+    assert.equal((printed.match(/Lessons to review/g) ?? []).length, 1, printed);
+  });
+
+  // C1: a cancelled build prints nothing — the same guard covers both exits.
+  test('an aborted build prints nothing', async () => {
+    let runId = null;
+    const cancelling = () => ({
+      async *run() {
+        lookupBuildCancel(runId)?.cancel('test abort');
+        throw new Error('cancelled mid-dispatch');
+      },
+      interrupt() {},
+      get isRunning() { return false; },
+    });
+    const { result, error, printed } = await build('LEARN-SUM-ABORT', {
+      agentFactory: cancelling,
+      configureClient: (client) => {
+        const realPlan = client.plan.bind(client);
+        client.plan = async (...args) => {
+          const planned = await realPlan(...args);
+          runId = planned?.runId ?? runId;
+          return planned;
+        };
+      },
+    });
+    assert.ok(error || result?.status === 'aborted', `expected an aborted build, got ${JSON.stringify(result)}`);
+    assert.doesNotMatch(printed, /Lessons to review|Lesson reviews/);
+  });
+
+  // C2: an older stratum CLI ignores `--unreviewed` and lists raw PatchCandidate
+  // rows — filtered here because raw rows carry `rendered` (and `clusterKey`),
+  // which UnreviewedLesson rows never do.
+  test('an old CLI listing raw PatchCandidate rows is filtered from the unreviewed list', async () => {
+    const fakeCli = join(stateRoot, 'old-stratum-cli.mjs');
+    await writeFile(fakeCli, `process.stdout.write(JSON.stringify([
+      {
+        clusterId: 'c-raw', clusterKey: 'k-raw', revisionId: 'rawrevision001',
+        claim: 'RAW PATCH CANDIDATE', rendered: { content: 'x', guidance: 'g' },
+      },
+      {
+        clusterId: 'c-lesson', revisionId: 'lessonrev00001',
+        claim: 'a real unreviewed lesson', guidance: 'do the thing',
+      },
+    ]));\n`);
+    const lines = await learnSummaryLines(workspace, {
+      env: { ...process.env, COMPOSE_STRATUM_TS_CLI_BIN: fakeCli },
+      warn: () => {},
+    });
+    const text = lines.join('\n');
+    assert.match(text, /Lessons to review \(1\):/);
+    assert.ok(text.includes('a real unreviewed lesson'), text);
+    assert.ok(!text.includes('RAW PATCH CANDIDATE'), text);
   });
 
   test('with [learn] off for the workspace, a populated sidecar prints nothing', async () => {
