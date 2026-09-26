@@ -26,3 +26,6 @@ __pycache__/
 
 # Codex agent run logs
 .codex-out/
+
+# Stratum per-workspace learn state (lesson sidecar, lifecycle log)
+.stratum/
