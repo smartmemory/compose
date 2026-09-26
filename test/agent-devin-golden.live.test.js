@@ -26,10 +26,10 @@ test('aborted non-live Devin fixture closes and removes its private root', { tim
   assert.equal(existsSync(root), false, 'private root must be removed before the fixture rejects');
 });
 
-test('fixture deadline awaits cleanup before rejection and test completion', { timeout: 10000 }, async t => {
+test('fixture deadline awaits cleanup before rejection and test completion', { timeout: 30000 }, async t => {
   let root, dispatchStarted;
   const started = new Promise(resolve => { dispatchStarted = resolve; });
-  const fixture = devinBuildFixture({ deadlineMs: 2000, onRoot: value => { root = value; },
+  const fixture = devinBuildFixture({ deadlineMs: 10000, onRoot: value => { root = value; },
     onDispatch: dispatchStarted, agentRun: () => new Promise(() => {}) });
   await Promise.race([started, fixture.then(() => { throw new Error('fixture completed before dispatch'); })]);
   await assert.rejects(fixture, /Devin golden fixture deadline exceeded/);

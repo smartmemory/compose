@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **compose 0.7.1 / compose-mcp 0.7.1: explicit Devin agents, requires `@smartmemory/stratum` `^0.7.1`** (was `^0.7.0`). Carries COMP-AGENT-DEVIN-1 below; stratum 0.7.1 is the first release that can run Devin.
+
 - **Explicit Devin agents (COMP-AGENT-DEVIN-1).** Accept Devin roles and consumer stages, with swe-2 tiers and sandbox forwarding. Defaults and preset assignments stay unchanged; GSD direct steps refuse Devin. Preserve producer-attributed zero USD through dispatch records and receipts, including Claude reported zero; unlabeled or partially unpriced zeros remain unknown.
 
 - **compose 0.7.0 / compose-mcp 0.7.0: build summary of lessons awaiting review, requires `@smartmemory/stratum` `^0.7.0`** (was `^0.6.3`). Carries the build-summary entry below, which calls the `stratum learn list --unreviewed`, `--reviews` and `--if-enabled` flags first shipped in stratum 0.7.0. Minor bump shared with stratum 0.7.0.
