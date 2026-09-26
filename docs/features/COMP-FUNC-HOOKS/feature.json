@@ -1,0 +1,24 @@
+{
+  "code": "COMP-FUNC-HOOKS",
+  "description": "**Migrate forge's Claude Code hooks to function hooks (hooks-module) when upstream lands.** Anthropic's \"Function Hooks: Core Architecture\" (Aug 2026) adds a fifth hook type: `hooks/hooks.json` names `\"modules\"`, a TS/JS file whose `register(on)` installs Koa-style `($, e, next)` middleware; plugin order is authority, `$` is the only I/O door, `ui.render` is hookable. Code already present in Claude Code 2.1.280 (strings `no hooks module to load; hooks/hooks.json names none in \"modules\"`). Scope: canon-guard, stratum session/stop/tool-failure hooks, HOOK-CACHE read-cache, COMP-LOOP-DETECT, and the SDK-only telemetry in `server/agent-hooks.js`. Load-bearing constraints: keep decision logic host-neutral in `lib/` (Codex host must keep working), preserve canon-guard's fail-open and deny-wins semantics under order-is-authority, and keep the shell-hook path as fallback until the module path is proven. Trigger: upstream GA. See design.md.",
+  "status": "PLANNED",
+  "phase": "Backlog",
+  "created": "2026-09-24",
+  "updated": "2026-09-24",
+  "complexity": "L",
+  "position": 9,
+  "tags": [
+    "infra",
+    "hooks",
+    "safety",
+    "host-portability"
+  ],
+  "impact": "high",
+  "links": [
+    {
+      "kind": "related",
+      "to_code": "COMP-CANON-GUARD",
+      "note": "canon-guard migrates in Phase 3; must keep fail-open + deny guarantees under order-is-authority"
+    }
+  ]
+}

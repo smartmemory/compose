@@ -4,7 +4,7 @@
   "status": "PLANNED",
   "phase": "Backlog",
   "created": "2026-08-08",
-  "updated": "2026-08-08",
+  "updated": "2026-09-24",
   "complexity": "S",
   "position": 6,
   "tags": [
@@ -12,5 +12,12 @@
     "safety",
     "hooks"
   ],
-  "impact": "medium"
+  "impact": "medium",
+  "links": [
+    {
+      "kind": "related",
+      "to_code": "COMP-FUNC-HOOKS",
+      "note": "Planned first new hook on the function-hook path (Phase 4); needs in-memory state that shell hooks lack"
+    }
+  ]
 }
