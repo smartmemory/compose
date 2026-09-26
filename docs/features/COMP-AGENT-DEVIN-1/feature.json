@@ -1,0 +1,10 @@
+{
+  "code": "COMP-AGENT-DEVIN-1",
+  "description": "Compose accepts devin as a third agent where explicitly named (implementer/reviewer/steps/profiles): one derived provider list, swe-2 medium/high/max tiers, sandbox forwarded to devin, a reported $0 treated as a known cost, fixed reviewer fallback; routing ladders, defaults and UI unchanged. Follow-up of stratum STRAT-AGENT-DEVIN-1.",
+  "status": "PLANNED",
+  "phase": "Features",
+  "created": "2026-09-26",
+  "updated": "2026-09-26",
+  "complexity": "M",
+  "position": 305
+}
