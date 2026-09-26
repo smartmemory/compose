@@ -1,6 +1,6 @@
 {
   "name": "@smartmemory/compose",
-  "version": "0.6.5",
+  "version": "0.7.0",
   "description": "Structured AI dev pipeline: your agent writes the code, Compose makes it prove it. Gated design decisions, enforced postconditions, and independent review from goal to shipped code.",
   "author": "SmartMemory",
   "license": "BUSL-1.1",
@@ -89,7 +89,7 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@smartmemory/sdk-js": "^1.4.60",
-    "@smartmemory/stratum": "^0.6.3",
+    "@smartmemory/stratum": "^0.7.0",
     "@tanstack/react-virtual": "^3.13.23",
     "ajv": "^8.18.0",
     "ajv-formats": "^3.0.1",
