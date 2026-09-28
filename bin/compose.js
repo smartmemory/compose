@@ -938,7 +938,7 @@ if (cmd === 'new') {
   const askMode = args.includes('--ask')
   const fromIdeaIdx = args.indexOf('--from-idea')
   const fromIdeaId = fromIdeaIdx !== -1 ? args[fromIdeaIdx + 1] : null
-  const intent = args.filter((a, i) => !a.startsWith('-') && i !== fromIdeaIdx + 1).join(' ')
+  const intent = args.filter((a, i) => !a.startsWith('-') && (fromIdeaIdx === -1 || i !== fromIdeaIdx + 1)).join(' ')
 
   if (!intent) {
     console.error('Usage: compose new "description of the product" [--auto] [--ask]')
