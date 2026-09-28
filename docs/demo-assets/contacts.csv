@@ -1,0 +1,25 @@
+id,first_name,last_name,email,phone,company,title,created
+1001,Robert,Smith,robert.smith@northwind.com,+1 (415) 555-0142,Northwind Traders,VP Sales,2024-03-11
+1002,Bob,Smith,bob.smith@northwind.com,415-555-0142,Northwind Traders,VP of Sales,2024-07-02
+1003,Robert,Smith,robert.smith@northwind.com,+1 (415) 555-0142,Northwind Traders,VP Sales,2025-01-19
+1004,Maria,Gonzalez,m.gonzalez@acmeindustrial.com,+34 91 555 0198,Acme Industrial,Head of Procurement,2024-01-08
+1005,Maria,González,maria.gonzalez@acmeindustrial.com,+34 915 550 198,Acme Industrial SA,Head of Procurement,2024-09-23
+1006,Priya,Raghunathan,praghunathan@helios-health.org,+1 617 555 0110,Helios Health,Director of IT,2023-11-30
+1007,Priya,Raghunathan,priya.r@helios-health.org,+1 (617) 555-0110,Helios Health Systems,IT Director,2025-02-14
+1008,James,O'Connor,joconnor@brightpath.io,+353 1 555 0167,BrightPath,CTO,2024-05-21
+1009,Jim,OConnor,james.oconnor@brightpath.io,+353 1 555 0167,Bright Path,Chief Technology Officer,2024-11-04
+1010,Wei,Chen,wei.chen@lanternworks.cn,+86 21 5550 0133,Lanternworks,Plant Manager,2024-02-17
+1011,Wei,Chen,wchen@lanternworks.cn,+86 21 5550 0188,Lanternworks,Quality Lead,2024-08-09
+1012,Sarah,Okafor,sokafor@meridian-capital.com,+44 20 7555 0121,Meridian Capital,Analyst,2024-04-30
+1013,Sara,Okafor,sarah.okafor@meridian-capital.com,+44 20 7555 0121,Meridian Capital,Senior Analyst,2025-03-06
+1014,Thomas,Muller,t.muller@rheinbau.de,+49 30 555 0177,Rheinbau GmbH,Site Engineer,2024-06-12
+1015,Thomas,Müller,t.mueller@rheinbau.de,+49 30 555 0177,Rheinbau GmbH,Site Engineer,2024-06-12
+1016,Aisha,Rahman,arahman@tidalworks.com,+971 4 555 0154,Tidalworks,Operations Lead,2024-10-01
+1017,Daniel,Kim,dkim@northwind.com,+1 (415) 555-0199,Northwind Traders,Account Executive,2024-03-15
+1018,Daniel,Kim,dkim@harborlight.com,+1 (206) 555-0164,Harborlight Logistics,Account Executive,2025-01-27
+1019,Elena,Petrova,epetrova@volta-energy.com,+7 495 555 0102,Volta Energy,Grid Analyst,2024-12-08
+1020,Elena,Petrova,epetrova@volta-energy.com,+7 495 555 0102,Volta Energy,Grid Analyst,2024-12-08
+1021,Michael,Brown,mbrown@acmeindustrial.com,+1 (312) 555-0171,Acme Industrial,Buyer,2024-02-02
+1022,Michelle,Brown,mbrown2@acmeindustrial.com,+1 (312) 555-0172,Acme Industrial,Buyer,2024-02-03
+1023,Kwame,Mensah,kmensah@sunbeltagri.com,+233 30 255 0119,Sunbelt Agri,Regional Manager,2024-07-19
+1024,Kwame,Mensah,k.mensah@sunbeltagri.com,+233 302 550 119,Sunbelt Agri Ltd,Regional Manager,2025-04-02
