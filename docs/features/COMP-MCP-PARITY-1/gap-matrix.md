@@ -9,7 +9,7 @@
 
 | CLI surface | MCP | Notes |
 |---|---|---|
-| `ideabox add/list/promote/kill/resurrect/pri/discuss/triage/render` | ❌ | **Highest value.** Zero matches for "ideabox" under `compose-mcp/`. An agent cannot capture an idea at all. Front door of the pipeline. |
+| `ideabox add/list/promote/kill/resurrect/pri/discuss/triage/render` | ❌ | **Highest value.** Zero matches for "ideabox" under `compose-mcp/`. See the correction below — a `/ideabox` skill exists but targets a different product. Tracked as `COMP-IDEABOX-MIGRATE-1`. |
 | `new` (product kickoff) | ❌ | research → brainstorm → roadmap Stratum flow; empty dir to populated project |
 | `build` | ❌ | UI can (`POST /api/build/start`), CLI can, MCP cannot |
 | `fix` | ❌ | bug-fix lifecycle |
@@ -65,6 +65,32 @@ class as `COMP-WS-ISOLATION-1`.
 
 **Fix candidates:** an explicit `add_workspace`/`open_workspace` by absolute
 path, or letting `set_workspace` accept a path rather than only a discovered id.
+
+## Correction (2026-09-28) — the skills question
+
+An earlier draft of this matrix said an agent "literally cannot capture an
+idea". That overstated it, and the owner was right to push back: `/ideabox` and
+`/roadmap` skills both exist. The corrected position:
+
+**`/roadmap` is already MCP-backed.** `~/.claude/skills/roadmap/SKILL.md` says
+*"Compose MCP (preferred when present) — call `get_roadmap` before reading any
+file."* No gap. The ✅ above stands.
+
+**`/ideabox` exists but is not a Compose client, and is worse than a gap.** It
+declares its location as `smart-memory-docs/docs/product/ideabox.md` — a
+hardcoded path to a **different product** (verified to exist at
+`/Users/ruze/reg/my/SmartMemory/...`). It hand-edits that markdown with grep and
+python and computes IDs by max+1, with two documented collision incidents.
+
+It never calls `compose ideabox` or the compose MCP, so:
+- invoked from a Compose project it still writes SmartMemory's file
+- nothing appears in the Compose UI
+- `compose ideabox render` is documented as *"the way back from any hand edit"*
+  (`lib/ideabox-cli.js:314-322`), so hand edits to a Compose-managed ideabox are
+  discarded by design
+
+The two systems do not merely coexist — they undo each other. Tracked
+separately as **`COMP-IDEABOX-MIGRATE-1`**.
 
 ## Preserve this — it already works
 
