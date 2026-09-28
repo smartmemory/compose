@@ -55,18 +55,52 @@ paths. (`compose new --help` is safe.)
 ## Step 3 — Kick off the product
 
 ```sh
-compose new "Markdown table to CSV converter CLI" --auto
+compose new "Markdown table to CSV converter CLI"
 ```
 
-- `--auto` skips the questionnaire. **Drop `--auto` only if you want to show
-  the questionnaire** — rehearse its length first. ❓
-- This is the real zero-to-product on-ramp: research → brainstorm → roadmap →
-  scaffold. It exists only in the CLI; **the UI never points at it.**
+This is the real zero-to-product on-ramp. It exists **only in the CLI** — the UI
+never points at it.
 
-❓ **Rehearse this once tonight.** It is the longest unscripted step and the one
-most likely to surprise you on stage. Then reset with Step 0.
+### What it actually runs
 
----
+A Stratum flow of three agent-driven steps, each producing a real artifact and
+each **validated against explicit criteria** (on failure it re-dispatches a fix
+prompt and retries). Gates pause between steps for your approval.
+
+| Step | Writes | Must contain |
+|---|---|---|
+| research | `docs/discovery/research.md` | ≥2 prior-art entries, architectural patterns, risks |
+| brainstorm | `docs/discovery/brainstorm.md` | ≥3 features with codes, user stories, ≥2 architecture options with trade-offs |
+| roadmap | `ROADMAP.md` | feature table with status columns, organised into phases, all PLANNED |
+
+✅ This is why the UI populates as it runs: the flow writes vision state that
+the graph and dashboard read. A free-form chat would produce plausible markdown
+and **nothing would appear on screen**. The terminal is the driver; the UI is
+where you watch the machine work. That is the story to tell.
+
+### Questionnaire vs `--auto` — decide after rehearsing
+
+Plain `compose new` asks **six questions** first: refine the description,
+project type (CLI / API / library / full-stack), language/runtime, scope
+(small/medium/large), **whether to research prior art**, and any extra
+constraints. Answers persist to `.compose/questionnaire.json` and become
+defaults next time (`--ask` re-runs it with those defaults).
+
+`--auto` skips **only those six questions**. It does not skip any of the three
+steps or the gates.
+
+❓ **Rehearse with the questionnaire once, and time it.**
+- If it is short: **use it live.** Those six questions are a good beat — they
+  show the system pinning down intent before it generates anything.
+- If it drags: fall back to `--auto`.
+
+⚠️ `--auto` is **not** automatically the safer choice. It locks in "research
+prior art = yes", which is a whole extra agent step. Answering **no** to that
+one question is the single biggest time saver available, and `--auto` gives it
+away.
+
+❓ This is the longest unscripted step. Rehearse it tonight, then reset via
+Step 0.
 
 ## Step 4 — Point the UI at `testapp`
 
@@ -177,5 +211,10 @@ on screen** — which looks exactly like a crash.
 
 ## Five-minute cut
 
-Steps 0–2 done beforehand. Then: **ideabox add (live update) → triage →
+Steps 0–2 done beforehand, and `compose new` already run (its three steps are
+too long for a five-minute slot). Then: **ideabox add (live update) → triage →
 promote → DESIGN → build → gate.** Everything else is optional.
+
+If you have twenty minutes, put `compose new` back in as the opener — it is the
+strongest demonstration that the pipeline is real, because every artifact it
+writes is validated and shows up in the UI as it lands.
