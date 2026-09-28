@@ -1,0 +1,17 @@
+{
+  "code": "COMP-OBS-STATS-1",
+  "description": "Usage statistics view: cross-build cost/token aggregates over time with KPI tiles, period comparison, day-bucketed time series, and a by-agent/by-model breakdown, read from build-history.jsonl",
+  "status": "PLANNED",
+  "phase": "COMP-OBS-STATS: Usage statistics",
+  "created": "2026-09-28",
+  "updated": "2026-09-28",
+  "complexity": "L",
+  "position": 1,
+  "parent": "COMP-OBS-COST-4",
+  "tags": [
+    "observability",
+    "ui",
+    "cost"
+  ],
+  "impact": "medium"
+}

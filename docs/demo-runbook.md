@@ -11,6 +11,10 @@ session, an empty folder. Assumes nothing from the session that produced it.
 
 **Legend:** ✅ verified live on 2026-09-28 · ⚠️ known rough edge · ❓ rehearse before you rely on it
 
+**Companion:** [`demo-runbook-claude-code.md`](./demo-runbook-claude-code.md) runs the
+same story with no UI, no server and no CLI — one Claude Code session driving the
+`/compose` lifecycle. Prefer it for a technical audience or a fragile stage setup.
+
 ---
 
 ## Step 0 — Reset the folder (do this tonight, not on stage)
