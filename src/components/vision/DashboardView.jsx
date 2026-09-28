@@ -329,7 +329,7 @@ export default function DashboardView({
             </Button>
           )}
           <p className="text-[11px] text-muted-foreground/70 font-mono">
-            Run /compose &lt;feature-code&gt; in the terminal to start.
+            Run /compose build &lt;feature-code&gt; in the terminal to start.
           </p>
           {completedFeatures.length > 0 && (
             <div className="mt-6 w-full max-w-sm">
