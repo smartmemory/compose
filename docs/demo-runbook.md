@@ -1,5 +1,11 @@
 # Compose Demo Runbook — zero to product in `testapp`
 
+**The demo product:** a CLI that finds duplicate contacts in a CRM export and
+reports merge candidates with confidence scores. Chosen because it contains a
+real architectural fork (exact vs fuzzy matching) — so the design phase shows
+thinking rather than ceremony — and because every CRM person recognises the
+pain instantly, spending no attention on the product and all of it on Compose.
+
 Written 2026-09-28 for a cold start: a fresh terminal, a fresh Claude Code
 session, an empty folder. Assumes nothing from the session that produced it.
 
@@ -15,6 +21,9 @@ ls -la ~/reg/my/testapp        # expect: empty
 ```
 
 ⚠️ **Do not skip.** Leftover `.compose/data` makes the demo look half-started.
+
+⚠️ `testapp` currently holds a `.compose/compose.json` from a workspace-anchoring
+test on 2026-09-28. The reset above clears it.
 
 ---
 
@@ -52,10 +61,30 @@ paths. (`compose new --help` is safe.)
 
 ---
 
+## Step 2b — Drop in the demo data
+
+```sh
+cp ~/reg/my/forge/compose/docs/demo-assets/contacts.csv ~/reg/my/testapp/
+```
+
+24 synthetic contacts with planted duplicates at every confidence band, plus
+four deliberate traps that must **not** merge (same name different employer,
+same name different role, Michael vs Michelle, and a singleton). Full breakdown
+in `docs/demo-assets/README.md`.
+
+⚠️ Say "synthetic" once on stage — it pre-empts "is that real customer data?".
+No real people or companies; all numbers in reserved `555` ranges.
+
+✅ The traps are what make the demo land: anything can find an identical row.
+They force the **threshold** question, which is the design decision worth
+watching.
+
+---
+
 ## Step 3 — Kick off the product
 
 ```sh
-compose new "Markdown table to CSV converter CLI"
+compose new "CLI that finds duplicate contacts in a CRM export and reports merge candidates with confidence scores"
 ```
 
 This is the real zero-to-product on-ramp. It exists **only in the CLI** — the UI
@@ -89,6 +118,26 @@ defaults next time (`--ask` re-runs it with those defaults).
 `--auto` skips **only those six questions**. It does not skip any of the three
 steps or the gates.
 
+### Answers to give it
+
+| Question | Answer | Why |
+|---|---|---|
+| Refine the description | keep | it is already specific |
+| What kind of project? | **CLI tool** | |
+| Primary language/runtime? | your pick | Node or Python both fine |
+| Scope? | **Small (1-3 features, single module)** | keeps the build short enough to demo |
+| Research prior art? | **No** | ⭐ drops an entire agent step — the single biggest time saver |
+| Additional context? | **Yes** → paste the fixture note below | |
+
+Context worth pasting when it asks:
+
+> Input is a CSV export with columns id, first_name, last_name, email, phone,
+> company, title, created. Must handle nicknames (Robert/Bob), diacritics and
+> transliteration (Müller/Mueller), punctuation (O'Connor/OConnor), phone
+> formatting variance, and company legal-suffix noise (Ltd, SA, GmbH). Must NOT
+> merge people who share a name but differ in employer or role. Output a merge
+> candidate report with confidence scores and a threshold the user can tune.
+
 ❓ **Rehearse with the questionnaire once, and time it.**
 - If it is short: **use it live.** Those six questions are a good beat — they
   show the system pinning down intent before it generates anything.
@@ -119,8 +168,9 @@ started before a switch will bleed through.
 ## Step 5 — Ideabox (your opening beat)
 
 ```sh
-compose ideabox add "Support piped stdin input"
-compose ideabox add "Emit TSV as well as CSV"
+compose ideabox add "Tune the merge threshold from a config file"
+compose ideabox add "Emit a CSV of merge pairs for bulk import back into the CRM"
+compose ideabox add "Flag same-name-different-employer pairs as job changes, not duplicates"
 compose ideabox list
 ```
 
@@ -155,9 +205,16 @@ to demo.
 From the promoted feature, or directly:
 
 ```sh
-compose feature "CSV output formatting"
-compose build <FEATURE-CODE>
+compose feature "Confidence score thresholding"
+compose build --quick <FEATURE-CODE>
 ```
+
+⚠️ **`/compose build` (the Claude Code skill) will NOT animate the cockpit.** It
+runs the lifecycle in-session and does not write the active-build record, so
+BUILDS and the bottom bar stay empty. Use the headless CLI above, or better,
+the UI's own **Start Build** control (`POST /api/build/start` —
+`StartBuildPopover` / `LaunchPopover`), which is the same `runBuild` path and
+gives you the live phase + cost chip in the bottom bar.
 
 Watch in the UI: **BUILDS** (cost and agent activity), **GRAPH** (the feature
 appears), **GATES** (approvals land here).
@@ -191,7 +248,7 @@ file-watcher websocket, rendered in place, **no page reload**.
 
 | Ask Claude Code for | Tool | Shows up in |
 |---|---|---|
-| "scaffold a feature for CSV output formatting" | `scaffold_feature` | **GRAPH** (new node), ITEMS, DOCS |
+| "scaffold a feature for confidence-score thresholding" | `scaffold_feature` | **GRAPH** (new node), ITEMS, DOCS |
 | "add it to the roadmap" | `add_roadmap_entry` | roadmap views |
 | "mark it in progress" | `set_feature_status` | GRAPH node colour, DASHBOARD |
 | "what gates are pending?" | `get_pending_gates` | GATES + bottom gate bar |
