@@ -1,8 +1,8 @@
 /**
  * useIdeaboxStore — Zustand singleton for the ideabox feature.
  *
- * State: { ideas, killed, loading, error, selectedIdeaId, filters }
- * Actions: hydrate(), addIdea(), promoteIdea(), killIdea(), setPriority(), updateFilters()
+ * State: { ideas, killed, clusters, loading, error, selectedIdeaId, filters }
+ * Actions: hydrate(), resetForProject(), addIdea(), promoteIdea(), killIdea(), setPriority(), updateFilters()
  *
  * Hydrates via GET /api/ideabox.
  * Subscribes to WS 'ideaboxUpdated' messages via the vision store's WS — but since
@@ -71,6 +71,8 @@ let _wsDisposed = false;
 // ---------------------------------------------------------------------------
 
 export const useIdeaboxStore = create((set, get) => {
+  let projectGeneration = 0;
+
   // Hydrate on store creation
   setTimeout(() => get().hydrate(), 0);
 
@@ -85,6 +87,7 @@ export const useIdeaboxStore = create((set, get) => {
     // ── State ───────────────────────────────────────────────────────────────
     ideas: [],
     killed: [],
+    clusters: [],
     loading: false,
     error: null,
     selectedIdeaId: null,
@@ -98,13 +101,26 @@ export const useIdeaboxStore = create((set, get) => {
     // ── Actions ─────────────────────────────────────────────────────────────
 
     hydrate: async () => {
+      const generation = projectGeneration;
       set({ loading: true, error: null });
       try {
         const data = await apiFetch('/api/ideabox');
-        set({ ideas: data.ideas || [], killed: data.killed || [], loading: false });
+        if (generation !== projectGeneration) return;
+        set({ ideas: data.ideas || [], killed: data.killed || [], clusters: data.clusters || [], loading: false });
       } catch (err) {
+        if (generation !== projectGeneration) return;
         set({ error: err.message, loading: false });
       }
+    },
+
+    resetForProject: () => {
+      projectGeneration++;
+      set({
+        ideas: [], killed: [], clusters: [], loading: false, error: null,
+        selectedIdeaId: null,
+        filters: { tag: '', status: '', priority: '', search: '' },
+      });
+      return get().hydrate();
     },
 
     addIdea: async (fields) => {

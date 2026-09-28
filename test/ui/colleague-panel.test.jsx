@@ -68,6 +68,44 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
+describe('Ideabox project reset', () => {
+  it('clears old project data, selection, and filters before loading the new project', async () => {
+    let resolveFetch;
+    wsFetch.mockImplementation(() => new Promise(resolve => { resolveFetch = resolve; }));
+    useIdeaboxStore.setState({
+      ideas: [{ id: 'IDEA-1' }], killed: [{ id: 'IDEA-2' }], clusters: [{ name: 'Old' }],
+      selectedIdeaId: 'IDEA-1', filters: { tag: 'old', status: 'NEW', priority: 'P0', search: 'old' },
+    });
+
+    const hydration = useIdeaboxStore.getState().resetForProject();
+    expect(useIdeaboxStore.getState()).toMatchObject({
+      ideas: [], killed: [], clusters: [], selectedIdeaId: null,
+      filters: { tag: '', status: '', priority: '', search: '' }, loading: true,
+    });
+    resolveFetch(json({ ideas: [{ id: 'IDEA-9' }], killed: [], clusters: [{ name: 'New' }] }));
+    await hydration;
+    expect(useIdeaboxStore.getState()).toMatchObject({
+      ideas: [{ id: 'IDEA-9' }], killed: [], clusters: [{ name: 'New' }], loading: false,
+    });
+  });
+
+  it('discards an old project hydrate that finishes after the new one', async () => {
+    let resolveOld;
+    let resolveNew;
+    wsFetch.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }))
+      .mockImplementationOnce(() => new Promise(resolve => { resolveNew = resolve; }));
+
+    const oldHydration = useIdeaboxStore.getState().hydrate();
+    const newHydration = useIdeaboxStore.getState().resetForProject();
+    resolveNew(json({ ideas: [{ id: 'IDEA-9' }], killed: [], clusters: [] }));
+    await newHydration;
+    resolveOld(json({ ideas: [{ id: 'IDEA-1' }], killed: [], clusters: [] }));
+    await oldHydration;
+
+    expect(useIdeaboxStore.getState()).toMatchObject({ ideas: [{ id: 'IDEA-9' }], loading: false, error: null });
+  });
+});
+
 describe('ColleaguePanel funnel states', () => {
   it('connect-smartmemory: no chat, upgrade guidance (no degraded plain-chat mode)', () => {
     renderPanel({ status: { enabled: true, state: 'connect-smartmemory' } });

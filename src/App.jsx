@@ -585,11 +585,9 @@ function AppInner() {
       // and their mount effects fire wsFetch immediately. Updating the cache
       // first guarantees those fetches carry the new X-Compose-Workspace-Id.
       await refreshWorkspace();
-      // The Ideabox selection is global store state that hydration does NOT
-      // clear — carried across a switch it points at whatever record happens
-      // to share the handle in the new project (and the colleague panel would
-      // write Maya's replies onto it). Clear it before the root flips.
-      useIdeaboxStore.getState().setSelectedIdea(null);
+      // Clear the global Ideabox state and fetch for the new workspace before
+      // the root flips. The reset discards in-flight responses from the old one.
+      useIdeaboxStore.getState().resetForProject();
       setProjectName(data.name);
       setProjectRoot(data.targetRoot);
       // Vision store will get new state via WebSocket broadcast
