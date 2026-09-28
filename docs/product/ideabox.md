@@ -2,7 +2,11 @@
      Projection of the fluid-store idea records (COMP-PLAN-IDEA-UNIFY).
      Edits here are overwritten on the next render. Change ideas with
      `compose ideabox add|pri|kill|discuss|promote`, then `compose ideabox
-     render` if this file ever looks stale. -->
+     render` if this file ever looks stale.
+     The title and introduction above are not generated: they live in
+     `<this file>.preamble.md`. Edit them THERE, not here.
+     That file is the opposite of this one: it is yours, nothing
+     regenerates it, and what you write there is kept. -->
 
 # Ideabox
 
@@ -193,6 +197,31 @@
 **Status:** NEW | **Priority:** P2
 **Source:** COMP-FOH FOH-6 spike, shelved 2026-08-10
 **Idea:** Meta rung of the discovery loop: grade the loop's own judgment over time (which promotions shipped-and-mattered, which kills a competitor later validated) and recalibrate. SHELVED 2026-08-10 as premature — captured so the spike isn't re-run (token spend). Two grounded blockers, do NOT re-derive: (1) NO SUBJECT — SmartMemory GET /agents/{id}/evaluation needs an AGENT-type row + written evaluations; Compose registers neither, and there is no reachable REST write path to create evaluations. (2) NO TRACK RECORD — Compose rarely records BOTH halves of a bet: predictions are written (feature triageConfidence/impact/effort in lib/feature-writer.js) but the later shipped-and-mattered OUTCOME never is; gate recommendations are rendered then discarded (only the human outcome persists). Sole exception: judgment-ledger reversals (superseded/retracted positions) — editorial, not scored forecasts. PREREQUISITE: start recording the missing half (tag feature confidences with a later outcome so prediction<->outcome pairs accumulate). SEQUENCING: build a lower rung first (pre-promotion wind-tunnel / standing adversaries) — it generates the very track record calibration later grades. Refs: docs/features/COMP-FOH/foh-5-substrate-findings.md, docs/product/2026-07-20-discovery-loop-vision.md (rungs 4/6).
+
+---
+
+### developer-experience
+
+#### IDEA-33 — Pre-push runs the full suite that CI already runs; scope it to changed paths
+**Status:** NEW | **Priority:** —
+**Source:** session 122, 2026-09-28 — hit while pushing the favicon/Inter fix (bdf5c2d)
+**Idea:** The pre-push hook runs a hard `npm test` gate (497 test files). CI runs the IDENTICAL suite: .github/workflows/test.yml, added 3d8d784 (2026-07-19), 'full suite on push/PR'. The hook predates it (afe1444, 2026-05-04), when there was no CI and a local suite was the only gate — correct then, duplicated for ~10 weeks since.
+
+STRUCTURAL PROBLEM, not flakiness — 4 occurrences of the same drop, all with the suite green: 2026-09-11, 2026-09-12, 2026-09-18 (recorded in 80ab5b4) and 2026-09-28 (this session). A pre-push hook runs while git holds the connection to the remote, so max gate duration is bounded by GitHub's idle timeout, not by how much the gate is valued. Today's run exceeded 15 min and GitHub closed the connection after the suite went GREEN ('Connection to github.com closed by remote host'); the push did not land and needed a --no-verify retry. 80ab5b4 (2026-09-18) records the same drop measured three times (09-11, 09-12, 09-18) and caches a verified HEAD to work around it — that treats a structural ceiling as an intermittent annoyance, and the suite only grows.
+
+TWO LIVE DEFECTS FOUND WHILE DIAGNOSING:
+1. The installed .git/hooks/pre-push (Sep 7, 7542b) does NOT contain the 80ab5b4 cache — zero matches for 'pre-push-verified'; the template (Sep 18, 9029b) has it. The fix was never installed here.
+2. HOOK_VERSION is "1" in BOTH the installed hook and the current template, so lib/hooks-status.js HOOK_VERSION_DRIFT provably cannot detect this drift. The one mechanism built to catch a stale hook is blind to the change that most needed catching.
+
+PROPOSAL: scope pre-push tests to the paths the push touches, keep the full suite in CI. This is a refinement of the hook's own existing design, not a replacement — the docs-only skip (eba6ba9, 2026-06-10) is already this idea with two buckets. Then re-install the hook, and bump HOOK_VERSION to 2 in both the template and HOOK_VERSIONS in lib/hooks-status.js so drift becomes detectable.
+TRADEOFF: a narrower local gate lets something reach CI; with commits going straight to main that means main can be red for a few minutes. If unacceptable, alternative is a full gate run detached from the push (more machinery).
+
+FALSIFIERS (check before acting, all one command):
+- defect 1 resolved when: grep -c pre-push-verified .git/hooks/pre-push  (0 = still stale)
+- defect 2 resolved when: grep HOOK_VERSION bin/git-hooks/pre-push.template  (still "1" = undetectable)
+- duplication resolved when: grep -n 'npm test' bin/git-hooks/pre-push.template  (unscoped = still duplicated)
+
+PARKED 2026-09-28 at owner's request: demo was next day; changing the gate guarding main the night before is worse than a known-slow gate.
 
 ---
 

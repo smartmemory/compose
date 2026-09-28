@@ -1,0 +1,27 @@
+{
+  "id": "7f6ee46e-cd81-43f4-abde-af516b5bc403",
+  "handle": "CLUS-8",
+  "kind": "cluster",
+  "title": "developer-experience",
+  "body": "",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "effort": null,
+  "impact": null,
+  "cluster": null,
+  "cluster_order": null,
+  "tags": [],
+  "source": null,
+  "extra_fields": [],
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "cli:ideabox",
+    "recorded_at": "2026-09-28T10:39:11.732Z",
+    "author": null
+  },
+  "created_at": "2026-09-28T10:39:11.732Z",
+  "updated_at": "2026-09-28T10:39:11.732Z"
+}
