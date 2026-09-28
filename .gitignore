@@ -5,6 +5,10 @@ package-lock.json
 .forge/
 *.png
 !Screenshot.png
+!public/apple-touch-icon.png
+!public/icon-192.png
+!public/icon-512.png
+!public/icon-512-maskable.png
 *.jpg
 .playwright-mcp/
 .compose-supervisor.pid

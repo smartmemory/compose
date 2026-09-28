@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { DialogProvider } from './components/ui/DialogProvider.jsx';
+import '@fontsource-variable/inter';
 import './index.css';
 
 const isMobile = window.location.pathname.startsWith('/m');
