@@ -179,6 +179,43 @@ Approve from the UI — the bottom bar exposes a gate reviewer with a pager.
 
 ---
 
+## Step 9 — The MCP beat (Claude Code driving the UI)
+
+The pitch: **ask for something in plain English, watch the UI change while you
+are still talking.** Two surfaces, one state.
+
+✅ Verified 2026-09-28: an MCP write reached the running UI over the
+file-watcher websocket, rendered in place, **no page reload**.
+
+### Use these — they produce visible changes
+
+| Ask Claude Code for | Tool | Shows up in |
+|---|---|---|
+| "scaffold a feature for CSV output formatting" | `scaffold_feature` | **GRAPH** (new node), ITEMS, DOCS |
+| "add it to the roadmap" | `add_roadmap_entry` | roadmap views |
+| "mark it in progress" | `set_feature_status` | GRAPH node colour, DASHBOARD |
+| "what gates are pending?" | `get_pending_gates` | GATES + bottom gate bar |
+
+**`scaffold_feature` is the one to demo live.** It is forgiving, and a new node
+appearing on the graph mid-sentence is the clearest possible proof.
+
+⚠️ **Do not demo `write_journal_entry` live.** It requires four exact sections
+(`what_happened`, `what_we_built`, `what_we_learned`, `open_threads`) plus
+`summary_for_index` and `date`, and it surfaces them **one validation error at
+a time** — five consecutive failures before it accepted the call. It works, but
+typing it live is a death spiral.
+
+### Pre-flight, every time
+
+```
+get_workspace        → current.root MUST be /Users/ruze/reg/my/testapp
+```
+
+If it disagrees with the UI, your writes land somewhere invisible and it looks
+like a crash. See the section below.
+
+---
+
 ## MCP ↔ UI — the one thing that will bite you
 
 **The MCP's workspace binding is independent of what the UI is pointed at.**
@@ -188,12 +225,18 @@ on screen** — which looks exactly like a crash.
 - The MCP discovers workspaces by anchoring on the directory the **session
   started in**. ✅ So: **start Claude Code inside `~/reg/my/testapp`**, not
   inside `forge`. That is what makes `testapp` visible to it at all.
+- ✅ **Proven, not theoretical.** A session started in `forge`, after running
+  `compose init` in `testapp`, still got
+  `WorkspaceUnknown: Unknown workspaceId: testapp` from `set_workspace`. The
+  MCP could not reach it at all. Anchoring is fixed at session start; no amount
+  of config fixes it afterwards.
 - Confirm before demoing: `get_workspace` → `current.root` must be
   `/Users/ruze/reg/my/testapp`. If not: `set_workspace({workspaceId: "testapp"})`.
 - Useful MCP tools that show up in the UI: `get_roadmap`, `scaffold_feature`,
   `add_roadmap_entry`, `get_pending_gates`, `approve_gate`, `validate_feature`,
   `write_journal_entry`, `get_feature_lifecycle`.
 - ⚠️ No ideabox tools. See Step 5.
+- ⚠️ Avoid `write_journal_entry` live. See Step 9.
 
 ---
 
@@ -213,7 +256,10 @@ on screen** — which looks exactly like a crash.
 
 Steps 0–2 done beforehand, and `compose new` already run (its three steps are
 too long for a five-minute slot). Then: **ideabox add (live update) → triage →
-promote → DESIGN → build → gate.** Everything else is optional.
+promote → DESIGN → scaffold via MCP → gate.** Everything else is optional.
+
+The MCP scaffold (Step 9) is worth keeping even in the short cut — it is the
+clearest single moment where talking to Claude Code visibly moves the UI.
 
 If you have twenty minutes, put `compose new` back in as the opener — it is the
 strongest demonstration that the pipeline is real, because every artifact it
