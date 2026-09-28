@@ -64,7 +64,8 @@ describe('COMP-IDEABOX-MIGRATE-DIALECT — the legacy flat dialect', () => {
 
   it('does NOT change how a new-dialect ideabox parses', () => {
     const parsed = parseIdeabox(NESTED);
-    assert.equal(parsed.ideas.length, 32, 'the nested dialect still yields its 32 ideas');
+    const headingCount = (NESTED.match(/^#### IDEA-/gm) || []).length;
+    assert.equal(parsed.ideas.length, headingCount, 'every #### IDEA- heading must be read as an idea');
     assert.ok(parsed.clusters.length >= 7, 'umbrellas still captured');
     assert.ok(parsed.ideas.every((i) => i.cluster), 'nested ideas keep their umbrella');
   });

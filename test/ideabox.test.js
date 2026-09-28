@@ -536,6 +536,16 @@ describe('discussion parsing', () => {
     assert.equal(disc[1].text, 'Graph maps better to relationships.')
   })
 
+  it('keeps reading discussion entries after a blank line', () => {
+    const md = DISCUSSION_EXAMPLE.replace(
+      '- [2026-04-10] agent:',
+      '\n- [2026-04-10] agent:',
+    )
+    const { ideas: [idea] } = parseIdeabox(md)
+    assert.equal(idea.discussion.length, 2)
+    assert.equal(idea.discussion[1].author, 'agent')
+  })
+
   it('defaults to empty discussion array when no discussion section', () => {
     const { ideas } = parseIdeabox(MINIMAL)
     for (const idea of ideas) {
@@ -732,6 +742,40 @@ describe('resurrectIdea', () => {
 describe('real-ideabox fidelity', () => {
   const REAL_PATH = new URL('../docs/product/ideabox.md', import.meta.url)
   const real = readFileSync(REAL_PATH, 'utf8')
+
+  it('round-trips multi-paragraph idea bodies without retaining section separators', () => {
+    const md = `# Ideabox
+
+## Ideas
+
+---
+
+### Research
+
+#### IDEA-1 — Multiple paragraphs
+**Status:** NEW | **Priority:** P1
+**Idea:** First paragraph.
+
+Second paragraph.
+
+Third paragraph.
+
+#### IDEA-2 — Next idea
+**Status:** NEW | **Priority:** P2
+**Idea:** One paragraph.
+
+---
+
+### Delivery
+
+#### IDEA-3 — Another cluster
+**Status:** NEW | **Priority:** P3
+**Idea:** Single paragraph.
+
+## Killed Ideas
+`
+    assert.equal(serializeIdeabox(parseIdeabox(md)), md)
+  })
 
   it('round-trips the real ideabox byte-for-byte', () => {
     // The strongest available statement that a write loses nothing. If this
