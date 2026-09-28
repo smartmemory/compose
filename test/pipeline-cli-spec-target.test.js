@@ -21,13 +21,14 @@ function setupCwd(extraSpecs = {}) {
 
   // Minimal build spec so the default-specName path remains valid.
   const buildSpec = {
-    version: '0.3',
-    workflow: { name: 'build' },
+    version: 1,
+    contracts: { Result: { summary: 'string' } },
     flows: {
+      entry: 'build',
       build: {
-        steps: [
-          { id: 'execute', agent: 'claude', intent: 'do work', retries: 2 },
-        ],
+        input: {},
+        output: { from: '${execute.output}', contract: 'Result' },
+        steps: [{ id: 'execute', agent: 'claude', do: 'do work', out: 'Result', attempts: 2 }],
       },
     },
   };
@@ -51,57 +52,32 @@ describe('pipeline-cli specName target', () => {
     const cwd = setupCwd();
     pipelineDisable(cwd, ['execute']);
     const spec = readSpec(cwd, 'build.stratum.yaml');
-    assert.equal(spec.flows.build.steps[0].skip_if, 'true');
+    assert.equal(spec.flows.build.steps[0].when, 'false');
   });
 
   test('pipelineDisable targets new.stratum.yaml when specName is passed', () => {
-    const newSpec = {
-      version: '0.2',
-      workflow: { name: 'new' },
-      flows: {
-        new: {
-          steps: [
-            { id: 'review_gate', function: 'review_gate' },
-            { id: 'roadmap', agent: 'claude', intent: 'roadmap' },
-          ],
-        },
-      },
-      functions: { review_gate: { mode: 'gate', timeout: 7200 } },
-    };
+    const newSpec = parse(readFileSync(new URL('../pipelines/new.stratum.yaml', import.meta.url), 'utf-8'));
     const cwd = setupCwd({ 'new.stratum.yaml': newSpec });
 
     pipelineDisable(cwd, ['review_gate'], 'new.stratum.yaml');
 
     const result = readSpec(cwd, 'new.stratum.yaml');
-    assert.equal(result.flows.new.steps[0].skip_if, 'true', 'review_gate should be disabled in kickoff spec');
+    assert.equal(result.flows.new.steps.find(s => s.id === 'review_gate').when, 'false', 'review_gate should be disabled in kickoff spec');
 
     // Build spec must remain untouched.
     const build = readSpec(cwd, 'build.stratum.yaml');
-    assert.equal(build.flows.build.steps[0].skip_if, undefined, 'build spec must not be mutated');
+    assert.equal(build.flows.build.steps[0].when, undefined, 'build spec must not be mutated');
   });
 
   test('pipelineSet --mode review converts kickoff review_gate into a codex sub-flow', () => {
-    const newSpec = {
-      version: '0.2',
-      workflow: { name: 'new' },
-      flows: {
-        new: {
-          steps: [
-            { id: 'brainstorm', agent: 'claude', intent: 'brainstorm' },
-            { id: 'review_gate', function: 'review_gate', on_approve: 'roadmap' },
-            { id: 'roadmap', agent: 'claude', intent: 'roadmap' },
-          ],
-        },
-      },
-      functions: { review_gate: { mode: 'gate', timeout: 7200 } },
-    };
+    const newSpec = parse(readFileSync(new URL('../pipelines/new.stratum.yaml', import.meta.url), 'utf-8'));
     const cwd = setupCwd({ 'new.stratum.yaml': newSpec });
 
     pipelineSet(cwd, 'review_gate', ['--mode', 'review'], 'new.stratum.yaml');
 
     const result = readSpec(cwd, 'new.stratum.yaml');
     const reviewStep = result.flows.new.steps.find(s => s.id === 'review_gate');
-    assert.equal(reviewStep.flow, 'review_gate_review', 'review_gate should now reference a sub-flow');
+    assert.equal(reviewStep.run, 'review_gate_review', 'review_gate should now reference a sub-flow');
     assert.equal(result.flows.review_gate_review.steps[0].agent, 'codex', 'sub-flow should run on codex');
   });
 
