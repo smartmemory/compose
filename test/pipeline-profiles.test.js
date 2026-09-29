@@ -42,7 +42,7 @@ test('item routing fixes provider/template, resolves exact models and effort, de
   ['critical', 'standard', 'fast'].forEach((tier, i) => {
     const result = resolveConsumerProfile(entry, { tier, provider: 'claude', template: 'orchestrator' }, 'codex');
     assert.equal(result.modelID, models[i]); assert.equal(result.template, 'implementer');
-    assert.equal(result.effort, tier === 'critical' ? 'high' : 'medium');
+    assert.equal(result.effort, tier === 'fast' ? 'medium' : 'high');
   });
   assert.equal(resolveConsumerProfile(entry, {}, 'codex').tier, 'critical');
   assert.equal(resolveConsumerProfile('claude:orchestrator', {}).modelID, null);
@@ -89,7 +89,7 @@ test('routing policy validates closed shapes, refuses runtime policy overrides a
   for (const metadata of [null, [], {}, { mode: 'off' }, { mode: 'shadow', extra: 1 }]) assert.throws(() => normalizePipelineProfiles({ _routing: metadata }, spec));
   assert.throws(() => mergeRuntimeProfiles(raw, { execute: { ...entry, route: { learn: true } } }), { code: 'ROUTING_POLICY_OVERRIDE' });
 });
-test('off projection pins bundled 0.5.1 digest and preserves legacy object representation', () => {
+test('off projection pins bundled profile digest and preserves legacy object representation', () => {
   // The shipped preset carries routing fields (plan/execute `route`, `_routing`); the 0.5.1 legacy
   // shape is derived from it here, never the other way round.
   const wrapped = JSON.parse(readFileSync('presets/team-fable-astra.profiles.json', 'utf8'));
@@ -100,7 +100,7 @@ test('off projection pins bundled 0.5.1 digest and preserves legacy object repre
   const { route: planRoute, ...planRest } = rest.plan;
   const { route: executeRoute, ...executeRest } = rest.execute;
   const raw = { ...rest, plan: Object.keys(planRest).length === 1 ? planRest.default : planRest, execute: executeRest };
-  const expected = '0a7792f6228420b553b6852f89b3d3f45a32cbf11e524a271bca49f9f45e5843';
+  const expected = '226328e52c9f8af988130eae6864828f4408c2c404b553d7542ea8a456806c4f';
   assert.equal(preflightPipelineProfiles(raw, yaml).profilesDigest, expected);
   const result = preflightPipelineProfiles(wrapped, yaml, {}, { mode: 'off' });
   assert.equal(result.profilesDigest, expected); assert.deepEqual(result.normalized, raw);

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Codex default gpt-6-sol now runs at high reasoning effort (was medium), per owner directive.
+
 - **Release: compose 0.7.2 — default Claude model is Sonnet 5.5; requires stratum ^0.7.3.**
 
 - Default Claude model moved from `claude-sonnet-5` to `claude-sonnet-5-5` (Sonnet 5.5, shipped 2026-09-29).

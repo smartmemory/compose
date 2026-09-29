@@ -79,7 +79,7 @@ describe('resolveTierThinking', () => {
   // picks the cheap model, it does not drop reasoning to the floor.
   test('codex tiers run high effort, and fast runs medium — never low', () => {
     assert.deepStrictEqual(resolveTierThinking('critical', 'codex'), { mode: null, effort: 'high' });
-    assert.deepStrictEqual(resolveTierThinking('standard', 'codex'), { mode: null, effort: 'medium' });
+    assert.deepStrictEqual(resolveTierThinking('standard', 'codex'), { mode: null, effort: 'high' });
     assert.deepStrictEqual(resolveTierThinking('fast', 'codex'), { mode: null, effort: 'medium' });
   });
   test('unknown tier returns null', () => {

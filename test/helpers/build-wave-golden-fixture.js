@@ -235,9 +235,9 @@ export function serializeGolden(value) {
     typeof value === 'function' || key === 'signal' ? undefined : value));
 }
 export function frozenRoutingBaseline(name) {
-  const frozen = JSON.parse(readFileSync(new URL(`../fixtures/model-route-off-${name}-v0.5.1.json`, import.meta.url)));
+  const frozen = JSON.parse(readFileSync(new URL(`../fixtures/model-route-off-${name}-sol-high.json`, import.meta.url)));
   assert.equal(frozen.captured, true);
-  assert.equal(frozen.sourceRevision, 'ed8e333d17046a327e90d058334d28d00c785fe8');
+  assert.equal(frozen.label, 'sol-high');
   return frozen;
 }
 

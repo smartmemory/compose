@@ -10,6 +10,7 @@ import { startFresh, resumeRouting, admitOrdinaryRoute, prepareRoutingIssuance, 
 import { routingDigest, canonicalRoutingJson } from '../lib/model-router.js';
 import { resolvePlanSpecValues } from '../lib/stratum-mcp-client.js';
 import { routingIssuanceState } from '../lib/routing-ledger.js';
+const ROUTE_BASELINE_LABEL = 'sol-high';
 const transport = Object.fromEntries(['route_mode', 'routing_start', 'routing_root', 'routing_plan_intent', 'routing_continuation'].map(k => [k, 'string?']));
 function fixture(t, extra = {}) {
   const cwd = mkdtempSync(join(tmpdir(), 'build-route-'));
@@ -106,10 +107,10 @@ test('unresolved launch refuses resume; exact prepared result resends only stepD
 });
 test('bundled off digest and synthetic Build input keys remain stable without routing storage', async t => {
   for (const [name, path] of [['bundled-build', 'presets/team-fable-astra'], ['carry', null]]) {
-    const frozen = JSON.parse(readFileSync(`test/fixtures/model-route-off-${name}-v0.5.1.json`));
+    const frozen = JSON.parse(readFileSync(`test/fixtures/model-route-off-${name}-${ROUTE_BASELINE_LABEL}.json`));
     if (path) {
       const check = preflightPipelineProfiles(JSON.parse(readFileSync(`${path}.profiles.json`)), readFileSync(`${path}.stratum.yaml`, 'utf8'), path, undefined, { mode: 'off' });
-      assert.equal(check.profilesDigest, '0a7792f6228420b553b6852f89b3d3f45a32cbf11e524a271bca49f9f45e5843');
+      assert.equal(check.profilesDigest, frozen.profileDigest);
     }
     assert.equal(frozen.captured, true);
   }
@@ -124,9 +125,9 @@ for (const opts of [{ route_mode: 'active' }, { route_trials: ['x'] }, { route_e
 
 test('carry preflight digest and bundled startFresh input match frozen values', async t => {
   const { PROFILES, WAVE_GOLDEN_SPEC } = await import('./helpers/build-wave-golden-fixture.js');
-  const carry = JSON.parse(readFileSync('test/fixtures/model-route-off-carry-v0.5.1.json'));
+  const carry = JSON.parse(readFileSync(`test/fixtures/model-route-off-carry-${ROUTE_BASELINE_LABEL}.json`));
   assert.equal(preflightPipelineProfiles(PROFILES, WAVE_GOLDEN_SPEC, 'carry', undefined, { mode: 'off' }).profilesDigest, carry.profileDigest);
-  const bundled = JSON.parse(readFileSync('test/fixtures/model-route-off-bundled-build-v0.5.1.json'));
+  const bundled = JSON.parse(readFileSync(`test/fixtures/model-route-off-bundled-build-${ROUTE_BASELINE_LABEL}.json`));
   const expected = bundled.events.find(e => e.kind === 'plan');
   const f = fixture(t);
   let input;
@@ -284,7 +285,7 @@ test('replayed frozen bundled/carry prompts retain supplied bytes and six static
   const { runAndNormalize } = await import('../lib/result-normalizer.js');
   const { fakeBuildStratum, agentResult } = await import('./helpers/build-stratum-fixture.js');
   for (const [name, raw] of [['bundled-build', JSON.parse(readFileSync('presets/team-fable-astra.profiles.json'))], ['carry', PROFILES]]) {
-    const frozen = JSON.parse(readFileSync(`test/fixtures/model-route-off-${name}-v0.5.1.json`));
+    const frozen = JSON.parse(readFileSync(`test/fixtures/model-route-off-${name}-${ROUTE_BASELINE_LABEL}.json`));
     const profiles = routingProfileProjection(raw, { mode: 'off' }).staticProfiles;
     const observed = [];
     const stratum = fakeBuildStratum({ agentRun: (provider, prompt, opts) => { observed.push({ provider, prompt, opts }); return agentResult({ summary: 'recorded fixture call' }, `oracle-${observed.length}`); } });

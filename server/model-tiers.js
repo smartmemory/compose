@@ -64,7 +64,7 @@ export const DEVIN_TIER_THINKING = {
 // reasoning-quality choice. Fast runs the cheap model at routine effort.
 const CODEX_TIER_THINKING = {
   critical: { mode: null, effort: 'high' },
-  standard: { mode: null, effort: 'medium' },
+  standard: { mode: null, effort: 'high' },
   fast: { mode: null, effort: 'medium' },
   // Same convention as fast: the tier picks a cheap MODEL, it does not floor reasoning.
   budget: { mode: null, effort: 'medium' },
