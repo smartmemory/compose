@@ -10,7 +10,7 @@ import { startFresh, resumeRouting, admitOrdinaryRoute, prepareRoutingIssuance, 
 import { routingDigest, canonicalRoutingJson } from '../lib/model-router.js';
 import { resolvePlanSpecValues } from '../lib/stratum-mcp-client.js';
 import { routingIssuanceState } from '../lib/routing-ledger.js';
-const ROUTE_BASELINE_LABEL = 'sol-high';
+const ROUTE_BASELINE_LABEL = 'sol61-high';
 const transport = Object.fromEntries(['route_mode', 'routing_start', 'routing_root', 'routing_plan_intent', 'routing_continuation'].map(k => [k, 'string?']));
 function fixture(t, extra = {}) {
   const cwd = mkdtempSync(join(tmpdir(), 'build-route-'));

@@ -222,7 +222,7 @@ test('coordinator routes only Claude to Fable with adaptive high thinking', () =
 
 test('existing Codex model routes are unchanged', () => {
   assert.equal(resolveTierModel('critical', 'codex'), 'gpt-6-astra');
-  assert.equal(resolveTierModel('standard', 'codex'), 'gpt-6-sol');
+  assert.equal(resolveTierModel('standard', 'codex'), 'gpt-6.1-sol');
   assert.equal(resolveTierModel('fast', 'codex'), 'gpt-6-luna');
 });
 

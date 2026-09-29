@@ -1,6 +1,7 @@
-/** Temporary baseline recorder. Host: ROUTE_BASELINE_REVISION=<commit> ROUTE_BASELINE_LABEL=sol-high RESEND_API_KEY= STRIPE_API_KEY= node test/helpers/record-model-route-baselines.mjs
+/** Temporary baseline recorder. Host: ROUTE_BASELINE_REVISION=<commit> ROUTE_BASELINE_LABEL=sol61-high ROUTE_BASELINE_WORKTREE=1 RESEND_API_KEY= STRIPE_API_KEY= node test/helpers/record-model-route-baselines.mjs
  * Without those env vars, uses revision ed8e333d17046a327e90d058334d28d00c785fe8 and label v0.5.1.
- * Always executes the selected source revision in a disposable archive; never captures changed production code.
+ * Executes the selected source revision in a disposable archive. WORKTREE=1 overlays the
+ * current tier map and its integration assertion, allowing a new baseline before a commit.
  * Raw prompts/inputs are retained. Only non-JSON runtime callbacks/signals are omitted from call options.
  */
 import { registerHooks } from 'node:module';
@@ -9,8 +10,10 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve, join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 const revision = process.env.ROUTE_BASELINE_REVISION || 'ed8e333d17046a327e90d058334d28d00c785fe8';
 const label = process.env.ROUTE_BASELINE_LABEL || 'v0.5.1';
+const worktreeOverlay = process.env.ROUTE_BASELINE_WORKTREE === '1';
 const replaceAnchor = (source, anchor, replacement, url) => {
   const count = source.split(anchor).length - 1;
   if (count !== 1) throw new Error(`Route baseline trace expected one anchor in ${url}, found ${count}: ${anchor}`);
@@ -58,6 +61,10 @@ if (process.env.ROUTE_BASELINE_TRACE) {
   try {
     const archive = execFileSync('git', ['archive', revision], { cwd: root, maxBuffer: 100 * 1024 * 1024 });
     execFileSync('tar', ['-x', '-C', dir], { input: archive });
+    const overlayPaths = ['server/model-tiers.js', 'test/integration/build-wave-golden.test.js'];
+    const sourceOverlaySha256 = worktreeOverlay ? Object.fromEntries(overlayPaths.map(path => [path,
+      createHash('sha256').update(readFileSync(join(root, path))).digest('hex')])) : null;
+    if (worktreeOverlay) for (const path of overlayPaths) copyFileSync(join(root, path), join(dir, path));
     symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'));
     symlinkSync(resolve(root, '../stratum'), join(tempRoot, 'stratum'));
     copyFileSync(fileURLToPath(import.meta.url), join(dir, 'test/helpers/record-model-route-baselines.mjs'));
@@ -99,9 +106,11 @@ if (process.env.ROUTE_BASELINE_TRACE) {
       const command = [
         ...(process.env.ROUTE_BASELINE_REVISION ? [`ROUTE_BASELINE_REVISION=${shellQuote(process.env.ROUTE_BASELINE_REVISION)}`] : []),
         ...(process.env.ROUTE_BASELINE_LABEL ? [`ROUTE_BASELINE_LABEL=${shellQuote(process.env.ROUTE_BASELINE_LABEL)}`] : []),
+        ...(worktreeOverlay ? ['ROUTE_BASELINE_WORKTREE=1'] : []),
         'RESEND_API_KEY=', 'STRIPE_API_KEY=', 'node test/helpers/record-model-route-baselines.mjs',
       ].join(' ');
-      const fixture = { sourceRevision: revision, ...(process.env.ROUTE_BASELINE_LABEL ? { label } : {}), captured, harness: test,
+      const fixture = { sourceRevision: revision, ...(worktreeOverlay ? { sourceOverlaySha256 } : {}),
+        ...(process.env.ROUTE_BASELINE_LABEL ? { label } : {}), captured, harness: test,
         command,
         ...(captured ? { profileDigest, events } : { reason: 'Real-engine capture did not complete; no expected bytes fabricated.', exitCode: run.status,
           diagnostics: output.slice(-14000) }) };

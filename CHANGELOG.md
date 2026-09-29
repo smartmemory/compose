@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Codex `standard` tier now uses `gpt-6.1-sol` at high reasoning effort (was `gpt-6-sol/high`); off-mode routing baselines are recorded under `sol61-high`.
+
 - Codex default gpt-6-sol now runs at high reasoning effort (was medium), per owner directive.
 
 - **Release: compose 0.7.2 — default Claude model is Sonnet 5.5; requires stratum ^0.7.3.**

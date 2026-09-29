@@ -37,7 +37,7 @@ export const MODEL_TIERS = {
 
 export const CODEX_MODEL_TIERS = {
   critical: 'gpt-6-astra',
-  standard: 'gpt-6-sol',
+  standard: 'gpt-6.1-sol',
   fast: 'gpt-6-luna',
   budget: 'gpt-6-luna',
   coordinator: null,

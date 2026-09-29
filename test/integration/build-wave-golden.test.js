@@ -17,7 +17,7 @@ import { git } from '../helpers/consumer-wave-fixture.js';
 import { resolveTierThinking } from '../../server/model-tiers.js';
 
 const DRIVER = fileURLToPath(new URL('../helpers/build-wave-golden-fixture.js', import.meta.url));
-const MODELS = { CORE: 'gpt-6-astra', BROKEN: 'gpt-6-sol', FAST: 'gpt-6-luna',
+const MODELS = { CORE: 'gpt-6-astra', BROKEN: 'gpt-6.1-sol', FAST: 'gpt-6-luna',
   DEFAULT: 'gpt-6-astra', REPAIR: 'gpt-6-astra' };
 async function fixtureFor(t, scenario, options) {
   const fixture = await makeWaveGoldenProject(scenario, options);
@@ -385,7 +385,7 @@ for (const repair of [null, 'success', 'failed', 'uncredited']) test(`d3 paid ca
     assert.equal(call.resolution.usageEvidence.usd, f.costs[name]);
     assert.equal(call.resolution.usageEvidence.tokens, 8);
     assert.deepEqual(receipt.split, { input: 3, output: 5, cacheRead: 2 });
-    assert.equal(call.resolution.reportedModel, 'gpt-6-sol');
+    assert.equal(call.resolution.reportedModel, 'gpt-6.1-sol');
     assert.equal(call.resolution.reportedEffort, resolveTierThinking('standard', 'codex').effort);
     assert.equal(call.executedTier.value, 'standard');
     if (name.endsWith('repair')) assert.equal(call.resolution.outcome, repair === 'failed' ? 'errored' : 'resolved');

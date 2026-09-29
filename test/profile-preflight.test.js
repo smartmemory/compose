@@ -154,7 +154,7 @@ test('object-form sidecars normalize defaults, tier routing, metadata and gate m
     gate: { decide_from: { step: 'plan', field: 'action', approve: ['done'], revise: ['retry'], kill: ['stop'] } } };
   const result = preflightPipelineProfiles(profiles, spec);
   assert.equal(result.normalized.execute.tier_from, 'item.tier');
-  assert.equal(result.resolved.execute.modelID, 'gpt-6-sol');
+  assert.equal(result.resolved.execute.modelID, 'gpt-6.1-sol');
   assert.match(result.profilesDigest, /^[a-f0-9]{64}$/);
   assert.throws(() => preflightPipelineProfiles({ ...profiles, execute: { ...profiles.execute, tier_from: 'item.model' } }, spec), /tier_from/);
   const reserved = structuredClone(spec); reserved.flows.main.steps[2].id = 'review_gate';
