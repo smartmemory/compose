@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **Release: compose 0.7.2 — default Claude model is Sonnet 5.5; requires stratum ^0.7.3.**
+
 - Default Claude model moved from `claude-sonnet-5` to `claude-sonnet-5-5` (Sonnet 5.5, shipped 2026-09-29).
 
 - **Ideabox writes preserve multi-paragraph idea bodies.** The parser now retains blank lines between body paragraphs while discarding structural blanks at idea boundaries, so parse/serialize mutations no longer join paragraphs in the generated ideabox. The nested-dialect test now counts idea headings in its live fixture instead of assuming a fixed number of ideas.
