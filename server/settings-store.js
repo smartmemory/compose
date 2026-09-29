@@ -62,8 +62,8 @@ export class SettingsStore {
       ),
       iterations: { ...this._contract.iterationDefaults },
       models: {
-        interactive: 'claude-sonnet-5',
-        agentRun: process.env.CLAUDE_MODEL || 'claude-sonnet-5',
+        interactive: 'claude-sonnet-5-5',
+        agentRun: process.env.CLAUDE_MODEL || 'claude-sonnet-5-5',
         summarizer: process.env.SUMMARIZER_MODEL || 'haiku',
       },
       ui: { theme: 'system', defaultView: 'graph' },
