@@ -1,3 +1,5 @@
+import { symbolicProfilesDigest, symbolicModelProjection } from '../helpers/model-route-projection.js';
+import { catalog, tier, thinking, claudeDefault, codexDefault, unpricedCodex } from '../helpers/model-catalog.js';
 /** Run with --test-timeout=900000. No model services, GUI, or installed-package mutation. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,8 +19,8 @@ import { git } from '../helpers/consumer-wave-fixture.js';
 import { resolveTierThinking } from '../../server/model-tiers.js';
 
 const DRIVER = fileURLToPath(new URL('../helpers/build-wave-golden-fixture.js', import.meta.url));
-const MODELS = { CORE: 'gpt-6-astra', BROKEN: 'gpt-6.1-sol', FAST: 'gpt-6-luna',
-  DEFAULT: 'gpt-6-astra', REPAIR: 'gpt-6-astra' };
+const MODELS = { CORE: tier('codex', 'critical').model, BROKEN: tier('codex', 'standard').model, FAST: tier('codex', 'fast').model,
+  DEFAULT: tier('codex', 'critical').model, REPAIR: tier('codex', 'critical').model };
 async function fixtureFor(t, scenario, options) {
   const fixture = await makeWaveGoldenProject(scenario, options);
   t.after(() => fixture.cleanup());
@@ -63,7 +65,7 @@ test('fixture: sidecar preflight and fake executable model, prerequisite, wiring
   const unit = spawnSync(process.execPath, ['--test', 'unit.test.cjs'], { cwd: f.workspace, encoding: 'utf8' });
   assert.equal(unit.status, 0, unit.stderr);
   const review = () => {
-    const r = spawnSync(f.codexPath, ['exec', '-m', 'gpt-6-astra', '-'], {
+    const r = spawnSync(f.codexPath, ['exec', '-m', tier('codex', 'critical').model, '-'], {
       cwd: f.workspace, env: f.env, input: '## Intent\nD3_REVIEW\n\n', encoding: 'utf8', timeout: 10000,
     });
     assert.equal(r.status, 0, r.stderr);
@@ -73,10 +75,10 @@ test('fixture: sidecar preflight and fake executable model, prerequisite, wiring
   assert.deepEqual(review(), { blocking: true, findings: [FINDING] });
   assert.equal(invoke('REPAIR').status, 0);
   assert.deepEqual(review(), { blocking: false, findings: [] });
-  assert.equal(invoke('ESCAPE', 'gpt-6-astra').status, 0);
+  assert.equal(invoke('ESCAPE', tier('codex', 'critical').model).status, 0);
   assert.equal(await readFile(join(f.workspace, 'untouched.txt'), 'utf8'), 'forbidden\n');
   const calls = await f.readAgentPids();
-  for (const call of calls) assert.equal(call.model, MODELS[call.lane] ?? 'gpt-6-astra');
+  for (const call of calls) assert.equal(call.model, MODELS[call.lane] ?? tier('codex', 'critical').model);
 });
 
 test('real connector: model argv and telemetry independently of wave admission', { timeout: 90000 }, async t => {
@@ -273,7 +275,7 @@ test('routing carry off oracle: frozen digest/input/full calls and no routing wr
   const beforeIgnore = await readFile(join(off.workspace, '.gitignore'), 'utf8');
   const a = await runWaveGolden(off, { route_mode: 'off' });
   assert.equal(a.audit.status, 'completed');
-  assert.equal(preflightPipelineProfiles(PROFILES, WAVE_GOLDEN_SPEC).profilesDigest, frozen.profileDigest);
+  assert.equal(symbolicProfilesDigest(preflightPipelineProfiles(PROFILES, WAVE_GOLDEN_SPEC)), frozen.profileDigest);
   assert.deepEqual(a.events[0].input, frozen.events[0].input);
   assert.equal(a.events[0].flow, frozen.events[0].flow);
   assert.deepEqual(a.events[0].opts, { ...frozen.events[0].opts, workspaceRoot: off.workspace });
@@ -298,7 +300,10 @@ test('routing carry shadow oracle: immutable two-wave and ordinary epochs with i
   assertShadowGoldenInput(b.events[0].input, frozen.events[0].input);
   const final = readRoutingEvidence(shadow, b.flowId);
   const records = assertRoutingGolden(final, 12);
-  assert.equal(JSON.parse(final.rootBytes).profilesDigest, frozen.profileDigest);
+  const sealed = JSON.parse(final.rootBytes);
+  const checked = preflightPipelineProfiles(sealed.mergedProfiles, sealed.spec.effective);
+  assert.equal(sealed.profilesDigest, checked.profilesDigest);
+  assert.equal(symbolicProfilesDigest(checked), frozen.profileDigest);
   assert.equal(new Set(b.routingSnapshots.map(r => r.rootBytes)).size, 1);
   for (const earlier of b.routingSnapshots) for (const [id, record] of Object.entries(earlier.journal.routing.records)) {
     assert.deepEqual(final.journal.routing.records[id], record, 'later waves never rewrite earlier records');
@@ -385,7 +390,7 @@ for (const repair of [null, 'success', 'failed', 'uncredited']) test(`d3 paid ca
     assert.equal(call.resolution.usageEvidence.usd, f.costs[name]);
     assert.equal(call.resolution.usageEvidence.tokens, 8);
     assert.deepEqual(receipt.split, { input: 3, output: 5, cacheRead: 2 });
-    assert.equal(call.resolution.reportedModel, 'gpt-6.1-sol');
+    assert.equal(call.resolution.reportedModel, tier('codex', 'standard').model);
     assert.equal(call.resolution.reportedEffort, resolveTierThinking('standard', 'codex').effort);
     assert.equal(call.executedTier.value, 'standard');
     if (name.endsWith('repair')) assert.equal(call.resolution.outcome, repair === 'failed' ? 'errored' : 'resolved');

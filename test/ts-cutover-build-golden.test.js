@@ -1,3 +1,4 @@
+import { tier, thinking } from './helpers/model-catalog.js';
 /**
  * TS-cutover acceptance test for lib/build.js's simple (non-parallel) path.
  *
@@ -162,15 +163,15 @@ describe('build.js consumes TS-native Stratum responses', () => {
       installAgentHarness(client, stubAgentFactory((agentType, agentOptions) => {
         agentRuns += 1;
         assert.equal(agentType, 'claude');
-        assert.equal(agentOptions.modelID, 'claude-fable-5-1');
+        assert.equal(agentOptions.modelID, tier('claude', 'coordinator').model);
         assert.deepEqual(agentOptions.thinking, { type: 'adaptive' });
-        assert.equal(agentOptions.effort, 'high');
+        assert.equal(agentOptions.effort, tier('claude', 'coordinator').effort);
         const events = readFileSync(join(workspace, '.compose', 'build-stream.jsonl'), 'utf8')
           .trim().split('\n').map(line => JSON.parse(line));
         const preflights = events.filter(event => event.type === 'profile_preflight');
         assert.equal(preflights.length, 1, 'one preflight event exists before the first dispatch');
         assert.deepEqual(preflights[0].steps.work, {
-          profile: 'claude::coordinator', provider: 'claude', tier: 'coordinator', modelID: 'claude-fable-5-1',
+          profile: 'claude::coordinator', provider: 'claude', tier: 'coordinator', modelID: tier('claude', 'coordinator').model,
         });
       }), workspace);
 

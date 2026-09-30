@@ -1,3 +1,5 @@
+import { symbolicProfilesDigest, symbolicModelProjection } from './helpers/model-route-projection.js';
+import { catalog, tier, thinking, claudeDefault, codexDefault, unpricedCodex } from './helpers/model-catalog.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
@@ -110,7 +112,7 @@ test('bundled off digest and synthetic Build input keys remain stable without ro
     const frozen = JSON.parse(readFileSync(`test/fixtures/model-route-off-${name}-${ROUTE_BASELINE_LABEL}.json`));
     if (path) {
       const check = preflightPipelineProfiles(JSON.parse(readFileSync(`${path}.profiles.json`)), readFileSync(`${path}.stratum.yaml`, 'utf8'), path, undefined, { mode: 'off' });
-      assert.equal(check.profilesDigest, frozen.profileDigest);
+      assert.equal(symbolicProfilesDigest(check), frozen.profileDigest);
     }
     assert.equal(frozen.captured, true);
   }
@@ -126,7 +128,7 @@ for (const opts of [{ route_mode: 'active' }, { route_trials: ['x'] }, { route_e
 test('carry preflight digest and bundled startFresh input match frozen values', async t => {
   const { PROFILES, WAVE_GOLDEN_SPEC } = await import('./helpers/build-wave-golden-fixture.js');
   const carry = JSON.parse(readFileSync(`test/fixtures/model-route-off-carry-${ROUTE_BASELINE_LABEL}.json`));
-  assert.equal(preflightPipelineProfiles(PROFILES, WAVE_GOLDEN_SPEC, 'carry', undefined, { mode: 'off' }).profilesDigest, carry.profileDigest);
+  assert.equal(symbolicProfilesDigest(preflightPipelineProfiles(PROFILES, WAVE_GOLDEN_SPEC, 'carry', undefined, { mode: 'off' })), carry.profileDigest);
   const bundled = JSON.parse(readFileSync(`test/fixtures/model-route-off-bundled-build-${ROUTE_BASELINE_LABEL}.json`));
   const expected = bundled.events.find(e => e.kind === 'plan');
   const f = fixture(t);
@@ -276,7 +278,7 @@ test('public Build resume restores recorded roles before preflight and ignores n
   await assert.rejects(f.run({ mode: 'feature', implementer: 'codex::critical', reviewer: 'claude', route_mode: 'shadow' }), /stop before pump/);
   assert.equal(calls.length, 0); crash = false;
   await f.run({ mode: 'feature', resumeFlowId: f.runId, route_mode: 'off', implementer: 'invalid-new-flag', reviewer: 'also-invalid' });
-  assert.equal(plans, 1); assert.deepEqual(calls, [{ provider: 'codex', model: 'gpt-6-astra' }]);
+  assert.equal(plans, 1); assert.deepEqual(calls, [{ provider: 'codex', model: tier('codex', 'critical').model }]);
 });
 
 test('replayed frozen bundled/carry prompts retain supplied bytes and six static connector option fields', async () => {
@@ -303,7 +305,7 @@ test('replayed frozen bundled/carry prompts retain supplied bytes and six static
     const projection = call => ({ provider: call.provider, prompt: call.prompt,
       options: Object.fromEntries(['modelID', 'thinking', 'effort', 'allowedTools', 'disallowedTools', 'sandboxMode']
         .filter(k => call.opts[k] !== undefined).map(k => [k, call.opts[k]])) });
-    assert.deepEqual(observed.map(projection), calls.map(projection));
+    assert.deepEqual(observed.map(call => projection(symbolicModelProjection(call))), calls.map(call => projection(symbolicModelProjection(call))));
   }
 });
 
@@ -430,7 +432,7 @@ for (const boundary of ['audit terminal', 'resume terminal']) test(`fresh after 
   }
   await f.run({ mode: 'feature', route_mode: 'shadow', implementer: 'codex::critical', reviewer: 'claude' });
   assert.equal(f.plans.length, 2); assert.equal(f.calls.length, 2);
-  assert.equal(f.calls[1][0], 'codex'); assert.equal(f.calls[1][2].modelID, 'gpt-6-astra');
+  assert.equal(f.calls[1][0], 'codex'); assert.equal(f.calls[1][2].modelID, tier('codex', 'critical').model);
   const start = JSON.parse(f.plans[1].routing_start);
   assert.equal(start.originalInput.implementer_agent, 'codex::critical');
   assert.equal(start.runtimeOverrides.work, 'codex::critical');

@@ -1,3 +1,4 @@
+import { tier, codexDefault } from './helpers/model-catalog.js';
 /**
  * Phase 2 dispatch ownership and context capture.
  */
@@ -141,7 +142,7 @@ describe('connector-owned dispatch capture', () => {
         usage: { tokens: 428663, usd: 0.4194, ms: 120 },
         split: { input: 403379, output: 25284, cacheRead: 380000 },
         usdSource: 'estimated',
-        telemetry: { model: 'gpt-5.6-terra', effort: 'high', durationMs: 118 },
+        telemetry: { model: codexDefault, effort: 'high', durationMs: 118 },
       }]);
       await client.agentRun('codex', 'prompt', {
         cwd: worktree,

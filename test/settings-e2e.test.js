@@ -1,3 +1,4 @@
+import { claudeDefault } from './helpers/model-catalog.js';
 /**
  * settings-e2e.test.js — End-to-end smoke test for the settings feature.
  *
@@ -192,7 +193,7 @@ describe('settings E2E', () => {
     const { status, body } = await post('/api/settings/reset');
     assert.equal(status, 200);
     assert.equal(body.ui.theme, 'system'); // back to default
-    assert.equal(body.models.interactive, 'claude-sonnet-5-5');
+    assert.equal(body.models.interactive, claudeDefault);
 
     const msg = await updatePromise;
     assert.equal(msg.settings.ui.theme, 'system');

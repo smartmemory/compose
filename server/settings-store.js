@@ -1,3 +1,4 @@
+import { getModelCatalog } from '../lib/model-catalog.js';
 /**
  * Settings Store — JSON-file-backed storage for user preferences.
  * Loads from disk on startup, saves after every mutation.
@@ -62,9 +63,9 @@ export class SettingsStore {
       ),
       iterations: { ...this._contract.iterationDefaults },
       models: {
-        interactive: 'claude-sonnet-5-5',
-        agentRun: process.env.CLAUDE_MODEL || 'claude-sonnet-5-5',
-        summarizer: process.env.SUMMARIZER_MODEL || 'haiku',
+        interactive: getModelCatalog().catalog.claude.default.model,
+        agentRun: process.env.CLAUDE_MODEL || getModelCatalog().catalog.claude.default.model,
+        summarizer: process.env.SUMMARIZER_MODEL || getModelCatalog().catalog.tiers.claude.fast.model,
       },
       ui: { theme: 'system', defaultView: 'graph' },
       // COMP-CAPS-ENFORCE: runtime capability enforcement policy

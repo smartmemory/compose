@@ -52,7 +52,7 @@ if (projectConfig.capabilities.stratum) {
   const probe = probeStratumBin(stratumBin);
   if (!probe.ok) {
     console.error(`[compose] stratum ${stratumEngine} binary is unusable but capabilities.stratum=true: ${probe.reason}`);
-    console.error('[compose] Install @smartmemory/stratum or set COMPOSE_STRATUM_TS_CLI_BIN to the live query/gate CLI');
+    console.error('[compose] Install @smartmemory/stratum or set COMPOSE_STRATUM_TS_CLI_BIN to the live query/gate CLI; COMPOSE_STRATUM_TS_MCP_BIN selects the model catalog installation');
     projectConfig.capabilities.stratum = false;
   }
 }

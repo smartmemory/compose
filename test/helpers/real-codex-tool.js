@@ -1,3 +1,4 @@
+import { catalog, codexDefault } from './model-catalog.js';
 import { CodexConnector } from '../../../stratum/ts/dist/connectors/codex.js';
 
 // Control SDK input only. The real connector creates every usage event, token
@@ -7,7 +8,7 @@ export function realCodexTool({ streamed = true, onResult, onCall, sdkEvents } =
     onCall?.(args);
     let seq = 0;
     const producer = new CodexConnector({
-      model: args.model ?? 'gpt-6.1-sol', effort: args.effort ?? 'high', transport: 'sdk', env: {},
+      model: args.model ?? codexDefault, effort: args.effort ?? catalog.codex.default.effort, transport: 'sdk', env: {},
       sdkFactory: () => ({ startThread: () => ({ runStreamed: async () => ({
         events: (async function* () {
           if (sdkEvents) { yield* sdkEvents(args); return; }

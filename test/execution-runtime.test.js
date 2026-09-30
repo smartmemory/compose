@@ -1,3 +1,4 @@
+import { tier, thinking } from './helpers/model-catalog.js';
 /** Real Compose -> stdio MCP -> connector -> OS process boundary; no model API. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -55,8 +56,8 @@ process.stdin.on('end', () => {
     assert.equal(await readFile(join(root, 'artifact.txt'), 'utf8'), 'implemented');
     const wire = JSON.parse(await readFile(join(root, 'wire.json'), 'utf8'));
     assert.equal(wire.cwd, await realpath(root));
-    assert.equal(wire.args[wire.args.indexOf('-m') + 1], 'gpt-6.1-sol');
-    assert.ok(wire.args.includes('model_reasoning_effort="high"'));
+    assert.equal(wire.args[wire.args.indexOf('-m') + 1], tier('codex', 'standard').model);
+    assert.ok(wire.args.includes(`model_reasoning_effort=${JSON.stringify(tier('codex', 'standard').effort)}`));
     await rm(join(root, 'artifact.txt'));
     await runAndNormalize(null, 'read-probe', step, {
       stratum, profile: 'codex:read-only-reviewer:fast', cwd: root,

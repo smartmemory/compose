@@ -1,3 +1,4 @@
+import { tier } from './helpers/model-catalog.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
@@ -27,7 +28,7 @@ for (const invalid of [false, true]) test(`public GSD whole-wave admission ${inv
   await runGsd(f.code, { cwd: f.cwd, stratum: f.stratum, allowDirtyWorkspace: true, preMergeGate: [] });
   assert.equal(f.stratum.calls.filter(c => c.type === 'agentRun').length, invalid ? 0 : 1);
   if (!invalid) {
-    assert.equal(f.stratum.calls.find(c => c.type === 'agentRun').args[2].modelID, 'gpt-6-luna');
+    assert.equal(f.stratum.calls.find(c => c.type === 'agentRun').args[2].modelID, tier('codex', 'fast').model);
     const events = readFileSync(join(f.cwd, '.compose/gsd', f.code, 'events.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
     assert.equal(events.find(e => e.kind === 'step_model').tier, 'fast');
     const timing = JSON.parse(readFileSync(join(f.cwd, '.compose/gsd', f.code, 'timing.json')));

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Model selections now come from the shipped catalog of the Stratum installation Compose selects for MCP dispatch. Tier maps retain their object APIs, load lazily, and fail loudly on missing or malformed catalog output. Routing provenance records the catalog digest and path. The summarizer default intentionally changes from the tracking alias `haiku` to the catalog's pinned Claude fast-tier model ID (currently `claude-haiku-4-5-20251001`), also visible as `models.summarizer` in `GET /api/settings`. Test baselines use provider/tier tokens while production profile digests remain concrete, so catalog-only model and effort updates no longer require test rewrites.
+
 - Codex `standard` tier now uses `gpt-6.1-sol` at high reasoning effort (was `gpt-6-sol/high`); off-mode routing baselines are recorded under `sol61-high`.
 
 - Codex default gpt-6-sol now runs at high reasoning effort (was medium), per owner directive.

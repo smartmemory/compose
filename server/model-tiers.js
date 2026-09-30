@@ -1,91 +1,41 @@
-/**
- * model-tiers.js — Model tier routing for STRAT-TIER.
- *
- * Maps symbolic tier names to provider-specific model IDs.
- * Tiers let pipeline specs declare intent (critical / standard / fast / budget / coordinator)
- * without hard-coding model strings — the map here is the single source of truth,
- * including the agent-string tier allow-list. Coordinator lets one preset role
- * explicitly name Fable while critical stays Opus 5.5; other presets do not move
- * silently to Fable.
- *
- * Tier names describe INTENT, never a model. `budget` is the Codex/Devin mirror of
- * `coordinator`: it appears in all provider maps so the shared vocabulary admits the name
- * (agent-string.js derives KNOWN_TIERS from MODEL_TIERS), and is null on the Claude side
- * because no Claude model sits at that price point — so `claude::budget` fails with the
- * standard "not available for provider" message rather than "unknown tier".
- *
- * SCOPE (COMP-MODEL-ROUTE, 2026-09-12): budget is ADDRESSABLE, not LADDERED. It is
- * deliberately absent from the cost ladder in lib/routing-ledger.js (`['fast','standard',
- * 'critical']`) and the item-tier list in lib/pipeline-profiles.js, so it is nameable in a
- * profile sidecar but is not an auto-escalation candidate and does not enter floor
- * computation. Ladder membership is an S2/S3 decision, entangled with open question Q3.
+/** Plain-object adapters over the selected Stratum installation's shipped catalog.
+ * Key enumeration is import-safe; the first value access loads the catalog once.
+ * Budget is addressable, not part of the auto-escalation ladder.
  */
+import { getModelCatalog, MODEL_TIER_KEYS } from '../lib/model-catalog.js';
 
-/**
- * Null = the tier name is known but this provider has no model at it.
- * @type {Record<string, string|null>}
- */
-export const MODEL_TIERS = {
-  critical: 'claude-opus-5-5',
-  standard: 'claude-opus-5-5',
-  fast: 'claude-haiku-4-5-20251001',
-  // Codex/Devin-only tier: fast and budget currently resolve to the same gpt-6-luna model
-  // (0.10/0.50 per MTok in stratum's ts/src/judge/pricing.ts); the tier names remain distinct.
-  budget: null,
-  coordinator: 'claude-fable-5-1',
-};
+function tierMap(loadCatalog, provider, thinking = false) {
+  const map = {};
+  for (const key of MODEL_TIER_KEYS) Object.defineProperty(map, key, {
+    enumerable: true, configurable: true,
+    get() {
+      const tier = loadCatalog().catalog.tiers[provider][key];
+      const value = tier === 'unavailable' ? null : thinking
+        ? { mode: tier.mode === 'unavailable' ? null : tier.mode,
+          effort: tier.effort === 'unavailable' ? null : tier.effort }
+        : tier.model;
+      // Materialize a normal value property once; thinking entries retain identity.
+      Object.defineProperty(map, key, { value, enumerable: true, configurable: true, writable: true });
+      return value;
+    },
+  });
+  return map;
+}
 
-export const CODEX_MODEL_TIERS = {
-  critical: 'gpt-6-astra',
-  standard: 'gpt-6.1-sol',
-  fast: 'gpt-6-luna',
-  budget: 'gpt-6-luna',
-  coordinator: null,
-};
+/** Independent catalog clients can exercise the same adapters in tests. */
+export function createModelTierMaps(loadCatalog = getModelCatalog) {
+  return {
+    MODEL_TIERS: tierMap(loadCatalog, 'claude'),
+    CODEX_MODEL_TIERS: tierMap(loadCatalog, 'codex'),
+    DEVIN_MODEL_TIERS: tierMap(loadCatalog, 'devin'),
+    TIER_THINKING: tierMap(loadCatalog, 'claude', true),
+    CODEX_TIER_THINKING: tierMap(loadCatalog, 'codex', true),
+    DEVIN_TIER_THINKING: tierMap(loadCatalog, 'devin', true),
+  };
+}
 
-export const DEVIN_MODEL_TIERS = {
-  critical: 'swe-2-max',
-  standard: 'swe-2-high',
-  fast: 'swe-2-medium',
-  budget: 'swe-2-medium',
-  coordinator: null,
-};
-
-export const DEVIN_TIER_THINKING = {
-  critical: { mode: null, effort: 'max' },
-  standard: { mode: null, effort: 'high' },
-  fast: { mode: null, effort: 'medium' },
-  budget: { mode: null, effort: 'medium' },
-  coordinator: null,
-};
-
-// C12: codex efforts follow the routing convention — `low` is for trivial
-// mechanical work only, and the fast tier is a model choice, not a
-// reasoning-quality choice. Fast runs the cheap model at routine effort.
-const CODEX_TIER_THINKING = {
-  critical: { mode: null, effort: 'high' },
-  standard: { mode: null, effort: 'high' },
-  fast: { mode: null, effort: 'medium' },
-  // Same convention as fast: the tier picks a cheap MODEL, it does not floor reasoning.
-  budget: { mode: null, effort: 'medium' },
-  coordinator: null,
-};
-
-/**
- * Default thinking config per tier.
- * - Opus 5.5 supports adaptive thinking and the effort parameter.
- * - Fable 5.1 thinking is always on; adaptive thinking uses effort to control depth.
- * - Haiku 4.5 doesn't accept the effort parameter (400 error), so fast tier stays off.
- *
- * @type {Record<string, { mode: 'adaptive'|'off', effort: 'low'|'medium'|'high'|'xhigh'|'max'|null }|null>}
- */
-export const TIER_THINKING = {
-  critical: { mode: 'adaptive', effort: 'xhigh' },
-  standard: { mode: 'adaptive', effort: 'medium' },
-  fast:     { mode: 'off',      effort: null   },
-  budget:   null,
-  coordinator: { mode: 'adaptive', effort: 'high' },
-};
+export const { MODEL_TIERS, CODEX_MODEL_TIERS, DEVIN_MODEL_TIERS,
+  TIER_THINKING, CODEX_TIER_THINKING, DEVIN_TIER_THINKING } = createModelTierMaps();
 
 /**
  * Resolve a tier name to a concrete model ID.

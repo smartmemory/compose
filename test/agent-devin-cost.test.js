@@ -1,3 +1,4 @@
+import { tier } from './helpers/model-catalog.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -19,17 +20,17 @@ function fake(result, events = []) {
   };
 }
 const devin = { usage: { usd: 0, tokens: 11, ms: 7 }, usdSource: 'estimated',
-  split: { input: 10, output: 1 }, telemetry: { model: 'swe-2-medium', effort: 'medium', durationMs: 7 } };
+  split: { input: 10, output: 1 }, telemetry: { model: tier('devin', 'fast').model, effort: tier('devin', 'fast').effort, durationMs: 7 } };
 const rows = [
   ['Devin real result', 'devin', devin, [], 0, 'estimated'],
   ['Devin streamed', 'devin', devin, [{ input_tokens: 10, output_tokens: 1, cost_usd: 0, usd_source: 'estimated' }], 0, 'estimated'],
   ['Devin event-only stated zero', 'devin', { telemetry: devin.telemetry }, [{ input_tokens: 10, output_tokens: 1, cost_usd: 0, usd_source: 'estimated' }], 0, 'estimated'],
-  ['Claude event-only stated zero', 'claude', { telemetry: { model: 'claude-opus-5-5', durationMs: 7 } }, [{ input_tokens: 10, output_tokens: 1, cost_usd: 0, usd_source: 'reported' }], 0, 'reported'],
+  ['Claude event-only stated zero', 'claude', { telemetry: { model: tier('claude', 'critical').model, durationMs: 7 } }, [{ input_tokens: 10, output_tokens: 1, cost_usd: 0, usd_source: 'reported' }], 0, 'reported'],
   ['legacy unlabeled zero', 'devin', {}, [{ input_tokens: 10, output_tokens: 1, cost_usd: 0 }], undefined],
   ['partially unpriced', 'devin', devin, [{ input_tokens: 10, cost_usd: 0, usd_source: 'estimated' }, { output_tokens: 1 }], undefined],
   ['cache-only unpriced event before raw zero', 'devin', { usage: { tokens: 10, ms: 7, usd: 0 }, usdSource: 'estimated' }, [{ cache_read_input_tokens: 10 }], undefined],
   ['mixed unlabeled zero', 'devin', {}, [{ input_tokens: 10, cost_usd: 0, usd_source: 'estimated' }, { output_tokens: 1, cost_usd: 0 }], undefined],
-  ['Claude stated zero', 'claude', { ...devin, usdSource: 'reported', telemetry: { model: 'claude-opus-5-5', durationMs: 7 } }, [], 0, 'reported'],
+  ['Claude stated zero', 'claude', { ...devin, usdSource: 'reported', telemetry: { model: tier('claude', 'critical').model, durationMs: 7 } }, [], 0, 'reported'],
 ];
 for (const [name, agent, result, events, cost, source] of rows) test(name + ' through normalization, receipts and spend verification', async t => {
   const out = await runAndNormalize(null, 'do work', { step_id: 'work', agent }, { stratum: fake(result, events), executionRuntime: 'stratum' });
@@ -88,7 +89,7 @@ test('positive records for every provider are byte-identical to HEAD 2106e32', a
   const baseline = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
   for (const agent of ['claude', 'codex', 'devin']) for (const streamed of [false, true]) for (const provenance of [undefined, 'reported', 'estimated']) {
     const result = { ...devin, usage: { ...devin.usage, usd: 0.25 }, usdSource: provenance,
-      telemetry: { model: ({ claude: 'claude-opus-5-5', codex: 'gpt-6-astra', devin: 'swe-2-medium' })[agent], effort: 'high', durationMs: 7 } };
+      telemetry: { model: ({ claude: tier('claude', 'critical').model, codex: tier('codex', 'critical').model, devin: tier('devin', 'fast').model })[agent], effort: 'high', durationMs: 7 } };
     const events = streamed ? [{ input_tokens: 10, output_tokens: 1, cost_usd: 0.25,
       ...(provenance ? { usd_source: provenance } : {}) }] : [];
     const run = fn => fn(null, 'work', { step_id: 'work', agent }, { stratum: fake(result, events), executionRuntime: 'stratum' });

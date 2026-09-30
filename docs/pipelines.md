@@ -110,19 +110,17 @@ compose re-applies at invocation — these are load-bearing wherever a fanout ru
 `isolation: none`, since the read-only restriction lives only there.
 
 Agent profiles use `provider:template:tier`; template and tier are optional.
-The tier allow-list comes from `server/model-tiers.js`:
+The shared tier keys are `critical`, `standard`, `fast`, `budget`, and `coordinator`.
+Model IDs, reasoning efforts and thinking modes come from the shipped Stratum
+[model catalog](../../stratum/ts/src/config/models.default.toml), through
+`stratum models --json` from the same installation Compose selects for MCP dispatch.
+`server/model-tiers.js` exposes those selections as provider maps. Run
+`stratum models --json` to inspect the installed catalog; routing provenance records
+its `catalogDigest` and `path`.
 
-| Tier | Claude | Codex |
-|------|--------|-------|
-| `critical` | `claude-opus-5-5` | `gpt-6-astra` |
-| `standard` | `claude-opus-5-5` | `gpt-6.1-sol` |
-| `fast` | `claude-haiku-4-5-20251001` | `gpt-6-luna` |
-| `budget` | unavailable (validation error) | `gpt-6-luna` |
-| `coordinator` | `claude-fable-5-1` | unavailable (validation error) |
-
-For example, `claude:orchestrator:coordinator` explicitly selects Fable with
-adaptive thinking and high effort. Omitting the tier, as in
-`claude:orchestrator`, keeps the connector default (`modelID: null`).
+For example, `claude:orchestrator:coordinator` selects the catalog's Claude coordinator
+entry. Omitting the tier, as in `claude:orchestrator`, keeps the connector default
+(`modelID: null`). Unavailable provider/tier entries fail validation.
 
 Profiles fail closed where it changes outcomes: a local spec whose bundled preset
 counterpart (same basename) ships a sidecar that configures execution (per-item

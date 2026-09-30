@@ -1,3 +1,4 @@
+import { tier } from './helpers/model-catalog.js';
 /** Pure routing identity, contract closure and static-only policy tests. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,7 +25,7 @@ test('statistical keys omit task/run/spec text and encode null prior and scoped 
   assert.equal(JSON.parse(dispatchKey(value)).prior, null);
   assert.notEqual(dispatchKey(value), dispatchKey({ ...value, stage: null }));
   assert.notEqual(dispatchKey(value), dispatchKey({ ...value, scopedStep: 'other/execute' }));
-  assert.throws(() => dispatchKey({ ...value, prior: 'gpt-6-astra' }));
+  assert.throws(() => dispatchKey({ ...value, prior: tier('codex', 'critical').model }));
 });
 test('issuance tuple distinguishes stages, items, epochs, generations, runs and retry tokens', () => {
   const value = { runId: 'run', scopedStep: 'a/b', stage: null, epoch: 0, itemIndex: null, generation: null, issuanceToken: 'token' };
@@ -35,7 +36,7 @@ test('issuance tuple distinguishes stages, items, epochs, generations, runs and 
 });
 test('S1a always returns independent copies of static baseline, preserves manual/item provenance', () => {
   const start = { mode: 'shadow', policy: { route_trials: [], route_explore: 0 }, table: routingTable(), calibration_feedback: false };
-  const baseline = { provider: 'codex', template: 'implementer', tier: 'critical', modelID: 'gpt-6-astra', source: 'preset', via: 'item.tier' };
+  const baseline = { provider: 'codex', template: 'implementer', tier: 'critical', modelID: tier('codex', 'critical').model, source: 'preset', via: 'item.tier' };
   const result = resolveRoute({ start, key: 'key', allocationId: 'allocation', baseline, manualOverride: { supplied: true, profile: 'codex:implementer:fast' } });
   assert.deepEqual(result.admitted, baseline); assert.deepEqual(result.would, baseline); assert.deepEqual(result.proposal, baseline);
   assert.equal(result.source, 'preset'); assert.equal(result.via, 'item.tier');

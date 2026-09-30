@@ -1,3 +1,5 @@
+import { symbolicProfilesDigest, symbolicModelProjection } from './helpers/model-route-projection.js';
+import { catalog, tier as tierEntry, thinking, claudeDefault, codexDefault, unpricedCodex } from './helpers/model-catalog.js';
 /** Sidecar validation, static precedence, routing policy projection and off digest identity. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -38,11 +40,11 @@ test('runtime default replacement preserves tier_from and enforces stage provide
   assert.throws(() => preflightPipelineProfiles({ execute: entry }, spec, { execute: 'claude:implementer:fast' }));
 });
 test('item routing fixes provider/template, resolves exact models and effort, default when absent', () => {
-  const models = ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna'];
+  const models = [tierEntry('codex', 'critical').model, tierEntry('codex', 'standard').model, tierEntry('codex', 'fast').model];
   ['critical', 'standard', 'fast'].forEach((tier, i) => {
     const result = resolveConsumerProfile(entry, { tier, provider: 'claude', template: 'orchestrator' }, 'codex');
     assert.equal(result.modelID, models[i]); assert.equal(result.template, 'implementer');
-    assert.equal(result.effort, tier === 'fast' ? 'medium' : 'high');
+    assert.equal(result.effort, tierEntry('codex', tier).effort);
   });
   assert.equal(resolveConsumerProfile(entry, {}, 'codex').tier, 'critical');
   assert.equal(resolveConsumerProfile('claude:orchestrator', {}).modelID, null);
@@ -100,10 +102,10 @@ test('off projection pins bundled profile digest and preserves legacy object rep
   const { route: planRoute, ...planRest } = rest.plan;
   const { route: executeRoute, ...executeRest } = rest.execute;
   const raw = { ...rest, plan: Object.keys(planRest).length === 1 ? planRest.default : planRest, execute: executeRest };
-  const expected = '3a8a65c9fc7d066ba464dc94085a349b56e8982e287153b18bc10853ab7100f9';
-  assert.equal(preflightPipelineProfiles(raw, yaml).profilesDigest, expected);
+  const expected = JSON.parse(readFileSync('test/fixtures/model-route-off-bundled-build-sol61-high.json', 'utf8')).profileDigest;
+  assert.equal(symbolicProfilesDigest(preflightPipelineProfiles(raw, yaml)), expected);
   const result = preflightPipelineProfiles(wrapped, yaml, {}, { mode: 'off' });
-  assert.equal(result.profilesDigest, expected); assert.deepEqual(result.normalized, raw);
+  assert.equal(symbolicProfilesDigest(result), expected); assert.deepEqual(result.normalized, raw);
   assert.deepEqual(preflightPipelineProfiles({ plan: { default: 'claude' } }, spec).normalized.plan, { default: 'claude' });
   assert.equal(Object.keys(result).includes('routingPolicy'), false);
   assert.equal(result.routingPolicy.mode, 'off');

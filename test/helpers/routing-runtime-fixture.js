@@ -1,3 +1,4 @@
+import { tier, claudeDefault } from './model-catalog.js';
 /** Real engine + real Compose connector boundary; only provider inference is controlled. */
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -43,7 +44,7 @@ export async function runtimeFixture(t, { gsd = false, spec = simpleSpec(gsd), p
   connector._testClient = { callTool: async ({ name, arguments: args }) => {
     if (name !== 'stratum_agent_run') throw Error(`Unexpected inference tool ${name}`);
     const ordinal = calls.length; calls.push(structuredClone(args));
-    const value = await inference?.(args, f, ordinal) ?? { text: '{"outcome":"complete","summary":"done"}', usage: { tokens: 11, ms: 7, usd: 0.12 }, usdSource: 'reported', telemetry: { model: 'claude-sonnet-4-6', effort: 'high' } };
+    const value = await inference?.(args, f, ordinal) ?? { text: '{"outcome":"complete","summary":"done"}', usage: { tokens: 11, ms: 7, usd: 0.12 }, usdSource: 'reported', telemetry: { model: claudeDefault, effort: 'high' } };
     return { content: [{ type: 'text', text: JSON.stringify(value) }] };
   } };
   const stratum = new Proxy(engine, { get(target, key) {
@@ -117,7 +118,7 @@ export async function runtimeWaveFixture(t, { incompletePartition = false, added
         addressed_findings: [], open_count: hold ? 99 : epoch >= repairRounds || added ? 0 : incompletePartition ? 1 : review.findings.length, tasks: epoch >= repairRounds ? [] : [replacements[epoch]] };
     } else if (args.prompt.includes('REVIEW')) output = { blocking: epoch < repairRounds && !added, findings: epoch >= repairRounds || added ? [] : incompletePartition ? [finding, { ...finding, claim: 'Second independently reported defect' }] : [{ ...finding, ...(repairFilesByRound ? { files: repairFilesByRound[epoch] } : {}) }] };
     else output = { outcome: 'complete', summary: 'done' };
-    return { text: JSON.stringify(output), usage: { tokens: 5, ms: 10, usd: 0.1 }, usdSource: 'reported', telemetry: { model: args.model ?? 'claude-sonnet-4-6', effort: args.effort ?? 'high' } };
+    return { text: JSON.stringify(output), usage: { tokens: 5, ms: 10, usd: 0.1 }, usdSource: 'reported', telemetry: { model: args.model ?? claudeDefault, effort: args.effort ?? 'high' } };
   }, intercept(method, args, response, f) {
     if (method === 'before:gateResolve') {
       const entry = { before: f.snapshot(), journal: f.journal(), args: structuredClone(args) };

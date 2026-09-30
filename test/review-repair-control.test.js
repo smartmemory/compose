@@ -1,3 +1,4 @@
+import { catalog } from './helpers/model-catalog.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -99,7 +100,7 @@ for (const primary of [true, false]) {
     assert.equal(fixture.calls.length, primary ? 1 : 2);
     for (const call of fixture.calls) {
       assert.equal(call.opts.sandboxMode, 'workspace-write');
-      assert.match(call.opts.modelID, /^gpt-/);
+      assert.ok(Object.hasOwn(catalog.pricing.codex, call.opts.modelID), 'review dispatch must name a Codex catalog model');
       assert.equal(call.opts.thinking, undefined);
     }
     fixture.assertCleanedUp();

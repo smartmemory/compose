@@ -1,3 +1,4 @@
+import { tier, claudeDefault, codexDefault } from './helpers/model-catalog.js';
 import crypto from 'node:crypto';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { syncBuiltinESMExports } from 'node:module';
@@ -20,14 +21,14 @@ function connector(f, responder) {
   f.context.stratum = client;
   return client;
 }
-const result = (text = 'done', usd = 3) => ({ text, usage: { tokens: 20, ms: 50, usd }, usdSource: 'reported', telemetry: { model: 'gpt-5.4', effort: 'high' } });
+const result = (text = 'done', usd = 3) => ({ text, usage: { tokens: 20, ms: 50, usd }, usdSource: 'reported', telemetry: { model: codexDefault, effort: 'high' } });
 const calls = f => Object.values(f.reopen().exportRoutingJournal().records).filter(r => r.type === 'call-intent');
 const resolutions = f => Object.values(f.reopen().exportRoutingJournal().records).filter(r => r.type === 'call-resolution');
 test('real MCP boundary owns one invocation and strips observer from the transport', async t => {
   const f = fixture(t); const i = f.issue(); f.launch(i);
   let original;
   const client = connector(f, args => { original = calls(f)[0]; assert.ok(original); assert.equal(args.routingCalls, undefined); return result(); });
-  const value = await client.agentRun('codex', 'original prompt', { routingCalls: callsForRouting(f.context, i), modelID: 'gpt-5.4', effort: 'high' });
+  const value = await client.agentRun('codex', 'original prompt', { routingCalls: callsForRouting(f.context, i), modelID: codexDefault, effort: 'high' });
   assert.equal(calls(f).length, 1); assert.equal(value.dispatchId, original.callId);
   assert.equal(resolutions(f)[0].usageEvidence.usd, 3);
   const receipt = f.reopen().journal.pendingUsageReceipts.find(p => p.dispatchId === value.dispatchId);
@@ -45,7 +46,7 @@ for (const failed of [false, true]) test(`local SDK raw presence and null effort
   f.context.stratum = { usageReport: async () => ({ status: 'ok' }) };
   async function* query({ options }) {
     assert.equal(options.routingCalls, undefined); assert.equal(calls(f).length, 1);
-    yield { type: 'system', subtype: 'init', model: 'claude-sonnet-4-6' };
+    yield { type: 'system', subtype: 'init', model: claudeDefault };
     yield { type: 'result', subtype: failed ? 'error_max_turns' : 'success', result: 'done', total_cost_usd: 0.2, duration_ms: 17, usage: { input_tokens: 3, output_tokens: 7 } };
   }
   const p = runLocalClaudeAgent('p', { query, effort: 'high', routingCalls: callsForRouting(f.context, i) });

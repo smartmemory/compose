@@ -1,3 +1,4 @@
+import { tier } from './helpers/model-catalog.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -36,7 +37,7 @@ test('resolves profiles, bare literals and no-tier defaults without mutating inp
   const before = structuredClone(spec);
   const result = preflightPipelineProfiles(profiles, spec);
   assert.deepEqual(result, { ok: true, resolved: {
-    plan: { profile: profiles.plan, provider: 'claude', tier: 'coordinator', modelID: 'claude-fable-5-1' },
+    plan: { profile: profiles.plan, provider: 'claude', tier: 'coordinator', modelID: tier('claude', 'coordinator').model },
     work: { profile: 'codex', provider: 'codex', tier: null, modelID: null },
   } });
   assert.deepEqual(spec, before);
@@ -113,7 +114,7 @@ test('r1 #2: a fanout stage with no explicit agent still has its sidecar profile
   assert.throws(() => preflightPipelineProfiles({ fan: 'codex:x:coordinator' }, spec, 's'),
     /step "fan": .*coordinator.*not available for provider "codex"/);
   const ok = preflightPipelineProfiles({ fan: 'claude::critical' }, spec);
-  assert.equal(ok.resolved.fan.modelID, 'claude-opus-5-5');
+  assert.equal(ok.resolved.fan.modelID, tier('claude', 'critical').model);
 });
 
 test('r1 #1: a multi-stage fanout whose stages declare different agents fails closed', () => {
@@ -154,7 +155,7 @@ test('object-form sidecars normalize defaults, tier routing, metadata and gate m
     gate: { decide_from: { step: 'plan', field: 'action', approve: ['done'], revise: ['retry'], kill: ['stop'] } } };
   const result = preflightPipelineProfiles(profiles, spec);
   assert.equal(result.normalized.execute.tier_from, 'item.tier');
-  assert.equal(result.resolved.execute.modelID, 'gpt-6.1-sol');
+  assert.equal(result.resolved.execute.modelID, tier('codex', 'standard').model);
   assert.match(result.profilesDigest, /^[a-f0-9]{64}$/);
   assert.throws(() => preflightPipelineProfiles({ ...profiles, execute: { ...profiles.execute, tier_from: 'item.model' } }, spec), /tier_from/);
   const reserved = structuredClone(spec); reserved.flows.main.steps[2].id = 'review_gate';

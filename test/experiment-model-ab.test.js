@@ -1,3 +1,4 @@
+import { tier, claudeDefault } from './helpers/model-catalog.js';
 /**
  * experiment-model-ab.test.js — Wave 1 unit/integration tests for COMP-MODEL-AB.
  *
@@ -595,11 +596,11 @@ describe('COMP-MODEL-AB S3: the cost axis never derives a price', () => {
       // Tokens and a model are both present -- everything the deleted fallback needed.
       writeBuildHistory(ws, {
         status: 'complete', input_tokens: 1_000_000, output_tokens: 1_000_000,
-        stepCount: 3, durationMs: 1_000, model: 'claude-sonnet-4-6',
+        stepCount: 3, durationMs: 1_000, model: claudeDefault,
       });
       writeFileSync(
         join(ws, '.compose', 'build-stream.jsonl'),
-        JSON.stringify({ type: 'step_model', modelID: 'claude-sonnet-4-6' }) + '\n',
+        JSON.stringify({ type: 'step_model', modelID: claudeDefault }) + '\n',
       );
 
       const result = collect({ sandbox: { workspace: ws, runDir: ws } });

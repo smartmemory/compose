@@ -1,3 +1,4 @@
+import { tier, thinking } from './helpers/model-catalog.js';
 /**
  * Tests for STRAT-TIER:
  *   - server/model-tiers.js: MODEL_TIERS, resolveTierModel
@@ -23,15 +24,15 @@ const STRATUM_PRICING = '@smartmemory/stratum/dist/judge/pricing.js';
 
 describe('resolveTierModel', () => {
   test('critical resolves to Opus', () => {
-    assert.strictEqual(resolveTierModel('critical'), 'claude-opus-5-5');
+    assert.strictEqual(resolveTierModel('critical'), tier('claude', 'critical').model);
   });
 
   test('standard resolves to Opus', () => {
-    assert.strictEqual(resolveTierModel('standard'), 'claude-opus-5-5');
+    assert.strictEqual(resolveTierModel('standard'), tier('claude', 'standard').model);
   });
 
   test('fast resolves to Haiku', () => {
-    assert.strictEqual(resolveTierModel('fast'), 'claude-haiku-4-5-20251001');
+    assert.strictEqual(resolveTierModel('fast'), tier('claude', 'fast').model);
   });
 
   test('unknown tier returns null', () => {
@@ -67,20 +68,18 @@ describe('MODEL_TIERS', () => {
 
 describe('resolveTierThinking', () => {
   test('critical → adaptive + xhigh', () => {
-    assert.deepStrictEqual(resolveTierThinking('critical'), { mode: 'adaptive', effort: 'xhigh' });
+    assert.deepStrictEqual(resolveTierThinking('critical'), thinking('claude', 'critical'));
   });
   test('standard → adaptive + medium', () => {
-    assert.deepStrictEqual(resolveTierThinking('standard'), { mode: 'adaptive', effort: 'medium' });
+    assert.deepStrictEqual(resolveTierThinking('standard'), thinking('claude', 'standard'));
   });
   test('fast → off + null (Haiku does not accept effort)', () => {
-    assert.deepStrictEqual(resolveTierThinking('fast'), { mode: 'off', effort: null });
+    assert.deepStrictEqual(resolveTierThinking('fast'), thinking('claude', 'fast'));
   });
-  // C12: codex reserves `low` effort for trivial mechanical work; the fast tier
-  // picks the cheap model, it does not drop reasoning to the floor.
-  test('codex tiers run high effort, and fast runs medium — never low', () => {
-    assert.deepStrictEqual(resolveTierThinking('critical', 'codex'), { mode: null, effort: 'high' });
-    assert.deepStrictEqual(resolveTierThinking('standard', 'codex'), { mode: null, effort: 'high' });
-    assert.deepStrictEqual(resolveTierThinking('fast', 'codex'), { mode: null, effort: 'medium' });
+  test('codex tiers read their configured efforts', () => {
+    assert.deepStrictEqual(resolveTierThinking('critical', 'codex'), thinking('codex', 'critical'));
+    assert.deepStrictEqual(resolveTierThinking('standard', 'codex'), thinking('codex', 'standard'));
+    assert.deepStrictEqual(resolveTierThinking('fast', 'codex'), thinking('codex', 'fast'));
   });
   test('unknown tier returns null', () => {
     assert.strictEqual(resolveTierThinking('unknown'), null);
@@ -158,13 +157,13 @@ describe('resolveAgentConfig — modelID', () => {
     const cfg = resolveAgentConfig('claude::fast');
     assert.strictEqual(cfg.provider, 'claude');
     assert.strictEqual(cfg.tier, 'fast');
-    assert.strictEqual(cfg.modelID, 'claude-haiku-4-5-20251001');
+    assert.strictEqual(cfg.modelID, tier('claude', 'fast').model);
   });
 
   test('"claude::critical" returns Opus modelID', () => {
     const cfg = resolveAgentConfig('claude::critical');
     assert.strictEqual(cfg.tier, 'critical');
-    assert.strictEqual(cfg.modelID, 'claude-opus-5-5');
+    assert.strictEqual(cfg.modelID, tier('claude', 'critical').model);
   });
 
   test('"claude" → modelID=null (no tier, uses connector default)', () => {
@@ -184,20 +183,20 @@ describe('resolveAgentConfig — modelID', () => {
     assert.strictEqual(cfg.provider, 'claude');
     assert.strictEqual(cfg.template, 'read-only-reviewer');
     assert.strictEqual(cfg.tier, 'critical');
-    assert.strictEqual(cfg.modelID, 'claude-opus-5-5');
+    assert.strictEqual(cfg.modelID, tier('claude', 'critical').model);
     assert.deepStrictEqual(cfg.allowedTools, ['Read', 'Grep', 'Glob', 'Agent']);
     assert.deepStrictEqual(cfg.disallowedTools, ['Edit', 'Write', 'Bash']);
   });
 
   test('"claude::critical" → thinking=adaptive + effort=xhigh', () => {
     const cfg = resolveAgentConfig('claude::critical');
-    assert.deepStrictEqual(cfg.thinking, { type: 'adaptive' });
-    assert.strictEqual(cfg.effort, 'xhigh');
+    assert.deepStrictEqual(cfg.thinking, { type: tier('claude', 'critical').mode === 'adaptive' ? 'adaptive' : 'disabled' });
+    assert.strictEqual(cfg.effort, tier('claude', 'critical').effort);
   });
 
   test('"claude::fast" → thinking=disabled + effort=null', () => {
     const cfg = resolveAgentConfig('claude::fast');
-    assert.deepStrictEqual(cfg.thinking, { type: 'disabled' });
+    assert.deepStrictEqual(cfg.thinking, { type: tier('claude', 'fast').mode === 'adaptive' ? 'adaptive' : 'disabled' });
     assert.strictEqual(cfg.effort, null);
   });
 
@@ -210,20 +209,20 @@ describe('resolveAgentConfig — modelID', () => {
 
 
 test('coordinator routes only Claude to Fable with adaptive high thinking', () => {
-  assert.equal(resolveTierModel('coordinator', 'claude'), 'claude-fable-5-1');
+  assert.equal(resolveTierModel('coordinator', 'claude'), tier('claude', 'coordinator').model);
   assert.equal(resolveTierModel('coordinator', 'codex'), null);
-  assert.deepEqual(resolveTierThinking('coordinator'), { mode: 'adaptive', effort: 'high' });
+  assert.deepEqual(resolveTierThinking('coordinator'), thinking('claude', 'coordinator'));
   assert.equal(resolveTierThinking('coordinator', 'codex'), null);
   const config = resolveAgentConfig('claude:orchestrator:coordinator');
-  assert.equal(config.modelID, 'claude-fable-5-1');
-  assert.deepEqual(config.thinking, { type: 'adaptive' });
-  assert.equal(config.effort, 'high');
+  assert.equal(config.modelID, tier('claude', 'coordinator').model);
+  assert.deepEqual(config.thinking, { type: tier('claude', 'coordinator').mode === 'adaptive' ? 'adaptive' : 'disabled' });
+  assert.equal(config.effort, tier('claude', 'coordinator').effort);
 });
 
-test('existing Codex model routes are unchanged', () => {
-  assert.equal(resolveTierModel('critical', 'codex'), 'gpt-6-astra');
-  assert.equal(resolveTierModel('standard', 'codex'), 'gpt-6.1-sol');
-  assert.equal(resolveTierModel('fast', 'codex'), 'gpt-6-luna');
+test('Codex model routes follow the shipped catalog', () => {
+  assert.equal(resolveTierModel('critical', 'codex'), tier('codex', 'critical').model);
+  assert.equal(resolveTierModel('standard', 'codex'), tier('codex', 'standard').model);
+  assert.equal(resolveTierModel('fast', 'codex'), tier('codex', 'fast').model);
 });
 
 
@@ -231,14 +230,14 @@ test('existing Codex model routes are unchanged', () => {
 // budget — the Codex-only mirror of coordinator (COMP-MODEL-ROUTE, 2026-09-12)
 // ---------------------------------------------------------------------------
 
-test('budget routes only Codex, to luna, at medium effort', () => {
-  assert.equal(resolveTierModel('budget', 'codex'), 'gpt-6-luna');
+test('budget routes Codex using its configured model and effort', () => {
+  assert.equal(resolveTierModel('budget', 'codex'), tier('codex', 'budget').model);
   assert.equal(resolveTierModel('budget', 'claude'), null);
-  assert.deepEqual(resolveTierThinking('budget', 'codex'), { mode: null, effort: 'medium' });
+  assert.deepEqual(resolveTierThinking('budget', 'codex'), thinking('codex', 'budget'));
   assert.equal(resolveTierThinking('budget', 'claude'), null);
   const config = resolveAgentConfig('codex:reviewer:budget');
-  assert.equal(config.modelID, 'gpt-6-luna');
-  assert.equal(config.effort, 'medium');
+  assert.equal(config.modelID, tier('codex', 'budget').model);
+  assert.equal(config.effort, tier('codex', 'budget').effort);
 });
 
 // budget is ADDRESSABLE, not LADDERED: it is deliberately absent from the cost ladder
@@ -254,7 +253,7 @@ test('budget is priced, so a luna dispatch is attributable', async () => {
   // legitimate upstream price cut would then fail compose for no reason.
   assert.ok(MODEL_PRICING[resolveTierModel('budget', 'codex')], 'luna must have an exact key');
   // A priced model yields a non-zero cost, so the ledger never marks it missing-usd.
-  assert.ok(usdFromTokens('gpt-5.6-luna', {
+  assert.ok(usdFromTokens(tier('codex', 'budget').model, {
     inputTokens: 1_000_000, cachedInputTokens: 0, outputTokens: 1_000_000,
   }) > 0);
 });

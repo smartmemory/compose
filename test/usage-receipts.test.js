@@ -1,3 +1,4 @@
+import { catalog, tier, claudeDefault, codexDefault } from './helpers/model-catalog.js';
 import { checkedConsumerAdapter } from './helpers/routing-adapter-check.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -43,7 +44,7 @@ function receiptStratum({ budget } = {}) {
 function normalizedUsage(overrides = {}) {
   return {
     dispatch_id: 'dispatch-1',
-    model: 'claude-sonnet-4-6',
+    model: claudeDefault,
     effort: 'high',
     duration_ms: 25,
     input_tokens: 10,
@@ -167,7 +168,7 @@ test('StratumMcpClient caches listTools, wraps usageReport, and runAgentText rep
           return mcpResult({
             text: 'answer',
             usage: { tokens: 7, ms: 11 },
-            telemetry: { model: 'gpt-5.6-codex', effort: 'high', durationMs: 11 },
+            telemetry: { model: codexDefault, effort: 'high', durationMs: 11 },
           });
         }
         return mcpResult({ status: 'ok', runId: 'flow-1', seq: 1, ledger: { spent: {} } });
@@ -185,7 +186,7 @@ test('StratumMcpClient caches listTools, wraps usageReport, and runAgentText rep
   assert.equal(seen.length, 1);
   assert.equal(seen[0].dispatch_id.length > 0, true);
   assert.deepEqual({ ...seen[0], dispatch_id: '<id>' }, {
-    dispatch_id: '<id>', model: 'gpt-5.6-codex', effort: 'high', duration_ms: 11,
+    dispatch_id: '<id>', model: codexDefault, effort: 'high', duration_ms: 11,
     input_tokens: 0, output_tokens: 7,
   });
   assert.equal(Object.hasOwn(seen[0], 'cost_usd'), false);
@@ -200,7 +201,7 @@ test('runAgentText warns once and returns text when its usage hook rejects', asy
         return mcpResult({
           text: 'answer',
           usage: { tokens: 7, ms: 11 },
-          telemetry: { model: 'gpt-5.6-codex', durationMs: 11 },
+          telemetry: { model: codexDefault, durationMs: 11 },
         });
       },
     },
@@ -228,7 +229,7 @@ test('runAgentText warns once and rethrows the original dispatch error when its 
   const dispatchError = Object.assign(new Error('dispatch failed'), {
     dispatchId: 'failed-dispatch',
     usage: { tokens: 5, ms: 9 },
-    telemetry: { model: 'gpt-5.6-codex', durationMs: 9 },
+    telemetry: { model: codexDefault, durationMs: 9 },
   });
   const client = new StratumMcpClient();
   Object.defineProperty(client, '_testClient', {
@@ -268,16 +269,16 @@ test('runAndNormalize emits one primary UsageRecord and preserves the merged usa
     async agentRun() {
       handler({ schema_version: '0.2.6', kind: 'step_usage', metadata: {
         input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 2,
-        cache_creation_input_tokens: 1, model: 'claude-sonnet-4-6',
+        cache_creation_input_tokens: 1, model: claudeDefault,
       } });
-      return { text: 'ok', dispatchId: 'primary-1', telemetry: { model: 'claude-sonnet-4-6', durationMs: 21 } };
+      return { text: 'ok', dispatchId: 'primary-1', telemetry: { model: claudeDefault, durationMs: 21 } };
     },
     async cancelAgentRun() {},
   };
   const out = await runAndNormalize(null, 'p', { step_id: 'work', output_fields: {} }, { stratum });
   assert.deepEqual(out.usage, {
     input_tokens: 10, output_tokens: 5, cache_creation_input_tokens: 1,
-    cache_read_input_tokens: 2, cost_usd: 0, model: 'claude-sonnet-4-6',
+    cache_read_input_tokens: 2, cost_usd: 0, model: claudeDefault,
   });
   assert.equal(out.usages.length, 1);
   // COMP-COST-OWNER S3: the event states no cost, so the record carries NO cost_usd key.
@@ -285,7 +286,7 @@ test('runAndNormalize emits one primary UsageRecord and preserves the merged usa
   // -- provenance for a number no producer ever reported. The omission is what
   // recordBuildUsage counts as unpriced and what reportUsageReceipts refuses to stamp.
   assert.deepEqual(out.usages[0], {
-    dispatch_id: 'primary-1', model: 'claude-sonnet-4-6', duration_ms: 21,
+    dispatch_id: 'primary-1', model: claudeDefault, duration_ms: 21,
     input_tokens: 10, output_tokens: 5, cache_read: 2, cache_creation: 1,
     usd_source: 'estimated',
   });
@@ -327,7 +328,7 @@ test('reported prices stay reported and unpriced entries carry no usd key in rec
     { stratum, flowId: 'flow-1', receiptsMode: true },
     { usages: [
       normalizedUsage({ dispatch_id: 'priced', usd_source: 'reported' }),
-      normalizedUsage({ dispatch_id: 'unpriced', model: 'gpt-5.6-codex', cost_usd: undefined, usd_source: 'estimated' }),
+      normalizedUsage({ dispatch_id: 'unpriced', model: codexDefault, cost_usd: undefined, usd_source: 'estimated' }),
     ] },
     { stepId: 'work', source: 'main' },
   );
@@ -990,7 +991,7 @@ test('runAgentText keeps a provider-reported usd when the engine labels it usdSo
           text: 'answer',
           usage: { usd: 0.02, tokens: 9, ms: 5 },
           usdSource: 'reported',
-          telemetry: { model: 'claude-sonnet-4-6', durationMs: 5 },
+          telemetry: { model: claudeDefault, durationMs: 5 },
         });
       },
     },
@@ -1010,7 +1011,7 @@ test('runAgentText still drops an unlabelled usd (fail closed)', async () => {
         return mcpResult({
           text: 'answer',
           usage: { usd: 0.02, tokens: 9, ms: 5 },
-          telemetry: { model: 'claude-sonnet-4-6', durationMs: 5 },
+          telemetry: { model: claudeDefault, durationMs: 5 },
         });
       },
     },
@@ -1125,7 +1126,7 @@ for (const [control, receiptsMode] of [
 for (const streamed of [false, true]) for (const [field, change] of Object.entries({
   cost: r => { r.cost_usd = 99; }, tokens: r => { r.output_tokens += 1; },
   duration: r => { r.duration_ms += 1; }, model: r => { r.model = 'changed-model'; },
-  'embedded effort': r => { r.model = 'gpt-6-sol/low'; },
+  'embedded effort': r => { r.model = `${codexDefault}/low`; },
   effort: r => { r.effort = 'low'; }, provenance: r => { r.usd_source = 'estimated'; },
   split: r => { r.input_tokens += 1; r.output_tokens -= 1; }, cache: r => { r.cache_read += 1; },
 })) test(`real normalizer forwarding refuses contradictory ${field}, streamed=${streamed}`, async t => {
@@ -1161,14 +1162,14 @@ for (const transport of ['mcp-streamed', 'mcp-returned', 'local-sdk']) {
     const f = fixture(t); const issuance = f.issue();
     f.context.stratum = { usageReport: async () => ({ status: 'ok' }) };
     const query = async function* () {
-      yield { type: 'system', subtype: 'init', model: 'claude-sonnet-4-6' };
+      yield { type: 'system', subtype: 'init', model: claudeDefault };
       yield { type: 'result', subtype: 'success', result: 'done', total_cost_usd: 0.2, duration_ms: 31,
         usage: { input_tokens: 3, output_tokens: 5, cache_read_input_tokens: 2, cache_creation_input_tokens: 1 } };
     };
     const client = new StratumMcpClient();
     client._testClient = { callTool: async ({ arguments: args }, _schema, request) => {
       let seq = 0;
-      const producer = new ClaudeConnector({ model: 'claude-sonnet-4-6', query, env: {}, onEvent(event) {
+      const producer = new ClaudeConnector({ model: claudeDefault, query, env: {}, onEvent(event) {
         if (transport === 'mcp-streamed') request.onprogress({ message: JSON.stringify({ schema_version: '0.2.8',
           step_id: '_agent_run', seq: seq++, ts: new Date().toISOString(), kind: event.kind,
           metadata: { ...event.metadata, stepId: '_agent_run' } }) });

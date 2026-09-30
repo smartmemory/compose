@@ -1,3 +1,4 @@
+import { thinking, claudeDefault } from './helpers/model-catalog.js';
 /**
  * Tests for the TS StratumMcpClient workflow and progress-event surface.
  *
@@ -196,7 +197,7 @@ describe('StratumMcpClient.agentRun', () => {
     const out = await client.agentRun('claude', 'do thing', {
       correlationId: 'corr-1',
       schema: { type: 'object' },
-      modelID: 'claude-sonnet-4-6',
+      modelID: claudeDefault,
       allowedTools: ['Read'],
       disallowedTools: ['Bash'],
       thinking: { type: 'adaptive' },
@@ -210,7 +211,7 @@ describe('StratumMcpClient.agentRun', () => {
     assert.equal(captured.args.agent, 'claude');
     assert.equal(captured.args.prompt, 'do thing');
     assert.equal(captured.args.cwd, '/tmp');
-    assert.equal(captured.args.model, 'claude-sonnet-4-6');
+    assert.equal(captured.args.model, claudeDefault);
     assert.ok(!('type' in captured.args), 'python-era `type` must not be on the wire');
     assert.ok(!('allowed_tools' in captured.args), 'allowed_tools is compose-side, not on the wire');
     assert.deepEqual(captured.args.allowedTools, ['Read']);
@@ -244,7 +245,7 @@ describe('StratumMcpClient.agentRun', () => {
             seq: 1, ts: '2026-04-26T00:00:01Z',
             kind: 'step_usage',
             // STRAT-PAR-STREAM-CONSUMER-VALIDATE: metadata must match closed step_usage schema
-            metadata: { stepId: '_agent_run', input_tokens: 5, output_tokens: 3, cost_usd: 0, model: 'claude-sonnet-4-6' },
+            metadata: { stepId: '_agent_run', input_tokens: 5, output_tokens: 3, cost_usd: 0, model: claudeDefault },
           }),
         });
         return { content: [{ type: 'text', text: JSON.stringify({ text: 'hello' }) }] };

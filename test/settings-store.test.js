@@ -1,3 +1,4 @@
+import { tier, claudeDefault } from './helpers/model-catalog.js';
 /**
  * settings-store.test.js — SettingsStore unit tests.
  */
@@ -66,8 +67,8 @@ describe('defaults', () => {
   test('get() returns model defaults', () => {
     const store = makeStore();
     const settings = store.get();
-    assert.equal(settings.models.interactive, 'claude-sonnet-5-5');
-    assert.ok(settings.models.summarizer);
+    assert.equal(settings.models.interactive, claudeDefault);
+    assert.equal(settings.models.summarizer, process.env.SUMMARIZER_MODEL || tier('claude', 'fast').model);
   });
 
   test('get() returns ui defaults', () => {
@@ -101,8 +102,8 @@ describe('update', () => {
 
   test('update models persists', () => {
     const store = makeStore();
-    const result = store.update({ models: { interactive: 'claude-haiku-4-5-20251001' } });
-    assert.equal(result.models.interactive, 'claude-haiku-4-5-20251001');
+    const result = store.update({ models: { interactive: tier('claude', 'fast').model } });
+    assert.equal(result.models.interactive, tier('claude', 'fast').model);
   });
 
   test('update ui persists', () => {
@@ -161,7 +162,7 @@ describe('reset', () => {
     store.update({ policies: { prd: 'gate' }, models: { interactive: 'opus' } });
     const result = store.reset();
     assert.equal(result.policies.prd, 'skip'); // back to contract default
-    assert.equal(result.models.interactive, 'claude-sonnet-5-5');
+    assert.equal(result.models.interactive, claudeDefault);
   });
 
   test('reset(section) clears only that section', () => {

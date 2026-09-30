@@ -1,7 +1,8 @@
+import { getModelCatalog } from '../lib/model-catalog.js';
 /**
  * summarizer.js — Spawn a Claude CLI subprocess to summarize batch events as JSON.
  *
- * Model-agnostic: defaults to haiku for cost efficiency but accepts any model.
+ * Model-agnostic: defaults to the catalog's Claude fast tier but accepts any model.
  * Extracted from SessionManager for independent reuse and testing.
  */
 
@@ -11,7 +12,7 @@ import path from 'node:path';
 import { getTargetRoot } from './project-root.js';
 
 
-const DEFAULT_MODEL = process.env.SUMMARIZER_MODEL || 'haiku';
+const defaultModel = () => process.env.SUMMARIZER_MODEL || getModelCatalog().catalog.tiers.claude.fast.model;
 
 // ---------------------------------------------------------------------------
 // Prompt builder
@@ -61,11 +62,11 @@ JSON schema:
  *
  * @param {string} prompt
  * @param {object} [opts]
- * @param {string} [opts.model]       — model to use (default: haiku or SUMMARIZER_MODEL env)
+ * @param {string} [opts.model]       — model to use (default: catalog Claude fast tier or SUMMARIZER_MODEL env)
  * @param {string} [opts.projectRoot]
  * @returns {Promise<object|null>}
  */
-export function summarize(prompt, { model = DEFAULT_MODEL, projectRoot = getTargetRoot() } = {}) {
+export function summarize(prompt, { model = defaultModel(), projectRoot = getTargetRoot() } = {}) {
   return new Promise((resolve) => {
     const cleanEnv = { ...process.env, COMPOSE_TARGET: projectRoot, NO_COLOR: '1' };
     delete cleanEnv.CLAUDECODE;

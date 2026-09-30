@@ -1,3 +1,4 @@
+import { claudeDefault } from './helpers/model-catalog.js';
 /**
  * settings-routes.test.js — Settings REST API tests.
  *
@@ -190,7 +191,7 @@ describe('POST /api/settings/reset', () => {
     await patch('/api/settings', { models: { interactive: 'opus' } });
     const { status, body } = await post('/api/settings/reset');
     assert.equal(status, 200);
-    assert.equal(body.models.interactive, 'claude-sonnet-5-5');
+    assert.equal(body.models.interactive, claudeDefault);
   });
 
   test('reset broadcasts settingsUpdated', async () => {

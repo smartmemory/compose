@@ -1,13 +1,59 @@
 {
-  "sourceRevision": "3fc49caf7895a550ef8b0425384bfebd5acddd9e",
+  "projection": "provider-tier-v1",
+  "catalogDigest": "520ec89caa7fd44c8b7dd641fccbec1d79146454b53b179e37ba94a294dee260",
+  "path": "/Users/ruze/reg/my/forge/stratum/ts/src/config/models.default.toml",
+  "sourceRevision": "HEAD",
   "sourceOverlaySha256": {
-    "server/model-tiers.js": "c6305543fc393bf7a8e96da8ba3490dcd2df251c2b437df71511f77f48cfe816",
-    "test/integration/build-wave-golden.test.js": "286839ca4334f12f0ff4b3faa9556cd82ffd94fe471ad2ac1a20cba0f5870415"
+    "contracts/routing-record.schema.json": "826e669088b650c842ae7a05690a9ce45074f2cf57558338abf87f2391a88b61",
+    "contracts/routing-start.schema.json": "61ac4f1c0a7d2ec8e3214430ca13ac6b73d65300f931a74511e99e7b5b4d2ca4",
+    "lib/agent-string.js": "1a0083b2b8126bdcfb6a31aed134a284ca4fb2e71c202f88d9a12f3b0f22e89b",
+    "lib/local-claude-connector.js": "2ca15db38339ee41a43aa6d56eeafa0cd04e9083beeff9369e15ded3441c4d24",
+    "lib/model-router.js": "768f8e4b400076de3d7b54682bbeefc4bf874f652f78670042b46633e6538415",
+    "lib/pipeline-profiles.js": "0b956c35139d62482cbaee6da9e33e5a31f85f5a73a6e0d7a0164814cff8e51e",
+    "server/agent-workspace.js": "dfc8a2ede89862805ecd7f6b9f3a3eda9c7f5bb66893dc59af8d653f755b7fc3",
+    "server/model-tiers.js": "60c4f24fe5b10e3b631d15ccd9c4731ab0fe2965e873c6581d0e58d47859fd52",
+    "server/settings-store.js": "17e38051ae998842b74a09f1dff83682cdec9657bdeef1e55a3bcb79168b235c",
+    "test/agent-devin-cost.test.js": "32f0bfdbea11d377ef61e7156b63307a6a91a2b88cf09ac468f0ff787e6289f0",
+    "test/agent-devin.test.js": "0b7465b00b33b5246b6c717ddc0df16b20960208c7c9a2860bb65b813b5a00c4",
+    "test/build-model-route.test.js": "958c63ee0bb6a7d1484326f2312c140af711c395e83997ec57c8038d1f080182",
+    "test/build-stream-validate.test.js": "2c4f812c8c41e4f75b50197bdbbbd45f00a617c816e495640bc32b82609580e0",
+    "test/build-team-fable-astra.test.js": "519d0cafde71a3e9c8c266cfee001739357b4d82f0dbe0b6a731e4a3f7b8b5d4",
+    "test/cost-tracking.test.js": "7d1effa7245345166a0d2afe2e88b19e24fefa964f7e5a41085c688975b3face",
+    "test/dispatch-capture.test.js": "9bb7096e4c279d3505c083cb9d7f6283357dbefca55cc69224d3f4e56c404a0b",
+    "test/execution-runtime.test.js": "696978ebfa2610b1c53da1f23d55c9ea1bdec5b3b20710b835c417dd8d5d6bca",
+    "test/experiment-model-ab.test.js": "8f18e195bf48b9385218c0d939f7cd998844affccadde087bf0f1f27ad8ae563",
+    "test/gsd-wave-routing.test.js": "e346c8d55b6b26f354e8bb08c9789373281dcd66bbd90b5e87ac4782016face1",
+    "test/helpers/build-wave-golden-fixture.js": "70d19c37b0b165c04d1a1871549609de9211e3cad4fc2d21f96e6a4db743a81f",
+    "test/helpers/devin-build-fixture.js": "4ae949a58dab9cbe4af405155e02cbbc8a34c14c3562b81e044f133ab6490c77",
+    "test/helpers/real-codex-tool.js": "c7c8a5182a26950cb04caaa7792640087b2d5a42745cbedd2dd8df2f42f12e69",
+    "test/helpers/record-model-route-baselines.mjs": "3a5c4bebd96a82516d3f2e13448351623a200727684c1963a6347cb0d01408a9",
+    "test/helpers/routing-runtime-fixture.js": "db9d07b6bb5b9c6397af0d1ee48a62286234e750c1a876fa64968baba73488cd",
+    "test/integration/build-wave-golden.test.js": "92539e1ae08ef8fff76a72c84cdf80bcf39588ba8942df885eb5afc090e5610a",
+    "test/model-router.test.js": "90f621716ee5a98a17ee150c10295e5428ee894b0ea39861c16ba4967d77634c",
+    "test/model-tiers.test.js": "c67a09243392e16e2d0e0f1b241df80c835b09f3caffaddb7cd8556776168af8",
+    "test/pipeline-profiles.test.js": "fa14a2d1151098379b46ea52c13110c1b9319790141399bb19766f2bb51e935e",
+    "test/profile-preflight.test.js": "541230720d98cb02a67cd01a8af4bc8f837cdfb18699b49888aa920dc5e48c12",
+    "test/result-normalizer.test.js": "85378105c1e866e03cc53b5afe110f4d16a7e92afc82288571b5b2d3962f505f",
+    "test/review-repair-control.test.js": "2bd0ab7981a58c3f05f79689c90f3fd7bd4be4e2ab0f6c59b4be7e52f731547f",
+    "test/routing-calls.test.js": "2df6593078c5090e27b8e443ae699995f314e675ce3d4a5712bfcd5ed006c89d",
+    "test/routing-ledger.test.js": "84c1f8cdc3fcd83bad4cfcc3c44944f6384ee93ebbacca8e22eb40b66a2c71f0",
+    "test/settings-e2e.test.js": "05950b5daf189cb6da3e1efc0a96b4dcdaedebf1d7d9db1c2b2efafa365141a3",
+    "test/settings-routes.test.js": "62f08ef334551fb69ca4cc3d7e6ecc43e324f4a0f324f6138550f1ff185a16eb",
+    "test/settings-store.test.js": "5ef920852a3b8b4f56321cb154cbee027ca5a902058acfc64cd7c992080c545a",
+    "test/stratum-mcp-client-parallel.test.js": "1fe223d99e70aa8203bf0686ef5b83d86f0af8a5d609b3ac4b89fe19774edad0",
+    "test/ts-cutover-build-golden.test.js": "b4e5eee750fabf4c765a48dc7469879eba33a2468a347baf172fe04932916ed9",
+    "test/unpriced-step-cost.test.js": "888dbff97a8db8501fe4199bc5a10c4942830aa4e3241a1f77fd3e28514511e3",
+    "test/usage-receipts.test.js": "17ce9ad664bea0e3765b806eb7a5baccc5041fc53e88e9554d650d53e029ab3b",
+    "lib/model-catalog.js": "18c99b8fe0a7cc7b42333a88966537f02a03c76cbdd07af0b883e8916d8ab9e5",
+    "test/model-catalog.test.js": "41e33c2941f94e81861d308dc9d6f5c8be1a8c3f724298e826b50ee420bf9e17",
+    "test/model-route-projection.test.js": "e21ad3c80b75f8a58c8fab3b1caa68c417f57da5aab853c142c2dfaea37b9ebd",
+    "test/helpers/model-catalog.js": "5b32258206d2fba1faaca9be990e531fe5fcb2425bc022ef373e97d2ab3a8534",
+    "test/helpers/model-route-projection.js": "5f2eecdf22100f5060e24b2f6f6066c9e251e081d02db1e1f91f158e41fb67be"
   },
   "label": "sol61-high",
   "captured": true,
   "harness": "test/gsd-stuck-resume-golden.test.js",
-  "command": "ROUTE_BASELINE_REVISION='3fc49caf7895a550ef8b0425384bfebd5acddd9e' ROUTE_BASELINE_LABEL='sol61-high' ROUTE_BASELINE_WORKTREE=1 RESEND_API_KEY= STRIPE_API_KEY= node test/helpers/record-model-route-baselines.mjs",
+  "command": "ROUTE_BASELINE_WORKTREE=1 RESEND_API_KEY= STRIPE_API_KEY= node test/helpers/record-model-route-baselines.mjs",
   "profileDigest": null,
   "events": [
     {
@@ -24,7 +70,7 @@
         ]
       },
       "opts": {
-        "workspaceRoot": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/gsd-stuck-resume-Lw1mh6"
+        "workspaceRoot": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/gsd-stuck-resume-dVM60C"
       }
     },
     {
@@ -41,7 +87,7 @@
         ]
       },
       "opts": {
-        "workspaceRoot": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/gsd-stuck-resume-47NCmo"
+        "workspaceRoot": "/var/folders/z_/22whr6jd3q725fk9vqhjt1w00000gn/T/gsd-stuck-resume-bwYKtB"
       }
     }
   ]

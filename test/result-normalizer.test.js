@@ -1,3 +1,4 @@
+import { catalog, tier, claudeDefault } from './helpers/model-catalog.js';
 /**
  * Tests for lib/result-normalizer.js
  *
@@ -255,7 +256,7 @@ test('aggregates step_usage envelopes into usage totals', async () => {
     text: 'ok',
     events: [
       { kind: 'step_usage', metadata: {
-        input_tokens: 10, output_tokens: 5, model: 'claude-sonnet-4-6',
+        input_tokens: 10, output_tokens: 5, model: claudeDefault,
         cache_creation_input_tokens: 2, cache_read_input_tokens: 1, cost_usd: 0.001,
       } },
     ],
@@ -268,7 +269,7 @@ test('aggregates step_usage envelopes into usage totals', async () => {
   );
   assert.equal(usage.input_tokens, 10);
   assert.equal(usage.output_tokens, 5);
-  assert.equal(usage.model, 'claude-sonnet-4-6');
+  assert.equal(usage.model, claudeDefault);
   assert.equal(usage.cost_usd, 0.001);
 });
 
@@ -285,7 +286,7 @@ test('an ESTIMATED step_usage cost is never relabelled as reported', async () =>
     text: 'ok',
     events: [
       { kind: 'step_usage', metadata: {
-        input_tokens: 216385, output_tokens: 5836, model: 'gpt-5.3-codex-spark',
+        input_tokens: 216385, output_tokens: 5836, model: catalog.retired.codex[0],
         cache_creation_input_tokens: 0, cache_read_input_tokens: 179200,
         cost_usd: 0.17813775, usd_source: 'estimated',
       } },
@@ -307,12 +308,12 @@ test('one estimated step makes the whole run an estimate, not a report', async (
     text: 'ok',
     events: [
       { kind: 'step_usage', metadata: {
-        input_tokens: 10, output_tokens: 5, model: 'claude-haiku-4-5-20251001',
+        input_tokens: 10, output_tokens: 5, model: tier('claude', 'fast').model,
         cache_creation_input_tokens: 0, cache_read_input_tokens: 0,
         cost_usd: 0.001, usd_source: 'reported',
       } },
       { kind: 'step_usage', metadata: {
-        input_tokens: 20, output_tokens: 5, model: 'gpt-5.3-codex-spark',
+        input_tokens: 20, output_tokens: 5, model: catalog.retired.codex[0],
         cache_creation_input_tokens: 0, cache_read_input_tokens: 0,
         cost_usd: 0.002, usd_source: 'estimated',
       } },
@@ -334,7 +335,7 @@ test('adopts the TS envelope split: input tokens stop reading zero', async () =>
       usage: { tokens: 436736, usd: 0.697, ms: 1200 },
       split: { input: 430000, output: 6736, cacheRead: 400000, cacheCreation: 20000 },
       usdSource: 'reported',
-      telemetry: { durationMs: 1200, model: 'claude-sonnet-4-6' },
+      telemetry: { durationMs: 1200, model: claudeDefault },
     },
   });
   const { usage } = await runAndNormalize(

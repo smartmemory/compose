@@ -1,3 +1,4 @@
+import { claudeDefault } from './helpers/model-catalog.js';
 /**
  * Tests for cost tracking integration:
  *   - result-normalizer accumulates usage events
@@ -89,7 +90,7 @@ test('runAndNormalize: returns usage totals when connector emits usage events', 
       output_tokens: 500,
       cache_creation_input_tokens: 0,
       cache_read_input_tokens: 0,
-      model: 'claude-sonnet-4-6',
+      model: claudeDefault,
     },
   ];
   const stratum = fakeStratum(events);
@@ -99,7 +100,7 @@ test('runAndNormalize: returns usage totals when connector emits usage events', 
   assert.ok(usage, 'usage should be returned');
   assert.equal(usage.input_tokens, 1000);
   assert.equal(usage.output_tokens, 500);
-  assert.equal(usage.model, 'claude-sonnet-4-6');
+  assert.equal(usage.model, claudeDefault);
   // COMP-COST-OWNER S3: this used to assert $0.0105, priced here from the tokens. It was a
   // fake-producer assertion -- a real Claude step_usage ALWAYS carries cost_usd (stratum
   // claude.ts:171, lib/local-claude-connector.js:276 both emit it unconditionally), so no
@@ -119,7 +120,7 @@ test('runAndNormalize: accumulates multiple usage events', async () => {
       output_tokens: 200,
       cache_creation_input_tokens: 0,
       cache_read_input_tokens: 0,
-      model: 'claude-sonnet-4-6',
+      model: claudeDefault,
     },
     { type: 'assistant', content: ' Part 2' },
     {
@@ -128,7 +129,7 @@ test('runAndNormalize: accumulates multiple usage events', async () => {
       output_tokens: 100,
       cache_creation_input_tokens: 0,
       cache_read_input_tokens: 0,
-      model: 'claude-sonnet-4-6',
+      model: claudeDefault,
     },
   ];
   const stratum = fakeStratum(events);
@@ -182,7 +183,7 @@ test('BuildStreamWriter.writeUsage emits step_usage event with correct shape', (
       cache_creation_input_tokens: 100,
       cache_read_input_tokens: 50,
       cost_usd: 0.018,
-      model: 'claude-sonnet-4-6',
+      model: claudeDefault,
     }, { usdSource: 'reported' });
     // COMP-COST-OWNER S2: the amount and its provenance travel together. A bare
     // cost_usd with no usdSource is now DROPPED rather than emitted unlabelled --
@@ -203,7 +204,7 @@ test('BuildStreamWriter.writeUsage emits step_usage event with correct shape', (
     assert.equal(ev.cache_read_input_tokens, 50);
     assert.equal(ev.cost_usd, 0.018);
     assert.equal(ev.usd_source, 'reported');
-    assert.equal(ev.model, 'claude-sonnet-4-6');
+    assert.equal(ev.model, claudeDefault);
     assert.ok(typeof ev._seq === 'number', '_seq should be set');
     assert.ok(typeof ev._ts === 'number', '_ts should be set');
   } finally {
@@ -288,8 +289,8 @@ test('BuildStreamWriter: writeUsage events followed by close with totals', () =>
   try {
     const writer = new BuildStreamWriter(tempDir, 'TEST-5', { truncate: true });
 
-    writer.writeUsage('scope', { input_tokens: 1000, output_tokens: 400, cost_usd: 0.009, model: 'claude-sonnet-4-6' });
-    writer.writeUsage('execute', { input_tokens: 5000, output_tokens: 2000, cost_usd: 0.045, model: 'claude-sonnet-4-6' });
+    writer.writeUsage('scope', { input_tokens: 1000, output_tokens: 400, cost_usd: 0.009, model: claudeDefault });
+    writer.writeUsage('execute', { input_tokens: 5000, output_tokens: 2000, cost_usd: 0.045, model: claudeDefault });
     writer.close('complete', { input_tokens: 6000, output_tokens: 2400, cost_usd: 0.054 });
 
     const lines = readFileSync(join(tempDir, 'build-stream.jsonl'), 'utf-8')

@@ -1,8 +1,6 @@
-/** Temporary baseline recorder. Host: ROUTE_BASELINE_REVISION=<commit> ROUTE_BASELINE_LABEL=sol61-high ROUTE_BASELINE_WORKTREE=1 RESEND_API_KEY= STRIPE_API_KEY= node test/helpers/record-model-route-baselines.mjs
- * Without those env vars, uses revision ed8e333d17046a327e90d058334d28d00c785fe8 and label v0.5.1.
- * Executes the selected source revision in a disposable archive. WORKTREE=1 overlays the
- * current tier map and its integration assertion, allowing a new baseline before a commit.
- * Raw prompts/inputs are retained. Only non-JSON runtime callbacks/signals are omitted from call options.
+/** Record symbolic routing baselines from a disposable source archive.
+ * WORKTREE=1 overlays all changed implementation/tests, including new catalog helpers.
+ * Existing symbolic captures are immutable; legacy concrete captures are replaced once.
  */
 import { registerHooks } from 'node:module';
 import { appendFileSync, existsSync, readFileSync, writeFileSync, mkdtempSync, symlinkSync, mkdirSync, rmSync, copyFileSync } from 'node:fs';
@@ -11,8 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { resolve, join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
-const revision = process.env.ROUTE_BASELINE_REVISION || 'ed8e333d17046a327e90d058334d28d00c785fe8';
-const label = process.env.ROUTE_BASELINE_LABEL || 'v0.5.1';
+const revision = process.env.ROUTE_BASELINE_REVISION || 'HEAD';
+const label = process.env.ROUTE_BASELINE_LABEL || 'sol61-high';
 const worktreeOverlay = process.env.ROUTE_BASELINE_WORKTREE === '1';
 const replaceAnchor = (source, anchor, replacement, url) => {
   const count = source.split(anchor).length - 1;
@@ -39,7 +37,7 @@ if (process.env.ROUTE_BASELINE_TRACE) {
           revision !== 'ed8e333d17046a327e90d058334d28d00c785fe8') {
         for (const anchor of [
           "const frozen = frozenRoutingBaseline('bundled-build');",
-          "assert.equal(corePreflight(profiles, spec, {}, { mode: 'off' }).profilesDigest, frozen.profileDigest);",
+          "assert.equal(symbolicProfilesDigest(corePreflight(profiles, spec, {}, { mode: 'off' })), frozen.profileDigest);",
           'assert.deepEqual(plan.input, frozen.events[0].input);',
           'assert.equal(plan.flow, frozen.events[0].flow);',
           'assert.deepEqual(plan.opts, { ...frozen.events[0].opts, workspaceRoot: f.workspace });',
@@ -61,7 +59,12 @@ if (process.env.ROUTE_BASELINE_TRACE) {
   try {
     const archive = execFileSync('git', ['archive', revision], { cwd: root, maxBuffer: 100 * 1024 * 1024 });
     execFileSync('tar', ['-x', '-C', dir], { input: archive });
-    const overlayPaths = ['server/model-tiers.js', 'test/integration/build-wave-golden.test.js'];
+    const overlayPaths = [...new Set([
+      ...execFileSync('git', ['diff', '--name-only'], { cwd: root, encoding: 'utf8' }).trim().split('\n')
+        .filter(path => /^(lib|server|contracts|test)\//.test(path) && !path.startsWith('test/fixtures/')),
+      'lib/model-catalog.js', 'test/model-catalog.test.js', 'test/model-route-projection.test.js', 'test/helpers/model-catalog.js',
+      'test/helpers/model-route-projection.js',
+    ])];
     const sourceOverlaySha256 = worktreeOverlay ? Object.fromEntries(overlayPaths.map(path => [path,
       createHash('sha256').update(readFileSync(join(root, path))).digest('hex')])) : null;
     if (worktreeOverlay) for (const path of overlayPaths) copyFileSync(join(root, path), join(dir, path));
@@ -76,13 +79,13 @@ if (process.env.ROUTE_BASELINE_TRACE) {
     ];
     for (const [name, test, pattern] of cases) {
       const destination = join(root, `test/fixtures/model-route-off-${name}-${label}.json`);
-      if (existsSync(destination) && JSON.parse(readFileSync(destination, 'utf8')).captured === true) {
+      if (existsSync(destination) && JSON.parse(readFileSync(destination, 'utf8')).projection === 'provider-tier-v1' && JSON.parse(readFileSync(destination, 'utf8')).captured === true) {
         console.log(`${name}: retained frozen fixture (not recaptured)`); continue;
       }
       const trace = join(dir, `${name}.jsonl`);
       writeFileSync(trace, '');
       const run = spawnSync(process.execPath, ['--import', './test/helpers/record-model-route-baselines.mjs', '--test',
-        '--test-timeout=300000', `--test-name-pattern=${pattern}`, test], { cwd: dir, encoding: 'utf8', timeout: 330000,
+        '--test-timeout=900000', `--test-name-pattern=${pattern}`, test], { cwd: dir, encoding: 'utf8', timeout: 930000,
         maxBuffer: 20 * 1024 * 1024, env: { ...process.env, RESEND_API_KEY: '', STRIPE_API_KEY: '', STRATUM_STATE_ROOT: join(dir, `.stratum-state-${name}`),
           COMPOSE_STRATUM_TS_MCP_BIN: TS_MCP_BIN, COMPOSE_STRATUM_TS_CLI_BIN: TS_CLI_BIN,
           ROUTE_BASELINE_TRACE: trace, ROUTE_BASELINE_CASE: name } });
@@ -100,7 +103,7 @@ if (process.env.ROUTE_BASELINE_TRACE) {
           ? "import {PROFILES as p,WAVE_GOLDEN_SPEC as s} from './test/helpers/build-wave-golden-fixture.js';"
           : "import {readFileSync} from 'node:fs'; const p=JSON.parse(readFileSync('presets/team-fable-astra.profiles.json')); const s=readFileSync('presets/team-fable-astra.stratum.yaml','utf8');";
         profileDigest = execFileSync(process.execPath, ['--input-type=module', '-e', probe +
-          "import {preflightPipelineProfiles} from './lib/pipeline-profiles.js'; console.log(preflightPipelineProfiles(p,s).profilesDigest);"], { cwd: dir, encoding: 'utf8' }).trim();
+          "import {preflightPipelineProfiles} from './lib/pipeline-profiles.js'; import {symbolicProfilesDigest} from './test/helpers/model-route-projection.js'; console.log(symbolicProfilesDigest(preflightPipelineProfiles(p,s)));"], { cwd: dir, encoding: 'utf8', env: { ...process.env, COMPOSE_STRATUM_TS_CLI_BIN: TS_CLI_BIN } }).trim();
       }
       const shellQuote = value => `'${value.replaceAll("'", "'\\''")}'`;
       const command = [
@@ -109,10 +112,12 @@ if (process.env.ROUTE_BASELINE_TRACE) {
         ...(worktreeOverlay ? ['ROUTE_BASELINE_WORKTREE=1'] : []),
         'RESEND_API_KEY=', 'STRIPE_API_KEY=', 'node test/helpers/record-model-route-baselines.mjs',
       ].join(' ');
-      const fixture = { sourceRevision: revision, ...(worktreeOverlay ? { sourceOverlaySha256 } : {}),
-        ...(process.env.ROUTE_BASELINE_LABEL ? { label } : {}), captured, harness: test,
+      const { symbolicModelProjection } = await import('./model-route-projection.js');
+      const { catalogDigest, path } = JSON.parse(execFileSync(process.execPath, [TS_CLI_BIN, 'models', '--json'], { encoding: 'utf8' }));
+      const fixture = { projection: 'provider-tier-v1', catalogDigest, path, sourceRevision: revision, ...(worktreeOverlay ? { sourceOverlaySha256 } : {}),
+        label, captured, harness: test,
         command,
-        ...(captured ? { profileDigest, events } : { reason: 'Real-engine capture did not complete; no expected bytes fabricated.', exitCode: run.status,
+        ...(captured ? { profileDigest, events: symbolicModelProjection(events) } : { reason: 'Real-engine capture did not complete; no expected bytes fabricated.', exitCode: run.status,
           diagnostics: output.slice(-14000) }) };
       mkdirSync(join(root, 'test/fixtures'), { recursive: true });
       writeFileSync(destination, JSON.stringify(fixture, null, 2) + '\n');

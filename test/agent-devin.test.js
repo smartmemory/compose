@@ -1,3 +1,4 @@
+import { tier, thinking } from './helpers/model-catalog.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -18,9 +19,9 @@ test('provider list and error vocabulary', () => {
   assert.throws(() => validateAgentString('gemini'), /known: claude, codex, devin/);
   assert.throws(() => validateAgentString('devin::coordinator'), /not available for provider "devin"/);
 });
-for (const [tier, model, effort] of [['critical','swe-2-max','max'], ['standard','swe-2-high','high'], ['fast','swe-2-medium','medium'], ['budget','swe-2-medium','medium']]) test(`Devin ${tier}`, () => {
-  const cfg = resolveAgentConfig(`devin::${tier}`);
-  assert.equal(cfg.modelID, model); assert.equal(cfg.effort, effort); assert.equal(cfg.thinking, null);
+for (const key of ['critical', 'standard', 'fast', 'budget']) test(`Devin ${key}`, () => {
+  const cfg = resolveAgentConfig(`devin::${key}`);
+  assert.equal(cfg.modelID, tier('devin', key).model); assert.equal(cfg.effort, tier('devin', key).effort); assert.equal(cfg.thinking, null);
 });
 test('bare and unknown tiers leave model and effort unset', () => {
   assert.equal(resolveAgentConfig('devin').modelID, null);
@@ -49,7 +50,7 @@ test('runtime roles resolve full Devin profiles to bare providers', () => {
 });
 test('authoring preflight accepts bare Devin and matching sidecars, rejects mismatch', () => {
   assert.equal(preflightPipelineProfiles({}, spec('devin')).resolved.work.provider, 'devin');
-  assert.equal(preflightPipelineProfiles({ work: 'devin::fast' }, spec('devin')).resolved.work.modelID, 'swe-2-medium');
+  assert.equal(preflightPipelineProfiles({ work: 'devin::fast' }, spec('devin')).resolved.work.modelID, tier('devin', 'fast').model);
   assert.throws(() => preflightPipelineProfiles({ work: 'devin::fast' }, spec('claude')), /provider|agent/);
 });
 for (const file of ['routing-start.schema.json','routing-record.schema.json','review-result.json','comp-obs-contract.schema.json']) test(`${file} provider contract accepts Devin only among known providers`, () => {
@@ -63,7 +64,7 @@ for (const file of ['routing-start.schema.json','routing-record.schema.json','re
 });
 for (const tiers of [['fast'], ['fast','budget']]) test(`executed attribution ${tiers}`, () => {
   const mappings = Object.fromEntries(tiers.map(tier => [tier, resolveAgentConfig(`devin::${tier}`)]));
-  const actual = routingExecutedTier({ mappings }, { transport: 'stratum', profileIntent: { provider: 'devin' } }, { id: 'r', launchOutcome: 'executed', reportedModel: 'swe-2-medium', reportedEffort: 'medium' });
+  const actual = routingExecutedTier({ mappings }, { transport: 'stratum', profileIntent: { provider: 'devin' } }, { id: 'r', launchOutcome: 'executed', reportedModel: tier('devin', 'fast').model, reportedEffort: tier('devin', 'fast').effort });
   assert.equal(actual.status, tiers.length === 1 ? 'known' : 'unknown');
   assert.equal(actual.value, tiers.length === 1 ? 'fast' : null);
 });

@@ -1,3 +1,4 @@
+import { catalog, tier, claudeDefault } from './helpers/model-catalog.js';
 /**
  * COMP-COST-OWNER S3 — the consumer never invents a cost.
  *
@@ -73,7 +74,7 @@ test('a step with tokens and no stated cost yields a usage record with NO cost_u
   // before the fallback was removed.
   const { usages } = await run(fakeStratum([
     { input_tokens: 1000, output_tokens: 500, cache_creation_input_tokens: 0,
-      cache_read_input_tokens: 0, model: 'claude-sonnet-4-6' },
+      cache_read_input_tokens: 0, model: claudeDefault },
   ]));
 
   assert.equal(usages.length, 1, 'one primary usage record');
@@ -90,8 +91,8 @@ test('a step with tokens and no stated cost yields a usage record with NO cost_u
 test('a priced step plus an unpriced step refuses the partial total', async () => {
   const { usages } = await run(fakeStratum([
     { input_tokens: 100, output_tokens: 50, cost_usd: 0.25, usd_source: 'reported',
-      model: 'claude-sonnet-4-6' },
-    { input_tokens: 900, output_tokens: 400, model: 'claude-sonnet-4-6' },
+      model: claudeDefault },
+    { input_tokens: 900, output_tokens: 400, model: claudeDefault },
   ]));
 
   assert.ok(!Object.hasOwn(usages[0], 'cost_usd'),
@@ -106,7 +107,7 @@ test('a priced step plus an unpriced step refuses the partial total', async () =
 test('a stated cost and its provenance survive untouched', async () => {
   const { usages } = await run(fakeStratum([
     { input_tokens: 216385, output_tokens: 5836, cache_read_input_tokens: 179200,
-      cost_usd: 0.17813775, usd_source: 'estimated', model: 'gpt-5.3-codex-spark' },
+      cost_usd: 0.17813775, usd_source: 'estimated', model: catalog.retired.codex[0] },
   ]));
 
   assert.equal(usages[0].cost_usd, 0.17813775,
@@ -116,8 +117,8 @@ test('a stated cost and its provenance survive untouched', async () => {
 
 test('estimated is sticky across a run: a mixed total cannot honestly be called reported', async () => {
   const { usages } = await run(fakeStratum([
-    { input_tokens: 100, output_tokens: 10, cost_usd: 0.5, usd_source: 'reported', model: 'gpt-6-astra' },
-    { input_tokens: 100, output_tokens: 10, cost_usd: 0.25, usd_source: 'estimated', model: 'gpt-6-astra' },
+    { input_tokens: 100, output_tokens: 10, cost_usd: 0.5, usd_source: 'reported', model: tier('codex', 'critical').model },
+    { input_tokens: 100, output_tokens: 10, cost_usd: 0.25, usd_source: 'estimated', model: tier('codex', 'critical').model },
   ]));
 
   assert.equal(usages[0].cost_usd, 0.75);
@@ -136,8 +137,8 @@ test('estimated is sticky across a run: a mixed total cannot honestly be called 
 test('the connector result total is adopted when some steps were unpriced', async () => {
   const { usages } = await run(fakeStratum(
     [
-      { input_tokens: 100, output_tokens: 50, cost_usd: 0.1, usd_source: 'reported', model: 'gpt-6-astra' },
-      { input_tokens: 900, output_tokens: 400, model: 'gpt-6-astra' },
+      { input_tokens: 100, output_tokens: 50, cost_usd: 0.1, usd_source: 'reported', model: tier('codex', 'critical').model },
+      { input_tokens: 900, output_tokens: 400, model: tier('codex', 'critical').model },
     ],
     { usage: { usd: 1.5, tokens: 1450 }, usdSource: 'reported' },
   ));

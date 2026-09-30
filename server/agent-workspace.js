@@ -1,3 +1,4 @@
+import { getModelCatalog } from '../lib/model-catalog.js';
 import { prepareProject, withProjectContext, getTargetRoot } from './project-root.js';
 import path from 'node:path';
 import { readFileSync, realpathSync } from 'node:fs';
@@ -189,7 +190,7 @@ export function createAgentWorkspace(binding, { query }) {
     return {
       cwd: binding.targetRoot,
       env: { ...process.env, COMPOSE_TARGET: binding.targetRoot },
-      model: _readModelSetting() || 'claude-sonnet-5-5',
+      model: _readModelSetting() || getModelCatalog().catalog.claude.default.model,
       permissionMode: 'acceptEdits',
       settingSources: ['project'],
       tools: { type: 'preset', preset: 'claude_code' },

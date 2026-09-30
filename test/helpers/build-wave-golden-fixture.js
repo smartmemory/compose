@@ -1,3 +1,5 @@
+import { symbolicModelProjection } from './model-route-projection.js';
+import { catalog, tier, thinking, claudeDefault, codexDefault, unpricedCodex } from './model-catalog.js';
 /** Test-only carry preset and hybrid inference driver. All engine RPCs are real. */
 // HERMETICITY GUARD. These goldens reach a real `execute_merge` gate, and
 // lib/build.js:5915 delegates a gate to the web UI whenever probeServer() finds
@@ -238,6 +240,9 @@ export function frozenRoutingBaseline(name) {
   const frozen = JSON.parse(readFileSync(new URL(`../fixtures/model-route-off-${name}-sol61-high.json`, import.meta.url)));
   assert.equal(frozen.captured, true);
   assert.equal(frozen.label, 'sol61-high');
+  assert.equal(frozen.projection, 'provider-tier-v1');
+  assert.match(frozen.catalogDigest, /^[a-f0-9]{64}$/);
+  assert.ok(frozen.path);
   return frozen;
 }
 
@@ -248,7 +253,7 @@ export function frozenRoutingBaseline(name) {
 export function normalizedGoldenCalls(events) {
   const plan = events.find(e => e.kind === 'plan');
   const workspace = plan.opts.workspaceRoot;
-  const calls = events.filter(e => e.kind === 'call').map(serializeGolden);
+  const calls = events.filter(e => e.kind === 'call').map(e => symbolicModelProjection(serializeGolden(e)));
   const step = c => c.opts.telemetry?.step_id ?? c.opts.flow?.stepId;
   for (let i = 0; i < calls.length;) {
     if (!/^execute\/\d+$/.test(step(calls[i]))) { i++; continue; }
@@ -327,9 +332,9 @@ export async function goldenProviderTool(respond, onCall = () => {}) {
         if (input.failed) throw Error('controlled SDK failure');
       } })(request, schema, progress);
       let seq = 0;
-      const producer = new ClaudeConnector({ model: args.model ?? 'claude-sonnet-4-6', effort: args.effort,
+      const producer = new ClaudeConnector({ model: args.model ?? claudeDefault, effort: args.effort,
         env: {}, query: async function* () {
-          yield { type: 'system', subtype: 'init', model: args.model ?? 'claude-sonnet-4-6' };
+          yield { type: 'system', subtype: 'init', model: args.model ?? claudeDefault };
           yield { type: 'result', subtype: input.failed ? 'error_max_turns' : 'success', result: input.text,
             ...(input.unknown ? {} : { total_cost_usd: input.usd, duration_ms: 31, usage: { input_tokens: 3, output_tokens: 5 } }) };
         }, onEvent(event) { progress.onprogress({ message: JSON.stringify({ schema_version: '0.2.8',

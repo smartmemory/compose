@@ -1,3 +1,5 @@
+import { symbolicProfilesDigest, symbolicModelProjection } from './helpers/model-route-projection.js';
+import { catalog, tier, thinking, claudeDefault, codexDefault, unpricedCodex } from './helpers/model-catalog.js';
 /** Production preset golden: real engine/connector, recorded Claude and fake Codex. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -38,10 +40,10 @@ test('fable-astra: real Stratum validator, CLI rewrite, bundled resolution and s
   assert.equal(preflight.ok, true);
   assert.deepEqual(profiles._routing, { mode: 'shadow' });
   assert.deepEqual(Object.entries(profiles).filter(([, p]) => p?.route?.learn).map(([id]) => id), ['plan', 'execute']);
-  assert.equal(preflight.resolved.plan.modelID, 'claude-fable-5-1');
-  assert.equal(preflight.resolved.assess.modelID, 'claude-fable-5-1');
-  assert.equal(preflight.resolved.verify.modelID, 'claude-opus-5-5');
-  assert.equal(preflight.resolved.review.modelID, 'gpt-6-astra');
+  assert.equal(preflight.resolved.plan.modelID, tier('claude', 'coordinator').model);
+  assert.equal(preflight.resolved.assess.modelID, tier('claude', 'coordinator').model);
+  assert.equal(preflight.resolved.verify.modelID, tier('claude', 'critical').model);
+  assert.equal(preflight.resolved.review.modelID, tier('codex', 'critical').model);
 });
 
 for (const mode of ['default shadow', 'off', 'paid shadow']) test(`fable-astra: ${mode} real preset wave → complete → ship and frozen oracle`, { timeout: 180000 }, async t => {
@@ -147,7 +149,7 @@ for (const mode of ['default shadow', 'off', 'paid shadow']) test(`fable-astra: 
     assert.ok(completions.every(c => !c.envelope.failure), JSON.stringify(completions));
     const journal = await readGoldenJournal(f);
     assert.equal(journal.wave.checkpoints.length, 1);
-    assert.equal(corePreflight(profiles, spec, {}, { mode: 'off' }).profilesDigest, frozen.profileDigest);
+    assert.equal(symbolicProfilesDigest(corePreflight(profiles, spec, {}, { mode: 'off' })), frozen.profileDigest);
     const plan = events.find(e => e.kind === 'plan');
     if (mode === 'off') {
       assert.deepEqual(plan.input, frozen.events[0].input);
@@ -186,7 +188,7 @@ for (const mode of ['default shadow', 'off', 'paid shadow']) test(`fable-astra: 
     assert.equal(readFileSync(join(f.workspace, 'untouched.txt'), 'utf8'), 'sentinel\n');
     const calls = await f.readAgentPids();
     assert.deepEqual(calls.map(c => c.lane), ['worker', 'review']);
-    assert.ok(calls.every(c => c.model === 'gpt-6-astra'));
+    assert.ok(calls.every(c => c.model === tier('codex', 'critical').model));
     const review = inference.find(c => c.provider === 'codex' && c.prompt.includes('Fresh independent read-only review'));
     assert.ok(review);
     assert.equal(review.opts.sandboxMode, 'read-only');
@@ -195,7 +197,7 @@ for (const mode of ['default shadow', 'off', 'paid shadow']) test(`fable-astra: 
     assert.match(review.prompt, /module.exports = x => x \* 2/);
     assert.match(review.prompt, /Integrated doubling test passed/);
     assert.deepEqual(inference.filter(c => c.provider === 'claude').map(c => c.opts.modelID),
-      ['claude-fable-5-1', 'claude-opus-5-5', 'claude-fable-5-1']);
+      [tier('claude', 'coordinator').model, tier('claude', 'critical').model, tier('claude', 'coordinator').model]);
   } finally {
     await client.close();
     if (oldRoot === undefined) delete process.env.STRATUM_STATE_ROOT; else process.env.STRATUM_STATE_ROOT = oldRoot;

@@ -1,3 +1,4 @@
+import { tier } from './helpers/model-catalog.js';
 /** Routing start/plan/continuation persistence over disposable Git repositories. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -265,8 +266,8 @@ test('start pins unseen item-tier mappings and separate same-named scoped defaul
   const start = createRoutingStart({ ...f.args, spec: authored, preflight });
   assert.equal(start.staticResolutions['main/work'].winner.provider, 'codex');
   assert.equal(start.staticResolutions['other/work'].winner.provider, 'claude');
-  assert.equal(start.mappings['candidate/codex/standard'].modelID, 'gpt-6.1-sol');
-  assert.equal(start.mappings['candidate/claude/coordinator'].modelID, 'claude-fable-5-1');
+  assert.equal(start.mappings['candidate/codex/standard'].modelID, tier('codex', 'standard').model);
+  assert.equal(start.mappings['candidate/claude/coordinator'].modelID, tier('claude', 'coordinator').model);
 });
 test('requested and run-binding before/after publication faults recover the original intent exactly', t => {
   for (const boundary of ['beforePublish', 'afterPublish']) {

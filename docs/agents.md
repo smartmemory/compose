@@ -18,7 +18,7 @@ Compose dispatches work to AI agents through a connector abstraction. All connec
 
 ## ClaudeSDKConnector
 
-Wraps `@anthropic-ai/claude-agent-sdk`'s `query()` function. Default model: `claude-sonnet-5-5` (override via `CLAUDE_MODEL` env var). Runs in `acceptEdits` permission mode with full `claude_code` tool access.
+Wraps `@anthropic-ai/claude-agent-sdk`'s `query()` function. The default model comes from the selected Stratum [model catalog](../../stratum/ts/src/config/models.default.toml)'s `claude.default` entry (override via `CLAUDE_MODEL` env var). Runs in `acceptEdits` permission mode with full `claude_code` tool access.
 
 Key behaviors:
 - Strips `CLAUDECODE` env var to allow spawning nested Claude Code sessions
@@ -30,7 +30,13 @@ Key behaviors:
 
 Spawns the official OpenAI `codex` CLI (`codex exec --json --skip-git-repo-check --sandbox read-only`), locked to OpenAI Codex models. Install via `npm i -g @openai/codex` (or `brew install codex`). Auth via `codex login` (ChatGPT OAuth) or `OPENAI_API_KEY` env var. Reasoning effort is passed via `-c model_reasoning_effort=<effort>` when the model ID carries a supported effort suffix.
 
-Supported models: `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` (with `/minimal`, `/low`, `/medium`, `/high`, `/xhigh` effort suffixes). Default: `gpt-6.1-sol/high` (override via `CODEX_MODEL` env var). The canonical dispatchable allowlist comes from `stratum/ts/src/judge/pricing.ts`; the default lives in `stratum/ts/src/connectors/codex.ts`.
+Supported models, defaults, and tier efforts are defined in the shipped Stratum
+[model catalog](../../stratum/ts/src/config/models.default.toml). Inspect the selected
+installation with `stratum models --json`; `pricing.codex` minus `retired.codex` is
+the dispatchable allowlist, and `codex.default` supplies the default model/effort.
+`CODEX_MODEL` remains the default override. Compose loads this catalog lazily through
+the CLI in the installation selected by its MCP bin resolver (`COMPOSE_STRATUM_TS_MCP_BIN`) and records `catalogDigest` and `path` in routing provenance.
+The catalog is cached per process, so upgrading Stratum requires restarting Compose.
 
 ## OpencodeConnector
 

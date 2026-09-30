@@ -1,3 +1,4 @@
+import { tier } from './model-catalog.js';
 /** Controller-run only. Never invoke a provider without COMPOSE_DEVIN_LIVE=1. */
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, copyFileSync, chmodSync } from 'node:fs';
@@ -86,7 +87,7 @@ export async function devinBuildFixture({ live = false, roles = {}, authoredAgen
       writeFileSync(join(args.cwd, 'devin-proof.txt'), 'DEVIN_OK\n');
       return { content: [{ type: 'text', text: JSON.stringify({
         text: '{"outcome":"complete","summary":"wrote file"}', usage: { tokens: 11, ms: 7, usd: 0 }, usdSource: 'estimated',
-        split: { input: 10, output: 1 }, telemetry: { model: 'swe-2-medium', effort: 'medium', durationMs: 7 },
+        split: { input: 10, output: 1 }, telemetry: { model: tier('devin', 'fast').model, effort: tier('devin', 'fast').effort, durationMs: 7 },
       }) }] };
     } };
     const agentRun = injectedAgentRun ?? (live ? client.agentRun.bind(client) : fakeConnector.agentRun.bind(fakeConnector));
@@ -94,7 +95,7 @@ export async function devinBuildFixture({ live = false, roles = {}, authoredAgen
       if (key === 'close') return async () => {};
       if (key === 'agentRun') return async (agent, prompt, opts) => {
         assert.equal(agent, 'devin');
-        assert.equal(opts.modelID, 'swe-2-medium'); assert.equal(opts.effort, 'medium');
+        assert.equal(opts.modelID, tier('devin', 'fast').model); assert.equal(opts.effort, tier('devin', 'fast').effort);
         assert.equal(opts.sandboxMode, 'workspace-write'); assert.notEqual(opts.cwd, cwd);
         const attempt = { agent, opts, identity: { flow: opts.flow, stepId: opts.telemetry?.step_id,
           issuanceId: opts.routingCalls?.binding?.issuanceId, recordId: opts.routingCalls?.binding?.recordId } };
@@ -145,7 +146,7 @@ export async function devinBuildFixture({ live = false, roles = {}, authoredAgen
     assert.equal(new Set(calls.map(call => call.identity?.issuanceId)).size, calls.length, 'each attempt must carry its own issuance');
     assert.ok(reports.length > 0);
     assert.equal(readFileSync(join(cwd, 'devin-proof.txt'), 'utf8'), 'DEVIN_OK\n');
-    const receipt = receipts.find(r => r.telemetry?.model === 'swe-2-medium');
+    const receipt = receipts.find(r => r.telemetry?.model === tier('devin', 'fast').model);
     assert.ok(receipt); assert.equal(receipt.usage.usd, 0); assert.equal(receipt.usdSource, 'estimated');
     assert.equal(accumulated.usd, 0);
     assert.equal(accumulated.usd_source, 'estimated');
@@ -154,7 +155,7 @@ export async function devinBuildFixture({ live = false, roles = {}, authoredAgen
     assert.equal(readFlowSpend(flowId, { revisionDigest: snapshot.revisionDigest }).spent, 0);
     {
       const calls = readRoutingLedger({ cwd }).flatMap(row => row.calls);
-      const call = calls.find(call => call.resolution?.reportedModel === 'swe-2-medium');
+      const call = calls.find(call => call.resolution?.reportedModel === tier('devin', 'fast').model);
       assert.ok(call); assert.equal(call.executedTier.status, 'known'); assert.equal(call.executedTier.value, 'fast');
       assert.equal(call.resolution.reportedEffort, 'medium');
       assert.equal(call.resolution.usageEvidence.usd, 0);

@@ -1,3 +1,4 @@
+import { catalog, tier, claudeDefault } from './helpers/model-catalog.js';
 /**
  * build-stream-validate.test.js — STRAT-PAR-STREAM-CONSUMER-VALIDATE
  *
@@ -76,7 +77,7 @@ describe('validateBuildStreamEvent — valid envelopes', () => {
         cache_creation_input_tokens: 0,
         cache_read_input_tokens: 200,
         cost_usd: 0.005,
-        model: 'claude-sonnet-4-6',
+        model: claudeDefault,
       },
     }));
     assert.equal(result.valid, true, `expected valid but got: ${result.error}`);
@@ -97,7 +98,7 @@ describe('validateBuildStreamEvent — valid envelopes', () => {
         output_tokens: 5836,
         cache_creation_input_tokens: 0,
         cache_read_input_tokens: 214016,
-        model: 'gpt-5.3-codex-spark',
+        model: catalog.retired.codex[0],
       },
     }));
     assert.equal(result.valid, true, `codex step_usage must not be dropped, got: ${result.error}`);
@@ -108,7 +109,7 @@ describe('validateBuildStreamEvent — valid envelopes', () => {
   it('still rejects step_usage missing a required token field', () => {
     for (const omit of ['stepId', 'input_tokens', 'output_tokens']) {
       const metadata = {
-        stepId: 'review', input_tokens: 10, output_tokens: 20, model: 'gpt-5.6-luna',
+        stepId: 'review', input_tokens: 10, output_tokens: 20, model: tier('codex', 'budget').model,
       };
       delete metadata[omit];
       const result = validateBuildStreamEvent(makeEnvelope({ kind: 'step_usage', metadata }));
@@ -131,7 +132,7 @@ describe('validateBuildStreamEvent — valid envelopes', () => {
         cache_read_input_tokens: 179200,
         cost_usd: 0.17813775,
         usd_source: 'estimated',
-        model: 'gpt-5.3-codex-spark',
+        model: catalog.retired.codex[0],
       },
     }));
     assert.equal(result.valid, true, `codex step_usage must not be dropped, got: ${result.error}`);
@@ -377,7 +378,7 @@ describe('validateBuildStreamEvent — open kinds (metadata not closed)', () => 
   it('accepts agent_started with any shape', () => {
     const result = validateBuildStreamEvent(makeEnvelope({
       kind: 'agent_started',
-      metadata: { agent: 'claude', model: 'claude-sonnet-4-6', prompt_chars: 1000 },
+      metadata: { agent: 'claude', model: claudeDefault, prompt_chars: 1000 },
     }));
     assert.equal(result.valid, true);
   });

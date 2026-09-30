@@ -365,6 +365,8 @@
         "itemTier"
       ],
       "properties": {
+        "catalogDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "path": { "type": "string", "minLength": 1 },
         "prior": {
           "enum": [
             null,

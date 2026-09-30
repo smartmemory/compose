@@ -143,6 +143,9 @@ test('real GSD three-run continuation preserves C allocation through 2→1→0, 
 test('GSD off/shadow compare path-normalized prompts and selected options; fresh input matches frozen GSD input', async t => {
   const off = await gsdFixture(t, { route: 'off' }); const a = await off.run();
   const frozen = JSON.parse(readFileSync('test/fixtures/model-route-off-gsd-input-sol61-high.json'));
+  assert.equal(frozen.projection, 'provider-tier-v1');
+  assert.match(frozen.catalogDigest, /^[a-f0-9]{64}$/);
+  assert.ok(frozen.path);
   assert.deepEqual(off.plans[0][2], frozen.events[0].input);
   assert.equal(existsSync(join(off.cwd, '.compose/routing')), false);
   const shadow = await gsdFixture(t); await shadow.run();

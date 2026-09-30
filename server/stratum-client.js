@@ -125,7 +125,7 @@ function _spawnResult(bin, err, out, err2) {
 
 /** Binary-specific spawn-failure message with the install/path remedy. */
 function _spawnRemedy(bin, code) {
-  return `${bin} (TS stratum engine) failed to spawn (${code}). Install @smartmemory/stratum or set COMPOSE_STRATUM_TS_CLI_BIN`;
+  return `${bin} (TS stratum engine) failed to spawn (${code}). Install @smartmemory/stratum or set COMPOSE_STRATUM_TS_CLI_BIN for CLI dispatch; COMPOSE_STRATUM_TS_MCP_BIN selects the model catalog installation`;
 }
 
 /**
