@@ -220,7 +220,7 @@ describe('F1 resolveStepOutputContract follows scoped subflow ids', () => {
 // ---------------------------------------------------------------------------
 describe('F2 local connector restricts tool availability', () => {
   const successResult = {
-    type: 'result', subtype: 'success', result: '{}',
+    type: 'result', subtype: 'success', is_error: false, result: '{}',
     total_cost_usd: 0, usage: { input_tokens: 1, output_tokens: 1 }, duration_ms: 1,
   };
 
@@ -251,6 +251,25 @@ describe('F2 local connector restricts tool availability', () => {
 // F3 — a failed run carries its billable usage
 // ---------------------------------------------------------------------------
 describe('F3 failed local run reports usage', () => {
+  it('rejects the logged-out CLI success subtype and attaches its reported usage', async () => {
+    const errResult = {
+      type: 'result', subtype: 'success', is_error: true,
+      result: 'Not logged in · Please run /login', terminal_reason: 'api_error',
+      duration_ms: 76, total_cost_usd: 0,
+      usage: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+    };
+    await assert.rejects(runLocalClaudeAgent('p', { query: makeQueryStub(errResult) }), error => {
+      assert.match(error.message, /Not logged in/);
+      assert.deepEqual(error.usage, {
+        input_tokens: 0, output_tokens: 0, tokens: 0,
+        cost_usd: 0, usd: 0, usd_source: 'reported',
+        duration_ms: 76, ms: 76, model: 'claude-test',
+      });
+      assert.equal(error.costUsd, 0);
+      return true;
+    });
+  });
+
   it('attaches usage + costUsd to the thrown error on error_during_execution', async () => {
     const errResult = {
       type: 'result', subtype: 'error_during_execution',
