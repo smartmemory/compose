@@ -1,0 +1,8 @@
+{
+  "code": "COMP-PROVIDER-FALLBACK-1",
+  "description": "Single-subscription fallback: when a user has only ONE AI vendor (only Claude, or only a ChatGPT/Codex account), Compose runs as normal and, when a dispatch fails BECAUSE that vendor is unavailable to the user (verified not-logged-in / no-credential signals; plan-quota exhaustion swaps with a loud warning), redoes it on the other vendor at the catalog-mapped tier, remembers the unavailable vendor for the rest of the run, and records every substitution. Model-level failures (the ChatGPT-account 'model is not supported' 400, retired/unknown models, old CLI) never swap: they fail loud with the likely fix. Collapsed cross-vendor reviews become same-vendor, one tier stronger, fresh session, and the run's provenance and summary say plainly that review was single-vendor. Tier mapping lives in the model catalog (STRAT-CONFIG-MODELS-1), not code. Codex-only users remain blocked on the lifecycle host by COMP-CODEX-PROVIDER-1; this feature covers Compose-dispatched pipeline agent calls. Design: [design.md](docs/features/COMP-PROVIDER-FALLBACK-1/design.md).",
+  "status": "PLANNED",
+  "phase": "COMP-TEAMS: Agent Team Presets",
+  "created": "2026-09-30",
+  "complexity": "L"
+}

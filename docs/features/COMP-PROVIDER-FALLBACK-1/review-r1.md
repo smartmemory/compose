@@ -1,0 +1,39 @@
+# COMP-PROVIDER-FALLBACK-1 — design review round 1 (Codex gpt-6-astra/medium, 2026-09-30)
+
+Controller adjudication: ALL SEVEN UPHELD. Revision NOT yet applied.
+
+**Verdict: NOT CLEAN.** The dispatch locations are credible, but the design has safety gaps and does not yet satisfy the binding “stronger model” decision. These are design findings, not complaints that planned functionality is absent.
+
+1. **P1 — Fallback can turn a read-only review into a write-capable call.**  
+   [D4, design.md:138](/Users/ruze/reg/my/forge/compose/docs/features/COMP-PROVIDER-FALLBACK-1/design.md:138) maps bare agents to the destination default and preserves the existing template—which can be absent. The explicitly covered [bug-escalation.js:126](/Users/ruze/reg/my/forge/compose/lib/bug-escalation.js:126) dispatches bare `codex`, without tool restrictions. Codex defaults to read-only at [codex.ts:194](/Users/ruze/reg/my/forge/stratum/ts/src/connectors/codex.ts:194); Claude uses `acceptEdits` at [claude.ts:85](/Users/ruze/reg/my/forge/stratum/ts/src/connectors/claude.ts:85) and the full tool preset when no allowlist is supplied at [claude.ts:127](/Users/ruze/reg/my/forge/stratum/ts/src/connectors/claude.ts:127).  
+   **Required change:** preserve effective capabilities across substitution, including implicit sandbox defaults. Bare review calls need an explicit destination review policy.
+
+2. **P1 — Resume bypasses the design’s own safe-redo requirement.**  
+   [D2, design.md:102](/Users/ruze/reg/my/forge/compose/docs/features/COMP-PROVIDER-FALLBACK-1/design.md:102) requires restoration before redoing writes, then permits a no-restore-point failure to run on the other vendor after resume. Stopping and resuming does not undo partial effects. The cited restore is a caller-level fanout catch at [build.js:1987](/Users/ruze/reg/my/forge/compose/lib/build.js:1987), outside both proposed fallback seams. Its implementation returns `false` without a witness and restores only a working tree at [consumer-fanout.js:1381](/Users/ruze/reg/my/forge/compose/lib/consumer-fanout.js:1381). That cannot undo external effects: the bundled [ship step:372](/Users/ruze/reg/my/forge/compose/pipelines/build.stratum.yaml:372) explicitly commits and pushes.  
+   **Required change:** persist a recovery-required state that survives resume. Let the side-effect owner authorize redispatch after verified restoration or reconciliation; a returned call alone is insufficient.
+
+3. **P1 — Advancing one tier does not guarantee a stronger model.**  
+   [D6, design.md:166](/Users/ruze/reg/my/forge/compose/docs/features/COMP-PROVIDER-FALLBACK-1/design.md:166) assumes the catalog ladder represents strictly stronger models. It does not: Codex `budget` and `fast` are identical Luna/medium configurations; Claude `standard` and `critical` are the same Opus model with different effort. See [models.default.toml:27](/Users/ruze/reg/my/forge/stratum/ts/src/config/models.default.toml:27). The proposed top-tier cap also explicitly permits the same model, contradicting the binding decision. `coordinator` is a valid source tier but is absent from the review ladder.  
+   **Required change:** define destination-provider escalation over the **effective implementation model**, skipping aliases. Specify coordinator handling. If no stronger model exists, stop or obtain an explicit owner exception; labelling same-model review does not satisfy the present requirement.
+
+4. **P1 — Direct-call retries conflict with routing’s one-invocation observation contract.**  
+   [D2, design.md:96](/Users/ruze/reg/my/forge/compose/docs/features/COMP-PROVIDER-FALLBACK-1/design.md:96) puts retries inside `#dispatchAgentRun`, while [D7:192](/Users/ruze/reg/my/forge/compose/docs/features/COMP-PROVIDER-FALLBACK-1/design.md:192) treats a substitution entry as sufficient routing integration. However, bug escalation supplies an auxiliary observer at [bug-escalation.js:127](/Users/ruze/reg/my/forge/compose/lib/bug-escalation.js:127). Such observers bind a durable observation at [routing-runtime.js:138](/Users/ruze/reg/my/forge/compose/lib/routing-runtime.js:138), and a second invocation on that observation is explicitly rejected at [consumer-fanout.js:871](/Users/ruze/reg/my/forge/compose/lib/consumer-fanout.js:871). A new dispatch UUID does not solve this.  
+   **Required change:** specify a new linked observation/issuance for the substitute, with separate termination evidence and receipts. This needs a retry-binding contract, not only the proposed receipt-mismatch test.
+
+5. **P2 — Resume does not pin fallback policy for dispatches that have no substitution yet.**  
+   [D7, design.md:195](/Users/ruze/reg/my/forge/compose/docs/features/COMP-PROVIDER-FALLBACK-1/design.md:195) replays existing substitutions but applies the registry to new issuances. The design never freezes the fallback table, review ladder or untiered destination defaults. Existing routing snapshots contain selected profiles and candidate mappings at [routing-ledger.js:275](/Users/ruze/reg/my/forge/compose/lib/routing-ledger.js:275); [routingModelMappings:285](/Users/ruze/reg/my/forge/compose/lib/routing-ledger.js:285) does not retain those new fallback rules. Resume validates those existing mappings at [routing-ledger.js:353](/Users/ruze/reg/my/forge/compose/lib/routing-ledger.js:353). A fallback-only catalog change could therefore alter later substitutions without triggering mapping drift.  
+   **Required change:** durably snapshot fallback policy and resolved destination configurations before use, and define how existing routing roots acquire that snapshot without mutation.
+
+6. **P2 — The unavailable classifier can hide installation defects.**  
+   [D1, design.md:71](/Users/ruze/reg/my/forge/compose/docs/features/COMP-PROVIDER-FALLBACK-1/design.md:71) treats missing SDK/CLI executables and Claude spawn `ENOENT` as vendor unavailability. But [codex.ts:675](/Users/ruze/reg/my/forge/stratum/ts/src/connectors/codex.ts:675) produces “Codex CLI unavailable” when bundled SDK resolution fails and PATH has no replacement—an installation failure, not evidence about subscription. Claude’s spawn also receives a working directory at [local-claude-connector.js:213](/Users/ruze/reg/my/forge/compose/lib/local-claude-connector.js:213); `ENOENT` alone cannot distinguish a missing executable from a missing cwd.  
+   **Required change:** keep ambiguous spawn/package failures `broken`. Require source-specific evidence for authentication fallback; generic thrown-message matching must not override tooling or workspace failures.
+
+7. **P2 — A real no-subscription case explicitly fails to swap.**  
+   [D1, design.md:80](/Users/ruze/reg/my/forge/compose/docs/features/COMP-PROVIDER-FALLBACK-1/design.md:80) intentionally classifies logged-in Claude accounts without a plan as `broken`, requiring `claude logout` before fallback works. That is an acknowledged gap against swap-on-failure for missing subscriptions. The current connectors also cannot be assumed to preserve the relevant signal: [claude.ts:205](/Users/ruze/reg/my/forge/stratum/ts/src/connectors/claude.ts:205) and [local-claude-connector.js:302](/Users/ruze/reg/my/forge/compose/lib/local-claude-connector.js:302) branch on `subtype`, not `is_error`.  
+   **Required change:** make a captured no-plan fixture and reliable connector error propagation an acceptance gate for that direction. Failing closed pending evidence is sensible, but requiring logout does not complete the owner’s requested behavior.
+
+The smallest viable revision keeps dispatch-time substitution, but adds explicit capability preservation, recovery ownership, durable retry bindings and a genuinely stronger-model mapping. Quota fallback and `--recheck-vendors` can remain deferred; they enlarge the state machine without resolving these core gaps.
+
+**NOT CLEAN.**
+
+
