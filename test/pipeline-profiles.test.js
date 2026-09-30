@@ -139,7 +139,7 @@ test('off preflight preserves inert underscore metadata and equals HEAD output a
   // Read the real legacy implementation without creating or regenerating a baseline fixture.
   let source = execFileSync('git', ['show', 'HEAD:lib/pipeline-profiles.js'], { encoding: 'utf8' });
   source = source.replace("from 'yaml'", `from '${import.meta.resolve('yaml')}'`)
-    .replace("from './agent-string.js'", `from '${pathToFileURL(resolve('lib/agent-string.js')).href}'`);
+    .replace(/from '\.\/([^']+)'/g, (_, file) => `from '${pathToFileURL(resolve('lib', file)).href}'`);
   const legacy = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
   const expected = legacy.preflightPipelineProfiles(raw, spec);
   const actual = preflightPipelineProfiles(raw, spec, {}, { mode: 'off' });
