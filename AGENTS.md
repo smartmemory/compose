@@ -1,5 +1,7 @@
 ## Stratum Execution Model
 
+> Part of the Forge workspace (`../`). Before non-trivial work, also read `../AGENTS.md`. Claude Code loads it automatically; Codex does not, because it starts AGENTS.md discovery at this repo's git root.
+
 Stratum is optional. If `capabilities.stratum` is false in `.compose/compose.json` (or stratum-mcp is not installed), skip Stratum steps and use flat prompt chains instead.
 
 For non-trivial tasks when Stratum is available, use it internally:
@@ -12,4 +14,4 @@ For non-trivial tasks when Stratum is available, use it internally:
 
 ## Context Budget
 
-The session-start loaded surface (agents, skills, rules, MCP tool schemas, CLAUDE.md chain) has a token cost. When you add a new skill, agent, rule, or MCP server, pair it with a `/context-budget` check at the next session boundary — run `node lib/context-budget.js <project-root> --tool-counts=<server=N,…>` and review the ranked cut list. Logic lives in `lib/context-budget.js` (read-only; never auto-applies cuts).
+The session-start loaded surface (agents, skills, rules, MCP tool schemas, AGENTS.md chain) has a token cost. When you add a new skill, agent, rule, or MCP server, pair it with a `/context-budget` check at the next session boundary — run `node lib/context-budget.js <project-root> --tool-counts=<server=N,…>` and review the ranked cut list. Logic lives in `lib/context-budget.js` (read-only; never auto-applies cuts).
