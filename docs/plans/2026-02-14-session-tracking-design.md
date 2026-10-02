@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-14
 **Status:** Approved
-**Related:** [Activity Resolution Spec](../specs/2026-02-14-activity-resolution-spec.md), [CLAUDE.md Phase 3 Roadmap](../../CLAUDE.md)
+**Related:** [Activity Resolution Spec](../specs/2026-02-14-activity-resolution-spec.md), [CLAUDE.md Phase 3 Roadmap](../../AGENTS.md)
 
 ## Overview
 

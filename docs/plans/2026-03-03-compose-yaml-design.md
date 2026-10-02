@@ -8,7 +8,7 @@
 - [Lifecycle Engine Roadmap](2026-02-15-lifecycle-engine-roadmap.md) ← Layer 3 (Policy Runtime), Layer 7 (Agent Abstraction)
 - [Agent Connectors Design](../features/agent-connectors/design.md) ← connector class hierarchy this spec compiles to
 - [Architecture Foundation Plan](2026-02-26-architecture-foundation-plan.md) ← Phase 4.5 lays connector substrate
-- [Bootstrap Roadmap (CLAUDE.md)](../../CLAUDE.md) ← Phase 6 (Lifecycle Engine), Phase 7 (Agent Abstraction)
+- [Bootstrap Roadmap (CLAUDE.md)](../../AGENTS.md) ← Phase 6 (Lifecycle Engine), Phase 7 (Agent Abstraction)
 
 ---
 

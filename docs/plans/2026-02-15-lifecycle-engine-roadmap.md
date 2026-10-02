@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-15
 **Status:** SKETCH — gap analysis and layer inventory, not a buildable spec
-**Related:** [Compose Skill](~/.claude/skills/compose/SKILL.md), [Feature-Dev v2 Design](../features/feature-dev-v2/design.md), [Skill Arch Upgrade Design](../features/skill-arch-upgrade/design.md), [Canonical Roadmap](../ROADMAP.md) ← Phase 6 entries, [Bootstrap Roadmap (CLAUDE.md)](../../CLAUDE.md), [Integration Roadmap (superseded)](2026-02-11-integration-roadmap.md), [PRD](../PRD.md)
+**Related:** [Compose Skill](~/.claude/skills/compose/SKILL.md), [Feature-Dev v2 Design](../features/feature-dev-v2/design.md), [Skill Arch Upgrade Design](../features/skill-arch-upgrade/design.md), [Canonical Roadmap](../ROADMAP.md) ← Phase 6 entries, [Bootstrap Roadmap (CLAUDE.md)](../../AGENTS.md), [Integration Roadmap (superseded)](2026-02-11-integration-roadmap.md), [PRD](../PRD.md)
 
 ---
 

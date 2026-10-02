@@ -8,7 +8,7 @@
 
 - [Agent Connectors Design](../features/agent-connectors/design.md) — the feature this phase implements
 - [Agent Connectors Blueprint](../features/agent-connectors/blueprint.md) — implementation details
-- [Bootstrap Roadmap (CLAUDE.md)](../../CLAUDE.md) — Phase 4.5, items 18a–18h
+- [Bootstrap Roadmap (CLAUDE.md)](../../AGENTS.md) — Phase 4.5, items 18a–18h
 - [Lifecycle Engine Roadmap](2026-02-15-lifecycle-engine-roadmap.md) — Phase 4.5 feeds into Layer 7
 
 ---
