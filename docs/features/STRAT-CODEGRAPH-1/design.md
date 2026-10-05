@@ -6,7 +6,7 @@
 - Roadmap: `compose/ROADMAP.md` § STRAT-CODEGRAPH
 - Sibling: [STRAT-CODEGRAPH-2](../STRAT-CODEGRAPH-2/design.md) (consumes this backend), STRAT-CODEGRAPH-3 (blast-radius scoring)
 - Related: COMP-CANON-INVENTORY (canon write list via the SmartMemory effects engine)
-- Evidence: `forge/scratch/2026-10-05-sm-code-spikes/gap-report.md`, `ground-truth.json` (15 grep-verified cross-file edges), `probe.py`
+- Evidence: [fixtures/](fixtures/README.md) (baseline gap report, 15 grep-verified cross-file edges, probe; pinned SHAs)
 - SmartMemory dependencies (smart-memory-docs, CODE-DEV initiative): CODE-INGEST-SURFACES-1, CODE-TS-RESOLVE-1, CODE-PARSE-DIAGNOSTICS-1
 
 ## Why the rescope
@@ -30,7 +30,7 @@ The original item planned to adopt an outside code-graph tool (Scope or CodeGrap
 - **Prior-art search.** Before a design starts, search the index for the concept. Hits are surfaced as "this may already exist".
 
 ## Acceptance criteria
-- [ ] **Spike S0 (first):** re-run `probe.py` against SmartMemory once CODE-TS-RESOLVE-1 lands. TS cross-file resolution must be > 0, and the result is recorded against the baseline above.
+- [ ] **Spike S0 (first):** re-run `fixtures/probe.py` against SmartMemory once CODE-TS-RESOLVE-1 lands. TS cross-file resolution must be > 0, and the result is recorded against the baseline above.
 - [ ] Compose detects SmartMemory availability. Without it, checks log a single warn-only notice and never fail a build.
 - [ ] Forge (compose + stratum/ts) is indexed through a SmartMemory surface that reaches JS/TS. The surface used is named in the report.
 - [ ] Incremental re-index touches only changed files. The timing is recorded.

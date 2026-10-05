@@ -1,0 +1,182 @@
+[
+  {
+    "caller": "compose/lib/journal-writer.js:540",
+    "callee": "compose/lib/idempotency.js:144",
+    "symbol": "checkOrInsert",
+    "found": false,
+    "extracted": false,
+    "call_source": "    return checkOrInsert(args.cwd, args.idempotency_key, fn).then(({ result }) => result);",
+    "definition_source": "export async function checkOrInsert(cwd, key, computeFn) {",
+    "imports": [
+      "31: import { checkOrInsert } from './idempotency.js';"
+    ]
+  },
+  {
+    "caller": "compose/lib/judgment-writer.js:1002",
+    "callee": "compose/lib/idempotency.js:144",
+    "symbol": "checkOrInsert",
+    "found": true,
+    "extracted": true,
+    "call_source": "    ({ result, cached } = await checkOrInsert(cwd, `${tool}:${args.idempotency_key}`, doWrite));",
+    "definition_source": "export async function checkOrInsert(cwd, key, computeFn) {",
+    "imports": [
+      "44: import { checkOrInsert } from './idempotency.js';"
+    ]
+  },
+  {
+    "caller": "compose/lib/followup-writer.js:323",
+    "callee": "compose/lib/idempotency.js:144",
+    "symbol": "checkOrInsert",
+    "found": true,
+    "extracted": true,
+    "call_source": "    const { result } = await checkOrInsert(cwd, cacheNamespacedKey, compute);",
+    "definition_source": "export async function checkOrInsert(cwd, key, computeFn) {",
+    "imports": [
+      "29: import { checkOrInsert } from './idempotency.js';"
+    ]
+  },
+  {
+    "caller": "compose/lib/feature-writer.js:147",
+    "callee": "compose/lib/idempotency.js:144",
+    "symbol": "checkOrInsert",
+    "found": false,
+    "extracted": false,
+    "call_source": "    return checkOrInsert(args.cwd, args.idempotency_key, fn).then(({ result }) => sanitizeWriterResult(result));",
+    "definition_source": "export async function checkOrInsert(cwd, key, computeFn) {",
+    "imports": [
+      "23: import { checkOrInsert } from './idempotency.js';"
+    ]
+  },
+  {
+    "caller": "compose/lib/changelog-writer.js:327",
+    "callee": "compose/lib/idempotency.js:144",
+    "symbol": "checkOrInsert",
+    "found": false,
+    "extracted": false,
+    "call_source": "    return checkOrInsert(args.cwd, args.idempotency_key, fn).then(({ result }) => result);",
+    "definition_source": "export async function checkOrInsert(cwd, key, computeFn) {",
+    "imports": [
+      "27: import { checkOrInsert } from './idempotency.js';"
+    ]
+  },
+  {
+    "caller": "compose/lib/completion-writer.js:265",
+    "callee": "compose/lib/idempotency.js:144",
+    "symbol": "checkOrInsert",
+    "found": false,
+    "extracted": false,
+    "call_source": "    return checkOrInsert(args.cwd, args.idempotency_key, fn).then(({ result }) => result);",
+    "definition_source": "export async function checkOrInsert(cwd, key, computeFn) {",
+    "imports": [
+      "32: import { checkOrInsert, validateIdempotencyKey } from './idempotency.js';"
+    ]
+  },
+  {
+    "caller": "compose/lib/build.js:3885",
+    "callee": "compose/lib/pipeline-compat.js:55",
+    "symbol": "tsCompatibilityOf",
+    "found": true,
+    "extracted": true,
+    "call_source": "  const specCompat = tsCompatibilityOf(specYaml);",
+    "definition_source": "export function tsCompatibilityOf(specText) {",
+    "imports": [
+      "47: import { tsCompatibilityOf, quarantineMessage, INIT_PROVISIONED_SPECS } from './pipeline-compat.js';"
+    ]
+  },
+  {
+    "caller": "compose/lib/new.js:101",
+    "callee": "compose/lib/pipeline-compat.js:55",
+    "symbol": "tsCompatibilityOf",
+    "found": true,
+    "extracted": true,
+    "call_source": "  const specCompat = tsCompatibilityOf(specText);",
+    "definition_source": "export function tsCompatibilityOf(specText) {",
+    "imports": [
+      "16: import { tsCompatibilityOf, quarantineMessage } from './pipeline-compat.js';"
+    ]
+  },
+  {
+    "caller": "stratum/ts/src/engine/engine.ts:561",
+    "callee": "stratum/ts/src/ir/validate.ts:348",
+    "symbol": "validateSpec",
+    "found": false,
+    "extracted": true,
+    "call_source": "    const validation = validateSpec(specInput);",
+    "definition_source": "export function validateSpec(input: unknown): ValidationResult {",
+    "imports": [
+      "15: import { type ValidationError, validateSpec } from \"../ir/validate.js\";"
+    ]
+  },
+  {
+    "caller": "stratum/ts/src/engine/engine.ts:515",
+    "callee": "stratum/ts/src/engine/run_lock.ts:332",
+    "symbol": "acquireRunLock",
+    "found": false,
+    "extracted": false,
+    "call_source": "      const release = await acquireRunLock(this.store.root, runId, {",
+    "definition_source": "export async function acquireRunLock(root: string, runId: string, options: RunLockOptions = {}): Promise<ReleaseRunLock> {",
+    "imports": [
+      "29: import { acquireRunLock, cancelLockWaitMs, readDriverLeaseSync, releaseDriverLeaseSync, writeDriverLeaseSync, type RunLockOptions } from \"./run_lock.js\";"
+    ]
+  },
+  {
+    "caller": "stratum/ts/src/engine/engine.ts:921",
+    "callee": "stratum/ts/src/engine/receipts.ts:26",
+    "symbol": "buildReceipt",
+    "found": false,
+    "extracted": false,
+    "call_source": "      const receipt = buildReceipt(staged, input as ReceiptInput);",
+    "definition_source": "export function buildReceipt(run: PersistedRun, input: ReceiptInput): ReceiptRecord {",
+    "imports": [
+      "30: import { buildReceipt, findReceipt, ReceiptValidationError, spineSpent, type ReceiptInput } from \"./receipts.js\";"
+    ]
+  },
+  {
+    "caller": "stratum/ts/src/engine/engine.ts:968",
+    "callee": "stratum/ts/src/engine/checkpoint.ts:36",
+    "symbol": "commitCheckpoint",
+    "found": false,
+    "extracted": false,
+    "call_source": "      commitCheckpoint(run, normalized);",
+    "definition_source": "export function commitCheckpoint(run: PersistedRun, label: string): void {",
+    "imports": [
+      "28: import { commitCheckpoint, revertCheckpoint } from \"./checkpoint.js\";"
+    ]
+  },
+  {
+    "caller": "stratum/ts/src/engine/engine.ts:1010",
+    "callee": "stratum/ts/src/engine/receipts.ts:67",
+    "symbol": "spineSpent",
+    "found": false,
+    "extracted": false,
+    "call_source": "      const spine = spineSpent(run);",
+    "definition_source": "export function spineSpent(run: PersistedRun): Budget {",
+    "imports": [
+      "30: import { buildReceipt, findReceipt, ReceiptValidationError, spineSpent, type ReceiptInput } from \"./receipts.js\";"
+    ]
+  },
+  {
+    "caller": "stratum/ts/src/ir/validate.ts:447",
+    "callee": "stratum/ts/src/ir/refs.ts:78",
+    "symbol": "extractReferences",
+    "found": false,
+    "extracted": true,
+    "call_source": "        const overRefs = extractReferences(step.fanout.over);",
+    "definition_source": "export function extractReferences(value: string): ExtractedReference[] | undefined {",
+    "imports": [
+      "3: import { extractReferences, referenceEdges, type PathSegment, type Reference } from \"./refs.js\";"
+    ]
+  },
+  {
+    "caller": "stratum/ts/src/engine/run_lock.ts:333",
+    "callee": "stratum/ts/src/engine/state.ts:274",
+    "symbol": "assertRunId",
+    "found": false,
+    "extracted": true,
+    "call_source": "  assertRunId(runId);",
+    "definition_source": "export function assertRunId(runId: string): void {",
+    "imports": [
+      "7: import { assertRunId, type PersistedRun, type StateStore } from \"./state.js\";"
+    ]
+  }
+]

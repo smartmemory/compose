@@ -4,7 +4,7 @@
 
 ## Related Documents
 - Backend: [STRAT-CODEGRAPH-1](../STRAT-CODEGRAPH-1/design.md)
-- Evidence: `forge/scratch/2026-10-05-sm-code-spikes/gap-report.md`, `ground-truth.json`
+- Evidence: [STRAT-CODEGRAPH-1 fixtures](../STRAT-CODEGRAPH-1/fixtures/README.md)
 - SmartMemory dependencies: CODE-CALLSITE-COVERAGE-1, CODE-EDGE-CONFIDENCE-1, CODE-FRAMEWORK-SEMANTICS-1
 - Motivating memories: `feedback_review_loops_catch_unwired`, `reference_dead_paths_under_green_suites`, `feedback_scope_codex_briefs_by_slice`
 

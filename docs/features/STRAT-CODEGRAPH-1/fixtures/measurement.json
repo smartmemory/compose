@@ -1,0 +1,88 @@
+{
+  "all": {
+    "files": 176,
+    "clean": 174,
+    "failed_or_partial": [
+      {
+        "file": "compose/lib/boundary-map.js",
+        "errors": [
+          "Parse errors in compose/lib/boundary-map.js (partial parse)"
+        ]
+      },
+      {
+        "file": "compose/lib/policy-check.js",
+        "errors": [
+          "Parse errors in compose/lib/policy-check.js (partial parse)"
+        ]
+      }
+    ],
+    "parse_seconds": 0.5431484591099434,
+    "reused": 174,
+    "entities_by_kind": {
+      "module": 176,
+      "function": 2230,
+      "class": 54
+    },
+    "unique_entities": 2425,
+    "raw_call_sites": 18315,
+    "extracted_calls": 14202,
+    "cross_file_resolved": 904,
+    "cross_fraction_extracted": 0.06365300661878609,
+    "cross_fraction_all": 0.04935844935844936,
+    "symbols": 617,
+    "import_symbols": 734
+  },
+  "compose": {
+    "files": 165,
+    "clean": 163,
+    "failed_or_partial": [
+      {
+        "file": "compose/lib/boundary-map.js",
+        "errors": [
+          "Parse errors in compose/lib/boundary-map.js (partial parse)"
+        ]
+      },
+      {
+        "file": "compose/lib/policy-check.js",
+        "errors": [
+          "Parse errors in compose/lib/policy-check.js (partial parse)"
+        ]
+      }
+    ],
+    "parse_seconds": 0.4768148769508116,
+    "reused": 163,
+    "entities_by_kind": {
+      "module": 165,
+      "function": 1983,
+      "class": 47
+    },
+    "unique_entities": 2164,
+    "raw_call_sites": 16360,
+    "extracted_calls": 12816,
+    "cross_file_resolved": 904,
+    "cross_fraction_extracted": 0.07053682896379526,
+    "cross_fraction_all": 0.05525672371638142,
+    "symbols": 617,
+    "import_symbols": 734
+  },
+  "stratum": {
+    "files": 11,
+    "clean": 11,
+    "failed_or_partial": [],
+    "parse_seconds": 0.06633358215913177,
+    "reused": 11,
+    "entities_by_kind": {
+      "module": 11,
+      "function": 247,
+      "class": 7
+    },
+    "unique_entities": 261,
+    "raw_call_sites": 1955,
+    "extracted_calls": 1386,
+    "cross_file_resolved": 0,
+    "cross_fraction_extracted": 0.0,
+    "cross_fraction_all": 0.0,
+    "symbols": 0,
+    "import_symbols": 0
+  }
+}
