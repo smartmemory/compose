@@ -1,0 +1,22 @@
+{
+  "code": "STRAT-CODEGRAPH-3",
+  "description": "**Blast radius scoring:** use PageRank + co-change history to rank file importance relative to a change set. High-PageRank files get extra review attention. Co-change clusters surface \"you probably also need to update Y\" warnings. Inspired by [SoulForge](https://github.com/ProxySoul/soulforge) (174 stars). Graph source: SmartMemory backend from STRAT-CODEGRAPH-1 (2026-10-05).",
+  "status": "PLANNED",
+  "phase": "STRAT-CODEGRAPH: Code Graph Context for Agents",
+  "created": "2026-10-05",
+  "updated": "2026-10-05",
+  "complexity": "M",
+  "position": 169,
+  "tags": [
+    "review",
+    "code-graph"
+  ],
+  "impact": "medium",
+  "links": [
+    {
+      "kind": "depends_on",
+      "to_code": "STRAT-CODEGRAPH-1",
+      "note": "graph source is the SmartMemory backend"
+    }
+  ]
+}

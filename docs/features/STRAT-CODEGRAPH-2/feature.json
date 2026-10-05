@@ -1,0 +1,46 @@
+{
+  "code": "STRAT-CODEGRAPH-2",
+  "description": "**Auto-query injection + code checks (rescoped 2026-10-05):** before dispatching agents, query SmartMemory for callers of X, types used by X and tests covering X, and inject them as a structured context block plus an auto file list in briefs, replacing broad file reads (token saving). Plans must account for every caller of a changed function. Review flags new functions nothing calls (unwired), applies a patch fence (diff outside declared symbols), and runs only the tests that reach changed code.",
+  "status": "PLANNED",
+  "phase": "STRAT-CODEGRAPH: Code Graph Context for Agents",
+  "created": "2026-10-05",
+  "updated": "2026-10-05",
+  "complexity": "L",
+  "position": 168,
+  "tags": [
+    "verification",
+    "review",
+    "briefs",
+    "smartmemory",
+    "code-graph"
+  ],
+  "impact": "high",
+  "links": [
+    {
+      "kind": "depends_on",
+      "to_code": "STRAT-CODEGRAPH-1",
+      "note": "needs the SmartMemory backend and forge index"
+    },
+    {
+      "kind": "external",
+      "provider": "local",
+      "repo": "smart-memory-docs",
+      "to_code": "CODE-CALLSITE-COVERAGE-1",
+      "note": "depends_on: callers/unwired/test-reach need call edges; baseline 4/15 grep-verified edges found"
+    },
+    {
+      "kind": "external",
+      "provider": "local",
+      "repo": "smart-memory-docs",
+      "to_code": "CODE-EDGE-CONFIDENCE-1",
+      "note": "depends_on: patch fence needs line spans; checks need exact vs name_only edges"
+    },
+    {
+      "kind": "external",
+      "provider": "local",
+      "repo": "smart-memory-docs",
+      "to_code": "CODE-FRAMEWORK-SEMANTICS-1",
+      "note": "depends_on: unwired check needs MCP/Express/CLI registrations as entry points; test-reach needs TESTS edges for TS"
+    }
+  ]
+}

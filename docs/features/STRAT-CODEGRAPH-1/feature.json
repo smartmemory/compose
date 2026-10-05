@@ -1,0 +1,40 @@
+{
+  "code": "STRAT-CODEGRAPH-1",
+  "description": "**Code graph via SmartMemory (rescoped 2026-10-05; was Scope/CodeGraphContext):** Compose builds use SmartMemory code intelligence as an optional backend (warn-only without SM). Index forge JS+TS on first run with incremental re-index on file change. At design/plan: reality-check that every symbol and file the plan names exists, and run a prior-art search for the concept before designing.",
+  "status": "PLANNED",
+  "phase": "STRAT-CODEGRAPH: Code Graph Context for Agents",
+  "created": "2026-10-05",
+  "updated": "2026-10-05",
+  "complexity": "M",
+  "position": 167,
+  "tags": [
+    "planning",
+    "verification",
+    "smartmemory",
+    "code-graph"
+  ],
+  "impact": "high",
+  "links": [
+    {
+      "kind": "external",
+      "provider": "local",
+      "repo": "smart-memory-docs",
+      "to_code": "CODE-INGEST-SURFACES-1",
+      "note": "depends_on: indexing surfaces must reach JS/TS (local MCP code_index is Python-only, code_tools.py:74)"
+    },
+    {
+      "kind": "external",
+      "provider": "local",
+      "repo": "smart-memory-docs",
+      "to_code": "CODE-TS-RESOLVE-1",
+      "note": "depends_on: TS './foo.js'->foo.ts resolution (0/1,386 stratum TS calls resolved)"
+    },
+    {
+      "kind": "external",
+      "provider": "local",
+      "repo": "smart-memory-docs",
+      "to_code": "CODE-PARSE-DIAGNOSTICS-1",
+      "note": "depends_on: hosted upload rejects partial parses; 2 forge files partial-parse"
+    }
+  ]
+}

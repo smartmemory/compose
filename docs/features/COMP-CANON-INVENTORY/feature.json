@@ -4,7 +4,7 @@
   "status": "PLANNED",
   "phase": "Judgment Layer",
   "created": "2026-07-25",
-  "updated": "2026-07-25",
+  "updated": "2026-10-05",
   "complexity": "L",
   "position": 8,
   "parent": "COMP-CANON-GUARD",
@@ -19,6 +19,13 @@
       "kind": "depends_on",
       "to_code": "COMP-BUILD-CORRELATION",
       "note": "Inventory's payoff (a 'block' promotion) is unreachable until build-correlation is repaired"
+    },
+    {
+      "kind": "external",
+      "provider": "local",
+      "repo": "smart-memory-docs",
+      "to_code": "CODE-EFFECTS-JSTS-1",
+      "note": "related 2026-10-05: SmartMemory effects engine (CODE-EFFECTS-ENGINE-1 + JS/TS adapters) can produce the canon write-surface list mechanically; forge supplies 'what counts as canon' as config"
     }
   ]
 }

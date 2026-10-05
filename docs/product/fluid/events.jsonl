@@ -57,3 +57,4 @@
 {"at":"2026-10-05T14:50:03.227Z","handle":"IDEA-35","type":"killed","detail":{"fields":["status","killed"]}}
 {"at":"2026-10-05T14:52:39.325Z","handle":"IDEA-37","type":"created","detail":{"kind":"idea"}}
 {"at":"2026-10-05T14:54:07.355Z","handle":"IDEA-37","type":"discussed","detail":{}}
+{"at":"2026-10-05T15:23:15.913Z","handle":"IDEA-37","type":"promoted","detail":{"fields":["status","links"]}}
