@@ -23,24 +23,21 @@
     },
     {
       "kind": "external",
-      "provider": "local",
-      "repo": "smart-memory-docs",
-      "to_code": "CODE-CALLSITE-COVERAGE-1",
-      "note": "depends_on: callers/unwired/test-reach need call edges; baseline 4/15 grep-verified edges found"
+      "provider": "url",
+      "note": "SmartMemory CODE-CALLSITE-COVERAGE-1: depends_on: callers/unwired/test-reach need call edges; baseline 4/15 grep-verified edges found",
+      "url": "https://github.com/smartmemory/smart-memory-docs/tree/main/docs/features/CODE-CALLSITE-COVERAGE-1"
     },
     {
       "kind": "external",
-      "provider": "local",
-      "repo": "smart-memory-docs",
-      "to_code": "CODE-EDGE-CONFIDENCE-1",
-      "note": "depends_on: patch fence needs line spans; checks need exact vs name_only edges"
+      "provider": "url",
+      "note": "SmartMemory CODE-EDGE-CONFIDENCE-1: depends_on: patch fence needs line spans; checks need exact vs name_only edges",
+      "url": "https://github.com/smartmemory/smart-memory-docs/tree/main/docs/features/CODE-EDGE-CONFIDENCE-1"
     },
     {
       "kind": "external",
-      "provider": "local",
-      "repo": "smart-memory-docs",
-      "to_code": "CODE-FRAMEWORK-SEMANTICS-1",
-      "note": "depends_on: unwired check needs MCP/Express/CLI registrations as entry points; test-reach needs TESTS edges for TS"
+      "provider": "url",
+      "note": "SmartMemory CODE-FRAMEWORK-SEMANTICS-1: depends_on: unwired check needs MCP/Express/CLI registrations as entry points; test-reach needs TESTS edges for TS",
+      "url": "https://github.com/smartmemory/smart-memory-docs/tree/main/docs/features/CODE-FRAMEWORK-SEMANTICS-1"
     }
   ]
 }

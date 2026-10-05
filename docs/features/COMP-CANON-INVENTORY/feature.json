@@ -1,6 +1,6 @@
 {
   "code": "COMP-CANON-INVENTORY",
-  "description": "Full canon write-surface inventory (COMP-CANON-GUARD S2): every path that mutates canon outside a typed tool — roadmap-gen, feature-writer, migrate-anon, experiment, roadmap-graph, bin/compose.js (feature create + roadmap generate + init template), server/ideabox-routes — is routed through a typed tool, retired, or declared override_only with a reason, verified at registration. Adds the missing update_feature_fields tool (description/phase/tags/profile on an existing feature). NOTE: this no longer gates a 'block' promotion — S2b was retired on the build_id: null finding, so the payoff is hygiene until COMP-BUILD-CORRELATION lands.",
+  "description": "Full canon write-surface inventory (COMP-CANON-GUARD S2): every path that mutates canon outside a typed tool \u2014 roadmap-gen, feature-writer, migrate-anon, experiment, roadmap-graph, bin/compose.js (feature create + roadmap generate + init template), server/ideabox-routes \u2014 is routed through a typed tool, retired, or declared override_only with a reason, verified at registration. Adds the missing update_feature_fields tool (description/phase/tags/profile on an existing feature). NOTE: this no longer gates a 'block' promotion \u2014 S2b was retired on the build_id: null finding, so the payoff is hygiene until COMP-BUILD-CORRELATION lands.",
   "status": "PLANNED",
   "phase": "Judgment Layer",
   "created": "2026-07-25",
@@ -22,10 +22,9 @@
     },
     {
       "kind": "external",
-      "provider": "local",
-      "repo": "smart-memory-docs",
-      "to_code": "CODE-EFFECTS-JSTS-1",
-      "note": "related 2026-10-05: SmartMemory effects engine (CODE-EFFECTS-ENGINE-1 + JS/TS adapters) can produce the canon write-surface list mechanically; forge supplies 'what counts as canon' as config"
+      "provider": "url",
+      "note": "SmartMemory CODE-EFFECTS-JSTS-1: related 2026-10-05: SmartMemory effects engine (CODE-EFFECTS-ENGINE-1 + JS/TS adapters) can produce the canon write-surface list mechanically; forge supplies 'what counts as canon' as config",
+      "url": "https://github.com/smartmemory/smart-memory-docs/tree/main/docs/features/CODE-EFFECTS-JSTS-1"
     }
   ]
 }

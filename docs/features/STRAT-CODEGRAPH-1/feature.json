@@ -17,24 +17,21 @@
   "links": [
     {
       "kind": "external",
-      "provider": "local",
-      "repo": "smart-memory-docs",
-      "to_code": "CODE-INGEST-SURFACES-1",
-      "note": "depends_on: indexing surfaces must reach JS/TS (local MCP code_index is Python-only, code_tools.py:74)"
+      "provider": "url",
+      "note": "SmartMemory CODE-INGEST-SURFACES-1: depends_on: indexing surfaces must reach JS/TS (local MCP code_index is Python-only, code_tools.py:74)",
+      "url": "https://github.com/smartmemory/smart-memory-docs/tree/main/docs/features/CODE-INGEST-SURFACES-1"
     },
     {
       "kind": "external",
-      "provider": "local",
-      "repo": "smart-memory-docs",
-      "to_code": "CODE-TS-RESOLVE-1",
-      "note": "depends_on: TS './foo.js'->foo.ts resolution (0/1,386 stratum TS calls resolved)"
+      "provider": "url",
+      "note": "SmartMemory CODE-TS-RESOLVE-1: depends_on: TS './foo.js'->foo.ts resolution (0/1,386 stratum TS calls resolved)",
+      "url": "https://github.com/smartmemory/smart-memory-docs/tree/main/docs/features/CODE-TS-RESOLVE-1"
     },
     {
       "kind": "external",
-      "provider": "local",
-      "repo": "smart-memory-docs",
-      "to_code": "CODE-PARSE-DIAGNOSTICS-1",
-      "note": "depends_on: hosted upload rejects partial parses; 2 forge files partial-parse"
+      "provider": "url",
+      "note": "SmartMemory CODE-PARSE-DIAGNOSTICS-1: depends_on: hosted upload rejects partial parses; 2 forge files partial-parse",
+      "url": "https://github.com/smartmemory/smart-memory-docs/tree/main/docs/features/CODE-PARSE-DIAGNOSTICS-1"
     }
   ]
 }
