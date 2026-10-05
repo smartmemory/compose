@@ -149,6 +149,11 @@
 **Source:** Nicolepcx/harness_engineering ch02_harness_components.ipynb @46bbcd5 (2026-10-05)
 **Idea:** Record one real agent trajectory (model turns + tool results) and replay it deterministically against the harness, swapping exactly one component per test (verifier, governor/gate, recorder, cache). Each swap must produce its expected failure; if the run still passes, that guard is not load-bearing. The book's 4 ablations: 3 of 4 failures were silent, run reported success. Direct control for unwired guards under green suites (memory: dead-paths-under-green-suites, review-loops-catch-unwired). No replay client found in compose/lib or stratum/ts/src on 2026-10-05 (grep replayClient|recorded run|cassette).
 
+#### IDEA-37 — Code-fact scanner (AST): mechanically list every write/read/external call/entry point to ground planning and implementation
+**Status:** NEW | **Priority:** — | **Tags:** verification planning design ast inventory
+**Source:** SmartMemory 2.0 FULL-ALIGN-1 Phase 0 boundary-atom scanner, via smartmemory-5a (2026-10-05)
+**Idea:** Port SmartMemory's scanner. A static AST pass (Python ast; TS via the compiler API or ts-morph) enumerates every side-effect atom: store, op, file:line, enclosing function. Call-graph propagation finds the entry points that reach each atom, with edges marked exact vs name_only. A runtime pass instruments the real drivers under the existing tests, and a merge unions the two. LLMs (explorers, planners, reviewers) then annotate a given list instead of discovering it, so 'did the plan cover every write path' becomes a set check. SM measured precision 0.90 against runtime and byte-identical reruns; the scanner was Codex-authored and the merge run cost $0.57 / 16 min. Gotchas: exclude import-time reads; ContextVar .set and read-shaped queries false-positive as writes. Source: smart-memory-docs/docs/features/FULL-ALIGN-1/facts/sink_inventory.py + merge_atoms.py, phase0-ledger.md. Forge prior art (checked 2026-10-05): no AST tooling in compose/stratum; design exploration is LLM-only (compose-explorer, COMP-EXPLORER-EVIDENCE-1); ANATOMY.md is hand-written and stale (says build.js 1536 lines, actual 8147); COMP-CANON-INVENTORY (PLANNED) needs exactly this list for canon write paths and is the natural first consumer.
+
 ---
 
 ### Umbrella D — Cockpit & loop ergonomics
