@@ -149,11 +149,6 @@
 **Source:** Nicolepcx/harness_engineering ch02_harness_components.ipynb @46bbcd5 (2026-10-05)
 **Idea:** Record one real agent trajectory (model turns + tool results) and replay it deterministically against the harness, swapping exactly one component per test (verifier, governor/gate, recorder, cache). Each swap must produce its expected failure; if the run still passes, that guard is not load-bearing. The book's 4 ablations: 3 of 4 failures were silent, run reported success. Direct control for unwired guards under green suites (memory: dead-paths-under-green-suites, review-loops-catch-unwired). No replay client found in compose/lib or stratum/ts/src on 2026-10-05 (grep replayClient|recorded run|cassette).
 
-#### IDEA-35 — Pipeline skips gates on bare file existence: skip only on a verified artifact
-**Status:** NEW | **Priority:** — | **Tags:** verification pipeline gates resilience
-**Source:** Nicolepcx/harness_engineering ch02 ablation 3 'verification -> adaptation' (2026-10-05)
-**Idea:** pipelines/build.stratum.yaml skips design_gate (L158), verification (L243) and plan_gate (L273) when blueprint.md / plan.md merely EXIST. Book's lesson: reuse only state written after verification, or a successful-looking run poisons later runs. Suspected hole (UNVERIFIED): a plan.md written, then rejected at plan_gate or crashed before it, lets a re-run skip the gate. Falsifier: check whether gate reject deletes the artifact or resume reads persisted gate state. Fix shape: skip_if keyed on a gate-approval record bound to the artifact digest, not file_exists.
-
 ---
 
 ### Umbrella D — Cockpit & loop ergonomics
@@ -275,3 +270,9 @@ PARKED 2026-09-28 at owner's request: demo was next day; changing the gate guard
 - [2026-08-05] human: startWatching() shares ONE debounceMap across every watchDir call, keyed by the prefixed relative path. The docs watch (dir=docs, prefix=docs) and the features watch (dir=docs/features, prefix=docs/features) both compute docs/features/X/y.md for the same file, so for any .md under docs/features/ the two watches collide: whichever fs.watch delivers second inside the 100ms window is dropped, and which one that is depends on the OS. The result is that either the fileChanged broadcast or the onFeatureChanged reseed is skipped, nondeterministically. Impact today is low (onFeatureChanged only fires for .md, and reseeding off a design.md edit is marginal) which is why IDEA-24 opted its own watch out with debounceMs:0 rather than changing this underneath existing callers. Fix is a per-watch debounce map, but it un-suppresses a duplicate fileChanged for feature files, so it needs its own look.
 
 ## Killed Ideas
+
+#### IDEA-35 — Pipeline skips gates on bare file existence: skip only on a verified artifact
+**Status:** KILLED | **Tags:** verification pipeline gates resilience
+**Source:** Nicolepcx/harness_engineering ch02 ablation 3 'verification -> adaptation' (2026-10-05)
+**Idea:** pipelines/build.stratum.yaml skips design_gate (L158), verification (L243) and plan_gate (L273) when blueprint.md / plan.md merely EXIST. Book's lesson: reuse only state written after verification, or a successful-looking run poisons later runs. Suspected hole (UNVERIFIED): a plan.md written, then rejected at plan_gate or crashed before it, lets a re-run skip the gate. Falsifier: check whether gate reject deletes the artifact or resume reads persisted gate state. Fix shape: skip_if keyed on a gate-approval record bound to the artifact digest, not file_exists.
+**Killed:** 2026-10-05 — No hole (Codex sol/high static check 2026-10-05, spot-checked). The file_exists gate skips live only in forge-root pipelines/build.stratum.yaml, a retired v0.2 dialect that compose/lib/build.js:3885 quarantines before execution. The live v1 compose/pipelines/build.stratum.yaml design_gate (L130) and plan_gate (L200) have no when/skip_if. A skipped step is not approval (engine.ts:2929), and resume keeps a waiting gate waiting (engine.ts:1716).

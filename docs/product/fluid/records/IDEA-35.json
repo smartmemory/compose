@@ -4,7 +4,7 @@
   "kind": "idea",
   "title": "Pipeline skips gates on bare file existence: skip only on a verified artifact",
   "body": "pipelines/build.stratum.yaml skips design_gate (L158), verification (L243) and plan_gate (L273) when blueprint.md / plan.md merely EXIST. Book's lesson: reuse only state written after verification, or a successful-looking run poisons later runs. Suspected hole (UNVERIFIED): a plan.md written, then rejected at plan_gate or crashed before it, lets a re-run skip the gate. Falsifier: check whether gate reject deletes the artifact or resume reads persisted gate state. Fix shape: skip_if keyed on a gate-approval record bound to the artifact digest, not file_exists.",
-  "status": "new",
+  "status": "killed",
   "status_label": null,
   "priority": null,
   "effort": null,
@@ -17,7 +17,10 @@
   "source": "Nicolepcx/harness_engineering ch02 ablation 3 'verification -> adaptation' (2026-10-05)",
   "extra_fields": [],
   "links": [],
-  "killed": null,
+  "killed": {
+    "at": "2026-10-05T14:50:03.206Z",
+    "reason": "No hole (Codex sol/high static check 2026-10-05, spot-checked). The file_exists gate skips live only in forge-root pipelines/build.stratum.yaml, a retired v0.2 dialect that compose/lib/build.js:3885 quarantines before execution. The live v1 compose/pipelines/build.stratum.yaml design_gate (L130) and plan_gate (L200) have no when/skip_if. A skipped step is not approval (engine.ts:2929), and resume keeps a waiting gate waiting (engine.ts:1716)."
+  },
   "discussion": [],
   "provenance": {
     "origin": "cli:ideabox",
@@ -25,5 +28,5 @@
     "author": null
   },
   "created_at": "2026-10-05T14:42:36.557Z",
-  "updated_at": "2026-10-05T14:42:36.557Z"
+  "updated_at": "2026-10-05T14:50:03.207Z"
 }
