@@ -18,12 +18,18 @@
   "extra_fields": [],
   "links": [],
   "killed": null,
-  "discussion": [],
+  "discussion": [
+    {
+      "at": "2026-10-05T14:54:07.335Z",
+      "text": "Owner 2026-10-05: forge uses SmartMemory, so build this ON SmartMemory instead of porting a standalone scanner. SM already ships the base layer: smartmemory/code/{parser,ts_parser,indexer}.py, exposed as MCP code_index / code_search / code_dependencies / code_dead_code (smart-memory-mcp/.../tools/code_tools.py). compose/.mcp.json registers smartmemory-memory. The FULL-ALIGN-1 boundary scanner itself imports SM's CodeParser + SymbolTable (sink_inventory.py:37-39). Gap found 2026-10-05: zero code_* tool calls across all Claude Code transcripts (tools offered, never invoked), and no evidence forge has ever been indexed. So step 1 is to index forge with code_index and have compose explorers/planners call it. The forge-specific part is only the atom classifiers (which writes count as canon/state). Unverified: whether ts_parser covers forge's plain JS (compose is .js/.jsx).",
+      "author": "human"
+    }
+  ],
   "provenance": {
     "origin": "cli:ideabox",
     "recorded_at": "2026-10-05T14:52:39.325Z",
     "author": null
   },
   "created_at": "2026-10-05T14:52:39.325Z",
-  "updated_at": "2026-10-05T14:52:39.325Z"
+  "updated_at": "2026-10-05T14:54:07.335Z"
 }
