@@ -64,6 +64,11 @@
 **Idea:** Semantica's ingest pipeline DETECTS contradictory facts across sources and flags them for resolution rather than silently merging — 'conflict-first design' is their stated stance. Compose has two live instances of the opposite: the shared build-stream / active-build last-writer-wins race (project_compose_idempotency_gaps, IDEA-11/14), and roadmap generate clobbering hand-authored prose (reference_roadmap_generate_clobbers_prose). The borrow is the STANCE, not their implementation: any writer that merges two sources without a contradiction check loses data quietly. Concretely — before a write that supersedes an existing record, diff the incoming value against the stored one on the fields the writer does not own; if they differ, emit a typed conflict (pairs with IDEA-2 typed errors) and halt rather than overwrite. Cheapest first slice is the roadmap/prose writer, which is single-threaded and needs no concurrency primitives. Distinct from IDEA-11/14, which prevent the RACE; this makes the merge itself honest even when the race is already lost.
 **Promoted to:** COMP-CONFLICT-MERGE
 
+#### IDEA-36 — Idempotency: reserve the key before executing, with a lease for abandoned reservations
+**Status:** NEW | **Priority:** — | **Tags:** resilience idempotency concurrency
+**Source:** Nicolepcx/harness_engineering ch02_state_across_execution_boundaries.ipynb s7 + s13 (2026-10-05)
+**Idea:** compose/lib/idempotency.js checkOrInsert holds a mkdir lock across check->computeFn->write. Two edges: the lock is stealable after LOCK_STALE_MS=20s, so a long computeFn can run twice; and a crash after computeFn but before writeEntries re-executes on retry. Book's shape: insert an in-flight reservation row first (winner alone executes, others get the committed result or 'in flight'), then commit; a lease timeout reconciles reservations whose process died. Low priority while the module only guards feature-file writes; matters once it guards external effects.
+
 ---
 
 ### Umbrella B — Multi-feature concurrency
@@ -138,6 +143,16 @@
 **Status:** NEW | **Priority:** — | **Tags:** judgment temporal question open-design
 **Source:** COMP-JUDGMENT-BITEMPORAL kill, 2026-08-08
 **Idea:** OPEN QUESTION, not a defect. position_revision carries only provenance.written_at (transaction time: when we recorded it). There is no valid-time axis (when the belief was true of the world). The codebase already has the concept where it judged it necessary — fact_at is a date field on facts — so valid time was available and deliberately not applied to positions. The question is whether a position meaningfully HAS a valid time distinct from its written_at, e.g. 'we held this view of the architecture as of 0.3.x' vs 'we typed it on 2026-08-08'. If yes it is a small schema addition plus an as_of() read; if no, close it. Does NOT block precedent trace (COMP-JUDGMENT-PRECEDENT) — revision + supersedes already give decision-time reconstruction. Residual of the killed COMP-JUDGMENT-BITEMPORAL, whose framing (that amendment overwrites) was false.
+
+#### IDEA-34 — Edge-ablation harness: replay a recorded run, remove one guard, assert the failure appears
+**Status:** NEW | **Priority:** — | **Tags:** verification testing stratum harness
+**Source:** Nicolepcx/harness_engineering ch02_harness_components.ipynb @46bbcd5 (2026-10-05)
+**Idea:** Record one real agent trajectory (model turns + tool results) and replay it deterministically against the harness, swapping exactly one component per test (verifier, governor/gate, recorder, cache). Each swap must produce its expected failure; if the run still passes, that guard is not load-bearing. The book's 4 ablations: 3 of 4 failures were silent, run reported success. Direct control for unwired guards under green suites (memory: dead-paths-under-green-suites, review-loops-catch-unwired). No replay client found in compose/lib or stratum/ts/src on 2026-10-05 (grep replayClient|recorded run|cassette).
+
+#### IDEA-35 — Pipeline skips gates on bare file existence: skip only on a verified artifact
+**Status:** NEW | **Priority:** — | **Tags:** verification pipeline gates resilience
+**Source:** Nicolepcx/harness_engineering ch02 ablation 3 'verification -> adaptation' (2026-10-05)
+**Idea:** pipelines/build.stratum.yaml skips design_gate (L158), verification (L243) and plan_gate (L273) when blueprint.md / plan.md merely EXIST. Book's lesson: reuse only state written after verification, or a successful-looking run poisons later runs. Suspected hole (UNVERIFIED): a plan.md written, then rejected at plan_gate or crashed before it, lets a re-run skip the gate. Falsifier: check whether gate reject deletes the artifact or resume reads persisted gate state. Fix shape: skip_if keyed on a gate-approval record bound to the artifact digest, not file_exists.
 
 ---
 

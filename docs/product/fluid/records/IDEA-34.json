@@ -1,0 +1,29 @@
+{
+  "id": "22b8c5ea-e553-40bc-a367-f2f358a1fea3",
+  "handle": "IDEA-34",
+  "kind": "idea",
+  "title": "Edge-ablation harness: replay a recorded run, remove one guard, assert the failure appears",
+  "body": "Record one real agent trajectory (model turns + tool results) and replay it deterministically against the harness, swapping exactly one component per test (verifier, governor/gate, recorder, cache). Each swap must produce its expected failure; if the run still passes, that guard is not load-bearing. The book's 4 ablations: 3 of 4 failures were silent, run reported success. Direct control for unwired guards under green suites (memory: dead-paths-under-green-suites, review-loops-catch-unwired). No replay client found in compose/lib or stratum/ts/src on 2026-10-05 (grep replayClient|recorded run|cassette).",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "effort": null,
+  "impact": null,
+  "cluster": "CLUS-3",
+  "cluster_order": null,
+  "tags": [
+    "verification testing stratum harness"
+  ],
+  "source": "Nicolepcx/harness_engineering ch02_harness_components.ipynb @46bbcd5 (2026-10-05)",
+  "extra_fields": [],
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "cli:ideabox",
+    "recorded_at": "2026-10-05T14:42:26.761Z",
+    "author": null
+  },
+  "created_at": "2026-10-05T14:42:26.761Z",
+  "updated_at": "2026-10-05T14:42:26.761Z"
+}

@@ -1,0 +1,29 @@
+{
+  "id": "695825ec-cd4c-480a-96d2-e3844e0f496c",
+  "handle": "IDEA-36",
+  "kind": "idea",
+  "title": "Idempotency: reserve the key before executing, with a lease for abandoned reservations",
+  "body": "compose/lib/idempotency.js checkOrInsert holds a mkdir lock across check->computeFn->write. Two edges: the lock is stealable after LOCK_STALE_MS=20s, so a long computeFn can run twice; and a crash after computeFn but before writeEntries re-executes on retry. Book's shape: insert an in-flight reservation row first (winner alone executes, others get the committed result or 'in flight'), then commit; a lease timeout reconciles reservations whose process died. Low priority while the module only guards feature-file writes; matters once it guards external effects.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "effort": null,
+  "impact": null,
+  "cluster": "CLUS-1",
+  "cluster_order": null,
+  "tags": [
+    "resilience idempotency concurrency"
+  ],
+  "source": "Nicolepcx/harness_engineering ch02_state_across_execution_boundaries.ipynb s7 + s13 (2026-10-05)",
+  "extra_fields": [],
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "cli:ideabox",
+    "recorded_at": "2026-10-05T14:42:36.669Z",
+    "author": null
+  },
+  "created_at": "2026-10-05T14:42:36.669Z",
+  "updated_at": "2026-10-05T14:42:36.669Z"
+}

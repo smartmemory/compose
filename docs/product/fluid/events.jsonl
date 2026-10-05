@@ -51,3 +51,6 @@
 {"at":"2026-08-10T08:55:19.884Z","handle":"IDEA-32","type":"triaged","detail":{"fields":["priority"]}}
 {"at":"2026-09-28T10:39:11.732Z","handle":"CLUS-8","type":"created","detail":{"kind":"cluster"}}
 {"at":"2026-09-28T10:39:11.751Z","handle":"IDEA-33","type":"created","detail":{"kind":"idea"}}
+{"at":"2026-10-05T14:42:26.761Z","handle":"IDEA-34","type":"created","detail":{"kind":"idea"}}
+{"at":"2026-10-05T14:42:36.557Z","handle":"IDEA-35","type":"created","detail":{"kind":"idea"}}
+{"at":"2026-10-05T14:42:36.669Z","handle":"IDEA-36","type":"created","detail":{"kind":"idea"}}

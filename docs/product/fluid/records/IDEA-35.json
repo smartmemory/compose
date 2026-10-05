@@ -1,0 +1,29 @@
+{
+  "id": "c8dc4fcc-0a8f-4ed0-be6a-943d251355e3",
+  "handle": "IDEA-35",
+  "kind": "idea",
+  "title": "Pipeline skips gates on bare file existence: skip only on a verified artifact",
+  "body": "pipelines/build.stratum.yaml skips design_gate (L158), verification (L243) and plan_gate (L273) when blueprint.md / plan.md merely EXIST. Book's lesson: reuse only state written after verification, or a successful-looking run poisons later runs. Suspected hole (UNVERIFIED): a plan.md written, then rejected at plan_gate or crashed before it, lets a re-run skip the gate. Falsifier: check whether gate reject deletes the artifact or resume reads persisted gate state. Fix shape: skip_if keyed on a gate-approval record bound to the artifact digest, not file_exists.",
+  "status": "new",
+  "status_label": null,
+  "priority": null,
+  "effort": null,
+  "impact": null,
+  "cluster": "CLUS-3",
+  "cluster_order": null,
+  "tags": [
+    "verification pipeline gates resilience"
+  ],
+  "source": "Nicolepcx/harness_engineering ch02 ablation 3 'verification -> adaptation' (2026-10-05)",
+  "extra_fields": [],
+  "links": [],
+  "killed": null,
+  "discussion": [],
+  "provenance": {
+    "origin": "cli:ideabox",
+    "recorded_at": "2026-10-05T14:42:36.557Z",
+    "author": null
+  },
+  "created_at": "2026-10-05T14:42:36.557Z",
+  "updated_at": "2026-10-05T14:42:36.557Z"
+}
