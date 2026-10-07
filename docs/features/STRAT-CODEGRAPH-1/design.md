@@ -6,6 +6,7 @@
 - Roadmap: `compose/ROADMAP.md` § STRAT-CODEGRAPH
 - Sibling: [STRAT-CODEGRAPH-2](../STRAT-CODEGRAPH-2/design.md) (consumes this backend), STRAT-CODEGRAPH-3 (blast-radius scoring)
 - Related: COMP-CANON-INVENTORY (canon write list via the SmartMemory effects engine)
+- Spike results: [spikes-2026-10-08.md](spikes-2026-10-08.md)
 - Evidence: [fixtures/](fixtures/README.md) (baseline gap report, 15 grep-verified cross-file edges, probe; pinned SHAs)
 - SmartMemory dependencies (smart-memory-docs, CODE-DEV initiative): CODE-INGEST-SURFACES-1, CODE-TS-RESOLVE-1, CODE-PARSE-DIAGNOSTICS-1
 
@@ -30,10 +31,10 @@ The original item planned to adopt an outside code-graph tool (Scope or CodeGrap
 - **Prior-art search.** Before a design starts, search the index for the concept. Hits are surfaced as "this may already exist".
 
 ## Acceptance criteria
-- [ ] **Spike S0 (first):** re-run `fixtures/probe.py` against SmartMemory once CODE-TS-RESOLVE-1 lands. TS cross-file resolution must be > 0, and the result is recorded against the baseline above.
+- [x] **Spike S0 (first):** re-run `fixtures/probe.py` against SmartMemory once CODE-TS-RESOLVE-1 lands. TS cross-file resolution must be > 0, and the result is recorded against the baseline above. **PASS 2026-10-08:** TS 0 → 51, ground truth 4 → 15/15 ([spikes-2026-10-08.md](spikes-2026-10-08.md)).
 - [ ] Compose detects SmartMemory availability. Without it, checks log a single warn-only notice and never fail a build.
 - [ ] Forge (compose + stratum/ts) is indexed through a SmartMemory surface that reaches JS/TS. The surface used is named in the report.
 - [ ] Incremental re-index touches only changed files. The timing is recorded.
-- [ ] **Spike S3:** replay one past plan or blueprint that named nonexistent symbols. The reality check flags every one.
+- [x] **Spike S3:** replay one past plan or blueprint that named nonexistent symbols. The reality check flags every one. **PASS 2026-10-08** (COMP-GSD-2). Report unmarked proposed names as "unmarked new", not errors ([spikes-2026-10-08.md](spikes-2026-10-08.md)).
 - [ ] Plan reality check runs at the plan gate and lists unresolved names with the artifact line.
 - [ ] Prior-art search runs before design and lists matches with file:line.

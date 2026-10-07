@@ -4,6 +4,7 @@
 
 ## Related Documents
 - Backend: [STRAT-CODEGRAPH-1](../STRAT-CODEGRAPH-1/design.md)
+- Spike results: [spikes-2026-10-08.md](../STRAT-CODEGRAPH-1/spikes-2026-10-08.md)
 - Evidence: [STRAT-CODEGRAPH-1 fixtures](../STRAT-CODEGRAPH-1/fixtures/README.md)
 - SmartMemory dependencies: CODE-CALLSITE-COVERAGE-1, CODE-EDGE-CONFIDENCE-1, CODE-FRAMEWORK-SEMANTICS-1
 - Motivating memories: `feedback_review_loops_catch_unwired`, `reference_dead_paths_under_green_suites`, `feedback_scope_codex_briefs_by_slice`
@@ -21,8 +22,8 @@ The original scope (inject callers / types / tests of X before dispatch, replaci
 - **Test reach.** Run only the tests whose call graph reaches the changed code.
 
 ## Acceptance criteria
-- [ ] **Spike S1 (first):** replay a past built-but-unwired incident. The unwired check flags it.
-- [ ] **Spike S2:** replay a past plan whose missing caller was found by a later review. The callers list surfaces that caller up front.
+- [x] **Spike S1 (first):** replay a past built-but-unwired incident. The unwired check flags it. **PASS 2026-10-08** (STRAT-AGENT-PEER-1). It needs a production-only liveness rule, since SM `dead_code` exempts exports. 27% FPs came from dynamic import ([spikes](../STRAT-CODEGRAPH-1/spikes-2026-10-08.md)).
+- [ ] **Spike S2:** replay a past plan whose missing caller was found by a later review. The callers list surfaces that caller up front. **PARTIAL 2026-10-08** (COMP-ROADMAP-ARCHIVE): `provider.renderRoadmap()` member calls appear only as name-only call text. Re-run when SM resolves local-receiver member calls and dynamic imports ([spikes](../STRAT-CODEGRAPH-1/spikes-2026-10-08.md)).
 - [ ] Injected context and brief file lists are measured on one real feature. Record input-token cost with and without, as a check on the original "replaces broad file reads" claim.
 - [ ] Every check reports edge confidence (exact vs name-only) and never blocks on name-only edges alone.
 - [ ] The patch fence uses persisted line spans (CODE-EDGE-CONFIDENCE-1) and reports off-plan symbols with file:line.
