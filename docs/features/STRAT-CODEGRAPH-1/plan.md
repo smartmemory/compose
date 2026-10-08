@@ -64,3 +64,4 @@ Ticked by forge-d0 after verification (author report: `forge/scratch/2026-10-08-
 - [ ] Re-index re-parses only changed files, timing recorded (T3 parse cache + timings.jsonl, T9). Caveat: SmartMemory re-runs whole-repo resolution, so a warm re-index is 75 s for compose (parse cache) vs 170 s cold
 - [ ] Plan reality check runs at plan_gate and lists unresolved names with the artifact line (T5, T7)
 - [ ] Prior-art search runs before design and lists matches with file:line (T6, T7)
+- [ ] Remove `lib/codegraph/bundle_fallback.py` and its spawn path once CODE-BUNDLE-CLI-1 ships `smartmemory code bundle` (waits on CODE-INDEXER-HARDEN-1 U5)

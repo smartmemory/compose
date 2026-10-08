@@ -110,7 +110,7 @@ test('reality check labels the plan fixture: existing / new / unmarked-new', () 
     assert.equal(label.sanitizeWriterResult.note, 'marked (new) but exists');
     assert.equal(label.fooBarMissing.label, 'unmarked-new');
     assert.equal(label.fooBarMissing.note, 'marked (existing) but not found');
-    assert.deepEqual(result.counts, { existing: 5, new: 2, unmarked_new: 3 });
+    assert.deepEqual(result.counts, { existing: 5, new: 2, unmarked_new: 3, unknown: 0 });
 
     const lineRef = result.mentions.find((m) => m.token === 'compose/lib/idempotency.js:144');
     assert.equal(lineRef.lineOwner, 'checkOrInsert');
@@ -118,7 +118,7 @@ test('reality check labels the plan fixture: existing / new / unmarked-new', () 
     assert.equal(result.boundaryMap.ok, true);
 
     const report = formatRealityReport(result, { artifact: 'plan-fixture.md' });
-    assert.match(report, /5 existing, 2 new, 3 unmarked-new — warn-only/);
+    assert.match(report, /5 existing, 2 new, 3 unmarked-new, 0 unknown — warn-only$/m);
     const activeLine = PLAN.split('\n').findIndex((l) => l.includes('active-build.js')) + 1;
     assert.match(report, new RegExp(`L${activeLine} unmarked-new \`compose/lib/active-build.js\``));
   } finally {
@@ -166,24 +166,29 @@ test('prior art finds the existing implementation by concept, with file:line', a
 
 // ---- Review round 1 regressions (scratch/2026-10-08-codegraph/build/REPORT.md) ----
 
-function tinyModel() {
+function tinyRaw(overrides = {}) {
   const entity = (name, file, line, extra = {}) => ({
     item_id: `code::t::${file}::${name}`, name, qualified_name: name, entity_type: 'function', file_path: file,
     line_number: line, end_line_number: line + 3, is_exported: true, call_evidence: [], ...extra,
   });
   const raw = {
     schema_version: '1', repo: 't', complete: true, relations: [
-      { source_id: 'code::t::lib/a.js::walk', target_id: 'code::t::lib/a.js::walk', relation_type: 'CALLS', properties: { line: 3, callee: 'walk', resolution: 'name_only', confidence: 0.5, unresolved: false } },
+      { source_id: 'code::t::lib/a.js::walk', target_id: 'code::t::lib/a.js::walk', relation_type: 'CALLS', edge_state: 'resolved', properties: { line: 3, callee: 'walk', resolution: 'name_only', confidence: 0.5, unresolved: false } },
     ],
+    files_skipped: 0, skipped_paths: [], budget_exhausted: false,
     entities: [
       entity('walk', 'lib/a.js', 1),
       entity('parse', 'lib/p.js', 10),
       entity('Widget', 'lib/w.js', 1, { entity_type: 'class' }),
       entity('saveThing', 'lib/s.js', 1),
-      entity('run', 'lib/r.js', 1, { call_evidence: [{ relation_type: 'CALLS', properties: { callee: 'api.saveThing(x)', line: 2, resolution: 'name_only', unresolved: true } }] }),
+      entity('run', 'lib/r.js', 1, { call_evidence: [{ relation_type: 'CALLS', edge_state: 'unresolved', properties: { callee: 'api.saveThing(x)', line: 2, resolution: 'name_only', unresolved: true } }] }),
     ],
   };
-  return buildModel([{ repo: { name: 't', prefix: '' }, snapshot: normalizeBundle(raw) }]);
+  return { ...raw, ...overrides };
+}
+
+function tinyModel(overrides = {}) {
+  return buildModel([{ repo: { name: 't', prefix: '' }, snapshot: normalizeBundle(tinyRaw(overrides)) }]);
 }
 
 test('R1-5: a (new) path does not make a different path with the same basename new', () => {
@@ -256,4 +261,108 @@ test('R2-2: two-letter PascalCase names are checked', () => {
   const label = Object.fromEntries(runRealityCheck({ text: '- `Db` (existing)\n- `Io` (new)\n', projectRoot: tmpdir(), model: m, repos: [] }).labels.map((n) => [n.name, n]));
   assert.equal(label.Db.label, 'unmarked-new');
   assert.equal(label.Io.label, 'new');
+});
+
+// ---- Fix round 1 (scratch/2026-10-08-codegraph/build/fix-r1-brief.md) ----
+
+test('fix-r1 #3: the recorded bundles carry edge_state and the model exposes it on callers', () => {
+  for (const name of ['compose', 'stratum']) {
+    const raw = rawBundle(name);
+    assert.ok(raw.relations.every((r) => ['resolved', 'ambiguous', 'unresolved', 'unsupported'].includes(r.edge_state)), name);
+  }
+  const { resolved } = model.callersOf('checkOrInsert');
+  assert.ok(resolved.length > 0);
+  assert.ok(resolved.every((c) => c.edgeState === 'resolved' || c.edgeState === 'ambiguous'));
+});
+
+test('fix-r1 #3: callersOf decides by edge_state: ambiguous is labelled, unresolved and unsupported are not callers', () => {
+  const edge = (from, state, extra = {}) => ({
+    source_id: `code::t::lib/${from}.js::${from}`, target_id: 'code::t::lib/p.js::parse', relation_type: 'CALLS', edge_state: state,
+    properties: { line: 2, callee: 'parse', resolution: 'name_only', confidence: 0.5, unresolved: false, ...extra },
+  });
+  const base = tinyRaw();
+  const entity = (name) => ({ item_id: `code::t::lib/${name}.js::${name}`, name, qualified_name: name, entity_type: 'function',
+    file_path: `lib/${name}.js`, line_number: 1, end_line_number: 4, is_exported: true, call_evidence: [] });
+  const raw = {
+    ...base,
+    entities: [...base.entities, entity('amb'), entity('unres'), entity('unsup')],
+    relations: [...base.relations, edge('amb', 'ambiguous', { candidates: ['a', 'b'] }), edge('unres', 'unresolved'), edge('unsup', 'unsupported')],
+  };
+  const m = buildModel([{ repo: { name: 't', prefix: '' }, snapshot: normalizeBundle(raw) }]);
+  const { resolved } = m.callersOf('parse');
+  assert.deepEqual(resolved.map((c) => [c.caller, c.edgeState]), [['amb', 'ambiguous']],
+    'raw unresolved:false does not override edge_state unresolved/unsupported');
+  const { spelling } = tinyModel().callersOf('saveThing');
+  assert.equal(spelling[0].edgeState, 'unresolved');
+});
+
+test('fix-r1 #3/#4: normalizeBundle rejects a missing or invalid edge_state and missing skip fields', () => {
+  const raw = tinyRaw();
+  const withEdge = (state) => ({ ...raw, relations: raw.relations.map((r) => ({ ...r, edge_state: state })) });
+  assert.throws(() => normalizeBundle(withEdge(undefined)), /edge_state/);
+  assert.throws(() => normalizeBundle(withEdge('exact')), /edge_state/);
+  assert.throws(() => normalizeBundle({ ...raw, files_skipped: undefined }), /files_skipped/);
+  assert.throws(() => normalizeBundle({ ...raw, files_skipped: -1 }), /files_skipped/);
+  assert.throws(() => normalizeBundle({ ...raw, skipped_paths: [{ path: '', reason: 'x' }] }), /skipped_paths/);
+  assert.throws(() => normalizeBundle({ ...raw, budget_exhausted: 'no' }), /budget_exhausted/);
+  assert.doesNotThrow(() => normalizeBundle(raw));
+});
+
+test('fix-r1 #4: a path token whose file the producer skipped is unknown (file skipped: reason), never missing', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'codegraph-skip-'));
+  try {
+    mkdirSync(join(projectRoot, 'lib'), { recursive: true });
+    writeFileSync(join(projectRoot, 'lib', 'big.ts'), 'export const x = 1;\n');
+    const m = tinyModel({ files_skipped: 1, skipped_paths: [{ path: 'lib/big.ts', reason: 'grammar_unavailable' }] });
+    const text = '- `lib/big.ts`\n- `big.ts`\n';
+    const result = runRealityCheck({ text, projectRoot, model: m, repos: [], fileList: new Set() });
+    const label = Object.fromEntries(result.labels.map((n) => [n.name, n]));
+    for (const name of ['lib/big.ts', 'big.ts']) {
+      assert.equal(label[name].label, 'unknown', `${name}: skipped files are checked before the disk (it exists on disk)`);
+      assert.equal(label[name].hint, 'file skipped: grammar_unavailable: tree-sitter-typescript/javascript not installed');
+    }
+    assert.equal(result.counts.unknown, 2);
+    assert.match(formatRealityReport(result), /L1 unknown `lib\/big\.ts` — file skipped: grammar_unavailable/);
+  } finally {
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('fix-r1 #4: a symbol that resolves nowhere while files were skipped notes "may be in N skipped file(s)"', () => {
+  const m = tinyModel({ files_skipped: 2, skipped_paths: [{ path: 'lib/x.ts', reason: 'oversize' }, { path: 'lib/y.ts', reason: 'oversize' }] });
+  const result = runRealityCheck({ text: 'call `missingThing()` and `lib/nope.js`\n', projectRoot: tmpdir(), model: m, repos: [], fileList: new Set() });
+  const label = Object.fromEntries(result.labels.map((n) => [n.name, n]));
+  assert.equal(label.missingThing.label, 'unmarked-new');
+  assert.equal(label.missingThing.note, 'may be in 2 skipped file(s)');
+  assert.equal(label['lib/nope.js'].note, null, 'a path is checked on disk, so the skip note does not apply');
+  assert.match(formatRealityReport(result), /2 file\(s\) skipped by the indexer/);
+});
+
+test('fix-r1 #4: an exhausted entity budget makes the check PARTIAL COVERAGE and reports no name missing', async () => {
+  const m = tinyModel({ files_skipped: 40, budget_exhausted: true });
+  const text = '- `missingThing()`\n- `lib/nope.js`\n- `walk()`\n- `brandNew()` (new)\n';
+  const result = runRealityCheck({ text, projectRoot: tmpdir(), model: m, repos: [], fileList: new Set() });
+  const label = Object.fromEntries(result.labels.map((n) => [n.name, n]));
+  assert.equal(label.walk.label, 'existing');
+  assert.equal(label.brandNew.label, 'new');
+  for (const name of ['missingThing', 'lib/nope.js']) {
+    assert.equal(label[name].label, 'unknown', name);
+    assert.match(label[name].note, /partial coverage: the entity budget ran out in t/);
+  }
+  assert.equal(result.counts.unmarked_new, 0);
+  assert.match(formatRealityReport(result), /PARTIAL COVERAGE \(entity budget ran out in t; no name is reported missing\)/);
+
+  const cwd = mkdtempSync(join(tmpdir(), 'codegraph-partial-'));
+  try {
+    writeFileSync(join(cwd, 'plan.md'), text);
+    const snapshot = normalizeBundle(tinyRaw({ files_skipped: 40, budget_exhausted: true }));
+    const loader = async () => ({ skipped: null, snapshots: [{ repo: { name: 't', prefix: '' }, snapshot, cached: false, timing: {} }], errors: [] });
+    const out = await planGateRealityCheck({ cwd, artifact: 'plan.md', featureCode: 'FX-P', loader });
+    const record = JSON.parse(readFileSync(out.recordPath, 'utf8'));
+    assert.equal(record.coverage.partial, true);
+    assert.deepEqual(record.coverage.budgetExhaustedRepos, ['t']);
+    assert.equal(record.counts.unknown, 2);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
 });

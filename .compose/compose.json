@@ -43,5 +43,11 @@
     "workspaceId": "team_11bc48bd9bc3",
     "apiKeyEnv": "COMPOSE_SM_KEY",
     "timeoutMs": 15000
+  },
+  "codegraph": {
+    "repos": [
+      { "name": "compose", "root": "." },
+      { "name": "stratum", "root": "../stratum/ts" }
+    ]
   }
 }

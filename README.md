@@ -183,6 +183,21 @@ Check what you're running:
 compose --version
 ```
 
+## Code graph (optional)
+
+When a capable SmartMemory is installed, Compose indexes your code and uses the graph at two points in a build:
+
+- **Before design (`explore_design`):** a "Possible Prior Art" block lists existing functions and classes that match the feature, with `file:line`, so the design starts from what already exists.
+- **At the plan gate (`plan_gate`):** a reality check labels every backticked name and path in the plan as existing, new (marked `(new)`), unmarked-new (absent and not marked), or unknown (the indexer skipped that file, or ran out of its entity budget, so absence proves nothing). The result is shown in the gate summary and recorded under `.compose/codegraph/reality/`.
+
+It is **warn-only**: it never blocks or decides a gate, and without SmartMemory it prints one warning and does nothing.
+
+- **Producer.** `smartmemory code bundle` when the installed CLI has it. Until a release ships that command, Compose falls back to `lib/codegraph/bundle_fallback.py`, which imports SmartMemory's indexer directly, and prints a WARNING each time it does. PyPI smartmemory 1.5.23 lacks the store-free `CodeIndexer.parse` the fallback needs, so point Compose at a Python with a newer core: `COMPOSE_CODEGRAPH_PYTHON=/path/to/python`, or `"codegraph": { "python": "…" }` in `.compose/compose.json`.
+- **JS/TS needs the tree-sitter grammars.** `tree-sitter-typescript` and `tree-sitter-javascript` are SmartMemory dev-only dependencies. Without them JS/TS files are skipped, and the reality check reports names in them as unknown, not missing.
+- **Repos and timeout.** `codegraph.repos` in `.compose/compose.json` lists what to index (`[{ "name": "compose", "root": "." }, { "name": "stratum", "root": "../stratum/ts" }]`; default: the project root). `codegraph.timeoutMs` bounds one producer run.
+- **Prebuild.** A build whose pipeline has `plan_gate` or `explore_design` starts the snapshots in the background at build start, so the gate usually hits the cache. Snapshots are cached in `.compose/codegraph/` (gitignored) by a fingerprint of each repo's source.
+- **Disable** with `COMPOSE_CODEGRAPH=0` or `"codegraph": { "enabled": false }`. It is also off under `NODE_ENV=test` unless `COMPOSE_CODEGRAPH=1`.
+
 ## Bundled skills
 
 `compose setup` (alias `compose sync`) mirrors compose-owned skills into your agent skill dirs (`~/.claude/skills/`, shared with Codex). Re-run it after a `compose update` or after editing skills locally — it's idempotent.

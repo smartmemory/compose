@@ -102,3 +102,18 @@ test('a producer failure is a warning and an empty result, never a throw', async
   assert.ok(out.skipped, JSON.stringify(out));
   assert.ok(warnings.some((w) => /snapshot failed/.test(w)), warnings.join('\n'));
 });
+
+test('fix-r1 #1: the fallback names why the CLI was not used (none on PATH, or one without `code bundle`)', async () => {
+  const report = { smartmemory: true, version: '1.5.24', store_free_parse: true, typescript_grammar: true };
+  const env = fakeEnv(report);
+  const none = await detectCodegraph({ cwd: dir, env });
+  assert.equal(none.mode, 'fallback');
+  assert.equal(none.fallbackReason, 'no `smartmemory` command on PATH');
+
+  resetAvailabilityCache();
+  writeFileSync(join(dir, 'bin', 'smartmemory'), '#!/bin/sh\nexit 2\n');
+  chmodSync(join(dir, 'bin', 'smartmemory'), 0o755);
+  const old = await detectCodegraph({ cwd: dir, env });
+  assert.equal(old.mode, 'fallback');
+  assert.match(old.fallbackReason, /`smartmemory code bundle --help` failed \(exit 2\).*CODE-BUNDLE-CLI-1/);
+});

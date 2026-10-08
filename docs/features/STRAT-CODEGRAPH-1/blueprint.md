@@ -28,7 +28,7 @@
 ```
 availability.js ──► snapshot.js ──► normalizeBundle() ──► .compose/codegraph/<repo>/<fingerprint>.json
    (python, SM,        (fingerprint,     (ONE envelope                (normalized model,
-    grammars,           single-flight,    parser)                      model_version 1)
+    grammars,           single-flight,    parser)                      model_version 2)
     warn once)          spawn, timing)
                                   │
                                   ▼
@@ -36,7 +36,7 @@ availability.js ──► snapshot.js ──► normalizeBundle() ──► .com
                                          └►  prior-art.js      ──► build.js explore_design prompt
 ```
 
-- **Producer order:** `smartmemory code bundle` when `smartmemory code bundle --help` exits 0, else `python -I lib/codegraph/bundle_fallback.py`. The CLI's argv lives in `cliBundleArgs()` in `snapshot.js`, next to `normalizeBundle`, so a contract change is a one-file edit.
+- **Producer order:** `smartmemory code bundle` when `smartmemory code bundle --help` exits 0, else `python -I lib/codegraph/bundle_fallback.py`. Both producers take the same argv, `<path> --repo <name> [--exclude <dir> …] --out <file> --allow-partial --fields minimal` (CODE-BUNDLE-CLI-1 design.md), built by `bundleArgv()` in `snapshot.js` (`cliBundleArgs()` prefixes `code bundle`), next to `normalizeBundle`, so a contract change is a one-file edit. Every fallback-produced snapshot prints a WARNING with the reason the CLI was not used (fix round 1).
 - **Envelope parsing lives only in `normalizeBundle`** (`snapshot.js`). It accepts `schema_version "1"` and throws `BundleFormatError` on anything else. It projects the brief's entity/relation field list into the internal model. Nothing else in Compose reads a bundle.
 - **The cache holds the normalized model, not the raw bundle** (77-248 MB raw, see above). The raw bundle is written to a temp file inside the repo's cache dir, normalized, and deleted.
 - **SmartMemory's parse cache** is pointed at `.compose/codegraph/<repo>/parse-cache` (`SMARTMEMORY_CODE_CHECKPOINT_DIR`) unless the user already set it. That keeps all state under `.compose/codegraph/` and makes a re-index re-parse only changed files (the warm column above).
@@ -69,7 +69,7 @@ availability.js ──► snapshot.js ──► normalizeBundle() ──► .com
 - `resetAvailabilityCache()` is the test seam.
 
 ### `lib/codegraph/snapshot.js` (new)
-- `resolveRepos(projectRoot)`, `computeFingerprint(root)`, `normalizeBundle(raw)`, `cliBundleArgs({ root, repo, out })`, `ensureSnapshot({ projectRoot, repo, availability, timeoutMs, producer? })`, `loadSnapshots({ projectRoot, … })`.
+- `resolveRepos(projectRoot)`, `computeFingerprint(root)`, `normalizeBundle(raw)`, `bundleArgv({ root, repo, out, exclude })`, `cliBundleArgs(…)`, `ensureSnapshot({ projectRoot, repo, availability, timeoutMs, producer? })`, `loadSnapshots({ projectRoot, … })`.
 - Single flight: an in-process `Map<cacheDir, Promise>`, plus a cross-process `acquireDirLock(<repo dir>/.lock, { timeoutMs })` (`lib/dir-lock.js:84`). The cache is re-checked after the lock is taken.
 - Timing goes to `<repo dir>/timings.jsonl` as `{ ts, fingerprint, cached, mode, fingerprintMs, bundleMs, normalizeMs, totalMs, entities, relations, complete }`. Only the newest 3 snapshot files are kept.
 - Child output is capped (last 8 KB of stderr kept). Timeout from config (default 300 s).
@@ -116,7 +116,7 @@ availability.js ──► snapshot.js ──► normalizeBundle() ──► .com
   - `source {head, dirty, fingerprint, commit_hash, repo_identity}`, `complete`, `failed_paths`
   - the hosted bundle fields `repo, entities[] (with item_id), relations[], commit_hash, parse_summary`
 - Fingerprint = HEAD + dirty flag + a hash of `git status --porcelain`.
-- `--slim` keeps exactly the fields Compose reads, under their contract names.
+- `--fields minimal` keeps exactly the fields Compose reads, under their contract names, and drops clean `parse_diagnostic` (was `--slim` before fix round 1). Every relation and call/test evidence record carries `edge_state` (resolved | ambiguous | unresolved | unsupported), stamped before slimming; the envelope carries `files_skipped`, `skipped_paths` and `budget_exhausted` (snapshot amendment).
 - Other flags: `--exclude` (additive to SM defaults) and `--allow-partial`. SM's per-call WARNING lines are silenced unless `--verbose` (10 MB of stderr on compose otherwise).
 
 ## Build-pipeline hooks (`lib/build.js`, existing)

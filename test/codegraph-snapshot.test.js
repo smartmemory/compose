@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   computeFingerprint, ensureSnapshot, loadSnapshots, normalizeBundle, resolveRepos, codegraphDir,
+  bundleArgv, cliBundleArgs, prebuildSnapshots, specUsesCodegraph,
 } from '../lib/codegraph/snapshot.js';
 import { resetAvailabilityCache } from '../lib/codegraph/availability.js';
 
@@ -21,11 +22,13 @@ const AVAILABLE = { available: true, mode: 'fallback', python: 'python3', versio
 
 let dir;
 let originalWarn;
+let warnings;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'codegraph-snap-'));
   resetAvailabilityCache();
   originalWarn = console.warn;
-  console.warn = () => {};
+  warnings = [];
+  console.warn = (...args) => { warnings.push(args.join(' ')); };
 });
 afterEach(() => {
   console.warn = originalWarn;
@@ -94,7 +97,9 @@ test('concurrent ensureSnapshot calls run the producer once; the next call is a 
     ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer }),
   ]);
   assert.equal(calls.length, 1);
-  assert.equal(a, b);
+  assert.equal(b.snapshot, a.snapshot);
+  assert.equal(b.joined, true, 'the second caller joined the run in flight');
+  assert.equal(a.joined, undefined);
   assert.equal(a.cached, false);
   assert.ok(existsSync(a.path));
   assert.equal(a.snapshot.entities.length, normalizeBundle(FIXTURE).entities.length);
@@ -204,4 +209,109 @@ test('R1-4: a producer that dies mid-write leaves no temp files', async () => {
   assert.equal(loaded.errors.length, 1);
   const repoDir = join(codegraphDir(dir), repo.name);
   assert.deepEqual(readdirSync(repoDir).filter((f) => f.includes('.tmp')), []);
+});
+
+// ---- Fix round 1 (scratch/2026-10-08-codegraph/build/fix-r1-brief.md) ----
+
+const fallbackLines = () => warnings.filter((w) => w.includes('private-import fallback'));
+
+test('fix-r1 #1: every snapshot the fallback produces prints a WARNING with the reason', async () => {
+  initRepo();
+  const repo = resolveRepos(dir)[0];
+  const calls = [];
+  const producer = fixtureProducer(calls);
+  const availability = { ...AVAILABLE, fallbackReason: 'no `smartmemory` command on PATH' };
+  const first = await ensureSnapshot({ projectRoot: dir, repo, availability, producer });
+  assert.equal(first.snapshot.producer, 'fallback');
+  writeFileSync(join(dir, 'sub', 'a.js'), 'export const a = 99;\n'); // new key: produced again
+  await ensureSnapshot({ projectRoot: dir, repo, availability, producer });
+  assert.equal(calls.length, 2);
+  assert.equal(fallbackLines().length, 2, 'one line per production, not once per process');
+  assert.match(fallbackLines()[0], /^\[codegraph\] WARNING: .*bundle_fallback\.py.*because no `smartmemory` command on PATH$/);
+
+  await ensureSnapshot({ projectRoot: dir, repo, availability: { ...availability, mode: 'cli' }, producer });
+  assert.equal(fallbackLines().length, 2, 'the CLI producer does not warn');
+});
+
+test('fix-r1 #1: a cached fallback snapshot gets one WARNING line per run', async () => {
+  initRepo();
+  const calls = [];
+  const producer = fixtureProducer(calls);
+  await loadSnapshots({ projectRoot: dir, availability: AVAILABLE, producer });
+  assert.equal(fallbackLines().length, 1, 'production warns');
+  for (let run = 1; run <= 2; run++) {
+    warnings.length = 0;
+    const loaded = await loadSnapshots({ projectRoot: dir, availability: AVAILABLE, producer });
+    assert.equal(loaded.snapshots[0].cached, true);
+    assert.equal(fallbackLines().length, 1, `run ${run}: a cache hit still says the snapshot came from the fallback`);
+    assert.match(fallbackLines()[0], /\(cached\)/);
+  }
+  assert.equal(calls.length, 1);
+});
+
+test('fix-r1 #7: a build-start prebuild is joined by the gate: one producer run', async () => {
+  initRepo();
+  const calls = [];
+  const producer = fixtureProducer(calls);
+  const loader = (args) => loadSnapshots({ ...args, availability: AVAILABLE, producer });
+  const pre = prebuildSnapshots({ projectRoot: dir, loader });
+  const gate = await loadSnapshots({ projectRoot: dir, availability: AVAILABLE, producer });
+  await pre;
+  assert.equal(calls.length, 1);
+  assert.equal(gate.snapshots[0].joined, true);
+  assert.match(fallbackLines().at(-1), /prebuilt this build/);
+  await assert.doesNotReject(prebuildSnapshots({ projectRoot: dir, loader: async () => { throw new Error('boom'); } }));
+});
+
+test('fix-r1 #7: under NODE_ENV=test the prebuild runs no producer', async () => {
+  initRepo();
+  const calls = [];
+  const producer = fixtureProducer(calls);
+  const loaded = await prebuildSnapshots({
+    projectRoot: dir, env: { PATH: process.env.PATH, NODE_ENV: 'test' },
+    loader: (args) => loadSnapshots({ ...args, producer }),
+  });
+  assert.match(loaded.skipped, /NODE_ENV=test/);
+  assert.equal(calls.length, 0);
+});
+
+test('fix-r1 #7: docs and feature.json edits keep the fingerprint; source and tsconfig edits change it', async () => {
+  initRepo();
+  const base = await computeFingerprint(dir);
+  mkdirSync(join(dir, 'docs', 'features', 'FX-1'), { recursive: true });
+  writeFileSync(join(dir, 'docs', 'features', 'FX-1', 'plan.md'), '# plan\n');
+  writeFileSync(join(dir, 'docs', 'features', 'FX-1', 'feature.json'), '{}\n');
+  const docs = await computeFingerprint(dir);
+  assert.equal(docs.fingerprint, base.fingerprint, 'what a build writes before plan_gate does not miss the prebuild');
+  assert.equal(docs.dirty, true);
+  writeFileSync(join(dir, 'tsconfig.json'), '{}\n');
+  const ts = await computeFingerprint(dir);
+  assert.notEqual(ts.fingerprint, base.fingerprint);
+  writeFileSync(join(dir, 'sub', 'b.js'), 'export const b = 1;\n');
+  assert.notEqual((await computeFingerprint(dir)).fingerprint, ts.fingerprint);
+});
+
+test('fix-r1 #7: stale bundle temp files from a dead producer are swept under the lock', async () => {
+  initRepo();
+  const repo = resolveRepos(dir)[0];
+  const repoDir = join(codegraphDir(dir), repo.name);
+  mkdirSync(repoDir, { recursive: true });
+  writeFileSync(join(repoDir, 'bundle.999999.deadbeef.tmp.json'), '{"partial');
+  writeFileSync(join(repoDir, 'bundle.999999.deadbeef.tmp.json.tmp.12'), '{"partial');
+  await ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer: fixtureProducer([]) });
+  assert.deepEqual(readdirSync(repoDir).filter((f) => f.includes('.tmp')), []);
+});
+
+test('fix-r1 #7: specUsesCodegraph finds plan_gate or explore_design at any depth', () => {
+  assert.equal(specUsesCodegraph({ flows: { build: { steps: [{ id: 'explore_design' }] } } }), true);
+  assert.equal(specUsesCodegraph({ flows: { build: { steps: [{ id: 'plan' }, { id: 'plan_gate', function: 'x' }] } } }), true);
+  assert.equal(specUsesCodegraph({ flows: { quick: { steps: [{ id: 'execute' }, { id: 'ship' }] } } }), false);
+  assert.equal(specUsesCodegraph(null), false);
+});
+
+test('fix-r1 #5: both producers take the contract argv (positional path, --fields minimal)', () => {
+  const argv = bundleArgv({ root: '/r', repo: 'compose', out: '/o.json', exclude: ['fixtures', 'vendor'] });
+  assert.deepEqual(argv, ['/r', '--repo', 'compose', '--exclude', 'fixtures', '--exclude', 'vendor', '--out', '/o.json', '--allow-partial', '--fields', 'minimal']);
+  assert.deepEqual(cliBundleArgs({ root: '/r', repo: 'compose', out: '/o.json' }).slice(0, 3), ['code', 'bundle', '/r']);
+  assert.ok(!argv.includes('--slim') && !argv.includes('--repo-root'));
 });
