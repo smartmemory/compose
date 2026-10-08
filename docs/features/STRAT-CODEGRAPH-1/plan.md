@@ -65,3 +65,4 @@ Ticked by forge-d0 after verification (author report: `forge/scratch/2026-10-08-
 - [ ] Plan reality check runs at plan_gate and lists unresolved names with the artifact line (T5, T7)
 - [ ] Prior-art search runs before design and lists matches with file:line (T6, T7)
 - [ ] Remove `lib/codegraph/bundle_fallback.py` and its spawn path once CODE-BUNDLE-CLI-1 ships `smartmemory code bundle` (waits on CODE-INDEXER-HARDEN-1 U5)
+- [ ] Replace the JS copy of core's read rules in `snapshot.js` (pruning, tsconfig `extends` chains, suffix rule, ancestor manifests) with the snapshot's `source` plus `source.resolution_dependencies` (path, kind exists|content, sha256), accepted by sm-scanner 2026-10-08 for CODE-BUNDLE-CLI-1. Why: three review rounds on the mirrored rules did not converge (3, 3, 6 findings), and every change to core's read rules would silently break the cache key.
