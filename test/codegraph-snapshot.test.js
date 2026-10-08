@@ -326,6 +326,9 @@ test('fix-r1 R1-1: every file core reads changes the key, however it is named; b
     'pkg/dist/bundle.js': 'export const b = 1;\n',
     'pkg/py/build/__init__.py': '',
     'pkg/py/build/mod.py': 'X = 1\n',
+    // fix-r1 R1-1 (Codex review of 15870294): config seeds under a pruned directory are not inputs.
+    'pkg/.compose/tsconfig.json': '{}\n',
+    'pkg/build/tsconfig.json': '{}\n',
   };
   const links = [['pkg/sym/tsconfig.json', '../config/real/shared.json']];
   const edit = (path) => (r) => writeFileSync(join(r, path), `${readFileSync(join(r, path), 'utf8').trimEnd()} \n\n`);
@@ -347,6 +350,10 @@ test('fix-r1 R1-1: every file core reads changes the key, however it is named; b
     ['an extends target of a tsconfig inside a gitignored directory', edit('pkg/config/lbase.txt'), true],
     ['a package.json above the indexed root', (r) => writeFileSync(join(r, 'package.json'), '{ "type": "commonjs" }\n'), true],
     ['source in a build/ folder that is a Python package', edit('pkg/py/build/mod.py'), true],
+    // Deleting the marker prunes build/, which drops mod.py from the producer's input; the deletion must stay in the key.
+    ['deleting the __init__.py that makes build/ a package', (r) => rmSync(join(r, 'pkg/py/build/__init__.py')), true],
+    ['an unignored .compose/tsconfig.json seed', edit('pkg/.compose/tsconfig.json'), false],
+    ['a tsconfig.json seed inside a pruned build/ folder', edit('pkg/build/tsconfig.json'), false],
     ['a node_modules file core prunes', edit('pkg/node_modules/dep/index.js'), false],
     ['a dist/ artifact core prunes', edit('pkg/dist/bundle.js'), false],
     ['a feature folder (plan.md, feature.json)', (r) => {
@@ -382,6 +389,41 @@ test('fix-r1 R1-1: every file core reads changes the key, however it is named; b
       const after = await computeFingerprint(root);
       if ((after.fingerprint !== before.fingerprint) !== changes) wrong.push(`${useGit ? 'git' : 'no git'}: ${what}`);
     }
+  }
+  assert.deepEqual(wrong, [], 'cases whose key change did not match core');
+});
+
+test('fix-r1 R1-1: pruning starts below the indexed root, never at the root or its ancestors', async () => {
+  // Root = packages/dist (committed, no __init__.py): core traverses the root it was given, and prunes only below it.
+  const files = {
+    'packages/dist/a.js': 'export const a = 1;\n',
+    'packages/dist/sub/b.js': 'export const b = 1;\n',
+    'packages/dist/node_modules/dep/index.js': 'module.exports = 1;\n',
+    'packages/dist/build/c.js': 'export const c = 1;\n',
+  };
+  const edit = (path) => (r) => writeFileSync(join(r, path), `${readFileSync(join(r, path), 'utf8').trimEnd()} \n\n`);
+  const cases = [
+    ['source directly in a root named dist', edit('packages/dist/a.js'), true],
+    ['source in a subfolder of a root named dist', edit('packages/dist/sub/b.js'), true],
+    ['an untracked source file in a root named dist', (r) => writeFileSync(join(r, 'packages/dist/new.js'), 'x\n'), true],
+    ['node_modules below the root', edit('packages/dist/node_modules/dep/index.js'), false],
+    ['build/ below the root', edit('packages/dist/build/c.js'), false],
+  ];
+  const wrong = [];
+  for (const [what, mutate, changes] of cases) {
+    const repo = mkdtempSync(join(dir, 'fp-'));
+    for (const [path, body] of Object.entries(files)) {
+      mkdirSync(join(repo, dirname(path)), { recursive: true });
+      writeFileSync(join(repo, path), body);
+    }
+    git(repo, 'init', '-q');
+    git(repo, 'add', '.');
+    git(repo, 'commit', '-qm', 'init');
+    const root = join(repo, 'packages', 'dist');
+    const before = await computeFingerprint(root);
+    mutate(repo);
+    const after = await computeFingerprint(root);
+    if ((after.fingerprint !== before.fingerprint) !== changes) wrong.push(what);
   }
   assert.deepEqual(wrong, [], 'cases whose key change did not match core');
 });
