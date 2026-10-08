@@ -1,6 +1,6 @@
 # STRAT-CODEGRAPH-1 — Code graph via SmartMemory
 
-**Status:** PLANNED (rescoped 2026-10-05) · **Epic:** STRAT-CODEGRAPH · **Promoted from:** IDEA-37
+**Status:** PARTIAL (built 2026-10-08, compose 66d86e46..724b6787; waits on SM CODE-BUNDLE-CLI-1 + a TS-capable release) (rescoped 2026-10-05) · **Epic:** STRAT-CODEGRAPH · **Promoted from:** IDEA-37
 
 ## Related Documents
 - Roadmap: `compose/ROADMAP.md` § STRAT-CODEGRAPH
@@ -32,9 +32,9 @@ The original item planned to adopt an outside code-graph tool (Scope or CodeGrap
 
 ## Acceptance criteria
 - [x] **Spike S0 (first):** re-run `fixtures/probe.py` against SmartMemory once CODE-TS-RESOLVE-1 lands. TS cross-file resolution must be > 0, and the result is recorded against the baseline above. **PASS 2026-10-08:** TS 0 → 51, ground truth 4 → 15/15 ([spikes-2026-10-08.md](spikes-2026-10-08.md)).
-- [ ] Compose detects SmartMemory availability. Without it, checks log a single warn-only notice and never fail a build.
-- [ ] Forge (compose + stratum/ts) is indexed through a SmartMemory surface that reaches JS/TS. The surface used is named in the report.
-- [ ] Incremental re-index touches only changed files. The timing is recorded.
+- [x] Compose detects SmartMemory availability. Without it, checks log a single warn-only notice and never fail a build. **MET 2026-10-08** (`lib/codegraph/availability.js`, `test/codegraph-availability.test.js`). Against PyPI 1.5.24 it reports available with a visible "no TS grammar" warning, and TS files land in skipped_paths as `grammar_unavailable`.
+- [x] Forge (compose + stratum/ts) is indexed through a SmartMemory surface that reaches JS/TS. The surface used is named in the report. **MET 2026-10-08, with a caveat:** the surface is `lib/codegraph/bundle_fallback.py` (a private `CodeIndexer.parse` import) on core main plus the dev TS grammars. No released smartmemory reaches JS/TS yet; that waits on CODE-BUNDLE-CLI-1 and the `[typescript]` extra release ([build report](../../../../scratch/2026-10-08-codegraph/build/REPORT.md)).
+- [ ] Incremental re-index touches only changed files. The timing is recorded. **PARTIAL 2026-10-08:** SM re-parses only changed files, but it re-runs resolution over the whole repo (compose: cold 170 s, warm 75 s, cache hit 0.4 s). Timings are in `.compose/codegraph/<repo>/timings.jsonl`. Build-start prebuild hides most of it.
 - [x] **Spike S3:** replay one past plan or blueprint that named nonexistent symbols. The reality check flags every one. **PASS 2026-10-08** (COMP-GSD-2). Report unmarked proposed names as "unmarked new", not errors ([spikes-2026-10-08.md](spikes-2026-10-08.md)).
-- [ ] Plan reality check runs at the plan gate and lists unresolved names with the artifact line.
-- [ ] Prior-art search runs before design and lists matches with file:line.
+- [x] Plan reality check runs at the plan gate and lists unresolved names with the artifact line. **MET 2026-10-08** (`lib/codegraph/reality-check.js`, plan_gate hook in `lib/build.js`, warn-only).
+- [x] Prior-art search runs before design and lists matches with file:line. **MET 2026-10-08** (`lib/codegraph/prior-art.js`, explore_design hook in `lib/build.js`).

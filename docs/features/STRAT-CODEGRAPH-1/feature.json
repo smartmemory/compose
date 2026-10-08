@@ -1,10 +1,10 @@
 {
   "code": "STRAT-CODEGRAPH-1",
   "description": "**Code graph via SmartMemory (rescoped 2026-10-05; was Scope/CodeGraphContext):** Compose builds use SmartMemory code intelligence as an optional backend (warn-only without SM). Index forge JS+TS on first run with incremental re-index on file change. At design/plan: reality-check that every symbol and file the plan names exists, and run a prior-art search for the concept before designing.",
-  "status": "PLANNED",
+  "status": "PARTIAL",
   "phase": "STRAT-CODEGRAPH: Code Graph Context for Agents",
   "created": "2026-10-05",
-  "updated": "2026-10-05",
+  "updated": "2026-10-08",
   "complexity": "M",
   "position": 167,
   "tags": [
@@ -33,5 +33,6 @@
       "note": "SmartMemory CODE-PARSE-DIAGNOSTICS-1: depends_on: hosted upload rejects partial parses; 2 forge files partial-parse",
       "url": "https://github.com/smartmemory/smart-memory-docs/tree/main/docs/features/CODE-PARSE-DIAGNOSTICS-1"
     }
-  ]
+  ],
+  "commit_sha": "724b6787"
 }
