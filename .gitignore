@@ -27,6 +27,8 @@ __pycache__/
 .claude/session-context.*.md
 .compose/breadcrumbs.log
 .compose/build-stream.jsonl
+# STRAT-CODEGRAPH-1 snapshot cache, parse cache, timings and check records.
+.compose/codegraph/
 
 # Codex agent run logs
 .codex-out/
