@@ -328,6 +328,45 @@ test('fix-r1 #4: a path token whose file the producer skipped is unknown (file s
   }
 });
 
+test('fix-r1 R1-2: a skipped file is unknown under every path spelling the disk check accepts (two repos)', () => {
+  // Layout of the tracked config: compose at the project root, stratum/ts as a sibling repo with prefix ../stratum/ts/.
+  const ws = mkdtempSync(join(tmpdir(), 'codegraph-skip-ws-'));
+  try {
+    const projectRoot = join(ws, 'compose');
+    const stratumRoot = join(ws, 'stratum', 'ts');
+    for (const [root, file] of [[projectRoot, 'lib/big.ts'], [stratumRoot, 'src/policy/bundle.ts'], [stratumRoot, 'src/policy/other.ts']]) {
+      mkdirSync(join(root, dirname(file)), { recursive: true });
+      writeFileSync(join(root, file), 'export const x = 1;\n');
+    }
+    const repos = [{ name: 'compose', root: projectRoot, prefix: '' }, { name: 'stratum', root: stratumRoot, prefix: '../stratum/ts/' }];
+    const snap = (overrides) => normalizeBundle(tinyRaw(overrides));
+    const model = buildModel([
+      { repo: repos[0], snapshot: snap({ repo: 'compose', files_skipped: 1, skipped_paths: [{ path: 'lib/big.ts', reason: 'grammar_unavailable' }] }) },
+      { repo: repos[1], snapshot: snap({ repo: 'stratum', files_skipped: 1, skipped_paths: [{ path: 'src/policy/bundle.ts', reason: 'oversize' }] }) },
+    ]);
+    const cases = [
+      // [spelling, expected label, expected hint suffix]
+      ['../stratum/ts/src/policy/bundle.ts', 'unknown', 'oversize'], // display path
+      ['src/policy/bundle.ts', 'unknown', 'oversize'], // repo-relative
+      ['stratum/ts/src/policy/bundle.ts', 'unknown', 'oversize'], // workspace-relative (the review's failing input)
+      ['bundle.ts', 'unknown', 'oversize'], // bare basename
+      ['lib/big.ts', 'unknown', 'grammar_unavailable'], // project-relative
+      ['compose/lib/big.ts', 'unknown', 'grammar_unavailable'], // <project>/-prefixed and workspace-relative
+      ['stratum/ts/src/policy/other.ts', 'existing', null], // a sibling file that was not skipped
+    ];
+    const text = cases.map(([name]) => `- \`${name}\``).join('\n') + '\n';
+    const result = runRealityCheck({ text, projectRoot, model, repos, fileList: new Set() });
+    const label = Object.fromEntries(result.labels.map((n) => [n.name, n]));
+    for (const [name, expected, reason] of cases) {
+      assert.ok(label[name], `${name} was extracted`);
+      assert.equal(label[name].label, expected, name);
+      if (reason) assert.match(label[name].hint, new RegExp(`^file skipped: ${reason}`), name);
+    }
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
 test('fix-r1 #4: a symbol that resolves nowhere while files were skipped notes "may be in N skipped file(s)"', () => {
   const m = tinyModel({ files_skipped: 2, skipped_paths: [{ path: 'lib/x.ts', reason: 'oversize' }, { path: 'lib/y.ts', reason: 'oversize' }] });
   const result = runRealityCheck({ text: 'call `missingThing()` and `lib/nope.js`\n', projectRoot: tmpdir(), model: m, repos: [], fileList: new Set() });

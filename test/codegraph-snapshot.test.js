@@ -291,6 +291,56 @@ test('fix-r1 #7: docs and feature.json edits keep the fingerprint; source and ts
   assert.notEqual((await computeFingerprint(dir)).fingerprint, ts.fingerprint);
 });
 
+test('fix-r1 R1-1: every file the producer may read changes the key; only build prose and feature folders do not', async () => {
+  // Core follows a tsconfig `extends` chain to a file of any name, with or without .json (ts_resolve.py:153-166),
+  // so the filter is a deny-list of documents, not an allow-list of config names.
+  const base = {
+    'top.js': 'export const t = 1;\n',
+    'tsconfig.json': '{ "extends": "./config/base" }\n',
+    'config/base.json': '{}\n',
+    'config/shared': '{}\n',
+    '.gitignore': '*.log\ntsconfig.local.json\n',
+    'tsconfig.local.json': '{}\n',
+  };
+  const cases = [
+    // [what, mutate(root), git: key changes?, non-git: key changes?]
+    ['edit a tracked extends target with another name', (r) => writeFileSync(join(r, 'config/base.json'), '{"x":1}\n'), true, true],
+    ['edit a tracked extensionless extends target', (r) => writeFileSync(join(r, 'config/shared'), '{"x":1}\n'), true, true],
+    ['add an untracked extensionless config', (r) => writeFileSync(join(r, 'config/other'), '{}\n'), true, true],
+    ['edit a gitignored tsconfig.local.json', (r) => writeFileSync(join(r, 'tsconfig.local.json'), '{"x":1}\n'), true, true],
+    ['edit tsconfig.json', (r) => writeFileSync(join(r, 'tsconfig.json'), '{ "extends": "./config/base.json" }\n'), true, true],
+    ['rename an extends target into docs', (r) => { mkdirSync(join(r, 'docs'), { recursive: true }); git(r, 'mv', 'config/base.json', 'docs/base.md'); }, true, true],
+    ['write a feature folder (plan.md, feature.json)', (r) => {
+      mkdirSync(join(r, 'docs', 'features', 'FX-1'), { recursive: true });
+      writeFileSync(join(r, 'docs', 'features', 'FX-1', 'plan.md'), '# plan\n');
+      writeFileSync(join(r, 'docs', 'features', 'FX-1', 'feature.json'), '{}\n');
+    }, false, false],
+    ['write a design doc', (r) => { mkdirSync(join(r, 'docs'), { recursive: true }); writeFileSync(join(r, 'docs', 'design.md'), '# d\n'); }, false, false],
+    ['write a gitignored log', (r) => writeFileSync(join(r, 'run.log'), 'x\n'), false, true],
+  ];
+  for (const useGit of [true, false]) {
+    for (const [what, mutate, gitChanges, walkChanges] of cases) {
+      if (!useGit && what.startsWith('rename')) continue; // git mv needs a repo
+      const root = mkdtempSync(join(dir, 'fp-'));
+      for (const [path, body] of Object.entries(base)) {
+        mkdirSync(join(root, dirname(path)), { recursive: true });
+        writeFileSync(join(root, path), body);
+      }
+      if (useGit) {
+        git(root, 'init', '-q');
+        git(root, 'add', '.');
+        git(root, 'commit', '-qm', 'init');
+      }
+      const before = await computeFingerprint(root);
+      assert.equal(before.git, useGit);
+      mutate(root);
+      const after = await computeFingerprint(root);
+      const expected = useGit ? gitChanges : walkChanges;
+      assert.equal(after.fingerprint !== before.fingerprint, expected, `${useGit ? 'git' : 'no git'}: ${what}`);
+    }
+  }
+});
+
 test('fix-r1 #7: stale bundle temp files from a dead producer are swept under the lock', async () => {
   initRepo();
   const repo = resolveRepos(dir)[0];
