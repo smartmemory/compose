@@ -4,7 +4,7 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -297,7 +297,7 @@ test('fix-r1 R1-1: every file core reads changes the key, however it is named; b
   // way stratum/ts is indexed. Chain: pkg/tsconfig.json -> config/shared(.json, JSONC) -> base.txt
   // -> docs/features/CFG/base.json -> ../tsconfig.base.json (outside pkg/) -> local/override.json (gitignored dir).
   const files = {
-    '.gitignore': '*.log\nlocal/\npkg/tsconfig.local.json\n',
+    '.gitignore': '*.log\nlocal/\npkg/tsconfig.local.json\nnode_modules/\ndist/\n',  // local/ also ignores pkg/local/
     'tsconfig.base.json': '{ "extends": "./local/override" }\n',
     'local/override.json': '{}\n',
     'pkg/top.js': 'export const t = 1;\n',
@@ -307,7 +307,27 @@ test('fix-r1 R1-1: every file core reads changes the key, however it is named; b
     'pkg/config/base.txt': '{ "extends": "../docs/features/CFG/base.json" }\n',
     'pkg/docs/features/CFG/base.json': '{ "extends": "../../../../tsconfig.base.json" }\n',
     'pkg/features/FX/feature.json': '{ "status": "PLANNED" }\n',
+    // Review round 3: a 33-link chain, a trailing-dot target (core appends .json: base..json), a symlinked tsconfig
+    // (extends resolves from the real file's folder), a gitignored directory core still indexes, an ancestor manifest.
+    'package.json': '{ "type": "module" }\n',
+    'pkg/deep/tsconfig.json': '{ "extends": "../config/c1.txt" }\n',
+    ...Object.fromEntries(Array.from({ length: 33 }, (_, i) => [
+      `pkg/config/c${i + 1}.txt`, i < 32 ? `{ "extends": "./c${i + 2}.txt" }\n` : '{ "compilerOptions": { "baseUrl": "../src-a" } }\n',
+    ])),
+    'pkg/dot/tsconfig.json': '{ "extends": "./base." }\n',
+    'pkg/dot/base..json': '{}\n',
+    'pkg/config/real/shared.json': '{ "extends": "./base2.txt" }\n',
+    'pkg/config/real/base2.txt': '{}\n',
+    'pkg/local/main.ts': 'export const m = 1;\n',
+    'pkg/local/tsconfig.json': '{ "extends": "../config/lbase.txt" }\n',
+    'pkg/config/lbase.txt': '{}\n',
+    // Directories core prunes (collection.py:11-29): node_modules always, dist/build unless a Python package.
+    'pkg/node_modules/dep/index.js': 'module.exports = 1;\n',
+    'pkg/dist/bundle.js': 'export const b = 1;\n',
+    'pkg/py/build/__init__.py': '',
+    'pkg/py/build/mod.py': 'X = 1\n',
   };
+  const links = [['pkg/sym/tsconfig.json', '../config/real/shared.json']];
   const edit = (path) => (r) => writeFileSync(join(r, path), `${readFileSync(join(r, path), 'utf8').trimEnd()} \n\n`);
   const cases = [
     // [what, mutate(repo dir), key changes (git and no git); git-only cases are marked]
@@ -319,6 +339,16 @@ test('fix-r1 R1-1: every file core reads changes the key, however it is named; b
     ['a gitignored tsconfig.local.json', edit('pkg/tsconfig.local.json'), true],
     ['tsconfig.json itself', edit('pkg/tsconfig.json'), true],
     ['source', edit('pkg/top.js'), true],
+    ['the 33rd link of an extends chain', edit('pkg/config/c33.txt'), true],
+    ['a trailing-dot extends target (base. -> base..json)', edit('pkg/dot/base..json'), true],
+    ['the real file behind a symlinked tsconfig', edit('pkg/config/real/shared.json'), true],
+    ['an extends target of a symlinked tsconfig (resolved from the real folder)', edit('pkg/config/real/base2.txt'), true],
+    ['source inside a gitignored directory core indexes', edit('pkg/local/main.ts'), true],
+    ['an extends target of a tsconfig inside a gitignored directory', edit('pkg/config/lbase.txt'), true],
+    ['a package.json above the indexed root', (r) => writeFileSync(join(r, 'package.json'), '{ "type": "commonjs" }\n'), true],
+    ['source in a build/ folder that is a Python package', edit('pkg/py/build/mod.py'), true],
+    ['a node_modules file core prunes', edit('pkg/node_modules/dep/index.js'), false],
+    ['a dist/ artifact core prunes', edit('pkg/dist/bundle.js'), false],
     ['a feature folder (plan.md, feature.json)', (r) => {
       mkdirSync(join(r, 'pkg', 'docs', 'features', 'FX-1'), { recursive: true });
       writeFileSync(join(r, 'pkg', 'docs', 'features', 'FX-1', 'plan.md'), '# plan\n');
@@ -328,12 +358,17 @@ test('fix-r1 R1-1: every file core reads changes the key, however it is named; b
     ['a design doc', (r) => writeFileSync(join(r, 'pkg', 'docs', 'design.md'), '# d\n'), false],
     ['a log file', (r) => writeFileSync(join(r, 'pkg', 'run.log'), 'x\n'), false],
   ];
+  const wrong = [];
   for (const useGit of [true, false]) {
     for (const [what, mutate, changes] of cases) {
       const repo = mkdtempSync(join(dir, 'fp-'));
       for (const [path, body] of Object.entries(files)) {
         mkdirSync(join(repo, dirname(path)), { recursive: true });
         writeFileSync(join(repo, path), body);
+      }
+      for (const [path, target] of links) {
+        mkdirSync(join(repo, dirname(path)), { recursive: true });
+        symlinkSync(target, join(repo, path));
       }
       if (useGit) {
         git(repo, 'init', '-q');
@@ -345,9 +380,10 @@ test('fix-r1 R1-1: every file core reads changes the key, however it is named; b
       assert.equal(before.git, useGit);
       mutate(repo);
       const after = await computeFingerprint(root);
-      assert.equal(after.fingerprint !== before.fingerprint, changes, `${useGit ? 'git' : 'no git'}: ${what}`);
+      if ((after.fingerprint !== before.fingerprint) !== changes) wrong.push(`${useGit ? 'git' : 'no git'}: ${what}`);
     }
   }
+  assert.deepEqual(wrong, [], 'cases whose key change did not match core');
 });
 
 test('fix-r1 #7: stale bundle temp files from a dead producer are swept under the lock', async () => {

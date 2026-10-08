@@ -369,6 +369,14 @@ test('fix-r1 R1-2: a skipped file is unknown under every path spelling the disk 
     const soloResult = runRealityCheck({ text: soloNames.map((n) => `- \`${n}\``).join('\n'), projectRoot, model: solo, repos: [repos[0]], fileList: new Set() });
     for (const n of soloResult.labels) assert.equal(n.label, 'unknown', `one repo: ${n.name}`);
     assert.equal(soloResult.labels.length, soloNames.length);
+    // Review round 3: a fallback spelling never borrows another file's skip record. `compose/snapshot.js` is a real
+    // file under the project, so it is existing even though stripping `compose/` would basename-match a skipped file.
+    mkdirSync(join(projectRoot, 'compose'), { recursive: true });
+    writeFileSync(join(projectRoot, 'compose', 'snapshot.js'), 'export const s = 1;\n');
+    const sibling = buildModel([{ repo: repos[0], snapshot: snap({ repo: 'compose', files_skipped: 1, skipped_paths: [{ path: 'lib/codegraph/snapshot.js', reason: 'oversize' }] }) }]);
+    const siblingResult = runRealityCheck({ text: '- `compose/snapshot.js`\n- `compose/lib/codegraph/snapshot.js`\n', projectRoot, model: sibling, repos: [repos[0]], fileList: new Set() });
+    const siblingLabel = Object.fromEntries(siblingResult.labels.map((n) => [n.name, n.label]));
+    assert.deepEqual(siblingLabel, { 'compose/snapshot.js': 'existing', 'compose/lib/codegraph/snapshot.js': 'unknown' });
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }
