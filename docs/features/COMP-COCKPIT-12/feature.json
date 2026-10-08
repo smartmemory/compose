@@ -1,0 +1,11 @@
+{
+  "code": "COMP-COCKPIT-12",
+  "description": "Multi-session status view in the cockpit. Show session busy/idle plus context size, open jobs plus running time, the owner question queue, disk free plus hourly spend, and the ledger tail, fitted to the Sessions tab, Ops strip and mobile /m view. Must reuse the SmartMemory status TUI data readers (sm_status.py, owner_queue.py), not write a second set. Open design question: how the Node server gets the Python readers' data (import/sidecar, shell out to --once, or poll sm_status.py --json).",
+  "status": "PLANNED",
+  "phase": "COMP-COCKPIT Wave 2: UX Journey Gaps (2026-06-10 sweep)",
+  "created": "2026-10-08",
+  "updated": "2026-10-08",
+  "complexity": "M",
+  "position": 8,
+  "parent": "COMP-COCKPIT"
+}
