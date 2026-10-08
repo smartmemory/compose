@@ -352,6 +352,7 @@ test('fix-r1 R1-2: a skipped file is unknown under every path spelling the disk 
       ['bundle.ts', 'unknown', 'oversize'], // bare basename
       ['lib/big.ts', 'unknown', 'grammar_unavailable'], // project-relative
       ['compose/lib/big.ts', 'unknown', 'grammar_unavailable'], // <project>/-prefixed and workspace-relative
+      ['compose/big.ts', 'unknown', 'grammar_unavailable'], // <project>/-prefixed bare basename (round 2)
       ['stratum/ts/src/policy/other.ts', 'existing', null], // a sibling file that was not skipped
     ];
     const text = cases.map(([name]) => `- \`${name}\``).join('\n') + '\n';
@@ -362,6 +363,12 @@ test('fix-r1 R1-2: a skipped file is unknown under every path spelling the disk 
       assert.equal(label[name].label, expected, name);
       if (reason) assert.match(label[name].hint, new RegExp(`^file skipped: ${reason}`), name);
     }
+    // One repo (no workspace root): the project spellings still reach the skip record.
+    const solo = buildModel([{ repo: repos[0], snapshot: snap({ repo: 'compose', files_skipped: 1, skipped_paths: [{ path: 'lib/big.ts', reason: 'grammar_unavailable' }] }) }]);
+    const soloNames = ['lib/big.ts', 'big.ts', 'compose/lib/big.ts', 'compose/big.ts'];
+    const soloResult = runRealityCheck({ text: soloNames.map((n) => `- \`${n}\``).join('\n'), projectRoot, model: solo, repos: [repos[0]], fileList: new Set() });
+    for (const n of soloResult.labels) assert.equal(n.label, 'unknown', `one repo: ${n.name}`);
+    assert.equal(soloResult.labels.length, soloNames.length);
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }

@@ -291,52 +291,61 @@ test('fix-r1 #7: docs and feature.json edits keep the fingerprint; source and ts
   assert.notEqual((await computeFingerprint(dir)).fingerprint, ts.fingerprint);
 });
 
-test('fix-r1 R1-1: every file the producer may read changes the key; only build prose and feature folders do not', async () => {
-  // Core follows a tsconfig `extends` chain to a file of any name, with or without .json (ts_resolve.py:153-166),
-  // so the filter is a deny-list of documents, not an allow-list of config names.
-  const base = {
-    'top.js': 'export const t = 1;\n',
-    'tsconfig.json': '{ "extends": "./config/base" }\n',
-    'config/base.json': '{}\n',
-    'config/shared': '{}\n',
-    '.gitignore': '*.log\ntsconfig.local.json\n',
-    'tsconfig.local.json': '{}\n',
+test('fix-r1 R1-1: every file core reads changes the key, however it is named; build prose and feature.json do not', async () => {
+  // Core follows a tsconfig `extends` chain to a file of any name and folder, even outside the indexed root
+  // (ts_resolve.py:153-166), so the chain is followed and hashed. The repo root here is a subdirectory (pkg/), the
+  // way stratum/ts is indexed. Chain: pkg/tsconfig.json -> config/shared(.json, JSONC) -> base.txt
+  // -> docs/features/CFG/base.json -> ../tsconfig.base.json (outside pkg/) -> local/override.json (gitignored dir).
+  const files = {
+    '.gitignore': '*.log\nlocal/\npkg/tsconfig.local.json\n',
+    'tsconfig.base.json': '{ "extends": "./local/override" }\n',
+    'local/override.json': '{}\n',
+    'pkg/top.js': 'export const t = 1;\n',
+    'pkg/tsconfig.json': '{ "extends": "./config/shared" }\n',
+    'pkg/tsconfig.local.json': '{}\n',
+    'pkg/config/shared.json': '{\n  // JSONC, as core accepts\n  "extends": "./base.txt",\n}\n',
+    'pkg/config/base.txt': '{ "extends": "../docs/features/CFG/base.json" }\n',
+    'pkg/docs/features/CFG/base.json': '{ "extends": "../../../../tsconfig.base.json" }\n',
+    'pkg/features/FX/feature.json': '{ "status": "PLANNED" }\n',
   };
+  const edit = (path) => (r) => writeFileSync(join(r, path), `${readFileSync(join(r, path), 'utf8').trimEnd()} \n\n`);
   const cases = [
-    // [what, mutate(root), git: key changes?, non-git: key changes?]
-    ['edit a tracked extends target with another name', (r) => writeFileSync(join(r, 'config/base.json'), '{"x":1}\n'), true, true],
-    ['edit a tracked extensionless extends target', (r) => writeFileSync(join(r, 'config/shared'), '{"x":1}\n'), true, true],
-    ['add an untracked extensionless config', (r) => writeFileSync(join(r, 'config/other'), '{}\n'), true, true],
-    ['edit a gitignored tsconfig.local.json', (r) => writeFileSync(join(r, 'tsconfig.local.json'), '{"x":1}\n'), true, true],
-    ['edit tsconfig.json', (r) => writeFileSync(join(r, 'tsconfig.json'), '{ "extends": "./config/base.json" }\n'), true, true],
-    ['rename an extends target into docs', (r) => { mkdirSync(join(r, 'docs'), { recursive: true }); git(r, 'mv', 'config/base.json', 'docs/base.md'); }, true, true],
-    ['write a feature folder (plan.md, feature.json)', (r) => {
-      mkdirSync(join(r, 'docs', 'features', 'FX-1'), { recursive: true });
-      writeFileSync(join(r, 'docs', 'features', 'FX-1', 'plan.md'), '# plan\n');
-      writeFileSync(join(r, 'docs', 'features', 'FX-1', 'feature.json'), '{}\n');
-    }, false, false],
-    ['write a design doc', (r) => { mkdirSync(join(r, 'docs'), { recursive: true }); writeFileSync(join(r, 'docs', 'design.md'), '# d\n'); }, false, false],
-    ['write a gitignored log', (r) => writeFileSync(join(r, 'run.log'), 'x\n'), false, true],
+    // [what, mutate(repo dir), key changes (git and no git); git-only cases are marked]
+    ['an extensionless extends spelling (config/shared -> .json)', edit('pkg/config/shared.json'), true],
+    ['a .txt extends target', edit('pkg/config/base.txt'), true],
+    ['an extends target inside docs/features/', edit('pkg/docs/features/CFG/base.json'), true],
+    ['an extends target outside the indexed root', edit('tsconfig.base.json'), true],
+    ['an extends target inside a gitignored directory', edit('local/override.json'), true],
+    ['a gitignored tsconfig.local.json', edit('pkg/tsconfig.local.json'), true],
+    ['tsconfig.json itself', edit('pkg/tsconfig.json'), true],
+    ['source', edit('pkg/top.js'), true],
+    ['a feature folder (plan.md, feature.json)', (r) => {
+      mkdirSync(join(r, 'pkg', 'docs', 'features', 'FX-1'), { recursive: true });
+      writeFileSync(join(r, 'pkg', 'docs', 'features', 'FX-1', 'plan.md'), '# plan\n');
+      writeFileSync(join(r, 'pkg', 'docs', 'features', 'FX-1', 'feature.json'), '{}\n');
+    }, false],
+    ['a feature.json under a configured features path', edit('pkg/features/FX/feature.json'), false],
+    ['a design doc', (r) => writeFileSync(join(r, 'pkg', 'docs', 'design.md'), '# d\n'), false],
+    ['a log file', (r) => writeFileSync(join(r, 'pkg', 'run.log'), 'x\n'), false],
   ];
   for (const useGit of [true, false]) {
-    for (const [what, mutate, gitChanges, walkChanges] of cases) {
-      if (!useGit && what.startsWith('rename')) continue; // git mv needs a repo
-      const root = mkdtempSync(join(dir, 'fp-'));
-      for (const [path, body] of Object.entries(base)) {
-        mkdirSync(join(root, dirname(path)), { recursive: true });
-        writeFileSync(join(root, path), body);
+    for (const [what, mutate, changes] of cases) {
+      const repo = mkdtempSync(join(dir, 'fp-'));
+      for (const [path, body] of Object.entries(files)) {
+        mkdirSync(join(repo, dirname(path)), { recursive: true });
+        writeFileSync(join(repo, path), body);
       }
       if (useGit) {
-        git(root, 'init', '-q');
-        git(root, 'add', '.');
-        git(root, 'commit', '-qm', 'init');
+        git(repo, 'init', '-q');
+        git(repo, 'add', '.');
+        git(repo, 'commit', '-qm', 'init');
       }
+      const root = join(repo, 'pkg');
       const before = await computeFingerprint(root);
       assert.equal(before.git, useGit);
-      mutate(root);
+      mutate(repo);
       const after = await computeFingerprint(root);
-      const expected = useGit ? gitChanges : walkChanges;
-      assert.equal(after.fingerprint !== before.fingerprint, expected, `${useGit ? 'git' : 'no git'}: ${what}`);
+      assert.equal(after.fingerprint !== before.fingerprint, changes, `${useGit ? 'git' : 'no git'}: ${what}`);
     }
   }
 });
