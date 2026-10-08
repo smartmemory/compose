@@ -8,7 +8,7 @@
 - House-shape precedent: `COMP-COCKPIT-9` (thin server routes + a view tab) at `/Users/ruze/reg/my/forge/compose/docs/features/COMP-COCKPIT-9/`
 - Source TUI (read-only for this feature, never edited from here): `/Users/ruze/reg/my/SmartMemory/scratch/2026-10-08-status-tui/`
   - `sm_status.py`, `owner_queue.py`, `scan_readonly.py`, `brief.md` (data sources), `README.md`, `report.md`
-- Install target for the TUI after Codex review: `~/.claude/scripts/` (not installed as of 2026-10-08: `~/.claude/scripts/sm_status.py` does not exist)
+- Installed 2026-10-08 13:50 at `~/.claude/scripts/` (`sm_status.py`, `owner_queue.py`, `scan_readonly.py`; confirmed by sm-coord). `python3 ~/.claude/scripts/sm_status.py --json` verified: exit 0, all six sources (sessions, jobs, queue, df, spend, ledger) `error: null`. Output is strict JSON (NaN/Infinity become null with an error). To stop it, send SIGTERM before killing the process group; it reaps its own fetch processes on SIGTERM/SIGHUP.
 
 ## Problem
 The owner watches many Claude Code sessions at once. Today that view exists only as a terminal TUI (`sm_status.py`). The cockpit has a Sessions tab, an Ops strip and a mobile `/m` view, but none of them show multi-session health, the owner question queue, disk and spend, or the ledger. The owner cannot check it from a phone or from the cockpit.
@@ -70,7 +70,7 @@ The Compose server is Node. The readers are Python in the SmartMemory scratch fo
 - [ ] Polling pauses while the tab is hidden
 - [ ] Tests: route with fixture JSON, stale cache, spawn failure, timeout; UI tests for Fleet view, pills and mobile tab (real route, per `testing.md`, no mocked reader seam)
 - [ ] `docs/cockpit.md` Zones and Ops Strip sections updated; CHANGELOG entry in the same commit
-- [ ] TUI install to `~/.claude/scripts/` (with `owner_queue.py` and `scan_readonly.py` together) confirmed before this ships
+- [x] TUI install to `~/.claude/scripts/` (with `owner_queue.py` and `scan_readonly.py` together) confirmed before this ships (2026-10-08)
 
 ## Status
 PLANNED. Falsifier for "not built": `ls /Users/ruze/reg/my/forge/compose/server | grep -i fleet` returns nothing and `feature.json` status is PLANNED.
