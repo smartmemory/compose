@@ -15,10 +15,13 @@ test('workflow parses as valid YAML', () => {
   assert.equal(wf.name, 'Publish compose-mcp');
 });
 
-test('workflow trigger pattern is compose-mcp-v*', () => {
-  // YAML "on" key is parsed as the boolean `true`; tolerate both
+test('workflow is manual-only (workflow_dispatch), no tag or push trigger', () => {
+  // Owner decision 2026-10-09: Actions lockdown. Publishing is a manual dispatch,
+  // never a `compose-mcp-v*` tag push. YAML "on" key is parsed as the boolean
+  // `true`; tolerate both.
   const on = wf.on ?? wf[true];
-  assert.deepEqual(on.push.tags, ['compose-mcp-v*']);
+  assert.ok('workflow_dispatch' in on, 'must be dispatchable by hand');
+  assert.deepEqual(Object.keys(on), ['workflow_dispatch'], 'must have no push/tag/pull_request trigger');
 });
 
 test('workflow references both required secrets', () => {
