@@ -5,11 +5,21 @@ on:
     branches: [main, develop]
   pull_request:
 
+# Read-only GITHUB_TOKEN, one run per ref (ACTIONS-LOCKDOWN-1).
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
