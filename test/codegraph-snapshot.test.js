@@ -20,7 +20,7 @@ import {
   bundleArgv, cliBundleArgs, prebuildSnapshots, specUsesCodegraph,
 } from '../lib/codegraph/snapshot.js';
 import { resetAvailabilityCache } from '../lib/codegraph/availability.js';
-import { digestMembers, worktreeState } from '../lib/codegraph/cache-validity.js';
+import { deriveStateFilter, digestMembers, membersDigest, worktreeState } from '../lib/codegraph/cache-validity.js';
 import { acquireDirLock } from '../lib/dir-lock.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -245,7 +245,7 @@ test('a stat-keyed file changed moments ago is racy: such a state is never cache
   assert.ok(warnings.some((w) => /1 file\(s\) changed within 3 s of the run, too recently for their stat keys to be trusted; using it once/.test(w)), warnings.join('\n'));
 });
 
-test('.compose edits keep the worktree state; docs edits change it (accepted over-invalidation)', async () => {
+test('.compose edits keep the worktree state; without a filter docs edits change it (fail-closed)', async () => {
   initRepo();
   const base = await worktreeState(dir);
   mkdirSync(join(dir, '.compose', 'codegraph', 'x'), { recursive: true });
@@ -838,4 +838,116 @@ test('fix-r1 #5: the producer takes the contract argv (positional path, --fields
   assert.deepEqual(bundleArgv({ root: '/r', repo: 'r', out: '/o', exclude: ['.compose'] }).filter((a) => a === '.compose'), ['.compose'], 'deduped');
   assert.deepEqual(cliBundleArgs({ root: '/r', repo: 'compose', out: '/o.json' }).slice(0, 3), ['code', 'bundle', '/r']);
   assert.ok(!argv.includes('--slim') && !argv.includes('--repo-root'));
+});
+
+// ---- the cache key covers only what the snapshot says core reads (plan_gate prebuild hits) ----
+
+/** A repo with TypeScript sources, configs a snapshot depends on, and docs; committed. */
+function initSourceRepo() {
+  initRepo();
+  mkdirSync(join(dir, 'src'), { recursive: true });
+  writeFileSync(join(dir, 'src', 'x.ts'), 'export const x = 1;\n');
+  writeFileSync(join(dir, 'tsconfig.json'), '{"compilerOptions":{}}\n');
+  writeFileSync(join(dir, 'package.json'), '{"name":"t"}\n');
+  writeFileSync(join(dir, 'README.md'), '# t\n');
+  git(dir, 'add', '.');
+  git(dir, 'commit', '-qm', 'sources');
+}
+
+/** What core records for this repo: one source walk (.js/.ts) plus the two configs as content dependencies. */
+function sourceDeps(root) {
+  const glob = {
+    kind: 'glob', path: '.', pattern: '**/*', exclude_dirs: ['.git', '.compose', 'node_modules'],
+    exclude_unless_package: [], source_suffixes: ['.js', '.ts'],
+  };
+  glob.members_sha256 = membersDigest(glob, root);
+  const content = (path) => ({ kind: 'content', path, sha256: createHash('sha256').update(readFileSync(join(root, path))).digest('hex') });
+  return [glob, content('tsconfig.json'), content('package.json')];
+}
+
+async function sourceCase() {
+  initSourceRepo();
+  const repo = resolveRepos(dir)[0];
+  const calls = [];
+  const producer = fixtureProducer(calls, () => sourceDeps(repo.root));
+  const run = () => ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer });
+  const first = await run();
+  assert.equal(first.cached, false);
+  assert.equal(first.timing.stored, true, warnings.join('\n'));
+  assert.equal((await run()).cached, true, 'an untouched tree is a hit');
+  return { run, calls, repo };
+}
+
+test('filter 1: a build writing docs/features/X/plan.md and editing README.md is still a cache hit (plan_gate prebuild)', async () => {
+  const { run, calls } = await sourceCase();
+  mkdirSync(join(dir, 'docs', 'features', 'X'), { recursive: true });
+  writeFileSync(join(dir, 'docs', 'features', 'X', 'design.md'), '# design\n');
+  writeFileSync(join(dir, 'docs', 'features', 'X', 'plan.md'), '# plan\n');
+  writeFileSync(join(dir, 'README.md'), '# t, edited\n');
+  assert.equal((await run()).cached, true);
+  assert.equal(calls.length, 1, 'the producer ran once');
+});
+
+test('filter 2: editing a tracked .ts file misses', async () => {
+  const { run, calls } = await sourceCase();
+  writeFileSync(join(dir, 'src', 'x.ts'), 'export const x = 2;\n');
+  assert.equal((await run()).cached, false);
+  assert.equal(calls.length, 2);
+});
+
+test('filter 3: a new untracked .ts file misses', async () => {
+  const { run } = await sourceCase();
+  writeFileSync(join(dir, 'src', 'new.ts'), 'export const n = 1;\n');
+  assert.equal((await run()).cached, false);
+});
+
+test('filter 4: editing a tsconfig.json or package.json the snapshot depends on misses', async () => {
+  for (const name of ['tsconfig.json', 'package.json']) {
+    const { run } = await sourceCase();
+    writeFileSync(join(dir, name), '{"edited":true}\n');
+    assert.equal((await run()).cached, false, name);
+    rmSync(dir, { recursive: true, force: true });
+    dir = mkdtempSync(join(tmpdir(), 'codegraph-snap-'));
+  }
+});
+
+test('filter 5: deleting a tracked .ts file misses', async () => {
+  const { run } = await sourceCase();
+  rmSync(join(dir, 'src', 'x.ts'));
+  assert.equal((await run()).cached, false);
+});
+
+test('filter 6: a snapshot with no glob entry keys every path (fail-closed): an .md edit misses', async () => {
+  initSourceRepo();
+  const repo = resolveRepos(dir)[0];
+  const producer = fixtureProducer([], () => []);
+  const run = () => ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer });
+  assert.equal((await run()).timing.stored, true, warnings.join('\n'));
+  assert.equal((await run()).cached, true);
+  writeFileSync(join(dir, 'README.md'), '# t, edited\n');
+  assert.equal((await run()).cached, false);
+});
+
+test('filter: the snapshot stores the suffixes and dependency paths it keyed with; a later read uses them', async () => {
+  const { run, repo } = await sourceCase();
+  const stored = JSON.parse(readFileSync(join(codegraphDir(dir), repo.name, readdirSync(join(codegraphDir(dir), repo.name)).find((f) => /^[0-9a-f]{64}\.json$/.test(f))), 'utf8'));
+  assert.deepEqual(stored.cache_key.filter.suffixes, ['.js', '.ts']);
+  assert.deepEqual(stored.cache_key.filter.deps, ['package.json', 'tsconfig.json']);
+  writeFileSync(join(dir, 'src', 'new.ts'), 'export const n = 1;\n');
+  assert.equal((await run()).cached, false);
+  rmSync(join(dir, 'src', 'new.ts'));
+  assert.equal((await run()).cached, true, 'removing the new source file is a hit again');
+});
+
+test('deriveStateFilter: suffix union, .py only when python is a language no glob declares, fail-closed otherwise', () => {
+  const glob = (suffixes) => ({ kind: 'glob', path: '.', exclude_dirs: [], source_suffixes: suffixes, members_sha256: 'x' });
+  const snap = (deps, languages) => ({ languages, source: { resolution_dependencies: deps } });
+  const content = { kind: 'content', path: 'sub/./tsconfig.json', sha256: 'y' };
+  assert.deepEqual(deriveStateFilter(snap([glob(['.ts']), glob(['.js']), content], ['typescript']), dir),
+    { suffixes: ['.js', '.ts'], deps: ['sub/tsconfig.json'] });
+  assert.deepEqual(deriveStateFilter(snap([glob(['.ts'])], ['python', 'typescript']), dir).suffixes, ['.py', '.ts']);
+  assert.deepEqual(deriveStateFilter(snap([glob(['.py', '.ts'])], ['python']), dir).suffixes, ['.py', '.ts']);
+  assert.equal(deriveStateFilter(snap([content], ['typescript']), dir), null, 'no glob entry');
+  assert.equal(deriveStateFilter(snap([{ kind: 'glob', path: '.', pattern: '*.json' }], []), dir), null, 'a glob with no suffixes');
+  assert.equal(deriveStateFilter({ languages: [], source: {} }, dir), null);
 });
