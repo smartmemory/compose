@@ -47,4 +47,4 @@ Discovery: published as `io.github.smartmemory/compose-mcp` on the [official MCP
 
 ## License
 
-Business Source License 1.1, same as the compose root, licensed by Regression Analytics LLC. Free for non-production use, and for production use by organizations with USD 250,000 or less in annual revenue. Larger organizations need a commercial license: help@smartmemory.ai. Each version converts to Apache 2.0 four years after its release.
+Business Source License 1.1, same as the compose root, licensed by Regression Analytics LLC. Free for non-production use, and for production use by organizations with USD 1,000,000 or less in annual revenue. Larger organizations need a commercial license: help@smartmemory.ai. Each version converts to Apache 2.0 four years after its release.
