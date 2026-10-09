@@ -136,6 +136,21 @@ test('worktree state covers ignored files (also inside ignored dirs) and files g
   assert.notEqual((await worktreeState(dir)).hash, four.hash, 'an assume-unchanged file is content-keyed');
 });
 
+test('r2-1: no file name can forge a state record (names with a newline and `=`)', async () => {
+  initRepo();
+  const text = 'x = 1\n';
+  const h = sha256(text);
+  // Two untracked files with the same content, versus ONE file whose name holds the other's record.
+  writeFileSync(join(dir, 'x.py'), text);
+  writeFileSync(join(dir, 'y.py'), text);
+  const two = await worktreeState(dir);
+  rmSync(join(dir, 'x.py'));
+  rmSync(join(dir, 'y.py'));
+  writeFileSync(join(dir, `x.py=${h}\n?? y.py`), text);
+  const one = await worktreeState(dir);
+  assert.notEqual(one.hash, two.hash);
+});
+
 /** Rewrite a file at the same size and put its mtime back, so only content (and ctime) differ. */
 function sameSizeEdit(path, from, to) {
   const { atime, mtime } = statSync(path);
@@ -269,6 +284,22 @@ test('concurrent ensureSnapshot calls run the producer once; the next call is a 
   assert.equal(calls[0].startsWith(repoDir), true, 'raw bundle is written inside the repo cache dir');
 });
 
+test('r2-6: a caller joining a run in flight gets its own repo (prefix), not the first caller\'s', async () => {
+  initRepo();
+  const repo = resolveRepos(dir)[0];
+  const calls = [];
+  const producer = fixtureProducer(calls);
+  const other = { ...repo, prefix: 'elsewhere/' };
+  const [a, b] = await Promise.all([
+    ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer }),
+    ensureSnapshot({ projectRoot: dir, repo: other, availability: AVAILABLE, producer }),
+  ]);
+  assert.equal(calls.length, 1, 'the prefix is not part of the run');
+  assert.equal(b.joined, true);
+  assert.equal(a.repo, repo);
+  assert.equal(b.repo, other);
+});
+
 test('an edit under the root re-produces; reverting it is a cache hit again', async () => {
   initRepo();
   const repo = resolveRepos(dir)[0];
@@ -310,6 +341,25 @@ test('everything besides the tree that changes the output re-produces; the parse
     'policy values are hashed, not stored');
 });
 
+test('r2-2: a parser package installed beside the same CLI re-produces (the runtime is in the cache salt)', async () => {
+  initRepo();
+  const repo = resolveRepos(dir)[0];
+  const site = join(outside, 'venv', 'lib', 'python3.12', 'site-packages');
+  mkdirSync(site, { recursive: true });
+  mkdirSync(join(outside, 'venv', 'bin'));
+  symlinkSync('/bin/sh', join(outside, 'venv', 'bin', 'python3'));
+  const cli = join(outside, 'smartmemory');
+  writeFileSync(cli, `#!${join(outside, 'venv', 'bin', 'python3')}\nexit 0\n`);
+  chmodSync(cli, 0o755);
+  const calls = [];
+  const run = () => ensureSnapshot({ projectRoot: dir, repo, availability: { ...AVAILABLE, command: cli }, producer: fixtureProducer(calls) });
+  assert.equal((await run()).timing.stored, true);
+  assert.equal((await run()).cached, true);
+  mkdirSync(join(site, 'tree_sitter_typescript-0.23.2.dist-info'));
+  assert.equal((await run()).cached, false);
+  assert.equal(calls.length, 2);
+});
+
 test('a caller that waited for the lock re-reads the tree: a snapshot published meanwhile for the old tree is not served', async () => {
   initRepo();
   const repo = resolveRepos(dir)[0];
@@ -340,7 +390,8 @@ test('(c): a resolution dependency outside the root invalidates the cache when i
   ];
   const calls = [];
   const producer = fixtureProducer(calls, deps);
-  const run = () => ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer });
+  // racyWindowMs 0: the outside files were written just before; only a change during the run is distrusted.
+  const run = () => ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer, racyWindowMs: 0 });
 
   assert.equal((await run()).timing.stored, true);
   assert.equal((await run()).cached, true);
@@ -351,6 +402,44 @@ test('(c): a resolution dependency outside the root invalidates the cache when i
   assert.equal((await run()).cached, false, 'a path that did not exist appeared');
   assert.equal((await run()).cached, true);
   assert.equal(calls.length, 3);
+});
+
+test('r2-4: an outside dependency changed while the producer ran is not cached (core hashes it after parsing)', async (t) => {
+  initRepo();
+  const repo = resolveRepos(dir)[0];
+  const config = join(outside, 'tsconfig.base.json');
+  writeFileSync(config, '{"compilerOptions":{}}\n');
+  mkdirSync(join(dir, '.compose', 'shared'), { recursive: true });
+  const composeDep = join(dir, '.compose', 'shared', 'paths.json');
+  writeFileSync(composeDep, '{}\n');
+  const old = new Date(Date.now() - 60000);
+  for (const p of [config, composeDep]) utimesSync(p, old, old);
+  const content = (path) => ({ kind: 'content', path, sha256: sha256(readFileSync(path)) });
+  // Each row: what the producer does mid-run, then the dependency it records (state read after the change).
+  const rows = [
+    ['an outside content file rewritten', () => writeFileSync(config, '{"compilerOptions":{"x":1}}\n'), () => [content(config)]],
+    ['an outside path created (recorded exists:true)', () => writeFileSync(join(outside, 'new.ts'), 'export {}\n'),
+      () => [{ kind: 'exists', path: join(outside, 'new.ts'), exists: true }]],
+    ['a .compose dependency rewritten ((b) leaves .compose out)', () => writeFileSync(composeDep, '{"a":1}\n'), () => [content(composeDep)]],
+  ];
+  for (const [name, change, deps] of rows) {
+    await t.test(name, async () => {
+      warnings.length = 0;
+      const producer = async ({ out }) => {
+        change();
+        writeFileSync(out, JSON.stringify(bundleFor(repo, deps())));
+      };
+      const result = await ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer, racyWindowMs: 0 });
+      assert.equal(result.timing.stored, false, name);
+      assert.ok(warnings.some((w) => /changed while the producer ran/.test(w)), warnings.join('\n'));
+    });
+  }
+  // Control: the same dependencies untouched during the run are cached.
+  const still = await ensureSnapshot({
+    projectRoot: dir, repo, availability: AVAILABLE, racyWindowMs: 0,
+    producer: async ({ out }) => writeFileSync(out, JSON.stringify(bundleFor(repo, [content(config), content(composeDep)]))),
+  });
+  assert.equal(still.timing.stored, true);
 });
 
 test('(c): a listing outside the checkout is unverifiable (core records no digest for it), so never cached', async () => {

@@ -106,6 +106,30 @@ test('core gives no digest for a missing base, a base outside the checkout, or a
     assert.equal(checkResolutionDependencies({ resolution_dependencies: [{ ...listing, members_sha256: inside }] }, root).ok, false);
     // A pattern glob walks through a directory link into another tree.
     assert.throws(() => membersDigest({ kind: 'glob', path: '.', pattern: 'via/*' }, root), /resolves outside the checkout/);
+
+    // r2-3: links that emit no member still make core's digest null when they lead outside.
+    mkdirSync(join(away, 'empty'));
+    writeFileSync(join(away, 'notes.txt'), 'x\n');
+    const tree = join(root, 'tree');
+    mkdirSync(join(tree, 'node_modules'), { recursive: true });
+    writeFileSync(join(tree, 'm.ts'), 'export {};\n');
+    const walkTree = { kind: 'glob', path: 'tree', pattern: '**/*', exclude_dirs: ['node_modules'], source_suffixes: ['.ts'] };
+    symlinkSync(join(away, 'pkg'), join(tree, 'node_modules', 'pkg')); // inside a pruned dir: core never looks
+    const verifiable = membersDigest(walkTree, root);
+    assert.equal(typeof verifiable, 'string');
+    const nullCases = [
+      ['a walk meets an outward directory link it does not follow', join(away, 'pkg'), join(tree, 'ext')],
+      ['a walk meets an outward link to a non-source file', join(away, 'notes.txt'), join(tree, 'notes.txt')],
+    ];
+    for (const [name, target, link] of nullCases) {
+      symlinkSync(target, link);
+      assert.throws(() => membersDigest(walkTree, root), /resolves outside the checkout/, name);
+      rmSync(link);
+      assert.equal(membersDigest(walkTree, root), verifiable, `${name}: removed again`);
+    }
+    // A pattern whose middle segment is an outward link: no final match, still null in core.
+    symlinkSync(join(away, 'empty'), join(root, 'mid'));
+    assert.throws(() => membersDigest({ kind: 'glob', path: '.', pattern: 'mid/*.ts' }, root), /resolves outside the checkout/);
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
