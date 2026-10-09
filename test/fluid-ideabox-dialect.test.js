@@ -64,7 +64,8 @@ describe('COMP-IDEABOX-MIGRATE-DIALECT — the legacy flat dialect', () => {
 
   it('does NOT change how a new-dialect ideabox parses', () => {
     const parsed = parseIdeabox(NESTED);
-    const headingCount = (NESTED.match(/^#### IDEA-/gm) || []).length;
+    // Killed ideas sit under `## Killed Ideas` and the parser skips that section.
+    const headingCount = (NESTED.split(/^## Killed Ideas/m)[0].match(/^#### IDEA-/gm) || []).length;
     assert.equal(parsed.ideas.length, headingCount, 'every #### IDEA- heading must be read as an idea');
     assert.ok(parsed.clusters.length >= 7, 'umbrellas still captured');
     assert.ok(parsed.ideas.every((i) => i.cluster), 'nested ideas keep their umbrella');

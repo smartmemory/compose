@@ -194,10 +194,10 @@ describe('resolveAgentConfig — modelID', () => {
     assert.strictEqual(cfg.effort, tier('claude', 'critical').effort);
   });
 
-  test('"claude::fast" → thinking=disabled + effort=null', () => {
+  test('"claude::fast" → thinking and effort follow the catalog tier', () => {
     const cfg = resolveAgentConfig('claude::fast');
     assert.deepStrictEqual(cfg.thinking, { type: tier('claude', 'fast').mode === 'adaptive' ? 'adaptive' : 'disabled' });
-    assert.strictEqual(cfg.effort, null);
+    assert.strictEqual(cfg.effort, tier('claude', 'fast').effort ?? null);
   });
 
   test('"claude" (no tier) → thinking=null + effort=null', () => {
