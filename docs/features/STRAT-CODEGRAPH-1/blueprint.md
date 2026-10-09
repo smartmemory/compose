@@ -9,6 +9,9 @@
 - Bundle contract (pending): SmartMemory CODE-BUNDLE-CLI-1, `smart-memory-docs/docs/features/CODE-BUNDLE-CLI-1/` (absent on 2026-10-08). Today's bundle fields: `smart-memory-docs/docs/features/CODE-INGEST-SURFACES-1/code-contract.json`.
 
 ## Facts measured before design (2026-10-08)
+
+**Switch-over 2026-10-09:** SmartMemory 1.5.26 ships `smartmemory code bundle` (CODE-BUNDLE-CLI-1). The fallback producer and the JS copy of core's read rules are gone; the sections below marked (switch-over) describe the current shape, and the facts in this section are kept as measured history.
+
 - **No released smartmemory can produce a bundle.** PyPI `smartmemory-core` 1.5.23 has no `CodeIndexer.parse` / `prepare_bundle` and no `qualified_name` field (probed in a scratch venv). The miniconda install here is 1.4.103 (same). Core main 9ad526cb has both (`smartmemory/code/indexer.py:247` `parse`, `:482` `prepare_bundle`). Live runs used a `git archive` of core 9ad526cb installed into a scratch venv.
 - **tree-sitter grammars are a dev-only dependency of core** (`pyproject.toml:192-194`, under the dev extra). A plain install parses Python only and silently skips JS/TS. Availability must check the grammars.
 - **`prepare_bundle` refuses forge's stratum/ts** with "Code bundle exceeds MAX_REQUEST_BODY_BYTES=67108864" and zero failed files. The 64 MiB cap is the hosted upload limit and does not apply to a local snapshot, so the fallback calls `parse()` and repeats `prepare_bundle`'s other checks (failed files, path escape, relation endpoint filter).
@@ -26,9 +29,9 @@
 ## Architecture
 
 ```
-availability.js ──► snapshot.js ──► normalizeBundle() ──► .compose/codegraph/<repo>/<fingerprint>.json
-   (python, SM,        (fingerprint,     (ONE envelope                (normalized model,
-    grammars,           single-flight,    parser)                      model_version 2)
+availability.js ──► snapshot.js ──► normalizeBundle() ──► .compose/codegraph/<repo>/<key>.json
+   (smartmemory CLI    (cache-validity,  (ONE envelope                (normalized model,
+    >= 1.5.26,          single-flight,    parser)                      model_version 3)
     warn once)          spawn, timing)
                                   │
                                   ▼
@@ -36,42 +39,41 @@ availability.js ──► snapshot.js ──► normalizeBundle() ──► .com
                                          └►  prior-art.js      ──► build.js explore_design prompt
 ```
 
-- **Producer order:** `smartmemory code bundle` when `smartmemory code bundle --help` exits 0, else `python -I lib/codegraph/bundle_fallback.py`. Both producers take the same argv, `<path> --repo <name> [--exclude <dir> …] --out <file> --allow-partial --fields minimal` (CODE-BUNDLE-CLI-1 design.md), built by `bundleArgv()` in `snapshot.js` (`cliBundleArgs()` prefixes `code bundle`), next to `normalizeBundle`, so a contract change is a one-file edit. Every fallback-produced snapshot prints a WARNING with the reason the CLI was not used (fix round 1).
+- **Producer (switch-over):** the `smartmemory code bundle` CLI only, >= 1.5.26. It takes the argv `<path> --repo <name> [--exclude <dir> …] --out <file> --allow-partial --fields minimal` (CODE-BUNDLE-CLI-1 design.md), built by `bundleArgv()` in `snapshot.js` (`cliBundleArgs()` prefixes `code bundle`), next to `normalizeBundle`, so a contract change is a one-file edit. `--exclude .compose` is always added (the cache lives there). The CLI's stderr goes to `<repo dir>/producer.log` and the console gets one summary line per run (exit code, WARNING count, the `[code:bundle]` totals, the log path, any ERROR lines).
 - **Envelope parsing lives only in `normalizeBundle`** (`snapshot.js`). It accepts `schema_version "1"` and throws `BundleFormatError` on anything else. It projects the brief's entity/relation field list into the internal model. Nothing else in Compose reads a bundle.
 - **The cache holds the normalized model, not the raw bundle** (77-248 MB raw, see above). The raw bundle is written to a temp file inside the repo's cache dir, normalized, and deleted.
 - **SmartMemory's parse cache** is pointed at `.compose/codegraph/<repo>/parse-cache` (`SMARTMEMORY_CODE_CHECKPOINT_DIR`) unless the user already set it. That keeps all state under `.compose/codegraph/` and makes a re-index re-parse only changed files (the warm column above).
-- **Warn-only everywhere.** Without Python + a capable smartmemory, every entry point returns a skip result after one warn line per process (owner decision 2026-10-05, same pattern as `lib/judgment-gen.js:47`). No entry point throws into the build. Errors become warnings.
+- **Warn-only everywhere.** Without a capable `smartmemory` CLI, every entry point returns a skip result after one warn line per process (owner decision 2026-10-05, same pattern as `lib/judgment-gen.js:47`). No entry point throws into the build. Errors become warnings.
 
 ## Repos and paths
-- Config: `.compose/compose.json` → `codegraph: { enabled, python, timeoutMs, repos: [{ name, root, prefix, exclude[] }] }`. Default when absent: one repo, `name = basename(projectRoot)`, `root = projectRoot`, `prefix = ''`.
+- Config: `.compose/compose.json` → `codegraph: { enabled, smartmemory, timeoutMs, repos: [{ name, root, prefix, exclude[] }] }`. Default when absent: one repo, `name = basename(projectRoot)`, `root = projectRoot`, `prefix = ''`.
 - Forge needs two repos (compose root and `../stratum/ts`, explicit names `compose` and `stratum`). Cross-repo edges (compose → `@smartmemory/stratum`) do not resolve, which is accepted.
 - `prefix` maps a repo-relative `file_path` to a display path relative to the project root (e.g. `../stratum/ts/`). Reality-check path lookups and every `file:line` shown use display paths.
 
-## Fingerprint
-`sha256(salt, tree, status records)` per repo root:
-- `tree` = `git rev-parse HEAD:./` run in the repo root, i.e. the tree hash of that subdirectory. A stratum commit that does not touch `ts/` keeps the cache.
-- `status` = `git status --porcelain=v1 -z --untracked-files=all --ignored=traditional -- .`; every listed path is hashed with its size and mtime. Porcelain alone does not change when an already-modified file is edited again, so the stat is part of the key.
-  - Ignored source files are included, because SmartMemory's collector does not read `.gitignore`. Ignored directories (collapsed `dir/`) are skipped.
-  - Paths under `.compose/` are skipped, because the cache itself lives there.
-- `salt` = producer mode, Python path, smartmemory version, TS-grammar presence, repo name and excludes.
-- The fingerprint is re-computed after the producer finishes. If it moved, the output is used once and not cached.
+## Cache validity (switch-over; `lib/codegraph/cache-validity.js`)
+Compose does not copy core's read rules. A cached snapshot is valid only while all of these hold; anything Compose cannot verify makes it invalid (over-invalidation accepted, under-invalidation not):
+- **(a) HEAD.** `git rev-parse HEAD` of the indexed root equals the snapshot's `source.head`. Any commit misses, including a stratum commit outside `ts/` (accepted).
+- **(b) Working-tree state.** A hash over every path `git status --porcelain=v1 -z --untracked-files=all --ignored=traditional -- .` lists under the root: non-ignored paths keyed by content sha256, ignored (`!!`) paths by stat (core does not read `.gitignore`, so ignored files are indexed), collapsed `dir/` entries (nested repos) by a stat walk. Assume-unchanged and skip-worktree files (`git ls-files -v`) are content-keyed too, because `git status` never lists them. Paths with a `.compose` segment below the root are left out, because the producer always runs with `--exclude .compose`. Not a git checkout: a stat walk of every file, skipping `.git` and `.compose`.
+- **(c) Resolution dependencies.** Every `source.resolution_dependencies` entry core recorded still holds: `exists` (followed stat), `content` (sha256), `listing` / `glob` (`members_sha256` recomputed by the CODE-BUNDLE-CLI-1 design.md recipe, Python 3.12 semantics). A null `members_sha256`, an unknown kind, a `**` / `..` / absolute glob pattern, or a kept symlink resolving outside the checkout is invalid.
+- **Key.** The file name is `sha256(salt, git, head, worktree hash)`; the stored `cache_key` is re-checked on read, then (c) runs. `salt` = model version, CLI path, CLI version, repo name, excludes.
+- **Store rule.** A produced snapshot is cached only if (a)+(b) are the same before and after the run, the producer's `source.head` equals HEAD, and (c) holds. Otherwise it is used once and not cached (one `unstable:<repo>` warning).
   - Residual risk: an edit reverted to the exact pre-run state while the producer ran goes undetected.
-- Not a git checkout: hash of (path, size, mtime) for source files under the root, skipping `node_modules`, `.git`, `.compose`, `dist`.
+- **Known over-invalidation.** The design.md and plan.md a build writes before plan_gate change (b), so a prebuild that already finished misses at plan_gate (one still running is joined). A repo whose snapshot carries a null listing digest (core emits one for a missing directory) never caches.
 
 ## Components
 
 ### `lib/codegraph/availability.js` (new)
-- `detectCodegraph({ cwd, env }) → Promise<{ available, mode: 'cli'|'fallback'|null, python, version, typescriptGrammar, reason, warnings[] }>`; memoized per (cwd, python).
-- Python = `env.COMPOSE_CODEGRAPH_PYTHON` ?? config `codegraph.python` ?? `python3`.
-- Probe: `python -I bundle_fallback.py --probe` (JSON). Available when `smartmemory && store_free_parse`. `typescriptGrammar=false` stays available with a warning.
-- Disabled by `codegraph.enabled === false` or `COMPOSE_CODEGRAPH=0`.
+- `detectCodegraph({ cwd, env }) → Promise<{ available, mode: 'cli'|null, command, version, reason, warnings[] }>`; memoized per (cwd, CLI choice, switches). (switch-over)
+- CLI = config `codegraph.smartmemory` ?? `env.COMPOSE_CODEGRAPH_SMARTMEMORY` ?? `smartmemory` on PATH (`locateCli`). A value with a `/` is a path relative to the project root.
+- Probe: `<cli> --version` must parse and be >= 1.5.26 (1.5.25 is refused by name: known segfault on TypeScript repos), then `<cli> code bundle --help` must exit 0.
+- Disabled by `codegraph.enabled === false` or `COMPOSE_CODEGRAPH=0`, and under `NODE_ENV=test` unless `COMPOSE_CODEGRAPH=1`.
 - `warnOnce(key, message)` prints `[codegraph] …` once per process.
 - `resetAvailabilityCache()` is the test seam.
 
 ### `lib/codegraph/snapshot.js` (new)
-- `resolveRepos(projectRoot)`, `computeFingerprint(root)`, `normalizeBundle(raw)`, `bundleArgv({ root, repo, out, exclude })`, `cliBundleArgs(…)`, `ensureSnapshot({ projectRoot, repo, availability, timeoutMs, producer? })`, `loadSnapshots({ projectRoot, … })`.
+- `resolveRepos(projectRoot)`, `normalizeBundle(raw)`, `spawnProducer(…)`, `bundleArgv({ root, repo, out, exclude })`, `cliBundleArgs(…)`, `ensureSnapshot({ projectRoot, repo, availability, timeoutMs, producer? })`, `loadSnapshots({ projectRoot, … })`.
 - Single flight: an in-process `Map<cacheDir, Promise>`, plus a cross-process `acquireDirLock(<repo dir>/.lock, { timeoutMs })` (`lib/dir-lock.js:84`). The cache is re-checked after the lock is taken.
-- Timing goes to `<repo dir>/timings.jsonl` as `{ ts, fingerprint, cached, mode, fingerprintMs, bundleMs, normalizeMs, totalMs, entities, relations, complete }`. Only the newest 3 snapshot files are kept.
+- Timing goes to `<repo dir>/timings.jsonl` as `{ ts, fingerprint, cached, stored, mode, keyMs, depsMs, bundleMs, normalizeMs, totalMs, notStored?, entities, relations, complete }` (`keyMs` = (a)+(b), `depsMs` = (c)). Only the newest 3 snapshot files are kept.
 - Child output is capped (last 8 KB of stderr kept). Timeout from config (default 300 s).
 
 ### `lib/codegraph/model.js` (new)
@@ -109,15 +111,8 @@ availability.js ──► snapshot.js ──► normalizeBundle() ──► .com
   - Each match comes back as `file:line`, name, entity_type and the matched terms.
 - `priorArtForDesign({ cwd, featureCode, description })` records `.compose/codegraph/prior-art/<featureCode>.json` and returns a markdown block, or `{ skipped }`. It never throws.
 
-### `lib/codegraph/bundle_fallback.py` (new)
-- `--probe` prints the capability JSON.
-- A build writes the agreed envelope to `--out`:
-  - `schema_version "1"`, `languages`, `generator {smartmemory_version, core_sha, producer, slim}`
-  - `source {head, dirty, fingerprint, commit_hash, repo_identity}`, `complete`, `failed_paths`
-  - the hosted bundle fields `repo, entities[] (with item_id), relations[], commit_hash, parse_summary`
-- Fingerprint = HEAD + dirty flag + a hash of `git status --porcelain`.
-- `--fields minimal` keeps exactly the fields Compose reads, under their contract names, and drops clean `parse_diagnostic` (was `--slim` before fix round 1). Every relation and call/test evidence record carries `edge_state` (resolved | ambiguous | unresolved | unsupported), stamped before slimming; the envelope carries `files_skipped`, `skipped_paths` and `budget_exhausted` (snapshot amendment).
-- Other flags: `--exclude` (additive to SM defaults) and `--allow-partial`. SM's per-call WARNING lines are silenced unless `--verbose` (10 MB of stderr on compose otherwise).
+### `lib/codegraph/bundle_fallback.py` (REMOVED 2026-10-09, switch-over)
+- The Python producer that imported SmartMemory's indexer until CODE-BUNDLE-CLI-1 shipped. Deleted with its probe, spawn path and tests; the CLI (>= 1.5.26) is the only producer. Its envelope shape is now the CLI's (`bundle-contract.json`); `edge_state` is read from `relation.properties.edge_state`.
 
 ## Build-pipeline hooks (`lib/build.js`, existing)
 - **plan_gate:** after `const gateExtras = {…}` (`lib/build.js:6192`), when `stepId === 'plan_gate'`:
@@ -133,16 +128,19 @@ availability.js ──► snapshot.js ──► normalizeBundle() ──► .com
 | File | Action | Purpose |
 |---|---|---|
 | `lib/codegraph/availability.js` | new | detection, memo, warn once |
-| `lib/codegraph/snapshot.js` | new | fingerprint, single-flight producer spawn, `normalizeBundle`, cache, timing |
+| `lib/codegraph/snapshot.js` | new | single-flight producer spawn, `normalizeBundle`, cache, timing |
+| `lib/codegraph/cache-validity.js` | new (switch-over) | (a) HEAD, (b) working-tree state, (c) resolution dependencies incl. the members_sha256 recipe |
 | `lib/codegraph/model.js` | new | indexes and callers |
 | `lib/codegraph/reality-check.js` | new | name extraction, labels, boundary map, plan-gate entry |
 | `lib/codegraph/prior-art.js` | new | concept match, design entry |
-| `lib/codegraph/bundle_fallback.py` | new | Python producer until CODE-BUNDLE-CLI-1 |
+| `lib/codegraph/bundle_fallback.py` | removed (switch-over) | was the Python producer until CODE-BUNDLE-CLI-1 |
 | `lib/build.js` | edit | plan_gate and explore_design hooks |
 | `.gitignore` | edit | ignore `.compose/codegraph/` |
 | `test/codegraph-golden.test.js` | new | committed-fixture golden (callers vs ground truth, reality check, prior art, normalizeBundle) |
 | `test/codegraph-availability.test.js` | new | absent SM → warn-once no-ops |
 | `test/codegraph-live.test.js` | new | live producer on a temp tree; skips without SM |
+| `test/codegraph-snapshot.test.js` | new | cache validity through `ensureSnapshot`, single flight, producer log |
+| `test/codegraph-cache-validity.test.js` | new (switch-over) | members_sha256 recipe vs Python values and vs the live CLI |
 | `test/fixtures/codegraph/*.bundle.json.gz` | new | recorded slim bundles of the ground-truth files at the pinned SHAs |
 | `test/fixtures/codegraph/README.md` | new | provenance and re-record command |
 | `test/fixtures/codegraph/plan-fixture.md` | new | reality-check golden input |

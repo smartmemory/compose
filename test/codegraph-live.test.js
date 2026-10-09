@@ -1,6 +1,7 @@
-// STRAT-CODEGRAPH-1 live: the real producer (SmartMemory CLI or bundle_fallback.py) on a
-// small temp git tree. SKIPS when no capable SmartMemory is installed (point
-// COMPOSE_CODEGRAPH_PYTHON at a Python whose smartmemory has CodeIndexer.parse to run it).
+// STRAT-CODEGRAPH-1 live: the real producer (`smartmemory code bundle`, >= 1.5.26) on a small temp
+// git tree. SKIPS when no capable SmartMemory CLI is found (discovery: codegraph.smartmemory,
+// $COMPOSE_CODEGRAPH_SMARTMEMORY, then PATH). To run it against a specific install:
+//   COMPOSE_CODEGRAPH_SMARTMEMORY=/path/to/venv/bin/smartmemory node --test test/codegraph-live.test.js
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

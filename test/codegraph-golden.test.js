@@ -173,7 +173,7 @@ function tinyRaw(overrides = {}) {
   });
   const raw = {
     schema_version: '1', repo: 't', complete: true, relations: [
-      { source_id: 'code::t::lib/a.js::walk', target_id: 'code::t::lib/a.js::walk', relation_type: 'CALLS', edge_state: 'resolved', properties: { line: 3, callee: 'walk', resolution: 'name_only', confidence: 0.5, unresolved: false } },
+      { source_id: 'code::t::lib/a.js::walk', target_id: 'code::t::lib/a.js::walk', relation_type: 'CALLS', properties: { line: 3, callee: 'walk', resolution: 'name_only', confidence: 0.5, unresolved: false, edge_state: 'resolved' } },
     ],
     files_skipped: 0, skipped_paths: [], budget_exhausted: false,
     entities: [
@@ -181,7 +181,7 @@ function tinyRaw(overrides = {}) {
       entity('parse', 'lib/p.js', 10),
       entity('Widget', 'lib/w.js', 1, { entity_type: 'class' }),
       entity('saveThing', 'lib/s.js', 1),
-      entity('run', 'lib/r.js', 1, { call_evidence: [{ relation_type: 'CALLS', edge_state: 'unresolved', properties: { callee: 'api.saveThing(x)', line: 2, resolution: 'name_only', unresolved: true } }] }),
+      entity('run', 'lib/r.js', 1, { call_evidence: [{ relation_type: 'CALLS', properties: { callee: 'api.saveThing(x)', line: 2, resolution: 'name_only', unresolved: true, edge_state: 'unresolved' } }] }),
     ],
   };
   return { ...raw, ...overrides };
@@ -266,9 +266,12 @@ test('R2-2: two-letter PascalCase names are checked', () => {
 // ---- Fix round 1 (scratch/2026-10-08-codegraph/build/fix-r1-brief.md) ----
 
 test('fix-r1 #3: the recorded bundles carry edge_state and the model exposes it on callers', () => {
+  // 1.5.26 contract: properties.edge_state on every relation carrying resolution or candidates (CALLS, REFERENCES).
   for (const name of ['compose', 'stratum']) {
     const raw = rawBundle(name);
-    assert.ok(raw.relations.every((r) => ['resolved', 'ambiguous', 'unresolved', 'unsupported'].includes(r.edge_state)), name);
+    const resolving = raw.relations.filter((r) => 'resolution' in (r.properties ?? {}) || 'candidates' in (r.properties ?? {}));
+    assert.ok(resolving.length > 0, name);
+    assert.ok(resolving.every((r) => ['resolved', 'ambiguous'].includes(r.properties.edge_state)), name);
   }
   const { resolved } = model.callersOf('checkOrInsert');
   assert.ok(resolved.length > 0);
@@ -277,8 +280,8 @@ test('fix-r1 #3: the recorded bundles carry edge_state and the model exposes it 
 
 test('fix-r1 #3: callersOf decides by edge_state: ambiguous is labelled, unresolved and unsupported are not callers', () => {
   const edge = (from, state, extra = {}) => ({
-    source_id: `code::t::lib/${from}.js::${from}`, target_id: 'code::t::lib/p.js::parse', relation_type: 'CALLS', edge_state: state,
-    properties: { line: 2, callee: 'parse', resolution: 'name_only', confidence: 0.5, unresolved: false, ...extra },
+    source_id: `code::t::lib/${from}.js::${from}`, target_id: 'code::t::lib/p.js::parse', relation_type: 'CALLS',
+    properties: { line: 2, callee: 'parse', resolution: 'name_only', confidence: 0.5, unresolved: false, edge_state: state, ...extra },
   });
   const base = tinyRaw();
   const entity = (name) => ({ item_id: `code::t::lib/${name}.js::${name}`, name, qualified_name: name, entity_type: 'function',
@@ -298,9 +301,15 @@ test('fix-r1 #3: callersOf decides by edge_state: ambiguous is labelled, unresol
 
 test('fix-r1 #3/#4: normalizeBundle rejects a missing or invalid edge_state and missing skip fields', () => {
   const raw = tinyRaw();
-  const withEdge = (state) => ({ ...raw, relations: raw.relations.map((r) => ({ ...r, edge_state: state })) });
+  const withEdge = (state) => ({ ...raw, relations: raw.relations.map((r) => ({ ...r, properties: { ...r.properties, edge_state: state } })) });
   assert.throws(() => normalizeBundle(withEdge(undefined)), /edge_state/);
   assert.throws(() => normalizeBundle(withEdge('exact')), /edge_state/);
+  // A top-level edge_state (the pre-1.5.26 shape) does not satisfy the contract.
+  assert.throws(() => normalizeBundle({ ...withEdge(undefined), relations: withEdge(undefined).relations.map((r) => ({ ...r, edge_state: 'resolved' })) }), /edge_state/);
+  // A relation with no resolution or candidates (IMPORTS, DEFINES) carries none, and gets null.
+  const imports = { source_id: 'code::t::lib/a.js::walk', target_id: 'code::t::lib/p.js::parse', relation_type: 'IMPORTS', properties: { line: 1 } };
+  const withImport = normalizeBundle({ ...raw, relations: [...raw.relations, imports] });
+  assert.deepEqual(withImport.relations.map((r) => [r.type, r.edgeState]), [['CALLS', 'resolved'], ['IMPORTS', null]]);
   assert.throws(() => normalizeBundle({ ...raw, files_skipped: undefined }), /files_skipped/);
   assert.throws(() => normalizeBundle({ ...raw, files_skipped: -1 }), /files_skipped/);
   assert.throws(() => normalizeBundle({ ...raw, skipped_paths: [{ path: '', reason: 'x' }] }), /skipped_paths/);
