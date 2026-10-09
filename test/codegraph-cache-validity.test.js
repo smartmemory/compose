@@ -60,6 +60,57 @@ test('unported glob shapes, null digests and unknown kinds make the snapshot inv
   }
 });
 
+test('wildcards match Python characters (code points), not UTF-16 units', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'codegraph-cv-'));
+  try {
+    mkdirSync(join(dir, 'packages', '😀'), { recursive: true });
+    mkdirSync(join(dir, 'packages', 'ab'));
+    const digest = (pattern) => membersDigest({ kind: 'glob', path: '.', pattern }, dir);
+    // python3: [p.relative_to(d).as_posix() for p in Path(d).glob(pattern)]
+    assert.equal(digest('packages/?'), digestMembers(['packages/😀']));
+    assert.equal(digest('packages/[😀]'), digestMembers(['packages/😀']));
+    assert.equal(digest('packages/??'), digestMembers(['packages/ab']));
+    assert.equal(digest('packages/[!a]'), digestMembers(['packages/😀']));
+    assert.equal(digest('packages/a[b_.]'), digestMembers(['packages/ab']), 'class punctuation is literal');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('core gives no digest for a missing base, a base outside the checkout, or a member resolving outside: neither does Compose', () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'codegraph-cv-')));
+  const root = join(base, 'root');
+  const away = join(base, 'away');
+  try {
+    mkdirSync(join(root, 'src'), { recursive: true });
+    mkdirSync(join(away, 'pkg'), { recursive: true });
+    writeFileSync(join(away, 'pkg', 'x.ts'), 'export {};\n');
+    const walk = { kind: 'glob', path: 'gone', pattern: '**/*', exclude_dirs: [], source_suffixes: ['.ts'] };
+    const unverifiable = [
+      [{ kind: 'glob', path: 'gone', pattern: '*' }, /gone is not a directory/],
+      [walk, /gone is not a directory/],
+      [{ kind: 'listing', path: 'gone' }, /gone is not a directory/],
+      [{ kind: 'listing', path: join(away, 'pkg') }, /resolves outside the checkout/],
+    ];
+    for (const [entry, reason] of unverifiable) assert.throws(() => membersDigest(entry, root), reason, JSON.stringify(entry));
+
+    // A relative link whose intermediary points outside: same name, kind and link text as an inside one.
+    symlinkSync(join(root, 'src'), join(root, 'via'));
+    symlinkSync('../via/x.ts', join(root, 'src', 'link.ts'));
+    writeFileSync(join(root, 'src', 'x.ts'), 'export {};\n');
+    const listing = { kind: 'listing', path: 'src' };
+    const inside = membersDigest(listing, root);
+    rmSync(join(root, 'via'));
+    symlinkSync(join(away, 'pkg'), join(root, 'via'));
+    assert.throws(() => membersDigest(listing, root), /resolves outside the checkout/);
+    assert.equal(checkResolutionDependencies({ resolution_dependencies: [{ ...listing, members_sha256: inside }] }, root).ok, false);
+    // A pattern glob walks through a directory link into another tree.
+    assert.throws(() => membersDigest({ kind: 'glob', path: '.', pattern: 'via/*' }, root), /resolves outside the checkout/);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
 const env = { ...process.env, COMPOSE_CODEGRAPH: '1' };
 resetAvailabilityCache();
 const availability = await detectCodegraph({ cwd: tmpdir(), env });
@@ -84,6 +135,9 @@ function writeMiniTree(root) {
     'node_modules/dep/index.js': 'module.exports = 1;\n',
     'dist/out.js': 'export {};\n',
     'vendor/v.js': 'export {};\n',
+    'vendor/__init__.py/k.js': 'export {};\n', // a directory named __init__.py does not make vendor a package
+    'lib.egg-info/e.js': 'export {};\n', // core prunes *.egg-info
+    'out/o.js': 'export {};\n',
   };
   for (const [rel, text] of Object.entries(files)) {
     mkdirSync(join(root, rel, '..'), { recursive: true });
@@ -126,6 +180,10 @@ test('live: every listing and glob digest the real producer recorded is recomput
     writeFileSync(join(root, 'packages', 'c', 'package.json'), '{ "name": "c" }\n');
     assert.equal(checkResolutionDependencies(source, root).ok, false, 'a new workspace package');
     rmSync(join(root, 'packages', 'c'), { recursive: true });
+    writeFileSync(join(root, 'out', '__init__.py'), '');
+    assert.equal(checkResolutionDependencies(source, root).ok, false, 'an __init__.py file makes out/ a package');
+    rmSync(join(root, 'out', '__init__.py'));
+    assert.equal(checkResolutionDependencies(source, root).ok, true);
     writeFileSync(join(root, 'tsconfig.json'), '{ "compilerOptions": { "baseUrl": "." } }\n');
     assert.equal(checkResolutionDependencies(source, root).ok, false, 'tsconfig paths edited');
   } finally {

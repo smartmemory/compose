@@ -101,6 +101,16 @@ test('an older smartmemory, one without `code bundle`, or one with no version is
   assert.match((await detectCodegraph({ cwd: dir, env: envFor() })).reason, /--version` gave no version/);
 });
 
+test('an upgrade or downgrade at the same path is re-probed, not served from the memo', async () => {
+  const env = envFor();
+  fakeCli('1.5.25');
+  assert.equal((await detectCodegraph({ cwd: dir, env })).available, false);
+  fakeCli('1.5.26'); // pip rewrites the console script on (re)install
+  assert.equal((await detectCodegraph({ cwd: dir, env })).available, true, 'upgrade seen without a reset');
+  fakeCli('1.5.25');
+  assert.equal((await detectCodegraph({ cwd: dir, env })).available, false, 'downgrade to a refused version seen');
+});
+
 test('discovery order: codegraph.smartmemory in compose.json, then $COMPOSE_CODEGRAPH_SMARTMEMORY, then PATH', async () => {
   const onPath = fakeCli('1.5.26', { where: 'bin' });
   const fromEnv = fakeCli('1.5.26', { where: 'env-bin' });

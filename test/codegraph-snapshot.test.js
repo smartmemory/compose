@@ -6,7 +6,10 @@ import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -17,7 +20,8 @@ import {
   bundleArgv, cliBundleArgs, prebuildSnapshots, specUsesCodegraph,
 } from '../lib/codegraph/snapshot.js';
 import { resetAvailabilityCache } from '../lib/codegraph/availability.js';
-import { membersDigest, worktreeState } from '../lib/codegraph/cache-validity.js';
+import { digestMembers, worktreeState } from '../lib/codegraph/cache-validity.js';
+import { acquireDirLock } from '../lib/dir-lock.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURE = JSON.parse(gunzipSync(readFileSync(join(HERE, 'fixtures', 'codegraph', 'stratum.bundle.json.gz'))).toString('utf8'));
@@ -132,6 +136,89 @@ test('worktree state covers ignored files (also inside ignored dirs) and files g
   assert.notEqual((await worktreeState(dir)).hash, four.hash, 'an assume-unchanged file is content-keyed');
 });
 
+/** Rewrite a file at the same size and put its mtime back, so only content (and ctime) differ. */
+function sameSizeEdit(path, from, to) {
+  const { atime, mtime } = statSync(path);
+  writeFileSync(path, readFileSync(path, 'utf8').replace(from, to));
+  utimesSync(path, atime, mtime);
+}
+
+// Edits a clean `git status` of the indexed root does not show, each on a root that is a SUBDIRECTORY
+// of the git toplevel (index paths are relative to the toplevel there, not to the root).
+const HIDDEN_EDITS = [
+  ['an assume-unchanged file', () => git(dir, 'update-index', '--assume-unchanged', 'sub/a.js'),
+    () => sameSizeEdit(join(dir, 'sub', 'a.js'), '1', '9')],
+  ['a skip-worktree file', () => git(dir, 'update-index', '--skip-worktree', 'sub/a.js'),
+    () => sameSizeEdit(join(dir, 'sub', 'a.js'), '1', '9')],
+  ['the target of a tracked symlink into .compose', () => {
+    mkdirSync(join(dir, 'sub', '.compose'));
+    writeFileSync(join(dir, 'sub', '.compose', 'source.py'), 'def f():\n    return 1\n');
+    symlinkSync('.compose/source.py', join(dir, 'sub', 'link.py'));
+    git(dir, 'add', 'sub/link.py');
+    git(dir, 'commit', '-qm', 'link');
+  }, () => sameSizeEdit(join(dir, 'sub', '.compose', 'source.py'), 'f', 'g')],
+  ['the target of a tracked symlink outside the root', () => {
+    writeFileSync(join(outside, 'shared.py'), 'def f():\n    return 1\n');
+    symlinkSync(join(outside, 'shared.py'), join(dir, 'sub', 'shared.py'));
+    git(dir, 'add', 'sub/shared.py');
+    git(dir, 'commit', '-qm', 'link');
+  }, () => sameSizeEdit(join(outside, 'shared.py'), 'f', 'g')],
+  ['an ignored file inside a clean submodule', () => {
+    const mod = join(dir, 'sub', 'mod');
+    mkdirSync(mod);
+    git(mod, 'init', '-q');
+    writeFileSync(join(mod, '.gitignore'), 'local.py\n');
+    git(mod, 'add', '.');
+    git(mod, 'commit', '-qm', 'mod');
+    git(dir, '-c', 'advice.addEmbeddedRepo=false', 'add', 'sub/mod'); // a gitlink (mode 160000)
+    git(dir, 'commit', '-qm', 'gitlink');
+    writeFileSync(join(mod, 'local.py'), 'def f():\n    return 1\n');
+  }, () => sameSizeEdit(join(dir, 'sub', 'mod', 'local.py'), 'f', 'g')],
+  ['the target of an ignored symlink', () => {
+    writeFileSync(join(dir, '.gitignore'), 'sub/ign.py\n');
+    git(dir, 'add', '.gitignore');
+    git(dir, 'commit', '-qm', 'ignore');
+    writeFileSync(join(outside, 'real.py'), 'def f():\n    return 1\n');
+    symlinkSync(join(outside, 'real.py'), join(dir, 'sub', 'ign.py'));
+  }, () => sameSizeEdit(join(outside, 'real.py'), 'f', 'g')],
+];
+
+test('worktree state sees every edit a clean git status hides (root below the git toplevel)', async (t) => {
+  for (const [name, setup, edit] of HIDDEN_EDITS) {
+    await t.test(name, async () => {
+      rmSync(dir, { recursive: true, force: true });
+      mkdirSync(dir);
+      initRepo();
+      setup();
+      const before = await worktreeState(join(dir, 'sub'));
+      assert.equal(before.error, undefined, before.error);
+      const status = git(dir, 'status', '--porcelain', '--', 'sub');
+      edit();
+      assert.equal(git(dir, 'status', '--porcelain', '--', 'sub'), status, 'git status does not show it');
+      const after = await worktreeState(join(dir, 'sub'));
+      assert.notEqual(after.hash, before.hash);
+    });
+  }
+});
+
+test('a stat-keyed file changed moments ago is racy: such a state is never cached', async () => {
+  initRepo();
+  writeFileSync(join(dir, '.gitignore'), 'local.js\n');
+  git(dir, 'add', '.gitignore');
+  git(dir, 'commit', '-qm', 'ignore');
+  writeFileSync(join(dir, 'local.js'), 'export const l = 1;\n');
+  assert.equal((await worktreeState(dir)).racy, 1, 'an ignored file written just now');
+  assert.equal((await worktreeState(dir, { racyWindowMs: 0 })).racy, 0);
+  writeFileSync(join(dir, 'top.js'), 'export const t = 2;\n');
+  assert.equal((await worktreeState(dir)).racy, 1, 'content-keyed files are never racy');
+
+  const repo = resolveRepos(dir)[0];
+  const calls = [];
+  const first = await ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer: fixtureProducer(calls) });
+  assert.equal(first.timing.stored, false);
+  assert.ok(warnings.some((w) => /1 file\(s\) changed within 3 s of the run, too recently for their stat keys to be trusted; using it once/.test(w)), warnings.join('\n'));
+});
+
 test('.compose edits keep the worktree state; docs edits change it (accepted over-invalidation)', async () => {
   initRepo();
   const base = await worktreeState(dir);
@@ -195,17 +282,51 @@ test('an edit under the root re-produces; reverting it is a cache hit again', as
   assert.equal(calls.length, 2);
 });
 
-test('a CLI command, version or model change re-produces', async () => {
+test('everything besides the tree that changes the output re-produces; the parse-cache location does not', async () => {
+  initRepo();
+  mkdirSync(join(dir, 'other'));
+  writeFileSync(join(dir, 'other', 'b.js'), 'export const b = 1;\n');
+  git(dir, 'add', '.');
+  git(dir, 'commit', '-qm', 'other');
+  const repo = { name: 'x', root: join(dir, 'sub'), prefix: '', exclude: ['fixtures', 'src'] };
+  const env = { PATH: process.env.PATH, SMARTMEMORY_CODE_MAX_RUN_ENTITIES: '1000' };
+  const calls = [];
+  const producer = fixtureProducer(calls);
+  const run = (over = {}) => ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer, env, ...over });
+  assert.equal((await run()).timing.stored, true);
+  assert.equal((await run()).cached, true);
+  assert.equal((await run({ env: { ...env, SMARTMEMORY_CODE_CHECKPOINT_DIR: join(outside, 'pc') } })).cached, true, 'parse-cache dir');
+  const changes = [
+    ['CLI version', { availability: { ...AVAILABLE, version: '1.5.27' } }],
+    ['CLI command', { availability: { ...AVAILABLE, command: '/other/smartmemory' } }],
+    ['indexed root (same name, clean, same HEAD)', { repo: { ...repo, root: join(dir, 'other') } }],
+    ['exclude list boundaries', { repo: { ...repo, exclude: ['fixtures,src'] } }],
+    ['code policy env', { env: { ...env, SMARTMEMORY_CODE_MAX_RUN_ENTITIES: '5' } }],
+    ['a new code policy env', { env: { ...env, SMARTMEMORY_CODE_GENERATED_PATTERNS: '*.gen.ts' } }],
+  ];
+  for (const [name, over] of changes) assert.equal((await run(over)).cached, false, name);
+  assert.equal(calls.length, 1 + changes.length);
+  assert.ok(!readFileSync(join(codegraphDir(dir), 'x', readdirSync(join(codegraphDir(dir), 'x')).find((f) => f.endsWith('.json') && f.length === 69)), 'utf8').includes('1000'),
+    'policy values are hashed, not stored');
+});
+
+test('a caller that waited for the lock re-reads the tree: a snapshot published meanwhile for the old tree is not served', async () => {
   initRepo();
   const repo = resolveRepos(dir)[0];
   const calls = [];
   const producer = fixtureProducer(calls);
-  await ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer });
-  await ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer });
-  assert.equal(calls.length, 1);
-  await ensureSnapshot({ projectRoot: dir, repo, availability: { ...AVAILABLE, version: '1.5.27' }, producer });
-  await ensureSnapshot({ projectRoot: dir, repo, availability: { ...AVAILABLE, command: '/other/smartmemory' }, producer });
-  assert.equal(calls.length, 3);
+  const first = await ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer });
+  const parked = `${first.path}.parked`;
+  renameSync(first.path, parked);
+  const release = await acquireDirLock(join(codegraphDir(dir), repo.name, '.lock'));
+  const waiting = ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer }); // reads S0, misses, waits
+  await new Promise((r) => setTimeout(r, 300));
+  renameSync(parked, first.path); // another process publishes the S0 snapshot...
+  writeFileSync(join(dir, 'sub', 'a.js'), 'export const a = 2;\n'); // ...and the tree moves to S1
+  release();
+  const result = await waiting;
+  assert.equal(result.cached, false);
+  assert.equal(calls.length, 2);
 });
 
 test('(c): a resolution dependency outside the root invalidates the cache when it changes', async () => {
@@ -213,13 +334,9 @@ test('(c): a resolution dependency outside the root invalidates the cache when i
   const repo = resolveRepos(dir)[0];
   const config = join(outside, 'tsconfig.base.json');
   writeFileSync(config, '{"compilerOptions":{}}\n');
-  mkdirSync(join(outside, 'pkgs'));
-  writeFileSync(join(outside, 'pkgs', 'a.ts'), 'export {}\n');
-  const listing = { kind: 'listing', path: join(outside, 'pkgs') };
   const deps = () => [
     { kind: 'content', path: config, sha256: sha256(readFileSync(config)) },
     { kind: 'exists', path: join(outside, 'missing.ts'), exists: existsSync(join(outside, 'missing.ts')) },
-    { ...listing, members_sha256: membersDigest(listing, repo.root) },
   ];
   const calls = [];
   const producer = fixtureProducer(calls, deps);
@@ -233,9 +350,19 @@ test('(c): a resolution dependency outside the root invalidates the cache when i
   writeFileSync(join(outside, 'missing.ts'), 'export {}\n');
   assert.equal((await run()).cached, false, 'a path that did not exist appeared');
   assert.equal((await run()).cached, true);
-  writeFileSync(join(outside, 'pkgs', 'b.ts'), 'export {}\n');
-  assert.equal((await run()).cached, false, 'listing members changed');
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 3);
+});
+
+test('(c): a listing outside the checkout is unverifiable (core records no digest for it), so never cached', async () => {
+  initRepo();
+  const repo = resolveRepos(dir)[0];
+  mkdirSync(join(outside, 'pkgs'));
+  writeFileSync(join(outside, 'pkgs', 'a.ts'), 'export {}\n');
+  // Even with the digest its members would have: core 1.5.26 emits null here, so this record is not one core makes.
+  const deps = () => [{ kind: 'listing', path: join(outside, 'pkgs'), members_sha256: digestMembers([['a.ts', 'file', null]]) }];
+  const first = await ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer: fixtureProducer([], deps) });
+  assert.equal(first.timing.stored, false);
+  assert.ok(warnings.some((w) => /resolves outside the checkout\); using it once/.test(w)), warnings.join('\n'));
 });
 
 test('(c): a dependency core could not digest (null members_sha256) is never cached', async () => {
