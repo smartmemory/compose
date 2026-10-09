@@ -54,7 +54,7 @@ test('unported glob shapes, null digests and unknown kinds make the snapshot inv
       assert.match(out.reason, reason);
     }
     assert.equal(checkResolutionDependencies({}, dir).ok, false, 'no resolution_dependencies at all');
-    assert.deepEqual(checkResolutionDependencies({ resolution_dependencies: [] }, dir), { ok: true, checked: 0 });
+    assert.deepEqual(checkResolutionDependencies({ resolution_dependencies: [] }, dir), { ok: true, checked: 0, witness: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' }, 'sha256 of no records');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

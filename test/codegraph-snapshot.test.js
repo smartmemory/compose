@@ -196,15 +196,26 @@ const HIDDEN_EDITS = [
     writeFileSync(join(outside, 'real.py'), 'def f():\n    return 1\n');
     symlinkSync(join(outside, 'real.py'), join(dir, 'sub', 'ign.py'));
   }, () => sameSizeEdit(join(outside, 'real.py'), 'f', 'g')],
+  ['r3-1: a clean tracked file a clean filter normalizes back (same size: git compares content)', () => {
+    writeFileSync(join(dir, '.gitattributes'), 'sub/a.js filter=strip\n');
+    git(dir, 'config', 'filter.strip.clean', "sed -e 's|//.*$||'");
+    git(dir, 'config', 'filter.strip.smudge', 'cat');
+    writeFileSync(join(dir, 'sub', 'a.js'), 'export const a = 1;// x\n');
+    git(dir, 'add', '.');
+    git(dir, 'commit', '-qm', 'filter');
+  }, () => sameSizeEdit(join(dir, 'sub', 'a.js'), '// x', '// y')],
+  ['r3-1: a case-only rename on a case-insensitive filesystem', () => {
+    if (!existsSync(join(dir, 'sub', 'A.js'))) return 'skip';
+  }, () => renameSync(join(dir, 'sub', 'a.js'), join(dir, 'sub', 'A.js'))],
 ];
 
 test('worktree state sees every edit a clean git status hides (root below the git toplevel)', async (t) => {
   for (const [name, setup, edit] of HIDDEN_EDITS) {
-    await t.test(name, async () => {
+    await t.test(name, async (st) => {
       rmSync(dir, { recursive: true, force: true });
       mkdirSync(dir);
       initRepo();
-      setup();
+      if (setup() === 'skip') return st.skip('case-sensitive filesystem');
       const before = await worktreeState(join(dir, 'sub'));
       assert.equal(before.error, undefined, before.error);
       const status = git(dir, 'status', '--porcelain', '--', 'sub');
@@ -440,6 +451,172 @@ test('r2-4: an outside dependency changed while the producer ran is not cached (
     producer: async ({ out }) => writeFileSync(out, JSON.stringify(bundleFor(repo, [content(config), content(composeDep)]))),
   });
   assert.equal(still.timing.stored, true);
+});
+
+/** Let the clock pass everything written so far, so only a change during the run is "recent". */
+const settle = () => new Promise((r) => setTimeout(r, 30));
+
+test('r3-2: node on or off PATH, and NODE_OPTIONS, change the cache salt and re-produce', async () => {
+  initRepo();
+  const repo = resolveRepos(dir)[0];
+  const bin = join(outside, 'bin');
+  mkdirSync(bin);
+  const calls = [];
+  const producer = fixtureProducer(calls);
+  const run = (env) => ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer, env });
+  const env = { PATH: bin };
+  assert.equal((await run(env)).timing.stored, true);
+  assert.equal((await run(env)).cached, true);
+  symlinkSync('/bin/sh', join(bin, 'node')); // the producer's independent JavaScript syntax check now runs
+  const rows = [
+    ['node appeared on PATH', env],
+    ['NODE_OPTIONS set', { ...env, NODE_OPTIONS: '--stack-size=100' }],
+  ];
+  for (const [name, over] of rows) {
+    assert.equal((await run(over)).cached, false, name);
+    assert.equal((await run(over)).cached, true, `${name}: stored under the new salt`);
+  }
+  rmSync(join(bin, 'node'));
+  assert.equal((await run(env)).cached, true, 'node gone again: the first salt, still cached');
+  assert.equal(calls.length, 3);
+});
+
+test('r3-3: a dependency outside (b) that changes kind or link invalidates at read (`exists` records no kind)', async (t) => {
+  // Each row: [name, path of the dependency (absolute), set it up, change it without changing exists:true]
+  const rows = [
+    ['a .compose directory replaced by a file', () => join(dir, '.compose', 'shared', 'thing'),
+      (p) => mkdirSync(p, { recursive: true }), (p) => { rmSync(p, { recursive: true }); writeFileSync(p, '{}\n'); }],
+    ['an outside directory replaced by a file', () => join(outside, 'thing'),
+      (p) => mkdirSync(p), (p) => { rmSync(p, { recursive: true }); writeFileSync(p, '{}\n'); }],
+    ['an outside link retargeted', () => join(outside, 'link'),
+      (p) => { writeFileSync(join(outside, 'one.ts'), ''); writeFileSync(join(outside, 'two.ts'), ''); symlinkSync('one.ts', p); },
+      (p) => { rmSync(p); symlinkSync('two.ts', p); }],
+  ];
+  for (const [name, pathOf, setup, change] of rows) {
+    await t.test(name, async () => {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
+      mkdirSync(dir);
+      mkdirSync(outside);
+      initRepo();
+      const repo = resolveRepos(dir)[0];
+      const path = pathOf();
+      setup(path);
+      await settle();
+      const calls = [];
+      const producer = fixtureProducer(calls, () => [{ kind: 'exists', path, exists: true }]);
+      const run = () => ensureSnapshot({ projectRoot: dir, repo, availability: AVAILABLE, producer, racyWindowMs: 0 });
+      assert.equal((await run()).timing.stored, true);
+      assert.equal((await run()).cached, true);
+      change(path);
+      assert.equal((await run()).cached, false, name);
+      assert.equal(calls.length, 2);
+    });
+  }
+});
+
+test('r3-4/r3-5: a dependency outside (b) deleted, or a link retargeted inward, while the producer ran is not stored', async (t) => {
+  // Each row: [name, set up before the run, change during the run, the dependency it records afterwards]
+  const content = (path) => ({ kind: 'content', path, sha256: sha256(readFileSync(path)) });
+  const rows = [
+    ['r3-4: an outside file deleted (recorded exists:false afterwards)', () => writeFileSync(join(outside, 'gone.ts'), ''),
+      () => rmSync(join(outside, 'gone.ts')), () => [{ kind: 'exists', path: join(outside, 'gone.ts'), exists: existsSync(join(outside, 'gone.ts')) }]],
+    ['r3-4: a .compose file deleted (recorded exists:false afterwards)', () => {
+      mkdirSync(join(dir, '.compose', 'shared'), { recursive: true });
+      writeFileSync(join(dir, '.compose', 'shared', 'gone.json'), '{}\n');
+    }, () => rmSync(join(dir, '.compose', 'shared', 'gone.json')),
+    () => [{ kind: 'exists', path: join(dir, '.compose', 'shared', 'gone.json'), exists: existsSync(join(dir, '.compose', 'shared', 'gone.json')) }]],
+    ['r3-5: a .compose link retargeted to a file inside the root', () => {
+      writeFileSync(join(dir, 'sub', 'old.json'), '{"a":1}\n');
+      writeFileSync(join(dir, 'sub', 'new.json'), '{"b":2}\n');
+      mkdirSync(join(dir, '.compose'));
+      symlinkSync('../sub/old.json', join(dir, '.compose', 'paths.json'));
+    }, () => { rmSync(join(dir, '.compose', 'paths.json')); symlinkSync('../sub/new.json', join(dir, '.compose', 'paths.json')); },
+    () => [content(join(dir, '.compose', 'paths.json'))]],
+    ['r3-5: an outside link retargeted to a file inside the root', () => {
+      writeFileSync(join(dir, 'sub', 'old.json'), '{"a":1}\n');
+      writeFileSync(join(dir, 'sub', 'new.json'), '{"b":2}\n');
+      symlinkSync(join(dir, 'sub', 'old.json'), join(outside, 'paths.json'));
+    }, () => { rmSync(join(outside, 'paths.json')); symlinkSync(join(dir, 'sub', 'new.json'), join(outside, 'paths.json')); },
+    () => [content(join(outside, 'paths.json'))]],
+    ['r3-5: an outside directory link on the way to the dependency retargeted inward', () => {
+      for (const [d, text] of [['old', '{"a":1}\n'], ['new', '{"b":2}\n']]) {
+        mkdirSync(join(dir, 'sub', d));
+        writeFileSync(join(dir, 'sub', d, 'paths.json'), text);
+      }
+      symlinkSync(join(dir, 'sub', 'old'), join(outside, 'cfg'));
+    }, () => { rmSync(join(outside, 'cfg')); symlinkSync(join(dir, 'sub', 'new'), join(outside, 'cfg')); },
+    () => [content(join(outside, 'cfg', 'paths.json'))]],
+  ];
+  for (const [name, setup, change, deps] of rows) {
+    await t.test(name, async () => {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
+      mkdirSync(dir);
+      mkdirSync(outside);
+      initRepo();
+      const repo = resolveRepos(dir)[0];
+      setup();
+      await settle();
+      warnings.length = 0;
+      resetAvailabilityCache();
+      // Control first: the same dependency, untouched during the run, is stored.
+      const control = await ensureSnapshot({
+        projectRoot: dir, repo, availability: AVAILABLE, racyWindowMs: 0,
+        producer: async ({ out }) => writeFileSync(out, JSON.stringify(bundleFor(repo, deps()))),
+      });
+      assert.equal(control.timing.stored, true, `${name}: control`);
+      rmSync(control.path);
+      await settle();
+      const result = await ensureSnapshot({
+        projectRoot: dir, repo, availability: AVAILABLE, racyWindowMs: 0,
+        producer: async ({ out }) => { change(); writeFileSync(out, JSON.stringify(bundleFor(repo, deps()))); },
+      });
+      assert.equal(result.timing.stored, false, name);
+      assert.ok(warnings.some((w) => /changed while the producer ran/.test(w)), warnings.join('\n'));
+    });
+  }
+});
+
+/** A fake CLI whose `#!` interpreter lives in a venv (its site-packages is part of the runtime identity). */
+function venvCli() {
+  const site = join(outside, 'venv', 'lib', 'python3.12', 'site-packages');
+  mkdirSync(site, { recursive: true });
+  mkdirSync(join(outside, 'venv', 'bin'));
+  symlinkSync('/bin/sh', join(outside, 'venv', 'bin', 'python3'));
+  const cli = join(outside, 'smartmemory');
+  writeFileSync(cli, `#!${join(outside, 'venv', 'bin', 'python3')}\nexit 0\n`);
+  chmodSync(cli, 0o755);
+  return { cli, grammar: join(site, 'tree_sitter_typescript-0.23.2.dist-info') };
+}
+
+test('r3-6: a grammar installed while the producer ran is not stored', async () => {
+  initRepo();
+  const repo = resolveRepos(dir)[0];
+  const { cli, grammar } = venvCli();
+  const producer = async ({ out }) => { mkdirSync(grammar); writeFileSync(out, JSON.stringify(bundleFor(repo))); };
+  const result = await ensureSnapshot({ projectRoot: dir, repo, availability: { ...AVAILABLE, command: cli }, producer });
+  assert.equal(result.timing.stored, false);
+  assert.ok(warnings.some((w) => /the producer or its runtime changed while the snapshot was built/.test(w)), warnings.join('\n'));
+});
+
+test('r3-6: a caller that waited for the lock re-reads the runtime: a grammar installed meanwhile is keyed in', async () => {
+  initRepo();
+  const repo = resolveRepos(dir)[0];
+  const { cli, grammar } = venvCli();
+  const calls = [];
+  const producer = fixtureProducer(calls);
+  const availability = { ...AVAILABLE, command: cli };
+  mkdirSync(join(codegraphDir(dir), repo.name), { recursive: true });
+  const release = await acquireDirLock(join(codegraphDir(dir), repo.name, '.lock'));
+  const waiting = ensureSnapshot({ projectRoot: dir, repo, availability, producer }); // keys the old runtime, waits
+  await new Promise((r) => setTimeout(r, 300));
+  mkdirSync(grammar);
+  release();
+  const result = await waiting;
+  assert.equal(result.timing.stored, true, 'built and stored under the runtime it ran with');
+  assert.equal((await ensureSnapshot({ projectRoot: dir, repo, availability, producer })).cached, true);
+  assert.equal(calls.length, 1);
 });
 
 test('(c): a listing outside the checkout is unverifiable (core records no digest for it), so never cached', async () => {
