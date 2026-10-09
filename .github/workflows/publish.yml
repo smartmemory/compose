@@ -1,9 +1,7 @@
+# Manual only (workflow_dispatch). Prod deploys and releases use the scripts in the repo/runbook. Owner decision 2026-10-09.
 name: Publish Stable Release
 
 on:
-  push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
     inputs:
       version:
