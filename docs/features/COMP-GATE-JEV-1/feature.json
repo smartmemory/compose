@@ -1,11 +1,34 @@
 {
   "code": "COMP-GATE-JEV-1",
   "description": "Jev as the gate approve/revise default in gate-prompt.js (replacing the keyword regex), off by default, regex fallback; value spike first on 51 real gate summaries, pre-registered bar",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "Backlog",
   "created": "2026-10-10",
   "updated": "2026-10-10",
   "complexity": "S",
   "position": 10,
-  "impact": "low"
+  "impact": "low",
+  "completions": [
+    {
+      "completion_id": "COMP-GATE-JEV-1:8ef89564cdf04f204ecc99e268b46e1b6b122c4a",
+      "feature_code": "COMP-GATE-JEV-1",
+      "commit_sha": "8ef89564cdf04f204ecc99e268b46e1b6b122c4a",
+      "commit_sha_short": "8ef89564",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/gate-jev.js",
+        "lib/gate-prompt.js",
+        "test/gate-jev.test.js",
+        "test/fixtures/gate-jev/question.txt",
+        "test/fixtures/gate-jev/criteria-approve.txt",
+        "test/fixtures/gate-jev/criteria-revise.txt",
+        "CHANGELOG.md",
+        "docs/features/COMP-GATE-JEV-1/design.md"
+      ],
+      "recorded_at": "2026-10-10T18:05:43.197Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Jev picks gate approve/revise default, on when JEV_API_KEY set; Codex r2 CLEAN (debf13b7fefe); tripwire 0 live hits; targeted gate tests 100/100."
+    }
+  ],
+  "commit_sha": "8ef89564cdf04f204ecc99e268b46e1b6b122c4a"
 }
