@@ -1,8 +1,9 @@
 # COMP-GATE-JEV-1 — Jev for the gate approve/revise default (design)
 
-**KILLED (2026-10-10):** value spike FAILED condition 4 (Jev p95 1602 ms, bar < 1 s). Conditions 1-3 passed. See "Spike results".
+**KILL REVERSED (2026-10-11):** the pre-registered re-time spike PASSED (warm p95 532 ms). See "Re-time results".
+First run 2026-10-10 failed only on latency (p95 1602 ms), which measured per-call proxied connection setup.
 
-**Status:** KILLED. **Value spike:** FAIL (run 2026-10-10).
+**Status:** IN_PROGRESS (build). **Value spike:** PASS on re-time (2026-10-11).
 **Origin:** redirected from `stratum/docs/features/STRAT-JUDGE-JEV-1/design.md` (PARKED 2026-10-10: its `stakes: cheap`
 target has zero real callers). Owner pick: "redirect Jev to a live call site".
 
@@ -45,10 +46,26 @@ Pre-registered here before any run. Do not edit this section after results exist
 
 ## Build (only after a pass)
 
-- [ ] `buildRecommendation()` asks Jev when `COMPOSE_GATE_JEV=1` and `JEV_API_KEY` is set. Off by default.
-- [ ] Jev error, timeout (budget 1500 ms) or missing key: log one WARNING and use the regex. Never block the gate.
+Spec revised 2026-10-11 from the re-time evidence. Facts the build must respect:
+- compose runs on Node 22 (`node --version` v22.22.3). Built-in `fetch` does not use `HTTPS_PROXY`, and compose has no
+  proxy code today. The direct route to `api.typesafe.ai` is refused here (HTTP 451), so the client MUST honor
+  `HTTPS_PROXY`/`https_proxy` and `NO_PROXY`/`no_proxy`, or every call fails over to the regex.
+- `buildRecommendation()` (`lib/gate-prompt.js:42`) is sync and is called from sync `drawGatePanel()` (:190), inside async
+  `promptGate()` (:237). Fetch the Jev answer in `promptGate()` before drawing, and pass it in; keep
+  `buildRecommendation()` sync.
+- One kept-alive connection, created lazily and reused across gates in the process. Measured: warm p95 532 ms, cold
+  p95 1260 ms, the connection survived a 300 s idle. On a dead socket, reconnect once inside the budget.
+
+- [ ] `lib/gate-jev.js` (new): `jevGateDefault(summary, {env, timeoutMs, transport})` returns `'approve' | 'revise' | null`.
+      Null on flag off, key missing, error, timeout or an unexpected answer, with one WARNING per failure kind per process.
+- [ ] Enabled only when `COMPOSE_GATE_JEV=1` and `JEV_API_KEY` is set. Off by default. Budget 1500 ms total.
+- [ ] Request payload identical to the spike (`scratch/2026-10-11-gate-jev-retime/work/retime.py`): same question text,
+      criteria and `state` shape, model `jev-latest`.
+- [ ] `promptGate()` awaits it only when a Stratum `summary` exists; `buildRecommendation()` uses the Jev answer when
+      non-null, else the regex. Recommendation sentence says which source picked the default (`jev` or `keyword`).
 - [ ] The key is read by name only. No key value in code, logs, fixtures or docs.
-- [ ] Table-driven test over: Jev approve, Jev revise, Jev error, Jev timeout, flag off, key missing.
+- [ ] Table-driven test over: Jev approve, Jev revise, error, timeout, unexpected answer, flag off, key missing,
+      proxy env honored, NO_PROXY honored, connection reused across two calls. Transport injected; no live network in tests.
 - [ ] CHANGELOG entry in the same commit.
 
 ## Acceptance criteria
@@ -105,3 +122,18 @@ same `question.txt` (sha `8dc77be7...52dd1`), same Jev question payload, no tuni
 - **Outcome:** pass, the KILLED status is reversed and the build proceeds, with the idle probe deciding the connection
   design (keep-alive, or pre-warm at step start). If the idle probe shows the connection never survives a gate-length idle
   AND Arm C p95 >= 1 s, the build must pre-warm, and that is stated in the build checklist. Fail, KILLED stands, final.
+
+## Re-time results (2026-10-11)
+
+Report: `/Users/ruze/reg/my/forge/scratch/2026-10-11-gate-jev-retime/REPORT.md`. Numbers re-computed by the coordinator
+from `preds-W.jsonl`, `preds-C.jsonl`, `idle-probe.jsonl`. Hashes matched. Machine load 6-11 from other sessions.
+
+| arm | p50 | p95 | max | agreement | REVISE recall |
+|---|---|---|---|---|---|
+| W, one kept-alive connection (the bar) | 276 ms | 532 ms | 897 ms | 45/51 | 10/15 |
+| C, new connection per call | 683 ms | 1260 ms | 1517 ms | 45/51 | 10/15 |
+| first run (Codex arms starting alongside) | 708 ms | 1602 ms | 2647 ms | 46/51 | 11/15 |
+
+Idle probe on one connection: reused after 30, 60, 120 and 300 s (244-490 ms). Gaps over 300 s not tested.
+Bar: W p95 532 < 1000, agreement 45 >= 40 and >= 33, recall 10 >= 4. **PASS.** Pre-warm is not required (the
+connection survived every tested idle), so the build uses lazy keep-alive with one reconnect.

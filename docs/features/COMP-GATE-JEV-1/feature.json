@@ -1,7 +1,7 @@
 {
   "code": "COMP-GATE-JEV-1",
   "description": "Jev as the gate approve/revise default in gate-prompt.js (replacing the keyword regex), off by default, regex fallback; value spike first on 51 real gate summaries, pre-registered bar",
-  "status": "PLANNED",
+  "status": "IN_PROGRESS",
   "phase": "Backlog",
   "created": "2026-10-10",
   "updated": "2026-10-10",
