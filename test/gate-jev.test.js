@@ -36,10 +36,6 @@ const CASES = [
   { name: 'timeout', env: ON, transport: () => new Promise(() => {}), timeoutMs: 40, label: null, warns: 1 },
   { name: 'unexpected choice', env: ON, transport: answer('MAYBE'), label: null, warns: 1 },
   { name: 'missing answer', env: ON, transport: async () => ({}), label: null, warns: 1 },
-  { name: 'flag off', env: { JEV_API_KEY: KEY }, transport: answer('REVISE'), label: null, warns: 0, calls: 0 },
-  { name: 'flag not exactly 1', env: { ...ON, COMPOSE_GATE_JEV: 'true' }, transport: answer('REVISE'), label: null, warns: 0, calls: 0 },
-  { name: 'key missing', env: { COMPOSE_GATE_JEV: '1' }, transport: answer('REVISE'), label: null, warns: 0, calls: 0 },
-  { name: 'key empty', env: { ...ON, JEV_API_KEY: '' }, transport: answer('REVISE'), label: null, warns: 0, calls: 0 },
 ];
 
 for (const c of CASES) {
@@ -52,6 +48,31 @@ for (const c of CASES) {
     assert.equal(calls, c.calls ?? 1);
     for (const w of warnings) assert.ok(!w.includes(KEY), 'warning must not carry the key');
   });
+}
+
+// On by default: {flag unset, '0', '1', other} x {key set, key empty, key unset}.
+const FLAGS = [undefined, '0', '1', 'other'];
+const KEYS = [KEY, '', undefined];
+for (const flag of FLAGS) {
+  for (const key of KEYS) {
+    test(`jevGateDefault enablement: flag=${flag} key=${key === KEY ? 'set' : key === '' ? 'empty' : 'unset'}`, async () => {
+      const env = {};
+      if (flag !== undefined) env.COMPOSE_GATE_JEV = flag;
+      if (key !== undefined) env.JEV_API_KEY = key;
+      let calls = 0;
+      const warnings = [];
+      const t = async () => { calls++; return { answers: { gate: { choice: 'REVISE' } } }; };
+      const first = await jevGateDefault('Step done.', { env, transport: t, warn: (m) => warnings.push(m) });
+      const second = await jevGateDefault('Step done.', { env, transport: t, warn: (m) => warnings.push(m) });
+      const enabled = Boolean(key) && flag !== '0';
+      assert.equal(first, enabled ? 'revise' : null);
+      assert.equal(second, first);
+      assert.equal(calls, enabled ? 2 : 0, 'disabled means no network');
+      // Only "asked for with =1 but no key" warns, exactly once per process.
+      assert.equal(warnings.length, !key && flag === '1' ? 1 : 0);
+      for (const w of warnings) assert.ok(!w.includes(KEY));
+    });
+  }
 }
 
 test('jevGateDefault: one WARNING per failure kind, not per gate', async () => {
@@ -90,15 +111,16 @@ test('proxy env is honored (either case), NO_PROXY bypasses it', () => {
 
 // Loopback proxy + upstream: CONNECT is answered 200 and spliced to a plain-HTTP
 // "Jev". `tlsWrap` is identity, so the tunnel carries plain HTTP (no TLS in test).
-async function rig({ connectStatus = 200 } = {}) {
+async function rig({ connectStatus = 200, upstreamStatus = 200, upstreamBody } = {}) {
   const stats = { connects: [], requests: 0, auth: [], socketsToKill: [] };
   const upstream = http.createServer((req, res) => {
     stats.requests++;
     stats.auth.push(req.headers.authorization);
     req.resume();
     req.on('end', () => {
+      res.statusCode = upstreamStatus;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ answers: { gate: { choice: 'REVISE' } } }));
+      res.end(upstreamBody ?? JSON.stringify({ answers: { gate: { choice: 'REVISE' } } }));
     });
   });
   await new Promise((r) => upstream.listen(0, '127.0.0.1', r));
@@ -161,6 +183,32 @@ test('default transport: proxy refusal yields null with a warning, no throw', as
   } finally { close(); }
 });
 
+// Failure kinds lib/gate-jev.js can produce: error, timeout, proxy, http, malformed, unexpected.
+// Each row: null, no throw, exactly one WARNING naming the kind, and a second gate stays quiet.
+const FAILURE_ROWS = [
+  { kind: 'error', rig: null, transport: async () => { throw new Error(`boom ${KEY}`); } },
+  { kind: 'timeout', rig: null, transport: () => new Promise(() => {}), timeoutMs: 40 },
+  { kind: 'unexpected', rig: null, transport: answer('MAYBE') },
+  { kind: 'proxy', rig: { connectStatus: 403 } },
+  { kind: 'http', rig: { upstreamStatus: 502, upstreamBody: '{"error":"bad gateway"}' } },
+  { kind: 'malformed', rig: { upstreamBody: '{not json' } },
+];
+for (const row of FAILURE_ROWS) {
+  test(`failure kind table: ${row.kind} -> null, no throw, one WARNING`, async () => {
+    const r = row.rig ? await rig(row.rig) : null;
+    try {
+      const transport = r ? r.transport : row.transport;
+      const warnings = [];
+      const opts = { env: ON, transport, warn: (m) => warnings.push(m), ...(row.timeoutMs ? { timeoutMs: row.timeoutMs } : {}) };
+      assert.equal(await jevGateDefault('s', opts), null);
+      assert.equal(await jevGateDefault('s', opts), null);
+      assert.equal(warnings.length, 1);
+      assert.ok(warnings[0].includes(`gate-jev ${row.kind};`), warnings[0]);
+      assert.ok(!warnings[0].includes(KEY));
+    } finally { r?.close(); }
+  });
+}
+
 async function gate(gateExtras, jevOptions, keys = ['']) {
   const input = new PassThrough(); const output = new PassThrough();
   let text = ''; output.on('data', (d) => { text += d; });
@@ -185,10 +233,10 @@ test('promptGate: Jev enabled but silent falls back to the regex and says keywor
   assert.ok(text.includes('All good. Ship it? (default by keyword)'));
 });
 
-test('promptGate: flag off leaves the sentence unchanged and makes no call', async () => {
+test('promptGate: opt-out (COMPOSE_GATE_JEV=0) leaves the sentence unchanged and makes no call', async () => {
   let calls = 0;
   const transport = async () => { calls++; return {}; };
-  const { result, text } = await gate({ summary: 'All good.' }, { env: { JEV_API_KEY: KEY }, transport });
+  const { result, text } = await gate({ summary: 'All good.' }, { env: { JEV_API_KEY: KEY, COMPOSE_GATE_JEV: '0' }, transport });
   assert.equal(result.outcome, 'approve');
   assert.ok(text.includes('All good. Ship it?') && !text.includes('default by'));
   assert.equal(calls, 0);
@@ -198,5 +246,13 @@ test('promptGate: no Stratum summary means Jev is not called', async () => {
   let calls = 0;
   const transport = async () => { calls++; return {}; };
   await gate({ fromPhase: 'a', toPhase: 'b' }, { env: ON, transport }, ['a']);
+  assert.equal(calls, 0);
+});
+
+test('promptGate: no key leaves the sentence byte-identical (no source, no call)', async () => {
+  let calls = 0;
+  const transport = async () => { calls++; return {}; };
+  const { text } = await gate({ summary: 'All good.' }, { env: {}, transport });
+  assert.ok(text.includes('All good. Ship it?') && !text.includes('default by'));
   assert.equal(calls, 0);
 });
