@@ -58,7 +58,7 @@ Spec revised 2026-10-11 from the re-time evidence. Facts the build must respect:
 
 - [x] `lib/gate-jev.js` (new): `jevGateDefault(summary, {env, timeoutMs, transport})` returns `'approve' | 'revise' | null`. (pinned by test/gate-jev.test.js:45)
       Null on flag off, key missing, error, timeout or an unexpected answer, with one WARNING per failure kind per process.
-- [x] Enabled only when `COMPOSE_GATE_JEV=1` and `JEV_API_KEY` is set. Off by default. Budget 1500 ms total. (pinned by test/gate-jev.test.js:45)
+- [ ] **On by default (owner, 2026-10-11: "turn it on").** Jev is used whenever `JEV_API_KEY` is set, unless `COMPOSE_GATE_JEV=0` opts out. No key: silent regex, no WARNING (the normal state for other compose users). `COMPOSE_GATE_JEV=1` with no key: one WARNING. Budget 1500 ms total.
 - [x] Request payload identical to the spike (`scratch/2026-10-11-gate-jev-retime/work/retime.py`): same question text, (pinned by test/gate-jev.test.js:66)
       criteria and `state` shape, model `jev-latest`.
 - [x] `promptGate()` awaits it only when a Stratum `summary` exists; `buildRecommendation()` uses the Jev answer when (pinned by test/gate-jev.test.js:172)
