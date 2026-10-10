@@ -82,3 +82,26 @@ pre-registered spike, not a revision of this one.
 **Finding independent of Jev:** the current keyword regex disagrees with the reference on 21 of 51 real summaries. It
 misses 11 of 15 REVISE cases (it suggests "approve" when the step reported a problem) and raises 10 false REVISEs on
 words like "missing" or "error" inside a clean summary. That is a defect in the gate default on its own.
+
+## Re-time spike (pre-registered 2026-10-11, owner: "sure run one")
+
+Why: the first run opened a new TLS connection through the local proxy (`127.0.0.1:8118`) on every call, while the
+Codex arms were starting on the same Mac. Measured afterwards: a new proxied connection costs 0.4-0.9 s even for an
+unauthenticated 403, a reused one about 0.21 s, and the direct route is refused (HTTP 451). So the first run's latency
+mostly measured connection setup. This spike re-times Jev with the connection held open. Same corpus (sha above),
+same `question.txt` (sha `8dc77be7...52dd1`), same Jev question payload, no tuning. No Codex calls.
+
+- **Arm W (warm, the bar):** one persistent HTTPS connection through the proxy, 3 uncounted warm-ups, the 51 rows
+  sequentially, wall-clock per call.
+- **Arm C (cold, descriptive):** a new connection per call, the 51 rows sequentially, same run conditions. Tells how much
+  of the first run was overlap with the Codex arms.
+- **Idle probe (descriptive):** after one warm call, wait 30, 60, 120, 300 s, call again on the same connection. Record
+  whether the connection was reused and the latency. This decides whether a build can rely on keep-alive, because real
+  gates are minutes apart.
+- **Conditions:** no other spike work from this session. Other sessions' jobs cannot be stopped, so record the load
+  average at start and end.
+- **Pre-registered bar, all must hold on Arm W:** p95 < 1000 ms, and on Arm W's labels the original accuracy conditions
+  1-3 still hold (agreement >= 33/51, REVISE recall >= 4/15, agreement >= 40/51, scored against the same reference labels).
+- **Outcome:** pass, the KILLED status is reversed and the build proceeds, with the idle probe deciding the connection
+  design (keep-alive, or pre-warm at step start). If the idle probe shows the connection never survives a gate-length idle
+  AND Arm C p95 >= 1 s, the build must pre-warm, and that is stated in the build checklist. Fail, KILLED stands, final.
