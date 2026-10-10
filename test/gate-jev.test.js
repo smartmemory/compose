@@ -8,12 +8,13 @@ import http from 'node:http';
 import net from 'node:net';
 import { PassThrough } from 'node:stream';
 import { readFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const {
-  jevGateDefault, buildJevBody, proxyFor, noProxyMatches, createJevTransport, resetJevWarnings,
+  JEV_BUDGET_MS, jevGateDefault, buildJevBody, proxyFor, noProxyMatches, createJevTransport, resetJevWarnings,
 } = await import(`${REPO_ROOT}/lib/gate-jev.js`);
 const { promptGate } = await import(`${REPO_ROOT}/lib/gate-prompt.js`);
 
@@ -84,13 +85,25 @@ test('jevGateDefault: one WARNING per failure kind, not per gate', async () => {
   assert.equal(warnings.length, 2);
 });
 
+const FIX = resolve(REPO_ROOT, 'test/fixtures/gate-jev');
+
 test('payload is the spike payload (question, criteria, state shape, model)', () => {
   const body = JSON.parse(buildJevBody('Done "é".'));
-  const question = readFileSync(resolve(REPO_ROOT, '../scratch/2026-10-11-gate-jev-retime/question.txt'), 'utf8');
   assert.equal(body.model, 'jev-latest');
-  assert.equal(body.questions.gate.instructions, question);
+  assert.equal(body.questions.gate.instructions, readFileSync(resolve(FIX, 'question.txt'), 'utf8'));
   assert.deepEqual(Object.keys(body.questions.gate.criteria), ['APPROVE', 'REVISE']);
+  assert.equal(body.questions.gate.criteria.APPROVE, readFileSync(resolve(FIX, 'criteria-approve.txt'), 'utf8'));
+  assert.equal(body.questions.gate.criteria.REVISE, readFileSync(resolve(FIX, 'criteria-revise.txt'), 'utf8'));
   assert.deepEqual(JSON.parse(body.state), { step_summary: 'Done "é".' });
+});
+
+// F5: `state` is Python json.dumps(obj, ensure_ascii=False): ": " separator, non-ASCII literal.
+test('state string is byte-identical to Python json.dumps(ensure_ascii=False)', () => {
+  const rows = [
+    ['Step done.', '{"step_summary": "Step done."}'],
+    ['Done "é" ✓\nok', '{"step_summary": "Done \\"é\\" ✓\\nok"}'],
+  ];
+  for (const [summary, want] of rows) assert.equal(JSON.parse(buildJevBody(summary)).state, want);
 });
 
 test('proxy env is honored (either case), NO_PROXY bypasses it', () => {
@@ -255,4 +268,90 @@ test('promptGate: no key leaves the sentence byte-identical (no source, no call)
   const { text } = await gate({ summary: 'All good.' }, { env: {}, transport });
   assert.ok(text.includes('All good. Ship it?') && !text.includes('default by'));
   assert.equal(calls, 0);
+});
+
+// F1: input consumed or behavior changed before the gate's readline exists. A flowing
+// input (a 'data' listener attached) must still deliver an answer typed right after the call.
+const F1_ROWS = [
+  { name: 'Jev off (flag 0)', env: { JEV_API_KEY: KEY, COMPOSE_GATE_JEV: '0' }, slow: false },
+  { name: 'Jev off (no key)', env: {}, slow: false },
+  { name: 'Jev on, slow transport', env: ON, slow: true },
+];
+for (const row of F1_ROWS) {
+  test(`promptGate: flowing input keeps an answer typed right after the call: ${row.name}`, async () => {
+    const input = new PassThrough(); const output = new PassThrough();
+    input.on('data', () => {});
+    output.resume();
+    const transport = row.slow
+      ? () => new Promise((r) => setTimeout(() => r({ answers: { gate: { choice: 'APPROVE' } } }), 150))
+      : async () => ({});
+    const p = promptGate({ step_id: 's' }, { input, output, gateExtras: { summary: 'All good.' }, jevOptions: { env: row.env, transport } });
+    input.write('a\n');
+    const result = await Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('answer lost')), 2000))]);
+    assert.equal(result.outcome, 'approve');
+  });
+}
+
+// F2: network handles outside the budget. A proxy that accepts CONNECT and never answers.
+async function stalledProxy() {
+  const sockets = [];
+  const server = net.createServer((s) => { sockets.push(s); s.on('error', () => {}); });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  return { port: server.address().port, close: () => { sockets.forEach((s) => s.destroy()); server.close(); } };
+}
+
+test('stalled CONNECT proxy: jevGateDefault returns null within the budget', async () => {
+  const sp = await stalledProxy();
+  const transport = createJevTransport({ proxy: { host: '127.0.0.1', port: sp.port }, tlsWrap: (s) => s });
+  try {
+    const t0 = Date.now();
+    const { label, warnings } = await run(ON, transport, { timeoutMs: 300 });
+    assert.equal(label, null);
+    assert.ok(Date.now() - t0 < 1000, `took ${Date.now() - t0} ms`);
+    assert.equal(warnings.length, 1);
+  } finally { transport.close(); sp.close(); }
+});
+
+test('stalled CONNECT proxy: a process running the scenario exits on its own', async () => {
+  const sp = await stalledProxy();
+  const script = `
+    const { jevGateDefault, createJevTransport } = await import(${JSON.stringify(`${REPO_ROOT}/lib/gate-jev.js`)});
+    const transport = createJevTransport({ proxy: { host: '127.0.0.1', port: ${sp.port} }, tlsWrap: (s) => s });
+    const r = await jevGateDefault('s', { env: { JEV_API_KEY: 'k' }, transport, timeoutMs: 300, warn() {} });
+    process.stdout.write(String(r));
+  `;
+  try {
+    const child = spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: ['ignore', 'pipe', 'inherit'] });
+    let out = ''; child.stdout.on('data', (d) => { out += d; });
+    const t0 = Date.now();
+    const code = await Promise.race([
+      new Promise((r) => child.on('exit', r)),
+      new Promise((r) => setTimeout(() => { child.kill('SIGKILL'); r('hung'); }, 3000)),
+    ]);
+    assert.equal(code, 0, 'child must exit on its own');
+    assert.equal(out, 'null');
+    assert.ok(Date.now() - t0 < 3000);
+  } finally { sp.close(); }
+});
+
+test('caller abort destroys the CONNECT request and sockets', async () => {
+  const sp = await stalledProxy();
+  const transport = createJevTransport({ proxy: { host: '127.0.0.1', port: sp.port }, tlsWrap: (s) => s });
+  try {
+    const ctl = new AbortController();
+    const p = transport('{}', { key: KEY, signal: ctl.signal });
+    p.catch(() => {});
+    await new Promise((r) => setTimeout(r, 50));
+    ctl.abort();
+    await assert.rejects(p);
+  } finally { transport.close(); sp.close(); }
+});
+
+test('default budget is 1500 ms: a never-answering transport yields null at about that mark', async () => {
+  assert.equal(JEV_BUDGET_MS, 1500);
+  const t0 = Date.now();
+  const { label } = await run(ON, () => new Promise(() => {}));
+  const ms = Date.now() - t0;
+  assert.equal(label, null);
+  assert.ok(ms >= 1400 && ms < 2000, `took ${ms} ms`);
 });

@@ -56,17 +56,17 @@ Spec revised 2026-10-11 from the re-time evidence. Facts the build must respect:
 - One kept-alive connection, created lazily and reused across gates in the process. Measured: warm p95 532 ms, cold
   p95 1260 ms, the connection survived a 300 s idle. On a dead socket, reconnect once inside the budget.
 
-- [x] `lib/gate-jev.js` (new): `jevGateDefault(summary, {env, timeoutMs, transport})` returns `'approve' | 'revise' | null`. (pinned by test/gate-jev.test.js:45)
+- [x] `lib/gate-jev.js` (new): `jevGateDefault(summary, {env, timeoutMs, transport})` returns `'approve' | 'revise' | null`. (pinned by test/gate-jev.test.js:43, test/gate-jev.test.js:79)
       Null on flag off, key missing, error, timeout or an unexpected answer, with one WARNING per failure kind per process.
-- [x] **On by default (owner, 2026-10-11: "turn it on").** Jev is used whenever `JEV_API_KEY` is set, unless `COMPOSE_GATE_JEV=0` opts out. No key: silent regex, no WARNING (the normal state for other compose users). `COMPOSE_GATE_JEV=1` with no key: one WARNING. Budget 1500 ms total. (pinned by test/gate-jev.test.js:58)
-- [x] Request payload identical to the spike (`scratch/2026-10-11-gate-jev-retime/work/retime.py`): same question text, (pinned by test/gate-jev.test.js:66)
+- [x] **On by default (owner, 2026-10-11: "turn it on").** Jev is used whenever `JEV_API_KEY` is set, unless `COMPOSE_GATE_JEV=0` opts out. No key: silent regex, no WARNING (the normal state for other compose users). `COMPOSE_GATE_JEV=1` with no key: one WARNING. Budget 1500 ms total. (pinned by test/gate-jev.test.js:59, test/gate-jev.test.js:350)
+- [x] Request payload identical to the spike (`scratch/2026-10-11-gate-jev-retime/work/retime.py`): same question text, (pinned by test/gate-jev.test.js:90, test/gate-jev.test.js:101)
       criteria and `state` shape, model `jev-latest`.
-- [x] `promptGate()` awaits it only when a Stratum `summary` exists; `buildRecommendation()` uses the Jev answer when (pinned by test/gate-jev.test.js:172)
+- [x] `promptGate()` awaits it only when a Stratum `summary` exists; `buildRecommendation()` uses the Jev answer when (pinned by test/gate-jev.test.js:233, test/gate-jev.test.js:258)
       non-null, else the regex. Recommendation sentence says which source picked the default (`jev` or `keyword`).
-- [x] The key is read by name only. No key value in code, logs, fixtures or docs. (pinned by test/gate-jev.test.js:45)
-- [x] Table-driven test over: Jev approve, Jev revise, error, timeout, unexpected answer, flag off, key missing, (pinned by test/gate-jev.test.js:45)
+- [x] The key is read by name only. No key value in code, logs, fixtures or docs. (pinned by test/gate-jev.test.js:210)
+- [x] Table-driven test over: Jev approve, Jev revise, error, timeout, unexpected answer, flag off, key missing, (pinned by test/gate-jev.test.js:43, test/gate-jev.test.js:59, test/gate-jev.test.js:109, test/gate-jev.test.js:166)
       proxy env honored, NO_PROXY honored, connection reused across two calls. Transport injected; no live network in tests.
-- [x] CHANGELOG entry in the same commit. (pinned by CHANGELOG.md:5)
+- [x] CHANGELOG entry in the same commit. (pinned by commit 5d660b19)
 
 ## Acceptance criteria
 

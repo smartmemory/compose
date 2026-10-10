@@ -1,0 +1,1 @@
+This is the summary of a finished lifecycle step, shown at a review gate. Should the default answer be APPROVE (the step reports its work done, nothing blocking) or REVISE (it reports a defect, failure, missing artifact or unresolved blocker in the step's own work)?
