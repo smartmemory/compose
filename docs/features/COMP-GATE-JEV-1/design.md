@@ -1,6 +1,8 @@
 # COMP-GATE-JEV-1 — Jev for the gate approve/revise default (design)
 
-**Status:** PLANNED (filed 2026-10-10). **Value spike:** PENDING. Build only if the spike passes.
+**KILLED (2026-10-10):** value spike FAILED condition 4 (Jev p95 1602 ms, bar < 1 s). Conditions 1-3 passed. See "Spike results".
+
+**Status:** KILLED. **Value spike:** FAIL (run 2026-10-10).
 **Origin:** redirected from `stratum/docs/features/STRAT-JUDGE-JEV-1/design.md` (PARKED 2026-10-10: its `stakes: cheap`
 target has zero real callers). Owner pick: "redirect Jev to a live call site".
 
@@ -51,6 +53,32 @@ Pre-registered here before any run. Do not edit this section after results exist
 
 ## Acceptance criteria
 
-- [ ] Spike run, results recorded in this file against the bar
-- [ ] Spike artifacts and a README in the spike folder, `JEV_API_KEY` absent from all of them
-- [ ] On pass: the build checklist above, with tests green. On fail: status KILLED with numbers
+- [x] Spike run, results recorded in this file against the bar
+- [x] Spike artifacts and a README in the spike folder, `JEV_API_KEY` absent from all of them
+- [x] On pass: the build checklist above, with tests green. On fail: status KILLED with numbers (FAIL, killed 2026-10-10)
+
+## Spike results (2026-10-10, recorded after the run; the bar above is unchanged)
+
+Report: `/Users/ruze/reg/my/forge/scratch/2026-10-10-gate-jev-spike/REPORT.md`. Numbers re-computed by the coordinator from
+`preds-*.jsonl` and the frozen corpus (sha matches). Reference labelled 15 REVISE, 36 APPROVE.
+
+| arm | agreement | REVISE recall |
+|---|---|---|
+| regex (current) | 30/51 | 4/15 |
+| gpt-6-luna/low | 40/51 | 11/15 |
+| Jev | 46/51 | 11/15 |
+
+| condition | result |
+|---|---|
+| 1. Jev >= regex + 3 | 46 vs 30, PASS |
+| 2. Jev REVISE recall >= regex | 11 vs 4, PASS |
+| 3. Jev >= luna | 46 vs 40, PASS |
+| 4. Jev p95 < 1 s from this Mac | p50 708 ms, p95 1602 ms, max 2647 ms (n=51), FAIL |
+
+Outcome per the pre-registered rule: KILLED. Caveat from the report: Jev was timed while the Codex reference arm was also
+starting on the same Mac, and the prior SmartMemory spike measured Jev p95 580 ms from this Mac. A re-time is a new
+pre-registered spike, not a revision of this one.
+
+**Finding independent of Jev:** the current keyword regex disagrees with the reference on 21 of 51 real summaries. It
+misses 11 of 15 REVISE cases (it suggests "approve" when the step reported a problem) and raises 10 false REVISEs on
+words like "missing" or "error" inside a clean summary. That is a defect in the gate default on its own.
