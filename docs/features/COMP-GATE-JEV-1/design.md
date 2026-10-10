@@ -3,7 +3,7 @@
 **KILL REVERSED (2026-10-11):** the pre-registered re-time spike PASSED (warm p95 532 ms). See "Re-time results".
 First run 2026-10-10 failed only on latency (p95 1602 ms), which measured per-call proxied connection setup.
 
-**Status:** BUILT, awaiting review. **Value spike:** PASS on re-time (2026-10-11).
+**Status:** BUILT, Codex review CLEAN on round 2 (2026-10-11, runs f4668856e508 NOT CLEAN -> debf13b7fefe CLEAN). **Value spike:** PASS on re-time (2026-10-11).
 **Origin:** redirected from `stratum/docs/features/STRAT-JUDGE-JEV-1/design.md` (PARKED 2026-10-10: its `stakes: cheap`
 target has zero real callers). Owner pick: "redirect Jev to a live call site".
 
