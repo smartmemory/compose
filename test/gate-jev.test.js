@@ -355,3 +355,42 @@ test('default budget is 1500 ms: a never-answering transport yields null at abou
   assert.equal(label, null);
   assert.ok(ms >= 1400 && ms < 2000, `took ${ms} ms`);
 });
+
+// F6 (class: a test run inherits a live credential from the ambient env and reaches a paid service).
+// Ambient cases run in a child process so NODE_TEST_CONTEXT / VITEST are controlled.
+function childEnabled({ testVar, explicitEnv, transport, optOut }) {
+  const code = `
+    const { jevGateEnabled, jevGateDefault } = await import(${JSON.stringify(`${REPO_ROOT}/lib/gate-jev.js`)});
+    const t = ${transport ? 'async () => ({ answers: { gate: { choice: "APPROVE" } } })' : 'undefined'};
+    const env = ${explicitEnv ? '{ JEV_API_KEY: "k" }' : 'process.env'};
+    const w = [];
+    const out = await jevGateDefault('Step done.', { env, transport: t, warn: (m) => w.push(m), timeoutMs: 300 });
+    console.log(JSON.stringify({ enabled: jevGateEnabled(env, { transport: t }), out, warned: w.length }));`;
+  const env = { PATH: process.env.PATH, JEV_API_KEY: 'k', HTTPS_PROXY: 'http://127.0.0.1:9' };
+  if (testVar) env[testVar] = testVar === 'NODE_TEST_CONTEXT' ? 'child-v8' : 'true';
+  if (optOut) env.COMPOSE_GATE_JEV = '0';
+  return new Promise((res, rej) => {
+    const c = spawn(process.execPath, ['--input-type=module', '-e', code], { env });
+    let o = '';
+    c.stdout.on('data', (d) => (o += d));
+    c.on('error', rej);
+    c.on('close', () => res(JSON.parse(o.trim().split('\n').pop())));
+  });
+}
+
+const F6_ROWS = [
+  { name: 'ambient + NODE_TEST_CONTEXT', args: { testVar: 'NODE_TEST_CONTEXT' }, enabled: false, out: null },
+  { name: 'ambient + VITEST', args: { testVar: 'VITEST' }, enabled: false, out: null },
+  { name: 'ambient, no runner', args: {}, enabled: true, out: null /* dead proxy: falls back */ },
+  { name: 'explicit env under runner', args: { testVar: 'NODE_TEST_CONTEXT', explicitEnv: true }, enabled: true, out: null },
+  { name: 'injected transport under runner', args: { testVar: 'NODE_TEST_CONTEXT', transport: true }, enabled: true, out: 'approve' },
+  { name: 'COMPOSE_GATE_JEV=0', args: { optOut: true }, enabled: false, out: null },
+];
+for (const row of F6_ROWS) {
+  test(`F6 ambient credential guard: ${row.name}`, async () => {
+    const r = await childEnabled(row.args);
+    assert.equal(r.enabled, row.enabled);
+    assert.equal(r.out, row.out);
+    if (!row.enabled) assert.equal(r.warned, 0, 'silent when disabled');
+  });
+}
