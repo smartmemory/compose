@@ -98,6 +98,17 @@ Sample: draw uniformly at random (seed 20261012) from the eligible pool until n 
 in blocks of 40 until R >= 20 or the pool is exhausted (report which). No REVISE-targeted sampling, so agreement reflects
 the real base rate.
 
+**A1 corpus frozen (2026-10-12, before any labels or rule code).** Builder report
+`/Users/ruze/reg/my/forge/scratch/2026-10-12-gate-default/CORPUS.md`. The eligible pool is **51 rows, exhausted** (the n = 120
+draw is not reachable). 51 is above the 40-row floor, so all 51 are labeled; no further blocks exist, so R < 20 cannot be
+topped up and is reported with its uncertainty. Pool: ts flows 43, legacy flows 8; forge 41, SmartMemory 7, music-gen 3.
+sha256: `heldout-u1.jsonl` 441ce4309122cda7a1eb93f63f9fcc4defd381783cb45f8d1dbacb1f30525822, `gate7.jsonl`
+4f7e8a938f14d9365771de485c55deacb63ee2ebbc14ddc208100b4f598d9400, `score.py`
+6790fbc9352ec766b844712415595ee1f4721e0191b326c6f73221fb21936c13, `old_regex.js`
+535fe14148672544754dfd4bf311718c1d53dfd5c3df2c63269c1caeebe9f6e8, `rubric.md`
+cc97567918f1b420f9aeb4eb3c8e28fd422b56d0e38251be2be165eb8dbfd363. Scorer self-test on the dev set reproduces the
+spike's regex numbers exactly (C 30/51, TP 4, R 15, FP 10).
+
 ## Pre-registered bar (held-out only; scorer and corpus frozen before any rule code; do not edit after results)
 
 Definitions on the held-out rows: `n` rows, `R` reference REVISEs, `TP` predicted REVISE and reference REVISE, `FP`
