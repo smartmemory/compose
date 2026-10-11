@@ -81,6 +81,23 @@ vendors, each blind to the other: `gpt-6.1-sol/high` and Claude Opus. Agreement 
 coordinator adjudicates against the rubric before any rule exists, and the row records `adjudicated: true`. The labeler
 agreement rate is reported. The dev set is relabeled the same way so dev and held-out use one standard.
 
+## Amendment A1 (2026-10-12, before any labels or rule code): population broadened
+
+**Census result** (`/Users/ruze/reg/my/forge/scratch/2026-10-12-gate-default/CENSUS.md`): only **7** eligible interactive gate
+encounters survive provenance + dedup (59 raw ever, all 7 survivors are `design_gate`, all predecessor outcomes `complete`).
+That is below the 40-row floor, so the gate-only population cannot carry the bar.
+
+**Change (coordinator, under the owner's "stop stopping" rule; owner may override):** the held-out population becomes
+**completion summaries of real-project build steps**, i.e. the `summary` a step returns at completion, which is the exact
+text a gate shows for its predecessor. Excluded: steps whose summary is produced programmatically or never shown at an
+interactive gate (`review*`, `*_gate`, `execute_merge`, `decompose`, `review_triage`). All provenance, grouping and dedup
+rules above still apply (sources: `~/.stratum/ts/flows` first, then legacy `~/.stratum/flows`, then build streams). The 7
+true gate rows are scored separately and reported as a sanity check, not as the bar.
+Known gap, stated: `plan_gate` inputs carry appended reality text that no stored flow records, so that variant is not covered.
+Sample: draw uniformly at random (seed 20261012) from the eligible pool until n = 120, then label; if R < 20, draw further
+in blocks of 40 until R >= 20 or the pool is exhausted (report which). No REVISE-targeted sampling, so agreement reflects
+the real base rate.
+
 ## Pre-registered bar (held-out only; scorer and corpus frozen before any rule code; do not edit after results)
 
 Definitions on the held-out rows: `n` rows, `R` reference REVISEs, `TP` predicted REVISE and reference REVISE, `FP`
