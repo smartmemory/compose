@@ -207,9 +207,17 @@ describe('Compose build summary shows lessons awaiting the owner', () => {
         await trainer.stepDone(planned.runId, 'work', { output: { outcome: 'done' } }, planned.ready[0].dispatchToken);
       }
       const sidecar = join(workspace, '.stratum', 'learn', 'candidates.jsonl');
-      for (let waited = 0; !existsSync(sidecar) && waited < 10_000; waited += 50) await new Promise((r) => setTimeout(r, 50));
-      const rows = readFileSync(sidecar, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
-      lessonRevision = rows.find((row) => row.rendered.guidance)?.revisionId;
+      // The writer opens the file (empty) before it writes the row, so existence is not
+      // readiness: wait for a complete, parseable guided row.
+      let rows = [];
+      for (let waited = 0; waited < 10_000; waited += 50) {
+        try {
+          rows = readFileSync(sidecar, 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line));
+          if (rows.some((row) => row.rendered?.guidance)) break;
+        } catch { /* missing, empty or mid-write: poll again */ }
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      lessonRevision = rows.find((row) => row.rendered?.guidance)?.revisionId;
       assert.ok(lessonRevision, 'the INLINE pass staged a guided lesson');
     } finally {
       await trainer.close();
