@@ -27,6 +27,7 @@ import { preflightCodexWorktreeProbe } from '../lib/codex-preflight.js';
 import { installAgentHarness } from './helpers/ts-agent-harness.js';
 import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
+import { connectForTest } from './helpers/connect-for-test.js';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -229,7 +230,7 @@ describe('a real build tags every dispatch it issues', () => {
     git(['add', '-A']);
     git(['commit', '-qm', 'flow tag baseline']);
 
-    await client.connect({
+    await connectForTest(t, client, {
       command: process.env.COMPOSE_STRATUM_TS_NODE || process.execPath,
       args: [TS_MCP_BIN],
       env: { ...process.env, STRATUM_STATE_ROOT: stateRoot },

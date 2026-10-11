@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { StratumMcpClient } from '../../lib/stratum-mcp-client.js';
 import { TS_MCP_BIN, TS_CLI_BIN } from '../helpers/stratum-test-bin.js';
+import { connectForTest } from '../helpers/connect-for-test.js';
 import { makeFakeCodexProject, CANCEL_FANOUT_SPEC, processGroupGone, waitForReceipt } from '../helpers/fake-codex-project.js';
 
 const cli = fileURLToPath(new URL('../../bin/compose.js', import.meta.url));
@@ -95,7 +96,7 @@ test('S07-2: real build --abort preserves captured lane A evidence without mergi
   const abortExit = await aborter.exited;
   assert.equal(abortExit.code, 0, output);
   const buildExit = await build.exited;
-  await client.connect({ command: process.execPath, args: [TS_MCP_BIN], env, cwd: fixture.workspace });
+  await connectForTest(t, client, { command: process.execPath, args: [TS_MCP_BIN], env, cwd: fixture.workspace });
 
   // Exactly the C50 outcomes. Post-apply reversal is unreachable mid-fanout.
   assert.equal((await client.audit(active.flowId)).status, 'cancelled');

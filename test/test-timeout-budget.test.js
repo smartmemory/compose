@@ -17,10 +17,15 @@
  * produces the evidence) and the second pins the CONSEQUENCE for our config. If a
  * future node makes the file-level test exempt, the first test fails and the
  * ceiling can safely come back down.
+ *
+ * 2026-10-12 recurrence: build-model-route-outcomes grew to 14 real wave builds and
+ * 750-850s loaded, so the 900s cap killed it mid-build and it read as a hang. Raising
+ * the cap again only moves the cliff. Instead the third test pins a per-file cap on
+ * wave builds (WAVE_BUILDS_PER_FILE in test/helpers/routing-runtime-fixture.js).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -66,3 +71,46 @@ test('every --test-timeout in package.json clears the slowest file\'s loaded wal
       `scripts.${name} sets --test-timeout=${ms}; under load the slowest file has taken 301s, so this kills healthy files`);
   }
 });
+
+test('a test file over WAVE_BUILDS_PER_FILE fails at the extra build, not at the file timeout', async () => {
+  const { admitWaveBuild, WAVE_BUILDS_PER_FILE } = await import('./helpers/routing-runtime-fixture.js');
+  const file = `budget-probe-${process.pid}.test.js`;
+  for (let i = 0; i < WAVE_BUILDS_PER_FILE; i++) admitWaveBuild(file);
+  assert.throws(() => admitWaveBuild(file), /WAVE_BUILDS_PER_FILE=\d+; split the file/);
+  admitWaveBuild(`${file}.other`); // the count is per file
+});
+
+for (const guarded of [true, false]) {
+  test(`a test that times out while connecting ${guarded ? 'closes the late client (connectForTest)' : 'leaks it and holds the file open (control)'}`, (t) => {
+    const dir = mkdtempSync(join(tmpdir(), 'tt-connect-'));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    const file = join(dir, 'fixture.test.js');
+    const helper = JSON.stringify(join(REPO_ROOT, 'test/helpers/connect-for-test.js'));
+    // connect() finishes after the 200ms test timeout and owns a child that lives 8s on its own.
+    writeFileSync(file, [
+      "import { test } from 'node:test';",
+      "import { spawn } from 'node:child_process';",
+      `import { connectForTest } from ${helper};`,
+      'const client = {',
+      "  async connect() { await new Promise((r) => setTimeout(r, 600)); this.child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 8000)']); },",
+      '  async close() { this.child?.kill(); },',
+      '};',
+      "test('connects too late', { timeout: 200 }, async (t) => {",
+      '  t.after(() => client.close());',
+      `  await ${guarded ? 'connectForTest(t, client)' : 'client.connect()'};`,
+      '});',
+    ].join('\n'));
+    const env = { ...process.env };
+    delete env.NODE_TEST_CONTEXT;
+    const started = Date.now();
+    const r = spawnSync(process.execPath, ['--test', '--test-timeout=4000', file], { encoding: 'utf8', env });
+    const out = `${r.stdout}${r.stderr}`;
+    assert.match(out, /test timed out after 200ms/, out);
+    if (guarded) {
+      assert.doesNotMatch(out, /test timed out after 4000ms/, 'the file must exit once the late client is closed');
+      assert.ok(Date.now() - started < 4000, out);
+    } else {
+      assert.match(out, /test timed out after 4000ms/, 'without the guard the leaked child holds the FILE until its cap');
+    }
+  });
+}

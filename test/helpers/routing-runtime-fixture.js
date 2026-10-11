@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import YAML from 'yaml';
 import { StratumMcpClient } from '../../lib/stratum-mcp-client.js';
 import { TS_MCP_BIN } from './stratum-test-bin.js';
+import { connectForTest } from './connect-for-test.js';
 import { runBuild } from '../../lib/build.js';
 import { runGsd } from '../../lib/gsd.js';
 import { readRoutingLedger } from '../../lib/routing-ledger.js';
@@ -36,9 +37,14 @@ export async function runtimeFixture(t, { gsd = false, spec = simpleSpec(gsd), p
   writeFileSync(join(cwd, 'pipelines', `${name}.profiles.json`), JSON.stringify(profiles));
   await setup?.({ cwd, root });
   writeFileSync(join(cwd, '.gitignore'), '.compose/data/\n.compose/gsd/\n'); git(['add', '.']); git(['commit', '-qm', 'fixture']);
+  // A test that times out runs its after-hooks at once while its body keeps going: stop before
+  // touching process.env, and register cleanup before connecting (see connect-for-test.js).
+  if (t.signal?.aborted) { rmSync(root, { recursive: true, force: true }); throw t.signal?.reason ?? Error('test ended during runtime fixture setup'); }
   const previous = process.env.STRATUM_STATE_ROOT; process.env.STRATUM_STATE_ROOT = stateRoot; process.env.NODE_ENV = 'test';
   const engine = new StratumMcpClient();
-  await engine.connect({ command: process.execPath, args: [TS_MCP_BIN], cwd, env: { ...process.env, ...engineEnv, STRATUM_STATE_ROOT: stateRoot, RESEND_API_KEY: '', STRIPE_API_KEY: '' } });
+  t.after(async () => { await engine.close(); if (previous === undefined) delete process.env.STRATUM_STATE_ROOT; else process.env.STRATUM_STATE_ROOT = previous; rmSync(root, { recursive: true, force: true }); });
+  await connectForTest(t, engine, { command: process.execPath, args: [TS_MCP_BIN], cwd, env: { ...process.env, ...engineEnv, STRATUM_STATE_ROOT: stateRoot, RESEND_API_KEY: '', STRIPE_API_KEY: '' } })
+    .catch(error => { if (t.signal?.aborted) rmSync(root, { recursive: true, force: true }); throw error; });
   const connector = new StratumMcpClient();
   const calls = [], receipts = [], reports = []; let flowId;
   connector._testClient = { callTool: async ({ name, arguments: args }) => {
@@ -68,11 +74,23 @@ export async function runtimeFixture(t, { gsd = false, spec = simpleSpec(gsd), p
     run: (opts = {}) => gsd ? runGsd(CODE, { cwd, stratum, route_mode: mode, gateCommands: ['true'], preMergeGate: ['true'], consumerArtifactsRoot: artifactRoot, ...opts })
       : runBuild(CODE, { cwd, stratum, route_mode: mode, mode: 'bug', template: 'bug-fix', skipTriage: true, consumerArtifactsRoot: artifactRoot, gateOpts: { nonInteractive: true }, ...opts }),
   };
-  t.after(async () => { await engine.close(); if (previous === undefined) delete process.env.STRATUM_STATE_ROOT; else process.env.STRATUM_STATE_ROOT = previous; rmSync(root, { recursive: true, force: true }); });
   return f;
 }
 
+/**
+ * A wave build costs 30-120s of wall time on a loaded machine (up to 250s at load 180 on 16 cores),
+ * and `--test-timeout` caps a FILE's total (test/test-timeout-budget.test.js). build-model-route-outcomes
+ * reached 14 wave builds and 750-850s loaded against the 900s cap, so it was killed as an apparent hang.
+ * Three per file keeps ~3x headroom at ordinary loaded rates. Split files instead of raising this.
+ */
+export const WAVE_BUILDS_PER_FILE = 3;
+const waveBuilds = new Map();
+export function admitWaveBuild(file) {
+  const built = (waveBuilds.get(file) ?? 0) + 1; waveBuilds.set(file, built);
+  if (built > WAVE_BUILDS_PER_FILE) throw Error(`${file} runs wave build ${built} > WAVE_BUILDS_PER_FILE=${WAVE_BUILDS_PER_FILE}; split the file so its loaded wall time stays well under --test-timeout`);
+}
 export async function runtimeWaveFixture(t, { incompletePartition = false, added = false, lostRevise = false, gsd = false, checkpoint = true, skipB = false, multiStage = false, hold = false, failBTransport = false, repairRounds = 1, initialBFiles, repairFilesByRound } = {}) {
+  admitWaveBuild(t.filePath ?? process.argv[1]);
   const spec = simpleSpec(gsd), flow = spec.flows[spec.flows.entry];
   Object.assign(spec.contracts, { Graph: { tasks: 'object[]' }, Review: { blocking: 'boolean', findings: 'object[]' },
     Decision: { action: 'string', rationale: 'string', open_count: 'number', blocking: 'boolean', addressed_findings: 'object[]', open_findings: 'object[]', tasks: 'object[]' } });

@@ -5,6 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { connectForTest } from './helpers/connect-for-test.js';
 
 // Real JSON-RPC transport and server entrypoint: set_workspace must override
 // COMPOSE_TARGET and never emit project-switch diagnostics on protocol stdout.
@@ -20,7 +21,7 @@ test('MCP rebind persists beyond the boot target through actual stdio requests',
   const client = new Client({ name: 'workspace-binding-probe', version: '1' });
   const errors = []; client.onerror = error => errors.push(error.message);
   t.after(async () => { await client.close(); fs.rmSync(parent, { recursive: true, force: true }); });
-  await client.connect(transport);
+  await connectForTest(t, client, transport);
   const invoke = async (name, args = {}) => {
     const result = await client.callTool({ name, arguments: args });
     assert.ok(!result.isError, JSON.stringify(result));

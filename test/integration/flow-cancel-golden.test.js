@@ -5,6 +5,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StratumMcpClient, isUnknownFlowError } from '../../lib/stratum-mcp-client.js';
 import { TS_MCP_BIN } from '../helpers/stratum-test-bin.js';
+import { connectForTest } from '../helpers/connect-for-test.js';
 import { makeFakeCodexProject, CANCEL_FANOUT_SPEC, processGroupGone, waitForReceipt } from '../helpers/fake-codex-project.js';
 
 test('S07-1: second real MCP client cancels a registered exec group and pins the wire contract', { timeout: 120000 }, async t => {
@@ -33,8 +34,8 @@ test('S07-1: second real MCP client cancels a registered exec group and pins the
     for (const pid of groups) assert.ok(processGroupGone(pid), `stray process group ${pid}`);
   });
   const connection = { command: process.execPath, args: [TS_MCP_BIN], cwd: fixture.workspace, env: fixture.env };
-  await a.connect(connection);
-  await b.connect(connection);
+  await connectForTest(t, a, connection);
+  await connectForTest(t, b, connection);
   const planned = await a.plan(CANCEL_FANOUT_SPEC, 'main', {
     featureCode: 'S07-FLOW', description: 'cancel golden', implementer_agent: 'codex', reviewer_agent: 'codex',
   }, { workspaceRoot: fixture.workspace });
@@ -84,7 +85,7 @@ test('S07-1: second real MCP client cancels a registered exec group and pins the
     assert.equal(isUnknownFlowError(error), false, 'normalized coded error is no longer the raw C4 shape');
     return true;
   });
-  await wire.connect(transport);
+  await connectForTest(t, wire, transport);
   await assert.rejects(wire.callTool({ name: 'stratum_flow_cancel', arguments: { runId: unknownId } }), error => {
     assert.equal(error.data, undefined);
     assert.equal(typeof error.code, 'number');

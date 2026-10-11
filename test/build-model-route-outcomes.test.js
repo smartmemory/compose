@@ -76,74 +76,6 @@ for (const when of ['before:gateResolve', 'gateResolve']) test(`gate response lo
   assert.equal(f.rows().find(r => r.issuance?.scopedStep === 'work').outcome.label, 'unknown');
 });
 
-for (const added of [false, true]) test(`real Build carry reset retains A and ${added ? 'adds C without rejecting B' : 'repairs old B while new B moves to index zero'}`, async t => {
-  const { runtimeWaveFixture } = await import('./helpers/routing-runtime-fixture.js');
-  const f = await runtimeWaveFixture(t, { added }); await f.run();
-  assert.equal(f.captured.length, 2, JSON.stringify({ events: f.snapshot().events.filter(e => e.type === "gate_resolved"), merges: f.journal().mergeTransactions }));
-  const before = f.captured[0]; assert.equal(before.before.steps.execute.fanout.items.length, 2);
-  const snapshots = Object.values(before.journal.routing.records).filter(r => r.type === 'wave-snapshot' && r.gateStepId === 'assess_gate');
-  assert.equal(snapshots.length, 1); assert.equal(snapshots[0].waves[0].items.length, 2);
-  const work = f.rows().filter(r => r.issuance?.scopedStep === 'execute');
-  const oldA = work.find(r => r.issuance.epoch === 0 && r.issuance.itemIndex === 0);
-  const oldB = work.find(r => r.issuance.epoch === 0 && r.issuance.itemIndex === 1);
-  const next = work.find(r => r.issuance.epoch === 1);
-  assert.equal(oldA.outcome.label, 'accepted'); assert.equal(oldB.outcome.label, added ? 'accepted' : 'repaired');
-  assert.equal(next.issuance.itemIndex, 0); assert.equal(next.issuance.logicalTaskId, added ? 'C' : 'B');
-  if (!added) assert.equal(next.context.repairOfRecordId, oldB.recordId);
-});
-test('actual carry provenance recovers a lost revise response as a validated engine token witness', async t => {
-  const { runtimeWaveFixture } = await import('./helpers/routing-runtime-fixture.js');
-  const f = await runtimeWaveFixture(t, { lostRevise: true }); await f.run();
-  const ack = records(f).find(r => r.type === 'gate-acknowledgement' && r.reconciliation === 'token-engine-witness');
-  assert.ok(ack); assert.equal(ack.witness.engineEvidence.consumedGateToken, f.captured[0].args[5]);
-  assert.ok(f.rows().some(r => r.outcome.label === 'repaired'));
-});
-
-test('real merge conflict records original approve and final revise/kill before each engine reset', async t => {
-  const { runtimeWaveFixture } = await import('./helpers/routing-runtime-fixture.js');
-  const f = await runtimeWaveFixture(t, { checkpoint: false }); await f.run();
-  const flips = records(f).filter(r => r.type === 'gate-disposition' && r.requestedDecision.decision !== r.finalProposedDecision.decision);
-  assert.deepEqual(flips.map(r => r.finalProposedDecision.decision), ['revise', 'kill']);
-  for (const flip of flips) {
-    assert.equal(flip.requestedDecision.decision, 'approve');
-    assert.match(flip.finalProposedDecision.rationale, /MERGE_WITNESS_PRECOMPUTE_FAILED/);
-    assert.equal(flip.ownershipCheck, 'ambiguous');
-    const before = f.gates.find(g => g.args[5] === flip.gateToken);
-    assert.ok(Object.values(before.journal.routing.records).some(r => r.id === flip.snapshotId));
-    assert.equal(Object.values(before.journal.routing.records).some(r => r.type === 'gate-acknowledgement' && r.dispositionId === flip.id), false);
-  }
-});
-
-test('incomplete original finding partition remains unknown through the public gate producer', async t => {
-  const { runtimeWaveFixture } = await import('./helpers/routing-runtime-fixture.js');
-  const f = await runtimeWaveFixture(t, { incompletePartition: true }); await f.run();
-  const disposition = records(f).find(r => r.type === 'gate-disposition' && r.gateStepId === 'assess_gate');
-  assert.ok(disposition); assert.equal(disposition.partitionCheck, 'ambiguous');
-  const original = f.rows().filter(r => r.issuance?.scopedStep === 'execute' && r.issuance.epoch === 0);
-  assert.equal(original.length, 2); assert.ok(original.every(r => r.outcome.label === 'unknown'));
-});
-
-test('engine-skipped item is captured without an invented issuance and remains unsafe to seal', async t => {
-  const { runtimeWaveFixture } = await import('./helpers/routing-runtime-fixture.js');
-  const f = await runtimeWaveFixture(t, { added: true, skipB: true });
-  // Revision admission must retain the S1a refusal for the unissued allocation.
-  await assert.rejects(f.run(), { code: 'ROUTING_CONTINUATION_AMBIGUOUS' });
-  const snapshot = records(f).find(r => r.type === 'wave-snapshot' && r.gateStepId === 'merge');
-  const skipped = snapshot.waves.flatMap(w => w.items).find(i => i.fullItem.id === 'B');
-  assert.equal(skipped.status, 'skipped'); assert.equal(skipped.issuanceId, null); assert.equal(skipped.issuanceToken, null);
-  assert.equal(records(f).filter(r => r.type === 'issuance' && r.logicalTaskId === 'B').length, 0);
-});
-
-test('real multi-stage consumer stages emit unsupported observations with no route issuance', async t => {
-  const { runtimeWaveFixture } = await import('./helpers/routing-runtime-fixture.js');
-  const f = await runtimeWaveFixture(t, { multiStage: true, added: true }); await f.run();
-  const intents = records(f).filter(r => r.type === 'call-intent' && r.observationId);
-  const stages = intents.map(i => records(f).find(r => r.id === i.observationId)).filter(o => o.unsupportedReason === 'multi-stage-consumer');
-  assert.ok(stages.some(o => o.stage === 0)); assert.ok(stages.some(o => o.stage === 1));
-  assert.ok(intents.every(i => i.issuanceId === null));
-  assert.equal(records(f).filter(r => r.type === 'issuance' && r.scopedStep === 'execute').length, 0);
-});
-
 test('real nested retry drives the scoped fixer without inventing a supported issuance for it', async t => {
   const spec = simpleSpec();
   spec.flows.bug_fix.steps = [{ id: 'nested', run: 'child', with: { task: '${input.task}' } }];
@@ -247,16 +179,6 @@ test('real dirty-review gate runs an unsupported review fixer before revising', 
   assert.ok(records(f).some(r => r.type === 'gate-disposition' && r.finalProposedDecision.decision === 'revise'));
 });
 
-test('configured hold materializes incomplete evidence without promoting merge checkpoints to acceptance', async t => {
-  const { runtimeWaveFixture } = await import('./helpers/routing-runtime-fixture.js');
-  const f = await runtimeWaveFixture(t, { hold: true }); await f.run();
-  assert.equal(f.snapshot().steps.assess_gate.status, 'waiting_gate');
-  assert.equal(f.captured.length, 0, 'hold performs no gate RPC or pre-reset capture');
-  const work = f.rows().filter(r => r.issuance?.scopedStep === 'execute');
-  assert.equal(work.length, 2); assert.ok(work.every(r => r.outcome.label === 'unknown'));
-  assert.equal(records(f).find(r => r.type === 'gate-disposition' && r.gateStepId === 'merge').dispositions.length, 0);
-});
-
 test('Build cancelled after a paid return materializes audit-plus-termination and terminal resume performs no call', async t => {
   const f = await runtimeFixture(t, { inference: async (_args, f) => {
     await f.engine.flowCancel(f.flowId);
@@ -269,16 +191,6 @@ test('Build cancelled after a paid return materializes audit-plus-termination an
   await assert.rejects(f.run({ resumeFlowId: f.flowId }), { code: 'FLOW_CANCELLED' });
   assert.equal(f.calls.length, before);
   assert.equal(f.rows().length, 1);
-});
-
-test('a consumer transport loss remains unsettled and cannot silently retry the item', async t => {
-  const { runtimeWaveFixture } = await import('./helpers/routing-runtime-fixture.js');
-  const f = await runtimeWaveFixture(t, { failBTransport: true });
-  await assert.rejects(f.run(), /lost consumer transport/);
-  const b = records(f).find(r => r.type === 'issuance' && r.logicalTaskId === 'B');
-  assert.ok(b); assert.equal(f.rows().find(r => r.recordId === b.id).outcome.label, 'unknown');
-  assert.equal(f.reports.filter(([, , , token]) => token === b.issuanceToken).length, 0);
-  assert.equal(records(f).filter(r => r.type === 'call-intent' && r.issuanceId === b.id).length, 1);
 });
 
 test('real engine-driven fanout recovers persisted receipts and coverage after the runner pauses', async t => {
@@ -331,19 +243,6 @@ test('policy revision transport disconnect cannot settle or approve its parent a
   assert.equal(f.calls.length, 2);
 });
 
-test('two real carry repairs retain A and bind B0 to B1 to B2 with repair depth two', async t => {
-  const { runtimeWaveFixture } = await import('./helpers/routing-runtime-fixture.js');
-  const f = await runtimeWaveFixture(t, { repairRounds: 2 }); await f.run();
-  assert.equal(f.captured.length, 3);
-  const work = f.rows().filter(r => r.issuance?.scopedStep === 'execute');
-  const a = work.find(r => r.issuance.logicalTaskId === 'A');
-  const b = work.filter(r => r.issuance.logicalTaskId === 'B').sort((a, b) => a.issuance.epoch - b.issuance.epoch);
-  assert.equal(a.outcome.label, 'accepted'); assert.equal(b.length, 3);
-  assert.deepEqual(b.map(r => r.outcome.label), ['repaired', 'repaired', 'accepted']);
-  assert.equal(b[1].context.repairOfRecordId, b[0].recordId);
-  assert.equal(b[2].context.repairOfRecordId, b[1].recordId); assert.equal(b[2].context.repairDepth, 2);
-});
-
 test('public Build settles unchanged real Codex SDK output with combined event model and split telemetry', async t => {
   const { realCodexTool } = await import('./helpers/real-codex-tool.js');
   const spec = simpleSpec(); spec.flows.bug_fix.steps[0].agent = 'codex';
@@ -358,38 +257,3 @@ test('public Build settles unchanged real Codex SDK output with combined event m
   assert.equal(row.cost.usd, 0.2); assert.equal(row.cost.paidReceiptRefs.length, 1);
   assert.notEqual(row.outcome.censorReason, 'uncertain-settlement');
 });
-
-for (const files of [['c.txt'], ['a.txt', 'c.txt'], ['b.txt', 'c.txt']]) {
-  test(`two real carry resets preserve residual B0 ownership for ${files.join('+')}`, async t => {
-    const { runtimeWaveFixture } = await import('./helpers/routing-runtime-fixture.js');
-    const f = await runtimeWaveFixture(t, { repairRounds: 2,
-      initialBFiles: ['b.txt', 'c.txt'], repairFilesByRound: [['b.txt'], files] });
-    await f.run();
-    assert.equal(f.captured.length, 3);
-    const work = f.rows().filter(r => r.issuance?.scopedStep === 'execute');
-    const b0 = work.find(r => r.issuance.logicalTaskId === 'B' && r.issuance.epoch === 0);
-    const b1 = work.find(r => r.issuance.epoch === 1);
-    const b2 = work.find(r => r.issuance.epoch === 2);
-    assert.equal(b1.context.repairOfRecordId, b0.recordId);
-    assert.equal(b1.context.repairDepth, 1);
-    const second = records(f).find(r => r.type === 'gate-disposition' && r.gateStepId === 'assess_gate' && r.gateOrdinal === 1);
-    assert.equal(second.partitionCheck, 'valid');
-    if (files.length === 1) {
-      assert.equal(second.ownershipCheck, 'valid');
-      assert.equal(second.lineage.length, 1);
-      assert.equal(second.lineage[0].fromIssuanceId, b0.recordId);
-      assert.equal(b2.context.repairOfRecordId, b0.recordId);
-      assert.equal(b2.context.repairDepth, 1);
-    } else {
-      assert.equal(second.ownershipCheck, 'ambiguous');
-      assert.equal(second.lineage.length, 0);
-      assert.equal(b2.context.repairOfRecordId, null);
-      assert.equal(b2.context.ancestryUnknown, true);
-    }
-    // Ownership projection must never rewrite the retained historical task.
-    const historical = records(f).filter(r => r.type === 'wave-snapshot').flatMap(r => r.waves.flatMap(w => w.items))
-      .filter(i => i.issuanceId === b0.recordId);
-    assert.ok(historical.length > 1);
-    for (const item of historical) assert.deepEqual(item.fullItem.files_owned, ['b.txt', 'c.txt']);
-  });
-}

@@ -1,4 +1,5 @@
 import { checkedConsumerAdapter } from './helpers/routing-adapter-check.js';
+import { connectForTest } from './helpers/connect-for-test.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
@@ -53,8 +54,8 @@ server.setRequestHandler(CallToolRequestSchema, async request=> {
 await server.connect(new StdioServerTransport());
 `);
   const client = new StratumMcpClient();
-  await client.connect({ command: process.execPath, args: [main], cwd: root });
   t.after(async () => { await client.close(); await rm(root, { recursive: true, force: true }); });
+  await connectForTest(t, client, { command: process.execPath, args: [main], cwd: root });
   return { client, root };
 }
 
