@@ -109,6 +109,25 @@ sha256: `heldout-u1.jsonl` 441ce4309122cda7a1eb93f63f9fcc4defd381783cb45f8d1dbac
 cc97567918f1b420f9aeb4eb3c8e28fd422b56d0e38251be2be165eb8dbfd363. Scorer self-test on the dev set reproduces the
 spike's regex numbers exactly (C 30/51, TP 4, R 15, FP 10).
 
+**A1 labels (2026-10-12, before any rule code).** Two blind labelers on the frozen rubric over 109 rows (51 held-out,
+51 dev, 7 gate): Codex `gpt-6.1-sol/high` (run 307e26dd240f) and Claude Opus. Agreement 107/109 (held-out 50/51, dev 50/51,
+gate 7/7). Coordinator adjudication: p0044 APPROVE (only pre-existing env-failing tests excluded, one flake passes alone,
+step reports done), g044 REVISE (a verification it ran left 2 stale refs unfixed, rubric "findings it did NOT fix").
+Files in `/Users/ruze/reg/my/forge/scratch/2026-10-12-gate-default/label/`, sha256 `labels-final.jsonl`
+8d62921bc7b228ded6238401efce3c5c9c1972cfe8f7f211d3e1c3d37c6711c3, `labels-heldout.jsonl`
+578a5ebb92b1a63ab928e0424e65210621822fb2aaaab1b6655dddb49fe69e99.
+
+| set | n | R (REVISE) | old regex C | old FP | old FN |
+|---|---|---|---|---|---|
+| held-out | 51 | **0** | 46 (90.2%) | 5 | 0 |
+| gate7 (real gates) | 7 | 0 | 5 | 2 | 0 |
+| dev (relabeled) | 51 | 11 | 34 | 10 | 7 |
+
+Consequence under the bar below, read as written: R = 0 makes condition 1 vacuous (`4 x 0 >= 0`), old agreement 90.2% > 90%
+makes condition 2 "regex already adequate", so only condition 3 (`FPnew <= 5`) remains, which an always-APPROVE function
+passes. The held-out set cannot measure the costly error (a wrong APPROVE), because none occurred in 51 real summaries
+(rule of three: true REVISE rate under about 6% at 95%). Outcome decision taken to the owner, recorded below.
+
 ## Pre-registered bar (held-out only; scorer and corpus frozen before any rule code; do not edit after results)
 
 Definitions on the held-out rows: `n` rows, `R` reference REVISEs, `TP` predicted REVISE and reference REVISE, `FP`
