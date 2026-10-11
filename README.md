@@ -198,6 +198,20 @@ It is **warn-only**: it never blocks or decides a gate, and without SmartMemory 
 - **Prebuild.** A build whose pipeline has `plan_gate` or `explore_design` starts the snapshots in the background at build start, so the gate usually hits the cache. Snapshots are cached in `.compose/codegraph/` (gitignored). A cached snapshot is reused only while git HEAD is unchanged, every file `git status` lists under the repo (ignored files, submodules and symlink targets included, `.compose/` excluded) is unchanged, and every resolution dependency SmartMemory recorded in the snapshot (`source.resolution_dependencies`: files, directory listings, globs, inside or outside the repo) still holds. Compose does not copy SmartMemory's read rules, so it errs toward rebuilding: a commit or an edited doc also rebuilds, a run in which a file changed in the last 3 seconds is used but not cached, and installing or removing a Python package beside the `smartmemory` CLI (a parser grammar, say), or putting `node` on or off `PATH`, also rebuilds. Touching a tracked file (or a checkout that rewrites it) rebuilds once, even when git says it is clean.
 - **Disable** with `COMPOSE_CODEGRAPH=0` or `"codegraph": { "enabled": false }`. It is also off under `NODE_ENV=test` unless `COMPOSE_CODEGRAPH=1`.
 
+## Jev gate defaults (optional)
+
+At a review gate, Compose suggests a default answer, approve or revise, that you accept by pressing Enter. Without Jev, a keyword rule reads the step's summary and picks that default. It is often wrong: it misses steps that report a problem, and it flags clean summaries that happen to contain words like "error" or "missing".
+
+[Jev](https://typesafe.ai), from TypeSafe, can pick the default instead. In our test on 51 real gate summaries, Jev matched a strong reference model on 45 of them, against 30 for the keyword rule.
+
+- **Turn it on** by signing up at [typesafe.ai](https://typesafe.ai) and exporting your key: `export JEV_API_KEY=...`. It is on whenever the key is set. Nothing else to configure.
+- **What you see.** The gate's recommendation ends with `(default by jev)` or `(default by keyword)`, so you always know which one picked it. You still decide. Jev only changes which answer Enter accepts.
+- **What it sends.** Only when Stratum provides a step summary, Compose sends that summary text to `api.typesafe.ai`. Nothing else from your project leaves the machine. If that is not acceptable for a project, turn Jev off there.
+- **Fallback.** Each call has a 1.5 second budget. On a timeout, an error or an unexpected answer, Compose uses the keyword rule and prints one warning per kind of failure.
+- **Proxies.** Compose honors `HTTPS_PROXY` / `https_proxy` and `NO_PROXY` / `no_proxy`, and keeps one connection open between gates so later gates answer faster.
+- **Turn it off** with `COMPOSE_GATE_JEV=0`. With no key, Jev stays off silently. Setting `COMPOSE_GATE_JEV=1` without a key prints one warning, which helps when you expected it to be on.
+- **Tests.** Under `node --test` or Vitest, Jev stays off even when the key is exported, so a test run never makes paid calls.
+
 ## Bundled skills
 
 `compose setup` (alias `compose sync`) mirrors compose-owned skills into your agent skill dirs (`~/.claude/skills/`, shared with Codex). Re-run it after a `compose update` or after editing skills locally — it's idempotent.
