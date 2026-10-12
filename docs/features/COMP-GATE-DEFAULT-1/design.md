@@ -1,6 +1,6 @@
 # COMP-GATE-DEFAULT-1 — a better offline gate default (design)
 
-**Status:** IN_PROGRESS (A2: owner narrowed to false alarms only 2026-10-12; rule authoring next). **Owner ask 2026-10-12:** "do the better default".
+**Status:** **KILLED (2026-10-12):** A2 bar failed on held-out (false alarms 5 to 5); the regex stays. See "A2 result". **Owner ask 2026-10-12:** "do the better default".
 **Parent:** COMP-GATE-JEV-1 (Jev picks the default when `JEV_API_KEY` is set). This feature is for everyone else, and is
 also Jev's fallback.
 
@@ -150,6 +150,25 @@ must-not-fire. It matches only the bare words, so `fails`, `failed`, `errors` ne
 
 Pass: build per the checklist below. Fail: KILL with the numbers, the regex stays. The rule author gets the dev set, its
 relabeled labels, the rubric and the must table, never the held-out or gate7 paths.
+
+## A2 result (2026-10-12, scored once): KILLED
+
+Candidate `scratch/2026-10-12-gate-default/author/candidate.mjs` (forge root), sha256
+6429f2ccdbf164b91b1c9a0a658a5df22007ba6b2296d69c7485b689f333ad18, 44 lines, written by a Sonnet author blind to held-out.
+Scoring record: `/Users/ruze/reg/my/forge/scratch/2026-10-12-gate-default/score/RESULT.md`.
+
+| A2 condition | old | new | result |
+|---|---|---|---|
+| 1. held-out FP <= 2 | 5 | 5 (the same 5 rows) | **FAIL** |
+| 2. gate7 FP <= 2 | 2 | 2 | pass |
+| 3. dev TP >= 4, 0 REVISE regressions, FP <= 10 | TP 4, FP 10 | TP 7, FP 2, 0 regressions | pass (dev is the tuning set) |
+| 4. must table | 8/20 | 20/20 | pass |
+
+Why: every remaining held-out false alarm is a problem word used as a topic (`fail-closed`, `fail-open`, `error envelopes`,
+`a missing capability throws`, `missing from Files`). The suppress list learned the dev phrasings (`fail-fast`,
+`error handling`), which did not recur. Dev false alarms 10 to 2, unseen 5 to 5: a keyword suppress list overfits engineering
+prose. **Outcome: KILLED, the regex stays.** A better default needs a reader of the sentence, which COMP-GATE-JEV-1 already
+provides when `JEV_API_KEY` is set.
 
 ## Pre-registered bar (held-out only; scorer and corpus frozen before any rule code; do not edit after results)
 
