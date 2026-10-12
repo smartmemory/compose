@@ -1,6 +1,6 @@
 # COMP-GATE-DEFAULT-1 — a better offline gate default (design)
 
-**Status:** IN_PROGRESS (design revised after review r1; census + held-out corpus next). **Owner ask 2026-10-12:** "do the better default".
+**Status:** IN_PROGRESS (A2: owner narrowed to false alarms only 2026-10-12; rule authoring next). **Owner ask 2026-10-12:** "do the better default".
 **Parent:** COMP-GATE-JEV-1 (Jev picks the default when `JEV_API_KEY` is set). This feature is for everyone else, and is
 also Jev's fallback.
 
@@ -127,6 +127,29 @@ Consequence under the bar below, read as written: R = 0 makes condition 1 vacuou
 makes condition 2 "regex already adequate", so only condition 3 (`FPnew <= 5`) remains, which an always-APPROVE function
 passes. The held-out set cannot measure the costly error (a wrong APPROVE), because none occurred in 51 real summaries
 (rule of three: true REVISE rate under about 6% at 95%). Outcome decision taken to the owner, recorded below.
+
+## Amendment A2 (2026-10-12, owner pick, before any rule code): false alarms only
+
+**Owner decision** (asked with the A1 label numbers above, options stop / false alarms only / wait): **"Fix only the false
+alarms."** The original bar below stays as written and is recorded as unmeasurable on this population (R = 0). The work is
+narrowed to: stop the keyword default from suggesting REVISE when a problem word is only the topic, negated, or already
+resolved, without losing anything the old regex catches.
+
+**Frozen synthetic table** `/Users/ruze/reg/my/forge/scratch/2026-10-12-gate-default/must-table.jsonl`, sha256
+3108dbac95a8601f457a8fa13334d3afc4d1fa67cde0e51c8dfeaf48908c4502: 10 must-fire (m00-m09, expect REVISE) and 10 must-not-fire
+(n00-n09, expect APPROVE), written by the coordinator before any rule. Old regex: 3/10 must-fire (m02, m04, m08), 5/10
+must-not-fire. It matches only the bare words, so `fails`, `failed`, `errors` never fire.
+
+**A2 bar, all must hold, scored once on the frozen candidate with `score.py` counts:**
+1. Held-out (R = 0): `FPnew <= 2` (at least 3 of the old regex's 5 false alarms removed).
+2. Gate7: `FPnew <= 2` (old 2).
+3. Dev (relabeled, R = 11): `TPnew >= 4` and no paired regression on a dev REVISE row (every REVISE the old regex catches
+   is still caught), and `FPnew <= 10`.
+4. Must table: all 10 must-not-fire give APPROVE, and m02, m04, m08 still give REVISE. The other 7 must-fire rows are
+   reported, not required (inflected forms are an improvement beyond the owner's scope, allowed only if 1-3 hold).
+
+Pass: build per the checklist below. Fail: KILL with the numbers, the regex stays. The rule author gets the dev set, its
+relabeled labels, the rubric and the must table, never the held-out or gate7 paths.
 
 ## Pre-registered bar (held-out only; scorer and corpus frozen before any rule code; do not edit after results)
 
