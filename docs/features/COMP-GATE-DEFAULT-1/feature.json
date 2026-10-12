@@ -1,10 +1,10 @@
 {
   "code": "COMP-GATE-DEFAULT-1",
   "description": "Better offline gate approve/revise default for users without Jev: structured step signals first, then a rewritten negation-aware rule; held-out corpus and pre-registered bar before any rule is written",
-  "status": "IN_PROGRESS",
+  "status": "KILLED",
   "phase": "Backlog",
   "created": "2026-10-11",
-  "updated": "2026-10-11",
+  "updated": "2026-10-12",
   "complexity": "S",
   "position": 11,
   "parent": "COMP-GATE-JEV-1"
