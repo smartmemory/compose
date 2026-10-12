@@ -1,0 +1,11 @@
+{
+  "code": "COMP-ROUTE-JEV-1",
+  "description": "Spike stub: Jev as a shadow tier recommender for model routing, scored against routing-ledger acceptance outcomes; never changes the tier. Not runnable until >= 80 outcome rows across >= 2 workspaces (24 rows, 1 workspace on 2026-10-12)",
+  "status": "PLANNED",
+  "phase": "Backlog",
+  "created": "2026-10-12",
+  "updated": "2026-10-12",
+  "complexity": "S",
+  "position": 12,
+  "parent": "COMP-MODEL-ROUTE"
+}
