@@ -86,7 +86,7 @@ import {
   preloadEagerModules,
   EAGER_PRELOAD_MODULES,
 } from './compose-mcp-tools.js';
-import { isToolAllowed } from './mcp-tool-policy.js';
+import { isToolAllowed, isToolListed, resolveToolSurface } from './mcp-tool-policy.js';
 import { prepareProject, withProjectContext, getTargetRoot, loadProjectConfig } from './project-root.js';
 import { resolveWorkspace } from '../lib/resolve-workspace.js';
 
@@ -117,14 +117,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   // COMP-MCP-ENFORCE-1: best-effort surface filter by the session's profile×phase.
   // The hard guarantee is the CallTool gate below; ListTools just hides what the
   // current context can't use (no tools/list_changed dependency).
-  const enabled = loadProjectConfig()?.capabilities?.phaseScopedTools === true;
-  if (!enabled) return { tools: toWire(TOOLS) };
+  const config = loadProjectConfig();
+  // COMPOSE-UX-SIMPLIFY-2: the tool surface (core|lean|full) trims the menu
+  // first; the profile×phase filter below then applies as before.
+  const surface = resolveToolSurface(process.env.COMPOSE_TOOL_SURFACE, config?.capabilities?.toolSurface);
+  const listed = TOOLS.filter((t) => isToolListed(t.name, surface));
+  const enabled = config?.capabilities?.phaseScopedTools === true;
+  if (!enabled) return { tools: toWire(listed) };
   const profile = _getSessionProfile();
-  if (profile === 'orchestrator') return { tools: toWire(TOOLS) };
+  if (profile === 'orchestrator') return { tools: toWire(listed) };
   const phase = resolveBoundPhase();
   // target match is unknowable at list time → list a tool if its profile base
   // (ignoring the feature-scoped re-permit) would ever permit it in this phase.
-  const tools = TOOLS.filter((t) =>
+  const tools = listed.filter((t) =>
     isToolAllowed({ tool: t.name, profile, phase, targetMatchesBoundFeature: true }).allowed);
   return { tools: toWire(tools) };
 });

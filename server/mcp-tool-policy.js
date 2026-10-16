@@ -136,3 +136,50 @@ export function isToolAllowed({ tool, profile, phase, targetMatchesBoundFeature 
   }
   return { allowed: false, reason: `${tool} denied for ${prof} in phase '${phase ?? 'unknown'}'` };
 }
+
+// ---------------------------------------------------------------------------
+// COMPOSE-UX-SIMPLIFY-2 — tool SURFACE (menu size), orthogonal to the security
+// profile above. A surface only decides what tools/list shows; it never widens
+// or narrows what PROFILE_POLICY permits, and a call to a hidden tool by name
+// still goes through the profile×phase gate unchanged (nothing is deleted).
+//
+// Surfaces:
+//   core (default) — everything except PARKED_TOOLS (35 of 51)
+//   lean           — LEAN_TOOLS only: 12 builder tools + 3 setup tools (opt-in for now)
+//   full           — all 51 tools (the pre-SIMPLIFY-2 behaviour)
+//
+// Selected by env COMPOSE_TOOL_SURFACE, else .compose/compose.json
+// capabilities.toolSurface, else 'core'. Unknown values fall back to 'core'.
+// ---------------------------------------------------------------------------
+
+/** Tools with no production caller (COMPOSE-UX-SIMPLIFY-1 report §1). Hidden unless surface=full. */
+export const PARKED_TOOLS = new Set([
+  'judgment_position_create', 'judgment_position_amend', 'judgment_joint_add',
+  'judgment_transition', 'judgment_ledger_append', 'judgment_person_write',
+  'judgment_situation_write', 'judgment_goal_write', 'get_judgment_state', 'get_judgment_trace',
+  'backfill_completion', 'roadmap_graph_check', 'roadmap_xref_push',
+  'get_workspace', 'write_checkpoint', 'compose_resume',
+]);
+
+/** The ~12 tools a single-feature builder agent uses (plus the setup tools). */
+export const LEAN_TOOLS = new Set([
+  'get_vision_items', 'get_item_detail', 'get_feature_lifecycle', 'scaffold_feature',
+  'link_artifact', 'write_journal_entry', 'get_pending_gates', 'validate_feature',
+  'roadmap_graph', 'set_feature_status', 'record_completion', 'add_roadmap_entry',
+  // setup tools, always listed
+  'set_workspace', 'bind_session', 'get_current_session',
+]);
+
+export const TOOL_SURFACES = ['core', 'lean', 'full'];
+
+export function resolveToolSurface(envValue, configValue) {
+  const v = envValue || configValue;
+  return TOOL_SURFACES.includes(v) ? v : 'core';
+}
+
+/** True when `tool` appears in tools/list on `surface`. */
+export function isToolListed(tool, surface) {
+  if (surface === 'full') return true;
+  if (surface === 'lean') return LEAN_TOOLS.has(tool);
+  return !PARKED_TOOLS.has(tool);
+}
