@@ -11,6 +11,8 @@ export default defineConfig({
   },
   server: {
     port: 5195,
+    // Don't watch dependency, build, runtime-state or docs trees: watching them made vite the box's top fs-event producer.
+    watch: { ignored: ['**/node_modules/**', '**/dist/**', '**/.compose/**', '**/docs/**'] },
     proxy: {
       '/api': 'http://localhost:4001',
       // Only proxy file-watcher and vision WS — agent connects directly to port 4002
