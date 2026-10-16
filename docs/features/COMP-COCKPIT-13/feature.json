@@ -1,0 +1,11 @@
+{
+  "code": "COMP-COCKPIT-13",
+  "description": "Published status page + process-metrics view. A derived view from Compose state only (journal, judgment ledger, gate log, sessions, feature.json): a static one-file HTML snapshot (`compose status export [--project|--all]` plus a cockpit \"Publish snapshot\" button), a process-metrics panel (per-unit time split authoring/review/fix/waiting/gate, first-pass CLEAN rate, review rounds per unit, gate minutes per land, waiting share), a master rollup across workspaces, and an \"owner owes\" list. Replaces the hand-kept per-project status builders in SmartMemory scratch. Sibling of COMP-COCKPIT-12 (live session view). Open: does the export embed data or link live.",
+  "status": "PLANNED",
+  "phase": "COMP-COCKPIT Wave 2: UX Journey Gaps (2026-06-10 sweep)",
+  "created": "2026-10-15",
+  "updated": "2026-10-15",
+  "complexity": "M",
+  "position": 9,
+  "parent": "COMP-COCKPIT"
+}
