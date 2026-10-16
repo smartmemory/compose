@@ -53,7 +53,8 @@ A **derived view**: no new store and no new writer.
    - (a) Compose ingests those stamps as a recorded input (a new reader, not ledger parsing);
    - (b) units run through Compose so it records them natively;
    - (c) the page shows metrics only for Compose-run units and marks the rest "not recorded".
-   Pick before blueprint.
+   Pick before blueprint. **Recommendation (s1-chat and forge-e0, 2026-10-15): (a), Compose ingests the `jobs.py` / `stamp.py`
+   stamps as a recorded input.** The owner decides at blueprint.
 3. **Source for "owner owes" decision items:** Compose pending gates, the judgment ledger's open positions, or the SmartMemory owner queue (`owner-queue.jsonl`, which COMP-COCKPIT-12 already reads)?
 4. **Publish target** for the cockpit button: a claude.ai artifact (as s1-chat does today), a file under `docs/` that DocsView auto-discovers (as `gsd-milestone-report.js` does), or both.
 5. **Retiring the scratch builders:** once 13 reaches parity, the `2026-10-15-status-multi` and `2026-10-14-2.0-status` builders are marked superseded at the origin. Define parity per panel first.
