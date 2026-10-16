@@ -5,6 +5,7 @@ import { makeBuildWorkspace, fakeBuildStratum, agentResult } from './build-strat
 import { git } from './consumer-wave-fixture.js';
 import { ConsumerFanoutArtifacts } from '../../lib/consumer-fanout.js';
 import { runBuild } from '../../lib/build.js';
+import { assertOutsideRealRepo } from './git-sandbox.js';
 
 export const decisionProfiles = {
   assess_gate: { decide_from: { step: 'assess', field: 'action', approve: ['complete'], revise: ['repair', 'implement'], kill: ['blocked'] },
@@ -42,6 +43,7 @@ export function buildWaveFixture(t, { profiles = decisionProfiles, spec = waveSp
   const cwd = makeBuildWorkspace(code, { spec: YAML.stringify(spec), profiles, compose: { policies: { default: 'skip' } } });
   t.after(() => rmSync(cwd, { recursive: true, force: true }));
   writeFileSync(join(cwd, '.gitignore'), '.compose/\n');
+  assertOutsideRealRepo(cwd);
   git(cwd, ['init', '-q']); git(cwd, ['config', 'user.name', 'Wave Test']); git(cwd, ['config', 'user.email', 'test@example.test']);
   git(cwd, ['add', '-A']); git(cwd, ['commit', '-qm', 'base']);
   const base = git(cwd, ['rev-parse', 'HEAD']);

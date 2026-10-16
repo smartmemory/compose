@@ -1,4 +1,5 @@
 import { tier } from './helpers/model-catalog.js';
+import { assertOutsideRealRepo, removeWorktree } from './helpers/git-sandbox.js';
 /** Routing start/plan/continuation persistence over disposable Git repositories. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,6 +21,7 @@ const spec = { version: 1, contracts: { Result: { value: 'string' } }, flows: { 
 function fixture(t) {
   const cwd = mkdtempSync(join(tmpdir(), 'routing-ledger-'));
   t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  assertOutsideRealRepo(cwd);
   const git = args => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
   git(['init', '-q']); git(['config', 'user.email', 'test@example.test']); git(['config', 'user.name', 'Routing test']);
   writeFileSync(join(cwd, 'tracked'), 'base'); git(['add', '.']); git(['commit', '-qm', 'base']);
@@ -62,7 +64,9 @@ test('storage excludes routing data from dirty checks, snapshot staging, cleanup
   f.git(['clean', '-fd']); assert.equal(readFileSync(path, 'utf8'), 'retained');
   f.git(['commit', '--allow-empty', '-qm', 'ship']); assert.doesNotMatch(f.git(['ls-tree', '-r', '--name-only', 'HEAD']), /routing/);
   const linked = join(f.cwd, 'linked'); f.git(['worktree', 'add', '-q', '-b', 'linked', linked]);
-  ensureRoutingStorage({ cwd: linked }); assert.equal(execFileSync('git', ['check-ignore', '.compose/routing/probe'], { cwd: linked, encoding: 'utf8' }).trim(), '.compose/routing/probe');
+  try {
+    ensureRoutingStorage({ cwd: linked }); assert.equal(execFileSync('git', ['check-ignore', '.compose/routing/probe'], { cwd: linked, encoding: 'utf8' }).trim(), '.compose/routing/probe');
+  } finally { removeWorktree(f.cwd, linked); }
 });
 test('tracked reserved subtree, symlink escape and concurrent live writer refuse', t => {
   const f = fixture(t); mkdirSync(join(f.cwd, '.compose/routing'), { recursive: true }); writeFileSync(join(f.cwd, '.compose/routing/tracked'), 'bad');

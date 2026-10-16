@@ -30,6 +30,7 @@ import { fakeBuildStratum, agentResult } from './build-stratum-fixture.js';
 import { decisionProfiles, decision } from './build-wave-fixture.js';
 import { makeFakeCodexProject } from './fake-codex-project.js';
 import { git } from './consumer-wave-fixture.js';
+import { assertOutsideRealRepo } from './git-sandbox.js';
 
 export const ROUTING_INPUTS = ['route_mode', 'routing_start', 'routing_root', 'routing_plan_intent', 'routing_continuation'];
 export const CODE = 'D3-GOLDEN-1';
@@ -112,6 +113,7 @@ export async function makeWaveGoldenProject(scenario = 'repair', options = {}) {
       { name: 'UNEXPECTED', text: '{"unexpected":true}' },
     ],
   });
+  assertOutsideRealRepo(fixture.workspace);
   git(fixture.workspace, ['config', 'user.name', 'Wave Golden']);
   git(fixture.workspace, ['config', 'user.email', 'wave@example.test']);
   fixture.base = git(fixture.workspace, ['rev-parse', 'HEAD']);

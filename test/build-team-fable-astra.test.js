@@ -21,6 +21,7 @@ const presetPath = fileURLToPath(new URL('../presets/team-fable-astra.stratum.ya
 const spec = readFileSync(presetPath, 'utf8');
 const profiles = loadPipelineProfiles(presetPath);
 import { preflightPipelineProfiles as corePreflight } from '../lib/pipeline-profiles.js';
+import { assertOutsideRealRepo } from './helpers/git-sandbox.js';
 const frozen = frozenRoutingBaseline('bundled-build');
 const code = 'S4-PRESET-1';
 const core = 'module.exports = x => x * 2;\n';
@@ -68,6 +69,7 @@ for (const mode of ['default shadow', 'off', 'paid shadow']) test(`fable-astra: 
     ],
   });
   t.after(() => f.cleanup());
+  assertOutsideRealRepo(f.workspace);
   git(f.workspace, ['config', 'user.name', 'Preset Golden']);
   git(f.workspace, ['config', 'user.email', 'preset@example.test']);
   const base = git(f.workspace, ['rev-parse', 'HEAD']);

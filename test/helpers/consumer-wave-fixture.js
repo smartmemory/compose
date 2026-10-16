@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { profilesDigest } from '../../lib/pipeline-profiles.js';
 import { ConsumerFanoutArtifacts } from '../../lib/consumer-fanout.js';
+import { assertOutsideRealRepo } from './git-sandbox.js';
 
 export function git(cwd, args) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' }).trim();
@@ -19,6 +20,7 @@ export function consumerWaveFixture(t) {
   };
   write('owned.txt', 'base\n');
   write('other.txt', 'other\n');
+  assertOutsideRealRepo(cwd);
   git(cwd, ['init', '-q']);
   git(cwd, ['config', 'user.name', 'Consumer Wave Test']);
   git(cwd, ['config', 'user.email', 'wave@example.test']);

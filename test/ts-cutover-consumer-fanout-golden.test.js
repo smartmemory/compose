@@ -35,6 +35,7 @@ import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 process.env.NODE_ENV = 'test';
 
 import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
+import { assertOutsideRealRepo, isolatedGitEnv } from './helpers/git-sandbox.js';
 
 const CONSUMER_BUILD_SPEC = `
 version: 1
@@ -515,7 +516,7 @@ flows:
 `;
 
 function git(cwd, args) {
-  return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' }).trim();
+  return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe', env: isolatedGitEnv() }).trim();
 }
 
 async function setupScenario(t, slug, spec = CONSUMER_BUILD_SPEC) {
@@ -553,9 +554,10 @@ async function setupScenario(t, slug, spec = CONSUMER_BUILD_SPEC) {
     '# TS consumer fanout golden\n',
   );
 
+  assertOutsideRealRepo(workspace);
   git(workspace, ['init', '-q']);
-  git(workspace, ['config', 'user.name', 'Compose Golden']);
-  git(workspace, ['config', 'user.email', 'compose-golden@example.test']);
+  git(workspace, ['config', '--local', 'user.name', 'Compose Golden']);
+  git(workspace, ['config', '--local', 'user.email', 'compose-golden@example.test']);
   git(workspace, ['add', '-A']);
   git(workspace, ['commit', '-qm', 'consumer golden baseline']);
 
