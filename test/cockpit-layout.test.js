@@ -24,6 +24,7 @@ import {
 
 import {
   DEFAULT_MAIN_TABS,
+  HIDDEN_VIEWS,
   isValidTab,
   getDefaultTab,
   addTab,
@@ -125,13 +126,17 @@ describe('viewTabsState — DEFAULT_MAIN_TABS', () => {
     assert.ok(DEFAULT_MAIN_TABS.length >= 2);
   });
 
-  it('contains all view keys in correct order', () => {
-    const expected = ['tree', 'graph', 'docs', 'gates', 'pipeline', 'sessions'];
-    for (const key of expected) {
-      assert.ok(DEFAULT_MAIN_TABS.includes(key), `missing ${key}`);
+  it('is exactly the five default tabs, Dashboard first', () => {
+    assert.deepEqual(DEFAULT_MAIN_TABS, ['dashboard', 'graph', 'docs', 'ideabox', 'settings']);
+  });
+
+  it('hidden views are not default tabs but stay reachable (listed in HIDDEN_VIEWS)', () => {
+    for (const key of HIDDEN_VIEWS) {
+      assert.ok(!DEFAULT_MAIN_TABS.includes(key), `${key} must not be a default tab`);
     }
-    // Working views before monitoring views
-    assert.ok(DEFAULT_MAIN_TABS.indexOf('docs') < DEFAULT_MAIN_TABS.indexOf('pipeline'));
+    for (const key of ['tree', 'journal', 'gates', 'pipeline', 'sessions']) {
+      assert.ok(HIDDEN_VIEWS.includes(key), `${key} reachable via HIDDEN_VIEWS`);
+    }
   });
 });
 
@@ -213,29 +218,33 @@ describe('viewTabsState — reorderTabs', () => {
 // ---------------------------------------------------------------------------
 
 describe('viewTabsState — loadMainTabs migration', () => {
-  it('includes journal in DEFAULT_MAIN_TABS', () => {
-    assert.ok(DEFAULT_MAIN_TABS.includes('journal'));
-  });
-
-  it('inserts journal into a persisted tab list that predates it', () => {
-    const persisted = DEFAULT_MAIN_TABS.filter(t => t !== 'journal');
-    const stored = new Map([['compose:mainTabs', JSON.stringify(persisted)]]);
-    const origLocalStorage = globalThis.localStorage;
+  function withStored(value, fn) {
+    const stored = new Map(value === null ? [] : [['compose:mainTabs', JSON.stringify(value)]]);
+    const orig = globalThis.localStorage;
     globalThis.localStorage = {
       getItem: (k) => (stored.has(k) ? stored.get(k) : null),
       setItem: (k, v) => stored.set(k, String(v)),
       removeItem: (k) => stored.delete(k),
     };
-    try {
-      const tabs = loadMainTabs();
-      assert.ok(tabs.includes('journal'), 'journal migrated into persisted tabs');
-      // Inserted after 'docs' when docs is present
-      assert.equal(tabs[tabs.indexOf('docs') + 1], 'journal');
-      // All persisted tabs survive
-      for (const t of persisted) assert.ok(tabs.includes(t));
-    } finally {
-      if (origLocalStorage === undefined) delete globalThis.localStorage;
-      else globalThis.localStorage = origLocalStorage;
+    try { return fn(); } finally {
+      if (orig === undefined) delete globalThis.localStorage;
+      else globalThis.localStorage = orig;
     }
+  }
+
+  it('drops hidden tabs from a persisted pre-SIMPLIFY-2 list', () => {
+    const old = ['tree', 'graph', 'docs', 'journal', 'gates', 'pipeline', 'sessions', 'settings'];
+    const tabs = withStored(old, () => loadMainTabs());
+    for (const t of HIDDEN_VIEWS) assert.ok(!tabs.includes(t), `${t} dropped`);
+    for (const t of DEFAULT_MAIN_TABS) assert.ok(tabs.includes(t), `${t} present`);
+  });
+
+  it('adds missing default tabs to a persisted list', () => {
+    const tabs = withStored(['graph', 'docs'], () => loadMainTabs());
+    assert.deepEqual([...tabs].sort(), [...DEFAULT_MAIN_TABS].sort());
+  });
+
+  it('falls back to the five defaults with nothing persisted', () => {
+    assert.deepEqual(withStored(null, () => loadMainTabs()), DEFAULT_MAIN_TABS);
   });
 });

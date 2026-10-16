@@ -222,7 +222,7 @@ describe('compose-mcp judgment registry parity', () => {
 
 describe('compose-mcp judgment writer (end-to-end)', () => {
   test('tools/list includes the nine judgment tools with exact new op enums', async () => {
-    const client = new McpClient(freshCwd());
+    const client = new McpClient(freshCwd(), { COMPOSE_TOOL_SURFACE: 'full' });
     try {
       const result = await client.request('tools/list', {});
       const names = result.tools.map((t) => t.name);
@@ -459,7 +459,7 @@ describe('COMP-JUDGMENT-GOAL-MIGRATE S3 — MCP reachability', () => {
       'the nine judgment tool names are unchanged',
     );
 
-    const client = new McpClient(freshCwd());
+    const client = new McpClient(freshCwd(), { COMPOSE_TOOL_SURFACE: 'full' });
     try {
       const result = await client.request('tools/list', {});
       const goal = result.tools.find((tool) => tool.name === 'judgment_goal_write');
@@ -671,4 +671,25 @@ describe('mcp-tool-policy — judgment entries', () => {
       assert.equal(isToolAllowed({ tool, profile: 'orchestrator' }).allowed, true, `${tool} allowed for orchestrator`);
     }
   });
+});
+
+describe('COMPOSE-UX-SIMPLIFY-2 — tools/list surfaces', () => {
+  // 51 defined; core hides the 16 parked tools, lean lists the 15 builder+setup tools, full lists all.
+  const rows = [
+    { surface: undefined, expected: 35, label: 'default (core)' },
+    { surface: 'core', expected: 35, label: 'core' },
+    { surface: 'lean', expected: 15, label: 'lean' },
+    { surface: 'full', expected: 51, label: 'full' },
+  ];
+  for (const { surface, expected, label } of rows) {
+    test(`tools/list on ${label} surface lists ${expected} tools`, async () => {
+      const client = new McpClient(freshCwd(), surface ? { COMPOSE_TOOL_SURFACE: surface } : { COMPOSE_TOOL_SURFACE: '' });
+      try {
+        const result = await client.request('tools/list', {});
+        assert.equal(result.tools.length, expected);
+      } finally {
+        client.close();
+      }
+    });
+  }
 });
