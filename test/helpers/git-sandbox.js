@@ -50,8 +50,7 @@ export function commonDirOf(dir) {
 }
 
 /** Throws when `dir` would write to the real repo's .git (same common dir, or inside its work tree). */
-export function assertOutsideRealRepo(dir) {
-  const real = realRepoCommonDir();
+export function assertOutsideRealRepo(dir, real = realRepoCommonDir()) {
   const common = commonDirOf(dir);
   if (common === real) throw new Error(`git sandbox: ${dir} resolves to the real repo (${real})`);
   const realTop = dirname(real);

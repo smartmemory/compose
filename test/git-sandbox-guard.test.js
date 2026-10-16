@@ -50,19 +50,23 @@ for (const [name, dir, rejected] of PATH_ROWS) {
   });
 }
 
-test('a linked worktree of the real repo shares its common dir and is rejected; removeWorktree cleans it up', () => {
+test('a linked worktree shares its repo common dir and is rejected when that repo is "real"; removeWorktree cleans it up', () => {
+  // Never touch the real repo's worktree list here: parallel test processes gate on it.
+  const { dir: stand, git } = initSandboxRepo();
   const wt = join(makeSandboxDir('compose-guard-wt-'), 'linked');
-  const real = realRepoCommonDir();
-  const run = (...a) => execFileSync('git', ['-C', ROOT, ...a], { encoding: 'utf8', env: isolatedGitEnv(), stdio: 'pipe' });
   try {
-    run('worktree', 'add', '-q', '--detach', wt, 'HEAD');
-    assert.equal(commonDirOf(wt), real);
-    assert.throws(() => assertOutsideRealRepo(wt), /real repo/);
+    git('commit', '-q', '--allow-empty', '-m', 'base');
+    git('worktree', 'add', '-q', '--detach', wt, 'HEAD');
+    const standIn = commonDirOf(stand);
+    assert.equal(commonDirOf(wt), standIn);
+    assert.throws(() => assertOutsideRealRepo(wt, standIn), /real repo/);
+    assert.doesNotThrow(() => assertOutsideRealRepo(wt), 'against the actual real repo it is outside');
   } finally {
-    removeWorktree(ROOT, wt);
+    removeWorktree(stand, wt);
     rmSync(dirname(wt), { recursive: true, force: true });
+    rmSync(stand, { recursive: true, force: true });
   }
-  assert.doesNotMatch(run('worktree', 'list', '--porcelain'), /compose-guard-wt-/);
+  assert.doesNotMatch(execFileSync('git', ['-C', ROOT, 'worktree', 'list', '--porcelain'], { encoding: 'utf8', env: isolatedGitEnv() }), /compose-guard-wt-/);
 });
 
 test('initSandboxRepo writes identity only into the repo it created; the real repo config is untouched', () => {
