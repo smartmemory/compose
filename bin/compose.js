@@ -101,7 +101,33 @@ import { computeHooksStatus, formatHookStatusLines, HOOK_MARKERS } from '../lib/
 // COMP-BUILD-CANCEL S06-3: the CLI must not exit out from under a live teardown (C46).
 import { pendingTeardown } from '../lib/build-cancel.js';
 
-const [,, cmd, ...args] = process.argv
+let [,, cmd, ...args] = process.argv
+
+// COMPOSE-UX-SIMPLIFY-2: fewer runner doors, same runners.
+//  - `compose build --preset fix|plan ...` runs the fix/plan runner (both already
+//    delegate to runBuild with their template). `compose fix` / `compose plan`
+//    stay as aliases with identical output.
+//  - `compose pipeline gsd|experiment|triage ...` runs that runner. The bare
+//    `compose gsd|experiment|triage` names stay as aliases.
+// Only the dispatch is rerouted; no runner body changed.
+const BUILD_PRESETS = ['fix', 'plan']
+const PIPELINE_RUNNERS = ['gsd', 'experiment', 'triage']
+if (cmd === 'pipeline' && PIPELINE_RUNNERS.includes(args[0])) {
+  cmd = args[0]
+  args = args.slice(1)
+} else if (cmd === 'build') {
+  const presetIdx = args.findIndex(a => a === '--preset' || a.startsWith('--preset='))
+  if (presetIdx !== -1) {
+    const inline = args[presetIdx].includes('=')
+    const preset = inline ? args[presetIdx].split('=')[1] : args[presetIdx + 1]
+    if (!BUILD_PRESETS.includes(preset)) {
+      console.error(`Error: --preset must be one of ${BUILD_PRESETS.join(', ')} (got ${preset ?? 'nothing'})`)
+      process.exit(1)
+    }
+    cmd = preset
+    args = args.filter((_, i) => i !== presetIdx && (inline || i !== presetIdx + 1))
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Help
