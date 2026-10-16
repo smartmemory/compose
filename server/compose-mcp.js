@@ -9,18 +9,18 @@
  * Register in .mcp.json:
  *   { "mcpServers": { "compose": { "command": "node", "args": ["server/compose-mcp.js"] } } }
  *
- * Tools:
- *   get_vision_items     — query items by phase/status/type/keyword
- *   get_item_detail      — single item with its connections
- *   get_current_session  — active session: tool count, items touched, summaries
- *   get_phase_summary    — status distribution for a given phase
- *   get_blocked_items    — items blocked by non-complete dependencies
+ * Tools: 51, defined in server/mcp-tool-defs.js (the single source; the
+ * dispatch switch below must match it). tools/list is trimmed twice:
+ *   1. tool surface (COMPOSE-UX-SIMPLIFY-2, server/mcp-tool-policy.js):
+ *      core (default, 35 tools: hides the 16 judgment/backfill/xref/resume
+ *      tools nobody calls), lean (12 builder tools + 3 setup), full (all 51).
+ *      Pick with COMPOSE_TOOL_SURFACE or capabilities.toolSurface.
+ *   2. profile x phase (COMP-MCP-ENFORCE-1) when phaseScopedTools is on.
+ * A hidden tool is still callable by name; only the menu shrinks.
  *
- * Token budget (per docs/features/mcp-connector/design.md Decision 6):
- *   Baseline (2026-02-24): ~519 tokens for all 5 tool definitions combined
- *   Soft cap: 2,000 tokens. Add typed tools for new operations; avoid proliferation.
- *   Per-tool: get_vision_items 235, get_phase_summary 104,
- *   get_item_detail 72, get_current_session 62, get_blocked_items 44
+ * Token budget: the 2026-02-24 baseline (5 tools, ~519 tokens, soft cap 2,000,
+ * docs/features/mcp-connector/design.md Decision 6) is long exceeded; the
+ * surfaces above are the current lever, not a per-tool cap.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
