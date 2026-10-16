@@ -228,7 +228,9 @@ function runGateStandIn(writer, { corruptConfig = false, env = () => ({}) } = {}
     // NODE_TEST_CONTEXT (set by the preload) would make the inner `node --test` act as a nested test child, not a runner.
     const { NODE_TEST_CONTEXT: _ctx, ...childEnv } = process.env;
     if (corruptConfig) writeFileSync(join(stand, '.git', 'config'), '[user\n\tname = broken');
-    const run = spawnSync(process.execPath, ['--import', './test/suppress-expected-drift.js', '--test', 'writer.test.js'], { cwd: stand, encoding: 'utf8', env: { ...childEnv, ...env(stand) } });
+    // The child's temp dirs (the writer's gate-tmp-*, the preload's state/guard dirs) live inside the stand and go with it.
+    mkdirSync(join(stand, 'tmp'));
+    const run = spawnSync(process.execPath, ['--import', './test/suppress-expected-drift.js', '--test', 'writer.test.js'], { cwd: stand, encoding: 'utf8', env: { ...childEnv, TMPDIR: join(stand, 'tmp'), ...env(stand) } });
     return { status: run.status, output: run.stdout + run.stderr, name: corruptConfig ? '' : git('config', '--local', 'user.name').trim() };
   } finally { rmSync(stand, { recursive: true, force: true }); }
 }

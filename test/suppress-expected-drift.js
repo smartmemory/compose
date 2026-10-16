@@ -43,7 +43,10 @@ if (!process.env.STRATUM_GUARDS_DIR) {
   const { mkdtempSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
-  process.env.STRATUM_GUARDS_DIR = mkdtempSync(join(tmpdir(), 'compose-test-guards-'));
+  const guardsDir = mkdtempSync(join(tmpdir(), 'compose-test-guards-'));
+  process.env.STRATUM_GUARDS_DIR = guardsDir;
+  // Only the process that created it removes it (children inherit the variable and skip this branch).
+  process.once('exit', () => rmSync(guardsDir, { recursive: true, force: true }));
 }
 
 // COMP-TRIAGE-6-2: mark the whole test run as a hermetic test context. Modules
