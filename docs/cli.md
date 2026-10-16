@@ -26,19 +26,19 @@ The Command Index below is generated from the command table and lists every ship
 | `compose new` | Kickoff a product (research, brainstorm, roadmap, scaffold) |
 | `compose feature` | Add a single feature (folder, design seed, ROADMAP entry) |
 | `compose roadmap` | Show roadmap status; generate/migrate/check ROADMAP.md |
-| `compose triage` | Analyze a feature and recommend a build profile |
+| `compose triage` | Alias for `pipeline triage`: analyze a feature and recommend a build profile |
 | `compose qa-scope` | Show affected routes from a feature's changed files |
 
 ### Build & implement
 
 | Command | Summary |
 |---|---|
-| `compose build` | Run a feature through the headless lifecycle |
-| `compose fix` | Run a bug through the headless bug-fix lifecycle |
-| `compose plan` | Plan work into a structured roadmap from a prompt |
-| `compose gsd` | Per-task fresh-context dispatch from a blueprint + Boundary Map |
-| `compose pipeline` | View and edit the build pipeline |
-| `compose experiment` | Run an A/B model experiment from a spec |
+| `compose build` | Run a feature through the headless lifecycle (--preset fix\|plan for bugs and planning) |
+| `compose fix` | Alias for `build --preset fix`: run a bug through the bug-fix lifecycle |
+| `compose plan` | Alias for `build --preset plan`: plan work into a roadmap from a prompt |
+| `compose gsd` | Alias for `pipeline gsd`: per-task dispatch from a blueprint + Boundary Map |
+| `compose pipeline` | View and edit the build pipeline; runners: pipeline gsd \| experiment \| triage |
+| `compose experiment` | Alias for `pipeline experiment`: run an A/B model experiment from a spec |
 
 ### Lifecycle, gates & review
 
@@ -78,10 +78,6 @@ The Command Index below is generated from the command table and lists every ship
 | `compose migrate-anon` | Promote anonymous ROADMAP rows to typed features (interactive) |
 | `compose hooks` | Manage Claude Code hooks (install \| uninstall \| status) |
 | `compose version` (alias: `--version`, `-V`) | Print compose version, git SHA, and install root |
-
-> (The table above is generated from `lib/cli-commands.js` — do not hand-edit its rows.)
-
----
 
 ## Workflow
 
