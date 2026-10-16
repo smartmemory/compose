@@ -67,9 +67,9 @@ if (!process.env.NODE_TEST_CONTEXT) process.env.NODE_TEST_CONTEXT = '1';
 if (!process.env.COMPOSE_NO_PLUGIN_INSTALL) process.env.COMPOSE_NO_PLUGIN_INSTALL = '1';
 
 // COMPOSE-GOLDEN-LEAK-1 (2026-10-17): tests that run `git config` / `git commit` must never reach the
-// real repo. Importing git-env-scrub scrubs every variable that redirects git's repo OR config (GIT_DIR,
-// GIT_CONFIG, GIT_CONFIG_PARAMETERS, ...; full list in that file) and swaps the developer's global config for a
-// throwaway fallback identity. The same module is imported by the git-calling helpers and test files, so a bare
+// real repo. Importing git-env-scrub strips EVERY GIT_* variable except an explicit allowlist (identity/dates and UI
+// knobs; see that file), so any variable that redirects git's repo, refs or config is gone, including ones a future git
+// adds, and swaps the developer's global config for a throwaway fallback identity. The same module is imported by the git-calling helpers and test files, so a bare
 // `node --test file` is protected too. Here we also gate the run: snapshot the real repo's local identity and
 // worktree list now, fail the process if they differ at exit. A probe that errors fails the gate (never "empty").
 {

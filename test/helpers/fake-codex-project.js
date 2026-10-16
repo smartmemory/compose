@@ -159,8 +159,8 @@ export async function makeFakeCodexProject({
     await writeFile(join(workspace, '.gitignore'), '.compose/data/\n.compose/build-stream.jsonl\ndocs/features/*/audit.json\n');
     const runGit = (args) => execFileSync('git', args, {
       cwd: workspace, encoding: 'utf8', stdio: 'pipe',
-      env: { ...isolatedGitEnv(), GIT_AUTHOR_NAME: 'S07 Fixture', GIT_AUTHOR_EMAIL: 's07@example.test',
-        GIT_COMMITTER_NAME: 'S07 Fixture', GIT_COMMITTER_EMAIL: 's07@example.test' },
+      env: isolatedGitEnv({ GIT_AUTHOR_NAME: 'S07 Fixture', GIT_AUTHOR_EMAIL: 's07@example.test',
+        GIT_COMMITTER_NAME: 'S07 Fixture', GIT_COMMITTER_EMAIL: 's07@example.test' }),
     }).trim();
     runGit(['init', '-q']);
     runGit(['add', '-A']);
