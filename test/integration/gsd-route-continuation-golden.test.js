@@ -1,6 +1,8 @@
 /** Real GSD/TS engine, deterministic inference, real merge/halt/crash writers.
  * The child entry point never registers tests and never invokes the recorder.
  */
+// COMPOSE-GOLDEN-LEAK-1: scrub inherited GIT_* redirection before any git call, even under a bare `node --test`.
+import '../helpers/git-env-scrub.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, readdirSync, existsSync, rmSync } from 'node:fs';

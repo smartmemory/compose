@@ -12,6 +12,8 @@
  *  4. The preflight Codex-in-worktree probe: env-skip, cache, success/failure, and
  *     the fail-fast abort message.
  */
+// COMPOSE-GOLDEN-LEAK-1: scrub inherited GIT_* redirection before any git call, even under a bare `node --test`.
+import './helpers/git-env-scrub.js';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';

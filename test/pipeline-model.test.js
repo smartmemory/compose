@@ -6,6 +6,8 @@
  * identity is (flowName, id), including after the v1 conversion flattened the
  * production review fanout into the entry flow.
  */
+// COMPOSE-GOLDEN-LEAK-1: scrub inherited GIT_* redirection before any git call, even under a bare `node --test`.
+import './helpers/git-env-scrub.js';
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

@@ -12,6 +12,8 @@
 
 process.env.NODE_ENV = 'test';
 
+// COMPOSE-GOLDEN-LEAK-1: scrub inherited GIT_* redirection before any git call, even under a bare `node --test`.
+import './helpers/git-env-scrub.js';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises';

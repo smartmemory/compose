@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { profilesDigest } from '../../lib/pipeline-profiles.js';
 import { ConsumerFanoutArtifacts } from '../../lib/consumer-fanout.js';
-import { assertOutsideRealRepo } from './git-sandbox.js';
+import { assertOutsideRealRepo, isolatedGitEnv } from './git-sandbox.js';
 
 export function git(cwd, args) {
-  return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' }).trim();
+  return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe', env: isolatedGitEnv() }).trim();
 }
 export function consumerWaveFixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'compose-consumer-wave-'));

@@ -11,20 +11,16 @@ import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// Importing git-env-scrub scrubs this process's env, so every importer is safe even under a bare `node --test file`.
+import { scrubGitEnv } from './git-env-scrub.js';
 
-// Variables that redirect git to a repository other than the one at `cwd`.
-export const REPO_LOCATING_ENV = [
-  'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY',
-  'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_NAMESPACE', 'GIT_PREFIX', 'GIT_CEILING_DIRECTORIES',
-  'GIT_DISCOVERY_ACROSS_FILESYSTEM',
-];
+export { CONFIG_REDIRECT_ENV, REPO_LOCATING_ENV, scrubGitEnv } from './git-env-scrub.js';
 
 export const TEST_IDENTITY = { name: 'Compose Test', email: 'compose-test@example.test' };
 
-/** process.env minus every repo-locating GIT_* variable, with global/system config disabled. */
+/** process.env minus every repo- and config-redirecting GIT_* variable, with global/system config disabled. */
 export function isolatedGitEnv(extra = {}) {
-  const env = { ...process.env };
-  for (const key of REPO_LOCATING_ENV) delete env[key];
+  const env = scrubGitEnv();
   env.GIT_CONFIG_NOSYSTEM = '1';
   env.GIT_CONFIG_GLOBAL = '/dev/null';
   return { ...env, ...extra };
@@ -79,4 +75,9 @@ export function initSandboxRepo(dir = makeSandboxDir(), identity = TEST_IDENTITY
 export function removeWorktree(repoDir, path) {
   try { execFileSync('git', ['-C', repoDir, 'worktree', 'remove', '--force', path], { env: isolatedGitEnv(), stdio: 'pipe' }); } catch { /* already gone */ }
   try { execFileSync('git', ['-C', repoDir, 'worktree', 'prune'], { env: isolatedGitEnv(), stdio: 'pipe' }); } catch { /* not a repo */ }
+}
+
+/** execFileSync('git', args) with the isolated env: the one door fixtures use to run git, whatever the caller's env. */
+export function gitSync(cwd, args, opts = {}) {
+  return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe', ...opts, env: isolatedGitEnv(opts.env) }).trim();
 }

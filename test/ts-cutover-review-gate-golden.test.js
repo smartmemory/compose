@@ -12,6 +12,8 @@
  * through the ENGINE AUDIT (review_gate revise→approve) plus the observed lens
  * re-issuance — not helper booleans.
  */
+// COMPOSE-GOLDEN-LEAK-1: scrub inherited GIT_* redirection before any git call, even under a bare `node --test`.
+import './helpers/git-env-scrub.js';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';

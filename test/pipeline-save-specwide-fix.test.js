@@ -14,6 +14,8 @@
  * And that the FLOW-SCOPED save (flowName given) stays additive for _extra
  * (preserves disk-only unsurfaced fields).
  */
+// COMPOSE-GOLDEN-LEAK-1: scrub inherited GIT_* redirection before any git call, even under a bare `node --test`.
+import './helpers/git-env-scrub.js';
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';

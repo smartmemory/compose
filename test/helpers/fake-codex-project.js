@@ -18,6 +18,7 @@
  * cancel has to kill.
  */
 
+import { isolatedGitEnv } from './git-sandbox.js';
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, chmod } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -158,7 +159,7 @@ export async function makeFakeCodexProject({
     await writeFile(join(workspace, '.gitignore'), '.compose/data/\n.compose/build-stream.jsonl\ndocs/features/*/audit.json\n');
     const runGit = (args) => execFileSync('git', args, {
       cwd: workspace, encoding: 'utf8', stdio: 'pipe',
-      env: { ...process.env, GIT_AUTHOR_NAME: 'S07 Fixture', GIT_AUTHOR_EMAIL: 's07@example.test',
+      env: { ...isolatedGitEnv(), GIT_AUTHOR_NAME: 'S07 Fixture', GIT_AUTHOR_EMAIL: 's07@example.test',
         GIT_COMMITTER_NAME: 'S07 Fixture', GIT_COMMITTER_EMAIL: 's07@example.test' },
     }).trim();
     runGit(['init', '-q']);

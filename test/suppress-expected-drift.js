@@ -67,37 +67,31 @@ if (!process.env.NODE_TEST_CONTEXT) process.env.NODE_TEST_CONTEXT = '1';
 if (!process.env.COMPOSE_NO_PLUGIN_INSTALL) process.env.COMPOSE_NO_PLUGIN_INSTALL = '1';
 
 // COMPOSE-GOLDEN-LEAK-1 (2026-10-17): tests that run `git config` / `git commit` must never reach the
-// real repo. Scrub the variables that redirect git (an inherited GIT_DIR from a hook would point every
-// "temp" repo at the real one), disable the developer's global/system config in favour of a throwaway
-// file that only carries a fallback identity (a repo's own `git config` still wins), and gate the run:
-// snapshot the real repo's local identity and worktree list now, fail the process if they differ at exit.
+// real repo. Importing git-env-scrub scrubs every variable that redirects git's repo OR config (GIT_DIR,
+// GIT_CONFIG, GIT_CONFIG_PARAMETERS, ...; full list in that file) and swaps the developer's global config for a
+// throwaway fallback identity. The same module is imported by the git-calling helpers and test files, so a bare
+// `node --test file` is protected too. Here we also gate the run: snapshot the real repo's local identity and
+// worktree list now, fail the process if they differ at exit. A probe that errors fails the gate (never "empty").
 {
   const { execFileSync } = await import('node:child_process');
-  const { mkdtempSync, writeFileSync, realpathSync, rmSync } = await import('node:fs');
-  const { tmpdir } = await import('node:os');
-  const { join, dirname } = await import('node:path');
+  const { dirname } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
-  const { REPO_LOCATING_ENV } = await import('./helpers/git-sandbox.js');
+  await import('./helpers/git-env-scrub.js');
   const realRepo = dirname(dirname(fileURLToPath(import.meta.url)));
   const probe = () => {
-    const env = { ...process.env };
-    for (const k of REPO_LOCATING_ENV) delete env[k];
-    const run = (...a) => { try { return execFileSync('git', ['-C', realRepo, ...a], { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'ignore'] }); } catch { return ''; } };
+    const run = (...a) => {
+      try { return execFileSync('git', ['-C', realRepo, ...a], { encoding: 'utf8', env: process.env, stdio: ['ignore', 'pipe', 'pipe'] }); } catch (err) {
+        if (err.status === 1 && a[0] === 'config') return ''; // `git config --get-all` exits 1 when the key is absent
+        return `PROBE-ERROR(${a.join(' ')}): ${err.status ?? ''} ${String(err.stderr ?? err.message).trim()}`;
+      }
+    };
     return JSON.stringify({ name: run('config', '--local', '--get-all', 'user.name'), email: run('config', '--local', '--get-all', 'user.email'), worktrees: run('worktree', 'list', '--porcelain') });
   };
   const before = probe();
-  for (const k of REPO_LOCATING_ENV) delete process.env[k];
-  if (!process.env.COMPOSE_TEST_GITCONFIG) {
-    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'compose-test-gitconfig-')));
-    process.on('exit', () => { try { rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ } });
-    writeFileSync(join(dir, 'gitconfig'), '[user]\n\tname = Compose Test\n\temail = compose-test@example.test\n');
-    process.env.COMPOSE_TEST_GITCONFIG = join(dir, 'gitconfig');
-  }
-  process.env.GIT_CONFIG_GLOBAL = process.env.COMPOSE_TEST_GITCONFIG;
-  process.env.GIT_CONFIG_NOSYSTEM = '1';
   process.on('exit', () => {
-    if (probe() !== before) {
-      process.stderr.write(`\nGOLDEN-LEAK GATE: this test process changed the real repo's local git identity or worktree list (${realRepo}).\nbefore=${before}\nafter=${probe()}\n`);
+    const after = probe();
+    if (after !== before || after.includes('PROBE-ERROR')) {
+      process.stderr.write(`\nGOLDEN-LEAK GATE: this test process changed the real repo's local git identity or worktree list, or the gate could not read it (${realRepo}).\nbefore=${before}\nafter=${after}\n`);
       process.exitCode = 1;
     }
   });

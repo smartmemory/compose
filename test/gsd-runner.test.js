@@ -4,6 +4,8 @@
  * Full end-to-end golden flow lives in test/gsd.test.js (T7). These cover
  * the validation/fallback paths that runGsd owns directly.
  */
+// COMPOSE-GOLDEN-LEAK-1: scrub inherited GIT_* redirection before any git call, even under a bare `node --test`.
+import './helpers/git-env-scrub.js';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';

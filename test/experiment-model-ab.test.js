@@ -1,3 +1,5 @@
+// COMPOSE-GOLDEN-LEAK-1: scrub inherited GIT_* redirection before any git call, even under a bare `node --test`.
+import './helpers/git-env-scrub.js';
 import { tier, claudeDefault } from './helpers/model-catalog.js';
 /**
  * experiment-model-ab.test.js — Wave 1 unit/integration tests for COMP-MODEL-AB.

@@ -19,6 +19,7 @@ export default defineConfig({
     isolate: true,
     globals: true,
     include: ['test/ui/**/*.test.{js,jsx}', 'src/**/*.test.{js,jsx}'],
-    setupFiles: ['test/ui/setup.js'],
+    // COMPOSE-GOLDEN-LEAK-1: scrub inherited GIT_* redirection for this runner too.
+    setupFiles: ['test/helpers/git-env-scrub.js', 'test/ui/setup.js'],
   },
 });

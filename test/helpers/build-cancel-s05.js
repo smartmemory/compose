@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { runBuild } from '../../lib/build.js';
 import { ConsumerFanoutArtifacts } from '../../lib/consumer-fanout.js';
 import { VisionWriter } from '../../lib/vision-writer.js';
-import { assertOutsideRealRepo } from './git-sandbox.js';
+import { assertOutsideRealRepo, isolatedGitEnv } from './git-sandbox.js';
 
 export const FLOW = 's05-flow';
 export const SPEC = `version: 1
@@ -50,7 +50,7 @@ export function fixture(t, spec = SPEC) {
   writeFileSync(join(dataDir, 'vision-state.json'), JSON.stringify({ items: [{ id: 's05-item', status: 'planned', lifecycle: { featureCode: 'S05' } }], connections: [], gates: [] }));
   writeFileSync(join(cwd, 'pipelines', 'build.stratum.yaml'), spec);
   writeFileSync(join(cwd, '.gitignore'), '.compose/data/\n.compose/build-stream.jsonl\ndocs/features/*/audit.json\n');
-  const git = args => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' }).trim();
+  const git = args => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe', env: isolatedGitEnv() }).trim();
   assertOutsideRealRepo(cwd);
   git(['init', '-q']);
   git(['config', 'user.name', 'S05 Test']);

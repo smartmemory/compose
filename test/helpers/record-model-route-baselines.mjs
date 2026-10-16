@@ -2,6 +2,7 @@
  * WORKTREE=1 overlays all changed implementation/tests, including new catalog helpers.
  * Existing symbolic captures are immutable; legacy concrete captures are replaced once.
  */
+import { isolatedGitEnv } from './git-sandbox.js';
 import { registerHooks } from 'node:module';
 import { appendFileSync, existsSync, readFileSync, writeFileSync, mkdtempSync, symlinkSync, mkdirSync, rmSync, copyFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -57,10 +58,10 @@ if (process.env.ROUTE_BASELINE_TRACE) {
   const dir = join(tempRoot, 'compose');
   mkdirSync(dir, { recursive: true });
   try {
-    const archive = execFileSync('git', ['archive', revision], { cwd: root, maxBuffer: 100 * 1024 * 1024 });
+    const archive = execFileSync('git', ['archive', revision], { env: isolatedGitEnv(), cwd: root, maxBuffer: 100 * 1024 * 1024 });
     execFileSync('tar', ['-x', '-C', dir], { input: archive });
     const overlayPaths = [...new Set([
-      ...execFileSync('git', ['diff', '--name-only'], { cwd: root, encoding: 'utf8' }).trim().split('\n')
+      ...execFileSync('git', ['diff', '--name-only'], { env: isolatedGitEnv(), cwd: root, encoding: 'utf8' }).trim().split('\n')
         .filter(path => /^(lib|server|contracts|test)\//.test(path) && !path.startsWith('test/fixtures/')),
       'lib/model-catalog.js', 'test/model-catalog.test.js', 'test/model-route-projection.test.js', 'test/helpers/model-catalog.js',
       'test/helpers/model-route-projection.js',

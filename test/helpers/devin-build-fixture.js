@@ -13,7 +13,7 @@ import { readFlowSpend } from '../../lib/flow-state.js';
 import { readRoutingLedger } from '../../lib/routing-ledger.js';
 import { lookupBuildCancel } from '../../lib/build-cancel.js';
 import { TS_MCP_BIN } from './stratum-test-bin.js';
-import { assertOutsideRealRepo } from './git-sandbox.js';
+import { assertOutsideRealRepo, isolatedGitEnv } from './git-sandbox.js';
 
 const TRANSIENT_DEVIN_ERROR = 'devin fetched an empty model list (transient devin-service degradation); retry the run';
 
@@ -76,7 +76,7 @@ export async function devinBuildFixture({ live = false, roles = {}, authoredAgen
     writeFileSync(join(cwd, 'pipelines/build.stratum.yaml'), YAML.stringify(spec));
     writeFileSync(join(cwd, 'pipelines/build.profiles.json'), JSON.stringify({ execute: 'devin::fast' }));
     writeFileSync(join(cwd, '.gitignore'), '.compose/data/\n.compose/routing/\n');
-    const git = args => execFileSync('git', args, { cwd, stdio: 'pipe' });
+    const git = args => execFileSync('git', args, { cwd, stdio: 'pipe', env: isolatedGitEnv() });
     assertOutsideRealRepo(cwd);
     git(['init', '-q']); git(['config','user.name','Devin Test']); git(['config','user.email','devin@example.test']); git(['add','.']); git(['commit','-qm','fixture']);
     process.env.STRATUM_STATE_ROOT = stateRoot;

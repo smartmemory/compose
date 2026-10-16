@@ -3,6 +3,8 @@
  * records store (revision chains, aggregates, goal state, joints, predictions,
  * ledger, intents, atomic writes) + effective reads + provider registry.
  */
+// COMPOSE-GOLDEN-LEAK-1: scrub inherited GIT_* redirection before any git call, even under a bare `node --test`.
+import './helpers/git-env-scrub.js';
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, existsSync } from 'node:fs';

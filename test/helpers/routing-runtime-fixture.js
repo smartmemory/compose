@@ -11,7 +11,7 @@ import { connectForTest } from './connect-for-test.js';
 import { runBuild } from '../../lib/build.js';
 import { runGsd } from '../../lib/gsd.js';
 import { readRoutingLedger } from '../../lib/routing-ledger.js';
-import { assertOutsideRealRepo } from './git-sandbox.js';
+import { assertOutsideRealRepo, isolatedGitEnv } from './git-sandbox.js';
 export const CODE = 'ROUTE-D2';
 const transport = Object.fromEntries(['route_mode', 'routing_start', 'routing_root', 'routing_plan_intent', 'routing_continuation'].map(k => [k, 'string?']));
 export const simpleSpec = (gsd = false) => ({ version: 1, contracts: { R: { outcome: 'string', summary: 'string' } }, flows: {
@@ -22,7 +22,7 @@ export async function runtimeFixture(t, { gsd = false, spec = simpleSpec(gsd), p
   const root = mkdtempSync(join(tmpdir(), 'routing-runtime-'));
   const cwd = join(root, 'workspace'), stateRoot = join(root, 'engine'), artifactRoot = join(root, 'artifacts');
   mkdirSync(cwd); mkdirSync(stateRoot);
-  const git = args => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' });
+  const git = args => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe', env: isolatedGitEnv() });
   assertOutsideRealRepo(cwd);
   git(['init', '-q']); git(['config', 'user.name', 'Routing Test']); git(['config', 'user.email', 'routing@example.test']);
   mkdirSync(join(cwd, '.compose/data'), { recursive: true }); mkdirSync(join(cwd, 'pipelines'));

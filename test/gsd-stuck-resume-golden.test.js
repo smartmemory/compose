@@ -29,6 +29,8 @@
  *   - Scenario 3 (resume guards): live pid, mode mismatch, missing pause.json,
  *     and a held claim (pause.lock) each refuse.
  */
+// COMPOSE-GOLDEN-LEAK-1: scrub inherited GIT_* redirection before any git call, even under a bare `node --test`.
+import './helpers/git-env-scrub.js';
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {

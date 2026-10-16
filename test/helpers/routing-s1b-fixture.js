@@ -1,4 +1,5 @@
 /** S1b has no runtime hooks in D1. Drive shipped start/admission/issuance producers. */
+import { isolatedGitEnv } from './git-sandbox.js';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,7 +16,7 @@ export function fixture(t, { cwd: suppliedCwd, start: suppliedStart, hooks = {},
   const root = mkdtempSync(join(tmpdir(), 'routing-s1b-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const cwd = suppliedCwd ?? join(root, 'project'); mkdirSync(cwd, { recursive: true });
-  if (!suppliedCwd) execFileSync('git', ['init', '-q'], { cwd });
+  if (!suppliedCwd) execFileSync('git', ['init', '-q'], { cwd, env: isolatedGitEnv() });
   const stateRoot = process.env.STRATUM_STATE_ROOT ?? join(root, 'flows'); mkdirSync(stateRoot, { recursive: true });
   const previousStateRoot = process.env.STRATUM_STATE_ROOT; process.env.STRATUM_STATE_ROOT = stateRoot;
   t.after(() => { if (previousStateRoot === undefined) delete process.env.STRATUM_STATE_ROOT; else process.env.STRATUM_STATE_ROOT = previousStateRoot; });
