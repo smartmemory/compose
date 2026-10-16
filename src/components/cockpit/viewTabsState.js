@@ -3,7 +3,7 @@
  *
  * Pure logic for managing the cockpit's main-area view tabs.
  *
- * Tabs represent the major content surfaces (Canvas, Stratum, …).
+ * Tabs represent the major content surfaces (Dashboard, Graph, Docs, …).
  * These were previously the right-panel tabs; they now live in the
  * cockpit header via <ViewTabs> and drive what the main area renders.
  *
@@ -11,11 +11,19 @@
  */
 
 // ---------------------------------------------------------------------------
-// Default tab list — always start with Canvas then Stratum
+// Default tab list (COMPOSE-UX-SIMPLIFY-2): five tabs, Dashboard first.
+// The other views (tree, journal, design, gates, validate, qa-scope, pipeline,
+// pipeline-editor, sessions, build-history) are hidden, not deleted: their
+// renderView cases stay and in-app links (e.g. a gate card) still reach them.
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_MAIN_TABS = [
-  'dashboard', 'graph', 'tree', 'docs', 'journal', 'design', 'gates', 'validate', 'qa-scope', 'pipeline', 'pipeline-editor', 'sessions', 'build-history', 'ideabox'
+export const DEFAULT_MAIN_TABS = ['dashboard', 'graph', 'docs', 'ideabox', 'settings'];
+
+// Views that were tabs before COMPOSE-UX-SIMPLIFY-2. A persisted tab list from
+// an older build is filtered against DEFAULT_MAIN_TABS so these drop out.
+export const HIDDEN_VIEWS = [
+  'tree', 'journal', 'design', 'gates', 'validate', 'qa-scope', 'pipeline',
+  'pipeline-editor', 'sessions', 'build-history',
 ];
 
 // ---------------------------------------------------------------------------
@@ -96,8 +104,9 @@ export function loadMainTabs() {
     if (!raw) return [...DEFAULT_MAIN_TABS];
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length >= 1) {
-      // Migration: ensure new tabs added to DEFAULT_MAIN_TABS are present
-      let tabs = parsed;
+      // Drop tabs hidden since COMPOSE-UX-SIMPLIFY-2 (and anything unknown),
+      // then ensure new tabs added to DEFAULT_MAIN_TABS are present.
+      let tabs = parsed.filter(t => DEFAULT_MAIN_TABS.includes(t));
       for (const tab of DEFAULT_MAIN_TABS) {
         if (!tabs.includes(tab)) {
           // Insert after 'docs' if possible, otherwise append

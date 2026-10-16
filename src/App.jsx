@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import AgentStream from './components/AgentStream';
 import PopoutView from './components/PopoutView';
-import StratumPanel from './components/StratumPanel';
 import ProjectSwitchPopover from './components/ProjectSwitchPopover.jsx';
 
 // Cockpit shell components
@@ -30,6 +29,7 @@ import {
 } from './components/cockpit/agentBarState.js';
 import {
   loadMainTabs,
+  HIDDEN_VIEWS,
   loadActiveTab,
   saveActiveTab,
 } from './components/cockpit/viewTabsState.js';
@@ -385,8 +385,6 @@ function CockpitView({
           onReset={onResetSettings}
         />
       );
-    case 'stratum':
-      return <StratumPanel />;
     default:
       return (
         <div className="flex-1 flex items-center justify-center text-[12px] text-muted-foreground italic">
@@ -489,9 +487,12 @@ function AppInner() {
   // ── Local vision state (absorbed from VisionTracker) ────────────────────
   const [selectedItemId, setSelectedItemId] = useState(null);
   const hadSessionView = useRef(!!localStorage.getItem('compose:activeView'));
-  const [activeView, setActiveView] = useState(() =>
-    localStorage.getItem('compose:activeView') || 'dashboard'
-  );
+  const [activeView, setActiveView] = useState(() => {
+    // COMPOSE-UX-SIMPLIFY-2: a view persisted from an older build that is now
+    // hidden (no tab) falls back to the dashboard on load.
+    const saved = localStorage.getItem('compose:activeView');
+    return saved && !HIDDEN_VIEWS.includes(saved) && saved !== 'stratum' ? saved : 'dashboard';
+  });
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleContextResizePx = useCallback((px) => {
