@@ -1,0 +1,265 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<title>The joint state machine</title>
+
+<style>
+  :root {
+    --paper:      #F7F6F4;
+    --card:       #FFFFFF;
+    --ink:        #1A1815;
+    --muted:      #6F6960;
+    --faint:      #9C958A;
+    --line:       #2E2A25;
+    --rule:       #DCD7CE;
+
+    --plum:       #6B3A78;
+    --plum-bg:    #F0E7F2;
+
+    --gate:       #A2650C;
+    --gate-bg:    #FAF0DA;
+
+    --term:       #7A5C3E;
+    --term-bg:    #F0E8DE;
+
+    --ok:         #1D7350;
+    --ok-bg:      #E2F0E9;
+
+    --hand: "Chalkboard SE", "Comic Sans MS", "Bradley Hand", "Segoe Print", ui-rounded, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #14120F; --card: #1C1916; --ink: #EAE5DE; --muted: #A19889;
+      --faint: #746C60; --line: #CCC5BA; --rule: #322D26;
+      --plum: #C79AD4; --plum-bg: #241A29;
+      --gate: #DDA23E; --gate-bg: #2A2113;
+      --term: #C4A480; --term-bg: #241D15;
+      --ok: #5FC79C; --ok-bg: #142620;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #14120F; --card: #1C1916; --ink: #EAE5DE; --muted: #A19889;
+    --faint: #746C60; --line: #CCC5BA; --rule: #322D26;
+    --plum: #C79AD4; --plum-bg: #241A29;
+    --gate: #DDA23E; --gate-bg: #2A2113;
+    --term: #C4A480; --term-bg: #241D15;
+    --ok: #5FC79C; --ok-bg: #142620;
+  }
+  :root[data-theme="light"] {
+    --paper: #F7F6F4; --card: #FFFFFF; --ink: #1A1815; --muted: #6F6960;
+    --faint: #9C958A; --line: #2E2A25; --rule: #DCD7CE;
+    --plum: #6B3A78; --plum-bg: #F0E7F2;
+    --gate: #A2650C; --gate-bg: #FAF0DA;
+    --term: #7A5C3E; --term-bg: #F0E8DE;
+    --ok: #1D7350; --ok-bg: #E2F0E9;
+  }
+
+  .page {
+    background: var(--paper); color: var(--ink); font-family: var(--hand);
+    padding: 40px 32px 64px; display: flex; flex-direction: column; gap: 28px; min-height: 100%;
+  }
+
+  .masthead { display: flex; flex-direction: column; gap: 10px; max-width: 80ch; }
+  .masthead h1 { font-size: clamp(28px, 3.4vw, 42px); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+  .masthead p { margin: 0; color: var(--muted); font-size: clamp(15px, 1.5vw, 18px); line-height: 1.5; }
+  .masthead .src { font-family: var(--mono); font-size: 12.5px; color: var(--faint); letter-spacing: 0.02em; }
+
+  .scroller { overflow-x: auto; padding-bottom: 6px; }
+  .scroller svg { display: block; width: 100%; min-width: 900px; height: auto; }
+
+  .t-box   { font-family: var(--hand); font-size: 17px; fill: var(--ink); }
+  .t-boxsm { font-family: var(--hand); font-size: 12.5px; fill: var(--muted); }
+  .t-edge  { font-family: var(--mono); font-size: 11px; fill: var(--muted); }
+  .t-note  { font-family: var(--hand); font-size: 13.5px; fill: var(--muted); }
+  .t-zone  { font-family: var(--hand); font-size: 15px; fill: var(--plum); letter-spacing: 0.06em; }
+
+  .e      { stroke: var(--line); stroke-width: 2.2; fill: none; }
+  .e-back { stroke: var(--gate); stroke-width: 2.4; fill: none; }
+  .e-term { stroke: var(--term); stroke-width: 1.9; fill: none; }
+
+  table.edges { border-collapse: collapse; font-size: 14px; width: 100%; }
+  table.edges th, table.edges td { text-align: left; padding: 8px 16px 8px 0; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+  table.edges th { color: var(--muted); font-weight: normal; font-size: 12.5px; letter-spacing: 0.05em; }
+  table.edges td.edge { font-family: var(--mono); font-size: 11.5px; white-space: nowrap; color: var(--ink); }
+  table.edges td.req  { font-family: var(--mono); font-size: 11.5px; color: var(--gate); }
+  table.edges tr.is-back td.edge { color: var(--gate); }
+
+  .callout { border: 2px solid var(--ink); border-radius: 3px; background: var(--card); padding: 24px 26px; display: flex; flex-direction: column; gap: 12px; }
+  .callout h2 { margin: 0; font-size: 22px; }
+  .callout p { margin: 0; max-width: 78ch; line-height: 1.6; font-size: 15.5px; }
+  .callout .why { display: flex; flex-direction: column; gap: 10px; }
+  .callout .why div { display: flex; gap: 12px; align-items: baseline; }
+  .callout .why b { color: var(--plum); font-family: var(--mono); font-size: 12.5px; white-space: nowrap; padding-top: 2px; }
+  code { font-family: var(--mono); font-size: 0.86em; }
+
+  .punch { font-size: clamp(16px, 1.8vw, 20px); line-height: 1.5; max-width: 90ch; margin: 0; text-wrap: balance; }
+  .punch em { font-style: normal; color: var(--gate); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px 32px; align-items: center; }
+  .legend .item { display: flex; gap: 10px; align-items: center; font-size: 14.5px; color: var(--muted); }
+  .legend .sw { width: 26px; height: 0; border-top: 3px solid; flex: none; }
+  .legend .bx { width: 22px; height: 15px; border-radius: 2px; border: 2px solid; flex: none; }
+
+  .footnote { font-size: 14px; color: var(--muted); max-width: 88ch; line-height: 1.6; margin: 0; }
+  h2.sec { margin: 0; font-size: 20px; }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <h1>The joint state machine</h1>
+    <p>Four states, eleven edges, four separate cycles — and not one edge you can take for free.
+       Every arrow here demands a specific artifact, and the refusal message names the one it wants.</p>
+    <span class="src">lib/lifecycle-modes.js — LIFECYCLE_MODES.judgment · lib/judgment-write-guard.js — EDGE_TABLE</span>
+  </header>
+
+  <div class="scroller">
+  <svg viewBox="0 0 1240 700" role="img" aria-label="The judgment joint state machine as a directed graph: open, under_test, resolved and inconclusive with four cycles between them, plus the superseded and dissolved terminal states.">
+    <defs>
+      <marker id="j-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--line)"></path>
+      </marker>
+      <marker id="j-back" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+        <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--gate)"></path>
+      </marker>
+      <marker id="j-term" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--term)"></path>
+      </marker>
+    </defs>
+
+    <text class="t-zone" x="40" y="30">FOUR CYCLES. A JOINT CAN COME BACK FROM ANYTHING EXCEPT A TERMINAL STATE.</text>
+
+    <!-- resolved -> open : outermost arc over the top -->
+    <path class="e-back" d="M 1050 147 C 1050 46, 250 40, 190 143" marker-end="url(#j-back)"></path>
+    <text class="t-edge" x="560" y="58" fill="var(--gate)">reopen { shaken_evidence_ref }</text>
+
+    <!-- under_test -> open : inner arc -->
+    <path class="e-back" d="M 600 147 C 600 92, 250 92, 208 143" marker-end="url(#j-back)"></path>
+    <text class="t-edge" x="330" y="108" fill="var(--gate)">resolution { outcome: failed_to_run }</text>
+
+    <!-- open -->
+    <rect x="100" y="147" width="200" height="66" rx="3" fill="var(--plum-bg)" stroke="var(--plum)" stroke-width="3"></rect>
+    <text class="t-box" x="200" y="176" text-anchor="middle">open</text>
+    <text class="t-boxsm" x="200" y="197" text-anchor="middle">genesis · 3 ways out</text>
+
+    <!-- under_test -->
+    <rect x="540" y="147" width="200" height="66" rx="3" fill="var(--card)" stroke="var(--plum)" stroke-width="2.5"></rect>
+    <text class="t-box" x="640" y="176" text-anchor="middle">under_test</text>
+    <text class="t-boxsm" x="640" y="197" text-anchor="middle" fill="var(--gate)">5 ways out</text>
+
+    <!-- resolved -->
+    <rect x="950" y="147" width="200" height="66" rx="3" fill="var(--ok-bg)" stroke="var(--ok)" stroke-width="2.5"></rect>
+    <text class="t-box" x="1050" y="176" text-anchor="middle" fill="var(--ok)">resolved</text>
+    <text class="t-boxsm" x="1050" y="197" text-anchor="middle">completable — still reopenable</text>
+
+    <!-- inconclusive -->
+    <rect x="540" y="347" width="200" height="66" rx="3" fill="var(--card)" stroke="var(--plum)" stroke-width="2.5"></rect>
+    <text class="t-box" x="640" y="376" text-anchor="middle">inconclusive</text>
+    <text class="t-boxsm" x="640" y="397" text-anchor="middle">2 ways out</text>
+
+    <!-- open -> under_test -->
+    <path class="e" d="M 300 180 L 534 180" marker-end="url(#j-ah)"></path>
+    <text class="t-edge" x="336" y="170">method gate: EXT needs ext{}, STRADDLE needs straddle{}</text>
+
+    <!-- under_test -> resolved -->
+    <path class="e" d="M 740 180 L 944 180" marker-end="url(#j-ah)"></path>
+    <text class="t-edge" x="762" y="170">resolution { resolved, evidence }</text>
+
+    <!-- under_test -> inconclusive -->
+    <path class="e" d="M 640 213 L 640 341" marker-end="url(#j-ah)"></path>
+    <text class="t-edge" x="652" y="264">resolution { inconclusive,</text>
+    <text class="t-edge" x="652" y="280">learned, would_have_settled }</text>
+
+    <!-- inconclusive -> under_test : small right loop -->
+    <path class="e-back" d="M 716 345 C 790 320, 796 240, 726 215" marker-end="url(#j-back)"></path>
+    <text class="t-edge" x="806" y="288" fill="var(--gate)">re-dispose</text>
+
+    <!-- inconclusive -> open -->
+    <path class="e-back" d="M 536 372 C 400 372, 244 300, 202 217" marker-end="url(#j-back)"></path>
+    <text class="t-edge" x="300" y="330" fill="var(--gate)">re-dispose { new_resolve_by }</text>
+
+    <!-- open -> superseded -->
+    <path class="e-term" d="M 168 213 C 150 340, 220 470, 288 528" marker-end="url(#j-term)"></path>
+    <!-- under_test -> superseded -->
+    <path class="e-term" d="M 570 215 C 500 320, 420 460, 366 528" marker-end="url(#j-term)"></path>
+    <!-- open -> dissolved -->
+    <path class="e-term" d="M 262 215 C 420 470, 660 476, 852 530" marker-end="url(#j-term)"></path>
+    <!-- under_test -> dissolved -->
+    <path class="e-term" d="M 712 215 C 800 330, 862 450, 892 528" marker-end="url(#j-term)"></path>
+
+    <!-- terminals -->
+    <rect x="230" y="532" width="210" height="66" rx="3" fill="var(--term-bg)" stroke="var(--term)" stroke-width="2.5"></rect>
+    <text class="t-box" x="335" y="561" text-anchor="middle" fill="var(--term)">superseded</text>
+    <text class="t-boxsm" x="335" y="582" text-anchor="middle">terminal · no way out</text>
+
+    <rect x="790" y="532" width="210" height="66" rx="3" fill="var(--term-bg)" stroke="var(--term)" stroke-width="2.5"></rect>
+    <text class="t-box" x="895" y="561" text-anchor="middle" fill="var(--term)">dissolved</text>
+    <text class="t-boxsm" x="895" y="582" text-anchor="middle">terminal · no way out</text>
+
+    <text class="t-note" x="40" y="640">Both terminals are reachable from BOTH open and under_test — four edges, drawn here in brown.</text>
+    <text class="t-note" x="40" y="662">superseded takes a resolution. dissolution is its OWN artifact and is refused if a resolution rides along.</text>
+    <text class="t-note" x="40" y="684">The guard graph also carries resolved → complete and → killed edges, but the write-guard refuses them first: unreachable.</text>
+  </svg>
+  </div>
+
+  <h2 class="sec">Every edge and its toll</h2>
+  <table class="edges">
+    <thead>
+      <tr><th>EDGE</th><th>WHAT IT DEMANDS</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="edge">open → under_test</td><td class="req">method gate — EXT needs ext{sharpened_question, bar, falsifier} or judgment_dispatch; STRADDLE needs straddle{discriminating_signal, kill_criteria}</td></tr>
+      <tr><td class="edge">under_test → resolved</td><td class="req">resolution { outcome: resolved, evidence }</td></tr>
+      <tr><td class="edge">under_test → inconclusive</td><td class="req">resolution { outcome: inconclusive, learned, would_have_settled }</td></tr>
+      <tr class="is-back"><td class="edge">under_test → open</td><td class="req">resolution { outcome: failed_to_run, reason } — “a free under_test→open edge does not exist”</td></tr>
+      <tr><td class="edge">open → superseded</td><td class="req">resolution { outcome: superseded, why }</td></tr>
+      <tr><td class="edge">under_test → superseded</td><td class="req">resolution { outcome: superseded, why }</td></tr>
+      <tr><td class="edge">open → dissolved</td><td class="req">dissolution { decomposed_into[] } — and NO resolution alongside it</td></tr>
+      <tr><td class="edge">under_test → dissolved</td><td class="req">dissolution { decomposed_into[] } — and NO resolution alongside it</td></tr>
+      <tr class="is-back"><td class="edge">resolved → open</td><td class="req">reopen { shaken_evidence_ref }</td></tr>
+      <tr class="is-back"><td class="edge">inconclusive → under_test</td><td class="req">re-dispose { new_resolve_by, new method package }</td></tr>
+      <tr class="is-back"><td class="edge">inconclusive → open</td><td class="req">re-dispose { new_resolve_by, new method package }</td></tr>
+    </tbody>
+  </table>
+
+  <section class="callout">
+    <h2>Why there is no free edge back</h2>
+    <div class="why">
+      <div><b>the trap</b><span>A state machine where “go back to open” costs nothing is a machine that quietly forgets.
+        A joint under test that turns out to be inconvenient just slides back to open, and the record shows a question
+        that was never actually asked.</span></div>
+      <div><b>the fix</b><span><code>under_test → open</code> demands <code>resolution { outcome: failed_to_run, reason }</code>.
+        Retreating is still allowed — but it has to be written down as a thing that happened, with a reason. The refusal
+        message says so in as many words: <em>a free under_test→open edge does not exist</em>.</span></div>
+      <div><b>the same idea</b><span>Reopening something already resolved needs <code>shaken_evidence_ref</code>: not an
+        opinion that the answer feels wrong, but a pointer to the evidence that shook it. Dissolution is deliberately its
+        own artifact and is refused if a resolution rides along, because breaking a question into smaller questions is not
+        the same act as answering it.</span></div>
+    </div>
+    <p>This is what makes the cycles safe to have. Loops in a state machine are usually where accountability leaks out;
+       here each loop is tolled, so going round costs a record every time.</p>
+  </section>
+
+  <p class="punch">
+    Cycles are not the weakness of this graph, they are the point — a joint you cannot reopen is a decision you can
+    never be wrong about. What keeps that honest is that <em>every way back charges you an artifact</em>.
+  </p>
+
+  <div class="legend">
+    <span class="item"><span class="sw" style="border-color: var(--line);"></span>forward transition</span>
+    <span class="item"><span class="sw" style="border-color: var(--gate);"></span>a way back — one of four cycles</span>
+    <span class="item"><span class="sw" style="border-color: var(--term);"></span>into a terminal state</span>
+    <span class="item"><span class="bx" style="background: var(--plum-bg); border-color: var(--plum);"></span>genesis</span>
+    <span class="item"><span class="bx" style="background: var(--ok-bg); border-color: var(--ok);"></span>completable</span>
+    <span class="item"><span class="bx" style="background: var(--term-bg); border-color: var(--term);"></span>terminal</span>
+  </div>
+
+  <p class="footnote">
+    This is one of the four modes in <code>LIFECYCLE_MODES</code>, and it is the only one that is not a build lifecycle.
+    It borrows the same guard the feature phases use, so there is a single lifecycle authority rather than two — which is
+    also why its graph picks up <code>resolved → complete</code> and kill edges it can never actually take.
+  </p>
+
+</div>
+
+</body></html>

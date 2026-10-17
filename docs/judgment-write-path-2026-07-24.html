@@ -1,0 +1,339 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<title>The judgment write path</title>
+
+<style>
+  :root {
+    --paper:      #F6F7F9;
+    --card:       #FFFFFF;
+    --ink:        #171A20;
+    --muted:      #6A7086;
+    --faint:      #9AA0B0;
+    --line:       #2A2F3A;
+    --rule:       #D3D7E0;
+
+    --indigo:     #4A54A8;
+    --indigo-bg:  #EDEEF8;
+
+    --ok:         #167A5B;
+    --ok-bg:      #E4F2EC;
+    --refused:    #64708A;
+    --refused-bg: #ECEEF3;
+    --stale:      #B47812;
+    --stale-bg:   #FBF0DC;
+
+    --hand: "Chalkboard SE", "Comic Sans MS", "Bradley Hand", "Segoe Print", ui-rounded, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #101319; --card: #171B23; --ink: #E7E9EE; --muted: #939AAD;
+      --faint: #6E7689; --line: #C2C7D4; --rule: #2C323E;
+      --indigo: #97A0E8; --indigo-bg: #1B2033;
+      --ok: #5CC49C; --ok-bg: #14261F;
+      --refused: #A2ADC4; --refused-bg: #1B1F28;
+      --stale: #E3AC48; --stale-bg: #2A2113;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #101319; --card: #171B23; --ink: #E7E9EE; --muted: #939AAD;
+    --faint: #6E7689; --line: #C2C7D4; --rule: #2C323E;
+    --indigo: #97A0E8; --indigo-bg: #1B2033;
+    --ok: #5CC49C; --ok-bg: #14261F;
+    --refused: #A2ADC4; --refused-bg: #1B1F28;
+    --stale: #E3AC48; --stale-bg: #2A2113;
+  }
+  :root[data-theme="light"] {
+    --paper: #F6F7F9; --card: #FFFFFF; --ink: #171A20; --muted: #6A7086;
+    --faint: #9AA0B0; --line: #2A2F3A; --rule: #D3D7E0;
+    --indigo: #4A54A8; --indigo-bg: #EDEEF8;
+    --ok: #167A5B; --ok-bg: #E4F2EC;
+    --refused: #64708A; --refused-bg: #ECEEF3;
+    --stale: #B47812; --stale-bg: #FBF0DC;
+  }
+
+  .page {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--hand);
+    padding: 40px 32px 64px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    min-height: 100%;
+  }
+
+  .masthead { display: flex; flex-direction: column; gap: 10px; max-width: 78ch; }
+  .masthead h1 {
+    font-size: clamp(28px, 3.4vw, 42px);
+    line-height: 1.1;
+    margin: 0;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+  .masthead p { margin: 0; color: var(--muted); font-size: clamp(15px, 1.5vw, 18px); line-height: 1.5; }
+  .masthead .src {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--faint);
+    letter-spacing: 0.02em;
+  }
+
+  .scroller { overflow-x: auto; padding-bottom: 6px; }
+  .scroller svg { display: block; width: 100%; min-width: 940px; height: auto; }
+
+  /* ---- SVG type roles ---- */
+  .t-box   { font-family: var(--hand); font-size: 17px; fill: var(--ink); }
+  .t-boxsm { font-family: var(--hand); font-size: 14.5px; fill: var(--muted); }
+  .t-note  { font-family: var(--hand); font-size: 13.5px; fill: var(--muted); }
+  .t-code  { font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.01em; }
+  .t-zone  { font-family: var(--hand); font-size: 15px; fill: var(--indigo); letter-spacing: 0.06em; }
+  .t-out   { font-family: var(--hand); font-size: 18px; }
+
+  .stroke-line { stroke: var(--line); }
+  .flow-arrow  { stroke: var(--line); stroke-width: 2; fill: none; }
+  .exit-arrow  { stroke: var(--refused); stroke-width: 1.8; fill: none; }
+
+  .callout {
+    border: 2px solid var(--ink);
+    border-radius: 3px;
+    background: var(--card);
+    padding: 24px 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .callout h2 { margin: 0; font-size: 22px; }
+  .callout p { margin: 0; max-width: 74ch; line-height: 1.6; font-size: 15.5px; color: var(--ink); }
+  .callout .why { display: flex; flex-direction: column; gap: 10px; }
+  .callout .why div { display: flex; gap: 12px; align-items: baseline; }
+  .callout .why b { color: var(--indigo); font-family: var(--mono); font-size: 12.5px; white-space: nowrap; padding-top: 2px; }
+  code { font-family: var(--mono); font-size: 0.86em; }
+
+  .punch {
+    font-size: clamp(16px, 1.8vw, 20px);
+    line-height: 1.5;
+    max-width: 88ch;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .punch em { font-style: normal; color: var(--stale); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px 34px; align-items: center; }
+  .legend .item { display: flex; gap: 10px; align-items: center; font-size: 14.5px; color: var(--muted); }
+  .legend .sw { width: 22px; height: 15px; border-radius: 2px; border: 2px solid; flex: none; }
+
+  .footnote { font-size: 14px; color: var(--muted); max-width: 84ch; line-height: 1.6; margin: 0; }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <h1>The judgment write path</h1>
+    <p>Every write to judgment canon runs the same gauntlet. Only intent-backed writes cross a
+       publication boundary — and that boundary is what decides whether a failure means
+       <em>nothing happened</em> or <em>it happened, the surface is just behind</em>.</p>
+    <span class="src">lib/judgment-writer.js — runOp · publishIntentWith · commitWithProjections</span>
+  </header>
+
+  <div class="scroller">
+  <svg viewBox="0 0 1240 1610" role="img" aria-label="Flow diagram of the judgment write path, from tool entry through the lock, replay and fence, into the intent-backed publication sequence and its publication boundary.">
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--line)"></path>
+      </marker>
+      <marker id="ah-exit" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--refused)"></path>
+      </marker>
+      <marker id="ah-stale" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--stale)"></path>
+      </marker>
+    </defs>
+
+    <!-- ================= ZONE A : the wrapper ================= -->
+
+    <!-- under-the-lock band -->
+    <rect x="20" y="432" width="1200" height="428" rx="4"
+          fill="var(--indigo-bg)" stroke="var(--indigo)" stroke-width="1.5" stroke-dasharray="7 6"></rect>
+    <text class="t-zone" x="40" y="456">UNDER THE JUDGMENT LOCK</text>
+
+    <!-- S1 entry -->
+    <rect x="330" y="40" width="330" height="78" rx="3" fill="var(--card)" stroke="var(--indigo)" stroke-width="2.5"></rect>
+    <text class="t-box" x="495" y="70" text-anchor="middle">one of nine judgment tools</text>
+    <text class="t-boxsm" x="495" y="96" text-anchor="middle">8 writers + get_judgment_state</text>
+    <path class="flow-arrow" d="M 495 118 L 495 152" marker-end="url(#ah)"></path>
+
+    <!-- S2 provenance -->
+    <rect x="330" y="154" width="330" height="60" rx="3" fill="var(--card)" stroke="var(--line)" stroke-width="2"></rect>
+    <text class="t-box" x="495" y="190" text-anchor="middle">refuse caller provenance</text>
+    <text class="t-note" x="300" y="180" text-anchor="end">provenance is writer-stamped.</text>
+    <text class="t-note" x="300" y="198" text-anchor="end">There is no caller-supplied path.</text>
+    <path class="exit-arrow" d="M 660 184 L 714 184" marker-end="url(#ah-exit)"></path>
+    <rect x="720" y="158" width="460" height="52" rx="3" fill="var(--refused-bg)" stroke="var(--refused)" stroke-width="2"></rect>
+    <text class="t-code" x="740" y="190" fill="var(--refused)">JUDGMENT_INPUT</text>
+    <path class="flow-arrow" d="M 495 214 L 495 248" marker-end="url(#ah)"></path>
+
+    <!-- S3 validate -->
+    <rect x="330" y="250" width="330" height="60" rx="3" fill="var(--card)" stroke="var(--line)" stroke-width="2"></rect>
+    <text class="t-box" x="495" y="286" text-anchor="middle">validate — synchronous</text>
+    <text class="t-note" x="300" y="268" text-anchor="end">Runs BEFORE the idempotency check,</text>
+    <text class="t-note" x="300" y="286" text-anchor="end">so a malformed call can never be</text>
+    <text class="t-note" x="300" y="304" text-anchor="end">cached as a hit.</text>
+    <path class="exit-arrow" d="M 660 280 L 714 280" marker-end="url(#ah-exit)"></path>
+    <rect x="720" y="248" width="460" height="70" rx="3" fill="var(--refused-bg)" stroke="var(--refused)" stroke-width="2"></rect>
+    <text class="t-code" x="740" y="273" fill="var(--refused)">JUDGMENT_SCHEMA_VIOLATION</text>
+    <text class="t-code" x="740" y="295" fill="var(--refused)">JUDGMENT_GROUNDING_VIOLATION</text>
+    <text class="t-code" x="740" y="311" fill="var(--refused)">JUDGMENT_ILLEGAL_EDGE · _METHOD_GATE</text>
+    <path class="flow-arrow" d="M 495 310 L 495 344" marker-end="url(#ah)"></path>
+
+    <!-- S4 idempotency -->
+    <rect x="330" y="346" width="330" height="60" rx="3" fill="var(--card)" stroke="var(--line)" stroke-width="2"></rect>
+    <text class="t-box" x="495" y="382" text-anchor="middle">idempotency key?</text>
+    <path class="exit-arrow" d="M 660 376 L 714 376" marker-end="url(#ah-exit)"></path>
+    <rect x="720" y="350" width="460" height="52" rx="3" fill="var(--card)" stroke="var(--refused)" stroke-width="2"></rect>
+    <text class="t-boxsm" x="740" y="374" fill="var(--refused)">seen before → return the cached result,</text>
+    <text class="t-boxsm" x="740" y="392" fill="var(--refused)">skip the audit. Nothing re-runs.</text>
+    <path class="flow-arrow" d="M 495 406 L 495 474" marker-end="url(#ah)"></path>
+
+    <!-- S5 lock -->
+    <rect x="330" y="476" width="330" height="58" rx="3" fill="var(--card)" stroke="var(--line)" stroke-width="2"></rect>
+    <text class="t-box" x="495" y="511" text-anchor="middle">acquire the judgment lock</text>
+    <path class="exit-arrow" d="M 660 505 L 714 505" marker-end="url(#ah-exit)"></path>
+    <rect x="720" y="479" width="460" height="52" rx="3" fill="var(--refused-bg)" stroke="var(--refused)" stroke-width="2"></rect>
+    <text class="t-code" x="740" y="511" fill="var(--refused)">JUDGMENT_LOCK_TIMEOUT</text>
+    <path class="flow-arrow" d="M 495 534 L 495 566" marker-end="url(#ah)"></path>
+
+    <!-- S6 replay -->
+    <rect x="330" y="568" width="330" height="76" rx="3" fill="var(--card)" stroke="var(--indigo)" stroke-width="2.5"></rect>
+    <text class="t-box" x="495" y="597" text-anchor="middle">replay pending intents</text>
+    <text class="t-boxsm" x="495" y="622" text-anchor="middle">the reconciler</text>
+    <text class="t-note" x="300" y="580" text-anchor="end">Runs at the head of every write —</text>
+    <text class="t-note" x="300" y="598" text-anchor="end">and every get_judgment_state.</text>
+    <text class="t-note" x="300" y="622" text-anchor="end">This is the whole reason a stale</text>
+    <text class="t-note" x="300" y="640" text-anchor="end">projection repairs itself on a read.</text>
+    <path class="flow-arrow" d="M 495 644 L 495 678" marker-end="url(#ah)"></path>
+
+    <!-- S7 fence -->
+    <rect x="330" y="680" width="330" height="68" rx="3" fill="var(--card)" stroke="var(--line)" stroke-width="2"></rect>
+    <text class="t-box" x="495" y="710" text-anchor="middle">the migration fence</text>
+    <text class="t-boxsm" x="495" y="733" text-anchor="middle">every goal op except migrate</text>
+    <text class="t-note" x="300" y="700" text-anchor="end">One central check, never copied</text>
+    <text class="t-note" x="300" y="718" text-anchor="end">into the executors.</text>
+    <path class="exit-arrow" d="M 660 714 L 714 714" marker-end="url(#ah-exit)"></path>
+    <rect x="720" y="672" width="460" height="86" rx="3" fill="var(--refused-bg)" stroke="var(--refused)" stroke-width="2"></rect>
+    <text class="t-code" x="740" y="696" fill="var(--refused)">JUDGMENT_INTENT_PENDING</text>
+    <text class="t-note" x="740" y="716">checked FIRST — a surviving intent outranks the fence.</text>
+    <text class="t-code" x="740" y="740" fill="var(--refused)">JUDGMENT_MIGRATION_REQUIRED</text>
+    <path class="flow-arrow" d="M 495 748 L 495 786" marker-end="url(#ah)"></path>
+
+    <!-- S8 execute -->
+    <rect x="330" y="788" width="330" height="56" rx="3" fill="var(--card)" stroke="var(--indigo)" stroke-width="2.5"></rect>
+    <text class="t-box" x="495" y="822" text-anchor="middle">execute</text>
+
+    <!-- transition into zone B -->
+    <path class="flow-arrow" d="M 495 844 L 495 946" marker-end="url(#ah)"></path>
+    <text class="t-zone" x="520" y="900">INSIDE EXECUTE — THE INTENT-BACKED WRITE</text>
+
+    <!-- ================= ZONE B : publication sequence ================= -->
+
+    <!-- B1 persist -->
+    <rect x="330" y="948" width="330" height="56" rx="3" fill="var(--card)" stroke="var(--line)" stroke-width="2"></rect>
+    <text class="t-box" x="495" y="982" text-anchor="middle">persist the intent</text>
+    <text class="t-note" x="300" y="970" text-anchor="end">The COMPLETE mutation, written</text>
+    <text class="t-note" x="300" y="988" text-anchor="end">down before any of it is applied.</text>
+    <path class="flow-arrow" d="M 495 1004 L 495 1036" marker-end="url(#ah)"></path>
+
+    <!-- B2 apply -->
+    <rect x="330" y="1038" width="330" height="56" rx="3" fill="var(--card)" stroke="var(--line)" stroke-width="2"></rect>
+    <text class="t-box" x="495" y="1072" text-anchor="middle">apply — idempotent</text>
+    <path class="exit-arrow" d="M 660 1066 L 714 1066" marker-end="url(#ah-exit)"></path>
+    <path class="flow-arrow" d="M 495 1094 L 495 1126" marker-end="url(#ah)"></path>
+
+    <!-- B3 attest -->
+    <rect x="330" y="1128" width="330" height="56" rx="3" fill="var(--card)" stroke="var(--line)" stroke-width="2"></rect>
+    <text class="t-box" x="495" y="1162" text-anchor="middle">append the attestation</text>
+    <path class="exit-arrow" d="M 660 1156 L 714 1156" marker-end="url(#ah-exit)"></path>
+    <path class="flow-arrow" d="M 495 1184 L 495 1216" marker-end="url(#ah)"></path>
+
+    <!-- shared pre-publication failure box -->
+    <rect x="720" y="1040" width="460" height="106" rx="3" fill="var(--refused-bg)" stroke="var(--refused)" stroke-width="2"></rect>
+    <text class="t-out" x="740" y="1068" fill="var(--refused)">nothing was published</text>
+    <text class="t-note" x="740" y="1090">Records restored. The intent is RETAINED,</text>
+    <text class="t-note" x="740" y="1108">so the next replay finishes or refuses cleanly.</text>
+    <text class="t-code" x="740" y="1133" fill="var(--refused)">JUDGMENT_PARTIAL_WRITE</text>
+
+    <!-- B4 THE CLEAR -->
+    <rect x="322" y="1218" width="346" height="80" rx="3" fill="var(--card)" stroke="var(--ink)" stroke-width="4"></rect>
+    <text class="t-box" x="495" y="1249" text-anchor="middle" font-size="19">clear the intent</text>
+    <text class="t-boxsm" x="495" y="1276" text-anchor="middle" fill="var(--ink)">the single durable act</text>
+    <text class="t-note" x="300" y="1240" text-anchor="end">Everything above is reversible.</text>
+    <text class="t-note" x="300" y="1258" text-anchor="end">Nothing below is.</text>
+    <path class="exit-arrow" d="M 668 1258 L 714 1258" marker-end="url(#ah-exit)"></path>
+    <rect x="720" y="1226" width="460" height="66" rx="3" fill="var(--refused-bg)" stroke="var(--refused)" stroke-width="2"></rect>
+    <text class="t-note" x="740" y="1250">Clear failed → restore, intent retained.</text>
+    <text class="t-code" x="740" y="1275" fill="var(--refused)">JUDGMENT_PARTIAL_WRITE</text>
+
+    <!-- THE BOUNDARY -->
+    <line x1="20" y1="1330" x2="1220" y2="1330" stroke="var(--ink)" stroke-width="2.5" stroke-dasharray="10 7"></line>
+    <rect x="452" y="1313" width="336" height="34" rx="17" fill="var(--paper)" stroke="var(--ink)" stroke-width="2.5"></rect>
+    <text class="t-box" x="620" y="1336" text-anchor="middle" font-size="15">↑ reversible · PUBLISHED · irreversible ↓</text>
+    <path class="flow-arrow" d="M 495 1298 L 495 1313"></path>
+    <path class="flow-arrow" d="M 495 1347 L 495 1378" marker-end="url(#ah)"></path>
+
+    <!-- B5 regenerate -->
+    <rect x="330" y="1380" width="330" height="56" rx="3" fill="var(--card)" stroke="var(--line)" stroke-width="2"></rect>
+    <text class="t-box" x="495" y="1414" text-anchor="middle">regenerate projections</text>
+    <text class="t-note" x="300" y="1402" text-anchor="end">Markdown surfaces only. Canon is</text>
+    <text class="t-note" x="300" y="1420" text-anchor="end">already true at this point.</text>
+    <path class="exit-arrow" stroke="var(--stale)" d="M 660 1408 L 714 1408" marker-end="url(#ah-stale)"></path>
+    <rect x="720" y="1376" width="460" height="106" rx="3" fill="var(--stale-bg)" stroke="var(--stale)" stroke-width="2.5"></rect>
+    <text class="t-out" x="740" y="1404" fill="var(--stale)">published, surfaces behind</text>
+    <text class="t-note" x="740" y="1426">Records stay COMMITTED. No rollback —</text>
+    <text class="t-note" x="740" y="1444">the next read regenerates and repairs.</text>
+    <text class="t-code" x="740" y="1469" fill="var(--stale)">JUDGMENT_PROJECTION_STALE</text>
+    <path class="flow-arrow" d="M 495 1436 L 495 1478" marker-end="url(#ah)"></path>
+
+    <!-- B6 outcome -->
+    <rect x="330" y="1480" width="330" height="66" rx="3" fill="var(--ok-bg)" stroke="var(--ok)" stroke-width="2.5"></rect>
+    <text class="t-out" x="495" y="1509" text-anchor="middle" fill="var(--ok)">published</text>
+    <text class="t-note" x="495" y="1532" text-anchor="middle">canon written, surfaces regenerated</text>
+
+    <!-- tail note -->
+    <text class="t-note" x="20" y="1580">Then: release the lock, and append a best-effort audit event — after the commit, and never allowed to surface a failure.</text>
+  </svg>
+  </div>
+
+  <section class="callout">
+    <h2>Why the clear comes before the regenerate</h2>
+    <div class="why">
+      <div><b>if reversed</b><span>Regenerate first, then clear, and a crash between them leaves a published-looking
+        set of surfaces sitting on top of a live intent. The next replay re-applies a write the reader has already seen.</span></div>
+      <div><b>if collapsed</b><span>Treat a projection failure after the clear as an ordinary failure, and the compensating
+        rollback reverts committed canon — a durable, attested write undone because a Markdown file could not be opened.</span></div>
+      <div><b>so</b><span>The clear is the one durable boundary. Everything before it rolls back and keeps the intent;
+        everything after it repairs forward and never rolls back.</span></div>
+    </div>
+    <p>The same asymmetry is why <code>replay</code> sits at the head of <em>reads</em> as well as writes. A surface that
+       is behind has no separate repair path — the next person to look at it fixes it by looking.</p>
+  </section>
+
+  <p class="punch">
+    <code>JUDGMENT_PROJECTION_STALE</code> means <em>behind, not failed</em> — collapsing it into an ordinary
+    failure is how committed canon gets rolled back over a file nobody could write.
+  </p>
+
+  <div class="legend">
+    <span class="item"><span class="sw" style="background: var(--ok-bg); border-color: var(--ok);"></span>published — canon written, surfaces current</span>
+    <span class="item"><span class="sw" style="background: var(--refused-bg); border-color: var(--refused);"></span>refused — nothing published, intent retained, safe to retry</span>
+    <span class="item"><span class="sw" style="background: var(--stale-bg); border-color: var(--stale);"></span>stale — published, surfaces behind, repairs on next read</span>
+  </div>
+
+  <p class="footnote">
+    Ordinary writes take a shorter road: mutate the records, regenerate, and on any failure restore and re-regenerate
+    under <code>JUDGMENT_PARTIAL_WRITE</code>. They never cross a publication boundary because they have no intent to
+    clear — which is exactly why transitions and the goal migration are intent-backed instead.
+  </p>
+
+</div>
+
+</body></html>

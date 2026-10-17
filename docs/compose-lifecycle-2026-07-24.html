@@ -1,0 +1,276 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<title>The Compose lifecycle</title>
+
+<style>
+  :root {
+    --paper:      #F5F7F7;
+    --card:       #FFFFFF;
+    --ink:        #161B1B;
+    --muted:      #647574;
+    --faint:      #93A2A1;
+    --line:       #26302F;
+    --rule:       #D0DAD9;
+
+    --petrol:     #1A6C6A;
+    --petrol-bg:  #E2EFEE;
+
+    --gate:       #A76A0D;
+    --gate-bg:    #FAF0DC;
+
+    --kill:       #A03A38;
+    --kill-bg:    #F7E7E7;
+
+    --ok:         #167A5B;
+    --ok-bg:      #E4F2EC;
+
+    --hand: "Chalkboard SE", "Comic Sans MS", "Bradley Hand", "Segoe Print", ui-rounded, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0E1414; --card: #161D1D; --ink: #E5EAEA; --muted: #92A3A2;
+      --faint: #677877; --line: #C0CCCB; --rule: #27322F;
+      --petrol: #57B5B0; --petrol-bg: #10262A;
+      --gate: #DB9F3C; --gate-bg: #2A2113;
+      --kill: #E08582; --kill-bg: #2A1717;
+      --ok: #5CC49C; --ok-bg: #14261F;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0E1414; --card: #161D1D; --ink: #E5EAEA; --muted: #92A3A2;
+    --faint: #677877; --line: #C0CCCB; --rule: #27322F;
+    --petrol: #57B5B0; --petrol-bg: #10262A;
+    --gate: #DB9F3C; --gate-bg: #2A2113;
+    --kill: #E08582; --kill-bg: #2A1717;
+    --ok: #5CC49C; --ok-bg: #14261F;
+  }
+  :root[data-theme="light"] {
+    --paper: #F5F7F7; --card: #FFFFFF; --ink: #161B1B; --muted: #647574;
+    --faint: #93A2A1; --line: #26302F; --rule: #D0DAD9;
+    --petrol: #1A6C6A; --petrol-bg: #E2EFEE;
+    --gate: #A76A0D; --gate-bg: #FAF0DC;
+    --kill: #A03A38; --kill-bg: #F7E7E7;
+    --ok: #167A5B; --ok-bg: #E4F2EC;
+  }
+
+  .page {
+    background: var(--paper); color: var(--ink); font-family: var(--hand);
+    padding: 40px 32px 64px; display: flex; flex-direction: column; gap: 28px; min-height: 100%;
+  }
+
+  .masthead { display: flex; flex-direction: column; gap: 10px; max-width: 82ch; }
+  .masthead h1 { font-size: clamp(28px, 3.4vw, 42px); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+  .masthead p { margin: 0; color: var(--muted); font-size: clamp(15px, 1.5vw, 18px); line-height: 1.5; }
+  .masthead .src { font-family: var(--mono); font-size: 12.5px; color: var(--faint); letter-spacing: 0.02em; }
+
+  .scroller { overflow-x: auto; padding-bottom: 6px; }
+  .scroller svg { display: block; width: 100%; min-width: 960px; height: auto; }
+
+  .t-box   { font-family: var(--hand); font-size: 16px; fill: var(--ink); }
+  .t-boxsm { font-family: var(--hand); font-size: 12.5px; fill: var(--muted); }
+  .t-note  { font-family: var(--hand); font-size: 13.5px; fill: var(--muted); }
+  .t-code  { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.01em; }
+  .t-zone  { font-family: var(--hand); font-size: 15px; fill: var(--petrol); letter-spacing: 0.06em; }
+  .t-arc   { font-family: var(--hand); font-size: 13px; }
+
+  .e       { stroke: var(--line); stroke-width: 2.2; fill: none; }
+  .e-back  { stroke: var(--gate); stroke-width: 2.6; fill: none; }
+  .e-kill  { stroke: var(--kill); stroke-width: 1.8; fill: none; stroke-dasharray: 6 5; }
+
+  .callout { border: 2px solid var(--ink); border-radius: 3px; background: var(--card); padding: 24px 26px; display: flex; flex-direction: column; gap: 12px; }
+  .callout h2 { margin: 0; font-size: 22px; }
+  .callout p { margin: 0; max-width: 78ch; line-height: 1.6; font-size: 15.5px; }
+  .callout .why { display: flex; flex-direction: column; gap: 10px; }
+  .callout .why div { display: flex; gap: 12px; align-items: baseline; }
+  .callout .why b { color: var(--petrol); font-family: var(--mono); font-size: 12.5px; white-space: nowrap; padding-top: 2px; }
+  code { font-family: var(--mono); font-size: 0.86em; }
+
+  table.deg { border-collapse: collapse; font-size: 14px; }
+  table.deg th, table.deg td { text-align: left; padding: 7px 18px 7px 0; border-bottom: 1px solid var(--rule); }
+  table.deg th { color: var(--muted); font-weight: normal; font-size: 12.5px; letter-spacing: 0.05em; }
+  table.deg td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--gate); }
+  table.deg td code { color: var(--ink); }
+
+  .punch { font-size: clamp(16px, 1.8vw, 20px); line-height: 1.5; max-width: 90ch; margin: 0; text-wrap: balance; }
+  .punch em { font-style: normal; color: var(--gate); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px 32px; align-items: center; }
+  .legend .item { display: flex; gap: 10px; align-items: center; font-size: 14.5px; color: var(--muted); }
+  .legend .sw { width: 26px; height: 0; border-top: 3px solid; flex: none; }
+  .legend .bx { width: 22px; height: 15px; border-radius: 2px; border: 2px solid; flex: none; }
+
+  .footnote { font-size: 14px; color: var(--muted); max-width: 88ch; line-height: 1.6; margin: 0; }
+  h2.sec { margin: 0; font-size: 20px; }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <h1>The Compose lifecycle is a graph</h1>
+    <p>Not a pipeline with exceptions. <code>transitions</code> is the only authority the guard consults,
+       and it has four branch points and a cycle. The tidy ten-step order everyone quotes lives in a
+       different field — one that is never used to sequence anything.</p>
+    <span class="src">lib/lifecycle-modes.js — LIFECYCLE_MODES.build.transitions · server/lifecycle-guard.js — buildPhaseGraph</span>
+  </header>
+
+  <div class="scroller">
+  <svg viewBox="0 0 1240 930" role="img" aria-label="The Compose build lifecycle drawn as a directed graph with cycles: ten phases, four branch points, a rework back-edge from verification to blueprint, and a kill edge from every non-terminal phase.">
+    <defs>
+      <marker id="g-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--line)"></path>
+      </marker>
+      <marker id="g-back" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+        <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--gate)"></path>
+      </marker>
+      <marker id="g-kill" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--kill)"></path>
+      </marker>
+    </defs>
+
+    <text class="t-zone" x="40" y="34">EVERY EDGE BELOW IS A PEER ENTRY IN transitions — NONE IS A “MAIN LINE”</text>
+
+    <!-- ================= BAND 1 ================= -->
+    <rect x="40" y="170" width="190" height="64" rx="3" fill="var(--card)" stroke="var(--petrol)" stroke-width="2.5"></rect>
+    <text class="t-box" x="135" y="198" text-anchor="middle">explore_design</text>
+    <text class="t-boxsm" x="135" y="218" text-anchor="middle" fill="var(--gate)">3 ways out</text>
+
+    <rect x="278" y="170" width="190" height="64" rx="3" fill="var(--card)" stroke="var(--petrol)" stroke-width="2.5"></rect>
+    <text class="t-box" x="373" y="198" text-anchor="middle">prd</text>
+    <text class="t-boxsm" x="373" y="218" text-anchor="middle" fill="var(--gate)">2 ways out</text>
+
+    <rect x="516" y="170" width="190" height="64" rx="3" fill="var(--card)" stroke="var(--petrol)" stroke-width="2.5"></rect>
+    <text class="t-box" x="611" y="206" text-anchor="middle">architecture</text>
+
+    <rect x="754" y="170" width="190" height="64" rx="3" fill="var(--card)" stroke="var(--petrol)" stroke-width="2.5"></rect>
+    <text class="t-box" x="849" y="206" text-anchor="middle">blueprint</text>
+
+    <rect x="992" y="170" width="190" height="64" rx="3" fill="var(--card)" stroke="var(--petrol)" stroke-width="2.5"></rect>
+    <text class="t-box" x="1087" y="198" text-anchor="middle">verification</text>
+    <text class="t-boxsm" x="1087" y="218" text-anchor="middle" fill="var(--gate)">2 ways out</text>
+
+    <!-- band 1 adjacent edges -->
+    <path class="e" d="M 230 202 L 272 202" marker-end="url(#g-ah)"></path>
+    <path class="e" d="M 468 202 L 510 202" marker-end="url(#g-ah)"></path>
+    <path class="e" d="M 706 202 L 748 202" marker-end="url(#g-ah)"></path>
+    <path class="e" d="M 944 202 L 986 202" marker-end="url(#g-ah)"></path>
+    <rect x="742" y="118" width="150" height="24" rx="12" fill="var(--gate-bg)" stroke="var(--gate)" stroke-width="1.6"></rect>
+    <text class="t-code" x="754" y="135" fill="var(--gate)">needs blueprint.md</text>
+    <path class="e" d="M 947 174 L 947 146" stroke-width="1.4" stroke-dasharray="3 3"></path>
+
+    <!-- band 1 long edges (peers, not detours) -->
+    <path class="e" d="M 150 170 C 150 112, 611 112, 611 166" marker-end="url(#g-ah)"></path>
+    <path class="e" d="M 373 170 C 373 128, 863 128, 863 166" marker-end="url(#g-ah)"></path>
+    <path class="e" d="M 120 170 C 120 56, 835 56, 835 166" marker-end="url(#g-ah)"></path>
+    <rect x="330" y="62" width="150" height="24" rx="12" fill="var(--gate-bg)" stroke="var(--gate)" stroke-width="1.6"></rect>
+    <text class="t-code" x="342" y="79" fill="var(--gate)">needs design.md</text>
+
+    <!-- the cycle -->
+    <path class="e-back" d="M 1040 234 C 1040 312, 890 314, 868 240" marker-end="url(#g-back)"></path>
+    <text class="t-arc" x="880" y="336" fill="var(--gate)">THE CYCLE — verification sends the blueprint back.</text>
+    <text class="t-arc" x="880" y="354" fill="var(--gate)">No acyclic graph can express this edge.</text>
+
+    <!-- connector down to band 2 -->
+    <path class="e" d="M 1130 234 L 1130 614" marker-end="url(#g-ah)"></path>
+    <rect x="1000" y="404" width="146" height="24" rx="12" fill="var(--gate-bg)" stroke="var(--gate)" stroke-width="1.6"></rect>
+    <text class="t-code" x="1012" y="421" fill="var(--gate)">needs plan.md</text>
+    <path class="e" d="M 1133 430 L 1133 452" stroke-width="1.4" stroke-dasharray="3 3"></path>
+
+    <!-- ================= BAND 2 (runs right to left) ================= -->
+    <rect x="992" y="620" width="190" height="64" rx="3" fill="var(--card)" stroke="var(--petrol)" stroke-width="2.5"></rect>
+    <text class="t-box" x="1087" y="656" text-anchor="middle">plan</text>
+
+    <rect x="754" y="620" width="190" height="64" rx="3" fill="var(--petrol-bg)" stroke="var(--petrol)" stroke-width="3"></rect>
+    <text class="t-box" x="849" y="648" text-anchor="middle">execute</text>
+    <text class="t-boxsm" x="849" y="668" text-anchor="middle" fill="var(--gate)">2 ways out</text>
+
+    <rect x="516" y="620" width="190" height="64" rx="3" fill="var(--card)" stroke="var(--petrol)" stroke-width="2.5"></rect>
+    <text class="t-box" x="611" y="656" text-anchor="middle">report</text>
+
+    <rect x="278" y="620" width="190" height="64" rx="3" fill="var(--card)" stroke="var(--petrol)" stroke-width="2.5"></rect>
+    <text class="t-box" x="373" y="656" text-anchor="middle">docs</text>
+
+    <rect x="40" y="620" width="190" height="64" rx="3" fill="var(--card)" stroke="var(--petrol)" stroke-width="2.5"></rect>
+    <text class="t-box" x="135" y="656" text-anchor="middle">ship</text>
+
+    <path class="e" d="M 992 652 L 950 652" marker-end="url(#g-ah)"></path>
+    <path class="e" d="M 754 652 L 712 652" marker-end="url(#g-ah)"></path>
+    <path class="e" d="M 516 652 L 474 652" marker-end="url(#g-ah)"></path>
+    <path class="e" d="M 278 652 L 236 652" marker-end="url(#g-ah)"></path>
+
+    <!-- execute -> docs, peer edge -->
+    <path class="e" d="M 849 684 C 849 754, 373 754, 373 690" marker-end="url(#g-ah)"></path>
+
+    <!-- ship -> complete -->
+    <path class="e" d="M 135 684 L 135 792" marker-end="url(#g-ah)"></path>
+    <rect x="40" y="796" width="190" height="62" rx="3" fill="var(--ok-bg)" stroke="var(--ok)" stroke-width="2.5"></rect>
+    <text class="t-box" x="135" y="833" text-anchor="middle" fill="var(--ok)">complete</text>
+
+    <!-- killed -->
+    <rect x="800" y="796" width="290" height="62" rx="3" fill="var(--kill-bg)" stroke="var(--kill)" stroke-width="2.5"></rect>
+    <text class="t-box" x="945" y="826" text-anchor="middle" fill="var(--kill)">killed</text>
+    <text class="t-note" x="945" y="846" text-anchor="middle">reachable from all ten</text>
+    <path class="e-kill" d="M 611 686 C 700 750, 850 782, 928 792" marker-end="url(#g-kill)"></path>
+    <path class="e-kill" d="M 880 686 C 890 730, 930 770, 945 792" marker-end="url(#g-kill)"></path>
+    <path class="e-kill" d="M 1120 686 C 1110 730, 1000 776, 968 792" marker-end="url(#g-kill)"></path>
+    <text class="t-note" x="510" y="880">…and from every other non-terminal phase. buildPhaseGraph adds all ten automatically.</text>
+
+    <text class="t-note" x="40" y="900">Terminal states only. Neither has any outgoing edge.</text>
+  </svg>
+  </div>
+
+  <h2 class="sec">Out-degree — where the graph actually forks</h2>
+  <table class="deg">
+    <thead>
+      <tr><th>PHASE</th><th>OUT</th><th>TARGETS, AS DECLARED</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>explore_design</code></td><td class="n">3</td><td><code>prd · architecture · blueprint</code></td></tr>
+      <tr><td><code>prd</code></td><td class="n">2</td><td><code>architecture · blueprint</code></td></tr>
+      <tr><td><code>verification</code></td><td class="n">2</td><td><code>plan · blueprint</code> ← the cycle</td></tr>
+      <tr><td><code>execute</code></td><td class="n">2</td><td><code>report · docs</code></td></tr>
+      <tr><td>every other non-terminal</td><td class="n">1</td><td>plus <code>killed</code>, added by the guard</td></tr>
+    </tbody>
+  </table>
+
+  <section class="callout">
+    <h2>The order everyone quotes is not the order anything enforces</h2>
+    <div class="why">
+      <div><b>phaseOrder</b><span>The tidy <code>explore_design → prd → … → ship</code> sequence is a real field, but its
+        only production consumer is <code>status-snapshot.js</code>, which folds it into <code>allKnownPhases()</code> —
+        a <code>Set</code> union across all four modes, used to check that a phase <em>name</em> is recognized. The order
+        is discarded on the way in. Nothing sequences anything by it.</span></div>
+      <div><b>transitions</b><span>This is what <code>buildPhaseGraph</code> reads and what every guarded transition is
+        checked against. In it, <code>explore_design → prd</code> and <code>explore_design → blueprint</code> are two
+        entries in the same array. Neither is the main line.</span></div>
+      <div><b>so</b><span>Reading the lifecycle as a pipeline with three optional steps gets the shape backwards.
+        It is a graph with four forks, and the ten-step reading is one walk through it.</span></div>
+    </div>
+    <p>The guard graph is deliberately a <em>superset</em> of what the application will request — a narrower graph would
+       reject transitions the app considers valid. That is why <code>ship → complete</code> and the ten kill edges are
+       grafted on top of the declared transitions rather than written into them.</p>
+  </section>
+
+  <p class="punch">
+    The most valuable edge in this diagram is the one that points <em>backwards</em>. It exists at the only moment when
+    being wrong is still free — after the blueprint is written, before a line of code depends on it.
+  </p>
+
+  <div class="legend">
+    <span class="item"><span class="sw" style="border-color: var(--line);"></span>declared transition — all peers</span>
+    <span class="item"><span class="sw" style="border-color: var(--gate);"></span>the cycle — rework</span>
+    <span class="item"><span class="sw" style="border-color: var(--kill); border-top-style: dashed;"></span>kill edge — added by the guard</span>
+    <span class="item"><span class="bx" style="background: var(--gate-bg); border-color: var(--gate);"></span>evidence the guard reads itself</span>
+    <span class="item"><span class="bx" style="background: var(--ok-bg); border-color: var(--ok);"></span>terminal</span>
+  </div>
+
+  <p class="footnote">
+    <code>fix</code> mode has the same shape and its own cycle — <code>fix → test → fix</code> — with three branch points
+    and nothing skippable. <code>plan</code> is the only acyclic mode, and only because it is a three-node seed that no
+    CLI command runs yet. The fourth registered mode, <code>judgment</code>, is not a build lifecycle at all: it is the
+    joint state machine, and it is the branchiest graph in the system.
+  </p>
+
+</div>
+
+</body></html>
