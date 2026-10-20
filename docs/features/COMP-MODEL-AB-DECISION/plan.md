@@ -228,8 +228,9 @@ Files: `$F/stage-run-contract.json` (new), `$F/archetype-contract.json` (new), `
       required on every archetype spec (`BUDGET_REQUIRED`), optional on legacy specs; per-run `budget {stoppedBy: null|"timeout"|"maxRuns"|
       "maxUsdTotal"|"maxTokensTotal", spentUsd, spentTokens}`; unstarted runs recorded as `skipped: "BUDGET_STOP"`.
 - [ ] `runKey` section (B1 implements): sha256 (canonical JSON) over {config label, `candidate` or `implementer`+`reviewer`, `ingredients`,
-      `pipelineDigest` and `profilesDigest` (canonical sha256 of the workflow's pipeline file and sidecar CONTENTS, null when absent; review r2
-      R2-5), archetype id + version, `fixtureDigest`, `oracleVersion`, `catalogDigest`, rep}; the terminal / retry / mismatch rules stated in B1.
+      `pipelineDigest` and `profilesDigest` (sha256 of the workflow's pipeline file and sidecar CONTENTS, null when absent; review r2
+      R2-5. Per `stage-run-contract.json#/rules/digests` (G1 fix round 1): the pipeline YAML is hashed as raw bytes, so a formatting-only edit
+      re-runs its cells; the JSON sidecar is hashed as canonical JSON. G1 review r2 R2-4), archetype id + version, `fixtureDigest`, `oracleVersion`, `catalogDigest`, rep}; the terminal / retry / mismatch rules stated in B1.
 - [ ] `archetype-contract.json`: plugin interface `{id, stage, runner: "stage"|"build", buildInput(workspace, scenario) -> void,
       prompt(scenario) -> str, oracle(workspace, hidden, artifacts) -> {accuracy, detail}, canary(workspace) -> bool,
       mechanismEngaged(workspace, transcript) -> bool, judged: bool, version}` (`judged` is true for design and plan, the rubric/panel
