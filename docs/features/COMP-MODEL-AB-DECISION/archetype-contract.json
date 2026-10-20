@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://compose.local/COMP-MODEL-AB-DECISION/archetype-contract.json",
+  "title": "COMP-MODEL-AB-DECISION archetype contract: the stage-archetype plugin interface, fixture unit, hidden rule",
+  "_source": "docs/features/COMP-MODEL-AB-DECISION/plan.md ### G1 (COMP-STAGE-GRADING-1); fixture unit shape from docs/features/COMP-MODEL-AB-DECISION/design.md (Children, COMP-STAGE-GRADING)",
+  "_roadmap": "COMP-MODEL-AB-DECISION",
+  "_changelog": [
+    "2026-10-20 G1 (COMP-STAGE-GRADING-1): first version. Plugin interface as a descriptor plus method table, fixture unit, oracle result, hidden-material rule, version-bump rule."
+  ],
+  "description": "Archetype modules are JavaScript, so the interface is expressed as a descriptor schema (the data an archetype exports) plus a methods table (the callable surface a loader must find). Validate by pointing at one of $defs (examples[].validatesAgainst).",
+  "rules": {
+    "hiddenNeverInWorkspace": "`hidden` material (golden tests, planted bugs, mutants, answer keys) is never copied into the workspace before the oracle runs. oracle(workspace, hidden, artifacts) receives it by path outside the workspace; buildInput(workspace, scenario) and prompt(scenario) never see it.",
+    "versionBump": "Any change to an oracle or to its hidden material bumps `version`. That `version` is the `oracleVersion` recorded on every run and row, and part of compatKey.",
+    "oracleCannotRun": "An oracle that cannot run (for example the hidden suite fails to start) returns oracleError (a string) and accuracy null, never accuracy 0. Admission excludes such runs (registry-contract.json $defs.admittedRun).",
+    "judged": "judged is true for the rubric/panel stages design and plan, false for every other stage.",
+    "loader": "G3 owns lib/archetypes/index.js (loadArchetype). An unknown id is refused with ARCHETYPE_UNKNOWN (stage-run-contract.json rules.refusals)."
+  },
+  "$defs": {
+    "stage": { "enum": ["design", "plan", "implement", "review", "test-authoring", "debug", "end-to-end"] },
+    "methodTable": {
+      "description": "The callable surface every archetype module must export, in this order. Returned values are validated by the schemas named in `returns`.",
+      "type": "array",
+      "const": [
+        { "name": "buildInput", "signature": "buildInput(workspace, scenario) -> void", "returns": "void" },
+        { "name": "prompt", "signature": "prompt(scenario) -> str", "returns": "string" },
+        { "name": "oracle", "signature": "oracle(workspace, hidden, artifacts) -> {accuracy, detail}", "returns": "#/$defs/oracleResult" },
+        { "name": "canary", "signature": "canary(workspace) -> bool", "returns": "boolean" },
+        { "name": "mechanismEngaged", "signature": "mechanismEngaged(workspace, transcript) -> bool", "returns": "boolean" }
+      ]
+    },
+    "descriptor": {
+      "description": "The data an archetype exports next to its methods: {id, stage, runner, judged, version} plus the method table. judged is true exactly for design and plan.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "stage", "runner", "judged", "version", "methods"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "stage": { "$ref": "#/$defs/stage" },
+        "runner": { "enum": ["stage", "build"] },
+        "judged": { "type": "boolean" },
+        "version": { "type": "string", "minLength": 1 },
+        "methods": { "$ref": "#/$defs/methodTable" }
+      },
+      "allOf": [
+        { "if": { "properties": { "stage": { "enum": ["design", "plan"] } }, "required": ["stage"] }, "then": { "properties": { "judged": { "const": true } } }, "else": { "properties": { "judged": { "const": false } } } }
+      ]
+    },
+    "fixtureUnit": {
+      "description": "One {context, task, gold, task_type} unit (design.md). gold is the answer key and lives with the hidden material, never in the workspace.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["context", "task", "gold", "task_type"],
+      "properties": {
+        "context": { "type": "string" },
+        "task": { "type": "string", "minLength": 1 },
+        "gold": { "type": ["string", "object", "array"] },
+        "task_type": { "$ref": "#/$defs/stage" }
+      }
+    },
+    "hiddenRule": {
+      "description": "Machine-checkable statement of the hidden rule, recorded by the harness for each oracle call.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hiddenKinds", "hiddenPathOutsideWorkspace", "copiedIntoWorkspaceBeforeOracle"],
+      "properties": {
+        "hiddenKinds": { "type": "array", "items": { "enum": ["golden-tests", "planted-bugs", "mutants", "answer-key", "rubric"] }, "minItems": 1, "uniqueItems": true },
+        "hiddenPathOutsideWorkspace": { "type": "string", "minLength": 1 },
+        "copiedIntoWorkspaceBeforeOracle": { "const": false }
+      }
+    },
+    "oracleResult": {
+      "description": "What oracle() returns. oracleError non-null means accuracy is null (never 0); otherwise accuracy is a number in 0..1.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accuracy", "detail"],
+      "properties": {
+        "accuracy": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "detail": { "type": "object" },
+        "oracleError": { "type": ["string", "null"] }
+      },
+      "if": { "properties": { "oracleError": { "type": "string" } }, "required": ["oracleError"] },
+      "then": { "properties": { "accuracy": { "type": "null" } } },
+      "else": { "properties": { "accuracy": { "type": "number" } } }
+    }
+  },
+  "examples": [
+    {
+      "name": "debug archetype descriptor (runner stage, not judged)",
+      "validatesAgainst": "#/$defs/descriptor",
+      "value": {
+        "id": "debug", "stage": "debug", "runner": "stage", "judged": false, "version": "1",
+        "methods": [
+          { "name": "buildInput", "signature": "buildInput(workspace, scenario) -> void", "returns": "void" },
+          { "name": "prompt", "signature": "prompt(scenario) -> str", "returns": "string" },
+          { "name": "oracle", "signature": "oracle(workspace, hidden, artifacts) -> {accuracy, detail}", "returns": "#/$defs/oracleResult" },
+          { "name": "canary", "signature": "canary(workspace) -> bool", "returns": "boolean" },
+          { "name": "mechanismEngaged", "signature": "mechanismEngaged(workspace, transcript) -> bool", "returns": "boolean" }
+        ]
+      }
+    },
+    {
+      "name": "design archetype descriptor (judged)",
+      "validatesAgainst": "#/$defs/descriptor",
+      "value": {
+        "id": "design", "stage": "design", "runner": "stage", "judged": true, "version": "1",
+        "methods": [
+          { "name": "buildInput", "signature": "buildInput(workspace, scenario) -> void", "returns": "void" },
+          { "name": "prompt", "signature": "prompt(scenario) -> str", "returns": "string" },
+          { "name": "oracle", "signature": "oracle(workspace, hidden, artifacts) -> {accuracy, detail}", "returns": "#/$defs/oracleResult" },
+          { "name": "canary", "signature": "canary(workspace) -> bool", "returns": "boolean" },
+          { "name": "mechanismEngaged", "signature": "mechanismEngaged(workspace, transcript) -> bool", "returns": "boolean" }
+        ]
+      }
+    },
+    {
+      "name": "fixture unit (debug)",
+      "validatesAgainst": "#/$defs/fixtureUnit",
+      "value": { "context": "mini MCP notes server: write/search/recall over SQLite", "task": "search_notes returns nothing for a note written in the same session; make the repro pass", "gold": { "fix": "flush the write transaction before the index read", "reproCommand": "node repro.js" }, "task_type": "debug" }
+    },
+    {
+      "name": "hidden rule for one oracle call",
+      "validatesAgainst": "#/$defs/hiddenRule",
+      "value": { "hiddenKinds": ["golden-tests"], "hiddenPathOutsideWorkspace": "/abs/experiment-root/hidden/debug-1", "copiedIntoWorkspaceBeforeOracle": false }
+    },
+    {
+      "name": "oracle result, ran",
+      "validatesAgainst": "#/$defs/oracleResult",
+      "value": { "accuracy": 0.75, "detail": { "hiddenTests": { "passed": 6, "total": 8 } }, "oracleError": null }
+    },
+    {
+      "name": "oracle result, could not run (accuracy null, never 0)",
+      "validatesAgainst": "#/$defs/oracleResult",
+      "value": { "accuracy": null, "detail": {}, "oracleError": "hidden suite failed to start: exit 2" }
+    }
+  ],
+  "negativeExamples": [
+    {
+      "name": "oracle error reported as accuracy 0",
+      "mustFailAgainst": "#/$defs/oracleResult",
+      "value": { "accuracy": 0, "detail": {}, "oracleError": "suite did not start" }
+    },
+    {
+      "name": "judged flag false on the design stage",
+      "mustFailAgainst": "#/$defs/descriptor",
+      "value": { "id": "design", "stage": "design", "runner": "stage", "judged": false, "version": "1", "methods": [{ "name": "buildInput", "signature": "buildInput(workspace, scenario) -> void", "returns": "void" }, { "name": "prompt", "signature": "prompt(scenario) -> str", "returns": "string" }, { "name": "oracle", "signature": "oracle(workspace, hidden, artifacts) -> {accuracy, detail}", "returns": "#/$defs/oracleResult" }, { "name": "canary", "signature": "canary(workspace) -> bool", "returns": "boolean" }, { "name": "mechanismEngaged", "signature": "mechanismEngaged(workspace, transcript) -> bool", "returns": "boolean" }] }
+    },
+    {
+      "name": "hidden material copied into the workspace",
+      "mustFailAgainst": "#/$defs/hiddenRule",
+      "value": { "hiddenKinds": ["golden-tests"], "hiddenPathOutsideWorkspace": "/abs/hidden", "copiedIntoWorkspaceBeforeOracle": true }
+    }
+  ]
+}

@@ -1,0 +1,545 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://compose.local/COMP-MODEL-AB-DECISION/stage-run-contract.json",
+  "title": "COMP-MODEL-AB-DECISION stage-run contract: runner discriminator, spec extension, per-run record, budget, runKey",
+  "_source": "docs/features/COMP-MODEL-AB-DECISION/plan.md ### G1 (COMP-STAGE-GRADING-1); legacy shapes from docs/features/COMP-MODEL-AB/plan.md ## Contract and lib/dispatch-ledger.js:62-67",
+  "_roadmap": "COMP-MODEL-AB-DECISION",
+  "_changelog": [
+    "2026-10-20 G1 (COMP-STAGE-GRADING-1): first version. Legacy spec and run record transcribed unchanged; stage and build runner shapes, budget, runKey and the four named refusals added. Extended later by D1 (ingredients, precedence) and R2 (metrics.steps[])."
+  ],
+  "description": "Validate an instance by pointing at one of $defs (see examples[].validatesAgainst and negativeExamples[].mustFailAgainst). The root carries no instance shape of its own.",
+  "rules": {
+    "runnerDiscriminator": [
+      { "case": "a", "when": "spec.fixture.archetype absent", "meaning": "legacy whole build", "configShape": "#/$defs/legacyConfig", "oracle": "none", "specSchema": "#/$defs/specLegacy", "recordSchema": "#/$defs/legacyRunRecord" },
+      { "case": "b", "when": "archetype.runner === \"stage\"", "meaning": "one agentRun per run", "configShape": "#/$defs/stageConfig (candidate, no implementer/reviewer)", "oracle": "archetype oracle after the agentRun", "specSchema": "#/$defs/specStage (or #/$defs/specStageJudged when archetype.judged)", "recordSchema": "#/$defs/stageRunRecord with runner \"stage\"" },
+      { "case": "c", "when": "archetype.runner === \"build\"", "meaning": "whole build, then the archetype oracle after collect", "configShape": "#/$defs/buildConfig (implementer and reviewer, no candidate)", "oracle": "archetype oracle after collect", "specSchema": "#/$defs/specBuild", "recordSchema": "#/$defs/stageRunRecord with runner \"build\"" }
+    ],
+    "refusals": {
+      "ARCHETYPE_UNKNOWN": { "enforcedBy": "validateSpec (needs the archetype registry; not expressible as schema)", "when": "fixture.archetype names an id the loader does not know" },
+      "CONFIG_SHAPE_MISMATCH": { "enforcedBy": "schema: specStage / specBuild config shapes are closed (additionalProperties false) and each requires its own keys", "when": "a stage config carries implementer or reviewer, a build config carries candidate, or a stage spec has a config with no candidate" },
+      "ARCHETYPE_RUNNER_UNSUPPORTED": { "enforcedBy": "validateSpec (G2) until R1 lifts it", "when": "archetype.runner === \"build\"; the schema specBuild exists so the shape is fixed now" },
+      "JUDGED_STAGE_CLAUDE_ONLY": { "enforcedBy": "schema specStageJudged (candidate pattern is claude only); validateSpec selects it when archetype.judged is true", "when": "a non-Claude candidate on a judged: true archetype" },
+      "BUDGET_REQUIRED": { "enforcedBy": "schema: budget is required in specStage, specStageJudged and specBuild, optional in specLegacy", "when": "an archetype spec has no budget" },
+      "BUDGET_STOP": { "enforcedBy": "runtime (B1); recorded as runSkipped.skipped", "when": "a run was never started because the budget stopped the experiment" }
+    },
+    "cost": "metrics.cost of a stage run is the sum over the sandbox's dispatch-ledger rows with site \"experiment-stage\" (see $defs.stageDispatchRow); usd is null if any such row has usd null. Read from the ledger, never from the agentRun return value.",
+    "runKey": "sha256 (hex) of the canonical JSON (keys sorted at every depth, no whitespace) of runKeyInputs. Absent pipeline/profiles files give null digests, never an empty-string hash.",
+    "canonicalJson": "JSON.stringify with object keys sorted lexicographically at every depth; arrays keep order."
+  },
+  "$defs": {
+    "hex64": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "isoDateTime": { "type": "string", "format": "date-time" },
+    "agentString": {
+      "description": "agentStr per lib/agent-string.js: provider[:template[:tier]]; provider from PROVIDERS, tier segment may be empty (claude::standard).",
+      "type": "string",
+      "pattern": "^(claude|codex|devin)(:[a-z0-9-]*){0,2}$"
+    },
+    "claudeAgentString": {
+      "description": "Judged stages are Claude-only (JUDGED_STAGE_CLAUDE_ONLY).",
+      "type": "string",
+      "pattern": "^claude(:[a-z0-9-]*){0,2}$"
+    },
+    "refusalCode": { "enum": ["ARCHETYPE_UNKNOWN", "CONFIG_SHAPE_MISMATCH", "ARCHETYPE_RUNNER_UNSUPPORTED", "JUDGED_STAGE_CLAUDE_ONLY", "BUDGET_REQUIRED"] },
+
+    "budgetSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxRuns", "perRunTimeoutMs", "maxUsdTotal", "maxTokensTotal", "perRunTokenAssume"],
+      "properties": {
+        "maxRuns": { "type": "integer", "minimum": 1 },
+        "perRunTimeoutMs": { "type": "integer", "minimum": 1 },
+        "maxUsdTotal": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "maxTokensTotal": { "type": "integer", "minimum": 1 },
+        "perRunTokenAssume": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "runBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stoppedBy", "spentUsd", "spentTokens"],
+      "properties": {
+        "stoppedBy": { "enum": [null, "timeout", "maxRuns", "maxUsdTotal", "maxTokensTotal"] },
+        "spentUsd": { "type": ["number", "null"], "minimum": 0 },
+        "spentTokens": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "legacyConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "implementer", "reviewer"],
+      "properties": { "label": { "type": "string", "minLength": 1 }, "implementer": { "$ref": "#/$defs/agentString" }, "reviewer": { "$ref": "#/$defs/agentString" } }
+    },
+    "stageConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "candidate"],
+      "properties": { "label": { "type": "string", "minLength": 1 }, "candidate": { "$ref": "#/$defs/agentString" } }
+    },
+    "judgedStageConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "candidate"],
+      "properties": { "label": { "type": "string", "minLength": 1 }, "candidate": { "$ref": "#/$defs/claudeAgentString" } }
+    },
+    "buildConfig": { "$ref": "#/$defs/legacyConfig" },
+    "judgeSetting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "model"],
+      "properties": { "enabled": { "type": "boolean" }, "model": { "$ref": "#/$defs/agentString" } }
+    },
+    "legacyFixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goal", "seedRepo", "seedRef"],
+      "properties": { "goal": { "type": "string" }, "seedRepo": { "type": ["string", "null"] }, "seedRef": { "type": ["string", "null"] } }
+    },
+    "archetypeFixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["archetype"],
+      "properties": {
+        "archetype": { "type": "string", "minLength": 1 },
+        "goal": { "type": "string" },
+        "seedRepo": { "type": ["string", "null"] },
+        "seedRef": { "type": ["string", "null"] }
+      }
+    },
+
+    "specLegacy": {
+      "description": "Case (a). Today's shape, unchanged. fixture.archetype is absent by construction (closed fixture).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "fixture", "configs", "reps", "judge", "parallelism", "buildTimeoutMs"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "fixture": { "$ref": "#/$defs/legacyFixture" },
+        "configs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/legacyConfig" } },
+        "reps": { "type": "integer", "minimum": 1 },
+        "judge": { "$ref": "#/$defs/judgeSetting" },
+        "parallelism": { "type": "integer", "minimum": 1 },
+        "buildTimeoutMs": { "type": "integer", "minimum": 1 },
+        "budget": { "$ref": "#/$defs/budgetSpec" }
+      }
+    },
+    "specStage": {
+      "description": "Case (b), non-judged archetype. budget required (BUDGET_REQUIRED). One agentRun per run, so perRunTimeoutMs replaces buildTimeoutMs.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "fixture", "configs", "reps", "parallelism", "budget"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "fixture": { "$ref": "#/$defs/archetypeFixture" },
+        "configs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/stageConfig" } },
+        "reps": { "type": "integer", "minimum": 1 },
+        "parallelism": { "type": "integer", "minimum": 1 },
+        "judge": { "$ref": "#/$defs/judgeSetting" },
+        "budget": { "$ref": "#/$defs/budgetSpec" }
+      }
+    },
+    "specStageJudged": {
+      "description": "Case (b) when archetype.judged is true (design, plan): same as specStage with Claude-only candidates.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "fixture", "configs", "reps", "parallelism", "budget"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "fixture": { "$ref": "#/$defs/archetypeFixture" },
+        "configs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/judgedStageConfig" } },
+        "reps": { "type": "integer", "minimum": 1 },
+        "parallelism": { "type": "integer", "minimum": 1 },
+        "judge": { "$ref": "#/$defs/judgeSetting" },
+        "budget": { "$ref": "#/$defs/budgetSpec" }
+      }
+    },
+    "specBuild": {
+      "description": "Case (c). Whole build then the archetype oracle. validateSpec refuses it with ARCHETYPE_RUNNER_UNSUPPORTED until R1; the shape is fixed here.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "fixture", "configs", "reps", "parallelism", "buildTimeoutMs", "budget"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "fixture": { "$ref": "#/$defs/archetypeFixture" },
+        "configs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/buildConfig" } },
+        "reps": { "type": "integer", "minimum": 1 },
+        "parallelism": { "type": "integer", "minimum": 1 },
+        "buildTimeoutMs": { "type": "integer", "minimum": 1 },
+        "judge": { "$ref": "#/$defs/judgeSetting" },
+        "budget": { "$ref": "#/$defs/budgetSpec" }
+      }
+    },
+
+    "costMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tokensIn", "tokensOut", "calls", "wallMs", "usd"],
+      "properties": {
+        "tokensIn": { "type": "integer", "minimum": 0 },
+        "tokensOut": { "type": "integer", "minimum": 0 },
+        "calls": { "type": "integer", "minimum": 0 },
+        "wallMs": { "type": "integer", "minimum": 0 },
+        "usd": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "outcomeMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["completed", "health", "testsPass", "testsTotal", "filesChanged", "linesChanged"],
+      "properties": {
+        "completed": { "type": "boolean" },
+        "health": { "type": ["number", "null"] },
+        "testsPass": { "type": ["integer", "null"], "minimum": 0 },
+        "testsTotal": { "type": ["integer", "null"], "minimum": 0 },
+        "filesChanged": { "type": "integer", "minimum": 0 },
+        "linesChanged": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "processMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewIters", "gateFailures", "retries", "escalations"],
+      "properties": {
+        "reviewIters": { "type": "integer", "minimum": 0 },
+        "gateFailures": { "type": "integer", "minimum": 0 },
+        "retries": { "type": "integer", "minimum": 0 },
+        "escalations": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "stageMetrics": {
+      "description": "metrics.stage. An oracle that cannot run sets oracleError and accuracy null, never accuracy 0.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accuracy", "oracle", "oracleVersion", "canaryOk", "mechanismEngaged", "oracleError", "detail"],
+      "properties": {
+        "accuracy": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "oracle": { "type": "string", "minLength": 1 },
+        "oracleVersion": { "type": "string", "minLength": 1 },
+        "canaryOk": { "type": "boolean" },
+        "mechanismEngaged": { "type": "boolean" },
+        "oracleError": { "type": ["string", "null"] },
+        "detail": { "type": "object" }
+      },
+      "if": { "properties": { "oracleError": { "type": "string" } }, "required": ["oracleError"] },
+      "then": { "properties": { "accuracy": { "type": "null" } } }
+    },
+    "legacyMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cost", "outcome", "process"],
+      "properties": { "cost": { "$ref": "#/$defs/costMetrics" }, "outcome": { "$ref": "#/$defs/outcomeMetrics" }, "process": { "$ref": "#/$defs/processMetrics" } }
+    },
+    "stageRunMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cost", "outcome", "process", "stage"],
+      "properties": {
+        "cost": { "$ref": "#/$defs/costMetrics" },
+        "outcome": { "$ref": "#/$defs/outcomeMetrics" },
+        "process": { "$ref": "#/$defs/processMetrics" },
+        "stage": { "$ref": "#/$defs/stageMetrics" }
+      }
+    },
+    "candidateResolved": {
+      "description": "From resolveAgentConfig (lib/agent-string.js) plus the catalog digest; never a tier name.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "modelID", "effort", "catalogDigest"],
+      "properties": {
+        "provider": { "enum": ["claude", "codex", "devin"] },
+        "modelID": { "type": "string", "minLength": 1 },
+        "effort": { "type": "string", "minLength": 1 },
+        "catalogDigest": { "$ref": "#/$defs/hex64" }
+      }
+    },
+    "legacyArtifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["diffPath", "logPath"],
+      "properties": { "diffPath": { "type": "string" }, "logPath": { "type": "string" } }
+    },
+    "stageArtifacts": {
+      "description": "Rubric and review oracles read outputPath.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outputPath", "transcriptPath", "diffPath", "logPath"],
+      "properties": {
+        "outputPath": { "type": "string" },
+        "transcriptPath": { "type": ["string", "null"] },
+        "diffPath": { "type": "string" },
+        "logPath": { "type": "string" }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["composeSha", "fixtureGoal", "seedRef", "startedAt", "endedAt"],
+      "properties": {
+        "composeSha": { "type": "string" },
+        "fixtureGoal": { "type": "string" },
+        "seedRef": { "type": ["string", "null"] },
+        "startedAt": { "$ref": "#/$defs/isoDateTime" },
+        "endedAt": { "$ref": "#/$defs/isoDateTime" }
+      }
+    },
+    "judgeScores": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["correctness", "clarity", "idiomaticity", "rationale"],
+      "properties": {
+        "correctness": { "type": "integer" },
+        "clarity": { "type": "integer" },
+        "idiomaticity": { "type": "integer" },
+        "rationale": { "type": "string" }
+      }
+    },
+
+    "runKeyInputs": {
+      "description": "The object hashed into runKey. candidate (stage) XOR implementer+reviewer (build). ingredients is added by D1; B1 owns the terminal / retry / mismatch rules.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configLabel", "ingredients", "pipelineDigest", "profilesDigest", "archetype", "fixtureDigest", "oracleVersion", "catalogDigest", "rep"],
+      "properties": {
+        "configLabel": { "type": "string", "minLength": 1 },
+        "candidate": { "$ref": "#/$defs/agentString" },
+        "implementer": { "$ref": "#/$defs/agentString" },
+        "reviewer": { "$ref": "#/$defs/agentString" },
+        "ingredients": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider", "modelID", "effort", "workflow"],
+          "properties": {
+            "provider": { "enum": ["claude", "codex", "devin"] },
+            "modelID": { "type": "string", "minLength": 1 },
+            "effort": { "type": "string", "minLength": 1 },
+            "workflow": { "type": "string", "minLength": 1 }
+          }
+        },
+        "pipelineDigest": { "oneOf": [{ "$ref": "#/$defs/hex64" }, { "type": "null" }] },
+        "profilesDigest": { "oneOf": [{ "$ref": "#/$defs/hex64" }, { "type": "null" }] },
+        "archetype": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version"],
+          "properties": { "id": { "type": "string", "minLength": 1 }, "version": { "type": "string", "minLength": 1 } }
+        },
+        "fixtureDigest": { "$ref": "#/$defs/hex64" },
+        "oracleVersion": { "type": "string", "minLength": 1 },
+        "catalogDigest": { "$ref": "#/$defs/hex64" },
+        "rep": { "type": "integer", "minimum": 1 }
+      },
+      "oneOf": [
+        { "required": ["candidate"], "not": { "anyOf": [{ "required": ["implementer"] }, { "required": ["reviewer"] }] } },
+        { "required": ["implementer", "reviewer"], "not": { "required": ["candidate"] } }
+      ]
+    },
+
+    "legacyRunRecord": {
+      "description": "Today's per-run record, unchanged (COMP-MODEL-AB ## Contract).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "configLabel", "rep", "metrics", "judge", "artifacts", "manifest"],
+      "properties": {
+        "runId": { "type": "string", "minLength": 1 },
+        "configLabel": { "type": "string", "minLength": 1 },
+        "rep": { "type": "integer", "minimum": 1 },
+        "metrics": { "$ref": "#/$defs/legacyMetrics" },
+        "judge": { "$ref": "#/$defs/judgeScores" },
+        "artifacts": { "$ref": "#/$defs/legacyArtifacts" },
+        "manifest": { "$ref": "#/$defs/manifest" }
+      }
+    },
+    "stageRunExecuted": {
+      "description": "An archetype run (runner stage or build) that started. candidateResolved is required for runner stage and absent for runner build.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "configLabel", "rep", "runner", "archetype", "metrics", "artifacts", "manifest", "budget", "runKey", "runKeyInputs"],
+      "properties": {
+        "runId": { "type": "string", "minLength": 1 },
+        "configLabel": { "type": "string", "minLength": 1 },
+        "rep": { "type": "integer", "minimum": 1 },
+        "runner": { "enum": ["stage", "build"] },
+        "archetype": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version"],
+          "properties": { "id": { "type": "string", "minLength": 1 }, "version": { "type": "string", "minLength": 1 } }
+        },
+        "candidateResolved": { "$ref": "#/$defs/candidateResolved" },
+        "metrics": { "$ref": "#/$defs/stageRunMetrics" },
+        "judge": { "$ref": "#/$defs/judgeScores" },
+        "artifacts": { "$ref": "#/$defs/stageArtifacts" },
+        "manifest": { "$ref": "#/$defs/manifest" },
+        "budget": { "$ref": "#/$defs/runBudget" },
+        "runKey": { "$ref": "#/$defs/hex64" },
+        "runKeyInputs": { "$ref": "#/$defs/runKeyInputs" },
+        "_error": { "type": "string" }
+      },
+      "allOf": [
+        { "if": { "properties": { "runner": { "const": "stage" } } }, "then": { "required": ["candidateResolved"], "properties": { "runKeyInputs": { "required": ["candidate"] } } } },
+        { "if": { "properties": { "runner": { "const": "build" } } }, "then": { "not": { "required": ["candidateResolved"] }, "properties": { "runKeyInputs": { "required": ["implementer", "reviewer"] } } } }
+      ]
+    },
+    "runSkipped": {
+      "description": "A run never started because the budget stopped the experiment; retried by the checkpoint rule.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "configLabel", "rep", "runner", "skipped", "budget"],
+      "properties": {
+        "runId": { "type": "string", "minLength": 1 },
+        "configLabel": { "type": "string", "minLength": 1 },
+        "rep": { "type": "integer", "minimum": 1 },
+        "runner": { "enum": ["stage", "build"] },
+        "skipped": { "const": "BUDGET_STOP" },
+        "budget": { "$ref": "#/$defs/runBudget" }
+      }
+    },
+    "stageRunRecord": { "oneOf": [{ "$ref": "#/$defs/stageRunExecuted" }, { "$ref": "#/$defs/runSkipped" }] },
+
+    "stageDispatchRow": {
+      "description": "A dispatch-ledger `dispatch` event (lib/dispatch-ledger.js:62-67 fields) written for one stage agentRun. G2 adds \"experiment-stage\" to DISPATCH_SITES. Summed into metrics.cost.",
+      "type": "object",
+      "required": ["dispatch_id", "site", "agent", "outcome"],
+      "properties": {
+        "dispatch_id": { "type": "string", "minLength": 1 },
+        "site": { "const": "experiment-stage" },
+        "agent": { "type": "string" },
+        "outcome": { "enum": ["ok", "error", "blocked"] },
+        "model": { "type": "string" },
+        "tokens_in": { "type": "integer", "minimum": 0 },
+        "tokens_out": { "type": "integer", "minimum": 0 },
+        "tokens_total": { "type": "integer", "minimum": 0 },
+        "usd": { "type": ["number", "null"], "minimum": 0 },
+        "usd_source": { "enum": ["reported", "estimated", null] },
+        "duration_ms": { "type": "integer", "minimum": 0 }
+      }
+    }
+  },
+
+  "examples": [
+    {
+      "name": "legacy spec (no fixture.archetype), unchanged",
+      "validatesAgainst": "#/$defs/specLegacy",
+      "value": { "id": "legacy-1", "fixture": { "goal": "add a health endpoint", "seedRepo": null, "seedRef": null }, "configs": [{ "label": "sonnet-opus", "implementer": "claude::standard", "reviewer": "claude::critical" }], "reps": 2, "judge": { "enabled": true, "model": "claude::critical" }, "parallelism": 1, "buildTimeoutMs": 1800000 }
+    },
+    {
+      "name": "stage spec, debug archetype, two candidates (one Codex)",
+      "validatesAgainst": "#/$defs/specStage",
+      "value": { "id": "debug-grid-1", "fixture": { "archetype": "debug" }, "configs": [{ "label": "sonnet-std", "candidate": "claude::standard" }, { "label": "sol-std", "candidate": "codex::standard" }], "reps": 3, "parallelism": 2, "budget": { "maxRuns": 6, "perRunTimeoutMs": 600000, "maxUsdTotal": 5, "maxTokensTotal": 3000000, "perRunTokenAssume": 400000 } }
+    },
+    {
+      "name": "judged stage spec (design), Claude candidates only",
+      "validatesAgainst": "#/$defs/specStageJudged",
+      "value": { "id": "design-grid-1", "fixture": { "archetype": "design" }, "configs": [{ "label": "opus-crit", "candidate": "claude::critical" }], "reps": 3, "parallelism": 1, "budget": { "maxRuns": 3, "perRunTimeoutMs": 900000, "maxUsdTotal": null, "maxTokensTotal": 2000000, "perRunTokenAssume": 500000 } }
+    },
+    {
+      "name": "build-runner spec (shape fixed now, refused until R1)",
+      "validatesAgainst": "#/$defs/specBuild",
+      "value": { "id": "impl-build-1", "fixture": { "archetype": "implement" }, "configs": [{ "label": "build-sonnet-opus", "implementer": "claude::standard", "reviewer": "claude::critical" }], "reps": 1, "parallelism": 1, "buildTimeoutMs": 1800000, "budget": { "maxRuns": 1, "perRunTimeoutMs": 1800000, "maxUsdTotal": 10, "maxTokensTotal": 6000000, "perRunTokenAssume": 3000000 } }
+    },
+    {
+      "name": "legacy per-run record, unchanged",
+      "validatesAgainst": "#/$defs/legacyRunRecord",
+      "value": {
+        "runId": "legacy-1-sonnet-opus-r1", "configLabel": "sonnet-opus", "rep": 1,
+        "metrics": {
+          "cost": { "tokensIn": 120000, "tokensOut": 18000, "calls": 14, "wallMs": 540000, "usd": 1.92 },
+          "outcome": { "completed": true, "health": 0.92, "testsPass": 12, "testsTotal": 12, "filesChanged": 5, "linesChanged": 210 },
+          "process": { "reviewIters": 2, "gateFailures": 0, "retries": 1, "escalations": 0 }
+        },
+        "judge": null,
+        "artifacts": { "diffPath": "runs/legacy-1-sonnet-opus-r1/diff.patch", "logPath": "runs/legacy-1-sonnet-opus-r1/build.log" },
+        "manifest": { "composeSha": "fec8126f", "fixtureGoal": "add a health endpoint", "seedRef": null, "startedAt": "2026-10-20T10:00:00.000Z", "endedAt": "2026-10-20T10:09:00.000Z" }
+      }
+    },
+    {
+      "name": "debug stage run record (runner stage)",
+      "validatesAgainst": "#/$defs/stageRunRecord",
+      "value": {
+        "runId": "debug-grid-1-sonnet-std-r1", "configLabel": "sonnet-std", "rep": 1, "runner": "stage",
+        "archetype": { "id": "debug", "version": "1" },
+        "candidateResolved": { "provider": "claude", "modelID": "claude-sonnet-5-5", "effort": "standard", "catalogDigest": "25c0c6e165cd0b9d6d941ac80b3c92814ace97dcddf2cca5c68984586bd5c1a0" },
+        "metrics": {
+          "cost": { "tokensIn": 61000, "tokensOut": 7400, "calls": 1, "wallMs": 94000, "usd": 0.41 },
+          "outcome": { "completed": true, "health": null, "testsPass": null, "testsTotal": null, "filesChanged": 2, "linesChanged": 17 },
+          "process": { "reviewIters": 0, "gateFailures": 0, "retries": 0, "escalations": 0 },
+          "stage": { "accuracy": 1, "oracle": "repro-passes", "oracleVersion": "1", "canaryOk": true, "mechanismEngaged": true, "oracleError": null, "detail": { "reproPassed": true, "hiddenTests": { "passed": 9, "total": 9 } } }
+        },
+        "judge": null,
+        "artifacts": { "outputPath": "runs/debug-grid-1-sonnet-std-r1/output.md", "transcriptPath": "runs/debug-grid-1-sonnet-std-r1/transcript.jsonl", "diffPath": "runs/debug-grid-1-sonnet-std-r1/diff.patch", "logPath": "runs/debug-grid-1-sonnet-std-r1/run.log" },
+        "manifest": { "composeSha": "fec8126f", "fixtureGoal": "failing search repro in the notes server", "seedRef": null, "startedAt": "2026-10-20T11:00:00.000Z", "endedAt": "2026-10-20T11:01:34.000Z" },
+        "budget": { "stoppedBy": null, "spentUsd": 0.41, "spentTokens": 68400 },
+        "runKey": "872bc5daeb3af8a526b711f1dc25755be9cf4e28a00382ee4d78b226ea55e1b5",
+        "runKeyInputs": { "configLabel": "sonnet-std", "candidate": "claude::standard", "ingredients": { "provider": "claude", "modelID": "claude-sonnet-5-5", "effort": "standard", "workflow": "default" }, "pipelineDigest": "1ffef34c3d353fef6937afab5097b358169bfb4d319982837728b7d87ea1b970", "profilesDigest": null, "archetype": { "id": "debug", "version": "1" }, "fixtureDigest": "dc7eaefc6e995958b82ed3c995607e18a35af896c3ab2a6d17dc4c501cc5a6a8", "oracleVersion": "1", "catalogDigest": "25c0c6e165cd0b9d6d941ac80b3c92814ace97dcddf2cca5c68984586bd5c1a0", "rep": 1 }
+      }
+    },
+    {
+      "name": "runner build record (whole build, then the archetype oracle)",
+      "validatesAgainst": "#/$defs/stageRunRecord",
+      "value": {
+        "runId": "impl-build-1-build-sonnet-opus-r1", "configLabel": "build-sonnet-opus", "rep": 1, "runner": "build",
+        "archetype": { "id": "implement", "version": "1" },
+        "metrics": {
+          "cost": { "tokensIn": 910000, "tokensOut": 64000, "calls": 31, "wallMs": 1320000, "usd": 7.8 },
+          "outcome": { "completed": true, "health": 0.9, "testsPass": 14, "testsTotal": 14, "filesChanged": 6, "linesChanged": 340 },
+          "process": { "reviewIters": 2, "gateFailures": 1, "retries": 1, "escalations": 0 },
+          "stage": { "accuracy": 0.86, "oracle": "hidden-golden-tests", "oracleVersion": "1", "canaryOk": true, "mechanismEngaged": true, "oracleError": null, "detail": { "hiddenTests": { "passed": 12, "total": 14 } } }
+        },
+        "judge": null,
+        "artifacts": { "outputPath": "runs/impl-build-1-build-sonnet-opus-r1/output.md", "transcriptPath": null, "diffPath": "runs/impl-build-1-build-sonnet-opus-r1/diff.patch", "logPath": "runs/impl-build-1-build-sonnet-opus-r1/build.log" },
+        "manifest": { "composeSha": "fec8126f", "fixtureGoal": "implement the notes server from spec", "seedRef": null, "startedAt": "2026-10-20T12:00:00.000Z", "endedAt": "2026-10-20T12:22:00.000Z" },
+        "budget": { "stoppedBy": null, "spentUsd": 7.8, "spentTokens": 974000 },
+        "runKey": "b4b5b782b4d48d49031746a5268ea271c2d4320850a55115fa4ae15f68dcf4fe",
+        "runKeyInputs": { "configLabel": "build-sonnet-opus", "implementer": "claude::standard", "reviewer": "claude::critical", "ingredients": { "provider": "claude", "modelID": "claude-sonnet-5-5", "effort": "standard", "workflow": "default" }, "pipelineDigest": "1ffef34c3d353fef6937afab5097b358169bfb4d319982837728b7d87ea1b970", "profilesDigest": null, "archetype": { "id": "implement", "version": "1" }, "fixtureDigest": "dc7eaefc6e995958b82ed3c995607e18a35af896c3ab2a6d17dc4c501cc5a6a8", "oracleVersion": "1", "catalogDigest": "25c0c6e165cd0b9d6d941ac80b3c92814ace97dcddf2cca5c68984586bd5c1a0", "rep": 1 }
+      }
+    },
+    {
+      "name": "oracle that could not run: oracleError set, accuracy null (never 0)",
+      "validatesAgainst": "#/$defs/stageMetrics",
+      "value": { "accuracy": null, "oracle": "repro-passes", "oracleVersion": "1", "canaryOk": true, "mechanismEngaged": true, "oracleError": "hidden suite failed to start: exit 2", "detail": {} }
+    },
+    {
+      "name": "run skipped by the budget",
+      "validatesAgainst": "#/$defs/stageRunRecord",
+      "value": { "runId": "debug-grid-1-sol-std-r3", "configLabel": "sol-std", "rep": 3, "runner": "stage", "skipped": "BUDGET_STOP", "budget": { "stoppedBy": "maxUsdTotal", "spentUsd": 5.02, "spentTokens": 1900000 } }
+    },
+    {
+      "name": "experiment-stage dispatch-ledger row",
+      "validatesAgainst": "#/$defs/stageDispatchRow",
+      "value": { "dispatch_id": "d-0001", "site": "experiment-stage", "agent": "claude::standard", "outcome": "ok", "model": "claude-sonnet-5-5", "tokens_in": 61000, "tokens_out": 7400, "tokens_total": 68400, "usd": 0.41, "usd_source": "estimated", "duration_ms": 94000 }
+    }
+  ],
+
+  "negativeExamples": [
+    {
+      "name": "stage config carrying implementer/reviewer",
+      "refusal": "CONFIG_SHAPE_MISMATCH",
+      "mustFailAgainst": "#/$defs/specStage",
+      "value": { "id": "bad-1", "fixture": { "archetype": "debug" }, "configs": [{ "label": "x", "implementer": "claude::standard", "reviewer": "claude::critical" }], "reps": 1, "parallelism": 1, "budget": { "maxRuns": 1, "perRunTimeoutMs": 1000, "maxUsdTotal": null, "maxTokensTotal": 1000, "perRunTokenAssume": 1000 } }
+    },
+    {
+      "name": "build config carrying candidate",
+      "refusal": "CONFIG_SHAPE_MISMATCH",
+      "mustFailAgainst": "#/$defs/specBuild",
+      "value": { "id": "bad-2", "fixture": { "archetype": "implement" }, "configs": [{ "label": "x", "candidate": "claude::standard" }], "reps": 1, "parallelism": 1, "buildTimeoutMs": 1000, "budget": { "maxRuns": 1, "perRunTimeoutMs": 1000, "maxUsdTotal": null, "maxTokensTotal": 1000, "perRunTokenAssume": 1000 } }
+    },
+    {
+      "name": "judged-stage spec with a Codex candidate",
+      "refusal": "JUDGED_STAGE_CLAUDE_ONLY",
+      "mustFailAgainst": "#/$defs/specStageJudged",
+      "value": { "id": "bad-3", "fixture": { "archetype": "design" }, "configs": [{ "label": "x", "candidate": "codex::standard" }], "reps": 1, "parallelism": 1, "budget": { "maxRuns": 1, "perRunTimeoutMs": 1000, "maxUsdTotal": null, "maxTokensTotal": 1000, "perRunTokenAssume": 1000 } }
+    },
+    {
+      "name": "archetype spec with no budget",
+      "refusal": "BUDGET_REQUIRED",
+      "mustFailAgainst": "#/$defs/specStage",
+      "value": { "id": "bad-4", "fixture": { "archetype": "debug" }, "configs": [{ "label": "x", "candidate": "claude::standard" }], "reps": 1, "parallelism": 1 }
+    },
+    {
+      "name": "oracle error with accuracy 0 instead of null",
+      "refusal": null,
+      "mustFailAgainst": "#/$defs/stageMetrics",
+      "value": { "accuracy": 0, "oracle": "repro-passes", "oracleVersion": "1", "canaryOk": true, "mechanismEngaged": true, "oracleError": "suite did not start", "detail": {} }
+    }
+  ]
+}

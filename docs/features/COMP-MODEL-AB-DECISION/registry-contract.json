@@ -1,0 +1,362 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://compose.local/COMP-MODEL-AB-DECISION/registry-contract.json",
+  "title": "COMP-MODEL-AB-DECISION registry contract: row shape, admission, compatKey, uplift, latest, catalog rule, promotion/demotion, measurementDecision",
+  "_source": "docs/features/COMP-MODEL-AB-DECISION/plan.md ### G1 (COMP-STAGE-GRADING-1) and ### Hub contracts; run records from stage-run-contract.json",
+  "_roadmap": "COMP-MODEL-AB-DECISION",
+  "_changelog": [
+    "2026-10-20 G1 (COMP-STAGE-GRADING-1): first version. registry.json, row, admission predicate, compatKey rule, uplift, promotion evidence, promoteRows/demoteRows arguments, measurementDecision file (review r2 R2-3)."
+  ],
+  "description": "Validate by pointing at one of $defs (examples[].validatesAgainst). Cross-record rules a schema cannot express are in `rules`.",
+  "rules": {
+    "admission": "A run is admitted iff outcome.completed === true, no _error, not skipped, metrics.stage.oracleError === null, accuracy numeric, canaryOk === true and mechanismEngaged === true. Machine form: $defs.admittedRun. nAdmitted counts admitted runs, nAttempted counts every non-skipped run of the cell.",
+    "measured": "A row is `measured` iff its stage is objective (not design/plan) AND nAdmitted >= 3 AND nAdmitted / nAttempted >= 2/3 (integer form: nAdmitted * 3 >= nAttempted * 2; not expressible in schema, checked by the registry writer). Otherwise `triaged` with a triageReason. The schema enforces nAdmitted >= 3, nAdmitted <= nAttempted and the triageReason / state coupling.",
+    "judgedStages": "Rows of the judged stages (design, plan) are written `triaged` with `JUDGED_UNPROMOTED` until promoted; a `measured` judged row must carry a non-null promotion.",
+    "compatKey": "sha256 hex of the canonical JSON (keys sorted at every depth, no whitespace) of {stage, archetypeVersion, fixtureDigest, oracleVersion}. Uplift is computed only within one compatKey and the champion must be `measured` in it, else uplift null with upliftNullReason NO_COMPATIBLE_CHAMPION. A newer compatKey never mixes with an older one.",
+    "cellKey": "stage plus the resolved ingredients (provider, modelID, effort, workflow), joined with `|`, for example `debug|claude|claude-sonnet-5-5|standard|default`. Never a tier name alone.",
+    "latest": "latest[stage][compatKey][cellKey] = rowId of the newest `measured` row of that cell. A `prior` row is never in latest. The writer (P1) guarantees every rowId in latest names a row with state `measured`.",
+    "prior": "A `prior` row may never be uplift input, a champion, in `latest`, or selectable by assembly. The schema forces uplift null on a prior row.",
+    "catalogRule": "Assembly uses only rows whose catalogDigest equals the current catalog's digest, unless an explicit digest is named (--catalog-digest). Otherwise it refuses with STALE_CATALOG.",
+    "measurementDecisionOwnership": "Written by M1; read by A1 and V1."
+  },
+  "$defs": {
+    "hex64": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "isoDateTime": { "type": "string", "format": "date-time" },
+    "stage": { "enum": ["design", "plan", "implement", "review", "test-authoring", "debug", "end-to-end"] },
+    "judgedStage": { "enum": ["design", "plan"] },
+    "triageReason": { "enum": ["LOW_N", "LOW_ADMISSION", "JUDGED_UNPROMOTED", "INCOMPATIBLE", "JUDGE_DRIFT"] },
+    "refusalCode": { "enum": ["STALE_CATALOG"] },
+
+    "admittedRun": {
+      "description": "Partial schema of a stage run record (stage-run-contract.json $defs.stageRunExecuted): matches iff the run is admitted. A run with canaryOk false, mechanismEngaged false, an oracleError, null accuracy, an _error, a skipped marker or an incomplete outcome does NOT match.",
+      "type": "object",
+      "required": ["metrics"],
+      "not": { "anyOf": [{ "required": ["_error"] }, { "required": ["skipped"] }] },
+      "properties": {
+        "metrics": {
+          "type": "object",
+          "required": ["outcome", "stage"],
+          "properties": {
+            "outcome": { "type": "object", "required": ["completed"], "properties": { "completed": { "const": true } } },
+            "stage": {
+              "type": "object",
+              "required": ["accuracy", "canaryOk", "mechanismEngaged", "oracleError"],
+              "properties": {
+                "accuracy": { "type": "number", "minimum": 0, "maximum": 1 },
+                "canaryOk": { "const": true },
+                "mechanismEngaged": { "const": true },
+                "oracleError": { "type": "null" }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "ingredients": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "modelID", "effort", "workflow"],
+      "properties": {
+        "provider": { "enum": ["claude", "codex", "devin"] },
+        "modelID": { "type": "string", "minLength": 1 },
+        "effort": { "type": "string", "minLength": 1 },
+        "workflow": { "type": "string", "minLength": 1 }
+      }
+    },
+    "spread": {
+      "description": "{median, min, max} over admitted runs.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["median", "min", "max"],
+      "properties": { "median": { "type": "number" }, "min": { "type": "number" }, "max": { "type": "number" } }
+    },
+    "spreadOrNull": {
+      "description": "usd only: null when any admitted run had unknown cost.",
+      "oneOf": [{ "$ref": "#/$defs/spread" }, { "type": "null" }]
+    },
+    "vector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accuracy", "tokensIn", "tokensOut", "usd", "wallMs", "reliability"],
+      "properties": {
+        "accuracy": { "$ref": "#/$defs/spread" },
+        "tokensIn": { "$ref": "#/$defs/spread" },
+        "tokensOut": { "$ref": "#/$defs/spread" },
+        "usd": { "$ref": "#/$defs/spreadOrNull" },
+        "wallMs": { "$ref": "#/$defs/spread" },
+        "reliability": { "$ref": "#/$defs/spread" }
+      }
+    },
+    "uplift": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["championCellKey", "delta", "ci95", "method", "resamples", "seed"],
+      "properties": {
+        "championCellKey": { "type": "string", "minLength": 1 },
+        "delta": { "type": "number" },
+        "ci95": { "type": "array", "prefixItems": [{ "type": "number" }, { "type": "number" }], "minItems": 2, "maxItems": 2 },
+        "method": { "const": "bootstrap" },
+        "resamples": { "type": "integer", "minimum": 1 },
+        "seed": { "type": "integer" }
+      }
+    },
+    "promotionEvidence": {
+      "description": "Evidence accepted by promoteRows(registry, {rowIds, evidence}); also the shape stored in row.promotion.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["calibrationReport", "panelModels", "judgeCatalogDigest", "gatePassed", "agreement"],
+      "properties": {
+        "calibrationReport": { "type": "string", "minLength": 1 },
+        "panelModels": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+        "judgeCatalogDigest": { "$ref": "#/$defs/hex64" },
+        "gatePassed": { "const": true },
+        "agreement": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "promoteRowsArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rowIds", "evidence"],
+      "properties": { "rowIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }, "evidence": { "$ref": "#/$defs/promotionEvidence" } }
+    },
+    "demoteRowsArgs": {
+      "description": "demoteRows(registry, {rowIds, reason}) for Standing flag 7.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rowIds", "reason"],
+      "properties": { "rowIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }, "reason": { "const": "JUDGE_DRIFT" } }
+    },
+
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rowId", "stage", "cellKey", "compatKey", "ingredients", "catalogDigest", "fixtureId", "fixtureDigest", "archetypeVersion", "oracleVersion", "state", "triageReason", "nAttempted", "nAdmitted", "vector", "uplift", "upliftNullReason", "promotion", "sourceRunIds", "experimentId", "generatedAt"],
+      "properties": {
+        "rowId": { "type": "string", "minLength": 1 },
+        "stage": { "$ref": "#/$defs/stage" },
+        "cellKey": { "type": "string", "minLength": 1 },
+        "compatKey": { "$ref": "#/$defs/hex64" },
+        "ingredients": { "$ref": "#/$defs/ingredients" },
+        "catalogDigest": { "$ref": "#/$defs/hex64" },
+        "fixtureId": { "type": "string", "minLength": 1 },
+        "fixtureDigest": { "$ref": "#/$defs/hex64" },
+        "archetypeVersion": { "type": "string", "minLength": 1 },
+        "oracleVersion": { "type": "string", "minLength": 1 },
+        "state": { "enum": ["triaged", "measured", "prior"] },
+        "triageReason": { "oneOf": [{ "$ref": "#/$defs/triageReason" }, { "type": "null" }] },
+        "nAttempted": { "type": "integer", "minimum": 0 },
+        "nAdmitted": { "type": "integer", "minimum": 0 },
+        "vector": { "$ref": "#/$defs/vector" },
+        "uplift": { "oneOf": [{ "$ref": "#/$defs/uplift" }, { "type": "null" }] },
+        "upliftNullReason": { "type": ["string", "null"] },
+        "promotion": { "oneOf": [{ "$ref": "#/$defs/promotionEvidence" }, { "type": "null" }] },
+        "sourceRunIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+        "experimentId": { "type": "string", "minLength": 1 },
+        "generatedAt": { "$ref": "#/$defs/isoDateTime" }
+      },
+      "allOf": [
+        { "if": { "properties": { "state": { "const": "measured" } } }, "then": { "properties": { "triageReason": { "type": "null" }, "nAdmitted": { "minimum": 3 } } } },
+        { "if": { "properties": { "state": { "const": "triaged" } } }, "then": { "properties": { "triageReason": { "type": "string" } } } },
+        { "if": { "properties": { "state": { "const": "prior" } } }, "then": { "properties": { "uplift": { "type": "null" } } } },
+        { "if": { "properties": { "stage": { "$ref": "#/$defs/judgedStage" }, "state": { "const": "measured" } }, "required": ["stage", "state"] }, "then": { "properties": { "promotion": { "type": "object" } } } },
+        { "if": { "properties": { "stage": { "$ref": "#/$defs/judgedStage" }, "state": { "const": "triaged" }, "promotion": { "type": "null" } }, "required": ["stage", "state", "promotion"] }, "then": { "properties": { "triageReason": { "const": "JUDGED_UNPROMOTED" } } } },
+        { "if": { "properties": { "uplift": { "type": "object" } }, "required": ["uplift"] }, "then": { "properties": { "upliftNullReason": { "type": "null" } } } }
+      ]
+    },
+
+    "registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "rows", "latest"],
+      "properties": {
+        "version": { "type": "integer", "minimum": 1 },
+        "rows": { "type": "array", "items": { "$ref": "#/$defs/row" } },
+        "latest": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/stage" },
+          "additionalProperties": {
+            "type": "object",
+            "propertyNames": { "$ref": "#/$defs/hex64" },
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+
+    "measurementDecision": {
+      "description": "#measurementDecision (review r2 R2-3): written by M1, read by A1 and V1. `measured` carries no reason; `noSignal` carries one.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "experimentIds", "decisions", "generatedAt"],
+      "properties": {
+        "version": { "type": "integer", "minimum": 1 },
+        "experimentIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+        "decisions": { "type": "array", "items": { "$ref": "#/$defs/decisionEntry" } },
+        "generatedAt": { "$ref": "#/$defs/isoDateTime" }
+      }
+    },
+    "decisionEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "compatKey", "championCellKey", "decision", "reason", "evidence"],
+      "properties": {
+        "stage": { "$ref": "#/$defs/stage" },
+        "compatKey": { "$ref": "#/$defs/hex64" },
+        "championCellKey": { "type": "string", "minLength": 1 },
+        "decision": { "enum": ["measured", "noSignal"] },
+        "reason": { "enum": [null, "NO_UPLIFT", "CALIBRATION_OUT_OF_RANGE", "FLAG4_SPREAD"] },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["calibrationRunId", "upliftRowId", "flag4"],
+          "properties": {
+            "calibrationRunId": { "type": "string", "minLength": 1 },
+            "upliftRowId": { "type": ["string", "null"] },
+            "flag4": { "type": ["object", "null"] }
+          }
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "decision": { "const": "measured" } } }, "then": { "properties": { "reason": { "type": "null" } } } },
+        { "if": { "properties": { "decision": { "const": "noSignal" } } }, "then": { "properties": { "reason": { "type": "string" } } } }
+      ]
+    }
+  },
+
+  "examples": [
+    {
+      "name": "measured row with an uplift block",
+      "validatesAgainst": "#/$defs/row",
+      "value": {
+        "rowId": "row-debug-sonnet-std-1", "stage": "debug",
+        "cellKey": "debug|claude|claude-sonnet-5-5|standard|default",
+        "compatKey": "f0b3e6d5424eff3d249d7dd1c1b8f6700624e3a6377ac84c596f04d757abb47d",
+        "ingredients": { "provider": "claude", "modelID": "claude-sonnet-5-5", "effort": "standard", "workflow": "default" },
+        "catalogDigest": "25c0c6e165cd0b9d6d941ac80b3c92814ace97dcddf2cca5c68984586bd5c1a0",
+        "fixtureId": "debug-notes-search-1",
+        "fixtureDigest": "dc7eaefc6e995958b82ed3c995607e18a35af896c3ab2a6d17dc4c501cc5a6a8",
+        "archetypeVersion": "1", "oracleVersion": "1",
+        "state": "measured", "triageReason": null, "nAttempted": 3, "nAdmitted": 3,
+        "vector": {
+          "accuracy": { "median": 1, "min": 0.75, "max": 1 },
+          "tokensIn": { "median": 61000, "min": 58000, "max": 66000 },
+          "tokensOut": { "median": 7400, "min": 6900, "max": 8100 },
+          "usd": { "median": 0.41, "min": 0.39, "max": 0.46 },
+          "wallMs": { "median": 94000, "min": 88000, "max": 120000 },
+          "reliability": { "median": 1, "min": 1, "max": 1 }
+        },
+        "uplift": { "championCellKey": "debug|claude|claude-opus-5-5|high|default", "delta": 0.12, "ci95": [0.03, 0.21], "method": "bootstrap", "resamples": 1000, "seed": 7 },
+        "upliftNullReason": null, "promotion": null,
+        "sourceRunIds": ["debug-grid-1-sonnet-std-r1", "debug-grid-1-sonnet-std-r2", "debug-grid-1-sonnet-std-r3"],
+        "experimentId": "debug-grid-1", "generatedAt": "2026-10-20T13:00:00.000Z"
+      }
+    },
+    {
+      "name": "triaged LOW_N row",
+      "validatesAgainst": "#/$defs/row",
+      "value": {
+        "rowId": "row-debug-sol-std-1", "stage": "debug",
+        "cellKey": "debug|codex|gpt-6.1-sol|high|default",
+        "compatKey": "f0b3e6d5424eff3d249d7dd1c1b8f6700624e3a6377ac84c596f04d757abb47d",
+        "ingredients": { "provider": "codex", "modelID": "gpt-6.1-sol", "effort": "high", "workflow": "default" },
+        "catalogDigest": "25c0c6e165cd0b9d6d941ac80b3c92814ace97dcddf2cca5c68984586bd5c1a0",
+        "fixtureId": "debug-notes-search-1",
+        "fixtureDigest": "dc7eaefc6e995958b82ed3c995607e18a35af896c3ab2a6d17dc4c501cc5a6a8",
+        "archetypeVersion": "1", "oracleVersion": "1",
+        "state": "triaged", "triageReason": "LOW_N", "nAttempted": 3, "nAdmitted": 2,
+        "vector": {
+          "accuracy": { "median": 1, "min": 1, "max": 1 },
+          "tokensIn": { "median": 54000, "min": 52000, "max": 56000 },
+          "tokensOut": { "median": 6100, "min": 5900, "max": 6300 },
+          "usd": null,
+          "wallMs": { "median": 81000, "min": 79000, "max": 83000 },
+          "reliability": { "median": 0.67, "min": 0.67, "max": 0.67 }
+        },
+        "uplift": null, "upliftNullReason": null, "promotion": null,
+        "sourceRunIds": ["debug-grid-1-sol-std-r1", "debug-grid-1-sol-std-r2"],
+        "experimentId": "debug-grid-1", "generatedAt": "2026-10-20T13:00:00.000Z"
+      }
+    },
+    {
+      "name": "promotion evidence (promoteRows evidence argument and row.promotion)",
+      "validatesAgainst": "#/$defs/promotionEvidence",
+      "value": { "calibrationReport": "docs/features/COMP-MODEL-AB-DECISION/calibration/design-1.json", "panelModels": ["claude-opus-5-5", "claude-sonnet-5-5"], "judgeCatalogDigest": "842db707d4d2ab6eb42f12cd7f761e4521cdc7e4507b20e9d6023973a2906495", "gatePassed": true, "agreement": 0.84 }
+    },
+    {
+      "name": "promoteRows arguments",
+      "validatesAgainst": "#/$defs/promoteRowsArgs",
+      "value": { "rowIds": ["row-design-opus-1"], "evidence": { "calibrationReport": "docs/features/COMP-MODEL-AB-DECISION/calibration/design-1.json", "panelModels": ["claude-opus-5-5"], "judgeCatalogDigest": "842db707d4d2ab6eb42f12cd7f761e4521cdc7e4507b20e9d6023973a2906495", "gatePassed": true, "agreement": 0.84 } }
+    },
+    {
+      "name": "demoteRows arguments (Standing flag 7)",
+      "validatesAgainst": "#/$defs/demoteRowsArgs",
+      "value": { "rowIds": ["row-design-opus-1"], "reason": "JUDGE_DRIFT" }
+    },
+    {
+      "name": "admitted run (partial record)",
+      "validatesAgainst": "#/$defs/admittedRun",
+      "value": { "runId": "debug-grid-1-sonnet-std-r1", "metrics": { "outcome": { "completed": true }, "stage": { "accuracy": 1, "canaryOk": true, "mechanismEngaged": true, "oracleError": null } } }
+    },
+    {
+      "name": "registry.json with the measured row in latest and the triaged row not",
+      "validatesAgainst": "#/$defs/registry",
+      "value": {
+        "version": 1,
+        "rows": [
+          { "rowId": "row-debug-sonnet-std-1", "stage": "debug", "cellKey": "debug|claude|claude-sonnet-5-5|standard|default", "compatKey": "f0b3e6d5424eff3d249d7dd1c1b8f6700624e3a6377ac84c596f04d757abb47d", "ingredients": { "provider": "claude", "modelID": "claude-sonnet-5-5", "effort": "standard", "workflow": "default" }, "catalogDigest": "25c0c6e165cd0b9d6d941ac80b3c92814ace97dcddf2cca5c68984586bd5c1a0", "fixtureId": "debug-notes-search-1", "fixtureDigest": "dc7eaefc6e995958b82ed3c995607e18a35af896c3ab2a6d17dc4c501cc5a6a8", "archetypeVersion": "1", "oracleVersion": "1", "state": "measured", "triageReason": null, "nAttempted": 3, "nAdmitted": 3, "vector": { "accuracy": { "median": 1, "min": 0.75, "max": 1 }, "tokensIn": { "median": 61000, "min": 58000, "max": 66000 }, "tokensOut": { "median": 7400, "min": 6900, "max": 8100 }, "usd": { "median": 0.41, "min": 0.39, "max": 0.46 }, "wallMs": { "median": 94000, "min": 88000, "max": 120000 }, "reliability": { "median": 1, "min": 1, "max": 1 } }, "uplift": null, "upliftNullReason": "NO_COMPATIBLE_CHAMPION", "promotion": null, "sourceRunIds": ["debug-grid-1-sonnet-std-r1", "debug-grid-1-sonnet-std-r2", "debug-grid-1-sonnet-std-r3"], "experimentId": "debug-grid-1", "generatedAt": "2026-10-20T13:00:00.000Z" }
+        ],
+        "latest": { "debug": { "f0b3e6d5424eff3d249d7dd1c1b8f6700624e3a6377ac84c596f04d757abb47d": { "debug|claude|claude-sonnet-5-5|standard|default": "row-debug-sonnet-std-1" } } }
+      }
+    },
+    {
+      "name": "measurementDecision file: one measured and one noSignal decision",
+      "validatesAgainst": "#/$defs/measurementDecision",
+      "value": {
+        "version": 1,
+        "experimentIds": ["debug-grid-1", "review-grid-1"],
+        "decisions": [
+          { "stage": "debug", "compatKey": "f0b3e6d5424eff3d249d7dd1c1b8f6700624e3a6377ac84c596f04d757abb47d", "championCellKey": "debug|claude|claude-opus-5-5|high|default", "decision": "measured", "reason": null, "evidence": { "calibrationRunId": "calib-debug-1", "upliftRowId": "row-debug-sonnet-std-1", "flag4": null } },
+          { "stage": "review", "compatKey": "e4e7e75adecd29379bf802e2463a415ac72661d80fd45db8566b146f6830bc04", "championCellKey": "review|claude|claude-opus-5-5|high|default", "decision": "noSignal", "reason": "NO_UPLIFT", "evidence": { "calibrationRunId": "calib-review-1", "upliftRowId": null, "flag4": { "spread": 0.02 } } }
+        ],
+        "generatedAt": "2026-10-20T14:00:00.000Z"
+      }
+    }
+  ],
+
+  "negativeExamples": [
+    {
+      "name": "run with canaryOk false (not admitted, so it cannot count toward a measured row)",
+      "mustFailAgainst": "#/$defs/admittedRun",
+      "value": { "metrics": { "outcome": { "completed": true }, "stage": { "accuracy": 1, "canaryOk": false, "mechanismEngaged": true, "oracleError": null } } }
+    },
+    {
+      "name": "run with an oracleError (not admitted)",
+      "mustFailAgainst": "#/$defs/admittedRun",
+      "value": { "metrics": { "outcome": { "completed": true }, "stage": { "accuracy": null, "canaryOk": true, "mechanismEngaged": true, "oracleError": "suite did not start" } } }
+    },
+    {
+      "name": "measured row with nAdmitted 2",
+      "mustFailAgainst": "#/$defs/row",
+      "value": { "rowId": "bad-1", "stage": "debug", "cellKey": "k", "compatKey": "f0b3e6d5424eff3d249d7dd1c1b8f6700624e3a6377ac84c596f04d757abb47d", "ingredients": { "provider": "claude", "modelID": "m", "effort": "e", "workflow": "default" }, "catalogDigest": "25c0c6e165cd0b9d6d941ac80b3c92814ace97dcddf2cca5c68984586bd5c1a0", "fixtureId": "f", "fixtureDigest": "dc7eaefc6e995958b82ed3c995607e18a35af896c3ab2a6d17dc4c501cc5a6a8", "archetypeVersion": "1", "oracleVersion": "1", "state": "measured", "triageReason": null, "nAttempted": 2, "nAdmitted": 2, "vector": { "accuracy": { "median": 1, "min": 1, "max": 1 }, "tokensIn": { "median": 1, "min": 1, "max": 1 }, "tokensOut": { "median": 1, "min": 1, "max": 1 }, "usd": null, "wallMs": { "median": 1, "min": 1, "max": 1 }, "reliability": { "median": 1, "min": 1, "max": 1 } }, "uplift": null, "upliftNullReason": null, "promotion": null, "sourceRunIds": ["r1"], "experimentId": "e", "generatedAt": "2026-10-20T13:00:00.000Z" }
+    },
+    {
+      "name": "measured judged-stage row with no promotion",
+      "mustFailAgainst": "#/$defs/row",
+      "value": { "rowId": "bad-2", "stage": "design", "cellKey": "k", "compatKey": "f0b3e6d5424eff3d249d7dd1c1b8f6700624e3a6377ac84c596f04d757abb47d", "ingredients": { "provider": "claude", "modelID": "m", "effort": "e", "workflow": "default" }, "catalogDigest": "25c0c6e165cd0b9d6d941ac80b3c92814ace97dcddf2cca5c68984586bd5c1a0", "fixtureId": "f", "fixtureDigest": "dc7eaefc6e995958b82ed3c995607e18a35af896c3ab2a6d17dc4c501cc5a6a8", "archetypeVersion": "1", "oracleVersion": "1", "state": "measured", "triageReason": null, "nAttempted": 3, "nAdmitted": 3, "vector": { "accuracy": { "median": 1, "min": 1, "max": 1 }, "tokensIn": { "median": 1, "min": 1, "max": 1 }, "tokensOut": { "median": 1, "min": 1, "max": 1 }, "usd": null, "wallMs": { "median": 1, "min": 1, "max": 1 }, "reliability": { "median": 1, "min": 1, "max": 1 } }, "uplift": null, "upliftNullReason": null, "promotion": null, "sourceRunIds": ["r1"], "experimentId": "e", "generatedAt": "2026-10-20T13:00:00.000Z" }
+    },
+    {
+      "name": "noSignal decision with no reason",
+      "mustFailAgainst": "#/$defs/decisionEntry",
+      "value": { "stage": "review", "compatKey": "e4e7e75adecd29379bf802e2463a415ac72661d80fd45db8566b146f6830bc04", "championCellKey": "c", "decision": "noSignal", "reason": null, "evidence": { "calibrationRunId": "c1", "upliftRowId": null, "flag4": null } }
+    },
+    {
+      "name": "promotion evidence with gatePassed false",
+      "mustFailAgainst": "#/$defs/promotionEvidence",
+      "value": { "calibrationReport": "x.json", "panelModels": ["m"], "judgeCatalogDigest": "842db707d4d2ab6eb42f12cd7f761e4521cdc7e4507b20e9d6023973a2906495", "gatePassed": false, "agreement": 0.5 }
+    }
+  ]
+}
