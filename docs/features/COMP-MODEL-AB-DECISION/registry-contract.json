@@ -6,21 +6,22 @@
   "_roadmap": "COMP-MODEL-AB-DECISION",
   "_changelog": [
     "2026-10-20 G1 (COMP-STAGE-GRADING-1): first version. registry.json, row, admission predicate, compatKey rule, uplift, promotion evidence, promoteRows/demoteRows arguments, measurementDecision file (review r2 R2-3).",
-    "2026-10-20 G1 fix round 1 (COMP-STAGE-GRADING-1): $.semantic[] names the predicates JSON Schema cannot check (joins and arithmetic) with reject codes and a conformance suite ($.semanticCases[]); prior rows get their own shape (as_of, n); empty-sample statistics are null and attemptedRunIds is added beside sourceRunIds; #measurementDecision and #promotion resolve; effort is the catalog enum; worked identities follow the resolver."
+    "2026-10-20 G1 fix round 1 (COMP-STAGE-GRADING-1): $.semantic[] names the predicates JSON Schema cannot check (joins and arithmetic) with reject codes and a conformance suite ($.semanticCases[]); prior rows get their own shape (as_of, n); empty-sample statistics are null and attemptedRunIds is added beside sourceRunIds; #measurementDecision and #promotion resolve; effort is the catalog enum; worked identities follow the resolver.",
+    "2026-10-20 G1 fix round 2 (COMP-STAGE-GRADING-1): uplift needs BOTH arms measured (new S8 UPLIFT_ARM_STATE: a non-measured row has uplift null with upliftNullReason SOURCE_NOT_MEASURED, a measured row with null uplift says NO_COMPATIBLE_CHAMPION); latest must be complete (every measured cell has an entry, S6); newest is by parsed instant, not string order (S6); demoteRows nulls the demoted row's uplift and every uplift that names it as champion."
   ],
   "description": "Validate by pointing at one of $defs (examples[].validatesAgainst). Cross-record rules a schema cannot express are in `rules`.",
   "rules": {
     "admission": "A run is admitted iff outcome.completed === true, no _error, not skipped, metrics.stage.oracleError === null, accuracy numeric, canaryOk === true and mechanismEngaged === true. Machine form: $defs.admittedRun. nAttempted counts every non-skipped run of the cell (attemptedRunIds), nAdmitted counts the admitted ones (sourceRunIds).",
     "measured": "A row is `measured` iff its stage is objective (not design/plan, or it carries a non-null promotion) AND nAdmitted >= 3 AND nAdmitted * 3 >= nAttempted * 2; otherwise `triaged` with a triageReason. The SCHEMA enforces only: measured has triageReason null and nAdmitted >= 3, triaged has a triageReason string, and the judged-stage promotion coupling. The ratio, the iff itself and nAdmitted <= nAttempted are semantic predicates S1 and S2.",
     "judgedStages": "Rows of the judged stages (design, plan) are written `triaged` with `JUDGED_UNPROMOTED` until promoted; a `measured` judged row must carry a non-null promotion.",
-    "compatKey": "sha256 hex of the canonical JSON (keys sorted at every depth, no whitespace) of {stage, archetypeVersion, fixtureDigest, oracleVersion}. Uplift is computed only within one compatKey and the champion must be `measured` in it, else uplift null with upliftNullReason NO_COMPATIBLE_CHAMPION. A newer compatKey never mixes with an older one.",
+    "compatKey": "sha256 hex of the canonical JSON (keys sorted at every depth, no whitespace) of {stage, archetypeVersion, fixtureDigest, oracleVersion}. Uplift is computed only within one compatKey and the champion must be `measured` in it, else uplift null with upliftNullReason NO_COMPATIBLE_CHAMPION. The row carrying the uplift (the source arm) must be `measured` too: a row that is not `measured` has uplift null with upliftNullReason SOURCE_NOT_MEASURED, which takes precedence when both arms fail (plan G4: null \"when either arm is not measured\"). upliftNullReason is therefore null iff uplift is non-null, else exactly one of SOURCE_NOT_MEASURED (source arm not measured) or NO_COMPATIBLE_CHAMPION (source measured, champion absent or not measured in the compatKey). Enforced by semantic predicates S4 (champion arm) and S8 (source arm and reason). A newer compatKey never mixes with an older one.",
     "cellKey": "stage plus the resolved ingredients (provider, modelID, effort, workflow), joined with `|`, for example `debug|claude|claude-sonnet-5-5|standard|default`. Never a tier name alone.",
-    "latest": "latest[stage][compatKey][cellKey] = rowId of the newest `measured` row of that cell (newest by generatedAt). A `prior` row is never in latest. Enforced by semantic predicates S5 and S6, not by the schema.",
+    "latest": "latest[stage][compatKey][cellKey] = rowId of the newest `measured` row of that cell, newest by the INSTANT generatedAt denotes (parsed, offsets applied, full fractional precision; never string order, since date-time allows offsets). The index is complete: every distinct (stage, compatKey, cellKey) that has at least one `measured` row has an entry, including after a replacement or a demotion (a cell left with no measured row has no entry). A `prior` row is never in latest. Enforced by semantic predicates S5 and S6, not by the schema.",
     "prior": "A `prior` row (fleet prior, P1) has its own closed shape, $defs.priorRow: rowId, stage, cellKey, ingredients (effort and workflow may be null = unknown), state \"prior\", vector (only accuracy is meaningful, a {median, min, max} of the first-pass CLEAN fraction; the other five are null), as_of and n exactly as P1 keeps them, generatedAt. ABSENT on a prior because there is no experiment behind it: compatKey, catalogDigest, fixtureId, fixtureDigest, archetypeVersion, oracleVersion, nAttempted, nAdmitted, triageReason, uplift, upliftNullReason, promotion, sourceRunIds, attemptedRunIds, experimentId. A prior row's cellKey writes `unknown` for a null effort or workflow. A prior may never be uplift input, a champion, in `latest`, or selectable by assembly (S4, S5).",
     "catalogRule": "Assembly uses only rows whose catalogDigest equals the target digest, where the target is the explicit digest when one is named (--catalog-digest), else the current catalog's digest. A selected row that does not equal the target is refused with STALE_CATALOG. Enforced by semantic predicate S7, not by the schema.",
     "measurementDecisionOwnership": "Written by M1; read by A1 and V1.",
     "validationBoundary": "JSON Schema (Ajv 2020) checks SHAPE only. The rules in $.semantic[] need arithmetic or joins across rows, which JSON Schema cannot express, so they are NOT enforced by validating against $defs.registry. They are enforced by one function, validateRegistrySemantics(registry, {currentCatalogDigest, explicitCatalogDigest, selectedRowIds}) -> [{code, rowId}], which G4's registry writer (lib/experiment-registry.js) calls before every write of registry.json, A1 calls before it selects rows, and P1 calls over the prior rows it adds. An empty result is the only pass. $.semanticCases[] is its conformance suite (each case is a registry that is schema-valid, so only this layer can reject it).",
-    "demoted": "demoteRows(registry, {rowIds, reason: \"JUDGE_DRIFT\"}) sets state `triaged`, triageReason `JUDGE_DRIFT` and KEEPS the row's promotion object as the record of what was demoted (a judged triaged row with a null promotion must say JUDGED_UNPROMOTED, so a demoted row cannot have it null).",
+    "demoted": "demoteRows(registry, {rowIds, reason: \"JUDGE_DRIFT\"}) sets state `triaged`, triageReason `JUDGE_DRIFT` and KEEPS the row's promotion object as the record of what was demoted (a judged triaged row with a null promotion must say JUDGED_UNPROMOTED, so a demoted row cannot have it null). Because uplift needs both arms measured (S4, S8), the same write sets the demoted row's uplift null with upliftNullReason SOURCE_NOT_MEASURED, sets uplift null with NO_COMPATIBLE_CHAMPION on every row whose uplift was computed against the demoted row (the writer may instead recompute it against a remaining measured row of the champion cell in the same compatKey), and updates latest per S6.",
     "emptySample": "Statistics over an empty admitted set are null, never zeros: when nAdmitted is 0 every vector member is null (schema); when nAdmitted > 0 every member except usd is a {median, min, max} (schema). sourceRunIds lists the ADMITTED runs the vector was computed over; attemptedRunIds lists every non-skipped run of the cell (admitted or not). Both counts are checked by S3."
   },
   "$defs": {
@@ -168,7 +169,7 @@
         { "if": { "properties": { "decision": { "const": "noSignal" } } }, "then": { "properties": { "reason": { "type": "string" } } } }
       ]
     },
-    "semanticCode": { "enum": ["COUNT_ORDER", "MEASURED_RULE", "RUN_ID_COUNTS", "CHAMPION_MEASURED", "PRIOR_EXCLUDED", "LATEST_UNRESOLVED", "STALE_CATALOG"] },
+    "semanticCode": { "enum": ["COUNT_ORDER", "MEASURED_RULE", "RUN_ID_COUNTS", "CHAMPION_MEASURED", "PRIOR_EXCLUDED", "LATEST_UNRESOLVED", "STALE_CATALOG", "UPLIFT_ARM_STATE"] },
     "effort": {
       "description": "Allowed resolved efforts, from lib/model-catalog.js:11 (the catalog's own list). resolveAgentConfig returns null effort for a tier with no thinking config (for example claude::budget); record that as \"unavailable\". A tier label such as \"standard\" is never an effort.",
       "enum": ["unavailable", "minimal", "low", "medium", "high", "xhigh", "max"]
@@ -237,7 +238,7 @@
         "nAdmitted": { "type": "integer", "minimum": 0 },
         "vector": { "$ref": "#/$defs/vector" },
         "uplift": { "oneOf": [{ "$ref": "#/$defs/uplift" }, { "type": "null" }] },
-        "upliftNullReason": { "type": ["string", "null"] },
+        "upliftNullReason": { "description": "null iff uplift is non-null; else SOURCE_NOT_MEASURED or NO_COMPATIBLE_CHAMPION ($.rules.compatKey, semantic S8).", "type": ["string", "null"] },
         "promotion": { "oneOf": [{ "$ref": "#/$defs/promotionEvidence" }, { "type": "null" }] },
         "sourceRunIds": { "description": "The ADMITTED runs the vector was computed over (length nAdmitted, may be empty).", "type": "array", "items": { "type": "string", "minLength": 1 } },
         "experimentId": { "type": "string", "minLength": 1 },
@@ -380,7 +381,7 @@
         "generatedAt": "2026-10-20T13:00:00.000Z",
         "promotion": null,
         "uplift": null,
-        "upliftNullReason": null,
+        "upliftNullReason": "SOURCE_NOT_MEASURED",
         "state": "triaged",
         "nAttempted": 3,
         "nAdmitted": 2,
@@ -415,7 +416,7 @@
         "generatedAt": "2026-10-20T13:00:00.000Z",
         "promotion": null,
         "uplift": null,
-        "upliftNullReason": null,
+        "upliftNullReason": "SOURCE_NOT_MEASURED",
         "state": "triaged",
         "nAttempted": 3,
         "nAdmitted": 0,
@@ -466,7 +467,7 @@
           "reliability": { "median": 1, "min": 1, "max": 1 }
         },
         "uplift": null,
-        "upliftNullReason": null,
+        "upliftNullReason": "SOURCE_NOT_MEASURED",
         "promotion": {
           "calibrationReport": "docs/features/COMP-MODEL-AB-DECISION/calibration/design-1.json",
           "panelModels": ["claude-opus-5-5", "claude-sonnet-5-5"],
@@ -596,7 +597,7 @@
             "generatedAt": "2026-10-20T13:00:00.000Z",
             "promotion": null,
             "uplift": null,
-            "upliftNullReason": null,
+            "upliftNullReason": "SOURCE_NOT_MEASURED",
             "state": "triaged",
             "nAttempted": 3,
             "nAdmitted": 2,
@@ -968,7 +969,7 @@
       "code": "CHAMPION_MEASURED",
       "scope": "registry",
       "inputs": ["row.uplift.championCellKey", "row.compatKey", "registry.rows"],
-      "statement": "A row with a non-null uplift names a champion: some row of the same registry has that cellKey, the SAME compatKey, and state `measured`. A prior or triaged row, or a row of another compatKey, is not a champion."
+      "statement": "Champion arm. A row with a non-null uplift names a champion: some row of the same registry has that cellKey, the SAME compatKey, and state `measured`. A prior or triaged row, or a row of another compatKey, is not a champion. The source arm (the row carrying the uplift) is S8."
     },
     { "id": "S5", "code": "PRIOR_EXCLUDED", "scope": "registry and selection", "inputs": ["registry.latest", "selectedRowIds", "registry.rows"], "statement": "No rowId in latest and no selected rowId names a `prior` row." },
     {
@@ -976,7 +977,7 @@
       "code": "LATEST_UNRESOLVED",
       "scope": "registry",
       "inputs": ["registry.latest", "registry.rows"],
-      "statement": "Every latest[stage][compatKey][cellKey] = rowId names an existing row whose stage, compatKey and cellKey are those keys, whose state is `measured`, and which is the newest (generatedAt) measured row of that stage, compatKey and cellKey."
+      "statement": "Pointers: every latest[stage][compatKey][cellKey] = rowId names an existing row whose stage, compatKey and cellKey are those keys, whose state is `measured`, and no measured row of that stage, compatKey and cellKey has a later generatedAt INSTANT (parse both timestamps, apply offsets, compare full fractional seconds; never compare the strings). Completeness: every distinct (stage, compatKey, cellKey) of a `measured` row has a latest entry (a missing entry is reported with the measured row's rowId)."
     },
     {
       "id": "S7",
@@ -984,6 +985,13 @@
       "scope": "selection",
       "inputs": ["selectedRowIds", "row.catalogDigest", "currentCatalogDigest", "explicitCatalogDigest"],
       "statement": "target = explicitCatalogDigest if non-null else currentCatalogDigest. Every selected row is `measured` and has catalogDigest === target, else STALE_CATALOG. Naming the digest the rows carry therefore overrides a newer current catalog; naming any other digest does not."
+    },
+    {
+      "id": "S8",
+      "code": "UPLIFT_ARM_STATE",
+      "scope": "row (experiment rows)",
+      "inputs": ["row.state", "row.uplift", "row.upliftNullReason"],
+      "statement": "Source arm and null reason (plan G4: uplift null with a reason when either arm is not measured). A row whose state is not `measured` has uplift === null and upliftNullReason === \"SOURCE_NOT_MEASURED\". A `measured` row with uplift === null has upliftNullReason === \"NO_COMPATIBLE_CHAMPION\". (A non-null uplift with a null reason is schema; its champion arm is S4.) Applies to triageReason INCOMPATIBLE and JUDGE_DRIFT rows too."
     }
   ],
   "refProbes": {
@@ -1142,7 +1150,8 @@
       "base": "registry.json: champion, uplift row, LOW_N row and a prior row; only the two measured rows are in latest",
       "patch": [
         { "op": "replace", "path": "/rows/0/compatKey", "value": "9999999999999999999999999999999999999999999999999999999999999999" },
-        { "op": "remove", "path": "/latest/debug/f0b3e6d5424eff3d249d7dd1c1b8f6700624e3a6377ac84c596f04d757abb47d/debug|claude|claude-opus-5-5|medium|default" }
+        { "op": "remove", "path": "/latest/debug/f0b3e6d5424eff3d249d7dd1c1b8f6700624e3a6377ac84c596f04d757abb47d/debug|claude|claude-opus-5-5|medium|default" },
+        { "op": "add", "path": "/latest/debug/9999999999999999999999999999999999999999999999999999999999999999", "value": { "debug|claude|claude-opus-5-5|medium|default": "row-debug-opus-std-1" } }
       ],
       "expect": ["CHAMPION_MEASURED"]
     },
@@ -1181,6 +1190,91 @@
       "patch": [],
       "semanticContext": { "currentCatalogDigest": "25c0c6e165cd0b9d6d941ac80b3c92814ace97dcddf2cca5c68984586bd5c1a0", "explicitCatalogDigest": null, "selectedRowIds": ["row-implement-opus-prior-1"] },
       "expect": ["PRIOR_EXCLUDED"]
+    },
+    {
+      "name": "uplift-bearing row triaged LOW_N (2 of 3 admitted) keeps its uplift, writer context (review r2 R2-1)",
+      "base": "registry.json: champion, uplift row, LOW_N row and a prior row; only the two measured rows are in latest",
+      "patch": [
+        { "op": "replace", "path": "/rows/1/state", "value": "triaged" },
+        { "op": "replace", "path": "/rows/1/triageReason", "value": "LOW_N" },
+        { "op": "replace", "path": "/rows/1/nAdmitted", "value": 2 },
+        { "op": "remove", "path": "/rows/1/sourceRunIds/2" },
+        { "op": "remove", "path": "/latest/debug/f0b3e6d5424eff3d249d7dd1c1b8f6700624e3a6377ac84c596f04d757abb47d/debug|claude|claude-sonnet-5-5|medium|default" }
+      ],
+      "semanticContext": { "currentCatalogDigest": "25c0c6e165cd0b9d6d941ac80b3c92814ace97dcddf2cca5c68984586bd5c1a0", "explicitCatalogDigest": null, "selectedRowIds": [] },
+      "expect": ["UPLIFT_ARM_STATE"]
+    },
+    {
+      "name": "triaged row with uplift null but no null reason",
+      "base": "registry.json: champion, uplift row, LOW_N row and a prior row; only the two measured rows are in latest",
+      "patch": [
+        { "op": "replace", "path": "/rows/2/upliftNullReason", "value": null }
+      ],
+      "expect": ["UPLIFT_ARM_STATE"]
+    },
+    {
+      "name": "triaged row with uplift null citing the champion instead of its own state",
+      "base": "registry.json: champion, uplift row, LOW_N row and a prior row; only the two measured rows are in latest",
+      "patch": [
+        { "op": "replace", "path": "/rows/2/upliftNullReason", "value": "NO_COMPATIBLE_CHAMPION" }
+      ],
+      "expect": ["UPLIFT_ARM_STATE"]
+    },
+    {
+      "name": "measured row with uplift null but no null reason",
+      "base": "registry.json: champion, uplift row, LOW_N row and a prior row; only the two measured rows are in latest",
+      "patch": [
+        { "op": "replace", "path": "/rows/0/upliftNullReason", "value": null }
+      ],
+      "expect": ["UPLIFT_ARM_STATE"]
+    },
+    {
+      "name": "a measured cell has no latest entry (review r2 R2-2)",
+      "base": "registry.json: champion, uplift row, LOW_N row and a prior row; only the two measured rows are in latest",
+      "patch": [
+        { "op": "remove", "path": "/latest/debug/f0b3e6d5424eff3d249d7dd1c1b8f6700624e3a6377ac84c596f04d757abb47d/debug|claude|claude-sonnet-5-5|medium|default" }
+      ],
+      "expect": ["LATEST_UNRESOLVED"]
+    },
+    {
+      "name": "newer measured row written with a UTC offset: string-older, instant-newer (review r2 R2-3)",
+      "base": "registry.json: champion, uplift row, LOW_N row and a prior row; only the two measured rows are in latest",
+      "patch": [
+        { "op": "copy", "from": "/rows/1", "path": "/rows/-" },
+        { "op": "replace", "path": "/rows/4/rowId", "value": "row-debug-sonnet-fast-2" },
+        { "op": "replace", "path": "/rows/4/generatedAt", "value": "2026-10-20T09:00:00-05:00" }
+      ],
+      "expect": ["LATEST_UNRESOLVED"]
+    },
+    {
+      "name": "older measured row written with a UTC offset: string-newer, instant-older; latest stays valid",
+      "base": "registry.json: champion, uplift row, LOW_N row and a prior row; only the two measured rows are in latest",
+      "patch": [
+        { "op": "copy", "from": "/rows/1", "path": "/rows/-" },
+        { "op": "replace", "path": "/rows/4/rowId", "value": "row-debug-sonnet-fast-2" },
+        { "op": "replace", "path": "/rows/4/generatedAt", "value": "2026-10-20T14:00:00+05:00" }
+      ],
+      "expect": []
+    },
+    {
+      "name": "newer measured row by a sub-millisecond fraction",
+      "base": "registry.json: champion, uplift row, LOW_N row and a prior row; only the two measured rows are in latest",
+      "patch": [
+        { "op": "copy", "from": "/rows/1", "path": "/rows/-" },
+        { "op": "replace", "path": "/rows/4/rowId", "value": "row-debug-sonnet-fast-2" },
+        { "op": "replace", "path": "/rows/4/generatedAt", "value": "2026-10-20T13:00:00.0001Z" }
+      ],
+      "expect": ["LATEST_UNRESOLVED"]
+    },
+    {
+      "name": "newer measured row stamped in a leap second (Date.parse cannot read it)",
+      "base": "registry.json: champion, uplift row, LOW_N row and a prior row; only the two measured rows are in latest",
+      "patch": [
+        { "op": "copy", "from": "/rows/1", "path": "/rows/-" },
+        { "op": "replace", "path": "/rows/4/rowId", "value": "row-debug-sonnet-fast-2" },
+        { "op": "replace", "path": "/rows/4/generatedAt", "value": "2026-10-20T23:59:60Z" }
+      ],
+      "expect": ["LATEST_UNRESOLVED"]
     }
   ]
 }
