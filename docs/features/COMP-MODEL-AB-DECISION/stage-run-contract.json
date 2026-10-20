@@ -6,7 +6,8 @@
   "_roadmap": "COMP-MODEL-AB-DECISION",
   "_changelog": [
     "2026-10-20 G1 (COMP-STAGE-GRADING-1): first version. Legacy spec and run record transcribed unchanged; stage and build runner shapes, budget, runKey and the four named refusals added. Extended later by D1 (ingredients, precedence) and R2 (metrics.steps[]).",
-    "2026-10-20 G1 fix round 1 (COMP-STAGE-GRADING-1): stageDispatchRow keeps the shipped nullable ledger semantics and the full field vocabulary; effort is the catalog enum and worked identities follow the resolver; digest content sources and the checkpoint decision table are machine-readable; worked digests are bound to stated content."
+    "2026-10-20 G1 fix round 1 (COMP-STAGE-GRADING-1): stageDispatchRow keeps the shipped nullable ledger semantics and the full field vocabulary; effort is the catalog enum and worked identities follow the resolver; digest content sources and the checkpoint decision table are machine-readable; worked digests are bound to stated content.",
+    "2026-10-20 G2 (COMP-STAGE-GRADING-2): stage runs carry unknown token usage as null, never 0. New $defs.stageCostMetrics (costMetrics with tokensIn/tokensOut nullable) used by stageRunMetrics.cost; legacy costMetrics unchanged. Example: stage run record with a null-usage receipt."
   ],
   "description": "Validate an instance by pointing at one of $defs (see examples[].validatesAgainst and negativeExamples[].mustFailAgainst). The root carries no instance shape of its own.",
   "rules": {
@@ -42,7 +43,7 @@
       "BUDGET_REQUIRED": { "enforcedBy": "schema: budget is required in specStage, specStageJudged and specBuild, optional in specLegacy", "when": "an archetype spec has no budget" },
       "BUDGET_STOP": { "enforcedBy": "runtime (B1); recorded as runSkipped.skipped", "when": "a run was never started because the budget stopped the experiment" }
     },
-    "cost": "metrics.cost of a stage run is the sum over the sandbox's dispatch-ledger rows with site \"experiment-stage\" (see $defs.stageDispatchRow); usd is null if any such row has usd null. Read from the ledger, never from the agentRun return value.",
+    "cost": "metrics.cost of a stage run is the sum over the sandbox's dispatch-ledger rows with site \"experiment-stage\" (see $defs.stageDispatchRow); usd (and tokensIn, tokensOut) is null if any such row has it null, or if there is no such row (#/$defs/stageCostMetrics). Read from the ledger, never from the agentRun return value.",
     "runKey": "sha256 (hex) of the canonical JSON (keys sorted at every depth, no whitespace) of runKeyInputs. Digest content sources are in rules.digests; absent pipeline/profiles files give null digests, never an empty-string hash.",
     "canonicalJson": "JSON.stringify with object keys sorted lexicographically at every depth; arrays keep order.",
     "digests": {
@@ -219,6 +220,19 @@
         "usd": { "type": ["number", "null"], "minimum": 0 }
       }
     },
+    "stageCostMetrics": {
+      "description": "metrics.cost of a stage run (rules.cost). A summed field is null when any summed ledger row has it null, or when the run left no experiment-stage row: unknown usage is never 0.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tokensIn", "tokensOut", "calls", "wallMs", "usd"],
+      "properties": {
+        "tokensIn": { "type": ["integer", "null"], "minimum": 0 },
+        "tokensOut": { "type": ["integer", "null"], "minimum": 0 },
+        "calls": { "type": "integer", "minimum": 0 },
+        "wallMs": { "type": "integer", "minimum": 0 },
+        "usd": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
     "outcomeMetrics": {
       "type": "object",
       "additionalProperties": false,
@@ -265,7 +279,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["cost", "outcome", "process", "stage"],
-      "properties": { "cost": { "$ref": "#/$defs/costMetrics" }, "outcome": { "$ref": "#/$defs/outcomeMetrics" }, "process": { "$ref": "#/$defs/processMetrics" }, "stage": { "$ref": "#/$defs/stageMetrics" } }
+      "properties": { "cost": { "$ref": "#/$defs/stageCostMetrics" }, "outcome": { "$ref": "#/$defs/outcomeMetrics" }, "process": { "$ref": "#/$defs/processMetrics" }, "stage": { "$ref": "#/$defs/stageMetrics" } }
     },
     "candidateResolved": {
       "description": "From resolveAgentConfig (lib/agent-string.js) plus the catalog digest; never a tier name.",
@@ -586,6 +600,11 @@
       "name": "oracle that could not run: oracleError set, accuracy null (never 0)",
       "validatesAgainst": "#/$defs/stageMetrics",
       "value": { "accuracy": null, "oracle": "repro-passes", "oracleVersion": "1", "canaryOk": true, "mechanismEngaged": true, "oracleError": "hidden suite failed to start: exit 2", "detail": {} }
+    },
+    {
+      "name": "stage run record whose only receipt has unknown usage (G2): token and usd sums stay null, the budget counts perRunTokenAssume",
+      "validatesAgainst": "#/$defs/stageRunRecord",
+      "value": { "runId": "debug-grid-1_sol-std_rep1", "configLabel": "sol-std", "rep": 1, "runner": "stage", "archetype": { "id": "debug", "version": "1" }, "candidateResolved": { "provider": "codex", "modelID": "gpt-6.1-sol", "effort": "high", "catalogDigest": "25c0c6e165cd0b9d6d941ac80b3c92814ace97dcddf2cca5c68984586bd5c1a0" }, "metrics": { "cost": { "tokensIn": null, "tokensOut": null, "calls": 1, "wallMs": 600000, "usd": null }, "outcome": { "completed": false, "health": null, "testsPass": null, "testsTotal": null, "filesChanged": 0, "linesChanged": 0 }, "process": { "reviewIters": 0, "gateFailures": 0, "retries": 0, "escalations": 0 }, "stage": { "accuracy": null, "oracle": "debug", "oracleVersion": "1", "canaryOk": false, "mechanismEngaged": false, "oracleError": "not run: agentRun failed: aborted by perRunTimeoutMs", "detail": {} } }, "judge": null, "artifacts": { "outputPath": "runs/debug-grid-1_sol-std_rep1/output.md", "transcriptPath": null, "diffPath": "runs/debug-grid-1_sol-std_rep1/diff.patch", "logPath": "runs/debug-grid-1_sol-std_rep1/run.log" }, "manifest": { "composeSha": "b2eb9abc", "fixtureGoal": "", "seedRef": null, "startedAt": "2026-10-20T11:00:00.000Z", "endedAt": "2026-10-20T11:10:00.500Z" }, "budget": { "stoppedBy": "timeout", "spentUsd": null, "spentTokens": 400000 }, "runKey": "5a3a611afbda3afd8820ff85347c10bc8c72b3d69ddf80dac640faf99dc3f58a", "runKeyInputs": { "configLabel": "sol-std", "candidate": "codex::standard", "ingredients": { "provider": "codex", "modelID": "gpt-6.1-sol", "effort": "high", "workflow": "none" }, "pipelineDigest": null, "profilesDigest": null, "archetype": { "id": "debug", "version": "1" }, "fixtureDigest": "dc7eaefc6e995958b82ed3c995607e18a35af896c3ab2a6d17dc4c501cc5a6a8", "oracleVersion": "1", "catalogDigest": "25c0c6e165cd0b9d6d941ac80b3c92814ace97dcddf2cca5c68984586bd5c1a0", "rep": 1 }, "_error": "aborted by perRunTimeoutMs" }
     },
     {
       "name": "run skipped by the budget",
