@@ -1,0 +1,12 @@
+{
+  "context": "mini MCP notes server: write/search/recall over SQLite",
+  "task": "search_notes does not return a note whose body contains the query; only title matches come back. Make the failing repro test/repro.test.js pass without breaking any other behaviour of the server.",
+  "gold": {
+    "fix": "src/store.js search(): match the body as well as the title (title LIKE $p OR body LIKE $p, both with ESCAPE)",
+    "reproCommand": "node --test test/repro.test.js",
+    "bugPatch": "bug.patch",
+    "repro": "repro.test.js",
+    "suites": ["../../notes-server/test", "suite"]
+  },
+  "task_type": "debug"
+}
