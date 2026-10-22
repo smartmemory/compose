@@ -42,10 +42,10 @@ test('[tag-filter-seeded] rows loaded through importNotes with mixed-case tags a
   const s = fresh();
   const [ferry, packing, standup] = s.importNotes(LEGACY);
   for (const q of ['travel', 'Travel', 'TRAVEL']) {
-    assert.deepEqual(s.search('ferry', { tag: q }).map((x) => x.id), [ferry], `tag query ${JSON.stringify(q)}`);
-    assert.deepEqual(s.search('ticket', { tag: q }).map((x) => x.id), [packing], `tag query ${JSON.stringify(q)}`);
+    assert.deepEqual(s.search('timetable', { tag: q }).map((x) => x.id), [ferry], `tag query ${JSON.stringify(q)}`);
+    assert.deepEqual(s.search('passport', { tag: q }).map((x) => x.id), [packing], `tag query ${JSON.stringify(q)}`);
   }
-  assert.deepEqual(s.search('ferry', { tag: 'work' }).map((x) => x.id), [standup]);
+  assert.deepEqual(s.search('booking', { tag: 'work' }).map((x) => x.id), [standup]);
 });
 
 test('[tag-normalized] update stores each tag once, trimmed and lower-case', () => {
