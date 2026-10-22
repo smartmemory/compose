@@ -226,6 +226,30 @@ describe('debug.canary and debug.mechanismEngaged', () => {
     });
   }
 
+  // mechanismEvidence: one row per evidence case. `transcript` is the text handed to the check, `log` seeds the workspace test log.
+  const evidenceRows = [
+    { name: 'command line in a codex-shaped event line', transcript: '{"kind":"tool_use_summary","tool":"bash","input":{"command":"node --test test/repro.test.js"}}', engaged: true, label: 'engaged' },
+    { name: 'command with a ./ prefix and a node flag', transcript: '{"input":{"command":"node --no-warnings --test ./test/repro.test.js"}}', engaged: true, label: 'engaged' },
+    { name: 'marker in tool output', transcript: '{"kind":"tool_result","output":"repro-executed-notes-search"}', engaged: true, label: 'engaged' },
+    { name: 'test log only', transcript: null, log: true, engaged: true, label: 'engaged' },
+    { name: 'neither source holds anything', transcript: null, engaged: false, label: 'no-evidence' },
+    { name: 'transcript reads the repro but never runs it', transcript: '{"input":{"command":"cat test/repro.test.js"}}', engaged: false, label: 'evidence-without-repro' },
+    { name: 'transcript runs the whole suite, not the repro', transcript: '{"input":{"command":"node --test"}}', engaged: false, label: 'evidence-without-repro' },
+  ];
+  for (const row of evidenceRows) {
+    test(`mechanismEvidence: ${row.name}`, () => {
+      const ws = seededWorkspace('evidence');
+      if (row.log) {
+        mkdirSync(join(ws, '.test-log'));
+        writeFileSync(join(ws, '.test-log', 'repro.log'), `x ${debug.REPRO_MARKER}\n`);
+      }
+      const ev = debug.mechanismEvidence(ws, row.transcript);
+      assert.equal(ev.engaged, row.engaged);
+      assert.equal(ev.label, row.label);
+      assert.equal(debug.mechanismEngaged(ws, row.transcript), row.engaged);
+    });
+  }
+
   test('mechanismEngaged: transcript text, transcript path, workspace test log, or neither', () => {
     const ws = seededWorkspace('mechanism');
     const reproSource = readFileSync(join(ws, debug.REPRO_PATH), 'utf8');
