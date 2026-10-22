@@ -26,7 +26,11 @@ function matches(file, glob) {
 test('every checked-in test location is included by npm test runners', () => {
   const nodeGlobs = pkg.scripts.test.match(/\S+\*\S*\.test\.js/g) ?? [];
   const globs = [...nodeGlobs, ...uiConfig.test.include, ...trackerConfig.test.include];
+  // stage-grading fixtures are hidden tests and a seeded scenario that the debug archetype's oracle runs inside a workspace copy
+  // (test/archetype-debug.test.js, test/experiment-stage-debug-integration.test.js); npm test must never run them directly.
+  const oracleFixtures = 'test/fixtures/stage-grading/';
   const omitted = ['test', 'tests', 'src'].flatMap(dir => files(join(root, dir)))
+    .filter(file => !file.startsWith(oracleFixtures))
     .filter(file => !globs.some(glob => matches(file, glob)));
   assert.deepEqual(omitted, [], 'Tests outside runner discovery silently stop protecting shipped paths');
 });
