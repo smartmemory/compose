@@ -216,7 +216,7 @@ test('initSandboxRepo writes identity only into the repo it created; the real re
 });
 
 // The leak gate, run against a disposable stand-in "real repo" (copies of the preload + scrub inside a throwaway checkout).
-function runGateStandIn(writer, { corruptConfig = false, env = () => ({}) } = {}) {
+function runGateStandIn(writer, { corruptConfig = false, baseCommit = false, env = () => ({}) } = {}) {
   const stand = realpathSync(mkdtempSync(join(tmpdir(), 'compose-guard-gate-')));
   try {
     mkdirSync(join(stand, 'test', 'helpers'), { recursive: true });
@@ -224,6 +224,7 @@ function runGateStandIn(writer, { corruptConfig = false, env = () => ({}) } = {}
     const git = (...a) => execFileSync('git', ['-C', stand, ...a], { encoding: 'utf8', env: isolatedGitEnv(), stdio: 'pipe' });
     git('init', '-q');
     git('config', '--local', 'user.name', 'Stand Original');
+    if (baseCommit) git('-c', 'user.email=stand@example.test', 'commit', '-q', '--allow-empty', '-m', 'stand base'); // before the gate's snapshot: `worktree list` carries HEAD
     writeFileSync(join(stand, 'writer.test.js'), writer);
     // NODE_TEST_CONTEXT (set by the preload) would make the inner `node --test` act as a nested test child, not a runner.
     const { NODE_TEST_CONTEXT: _ctx, ...childEnv } = process.env;
@@ -237,16 +238,31 @@ function runGateStandIn(writer, { corruptConfig = false, env = () => ({}) } = {}
 const WRITER_PRELUDE = "import test from 'node:test'; import { execFileSync } from 'node:child_process'; import { mkdtempSync } from 'node:fs'; import { tmpdir } from 'node:os'; import { join } from 'node:path';\n";
 
 const OWN_REPO_WRITER = WRITER_PRELUDE + "test('x', () => { const tmp = mkdtempSync(join(tmpdir(), 'gate-tmp-')); execFileSync('git', ['init', '-q'], { cwd: tmp }); execFileSync('git', ['config', 'user.name', 'Own'], { cwd: tmp }); });";
+// Writer (run with `baseCommit`) that has a separate node process `git worktree add` into it
+// (under compose-test-worktrees/ when `probeDir`, else a plain tmp dir), optionally also changing the local identity.
+const FOREIGN_WORKTREE_WRITER = (probeDir, changeIdentity) => WRITER_PRELUDE + `import { spawnSync } from 'node:child_process';
+test('x', () => {
+  const git = (...a) => execFileSync('git', a, { cwd: process.cwd(), stdio: 'pipe' });
+  const dir = join(mkdtempSync(join(tmpdir(), 'gate-wt-')), ${probeDir ? "'compose-test-worktrees', 'p'" : "'p'"});
+  const add = spawnSync(process.execPath, ['-e', "require('node:child_process').execFileSync('git', ['worktree', 'add', '--detach', process.argv[1], 'HEAD'], { stdio: 'pipe' })", dir], { cwd: process.cwd(), encoding: 'utf8' });
+  if (add.status !== 0) throw new Error(add.stderr);
+  ${changeIdentity ? "git('config', 'user.name', 'Review Leak');" : ''}
+});`;
 const GATE_ROWS = [
   ['a writer that inits a tmp dir but configures identity in the real repo (mismatched cwd) fails the run',
     WRITER_PRELUDE + "test('x', () => { const tmp = mkdtempSync(join(tmpdir(), 'gate-tmp-')); execFileSync('git', ['init', '-q'], { cwd: tmp }); execFileSync('git', ['config', 'user.name', 'Review Leak'], { cwd: process.cwd() }); });", undefined, 1, 'Review Leak'],
   ['a writer that only touches its own tmp repo passes', OWN_REPO_WRITER, undefined, 0, 'Stand Original'],
   ['an inherited GIT_CONFIG naming the real repo config neither redirects the write nor blinds the gate',
     OWN_REPO_WRITER, (stand) => ({ GIT_CONFIG: join(stand, '.git', 'config') }), 0, 'Stand Original'],
+  // COMP-GOLDEN-LEAK-RACE-1: a worktree added to the real repo by ANOTHER process under compose-test-worktrees/ (what the
+  // codex-preflight probes of concurrent test files do) is not this process's leak. The foreign process is a separate node.
+  ['a foreign process adding a worktree under compose-test-worktrees/ during the run passes', FOREIGN_WORKTREE_WRITER(true, false), undefined, 0, 'Stand Original', true],
+  ['the same foreign worktree add plus an identity change in the real repo still fails', FOREIGN_WORKTREE_WRITER(true, true), undefined, 1, 'Review Leak', true],
+  ['a worktree the run adds to the real repo outside compose-test-worktrees/ and leaves behind fails', FOREIGN_WORKTREE_WRITER(false, false), undefined, 1, 'Stand Original', true],
 ];
-for (const [name, writer, env, status, identity] of GATE_ROWS) {
+for (const [name, writer, env, status, identity, baseCommit] of GATE_ROWS) {
   test(`leak gate: ${name}`, () => {
-    const out = runGateStandIn(writer, { env });
+    const out = runGateStandIn(writer, { env, baseCommit });
     assert.equal(out.status, status, out.output);
     if (status === 1) assert.match(out.output, /GOLDEN-LEAK GATE/);
     assert.equal(out.name, identity);
