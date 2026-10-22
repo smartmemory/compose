@@ -1,8 +1,8 @@
 {
   "context": "mini MCP notes server: write/search/recall over SQLite",
-  "task": "search_notes does not return a note whose body contains the query; only title matches come back. Make the failing repro test/repro.test.js pass without breaking any other behaviour of the server.",
+  "task": "search_notes with a tag filter returns nothing for a note that was written with the tag 'Travel', even when the filter is 'Travel' too. Make the failing repro test/repro.test.js pass without breaking any other behaviour of the server.",
   "gold": {
-    "fix": "src/store.js search(): match the body as well as the title (title LIKE $p OR body LIKE $p, both with ESCAPE)",
+    "fix": "Site A: search() compares the raw query tag, so normalize it (normalizeTags([tag])[0]). Site B (the real invariant): update() and importNotes() store tags with trimTags (no lower-casing); they must use normalizeTags like write(), so every stored tag is trimmed, lower-case and unique",
     "reproCommand": "node --test test/repro.test.js",
     "bugPatch": "bug.patch",
     "repro": "repro.test.js",

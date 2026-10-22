@@ -19,6 +19,7 @@ import { isBuiltin } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
+import { applyPatch } from 'diff';
 
 import { runExperiment } from '../lib/experiment.js';
 import { loadArchetype } from '../lib/archetypes/index.js';
@@ -37,14 +38,13 @@ after(() => rmSync(ROOT, { recursive: true, force: true }));
 const BUDGET = { maxRuns: 10, perRunTimeoutMs: 120_000, maxUsdTotal: null, maxTokensTotal: 9_000_000, perRunTokenAssume: 400_000 };
 const SQLITE = isBuiltin('node:sqlite') ? false : 'node:sqlite unavailable';
 
-// The gold fix is the inverse of hidden/debug/bug.patch: put the body match back into search().
-const BUGGED = `    sql += ')';\n`;
-const FIXED = `    sql += " OR n.body LIKE $p ESCAPE '\\\\')";\n`;
+// The gold fix is the canned patch the archetype tests use (test/fixtures/stage-grading/oracle-fixes/gold.patch).
+const GOLD = join(fileURLToPath(new URL('./fixtures/stage-grading/oracle-fixes/', import.meta.url)), 'gold.patch');
 function applyGoldFix(cwd) {
   const file = join(cwd, 'src', 'store.js');
-  const src = readFileSync(file, 'utf-8');
-  assert.ok(src.includes(BUGGED), 'workspace holds the planted bug');
-  writeFileSync(file, src.replace(BUGGED, FIXED));
+  const fixed = applyPatch(readFileSync(file, 'utf-8'), readFileSync(GOLD, 'utf-8'));
+  assert.notEqual(fixed, false, 'gold patch applies to the planted bug');
+  writeFileSync(file, fixed);
 }
 
 /**
@@ -118,8 +118,8 @@ describe('real debug archetype through the stage runner', () => {
       // The runner handed buildInput/prompt the public scenario: the bug report reached the agent, the gold never did.
       const { calls } = stratum;
       assert.equal(calls.length, 1);
-      assert.match(calls[0].prompt, /search_notes does not return a note whose body contains the query/);
-      assert.doesNotMatch(calls[0].prompt, /title LIKE \$p OR body LIKE/);
+      assert.match(calls[0].prompt, /tag filter returns nothing for a note that was written with the tag 'Travel'/);
+      assert.doesNotMatch(calls[0].prompt, /trimTags|normalizeTags/);
     }));
   }
 

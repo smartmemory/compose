@@ -21,7 +21,7 @@ export const TOOLS = [
   },
   {
     name: 'search_notes',
-    description: 'Find notes whose title or body contains the query (case-insensitive), newest first.',
+    description: 'Search notes, newest first. Optionally restrict to notes carrying a tag.',
     inputSchema: {
       type: 'object',
       required: ['query'],
