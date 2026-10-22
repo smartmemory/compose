@@ -81,6 +81,11 @@ if (!process.env.COMPOSE_NO_PLUGIN_INSTALL) process.env.COMPOSE_NO_PLUGIN_INSTAL
   const { fileURLToPath } = await import('node:url');
   await import('./helpers/git-env-scrub.js');
   const realRepo = dirname(dirname(fileURLToPath(import.meta.url)));
+  // COMP-GOLDEN-LEAK-RACE-1: other test processes running concurrently (codex-preflight probes, via build-flow-tag,
+  // codex-impl, routing-calls, git-sandbox-guard) add and remove detached worktrees under `<tmpdir>/compose-test-worktrees/`
+  // on this same repo. A per-process snapshot blamed whichever file was alive (archetype-debug in 2 of 2 full gates), so
+  // blocks of `git worktree list --porcelain` under that directory are excluded. Every other worktree still counts.
+  const withoutForeignProbeWorktrees = (out) => out.split('\n\n').filter((blk) => !/^worktree .*\/compose-test-worktrees\//.test(blk)).join('\n\n');
   const probe = () => {
     const run = (...a) => {
       try { return execFileSync('git', ['-C', realRepo, ...a], { encoding: 'utf8', env: process.env, stdio: ['ignore', 'pipe', 'pipe'] }); } catch (err) {
@@ -88,7 +93,7 @@ if (!process.env.COMPOSE_NO_PLUGIN_INSTALL) process.env.COMPOSE_NO_PLUGIN_INSTAL
         return `PROBE-ERROR(${a.join(' ')}): ${err.status ?? ''} ${String(err.stderr ?? err.message).trim()}`;
       }
     };
-    return JSON.stringify({ name: run('config', '--local', '--get-all', 'user.name'), email: run('config', '--local', '--get-all', 'user.email'), worktrees: run('worktree', 'list', '--porcelain') });
+    return JSON.stringify({ name: run('config', '--local', '--get-all', 'user.name'), email: run('config', '--local', '--get-all', 'user.email'), worktrees: withoutForeignProbeWorktrees(run('worktree', 'list', '--porcelain')) });
   };
   const before = probe();
   process.on('exit', () => {
