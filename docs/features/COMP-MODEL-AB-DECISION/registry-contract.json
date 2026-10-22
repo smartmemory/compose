@@ -7,7 +7,8 @@
   "_changelog": [
     "2026-10-20 G1 (COMP-STAGE-GRADING-1): first version. registry.json, row, admission predicate, compatKey rule, uplift, promotion evidence, promoteRows/demoteRows arguments, measurementDecision file (review r2 R2-3).",
     "2026-10-20 G1 fix round 1 (COMP-STAGE-GRADING-1): $.semantic[] names the predicates JSON Schema cannot check (joins and arithmetic) with reject codes and a conformance suite ($.semanticCases[]); prior rows get their own shape (as_of, n); empty-sample statistics are null and attemptedRunIds is added beside sourceRunIds; #measurementDecision and #promotion resolve; effort is the catalog enum; worked identities follow the resolver.",
-    "2026-10-20 G1 fix round 2 (COMP-STAGE-GRADING-1): uplift needs BOTH arms measured (new S8 UPLIFT_ARM_STATE: a non-measured row has uplift null with upliftNullReason SOURCE_NOT_MEASURED, a measured row with null uplift says NO_COMPATIBLE_CHAMPION); latest must be complete (every measured cell has an entry, S6); newest is by parsed instant, not string order (S6); demoteRows nulls the demoted row's uplift and every uplift that names it as champion."
+    "2026-10-20 G1 fix round 2 (COMP-STAGE-GRADING-1): uplift needs BOTH arms measured (new S8 UPLIFT_ARM_STATE: a non-measured row has uplift null with upliftNullReason SOURCE_NOT_MEASURED, a measured row with null uplift says NO_COMPATIBLE_CHAMPION); latest must be complete (every measured cell has an entry, S6); newest is by parsed instant, not string order (S6); demoteRows nulls the demoted row's uplift and every uplift that names it as champion.",
+    "2026-10-22 G4-FU-1 (COMP-STAGE-GRADING-4-FU-1): uplift is bound to its exact samples and champion revision. Every experiment row persists `accuracies` (parallel to sourceRunIds); uplift records championRowId, championSampleRevision and sourceSampleRevision; $.rules.uplift defines deterministic champion selection (same catalogDigest first, newest, rowId); $.rules.snapshot makes a replacement a complete cell snapshot (INCOMPLETE_SNAPSHOT); new S9 UPLIFT_BINDING and S10 SAMPLE_VECTOR. Examples and cases updated."
   ],
   "description": "Validate by pointing at one of $defs (examples[].validatesAgainst). Cross-record rules a schema cannot express are in `rules`.",
   "rules": {
@@ -22,7 +23,9 @@
     "measurementDecisionOwnership": "Written by M1; read by A1 and V1.",
     "validationBoundary": "JSON Schema (Ajv 2020) checks SHAPE only. The rules in $.semantic[] need arithmetic or joins across rows, which JSON Schema cannot express, so they are NOT enforced by validating against $defs.registry. They are enforced by one function, validateRegistrySemantics(registry, {currentCatalogDigest, explicitCatalogDigest, selectedRowIds}) -> [{code, rowId}], which G4's registry writer (lib/experiment-registry.js) calls before every write of registry.json, A1 calls before it selects rows, and P1 calls over the prior rows it adds. An empty result is the only pass. $.semanticCases[] is its conformance suite (each case is a registry that is schema-valid, so only this layer can reject it).",
     "demoted": "demoteRows(registry, {rowIds, reason: \"JUDGE_DRIFT\"}) sets state `triaged`, triageReason `JUDGE_DRIFT` and KEEPS the row's promotion object as the record of what was demoted (a judged triaged row with a null promotion must say JUDGED_UNPROMOTED, so a demoted row cannot have it null). Because uplift needs both arms measured (S4, S8), the same write sets the demoted row's uplift null with upliftNullReason SOURCE_NOT_MEASURED, sets uplift null with NO_COMPATIBLE_CHAMPION on every row whose uplift was computed against the demoted row (the writer may instead recompute it against a remaining measured row of the champion cell in the same compatKey), and updates latest per S6.",
-    "emptySample": "Statistics over an empty admitted set are null, never zeros: when nAdmitted is 0 every vector member is null (schema); when nAdmitted > 0 every member except usd is a {median, min, max} (schema). sourceRunIds lists the ADMITTED runs the vector was computed over; attemptedRunIds lists every non-skipped run of the cell (admitted or not). Both counts are checked by S3."
+    "emptySample": "Statistics over an empty admitted set are null, never zeros: when nAdmitted is 0 every vector member is null (schema); when nAdmitted > 0 every member except usd is a {median, min, max} (schema). sourceRunIds lists the ADMITTED runs the vector was computed over; attemptedRunIds lists every non-skipped run of the cell (admitted or not). Both counts are checked by S3. accuracies lists those runs' accuracies in the same order (S10).",
+    "uplift": "Signed uplift of a source row over a champion row: delta of the median accuracy (source minus champion) with a seeded 95% percentile bootstrap, computed ONLY from persisted samples. Every experiment row stores `accuracies`, the admitted per-run accuracies parallel to `sourceRunIds` (same length and order, and they reproduce vector.accuracy exactly: S10), so an uplift can be recomputed after any row changes. The champion row is chosen deterministically: among `measured` rows with the source's stage and compatKey whose cellKey is the named champion cell, the row with the SAME catalogDigest as the source first (a source never reads another catalog's samples while its own catalog has a champion row), else the newest generatedAt by parsed instant, else the greater rowId (the tiebreak latest uses). The uplift records the exact bindings: championRowId, championSampleRevision and sourceSampleRevision, where a sample revision is the sha256 hex of the canonical JSON of that row's {sourceRunIds, accuracies}. S9 rejects an uplift whose championRowId is not the deterministic pick, or whose recorded revisions differ from the rows' current samples. A writer therefore recomputes (or nulls with SOURCE_NOT_MEASURED / NO_COMPATIBLE_CHAMPION) every uplift whenever a row is replaced, promoted or demoted, including a champion that arrives in a later call or is refreshed. A null uplift carries no champion cell, so it re-binds only when a write names the champion cell again.",
+    "snapshot": "Replacing a row (same rowId) is a COMPLETE cell snapshot: the new attemptedRunIds must contain every attemptedRunId the row already records, else the writer refuses with INCOMPLETE_SNAPSHOT and changes nothing. Failed and unadmitted runs stay in the snapshot (they count in nAttempted), so the caller (B1) supplies the whole cell, cached failures included. The replacement's runs, accuracies and statistics supersede the old ones; nothing is merged."
   },
   "$defs": {
     "hex64": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
@@ -81,9 +84,12 @@
     "uplift": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["championCellKey", "delta", "ci95", "method", "resamples", "seed"],
+      "required": ["championCellKey", "championRowId", "championSampleRevision", "sourceSampleRevision", "delta", "ci95", "method", "resamples", "seed"],
       "properties": {
         "championCellKey": { "type": "string", "minLength": 1 },
+        "championRowId": { "description": "The exact champion row this uplift was computed against ($.rules.uplift picks it deterministically; S9).", "type": "string", "minLength": 1 },
+        "championSampleRevision": { "description": "sha256 hex of the canonical JSON of the champion row's {sourceRunIds, accuracies} when the uplift was computed (S9).", "$ref": "#/$defs/hex64" },
+        "sourceSampleRevision": { "description": "The same revision for the row that carries this uplift (S9).", "$ref": "#/$defs/hex64" },
         "delta": { "type": "number" },
         "ci95": { "type": "array", "prefixItems": [{ "type": "number" }, { "type": "number" }], "minItems": 2, "maxItems": 2 },
         "method": { "const": "bootstrap" },
@@ -169,7 +175,7 @@
         { "if": { "properties": { "decision": { "const": "noSignal" } } }, "then": { "properties": { "reason": { "type": "string" } } } }
       ]
     },
-    "semanticCode": { "enum": ["COUNT_ORDER", "MEASURED_RULE", "RUN_ID_COUNTS", "CHAMPION_MEASURED", "PRIOR_EXCLUDED", "LATEST_UNRESOLVED", "STALE_CATALOG", "UPLIFT_ARM_STATE"] },
+    "semanticCode": { "enum": ["COUNT_ORDER", "MEASURED_RULE", "RUN_ID_COUNTS", "CHAMPION_MEASURED", "PRIOR_EXCLUDED", "LATEST_UNRESOLVED", "STALE_CATALOG", "UPLIFT_ARM_STATE", "UPLIFT_BINDING", "SAMPLE_VECTOR"] },
     "effort": {
       "description": "Allowed resolved efforts, from lib/model-catalog.js:11 (the catalog's own list). resolveAgentConfig returns null effort for a tier with no thinking config (for example claude::budget); record that as \"unavailable\". A tier label such as \"standard\" is never an effort.",
       "enum": ["unavailable", "minimal", "low", "medium", "high", "xhigh", "max"]
@@ -217,6 +223,7 @@
         "upliftNullReason",
         "promotion",
         "sourceRunIds",
+        "accuracies",
         "experimentId",
         "generatedAt",
         "attemptedRunIds"
@@ -241,6 +248,7 @@
         "upliftNullReason": { "description": "null iff uplift is non-null; else SOURCE_NOT_MEASURED or NO_COMPATIBLE_CHAMPION ($.rules.compatKey, semantic S8).", "type": ["string", "null"] },
         "promotion": { "oneOf": [{ "$ref": "#/$defs/promotionEvidence" }, { "type": "null" }] },
         "sourceRunIds": { "description": "The ADMITTED runs the vector was computed over (length nAdmitted, may be empty).", "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "accuracies": { "description": "The admitted per-run accuracies, parallel to sourceRunIds (same length and order; may be empty). The samples every uplift is computed from; they reproduce vector.accuracy exactly (S10).", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 } },
         "experimentId": { "type": "string", "minLength": 1 },
         "generatedAt": { "$ref": "#/$defs/isoDateTime" },
         "attemptedRunIds": { "description": "Every non-skipped run of the cell, admitted or not (length nAttempted).", "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
@@ -310,7 +318,7 @@
         "experimentId": "debug-grid-1",
         "generatedAt": "2026-10-20T13:00:00.000Z",
         "promotion": null,
-        "uplift": { "championCellKey": "debug|claude|claude-opus-5-5|medium|default", "delta": -0.12, "ci95": [-0.21, -0.03], "method": "bootstrap", "resamples": 1000, "seed": 7 },
+        "uplift": { "championCellKey": "debug|claude|claude-opus-5-5|medium|default", "championRowId": "row-debug-opus-std-1", "championSampleRevision": "d3c3f1a65c0794b049e0e04ba5ca8b861f2d9a3a30a2a0afeba7225fd36cc4b1", "sourceSampleRevision": "503aedb51af746e7ca29bad482ca1ed4d5c947e4d119cf14654ba9347e279c82", "delta": 0, "ci95": [-0.25, 0], "method": "bootstrap", "resamples": 1000, "seed": 7 },
         "upliftNullReason": null,
         "state": "measured",
         "nAttempted": 3,
@@ -324,6 +332,7 @@
           "reliability": { "median": 1, "min": 1, "max": 1 }
         },
         "attemptedRunIds": ["debug-grid-1-sonnet-fast-r1", "debug-grid-1-sonnet-fast-r2", "debug-grid-1-sonnet-fast-r3"],
+        "accuracies": [0.75, 1, 1],
         "sourceRunIds": ["debug-grid-1-sonnet-fast-r1", "debug-grid-1-sonnet-fast-r2", "debug-grid-1-sonnet-fast-r3"]
       }
     },
@@ -359,6 +368,7 @@
           "reliability": { "median": 1, "min": 1, "max": 1 }
         },
         "attemptedRunIds": ["debug-grid-1-opus-std-r1", "debug-grid-1-opus-std-r2", "debug-grid-1-opus-std-r3"],
+        "accuracies": [1, 1, 1],
         "sourceRunIds": ["debug-grid-1-opus-std-r1", "debug-grid-1-opus-std-r2", "debug-grid-1-opus-std-r3"]
       }
     },
@@ -394,6 +404,7 @@
           "reliability": { "median": 0.67, "min": 0.67, "max": 0.67 }
         },
         "attemptedRunIds": ["debug-grid-1-sol-std-r1", "debug-grid-1-sol-std-r2", "debug-grid-1-sol-std-r3"],
+        "accuracies": [1, 1],
         "sourceRunIds": ["debug-grid-1-sol-std-r1", "debug-grid-1-sol-std-r2"]
       }
     },
@@ -422,6 +433,7 @@
         "nAdmitted": 0,
         "vector": { "accuracy": null, "tokensIn": null, "tokensOut": null, "usd": null, "wallMs": null, "reliability": null },
         "attemptedRunIds": ["debug-grid-1-opus-std-r1", "debug-grid-1-opus-std-r2", "debug-grid-1-opus-std-r3"],
+        "accuracies": [],
         "sourceRunIds": []
       }
     },
@@ -476,6 +488,7 @@
           "agreement": 0.84
         },
         "attemptedRunIds": ["design-grid-1-opus-std-r1", "design-grid-1-opus-std-r2", "design-grid-1-opus-std-r3"],
+        "accuracies": [0.75, 1, 1],
         "sourceRunIds": ["design-grid-1-opus-std-r1", "design-grid-1-opus-std-r2", "design-grid-1-opus-std-r3"],
         "experimentId": "design-grid-1",
         "generatedAt": "2026-10-20T13:00:00.000Z"
@@ -548,6 +561,7 @@
               "reliability": { "median": 1, "min": 1, "max": 1 }
             },
             "attemptedRunIds": ["debug-grid-1-opus-std-r1", "debug-grid-1-opus-std-r2", "debug-grid-1-opus-std-r3"],
+            "accuracies": [1, 1, 1],
             "sourceRunIds": ["debug-grid-1-opus-std-r1", "debug-grid-1-opus-std-r2", "debug-grid-1-opus-std-r3"]
           },
           {
@@ -565,7 +579,7 @@
             "experimentId": "debug-grid-1",
             "generatedAt": "2026-10-20T13:00:00.000Z",
             "promotion": null,
-            "uplift": { "championCellKey": "debug|claude|claude-opus-5-5|medium|default", "delta": -0.12, "ci95": [-0.21, -0.03], "method": "bootstrap", "resamples": 1000, "seed": 7 },
+            "uplift": { "championCellKey": "debug|claude|claude-opus-5-5|medium|default", "championRowId": "row-debug-opus-std-1", "championSampleRevision": "d3c3f1a65c0794b049e0e04ba5ca8b861f2d9a3a30a2a0afeba7225fd36cc4b1", "sourceSampleRevision": "503aedb51af746e7ca29bad482ca1ed4d5c947e4d119cf14654ba9347e279c82", "delta": 0, "ci95": [-0.25, 0], "method": "bootstrap", "resamples": 1000, "seed": 7 },
             "upliftNullReason": null,
             "state": "measured",
             "nAttempted": 3,
@@ -579,6 +593,7 @@
               "reliability": { "median": 1, "min": 1, "max": 1 }
             },
             "attemptedRunIds": ["debug-grid-1-sonnet-fast-r1", "debug-grid-1-sonnet-fast-r2", "debug-grid-1-sonnet-fast-r3"],
+            "accuracies": [0.75, 1, 1],
             "sourceRunIds": ["debug-grid-1-sonnet-fast-r1", "debug-grid-1-sonnet-fast-r2", "debug-grid-1-sonnet-fast-r3"]
           },
           {
@@ -610,6 +625,7 @@
               "reliability": { "median": 0.67, "min": 0.67, "max": 0.67 }
             },
             "attemptedRunIds": ["debug-grid-1-sol-std-r1", "debug-grid-1-sol-std-r2", "debug-grid-1-sol-std-r3"],
+            "accuracies": [1, 1],
             "sourceRunIds": ["debug-grid-1-sol-std-r1", "debug-grid-1-sol-std-r2"]
           },
           {
@@ -665,6 +681,7 @@
               "reliability": { "median": 1, "min": 1, "max": 1 }
             },
             "attemptedRunIds": ["debug-grid-1-opus-std-r1", "debug-grid-1-opus-std-r2", "debug-grid-1-opus-std-r3"],
+            "accuracies": [1, 1, 1],
             "sourceRunIds": ["debug-grid-1-opus-std-r1", "debug-grid-1-opus-std-r2", "debug-grid-1-opus-std-r3"]
           }
         ],
@@ -759,6 +776,7 @@
           "reliability": { "median": 1, "min": 1, "max": 1 }
         },
         "attemptedRunIds": ["r1", "r2"],
+        "accuracies": [0.75, 1],
         "sourceRunIds": ["r1", "r2"]
       }
     },
@@ -794,6 +812,7 @@
           "reliability": { "median": 1, "min": 1, "max": 1 }
         },
         "attemptedRunIds": ["debug-grid-1-sonnet-fast-r1", "debug-grid-1-sonnet-fast-r2", "debug-grid-1-sonnet-fast-r3"],
+        "accuracies": [0.75, 1, 1],
         "sourceRunIds": ["debug-grid-1-sonnet-fast-r1", "debug-grid-1-sonnet-fast-r2", "debug-grid-1-sonnet-fast-r3"]
       }
     },
@@ -815,7 +834,7 @@
         "experimentId": "debug-grid-1",
         "generatedAt": "2026-10-20T13:00:00.000Z",
         "promotion": null,
-        "uplift": { "championCellKey": "debug|claude|claude-opus-5-5|medium|default", "delta": -0.12, "ci95": [-0.21, -0.03], "method": "bootstrap", "resamples": 1000, "seed": 7 },
+        "uplift": { "championCellKey": "debug|claude|claude-opus-5-5|medium|default", "championRowId": "row-debug-opus-std-1", "championSampleRevision": "d3c3f1a65c0794b049e0e04ba5ca8b861f2d9a3a30a2a0afeba7225fd36cc4b1", "sourceSampleRevision": "34d1f50fe0ecd0a8df00ec5ab44fd502ba51d82813a861399cd142d9cc8b94b0", "delta": 0, "ci95": [0, 0], "method": "bootstrap", "resamples": 1000, "seed": 7 },
         "upliftNullReason": null,
         "state": "measured",
         "nAttempted": 3,
@@ -829,6 +848,7 @@
           "reliability": { "median": 1, "min": 1, "max": 1 }
         },
         "attemptedRunIds": ["debug-grid-1-sonnet-fast-r1", "debug-grid-1-sonnet-fast-r2", "debug-grid-1-sonnet-fast-r3"],
+        "accuracies": [1, 1, 1],
         "sourceRunIds": ["debug-grid-1-sonnet-fast-r1", "debug-grid-1-sonnet-fast-r2", "debug-grid-1-sonnet-fast-r3"]
       }
     },
@@ -864,6 +884,7 @@
           "reliability": { "median": 1, "min": 1, "max": 1 }
         },
         "attemptedRunIds": ["debug-grid-1-sonnet-fast-r1", "debug-grid-1-sonnet-fast-r2", "debug-grid-1-sonnet-fast-r3"],
+        "accuracies": [],
         "sourceRunIds": []
       }
     },
@@ -885,7 +906,7 @@
         "experimentId": "debug-grid-1",
         "generatedAt": "2026-10-20T13:00:00.000Z",
         "promotion": null,
-        "uplift": { "championCellKey": "debug|claude|claude-opus-5-5|medium|default", "delta": -0.12, "ci95": [-0.21, -0.03], "method": "bootstrap", "resamples": 1000, "seed": 7 },
+        "uplift": { "championCellKey": "debug|claude|claude-opus-5-5|medium|default", "championRowId": "row-debug-opus-std-1", "championSampleRevision": "d3c3f1a65c0794b049e0e04ba5ca8b861f2d9a3a30a2a0afeba7225fd36cc4b1", "sourceSampleRevision": "503aedb51af746e7ca29bad482ca1ed4d5c947e4d119cf14654ba9347e279c82", "delta": 0, "ci95": [-0.25, 0], "method": "bootstrap", "resamples": 1000, "seed": 7 },
         "upliftNullReason": null,
         "state": "measured",
         "nAttempted": 3,
@@ -899,6 +920,7 @@
           "reliability": { "median": 1, "min": 1, "max": 1 }
         },
         "attemptedRunIds": ["debug-grid-1-sonnet-fast-r1", "debug-grid-1-sonnet-fast-r2", "debug-grid-1-sonnet-fast-r3"],
+        "accuracies": [0.75, 1, 1],
         "sourceRunIds": ["debug-grid-1-sonnet-fast-r1", "debug-grid-1-sonnet-fast-r2", "debug-grid-1-sonnet-fast-r3"]
       }
     },
@@ -992,6 +1014,20 @@
       "scope": "row (experiment rows)",
       "inputs": ["row.state", "row.uplift", "row.upliftNullReason"],
       "statement": "Source arm and null reason (plan G4: uplift null with a reason when either arm is not measured). A row whose state is not `measured` has uplift === null and upliftNullReason === \"SOURCE_NOT_MEASURED\". A `measured` row with uplift === null has upliftNullReason === \"NO_COMPATIBLE_CHAMPION\". (A non-null uplift with a null reason is schema; its champion arm is S4.) Applies to triageReason INCOMPATIBLE and JUDGE_DRIFT rows too."
+    },
+    {
+      "id": "S9",
+      "code": "UPLIFT_BINDING",
+      "scope": "registry",
+      "inputs": ["row.uplift", "row.accuracies", "row.sourceRunIds", "registry.rows"],
+      "statement": "Binding. A row with a non-null uplift names its champion row: uplift.championRowId resolves to a row that is `measured`, with the source's stage and compatKey and cellKey === uplift.championCellKey, and it is the deterministic pick of $.rules.uplift (same catalogDigest first, then newest generatedAt by instant, then greater rowId) among the registry's rows; uplift.sourceSampleRevision equals the sha256 hex of the canonical JSON of the source row's {sourceRunIds, accuracies}, and uplift.championSampleRevision the same for the champion row. A replaced, promoted or demoted champion, or a changed sample, therefore leaves a stale uplift that this rejects."
+    },
+    {
+      "id": "S10",
+      "code": "SAMPLE_VECTOR",
+      "scope": "row (experiment rows)",
+      "inputs": ["row.accuracies", "row.sourceRunIds", "row.vector.accuracy"],
+      "statement": "accuracies has the length of sourceRunIds, every element is a finite number in [0, 1], and {median, min, max} of accuracies equals vector.accuracy exactly (an empty accuracies means vector.accuracy is null)."
     }
   ],
   "refProbes": {
@@ -1275,6 +1311,56 @@
         { "op": "replace", "path": "/rows/4/generatedAt", "value": "2026-10-20T23:59:60Z" }
       ],
       "expect": ["LATEST_UNRESOLVED"]
+    },
+    {
+      "name": "accuracies shorter than sourceRunIds",
+      "base": "registry.json: champion, uplift row, LOW_N row and a prior row; only the two measured rows are in latest",
+      "patch": [
+        { "op": "remove", "path": "/rows/0/accuracies/2" }
+      ],
+      "expect": ["SAMPLE_VECTOR"]
+    },
+    {
+      "name": "accuracies that do not reproduce vector.accuracy",
+      "base": "registry.json: champion, uplift row, LOW_N row and a prior row; only the two measured rows are in latest",
+      "patch": [
+        { "op": "replace", "path": "/rows/0/accuracies/0", "value": 0.5 }
+      ],
+      "expect": ["SAMPLE_VECTOR", "UPLIFT_BINDING"]
+    },
+    {
+      "name": "uplift recorded against a stale champion sample revision",
+      "base": "registry.json: champion, uplift row, LOW_N row and a prior row; only the two measured rows are in latest",
+      "patch": [
+        { "op": "replace", "path": "/rows/1/uplift/championSampleRevision", "value": "0000000000000000000000000000000000000000000000000000000000000000" }
+      ],
+      "expect": ["UPLIFT_BINDING"]
+    },
+    {
+      "name": "uplift recorded against a stale source sample revision",
+      "base": "registry.json: champion, uplift row, LOW_N row and a prior row; only the two measured rows are in latest",
+      "patch": [
+        { "op": "replace", "path": "/rows/1/uplift/sourceSampleRevision", "value": "0000000000000000000000000000000000000000000000000000000000000000" }
+      ],
+      "expect": ["UPLIFT_BINDING"]
+    },
+    {
+      "name": "uplift names a champion row that is not the deterministic pick (a triaged row)",
+      "base": "registry.json: champion, uplift row, LOW_N row and a prior row; only the two measured rows are in latest",
+      "patch": [
+        { "op": "replace", "path": "/rows/1/uplift/championRowId", "value": "row-debug-sol-std-1" }
+      ],
+      "expect": ["UPLIFT_BINDING"]
+    },
+    {
+      "name": "champion refreshed after the uplift: a newer measured row of the champion cell exists",
+      "base": "registry.json: champion, uplift row, LOW_N row and a prior row; only the two measured rows are in latest",
+      "patch": [
+        { "op": "copy", "from": "/rows/0", "path": "/rows/-" },
+        { "op": "replace", "path": "/rows/4/rowId", "value": "row-debug-opus-std-2" },
+        { "op": "replace", "path": "/rows/4/generatedAt", "value": "2026-10-21T00:00:00.000Z" }
+      ],
+      "expect": ["UPLIFT_BINDING"]
     }
   ]
 }
