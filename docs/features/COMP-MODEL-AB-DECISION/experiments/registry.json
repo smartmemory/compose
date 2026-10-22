@@ -1,0 +1,241 @@
+{
+  "latest": {
+    "debug": {
+      "7633146ece3aa35259364c65cfe51792726b6b2227673393a7683e13ac7e5da4": {
+        "debug|claude|claude-opus-5-5|medium|none": "row-debug-43e7829cdafad84c",
+        "debug|claude|claude-sonnet-5-5|medium|none": "row-debug-f00760c57f6dd94a"
+      }
+    }
+  },
+  "rows": [
+    {
+      "accuracies": [
+        1,
+        1,
+        1
+      ],
+      "archetypeVersion": "1",
+      "attemptedRunIds": [
+        "skeleton-debug_opus-standard_rep1",
+        "skeleton-debug_opus-standard_rep2",
+        "skeleton-debug_opus-standard_rep3"
+      ],
+      "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd",
+      "cellKey": "debug|claude|claude-opus-5-5|medium|none",
+      "compatKey": "7633146ece3aa35259364c65cfe51792726b6b2227673393a7683e13ac7e5da4",
+      "experimentId": "skeleton-debug",
+      "fixtureDigest": "710d29166eaacb0b5f37f8846ea409bfaa03f3d5b62b1f52f6ac41d8c738ae68",
+      "fixtureId": "debug-710d29166eaa",
+      "generatedAt": "2026-10-22T12:04:30.017Z",
+      "ingredients": {
+        "effort": "medium",
+        "modelID": "claude-opus-5-5",
+        "provider": "claude",
+        "workflow": "none"
+      },
+      "nAdmitted": 3,
+      "nAttempted": 3,
+      "oracleVersion": "1",
+      "promotion": null,
+      "rowId": "row-debug-43e7829cdafad84c",
+      "sourceRunIds": [
+        "skeleton-debug_opus-standard_rep1",
+        "skeleton-debug_opus-standard_rep2",
+        "skeleton-debug_opus-standard_rep3"
+      ],
+      "stage": "debug",
+      "state": "measured",
+      "triageReason": null,
+      "uplift": {
+        "championCellKey": "debug|claude|claude-sonnet-5-5|medium|none",
+        "championRowId": "row-debug-f00760c57f6dd94a",
+        "championSampleRevision": "7c44923931f44eb052d24b14ccf793eb9f67de473cf7118d1c1ebedbd1cb8462",
+        "ci95": [
+          0,
+          0
+        ],
+        "delta": 0,
+        "method": "bootstrap",
+        "resamples": 1000,
+        "seed": 7,
+        "sourceSampleRevision": "d4a4af331b09721559ab9b51bf26c6852085c66aa16290c378cab512c44d06fc"
+      },
+      "upliftNullReason": null,
+      "vector": {
+        "accuracy": {
+          "max": 1,
+          "median": 1,
+          "min": 1
+        },
+        "reliability": {
+          "max": 1,
+          "median": 1,
+          "min": 1
+        },
+        "tokensIn": {
+          "max": 10,
+          "median": 10,
+          "min": 10
+        },
+        "tokensOut": {
+          "max": 1768,
+          "median": 1693,
+          "min": 1425
+        },
+        "usd": {
+          "max": 0.9410651000000001,
+          "median": 0.3490886,
+          "min": 0.33484710000000006
+        },
+        "wallMs": {
+          "max": 58078,
+          "median": 50624,
+          "min": 43069
+        }
+      }
+    },
+    {
+      "accuracies": [
+        1,
+        1,
+        1
+      ],
+      "archetypeVersion": "1",
+      "attemptedRunIds": [
+        "skeleton-debug_sonnet-fast_rep1",
+        "skeleton-debug_sonnet-fast_rep2",
+        "skeleton-debug_sonnet-fast_rep3"
+      ],
+      "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd",
+      "cellKey": "debug|claude|claude-sonnet-5-5|medium|none",
+      "compatKey": "7633146ece3aa35259364c65cfe51792726b6b2227673393a7683e13ac7e5da4",
+      "experimentId": "skeleton-debug",
+      "fixtureDigest": "710d29166eaacb0b5f37f8846ea409bfaa03f3d5b62b1f52f6ac41d8c738ae68",
+      "fixtureId": "debug-710d29166eaa",
+      "generatedAt": "2026-10-22T11:27:31.392Z",
+      "ingredients": {
+        "effort": "medium",
+        "modelID": "claude-sonnet-5-5",
+        "provider": "claude",
+        "workflow": "none"
+      },
+      "nAdmitted": 3,
+      "nAttempted": 3,
+      "oracleVersion": "1",
+      "promotion": null,
+      "rowId": "row-debug-f00760c57f6dd94a",
+      "sourceRunIds": [
+        "skeleton-debug_sonnet-fast_rep1",
+        "skeleton-debug_sonnet-fast_rep2",
+        "skeleton-debug_sonnet-fast_rep3"
+      ],
+      "stage": "debug",
+      "state": "measured",
+      "triageReason": null,
+      "uplift": null,
+      "upliftNullReason": "NO_COMPATIBLE_CHAMPION",
+      "vector": {
+        "accuracy": {
+          "max": 1,
+          "median": 1,
+          "min": 1
+        },
+        "reliability": {
+          "max": 1,
+          "median": 1,
+          "min": 1
+        },
+        "tokensIn": {
+          "max": 19584,
+          "median": 19101,
+          "min": 17377
+        },
+        "tokensOut": {
+          "max": 1635,
+          "median": 1374,
+          "min": 934
+        },
+        "usd": {
+          "max": 0.8877285,
+          "median": 0.46736970000000005,
+          "min": 0.40936469999999997
+        },
+        "wallMs": {
+          "max": 56945,
+          "median": 48517,
+          "min": 44066
+        }
+      }
+    },
+    {
+      "accuracies": [
+        1
+      ],
+      "archetypeVersion": "1",
+      "attemptedRunIds": [
+        "skeleton-debug_codex-standard_rep1",
+        "skeleton-debug_codex-standard_rep2",
+        "skeleton-debug_codex-standard_rep3"
+      ],
+      "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd",
+      "cellKey": "debug|codex|gpt-6.1-sol|high|none",
+      "compatKey": "7633146ece3aa35259364c65cfe51792726b6b2227673393a7683e13ac7e5da4",
+      "experimentId": "skeleton-debug",
+      "fixtureDigest": "710d29166eaacb0b5f37f8846ea409bfaa03f3d5b62b1f52f6ac41d8c738ae68",
+      "fixtureId": "debug-710d29166eaa",
+      "generatedAt": "2026-10-22T16:07:44.684Z",
+      "ingredients": {
+        "effort": "high",
+        "modelID": "gpt-6.1-sol",
+        "provider": "codex",
+        "workflow": "none"
+      },
+      "nAdmitted": 1,
+      "nAttempted": 3,
+      "oracleVersion": "1",
+      "promotion": null,
+      "rowId": "row-debug-bc4758e9b9a6d5f0",
+      "sourceRunIds": [
+        "skeleton-debug_codex-standard_rep3"
+      ],
+      "stage": "debug",
+      "state": "triaged",
+      "triageReason": "LOW_N",
+      "uplift": null,
+      "upliftNullReason": "SOURCE_NOT_MEASURED",
+      "vector": {
+        "accuracy": {
+          "max": 1,
+          "median": 1,
+          "min": 1
+        },
+        "reliability": {
+          "max": 1,
+          "median": 1,
+          "min": 1
+        },
+        "tokensIn": {
+          "max": 255106,
+          "median": 255106,
+          "min": 255106
+        },
+        "tokensOut": {
+          "max": 1980,
+          "median": 1980,
+          "min": 1980
+        },
+        "usd": {
+          "max": 0.1219224,
+          "median": 0.1219224,
+          "min": 0.1219224
+        },
+        "wallMs": {
+          "max": 128547,
+          "median": 128547,
+          "min": 128547
+        }
+      }
+    }
+  ],
+  "version": 1
+}

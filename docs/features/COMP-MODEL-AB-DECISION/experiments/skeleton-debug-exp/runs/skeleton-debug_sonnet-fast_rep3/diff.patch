@@ -1,0 +1,20 @@
+diff --git a/.test-log/repro.log b/.test-log/repro.log
+new file mode 100644
+index 0000000..94782f3
+--- /dev/null
++++ b/.test-log/repro.log
+@@ -0,0 +1,2 @@
++2026-10-22T11:27:11.423Z repro-executed-notes-search
++2026-10-22T11:27:24.184Z repro-executed-notes-search
+diff --git a/src/store.js b/src/store.js
+index ff7ce27..10e6e0d 100644
+--- a/src/store.js
++++ b/src/store.js
+@@ -82,6 +82,7 @@ export class NotesStore {
+       params.tag = normalizeTags([tag])[0];
+     }
+     sql += " WHERE (n.title LIKE $p ESCAPE '\\'";
++    sql += " OR n.body LIKE $p ESCAPE '\\'";
+     sql += ')';
+     sql += ' ORDER BY n.created_at DESC, n.id DESC LIMIT $limit';
+     return this.db.prepare(sql).all(params).map((row) => this.#hydrate(row));

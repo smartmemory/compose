@@ -1,0 +1,72 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+new file mode 100644
+index 0000000..7d0d47b
+--- /dev/null
++++ b/CHANGELOG.md
+@@ -0,0 +1,5 @@
++# Changelog
++
++## Unreleased
++
++- Fix note search to match body text as well as titles, preserving literal matching, tag filters, limits, and newest-first ordering.
+diff --git a/src/store.js b/src/store.js
+index ff7ce27..10e6e0d 100644
+--- a/src/store.js
++++ b/src/store.js
+@@ -82,6 +82,7 @@ export class NotesStore {
+       params.tag = normalizeTags([tag])[0];
+     }
+     sql += " WHERE (n.title LIKE $p ESCAPE '\\'";
++    sql += " OR n.body LIKE $p ESCAPE '\\'";
+     sql += ')';
+     sql += ' ORDER BY n.created_at DESC, n.id DESC LIMIT $limit';
+     return this.db.prepare(sql).all(params).map((row) => this.#hydrate(row));
+diff --git a/test/search.test.js b/test/search.test.js
+new file mode 100644
+index 0000000..fc546b7
+--- /dev/null
++++ b/test/search.test.js
+@@ -0,0 +1,43 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { NotesStore } from '../src/store.js';
++import { handleMessage } from '../src/server.js';
++
++test('search combines title and body matches while preserving filters and ordering', (context) => {
++  const store = new NotesStore();
++  context.after(() => store.close());
++  store.clock = () => '2026-10-23T00:00:00.000Z';
++  const titleMatch = store.write({ title: 'Ferry', body: 'Booking', tags: ['Travel'] });
++  const bodyMatch = store.write({ title: 'Standup', body: 'Book the FERRY', tags: ['travel'] });
++  const bothMatch = store.write({ title: 'Ferry', body: 'Ferry booking', tags: ['work'] });
++  store.write({ title: 'Unrelated', body: 'Nothing to match', tags: ['travel'] });
++
++  assert.deepEqual(store.search(' ferry '), [bothMatch, bodyMatch, titleMatch]);
++  assert.deepEqual(store.search('ferry', { tag: ' TRAVEL ' }), [bodyMatch, titleMatch]);
++  assert.deepEqual(store.search('ferry', { tag: 'travel', limit: 1 }), [bodyMatch]);
++  assert.deepEqual(store.search('ferry', { tag: 'missing' }), []);
++  assert.deepEqual(store.recall(bodyMatch.id), bodyMatch);
++
++  const response = handleMessage(store, {
++    jsonrpc: '2.0',
++    id: 1,
++    method: 'tools/call',
++    params: { name: 'search_notes', arguments: { query: 'ferry', tag: 'travel' } },
++  });
++  assert.equal(response.result.isError, false);
++  assert.deepEqual(JSON.parse(response.result.content[0].text), [bodyMatch, titleMatch]);
++});
++
++test('search treats wildcard characters and backslashes literally in either field', (context) => {
++  const store = new NotesStore();
++  context.after(() => store.close());
++  store.clock = () => '2026-10-23T00:00:00.000Z';
++  const titleMatch = store.write({ title: '50%_\\ discount', body: 'Sale' });
++  const bodyMatch = store.write({ title: 'Sale', body: '50%_\\ discount' });
++  store.write({ title: '50abcX\\ discount', body: '50abcX\\ discount' });
++  store.write({ title: '50%X\\ discount', body: '50%X\\ discount' });
++  store.write({ title: '50%_ discount', body: '50%_ discount' });
++
++  assert.deepEqual(store.search('50%_\\'), [bodyMatch, titleMatch]);
++  assert.deepEqual(store.search("' OR 1=1 --"), []);
++});

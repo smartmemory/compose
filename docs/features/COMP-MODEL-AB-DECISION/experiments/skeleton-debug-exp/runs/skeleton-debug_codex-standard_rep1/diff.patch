@@ -1,0 +1,13 @@
+diff --git a/src/store.js b/src/store.js
+index ff7ce27..02b793f 100644
+--- a/src/store.js
++++ b/src/store.js
+@@ -81,7 +81,7 @@ export class NotesStore {
+       sql += ' JOIN note_tags t ON t.note_id = n.id AND t.tag = $tag';
+       params.tag = normalizeTags([tag])[0];
+     }
+-    sql += " WHERE (n.title LIKE $p ESCAPE '\\'";
++    sql += " WHERE (n.title LIKE $p ESCAPE '\\' OR n.body LIKE $p ESCAPE '\\'";
+     sql += ')';
+     sql += ' ORDER BY n.created_at DESC, n.id DESC LIMIT $limit';
+     return this.db.prepare(sql).all(params).map((row) => this.#hydrate(row));

@@ -1,0 +1,192 @@
+{
+  "experimentId": "skeleton-debug",
+  "configs": [
+    {
+      "label": "sonnet-fast",
+      "nCompleted": 3,
+      "nTotal": 3,
+      "metrics": {
+        "cost.tokensIn": {
+          "median": 19101,
+          "min": 17377,
+          "max": 19584
+        },
+        "cost.tokensOut": {
+          "median": 1374,
+          "min": 934,
+          "max": 1635
+        },
+        "cost.calls": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "cost.wallMs": {
+          "median": 48517,
+          "min": 44066,
+          "max": 56945
+        },
+        "cost.usd": {
+          "median": 0.46736970000000005,
+          "min": 0.40936469999999997,
+          "max": 0.8877285
+        },
+        "outcome.filesChanged": {
+          "median": 2,
+          "min": 2,
+          "max": 2
+        },
+        "outcome.linesChanged": {
+          "median": 3,
+          "min": 2,
+          "max": 4
+        },
+        "process.reviewIters": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "process.gateFailures": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "process.retries": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "process.escalations": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "label": "opus-standard",
+      "nCompleted": 3,
+      "nTotal": 3,
+      "metrics": {
+        "cost.tokensIn": {
+          "median": 10,
+          "min": 10,
+          "max": 10
+        },
+        "cost.tokensOut": {
+          "median": 1693,
+          "min": 1425,
+          "max": 1768
+        },
+        "cost.calls": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "cost.wallMs": {
+          "median": 50624,
+          "min": 43069,
+          "max": 58078
+        },
+        "cost.usd": {
+          "median": 0.3490886,
+          "min": 0.33484710000000006,
+          "max": 0.9410651000000001
+        },
+        "outcome.filesChanged": {
+          "median": 2,
+          "min": 2,
+          "max": 2
+        },
+        "outcome.linesChanged": {
+          "median": 3,
+          "min": 2,
+          "max": 4
+        },
+        "process.reviewIters": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "process.gateFailures": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "process.retries": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "process.escalations": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "label": "codex-standard",
+      "nCompleted": 3,
+      "nTotal": 3,
+      "metrics": {
+        "cost.tokensIn": {
+          "median": 312012,
+          "min": 255106,
+          "max": 881521
+        },
+        "cost.tokensOut": {
+          "median": 2117,
+          "min": 1980,
+          "max": 2713
+        },
+        "cost.calls": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "cost.wallMs": {
+          "median": 128547,
+          "min": 114586,
+          "max": 170551
+        },
+        "cost.usd": {
+          "median": 0.13496039999999998,
+          "min": 0.1219224,
+          "max": 0.512156
+        },
+        "outcome.filesChanged": {
+          "median": 2,
+          "min": 1,
+          "max": 3
+        },
+        "outcome.linesChanged": {
+          "median": 5,
+          "min": 2,
+          "max": 49
+        },
+        "process.reviewIters": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "process.gateFailures": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "process.retries": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "process.escalations": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    }
+  ],
+  "generatedAt": "2026-10-22T16:07:44.774Z"
+}

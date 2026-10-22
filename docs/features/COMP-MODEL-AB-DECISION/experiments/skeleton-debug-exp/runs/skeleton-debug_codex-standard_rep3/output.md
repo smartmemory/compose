@@ -1,0 +1,3 @@
+I’ll run the repro, trace the search code, and fix the query under `src/`. Then I’ll run the server’s full test suite.I’m using the systematic-debugging skill to reproduce the failure and identify its cause before changing the code.The repro fails as reported. The SQL predicate in `src/store.js:84` checks only the title, while `src/server.js:24` promises title or body matches. I’ll add the body check using the same escaped query pattern.Fixed `src/store.js:84` to search both title and body using the existing escaped query pattern.
+
+The repro and `npm test` pass. Additional checks passed for filtering, ordering, limits, literal characters, validation, and MCP dispatch. The repro file is unchanged.

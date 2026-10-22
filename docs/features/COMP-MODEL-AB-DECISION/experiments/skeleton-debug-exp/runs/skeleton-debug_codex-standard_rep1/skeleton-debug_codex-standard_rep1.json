@@ -1,0 +1,114 @@
+{
+  "runId": "skeleton-debug_codex-standard_rep1",
+  "configLabel": "codex-standard",
+  "rep": 1,
+  "runner": "stage",
+  "archetype": {
+    "id": "debug",
+    "version": "1"
+  },
+  "candidateResolved": {
+    "provider": "codex",
+    "modelID": "gpt-6.1-sol",
+    "effort": "high",
+    "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd"
+  },
+  "metrics": {
+    "cost": {
+      "tokensIn": 312012,
+      "tokensOut": 2117,
+      "calls": 1,
+      "wallMs": 114586,
+      "usd": 0.13496039999999998
+    },
+    "outcome": {
+      "completed": true,
+      "health": null,
+      "testsPass": null,
+      "testsTotal": null,
+      "filesChanged": 1,
+      "linesChanged": 2
+    },
+    "process": {
+      "reviewIters": 0,
+      "gateFailures": 0,
+      "retries": 0,
+      "escalations": 0
+    },
+    "stage": {
+      "accuracy": 1,
+      "oracle": "debug",
+      "oracleVersion": "1",
+      "canaryOk": true,
+      "mechanismEngaged": false,
+      "oracleError": null,
+      "detail": {
+        "failed": [],
+        "repro": {
+          "started": true,
+          "ok": true,
+          "timedOut": false,
+          "exitCode": 0,
+          "total": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "failedTests": [],
+          "missing": []
+        },
+        "suite": {
+          "started": true,
+          "ok": true,
+          "timedOut": false,
+          "exitCode": 0,
+          "total": 16,
+          "passed": 16,
+          "failed": 0,
+          "cancelled": 0,
+          "failedTests": [],
+          "missing": []
+        }
+      }
+    }
+  },
+  "judge": null,
+  "artifacts": {
+    "outputPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/skeleton-debug-exp/runs/skeleton-debug_codex-standard_rep1/output.md",
+    "transcriptPath": null,
+    "diffPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/skeleton-debug-exp/runs/skeleton-debug_codex-standard_rep1/diff.patch",
+    "logPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/skeleton-debug-exp/runs/skeleton-debug_codex-standard_rep1/run.log"
+  },
+  "manifest": {
+    "composeSha": "d1efbcf9743c0f1a3f6783f8d14e0e25bdaf37ba",
+    "fixtureGoal": "",
+    "seedRef": null,
+    "startedAt": "2026-10-22T16:00:32.621Z",
+    "endedAt": "2026-10-22T16:02:29.771Z"
+  },
+  "budget": {
+    "stoppedBy": null,
+    "spentUsd": 0.13496039999999998,
+    "spentTokens": 314129
+  },
+  "runKey": "d255ef47962d12d51fe17ee489df9654faa6c84a093b56bfc52292ec889dce39",
+  "runKeyInputs": {
+    "configLabel": "codex-standard",
+    "candidate": "codex::standard",
+    "ingredients": {
+      "provider": "codex",
+      "modelID": "gpt-6.1-sol",
+      "effort": "high",
+      "workflow": "none"
+    },
+    "pipelineDigest": null,
+    "profilesDigest": null,
+    "archetype": {
+      "id": "debug",
+      "version": "1"
+    },
+    "fixtureDigest": "710d29166eaacb0b5f37f8846ea409bfaa03f3d5b62b1f52f6ac41d8c738ae68",
+    "oracleVersion": "1",
+    "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd",
+    "rep": 1
+  }
+}

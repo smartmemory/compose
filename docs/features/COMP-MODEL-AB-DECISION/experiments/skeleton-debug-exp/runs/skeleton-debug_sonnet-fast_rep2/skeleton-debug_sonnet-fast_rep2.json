@@ -1,0 +1,114 @@
+{
+  "runId": "skeleton-debug_sonnet-fast_rep2",
+  "configLabel": "sonnet-fast",
+  "rep": 2,
+  "runner": "stage",
+  "archetype": {
+    "id": "debug",
+    "version": "1"
+  },
+  "candidateResolved": {
+    "provider": "claude",
+    "modelID": "claude-sonnet-5-5",
+    "effort": "medium",
+    "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd"
+  },
+  "metrics": {
+    "cost": {
+      "tokensIn": 19101,
+      "tokensOut": 1635,
+      "calls": 1,
+      "wallMs": 48517,
+      "usd": 0.46736970000000005
+    },
+    "outcome": {
+      "completed": true,
+      "health": null,
+      "testsPass": null,
+      "testsTotal": null,
+      "filesChanged": 2,
+      "linesChanged": 2
+    },
+    "process": {
+      "reviewIters": 0,
+      "gateFailures": 0,
+      "retries": 0,
+      "escalations": 0
+    },
+    "stage": {
+      "accuracy": 1,
+      "oracle": "debug",
+      "oracleVersion": "1",
+      "canaryOk": true,
+      "mechanismEngaged": true,
+      "oracleError": null,
+      "detail": {
+        "failed": [],
+        "repro": {
+          "started": true,
+          "ok": true,
+          "timedOut": false,
+          "exitCode": 0,
+          "total": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "failedTests": [],
+          "missing": []
+        },
+        "suite": {
+          "started": true,
+          "ok": true,
+          "timedOut": false,
+          "exitCode": 0,
+          "total": 16,
+          "passed": 16,
+          "failed": 0,
+          "cancelled": 0,
+          "failedTests": [],
+          "missing": []
+        }
+      }
+    }
+  },
+  "judge": null,
+  "artifacts": {
+    "outputPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/skeleton-debug-exp/runs/skeleton-debug_sonnet-fast_rep2/output.md",
+    "transcriptPath": null,
+    "diffPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/skeleton-debug-exp/runs/skeleton-debug_sonnet-fast_rep2/diff.patch",
+    "logPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/skeleton-debug-exp/runs/skeleton-debug_sonnet-fast_rep2/run.log"
+  },
+  "manifest": {
+    "composeSha": "d1efbcf9743c0f1a3f6783f8d14e0e25bdaf37ba",
+    "fixtureGoal": "",
+    "seedRef": null,
+    "startedAt": "2026-10-22T11:25:43.602Z",
+    "endedAt": "2026-10-22T11:26:33.170Z"
+  },
+  "budget": {
+    "stoppedBy": null,
+    "spentUsd": 0.46736970000000005,
+    "spentTokens": 20736
+  },
+  "runKey": "89ee25f6dbcc55516326014e56da3f1fd7ddab9eb5f3f769348b528eedcf319a",
+  "runKeyInputs": {
+    "configLabel": "sonnet-fast",
+    "candidate": "claude::fast",
+    "ingredients": {
+      "provider": "claude",
+      "modelID": "claude-sonnet-5-5",
+      "effort": "medium",
+      "workflow": "none"
+    },
+    "pipelineDigest": null,
+    "profilesDigest": null,
+    "archetype": {
+      "id": "debug",
+      "version": "1"
+    },
+    "fixtureDigest": "710d29166eaacb0b5f37f8846ea409bfaa03f3d5b62b1f52f6ac41d8c738ae68",
+    "oracleVersion": "1",
+    "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd",
+    "rep": 2
+  }
+}

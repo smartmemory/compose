@@ -1,0 +1,114 @@
+{
+  "runId": "skeleton-debug_opus-standard_rep3",
+  "configLabel": "opus-standard",
+  "rep": 3,
+  "runner": "stage",
+  "archetype": {
+    "id": "debug",
+    "version": "1"
+  },
+  "candidateResolved": {
+    "provider": "claude",
+    "modelID": "claude-opus-5-5",
+    "effort": "medium",
+    "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd"
+  },
+  "metrics": {
+    "cost": {
+      "tokensIn": 10,
+      "tokensOut": 1768,
+      "calls": 1,
+      "wallMs": 43069,
+      "usd": 0.3490886
+    },
+    "outcome": {
+      "completed": true,
+      "health": null,
+      "testsPass": null,
+      "testsTotal": null,
+      "filesChanged": 2,
+      "linesChanged": 4
+    },
+    "process": {
+      "reviewIters": 0,
+      "gateFailures": 0,
+      "retries": 0,
+      "escalations": 0
+    },
+    "stage": {
+      "accuracy": 1,
+      "oracle": "debug",
+      "oracleVersion": "1",
+      "canaryOk": true,
+      "mechanismEngaged": true,
+      "oracleError": null,
+      "detail": {
+        "failed": [],
+        "repro": {
+          "started": true,
+          "ok": true,
+          "timedOut": false,
+          "exitCode": 0,
+          "total": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "failedTests": [],
+          "missing": []
+        },
+        "suite": {
+          "started": true,
+          "ok": true,
+          "timedOut": false,
+          "exitCode": 0,
+          "total": 16,
+          "passed": 16,
+          "failed": 0,
+          "cancelled": 0,
+          "failedTests": [],
+          "missing": []
+        }
+      }
+    }
+  },
+  "judge": null,
+  "artifacts": {
+    "outputPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/skeleton-debug-exp/runs/skeleton-debug_opus-standard_rep3/output.md",
+    "transcriptPath": null,
+    "diffPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/skeleton-debug-exp/runs/skeleton-debug_opus-standard_rep3/diff.patch",
+    "logPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/skeleton-debug-exp/runs/skeleton-debug_opus-standard_rep3/run.log"
+  },
+  "manifest": {
+    "composeSha": "d1efbcf9743c0f1a3f6783f8d14e0e25bdaf37ba",
+    "fixtureGoal": "",
+    "seedRef": null,
+    "startedAt": "2026-10-22T12:03:45.824Z",
+    "endedAt": "2026-10-22T12:04:30.017Z"
+  },
+  "budget": {
+    "stoppedBy": null,
+    "spentUsd": 0.3490886,
+    "spentTokens": 1778
+  },
+  "runKey": "4e7e85759893a60451432fe8ed5eb7d2f4eeed564556ffa9e435133290347e59",
+  "runKeyInputs": {
+    "configLabel": "opus-standard",
+    "candidate": "claude::standard",
+    "ingredients": {
+      "provider": "claude",
+      "modelID": "claude-opus-5-5",
+      "effort": "medium",
+      "workflow": "none"
+    },
+    "pipelineDigest": null,
+    "profilesDigest": null,
+    "archetype": {
+      "id": "debug",
+      "version": "1"
+    },
+    "fixtureDigest": "710d29166eaacb0b5f37f8846ea409bfaa03f3d5b62b1f52f6ac41d8c738ae68",
+    "oracleVersion": "1",
+    "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd",
+    "rep": 3
+  }
+}

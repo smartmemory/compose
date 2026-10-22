@@ -1,0 +1,12 @@
+{
+  "id": "skeleton-debug",
+  "fixture": { "archetype": "debug" },
+  "configs": [
+    { "label": "sonnet-fast", "candidate": "claude::fast" },
+    { "label": "opus-standard", "candidate": "claude::standard" },
+    { "label": "codex-standard", "candidate": "codex::standard" }
+  ],
+  "reps": 3,
+  "parallelism": 1,
+  "budget": { "maxRuns": 9, "perRunTimeoutMs": 900000, "maxUsdTotal": null, "maxTokensTotal": 9000000, "perRunTokenAssume": 1000000 }
+}
