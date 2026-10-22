@@ -12,7 +12,7 @@
 
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync, readdirSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, existsSync, rmSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { isBuiltin } from 'node:module';
@@ -47,16 +47,28 @@ function applyGoldFix(cwd) {
   writeFileSync(file, src.replace(BUGGED, FIXED));
 }
 
-/** Fake StratumMcpClient: connect/close plus an agentRun that applies `edit` to the workspace. */
-function fakeStratum(edit) {
+/**
+ * Fake StratumMcpClient: connect/close plus an agentRun that applies `edit` to the workspace.
+ * `shape.events` are BuildStreamEvent envelopes pushed to onEvent subscribers during the call (as the real client does);
+ * `shape.transcript` rides on the result (a provider that returns its own).
+ */
+function fakeStratum(edit, shape = {}) {
+  const subs = new Map();
   const fake = {
     calls: [],
     async connect() {},
     async close() {},
+    onEvent(flowId, stepId, handler) {
+      subs.set(`${flowId}::${stepId}`, handler);
+      return () => subs.delete(`${flowId}::${stepId}`);
+    },
     async agentRun(provider, prompt, opts) {
       fake.calls.push({ provider, prompt, opts });
       edit(opts.cwd);
-      return { text: 'done', usage: null };
+      (shape.events ?? []).forEach((e, seq) => subs.get(`${opts.correlationId}::_agent_run`)?.({
+        schema_version: '0.2.8', flow_id: opts.correlationId, step_id: '_agent_run', seq, ts: '2026-10-23T00:00:00Z', ...e,
+      }));
+      return { text: 'done', usage: null, ...(shape.transcript !== undefined ? { transcript: shape.transcript } : {}) };
     },
   };
   return fake;
@@ -80,10 +92,11 @@ const quiet = fn => async (...a) => {
 };
 
 // No `_loadArchetype` seam: the engine imports the real lib/archetypes loader.
-async function runDebug(edit) {
-  const stratum = fakeStratum(edit);
-  const { runs } = await runExperiment(writeSpec(), { _stratumFactory: () => stratum });
-  return { runs, stratum };
+async function runDebug(edit, shape) {
+  const stratum = fakeStratum(edit, shape);
+  const specPath = writeSpec();
+  const { runs } = await runExperiment(specPath, { _stratumFactory: () => stratum });
+  return { runs, stratum, expRoot: resolve(dirname(specPath), 'integ-exp') };
 }
 
 describe('real debug archetype through the stage runner', () => {
@@ -156,6 +169,51 @@ describe('real debug archetype through the stage runner', () => {
       assert.equal(stratum.calls.length, 0, 'no dispatch after the refusal');
       assert.equal(run.metrics.stage.accuracy, null);
       assert.match(run.metrics.stage.oracleError, /hidden material .* is inside the workspace/);
+    }));
+  }
+});
+
+// COMP-STAGE-TRANSCRIPT-1: the runner builds the transcript from tool events for every provider, and a false
+// mechanismEngaged names the sources it tried. One row per evidence case, each on the untouched workspace.
+const CMD_EVENT = { kind: 'tool_use_summary', metadata: { tool: 'bash', summary: 'node --test test/repro.test.js', ok: false, input: { command: 'node --test test/repro.test.js' } } };
+const CAT_EVENT = { kind: 'tool_use_summary', metadata: { tool: 'bash', summary: 'cat src/store.js', ok: true, input: { command: 'cat src/store.js' } } };
+const PROSE_EVENT = { kind: 'agent_relay', metadata: { role: 'assistant', text: 'I ran node --test test/repro.test.js and it failed first' } };
+const writeReproLog = cwd => {
+  mkdirSync(join(cwd, '.test-log'), { recursive: true });
+  writeFileSync(join(cwd, '.test-log', 'repro.log'), `2026-10-23T00:00:00Z repro-executed-notes-search\n`);
+};
+
+describe('stage runner transcript and mechanism evidence', () => {
+  const ROWS = [
+    { name: 'codex-shaped: command in tool events, no test log (probe A)', shape: { events: [CAT_EVENT, CMD_EVENT] },
+      engaged: true, transcript: true },
+    { name: 'claude-shaped: marker in the result transcript, no events (probe B)',
+      shape: { transcript: '{"kind":"tool_result","output":"repro-executed-notes-search"}' }, engaged: true, transcript: true },
+    { name: 'no events and no log (probe C)', shape: {}, engaged: false, transcript: false, label: 'no-evidence',
+      sources: { transcript: { present: false, marker: false, command: false }, testLog: { present: false, marker: false } } },
+    { name: 'test log only (probe D)', shape: {}, edit: writeReproLog, engaged: true, transcript: false },
+    { name: 'events that never ran the repro (probe E)', shape: { events: [CAT_EVENT] }, engaged: false, transcript: true,
+      label: 'evidence-without-repro' },
+    { name: 'the agent only claims the run in prose: prose is not captured', shape: { events: [PROSE_EVENT] }, engaged: false,
+      transcript: false, label: 'no-evidence' },
+  ];
+  for (const row of ROWS) {
+    test(row.name, { skip: SQLITE }, quiet(async () => {
+      const { runs, expRoot } = await runDebug(row.edit ?? (() => {}), row.shape);
+      const [run] = runs;
+      assert.ok(validateRecord(run), JSON.stringify(validateRecord.errors));
+      const { stage } = run.metrics;
+      assert.equal(stage.mechanismEngaged, row.engaged, JSON.stringify({ d: stage.detail, e: stage.oracleError, r: run._error }));
+      assert.equal(typeof run.artifacts.transcriptPath, row.transcript ? 'string' : 'object');
+      if (row.transcript) {
+        const lines = readFileSync(resolve(expRoot, run.artifacts.transcriptPath), 'utf8').trim().split('\n');
+        assert.ok(lines.length >= 1 && lines.every(l => JSON.parse(l) !== undefined), 'transcript.jsonl parses');
+      }
+      if (row.engaged) assert.equal(stage.detail.mechanism, undefined, 'a true check needs no explanation');
+      else {
+        assert.equal(stage.detail.mechanism.label, row.label);
+        if (row.sources) assert.deepEqual(stage.detail.mechanism.sources, row.sources);
+      }
     }));
   }
 });
