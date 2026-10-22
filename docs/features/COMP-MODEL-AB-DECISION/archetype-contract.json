@@ -5,10 +5,12 @@
   "_source": "docs/features/COMP-MODEL-AB-DECISION/plan.md ### G1 (COMP-STAGE-GRADING-1); fixture unit shape from docs/features/COMP-MODEL-AB-DECISION/design.md (Children, COMP-STAGE-GRADING)",
   "_roadmap": "COMP-MODEL-AB-DECISION",
   "_changelog": [
-    "2026-10-20 G1 (COMP-STAGE-GRADING-1): first version. Plugin interface as a descriptor plus method table, fixture unit, oracle result, hidden-material rule, version-bump rule."
+    "2026-10-20 G1 (COMP-STAGE-GRADING-1): first version. Plugin interface as a descriptor plus method table, fixture unit, oracle result, hidden-material rule, version-bump rule.",
+    "2026-10-22 COMP-STAGE-GRADING-3-INTEG: rules.runnerData names the module data the stage runner reads (hiddenPath, scenario, fixture|fixturePath, oracleName)."
   ],
   "description": "Archetype modules are JavaScript, so the interface is expressed as a descriptor schema (the data an archetype exports) plus a methods table (the callable surface a loader must find). Validate by pointing at one of $defs (examples[].validatesAgainst).",
   "rules": {
+    "runnerData": "Next to the descriptor and methods, a stage archetype module exports the data lib/experiment-stage.js reads, under exactly these names: `hiddenPath` (absolute path outside the workspace, passed to oracle as `hidden`; required, the runner refuses an archetype without it and refuses a run whose workspace contains it), `scenario` (the prompt-safe fixture unit, no gold, passed to buildInput and prompt; null is allowed), `fixture` or `fixturePath` (hashed into fixtureDigest; one required), `oracleName` (optional, defaults to the id). Module-internal names (for example hiddenDir) are not part of the contract.",
     "hiddenNeverInWorkspace": "`hidden` material (golden tests, planted bugs, mutants, answer keys) is never copied into the workspace before the oracle runs. oracle(workspace, hidden, artifacts) receives it by path outside the workspace; buildInput(workspace, scenario) and prompt(scenario) never see it.",
     "versionBump": "Any change to an oracle or to its hidden material bumps `version`. That `version` is the `oracleVersion` recorded on every run and row, and part of compatKey.",
     "oracleCannotRun": "An oracle that cannot run (for example the hidden suite fails to start) returns oracleError (a string) and accuracy null, never accuracy 0. Admission excludes such runs (registry-contract.json $defs.admittedRun).",
