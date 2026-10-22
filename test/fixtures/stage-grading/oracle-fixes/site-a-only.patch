@@ -1,0 +1,11 @@
+--- a/src/store.js
++++ b/src/store.js
+@@ -123,7 +123,7 @@
+     let sql = 'SELECT DISTINCT n.id, n.title, n.body, n.created_at FROM notes n';
+     if (tag !== undefined) {
+       sql += ' JOIN note_tags t ON t.note_id = n.id AND t.tag = $tag';
+-      params.tag = tag;
++      params.tag = normalizeTags([tag])[0];
+     }
+     sql += " WHERE (n.title LIKE $p ESCAPE '\\'";
+     sql += " OR n.body LIKE $p ESCAPE '\\')";

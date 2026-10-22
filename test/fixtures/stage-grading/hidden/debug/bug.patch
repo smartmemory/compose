@@ -1,11 +1,48 @@
 --- a/src/store.js
 +++ b/src/store.js
-@@ -82,7 +82,7 @@
-       params.tag = normalizeTags([tag])[0];
+@@ -42,6 +42,18 @@
+   return [...out].sort();
+ }
+ 
++// Validates and trims tags, keeping them as given (used by update and importNotes).
++function trimTags(tags) {
++  if (tags === undefined || tags === null) return [];
++  if (!Array.isArray(tags)) throw new NotesError('INVALID', 'tags must be an array of strings');
++  const out = new Set();
++  for (const t of tags) {
++    if (typeof t !== 'string' || !t.trim()) throw new NotesError('INVALID', 'each tag must be a non-empty string');
++    out.add(t.trim());
++  }
++  return [...out].sort();
++}
++
+ export class NotesStore {
+   constructor(path = ':memory:') {
+     this.db = new DatabaseSync(path);
+@@ -69,7 +81,7 @@
+     if (!Number.isInteger(id) || id < 1) throw new NotesError('INVALID', 'id must be a positive integer');
+     if (title !== undefined && (typeof title !== 'string' || !title.trim())) throw new NotesError('INVALID', 'title must be a non-empty string');
+     if (body !== undefined && typeof body !== 'string') throw new NotesError('INVALID', 'body must be a string');
+-    const cleanTags = tags === undefined ? undefined : normalizeTags(tags);
++    const cleanTags = tags === undefined ? undefined : trimTags(tags);
+     if (!this.db.prepare('SELECT 1 FROM notes WHERE id = ?').get(id)) return null;
+     if (title !== undefined) this.db.prepare('UPDATE notes SET title = ? WHERE id = ?').run(title.trim(), id);
+     if (body !== undefined) this.db.prepare('UPDATE notes SET body = ? WHERE id = ?').run(body, id);
+@@ -85,7 +97,7 @@
+       const { title, body, tags, createdAt } = row ?? {};
+       if (typeof title !== 'string' || !title.trim()) throw new NotesError('INVALID', 'title is required');
+       if (typeof body !== 'string') throw new NotesError('INVALID', 'body must be a string');
+-      const cleanTags = normalizeTags(tags);
++      const cleanTags = trimTags(tags);
+       const { lastInsertRowid } = this.db
+         .prepare('INSERT INTO notes (title, body, created_at) VALUES (?, ?, ?)')
+         .run(title.trim(), body, createdAt ?? this.clock());
+@@ -111,7 +123,7 @@
+     let sql = 'SELECT DISTINCT n.id, n.title, n.body, n.created_at FROM notes n';
+     if (tag !== undefined) {
+       sql += ' JOIN note_tags t ON t.note_id = n.id AND t.tag = $tag';
+-      params.tag = normalizeTags([tag])[0];
++      params.tag = tag;
      }
      sql += " WHERE (n.title LIKE $p ESCAPE '\\'";
--    sql += " OR n.body LIKE $p ESCAPE '\\')";
-+    sql += ')';
-     sql += ' ORDER BY n.created_at DESC, n.id DESC LIMIT $limit';
-     return this.db.prepare(sql).all(params).map((row) => this.#hydrate(row));
-   }
+     sql += " OR n.body LIKE $p ESCAPE '\\')";

@@ -15,6 +15,7 @@ import { join, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
+import { applyPatch } from 'diff';
 
 import { loadArchetype, describeArchetype, ARCHETYPE_IDS } from '../lib/archetypes/index.js';
 import * as debug from '../lib/archetypes/debug.js';
@@ -50,8 +51,9 @@ function seededWorkspace(name) {
 }
 
 const STORE = join('src', 'store.js');
-const BUG_LINE = "    sql += ')';\n";
-const FIX_LINE = "    sql += \" OR n.body LIKE $p ESCAPE '\\\\')\";\n";
+const BUG_LINE = '      params.tag = tag;\n';
+const SITE_A_LINE = '      params.tag = normalizeTags([tag])[0];\n';
+const FIXES = join(ROOT, 'test/fixtures/stage-grading/oracle-fixes');
 const TITLE_CLAUSE = "\" WHERE (n.title LIKE $p ESCAPE '\\\\'\"";
 const BODY_CLAUSE = "\" WHERE (n.body LIKE $p ESCAPE '\\\\'\"";
 
@@ -61,6 +63,17 @@ function editStore(ws, from, to) {
   assert.ok(src.includes(from), `canned edit anchor missing: ${from}`);
   writeFileSync(p, src.replace(from, to));
 }
+
+/** Applies a canned candidate fix (test/fixtures/stage-grading/oracle-fixes/<name>.patch) to the workspace's store.js. */
+function applyFix(ws, name) {
+  const p = join(ws, STORE);
+  const fixed = applyPatch(readFileSync(p, 'utf8'), readFileSync(join(FIXES, `${name}.patch`), 'utf8'));
+  assert.notEqual(fixed, false, `${name}.patch applies to the buggy store.js`);
+  writeFileSync(p, fixed);
+}
+
+// The oracle's checks in report order (lib/archetypes/debug.js oracle()).
+const CHECKS = ['repro', 'golden', 'search-unchanged', 'tag-filter-written', 'tag-filter-update', 'tag-filter-seeded', 'tag-normalized', 'hygiene'];
 
 function runNodeTests(cwd, files) {
   const env = Object.fromEntries(['PATH', 'HOME', 'TMPDIR'].filter((k) => process.env[k] !== undefined).map((k) => [k, process.env[k]]));
@@ -74,7 +87,7 @@ describe('notes-server fixture self-test', () => {
 
   test('golden suite and repro are green with the bug patch reverted', () => {
     const ws = seededWorkspace('selftest-reverted');
-    editStore(ws, BUG_LINE, FIX_LINE);
+    applyFix(ws, 'gold');
     assert.equal(readFileSync(join(ws, STORE), 'utf8'), readFileSync(join(debug.scenarioDir, STORE), 'utf8'),
       'reverting the planted bug restores the scenario source byte for byte');
     for (const f of GOLDEN) writeFileSync(join(ws, f), readFileSync(join(debug.scenarioDir, f)));
@@ -98,7 +111,7 @@ describe('debug.buildInput', () => {
   test('writes the buggy code and the failing repro only; no hidden material reaches the workspace', () => {
     const ws = seededWorkspace('build-input');
     const files = listTree(ws);
-    assert.deepEqual(files, ['README.md', join('bin', 'notes-server.js'), 'package.json', join('src', 'server.js'), STORE,
+    assert.deepEqual(files, ['README.md', join('bin', 'notes-server.js'), 'package.json', join('src', 'seed.js'), join('src', 'server.js'), STORE,
       join('test', 'repro.test.js')].sort());
     assert.equal(readFileSync(join(ws, STORE), 'utf8').includes(BUG_LINE), true, 'planted bug present');
 
@@ -110,7 +123,9 @@ describe('debug.buildInput', () => {
       'the workspace README is the scenario README, not the hidden one');
     const all = files.map((f) => readFileSync(join(ws, f), 'utf8')).join('\n');
     assert.ok(!all.includes(fixture.gold.fix), 'answer key text in workspace');
-    assert.ok(!all.includes(FIX_LINE.trim()), 'fixed line in workspace');
+    assert.ok(!all.includes(SITE_A_LINE.trim()), 'fixed line in workspace');
+    assert.ok(!/title or body/i.test(readFileSync(join(ws, 'src', 'server.js'), 'utf8')), 'search-behaviour hint removed from the tool description');
+    assert.ok(!/title or the body/i.test(readFileSync(join(ws, 'README.md'), 'utf8')), 'search-behaviour hint removed from the README');
   });
 
   test('refuses a scenario carrying gold and a workspace that is not empty', () => {
@@ -134,17 +149,32 @@ describe('debug.buildInput', () => {
 
 describe('debug.oracle outcome table (canned workspaces, no model)', () => {
   const WITH_MARKER = `$ node --test test/repro.test.js\n# ${debug.REPRO_MARKER}\nok 1 - search_notes finds a note by a word in its body\n`;
+  const NONE = CHECKS;
   const rows = [
     { outcome: 'untouched workspace', make: () => {}, transcript: null,
-      expect: { accuracy: 0, failed: ['repro', 'suite'], canary: false, mechanismEngaged: false, oracleError: null } },
-    { outcome: 'repro green + suite red (body-only search drops title matches)',
-      make: (ws) => editStore(ws, TITLE_CLAUSE, BODY_CLAUSE), transcript: WITH_MARKER,
-      expect: { accuracy: 0, failed: ['suite'], canary: true, mechanismEngaged: true, oracleError: null } },
-    { outcome: 'repro green + suite green (real fix)', make: (ws) => editStore(ws, BUG_LINE, FIX_LINE), transcript: WITH_MARKER,
+      expect: { accuracy: 0, failed: NONE, canary: false, mechanismEngaged: false, oracleError: null } },
+    { outcome: 'repro green + golden red (limit validation removed)',
+      make: (ws) => { applyFix(ws, 'gold'); editStore(ws, 'limit < 1 || ', ''); }, transcript: WITH_MARKER,
+      expect: { accuracy: 7 / 8, failed: ['golden'], canary: true, mechanismEngaged: true, oracleError: null } },
+    { outcome: 'repro red (body-only search drops the title match the repro needs)',
+      make: (ws) => { applyFix(ws, 'gold'); editStore(ws, TITLE_CLAUSE, BODY_CLAUSE); }, transcript: WITH_MARKER,
+      expect: { accuracy: 0, failed: NONE, canary: true, mechanismEngaged: true, oracleError: null } },
+    { outcome: 'gold fix (both sites)', make: (ws) => applyFix(ws, 'gold'), transcript: WITH_MARKER,
       expect: { accuracy: 1, failed: [], canary: true, mechanismEngaged: true, oracleError: null } },
-    { outcome: 'repro red (edit that does not fix)', make: (ws) => editStore(ws, BUG_LINE, `    // TODO body search\n${BUG_LINE}`),
-      transcript: 'cat src/store.js', expect: { accuracy: 0, failed: ['repro', 'suite'], canary: true, mechanismEngaged: false, oracleError: null } },
-    { outcome: 'hidden suite cannot start', make: (ws) => editStore(ws, BUG_LINE, FIX_LINE), hidden: () => tempDir('empty-hidden'),
+    { outcome: 'site A only (query tag normalized at search time)', make: (ws) => applyFix(ws, 'site-a-only'), transcript: WITH_MARKER,
+      expect: { accuracy: 5 / 8, failed: ['tag-filter-update', 'tag-filter-seeded', 'tag-normalized'], canary: true, mechanismEngaged: true, oracleError: null } },
+    { outcome: 'gold fix plus a stray file outside src and test', make: (ws) => { applyFix(ws, 'gold'); writeFileSync(join(ws, 'NOTES.txt'), 'scratch'); },
+      transcript: WITH_MARKER, expect: { accuracy: 7 / 8, failed: ['hygiene'], canary: true, mechanismEngaged: true, oracleError: null } },
+    { outcome: 'gold fix plus an edit to package.json', make: (ws) => { applyFix(ws, 'gold'); writeFileSync(join(ws, 'package.json'), '{}'); },
+      transcript: WITH_MARKER, expect: { accuracy: 7 / 8, failed: ['hygiene'], canary: true, mechanismEngaged: true, oracleError: null } },
+    { outcome: 'gold fix plus a new file under src and a new test', make: (ws) => {
+      applyFix(ws, 'gold');
+      writeFileSync(join(ws, 'src', 'helper.js'), 'export {};\n');
+      writeFileSync(join(ws, 'test', 'extra.test.js'), "import { test } from 'node:test';\ntest('x', () => {});\n");
+    }, transcript: WITH_MARKER, expect: { accuracy: 1, failed: [], canary: true, mechanismEngaged: true, oracleError: null } },
+    { outcome: 'repro red (edit that does not fix)', make: (ws) => editStore(ws, BUG_LINE, `    // TODO tag case\n${BUG_LINE}`),
+      transcript: 'cat src/store.js', expect: { accuracy: 0, failed: NONE, canary: true, mechanismEngaged: false, oracleError: null } },
+    { outcome: 'hidden suite cannot start', make: (ws) => applyFix(ws, 'gold'), hidden: () => tempDir('empty-hidden'),
       transcript: WITH_MARKER, expect: { accuracy: null, canary: true, mechanismEngaged: true, oracleError: /^hidden suite cannot start/ } },
   ];
 
@@ -162,9 +192,10 @@ describe('debug.oracle outcome table (canned workspaces, no model)', () => {
         assert.match(result.oracleError, row.expect.oracleError);
       } else {
         assert.equal(result.oracleError, null);
-        assert.deepEqual(result.detail.failed, row.expect.failed);
+        assert.deepEqual(result.detail.failed, CHECKS.filter((c) => row.expect.failed.includes(c)));
+        assert.deepEqual([result.detail.passed, result.detail.total], [CHECKS.length - row.expect.failed.length, CHECKS.length]);
+        assert.deepEqual(Object.keys(result.detail.checks), CHECKS);
         assert.equal(result.detail.repro.ok, !row.expect.failed.includes('repro'));
-        assert.equal(result.detail.suite.ok, !row.expect.failed.includes('suite'));
         assert.ok(result.detail.suite.total >= 16, `hidden full suite ran (${result.detail.suite.total} tests)`);
       }
       assert.equal(debug.canary(ws), row.expect.canary);
@@ -214,7 +245,7 @@ describe('debug.canary and debug.mechanismEngaged', () => {
       mkdirSync(join(ws, 'node_modules'));
       writeFileSync(join(ws, 'node_modules', 'x.js'), '');
     } },
-    { name: 'seeded file edited', expect: true, make: (ws) => editStore(ws, BUG_LINE, FIX_LINE) },
+    { name: 'seeded file edited', expect: true, make: (ws) => editStore(ws, BUG_LINE, SITE_A_LINE) },
     { name: 'seeded file deleted', expect: true, make: (ws) => unlinkSync(join(ws, 'README.md')) },
     { name: 'source file added', expect: true, make: (ws) => writeFileSync(join(ws, 'src', 'helper.js'), 'export {};\n') },
   ];

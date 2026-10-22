@@ -64,6 +64,38 @@ export class NotesStore {
     return this.recall(id);
   }
 
+  // Partial update: only the fields present change; tags, when given, replace the note's tag set.
+  update(id, { title, body, tags } = {}) {
+    if (!Number.isInteger(id) || id < 1) throw new NotesError('INVALID', 'id must be a positive integer');
+    if (title !== undefined && (typeof title !== 'string' || !title.trim())) throw new NotesError('INVALID', 'title must be a non-empty string');
+    if (body !== undefined && typeof body !== 'string') throw new NotesError('INVALID', 'body must be a string');
+    const cleanTags = tags === undefined ? undefined : normalizeTags(tags);
+    if (!this.db.prepare('SELECT 1 FROM notes WHERE id = ?').get(id)) return null;
+    if (title !== undefined) this.db.prepare('UPDATE notes SET title = ? WHERE id = ?').run(title.trim(), id);
+    if (body !== undefined) this.db.prepare('UPDATE notes SET body = ? WHERE id = ?').run(body, id);
+    if (cleanTags !== undefined) this.#replaceTags(id, cleanTags);
+    return this.recall(id);
+  }
+
+  // Bulk load of {title, body, tags?, createdAt?} rows (the seed notes in src/seed.js); returns the new ids.
+  importNotes(rows) {
+    if (!Array.isArray(rows)) throw new NotesError('INVALID', 'rows must be an array');
+    const ids = [];
+    for (const row of rows) {
+      const { title, body, tags, createdAt } = row ?? {};
+      if (typeof title !== 'string' || !title.trim()) throw new NotesError('INVALID', 'title is required');
+      if (typeof body !== 'string') throw new NotesError('INVALID', 'body must be a string');
+      const cleanTags = normalizeTags(tags);
+      const { lastInsertRowid } = this.db
+        .prepare('INSERT INTO notes (title, body, created_at) VALUES (?, ?, ?)')
+        .run(title.trim(), body, createdAt ?? this.clock());
+      const id = Number(lastInsertRowid);
+      this.#replaceTags(id, cleanTags);
+      ids.push(id);
+    }
+    return ids;
+  }
+
   recall(id) {
     if (!Number.isInteger(id) || id < 1) throw new NotesError('INVALID', 'id must be a positive integer');
     const row = this.db.prepare('SELECT id, title, body, created_at FROM notes WHERE id = ?').get(id);
@@ -94,6 +126,12 @@ export class NotesStore {
 
   close() {
     this.db.close();
+  }
+
+  #replaceTags(id, tags) {
+    this.db.prepare('DELETE FROM note_tags WHERE note_id = ?').run(id);
+    const addTag = this.db.prepare('INSERT INTO note_tags (note_id, tag) VALUES (?, ?)');
+    for (const tag of tags) addTag.run(id, tag);
   }
 
   #hydrate(row) {

@@ -78,6 +78,32 @@ test('search filters by tag', () => {
   assert.deepEqual(s.search('standup', { tag: 'WORK' }).map((x) => x.id), [work.id]);
 });
 
+test('update changes only the given fields; an unknown id gives null; bad input is refused', () => {
+  const s = fresh();
+  const n = s.write({ title: 'Plan', body: 'draft', tags: ['a'] });
+  const changed = s.update(n.id, { body: 'final' });
+  assert.deepEqual([changed.title, changed.body, changed.tags, changed.createdAt], ['Plan', 'final', ['a'], n.createdAt]);
+  assert.equal(s.update(n.id, { title: ' Plan B ' }).title, 'Plan B');
+  assert.deepEqual(s.update(n.id, { tags: [] }).tags, []);
+  assert.equal(s.update(999, { body: 'x' }), null);
+  assert.throws(() => s.update(n.id, { title: ' ' }), { code: 'INVALID' });
+  assert.throws(() => s.update(0, {}), { code: 'INVALID' });
+  assert.throws(() => s.update(n.id, { tags: 'a' }), { code: 'INVALID' });
+});
+
+test('importNotes loads rows with their own createdAt and returns the new ids; a bad row is refused', () => {
+  const s = fresh();
+  const ids = s.importNotes([
+    { title: 'One', body: 'a', createdAt: '2025-01-01T00:00:00.000Z' },
+    { title: 'Two', body: 'b', tags: ['x'] },
+  ]);
+  assert.equal(ids.length, 2);
+  assert.equal(s.recall(ids[0]).createdAt, '2025-01-01T00:00:00.000Z');
+  assert.deepEqual(s.recall(ids[1]).tags, ['x']);
+  assert.throws(() => s.importNotes('nope'), { code: 'INVALID' });
+  assert.throws(() => s.importNotes([{ title: '', body: 'a' }]), { code: 'INVALID' });
+});
+
 test('remove deletes the note and its tags', () => {
   const s = fresh();
   const n = s.write({ title: 'tmp', body: '', tags: ['x'] });
