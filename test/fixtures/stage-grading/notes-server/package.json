@@ -1,0 +1,9 @@
+{
+  "name": "notes-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Mini MCP notes server over SQLite (write, search, recall)",
+  "bin": { "notes-server": "bin/notes-server.js" },
+  "scripts": { "test": "node --disable-warning=ExperimentalWarning --test" }
+}
