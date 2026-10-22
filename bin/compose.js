@@ -2649,17 +2649,29 @@ if (cmd === 'pipeline') {
   process.exit(0)
 }
 
-// COMP-MODEL-AB: compose experiment <spec.json> [--prune-workspaces]
+// COMP-MODEL-AB: compose experiment <spec.json> [--prune-workspaces] [--rerun <runId|failed|all>]
 if (cmd === 'experiment') {
   const specArg = args[0]
   if (!specArg || specArg.startsWith('-')) {
-    console.error('Usage: compose experiment <spec.json> [--prune-workspaces]')
+    console.error('Usage: compose experiment <spec.json> [--prune-workspaces] [--rerun <runId|failed|all>]')
     console.error('')
     console.error('Runs a sandboxed A/B experiment across model configs.')
     console.error('Writes results.json + report.md next to the spec file.')
+    console.error('A spec with a budget reuses finished runs on restart; --rerun failed also reruns timeouts,')
+    console.error('--rerun all reruns everything, --rerun <runId> reruns one run.')
     process.exit(1)
   }
   const pruneWorkspaces = args.includes('--prune-workspaces')
+  // COMP-STAGE-GRADING-12 (B1): --rerun <v> or --rerun=<v>
+  let rerun = null
+  const rerunIdx = args.findIndex((a) => a === '--rerun' || a.startsWith('--rerun='))
+  if (rerunIdx !== -1) {
+    rerun = args[rerunIdx].includes('=') ? args[rerunIdx].slice('--rerun='.length) : args[rerunIdx + 1]
+    if (!rerun || rerun.startsWith('-')) {
+      console.error('Error: --rerun requires failed, all, or a runId')
+      process.exit(1)
+    }
+  }
   const specPath = resolve(specArg)
   if (!existsSync(specPath)) {
     console.error(`Error: spec file not found: ${specPath}`)
@@ -2667,7 +2679,7 @@ if (cmd === 'experiment') {
   }
   const { runExperiment } = await import('../lib/experiment.js')
   try {
-    const result = await runExperiment(specPath, { pruneWorkspaces })
+    const result = await runExperiment(specPath, { pruneWorkspaces, ...(rerun ? { rerun } : {}) })
     console.log(`Results: ${result.resultsPath}`)
     console.log(`Report:  ${result.reportPath}`)
     const incompleteRuns = result.runs.filter((run) => run.metrics?.outcome?.completed !== true)
@@ -2676,7 +2688,7 @@ if (cmd === 'experiment') {
         `Experiment incomplete: ${incompleteRuns.length} of ${result.runs.length} run(s) did not complete.`
       )
       for (const run of incompleteRuns) {
-        console.error(`  ${run.runId}: ${run._error || 'completed=false'}`)
+        console.error(`  ${run.runId}: ${run._error || (run.skipped ? `skipped (${run.skipped}, ${run.budget?.stoppedBy})` : 'completed=false')}`)
       }
       process.exit(1)
     }
