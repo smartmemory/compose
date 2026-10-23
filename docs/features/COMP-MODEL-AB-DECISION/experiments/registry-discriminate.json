@@ -3,7 +3,8 @@
     "debug": {
       "6054a22efd6bae8f13d0ba21e1f0cf752e7f80a71120701429965219890bd885": {
         "debug|claude|claude-opus-5-5|medium|none": "row-debug-aa11ddb6e530e41f",
-        "debug|claude|claude-sonnet-5-5|medium|none": "row-debug-3b41670875ad1751"
+        "debug|claude|claude-sonnet-5-5|medium|none": "row-debug-3b41670875ad1751",
+        "debug|codex|gpt-6.1-sol|high|none": "row-debug-6547dbc355cbcf54"
       }
     }
   },
@@ -176,6 +177,98 @@
           "max": 69192,
           "median": 54924,
           "min": 46723
+        }
+      }
+    },
+    {
+      "accuracies": [
+        0.625,
+        0.875,
+        0.75,
+        0.625,
+        0.75
+      ],
+      "archetypeVersion": "2",
+      "attemptedRunIds": [
+        "discriminate-debug_codex-standard_rep1",
+        "discriminate-debug_codex-standard_rep2",
+        "discriminate-debug_codex-standard_rep3",
+        "discriminate-debug_codex-standard_rep4",
+        "discriminate-debug_codex-standard_rep5"
+      ],
+      "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd",
+      "cellKey": "debug|codex|gpt-6.1-sol|high|none",
+      "compatKey": "6054a22efd6bae8f13d0ba21e1f0cf752e7f80a71120701429965219890bd885",
+      "experimentId": "discriminate-debug",
+      "fixtureDigest": "bcf1af9562b4212772e6459ae4ceeef0aa1c07cb97ca2c56b01d9737253dacf4",
+      "fixtureId": "debug-bcf1af9562b4",
+      "generatedAt": "2026-10-23T16:35:45.373Z",
+      "ingredients": {
+        "effort": "high",
+        "modelID": "gpt-6.1-sol",
+        "provider": "codex",
+        "workflow": "none"
+      },
+      "nAdmitted": 5,
+      "nAttempted": 5,
+      "oracleVersion": "2",
+      "promotion": null,
+      "rowId": "row-debug-6547dbc355cbcf54",
+      "sourceRunIds": [
+        "discriminate-debug_codex-standard_rep1",
+        "discriminate-debug_codex-standard_rep2",
+        "discriminate-debug_codex-standard_rep3",
+        "discriminate-debug_codex-standard_rep4",
+        "discriminate-debug_codex-standard_rep5"
+      ],
+      "stage": "debug",
+      "state": "measured",
+      "triageReason": null,
+      "uplift": {
+        "championCellKey": "debug|claude|claude-sonnet-5-5|medium|none",
+        "championRowId": "row-debug-3b41670875ad1751",
+        "championSampleRevision": "15ba41ad80875f1a37fd83bfc77040b3bd8cf82926dcdb7c3a115a8c9c25ba0a",
+        "ci95": [
+          -0.25,
+          0
+        ],
+        "delta": -0.125,
+        "method": "bootstrap",
+        "resamples": 1000,
+        "seed": 7,
+        "sourceSampleRevision": "2e47d9b80b76030da8c7acb317ea198732022daa8b29e7f86bac8124f21a9672"
+      },
+      "upliftNullReason": null,
+      "vector": {
+        "accuracy": {
+          "max": 0.875,
+          "median": 0.75,
+          "min": 0.625
+        },
+        "reliability": {
+          "max": 1,
+          "median": 1,
+          "min": 1
+        },
+        "tokensIn": {
+          "max": 1107248,
+          "median": 319042,
+          "min": 258935
+        },
+        "tokensOut": {
+          "max": 3604,
+          "median": 2768,
+          "min": 2277
+        },
+        "usd": {
+          "max": 0.3596588,
+          "median": 0.18459520000000001,
+          "min": 0.139038
+        },
+        "wallMs": {
+          "max": 216850,
+          "median": 177505,
+          "min": 129913
         }
       }
     }

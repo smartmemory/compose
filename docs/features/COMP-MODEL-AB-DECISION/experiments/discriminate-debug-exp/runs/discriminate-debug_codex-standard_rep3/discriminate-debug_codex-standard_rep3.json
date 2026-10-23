@@ -1,0 +1,137 @@
+{
+  "runId": "discriminate-debug_codex-standard_rep3",
+  "configLabel": "codex-standard",
+  "rep": 3,
+  "runner": "stage",
+  "archetype": {
+    "id": "debug",
+    "version": "2"
+  },
+  "candidateResolved": {
+    "provider": "codex",
+    "modelID": "gpt-6.1-sol",
+    "effort": "high",
+    "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd"
+  },
+  "metrics": {
+    "cost": {
+      "tokensIn": 310956,
+      "tokensOut": 2663,
+      "calls": 1,
+      "wallMs": 129913,
+      "usd": 0.139038
+    },
+    "outcome": {
+      "completed": true,
+      "health": null,
+      "testsPass": null,
+      "testsTotal": null,
+      "filesChanged": 1,
+      "linesChanged": 2
+    },
+    "process": {
+      "reviewIters": 0,
+      "gateFailures": 0,
+      "retries": 0,
+      "escalations": 0
+    },
+    "stage": {
+      "accuracy": 0.75,
+      "oracle": "debug",
+      "oracleVersion": "2",
+      "canaryOk": true,
+      "mechanismEngaged": true,
+      "oracleError": null,
+      "detail": {
+        "failed": [
+          "tag-filter-written",
+          "tag-normalized"
+        ],
+        "checks": {
+          "repro": "pass",
+          "golden": "pass",
+          "search-unchanged": "pass",
+          "tag-filter-written": "fail",
+          "tag-filter-update": "pass",
+          "tag-filter-seeded": "pass",
+          "tag-normalized": "fail",
+          "hygiene": "pass"
+        },
+        "passed": 6,
+        "total": 8,
+        "repro": {
+          "started": true,
+          "ok": true,
+          "timedOut": false,
+          "exitCode": 0,
+          "total": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "failedTests": [],
+          "missing": []
+        },
+        "suite": {
+          "started": true,
+          "ok": false,
+          "timedOut": false,
+          "exitCode": 1,
+          "total": 23,
+          "passed": 20,
+          "failed": 3,
+          "cancelled": 0,
+          "failedTests": [
+            "[tag-filter-written] notes written with mixed-case tags are found by the tag in any case",
+            "[tag-normalized] update stores each tag once, trimmed and lower-case",
+            "[tag-normalized] importNotes stores each tag once, trimmed and lower-case"
+          ],
+          "missing": [
+            "[tag-filter-written] notes written with mixed-case tags are found by the tag in any case",
+            "[tag-normalized] update stores each tag once, trimmed and lower-case",
+            "[tag-normalized] importNotes stores each tag once, trimmed and lower-case"
+          ]
+        }
+      }
+    }
+  },
+  "judge": null,
+  "artifacts": {
+    "outputPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/discriminate-debug-exp/runs/discriminate-debug_codex-standard_rep3/output.md",
+    "transcriptPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/discriminate-debug-exp/runs/discriminate-debug_codex-standard_rep3/transcript.jsonl",
+    "diffPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/discriminate-debug-exp/runs/discriminate-debug_codex-standard_rep3/diff.patch",
+    "logPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/discriminate-debug-exp/runs/discriminate-debug_codex-standard_rep3/run.log"
+  },
+  "manifest": {
+    "composeSha": "fa90ab3d1c2e5fd035c84afc7e0e7dbf8ad37065",
+    "fixtureGoal": "",
+    "seedRef": null,
+    "startedAt": "2026-10-23T16:18:27.211Z",
+    "endedAt": "2026-10-23T16:20:40.000Z"
+  },
+  "budget": {
+    "stoppedBy": null,
+    "spentUsd": 0.139038,
+    "spentTokens": 313619
+  },
+  "runKey": "a80809019677cac9b4dc0be29c818c9ce93bcc993feed7e6306d62e197cc4c19",
+  "runKeyInputs": {
+    "configLabel": "codex-standard",
+    "candidate": "codex::standard",
+    "ingredients": {
+      "provider": "codex",
+      "modelID": "gpt-6.1-sol",
+      "effort": "high",
+      "workflow": "none"
+    },
+    "pipelineDigest": null,
+    "profilesDigest": null,
+    "archetype": {
+      "id": "debug",
+      "version": "2"
+    },
+    "fixtureDigest": "bcf1af9562b4212772e6459ae4ceeef0aa1c07cb97ca2c56b01d9737253dacf4",
+    "oracleVersion": "2",
+    "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd",
+    "rep": 3
+  }
+}

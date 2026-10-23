@@ -1,0 +1,3 @@
+I’ll run the repro, trace the tag filter through `src/`, and make a focused fix. I’ll use the debugging and verification skills to check the cause and confirm the result.The repro fails because `write()` lowercases tags, while `search()` compares the filter exactly (`src/store.js:40,125–126`). Updates and imports can also retain mixed-case tags. I’ll normalize both sides during search so those notes remain searchable without changing their stored tags.Fixed [src/store.js](src/store.js): tag searches now normalize both stored tags and filters, including Unicode case, while preserving stored tags.
+
+Verified the repro, `npm test`, and additional SQLite/MCP regression checks all pass. `test/repro.test.js` is unchanged.

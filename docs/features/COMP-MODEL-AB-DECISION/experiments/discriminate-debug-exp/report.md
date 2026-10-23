@@ -1,27 +1,26 @@
 # Experiment Report: discriminate-debug
 
-Generated: 2026-10-23T00:17:35.051Z
+Generated: 2026-10-23T16:35:45.376Z
 
 ## Results
 
 | Config | Completed | Cost $ | Tokens In | Tokens Out | Wall ms | Health | Tests Pass | Files | Lines | Review Iters | Gate Fails | Correctness | Clarity | Idiom. |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| sonnet-fast | **5/5** | **$0.172** | **10** | **1239** | **54924** | - | - | **2** | **5** | **0** | **0** | - | - | - |
-| opus-standard | 5/5 | $0.505 | 16 | 4206 | 71776 | - | - | 2 | 9 | 0 | 0 | - | - | - |
+| codex-standard | **5/5** | **$0.185** | **319042** | **2768** | **177505** | - | - | **2** | **8** | **0** | **0** | - | - | - |
 
 ## Winner per Metric
 
-- **Completed**: sonnet-fast
-- **Cost $**: sonnet-fast
-- **Tokens In**: sonnet-fast
-- **Tokens Out**: sonnet-fast
-- **Wall ms**: sonnet-fast
-- **Files**: sonnet-fast
-- **Lines**: sonnet-fast
-- **Review Iters**: sonnet-fast
-- **Gate Fails**: sonnet-fast
+- **Completed**: codex-standard
+- **Cost $**: codex-standard
+- **Tokens In**: codex-standard
+- **Tokens Out**: codex-standard
+- **Wall ms**: codex-standard
+- **Files**: codex-standard
+- **Lines**: codex-standard
+- **Review Iters**: codex-standard
+- **Gate Fails**: codex-standard
 
 ## Caveats
 
-- N = 10 total runs (10 completed). Medians are reported.
-- High variance observed (max relative spread 185%). Consider increasing reps for more stable estimates.
+- N = 5 total runs (5 completed). Medians are reported.
+- High variance observed (max relative spread 938%). Consider increasing reps for more stable estimates.

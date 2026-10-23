@@ -1,0 +1,100 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+new file mode 100644
+index 0000000..3eb8741
+--- /dev/null
++++ b/CHANGELOG.md
+@@ -0,0 +1,6 @@
++# Changelog
++
++## 2026-10-24
++
++- Fix tag-filtered search so `Travel` matches `travel`, including mixed-case tags retained by imports and updates, without changing stored tags.
++- Add regression coverage for store behavior and the MCP write, search and recall round trip.
+diff --git a/src/store.js b/src/store.js
+index 0bc7fb3..7616fc2 100644
+--- a/src/store.js
++++ b/src/store.js
+@@ -122,7 +122,7 @@ export class NotesStore {
+     const params = { p: likePattern(query.trim()), limit };
+     let sql = 'SELECT DISTINCT n.id, n.title, n.body, n.created_at FROM notes n';
+     if (tag !== undefined) {
+-      sql += ' JOIN note_tags t ON t.note_id = n.id AND t.tag = $tag';
++      sql += ' JOIN note_tags t ON t.note_id = n.id AND t.tag = $tag COLLATE NOCASE';
+       params.tag = tag;
+     }
+     sql += " WHERE (n.title LIKE $p ESCAPE '\\'";
+diff --git a/test/store.test.js b/test/store.test.js
+new file mode 100644
+index 0000000..9f30b90
+--- /dev/null
++++ b/test/store.test.js
+@@ -0,0 +1,69 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { NotesError, NotesStore } from '../src/store.js';
++import { handleMessage } from '../src/server.js';
++import { SEED_NOTES } from '../src/seed.js';
++
++test('tag filters match written, imported and updated tags without changing stored tags', () => {
++  const store = new NotesStore();
++  try {
++    store.clock = () => '2026-01-01T00:00:00.000Z';
++    const written = store.write({ title: 'Ferry', body: 'Schedule', tags: [' Travel ', 'TRAVEL'] });
++    assert.deepEqual(written.tags, ['travel']);
++    const importedIds = store.importNotes(SEED_NOTES);
++    const updated = store.update(written.id, { tags: ['Travel', 'TRAVEL', 'Boats'] });
++    assert.deepEqual(updated.tags, ['Boats', 'TRAVEL', 'Travel']);
++    assert.deepEqual(store.recall(importedIds[0]).tags, ['Boats', 'Travel']);
++
++    const expectedIds = [written.id, importedIds[3], importedIds[1], importedIds[0]];
++    for (const tag of ['Travel', 'TRAVEL', 'travel']) {
++      assert.deepEqual(store.search('ferry', { tag }).map((note) => note.id), expectedIds);
++    }
++    assert.deepEqual(store.search('ferry', { tag: 'Work' }), []);
++    assert.deepEqual(store.search('ferry', { tag: 'Trav' }), []);
++  } finally {
++    store.close();
++  }
++});
++
++test('search preserves literal queries, ordering, limits, updates and deletion', () => {
++  const store = new NotesStore();
++  try {
++    store.clock = () => '2026-01-01T00:00:00.000Z';
++    const first = store.write({ title: '  Ferry  ', body: '100%_\\', tags: ['Travel'] });
++    const second = store.write({ title: 'Other', body: 'Ferry', tags: ['Work'] });
++    assert.equal(first.title, 'Ferry');
++    assert.deepEqual(store.search(' ferry ').map((note) => note.id), [second.id, first.id]);
++    assert.deepEqual(store.search('ferry', { limit: 1 }).map((note) => note.id), [second.id]);
++    assert.deepEqual(store.search('%_\\').map((note) => note.id), [first.id]);
++    assert.deepEqual(store.update(first.id, { body: 'Changed' }).tags, ['travel']);
++    assert.deepEqual(store.update(first.id, { tags: [] }).tags, []);
++    assert.deepEqual(store.search('ferry', { tag: 'Travel' }), []);
++    assert.throws(() => store.search(''), NotesError);
++    assert.throws(() => store.search('ferry', { limit: 0 }), NotesError);
++    assert.equal(store.remove(first.id), true);
++    assert.equal(store.recall(first.id), null);
++    assert.equal(store.remove(first.id), false);
++  } finally {
++    store.close();
++  }
++});
++
++test('MCP write, filtered search and recall round trip', () => {
++  const store = new NotesStore();
++  try {
++    const call = (name, args) => handleMessage(store, {
++      jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args },
++    });
++    const written = JSON.parse(call('write_note', {
++      title: 'Ferry', body: 'Schedule', tags: ['Travel'],
++    }).result.content[0].text);
++    const searched = call('search_notes', { query: 'ferry', tag: 'Travel' });
++    assert.equal(searched.result.isError, false);
++    assert.deepEqual(JSON.parse(searched.result.content[0].text), [written]);
++    assert.deepEqual(JSON.parse(call('recall_note', { id: written.id }).result.content[0].text), written);
++    assert.equal(call('search_notes', { query: '' }).result.isError, true);
++  } finally {
++    store.close();
++  }
++});

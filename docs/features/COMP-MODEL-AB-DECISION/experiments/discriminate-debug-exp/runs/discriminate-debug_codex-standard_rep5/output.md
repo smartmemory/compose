@@ -1,0 +1,3 @@
+I’ll run the repro, trace how tags are stored and filtered, and fix the source under `src/` without changing the repro.I’m using the systematic-debugging skill to trace the failure before making a change.The repro fails because writes lowercase tags, while search uses a case-sensitive comparison (`src/store.js:40,125`). Updates and imports preserve tag case (`src/store.js:45-54`), so I’ll make the search comparison case-insensitive and leave stored tags unchanged.Fixed tag filtering in [src/store.js:125](src/store.js:125) using a case-insensitive comparison. Stored tags remain unchanged.
+
+The unchanged repro and `npm test` pass. Additional regression checks passed for imports, updates, ordering, limits, literal searches, and MCP dispatch.

@@ -1,0 +1,80 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+new file mode 100644
+index 0000000..bdcf9ae
+--- /dev/null
++++ b/CHANGELOG.md
+@@ -0,0 +1,6 @@
++# Changelog
++
++## Unreleased
++
++### Fixed
++- Match tag filters case-insensitively for written, updated, and imported notes without changing stored tag values.
+diff --git a/src/store.js b/src/store.js
+index 0bc7fb3..7616fc2 100644
+--- a/src/store.js
++++ b/src/store.js
+@@ -122,7 +122,7 @@ export class NotesStore {
+     const params = { p: likePattern(query.trim()), limit };
+     let sql = 'SELECT DISTINCT n.id, n.title, n.body, n.created_at FROM notes n';
+     if (tag !== undefined) {
+-      sql += ' JOIN note_tags t ON t.note_id = n.id AND t.tag = $tag';
++      sql += ' JOIN note_tags t ON t.note_id = n.id AND t.tag = $tag COLLATE NOCASE';
+       params.tag = tag;
+     }
+     sql += " WHERE (n.title LIKE $p ESCAPE '\\'";
+diff --git a/test/store.test.js b/test/store.test.js
+new file mode 100644
+index 0000000..d88a3fa
+--- /dev/null
++++ b/test/store.test.js
+@@ -0,0 +1,49 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { NotesStore } from '../src/store.js';
++import { SEED_NOTES } from '../src/seed.js';
++
++test('tag filters match written, updated, and imported tags regardless of case', () => {
++  const store = new NotesStore();
++  try {
++    store.clock = () => '2026-01-01T00:00:00.000Z';
++    const importedIds = store.importNotes(SEED_NOTES);
++    const written = store.write({ title: 'Ferry reservation', body: '', tags: ['Travel'] });
++    const updated = store.write({ title: 'Ferry departure', body: '', tags: ['work'] });
++    store.update(updated.id, { tags: ['TrAvEl'] });
++    const expectedIds = [updated.id, written.id, importedIds[3], importedIds[1], importedIds[0]];
++
++    for (const tag of ['Travel', 'travel', 'TRAVEL', 'TrAvEl']) {
++      assert.deepEqual(store.search('ferry', { tag }).map((note) => note.id), expectedIds);
++    }
++    assert.deepEqual(store.recall(written.id).tags, ['travel']);
++    assert.deepEqual(store.recall(updated.id).tags, ['TrAvEl']);
++    assert.deepEqual(store.recall(importedIds[0]).tags, ['Boats', 'Travel']);
++  } finally {
++    store.close();
++  }
++});
++
++test('tag filtering preserves distinct results, ordering, limits, and literal matching', () => {
++  const store = new NotesStore();
++  try {
++    store.clock = () => '2026-01-01T00:00:00.000Z';
++    const older = store.write({ title: 'Ferry %_\\', body: '', tags: ['travel'] });
++    const newerId = store.importNotes([
++      { title: 'Ferry %_\\', body: '', tags: ['Travel', 'TRAVEL'] },
++    ])[0];
++    const untagged = store.write({ title: 'Ferry express', body: '', tags: ['work'] });
++
++    assert.deepEqual(store.search('ferry').map((note) => note.id), [untagged.id, newerId, older.id]);
++    assert.deepEqual(store.search('ferry', { tag: 'Travel' }).map((note) => note.id), [newerId, older.id]);
++    assert.deepEqual(store.search('ferry', { tag: 'Travel', limit: 1 }).map((note) => note.id), [newerId]);
++    assert.deepEqual(store.search('%_\\', { tag: 'Travel' }).map((note) => note.id), [newerId, older.id]);
++    assert.deepEqual(store.search('ferry', { tag: 'trav' }), []);
++    assert.deepEqual(store.search('ferry', { tag: '%' }), []);
++    assert.deepEqual(store.search('express', { tag: 'Travel' }), []);
++    assert.throws(() => store.search(' ', { tag: 'Travel' }), { code: 'INVALID' });
++    assert.throws(() => store.search('ferry', { tag: 'Travel', limit: 0 }), { code: 'INVALID' });
++  } finally {
++    store.close();
++  }
++});
