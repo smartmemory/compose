@@ -1,0 +1,22 @@
+diff --git a/.test-log/repro.log b/.test-log/repro.log
+new file mode 100644
+index 0000000..ee0f5cc
+--- /dev/null
++++ b/.test-log/repro.log
+@@ -0,0 +1 @@
++2026-10-23T00:08:46.151Z repro-executed-notes-search
+diff --git a/src/store.js b/src/store.js
+index 0bc7fb3..c32e6e9 100644
+--- a/src/store.js
++++ b/src/store.js
+@@ -122,8 +122,8 @@ export class NotesStore {
+     const params = { p: likePattern(query.trim()), limit };
+     let sql = 'SELECT DISTINCT n.id, n.title, n.body, n.created_at FROM notes n';
+     if (tag !== undefined) {
+-      sql += ' JOIN note_tags t ON t.note_id = n.id AND t.tag = $tag';
+-      params.tag = tag;
++      sql += ' JOIN note_tags t ON t.note_id = n.id AND t.tag = $tag COLLATE NOCASE';
++      params.tag = typeof tag === 'string' ? tag.trim() : tag;
+     }
+     sql += " WHERE (n.title LIKE $p ESCAPE '\\'";
+     sql += " OR n.body LIKE $p ESCAPE '\\')";

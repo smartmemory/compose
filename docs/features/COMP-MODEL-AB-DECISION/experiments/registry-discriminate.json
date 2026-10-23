@@ -1,0 +1,184 @@
+{
+  "latest": {
+    "debug": {
+      "6054a22efd6bae8f13d0ba21e1f0cf752e7f80a71120701429965219890bd885": {
+        "debug|claude|claude-opus-5-5|medium|none": "row-debug-aa11ddb6e530e41f",
+        "debug|claude|claude-sonnet-5-5|medium|none": "row-debug-3b41670875ad1751"
+      }
+    }
+  },
+  "rows": [
+    {
+      "accuracies": [
+        0.875,
+        0.875,
+        0.875,
+        0.875,
+        0.875
+      ],
+      "archetypeVersion": "2",
+      "attemptedRunIds": [
+        "discriminate-debug_opus-standard_rep1",
+        "discriminate-debug_opus-standard_rep2",
+        "discriminate-debug_opus-standard_rep3",
+        "discriminate-debug_opus-standard_rep4",
+        "discriminate-debug_opus-standard_rep5"
+      ],
+      "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd",
+      "cellKey": "debug|claude|claude-opus-5-5|medium|none",
+      "compatKey": "6054a22efd6bae8f13d0ba21e1f0cf752e7f80a71120701429965219890bd885",
+      "experimentId": "discriminate-debug",
+      "fixtureDigest": "bcf1af9562b4212772e6459ae4ceeef0aa1c07cb97ca2c56b01d9737253dacf4",
+      "fixtureId": "debug-bcf1af9562b4",
+      "generatedAt": "2026-10-23T00:17:35.049Z",
+      "ingredients": {
+        "effort": "medium",
+        "modelID": "claude-opus-5-5",
+        "provider": "claude",
+        "workflow": "none"
+      },
+      "nAdmitted": 5,
+      "nAttempted": 5,
+      "oracleVersion": "2",
+      "promotion": null,
+      "rowId": "row-debug-aa11ddb6e530e41f",
+      "sourceRunIds": [
+        "discriminate-debug_opus-standard_rep1",
+        "discriminate-debug_opus-standard_rep2",
+        "discriminate-debug_opus-standard_rep3",
+        "discriminate-debug_opus-standard_rep4",
+        "discriminate-debug_opus-standard_rep5"
+      ],
+      "stage": "debug",
+      "state": "measured",
+      "triageReason": null,
+      "uplift": {
+        "championCellKey": "debug|claude|claude-sonnet-5-5|medium|none",
+        "championRowId": "row-debug-3b41670875ad1751",
+        "championSampleRevision": "15ba41ad80875f1a37fd83bfc77040b3bd8cf82926dcdb7c3a115a8c9c25ba0a",
+        "ci95": [
+          0,
+          0.125
+        ],
+        "delta": 0,
+        "method": "bootstrap",
+        "resamples": 1000,
+        "seed": 7,
+        "sourceSampleRevision": "82b414f6167b59856a55c0587248b197886bc9772538dd76236b20c560c1ff88"
+      },
+      "upliftNullReason": null,
+      "vector": {
+        "accuracy": {
+          "max": 0.875,
+          "median": 0.875,
+          "min": 0.875
+        },
+        "reliability": {
+          "max": 1,
+          "median": 1,
+          "min": 1
+        },
+        "tokensIn": {
+          "max": 20,
+          "median": 16,
+          "min": 14
+        },
+        "tokensOut": {
+          "max": 6023,
+          "median": 4206,
+          "min": 3058
+        },
+        "usd": {
+          "max": 1.1310343000000003,
+          "median": 0.5054820999999999,
+          "min": 0.44693200000000005
+        },
+        "wallMs": {
+          "max": 121488,
+          "median": 71776,
+          "min": 67069
+        }
+      }
+    },
+    {
+      "accuracies": [
+        0.75,
+        0.875,
+        0.875,
+        0.875,
+        0.75
+      ],
+      "archetypeVersion": "2",
+      "attemptedRunIds": [
+        "discriminate-debug_sonnet-fast_rep1",
+        "discriminate-debug_sonnet-fast_rep2",
+        "discriminate-debug_sonnet-fast_rep3",
+        "discriminate-debug_sonnet-fast_rep4",
+        "discriminate-debug_sonnet-fast_rep5"
+      ],
+      "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd",
+      "cellKey": "debug|claude|claude-sonnet-5-5|medium|none",
+      "compatKey": "6054a22efd6bae8f13d0ba21e1f0cf752e7f80a71120701429965219890bd885",
+      "experimentId": "discriminate-debug",
+      "fixtureDigest": "bcf1af9562b4212772e6459ae4ceeef0aa1c07cb97ca2c56b01d9737253dacf4",
+      "fixtureId": "debug-bcf1af9562b4",
+      "generatedAt": "2026-10-23T00:10:05.883Z",
+      "ingredients": {
+        "effort": "medium",
+        "modelID": "claude-sonnet-5-5",
+        "provider": "claude",
+        "workflow": "none"
+      },
+      "nAdmitted": 5,
+      "nAttempted": 5,
+      "oracleVersion": "2",
+      "promotion": null,
+      "rowId": "row-debug-3b41670875ad1751",
+      "sourceRunIds": [
+        "discriminate-debug_sonnet-fast_rep1",
+        "discriminate-debug_sonnet-fast_rep2",
+        "discriminate-debug_sonnet-fast_rep3",
+        "discriminate-debug_sonnet-fast_rep4",
+        "discriminate-debug_sonnet-fast_rep5"
+      ],
+      "stage": "debug",
+      "state": "measured",
+      "triageReason": null,
+      "uplift": null,
+      "upliftNullReason": "NO_COMPATIBLE_CHAMPION",
+      "vector": {
+        "accuracy": {
+          "max": 0.875,
+          "median": 0.875,
+          "min": 0.75
+        },
+        "reliability": {
+          "max": 1,
+          "median": 1,
+          "min": 1
+        },
+        "tokensIn": {
+          "max": 12,
+          "median": 10,
+          "min": 8
+        },
+        "tokensOut": {
+          "max": 1538,
+          "median": 1239,
+          "min": 1151
+        },
+        "usd": {
+          "max": 0.47797009999999995,
+          "median": 0.1718221,
+          "min": 0.16094050000000001
+        },
+        "wallMs": {
+          "max": 69192,
+          "median": 54924,
+          "min": 46723
+        }
+      }
+    }
+  ],
+  "version": 1
+}

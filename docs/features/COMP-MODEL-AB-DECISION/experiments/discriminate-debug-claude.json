@@ -1,0 +1,11 @@
+{
+  "id": "discriminate-debug",
+  "fixture": { "archetype": "debug" },
+  "configs": [
+    { "label": "sonnet-fast", "candidate": "claude::fast" },
+    { "label": "opus-standard", "candidate": "claude::standard" }
+  ],
+  "reps": 5,
+  "parallelism": 1,
+  "budget": { "maxRuns": 10, "perRunTimeoutMs": 900000, "maxUsdTotal": 9, "maxTokensTotal": 10000000, "perRunTokenAssume": 1000000 }
+}

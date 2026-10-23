@@ -1,0 +1,10 @@
+{
+  "id": "discriminate-debug",
+  "fixture": { "archetype": "debug" },
+  "configs": [
+    { "label": "codex-standard", "candidate": "codex::standard" }
+  ],
+  "reps": 5,
+  "parallelism": 1,
+  "budget": { "maxRuns": 5, "perRunTimeoutMs": 900000, "maxUsdTotal": 5, "maxTokensTotal": 5000000, "perRunTokenAssume": 1000000 }
+}

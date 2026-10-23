@@ -1,0 +1,32 @@
+diff --git a/.test-log/repro.log b/.test-log/repro.log
+new file mode 100644
+index 0000000..3d5265a
+--- /dev/null
++++ b/.test-log/repro.log
+@@ -0,0 +1,2 @@
++2026-10-23T00:11:33.678Z repro-executed-notes-search
++2026-10-23T00:11:54.476Z repro-executed-notes-search
+diff --git a/src/store.js b/src/store.js
+index 0bc7fb3..e4ac474 100644
+--- a/src/store.js
++++ b/src/store.js
+@@ -59,6 +59,10 @@ export class NotesStore {
+     this.db = new DatabaseSync(path);
+     this.db.exec('PRAGMA foreign_keys = ON;');
+     this.db.exec(SCHEMA);
++    // Tag comparison folds case the same way write() does (JS toLowerCase, Unicode-aware;
++    // SQLite's lower() is ASCII-only). update/importNotes keep tags as given, so stored
++    // tags can be mixed case and the filter must fold both sides.
++    this.db.function('tag_fold', { deterministic: true }, (s) => (typeof s === 'string' ? s.trim().toLowerCase() : s));
+     this.clock = () => new Date().toISOString();
+   }
+ 
+@@ -122,7 +126,7 @@ export class NotesStore {
+     const params = { p: likePattern(query.trim()), limit };
+     let sql = 'SELECT DISTINCT n.id, n.title, n.body, n.created_at FROM notes n';
+     if (tag !== undefined) {
+-      sql += ' JOIN note_tags t ON t.note_id = n.id AND t.tag = $tag';
++      sql += ' JOIN note_tags t ON t.note_id = n.id AND tag_fold(t.tag) = tag_fold($tag)';
+       params.tag = tag;
+     }
+     sql += " WHERE (n.title LIKE $p ESCAPE '\\'";

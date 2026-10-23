@@ -1,0 +1,134 @@
+{
+  "runId": "discriminate-debug_sonnet-fast_rep2",
+  "configLabel": "sonnet-fast",
+  "rep": 2,
+  "runner": "stage",
+  "archetype": {
+    "id": "debug",
+    "version": "2"
+  },
+  "candidateResolved": {
+    "provider": "claude",
+    "modelID": "claude-sonnet-5-5",
+    "effort": "medium",
+    "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd"
+  },
+  "metrics": {
+    "cost": {
+      "tokensIn": 8,
+      "tokensOut": 1239,
+      "calls": 1,
+      "wallMs": 54924,
+      "usd": 0.1684224
+    },
+    "outcome": {
+      "completed": true,
+      "health": null,
+      "testsPass": null,
+      "testsTotal": null,
+      "filesChanged": 2,
+      "linesChanged": 6
+    },
+    "process": {
+      "reviewIters": 0,
+      "gateFailures": 0,
+      "retries": 0,
+      "escalations": 0
+    },
+    "stage": {
+      "accuracy": 0.875,
+      "oracle": "debug",
+      "oracleVersion": "2",
+      "canaryOk": true,
+      "mechanismEngaged": true,
+      "oracleError": null,
+      "detail": {
+        "failed": [
+          "tag-normalized"
+        ],
+        "checks": {
+          "repro": "pass",
+          "golden": "pass",
+          "search-unchanged": "pass",
+          "tag-filter-written": "pass",
+          "tag-filter-update": "pass",
+          "tag-filter-seeded": "pass",
+          "tag-normalized": "fail",
+          "hygiene": "pass"
+        },
+        "passed": 7,
+        "total": 8,
+        "repro": {
+          "started": true,
+          "ok": true,
+          "timedOut": false,
+          "exitCode": 0,
+          "total": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "failedTests": [],
+          "missing": []
+        },
+        "suite": {
+          "started": true,
+          "ok": false,
+          "timedOut": false,
+          "exitCode": 1,
+          "total": 23,
+          "passed": 21,
+          "failed": 2,
+          "cancelled": 0,
+          "failedTests": [
+            "[tag-normalized] update stores each tag once, trimmed and lower-case",
+            "[tag-normalized] importNotes stores each tag once, trimmed and lower-case"
+          ],
+          "missing": [
+            "[tag-normalized] update stores each tag once, trimmed and lower-case",
+            "[tag-normalized] importNotes stores each tag once, trimmed and lower-case"
+          ]
+        }
+      }
+    }
+  },
+  "judge": null,
+  "artifacts": {
+    "outputPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/discriminate-debug-exp/runs/discriminate-debug_sonnet-fast_rep2/output.md",
+    "transcriptPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/discriminate-debug-exp/runs/discriminate-debug_sonnet-fast_rep2/transcript.jsonl",
+    "diffPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/discriminate-debug-exp/runs/discriminate-debug_sonnet-fast_rep2/diff.patch",
+    "logPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/discriminate-debug-exp/runs/discriminate-debug_sonnet-fast_rep2/run.log"
+  },
+  "manifest": {
+    "composeSha": "3258bcb897b75a535c245cf8da063d664b342ad9",
+    "fixtureGoal": "",
+    "seedRef": null,
+    "startedAt": "2026-10-23T00:06:12.078Z",
+    "endedAt": "2026-10-23T00:07:08.203Z"
+  },
+  "budget": {
+    "stoppedBy": null,
+    "spentUsd": 0.1684224,
+    "spentTokens": 1247
+  },
+  "runKey": "3f46c168b77ca17d62d5284d42121b6c0fdad1b610a5bee0adc6b89bb168d67e",
+  "runKeyInputs": {
+    "configLabel": "sonnet-fast",
+    "candidate": "claude::fast",
+    "ingredients": {
+      "provider": "claude",
+      "modelID": "claude-sonnet-5-5",
+      "effort": "medium",
+      "workflow": "none"
+    },
+    "pipelineDigest": null,
+    "profilesDigest": null,
+    "archetype": {
+      "id": "debug",
+      "version": "2"
+    },
+    "fixtureDigest": "bcf1af9562b4212772e6459ae4ceeef0aa1c07cb97ca2c56b01d9737253dacf4",
+    "oracleVersion": "2",
+    "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd",
+    "rep": 2
+  }
+}

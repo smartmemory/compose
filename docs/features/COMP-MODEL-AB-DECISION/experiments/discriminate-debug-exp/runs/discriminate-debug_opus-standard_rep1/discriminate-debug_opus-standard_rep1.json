@@ -1,0 +1,134 @@
+{
+  "runId": "discriminate-debug_opus-standard_rep1",
+  "configLabel": "opus-standard",
+  "rep": 1,
+  "runner": "stage",
+  "archetype": {
+    "id": "debug",
+    "version": "2"
+  },
+  "candidateResolved": {
+    "provider": "claude",
+    "modelID": "claude-opus-5-5",
+    "effort": "medium",
+    "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd"
+  },
+  "metrics": {
+    "cost": {
+      "tokensIn": 20,
+      "tokensOut": 3521,
+      "calls": 1,
+      "wallMs": 121488,
+      "usd": 1.1310343000000003
+    },
+    "outcome": {
+      "completed": true,
+      "health": null,
+      "testsPass": null,
+      "testsTotal": null,
+      "filesChanged": 2,
+      "linesChanged": 8
+    },
+    "process": {
+      "reviewIters": 0,
+      "gateFailures": 0,
+      "retries": 0,
+      "escalations": 0
+    },
+    "stage": {
+      "accuracy": 0.875,
+      "oracle": "debug",
+      "oracleVersion": "2",
+      "canaryOk": true,
+      "mechanismEngaged": true,
+      "oracleError": null,
+      "detail": {
+        "failed": [
+          "tag-normalized"
+        ],
+        "checks": {
+          "repro": "pass",
+          "golden": "pass",
+          "search-unchanged": "pass",
+          "tag-filter-written": "pass",
+          "tag-filter-update": "pass",
+          "tag-filter-seeded": "pass",
+          "tag-normalized": "fail",
+          "hygiene": "pass"
+        },
+        "passed": 7,
+        "total": 8,
+        "repro": {
+          "started": true,
+          "ok": true,
+          "timedOut": false,
+          "exitCode": 0,
+          "total": 1,
+          "passed": 1,
+          "failed": 0,
+          "cancelled": 0,
+          "failedTests": [],
+          "missing": []
+        },
+        "suite": {
+          "started": true,
+          "ok": false,
+          "timedOut": false,
+          "exitCode": 1,
+          "total": 23,
+          "passed": 21,
+          "failed": 2,
+          "cancelled": 0,
+          "failedTests": [
+            "[tag-normalized] update stores each tag once, trimmed and lower-case",
+            "[tag-normalized] importNotes stores each tag once, trimmed and lower-case"
+          ],
+          "missing": [
+            "[tag-normalized] update stores each tag once, trimmed and lower-case",
+            "[tag-normalized] importNotes stores each tag once, trimmed and lower-case"
+          ]
+        }
+      }
+    }
+  },
+  "judge": null,
+  "artifacts": {
+    "outputPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/discriminate-debug-exp/runs/discriminate-debug_opus-standard_rep1/output.md",
+    "transcriptPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/discriminate-debug-exp/runs/discriminate-debug_opus-standard_rep1/transcript.jsonl",
+    "diffPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/discriminate-debug-exp/runs/discriminate-debug_opus-standard_rep1/diff.patch",
+    "logPath": "/Users/ruze/reg/my/forge/compose/docs/features/COMP-MODEL-AB-DECISION/experiments/discriminate-debug-exp/runs/discriminate-debug_opus-standard_rep1/run.log"
+  },
+  "manifest": {
+    "composeSha": "3258bcb897b75a535c245cf8da063d664b342ad9",
+    "fixtureGoal": "",
+    "seedRef": null,
+    "startedAt": "2026-10-23T00:10:06.250Z",
+    "endedAt": "2026-10-23T00:12:09.318Z"
+  },
+  "budget": {
+    "stoppedBy": null,
+    "spentUsd": 1.1310343000000003,
+    "spentTokens": 3541
+  },
+  "runKey": "0010e05866f89d65c4a77f707b40c432e0f9621f2fca06e9ded217625112bdf8",
+  "runKeyInputs": {
+    "configLabel": "opus-standard",
+    "candidate": "claude::standard",
+    "ingredients": {
+      "provider": "claude",
+      "modelID": "claude-opus-5-5",
+      "effort": "medium",
+      "workflow": "none"
+    },
+    "pipelineDigest": null,
+    "profilesDigest": null,
+    "archetype": {
+      "id": "debug",
+      "version": "2"
+    },
+    "fixtureDigest": "bcf1af9562b4212772e6459ae4ceeef0aa1c07cb97ca2c56b01d9737253dacf4",
+    "oracleVersion": "2",
+    "catalogDigest": "79f5b50f46fa2ecdcff84a87cf931d2dd3e186166ec2e7c9e03868773abd34cd",
+    "rep": 1
+  }
+}

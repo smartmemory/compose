@@ -1,0 +1,130 @@
+{
+  "experimentId": "discriminate-debug",
+  "configs": [
+    {
+      "label": "sonnet-fast",
+      "nCompleted": 5,
+      "nTotal": 5,
+      "metrics": {
+        "cost.tokensIn": {
+          "median": 10,
+          "min": 8,
+          "max": 12
+        },
+        "cost.tokensOut": {
+          "median": 1239,
+          "min": 1151,
+          "max": 1538
+        },
+        "cost.calls": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "cost.wallMs": {
+          "median": 54924,
+          "min": 46723,
+          "max": 69192
+        },
+        "cost.usd": {
+          "median": 0.1718221,
+          "min": 0.16094050000000001,
+          "max": 0.47797009999999995
+        },
+        "outcome.filesChanged": {
+          "median": 2,
+          "min": 2,
+          "max": 2
+        },
+        "outcome.linesChanged": {
+          "median": 5,
+          "min": 3,
+          "max": 6
+        },
+        "process.reviewIters": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "process.gateFailures": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "process.retries": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "process.escalations": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "label": "opus-standard",
+      "nCompleted": 5,
+      "nTotal": 5,
+      "metrics": {
+        "cost.tokensIn": {
+          "median": 16,
+          "min": 14,
+          "max": 20
+        },
+        "cost.tokensOut": {
+          "median": 4206,
+          "min": 3058,
+          "max": 6023
+        },
+        "cost.calls": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "cost.wallMs": {
+          "median": 71776,
+          "min": 67069,
+          "max": 121488
+        },
+        "cost.usd": {
+          "median": 0.5054820999999999,
+          "min": 0.44693200000000005,
+          "max": 1.1310343000000003
+        },
+        "outcome.filesChanged": {
+          "median": 2,
+          "min": 1,
+          "max": 2
+        },
+        "outcome.linesChanged": {
+          "median": 9,
+          "min": 7,
+          "max": 18
+        },
+        "process.reviewIters": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "process.gateFailures": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "process.retries": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "process.escalations": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    }
+  ],
+  "generatedAt": "2026-10-23T00:17:35.051Z"
+}
