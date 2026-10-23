@@ -89,6 +89,8 @@ describe('IDEA-24 — a CLI write reaches a connected cockpit (end to end)', () 
     spawned.push(srv);
     let srvDied = false;
     srv.on('exit', () => { srvDied = true; });
+    let srvLog = '';
+    for (const stream of [srv.stdout, srv.stderr]) stream.on('data', (c) => { srvLog += c; });
 
     const get = (p) => new Promise((res, rej) => {
       const req = http.get(`http://127.0.0.1:${port}${p}`, (r) => {
@@ -137,6 +139,8 @@ describe('IDEA-24 — a CLI write reaches a connected cockpit (end to end)', () 
       { env, cwd: project },
     );
     spawned.push(cli);
+    let cliLog = '';
+    for (const stream of [cli.stdout, cli.stderr]) stream.on('data', (c) => { cliLog += c; });
     const cliCode = await new Promise((r) => cli.on('close', r));
     assert.equal(cliCode, 0, 'the CLI write succeeded');
 
@@ -145,7 +149,7 @@ describe('IDEA-24 — a CLI write reaches a connected cockpit (end to end)', () 
     await pollUntil(() => seen.length > 0, 'ideaboxUpdated to reach the cockpit socket').catch(() => {});
 
     assert.equal(seen.length >= 1, true,
-      'an out-of-process CLI write reached the cockpit socket — this is the whole feature');
+      `an out-of-process CLI write reached the cockpit socket — this is the whole feature\ncli: ${cliLog.slice(-600)}\nserver: ${srvLog.slice(-1200)}`);
     assert.equal(seen[0].type, 'ideaboxUpdated');
     assert.equal(seen[0].source, 'projection-watch',
       'and it came from the file watch, not from a REST mutation');
