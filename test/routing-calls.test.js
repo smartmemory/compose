@@ -12,6 +12,7 @@ import { runAndNormalize } from '../lib/result-normalizer.js';
 import { callsForRouting, recoverRoutingEvidence } from '../lib/routing-runtime.js';
 import { materializeRoutingLedger } from '../lib/routing-ledger.js';
 import { fixture, consumerWave } from './helpers/routing-s1b-fixture.js';
+import { pollUntil } from './helpers/poll-until.js';
 process.env.NODE_ENV = 'test';
 const wire = value => ({ content: [{ type: 'text', text: JSON.stringify(value) }] });
 function connector(f, responder) {
@@ -105,7 +106,7 @@ test('A/B same-profile primary and repair orders retain original descriptors thr
   const run = index => runAndNormalize(null, `PRIMARY-${tasks[index].id}`, { step_id: 'review', agent: 'codex' }, { stratum: client, reviewMode: true,
     routingCalls: callsForRouting(f.context, wave.issuances[index], null, wave.descriptors[index]) });
   const a = run(0), b = run(1);
-  const until = async key => { for (let n = 0; n < 100 && !releases.has(key); n++) await new Promise(r => setTimeout(r, 5)); assert.ok(releases.has(key), key); };
+  const until = async key => { await pollUntil(() => releases.has(key), key, { intervalMs: 5 }); };
   await until('B'); releases.get('B')(); await until('B-repair');
   releases.get('A')(); await until('A-repair'); releases.get('A-repair')(); releases.get('B-repair')(); await Promise.all([a, b]);
   assert.equal(original.size, 4); assert.equal(calls(f).length, 4);
@@ -192,7 +193,7 @@ test('real late MCP return improves the same uncertain invocation without a new 
   controller.abort(); await assert.rejects(running, { code: 'CANCELLATION_TEARDOWN_TIMEOUT' });
   assert.equal(resolutions(f).at(-1).outcome, 'unresolved');
   release();
-  for (let n = 0; n < 100 && !resolutions(f).some(r => r.outcome === 'resolved'); n++) await new Promise(resolve => setTimeout(resolve, 5));
+  await pollUntil(() => resolutions(f).some(r => r.outcome === 'resolved'), 'routing resolution to be recorded', { intervalMs: 5 });
   await recoverRoutingEvidence(f.context);
   assert.equal(launched, 1); assert.equal(calls(f).length, 1);
   assert.equal(resolutions(f).at(-1).usageEvidence.usd, 0.8);

@@ -8,13 +8,12 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { WebSocket } from 'ws';
+import { pollUntil } from './helpers/poll-until.js';
 
 const repo = path.resolve(import.meta.dirname, '..');
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-async function until(check, label) {
-  for (let n = 0; n < 120; n++) { const value = await check(); if (value) return value; await pause(25); }
-  throw new Error(`Timed out: ${label}`);
-}
+// Poll the condition with a 30 s deadline (a fixed 120 x 25 ms = 3 s loop timed out server startup under load).
+const until = (check, label, options) => pollUntil(check, label, options);
 async function freePort() {
   const socket = net.createServer(); socket.listen(0, '127.0.0.1'); await once(socket, 'listening');
   const port = socket.address().port; await new Promise(resolve => socket.close(resolve)); return port;
@@ -23,7 +22,7 @@ function write(file, value) { fs.mkdirSync(path.dirname(file), { recursive: true
 
 // This launches the production entrypoint. No route/store/manager is mocked;
 // only the paid CLI executable is replaced with a cwd-reporting local process.
-test('production HTTP server switches all workspace services and preserves running A work', { timeout: 20000 }, async t => {
+test('production HTTP server switches all workspace services and preserves running A work', { timeout: 120000 }, async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'compose-switch-runtime-'));
   const a = path.join(dir, 'a'), b = path.join(dir, 'b');
   for (const [root, id, theme, guardAuth] of [[a, 'switch-a', 'light', false], [b, 'switch-b', 'dark', true]]) {
@@ -73,7 +72,7 @@ test('production HTTP server switches all workspace services and preserves runni
     const response = await fetch(url + route, { method, headers: { 'Content-Type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
     return { status: response.status, body: await response.json() };
   }
-  await until(async () => { try { return (await request('/api/health')).status === 200; } catch { if (child.exitCode !== null) throw new Error(logs); } }, 'server startup');
+  await until(async () => { try { return (await request('/api/health')).status === 200; } catch { if (child.exitCode !== null) throw new Error(logs); } }, 'server startup', { rethrow: () => child.exitCode !== null });
   assert.equal((await request('/api/settings')).body.ui.theme, 'light');
   assert.equal((await request('/api/pipeline/draft')).body.draft.instruction, 'switch-a');
   assert.equal((await request('/api/agent/proxy/session', 'POST', { prompt: 'sdk-A' })).status, 200);

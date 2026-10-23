@@ -23,6 +23,7 @@ import { appendGateLogEntry } from '../server/gate-log-store.js';
 import { switchProject, getTargetRoot } from '../server/project-root.js';
 import { renderFeatureEventContent, renderGateLogContent, flushPending, _resetEmitterState } from '../lib/smartmemory-ingest.js';
 import { runSync } from '../lib/smartmemory-sync.js';
+import { pollUntil } from './helpers/poll-until.js';
 
 function listen(server) {
   return new Promise((resolve) => { server.listen(0, '127.0.0.1', () => resolve(server)); });
@@ -52,11 +53,8 @@ after(() => { for (const s of servers) s.close(); });
 // appendEvent/appendGateLogEntry return (before `pending` even gains the
 // in-flight ingest promise). Poll briefly for the stub to observe the
 // request, then drain with flushPending.
-async function waitForSeen(seen, count, timeoutMs = 2000) {
-  const start = Date.now();
-  while (seen.length < count && Date.now() - start < timeoutMs) {
-    await new Promise((r) => setTimeout(r, 5));
-  }
+async function waitForSeen(seen, count, timeoutMs = 30_000) {
+  await pollUntil(() => seen.length >= count, `${count} hook deliveries`, { timeoutMs, intervalMs: 5 }).catch(() => {});
 }
 
 beforeEach(() => {

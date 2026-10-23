@@ -18,7 +18,18 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import express from 'express';
 
-import { BuildStreamBridge } from '../server/build-stream-bridge.js';
+import { BuildStreamBridge as ProductionBridge } from '../server/build-stream-bridge.js';
+import { pollUntil } from './helpers/poll-until.js';
+
+// fs.watch is an optimisation; the bridge's safety poll is the delivery guarantee
+// (server/build-stream-bridge.js). The default 2 s poll outlasts the short SSE windows
+// below when FSEvents lags under load, so the tests drive the poll at 50 ms and
+// wait on their condition (same shape as test/build-stream-bridge.test.js).
+class BuildStreamBridge extends ProductionBridge {
+  constructor(composeDir, broadcast, opts = {}) {
+    super(composeDir, broadcast, { pollIntervalMs: 50, ...opts });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -36,13 +47,10 @@ function writeJsonlLine(filePath, event, seq) {
  * Throws on timeout so a genuinely stalled bridge still fails the test.
  */
 async function waitUntil(predicate, message, timeoutMs = 30_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (predicate()) return;
-    await new Promise(r => setTimeout(r, 20));
-  }
-  throw new Error(`timed out after ${timeoutMs}ms waiting for: ${message}`);
+  await pollUntil(predicate, message, { timeoutMs, intervalMs: 20 });
 }
+
+const isEnd = (messages) => messages.some(m => m.type === 'system' && m.subtype === 'build_end');
 
 /**
  * Collect SSE messages from a server for a given duration.
@@ -53,7 +61,7 @@ async function waitUntil(predicate, message, timeoutMs = 30_000) {
  * response is removed asynchronously on close, so the set can drop and re-grow
  * to the same size and a "wait until size increases" check would hang forever.
  */
-function collectSSE(port, durationMs = 2000) {
+function collectSSE(port, durationMs = 30_000, until = null) {
   let markConnected;
   const connected = new Promise((resolve) => { markConnected = resolve; });
   const done = new Promise((resolve) => {
@@ -75,10 +83,19 @@ function collectSSE(port, durationMs = 2000) {
       });
     });
 
-    setTimeout(() => {
+    // `durationMs` is a deadline, not a fixed window: resolve the moment `until`
+    // holds so a healthy run never waits it out and a loaded one gets the headroom.
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      clearInterval(ticker);
+      clearTimeout(deadline);
       req.destroy();
       resolve(messages);
-    }, durationMs);
+    };
+    const deadline = setTimeout(finish, durationMs);
+    const ticker = setInterval(() => { if (until && until(messages)) finish(); }, 20);
   });
   done.connected = connected;
   return done;
@@ -144,8 +161,8 @@ describe('Bridge-to-SSE smoke test', () => {
     bridge.start();
 
     try {
-      const collecting = collectSSE(port, 1500);
-      await new Promise(r => setTimeout(r, 200));
+      const collecting = collectSSE(port, 30_000, isEnd);
+      await collecting.connected;
 
       let seq = 0;
       writeFileSync(jsonlPath, '');
@@ -195,8 +212,8 @@ describe('Bridge-to-SSE smoke test', () => {
     bridge.start();
 
     try {
-      const collecting = collectSSE(port, 1500);
-      await new Promise(r => setTimeout(r, 200));
+      const collecting = collectSSE(port, 30_000, isEnd);
+      await collecting.connected;
 
       let seq = 0;
       writeFileSync(jsonlPath, '');
@@ -278,7 +295,7 @@ describe('Bridge-to-SSE smoke test', () => {
       // NOW connect the SSE client and write new events. Wait for THIS request's
       // own response rather than a guessed 200ms or a client-count increase —
       // see collectSSE's note on why counting races with prior-client teardown.
-      const collecting = collectSSE(port, 1500);
+      const collecting = collectSSE(port, 30_000, isEnd);
       await collecting.connected;
 
       // Write NEW events (seq continues monotonically)
@@ -311,8 +328,8 @@ describe('Bridge-to-SSE smoke test', () => {
       let seq = 0;
       writeFileSync(jsonlPath, '');
 
-      const collecting1 = collectSSE(port, 800);
-      await new Promise(r => setTimeout(r, 200));
+      const collecting1 = collectSSE(port, 30_000, (m) => m.length > 0);
+      await collecting1.connected;
       writeJsonlLine(jsonlPath, { type: 'build_start', featureCode: 'RECON-1', flowId: 'f5' }, seq++);
       const messages1 = await collecting1;
       assert.ok(messages1.length > 0, 'first connection should get events');
@@ -321,8 +338,8 @@ describe('Bridge-to-SSE smoke test', () => {
       writeJsonlLine(jsonlPath, { type: 'build_step_start', stepId: 's1', stepNum: 1, totalSteps: 1, agent: 'claude', flowId: 'f5' }, seq++);
 
       // Second connection — should see new events written after reconnect
-      const collecting2 = collectSSE(port, 1500);
-      await new Promise(r => setTimeout(r, 200));
+      const collecting2 = collectSSE(port, 30_000, isEnd);
+      await collecting2.connected;
 
       writeJsonlLine(jsonlPath, { type: 'build_end', status: 'complete', featureCode: 'RECON-1' }, seq++);
       const messages2 = await collecting2;

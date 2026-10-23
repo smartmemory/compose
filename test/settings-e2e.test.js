@@ -106,7 +106,7 @@ function connectWs() {
 }
 
 /** Wait for a message of the given type, checking buffered messages first. */
-function waitForMessage(ws, type, timeoutMs = 3000) {
+function waitForMessage(ws, type, timeoutMs = 30_000) {
   // Check buffered messages from connection setup
   if (ws._buffered) {
     const idx = ws._buffered.findIndex(m => m.type === type);
@@ -118,7 +118,7 @@ function waitForMessage(ws, type, timeoutMs = 3000) {
   return nextMessage(ws, type, timeoutMs);
 }
 
-function nextMessage(ws, type, timeoutMs = 3000) {
+function nextMessage(ws, type, timeoutMs = 30_000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`Timeout waiting for ${type}`)), timeoutMs);
     const handler = (data) => {

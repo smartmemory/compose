@@ -29,6 +29,7 @@
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import net from 'node:net';
+import { pollUntil } from './helpers/poll-until.js';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
@@ -100,9 +101,13 @@ describe('IDEA-24 — a CLI write reaches a connected cockpit (end to end)', () 
     // Boot. Tolerated: a machine under load, or a port taken between the probe
     // and the bind, must not turn into a red gate.
     let up = false;
-    for (let i = 0; i < 150 && !srvDied; i++) {
-      try { await get('/api/ideabox'); up = true; break; } catch { await sleep(200); }
-    }
+    try {
+      up = await pollUntil(
+        async () => { if (srvDied) throw new Error('server exited'); await get('/api/ideabox'); return true; },
+        'server startup',
+        { intervalMs: 200, rethrow: () => srvDied },
+      );
+    } catch { up = false; }
     if (!up) {
       rmSync(project, { recursive: true, force: true });
       return t.skip('server did not come up in this environment');
@@ -135,7 +140,9 @@ describe('IDEA-24 — a CLI write reaches a connected cockpit (end to end)', () 
     const cliCode = await new Promise((r) => cli.on('close', r));
     assert.equal(cliCode, 0, 'the CLI write succeeded');
 
-    for (let i = 0; i < 50 && seen.length === 0; i++) await sleep(100);
+    // Deadline, not a fixed 5 s: the delivery is fs.watch (FSEvents), which lags
+    // 1-1.5 s under load. Returns as soon as the event lands.
+    await pollUntil(() => seen.length > 0, 'ideaboxUpdated to reach the cockpit socket').catch(() => {});
 
     assert.equal(seen.length >= 1, true,
       'an out-of-process CLI write reached the cockpit socket — this is the whole feature');

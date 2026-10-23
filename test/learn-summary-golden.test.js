@@ -210,7 +210,7 @@ describe('Compose build summary shows lessons awaiting the owner', () => {
       // The writer opens the file (empty) before it writes the row, so existence is not
       // readiness: wait for a complete, parseable guided row.
       let rows = [];
-      for (let waited = 0; waited < 10_000; waited += 50) {
+      for (let waited = 0; waited < 30_000; waited += 50) {
         try {
           rows = readFileSync(sidecar, 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line));
           if (rows.some((row) => row.rendered?.guidance)) break;

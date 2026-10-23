@@ -31,6 +31,7 @@ import { decisionProfiles, decision } from './build-wave-fixture.js';
 import { makeFakeCodexProject } from './fake-codex-project.js';
 import { git } from './consumer-wave-fixture.js';
 import { assertOutsideRealRepo } from './git-sandbox.js';
+import { pollUntil } from './poll-until.js';
 
 export const ROUTING_INPUTS = ['route_mode', 'routing_start', 'routing_root', 'routing_plan_intent', 'routing_continuation'];
 export const CODE = 'D3-GOLDEN-1';
@@ -423,8 +424,7 @@ export async function paidWaveGolden(t, { repair = null, unknown = false, failPr
     finally { crypto.randomUUID = originalUUID; syncBuiltinESMExports(); }
   };
   const until = async name => {
-    for (let n = 0; n < 1000 && !releases.has(name); n++) await new Promise(r => setTimeout(r, 10));
-    assert.ok(releases.has(name), `producer reached ${name}; calls=${calls.join(',')}`);
+    await pollUntil(() => releases.has(name), `producer reached ${name}; calls=${calls.join(',')}`, { intervalMs: 10 });
   };
   const runBuildFixture = f.run;
   const run = async () => {

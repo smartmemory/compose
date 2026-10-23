@@ -60,7 +60,7 @@ const http = await import('node:http');
 const projectionPath = join(project, 'docs', 'product', 'ideabox.md');
 
 /** Poll until `fn()` is truthy or the budget runs out. Returns fn()'s value. */
-async function waitFor(fn, budgetMs = 4000, stepMs = 25) {
+async function waitFor(fn, budgetMs = 30_000, stepMs = 25) {
   const deadline = Date.now() + budgetMs;
   for (;;) {
     const v = fn();
