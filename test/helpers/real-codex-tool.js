@@ -1,5 +1,7 @@
 import { catalog, codexDefault } from './model-catalog.js';
-import { CodexConnector } from '../../../stratum/ts/dist/connectors/codex.js';
+import { importStratumDist } from './stratum-test-bin.js';
+
+const { CodexConnector } = await importStratumDist('connectors/codex.js');
 
 // Control SDK input only. The real connector creates every usage event, token
 // split, duration, model/effort pair and price provenance consumed by Compose.

@@ -2,6 +2,7 @@
 import './helpers/git-env-scrub.js';
 import { catalog, tier, claudeDefault, codexDefault } from './helpers/model-catalog.js';
 import { checkedConsumerAdapter } from './helpers/routing-adapter-check.js';
+import { importStratumDist } from './helpers/stratum-test-bin.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -1160,7 +1161,7 @@ for (const transport of ['mcp-streamed', 'mcp-returned', 'local-sdk']) {
   test(`real Claude ${transport} forwarding preserves duration, provenance and token splits`, async t => {
     const { fixture } = await import('./helpers/routing-s1b-fixture.js');
     const { callsForRouting } = await import('../lib/routing-runtime.js');
-    const { ClaudeConnector } = await import('../../stratum/ts/dist/connectors/claude.js');
+    const { ClaudeConnector } = await importStratumDist('connectors/claude.js');
     const f = fixture(t); const issuance = f.issue();
     f.context.stratum = { usageReport: async () => ({ status: 'ok' }) };
     const query = async function* () {

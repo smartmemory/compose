@@ -25,7 +25,7 @@ import YAML from 'yaml';
 import { runBuild } from '../../lib/build.js';
 import { ConsumerFanoutArtifacts } from '../../lib/consumer-fanout.js';
 import { StratumMcpClient } from '../../lib/stratum-mcp-client.js';
-import { TS_MCP_BIN } from './stratum-test-bin.js';
+import { TS_MCP_BIN, importStratumDist } from './stratum-test-bin.js';
 import { fakeBuildStratum, agentResult } from './build-stratum-fixture.js';
 import { decisionProfiles, decision } from './build-wave-fixture.js';
 import { makeFakeCodexProject } from './fake-codex-project.js';
@@ -320,7 +320,7 @@ export function assertRoutingGolden(evidence, callCount) {
 /** SDK inputs only: both production connectors own output/error/telemetry shapes. */
 export async function goldenProviderTool(respond, onCall = () => {}) {
   const { realCodexTool } = await import('./real-codex-tool.js');
-  const { ClaudeConnector } = await import('../../../stratum/ts/dist/connectors/claude.js');
+  const { ClaudeConnector } = await importStratumDist('connectors/claude.js');
   const { McpError, ErrorCode } = await import('@modelcontextprotocol/sdk/types.js');
   return async (request, schema, progress) => {
     const args = request.arguments;
