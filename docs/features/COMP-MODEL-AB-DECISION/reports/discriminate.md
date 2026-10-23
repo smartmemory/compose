@@ -18,7 +18,7 @@ Second finding: `tag-filter-written` fails in 6 of 15 runs (codex 4 of 5, sonnet
 |---|---|---|---|---|---|---|
 | opus-5-5/medium (`claude::standard`) | 5 | .875 x5 | .875 | .875 | tag-normalized 5/5 | 1.13, 0.60, 0.45, 0.51, 0.48 |
 | sonnet-5-5/medium (`claude::fast`) | 5 | .75, .875, .875, .875, .75 | .875 | .825 | tag-normalized 5/5, tag-filter-written 2/5 | 0.48, 0.17, 0.20, 0.17, 0.16 |
-| gpt-6.1-sol/high (`codex::standard`) | 5 | .625, .875, .75, .625, .75 | .75 | .725 | tag-normalized 5/5, tag-filter-written 3/5, hygiene 2/5 | 0.36, 0.16, 0.14, 0.34, 0.18 |
+| gpt-6.1-sol/high (`codex::standard`) | 5 | .625, .875, .75, .625, .75 | .75 | .725 | tag-normalized 5/5, tag-filter-written 4/5, hygiene 2/5 | 0.36, 0.16, 0.14, 0.34, 0.18 |
 
 Order by mean: opus .875, sonnet .825, codex .725. Before this run all nine G5 runs scored 1, so the stage no longer sits at the ceiling.
 
@@ -28,6 +28,24 @@ Order by mean: opus .875, sonnet .825, codex .725. Before this run all nine G5 r
 3. **Ceiling .875.** The shared `tag-normalized` miss caps every cell at 7 of 8, which compresses the range and hides any difference on that check.
 4. Token receipts are still not comparable across providers (`skeleton.md` finding 4); usd is receipts-derived.
 5. Codex rep4's first attempt ended on a transport error (`MCP error -32603 ... Connection refused (os error 61)`, `run.log`), no score. It was re-run once; the first attempt's $0.54 is counted in spend.
+
+## Reading with `tag-normalized` marked informational (owner-absent ruling 2026-10-24, via s1-chat)
+Because the check is under-specified (verdict B above), the comparison that follows rests on the 7 checks that can separate models. Derived from the per-run `detail.failed` lists, equal weight per check (matches .875 = 7 of 8); not a re-score by the oracle, and the stored oracle scores above are unchanged.
+
+| Cell | per rep (7 checks) | median | mean | failed checks left |
+|---|---|---|---|---|
+| opus | 1.0 x5 | 1.0 | 1.0 | none |
+| sonnet | .857, 1.0, 1.0, 1.0, .857 | 1.0 | .943 | tag-filter-written 2/5 |
+| codex | .714, 1.0, .857, .714, .857 | .857 | .828 | tag-filter-written 4/5, hygiene 2/5 |
+
+Correction: the first results table originally said codex failed `tag-filter-written` 3 of 5. The run records say 4 of 5 (reps 1, 3, 4, 5: `detail.failed` in each `<run>.json`), which makes 6 of 15 overall with sonnet. Fixed in that table.
+
+## Prepared, not run: fix for the under-specified check
+Unit COMP-MODEL-AB-TAGFIX-1 (committed on branch `comp-model-ab-tagfix-1`, unrun): one README line stating the storage invariant, and the planted "keeping them as given" comment reworded, with an `ORACLE_VERSION` bump. Not merged and no model has been run against it.
+
+Owner question (morning): pay for a re-run on the fixed text? Estimate from this run's measured per-run cost, 5 reps per model, no retries: opus about $3.17, sonnet about $1.18, codex about $1.18, total about $5.5 (this run: $6.07 including the $0.54 failed Codex attempt). The Codex arm also needs a credits ruling, since an experiment arm is not one of the five listed credits uses (`usage-watch.md`).
+
+Follow-up filed: store the per-assertion failure text in every run record (today only test names are kept, so causes have to be inferred from diffs).
 
 ## Spend
 Claude arms $4.34 (sonnet 1.18, opus 3.17). Codex arm $1.19 for the five completed runs plus $0.54 for the failed rep4 attempt = $1.73. Total $6.07 of the approved ~$14. Ledger lines 2026-10-23 and 2026-10-24 (`forge-main:`).
