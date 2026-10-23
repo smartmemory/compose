@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import YAML from 'yaml';
 import { StratumMcpClient } from '../../lib/stratum-mcp-client.js';
-import { TS_MCP_BIN } from './stratum-test-bin.js';
+import { TS_MCP_BIN, importStratumDist } from './stratum-test-bin.js';
 import { connectForTest } from './connect-for-test.js';
 import { runBuild } from '../../lib/build.js';
 import { runGsd } from '../../lib/gsd.js';
@@ -31,7 +31,7 @@ export async function runtimeFixture(t, { gsd = false, spec = simpleSpec(gsd), p
   writeFileSync(join(cwd, '.compose/data/settings.json'), JSON.stringify({ policies: { assess_gate: 'skip', merge: 'skip' } }));
   writeFileSync(join(cwd, 'docs/bugs', CODE, 'description.md'), '# D2 runtime\n');
   writeFileSync(join(cwd, 'docs/features', CODE, 'blueprint.md'), '# Runtime\n\n## File Plan\n\n| File | Action | Purpose |\n|------|--------|---------|\n| `a.txt` | new | A |\n\n## Boundary Map\n\n### S01: A\n\nFile Plan: `a.txt` (new)\n\nProduces:\n  a.txt → a (function)\n\nConsumes: nothing\n');
-  const { validateSpec } = await import('../../../stratum/ts/dist/ir/validate.js');
+  const { validateSpec } = await importStratumDist('ir/validate.js');
   const validation = validateSpec(spec);
   if (!validation.ok) throw Error(JSON.stringify(validation.errors));
   const name = gsd ? 'gsd' : 'bug-fix';

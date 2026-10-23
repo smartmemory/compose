@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildReceipt } from '../../stratum/ts/dist/engine/receipts.js';
+import { importStratumDist } from './helpers/stratum-test-bin.js';
+
+const { buildReceipt } = await importStratumDist('engine/receipts.js');
 import { fixture, beginCall, finishCall, acknowledgeAll, gateEvidence, linkRepair, evidenceRecord } from './helpers/routing-s1b-fixture.js';
 import { bindRoutingCalls, deriveRoutingOutcome, deriveRoutingContext, materializeRoutingLedger, routingEligible, routingUsageEvidence, readRoutingLedger, reconcileRoutingPaidReceipts } from '../lib/routing-ledger.js';
 import { canonicalRoutingJson, routingDigest } from '../lib/model-router.js';

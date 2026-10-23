@@ -5,7 +5,19 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { BuildStreamBridge } from '../server/build-stream-bridge.js';
+import { BuildStreamBridge as ProductionBridge } from '../server/build-stream-bridge.js';
+
+// The bridge's delivery guarantee is its safety poll; fs.watch is only an
+// optimisation (see _startSafetyPoll). On macOS FSEvents delivery is late or
+// absent under load (probe 2026-10-24: 1.0-1.5 s latency, 1 of 5 tmpdir watches
+// silent while fseventsd sat at 100% CPU), so tests that sleep a fixed 200 ms
+// and expect the watcher to have fired fail with `0 !== 7`. Drive reads from a
+// 50 ms poll so these tests pin the bridge's mapping, not the OS's FSEvents.
+class BuildStreamBridge extends ProductionBridge {
+  constructor(composeDir, broadcast, opts = {}) {
+    super(composeDir, broadcast, { pollIntervalMs: 50, ...opts });
+  }
+}
 
 function writeLine(filePath, event, seq) {
   const line = JSON.stringify({ ...event, _seq: seq, _ts: Date.now() });
@@ -551,7 +563,8 @@ describe('BuildStreamBridge', () => {
     mkdirSync(lateComposeDir, { recursive: true });
     writeLine(lateFilePath, { type: 'build_start', featureCode: 'T-1', flowId: 'f1' }, 0);
 
-    await sleep(3000); // wait for poll interval (2s) + debounce
+    // Directory discovery polls on a fixed 2 s cadence; wait on the condition, not a clock.
+    for (let waited = 0; broadcasts.length < 1 && waited < 15000; waited += 100) await sleep(100);
     bridge.stop();
 
     assert.ok(broadcasts.length >= 1, 'Should have picked up events after directory creation');

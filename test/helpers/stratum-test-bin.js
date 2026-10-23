@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -34,6 +34,16 @@ function resolveTestBin(kind) {
         + '@smartmemory/stratum is not installed. Install it or place a stratum sibling.',
     );
   }
+}
+
+// Import a compiled stratum module (`ir/validate.js`, `connectors/codex.js`, ...) without a
+// fixed `../../../stratum` hop. That hop only lands on the sibling checkout when compose sits
+// directly under forge/; from a git worktree (`.worktrees/<name>`) it points at
+// `.worktrees/stratum` and the import dies with ERR_MODULE_NOT_FOUND (measured 2026-10-24,
+// build-wave-golden d3 paid-carry cases). `@smartmemory/stratum` resolves through node_modules
+// from wherever compose is checked out, so this works in a worktree, the checkout and CI.
+export function importStratumDist(rel) {
+  return import(pathToFileURL(require.resolve(`@smartmemory/stratum/dist/${rel}`)).href);
 }
 
 export const TS_MCP_BIN = resolveTestBin('mcp');
