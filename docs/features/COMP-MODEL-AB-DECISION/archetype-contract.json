@@ -90,7 +90,7 @@
       "name": "debug archetype descriptor (runner stage, not judged)",
       "validatesAgainst": "#/$defs/descriptor",
       "value": {
-        "id": "debug", "stage": "debug", "runner": "stage", "judged": false, "version": "2",
+        "id": "debug", "stage": "debug", "runner": "stage", "judged": false, "version": "3",
         "methods": [
           { "name": "buildInput", "signature": "buildInput(workspace, scenario) -> void", "returns": "void" },
           { "name": "prompt", "signature": "prompt(scenario) -> str", "returns": "string" },

@@ -4,7 +4,7 @@
    return [...out].sort();
  }
  
-+// Validates and trims tags, keeping them as given (used by update and importNotes).
++// Validates and trims tags (used by update and importNotes).
 +function trimTags(tags) {
 +  if (tags === undefined || tags === null) return [];
 +  if (!Array.isArray(tags)) throw new NotesError('INVALID', 'tags must be an array of strings');
