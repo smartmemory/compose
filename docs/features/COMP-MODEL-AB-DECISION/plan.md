@@ -1,3 +1,5 @@
+> **PARKED 2026-10-24 (owner via s1-chat, ledger `4f7c3fd7a`): experiment closed.** The re-run on fixed scoring was declined, no further paid runs, the routing table stays as is. Final readout: `reports/discriminate.md`. The tag fix (branch `comp-model-ab-tagfix-1`) merges as hygiene only.
+
 # COMP-MODEL-AB-DECISION — Implementation Plan (Shape B, the evidence loop)
 
 > **OWNER PICK 2026-10-20 (via s1-chat): Shape B, the evidence loop, "measure who's best at what".** Reason (owner's words and
