@@ -1109,7 +1109,9 @@ Sources: [Scope CLI](https://rynhardt-potgieter.github.io/scope/) (Rust-based co
 
 ---
 
-## COMP-SPECFLOW: Spec-Driven Development Artifacts — PLANNED
+## COMP-SPECFLOW: Spec-Driven Development Artifacts — SUPERSEDED (2026-10-26)
+
+**SUPERSEDED (2026-10-26): by CODEGEN-DESIGN-2 `~/reg/my/SmartMemory/smart-memory-ops/units/CODEGEN-DESIGN-2/design.md`** (the Choir facts schema replaces these planned artifact schemas; design §8.3).
 
 Formalize the proposal → spec → design → tasks artifact flow as a lightweight, iterative (not waterfall) pipeline. Each artifact type has a schema and a "good enough" quality bar. Artifacts are fluid — updated as understanding evolves, not frozen at creation. Compose already has lifecycle phases that map to this — this feature refines the artifact schemas and makes them usable outside Compose.
 
