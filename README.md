@@ -162,6 +162,18 @@ compose feature AUTH-1 "JWT middleware with refresh tokens"
 compose build AUTH-1
 ```
 
+## Run the cockpit
+
+From a source checkout, `scripts/cockpit.sh start` runs the API server (4001), the agent server (4002) and the Vite UI (5195) under `server/supervisor.js`, all bound to `127.0.0.1`, then waits until each port answers. Open `http://127.0.0.1:5195`.
+
+```sh
+scripts/cockpit.sh start    # pidfile + log in ~/.compose/run/
+scripts/cockpit.sh status
+scripts/cockpit.sh stop     # kills only the supervisor and its own children
+```
+
+It is on-demand, not a launchd daemon. The three ports are registered to `compose` in `~/.ports`. Do not click Run or Launch agent in the UI unless you mean it: the agent server spawns `claude -p`.
+
 ## Upgrading
 
 One command — auto-detects whether compose was installed via npm or git clone:

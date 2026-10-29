@@ -10,14 +10,17 @@ export default defineConfig({
     },
   },
   server: {
+    // Loopback only: WIKI-FRAME-LOOSEN-1 allows exactly http://127.0.0.1:5195 as a frame origin.
+    host: '127.0.0.1',
     port: 5195,
+    strictPort: true,
     // Don't watch dependency, build, runtime-state or docs trees: watching them made vite the box's top fs-event producer.
     watch: { ignored: ['**/node_modules/**', '**/dist/**', '**/.compose/**', '**/docs/**'] },
     proxy: {
-      '/api': 'http://localhost:4001',
+      '/api': 'http://127.0.0.1:4001',
       // Only proxy file-watcher and vision WS — agent connects directly to port 4002
-      '/ws/files': { target: 'ws://localhost:4001', ws: true },
-      '/ws/vision': { target: 'ws://localhost:4001', ws: true },
+      '/ws/files': { target: 'ws://127.0.0.1:4001', ws: true },
+      '/ws/vision': { target: 'ws://127.0.0.1:4001', ws: true },
     },
   },
   build: {
