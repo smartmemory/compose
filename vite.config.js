@@ -18,6 +18,7 @@ export default defineConfig({
     watch: { ignored: ['**/node_modules/**', '**/dist/**', '**/.compose/**', '**/docs/**'] },
     proxy: {
       '/api': 'http://127.0.0.1:4001',
+      '/ops-status': 'http://127.0.0.1:4001',
       // Only proxy file-watcher and vision WS — agent connects directly to port 4002
       '/ws/files': { target: 'ws://127.0.0.1:4001', ws: true },
       '/ws/vision': { target: 'ws://127.0.0.1:4001', ws: true },

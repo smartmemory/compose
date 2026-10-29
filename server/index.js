@@ -14,6 +14,7 @@ import { createAuthGate, wsUpgradeTokenOk } from './auth-middleware.js';
 import { attachAuthRoutes } from './auth-routes.js';
 import { configureAuthStore, requireSensitiveToken } from './security.js';
 import { resolveComposeHost, attachAgentProxy } from './remote-utils.js';
+import { attachOpsStatusRoutes } from './ops-status-routes.js';
 
 // Re-export for Boundary Map (S02) and tests
 export { resolveComposeHost, attachAgentProxy };
@@ -216,6 +217,9 @@ app.use((req, res, next) => workspaces.handle(req, res, next));
 // Mounted AFTER all API routes so /api/* is never shadowed.
 // In dev Vite (5195) serves the SPA; in remote mode the built dist/ is used.
 // ---------------------------------------------------------------------------
+// COMPOSE-OPS-TAB-1: read-only Ops status pages (absent when the dir is absent).
+attachOpsStatusRoutes(app, { remote: remoteMode });
+
 const _distDir = path.join(COMPOSE_HOME, 'dist');
 const _distExists = () => {
   try { return existsSync(_distDir) && statSync(_distDir).isDirectory(); }
