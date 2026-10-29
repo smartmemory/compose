@@ -16,6 +16,7 @@ import { configureAuthStore, requireSensitiveToken } from './security.js';
 import { resolveComposeHost, attachAgentProxy } from './remote-utils.js';
 import { attachOpsStatusRoutes } from './ops-status-routes.js';
 import { attachStratumUiRoutes } from './stratum-ui-routes.js';
+import { attachWikiRoutes } from './wiki-routes.js';
 
 // Re-export for Boundary Map (S02) and tests
 export { resolveComposeHost, attachAgentProxy };
@@ -222,6 +223,8 @@ app.use((req, res, next) => workspaces.handle(req, res, next));
 // ---------------------------------------------------------------------------
 // COMPOSE-OPS-TAB-1: read-only Ops status pages (absent when the dir is absent).
 attachOpsStatusRoutes(app, { remote: remoteMode });
+// COMPOSE-WIKI-TAB-1: /api/wiki/* proxies the wiki DataClient's calls (wiki-eng only; absent in remote mode).
+attachWikiRoutes(app, { remote: remoteMode });
 
 const _distDir = path.join(COMPOSE_HOME, 'dist');
 const _distExists = () => {

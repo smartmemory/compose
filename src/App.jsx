@@ -6,9 +6,11 @@ import ProjectSwitchPopover from './components/ProjectSwitchPopover.jsx';
 // Cockpit shell components
 import ViewTabs from './components/cockpit/ViewTabs.jsx';
 import StratumView from './components/cockpit/StratumView.jsx';
+import WikiView from './components/cockpit/WikiView.jsx';
 import OpsView from './components/cockpit/OpsView.jsx';
 import useOpsStatusIndex from './components/cockpit/useOpsStatusIndex.js';
 import useStratumUiAvailable from './components/cockpit/useStratumUiAvailable.js';
+import useWikiTab from './components/cockpit/useWikiTab.js';
 import ColleaguePanel from './components/colleague/ColleaguePanel.jsx';
 import useMayaStatus from './components/colleague/useMayaStatus.js';
 import { useIdeaboxStore } from './components/vision/useIdeaboxStore.js';
@@ -256,6 +258,8 @@ function CockpitView({
   iterationStates,
   // COMP-COCKPIT-8: gate focus deep-link
   focusedGateId, onFocusHandled,
+  // COMPOSE-WIKI-TAB-1: {workspace, frameBase} from useWikiTab
+  wikiTab,
 }) {
   switch (activeView) {
     case 'dashboard':
@@ -381,6 +385,12 @@ function CockpitView({
       return <OpsView />;
     case 'stratum':
       return <StratumView />;
+    case 'wiki': {
+      // The selected item's feature wins over the session's (COMPOSE-WIKI-TAB-1).
+      const item = selectedItemId ? items.find(i => i.id === selectedItemId) : null;
+      const code = item?.featureCode || item?.feature_code || item?.lifecycle?.featureCode || featureCode || '';
+      return <WikiView featureCode={code} workspace={wikiTab?.workspace} frameBase={wikiTab?.frameBase} />;
+    }
     case 'qa-scope':
       return <QaScopeView featureCode={featureCode} />;
     case 'journal':
@@ -424,6 +434,7 @@ function AppInner() {
   const [mainTabs] = useState(loadMainTabs);
   const opsPages = useOpsStatusIndex();
   const stratumUi = useStratumUiAvailable();
+  const wikiTab = useWikiTab();
   const [activeTab, setActiveTabRaw] = useState(() => loadActiveTab(mainTabs));
 
   // Agent bar
@@ -501,7 +512,7 @@ function AppInner() {
     // COMPOSE-UX-SIMPLIFY-2: a view persisted from an older build that is now
     // hidden (no tab) falls back to the dashboard on load.
     const saved = localStorage.getItem('compose:activeView');
-    return saved && !HIDDEN_VIEWS.includes(saved) && saved !== 'stratum' ? saved : 'dashboard';
+    return saved && !HIDDEN_VIEWS.includes(saved) && saved !== 'stratum' && saved !== 'wiki' ? saved : 'dashboard';
   });
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -1129,7 +1140,7 @@ function AppInner() {
           {/* View tabs — centred in the header */}
           <div className="flex-1 min-w-0 h-full flex items-center">
             <ViewTabs
-              tabs={mainTabs.filter(t => (t !== 'ops' || opsPages.length) && (t !== 'stratum' || stratumUi))}
+              tabs={mainTabs.filter(t => (t !== 'ops' || opsPages.length) && (t !== 'stratum' || stratumUi) && (t !== 'wiki' || wikiTab.available))}
               activeTab={activeTab}
               onTabChange={setActiveTab}
               onOpenPalette={() => setPaletteOpen(v => !v)}
@@ -1380,6 +1391,7 @@ function AppInner() {
                       agentActivity={agentActivity}
                       iterationStates={iterationStates}
                       focusedGateId={focusedGateId}
+                      wikiTab={wikiTab}
                       onFocusHandled={handleGateFocusHandled}
                     />
                   </PanelErrorBoundary>

@@ -2,19 +2,22 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { resolveStratumUiDir } from './lib/stratum-ui-link.js';
+import { resolveStratumUiDir } from './lib/stratum-ui-link.js'
+import { resolveWikiComponentsDir } from './lib/wiki-components-link.js';
 
 const stratumUi = resolveStratumUiDir();
+const wikiComponents = resolveWikiComponentsDir();
 
 export default defineConfig({
   plugins: [react()],
-  define: { __STRATUM_UI__: JSON.stringify(Boolean(stratumUi)) },
+  define: { __STRATUM_UI__: JSON.stringify(Boolean(stratumUi)), __WIKI_COMPONENTS__: JSON.stringify(Boolean(wikiComponents)) },
   resolve: {
-    dedupe: ['react', 'react-dom', '@dagrejs/dagre'],
+    dedupe: ['react', 'react-dom', '@dagrejs/dagre', 'lucide-react', 'date-fns'],
     alias: [
       { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
       { find: '@stratum/ui/styles.css', replacement: stratumUi ? path.join(stratumUi, 'src/styles.css') : fileURLToPath(new URL('./src/lib/stratum-ui-stub.css', import.meta.url)) },
       { find: /^@stratum\/ui$/, replacement: stratumUi ? path.join(stratumUi, 'src/index.ts') : fileURLToPath(new URL('./src/lib/stratum-ui-stub.js', import.meta.url)) },
+      { find: /^@wiki\/components$/, replacement: wikiComponents ? path.join(wikiComponents, 'src/index.js') : fileURLToPath(new URL('./src/lib/wiki-components-stub.js', import.meta.url)) },
     ],
   },
   test: {
