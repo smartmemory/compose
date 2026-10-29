@@ -3,10 +3,10 @@
 # Usage: scripts/cockpit.sh start|stop|status. Ports are registered to `compose` in ~/.ports.
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RUN="$HOME/.compose/run"
+RUN="${COMPOSE_RUN_DIR:-$HOME/.compose/run}"
 PIDFILE="$RUN/cockpit.pid"
 LOG="$RUN/cockpit.log"
-PORTS="4001 4002 5195"
+PORTS="${PORT:-4001} ${AGENT_PORT:-4002} ${VITE_PORT:-5195}"  # same env names the supervisor reads
 
 alive() { [ -n "${1:-}" ] && kill -0 "$1" 2>/dev/null; }
 sup_pid() { [ -f "$PIDFILE" ] && cat "$PIDFILE"; }
@@ -21,6 +21,21 @@ cmd_status() {
   alive "$pid"
 }
 
+# The wiki owner token: when the project's `.compose/compose.json` wiki block names a token env var that is not already set,
+# read the Mac wiki host's sealed 0600 file (wiki `mac_host.sealed_dir_default`, `wiki-owner-token`) into that var for the
+# supervisor only. The value is never echoed. The supervisor hands it to the API server alone (`wikiChildEnv`).
+WIKI_SEALED_DIR="${WIKI_SEALED_DIR:-$HOME/.config/smartmemory-wiki/sealed}"
+wiki_token_name() {
+  node --input-type=module -e "import { readWikiConfig, checkWikiConfig } from './server/wiki-routes.js'; const c = checkWikiConfig(readWikiConfig(process.argv[1])); if (c.ok) console.log(c.tokenEnv);" "${COMPOSE_TARGET:-$HERE}" 2>/dev/null
+}
+load_wiki_token() {
+  local name; name="$(cd "$HERE" && wiki_token_name)"
+  [ -n "$name" ] || return 0
+  [ -n "${!name:-}" ] && return 0
+  local f="$WIKI_SEALED_DIR/wiki-owner-token"
+  if [ -r "$f" ] && [ -s "$f" ]; then export "$name=$(<"$f")"; else echo "wiki token: $name not set and $f is missing, the Wiki tab will answer token_missing"; fi
+}
+
 cmd_start() {
   mkdir -p "$RUN"
   if alive "$(sup_pid)"; then echo "already running pid $(sup_pid)"; return 0; fi
@@ -29,7 +44,7 @@ cmd_start() {
       echo "port $p is already in use, refusing to start (python3 ~/.claude/scripts/port_check.py $p)"; return 1
     fi
   done
-  (cd "$HERE" && nohup node server/supervisor.js > "$LOG" 2>&1 & echo $! > "$PIDFILE")
+  (load_wiki_token; cd "$HERE" && nohup node server/supervisor.js > "$LOG" 2>&1 & echo $! > "$PIDFILE")
   local deadline=$((SECONDS+90))
   for p in $PORTS; do
     until listening "$p"; do
@@ -57,9 +72,12 @@ cmd_stop() {
   echo "stopped"
 }
 
-case "${1:-}" in
-  start) cmd_start ;;
-  stop) cmd_stop ;;
-  status) cmd_status ;;
-  *) echo "usage: $0 start|stop|status" >&2; exit 2 ;;
-esac
+# Sourced by test/wiki-token-env.test.js, which calls load_wiki_token directly.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  case "${1:-}" in
+    start) cmd_start ;;
+    stop) cmd_stop ;;
+    status) cmd_status ;;
+    *) echo "usage: $0 start|stop|status" >&2; exit 2 ;;
+  esac
+fi

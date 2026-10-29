@@ -27,7 +27,7 @@ export default defineConfig({
   server: {
     // Loopback only: WIKI-FRAME-LOOSEN-1 allows exactly http://127.0.0.1:5195 as a frame origin.
     host: '127.0.0.1',
-    port: 5195,
+    port: Number(process.env.VITE_PORT) || 5195, // the supervisor and cockpit.sh already honour VITE_PORT
     strictPort: true,
     // Don't watch dependency, build, runtime-state or docs trees: watching them made vite the box's top fs-event producer.
     watch: { ignored: ['**/node_modules/**', '**/dist/**', '**/.compose/**', '**/docs/**'] },

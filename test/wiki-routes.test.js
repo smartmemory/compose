@@ -55,6 +55,7 @@ const ROWS = [
   ['config off', 'off', true, 'GET', '/identity', null, null, 503, 'wiki_disabled', 0],
   ['base URL not 127.0.0.1', 'remote-url', true, 'POST', '/query/search', { workspace: 'wiki-eng', q: 'x' }, null, 503, 'config_invalid', 0],
   ['tokenEnv not an env name', 'bad-env', true, 'GET', '/identity', null, null, 503, 'config_invalid', 0],
+  ['tokenEnv named VITE_* (browser-inlined prefix)', 'vite-env', true, 'GET', '/identity', null, null, 503, 'config_invalid', 0],
   ['empty search', 'ok', true, 'POST', '/query/search', { workspace: 'wiki-eng', q: '' }, null, 400, 'bad_request', 0],
   ['foreign Host (DNS rebinding)', 'ok', true, 'POST', '/query/search', { workspace: 'wiki-eng', q: 'x' }, 'evil.example:4001', 403, 'host_refused', 0],
   ['wiki redirects (session gone): not followed', 'ok', true, 'POST', '/query/feature_hub', { ...fh, featureId: 'REDIRECT' }, null, 502, 'bad_response', 1],
@@ -77,6 +78,7 @@ describe('attachWikiRoutes', () => {
       private: { enabled: true, tokenEnv: ENV_NAME, baseUrl: wikiBase, workspace: 'wiki-private' },
       off: { enabled: false, tokenEnv: ENV_NAME, baseUrl: wikiBase },
       'remote-url': { enabled: true, tokenEnv: ENV_NAME, baseUrl: 'http://wiki.example:8791' },
+      'vite-env': { enabled: true, tokenEnv: 'VITE_WIKI_OWNER_TOKEN', baseUrl: wikiBase },
       'bad-env': { enabled: true, tokenEnv: 'x; echo', baseUrl: wikiBase },
       down: { enabled: true, tokenEnv: ENV_NAME, baseUrl: 'http://127.0.0.1:1' },
     };

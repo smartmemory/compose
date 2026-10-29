@@ -42,7 +42,17 @@ export const WIKI_QUERIES = {
 };
 
 const BASE_URL_RE = /^http:\/\/127\.0\.0\.1:([1-9][0-9]{0,4})$/;
-const ENV_NAME_RE = /^[A-Z_][A-Z0-9_]{0,63}$/;
+const ENV_NAME_RE = /^(?!VITE_)[A-Z_][A-Z0-9_]{0,63}$/; // VITE_* is inlined into the browser bundle, so never a token name
+
+/**
+ * The environment a supervised child gets. The wiki token variable reaches only the API server, the one process that
+ * runs the proxy: Vite (which exposes VITE_* to the browser) and the agent server (which spawns `claude -p`) never see it.
+ */
+export function wikiChildEnv(procName, env, tokenEnv) {
+  const out = { ...env };
+  if (procName !== 'api-server' && typeof tokenEnv === 'string') delete out[tokenEnv];
+  return out;
+}
 const LOOPBACK_HOST_RE = /^(127\.0\.0\.1|localhost)(:\d{1,5})?$/;
 const LOOPBACK_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d{1,5})?$/;
 
