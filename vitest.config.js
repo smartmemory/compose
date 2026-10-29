@@ -1,13 +1,21 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { resolveStratumUiDir } from './lib/stratum-ui-link.js';
+
+const stratumUi = resolveStratumUiDir();
 
 export default defineConfig({
   plugins: [react()],
+  define: { __STRATUM_UI__: JSON.stringify(Boolean(stratumUi)) },
   resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-    },
+    dedupe: ['react', 'react-dom', '@dagrejs/dagre'],
+    alias: [
+      { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+      { find: '@stratum/ui/styles.css', replacement: stratumUi ? path.join(stratumUi, 'src/styles.css') : fileURLToPath(new URL('./src/lib/stratum-ui-stub.css', import.meta.url)) },
+      { find: /^@stratum\/ui$/, replacement: stratumUi ? path.join(stratumUi, 'src/index.ts') : fileURLToPath(new URL('./src/lib/stratum-ui-stub.js', import.meta.url)) },
+    ],
   },
   test: {
     environment: 'jsdom',

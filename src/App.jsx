@@ -5,9 +5,10 @@ import ProjectSwitchPopover from './components/ProjectSwitchPopover.jsx';
 
 // Cockpit shell components
 import ViewTabs from './components/cockpit/ViewTabs.jsx';
-import StratumPanel from './components/StratumPanel.jsx';
+import StratumView from './components/cockpit/StratumView.jsx';
 import OpsView from './components/cockpit/OpsView.jsx';
 import useOpsStatusIndex from './components/cockpit/useOpsStatusIndex.js';
+import useStratumUiAvailable from './components/cockpit/useStratumUiAvailable.js';
 import ColleaguePanel from './components/colleague/ColleaguePanel.jsx';
 import useMayaStatus from './components/colleague/useMayaStatus.js';
 import { useIdeaboxStore } from './components/vision/useIdeaboxStore.js';
@@ -379,7 +380,7 @@ function CockpitView({
     case 'ops':
       return <OpsView />;
     case 'stratum':
-      return <StratumPanel />;
+      return <StratumView />;
     case 'qa-scope':
       return <QaScopeView featureCode={featureCode} />;
     case 'journal':
@@ -422,6 +423,7 @@ function AppInner() {
   // Main-area tabs
   const [mainTabs] = useState(loadMainTabs);
   const opsPages = useOpsStatusIndex();
+  const stratumUi = useStratumUiAvailable();
   const [activeTab, setActiveTabRaw] = useState(() => loadActiveTab(mainTabs));
 
   // Agent bar
@@ -1127,7 +1129,7 @@ function AppInner() {
           {/* View tabs — centred in the header */}
           <div className="flex-1 min-w-0 h-full flex items-center">
             <ViewTabs
-              tabs={opsPages.length ? mainTabs : mainTabs.filter(t => t !== 'ops')}
+              tabs={mainTabs.filter(t => (t !== 'ops' || opsPages.length) && (t !== 'stratum' || stratumUi))}
               activeTab={activeTab}
               onTabChange={setActiveTab}
               onOpenPalette={() => setPaletteOpen(v => !v)}

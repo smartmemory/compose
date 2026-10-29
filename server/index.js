@@ -15,6 +15,7 @@ import { attachAuthRoutes } from './auth-routes.js';
 import { configureAuthStore, requireSensitiveToken } from './security.js';
 import { resolveComposeHost, attachAgentProxy } from './remote-utils.js';
 import { attachOpsStatusRoutes } from './ops-status-routes.js';
+import { attachStratumUiRoutes } from './stratum-ui-routes.js';
 
 // Re-export for Boundary Map (S02) and tests
 export { resolveComposeHost, attachAgentProxy };
@@ -113,6 +114,8 @@ const _authStore = createAuthStore(getDataDir());
 configureAuthStore(_authStore);
 
 app.use(cors({ origin: /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/ }));
+// COMPOSE-STRAT-TAB-1: /api/stratum-ui/* reads its own request bodies, so it mounts BEFORE express.json().
+await attachStratumUiRoutes(app, { remote: remoteMode });
 app.use(express.json());
 
 // ---------------------------------------------------------------------------
