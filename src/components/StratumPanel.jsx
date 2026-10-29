@@ -282,7 +282,7 @@ function FlowList({ activeBuild }) {
 }
 
 // ---------------------------------------------------------------------------
-// Active Build Banner (transitional — STRAT-COMP-8 deletes StratumPanel.jsx)
+// Active Build Banner (transitional — COMPOSE-STRAT-TAB-1 retires StratumPanel.jsx in favour of GatesInbox)
 // ---------------------------------------------------------------------------
 
 const pulsingDotStyle = {

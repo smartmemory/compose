@@ -5,6 +5,7 @@ import ProjectSwitchPopover from './components/ProjectSwitchPopover.jsx';
 
 // Cockpit shell components
 import ViewTabs from './components/cockpit/ViewTabs.jsx';
+import StratumPanel from './components/StratumPanel.jsx';
 import OpsView from './components/cockpit/OpsView.jsx';
 import useOpsStatusIndex from './components/cockpit/useOpsStatusIndex.js';
 import ColleaguePanel from './components/colleague/ColleaguePanel.jsx';
@@ -377,6 +378,8 @@ function CockpitView({
       return <IdeaboxView />;
     case 'ops':
       return <OpsView />;
+    case 'stratum':
+      return <StratumPanel />;
     case 'qa-scope':
       return <QaScopeView featureCode={featureCode} />;
     case 'journal':

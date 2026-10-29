@@ -17,7 +17,7 @@
  *                           be conditional, a persisted tab cannot).
  */
 import React from 'react';
-import { Network, GitBranch, Activity, ShieldCheck, Search, FileText, Workflow, MessageSquare, LayoutDashboard, Lightbulb, History, BookOpen, ListChecks, FileSearch, Sparkles, Settings, Gauge } from 'lucide-react';
+import { Network, GitBranch, Activity, ShieldCheck, Search, FileText, Workflow, MessageSquare, LayoutDashboard, Lightbulb, History, BookOpen, ListChecks, FileSearch, Sparkles, Settings, Gauge, Layers } from 'lucide-react';
 
 const TAB_META = {
   dashboard: { label: 'Dashboard', icon: LayoutDashboard, tip: 'Overview of project status and activity' },
@@ -35,6 +35,7 @@ const TAB_META = {
   design:    { label: 'Design',    icon: MessageSquare,   tip: 'Design agent conversations and decisions' },
   ideabox:   { label: 'Ideabox',   icon: Lightbulb,       tip: 'Captured ideas and suggestions' },
   ops:       { label: 'Ops',       icon: Gauge,          tip: 'Ops status pages (read-only)' },
+  stratum:   { label: 'Stratum',   icon: Layers,         tip: 'Stratum flows and pending gates' },
   settings:  { label: 'Settings',  icon: Settings,        tip: 'Project and UI settings' },
 };
 
