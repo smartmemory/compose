@@ -1,6 +1,6 @@
 {
   "_source": "forge/compose/docs/features/COMPOSE-UI-INTEGRATION-1/design.md (STRATUM-CADENCE-UI-AUDIT-1, 2026-10-29). Envelope taken from smart-memory-ops/docs/process/operating-process.md section 4b `ops-event/1`, extended additively (field `provider`, Stratum kinds, snapshot records).",
-  "_roadmap": "COMPOSE-UI-INTEGRATION-1 units in design.md section 'Units'. Status: DESIGN, not built.",
+  "_roadmap": "SUPERSEDED 2026-10-30 by design.md v2 (published components; no Compose read model). Kept for history; v1 units dropped, see design.md 'Dropped from v1'.",
   "version": 1,
   "schema_id": "ops-event/1",
   "closed": "Every object below is additionalProperties:false, as COMP-OBS-CONTRACT/schema.json does. A new field or kind is an additive edit to this file in the same commit as its provider.",

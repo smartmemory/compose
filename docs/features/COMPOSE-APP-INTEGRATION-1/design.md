@@ -138,3 +138,10 @@ Stripe read-only fits the same way (LINKS = products/prices with `metadata.featu
   docs: zero hits. `connector` hits (COMP-TRIAGE-6, COMP-MODEL-ROUTE-1, COMP-CONSENSUS-4,
   STRAT-HERMES-CONNECTOR) are all *agent* dispatch connectors, a different axis. 38 compose
   `design.md` files mention `registry|adapter`; the relevant ones are in the table in section 1.
+
+## Superseded by COMPOSE-UI-INTEGRATION-1 (2026-10-30)
+
+**W1/W2 (and unit COMPOSE-APP-WIKI-TAB-1) are SUPERSEDED** by [COMPOSE-UI-INTEGRATION-1 v2](../COMPOSE-UI-INTEGRATION-1/design.md)
+(owner 2026-10-30: publish components, not a Compose-rendered Apps tab): the wiki's own `FeatureHub`/`Search`
+components render in Compose (WIKI-UI-COMPONENTS-1, COMPOSE-WIKI-TAB-1). Kept from §3: env-NAME auth, `wiki-eng` only, never
+`/commands`. COMPOSE-APP-READMODEL-1 (unit 6) has no read model to feed; W3-W5 and the contract are not re-decided here.
