@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "compose/docs/features/COMPOSE-APP-INTEGRATION-1/app-provider-contract.json",
+  "title": "Compose App Provider contract v1",
+  "_source": "compose/docs/features/COMPOSE-APP-INTEGRATION-1/design.md",
+  "_roadmap": "COMPOSE-APP-INTEGRATION-1 (units COMPOSE-APP-WIKI-TAB-1 .. COMPOSE-APP-DESIGN-CONTEXT-1)",
+  "_status": "DESIGN 2026-10-29. Read model record shape is a stand-in until COMPOSE-UI-INTEGRATION-1 publishes its contract; reconcile then.",
+  "description": "Any app implements this to appear in Compose. Lives as .compose/compose.json `apps[]` (one appDeclaration each). Capabilities are declared, never emulated: an undeclared capability is absent (PROVIDER-SEAM, lib/fluid/factory.js:1-19). No credential values anywhere: env var NAMES only.",
+  "type": "object",
+  "properties": {
+    "apps": { "type": "array", "items": { "$ref": "#/$defs/appDeclaration" }, "maxItems": 32 }
+  },
+  "$defs": {
+    "envName": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$" },
+    "capability": { "type": "string", "enum": ["SEARCH", "LINKS", "INGEST", "HEALTH", "ACTIONS"] },
+    "appDeclaration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "enabled", "transport", "adapter", "auth", "capabilities"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,31}$" },
+        "label": { "type": "string", "maxLength": 48 },
+        "enabled": { "type": "boolean", "description": "Strict truthy. false = zero traffic, byte-identical to absent (COMP-SMARTMEMORY-INGEST Decision 1)." },
+        "homepage": { "type": "string", "pattern": "^https?://", "description": "Base for read-only deep links (ACTIONS)." },
+        "adapter": { "type": "string", "enum": ["wiki-http", "smartmemory-http", "mcp-generic"], "description": "Key into the closed in-repo map lib/apps/adapters/index.js. Config never names a code path." },
+        "transport": { "$ref": "#/$defs/transport" },
+        "auth": { "$ref": "#/$defs/auth" },
+        "capabilities": { "type": "array", "items": { "$ref": "#/$defs/capability" }, "uniqueItems": true, "minItems": 1 },
+        "scope": { "$ref": "#/$defs/scope" },
+        "ingest": { "$ref": "#/$defs/ingestDeclaration" },
+        "actions": { "type": "array", "items": { "$ref": "#/$defs/actionDeclaration" }, "maxItems": 8 },
+        "toolMap": {
+          "type": "object",
+          "description": "mcp-generic only: capability -> MCP tool name and result field map.",
+          "propertyNames": { "$ref": "#/$defs/capability" },
+          "additionalProperties": {
+            "type": "object", "additionalProperties": false, "required": ["tool"],
+            "properties": {
+              "tool": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]{1,64}$" },
+              "argMap": { "type": "object", "additionalProperties": { "type": "string" } },
+              "resultMap": { "type": "object", "additionalProperties": { "type": "string" }, "description": "AppHit field -> dotted path in the tool result." }
+            }
+          }
+        }
+      },
+      "not": { "anyOf": [
+        { "required": ["token"] }, { "required": ["secret"] }, { "required": ["password"] },
+        { "required": ["apiKey"] }, { "required": ["key"] }
+      ] }
+    },
+    "transport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["mcp-stdio", "mcp-http", "http", "cli", "files"], "description": "mcp-* preferred for apps that ship an MCP server." },
+        "baseUrl": { "type": "string", "pattern": "^https?://" },
+        "command": { "type": "array", "items": { "type": "string" }, "description": "mcp-stdio / cli argv. Spawned with ONLY auth.envAllowlist passed, never the whole env." },
+        "root": { "type": "string", "description": "files: absolute directory read-only." },
+        "pathAllowlist": { "type": "array", "items": { "type": "string" }, "description": "http: the only method+path pairs the adapter may call, e.g. 'POST /query/search'." }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["none", "header", "bearer", "delegated"] },
+        "header": { "type": "string", "pattern": "^[a-z0-9-]{1,64}$" },
+        "env": { "$ref": "#/$defs/envName", "description": "Name of the env var whose value is sent. Missing at runtime = health 'unauthorized', never a crash." },
+        "envAllowlist": { "type": "array", "items": { "$ref": "#/$defs/envName" }, "description": "delegated: env names passed to the app's own MCP process." }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "header" } } }, "then": { "required": ["header", "env"] } },
+        { "if": { "properties": { "kind": { "const": "bearer" } } }, "then": { "required": ["env"] } },
+        { "if": { "properties": { "kind": { "const": "delegated" } } }, "then": { "required": ["envAllowlist"] } }
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "workspaces": { "type": "array", "items": { "type": "string" }, "description": "Allowlist of app-side workspaces/projects. Adapters may hard-refuse some regardless (wiki-http refuses wiki-private)." },
+        "maxResults": { "type": "integer", "minimum": 1, "maximum": 50, "default": 10 },
+        "timeoutMs": { "type": "integer", "minimum": 200, "maximum": 15000, "default": 3000 },
+        "healthTtlS": { "type": "integer", "minimum": 5, "maximum": 3600, "default": 60 }
+      }
+    },
+    "ingestDeclaration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["pull", "push"], "description": "pull: the app reads paths Compose names (Compose sends nothing). push: Compose sends lifecycle events (COMP-SMARTMEMORY-INGEST)." },
+        "paths": { "type": "array", "items": { "type": "string" }, "description": "pull: repo-relative paths the app is expected to index (informational; drives the Apps settings 'covered' column)." }
+      }
+    },
+    "actionDeclaration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "readOnly", "href"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,31}$" },
+        "label": { "type": "string", "maxLength": 32 },
+        "readOnly": { "const": true, "description": "v1 allows read-only deep links only." },
+        "href": { "type": "string", "description": "Template; {featureCode} and {hitId} are the only placeholders." }
+      }
+    },
+    "request": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["capability", "q"],
+          "properties": { "capability": { "const": "SEARCH" }, "q": { "type": "string", "minLength": 1, "maxLength": 256 }, "featureCode": { "type": "string" }, "limit": { "type": "integer", "minimum": 1, "maximum": 50 } } },
+        { "type": "object", "additionalProperties": false, "required": ["capability", "featureCode"],
+          "properties": { "capability": { "const": "LINKS" }, "featureCode": { "type": "string", "pattern": "^[A-Z][A-Z0-9.-]*[A-Z0-9]$" } } },
+        { "type": "object", "additionalProperties": false, "required": ["capability"],
+          "properties": { "capability": { "enum": ["HEALTH", "INGEST"] } } }
+      ]
+    },
+    "response": {
+      "oneOf": [
+        { "type": "object", "required": ["ok", "data"], "properties": { "ok": { "const": true }, "data": {
+          "oneOf": [
+            { "type": "object", "required": ["hits"], "properties": { "hits": { "type": "array", "items": { "$ref": "#/$defs/appHit" } } } },
+            { "$ref": "#/$defs/health" },
+            { "type": "object", "required": ["mode"], "properties": { "mode": { "enum": ["pull", "push"] }, "lastIndexedAt": { "type": ["string", "null"] }, "covered": { "type": "array", "items": { "type": "string" } } } }
+          ] } } },
+        { "type": "object", "required": ["ok", "error"], "properties": { "ok": { "const": false }, "error": {
+          "type": "object", "required": ["kind", "retryable"], "properties": {
+            "kind": { "enum": ["disabled", "capability_unavailable", "unreachable", "unauthorized", "timeout", "invalid_request", "scope_refused", "app_error"] },
+            "retryable": { "type": "boolean" },
+            "message": { "type": "string", "maxLength": 200, "description": "Server-owned fixed text; never echoes request values or credential material." } } } } }
+      ]
+    },
+    "appHit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["appId", "id", "title"],
+      "properties": {
+        "appId": { "type": "string" },
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "snippet": { "type": "string", "maxLength": 281 },
+        "kind": { "type": "string", "description": "App vocabulary, e.g. wiki doc kind design|plan|report|decision|ledger." },
+        "url": { "type": ["string", "null"] },
+        "score": { "type": ["number", "null"] },
+        "ts": { "type": ["string", "null"] },
+        "featureIds": { "type": "array", "items": { "type": "string" } },
+        "workspace": { "type": ["string", "null"] }
+      }
+    },
+    "health": {
+      "type": "object",
+      "required": ["state"],
+      "properties": {
+        "state": { "enum": ["ok", "degraded", "unreachable", "unauthorized", "disabled", "misconfigured"] },
+        "checkedAt": { "type": "string" },
+        "detail": { "type": "string", "maxLength": 200 }
+      }
+    },
+    "readModelRecord": {
+      "type": "object",
+      "description": "Stand-in for the COMPOSE-UI-INTEGRATION-1 read-model record; one per (app, entity, recordType).",
+      "required": ["provider", "entity", "recordType", "data", "fetchedAt"],
+      "properties": {
+        "provider": { "type": "object", "required": ["kind", "id"], "properties": { "kind": { "const": "app" }, "id": { "type": "string" } } },
+        "entity": { "type": "object", "required": ["type"], "properties": { "type": { "enum": ["feature", "workspace"] }, "code": { "type": "string" } } },
+        "recordType": { "enum": ["app.links", "app.search", "app.health", "app.ingest"] },
+        "data": {},
+        "fetchedAt": { "type": "string" },
+        "ttlS": { "type": "integer" }
+      }
+    }
+  },
+  "examples": [
+    { "apps": [
+      { "id": "wiki", "label": "SmartMemory Wiki", "enabled": true, "adapter": "wiki-http",
+        "transport": { "type": "http", "baseUrl": "http://127.0.0.1:8791",
+          "pathAllowlist": ["GET /health", "GET /identity", "POST /query/search", "POST /query/feature_hub"] },
+        "auth": { "kind": "header", "header": "x-wiki-owner-token", "env": "WIKI_OWNER_TOKEN" },
+        "capabilities": ["SEARCH", "LINKS", "HEALTH", "INGEST", "ACTIONS"],
+        "scope": { "workspaces": ["wiki-eng"], "maxResults": 10, "timeoutMs": 3000 },
+        "ingest": { "mode": "pull", "paths": ["docs/features/", "docs/design/", "docs/plans/", "docs/journal/"] },
+        "actions": [ { "id": "open", "label": "Open in wiki", "readOnly": true, "href": "http://127.0.0.1:8791/pages/{hitId}" } ] },
+      { "id": "smartmemory", "label": "SmartMemory", "enabled": true, "adapter": "smartmemory-http",
+        "transport": { "type": "http", "baseUrl": "http://localhost:9001" },
+        "auth": { "kind": "bearer", "env": "COMPOSE_SM_KEY" },
+        "capabilities": ["SEARCH", "HEALTH", "INGEST"],
+        "ingest": { "mode": "push" } },
+      { "id": "posthog", "label": "PostHog (read-only)", "enabled": false, "adapter": "mcp-generic",
+        "transport": { "type": "mcp-stdio", "command": ["<posthog-mcp-entrypoint>"] },
+        "auth": { "kind": "delegated", "envAllowlist": ["POSTHOG_PERSONAL_API_KEY"] },
+        "capabilities": ["LINKS", "HEALTH"],
+        "toolMap": { "LINKS": { "tool": "feature-flag-get-all", "argMap": { "search": "featureCode" },
+          "resultMap": { "id": "id", "title": "key", "snippet": "name" } } } }
+    ] }
+  ],
+  "_unverified": [
+    "PostHog MCP entrypoint, tool name 'feature-flag-get-all' and env name POSTHOG_PERSONAL_API_KEY are illustrative, not checked against the installed PostHog MCP.",
+    "Wiki deep link /pages/{hitId}: GET /pages/{page} exists (wiki/spine/api/pages.py:134) but whether a feature_hub row id is a valid {page} is not checked.",
+    "WIKI_OWNER_TOKEN is a proposed env name; the wiki writes its owner token to a sealed file that Compose must never read (operator exports it)."
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "_source": "forge/compose/docs/features/COMPOSE-UI-INTEGRATION-1/design.md (STRATUM-CADENCE-UI-AUDIT-1, 2026-10-29). Envelope taken from smart-memory-ops/docs/process/operating-process.md section 4b `ops-event/1`, extended additively (field `provider`, Stratum kinds, snapshot records).",
+  "_roadmap": "COMPOSE-UI-INTEGRATION-1 units in design.md section 'Units'. Status: DESIGN, not built.",
+  "version": 1,
+  "schema_id": "ops-event/1",
+  "closed": "Every object below is additionalProperties:false, as COMP-OBS-CONTRACT/schema.json does. A new field or kind is an additive edit to this file in the same commit as its provider.",
+  "event": {
+    "required": ["schema", "event_id", "ts", "provider", "source", "source_ref", "kind", "object"],
+    "fields": {
+      "schema": "const 'ops-event/1'",
+      "event_id": "sha256(provider + source_ref), so a re-read is a no-op",
+      "ts": "ISO-8601 UTC of the original record",
+      "provider": "enum: cadence-diary | cadence-snapshot | seats | sessions | stratum-flows | stratum-agents | daemons",
+      "source": "enum from ops-event/1: stamp | job | owner_queue | usage | batch | session | daemon | ledger | cadence | event_log, plus 'stratum'",
+      "source_ref": "path:byte_offset, diary '<day>:<line>', or stratum '<flow_id>:<event_index>' / '<run_id>'",
+      "kind": "one of `kinds` below",
+      "object": {"type": "enum: unit | job | owner_question | session | seat | review_batch | daemon | flow | step | gate | agent_run", "id": "string"},
+      "feature_code": "string|null: Compose feature code when known",
+      "lane": "string|null", "repo": "string|null", "session": "string|null", "seat": "string|null",
+      "actor": "string|null: session name, daemon name, 'owner', or 'stratum'",
+      "from_state": "string|null", "to_state": "string|null",
+      "verdict": "enum|null: CLEAN | FINDINGS | READY FOR REVIEW | BLOCKED | INVALID",
+      "sha": "string|null",
+      "payload_ref": "string|null: absolute path of the record holding the detail (never the content)",
+      "extra": "object, small scalars only (counts, percents, reason codes); never report bodies, env values or keys"
+    }
+  },
+  "kinds": {
+    "cadence-diary": {
+      "rule": "1:1 from the diary kind (smart-memory-ops/claude/scripts/ev.py KINDS); to_state from the fixed stamp->state table in operating-process.md section 2",
+      "kinds": ["unit.<stamp event>", "unit.claimed", "unit.released", "unit.retire", "job.added", "job.done", "job.queued", "owner.ask", "owner.answer", "owner.remind", "lane.set", "lane.order"],
+      "excluded": ["note (free text, never parsed)", "job.snapshot, job.priority (folded into the job object)"]
+    },
+    "cadence-diary-planned": ["session.start", "session.stop", "session.hop", "session.compact", "session.cold_off", "deploy", "owner.decision", "finding.adjudicated"],
+    "stratum-flows": ["flow.planned", "flow.status", "step.ready", "step.result", "step.ensure_failed", "step.retry", "gate.waiting", "gate.resolved", "flow.spend"],
+    "stratum-agents": ["agent_run.started", "agent_run.exited"],
+    "daemons": ["daemon.heartbeat", "daemon.stale"],
+    "provider-health": ["provider.ok", "provider.error"]
+  },
+  "snapshot": {
+    "rule": "Providers whose truth is a current reading (not a history) emit one snapshot record per poll; the read model replaces the previous one for the same (provider, object.type, object.id).",
+    "required": ["schema", "provider", "ts", "object", "state"],
+    "fields": {
+      "schema": "const 'ops-snapshot/1'",
+      "provider": "as event.provider",
+      "ts": "ISO-8601 UTC of the reading",
+      "object": "as event.object",
+      "state": "object, closed per object.type: seat {pct_5h, pct_7d, reset_5h, reset_7d, fable_pct, codex_pct}; session {name, seat, busy, context_k, tab}; gate_state {name, enabled, last_decision, last_reason}; cadence {launchable, ready, blocked_by: {reason: count}, walls: [name], rung}; unit_wait {unit, reason}",
+      "stale_after_s": "integer: the UI greys the record after this"
+    }
+  },
+  "provider_registry": {
+    "file": ".compose/ops-providers.json (per workspace, read-only config)",
+    "precedent": "smart-memory-ops/status/configs/cadence-section.json (command, timeout_s, kill_env)",
+    "entry": {
+      "name": "provider enum",
+      "mode": "events | snapshot",
+      "command": "argv array, run without a shell; must print JSON lines of ops-event/1 or ops-snapshot/1 on stdout",
+      "cursor_arg": "string|null: e.g. '--since'; the runner passes the last source_ref it accepted",
+      "interval_s": "integer >= 5",
+      "timeout_s": "integer",
+      "kill_env": "string: env var that turns this provider off when '0'",
+      "cwd": "string|null"
+    }
+  },
+  "read_model": {
+    "objects": ["units", "jobs", "owner_questions", "sessions", "seats", "gate_states", "review_batches", "daemons", "flows", "steps", "gates", "agent_runs", "providers"],
+    "join_keys": "unit<->job by unit id in job label; job<->agent_run by peerLabel/label; flow<->feature by feature_code or stratumFlowId; session<->seat by seat",
+    "api": {
+      "GET /api/ops/state": "the whole projection plus per-provider {last_ok, last_error, cursor}",
+      "GET /api/ops/events?since=<event_id|ts>&limit=N": "recent events, newest last",
+      "WS /ws/vision message 'opsEvent'": "one event or snapshot, after it is applied"
+    },
+    "storage": "in memory, rebuilt from providers on start; optional cache .compose/data/ops-cache.json. Never a second source of truth (the diary and ~/.stratum stay the truth).",
+    "writes": "none in v1. Two-way actions (answer owner question, approve Stratum gate, launch) go through their owners' own writers: owner_queue.py, `stratum gate`, `stratum session launch`."
+  },
+  "rules": [
+    "No secrets, no content: pointers only (payload_ref).",
+    "Fail visible: a provider that exits non-zero or prints an unparseable line yields provider.error with the line position; the cursor does not move (no-silent-degradation.md).",
+    "Free prose (ledger, notes) is never parsed; a prose-only fact gets a typed diary kind first.",
+    "Per object, order by ts then source_ref; no cross-object ordering promise."
+  ]
+}
