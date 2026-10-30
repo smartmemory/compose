@@ -9,6 +9,7 @@ import StratumView from './components/cockpit/StratumView.jsx';
 import CadenceView from './components/cockpit/CadenceView.jsx';
 import WikiView from './components/cockpit/WikiView.jsx';
 import OpsView from './components/cockpit/OpsView.jsx';
+import UsageView from './components/usage/UsageView.jsx';
 import useOpsStatusIndex from './components/cockpit/useOpsStatusIndex.js';
 import useStratumUiAvailable from './components/cockpit/useStratumUiAvailable.js';
 import useCadenceUiAvailable from './components/cockpit/useCadenceUiAvailable.js';
@@ -385,6 +386,8 @@ function CockpitView({
       return <IdeaboxView />;
     case 'ops':
       return <OpsView />;
+    case 'usage':
+      return <UsageView />;
     case 'stratum':
       return <StratumView />;
     case 'cadence':

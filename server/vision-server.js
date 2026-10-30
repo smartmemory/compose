@@ -39,6 +39,7 @@ import { attachPipelineRoutes } from './pipeline-routes.js';
 import { attachIdeaboxRoutes } from './ideabox-routes.js';
 import { attachBuildRoutes } from './build-routes.js';
 import { attachFeatureScaffoldRoutes } from './feature-scaffold-routes.js';
+import { attachUsageRoutes } from './usage-routes.js';
 import { attachJournalRoutes } from './journal-routes.js';
 import { CoalescingBuffer } from './coalescing-buffer.js';
 /** Settings defaults (previously derived from contracts/lifecycle.json). */
@@ -194,6 +195,9 @@ export class VisionServer {
     // ── Feature scaffolding (COMP-PARITY-9, sensitive) ─────────────────────
     // POST /api/features/scaffold — writes feature.json + a ROADMAP row.
     attachFeatureScaffoldRoutes(app, { getProjectRoot: () => getTargetRoot() });
+
+    // ── Usage statistics (COMP-OBS-STATS-1, read-only) ───────────────────
+    attachUsageRoutes(app);
 
     // ── Build state hydration ─────────────────────────────────────────────
     app.get('/api/build/state', (_req, res) => {

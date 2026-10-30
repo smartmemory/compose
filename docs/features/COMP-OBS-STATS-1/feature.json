@@ -1,10 +1,10 @@
 {
   "code": "COMP-OBS-STATS-1",
-  "description": "Usage statistics view: cross-build cost/token aggregates over time with KPI tiles, period comparison, day-bucketed time series, and a by-agent/by-model breakdown, read from build-history.jsonl",
-  "status": "PLANNED",
+  "description": "Usage statistics view (slice 1): cockpit Usage tab over the dispatch ledger (collectDispatchMetrics day buckets + build-history join): KPI tiles with three-state cost provenance, period comparison, day-bucketed stacked SVG chart, by-model table with an Unknown row",
+  "status": "COMPLETE",
   "phase": "COMP-OBS-STATS: Usage statistics",
   "created": "2026-09-28",
-  "updated": "2026-09-28",
+  "updated": "2026-10-30",
   "complexity": "L",
   "position": 1,
   "parent": "COMP-OBS-COST-4",

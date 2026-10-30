@@ -17,7 +17,7 @@
 // renderView cases stay and in-app links (e.g. a gate card) still reach them.
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_MAIN_TABS = ['dashboard', 'graph', 'docs', 'ideabox', 'ops', 'stratum', 'cadence', 'wiki', 'settings'];
+export const DEFAULT_MAIN_TABS = ['dashboard', 'graph', 'docs', 'ideabox', 'ops', 'stratum', 'cadence', 'wiki', 'usage', 'settings'];
 
 // Views that were tabs before COMPOSE-UX-SIMPLIFY-2. A persisted tab list from
 // an older build is filtered against DEFAULT_MAIN_TABS so these drop out.

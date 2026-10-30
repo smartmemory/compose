@@ -1652,8 +1652,8 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 
 ---
 
-## COMP-OBS-STATS: Usage statistics — PLANNED
+## COMP-OBS-STATS: Usage statistics — COMPLETE
 
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
-| 1 | COMP-OBS-STATS-1 | Usage statistics view: cross-build cost/token aggregates over time with KPI tiles, period comparison, day-bucketed time series, and a by-agent/by-model breakdown, read from build-history.jsonl | PLANNED |
+| 1 | COMP-OBS-STATS-1 | Usage statistics view (slice 1): cockpit Usage tab over the dispatch ledger (collectDispatchMetrics day buckets + build-history join): KPI tiles with three-state cost provenance, period comparison, day-bucketed stacked SVG chart, by-model table with an Unknown row | COMPLETE |

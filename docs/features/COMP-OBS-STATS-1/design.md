@@ -1,6 +1,8 @@
 # COMP-OBS-STATS-1: Usage statistics page — Design
 
-**Status:** DESIGN
+**Status:** SLICE 1 COMPLETE (2026-10-30, COMP-OBS-STATS-1: `lib/dispatch-metrics.js` usage section, `GET /api/usage/stats` in `server/usage-routes.js`, `src/components/usage/UsageView.jsx`). Slices 2-4 PLANNED.
+**Slice 1 decisions (owner-absent, forge-main 2026-10-30):** Q1 current workspace only; Q2 the page header says it counts Compose-dispatched spend only; Q3 shipped now with the Unknown row and the incomplete marker, COMP-COST-OWNER-1 untouched.
+**Implementation note:** build-history records carry the build id as `accumulator_build_id` (`lib/build.js` `buildCostSnapshot`), not `build_id`; the join is ledger `build_id` = history `accumulator_build_id`. History rows without it (pre-COMP-COST-OWNER) cannot join and count as `unjoined`.
 **Date:** 2026-09-28
 **Reviewed:** Codex `gpt-6-sol/high`, 2026-09-28 — 4 findings upheld, all incorporated.
 The substrate decision below is the reverse of this doc's first draft; see "Correction".
