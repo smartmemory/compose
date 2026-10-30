@@ -23,7 +23,12 @@ async function fakeWiki(calls) {
   app.post('/query/feature_hub', (req, res) => (req.body.filters.feature_id === 'REDIRECT'
     ? res.redirect(303, '/signin')
     : res.json({ items: [], total: 0, next_cursor: null, generated_at: 't', feature: null })));
-  app.post('/query/decisions', (_req, res) => res.status(400).json({ code: 'bad_filter', message: 'no such feature' }));
+  app.post('/query/decisions', (req, res) => {
+    if (req.body.page?.cursor === 'REDIRECT') return res.redirect(303, '/signin');
+    return req.body.filters.feature_id === undefined
+      ? res.json({ items: [], total: 0, next_cursor: null, generated_at: 't' })
+      : res.status(400).json({ code: 'bad_filter', message: 'no such feature' });
+  });
   app.post('/query/search', (_req, res) => res.json({ groups: [], generated_at: 't' }));
   app.use((_req, res) => res.status(418).json({ code: 'reached_the_wiki' }));
   return listen(app);
@@ -41,6 +46,23 @@ const ROWS = [
     ['POST', '/query/decisions', { query: 'decisions', workspace: 'wiki-eng', filters: { feature_id: 'COMPOSE-WIKI-TAB-1' }, page: { size: 50 } }]],
   ['search: allowed', 'ok', true, 'POST', '/query/search', { workspace: 'wiki-eng', q: 'recall' }, null, 200, null, 1,
     ['POST', '/query/search', { query: 'search', workspace: 'wiki-eng', filters: { q: 'recall' }, page: {} }]],
+  ['decisions_page: allowed, no cursor, page built here', 'ok', true, 'POST', '/query/decisions_page', { workspace: 'wiki-eng', extra: 'dropped', filters: { feature_id: 'X' }, query: 'ideas' }, null, 200, null, 1,
+    ['POST', '/query/decisions', { query: 'decisions', workspace: 'wiki-eng', filters: {}, page: { size: 50 } }]],
+  ['decisions_page: cursor and size pass, nothing else', 'ok', true, 'POST', '/query/decisions_page', { workspace: 'wiki-eng', cursor: 'abc.DEF_123', size: 20, sort: 'x' }, null, 200, null, 1,
+    ['POST', '/query/decisions', { query: 'decisions', workspace: 'wiki-eng', filters: {}, page: { size: 20, cursor: 'abc.DEF_123' } }]],
+  ['decisions_page: cursor at the cap passes', 'ok', true, 'POST', '/query/decisions_page', { workspace: 'wiki-eng', cursor: 'c'.repeat(512) }, null, 200, null, 1,
+    ['POST', '/query/decisions', { query: 'decisions', workspace: 'wiki-eng', filters: {}, page: { size: 50, cursor: 'c'.repeat(512) } }]],
+  ['decisions_page: oversize cursor', 'ok', true, 'POST', '/query/decisions_page', { workspace: 'wiki-eng', cursor: 'c'.repeat(513) }, null, 400, 'bad_request', 0],
+  ['decisions_page: empty cursor', 'ok', true, 'POST', '/query/decisions_page', { workspace: 'wiki-eng', cursor: '' }, null, 400, 'bad_request', 0],
+  ['decisions_page: object cursor', 'ok', true, 'POST', '/query/decisions_page', { workspace: 'wiki-eng', cursor: { $ne: 1 } }, null, 400, 'bad_request', 0],
+  ['decisions_page: size 0', 'ok', true, 'POST', '/query/decisions_page', { workspace: 'wiki-eng', size: 0 }, null, 400, 'bad_request', 0],
+  ['decisions_page: size 51', 'ok', true, 'POST', '/query/decisions_page', { workspace: 'wiki-eng', size: 51 }, null, 400, 'bad_request', 0],
+  ['decisions_page: size 1.5', 'ok', true, 'POST', '/query/decisions_page', { workspace: 'wiki-eng', size: 1.5 }, null, 400, 'bad_request', 0],
+  ['decisions_page: size as a string', 'ok', true, 'POST', '/query/decisions_page', { workspace: 'wiki-eng', size: '20' }, null, 400, 'bad_request', 0],
+  ['decisions_page: wiki-private', 'ok', true, 'POST', '/query/decisions_page', { workspace: 'wiki-private' }, null, 403, 'workspace_refused', 0],
+  ['decisions_page: no workspace', 'ok', true, 'POST', '/query/decisions_page', {}, null, 403, 'workspace_refused', 0],
+  ['decisions_page: missing token', 'ok', false, 'POST', '/query/decisions_page', { workspace: 'wiki-eng' }, null, 503, 'token_missing', 0],
+  ['decisions_page: wiki redirect not followed', 'ok', true, 'POST', '/query/decisions_page', { workspace: 'wiki-eng', cursor: 'REDIRECT' }, null, 502, 'bad_response', 1],
   ['unlisted query (notes_tree)', 'ok', true, 'POST', '/query/notes_tree', { workspace: 'wiki-eng' }, null, 404, 'not_proxied', 0],
   ['unlisted GET (/pages/home)', 'ok', true, 'GET', '/pages/home', null, null, 404, 'not_proxied', 0],
   ['/commands', 'ok', true, 'POST', '/commands', { command: 'apply' }, null, 404, 'not_proxied', 0],

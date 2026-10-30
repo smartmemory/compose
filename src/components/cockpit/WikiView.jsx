@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { WikiDataProvider, FeatureHub, Search, wikiPath } from '@wiki/components';
+import { WikiDataProvider, FeatureHub, Search, Decisions, wikiPath } from '@wiki/components';
 import './wiki-tab.css';
 import { createWikiDataClient } from '../../lib/clients/wiki.js';
 
 /**
- * Wiki tab (COMPOSE-WIKI-TAB-1): the wiki's FeatureHub and Search screens from `@wiki/components`,
+ * Wiki tab (COMPOSE-WIKI-TAB-1): the wiki's FeatureHub, Search and Decisions screens from `@wiki/components`,
  * fed by Compose's DataClient (all data through `/api/wiki`, `wiki-eng` only), plus "Open full wiki":
  * the Mac wiki's own UI in a frame, which rides the browser's wiki sign-in (WIKI-FRAME-LOOSEN-1 lets
  * http://127.0.0.1:4001 and :5195 frame it). Navigation is this component's state; the screens never route.
@@ -63,6 +63,7 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
           </form>
           <button type="button" className={tabClass('feature')} onClick={() => open('feature')}>Feature</button>
           <button type="button" className={tabClass('search')} onClick={() => open('search')}>Search</button>
+          <button type="button" className={tabClass('decisions')} onClick={() => open('decisions')}>Decisions</button>
           <button type="button" className={tabClass('full')} onClick={() => open('full')}>Open full wiki</button>
           <span className="ml-auto text-xs text-muted-foreground">{workspace}</span>
         </nav>
@@ -73,6 +74,7 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
           {pane === 'search' && (
             <Search query={search.query} workspace={search.workspace} workspaces={[workspace]} onNavigate={onNavigate} hrefFor={hrefFor} />
           )}
+          {pane === 'decisions' && <Decisions workspace={workspace} onNavigate={onNavigate} hrefFor={hrefFor} />}
           {pane === 'full' && (
             <>
               {!frameable && (

@@ -29,6 +29,7 @@ describe('Wiki tab', () => {
       identity: vi.fn(async () => { throw new Error('identity must not be needed: the tab passes its workspace'); }),
       featureHub: vi.fn(async () => ({ items: [doc], total: 1, next_cursor: null, generated_at: 't', feature })),
       decisions: vi.fn(async () => ({ items: [], total: 0, next_cursor: null, generated_at: 't' })),
+      decisionsPage: vi.fn(async () => ({ items: [], total: 0, next_cursor: null, generated_at: 't' })),
       search: vi.fn(async () => ({ groups: [{ label: 'design', items: [{ doc_id: 'd1', title: 'Wiki tab design', path: doc.path, snippet: 'the tab', rank: 1 }], total: 1, next_cursor: null }], generated_at: 't' })),
     };
     render(<WikiView client={client} featureCode="COMPOSE-WIKI-TAB-1" workspace="wiki-eng" frameBase={FRAME} />);
@@ -49,6 +50,35 @@ describe('Wiki tab', () => {
   });
 });
 
+describe('Wiki tab: Decisions', () => {
+  const entry = (id, text) => ({ entry_id: id, parent_doc_id: 'd1', kind: 'decision', ts: '2026-10-02', text, refs: [], status: 'accepted' });
+
+  it.skipIf(!linked)('pages the decisions list through the injected client without fetching', async () => {
+    const fetchSpy = vi.fn(() => { throw new Error('a component fetched'); });
+    vi.stubGlobal('fetch', fetchSpy);
+    const pages = {
+      '': { items: [entry('e1', 'First call')], total: 60, next_cursor: 'c2', generated_at: 't' },
+      c2: { items: [entry('e2', 'Second call')], total: 60, next_cursor: null, generated_at: 't' },
+    };
+    const client = {
+      identity: vi.fn(async () => { throw new Error('identity must not be needed'); }),
+      featureHub: vi.fn(), decisions: vi.fn(), search: vi.fn(),
+      decisionsPage: vi.fn(async ({ cursor }) => pages[cursor ?? '']),
+    };
+    render(<WikiView client={client} workspace="wiki-eng" frameBase={FRAME} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Decisions' }));
+    expect(await screen.findByText('First call')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Next page'));
+    expect(await screen.findByText('Second call')).toBeTruthy();
+    expect(client.decisionsPage.mock.calls.map(([a]) => a)).toEqual([
+      { workspace: 'wiki-eng', size: 50 },
+      { workspace: 'wiki-eng', cursor: 'c2', size: 50 },
+    ]);
+    expect(client.identity).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe('Compose wiki DataClient', () => {
   it('talks only to /api/wiki and rejects with the answer\'s code', async () => {
     const calls = [];
@@ -61,10 +91,15 @@ describe('Compose wiki DataClient', () => {
     await client.identity();
     await client.featureHub({ workspace: 'wiki-eng', featureId: 'X-1' });
     await client.search({ workspace: 'wiki-eng', q: 'recall' });
+    await client.decisionsPage({ workspace: 'wiki-eng' });
+    await client.decisionsPage({ workspace: 'wiki-eng', cursor: 'c2', size: 20 });
     await expect(client.decisions({ workspace: 'wiki-private', featureId: 'X-1' })).rejects.toMatchObject({ code: 'workspace_refused', status: 403 });
     expect(calls.map(([u, m]) => `${m} ${u}`)).toEqual([
-      'GET /api/wiki/identity', 'POST /api/wiki/query/feature_hub', 'POST /api/wiki/query/search', 'POST /api/wiki/query/decisions',
+      'GET /api/wiki/identity', 'POST /api/wiki/query/feature_hub', 'POST /api/wiki/query/search',
+      'POST /api/wiki/query/decisions_page', 'POST /api/wiki/query/decisions_page', 'POST /api/wiki/query/decisions',
     ]);
     expect(calls[1][2]).toEqual({ workspace: 'wiki-eng', featureId: 'X-1' });
+    expect(calls[3][2]).toEqual({ workspace: 'wiki-eng' });
+    expect(calls[4][2]).toEqual({ workspace: 'wiki-eng', cursor: 'c2', size: 20 });
   });
 });

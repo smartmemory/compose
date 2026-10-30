@@ -10,6 +10,7 @@
  *   GET  /api/wiki/identity            -> GET  /identity, workspaces cut to the one served workspace
  *   POST /api/wiki/query/feature_hub   -> POST /query/feature_hub  {workspace, featureId}
  *   POST /api/wiki/query/decisions     -> POST /query/decisions    {workspace, featureId}
+ *   POST /api/wiki/query/decisions_page -> POST /query/decisions   {workspace, cursor?, size?} (all decisions, paged)
  *   POST /api/wiki/query/search        -> POST /query/search       {workspace, q}
  *   anything else under /api/wiki      -> 404 not_proxied (`/commands` included), no upstream call
  *
@@ -40,6 +41,25 @@ export const WIKI_QUERIES = {
   decisions: { field: 'featureId', filter: 'feature_id', page: { size: 50 }, max: 200 },
   search: { field: 'q', filter: 'q', page: {}, max: 256 },
 };
+
+// The paged no-filter calls (COMPOSE-WIKI-DECISIONS-1): proxy key -> the wiki query it asks. The page is built from a
+// checked `cursor` (opaque string, at most CURSOR_MAX characters, or absent) and `size` (integer 1 to `maxSize`, default
+// `maxSize`); there is no filter and nothing else of the body is read.
+export const CURSOR_MAX = 512;
+export const WIKI_PAGED_QUERIES = {
+  decisions_page: { query: 'decisions', maxSize: 50 },
+};
+
+/** The upstream `page` for a paged call, or `{error}` naming what is wrong. */
+function pageOf(spec, { cursor, size }) {
+  if (cursor != null && (typeof cursor !== 'string' || !cursor || cursor.length > CURSOR_MAX)) {
+    return { error: `cursor must be 1 to ${CURSOR_MAX} characters` };
+  }
+  if (size != null && (!Number.isInteger(size) || size < 1 || size > spec.maxSize)) {
+    return { error: `size must be an integer from 1 to ${spec.maxSize}` };
+  }
+  return { page: { size: size ?? spec.maxSize, ...(cursor != null ? { cursor } : {}) } };
+}
 
 const BASE_URL_RE = /^http:\/\/127\.0\.0\.1:([1-9][0-9]{0,4})$/;
 const ENV_NAME_RE = /^(?!VITE_)[A-Z_][A-Z0-9_]{0,63}$/; // VITE_* is inlined into the browser bundle, so never a token name
@@ -144,10 +164,18 @@ export function attachWikiRoutes(app, {
   });
 
   app.post(`${PREFIX}/query/:name`, async (req, res, next) => {
+    const paged = Object.hasOwn(WIKI_PAGED_QUERIES, req.params.name) ? WIKI_PAGED_QUERIES[req.params.name] : null;
     const spec = Object.hasOwn(WIKI_QUERIES, req.params.name) ? WIKI_QUERIES[req.params.name] : null;
-    if (!spec) return next();
+    if (!spec && !paged) return next();
     const cfg = config(req);
     if (!cfg.ok) return refuse(res, cfg.code === 'workspace_refused' ? 403 : 503, cfg.code, 'the wiki tab is not configured');
+    if (paged) {
+      const { workspace, cursor, size } = req.body ?? {};
+      if (workspace !== cfg.workspace) return refuse(res, 403, 'workspace_refused', `only ${cfg.workspace} is served here`);
+      const p = pageOf(paged, { cursor, size });
+      if (p.error) return refuse(res, 400, 'bad_request', p.error);
+      return send(res, await upstream(cfg, 'POST', `/query/${paged.query}`, { query: paged.query, workspace: cfg.workspace, filters: {}, page: p.page }));
+    }
     const { workspace, [spec.field]: value } = req.body ?? {};
     if (workspace !== cfg.workspace) return refuse(res, 403, 'workspace_refused', `only ${cfg.workspace} is served here`);
     if (typeof value !== 'string' || !value.trim() || value.length > spec.max) {
