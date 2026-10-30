@@ -438,7 +438,7 @@ function CockpitView({
 // AppInner — cockpit shell with absorbed VisionTracker logic
 // ---------------------------------------------------------------------------
 
-/** COMP-AUDIT-17 §2.7: every stored navigation value, read once on load. The retired tab-list keys are removed. */
+/** COMP-AUDIT-17 §2.7: every stored navigation value, read once on load (a pure read: the retired keys are removed in an effect). */
 function readStoredNav() {
   let nav;
   try {
@@ -450,7 +450,7 @@ function readStoredNav() {
       items: null,
       available: {},
     });
-    for (const k of LEGACY_NAV_STORAGE_KEYS) localStorage.removeItem(k);
+    nav.hadStored = !!(localStorage.getItem('compose:activeView') || localStorage.getItem('compose:activeTab'));
   } catch {
     nav = migrateNavState({});
   }
@@ -459,6 +459,10 @@ function readStoredNav() {
 
 function AppInner() {
   const [navAtLoad] = useState(readStoredNav);
+  // The retired keys go after the first commit: a suspended first render re-runs the initializer above, which must see them again.
+  useEffect(() => {
+    try { for (const k of LEGACY_NAV_STORAGE_KEYS) localStorage.removeItem(k); } catch { /* ignore */ }
+  }, []);
   // ── Workspace context (for refresh after project switch) ────────────────
   const { refresh: refreshWorkspace } = useWorkspace();
 
@@ -560,7 +564,7 @@ function AppInner() {
   // ── Local vision state (absorbed from VisionTracker) ────────────────────
   const [selectedItemId, setSelectedItemId] = useState(null);
   // A `?view=` deep link counts as a chosen view: the settings defaultView must not override it (COMP-COCKPIT-13).
-  const hadSessionView = useRef(!!localStorage.getItem('compose:activeView') || viewFromQuery(window.location.search) !== null);
+  const hadSessionView = useRef(navAtLoad.hadStored || viewFromQuery(window.location.search) !== null);
   const [activeView, setActiveView] = useState(() => {
     // COMP-AUDIT-17: on load only what is known on load (every availability is `unknown`).
     // Any valid view key is kept; a package-gated key is re-checked once its availability

@@ -163,8 +163,13 @@ describe('App rooms (COMP-AUDIT-17 slice 2)', () => {
     localStorage.setItem('compose:mainTabs', JSON.stringify(['tree', 'graph', 'bogus']));
     localStorage.setItem('compose:activeTab', 'gates');
     mockFetch();
+    // a settings defaultView must not override the migrated stored view (the old tab key counts as a stored view)
+    const { useVisionStore } = await import('../../src/components/vision/useVisionStore.js');
+    useVisionStore.setState({ settings: { ui: { defaultView: 'dashboard' } } });
     await renderApp();
     await waitFor(() => expect(selectedIds()).toEqual(['room-tab-review']));
+    await new Promise((r) => setTimeout(r, 300));
+    expect(selectedIds()).toEqual(['room-tab-review']);
     expect(screen.getByTestId('sub-tab-gates').getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByText(/View not found/i)).toBeNull();
     expect(localStorage.getItem('compose:mainTabs')).toBeNull();
