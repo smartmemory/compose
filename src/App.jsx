@@ -969,11 +969,9 @@ function AppInner() {
     }
   }, [createItem, selectedPhase]);
 
-  // COMP-COCKPIT-5: open the create dialog preset to a feature (empty-state CTA).
-  const handleCreateFeature = useCallback(() => {
-    setCreateInitialType('feature');
-    setCreateOpen(true);
-  }, []);
+  // COMP-AUDIT-8: the empty-state CTA opens the New Feature scaffold dialog
+  // (feature.json + ROADMAP row), not the generic item dialog.
+  const handleCreateFeature = useCallback(() => setNewFeatureOpen(true), []);
 
   // COMP-COCKPIT-5: the ONLY correct emptiness signal — every view receives
   // pre-filtered data, so they cannot distinguish "empty project" from
