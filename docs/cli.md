@@ -60,6 +60,7 @@ The Command Index below is generated from the command table and lists every ship
 | `compose ideabox` | Capture, review, and promote product ideas |
 | `compose judgment` | Judgment records: trace a position's causal ancestry |
 | `compose metrics` | Report dispatch, settlement, and triage metrics |
+| `compose process` | Write the Process view pointer page (publish) |
 | `compose tracker` | Tracker provider status and op-log sync |
 
 ### App, integrations & runtime
