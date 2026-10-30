@@ -174,6 +174,10 @@ scripts/cockpit.sh stop     # kills only the supervisor and its own children
 
 It is on-demand, not a launchd daemon. The three ports are registered to `compose` in `~/.ports`. Do not click Run or Launch agent in the UI unless you mean it: the agent server spawns `claude -p`.
 
+### Wiki tab (`@smartmemory/wiki-components`)
+
+The Wiki tab renders the SmartMemory wiki's feature hub and search screens from `@smartmemory/wiki-components` (a dev dependency, bundled into `dist/` at build time). The build uses the wiki checkout next to this repo when it exists (`../../SmartMemory/smart-memory-wiki/ui/packages/wiki-components`), else the installed package, else a stub that hides the tab; `COMPOSE_WIKI_COMPONENTS_DIR=<dir>` overrides and `none` forces the stub (`lib/wiki-components-link.js`). At runtime the tab shows only when the build has the package AND the project's `.compose/compose.json` has a `wiki` block (`{"enabled": true, "tokenEnv": "<ENV NAME>", "baseUrl": "http://127.0.0.1:8791"}`); without one the tab stays hidden.
+
 ## Upgrading
 
 One command — auto-detects whether compose was installed via npm or git clone:
