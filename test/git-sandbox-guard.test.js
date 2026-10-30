@@ -224,6 +224,7 @@ function runGateStandIn(writer, { corruptConfig = false, baseCommit = false, env
     const git = (...a) => execFileSync('git', ['-C', stand, ...a], { encoding: 'utf8', env: isolatedGitEnv(), stdio: 'pipe' });
     git('init', '-q');
     git('config', '--local', 'user.name', 'Stand Original');
+    git('config', '--local', 'user.email', 'stand@example.test');
     if (baseCommit) git('-c', 'user.email=stand@example.test', 'commit', '-q', '--allow-empty', '-m', 'stand base'); // before the gate's snapshot: `worktree list` carries HEAD
     writeFileSync(join(stand, 'writer.test.js'), writer);
     // NODE_TEST_CONTEXT (set by the preload) would make the inner `node --test` act as a nested test child, not a runner.
@@ -233,20 +234,29 @@ function runGateStandIn(writer, { corruptConfig = false, baseCommit = false, env
     mkdirSync(join(stand, 'tmp'));
     const run = spawnSync(process.execPath, ['--import', './test/suppress-expected-drift.js', '--test', 'writer.test.js'], { cwd: stand, encoding: 'utf8', env: { ...childEnv, TMPDIR: join(stand, 'tmp'), ...env(stand) } });
     return { status: run.status, output: run.stdout + run.stderr, name: corruptConfig ? '' : git('config', '--local', 'user.name').trim() };
-  } finally { rmSync(stand, { recursive: true, force: true }); }
+  } finally { for (const d of [stand, `${stand}-op`]) rmSync(d, { recursive: true, force: true }); }
 }
 const WRITER_PRELUDE = "import test from 'node:test'; import { execFileSync } from 'node:child_process'; import { mkdtempSync } from 'node:fs'; import { tmpdir } from 'node:os'; import { join } from 'node:path';\n";
 
 const OWN_REPO_WRITER = WRITER_PRELUDE + "test('x', () => { const tmp = mkdtempSync(join(tmpdir(), 'gate-tmp-')); execFileSync('git', ['init', '-q'], { cwd: tmp }); execFileSync('git', ['config', 'user.name', 'Own'], { cwd: tmp }); });";
-// Writer (run with `baseCommit`) that has a separate node process `git worktree add` into it
-// (under compose-test-worktrees/ when `probeDir`, else a plain tmp dir), optionally also changing the local identity.
-const FOREIGN_WORKTREE_WRITER = (probeDir, changeIdentity) => WRITER_PRELUDE + `import { spawnSync } from 'node:child_process';
+// Writer (run with `baseCommit`) that has a separate node process `git worktree add` into it (under
+// compose-test-worktrees/ for 'probe', the repo's own .worktrees/ for 'operator', a sibling of the repo outside tmpdir()
+// for 'scratch' (like a SmartMemory/scratch review checkout), else a plain tmp dir), optionally also changing the local identity.
+const FOREIGN_WORKTREE_WRITER = (where, changeIdentity) => WRITER_PRELUDE + `import { spawnSync } from 'node:child_process';
 test('x', () => {
   const git = (...a) => execFileSync('git', a, { cwd: process.cwd(), stdio: 'pipe' });
-  const dir = join(mkdtempSync(join(tmpdir(), 'gate-wt-')), ${probeDir ? "'compose-test-worktrees', 'p'" : "'p'"});
+  const dir = ${where === 'operator' ? "join(process.cwd(), '.worktrees', 'p')" : where === 'scratch' ? "join(process.cwd() + '-op', 'p')" : `join(mkdtempSync(join(tmpdir(), 'gate-wt-')), ${where === 'probe' ? "'compose-test-worktrees', 'p'" : "'p'"})`};
   const add = spawnSync(process.execPath, ['-e', "require('node:child_process').execFileSync('git', ['worktree', 'add', '--detach', process.argv[1], 'HEAD'], { stdio: 'pipe' })", dir], { cwd: process.cwd(), encoding: 'utf8' });
   if (add.status !== 0) throw new Error(add.stderr);
   ${changeIdentity ? "git('config', 'user.name', 'Review Leak');" : ''}
+});`;
+// Writer (run with `baseCommit`) that has a separate git process commit onto the real repo's checked-out branch as
+// `email` (inherited GIT_*_EMAIL dropped so the -c value is the commit identity).
+const FOREIGN_COMMIT_WRITER = (email) => WRITER_PRELUDE + `import { spawnSync } from 'node:child_process';
+test('x', () => {
+  const env = { ...process.env }; delete env.GIT_AUTHOR_EMAIL; delete env.GIT_COMMITTER_EMAIL;
+  const c = spawnSync('git', ['-c', 'user.email=${email}', 'commit', '-q', '--allow-empty', '-m', 'concurrent'], { cwd: process.cwd(), env, encoding: 'utf8' });
+  if (c.status !== 0) throw new Error(c.stderr);
 });`;
 const GATE_ROWS = [
   ['a writer that inits a tmp dir but configures identity in the real repo (mismatched cwd) fails the run',
@@ -256,9 +266,17 @@ const GATE_ROWS = [
     OWN_REPO_WRITER, (stand) => ({ GIT_CONFIG: join(stand, '.git', 'config') }), 0, 'Stand Original'],
   // COMP-GOLDEN-LEAK-RACE-1: a worktree added to the real repo by ANOTHER process under compose-test-worktrees/ (what the
   // codex-preflight probes of concurrent test files do) is not this process's leak. The foreign process is a separate node.
-  ['a foreign process adding a worktree under compose-test-worktrees/ during the run passes', FOREIGN_WORKTREE_WRITER(true, false), undefined, 0, 'Stand Original', true],
-  ['the same foreign worktree add plus an identity change in the real repo still fails', FOREIGN_WORKTREE_WRITER(true, true), undefined, 1, 'Review Leak', true],
-  ['a worktree the run adds to the real repo outside compose-test-worktrees/ and leaves behind fails', FOREIGN_WORKTREE_WRITER(false, false), undefined, 1, 'Stand Original', true],
+  ['a foreign process adding a worktree under compose-test-worktrees/ during the run passes', FOREIGN_WORKTREE_WRITER('probe', false), undefined, 0, 'Stand Original', true],
+  ['the same foreign worktree add plus an identity change in the real repo still fails', FOREIGN_WORKTREE_WRITER('probe', true), undefined, 1, 'Review Leak', true],
+  ['a worktree the run adds to the real repo outside compose-test-worktrees/ and leaves behind fails', FOREIGN_WORKTREE_WRITER('tmp', false), undefined, 1, 'Stand Original', true],
+  // COMPOSE-ORIGIN-RED-1: other sessions add operator worktrees (the repo's .worktrees/, scratch checkouts) and commit
+  // onto checked-out branches as the repo identity while a full suite runs; neither is this process's leak. A commit carrying any other
+  // identity (the COMPOSE-GOLDEN-LEAK-1 fixture-identity commits) still fails.
+  ['a foreign process adding a worktree under the repo\'s .worktrees/ during the run passes', FOREIGN_WORKTREE_WRITER('operator', false), undefined, 0, 'Stand Original', true],
+  ['a foreign process adding a worktree outside the repo and tmpdir() (a scratch checkout) during the run passes', FOREIGN_WORKTREE_WRITER('scratch', false), undefined, 0, 'Stand Original', true],
+  ['the same .worktrees/ add plus an identity change in the real repo still fails', FOREIGN_WORKTREE_WRITER('operator', true), undefined, 1, 'Review Leak', true],
+  ['a commit onto the real repo\'s branch by the repo identity during the run passes', FOREIGN_COMMIT_WRITER('stand@example.test'), undefined, 0, 'Stand Original', true],
+  ['a commit onto the real repo\'s branch by any other identity fails', FOREIGN_COMMIT_WRITER('golden@example.test'), undefined, 1, 'Stand Original', true],
 ];
 for (const [name, writer, env, status, identity, baseCommit] of GATE_ROWS) {
   test(`leak gate: ${name}`, () => {

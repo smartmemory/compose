@@ -47,7 +47,7 @@ test('--test-timeout caps a FILE\'s total wall time, not each test (the whole re
   // child refuse to run files ("run() is being called recursively").
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;
-  const r = spawnSync(process.execPath, ['--test', '--test-timeout=500', file], { encoding: 'utf8', env });
+  const r = spawnSync(process.execPath, ['--test', '--test-reporter=tap', '--test-timeout=500', file], { encoding: 'utf8', env });
   const out = `${r.stdout}${r.stderr}`;
 
   assert.match(out, /failureType: 'testTimeoutFailure'/, `expected a timeout kill:\n${out}`);

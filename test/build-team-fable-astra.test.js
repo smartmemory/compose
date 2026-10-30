@@ -93,7 +93,7 @@ for (const mode of ['default shadow', 'off', 'paid shadow']) test(`fable-astra: 
     if (step === 'plan') output = { tasks: [task] };
     else if (step === 'verify') {
       const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
-      const observed = execFileSync(process.execPath, ['--test', 'unit.test.cjs'], { cwd: opts.cwd, env, encoding: 'utf8' });
+      const observed = execFileSync(process.execPath, ['--test', '--test-reporter=tap', 'unit.test.cjs'], { cwd: opts.cwd, env, encoding: 'utf8' });
       assert.match(observed, /# fail 0/);
       output = { tests_pass: true, summary: 'Integrated doubling test passed',
         verification: { commands: ['node --test unit.test.cjs'], outcomes: [observed] },

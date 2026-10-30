@@ -49,7 +49,7 @@ test('GSD budget golden leaves decoy home and inherited flow store unchanged wit
     // process-wide safeguard. A decoy HOME catches a harness that ignores
     // STRATUM_STATE_ROOT: homedir() resolves to it instead of the real home.
     const { stdout } = await execFileAsync(process.execPath, [
-      '--test', '--test-timeout=420000', 'test/gsd-budget-terminal-golden.test.js',
+      '--test', '--test-reporter=tap', '--test-timeout=420000', 'test/gsd-budget-terminal-golden.test.js',
     ], {
       cwd: repo,
       env: childEnv,

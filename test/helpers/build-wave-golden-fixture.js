@@ -158,7 +158,7 @@ export async function runWaveGolden(fixture, { resumeFlowId, crash = false, rout
     else if (step === 'verify') {
       const unitEnv = { ...process.env };
       delete unitEnv.NODE_TEST_CONTEXT;
-      const unitOutput = execFileSync(process.execPath, ['--test', 'unit.test.cjs'], { cwd: opts.cwd, env: unitEnv, encoding: 'utf8' });
+      const unitOutput = execFileSync(process.execPath, ['--test', '--test-reporter=tap', 'unit.test.cjs'], { cwd: opts.cwd, env: unitEnv, encoding: 'utf8' });
       assert.match(unitOutput, /# fail 0/);
       output = { tests_pass: true, summary: 'core unit test passes' };
     } else if (step === 'assess') {

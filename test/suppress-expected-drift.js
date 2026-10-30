@@ -74,32 +74,69 @@ if (!process.env.COMPOSE_NO_PLUGIN_INSTALL) process.env.COMPOSE_NO_PLUGIN_INSTAL
 // knobs; see that file), so any variable that redirects git's repo, refs or config is gone, including ones a future git
 // adds, and swaps the developer's global config for a throwaway fallback identity. The same module is imported by the git-calling helpers and test files, so a bare
 // `node --test file` is protected too. Here we also gate the run: snapshot the real repo's local identity and
-// worktree list now, fail the process if they differ at exit. A probe that errors fails the gate (never "empty").
+// worktree list now, fail the process at exit if the identity changed, a worktree appeared/vanished/switched, or a
+// worktree's HEAD gained a commit not made by the repo's own identity. A probe that errors fails the gate (never "empty").
 {
   const { execFileSync } = await import('node:child_process');
+  const { realpathSync } = await import('node:fs');
   const { dirname } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
   await import('./helpers/git-env-scrub.js');
   const realRepo = dirname(dirname(fileURLToPath(import.meta.url)));
+  const run = (...a) => {
+    try { return execFileSync('git', ['-C', realRepo, ...a], { encoding: 'utf8', env: process.env, stdio: ['ignore', 'pipe', 'pipe'] }); } catch (err) {
+      if (err.status === 1 && a[0] === 'config') return ''; // `git config --get-all` exits 1 when the key is absent
+      return `PROBE-ERROR(${a.join(' ')}): ${err.status ?? ''} ${String(err.stderr ?? err.message).trim()}`;
+    }
+  };
   // COMP-GOLDEN-LEAK-RACE-1: other test processes running concurrently (codex-preflight probes, via build-flow-tag,
   // codex-impl, routing-calls, git-sandbox-guard) add and remove detached worktrees under `<tmpdir>/compose-test-worktrees/`
   // on this same repo. A per-process snapshot blamed whichever file was alive (archetype-debug in 2 of 2 full gates), so
-  // blocks of `git worktree list --porcelain` under that directory are excluded. Every other worktree still counts.
-  const withoutForeignProbeWorktrees = (out) => out.split('\n\n').filter((blk) => !/^worktree .*\/compose-test-worktrees\//.test(blk)).join('\n\n');
+  // blocks of `git worktree list --porcelain` under that directory are excluded.
+  // COMPOSE-ORIGIN-RED-1: other SESSIONS work in this repo while a ~25 min suite runs. They add/remove operator
+  // worktrees (`<repo>/.worktrees/<name>`, `SmartMemory/scratch/...`) and commit onto checked-out branches, and every
+  // test file alive at that moment failed (34 of 34 file-level failures in the 2026-10-30 11:03 pre-push run,
+  // `.worktrees/gate-0f3a` added; main moved 75887ddd -> 3cc816d4 in that day's A/B run). So only worktrees where test or
+  // compose code can create one are gated: the checkout under test and its subtree (minus `.worktrees/`), `tmpdir()`
+  // (fixtures; `lib/consumer-fanout.js` defaultArtifactRoot; stratum engine fanout) and `~/.stratum/` (the non-test
+  // base in `lib/codex-preflight.js`, `lib/bug-escalation.js`). A moved HEAD on a gated worktree is a leak only when a
+  // new commit carries an identity other than the repo's local user.email: the COMPOSE-GOLDEN-LEAK-1 incident's 354
+  // commits carried the fixture identity it had written.
+  const { homedir } = await import('node:os');
+  const real = (p) => { try { return realpathSync(p); } catch { return p; } };
+  const roots = (p) => [...new Set([p, real(p)])];
+  const repoRoots = roots(realRepo);
+  const gatedRoots = [...roots(tmpdir()), ...roots(join(homedir(), '.stratum'))].map((r) => `${r}/`);
+  const isGated = (path) => repoRoots.includes(path) || gatedRoots.some((r) => path.startsWith(r))
+    || repoRoots.some((r) => path.startsWith(`${r}/`) && !path.startsWith(`${r}/.worktrees/`));
+  const parseWorktrees = (out) => out.split('\n\n').filter((blk) => blk.trim()).map((blk) => {
+    const lines = blk.split('\n').filter(Boolean);
+    return { path: lines[0].replace(/^worktree /, ''), head: lines.find((l) => l.startsWith('HEAD '))?.slice(5) ?? '', rest: lines.filter((l) => !l.startsWith('HEAD ')).join('\n') };
+  }).filter((w) => !/\/compose-test-worktrees\//.test(w.path));
   const probe = () => {
-    const run = (...a) => {
-      try { return execFileSync('git', ['-C', realRepo, ...a], { encoding: 'utf8', env: process.env, stdio: ['ignore', 'pipe', 'pipe'] }); } catch (err) {
-        if (err.status === 1 && a[0] === 'config') return ''; // `git config --get-all` exits 1 when the key is absent
-        return `PROBE-ERROR(${a.join(' ')}): ${err.status ?? ''} ${String(err.stderr ?? err.message).trim()}`;
-      }
-    };
-    return JSON.stringify({ name: run('config', '--local', '--get-all', 'user.name'), email: run('config', '--local', '--get-all', 'user.email'), worktrees: withoutForeignProbeWorktrees(run('worktree', 'list', '--porcelain')) });
+    const snap = { name: run('config', '--local', '--get-all', 'user.name'), email: run('config', '--local', '--get-all', 'user.email'), raw: run('worktree', 'list', '--porcelain') };
+    return { ...snap, worktrees: snap.raw.includes('PROBE-ERROR') ? [] : parseWorktrees(snap.raw) };
   };
+  const gated = (ws) => ws.filter((w) => isGated(w.path)).map((w) => w.rest).sort().join('\n\n');
   const before = probe();
   process.on('exit', () => {
     const after = probe();
-    if (after !== before || after.includes('PROBE-ERROR')) {
-      process.stderr.write(`\nGOLDEN-LEAK GATE: this test process changed the real repo's local git identity or worktree list, or the gate could not read it (${realRepo}).\nbefore=${before}\nafter=${after}\n`);
+    const problems = [];
+    if ([after.name, after.email, after.raw].some((v) => v.includes('PROBE-ERROR'))) problems.push('the gate could not read the repo');
+    if (after.name !== before.name || after.email !== before.email) problems.push('local git identity changed');
+    if (gated(after.worktrees) !== gated(before.worktrees)) problems.push('a worktree in the checkout under test, tmpdir() or ~/.stratum/ was added, removed or switched');
+    const repoEmail = before.email.trim().split('\n').at(-1);
+    for (const w of after.worktrees.filter((x) => isGated(x.path))) {
+      const was = before.worktrees.find((x) => x.path === w.path);
+      if (!was?.head || !w.head || was.head === w.head) continue;
+      const log = run('log', '--format=%H%x09%ae%x09%ce', `${was.head}..${w.head}`);
+      if (log.includes('PROBE-ERROR')) { problems.push(`cannot list commits ${was.head}..${w.head} on ${w.path}: ${log}`); continue; }
+      const foreign = log.split('\n').filter(Boolean).filter((l) => { const [, ae, ce] = l.split('\t'); return !repoEmail || ae !== repoEmail || ce !== repoEmail; });
+      if (foreign.length) problems.push(`commits not made by the repo identity <${repoEmail}> landed on ${w.path}: ${foreign.join(', ')}`);
+    }
+    if (problems.length) {
+      const show = (s) => JSON.stringify({ name: s.name, email: s.email, worktrees: s.raw });
+      process.stderr.write(`\nGOLDEN-LEAK GATE: this test process changed the real repo's local git identity, worktree list or commits, or the gate could not read it (${realRepo}): ${problems.join('; ')}.\nbefore=${show(before)}\nafter=${show(after)}\n`);
       process.exitCode = 1;
     }
   });
