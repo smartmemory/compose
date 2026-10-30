@@ -225,7 +225,7 @@ function runGateStandIn(writer, { corruptConfig = false, baseCommit = false, env
     git('init', '-q');
     git('config', '--local', 'user.name', 'Stand Original');
     git('config', '--local', 'user.email', 'stand@example.test');
-    if (baseCommit) git('-c', 'user.email=stand@example.test', 'commit', '-q', '--allow-empty', '-m', 'stand base'); // before the gate's snapshot: `worktree list` carries HEAD
+    for (let i = 0; i < Number(baseCommit); i += 1) git('-c', 'user.email=stand@example.test', 'commit', '-q', '--allow-empty', '-m', `stand base ${i}`); // before the gate's snapshot: `worktree list` carries HEAD; `2` gives a parent to rewind to
     writeFileSync(join(stand, 'writer.test.js'), writer);
     // NODE_TEST_CONTEXT (set by the preload) would make the inner `node --test` act as a nested test child, not a runner.
     const { NODE_TEST_CONTEXT: _ctx, ...childEnv } = process.env;
@@ -277,6 +277,17 @@ const GATE_ROWS = [
   ['the same .worktrees/ add plus an identity change in the real repo still fails', FOREIGN_WORKTREE_WRITER('operator', true), undefined, 1, 'Review Leak', true],
   ['a commit onto the real repo\'s branch by the repo identity during the run passes', FOREIGN_COMMIT_WRITER('stand@example.test'), undefined, 0, 'Stand Original', true],
   ['a commit onto the real repo\'s branch by any other identity fails', FOREIGN_COMMIT_WRITER('golden@example.test'), undefined, 1, 'Stand Original', true],
+  // COMPOSE-LEAK-GATE-IDENTITY-1 (batch review B20261031-forge-1 M1): the preload marks every commit the test process tree makes
+  // (GIT_AUTHOR_EMAIL/GIT_COMMITTER_EMAIL = a sentinel), so a wrong-cwd `git commit` with no identity flags is caught, and a HEAD
+  // that is no longer a descendant of its snapshot (a rewind: empty `was..now` range) is caught. A foreign process still fast-forwards.
+  ['a test that commits with no identity flags in the real repo (mismatched cwd) fails (A)', WRITER_PRELUDE + "test('x', () => { execFileSync('git', ['commit', '-q', '--allow-empty', '-m', 'junk'], { cwd: process.cwd() }); });", undefined, 1, 'Stand Original', true],
+  ['a test that rewinds the real repo with git reset --hard HEAD~1 fails (B)', WRITER_PRELUDE + "test('x', () => { execFileSync('git', ['reset', '-q', '--hard', 'HEAD~1'], { cwd: process.cwd() }); });", undefined, 1, 'Stand Original', 2],
+  ['a test that commits with an explicit -c user.email in the real repo still fails (C)', WRITER_PRELUDE + "test('x', () => { execFileSync('git', ['-c', 'user.email=x@y.z', 'commit', '-q', '--allow-empty', '-m', 'junk'], { cwd: process.cwd() }); });", undefined, 1, 'Stand Original', true],
+  ['a foreign process fast-forwarding two commits by the repo identity passes (D)', WRITER_PRELUDE + `import { spawnSync } from 'node:child_process';
+test('x', () => {
+  const env = { ...process.env }; delete env.GIT_AUTHOR_EMAIL; delete env.GIT_COMMITTER_EMAIL;
+  for (const m of ['one', 'two']) { const c = spawnSync('git', ['-c', 'user.email=stand@example.test', 'commit', '-q', '--allow-empty', '-m', m], { cwd: process.cwd(), env, encoding: 'utf8' }); if (c.status !== 0) throw new Error(c.stderr); }
+});`, undefined, 0, 'Stand Original', 2],
 ];
 for (const [name, writer, env, status, identity, baseCommit] of GATE_ROWS) {
   test(`leak gate: ${name}`, () => {

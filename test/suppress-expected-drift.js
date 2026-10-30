@@ -2,6 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+const TEST_COMMIT_SENTINEL = 'compose-test-sentinel@invalid';
+
 // Always replace inherited state roots (even a shell pointing at the real store).
 // Each Node test worker owns its directory; only that process removes it.
 const testStateRoot = mkdtempSync(join(tmpdir(), 'compose-test-flows-'));
@@ -82,6 +84,11 @@ if (!process.env.COMPOSE_NO_PLUGIN_INSTALL) process.env.COMPOSE_NO_PLUGIN_INSTAL
   const { dirname } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
   await import('./helpers/git-env-scrub.js');
+  // COMPOSE-LEAK-GATE-IDENTITY-1: mark every commit THIS process tree makes. Git takes the identity from env before `-c` and repo
+  // config, so a test whose cwd is wrong and that runs a bare `git commit` carries the sentinel instead of the repo identity.
+  // Other sessions are separate processes and never inherit it. Email only: nothing reads %ae/%ce, and names stay as tests set them.
+  process.env.GIT_AUTHOR_EMAIL = TEST_COMMIT_SENTINEL;
+  process.env.GIT_COMMITTER_EMAIL = TEST_COMMIT_SENTINEL;
   const realRepo = dirname(dirname(fileURLToPath(import.meta.url)));
   const run = (...a) => {
     try { return execFileSync('git', ['-C', realRepo, ...a], { encoding: 'utf8', env: process.env, stdio: ['ignore', 'pipe', 'pipe'] }); } catch (err) {
@@ -129,9 +136,16 @@ if (!process.env.COMPOSE_NO_PLUGIN_INSTALL) process.env.COMPOSE_NO_PLUGIN_INSTAL
     for (const w of after.worktrees.filter((x) => isGated(x.path))) {
       const was = before.worktrees.find((x) => x.path === w.path);
       if (!was?.head || !w.head || was.head === w.head) continue;
+      // A rewind (reset --hard, checkout of an unrelated commit) leaves an EMPTY `was..now` range, so the identity check below
+      // cannot see it: the snapshot must still be an ancestor of the new HEAD. Exit 1 = not an ancestor, anything else = error.
+      try { execFileSync('git', ['-C', realRepo, 'merge-base', '--is-ancestor', was.head, w.head], { env: process.env, stdio: ['ignore', 'pipe', 'pipe'] }); } catch (err) {
+        problems.push(err.status === 1 ? `HEAD of ${w.path} is no longer a descendant of its snapshot ${was.head} (rewound or switched to ${w.head})`
+          : `cannot check ancestry ${was.head}..${w.head} on ${w.path}: PROBE-ERROR ${err.status ?? ''} ${String(err.stderr ?? err.message).trim()}`);
+        continue;
+      }
       const log = run('log', '--format=%H%x09%ae%x09%ce', `${was.head}..${w.head}`);
       if (log.includes('PROBE-ERROR')) { problems.push(`cannot list commits ${was.head}..${w.head} on ${w.path}: ${log}`); continue; }
-      const foreign = log.split('\n').filter(Boolean).filter((l) => { const [, ae, ce] = l.split('\t'); return !repoEmail || ae !== repoEmail || ce !== repoEmail; });
+      const foreign = log.split('\n').filter(Boolean).filter((l) => { const [, ae, ce] = l.split('\t'); return !repoEmail || ae !== repoEmail || ce !== repoEmail || ae === TEST_COMMIT_SENTINEL || ce === TEST_COMMIT_SENTINEL; });
       if (foreign.length) problems.push(`commits not made by the repo identity <${repoEmail}> landed on ${w.path}: ${foreign.join(', ')}`);
     }
     if (problems.length) {
