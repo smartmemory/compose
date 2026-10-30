@@ -25,12 +25,15 @@ const fleetBody = (queue) => ({
 });
 const QUEUE = { value: [{ id: 'Q-1', by: 'someone', text: 'a fake question', age: 125 }], error: null };
 
-function mount(env, fleet = fleetBody(QUEUE)) {
+const PUBLISH = { url: 'http://127.0.0.1:5195/?view=process', generatedAt: '2026-10-30T21:00:00.000Z' };
+
+function mount(env, fleet = fleetBody(QUEUE), publish = { status: 200, body: PUBLISH }) {
   resetProcessPoller();
   resetFleetPoller();
   const calls = [];
   vi.stubGlobal('fetch', vi.fn(async (url, opts = {}) => {
     calls.push([String(url), opts.method || 'GET']);
+    if (String(url) === '/api/process/publish') return { ok: publish.status === 200, status: publish.status, json: async () => publish.body };
     const body = String(url).startsWith('/api/process') ? env : fleet;
     return { ok: true, status: 200, json: async () => body };
   }));
@@ -189,6 +192,36 @@ const ROWS = [
       await screen.findByTestId('process-rollup-table');
       await screen.findByTestId('fleet-owner');
       expect(calls.every(([u, m]) => m === 'GET' && (u === '/api/process' || u === '/api/fleet'))).toBe(true);
+    },
+  },
+  {
+    name: 'U3: no publish call until the button is clicked, then one GET /api/process/publish shows the URL, copy and the CLI line',
+    async run() {
+      const calls = mount(envelope());
+      await screen.findByTestId('process-rollup-table');
+      expect(calls.some(([u]) => u === '/api/process/publish')).toBe(false);
+      expect(screen.queryByTestId('process-publish-url')).toBeNull();
+      const writeText = vi.fn(async () => {});
+      vi.stubGlobal('navigator', { clipboard: { writeText } });
+      fireEvent.click(screen.getByTestId('process-publish-button'));
+      await screen.findByTestId('process-publish-url');
+      expect(text('process-publish-url')).toBe(PUBLISH.url);
+      expect(text('process-publish-cli')).toContain('compose process publish');
+      fireEvent.click(screen.getByTestId('process-publish-copy'));
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith(PUBLISH.url));
+      expect(calls.filter(([u]) => u === '/api/process/publish')).toEqual([['/api/process/publish', 'GET']]);
+      expect(calls.every(([u, m]) => m === 'GET' && ['/api/process', '/api/fleet', '/api/process/publish'].includes(u))).toBe(true);
+    },
+  },
+  {
+    name: 'U3: a refused host (409) shows the reason and no URL',
+    async run() {
+      mount(envelope(), fleetBody(QUEUE), { status: 409, body: { error: 'cockpit host 192.168.1.5 is not 127.0.0.1, localhost or [::1]' } });
+      await screen.findByTestId('process-rollup-table');
+      fireEvent.click(screen.getByTestId('process-publish-button'));
+      await screen.findByTestId('process-publish-error');
+      expect(text('process-publish-error')).toContain('192.168.1.5');
+      expect(screen.queryByTestId('process-publish-url')).toBeNull();
     },
   },
 ];

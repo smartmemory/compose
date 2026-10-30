@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useProcess } from '../../lib/processPoller.js';
+import { wsFetch } from '../../lib/wsFetch.js';
 import { useFleet } from '../../lib/fleetPoller.js';
 import { OwnerQueueCard } from './FleetPanels.jsx';
 import {
@@ -224,6 +225,40 @@ function TimeSplit({ stamps }) {
   );
 }
 
+const PUBLISH_CLI = 'compose process publish';
+
+/** U3: asks GET /api/process/publish (the one call this control makes) for the loopback link, shows it with a copy control and the CLI line. */
+function PublishControl() {
+  const [state, setState] = useState({ busy: false, url: null, at: null, error: null, copied: false });
+  const publish = async () => {
+    setState((s) => ({ ...s, busy: true, error: null, copied: false }));
+    try {
+      const res = await wsFetch('/api/process/publish');
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error ?? `publish route ${res.status}`);
+      setState({ busy: false, url: body.url, at: body.generatedAt, error: null, copied: false });
+    } catch (e) {
+      setState({ busy: false, url: null, at: null, error: String(e?.message ?? e), copied: false });
+    }
+  };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(state.url); setState((s) => ({ ...s, copied: true })); }
+    catch { setState((s) => ({ ...s, error: 'copy failed: select the address and copy it by hand' })); }
+  };
+  return (
+    <div className="flex items-center gap-2 flex-wrap" data-testid="process-publish">
+      <button type="button" className="rounded border border-border px-2 py-0.5 text-[10px]" disabled={state.busy} onClick={publish} data-testid="process-publish-button">Publish</button>
+      {state.url ? (<>
+        <code className="text-[10px] select-all" data-testid="process-publish-url">{state.url}</code>
+        <button type="button" className="rounded border border-border px-2 py-0.5 text-[10px]" onClick={copy} data-testid="process-publish-copy">{state.copied ? 'Copied' : 'Copy'}</button>
+        <span data-testid="process-publish-cli">CLI: <code className="select-all">{PUBLISH_CLI}</code></span>
+        <span>Only this link leaves the Mac, never the figures.</span>
+      </>) : null}
+      {state.error ? <span style={warn} data-testid="process-publish-error">publish unavailable: {state.error}</span> : null}
+    </div>
+  );
+}
+
 export default function ProcessView() {
   const { data, error, loading } = useProcess();
   const fleet = useFleet();
@@ -247,6 +282,7 @@ export default function ProcessView() {
         {error && <span style={warn} data-testid="process-poll-error">last poll failed: {error}</span>}
         {builder?.stale && <span style={warn}>builder source: serving cached copy</span>}
         {stamps?.stale && <span style={warn}>stamps source: serving cached copy</span>}
+        <PublishControl />
       </div>
       <div className="grid gap-2" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 340px)', alignItems: 'start' }}>
         <div className="flex flex-col gap-2 min-w-0">

@@ -4409,6 +4409,53 @@ if (cmd === 'build') {
   else process.stdout.write(renderDispatchMetrics(report))
   process.exit(0)
 
+} else if (cmd === 'process') {
+  // ---------------------------------------------------------------------------
+  // compose process publish [--out <file>]   (COMP-COCKPIT-13 U3)
+  // Writes the pointer page: the 127.0.0.1 deep link to the Process view, a time and a fixed header, no data.
+  // ---------------------------------------------------------------------------
+  const sub = args[0]
+  if (sub !== 'publish') {
+    console.error('Usage: compose process publish [--out <file>]')
+    process.exit(1)
+  }
+  let out = null
+  for (let index = 1; index < args.length; index++) {
+    const arg = args[index]
+    if (arg === '--out') {
+      const value = args[index + 1]
+      if (!value || value.startsWith('--')) {
+        console.error('compose process publish: --out requires a value')
+        process.exit(1)
+      }
+      out = value
+      index++
+      continue
+    }
+    console.error(`compose process publish: unknown flag ${arg}`)
+    process.exit(1)
+  }
+  const { buildPointer, detectSourceCheckout, renderPointerPage, writePointerPage, PublishRefused, DEFAULT_POINTER_FILE } = await import('../lib/process-publish.js')
+  const { COMPOSE_HOME } = await import('../server/project-root.js')
+  const { root: cwd } = resolveCwdWithWorkspace(args)
+  let pointer
+  try {
+    pointer = buildPointer({ env: process.env, hasSourceCheckout: detectSourceCheckout(COMPOSE_HOME) })
+  } catch (error) {
+    if (!(error instanceof PublishRefused)) throw error
+    console.error(`compose process publish: ${error.message}`)
+    process.exit(2)
+  }
+  let target
+  try {
+    target = writePointerPage(resolve(out ?? join(cwd, DEFAULT_POINTER_FILE)), renderPointerPage(pointer))
+  } catch (error) {
+    console.error(`compose process publish: ${error.message}`)
+    process.exit(1)
+  }
+  process.stdout.write(`${pointer.url}\n${pointer.generatedAt}\n${target}\n`)
+  process.exit(0)
+
 } else {
   console.error(`Unknown command: ${cmd}`)
   process.exit(1)

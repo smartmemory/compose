@@ -14,8 +14,11 @@ import { homedir } from 'node:os';
 import { createSourceCache } from './fleet-routes.js';
 import { DEFAULT_OPS_STATUS_DIR, NAME_RE, resolveOpsStatusDir } from './ops-status-routes.js';
 import { freshness, laneRows, laneTimeSplit } from '../lib/process-metrics.js';
+import { PublishRefused, buildPointer, detectSourceCheckout } from '../lib/process-publish.js';
+import { COMPOSE_HOME } from './project-root.js';
 
 export const PROCESS_ROUTE = '/api/process';
+export const PUBLISH_ROUTE = '/api/process/publish';
 export const BUILDER_TICK_S = 900; // launchd ai.smartmemory.status-build StartInterval; stale at two ticks
 const TTL_MS = { builder: 60_000, stamps: 120_000 };
 const LOG = '[process]';
@@ -117,6 +120,7 @@ export function attachProcessRoutes(app, {
   warn = console.warn,
   info = console.log,
   ttlMs = TTL_MS,
+  hasSourceCheckout = detectSourceCheckout(COMPOSE_HOME),
 } = {}) {
   if (remote) return false;
   const opts = (name) => ({ ttlMs: ttlMs[name], now, warn, info, logPrefix: LOG });
@@ -141,6 +145,18 @@ export function attachProcessRoutes(app, {
       res.json({ generated: new Date(now()).toISOString(), sources: { builder, stamps } });
     } catch (error) {
       res.status(500).json({ error: String(error?.message ?? error) });
+    }
+  });
+  // U3: the loopback link for the Publish control. Takes no input (query, body and Host are ignored), reads only env
+  // and the checkout check, writes nothing, and carries no Process data. Mounted only here, so not in remote mode.
+  app.get(PUBLISH_ROUTE, (_req, res) => {
+    res.set('cache-control', 'no-store');
+    try {
+      res.json(buildPointer({ env, hasSourceCheckout, now }));
+    } catch (error) {
+      if (!(error instanceof PublishRefused)) return res.status(500).json({ error: 'publish failed' });
+      warn(`${LOG} publish refused: ${error.message}`);
+      res.status(409).json({ error: error.message });
     }
   });
   return true;
