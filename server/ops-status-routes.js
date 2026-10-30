@@ -17,7 +17,7 @@ import express from 'express';
 
 export const DEFAULT_OPS_STATUS_DIR = join(homedir(), 'reg/my/SmartMemory/smart-memory-ops/status/out');
 
-const NAME_RE = /^[A-Za-z0-9._-]+$/;
+export const NAME_RE = /^[A-Za-z0-9._-]+$/;
 
 export function resolveOpsStatusDir(env = process.env) {
   const dir = env.COMPOSE_OPS_STATUS_DIR || DEFAULT_OPS_STATUS_DIR;

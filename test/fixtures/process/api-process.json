@@ -1,0 +1,246 @@
+{
+  "generated": "2027-01-15T08:00:00.000Z",
+  "sources": {
+    "builder": {
+      "value": {
+        "table": {
+          "as_of": "2026-10-30 20:56 local",
+          "projects": [
+            {
+              "name": "hub",
+              "label": "Fixture hub",
+              "as_of": "2026-10-30 20:56 local"
+            },
+            {
+              "name": "main",
+              "label": "Fixture main",
+              "as_of": "2026-10-30 20:55 local"
+            }
+          ],
+          "rows": [
+            {
+              "measure": "Waiting share of unit time",
+              "cells": [
+                "17%",
+                "STALE: 36%"
+              ],
+              "covers": [
+                "Fixture hub",
+                "Fixture main"
+              ],
+              "basis": [
+                "Fixture hub: queue wait before dispatch, share of wait plus build time, over 16 units with stamps"
+              ]
+            },
+            {
+              "measure": "Landing gate minutes per land",
+              "cells": [
+                "no data (n=0, needs gates[] stamps with result pass)",
+                "median 1, longest 2 (3 lands on 10-24)"
+              ],
+              "covers": [
+                "Fixture main"
+              ],
+              "basis": []
+            }
+          ],
+          "note": "Fixture note."
+        },
+        "tableError": null,
+        "asOf": "2026-10-30 20:56 local",
+        "ageS": 0,
+        "stale": false,
+        "failed": null,
+        "pages": {
+          "hub": {
+            "value": {
+              "project": "hub",
+              "label": "Fixture hub",
+              "as_of": "2026-10-30 20:56 local",
+              "units": 20,
+              "landed": 12,
+              "in_flight": 2,
+              "blocked": 1,
+              "no_active_lane": false,
+              "running_jobs": null,
+              "waiting_share": {
+                "pct": 17,
+                "basis": "queue wait before dispatch, share of wait plus build time, over 16 units with stamps"
+              },
+              "waiting_units_stamped": 16,
+              "first_pass_clean": {
+                "clean": 9,
+                "total": 12,
+                "basis": "first review verdicts, round files"
+              },
+              "review_rounds": {
+                "median": 1,
+                "max": 3,
+                "n": 12,
+                "basis": "review rounds per unit (round files, else rounds stamped in the queue)"
+              },
+              "gate_minutes": {
+                "day": "10-24",
+                "lands": 3,
+                "median": 4,
+                "max": 7,
+                "last5": [
+                  [
+                    "UNIT-A",
+                    4
+                  ],
+                  [
+                    "UNIT-B",
+                    3
+                  ],
+                  [
+                    "UNIT-C",
+                    7
+                  ]
+                ],
+                "basis": "the landing test run, start to finish, for lands on the newest day",
+                "stale": "frozen 2026-10-23, fixture"
+              },
+              "standard": {
+                "stamps": {
+                  "with": 18,
+                  "of": 20
+                },
+                "review_files": 12,
+                "gate_runs": 5,
+                "gate_passes": 4
+              },
+              "no_data": {},
+              "top_blocker": null,
+              "last_change": "10-30 19:35"
+            },
+            "error": null,
+            "asOf": "2026-10-30 20:56 local",
+            "ageS": 0,
+            "stale": false,
+            "failed": null
+          },
+          "main": {
+            "value": {
+              "project": "main",
+              "label": "Fixture main",
+              "as_of": "2026-10-30 20:55 local",
+              "units": 40,
+              "landed": 30,
+              "in_flight": 3,
+              "blocked": 0,
+              "no_active_lane": false,
+              "running_jobs": null,
+              "waiting_share": {
+                "pct": 36,
+                "basis": "queue wait before dispatch, share of wait plus build time, over 11 units with stamps"
+              },
+              "waiting_units_stamped": 11,
+              "first_pass_clean": {
+                "clean": 5,
+                "total": 10,
+                "basis": "first review verdicts, round files"
+              },
+              "review_rounds": {
+                "median": 2,
+                "max": 4,
+                "n": 10,
+                "basis": "review rounds per unit (round files, else rounds stamped in the queue)"
+              },
+              "standard": {
+                "stamps": {
+                  "with": 30,
+                  "of": 40
+                },
+                "review_files": 10,
+                "gate_runs": 0,
+                "gate_passes": 0
+              },
+              "no_data": {
+                "gate_minutes": "no data (n=0, needs gates[] stamps with result pass)"
+              },
+              "top_blocker": null,
+              "last_change": "10-30 19:30"
+            },
+            "error": null,
+            "asOf": "2026-10-30 20:55 local",
+            "ageS": 0,
+            "stale": false,
+            "failed": {
+              "time": "2026-10-30 20:50 local",
+              "reason": "summary build raised: fixture reason"
+            }
+          }
+        }
+      },
+      "error": null,
+      "ts": 1800000000000,
+      "stale": false
+    },
+    "stamps": {
+      "value": {
+        "lanes": {
+          "hub": {
+            "value": {
+              "rows": 1
+            },
+            "error": null,
+            "warnings": [
+              "1 rows skipped (not an object)"
+            ],
+            "timeSplit": {
+              "known": 1,
+              "unknown": 0,
+              "outside": 0,
+              "byRule": {
+                "U-a": 0,
+                "U-b": 0,
+                "U-c": 0,
+                "U-d": 0,
+                "U-e": 0
+              },
+              "minutes": {
+                "authoring": 30,
+                "review": 10,
+                "fix_rounds": 10,
+                "gate": 10,
+                "waiting_owner": 0,
+                "waiting": 60
+              }
+            }
+          },
+          "main": {
+            "value": {
+              "rows": 9
+            },
+            "error": null,
+            "warnings": [],
+            "timeSplit": {
+              "known": 3,
+              "unknown": 5,
+              "outside": 1,
+              "byRule": {
+                "U-a": 1,
+                "U-b": 1,
+                "U-c": 1,
+                "U-d": 1,
+                "U-e": 1
+              },
+              "minutes": {
+                "authoring": 90,
+                "review": 30,
+                "fix_rounds": 30,
+                "gate": 30,
+                "waiting_owner": 11,
+                "waiting": 169
+              }
+            }
+          }
+        }
+      },
+      "error": null,
+      "ts": 1800000000000,
+      "stale": false
+    }
+  }
+}

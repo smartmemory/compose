@@ -230,7 +230,7 @@ export function mergeJobs(smJobs, stratum) {
 }
 
 /** Single-flight cache with stale-while-revalidate and one warn line per outage. */
-export function createSourceCache(name, load, { ttlMs, now = Date.now, warn = console.warn, info = console.log }) {
+export function createSourceCache(name, load, { ttlMs, now = Date.now, warn = console.warn, info = console.log, logPrefix = '[fleet]' }) {
   let entry = null; // {value, error, ts}
   let pending = null;
   let down = false;
@@ -242,12 +242,12 @@ export function createSourceCache(name, load, { ttlMs, now = Date.now, warn = co
       try {
         const value = await load();
         entry = { value, error: null, ts: now() };
-        if (down) info(`[fleet] ${name} recovered`);
+        if (down) info(`${logPrefix} ${name} recovered`);
         down = false;
       } catch (error) {
         const reason = String(error?.message ?? error).slice(0, 300);
         entry = { value: null, error: reason, ts: now() };
-        if (!down) warn(`[fleet] ${name} unavailable: ${reason}`);
+        if (!down) warn(`${logPrefix} ${name} unavailable: ${reason}`);
         down = true;
       } finally {
         fetchedAt = now();

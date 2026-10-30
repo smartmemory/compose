@@ -1,0 +1,258 @@
+{
+ "feature": "fixture",
+ "writer": "unit_stamps.py",
+ "units": {
+  "FX-FULL": {
+   "state": "landed",
+   "ready_at": "2026-10-30T10:00:00Z",
+   "landed_at": "2026-10-30T12:00:00Z",
+   "dispatched_at": "2026-10-30T10:10:00Z",
+   "author_done_at": "2026-10-30T10:40:00Z",
+   "reviews": [
+    {
+     "round": 1,
+     "verdict": "CLEAN",
+     "dispatched_at": "2026-10-30T10:50:00Z",
+     "at": "2026-10-30T11:00:00Z"
+    }
+   ],
+   "fix_runs": [
+    {
+     "round": 1,
+     "dispatched_at": "2026-10-30T11:05:00Z",
+     "done_at": "2026-10-30T11:15:00Z"
+    }
+   ],
+   "gates": [
+    {
+     "n": 1,
+     "started_at": "2026-10-30T11:30:00Z",
+     "done_at": "2026-10-30T11:40:00Z",
+     "result": "pass"
+    }
+   ]
+  },
+  "FX-OWNER-GAP": {
+   "state": "landed",
+   "ready_at": "2026-10-30T10:00:00Z",
+   "landed_at": "2026-10-30T12:00:00Z",
+   "dispatched_at": "2026-10-30T10:10:00Z",
+   "author_done_at": "2026-10-30T10:40:00Z",
+   "reviews": [
+    {
+     "round": 1,
+     "verdict": "CLEAN",
+     "dispatched_at": "2026-10-30T10:50:00Z",
+     "at": "2026-10-30T11:00:00Z"
+    }
+   ],
+   "fix_runs": [
+    {
+     "round": 1,
+     "dispatched_at": "2026-10-30T11:05:00Z",
+     "done_at": "2026-10-30T11:15:00Z"
+    }
+   ],
+   "gates": [
+    {
+     "n": 1,
+     "started_at": "2026-10-30T11:30:00Z",
+     "done_at": "2026-10-30T11:40:00Z",
+     "result": "pass"
+    }
+   ],
+   "owner_waits": [
+    {
+     "qid": "q1",
+     "start": "2026-10-30T10:42:00Z",
+     "end": "2026-10-30T10:48:00Z"
+    }
+   ]
+  },
+  "FX-OWNER-OVER-REVIEW": {
+   "state": "landed",
+   "ready_at": "2026-10-30T10:00:00Z",
+   "landed_at": "2026-10-30T12:00:00Z",
+   "dispatched_at": "2026-10-30T10:10:00Z",
+   "author_done_at": "2026-10-30T10:40:00Z",
+   "reviews": [
+    {
+     "round": 1,
+     "verdict": "CLEAN",
+     "dispatched_at": "2026-10-30T10:50:00Z",
+     "at": "2026-10-30T11:00:00Z"
+    }
+   ],
+   "fix_runs": [
+    {
+     "round": 1,
+     "dispatched_at": "2026-10-30T11:05:00Z",
+     "done_at": "2026-10-30T11:15:00Z"
+    }
+   ],
+   "gates": [
+    {
+     "n": 1,
+     "started_at": "2026-10-30T11:30:00Z",
+     "done_at": "2026-10-30T11:40:00Z",
+     "result": "pass"
+    }
+   ],
+   "owner_waits": [
+    {
+     "qid": "q2",
+     "start": "2026-10-30T10:55:00Z",
+     "end": "2026-10-30T11:10:00Z"
+    }
+   ]
+  },
+  "FX-UA-REVIEW": {
+   "state": "landed",
+   "ready_at": "2026-10-30T10:00:00Z",
+   "landed_at": "2026-10-30T12:00:00Z",
+   "dispatched_at": "2026-10-30T10:10:00Z",
+   "author_done_at": "2026-10-30T10:40:00Z",
+   "reviews": [
+    {
+     "round": 1,
+     "verdict": "CLEAN",
+     "at": "2026-10-30T11:00:00Z"
+    }
+   ],
+   "fix_runs": [
+    {
+     "round": 1,
+     "dispatched_at": "2026-10-30T11:05:00Z",
+     "done_at": "2026-10-30T11:15:00Z"
+    }
+   ],
+   "gates": [
+    {
+     "n": 1,
+     "started_at": "2026-10-30T11:30:00Z",
+     "done_at": "2026-10-30T11:40:00Z",
+     "result": "pass"
+    }
+   ]
+  },
+  "FX-UB-OPEN-REVIEW": {
+   "state": "landed",
+   "ready_at": "2026-10-30T10:00:00Z",
+   "landed_at": "2026-10-30T12:00:00Z",
+   "dispatched_at": "2026-10-30T10:10:00Z",
+   "author_done_at": "2026-10-30T10:40:00Z",
+   "reviews": [
+    {
+     "round": 1,
+     "dispatched_at": "2026-10-30T10:50:00Z"
+    }
+   ],
+   "fix_runs": [
+    {
+     "round": 1,
+     "dispatched_at": "2026-10-30T11:05:00Z",
+     "done_at": "2026-10-30T11:15:00Z"
+    }
+   ],
+   "gates": [
+    {
+     "n": 1,
+     "started_at": "2026-10-30T11:30:00Z",
+     "done_at": "2026-10-30T11:40:00Z",
+     "result": "pass"
+    }
+   ]
+  },
+  "FX-UC-LEGACY-FIXES": {
+   "state": "landed",
+   "ready_at": "2026-10-30T10:00:00Z",
+   "landed_at": "2026-10-30T12:00:00Z",
+   "dispatched_at": "2026-10-30T10:10:00Z",
+   "author_done_at": "2026-10-30T10:40:00Z",
+   "reviews": [
+    {
+     "round": 1,
+     "verdict": "CLEAN",
+     "dispatched_at": "2026-10-30T10:50:00Z",
+     "at": "2026-10-30T11:00:00Z"
+    }
+   ],
+   "fix_runs": [],
+   "gates": [
+    {
+     "n": 1,
+     "started_at": "2026-10-30T11:30:00Z",
+     "done_at": "2026-10-30T11:40:00Z",
+     "result": "pass"
+    }
+   ],
+   "fixes": [
+    "2026-10-30T11:05:00Z"
+   ]
+  },
+  "FX-UD-NO-AUTHOR-DONE": {
+   "state": "landed",
+   "ready_at": "2026-10-30T10:00:00Z",
+   "landed_at": "2026-10-30T12:00:00Z",
+   "dispatched_at": "2026-10-30T10:10:00Z",
+   "reviews": [
+    {
+     "round": 1,
+     "verdict": "CLEAN",
+     "dispatched_at": "2026-10-30T10:50:00Z",
+     "at": "2026-10-30T11:00:00Z"
+    }
+   ],
+   "fix_runs": [
+    {
+     "round": 1,
+     "dispatched_at": "2026-10-30T11:05:00Z",
+     "done_at": "2026-10-30T11:15:00Z"
+    }
+   ],
+   "gates": [
+    {
+     "n": 1,
+     "started_at": "2026-10-30T11:30:00Z",
+     "done_at": "2026-10-30T11:40:00Z",
+     "result": "pass"
+    }
+   ]
+  },
+  "FX-UE-BAD-STAMP": {
+   "state": "landed",
+   "ready_at": "2026-10-30T10:00:00Z",
+   "landed_at": "2026-10-30T12:00:00Z",
+   "dispatched_at": "2026-10-30T10:10:00Z",
+   "author_done_at": "not a time",
+   "reviews": [
+    {
+     "round": 1,
+     "verdict": "CLEAN",
+     "dispatched_at": "2026-10-30T10:50:00Z",
+     "at": "2026-10-30T11:00:00Z"
+    }
+   ],
+   "fix_runs": [
+    {
+     "round": 1,
+     "dispatched_at": "2026-10-30T11:05:00Z",
+     "done_at": "2026-10-30T11:15:00Z"
+    }
+   ],
+   "gates": [
+    {
+     "n": 1,
+     "started_at": "2026-10-30T11:30:00Z",
+     "done_at": "2026-10-30T11:40:00Z",
+     "result": "pass"
+    }
+   ]
+  },
+  "FX-NOT-LANDED": {
+   "state": "in_flight",
+   "ready_at": "2026-10-30T10:00:00Z",
+   "dispatched_at": "2026-10-30T10:10:00Z"
+  }
+ }
+}

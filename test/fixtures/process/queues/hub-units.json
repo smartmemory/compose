@@ -1,0 +1,36 @@
+{
+ "units": [
+  {
+   "id": "FX-LIST-1",
+   "state": "landed",
+   "ready_at": "2026-10-30T10:00:00Z",
+   "landed_at": "2026-10-30T12:00:00Z",
+   "dispatched_at": "2026-10-30T10:10:00Z",
+   "author_done_at": "2026-10-30T10:40:00Z",
+   "reviews": [
+    {
+     "round": 1,
+     "verdict": "CLEAN",
+     "dispatched_at": "2026-10-30T10:50:00Z",
+     "at": "2026-10-30T11:00:00Z"
+    }
+   ],
+   "fix_runs": [
+    {
+     "round": 1,
+     "dispatched_at": "2026-10-30T11:05:00Z",
+     "done_at": "2026-10-30T11:15:00Z"
+    }
+   ],
+   "gates": [
+    {
+     "n": 1,
+     "started_at": "2026-10-30T11:30:00Z",
+     "done_at": "2026-10-30T11:40:00Z",
+     "result": "pass"
+    }
+   ]
+  },
+  "skip-me-not-an-object"
+ ]
+}

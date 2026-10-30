@@ -1,0 +1,12 @@
+{
+  "project": "hub", "label": "Fixture hub", "as_of": "2026-10-30 20:56 local",
+  "units": 20, "landed": 12, "in_flight": 2, "blocked": 1, "no_active_lane": false, "running_jobs": null,
+  "waiting_share": {"pct": 17, "basis": "queue wait before dispatch, share of wait plus build time, over 16 units with stamps"},
+  "waiting_units_stamped": 16,
+  "first_pass_clean": {"clean": 9, "total": 12, "basis": "first review verdicts, round files"},
+  "review_rounds": {"median": 1.0, "max": 3, "n": 12, "basis": "review rounds per unit (round files, else rounds stamped in the queue)"},
+  "gate_minutes": {"day": "10-24", "lands": 3, "median": 4, "max": 7, "last5": [["UNIT-A", 4], ["UNIT-B", 3], ["UNIT-C", 7]], "basis": "the landing test run, start to finish, for lands on the newest day", "stale": "frozen 2026-10-23, fixture"},
+  "standard": {"stamps": {"with": 18, "of": 20}, "review_files": 12, "gate_runs": 5, "gate_passes": 4},
+  "no_data": {},
+  "top_blocker": null, "last_change": "10-30 19:35"
+}

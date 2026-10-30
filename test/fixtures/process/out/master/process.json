@@ -1,0 +1,12 @@
+{
+  "as_of": "2026-10-30 20:56 local",
+  "projects": [
+    {"name": "hub", "label": "Fixture hub", "as_of": "2026-10-30 20:56 local"},
+    {"name": "main", "label": "Fixture main", "as_of": "2026-10-30 20:55 local"}
+  ],
+  "rows": [
+    {"measure": "Waiting share of unit time", "cells": ["17%", "STALE: 36%"], "covers": ["Fixture hub", "Fixture main"], "basis": ["Fixture hub: queue wait before dispatch, share of wait plus build time, over 16 units with stamps"]},
+    {"measure": "Landing gate minutes per land", "cells": ["no data (n=0, needs gates[] stamps with result pass)", "median 1, longest 2 (3 lands on 10-24)"], "covers": ["Fixture main"], "basis": []}
+  ],
+  "note": "Fixture note."
+}

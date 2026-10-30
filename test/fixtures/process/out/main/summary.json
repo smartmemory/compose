@@ -1,0 +1,11 @@
+{
+  "project": "main", "label": "Fixture main", "as_of": "2026-10-30 20:55 local",
+  "units": 40, "landed": 30, "in_flight": 3, "blocked": 0, "no_active_lane": false, "running_jobs": null,
+  "waiting_share": {"pct": 36, "basis": "queue wait before dispatch, share of wait plus build time, over 11 units with stamps"},
+  "waiting_units_stamped": 11,
+  "first_pass_clean": {"clean": 5, "total": 10, "basis": "first review verdicts, round files"},
+  "review_rounds": {"median": 2.0, "max": 4, "n": 10, "basis": "review rounds per unit (round files, else rounds stamped in the queue)"},
+  "standard": {"stamps": {"with": 30, "of": 40}, "review_files": 10, "gate_runs": 0, "gate_passes": 0},
+  "no_data": {"gate_minutes": "no data (n=0, needs gates[] stamps with result pass)"},
+  "top_blocker": null, "last_change": "10-30 19:30"
+}
