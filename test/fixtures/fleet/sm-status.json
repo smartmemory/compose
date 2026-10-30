@@ -17,7 +17,7 @@
     "df": {"value": {"free_gb": 80.5, "pct": "92%"}, "error": null, "ts": 1793350000.0},
     "spend": {"value": null, "error": "RuntimeError: exit 2: attribute script missing", "ts": 1793350000.0},
     "ceiling": {"value": {"line": "spend today $10 / $100 (10%)", "pct": 10.0, "warn": false}, "error": null, "ts": 1793350000.0},
-    "ledger": {"value": ["- 2026-10-30 17:00 lane-a-main: fixture ledger line one", "- 2026-10-30 17:05 lane-b-main: fixture ledger line two"], "error": null, "ts": 1793350000.0},
+    "ledger": {"value": ["- 2026-10-30 17:00 lane-a-main: fixture ledger line one", "- 2026-10-30 17:05 lane-b-main: fixture ledger line two"], "error": "UncertainSource: fixture partial read, line 3 unreadable", "ts": 1793350000.0},
     "quota": {"value": {"rows": [{"label": "must not leak"}]}, "error": null, "ts": 1793350000.0}
   }
 }

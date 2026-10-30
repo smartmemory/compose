@@ -59,9 +59,21 @@ function Unavailable({ id, title, reason, cls }) {
   );
 }
 
+/**
+ * An sm_status panel: rows, an unavailable card, or (sm_status's partial read: error AND value, sm_status.py
+ * Source.refresh UncertainSource) the readable rows under an "unknown" note, as a lower bound, like its TUI.
+ */
 function panelOr(panel, id, title, cls, render) {
   if (!panel) return null;
-  if (panel.error != null || panel.value == null) {
+  if (panel.error != null && panel.value != null) {
+    const card = render(panel.value);
+    return React.cloneElement(card, {}, (
+      <div className={cls.note} data-testid={`fleet-partial-${id}`} style={TONE.yellow}>
+        unknown: {panel.error} (rows shown are a lower bound)
+      </div>
+    ), card.props.children);
+  }
+  if (panel.value == null) {
     return <Unavailable key={id} id={id} title={title} reason={panel.error ?? 'no data'} cls={cls} />;
   }
   return render(panel.value);

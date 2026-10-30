@@ -78,6 +78,7 @@ describe('Fleet UI on the real route (fixture readers)', () => {
     expect(screen.getByTestId('fleet-unavailable-spend').textContent).toBe('unavailable: RuntimeError: exit 2: attribute script missing');
     expect(screen.getByTestId('fleet-disk').textContent).toContain('80 GB free');
     expect(screen.getByTestId('fleet-ledger').textContent).toContain('fixture ledger line two');
+    expect(screen.getByTestId('fleet-partial-ledger').textContent).toBe('unknown: UncertainSource: fixture partial read, line 3 unreadable (rows shown are a lower bound)');
     expect(document.body.textContent).not.toContain('must not leak');
     if (srv.cadence) {
       expect(screen.getByTestId('fleet-proposed').textContent).toBe('Cadence would start: forge/FIXTURE-1 · top blockers: parked-until 153, no-brief 125, held 49, claimed 22');
