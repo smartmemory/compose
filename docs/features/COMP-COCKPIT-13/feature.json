@@ -1,11 +1,25 @@
 {
   "code": "COMP-COCKPIT-13",
   "description": "Published status page + process-metrics view. A derived view from Compose state only (journal, judgment ledger, gate log, sessions, feature.json): a static one-file HTML snapshot (`compose status export [--project|--all]` plus a cockpit \"Publish snapshot\" button), a process-metrics panel (per-unit time split authoring/review/fix/waiting/gate, first-pass CLEAN rate, review rounds per unit, gate minutes per land, waiting share), a master rollup across workspaces, and an \"owner owes\" list. Replaces the hand-kept per-project status builders in SmartMemory scratch. Sibling of COMP-COCKPIT-12 (live session view). Open: does the export embed data or link live.",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-COCKPIT Wave 2: UX Journey Gaps (2026-06-10 sweep)",
   "created": "2026-10-15",
-  "updated": "2026-10-15",
+  "updated": "2026-10-30",
   "complexity": "M",
   "position": 9,
-  "parent": "COMP-COCKPIT"
+  "parent": "COMP-COCKPIT",
+  "completions": [
+    {
+      "completion_id": "COMP-COCKPIT-13:1dfaaa71dbb547ed61a9a99ac8d84174b3a3f752",
+      "feature_code": "COMP-COCKPIT-13",
+      "commit_sha": "1dfaaa71dbb547ed61a9a99ac8d84174b3a3f752",
+      "commit_sha_short": "1dfaaa71",
+      "tests_pass": true,
+      "files_changed": [],
+      "recorded_at": "2026-10-30T14:24:52.713Z",
+      "recorded_by": "mcp:agent",
+      "notes": "U0 ops 3e81292c3+bd2e82a14, U1 2c9aa113, U2 185ca47c, U3 9b4b6769+1dfaaa71. Reports OPS/units/COMP-COCKPIT-13-{READER,VIEW,PUBLISH}/report.md, security review OPS/units/COMP-COCKPIT-13-PUBLISH/security-review.md. Live link check: blocked (cockpit not running), plain-text URL used."
+    }
+  ],
+  "commit_sha": "1dfaaa71dbb547ed61a9a99ac8d84174b3a3f752"
 }
