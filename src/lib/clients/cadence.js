@@ -24,6 +24,7 @@ export function createCadenceDataClient() {
     getSeats: () => getJson('/seats'),
     getChains: () => getJson('/chains'),
     getAttention: () => getJson('/attention'),
+    getReview: () => getJson('/review'), // cadence be74428 (CADENCE-UI-REVIEW-GATE-1): attention screen's review strip
     getDiary(query = {}) {
       const params = new URLSearchParams();
       if (query.family) params.set('family', query.family);

@@ -22,6 +22,7 @@ function fakeClient() {
       generatedAt: at, alerts: [], overdue: [], cadenceStatus: 'ok', cadenceTs: at, errors: [],
       asks: [{ id: 'ASK-1', by: 's2-coord', text: 'a fake owner ask', openedAt: at, unit: null }],
     })),
+    getReview: vi.fn(async () => ({ generatedAt: at, inReview: [], inReviewByLane: {}, ungrouped: { count: 0, oldestLanded: null }, reviewMaxH: 24, errors: [] })),
     getDiary: vi.fn(async () => ({
       generatedAt: at, scanned: 1, skipped: 0, errors: [],
       events: [{ ts: at, kind: 'unit.land', family: 'unit', by: 'x', lane: 'ops', unit: 'FAKE-UNIT-1', detail: 'a fake landing' }],
@@ -45,6 +46,7 @@ describe('Cadence tab', () => {
     await waitFor(() => expect(client.getChains).toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: 'Attention' }));
     expect(await screen.findByText(/a fake owner ask/)).toBeTruthy();
+    expect(client.getReview).toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Diary' }));
     expect(await screen.findByText(/a fake landing/)).toBeTruthy();
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -63,11 +65,12 @@ describe('Compose cadence DataClient', () => {
     await client.getSeats();
     await client.getChains();
     await client.getAttention();
+    await client.getReview();
     await client.getDiary();
     await client.getDiary({ family: 'job', limit: 5 });
     expect(calls.map(([u]) => u)).toEqual([
       '/api/cadence-ui/belt', '/api/cadence-ui/seats', '/api/cadence-ui/chains', '/api/cadence-ui/attention',
-      '/api/cadence-ui/diary', '/api/cadence-ui/diary?family=job&limit=5',
+      '/api/cadence-ui/review', '/api/cadence-ui/diary', '/api/cadence-ui/diary?family=job&limit=5',
     ]);
     expect(calls.every(([, m]) => m === 'GET')).toBe(true);
   });

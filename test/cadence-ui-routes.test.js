@@ -38,6 +38,7 @@ const ROWS = [
   ['GET', '/api/cadence-ui/seats', 200, 'seats'],
   ['GET', '/api/cadence-ui/chains', 200, 'chains'],
   ['GET', '/api/cadence-ui/attention', 200, 'asks'],
+  ['GET', '/api/cadence-ui/review', 200, 'inReview'],
   ['GET', '/api/cadence-ui/diary', 200, 'events'],
   ['GET', '/api/cadence-ui/diary?family=job&limit=5', 200, 'events'],
   ['GET', '/api/cadence-ui/diary?family=nope', 400, 'error'],
