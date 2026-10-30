@@ -18,5 +18,5 @@ describe('empty cockpit CTA (COMP-AUDIT-8)', () => {
     fireEvent.click(cta);
     await waitFor(() => expect(screen.getByText('New Feature')).toBeTruthy());
     expect(screen.getByPlaceholderText(/COMP-FOO-1/i)).toBeTruthy();
-  });
+  }, 30000); // the full App import alone can pass 5 s when the pre-push suite runs under load
 });
