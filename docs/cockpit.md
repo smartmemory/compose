@@ -30,7 +30,8 @@ Web UI shell for Compose: layout, zones, navigation, and persistence.
 | **Sidebar** | `AttentionQueueSidebar` | Build status, attention queue (blocked/gate items), search, group filters by feature code prefix. |
 | **Main Area** | driven by active tab | Graph (fcose layout with compound grouping), Tree (search + filters), Docs (file browser + preview), and ops views. |
 | **Context Panel** | `ContextPanel` | Resizable right panel with tabbed detail: Overview, Pipeline dots, Sessions, Errors, Files. Project summary when nothing selected. |
-| **Ops Strip** | `OpsStrip` | Persistent 36px bar with scrollable pills for active builds, pending gates (inline approve), and recent errors. Hidden in Docs view. |
+| **Ops Strip** | `OpsStrip` | Persistent 36px bar with scrollable pills for active builds, pending gates (inline approve), recent errors, and the Fleet pills (COMP-COCKPIT-12). Hidden in Docs view. |
+| **Fleet (Sessions tab)** | `FleetView` / `FleetPanels` | COMP-COCKPIT-12. A Fleet pane beside Agent sessions in the Sessions view: Claude sessions (busy/idle, context K, yellow at 200K, red at 250K), open jobs with running time, the detached fleet vs its cap (Stratum), the owner question queue, disk free, hourly and daily spend, Cadence's ready units with each unit's blocker plus one "Cadence would start" line, and the ledger tail. Read-only (watch here, act in chat). Data: `GET /api/fleet` (`server/fleet-routes.js`) over three readers: `stratum session fleet --json`, `sm_status.py --json`, and the mounted Cadence handler's belt plus the last `would_launch` line of `~/.cadence/shadow.jsonl`. A reader that is down hides only its own cards and pills and logs one warn line per outage. A failing source inside a reader shows `unavailable: <reason>` in its own card. One shared poll every 15 s (`src/lib/fleetPoller.js`), paused while the browser tab is hidden. The Sessions view is not a default tab: reach it from a Fleet pill or the Settings default view. Mobile `/m/status` shows the same cards stacked, owner questions first. |
 | **Agent Bar** | `AgentBar` | Always-present bottom panel for the agent stream. Collapsed/expanded/maximized. |
 | **Gate Notification** | `GateNotificationBar` | Carousel of pending gates with Approve/Revise/Kill. |
 
@@ -52,6 +53,8 @@ Tabbed detail surface (5 tabs: Overview, Pipeline, Sessions, Errors, Files). Res
 ## Ops Strip
 
 Persistent 36px bar with three entry types (blue build pills, amber gate pills with inline approve, red error pills). Completed builds flash green 2s. Hidden in Docs view.
+
+Fleet pills (COMP-COCKPIT-12), from the same `GET /api/fleet` poll as the Fleet view: a red pill when any session is at or over 250K context (`N sessions >250K`), an amber pill when owner questions are open (`N owner questions`), and a red pill when disk is under 100 GB free (`disk N GB free`). They use the `--destructive` and `--warning` tokens (`fleet-red`, `fleet-amber` in `OpsStripEntry`). Clicking one opens the Sessions view on its Fleet pane. They have no approve or dismiss control. When the `sm_status` reader is down they are hidden, and the strip itself still hides when it has no entries.
 
 ## Sidebar
 

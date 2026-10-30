@@ -1,0 +1,23 @@
+{
+  "generated": 1793350000.0,
+  "sources": {
+    "sessions": {"value": [
+      {"name": "lane-a-main", "busy": true, "ctx": 262000, "error": null, "session_id": "00000000-0000-4000-8000-000000000001"},
+      {"name": "lane-b-main", "busy": false, "ctx": 214000, "error": null, "session_id": "00000000-0000-4000-8000-000000000002"},
+      {"name": "lane-c-main", "busy": false, "ctx": 41000, "error": null, "session_id": "00000000-0000-4000-8000-000000000003"}
+    ], "error": null, "ts": 1793350000.0},
+    "jobs": {"value": [
+      {"session": "lane-a-main", "id": "job-alive", "kind": "author", "priority": "P1", "age": 1800, "pid": 4242, "alive": false, "error": null},
+      {"session": "lane-b-main", "id": "job-dead", "kind": "review", "priority": "P2", "age": 7200, "pid": 5353, "alive": true, "error": null},
+      {"session": "lane-c-main", "id": "job-nopid", "kind": "bash", "priority": "P3", "age": 90, "pid": null, "alive": null, "error": null}
+    ], "error": null, "ts": 1793350000.0},
+    "queue": {"value": [
+      {"id": "q-1", "by": "lane-a-main", "text": "Pick the rollout order for the fixture unit", "age": 5400, "error": null}
+    ], "error": null, "ts": 1793350000.0},
+    "df": {"value": {"free_gb": 80.5, "pct": "92%"}, "error": null, "ts": 1793350000.0},
+    "spend": {"value": null, "error": "RuntimeError: exit 2: attribute script missing", "ts": 1793350000.0},
+    "ceiling": {"value": {"line": "spend today $10 / $100 (10%)", "pct": 10.0, "warn": false}, "error": null, "ts": 1793350000.0},
+    "ledger": {"value": ["- 2026-10-30 17:00 lane-a-main: fixture ledger line one", "- 2026-10-30 17:05 lane-b-main: fixture ledger line two"], "error": null, "ts": 1793350000.0},
+    "quota": {"value": {"rows": [{"label": "must not leak"}]}, "error": null, "ts": 1793350000.0}
+  }
+}

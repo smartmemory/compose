@@ -3,7 +3,7 @@ import React from 'react';
 /**
  * OpsStripEntry — Individual pill in the ops strip.
  *
- * Types: build (blue), gate (amber), error (red), done (green).
+ * Types: build (blue), gate (amber), error (red), done (green), fleet-red / fleet-amber (COMP-COCKPIT-12).
  * Each pill is a compact 24px-tall rounded element with icon + label.
  */
 
@@ -32,6 +32,17 @@ const TOKENS = {
     background: 'hsl(217 91% 60% / 0.12)',
     borderColor: 'hsl(217 91% 60% / 0.3)',
     color: 'hsl(210 100% 66%)',
+  },
+  // COMP-COCKPIT-12 Fleet pills, themed through the index.css tokens.
+  'fleet-red': {
+    background: 'hsl(var(--destructive) / 0.12)',
+    borderColor: 'hsl(var(--destructive) / 0.3)',
+    color: 'hsl(var(--destructive))',
+  },
+  'fleet-amber': {
+    background: 'hsl(var(--warning) / 0.12)',
+    borderColor: 'hsl(var(--warning) / 0.3)',
+    color: 'hsl(var(--warning))',
   },
 };
 
@@ -91,6 +102,8 @@ export default function OpsStripEntry({
         {type === 'error' && '\u2715'}
         {type === 'done' && '\u2713'}
         {type === 'iteration' && '\u21BB'}
+        {type === 'fleet-red' && '\u25CF'}
+        {type === 'fleet-amber' && '?'}
       </span>
 
       {/* Label */}

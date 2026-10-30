@@ -8,6 +8,9 @@ import AgentAvatar from './shared/AgentAvatar.jsx';
 import RelativeTime from './shared/RelativeTime.jsx';
 import EmptyState from './shared/EmptyState.jsx';
 import FeatureFocusToggle from '../shared/FeatureFocusToggle.jsx';
+import FleetView from '../cockpit/FleetView.jsx';
+import { anyReaderUp } from '../cockpit/fleetLogic.js';
+import { useFleet } from '../../lib/fleetPoller.js';
 
 /**
  * SessionsView — Browse and filter agent sessions.
@@ -16,11 +19,19 @@ import FeatureFocusToggle from '../shared/FeatureFocusToggle.jsx';
  *   sessions     — from useVisionStore().sessions
  *   items        — from useVisionStore().items (for feature-code → item lookup)
  *   onSelectItem — (itemId) => void
+ *   pane         — 'sessions' | 'fleet' (COMP-COCKPIT-12), controlled with onPaneChange; the Ops strip pills open 'fleet'
  *
  * Note: visionState WS payload does not yet include sessions. This component
  * renders an empty state gracefully until server-side broadcast is extended.
  */
-export default function SessionsView({ sessions = [], items = [], onSelectItem, featureCode, focusActive, onToggleFocus }) {
+export default function SessionsView({ sessions = [], items = [], onSelectItem, featureCode, focusActive, onToggleFocus, pane, onPaneChange }) {
+  // COMP-COCKPIT-12: Fleet pane. Hidden when every Fleet reader is down (the route logs the outage once).
+  const fleet = useFleet();
+  const fleetShown = fleet.loading && !fleet.data ? true : anyReaderUp(fleet.data);
+  const [ownPane, setOwnPane] = useState('sessions');
+  const activePane = onPaneChange ? (pane ?? 'sessions') : ownPane;
+  const setPane = onPaneChange ?? setOwnPane;
+  const showFleet = activePane === 'fleet' && fleetShown;
   const [search, setSearch] = useState('');
   const [agentFilter, setAgentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -43,6 +54,23 @@ export default function SessionsView({ sessions = [], items = [], onSelectItem, 
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      {fleetShown && (
+        <div className="flex items-center gap-1 px-3 pt-2 shrink-0" role="tablist" aria-label="Sessions panes">
+          {[['sessions', 'Agent sessions'], ['fleet', 'Fleet']].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={(showFleet ? 'fleet' : 'sessions') === id}
+              data-testid={`sessions-pane-${id}`}
+              onClick={() => setPane(id)}
+              className={cn('text-[11px] px-2 py-0.5 rounded border', (showFleet ? 'fleet' : 'sessions') === id
+                ? 'border-border bg-muted text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}
+            >{label}</button>
+          ))}
+        </div>
+      )}
+      {showFleet ? <FleetView fleet={fleet} /> : (<>
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-border shrink-0">
         <FeatureFocusToggle featureCode={featureCode} active={focusActive} onToggle={onToggleFocus} />
@@ -117,6 +145,7 @@ export default function SessionsView({ sessions = [], items = [], onSelectItem, 
           />
         ))}
       </div>
+      </>)}
     </div>
   );
 }

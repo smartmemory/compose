@@ -1,0 +1,4 @@
+{"kind":"actual","ts":"2026-10-30T09:00:00Z","v":1}
+{"kind":"would_launch","ts":"2026-10-30T09:10:00Z","rung":"watch","launchable":1,"units":["forge/FIXTURE-OLD-1"],"units_known":true,"at_wall":"","accounts":{"seat1":{"open":true,"why":"ok"}},"v":1}
+{"kind":"would_launch","ts":"2026-10-30T09:40:00Z","rung":"watch","launchable":1,"units":["forge/FIXTURE-1"],"units_known":true,"at_wall":"","accounts":{"seat1":{"open":true,"why":"ok"}},"v":1}
+{"kind":"actual","ts":"2026-10-30T09:41:00Z","v":1}

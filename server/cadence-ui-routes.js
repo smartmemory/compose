@@ -35,6 +35,8 @@ export async function attachCadenceUiRoutes(app, {
     cadenceRoot: resolve(uiDir, '..'),
     ...(run ? { run } : {}),
   });
+  // COMP-COCKPIT-12: the Fleet route calls the same handler in-process (shared cache, no second HTTP hop).
+  if (app.locals) app.locals.cadenceUiHandler = handler;
   app.get(`${PREFIX}/available`, (_req, res) => res.json({ available: true }));
   // The handler routes on `/api/...`; Express strips the mount path, so put `/api` back.
   app.use(PREFIX, (req, res) => {

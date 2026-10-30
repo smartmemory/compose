@@ -261,6 +261,8 @@ function CockpitView({
   iterationStates,
   // COMP-COCKPIT-8: gate focus deep-link
   focusedGateId, onFocusHandled,
+  // COMP-COCKPIT-12: Sessions tab pane (agent sessions | fleet)
+  sessionsPane, onSessionsPaneChange,
   // COMPOSE-WIKI-TAB-1: {workspace, frameBase} from useWikiTab
   wikiTab,
 }) {
@@ -341,6 +343,8 @@ function CockpitView({
           featureCode={featureCode}
           focusActive={focusActive}
           onToggleFocus={onToggleFocus}
+          pane={sessionsPane}
+          onPaneChange={onSessionsPaneChange}
         />
       );
     case 'build-history':
@@ -808,6 +812,13 @@ function AppInner() {
     }
     prevBuildRef.current = activeBuild;
   }, [activeBuild]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // COMP-COCKPIT-12: a Fleet pill opens the Sessions tab on its Fleet pane.
+  const [sessionsPane, setSessionsPane] = useState('sessions');
+  const handleOpenFleet = useCallback(() => {
+    setSessionsPane('fleet');
+    handleViewChange('sessions');
+  }, [handleViewChange]);
 
   // COMP-UX-1f: OpsStrip feature click → select item in context panel
   const handleOpsSelectFeature = useCallback((featureCode) => {
@@ -1393,6 +1404,8 @@ function AppInner() {
                       featureCode={activeFeatureCode}
                       focusActive={focusFeature}
                       onToggleFocus={() => setFocusFeature(f => !f)}
+                      sessionsPane={sessionsPane}
+                      onSessionsPaneChange={setSessionsPane}
                       sessionState={sessionState}
                       agentActivity={agentActivity}
                       iterationStates={iterationStates}
@@ -1460,7 +1473,7 @@ function AppInner() {
           {/* OPS STRIP (COMP-UX-1d)                                           */}
           {/* ============================================================== */}
           <PanelErrorBoundary zone="ops strip">
-          <OpsStrip activeView={activeView} onSelectFeature={handleOpsSelectFeature} />
+          <OpsStrip activeView={activeView} onSelectFeature={handleOpsSelectFeature} onOpenFleet={handleOpenFleet} />
           </PanelErrorBoundary>
 
           {/* ============================================================== */}

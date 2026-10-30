@@ -5,6 +5,8 @@ import OpsStripEntry from './OpsStripEntry.jsx';
 import { deriveEntries } from './opsStripLogic.js';
 import { formatBudgetCompact } from './stepDetailLogic.js';
 import { wsFetch } from '../../lib/wsFetch.js';
+import { useFleet } from '../../lib/fleetPoller.js';
+import { fleetPills } from './fleetLogic.js';
 
 /**
  * OpsStrip — Persistent 36px bar surfacing active builds, pending gates, and recent errors.
@@ -13,10 +15,14 @@ import { wsFetch } from '../../lib/wsFetch.js';
  * Hidden when activeView === 'docs'. Self-contained: calls useVisionStore internally.
  */
 
-export default function OpsStrip({ activeView, onSelectFeature }) {
+export default function OpsStrip({ activeView, onSelectFeature, onOpenFleet }) {
   const { activeBuild, gates, items, recentErrors, resolveGate, iterationStates } = useVisionStore(
     useShallow(s => ({ activeBuild: s.activeBuild, gates: s.gates, items: s.items, recentErrors: s.recentErrors, resolveGate: s.resolveGate, iterationStates: s.iterationStates }))
   );
+
+  // COMP-COCKPIT-12: Fleet pills (sessions over 250K, open owner questions, disk under 100 GB); hidden when sm_status is down.
+  const fleet = useFleet();
+  const fleetEntries = useMemo(() => fleetPills(fleet.data), [fleet.data]);
 
   // Animation state per entry key
   const [animStates, setAnimStates] = useState(new Map());
@@ -175,7 +181,7 @@ export default function OpsStrip({ activeView, onSelectFeature }) {
   }, [resolveGate]);
 
   // Hidden when activeView is 'docs' or no entries
-  if (activeView === 'docs' || visibleEntries.length === 0) {
+  if (activeView === 'docs' || (visibleEntries.length === 0 && fleetEntries.length === 0)) {
     return null;
   }
 
@@ -198,6 +204,14 @@ export default function OpsStrip({ activeView, onSelectFeature }) {
         flexShrink: 0,
       }}
     >
+      {fleetEntries.map(pill => (
+        <OpsStripEntry
+          key={pill.key}
+          type={pill.tone === 'red' ? 'fleet-red' : 'fleet-amber'}
+          label={pill.label}
+          onClick={onOpenFleet}
+        />
+      ))}
       {visibleEntries.map(entry => (
         <OpsStripEntry
           key={entry.key}

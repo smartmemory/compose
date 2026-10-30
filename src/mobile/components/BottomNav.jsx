@@ -5,6 +5,7 @@ const ITEMS = [
   { id: 'roadmap', label: 'Roadmap', icon: '⚡' },
   { id: 'builds', label: 'Builds', icon: '⏵' },
   { id: 'ideas', label: 'Ideas', icon: '✦' },
+  { id: 'status', label: 'Status', icon: '◉' },
 ];
 
 /**

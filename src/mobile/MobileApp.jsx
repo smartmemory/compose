@@ -9,6 +9,7 @@ import AgentsTab from './tabs/AgentsTab';
 import RoadmapTab from './tabs/RoadmapTab';
 import IdeasTab from './tabs/IdeasTab';
 import BuildsTab from './tabs/BuildsTab';
+import StatusTab from './tabs/StatusTab';
 import MobileAlertBar from './components/MobileAlertBar';
 import MobileEnvHealth from './components/MobileEnvHealth';
 import { usePendingGates } from './hooks/usePendingGates.js';
@@ -17,7 +18,7 @@ import { useRoadmapItems } from './hooks/useRoadmapItems.js';
 import useMonitorEvents from './hooks/useMonitorEvents.js';
 import './mobile.css';
 
-const TABS = ['agents', 'roadmap', 'builds', 'ideas'];
+const TABS = ['agents', 'roadmap', 'builds', 'ideas', 'status'];
 const DEFAULT_TAB = 'agents';
 const TOKEN_STORAGE_KEY = 'compose:mobile:sensitiveToken';
 
@@ -161,6 +162,9 @@ export default function MobileApp() {
     );
   } else if (tab === 'ideas') {
     content = <IdeasTab />;
+  } else if (tab === 'status') {
+    // COMP-COCKPIT-12: read-only fleet status
+    content = <StatusTab />;
   } else if (tab === 'builds') {
     content = (
       <BuildsTab

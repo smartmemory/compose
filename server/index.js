@@ -15,6 +15,7 @@ import { attachAuthRoutes } from './auth-routes.js';
 import { configureAuthStore, requireSensitiveToken } from './security.js';
 import { resolveComposeHost, attachAgentProxy } from './remote-utils.js';
 import { attachOpsStatusRoutes } from './ops-status-routes.js';
+import { attachFleetRoutes } from './fleet-routes.js';
 import { attachStratumUiRoutes } from './stratum-ui-routes.js';
 import { attachCadenceUiRoutes } from './cadence-ui-routes.js';
 import { attachWikiRoutes } from './wiki-routes.js';
@@ -226,6 +227,8 @@ app.use((req, res, next) => workspaces.handle(req, res, next));
 // ---------------------------------------------------------------------------
 // COMPOSE-OPS-TAB-1: read-only Ops status pages (absent when the dir is absent).
 attachOpsStatusRoutes(app, { remote: remoteMode });
+// COMP-COCKPIT-12: GET /api/fleet (read-only Fleet view; behind the remote auth gate, loopback otherwise).
+attachFleetRoutes(app);
 // COMPOSE-WIKI-TAB-1: /api/wiki/* proxies the wiki DataClient's calls (wiki-eng only; absent in remote mode).
 attachWikiRoutes(app, { remote: remoteMode });
 
