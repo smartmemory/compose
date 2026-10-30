@@ -1,8 +1,7 @@
 name: Publish compose-mcp
 
 on:
-  push:
-    tags: ['compose-mcp-v*']
+  workflow_dispatch:
 
 permissions:
   contents: read
