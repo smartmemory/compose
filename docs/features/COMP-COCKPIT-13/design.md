@@ -1,6 +1,6 @@
 # COMP-COCKPIT-13 — Published status page + process-metrics view
 
-**Status:** PLANNED · BLUEPRINT DONE 2026-10-30, plan-review fix round 1 the same day (metric source redesigned: P1-P5 read the status builder's output, no JS port; every file:line below was read on compose main `635dae6e` and the ops tree on 2026-10-30). Filed 2026-10-15 (owner request relayed by s1-chat). Build order: the four units in "Blueprint → Units" below (U0 in the ops lane, owned by ops-main), after COMP-COCKPIT-12 (COMPLETE 2026-10-30).
+**Status:** COMPLETE 2026-10-30 (U0 ops 3e81292c3, U1 2c9aa113, U2 185ca47c, U3 9b4b6769+1dfaaa71+f5359707; polish U4 COMP-COCKPIT-13-POLISH 5e26f174 on 2026-10-31). Was: PLANNED · BLUEPRINT DONE 2026-10-30, plan-review fix round 1 the same day (metric source redesigned: P1-P5 read the status builder's output, no JS port; every file:line below was read on compose main `635dae6e` and the ops tree on 2026-10-30). Filed 2026-10-15 (owner request relayed by s1-chat). Build order: the four units in "Blueprint → Units" below (U0 in the ops lane, owned by ops-main), after COMP-COCKPIT-12 (COMPLETE 2026-10-30).
 
 **Decisions (record: `/Users/ruze/reg/my/SmartMemory/smart-memory-ops/units/COMP-COCKPIT-13/decision.md`):**
 - **Q1 embed or link → LINK to live data** (OWNER via s1-chat 2026-10-30 18:0x). **Publish is Mac-only** (OWNER via s1-chat 18:2x, option (a)): a private claude.ai page holds only the `127.0.0.1` cockpit link, the generated time and a static header. No frozen summary, no data off the Mac.
