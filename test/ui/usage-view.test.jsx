@@ -3,7 +3,7 @@ import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import UsageView from '../../src/components/usage/UsageView.jsx';
-import { DEFAULT_MAIN_TABS } from '../../src/components/cockpit/viewTabsState.js';
+import { locateView } from '../../lib/view-keys.js';
 
 const prov = (r, e, a) => ({ reported: { dispatch_count: r, usd: 0 }, estimated: { dispatch_count: e, usd: 0 }, absent: { dispatch_count: a, usd: 0 } });
 
@@ -41,7 +41,7 @@ const fakeClient = (cur, prev = null) => ({
 describe('UsageView', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('is a default tab', () => expect(DEFAULT_MAIN_TABS).toContain('usage'));
+  it('is a sub-tab of the Fleet room', () => expect(locateView('usage')).toEqual({ top: 'fleet', sub: 'usage' }));
 
   it('renders tiles, chart and table from the client without fetching', async () => {
     const fetchSpy = vi.fn();

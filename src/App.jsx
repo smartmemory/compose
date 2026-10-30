@@ -1,10 +1,11 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef, useReducer } from 'react';
 import AgentStream from './components/AgentStream';
 import PopoutView from './components/PopoutView';
 import ProjectSwitchPopover from './components/ProjectSwitchPopover.jsx';
 
 // Cockpit shell components
-import ViewTabs from './components/cockpit/ViewTabs.jsx';
+import ViewTabs, { ViewSubTabs } from './components/cockpit/ViewTabs.jsx';
+import { itemFeatureCode, featureCodeResolves, resolveFeatureContext, filterFeatureCode, focusReducer, parseStoredFocus, FOCUS_STORAGE_KEY } from './components/cockpit/focusedFeature.js';
 import StratumView from './components/cockpit/StratumView.jsx';
 import CadenceView from './components/cockpit/CadenceView.jsx';
 import WikiView from './components/cockpit/WikiView.jsx';
@@ -40,11 +41,6 @@ import {
   agentBarHeightClass,
 } from './components/cockpit/agentBarState.js';
 import {
-  loadMainTabs,
-  loadActiveTab,
-  saveActiveTab,
-} from './components/cockpit/viewTabsState.js';
-import {
   loadSidebarOpen,
   saveSidebarOpen,
   loadContextOpen,
@@ -55,7 +51,7 @@ import {
 } from './components/cockpit/contextPanelState.js';
 
 // Vision surface — views, sidebar, modals, store
-import { reachableViews, resolveStoredView, resolveDefaultView, viewFromQuery } from '../lib/view-keys.js';
+import { VIEW_KEYS, isViewKey, locateView, reachableViews, resolveStoredView, resolveDefaultView, viewFromQuery, migrateNavState, LEGACY_NAV_STORAGE_KEYS } from '../lib/view-keys.js';
 import { NavigationContext } from './lib/navigation.jsx';
 import { VisionChangesContext } from './components/vision/VisionChangesContext.js';
 import { useVisionStore } from './components/vision/useVisionStore.js';
@@ -257,7 +253,7 @@ function CockpitView({
   onResolveGate, onUpdateSettings, onResetSettings,
   projectRoot,
   // COMP-UX-2a: Feature focus
-  featureCode, focusActive, onToggleFocus,
+  featureCode, filterCode,
   // COMP-UX-7: Live metrics
   sessionState, agentActivity,
   // COMP-UX-9: Iteration progress
@@ -312,9 +308,8 @@ function CockpitView({
           onCreate={onCreate}
           onCreateFeature={onCreateFeature}
           isEmptyProject={isEmptyProject}
-          featureCode={featureCode}
-          focusActive={focusActive}
-          onToggleFocus={onToggleFocus}
+          featureCode={filterCode}
+          focusActive={!!filterCode}
         />
       );
     case 'graph':
@@ -334,9 +329,8 @@ function CockpitView({
           spawnedAgents={spawnedAgents}
           agentRelays={agentRelays}
           agentOverlay={agentOverlay}
-          featureCode={featureCode}
-          focusActive={focusActive}
-          onToggleFocus={onToggleFocus}
+          featureCode={filterCode}
+          focusActive={!!filterCode}
         />
       );
     case 'pipeline':
@@ -356,9 +350,8 @@ function CockpitView({
           sessions={sessions}
           items={items}
           onSelectItem={onSelect}
-          featureCode={featureCode}
-          focusActive={focusActive}
-          onToggleFocus={onToggleFocus}
+          featureCode={filterCode}
+          focusActive={!!filterCode}
           pane={sessionsPane}
           onPaneChange={onSessionsPaneChange}
         />
@@ -369,6 +362,7 @@ function CockpitView({
           builds={buildHistory}
           items={items}
           onSelectItem={onSelect}
+          featureFilter={filterCode}
         />
       );
     case 'gates':
@@ -378,9 +372,8 @@ function CockpitView({
           items={phaseFilteredItems}
           onResolve={onResolveGate}
           onSelect={onSelect}
-          featureCode={featureCode}
-          focusActive={focusActive}
-          onToggleFocus={onToggleFocus}
+          featureCode={filterCode}
+          focusActive={!!filterCode}
           focusedGateId={focusedGateId}
           onFocusHandled={onFocusHandled}
         />
@@ -395,9 +388,8 @@ function CockpitView({
           onSelectedFileChange={onDocsSelectedFileChange}
           previousView={docsPreviousView}
           onBack={onDocsBack}
-          featureCode={featureCode}
-          focusActive={focusActive}
-          onToggleFocus={onToggleFocus}
+          featureCode={filterCode}
+          focusActive={!!filterCode}
         />
       );
     case 'design':
@@ -446,7 +438,27 @@ function CockpitView({
 // AppInner — cockpit shell with absorbed VisionTracker logic
 // ---------------------------------------------------------------------------
 
+/** COMP-AUDIT-17 §2.7: every stored navigation value, read once on load. The retired tab-list keys are removed. */
+function readStoredNav() {
+  let nav;
+  try {
+    nav = migrateNavState({
+      activeViewRaw: localStorage.getItem('compose:activeView'),
+      activeTabRaw: localStorage.getItem('compose:activeTab'),
+      tabsRaw: localStorage.getItem('compose:mainTabs'),
+      focusRaw: localStorage.getItem(FOCUS_STORAGE_KEY),
+      items: null,
+      available: {},
+    });
+    for (const k of LEGACY_NAV_STORAGE_KEYS) localStorage.removeItem(k);
+  } catch {
+    nav = migrateNavState({});
+  }
+  return nav;
+}
+
 function AppInner() {
+  const [navAtLoad] = useState(readStoredNav);
   // ── Workspace context (for refresh after project switch) ────────────────
   const { refresh: refreshWorkspace } = useWorkspace();
 
@@ -460,8 +472,6 @@ function AppInner() {
     document.documentElement.classList.contains('dark')
   );
 
-  // Main-area tabs
-  const [mainTabs] = useState(loadMainTabs);
   // COMP-AUDIT-17: availability is three-valued (unknown | yes | no). A view is
   // dropped only on `no`; while a check is in flight the view shows its own
   // loading or empty state.
@@ -473,10 +483,6 @@ function AppInner() {
     () => ({ ops: opsAvail, stratum: stratumAvail, cadence: cadenceAvail, wiki: wikiTab.availability }),
     [opsAvail, stratumAvail, cadenceAvail, wikiTab.availability],
   );
-  const [activeTab, setActiveTabRaw] = useState(() => {
-    const linked = viewFromQuery(window.location.search);
-    return linked && mainTabs.includes(linked) ? linked : loadActiveTab(mainTabs);
-  });
 
   // Agent bar
   const [agentBarState, setAgentBarStateRaw] = useState(loadAgentBarState);
@@ -528,8 +534,13 @@ function AppInner() {
     statusSnapshots: s.statusSnapshots, setStatusSnapshot: s.setStatusSnapshot,
   })));
 
-  // COMP-UX-2a: Derive active feature code from session state
-  const activeFeatureCode = sessionState?.featureCode || null;
+  // COMP-AUDIT-17 §2.5: focus is explicit state, separate from selection. Only the
+  // right panel's Focus button sets it; only the chip's × (or a project switch, or a
+  // stale code on load) clears it. Filters read it only when source === 'focus'.
+  const [focusedFeature, dispatchFocus] = useReducer(focusReducer, null, () => navAtLoad.focus);
+  const featureCtx = useMemo(() => resolveFeatureContext({ focusedFeature, sessionState }), [focusedFeature, sessionState]);
+  const activeFeatureCode = featureCtx.code;
+  const filterCode = filterFeatureCode(featureCtx);
 
   // COMP-OBS-STATUS: hydrate status snapshot on feature selection change.
   // Fetches once per featureCode unless invalidated (clearStatusSnapshots on hydrate).
@@ -551,15 +562,13 @@ function AppInner() {
   // A `?view=` deep link counts as a chosen view: the settings defaultView must not override it (COMP-COCKPIT-13).
   const hadSessionView = useRef(!!localStorage.getItem('compose:activeView') || viewFromQuery(window.location.search) !== null);
   const [activeView, setActiveView] = useState(() => {
-    // COMP-AUDIT-17: on load only what is known on load. Any valid view key is
-    // kept; a package-gated key is re-checked once its availability settles
-    // (the effect below). Fresh storage or an invalid key lands on Home.
+    // COMP-AUDIT-17: on load only what is known on load (every availability is `unknown`).
+    // Any valid view key is kept; a package-gated key is re-checked once its availability
+    // settles (the effect below). Fresh storage or an invalid key lands on Home.
     // COMP-COCKPIT-13: a `?view=<key>` deep link wins over the stored view (the popout check ran in App()).
     const linked = viewFromQuery(window.location.search);
-    if (linked) return linked;
-    const { view, fellBackFrom } = resolveStoredView(localStorage.getItem('compose:activeView'), {});
-    if (fellBackFrom) console.warn(`[compose] stored view "${fellBackFrom}" is not a view; showing Home`);
-    return view;
+    if (navAtLoad.fellBackFrom) console.warn(`[compose] stored view "${navAtLoad.fellBackFrom}" is not a view; showing Home`);
+    return linked || navAtLoad.view;
   });
   const [searchQuery, setSearchQuery] = useState('');
   const untriagedIdeas = useIdeaboxStore(s => s.ideas.filter(i => !i.priority || i.priority === '—').length);
@@ -605,8 +614,6 @@ function AppInner() {
   });
   // COMP-UX-1: Group filter (shared between sidebar and graph)
   const [hiddenGroups, setHiddenGroups] = useState(new Set());
-  // COMP-UX-2a: Feature-aware focus filter
-  const [focusFeature, setFocusFeature] = useState(false);
   const handleToggleGroup = useCallback((group) => {
     setHiddenGroups(prev => {
       const next = new Set(prev);
@@ -658,6 +665,7 @@ function AppInner() {
       // Clear the global Ideabox state and fetch for the new workspace before
       // the root flips. The reset discards in-flight responses from the old one.
       useIdeaboxStore.getState().resetForProject();
+      dispatchFocus({ type: 'projectSwitch' });
       setProjectName(data.name);
       setProjectRoot(data.targetRoot);
       // Vision store will get new state via WebSocket broadcast
@@ -670,22 +678,24 @@ function AppInner() {
   // ── Derived flags ───────────────────────────────────────────────────────
   const isMaximized = agentBarState === AGENT_BAR_STATES.MAXIMIZED;
 
-  // ── Sync activeView ↔ activeTab ─────────────────────────────────────────
-  // activeView is the view key used by CockpitView; activeTab drives ViewTabs.
-  // Keep them in sync: tab changes drive the view.
-  const setActiveTab = useCallback((tab) => {
-    setActiveTabRaw(tab);
-    saveActiveTab(tab);
-    setActiveView(tab);
+  // ── Navigation ──────────────────────────────────────────────────────────
+  // activeView is the flat leaf view key; the rooms and sub-tabs are derived from it
+  // (`locateView`). An unknown key is ignored with one WARNING (server `visionUI` commands,
+  // EntityLink), never a "View not found" page.
+  const handleViewChange = useCallback((view) => {
+    if (!isViewKey(view)) {
+      console.warn(`[compose] ignoring navigation to unknown view "${view}"`);
+      return;
+    }
+    setActiveView(view);
   }, []);
 
-  // When sidebar nav changes view, sync tabs too
-  const handleViewChange = useCallback((view) => {
-    setActiveView(view);
-    // If the view is in mainTabs, sync the tab
-    setActiveTabRaw(view);
-    saveActiveTab(view);
-  }, []);
+  // A room re-opens on the view last used in it.
+  const lastByRoom = useRef({});
+  useEffect(() => {
+    const loc = locateView(activeView);
+    if (loc) lastByRoom.current[loc.top] = activeView;
+  }, [activeView]);
 
   // ── Layout persistence ───────────────────────────────────────────────────
   useEffect(() => {
@@ -697,6 +707,20 @@ function AppInner() {
       setDocsSelectedFile(null);
     }
   }, [activeView]);
+
+  // COMP-AUDIT-17: persist the focused feature; a code that no longer resolves to any item is cleared once items load.
+  useEffect(() => {
+    try {
+      if (focusedFeature) localStorage.setItem(FOCUS_STORAGE_KEY, focusedFeature);
+      else localStorage.removeItem(FOCUS_STORAGE_KEY);
+    } catch { /* ignore */ }
+  }, [focusedFeature]);
+  useEffect(() => {
+    if (focusedFeature && items.length > 0 && !featureCodeResolves(items, focusedFeature)) {
+      console.warn(`[compose] focused feature "${focusedFeature}" no longer resolves to any item; clearing focus`);
+      dispatchFocus({ type: 'reconcile', items });
+    }
+  }, [focusedFeature, items]);
 
   useEffect(() => {
     if (selectedTrack) localStorage.setItem('compose:selectedTrack', selectedTrack);
@@ -721,7 +745,7 @@ function AppInner() {
     if (defaultViewApplied.current || hadSessionView.current) return;
     if (settings?.ui?.defaultView) {
       // COMP-AUDIT-17: applied only if reachable by clicks in the visible tabs and not known-absent; else Home.
-      const { view, fellBackFrom } = resolveDefaultView(settings.ui.defaultView, mainTabs, availability);
+      const { view, fellBackFrom } = resolveDefaultView(settings.ui.defaultView, VIEW_KEYS, availability);
       if (fellBackFrom) console.warn(`[compose] default view "${fellBackFrom}" is not reachable; showing Home`);
       handleViewChange(view);
       defaultViewApplied.current = true;
@@ -1042,6 +1066,8 @@ function AppInner() {
   // pre-filtered data, so they cannot distinguish "empty project" from
   // "filters exclude everything" locally. Computed from raw store items.
   const isEmptyProject = items.length === 0;
+  // COMP-AUDIT-17: the Review room carries the pending-gates badge (the old tab badge was keyed to a tab that no longer exists).
+  const pendingGateCount = useMemo(() => gates.filter(g => g.status === 'pending').length, [gates]);
 
   const handleDelete = useCallback(async (id) => {
     await deleteItem(id);
@@ -1069,15 +1095,13 @@ function AppInner() {
       // nothing rather than corrupt the selection state.
       return;
     }
-    // Clear both gate-hiding filters: phaseFilteredGates would hide a gate
-    // whose owning item is outside the selected phase, and GateView's
-    // feature-focus filter (focusActive) would hide a gate belonging to a
-    // different feature — either would make the jump a silent no-op.
+    // Clear the phase filter: phaseFilteredGates would hide a gate whose owning item is
+    // outside the selected phase. The feature focus stays: GateView always includes the
+    // jumped-to gate (focusedGateId) even when the focus would hide it (COMP-AUDIT-17).
     setSelectedPhase(null);
-    setFocusFeature(false);
     setFocusedGateId(gateId);
     handleViewChange('gates');
-  }, [gates, setSelectedPhase, setFocusFeature, handleViewChange]);
+  }, [gates, setSelectedPhase, handleViewChange]);
 
   const handleGateFocusHandled = useCallback(() => setFocusedGateId(null), []);
 
@@ -1208,9 +1232,13 @@ function AppInner() {
           {/* View tabs — centred in the header */}
           <div className="flex-1 min-w-0 h-full flex items-center">
             <ViewTabs
-              tabs={mainTabs.filter(t => availability[t] === undefined || availability[t] === 'yes' || (availability[t] === 'unknown' && t === activeView))}
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
+              activeView={activeView}
+              availability={availability}
+              onViewChange={handleViewChange}
+              lastByRoom={lastByRoom.current}
+              badges={{ review: pendingGateCount }}
+              focusedFeature={focusedFeature}
+              onClearFocus={() => dispatchFocus({ type: 'clear' })}
               onOpenPalette={() => setPaletteOpen(v => !v)}
               colleague={{
                 installed: mayaStatus?.enabled === true,
@@ -1273,6 +1301,7 @@ function AppInner() {
           </div>
         </header>
         </PanelErrorBoundary>
+        <ViewSubTabs activeView={activeView} availability={availability} onViewChange={handleViewChange} />
 
         {/* ================================================================ */}
         {/* WORKSPACE                                                         */}
@@ -1357,6 +1386,7 @@ function AppInner() {
                 {/* Wave 6 region ① — Status Band (32px sticky) */}
                 <StatusBand
                   featureCode={activeFeatureCode}
+                  source={featureCtx.source}
                   snapshot={activeFeatureCode ? (statusSnapshots?.[activeFeatureCode] ?? null) : null}
                 />
                 {/* Wave 6 region ② — Decision Timeline strip (72px sticky, top: 32px) */}
@@ -1407,8 +1437,7 @@ function AppInner() {
                       onDocsBack={navigateBackFromDocs}
                       projectRoot={projectRoot}
                       featureCode={activeFeatureCode}
-                      focusActive={focusFeature}
-                      onToggleFocus={() => setFocusFeature(f => !f)}
+                      filterCode={filterCode}
                       sessionsPane={sessionsPane}
                       onSessionsPaneChange={setSessionsPane}
                       sessionState={sessionState}
@@ -1423,7 +1452,7 @@ function AppInner() {
                       cadenceAvailable={cadenceAvail === 'yes'}
                       onJumpToGate={openGate}
                       onNavigate={handleViewChange}
-                      reachableViewKeys={reachableViews(mainTabs, availability)}
+                      reachableViewKeys={reachableViews(VIEW_KEYS, availability)}
                     />
                   </PanelErrorBoundary>
                 </div>
@@ -1446,6 +1475,8 @@ function AppInner() {
                         onOpenFile={navigateToDocs}
                         onViewInGraph={handleViewInGraph}
                         onViewInTree={handleViewInTree}
+                        focusedFeature={focusedFeature}
+                        onFocusFeature={(item) => dispatchFocus({ type: 'focus', item })}
                       />
                     )}
                     {contextSelection?.type === 'step' && (

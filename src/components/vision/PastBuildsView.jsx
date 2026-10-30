@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Search, History, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import RelativeTime from './shared/RelativeTime.jsx';
@@ -43,8 +43,10 @@ function formatDuration(ms) {
 // COMP-COST-OWNER S2: one shared formatter; null keeps the row's cost chip unrendered.
 const formatCost = (usd) => (usd === 0 ? null : sharedFormatCost(usd, { unknown: null }));
 
-export default function PastBuildsView({ builds = [], items = [], onSelectItem }) {
-  const [search, setSearch] = useState('');
+export default function PastBuildsView({ builds = [], items = [], onSelectItem, featureFilter = null }) {
+  // COMP-AUDIT-17: the focus chip pre-fills the feature search box; the user can still edit it.
+  const [search, setSearch] = useState(featureFilter || '');
+  useEffect(() => { setSearch(featureFilter || ''); }, [featureFilter]);
   const [statusFilter, setStatusFilter] = useState('all');
 
   const filtered = useMemo(() => {

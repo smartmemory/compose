@@ -1,10 +1,10 @@
 {
   "code": "COMP-AUDIT-18",
-  "description": "Land on Dashboard (and fatten it) instead of the Graph, which is unreadable at default zoom (use a fit-to-readable initial zoom); remove or repurpose the permanently-inert 'Select a feature to see status.' global bar shown atop every view; and resolve the three competing status models on one item (status dropdown vs lifecycle phase vs confidence) so it is clear which governs `compose build` (see COMP-AUDIT-11).",
-  "status": "PLANNED",
+  "description": "Land on Dashboard (and fatten it) instead of the Graph, which is unreadable at default zoom (use a fit-to-readable initial zoom); and remove or repurpose the permanently-inert 'Select a feature to see status.' global bar shown atop every view. The third clause (resolve the three competing status models on one item, status dropdown vs lifecycle phase vs confidence, so it is clear which governs `compose build`) moved to COMP-AUDIT-11 (owner pick 2a, 2026-10-30); slice 1 only labelled the three controls.",
+  "status": "COMPLETE",
   "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
   "created": "2026-07-12",
-  "updated": "2026-07-12",
+  "updated": "2026-10-30",
   "complexity": "M",
   "position": 18,
   "tags": [

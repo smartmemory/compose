@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { checkAvailability } from './availabilityCheck.js';
 
 const HIDDEN = { available: false, workspace: null, frameBase: null };
 const UNKNOWN = { ...HIDDEN, availability: 'unknown' };
@@ -20,14 +21,12 @@ export function useWikiTabState() {
   useEffect(() => {
     if (!built) return undefined;
     let live = true;
-    fetch('/api/wiki/available')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
-        if (!live) return;
-        if (j?.available === true) setTab({ available: true, workspace: j.workspace, frameBase: j.frameBase, availability: 'yes' });
+    checkAvailability({ name: 'wiki', url: '/api/wiki/available', decide: (j) => (j?.available === true ? 'yes' : 'no'), isLive: () => live })
+      .then(({ state, json: j }) => {
+        if (!live || state === 'unknown') return;
+        if (state === 'yes') setTab({ available: true, workspace: j.workspace, frameBase: j.frameBase, availability: 'yes' });
         else setTab(NO);
-      })
-      .catch(() => { if (live) setTab(NO); });
+      });
     return () => { live = false; };
   }, [built]);
   return built ? tab : NO;

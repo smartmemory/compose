@@ -7,7 +7,6 @@ import StatusBadge from './shared/StatusBadge.jsx';
 import AgentAvatar from './shared/AgentAvatar.jsx';
 import RelativeTime from './shared/RelativeTime.jsx';
 import EmptyState from './shared/EmptyState.jsx';
-import FeatureFocusToggle from '../shared/FeatureFocusToggle.jsx';
 import FleetView from '../cockpit/FleetView.jsx';
 import { anyReaderUp } from '../cockpit/fleetLogic.js';
 import { useFleet } from '../../lib/fleetPoller.js';
@@ -24,7 +23,7 @@ import { useFleet } from '../../lib/fleetPoller.js';
  * Note: visionState WS payload does not yet include sessions. This component
  * renders an empty state gracefully until server-side broadcast is extended.
  */
-export default function SessionsView({ sessions = [], items = [], onSelectItem, featureCode, focusActive, onToggleFocus, pane, onPaneChange }) {
+export default function SessionsView({ sessions = [], items = [], onSelectItem, featureCode, focusActive, pane, onPaneChange }) {
   // COMP-COCKPIT-12: Fleet pane. Hidden when every Fleet reader is down (the route logs the outage once).
   const fleet = useFleet();
   const fleetShown = fleet.loading && !fleet.data ? true : anyReaderUp(fleet.data);
@@ -73,7 +72,6 @@ export default function SessionsView({ sessions = [], items = [], onSelectItem, 
       {showFleet ? <FleetView fleet={fleet} /> : (<>
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-border shrink-0">
-        <FeatureFocusToggle featureCode={featureCode} active={focusActive} onToggle={onToggleFocus} />
         {/* Active count */}
         <div className="flex items-center gap-1 text-[10px]">
           <span className={cn(

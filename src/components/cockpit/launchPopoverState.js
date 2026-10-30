@@ -1,7 +1,7 @@
 /**
  * launchPopoverState.js — Pure logic for LaunchPopover, testable without
  * React/JSX (the repo runs UI logic tests under `node --test`, which cannot
- * parse JSX — see opsStripLogic.js / viewTabsState.js for the same pattern).
+ * parse JSX — see opsStripLogic.js for the same pattern).
  *
  * buildLaunchPayload shapes the startBuild() argument object for the three
  * launcher lifecycles (COMP-PARITY-2):

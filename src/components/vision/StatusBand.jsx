@@ -14,11 +14,12 @@
  * Props:
  *   featureCode {string|null}       — currently-selected feature code
  *   snapshot    {StatusSnapshot|null} — snapshot object (from store or REST)
+ *   source      {'focus'|'session'|null} — where the feature came from (COMP-AUDIT-17); named in the band
  */
 import React, { useState, useCallback } from 'react';
 import { formatExpansionPanel } from './statusBandLogic.js';
 
-export default function StatusBand({ featureCode, snapshot }) {
+export default function StatusBand({ featureCode, snapshot, source = null }) {
   const [expanded, setExpanded] = useState(false);
 
   const handleClick = useCallback(() => {
@@ -67,6 +68,11 @@ export default function StatusBand({ featureCode, snapshot }) {
             flex: 1,
           }}
         >
+          {source && (
+            <span data-status-source style={{ opacity: 0.6, marginRight: 8 }}>
+              {source === 'focus' ? 'Focused:' : 'Agent session:'}
+            </span>
+          )}
           {sentence}
         </span>
         <span

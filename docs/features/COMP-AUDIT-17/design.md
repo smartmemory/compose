@@ -1,11 +1,9 @@
 # COMP-AUDIT-17 + COMP-AUDIT-18: cockpit navigation and landing page (design)
 
-**Status:** SLICE 1 BUILT 2026-10-30 (home page, readable map, labelled header; report `smart-memory-ops/units/COMP-AUDIT-17-18/report-slice1.md`). Slice 2 (rooms, focus) not started. Design history: DESIGN, fix round 1 of 2 (2026-10-30, Opus `hard:`), read-only of compose `8a870e32`. Round 1
+**Status:** BUILT 2026-10-30. Slice 1 (home page, readable map, labelled header) landed as `a476292a` (report `smart-memory-ops/units/COMP-AUDIT-17-18/report-slice1.md`). Slice 2 (shape A rooms, the focus chip, `migrateNavState`, the transient-availability fix) is built on compose local `main` (report `report-slice2.md`). Owner picks (2026-10-30): 1a labelled rooms, 2a label the three status controls now and merge in COMP-AUDIT-11, 3a Design stays under Build ▸ Design. Design history: DESIGN, fix round 1 of 2 (2026-10-30, Opus `hard:`), read-only of compose `8a870e32`. Round 1
 (`c6f530e3`, read of `b6031a44`) went to an Opus design review
-(`smart-memory-ops/units/COMP-AUDIT-17-18/review-r1.md`, NOT CLEAN H1 M6 L10). This round corrects the
-"feature-scoped views" premise (H1), so the shape comparison and the recommendation in §2 and §7 changed:
-**the recommendation is now shape A (labelled rooms), not B.** Next: final design review (round 2), owner
-picks, then a build unit. No source changes in this unit.
+(`smart-memory-ops/units/COMP-AUDIT-17-18/review-r1.md`, NOT CLEAN H1 M6 L10). That round corrected the
+"feature-scoped views" premise (H1), so the recommendation is shape A (labelled rooms), not B. No code in the design unit itself.
 **Covers:** COMP-AUDIT-17 (information architecture) and COMP-AUDIT-18 (landing page, inert status bar,
 one status surface). AUDIT-18's third clause (three status models on one item) is split out: see §5.
 **Line numbers** are compose `8a870e32`. COMP-OBS-STATS-1 (`a986f9de`) landed after round 1, added the
@@ -392,37 +390,39 @@ Resolving which one governs is data-model work that COMP-AUDIT-11 already owns (
 ## 6. Acceptance criteria (build unit; slice 1 first, slice 2 after the owner picks)
 
 **Slice 1 (any shape).** Each box says why it does not depend on the shape.
-- [ ] `src/components/cockpit/viewKeys.js` (new, pure, no React): `VIEW_KEYS` (the 20 leaf keys, the one list the `CockpitView` switch, settings and tests share) and `reachableViews(nav, available)`. *Shape-neutral: leaf keys exist under A, B and C; only `nav` differs.* `server/settings-store.js` imports it (no server→`src/` import exists today, unverified for packaging; fallback: a server copy plus a parity test)
-- [ ] `server/settings-store.js` (existing): `ui.defaultView` default `'dashboard'`; accepts any `VIEW_KEYS` entry. *Shape-neutral: stores a leaf key, not a tab*
-- [ ] `src/components/vision/SettingsPanel.jsx` (existing): picker lists `reachableViews` (one shared list, not two copies). *Shape-neutral: the set follows the nav model*
-- [ ] `src/App.jsx` (existing): first connect applies `defaultView` only if reachable, else Home; the `compose:activeView` initialiser (`:518-524`) also drops `ops` with no pages and any unreachable key; fresh storage lands on Dashboard/Home (test). *Shape-neutral: "reachable" is computed*
-- [ ] `src/components/vision/VisionTracker.jsx` (existing): any view it has no branch for (incl. `dashboard`, `usage`, its own default `roadmap`) renders `graph`; one test (review L2). *Shape-neutral: the popout keeps its own view set*
-- [ ] `src/components/vision/DashboardView.jsx` (existing) + `src/components/vision/HomeSections.jsx` (new): §4.2 sections from store data, each hidden when empty; unfiltered gates/items for Needs you; `handleStopAgent` wired to Running now; completed sorted by `updatedAt` and labelled "last changed". *Shape-neutral: Home is the landing view in A, B and C*
-- [ ] `buildHistory` fetched when Home mounts (`App.jsx:905-908` effect widened). *Shape-neutral*
-- [ ] `src/components/vision/GraphView.jsx` (existing) + `src/components/vision/graphInitialViewport.js` (new): fit-to-readable §4.3, `READABLE_ZOOM = 1.12`, once per mount, Fit button unchanged; one table test (fitted zoom × candidates → zoom/centre). *Shape-neutral: the Graph is the same component in every shape*
-- [ ] `src/components/vision/StatusBand.jsx` (existing): renders nothing without a feature; `NO_FEATURE_SENTENCE` removed. *Shape-neutral*
-- [ ] `src/components/vision/AttentionQueueSidebar.jsx` (existing): theme toggle, title, BuildStatusWidget removed; **CompactStatsRow kept**; group counts labelled. *Shape-neutral: the sidebar is outside the tab model*
-- [ ] `src/components/cockpit/ContextPanel.jsx` (existing): ProjectSummary replaced by a one-line hint. *Shape-neutral*
-- [ ] `src/components/cockpit/OpsStrip.jsx` (existing): "All ▸" link at the end opens Home; entry clicks still select the feature (test both). *Shape-neutral: targets the leaf `dashboard`*
-- [ ] `src/App.jsx` header (existing): Run ▾ / New ▾ / Display ▾ clusters with text items; sidebar "+ New" removed, ⌘N kept; dead `gates` badge removed. *Shape-neutral: header right side, not the tabs*
-- [ ] `src/components/vision/ItemDetailPanel.jsx` (existing): the three §5 labels; phase read-only when `lifecycle.currentPhase` is set. *Shape-neutral*
-- [ ] Tests rewritten, not "kept green" (review L3): `test/settings-store.test.js:78,111-113` (`graph` default, `gates` becomes a plain valid key), `test/settings-routes.test.js:124`, `test/settings-e2e.test.js:147`, `test/ui/status-band.test.jsx:132-134` (sentence removed). New tests table-driven, no stacked `parametrize`-style loops; vitest `--maxWorkers=4`
+- [x] `src/components/cockpit/viewKeys.js` (new, pure, no React): `VIEW_KEYS` (the 20 leaf keys, the one list the `CockpitView` switch, settings and tests share) and `reachableViews(nav, available)`. *Shape-neutral: leaf keys exist under A, B and C; only `nav` differs.* `server/settings-store.js` imports it (no server→`src/` import exists today, unverified for packaging; fallback: a server copy plus a parity test)
+- [x] `server/settings-store.js` (existing): `ui.defaultView` default `'dashboard'`; accepts any `VIEW_KEYS` entry. *Shape-neutral: stores a leaf key, not a tab*
+- [x] `src/components/vision/SettingsPanel.jsx` (existing): picker lists `reachableViews` (one shared list, not two copies). *Shape-neutral: the set follows the nav model*
+- [x] `src/App.jsx` (existing): first connect applies `defaultView` only if reachable, else Home. On load the `compose:activeView` initialiser keeps any valid key and re-checks once availability settles: a package-gated key falls back to Home only when its check answers `no` (`review-r2.md:33-48`). Fresh storage lands on Dashboard/Home (test). *Shape-neutral: "reachable" is computed*
+- [x] `src/components/vision/VisionTracker.jsx` (existing): any view it has no branch for (incl. `dashboard`, `usage`, its own default `roadmap`) renders `graph`; one test (review L2). *Shape-neutral: the popout keeps its own view set*
+- [x] `src/components/vision/DashboardView.jsx` (existing) + `src/components/vision/HomeSections.jsx` (new): §4.2 sections from store data, each hidden when empty; unfiltered gates/items for Needs you; `handleStopAgent` wired to Running now; completed sorted by `updatedAt` and labelled "last changed". *Shape-neutral: Home is the landing view in A, B and C*
+- [x] `buildHistory` fetched when Home mounts (`App.jsx:905-908` effect widened). *Shape-neutral*
+- [x] `src/components/vision/GraphView.jsx` (existing) + `src/components/vision/graphInitialViewport.js` (new): fit-to-readable §4.3, `READABLE_ZOOM = 1.12`, once per mount, Fit button unchanged; one table test (fitted zoom × candidates → zoom/centre). *Shape-neutral: the Graph is the same component in every shape*
+- [x] `src/components/vision/StatusBand.jsx` (existing): renders nothing without a feature; `NO_FEATURE_SENTENCE` removed. *Shape-neutral*
+- [x] `src/components/vision/AttentionQueueSidebar.jsx` (existing): theme toggle, title, BuildStatusWidget removed; **CompactStatsRow kept**; group counts labelled. *Shape-neutral: the sidebar is outside the tab model*
+- [x] `src/components/cockpit/ContextPanel.jsx` (existing): ProjectSummary replaced by a one-line hint. *Shape-neutral*
+- [x] `src/components/cockpit/OpsStrip.jsx` (existing): "All ▸" link at the end opens Home; entry clicks still select the feature (test both). *Shape-neutral: targets the leaf `dashboard`*
+- [x] `src/App.jsx` header (existing): Run ▾ / New ▾ / Display ▾ clusters with text items; sidebar "+ New" removed, ⌘N kept; dead `gates` badge removed. *Shape-neutral: header right side, not the tabs*
+- [x] `src/components/vision/ItemDetailPanel.jsx` (existing): the three §5 labels; phase read-only when `lifecycle.currentPhase` is set. *Shape-neutral*
+- [x] Tests rewritten, not "kept green" (review L3): `test/settings-store.test.js:78,111-113` (`graph` default, `gates` becomes a plain valid key), `test/settings-routes.test.js:124`, `test/settings-e2e.test.js:147`, `test/ui/status-band.test.jsx:132-134` (sentence removed). New tests table-driven, no stacked `parametrize`-style loops; vitest `--maxWorkers=4`
 
 **Slice 2, shape-neutral core (A, B or C):**
-- [ ] `src/components/cockpit/focusedFeature.js` (new): pure `resolveFeatureContext` + focus reducer per §2.5, one row table: Focus button sets; re-click same item (no change); select non-feature item (no change); select another feature's item (no change); deselect (no change); × (cleared); project switch (cleared); reload with a resolving code (restored); reload with a stale code (cleared + warning); session binds with no focus (display `session`, no filter); session binds with focus (focus wins)
-- [ ] `src/App.jsx` (existing): `focusedFeature` state persisted as `compose:focusedFeature`; filters read it only when `source === 'focus'`; StatusBand, DecisionTimelineStrip, OpenLoopsPanel, Home, QA scope, Validate read `resolveFeatureContext`; `activeFeatureCode` (`:499`) and `focusFeature` (`:569`) retired; `openGate` no longer clears focus (`:1015`)
-- [ ] `src/components/cockpit/ContextItemDetail.jsx` (existing): "Focus" button in the item header for items whose code resolves
-- [ ] `src/components/shared/FeatureFocusToggle.jsx` (existing): removed from Graph, Items, Docs, Gates, Sessions; GateView always includes `focusedGateId`
-- [ ] `src/components/cockpit/viewKeys.js` (existing after slice 1): `locateView(key)` → `{top, sub}` for the picked shape; `migrateNavState` per §2.7 with its row table incl. the "View not found" row
-- [ ] Every §2.6 site handled as the table says (one acceptance check per row); `handleViewChange` keeps its signature
-- [ ] Coverage test, keys **derived from `VIEW_KEYS`**, never a literal count: (a) with **no feature focused** and all packages available, every key is reachable by a click path in the nav model; (b) with each package absent, its key drops out and no other key does; (c) one row per `handleViewChange` caller in §2.6 (default view, `visionUI`, gate open, EntityLink, View in graph, View in tree, open file, docs back, sidebar Ideas, GateToast, OpsStrip Fleet pill, tab click) asserting the derived `{top, sub}` is highlighted; (d) rendering `CockpitView` for every key never reaches the "not found" branch, and every `case` in the switch is in `VIEW_KEYS`
-- [ ] Tests rewritten: `test/cockpit-layout.test.js:123-138,236-239` (`DEFAULT_MAIN_TABS`/`HIDDEN_VIEWS`), the "is a default tab" checks in `test/ui/{ops,stratum,cadence,wiki}-view.test.jsx` (`:14,:18,:35,:23`) and `test/ui/usage-view.test.jsx`, `test/context-panel-state.test.js` if `CONTEXT_HIDDEN_VIEWS` moves
+- [x] `src/components/cockpit/focusedFeature.js` (new): pure `resolveFeatureContext` + focus reducer per §2.5, one row table: Focus button sets; re-click same item (no change); select non-feature item (no change); select another feature's item (no change); deselect (no change); × (cleared); project switch (cleared); reload with a resolving code (restored); reload with a stale code (cleared + warning); session binds with no focus (display `session`, no filter); session binds with focus (focus wins)
+- [x] `src/App.jsx` (existing): `focusedFeature` state persisted as `compose:focusedFeature`; filters read it only when `source === 'focus'`; StatusBand, DecisionTimelineStrip, OpenLoopsPanel, Home, QA scope, Validate read `resolveFeatureContext`; `activeFeatureCode` (`:499`) and `focusFeature` (`:569`) retired; `openGate` no longer clears focus (`:1015`)
+- [x] `src/components/cockpit/ContextItemDetail.jsx` (existing): "Focus" button in the item header for items whose code resolves
+- [x] `src/components/shared/FeatureFocusToggle.jsx` (existing): removed from Graph, Items, Docs, Gates, Sessions; GateView always includes `focusedGateId`
+- [x] `src/components/cockpit/viewKeys.js` (existing after slice 1): `locateView(key)` → `{top, sub}` for the picked shape; `migrateNavState` per §2.7 with its row table incl. the "View not found" row
+- [x] Every §2.6 site handled as the table says (one acceptance check per row); `handleViewChange` keeps its signature
+- [x] Coverage test, keys **derived from `VIEW_KEYS`**, never a literal count: (a) with **no feature focused** and all packages available, every key is reachable by a click path in the nav model; (b) with each package absent, its key drops out and no other key does; (c) one row per `handleViewChange` caller in §2.6 (default view, `visionUI`, gate open, EntityLink, View in graph, View in tree, open file, docs back, sidebar Ideas, GateToast, OpsStrip Fleet pill, tab click) asserting the derived `{top, sub}` is highlighted; (d) rendering `CockpitView` for every key never reaches the "not found" branch, and every `case` in the switch is in `VIEW_KEYS`
+- [x] Tests rewritten: `test/cockpit-layout.test.js:123-138,236-239` (`DEFAULT_MAIN_TABS`/`HIDDEN_VIEWS`), the "is a default tab" checks in `test/ui/{ops,stratum,cadence,wiki}-view.test.jsx` (`:14,:18,:35,:23`) and `test/ui/usage-view.test.jsx`, `test/context-panel-state.test.js` if `CONTEXT_HIDDEN_VIEWS` moves
 
 **Slice 2, shape A layout (if picked):**
-- [ ] `src/components/cockpit/ViewTabs.jsx` (existing): top row `Home · Roadmap · Ideas · Review · Build · Fleet · Library` + gear, sub-row per §2.1, `Feature: CODE ×` chip; rooms hide unavailable sub-tabs (same predicates as `App.jsx:1149`)
-- [ ] `src/components/cockpit/viewTabsState.js` (existing): flat tab list, active-tab key and `HIDDEN_VIEWS` retired (migration in `migrateNavState`)
-- [ ] Roadmap = Graph with a List toggle (tree)
-- [ ] Docs: `docs/features/COMP-AUDIT-17/design.md` status → built; ROADMAP rows 17/18 COMPLETE via `compose roadmap`, with row 18's text amended to say clause 3 moved, and the clause added to the COMP-AUDIT-11 row (`ROADMAP.md:1547`) in the same commit; CHANGELOG same commit
+- [x] `src/components/cockpit/ViewTabs.jsx` (existing): top row `Home · Roadmap · Ideas · Review · Build · Fleet · Library` + gear, sub-row per §2.1, `Feature: CODE ×` chip; rooms hide unavailable sub-tabs (same predicates as `App.jsx:1149`)
+- [x] `src/components/cockpit/viewTabsState.js` (existing): flat tab list, active-tab key and `HIDDEN_VIEWS` retired (migration in `migrateNavState`)
+- [x] Roadmap = Graph with a List toggle (tree)
+- [x] Docs: `docs/features/COMP-AUDIT-17/design.md` status → built; ROADMAP rows 17/18 COMPLETE via `compose roadmap`, with row 18's text amended to say clause 3 moved, and the clause added to the COMP-AUDIT-11 row (`ROADMAP.md:1547`) in the same commit; CHANGELOG same commit
+
+**Built differently (recorded, owner-accepted):** the view list lives in repo-root `lib/view-keys.js` (not `src/components/cockpit/viewKeys.js`: the published package ships `lib/**`), so `locateView`, `roomViews`, `roomEntryView` and `migrateNavState` sit there; `viewTabsState.js` and `FeatureFocusToggle.jsx` are deleted; the header Run cluster is a caption over two buttons, not one menu.
 
 (Shape B adds a `FeatureView.jsx` host and the ContextItemDetail reconciliation of §2.2; shape C adds a
 "More ▾" menu in `ViewTabs.jsx` and keeps the flat tab list.)

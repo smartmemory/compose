@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { checkAvailability } from './availabilityCheck.js';
 
 /**
  * True when the Stratum tab can work (COMPOSE-STRAT-TAB-1): this build linked
@@ -15,10 +16,8 @@ export function useStratumUiAvailability() {
   useEffect(() => {
     if (!built) return undefined;
     let live = true;
-    fetch('/api/stratum-ui/available')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (live) setState(j?.available === true ? 'yes' : 'no'); })
-      .catch(() => { if (live) setState('no'); });
+    checkAvailability({ name: 'stratum', url: '/api/stratum-ui/available', decide: (j) => (j?.available === true ? 'yes' : 'no'), isLive: () => live })
+      .then(({ state: s }) => { if (live && s !== 'unknown') setState(s); });
     return () => { live = false; };
   }, [built]);
   return built ? state : 'no';

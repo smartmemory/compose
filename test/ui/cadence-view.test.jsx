@@ -4,7 +4,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import CadenceView from '../../src/components/cockpit/CadenceView.jsx';
 import { createCadenceDataClient } from '../../src/lib/clients/cadence.js';
-import { DEFAULT_MAIN_TABS } from '../../src/components/cockpit/viewTabsState.js';
+import { locateView } from '../../lib/view-keys.js';
 
 const linked = typeof __CADENCE_UI__ !== 'undefined' && __CADENCE_UI__;
 const at = '2026-10-30T00:00:00Z';
@@ -33,7 +33,7 @@ function fakeClient() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Cadence tab', () => {
-  it('is a default tab', () => expect(DEFAULT_MAIN_TABS).toContain('cadence'));
+  it('is a sub-tab of the Fleet room', () => expect(locateView('cadence')).toEqual({ top: 'fleet', sub: 'cadence' }));
 
   it.skipIf(!linked)('renders every screen from the injected client without fetching', async () => {
     const fetchSpy = vi.fn(() => { throw new Error('a component fetched'); });

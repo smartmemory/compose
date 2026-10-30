@@ -1,10 +1,10 @@
 {
   "code": "COMP-AUDIT-17",
-  "description": "Information architecture: 14 flat top-level views plus a ~10-icon unlabeled toolbar, with overlapping Dashboard/Graph/Items and confusing Pipeline vs Pipeline Editor. Group into Work / Review / Build / Knowledge and label or drop the icon rail and the sidebar double-number group counts.",
-  "status": "PLANNED",
+  "description": "Information architecture: 14 flat top-level views plus a ~10-icon unlabeled toolbar, with overlapping Dashboard/Graph/Items and confusing Pipeline vs Pipeline Editor. Built as seven labelled rooms (Home, Roadmap, Ideas, Review, Build, Fleet, Library) with a tab row inside each, the Settings gear, and one explicit Feature focus chip; the header and sidebar counts are labelled.",
+  "status": "COMPLETE",
   "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
   "created": "2026-07-12",
-  "updated": "2026-07-12",
+  "updated": "2026-10-30",
   "complexity": "M",
   "position": 17,
   "tags": [

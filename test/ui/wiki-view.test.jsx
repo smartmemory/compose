@@ -4,7 +4,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import WikiView from '../../src/components/cockpit/WikiView.jsx';
 import { createWikiDataClient } from '../../src/lib/clients/wiki.js';
-import { DEFAULT_MAIN_TABS } from '../../src/components/cockpit/viewTabsState.js';
+import { locateView } from '../../lib/view-keys.js';
 
 const linked = typeof __WIKI_COMPONENTS__ !== 'undefined' && __WIKI_COMPONENTS__;
 const FRAME = 'http://127.0.0.1:8791';
@@ -20,7 +20,7 @@ const doc = {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Wiki tab', () => {
-  it('is a default tab', () => expect(DEFAULT_MAIN_TABS).toContain('wiki'));
+  it('is a sub-tab of the Library room', () => expect(locateView('wiki')).toEqual({ top: 'library', sub: 'wiki' }));
 
   it.skipIf(!linked)('renders the feature hub, search and the full-wiki frame from the injected client without fetching', async () => {
     const fetchSpy = vi.fn(() => { throw new Error('a component fetched'); });

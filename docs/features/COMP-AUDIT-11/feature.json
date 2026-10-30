@@ -1,10 +1,10 @@
 {
   "code": "COMP-AUDIT-11",
-  "description": "Split phase model: VisionStore keeps a legacy phase enum (vision-store.js:13) and the cockpit filters on item.phase (App.jsx:689) while COMP-ROADMAP-MODES promised consolidation on lifecycle.currentPhase \u2014 lifecycle phase and UI filter state can disagree. Collapse during the stratum TS cutover rather than porting both.",
+  "description": "Split phase model: VisionStore keeps a legacy phase enum (vision-store.js:13) and the cockpit filters on item.phase (App.jsx:689) while COMP-ROADMAP-MODES promised consolidation on lifecycle.currentPhase \u2014 lifecycle phase and UI filter state can disagree. Collapse during the stratum TS cutover rather than porting both. Also owns the three status controls on one item (status dropdown vs lifecycle phase vs confidence): resolve which one governs `compose build` and merge the models (moved from COMP-AUDIT-18 clause 3, owner pick 2a 2026-10-30; the labels shipped in COMP-AUDIT-17/18 slice 1, `ItemDetailPanel.jsx`). Do the merge in the Stratum move.",
   "status": "PLANNED",
   "phase": "COMP-AUDIT: 2026-07 Cockpit Wiring, Completeness & UX Audit",
   "created": "2026-07-12",
-  "updated": "2026-07-12",
+  "updated": "2026-10-30",
   "complexity": "L",
   "position": 11,
   "tags": [

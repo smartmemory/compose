@@ -4,7 +4,6 @@ import { cn } from '@/lib/utils.js';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { LIFECYCLE_PHASE_LABELS, LIFECYCLE_PHASE_ARTIFACTS, gateLabel } from './constants.js';
-import FeatureFocusToggle from '../shared/FeatureFocusToggle.jsx';
 import ArtifactDiff from '../shared/ArtifactDiff.jsx';
 import MarkdownViewer from './shared/MarkdownViewer.jsx';
 
@@ -319,7 +318,7 @@ function ResolvedGateRow({ gate, item }) {
   );
 }
 
-export default function GateView({ gates, items, onResolve, onSelect, featureCode, focusActive, onToggleFocus, focusedGateId, onFocusHandled }) {
+export default function GateView({ gates, items, onResolve, onSelect, featureCode, focusActive, focusedGateId, onFocusHandled }) {
   const [expandedGateId, setExpandedGateId] = useState(null);
   const [expandedAction, setExpandedAction] = useState(null);
 
@@ -328,14 +327,15 @@ export default function GateView({ gates, items, onResolve, onSelect, featureCod
   const gateRefs = useRef(new Map());
   const [highlightedGateId, setHighlightedGateId] = useState(null);
 
-  // COMP-UX-2a: Feature focus filter
+  // COMP-UX-2a: Feature focus filter (the focus chip, COMP-AUDIT-17)
   const displayGates = useMemo(() => {
     if (!focusActive || !featureCode) return gates;
     const featureItemIds = new Set(
       items.filter(i => i.featureCode === featureCode || i.lifecycle?.featureCode === featureCode).map(i => i.id)
     );
-    return gates.filter(g => featureItemIds.has(g.itemId));
-  }, [gates, items, focusActive, featureCode]);
+    // COMP-AUDIT-17: a jumped-to gate is always shown, even when the feature focus would hide it.
+    return gates.filter(g => featureItemIds.has(g.itemId) || g.id === focusedGateId);
+  }, [gates, items, focusActive, featureCode, focusedGateId]);
 
   const handleExpand = (gateId, action) => {
     setExpandedGateId(gateId);
@@ -396,7 +396,6 @@ export default function GateView({ gates, items, onResolve, onSelect, featureCod
     <div className="flex-1 overflow-auto flex flex-col">
       {/* Summary bar */}
       <div className="flex items-center gap-3 px-3 py-2 border-b border-border shrink-0">
-        <FeatureFocusToggle featureCode={featureCode} active={focusActive} onToggle={onToggleFocus} />
         <span className="text-xs font-medium text-foreground">Gates</span>
         {pending.length > 0 ? (
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-400 font-medium">

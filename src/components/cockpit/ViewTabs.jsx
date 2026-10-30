@@ -1,78 +1,105 @@
 /**
- * ViewTabs — cockpit header tab bar for switching main-area views.
+ * ViewTabs — cockpit header room row (COMP-AUDIT-17, shape A "labelled rooms").
  *
- * Renders a horizontal list of tab buttons with icons inside the cockpit header.
- * The active tab is highlighted; clicking a tab fires onTabChange.
- * Includes a Cmd+K search button on the right.
+ * Top row: Home · Roadmap · Ideas · Review · Build · Fleet · Library, the
+ * Settings gear, and a `Feature: CODE ×` chip while a feature is focused.
+ * A room with more than one view shows a second row (`ViewSubTabs`, rendered
+ * under the header). The view key stays flat: `locateView` derives which room
+ * and sub-tab to highlight, and a click calls `onViewChange` with a leaf key.
  *
  * Props:
- *   tabs        {string[]}  ordered list of tab keys
- *   activeTab   {string}    currently active tab key
- *   onTabChange {fn}        called with (tabKey) when a tab is clicked
- *   onOpenPalette {fn}      called when Cmd+K button is clicked
- *   colleague   {object?}   {installed, open, onToggle} — the Maya summon
- *                           button (FOH-6). Renders iff installed; NOT a tab
- *                           (deliberately outside DEFAULT_MAIN_TABS and the
- *                           tab-persistence machinery — a chrome button can
- *                           be conditional, a persisted tab cannot).
+ *   activeView     {string}   the current leaf view key
+ *   availability   {object}   {ops, stratum, cadence, wiki}: 'yes' | 'no' | 'unknown'
+ *   onViewChange   {fn}       called with a leaf view key
+ *   lastByRoom     {object?}  room key -> last view used there (a room re-opens on it)
+ *   badges         {object?}  room key -> count (Review carries the pending gates)
+ *   focusedFeature {string?}  feature code to show in the chip
+ *   onClearFocus   {fn?}      the chip's ×
+ *   onOpenPalette  {fn}       called when Cmd+K button is clicked
+ *   colleague      {object?}  {installed, open, onToggle} — the Maya summon
+ *                             button (FOH-6). Renders iff installed; NOT a room.
  */
 import React from 'react';
-import { Network, GitBranch, Activity, ShieldCheck, Search, FileText, Workflow, MessageSquare, LayoutDashboard, Lightbulb, History, BookOpen, ListChecks, FileSearch, Sparkles, Settings, Gauge, Layers, Library, SquareKanban, BarChart3 } from 'lucide-react';
+import { Network, Activity, ShieldCheck, Search, Workflow, LayoutDashboard, Lightbulb, Sparkles, Settings, X, Library } from 'lucide-react';
+import { ROOMS, GEAR_VIEW, SUB_LABELS, locateView, roomViews, roomEntryView } from '../../../lib/view-keys.js';
 
-const TAB_META = {
-  dashboard: { label: 'Dashboard', icon: LayoutDashboard, tip: 'Overview of project status and activity' },
-  tree:      { label: 'Items',     icon: GitBranch,       tip: 'Hierarchical list of all items and features' },
-  graph:     { label: 'Graph',     icon: Network,         tip: 'Visual dependency graph of items' },
-  pipeline:  { label: 'Pipeline',  icon: Workflow,        tip: 'Build pipeline stages and progress' },
-  'pipeline-editor': { label: 'Pipeline Editor', icon: Network, tip: 'Visually edit Stratum pipeline specs' },
-  sessions:  { label: 'Sessions',  icon: Activity,        tip: 'Active and past agent sessions' },
-  'build-history': { label: 'Builds', icon: History,      tip: 'History of past build runs and outcomes' },
-  gates:     { label: 'Gates',     icon: ShieldCheck,     tip: 'Quality gates and approval checkpoints' },
-  validate:  { label: 'Validate',  icon: ListChecks,      tip: 'Cross-artifact validation findings (compose validate)' },
-  'qa-scope': { label: 'QA Scope', icon: FileSearch,      tip: 'Affected routes for the active feature (qa-scope)' },
-  docs:      { label: 'Docs',      icon: FileText,        tip: 'Project documentation and specs' },
-  journal:   { label: 'Journal',   icon: BookOpen,        tip: 'Project journal and changelog' },
-  design:    { label: 'Design',    icon: MessageSquare,   tip: 'Design agent conversations and decisions' },
-  ideabox:   { label: 'Ideabox',   icon: Lightbulb,       tip: 'Captured ideas and suggestions' },
-  ops:       { label: 'Ops',       icon: Gauge,          tip: 'Ops status pages (read-only)' },
-  stratum:   { label: 'Stratum',   icon: Layers,         tip: 'Stratum flows and pending gates' },
-  cadence:   { label: 'Cadence',   icon: SquareKanban,   tip: 'Cadence Board: unit belt, seats, chains, attention, diary (read-only)' },
-  wiki:      { label: 'Wiki',      icon: Library,        tip: 'Wiki feature hub and search (wiki-eng)' },
-  usage:     { label: 'Usage',     icon: BarChart3,      tip: 'Usage statistics: Compose-dispatched cost and tokens over time (read-only)' },
-  process:   { label: 'Process',   icon: Gauge,          tip: 'Unit process metrics across lanes, live (read-only)' },
-  settings:  { label: 'Settings',  icon: Settings,        tip: 'Project and UI settings' },
+const ROOM_META = {
+  home:    { icon: LayoutDashboard, tip: 'Landing page: what needs you, what is running' },
+  roadmap: { icon: Network,         tip: 'Graph of all items, with a list view' },
+  ideas:   { icon: Lightbulb,       tip: 'Captured ideas and suggestions' },
+  review:  { icon: ShieldCheck,     tip: 'Gates, validation findings and QA scope' },
+  build:   { icon: Workflow,        tip: 'Design, the live build, past builds and the flow editor' },
+  fleet:   { icon: Activity,        tip: 'Agents and seats: Cadence, Stratum, Ops, Sessions, Usage, Process' },
+  library: { icon: Library,         tip: 'Docs, the wiki and the journal' },
 };
 
-export default function ViewTabs({ tabs = [], activeTab, onTabChange, onOpenPalette, badges = {}, colleague }) {
+const tabClass = (isActive) => [
+  'flex items-center gap-1.5 px-3 h-full text-[11px] uppercase tracking-wider font-medium transition-colors',
+  'border-b-2 -mb-px',
+  isActive
+    ? 'border-blue-600 text-blue-600 dark:border-accent dark:text-accent'
+    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border',
+].join(' ');
+
+/** Second row for the active room; renders nothing for a room with one view (Home, Ideas) or the gear. */
+export function ViewSubTabs({ activeView, availability, onViewChange }) {
+  const loc = locateView(activeView);
+  if (!loc || loc.top === GEAR_VIEW) return null;
+  const views = roomViews(loc.top, availability, activeView);
+  if (views.length < 2) return null;
+  const room = ROOMS.find((r) => r.key === loc.top);
+  return (
+    <div
+      className="flex items-center gap-0.5 h-8 px-3 shrink-0"
+      style={{ borderBottom: '1px solid hsl(var(--border))' }}
+      role="tablist"
+      aria-label={`${room.label} views`}
+      data-testid="sub-tabs"
+    >
+      {views.map((key) => {
+        const isActive = key === activeView;
+        return (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={isActive}
+            data-testid={`sub-tab-${key}`}
+            className={tabClass(isActive)}
+            onClick={() => onViewChange?.(key)}
+          >
+            {SUB_LABELS[key] || key}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function ViewTabs({ activeView, availability = {}, onViewChange, onOpenPalette, badges = {}, lastByRoom = {}, focusedFeature, onClearFocus, colleague }) {
+  const loc = locateView(activeView);
   return (
     <div
       className="flex items-center gap-0.5 h-full"
       role="tablist"
-      aria-label="Main views"
+      aria-label="Rooms"
     >
-      {tabs.map(tab => {
-        const meta = TAB_META[tab];
-        const isActive = tab === activeTab;
+      {ROOMS.map((room) => {
+        const meta = ROOM_META[room.key];
+        const isActive = loc?.top === room.key;
         const Icon = meta?.icon;
-        const label = meta?.label || tab;
-        const badge = badges[tab];
+        const badge = badges[room.key];
         return (
           <button
-            key={tab}
+            key={room.key}
             role="tab"
             aria-selected={isActive}
+            data-testid={`room-tab-${room.key}`}
             title={meta?.tip}
-            className={[
-              'flex items-center gap-1.5 px-3 h-full text-[11px] uppercase tracking-wider font-medium transition-colors',
-              'border-b-2 -mb-px',
-              isActive
-                ? 'border-blue-600 text-blue-600 dark:border-accent dark:text-accent'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border',
-            ].join(' ')}
-            onClick={() => onTabChange?.(tab)}
+            className={tabClass(isActive)}
+            onClick={() => onViewChange?.(isActive ? activeView : roomEntryView(room.key, availability, lastByRoom[room.key]))}
           >
             {Icon && <Icon style={{ width: 12, height: 12 }} />}
-            {label}
+            {room.label}
             {badge > 0 && (
               <span className="text-[9px] min-w-[16px] h-4 flex items-center justify-center rounded-full px-1 tabular-nums"
                 style={{ background: 'hsl(var(--destructive) / 0.15)', color: 'hsl(var(--destructive))' }}>
@@ -82,6 +109,35 @@ export default function ViewTabs({ tabs = [], activeTab, onTabChange, onOpenPale
           </button>
         );
       })}
+      <button
+        role="tab"
+        aria-selected={loc?.top === GEAR_VIEW}
+        aria-label="Settings"
+        data-testid="room-tab-settings"
+        title="Project and UI settings"
+        className={tabClass(loc?.top === GEAR_VIEW)}
+        onClick={() => onViewChange?.(GEAR_VIEW)}
+      >
+        <Settings style={{ width: 12, height: 12 }} />
+      </button>
+      {focusedFeature && (
+        <span
+          className="ml-2 flex items-center gap-1 px-2 h-5 rounded text-[10px] font-mono"
+          style={{ background: 'hsl(var(--accent) / 0.15)', color: 'hsl(var(--accent))' }}
+          data-testid="focus-chip"
+          title="Project views are filtered to this feature. Click × to show everything."
+        >
+          Feature: {focusedFeature}
+          <button
+            onClick={onClearFocus}
+            aria-label="Clear feature focus"
+            data-testid="focus-chip-clear"
+            className="hover:opacity-70"
+          >
+            <X style={{ width: 10, height: 10 }} />
+          </button>
+        </span>
+      )}
       <div className="flex-1" />
       {colleague?.installed && (
         <button

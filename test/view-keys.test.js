@@ -8,10 +8,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  VIEW_KEYS, DEFAULT_VIEW, PACKAGE_GATED_VIEWS, VIEW_LABELS,
+  ROOMS, VIEW_KEYS, DEFAULT_VIEW, PACKAGE_GATED_VIEWS, VIEW_LABELS,
   reachableViews, resolveStoredView, resolveDefaultView, viewFromQuery,
 } from '../lib/view-keys.js';
-import { DEFAULT_MAIN_TABS } from '../src/components/cockpit/viewTabsState.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -52,10 +51,10 @@ describe('resolveStoredView (load: keep what is known on load)', () => {
 });
 
 describe('reachableViews + resolveDefaultView', () => {
-  test('reachable = visible tabs that are valid keys and not known-absent', () => {
+  test('reachable = listed keys that are valid and not known-absent', () => {
     const rows = [
-      { name: 'all unknown', tabs: DEFAULT_MAIN_TABS, avail: {}, expect: DEFAULT_MAIN_TABS },
-      { name: 'ops and wiki absent', tabs: DEFAULT_MAIN_TABS, avail: { ops: 'no', wiki: 'no', stratum: 'yes' }, expect: DEFAULT_MAIN_TABS.filter(k => k !== 'ops' && k !== 'wiki') },
+      { name: 'all unknown', tabs: VIEW_KEYS, avail: {}, expect: VIEW_KEYS },
+      { name: 'ops and wiki absent', tabs: VIEW_KEYS, avail: { ops: 'no', wiki: 'no', stratum: 'yes' }, expect: VIEW_KEYS.filter(k => k !== 'ops' && k !== 'wiki') },
       { name: 'junk in the tab list is dropped', tabs: ['graph', 'bogus', null, 'docs'], avail: {}, expect: ['graph', 'docs'] },
       { name: 'not an array', tabs: null, avail: {}, expect: [] },
     ];
@@ -63,12 +62,12 @@ describe('reachableViews + resolveDefaultView', () => {
   });
 
   test('defaultView lands only if reachable by clicks, else Home', () => {
-    const tabs = DEFAULT_MAIN_TABS;
+    const tabs = VIEW_KEYS; // slice 2: every key is reachable by clicks (rooms)
     const rows = [
       { name: 'none', dv: undefined, avail: {}, view: 'dashboard', from: null },
       { name: 'graph (a pick that stays)', dv: 'graph', avail: {}, view: 'graph', from: null },
       { name: 'visible tab', dv: 'docs', avail: {}, view: 'docs', from: null },
-      { name: 'hidden view has no tab', dv: 'pipeline', avail: {}, view: 'dashboard', from: 'pipeline' },
+      { name: 'a view in a room (was hidden before rooms)', dv: 'pipeline', avail: {}, view: 'pipeline', from: null },
       { name: 'invalid', dv: 'roadmap', avail: {}, view: 'dashboard', from: 'roadmap' },
       { name: 'package tab, still unknown', dv: 'stratum', avail: { stratum: 'unknown' }, view: 'stratum', from: null },
       { name: 'package tab, absent', dv: 'ops', avail: { ops: 'no' }, view: 'dashboard', from: 'ops' },
@@ -82,10 +81,11 @@ describe('reachableViews + resolveDefaultView', () => {
 });
 
 describe('process view key (COMP-COCKPIT-13)', () => {
-  test('is a key and a tab after usage; viewFromQuery reads ?view= (one row table)', () => {
+  test('is a key and a Fleet sub-tab after usage; viewFromQuery reads ?view= (one row table)', () => {
     assert.ok(VIEW_KEYS.includes('process'));
     assert.equal(VIEW_LABELS.process, 'Process');
-    assert.equal(DEFAULT_MAIN_TABS.indexOf('process'), DEFAULT_MAIN_TABS.indexOf('usage') + 1);
+    const fleet = ROOMS.find((r) => r.key === 'fleet').views;
+    assert.equal(fleet.indexOf('process'), fleet.indexOf('usage') + 1);
     const rows = [
       ['?view=process', 'process'], ['?a=1&view=graph', 'graph'], ['?view=bogus', null], ['?view=', null],
       ['?popout=x', null], ['', null], [undefined, null], [null, null], ['?view=<x>', null],

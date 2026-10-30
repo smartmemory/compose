@@ -4,7 +4,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import StratumView from '../../src/components/cockpit/StratumView.jsx';
 import { createStratumDataClient } from '../../src/lib/clients/stratum.js';
-import { DEFAULT_MAIN_TABS } from '../../src/components/cockpit/viewTabsState.js';
+import { locateView } from '../../lib/view-keys.js';
 
 const linked = typeof __STRATUM_UI__ !== 'undefined' && __STRATUM_UI__;
 const run = (id) => ({
@@ -15,7 +15,7 @@ const run = (id) => ({
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Stratum tab', () => {
-  it('is a default tab', () => expect(DEFAULT_MAIN_TABS).toContain('stratum'));
+  it('is a sub-tab of the Fleet room', () => expect(locateView('stratum')).toEqual({ top: 'fleet', sub: 'stratum' }));
 
   it.skipIf(!linked)('renders runs and gates from the injected client without fetching', async () => {
     const fetchSpy = vi.fn(() => { throw new Error('a component fetched'); });

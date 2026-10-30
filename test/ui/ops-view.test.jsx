@@ -3,7 +3,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import OpsView from '../../src/components/cockpit/OpsView.jsx';
-import { DEFAULT_MAIN_TABS } from '../../src/components/cockpit/viewTabsState.js';
+import { locateView } from '../../lib/view-keys.js';
 
 const mockIndex = (pages) => vi.fn(async () => ({ ok: true, json: async () => ({ pages }) }));
 
@@ -11,7 +11,7 @@ describe('OpsView', () => {
   beforeEach(() => localStorage.clear());
   afterEach(() => vi.unstubAllGlobals());
 
-  it('is a default tab', () => expect(DEFAULT_MAIN_TABS).toContain('ops'));
+  it('is a sub-tab of the Fleet room', () => expect(locateView('ops')).toEqual({ top: 'fleet', sub: 'ops' }));
 
   it('picker + iframe from the index, remembers last page', async () => {
     const f = mockIndex(['forge', 'wiki']);

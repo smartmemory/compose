@@ -6,7 +6,7 @@
  *   compose:contextPanelOpen  — right context panel (default: false)
  *
  * No React imports; fully testable in Node.js.
- * Follows the same load/save convention as agentBarState.js and viewTabsState.js.
+ * Follows the same load/save convention as agentBarState.js.
  */
 
 // ---------------------------------------------------------------------------

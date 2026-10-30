@@ -3,7 +3,6 @@ import cytoscape from 'cytoscape';
 import cytoscapeDagre from 'cytoscape-dagre';
 import cytoscapeFcose from 'cytoscape-fcose';
 import { TYPE_COLORS, PHASE_LABELS, CONFIDENCE_LABELS } from './constants.js';
-import FeatureFocusToggle from '../shared/FeatureFocusToggle.jsx';
 import { useIdeaboxStore } from './useIdeaboxStore.js';
 import { wsFetch } from '../../lib/wsFetch.js';
 import { notify } from '../cockpit/NotificationBar.jsx';
@@ -558,7 +557,7 @@ function GatePopover({ featureCode, gates, items, badgePositions, onResolve, onC
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
-export default function GraphView({ items, connections, selectedItemId, onSelect, onCreateFeature, isEmptyProject, visibleTracks, hiddenGroups, buildStateMap, resolveGate, gates, spawnedAgents, agentRelays, agentOverlay, featureCode, focusActive, onToggleFocus }) {
+export default function GraphView({ items, connections, selectedItemId, onSelect, onCreateFeature, isEmptyProject, visibleTracks, hiddenGroups, buildStateMap, resolveGate, gates, spawnedAgents, agentRelays, agentOverlay, featureCode, focusActive }) {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   // Persistent layout: saved positions keyed by item id (leaf nodes only —
@@ -1077,8 +1076,6 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
       <div className="shrink-0" style={{ background: '#1e293b', borderBottom: '1px solid #334155' }}>
         <div className="flex items-center justify-between px-3 py-1.5">
           <div className="flex items-center gap-2">
-            <FeatureFocusToggle featureCode={featureCode} active={focusActive} onToggle={onToggleFocus} />
-            {featureCode && <Sep />}
             <span style={{ fontSize: 11, color: '#64748b' }}>Status:</span>
             {STATUS_FILTERS.map(f => (
               <FilterBtn key={f.key} active={statusFilter === f.key} onClick={() => setStatusFilter(f.key)}>

@@ -9,6 +9,8 @@
  *   onSelect {fn}      called when user navigates to a related item (updates contextSelection)
  *   onClose  {fn}      called to clear contextSelection
  *   onOpenFile {fn}    called when user clicks a file (navigates to DocsView)
+ *   focusedFeature {string?} the focused feature code (COMP-AUDIT-17)
+ *   onFocusFeature {fn?}     called with the item when Focus is clicked
  */
 import React, { useState, useMemo, useEffect } from 'react';
 import { useVisionStore } from '../vision/useVisionStore.js';
@@ -24,8 +26,9 @@ import ContextFilesTab from '../vision/ContextFilesTab.jsx';
 import RecallTab from './RecallTab.jsx';
 import useRecallEnabled from './useRecallEnabled.js';
 import { DETAIL_TABS } from './contextPanelState.js';
+import { itemFeatureCode } from './focusedFeature.js';
 
-export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFile, onViewInGraph, onViewInTree }) {
+export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFile, onViewInGraph, onViewInTree, focusedFeature, onFocusFeature }) {
   const {
     items, connections, gates, updateItem, deleteItem,
     createConnection, deleteConnection, resolveGate,
@@ -80,8 +83,25 @@ export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFil
     );
   }
 
+  // COMP-AUDIT-17: Focus sets the feature every filter and status display follows. Only items with a code get it.
+  const focusCode = itemFeatureCode(item);
+  const isFocused = !!focusCode && focusCode === focusedFeature;
+
   return (
     <div className="h-full flex flex-col">
+      {focusCode && onFocusFeature && (
+        <div className="flex items-center justify-end px-3 py-1 shrink-0" style={{ borderBottom: '1px solid hsl(var(--border))' }}>
+          <button
+            data-testid="focus-feature"
+            disabled={isFocused}
+            onClick={() => onFocusFeature(item)}
+            title="Filter project views to this feature (clear it with the × on the Feature chip)"
+            className="text-[11px] px-2 py-0.5 rounded border border-border text-muted-foreground hover:text-foreground disabled:opacity-60 disabled:cursor-default"
+          >
+            {isFocused ? `Focused: ${focusCode}` : `Focus ${focusCode}`}
+          </button>
+        </div>
+      )}
       <DetailTabs
         activeTab={effectiveTab}
         tabs={visibleTabs}

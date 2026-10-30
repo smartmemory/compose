@@ -1,22 +1,24 @@
 import { useEffect, useState } from 'react';
+import { checkAvailability } from './availabilityCheck.js';
 
 /**
  * Page names served at /ops-status (COMPOSE-OPS-TAB-1) plus a three-valued
  * availability (COMP-AUDIT-17): `unknown` until the index fetch settles, then
- * `yes` (pages listed) or `no` (route absent, failed or empty).
+ * `yes` (pages listed) or `no` (route absent or empty). A failed fetch stays `unknown` (availabilityCheck.js).
  */
 export function useOpsStatusIndexState() {
   const [state, setState] = useState({ pages: [], availability: 'unknown' });
   useEffect(() => {
     let live = true;
-    fetch('/api/ops-status/index')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
-        if (!live) return;
-        const pages = Array.isArray(j?.pages) ? j.pages : [];
-        setState({ pages, availability: pages.length ? 'yes' : 'no' });
-      })
-      .catch(() => { if (live) setState({ pages: [], availability: 'no' }); });
+    checkAvailability({
+      name: 'ops',
+      url: '/api/ops-status/index',
+      decide: (j) => (Array.isArray(j?.pages) && j.pages.length ? 'yes' : 'no'),
+      isLive: () => live,
+    }).then(({ state: s, json: j }) => {
+      if (!live || s === 'unknown') return;
+      setState({ pages: s === 'yes' ? j.pages : [], availability: s });
+    });
     return () => { live = false; };
   }, []);
   return state;

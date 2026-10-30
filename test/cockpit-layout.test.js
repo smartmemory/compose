@@ -4,7 +4,7 @@
  * TDD tests for COMP-UI-1: Cockpit shell layout logic.
  * Tests cover the pure-logic modules that back the cockpit UI:
  *   - agentBarState.js  — state machine for the collapsible agent bar
- *   - viewTabsState.js  — logic for managing main-area view tabs
+ *   (viewTabsState.js was retired by COMP-AUDIT-17: rooms are tested in nav-rooms.test.js)
  *
  * Tests use node:test (the project's existing test runner).
  */
@@ -21,17 +21,6 @@ import {
   isValidAgentBarState,
   agentBarHeightClass,
 } from '../src/components/cockpit/agentBarState.js';
-
-import {
-  DEFAULT_MAIN_TABS,
-  HIDDEN_VIEWS,
-  isValidTab,
-  getDefaultTab,
-  addTab,
-  removeTab,
-  reorderTabs,
-  loadMainTabs,
-} from '../src/components/cockpit/viewTabsState.js';
 
 // ---------------------------------------------------------------------------
 // agentBarState
@@ -113,138 +102,5 @@ describe('agentBarState — agentBarHeightClass', () => {
     const cls = agentBarHeightClass('maximized');
     assert.equal(typeof cls, 'string');
     assert.ok(cls.length > 0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// viewTabsState
-// ---------------------------------------------------------------------------
-
-describe('viewTabsState — DEFAULT_MAIN_TABS', () => {
-  it('is a non-empty array', () => {
-    assert.ok(Array.isArray(DEFAULT_MAIN_TABS));
-    assert.ok(DEFAULT_MAIN_TABS.length >= 2);
-  });
-
-  it('is exactly the default tabs, Dashboard first', () => {
-    assert.deepEqual(DEFAULT_MAIN_TABS, ['dashboard', 'graph', 'docs', 'ideabox', 'ops', 'stratum', 'cadence', 'wiki', 'usage', 'process', 'settings']);
-  });
-
-  it('hidden views are not default tabs but stay reachable (listed in HIDDEN_VIEWS)', () => {
-    for (const key of HIDDEN_VIEWS) {
-      assert.ok(!DEFAULT_MAIN_TABS.includes(key), `${key} must not be a default tab`);
-    }
-    for (const key of ['tree', 'journal', 'gates', 'pipeline', 'sessions']) {
-      assert.ok(HIDDEN_VIEWS.includes(key), `${key} reachable via HIDDEN_VIEWS`);
-    }
-  });
-});
-
-describe('viewTabsState — isValidTab', () => {
-  it('returns true for a tab in the list', () => {
-    assert.equal(isValidTab(['Canvas', 'Stratum'], 'Canvas'), true);
-  });
-
-  it('returns false for a tab not in the list', () => {
-    assert.equal(isValidTab(['Canvas', 'Stratum'], 'Bogus'), false);
-  });
-
-  it('returns false for empty/null tab name', () => {
-    assert.equal(isValidTab(['Canvas'], ''), false);
-    assert.equal(isValidTab(['Canvas'], null), false);
-  });
-});
-
-describe('viewTabsState — getDefaultTab', () => {
-  it('returns the first tab', () => {
-    assert.equal(getDefaultTab(['Canvas', 'Stratum']), 'Canvas');
-  });
-
-  it('returns null for empty array', () => {
-    assert.equal(getDefaultTab([]), null);
-  });
-});
-
-describe('viewTabsState — addTab', () => {
-  it('appends a new tab to the list', () => {
-    const result = addTab(['Canvas', 'Stratum'], 'Graph');
-    assert.deepEqual(result, ['Canvas', 'Stratum', 'Graph']);
-  });
-
-  it('does not add duplicates', () => {
-    const result = addTab(['Canvas', 'Stratum'], 'Canvas');
-    assert.deepEqual(result, ['Canvas', 'Stratum']);
-  });
-});
-
-describe('viewTabsState — removeTab', () => {
-  it('removes an existing tab', () => {
-    const result = removeTab(['Canvas', 'Stratum', 'Graph'], 'Graph');
-    assert.deepEqual(result, ['Canvas', 'Stratum']);
-  });
-
-  it('is a no-op if tab does not exist', () => {
-    const result = removeTab(['Canvas', 'Stratum'], 'Bogus');
-    assert.deepEqual(result, ['Canvas', 'Stratum']);
-  });
-
-  it('does not remove if only one tab remains', () => {
-    // Cannot remove the last tab
-    const result = removeTab(['Canvas'], 'Canvas');
-    assert.deepEqual(result, ['Canvas']);
-  });
-});
-
-describe('viewTabsState — reorderTabs', () => {
-  it('moves a tab from one position to another', () => {
-    const result = reorderTabs(['Canvas', 'Stratum', 'Graph'], 2, 0);
-    assert.deepEqual(result, ['Graph', 'Canvas', 'Stratum']);
-  });
-
-  it('is a no-op when from === to', () => {
-    const result = reorderTabs(['Canvas', 'Stratum'], 0, 0);
-    assert.deepEqual(result, ['Canvas', 'Stratum']);
-  });
-
-  it('returns original array when indices are out of bounds', () => {
-    const tabs = ['Canvas', 'Stratum'];
-    const result = reorderTabs(tabs, -1, 5);
-    assert.deepEqual(result, ['Canvas', 'Stratum']);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// loadMainTabs — persisted-tab migration (COMP-COCKPIT-9)
-// ---------------------------------------------------------------------------
-
-describe('viewTabsState — loadMainTabs migration', () => {
-  function withStored(value, fn) {
-    const stored = new Map(value === null ? [] : [['compose:mainTabs', JSON.stringify(value)]]);
-    const orig = globalThis.localStorage;
-    globalThis.localStorage = {
-      getItem: (k) => (stored.has(k) ? stored.get(k) : null),
-      setItem: (k, v) => stored.set(k, String(v)),
-      removeItem: (k) => stored.delete(k),
-    };
-    try { return fn(); } finally {
-      if (orig === undefined) delete globalThis.localStorage;
-      else globalThis.localStorage = orig;
-    }
-  }
-
-  it('drops hidden tabs from a persisted pre-SIMPLIFY-2 list', () => {
-    const old = ['tree', 'graph', 'docs', 'journal', 'gates', 'pipeline', 'sessions', 'settings'];
-    const tabs = withStored(old, () => loadMainTabs());
-    for (const t of HIDDEN_VIEWS) assert.ok(!tabs.includes(t), `${t} dropped`);
-    for (const t of DEFAULT_MAIN_TABS) assert.ok(tabs.includes(t), `${t} present`);
-  });
-
-  it('adds missing default tabs to a persisted list', () => {
-    const tabs = withStored(['graph', 'docs'], () => loadMainTabs());
-    assert.deepEqual([...tabs].sort(), [...DEFAULT_MAIN_TABS].sort());
-  });
-
-  it('falls back to the five defaults with nothing persisted', () => {
-    assert.deepEqual(withStored(null, () => loadMainTabs()), DEFAULT_MAIN_TABS);
   });
 });

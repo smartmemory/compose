@@ -115,9 +115,18 @@ describe('useOpsStatusIndexState (three-valued)', () => {
     expect(result.current.availability).toBe('unknown');
     await waitFor(() => expect(result.current.availability).toBe('yes'));
   });
-  it('unknown -> no on empty or failed fetch', async () => {
-    global.fetch = vi.fn(async () => { throw new Error('down'); });
+  it('unknown -> no on an empty page list (a definitive answer)', async () => {
+    global.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ pages: [] }) }));
     const { result } = renderHook(() => useOpsStatusIndexState());
     await waitFor(() => expect(result.current.availability).toBe('no'));
+  });
+  // COMP-AUDIT-17 slice 2 (FORGE-PL L1): a failed fetch is not "no"; the full row table is test/availability-check.test.js.
+  it('a failed fetch stays unknown and warns once', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    global.fetch = vi.fn(async () => { throw new Error('down'); });
+    const { result } = renderHook(() => useOpsStatusIndexState());
+    await waitFor(() => expect(warn).toHaveBeenCalledWith('[nav] ops availability check failed: down'));
+    expect(result.current.availability).toBe('unknown');
+    warn.mockRestore();
   });
 });

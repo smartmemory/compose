@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { checkAvailability } from './availabilityCheck.js';
 
 /**
  * True when the Cadence tab can work (COMPOSE-CADENCE-TAB-1): this build linked the sibling
@@ -15,10 +16,8 @@ export function useCadenceUiAvailability() {
   useEffect(() => {
     if (!built) return undefined;
     let live = true;
-    fetch('/api/cadence-ui/available')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (live) setState(j?.available === true ? 'yes' : 'no'); })
-      .catch(() => { if (live) setState('no'); });
+    checkAvailability({ name: 'cadence', url: '/api/cadence-ui/available', decide: (j) => (j?.available === true ? 'yes' : 'no'), isLive: () => live })
+      .then(({ state: s }) => { if (live && s !== 'unknown') setState(s); });
     return () => { live = false; };
   }, [built]);
   return built ? state : 'no';

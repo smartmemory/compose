@@ -3,7 +3,7 @@
  *
  * Pure dispatch-shaping logic for <BuildAllGsdControl>. Kept JSX-free so it is
  * testable under `node --test` (which cannot parse JSX) and mirrors the repo
- * convention used by viewTabsState.js / opsStripLogic.js.
+ * convention used by opsStripLogic.js.
  *
  * The component owns the React state + the confirm dialog + the startBuild call;
  * this module just answers two questions:

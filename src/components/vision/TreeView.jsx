@@ -7,7 +7,6 @@ import { ChevronRight, ChevronDown, Search, X, Plus } from 'lucide-react';
 import { TYPE_COLORS, STATUS_COLORS } from './constants.js';
 import ConfidenceDots from './ConfidenceDots.jsx';
 import { VisionChangesContext } from './VisionChangesContext.js';
-import FeatureFocusToggle from '../shared/FeatureFocusToggle.jsx';
 import EmptyState from './shared/EmptyState.jsx';
 
 // ─── Filter presets ──────────────────────────────────────────────────────────
@@ -144,7 +143,7 @@ function TreeItem({ item, children, depth, selectedItemId, onSelect, onToggle, e
   );
 }
 
-export default function TreeView({ items, connections, selectedItemId, onSelect, onCreate, onCreateFeature, isEmptyProject, featureCode, focusActive, onToggleFocus }) {
+export default function TreeView({ items, connections, selectedItemId, onSelect, onCreate, onCreateFeature, isEmptyProject, featureCode, focusActive }) {
   const [expandedIds, setExpandedIds] = useState(() => new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -338,7 +337,6 @@ export default function TreeView({ items, connections, selectedItemId, onSelect,
     <div className="flex-1 flex flex-col min-h-0">
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-        <FeatureFocusToggle featureCode={featureCode} active={focusActive} onToggle={onToggleFocus} />
         {/* Search */}
         <div className="relative flex-1 max-w-[180px]">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
