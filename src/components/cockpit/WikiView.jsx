@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { WikiDataProvider, FeatureHub, Search, Decisions, Sources, wikiPath } from '@wiki/components';
+import { WikiDataProvider, FeatureHub, Search, Decisions, Sources, AreaDocs, wikiPath } from '@wiki/components';
 import './wiki-tab.css';
 import { createWikiDataClient } from '../../lib/clients/wiki.js';
 
 /**
- * Wiki tab (COMPOSE-WIKI-TAB-1): the wiki's FeatureHub, Search, Decisions and Sources screens from `@wiki/components`,
+ * Wiki tab (COMPOSE-WIKI-TAB-1): the wiki's FeatureHub, Search, Decisions, Sources and AreaDocs screens from `@wiki/components`,
  * fed by Compose's DataClient (all data through `/api/wiki`, `wiki-eng` only), plus "Open full wiki":
  * the Mac wiki's own UI in a frame, which rides the browser's wiki sign-in (WIKI-FRAME-LOOSEN-1 lets
  * http://127.0.0.1:4001 and :5195 frame it). Navigation is this component's state; the screens never route.
@@ -17,6 +17,8 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
   const [pane, setPane] = useState('feature');
   const [search, setSearch] = useState({ query: featureCode ?? '', workspace: undefined });
   const [framePath, setFramePath] = useState(null);
+  const [area, setArea] = useState('');
+  const [areaDraft, setAreaDraft] = useState('');
 
   // A new selected feature replaces the code and prefills Search with it.
   useEffect(() => {
@@ -30,6 +32,7 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
   const hrefFor = (target) => `${frameBase}/ui${wikiPath(target)}`;
   const onNavigate = (target) => {
     if (target.kind === 'search') setSearch({ query: target.query ?? '', workspace: target.workspace });
+    else if (target.kind === 'area') { setArea(target.area); setAreaDraft(target.area); setPane('area'); }
     else { setFramePath(wikiPath(target)); setPane('full'); }
   };
   const open = (next) => {
@@ -43,6 +46,10 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
     setCode(next);
     setSearch({ query: next, workspace: undefined });
     setFramePath(null);
+  };
+  const submitArea = (e) => {
+    e.preventDefault();
+    setArea(areaDraft.trim());
   };
   const tabClass = (name) => `px-3 py-1 text-sm rounded ${pane === name ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'}`;
   // The wiki lists 127.0.0.1 parents only (a `localhost` page is another site: no cookie, no frame).
@@ -65,6 +72,7 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
           <button type="button" className={tabClass('search')} onClick={() => open('search')}>Search</button>
           <button type="button" className={tabClass('decisions')} onClick={() => open('decisions')}>Decisions</button>
           <button type="button" className={tabClass('sources')} onClick={() => open('sources')}>Sources</button>
+          <button type="button" className={tabClass('area')} onClick={() => open('area')}>Area</button>
           <button type="button" className={tabClass('full')} onClick={() => open('full')}>Open full wiki</button>
           <span className="ml-auto text-xs text-muted-foreground">{workspace}</span>
         </nav>
@@ -77,6 +85,23 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
           )}
           {pane === 'decisions' && <Decisions workspace={workspace} onNavigate={onNavigate} hrefFor={hrefFor} />}
           {pane === 'sources' && <Sources workspace={workspace} onNavigate={onNavigate} hrefFor={hrefFor} />}
+          {pane === 'area' && (
+            <>
+              <form onSubmit={submitArea} className="mb-4">
+                <input
+                  aria-label="Area"
+                  className="h-7 w-64 rounded border border-border bg-background px-2 text-sm font-mono"
+                  placeholder="Area name"
+                  maxLength={200}
+                  value={areaDraft}
+                  onChange={(e) => setAreaDraft(e.target.value)}
+                />
+              </form>
+              {area
+                ? <AreaDocs area={area} workspace={workspace} onNavigate={onNavigate} hrefFor={hrefFor} />
+                : <p className="text-sm text-muted-foreground">Type an area name above, or follow an area link on a doc.</p>}
+            </>
+          )}
           {pane === 'full' && (
             <>
               {!frameable && (

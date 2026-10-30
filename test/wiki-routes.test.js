@@ -35,6 +35,12 @@ async function fakeWiki(calls) {
       ? res.json({ items: [], total: 0, next_cursor: null, generated_at: 't' })
       : res.status(400).json({ code: 'bad_filter', message: 'no filters expected' });
   });
+  app.post('/query/docs_by_area', (req, res) => {
+    if (req.body.page?.cursor === 'REDIRECT') return res.redirect(303, '/signin');
+    return typeof req.body.filters.area === 'string' && Object.keys(req.body.filters).length === 1
+      ? res.json({ items: [], total: 0, next_cursor: null, generated_at: 't' })
+      : res.status(400).json({ code: 'bad_filter', message: 'area required' });
+  });
   app.post('/query/search', (_req, res) => res.json({ groups: [], generated_at: 't' }));
   app.use((_req, res) => res.status(418).json({ code: 'reached_the_wiki' }));
   return listen(app);
@@ -86,6 +92,32 @@ const ROWS = [
   ['sources_page: no workspace', 'ok', true, 'POST', '/query/sources_page', {}, null, 403, 'workspace_refused', 0],
   ['sources_page: missing token', 'ok', false, 'POST', '/query/sources_page', { workspace: 'wiki-eng' }, null, 503, 'token_missing', 0],
   ['sources_page: wiki redirect not followed', 'ok', true, 'POST', '/query/sources_page', { workspace: 'wiki-eng', cursor: 'REDIRECT' }, null, 502, 'bad_response', 1],
+  ['docs_by_area: allowed, area filter and page built here', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'search', extra: 'dropped', filters: { status: ['x'] }, query: 'ideas' }, null, 200, null, 1,
+    ['POST', '/query/docs_by_area', { query: 'docs_by_area', workspace: 'wiki-eng', filters: { area: 'search' }, page: { size: 50 } }]],
+  ['docs_by_area: cursor and size pass with the area', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'a.b:c@d/e-f_1', cursor: 'abc.DEF_123', size: 20 }, null, 200, null, 1,
+    ['POST', '/query/docs_by_area', { query: 'docs_by_area', workspace: 'wiki-eng', filters: { area: 'a.b:c@d/e-f_1' }, page: { size: 20, cursor: 'abc.DEF_123' } }]],
+  ['docs_by_area: area at the cap passes', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'a'.repeat(200) }, null, 200, null, 1,
+    ['POST', '/query/docs_by_area', { query: 'docs_by_area', workspace: 'wiki-eng', filters: { area: 'a'.repeat(200) }, page: { size: 50 } }]],
+  ['docs_by_area: oversize area', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'a'.repeat(201) }, null, 400, 'bad_request', 0],
+  ['docs_by_area: no area', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng' }, null, 400, 'bad_request', 0],
+  ['docs_by_area: empty area', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: '' }, null, 400, 'bad_request', 0],
+  ['docs_by_area: blank area', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: '   ' }, null, 400, 'bad_request', 0],
+  ['docs_by_area: area with a space', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'core engine' }, null, 400, 'bad_request', 0],
+  ['docs_by_area: area with &', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'ops&process' }, null, 400, 'bad_request', 0],
+  ['docs_by_area: area with a newline', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'core\nx' }, null, 400, 'bad_request', 0],
+  ['docs_by_area: area with non-ASCII letters', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'cör' }, null, 400, 'bad_request', 0],
+  ['docs_by_area: array area', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: ['search'] }, null, 400, 'bad_request', 0],
+  ['docs_by_area: object area', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: { $ne: 1 } }, null, 400, 'bad_request', 0],
+  ['docs_by_area: oversize cursor', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'search', cursor: 'c'.repeat(513) }, null, 400, 'bad_request', 0],
+  ['docs_by_area: empty cursor', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'search', cursor: '' }, null, 400, 'bad_request', 0],
+  ['docs_by_area: object cursor', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'search', cursor: { $ne: 1 } }, null, 400, 'bad_request', 0],
+  ['docs_by_area: size 0', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'search', size: 0 }, null, 400, 'bad_request', 0],
+  ['docs_by_area: size 51', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'search', size: 51 }, null, 400, 'bad_request', 0],
+  ['docs_by_area: size as a string', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'search', size: '20' }, null, 400, 'bad_request', 0],
+  ['docs_by_area: wiki-private', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-private', area: 'search' }, null, 403, 'workspace_refused', 0],
+  ['docs_by_area: no workspace', 'ok', true, 'POST', '/query/docs_by_area', { area: 'search' }, null, 403, 'workspace_refused', 0],
+  ['docs_by_area: missing token', 'ok', false, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'search' }, null, 503, 'token_missing', 0],
+  ['docs_by_area: wiki redirect not followed', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'search', cursor: 'REDIRECT' }, null, 502, 'bad_response', 1],
   ['unlisted query (notes_tree)', 'ok', true, 'POST', '/query/notes_tree', { workspace: 'wiki-eng' }, null, 404, 'not_proxied', 0],
   ['unlisted GET (/pages/home)', 'ok', true, 'GET', '/pages/home', null, null, 404, 'not_proxied', 0],
   ['/commands', 'ok', true, 'POST', '/commands', { command: 'apply' }, null, 404, 'not_proxied', 0],

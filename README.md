@@ -176,7 +176,7 @@ It is on-demand, not a launchd daemon. The three ports are registered to `compos
 
 ### Wiki tab (`@smartmemory/wiki-components`)
 
-The Wiki tab renders the SmartMemory wiki's feature hub, search, decisions and sources screens (`^0.3.0`) from `@smartmemory/wiki-components` (a dev dependency, bundled into `dist/` at build time). The build uses the wiki checkout next to this repo when it exists (`../../SmartMemory/smart-memory-wiki/ui/packages/wiki-components`), else the installed package, else a stub that hides the tab; `COMPOSE_WIKI_COMPONENTS_DIR=<dir>` overrides and `none` forces the stub (`lib/wiki-components-link.js`). At runtime the tab shows only when the build has the package AND the project's `.compose/compose.json` has a `wiki` block (`{"enabled": true, "tokenEnv": "<ENV NAME>", "baseUrl": "http://127.0.0.1:8791"}`); without one the tab stays hidden.
+The Wiki tab renders the SmartMemory wiki's feature hub, search, decisions, sources and area-docs screens (`^0.4.0`) from `@smartmemory/wiki-components` (a dev dependency, bundled into `dist/` at build time). The build uses the wiki checkout next to this repo when it exists (`../../SmartMemory/smart-memory-wiki/ui/packages/wiki-components`), else the installed package, else a stub that hides the tab; `COMPOSE_WIKI_COMPONENTS_DIR=<dir>` overrides and `none` forces the stub (`lib/wiki-components-link.js`). At runtime the tab shows only when the build has the package AND the project's `.compose/compose.json` has a `wiki` block (`{"enabled": true, "tokenEnv": "<ENV NAME>", "baseUrl": "http://127.0.0.1:8791"}`); without one the tab stays hidden.
 
 ## Upgrading
 

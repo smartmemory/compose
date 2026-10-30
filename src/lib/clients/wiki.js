@@ -2,7 +2,7 @@
  * wiki.js — Compose's DataClient for `@wiki/components` (COMPOSE-WIKI-TAB-1).
  *
  * The contract is `smart-memory-wiki/ui/packages/wiki-components/src/data-client.d.ts` (`identity`,
- * `featureHub`, `decisions`, `decisionsPage`, `sourcesPage`, `search`). Every call goes to Compose's own `/api/wiki/*` proxy
+ * `featureHub`, `decisions`, `decisionsPage`, `sourcesPage`, `docsByArea`, `search`). Every call goes to Compose's own `/api/wiki/*` proxy
  * (server/wiki-routes.js), which holds the wiki token and builds the wiki's query envelope; the browser
  * never talks to the wiki for data. A refusal rejects with an Error carrying the answer's `code`, as the
  * contract asks, so the screens can show it.
@@ -30,6 +30,7 @@ export function createWikiDataClient() {
     decisions: ({ workspace, featureId }) => call('/query/decisions', { workspace, featureId }),
     decisionsPage: ({ workspace, cursor, size }) => call('/query/decisions_page', { workspace, ...(cursor ? { cursor } : {}), ...(size ? { size } : {}) }),
     sourcesPage: ({ workspace, cursor, size }) => call('/query/sources_page', { workspace, ...(cursor ? { cursor } : {}), ...(size ? { size } : {}) }),
+    docsByArea: ({ workspace, area, cursor, size }) => call('/query/docs_by_area', { workspace, area, ...(cursor ? { cursor } : {}), ...(size ? { size } : {}) }),
     search: ({ workspace, q }) => call('/query/search', { workspace, q }),
   };
 }

@@ -31,6 +31,7 @@ describe('Wiki tab', () => {
       decisions: vi.fn(async () => ({ items: [], total: 0, next_cursor: null, generated_at: 't' })),
       decisionsPage: vi.fn(async () => ({ items: [], total: 0, next_cursor: null, generated_at: 't' })),
       sourcesPage: vi.fn(async () => ({ items: [], total: 0, next_cursor: null, generated_at: 't' })),
+      docsByArea: vi.fn(async () => ({ items: [], total: 0, next_cursor: null, generated_at: 't' })),
       search: vi.fn(async () => ({ groups: [{ label: 'design', items: [{ doc_id: 'd1', title: 'Wiki tab design', path: doc.path, snippet: 'the tab', rank: 1 }], total: 1, next_cursor: null }], generated_at: 't' })),
     };
     render(<WikiView client={client} featureCode="COMPOSE-WIKI-TAB-1" workspace="wiki-eng" frameBase={FRAME} />);
@@ -63,7 +64,7 @@ describe('Wiki tab: Decisions', () => {
     };
     const client = {
       identity: vi.fn(async () => { throw new Error('identity must not be needed'); }),
-      featureHub: vi.fn(), decisions: vi.fn(), search: vi.fn(), sourcesPage: vi.fn(),
+      featureHub: vi.fn(), decisions: vi.fn(), search: vi.fn(), sourcesPage: vi.fn(), docsByArea: vi.fn(),
       decisionsPage: vi.fn(async ({ cursor }) => pages[cursor ?? '']),
     };
     render(<WikiView client={client} workspace="wiki-eng" frameBase={FRAME} />);
@@ -92,7 +93,7 @@ describe('Wiki tab: Sources', () => {
     };
     const client = {
       identity: vi.fn(async () => { throw new Error('identity must not be needed'); }),
-      featureHub: vi.fn(), decisions: vi.fn(), decisionsPage: vi.fn(), search: vi.fn(),
+      featureHub: vi.fn(), decisions: vi.fn(), decisionsPage: vi.fn(), search: vi.fn(), docsByArea: vi.fn(),
       sourcesPage: vi.fn(async ({ cursor }) => pages[cursor ?? '']),
     };
     render(<WikiView client={client} workspace="wiki-eng" frameBase={FRAME} />);
@@ -105,6 +106,50 @@ describe('Wiki tab: Sources', () => {
     expect(client.sourcesPage.mock.calls.map(([a]) => a)).toEqual([
       { workspace: 'wiki-eng', size: 50 },
       { workspace: 'wiki-eng', cursor: 's2', size: 50 },
+    ]);
+    expect(client.identity).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('Wiki tab: Area docs', () => {
+  const adoc = (id, title, areas) => ({ ...doc, doc_id: id, title, areas });
+
+  it.skipIf(!linked)('opens an area from a typed name, pages its docs, and follows a doc\'s area link, without fetching', async () => {
+    const fetchSpy = vi.fn(() => { throw new Error('a component fetched'); });
+    vi.stubGlobal('fetch', fetchSpy);
+    const pages = {
+      search: {
+        '': { items: [adoc('a1', 'Recall design', ['search', 'core'])], total: 60, next_cursor: 'a2', generated_at: 't' },
+        a2: { items: [adoc('a2', 'Second page doc', ['search'])], total: 60, next_cursor: null, generated_at: 't' },
+      },
+      core: { '': { items: [adoc('a3', 'Core doc', ['core'])], total: 1, next_cursor: null, generated_at: 't' } },
+    };
+    const client = {
+      identity: vi.fn(async () => { throw new Error('identity must not be needed'); }),
+      featureHub: vi.fn(), decisions: vi.fn(), decisionsPage: vi.fn(), sourcesPage: vi.fn(), search: vi.fn(),
+      docsByArea: vi.fn(async ({ area, cursor }) => pages[area][cursor ?? '']),
+    };
+    render(<WikiView client={client} workspace="wiki-eng" frameBase={FRAME} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Area' }));
+    expect(screen.getByText(/Type an area name/)).toBeTruthy();
+    expect(client.docsByArea).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Area'), { target: { value: ' search ' } });
+    fireEvent.submit(screen.getByLabelText('Area').closest('form'));
+    expect(await screen.findByText('Recall design')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Next page'));
+    expect(await screen.findByText('Second page doc')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Previous page'));
+    const link = (await screen.findByText('core', { selector: 'a' }));
+    expect(link.getAttribute('href')).toBe(`${FRAME}/ui/area/core`);
+    fireEvent.click(link); // a plain click is onNavigate: the area opens in this view, not the frame
+    expect(await screen.findByText('Core doc')).toBeTruthy();
+    expect(screen.getByLabelText('Area').value).toBe('core');
+    expect(client.docsByArea.mock.calls.map(([a]) => a)).toEqual([
+      { workspace: 'wiki-eng', area: 'search', size: 50 },
+      { workspace: 'wiki-eng', area: 'search', cursor: 'a2', size: 50 },
+      { workspace: 'wiki-eng', area: 'search', size: 50 },
+      { workspace: 'wiki-eng', area: 'core', size: 50 },
     ]);
     expect(client.identity).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -127,16 +172,21 @@ describe('Compose wiki DataClient', () => {
     await client.decisionsPage({ workspace: 'wiki-eng', cursor: 'c2', size: 20 });
     await client.sourcesPage({ workspace: 'wiki-eng' });
     await client.sourcesPage({ workspace: 'wiki-eng', cursor: 's2', size: 20 });
+    await client.docsByArea({ workspace: 'wiki-eng', area: 'search' });
+    await client.docsByArea({ workspace: 'wiki-eng', area: 'search', cursor: 'a2', size: 20 });
     await expect(client.decisions({ workspace: 'wiki-private', featureId: 'X-1' })).rejects.toMatchObject({ code: 'workspace_refused', status: 403 });
     expect(calls.map(([u, m]) => `${m} ${u}`)).toEqual([
       'GET /api/wiki/identity', 'POST /api/wiki/query/feature_hub', 'POST /api/wiki/query/search',
       'POST /api/wiki/query/decisions_page', 'POST /api/wiki/query/decisions_page',
-      'POST /api/wiki/query/sources_page', 'POST /api/wiki/query/sources_page', 'POST /api/wiki/query/decisions',
+      'POST /api/wiki/query/sources_page', 'POST /api/wiki/query/sources_page',
+      'POST /api/wiki/query/docs_by_area', 'POST /api/wiki/query/docs_by_area', 'POST /api/wiki/query/decisions',
     ]);
     expect(calls[1][2]).toEqual({ workspace: 'wiki-eng', featureId: 'X-1' });
     expect(calls[3][2]).toEqual({ workspace: 'wiki-eng' });
     expect(calls[4][2]).toEqual({ workspace: 'wiki-eng', cursor: 'c2', size: 20 });
     expect(calls[5][2]).toEqual({ workspace: 'wiki-eng' });
     expect(calls[6][2]).toEqual({ workspace: 'wiki-eng', cursor: 's2', size: 20 });
+    expect(calls[7][2]).toEqual({ workspace: 'wiki-eng', area: 'search' });
+    expect(calls[8][2]).toEqual({ workspace: 'wiki-eng', area: 'search', cursor: 'a2', size: 20 });
   });
 });

@@ -12,6 +12,7 @@
  *   POST /api/wiki/query/decisions     -> POST /query/decisions    {workspace, featureId}
  *   POST /api/wiki/query/decisions_page -> POST /query/decisions   {workspace, cursor?, size?} (all decisions, paged)
  *   POST /api/wiki/query/sources_page   -> POST /query/sources     {workspace, cursor?, size?} (all sources, paged)
+ *   POST /api/wiki/query/docs_by_area   -> POST /query/docs_by_area {workspace, area, cursor?, size?} (one area's docs, paged)
  *   POST /api/wiki/query/search        -> POST /query/search       {workspace, q}
  *   anything else under /api/wiki      -> 404 not_proxied (`/commands` included), no upstream call
  *
@@ -43,13 +44,14 @@ export const WIKI_QUERIES = {
   search: { field: 'q', filter: 'q', page: {}, max: 256 },
 };
 
-// The paged no-filter calls (COMPOSE-WIKI-DECISIONS-1): proxy key -> the wiki query it asks. The page is built from a
-// checked `cursor` (opaque string, at most CURSOR_MAX characters, or absent) and `size` (integer 1 to `maxSize`, default
-// `maxSize`); there is no filter and nothing else of the body is read.
+// The paged calls: proxy key -> the wiki query it asks. The page is built from a checked `cursor` (opaque string, at most
+// CURSOR_MAX characters, or absent) and `size` (integer 1 to `maxSize`, default `maxSize`). Most take no filter; a spec with
+// `field` takes exactly that one filter (a string of 1 to `max` characters, and matching `pattern` when the spec has one). Nothing else of the body is read.
 export const CURSOR_MAX = 512;
 export const WIKI_PAGED_QUERIES = {
   decisions_page: { query: 'decisions', maxSize: 50 },
   sources_page: { query: 'sources', maxSize: 50 },
+  docs_by_area: { query: 'docs_by_area', maxSize: 50, field: 'area', max: 200, pattern: /^[A-Za-z0-9_.:@/-]+$/ }, // the wiki schema's area characters
 };
 
 /** The upstream `page` for a paged call, or `{error}` naming what is wrong. */
@@ -174,9 +176,17 @@ export function attachWikiRoutes(app, {
     if (paged) {
       const { workspace, cursor, size } = req.body ?? {};
       if (workspace !== cfg.workspace) return refuse(res, 403, 'workspace_refused', `only ${cfg.workspace} is served here`);
+      let filters = {};
+      if (paged.field) {
+        const value = req.body[paged.field];
+        if (typeof value !== 'string' || !value.trim() || value.length > paged.max || (paged.pattern && !paged.pattern.test(value))) {
+          return refuse(res, 400, 'bad_request', `${paged.field} must be 1 to ${paged.max} characters${paged.pattern ? ' from A-Z a-z 0-9 _ . : @ / -' : ''}`);
+        }
+        filters = { [paged.field]: value };
+      }
       const p = pageOf(paged, { cursor, size });
       if (p.error) return refuse(res, 400, 'bad_request', p.error);
-      return send(res, await upstream(cfg, 'POST', `/query/${paged.query}`, { query: paged.query, workspace: cfg.workspace, filters: {}, page: p.page }));
+      return send(res, await upstream(cfg, 'POST', `/query/${paged.query}`, { query: paged.query, workspace: cfg.workspace, filters, page: p.page }));
     }
     const { workspace, [spec.field]: value } = req.body ?? {};
     if (workspace !== cfg.workspace) return refuse(res, 403, 'workspace_refused', `only ${cfg.workspace} is served here`);

@@ -5,4 +5,5 @@ export const FeatureHub = () => null;
 export const Search = () => null;
 export const Decisions = () => null;
 export const Sources = () => null;
+export const AreaDocs = () => null;
 export const wikiPath = () => '/';
