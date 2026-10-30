@@ -1,6 +1,8 @@
 # COMP-COCKPIT-12 — Multi-session status view in the cockpit
 
-**Status:** PLANNED · 2026-10-08 (owner request relayed 2026-10-08)
+**Status:** COMPLETE · 2026-10-30 (owner request relayed 2026-10-08)
+
+**Decision (OWNER via s1-chat, 2026-10-30 18:0x, record `/Users/ruze/reg/my/SmartMemory/smart-memory-ops/units/COMP-COCKPIT-12/decision.md`):** the design question below is answered with three read-only readers, not the single `sm_status.py` poll recommended here. (1) `stratum session fleet --json` (contract `/Users/ruze/reg/my/forge/stratum/docs/features/SESSION-MGMT-1/session-contract.json`, `operations.fleet`) for the detached fleet; (2) `python3 ~/.claude/scripts/sm_status.py --json` for what Stratum does not cover (sessions, jobs, owner queue, disk, spend, ledger tail); Stratum wins where both supply a value (a job's liveness); (3) Cadence: ready units with their verdict and blockers from the mounted `/api/cadence-ui/belt` handler (COMPOSE-CADENCE-TAB-1, called in-process) plus the last `would_launch` line from the tail of `~/.cadence/shadow.jsonl`; never `~/.cadence/snapshot.json`, never the F33-affected agreement numbers. Reason: the owner picked the contracted Stratum JSON as the session source ("1 + cadence yes") and asked for Cadence's proposed launches beside it. v1 is read-only: watch everything, act in chat.
 
 ## Related Documents
 - Cockpit shell (zones, Sessions tab, Ops strip): `/Users/ruze/reg/my/forge/compose/docs/cockpit.md`
@@ -34,7 +36,7 @@ Read-only, no AI calls. Each source has its own refresh cadence in the TUI (3 s,
 - **Mobile `/m`:** one read-only "Status" tab beside the existing `src/mobile/tabs/` entries (Agents, Builds, Ideas, Roadmap). Stacked cards: owner questions first, then sessions, jobs, disk and spend, ledger tail. No actions in v1.
 - **Panel failure:** a source that errors shows `unavailable: <reason>` in its own card. If the reader itself is absent (see design question), hide the whole Fleet panel and Ops pills and log one warn line.
 
-## Design question (OPEN, not decided here): how does the Node server get the Python readers' data?
+## Design question (DECIDED 2026-10-30, see the decision at the top): how does the Node server get the Python readers' data?
 The Compose server is Node. The readers are Python in the SmartMemory scratch folder, moving to `~/.claude/scripts/` after review.
 
 | | (a) Import the readers (Python sidecar or port) | (b) Shell out to `sm_status.py --once` | (c) Poll `sm_status.py --json` |
@@ -56,21 +58,21 @@ The Compose server is Node. The readers are Python in the SmartMemory scratch fo
 - Non-macOS hosts (the sessions source depends on iTerm2 via osascript).
 
 ## Acceptance criteria
-- [ ] Design question resolved by the owner and recorded at the top of this file with date and reason
-- [ ] No Node re-implementation of any reader: every panel value comes from the TUI's own readers
-- [ ] Server route (read-only, behind existing auth) returns the five panels' data, with per-source `error` preserved
-- [ ] Server caches the reader result so N clients cause at most one spawn per cache window, and never two concurrent spawns
-- [ ] Spawn has a timeout and runs with no shell interpolation of user input
-- [ ] Reader path resolves `~/.claude/scripts/sm_status.py` (override via env var for tests)
-- [ ] Python, script or non-zero exit absent: Fleet panel and Ops pills hidden, exactly one warn line logged per outage, cockpit otherwise unaffected
-- [ ] Sessions tab shows the Fleet view: sessions (busy/idle, context K with 200K yellow and 250K red), open jobs with running time, owner queue with age, disk free and hourly spend, ledger tail
-- [ ] Ops strip shows the compact pills (context over 250K, open owner questions, disk under 100 GB) and click opens the Fleet view
-- [ ] Mobile `/m` has a read-only Status tab with the same data, readable at phone width
-- [ ] A single failing source shows `unavailable: <reason>` in its own card on desktop and mobile
-- [ ] Polling pauses while the tab is hidden
-- [ ] Tests: route with fixture JSON, stale cache, spawn failure, timeout; UI tests for Fleet view, pills and mobile tab (real route, per `testing.md`, no mocked reader seam)
-- [ ] `docs/cockpit.md` Zones and Ops Strip sections updated; CHANGELOG entry in the same commit
+- [x] Design question resolved by the owner and recorded at the top of this file with date and reason: top of this file (Decision, 2026-10-30)
+- [x] No Node re-implementation of any reader: every panel value comes from the TUI's own readers: `server/fleet-routes.js:109-122` (sm_status JSON passed through, panels cut only), `:125-140` (Stratum envelope), `:196-216` (Cadence belt handler + shadow tail); no parser of the TUI's sources in Node
+- [x] Server route (read-only, behind existing auth) returns the five panels' data, with per-source `error` preserved: `server/fleet-routes.js:294-305` `GET /api/fleet`, per-source `{value, error, ts}`; mounted `server/index.js:230-231` beside the other `/api` routes (remote auth gate, loopback otherwise)
+- [x] Server caches the reader result so N clients cause at most one spawn per cache window, and never two concurrent spawns: `server/fleet-routes.js:233-270` single-flight cache, TTL `:34` (Stratum 10 s, sm_status 60 s, Cadence 60 s); test row `test/fleet-routes.test.js:83`
+- [x] Spawn has a timeout and runs with no shell interpolation of user input: `server/fleet-routes.js:62-90` argv array, `shell: false` `:66`, SIGTERM then SIGKILL `:82-85`; test row `test/fleet-routes.test.js:107`
+- [x] Reader path resolves `~/.claude/scripts/sm_status.py` (override via env var for tests): `server/fleet-routes.js:45-55` (`COMPOSE_FLEET_SM_STATUS`, `_PYTHON`, `_STRATUM_BIN`, `_CADENCE_SHADOW`)
+- [x] Python, script or non-zero exit absent: Fleet panel and Ops pills hidden, exactly one warn line logged per outage, cockpit otherwise unaffected: per reader: `server/fleet-routes.js:250` one warn per outage, `:246` recovery line; test rows `test/fleet-routes.test.js:99,116,121,125,132,135`; all-down UI `test/ui/fleet-view.test.jsx:118-137`; live forced Stratum outage logged once (report)
+- [x] Sessions tab shows the Fleet view: sessions (busy/idle, context K with 200K yellow and 250K red), open jobs with running time, owner queue with age, disk free and hourly spend, ledger tail: `src/components/vision/SessionsView.jsx:28-34,57-59`, `src/components/cockpit/FleetPanels.jsx`; test `test/ui/fleet-view.test.jsx:66`
+- [x] Ops strip shows the compact pills (context over 250K, open owner questions, disk under 100 GB) and click opens the Fleet view: `src/components/cockpit/fleetLogic.js` `fleetPills`, `src/components/cockpit/OpsStrip.jsx:18-25`; test `test/ui/fleet-view.test.jsx:92`; shot `ops-pills.png`
+- [x] Mobile `/m` has a read-only Status tab with the same data, readable at phone width: `src/mobile/tabs/StatusTab.jsx`, `src/mobile/MobileApp.jsx:165-167`, `src/mobile/components/BottomNav.jsx:8`; test `test/ui/fleet-view.test.jsx:102`; live at 390 px, no horizontal overflow (report)
+- [x] A single failing source shows `unavailable: <reason>` in its own card on desktop and mobile: `src/components/cockpit/FleetPanels.jsx` `Unavailable`/`panelOr`; partial reads keep their rows under an `unknown` note; test `test/ui/fleet-view.test.jsx:66`
+- [x] Polling pauses while the tab is hidden: `src/lib/fleetPoller.js:38-57`; test `test/ui/fleet-view.test.jsx:142`
+- [x] Tests: route with fixture JSON, stale cache, spawn failure, timeout; UI tests for Fleet view, pills and mobile tab (real route, per `testing.md`, no mocked reader seam): `test/fleet-routes.test.js:56-151` (one table), `test/ui/fleet-view.test.jsx` (real route in `test/fixtures/fleet/serve.mjs`, fixture readers by env path)
+- [x] `docs/cockpit.md` Zones and Ops Strip sections updated; CHANGELOG entry in the same commit: `docs/cockpit.md:33-34,57`, `CHANGELOG.md:5`
 - [x] TUI install to `~/.claude/scripts/` (with `owner_queue.py` and `scan_readonly.py` together) confirmed before this ships (2026-10-08)
 
 ## Status
-PLANNED. Falsifier for "not built": `ls /Users/ruze/reg/my/forge/compose/server | grep -i fleet` returns nothing and `feature.json` status is PLANNED.
+COMPLETE 2026-10-30 (report `/Users/ruze/reg/my/SmartMemory/smart-memory-ops/units/COMP-COCKPIT-12/report.md`). Falsifier for "built": `ls /Users/ruze/reg/my/forge/compose/server | grep -i fleet` returns nothing or `feature.json` status is not COMPLETE.
