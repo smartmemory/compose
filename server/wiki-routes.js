@@ -13,6 +13,8 @@
  *   POST /api/wiki/query/decisions_page -> POST /query/decisions   {workspace, cursor?, size?} (all decisions, paged)
  *   POST /api/wiki/query/sources_page   -> POST /query/sources     {workspace, cursor?, size?} (all sources, paged)
  *   POST /api/wiki/query/docs_by_area   -> POST /query/docs_by_area {workspace, area, cursor?, size?} (one area's docs, paged)
+ *   POST /api/wiki/query/ledger        -> POST /query/ledger       {workspace, from, to, cursor?, size?} (the window's entries, paged, sort ts desc set here)
+ *   GET  /api/wiki/feeds/upcoming_calls?workspace= -> GET /feeds/upcoming_calls?workspace= (the ONE fixed feed; null when the wiki does not serve it)
  *   POST /api/wiki/query/search        -> POST /query/search       {workspace, q}
  *   anything else under /api/wiki      -> 404 not_proxied (`/commands` included), no upstream call
  *
@@ -52,7 +54,45 @@ export const WIKI_PAGED_QUERIES = {
   decisions_page: { query: 'decisions', maxSize: 50 },
   sources_page: { query: 'sources', maxSize: 50 },
   docs_by_area: { query: 'docs_by_area', maxSize: 50, field: 'area', max: 200, pattern: /^[A-Za-z0-9_.:@/-]+$/ }, // the wiki schema's area characters
+  // A spec with `window` takes `from` and `to` (see windowOf) and carries a fixed `sort` that is built here, never read from the client.
+  ledger: { query: 'ledger', maxSize: 50, window: true, sort: [['ts', 'desc']] },
 };
+
+// The one feed the tab reads. A fixed name, not a `/feeds/:name` route: any other name is not proxied.
+export const WIKI_FEED = 'upcoming_calls';
+
+// A ledger window: `from` and `to` are each a calendar date `YYYY-MM-DD` (read as 00:00:00Z, which is what is sent upstream) or an
+// ISO instant with an offset, and the wiki's own pattern (query.schema.json ledger filters) needs the instant form. `from` <= `to`,
+// at most WINDOW_MAX_DAYS apart.
+export const WINDOW_MAX_DAYS = 366;
+const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const INSTANT_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,6})?(Z|[+-](\d{2}):(\d{2}))$/;
+
+/** `{iso, ms}` for one strict date or instant string, or null. */
+function instantOf(value) {
+  if (typeof value !== 'string' || value.length > 40) return null;
+  const d = DATE_RE.exec(value);
+  const t = d ? null : INSTANT_RE.exec(value);
+  const m = d || t;
+  if (!m) return null;
+  const [y, mo, da] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const day = new Date(Date.UTC(y, mo - 1, da));
+  if (mo < 1 || mo > 12 || day.getUTCMonth() !== mo - 1) return null; // a day past the month's end rolls into the next month: 2026-02-30 is not a date
+  if (d) return { iso: `${value}T00:00:00Z`, ms: day.getTime() };
+  if (Number(t[4]) > 23 || Number(t[5]) > 59 || Number(t[6]) > 59 || (t[9] !== undefined && (Number(t[9]) > 23 || Number(t[10]) > 59))) return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? { iso: value, ms } : null;
+}
+
+/** The upstream ledger filters `{from, to}` for a body, or `{error}` naming what is wrong. */
+function windowOf({ from, to }) {
+  const a = instantOf(from);
+  const b = instantOf(to);
+  if (!a || !b) return { error: 'from and to must each be a date YYYY-MM-DD or an ISO instant such as 2026-10-01T00:00:00Z' };
+  if (a.ms > b.ms) return { error: 'from must not be after to' };
+  if (b.ms - a.ms > WINDOW_MAX_DAYS * 86_400_000) return { error: `the window must be at most ${WINDOW_MAX_DAYS} days` };
+  return { filters: { from: a.iso, to: b.iso } };
+}
 
 /** The upstream `page` for a paged call, or `{error}` naming what is wrong. */
 function pageOf(spec, { cursor, size }) {
@@ -177,6 +217,11 @@ export function attachWikiRoutes(app, {
       const { workspace, cursor, size } = req.body ?? {};
       if (workspace !== cfg.workspace) return refuse(res, 403, 'workspace_refused', `only ${cfg.workspace} is served here`);
       let filters = {};
+      if (paged.window) {
+        const w = windowOf(req.body);
+        if (w.error) return refuse(res, 400, 'bad_request', w.error);
+        filters = w.filters;
+      }
       if (paged.field) {
         const value = req.body[paged.field];
         if (typeof value !== 'string' || !value.trim() || value.length > paged.max || (paged.pattern && !paged.pattern.test(value))) {
@@ -186,7 +231,7 @@ export function attachWikiRoutes(app, {
       }
       const p = pageOf(paged, { cursor, size });
       if (p.error) return refuse(res, 400, 'bad_request', p.error);
-      return send(res, await upstream(cfg, 'POST', `/query/${paged.query}`, { query: paged.query, workspace: cfg.workspace, filters, page: p.page }));
+      return send(res, await upstream(cfg, 'POST', `/query/${paged.query}`, { query: paged.query, workspace: cfg.workspace, filters, ...(paged.sort ? { sort: paged.sort } : {}), page: p.page }));
     }
     const { workspace, [spec.field]: value } = req.body ?? {};
     if (workspace !== cfg.workspace) return refuse(res, 403, 'workspace_refused', `only ${cfg.workspace} is served here`);
@@ -195,6 +240,18 @@ export function attachWikiRoutes(app, {
     }
     const name = req.params.name;
     return send(res, await upstream(cfg, 'POST', `/query/${name}`, { query: name, workspace: cfg.workspace, filters: { [spec.filter]: value }, page: spec.page }));
+  });
+
+  // The ONE feed. The workspace comes from config (the query string's `workspace` must equal it), nothing else of the request is read.
+  // The wiki answers a feed it does not wire with 404 `not_found` "unknown feed" (smart-memory-wiki wiki/spine/api/app.py `feed`); that, and only that,
+  // becomes `null` (absent), apart from an empty feed (a 200 envelope).
+  app.get(`${PREFIX}/feeds/${WIKI_FEED}`, async (req, res) => {
+    const cfg = config(req);
+    if (!cfg.ok) return refuse(res, cfg.code === 'workspace_refused' ? 403 : 503, cfg.code, 'the wiki tab is not configured');
+    if (req.query.workspace !== cfg.workspace) return refuse(res, 403, 'workspace_refused', `only ${cfg.workspace} is served here`);
+    const r = await upstream(cfg, 'GET', `/feeds/${WIKI_FEED}?workspace=${encodeURIComponent(cfg.workspace)}`, null);
+    if (r.status === 404 && r.body?.code === 'not_found' && r.body?.message === 'unknown feed') return res.status(200).json(null);
+    return send(res, r);
   });
 
   // Everything else (other queries, /commands, /pages, any method) is not proxied and never reaches the wiki.

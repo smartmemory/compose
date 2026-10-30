@@ -32,6 +32,7 @@ describe('Wiki tab', () => {
       decisionsPage: vi.fn(async () => ({ items: [], total: 0, next_cursor: null, generated_at: 't' })),
       sourcesPage: vi.fn(async () => ({ items: [], total: 0, next_cursor: null, generated_at: 't' })),
       docsByArea: vi.fn(async () => ({ items: [], total: 0, next_cursor: null, generated_at: 't' })),
+      ledger: vi.fn(), upcomingCalls: vi.fn(),
       search: vi.fn(async () => ({ groups: [{ label: 'design', items: [{ doc_id: 'd1', title: 'Wiki tab design', path: doc.path, snippet: 'the tab', rank: 1 }], total: 1, next_cursor: null }], generated_at: 't' })),
     };
     render(<WikiView client={client} featureCode="COMPOSE-WIKI-TAB-1" workspace="wiki-eng" frameBase={FRAME} />);
@@ -64,7 +65,7 @@ describe('Wiki tab: Decisions', () => {
     };
     const client = {
       identity: vi.fn(async () => { throw new Error('identity must not be needed'); }),
-      featureHub: vi.fn(), decisions: vi.fn(), search: vi.fn(), sourcesPage: vi.fn(), docsByArea: vi.fn(),
+      featureHub: vi.fn(), decisions: vi.fn(), search: vi.fn(), sourcesPage: vi.fn(), docsByArea: vi.fn(), ledger: vi.fn(), upcomingCalls: vi.fn(),
       decisionsPage: vi.fn(async ({ cursor }) => pages[cursor ?? '']),
     };
     render(<WikiView client={client} workspace="wiki-eng" frameBase={FRAME} />);
@@ -93,7 +94,7 @@ describe('Wiki tab: Sources', () => {
     };
     const client = {
       identity: vi.fn(async () => { throw new Error('identity must not be needed'); }),
-      featureHub: vi.fn(), decisions: vi.fn(), decisionsPage: vi.fn(), search: vi.fn(), docsByArea: vi.fn(),
+      featureHub: vi.fn(), decisions: vi.fn(), decisionsPage: vi.fn(), search: vi.fn(), docsByArea: vi.fn(), ledger: vi.fn(), upcomingCalls: vi.fn(),
       sourcesPage: vi.fn(async ({ cursor }) => pages[cursor ?? '']),
     };
     render(<WikiView client={client} workspace="wiki-eng" frameBase={FRAME} />);
@@ -127,7 +128,7 @@ describe('Wiki tab: Area docs', () => {
     };
     const client = {
       identity: vi.fn(async () => { throw new Error('identity must not be needed'); }),
-      featureHub: vi.fn(), decisions: vi.fn(), decisionsPage: vi.fn(), sourcesPage: vi.fn(), search: vi.fn(),
+      featureHub: vi.fn(), decisions: vi.fn(), decisionsPage: vi.fn(), sourcesPage: vi.fn(), search: vi.fn(), ledger: vi.fn(), upcomingCalls: vi.fn(),
       docsByArea: vi.fn(async ({ area, cursor }) => pages[area][cursor ?? '']),
     };
     render(<WikiView client={client} workspace="wiki-eng" frameBase={FRAME} />);
@@ -156,12 +157,60 @@ describe('Wiki tab: Area docs', () => {
   });
 });
 
+describe('Wiki tab: Ledger', () => {
+  const le = (id, text, ts) => ({ entry_id: id, parent_doc_id: 'd1', kind: 'ledger', ts, text, refs: [] });
+  const baseClient = (over) => ({
+    identity: vi.fn(async () => { throw new Error('identity must not be needed'); }),
+    featureHub: vi.fn(), decisions: vi.fn(), decisionsPage: vi.fn(), sourcesPage: vi.fn(), docsByArea: vi.fn(), search: vi.fn(), ...over,
+  });
+
+  it.skipIf(!linked)('pages the 30-day timeline through the injected client and shows the upcoming calls, without fetching', async () => {
+    const fetchSpy = vi.fn(() => { throw new Error('a component fetched'); });
+    vi.stubGlobal('fetch', fetchSpy);
+    const pages = {
+      '': { items: [le('l1', 'Shipped the tab', '2026-10-29T09:00:00Z')], total: 60, next_cursor: 'l2', generated_at: 't' },
+      l2: { items: [le('l2', 'Older note', '2026-10-05T09:00:00Z')], total: 60, next_cursor: null, generated_at: 't' },
+    };
+    const client = baseClient({
+      ledger: vi.fn(async ({ cursor }) => pages[cursor ?? '']),
+      upcomingCalls: vi.fn(async () => ({ items: [le('c1', 'Call with Ana', '2026-11-02T15:00:00Z')], errors: [] })),
+    });
+    render(<WikiView client={client} workspace="wiki-eng" frameBase={FRAME} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ledger' }));
+    expect(await screen.findByText('Shipped the tab')).toBeTruthy();
+    expect(await screen.findByText('Call with Ana')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Next page'));
+    expect(await screen.findByText('Older note')).toBeTruthy();
+    const [first, second] = client.ledger.mock.calls.map(([a]) => a);
+    expect([first.workspace, first.size, first.cursor, second.cursor]).toEqual(['wiki-eng', 50, undefined, 'l2']);
+    expect(Date.parse(first.to) - Date.parse(first.from)).toBe(31 * 86_400_000); // 30 days back, one day forward
+    expect(client.upcomingCalls.mock.calls.map(([a]) => a)).toEqual([{ workspace: 'wiki-eng' }]);
+    expect(client.identity).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it.skipIf(!linked)('an absent calls feed (null) leaves out the Upcoming calls section', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => { throw new Error('a component fetched'); }));
+    const client = baseClient({
+      ledger: vi.fn(async () => ({ items: [le('l1', 'Shipped the tab', '2026-10-29T09:00:00Z')], total: 1, next_cursor: null, generated_at: 't' })),
+      upcomingCalls: vi.fn(async () => null),
+    });
+    render(<WikiView client={client} workspace="wiki-eng" frameBase={FRAME} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ledger' }));
+    expect(await screen.findByText('Shipped the tab')).toBeTruthy();
+    await waitFor(() => expect(client.upcomingCalls).toHaveBeenCalled());
+    expect(screen.queryByText('Upcoming calls')).toBeNull();
+  });
+});
+
 describe('Compose wiki DataClient', () => {
   it('talks only to /api/wiki and rejects with the answer\'s code', async () => {
     const calls = [];
+    let feedNull = false;
     vi.stubGlobal('fetch', vi.fn(async (url, opts = {}) => {
       calls.push([String(url), opts.method || 'GET', opts.body && JSON.parse(opts.body)]);
       if (String(url).endsWith('/decisions')) return { ok: false, status: 403, json: async () => ({ code: 'workspace_refused', message: 'no' }) };
+      if (String(url).includes('/feeds/')) return { ok: true, status: 200, json: async () => (feedNull ? null : { data: { items: [] }, errors: [], partial: false }) };
       return { ok: true, status: 200, json: async () => ({ items: [] }) };
     }));
     const client = createWikiDataClient();
@@ -174,12 +223,19 @@ describe('Compose wiki DataClient', () => {
     await client.sourcesPage({ workspace: 'wiki-eng', cursor: 's2', size: 20 });
     await client.docsByArea({ workspace: 'wiki-eng', area: 'search' });
     await client.docsByArea({ workspace: 'wiki-eng', area: 'search', cursor: 'a2', size: 20 });
+    await client.ledger({ workspace: 'wiki-eng', from: '2026-09-30T00:00:00Z', to: '2026-10-31T00:00:00Z' });
+    await client.ledger({ workspace: 'wiki-eng', from: '2026-09-30T00:00:00Z', to: '2026-10-31T00:00:00Z', cursor: 'l2', size: 20 });
+    expect(await client.upcomingCalls({ workspace: 'wiki-eng' })).toEqual({ items: [], errors: [] });
+    feedNull = true;
+    expect(await client.upcomingCalls({ workspace: 'wiki-eng' })).toBeNull();
     await expect(client.decisions({ workspace: 'wiki-private', featureId: 'X-1' })).rejects.toMatchObject({ code: 'workspace_refused', status: 403 });
     expect(calls.map(([u, m]) => `${m} ${u}`)).toEqual([
       'GET /api/wiki/identity', 'POST /api/wiki/query/feature_hub', 'POST /api/wiki/query/search',
       'POST /api/wiki/query/decisions_page', 'POST /api/wiki/query/decisions_page',
       'POST /api/wiki/query/sources_page', 'POST /api/wiki/query/sources_page',
-      'POST /api/wiki/query/docs_by_area', 'POST /api/wiki/query/docs_by_area', 'POST /api/wiki/query/decisions',
+      'POST /api/wiki/query/docs_by_area', 'POST /api/wiki/query/docs_by_area',
+      'POST /api/wiki/query/ledger', 'POST /api/wiki/query/ledger',
+      'GET /api/wiki/feeds/upcoming_calls?workspace=wiki-eng', 'GET /api/wiki/feeds/upcoming_calls?workspace=wiki-eng', 'POST /api/wiki/query/decisions',
     ]);
     expect(calls[1][2]).toEqual({ workspace: 'wiki-eng', featureId: 'X-1' });
     expect(calls[3][2]).toEqual({ workspace: 'wiki-eng' });
@@ -188,5 +244,8 @@ describe('Compose wiki DataClient', () => {
     expect(calls[6][2]).toEqual({ workspace: 'wiki-eng', cursor: 's2', size: 20 });
     expect(calls[7][2]).toEqual({ workspace: 'wiki-eng', area: 'search' });
     expect(calls[8][2]).toEqual({ workspace: 'wiki-eng', area: 'search', cursor: 'a2', size: 20 });
+    expect(calls[9][2]).toEqual({ workspace: 'wiki-eng', from: '2026-09-30T00:00:00Z', to: '2026-10-31T00:00:00Z' });
+    expect(calls[10][2]).toEqual({ workspace: 'wiki-eng', from: '2026-09-30T00:00:00Z', to: '2026-10-31T00:00:00Z', cursor: 'l2', size: 20 });
+    expect(calls[11][1]).toBe('GET');
   });
 });

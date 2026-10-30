@@ -6,4 +6,5 @@ export const Search = () => null;
 export const Decisions = () => null;
 export const Sources = () => null;
 export const AreaDocs = () => null;
+export const Ledger = () => null;
 export const wikiPath = () => '/';

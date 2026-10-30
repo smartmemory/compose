@@ -15,10 +15,14 @@ function listen(app) {
   return new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
 }
 
+// What GET /feeds/upcoming_calls answers (a row's `setup` sets it; the loop resets it): 'absent' is the real wiki's answer for a feed it does not
+// wire (smart-memory-wiki wiki/spine/api/app.py `feed`: 404 not_found "unknown feed").
+let feedMode = 'absent';
+
 async function fakeWiki(calls) {
   const app = express();
   app.use(express.json());
-  app.use((req, _res, next) => { calls.push({ method: req.method, path: req.path, headers: req.headers, body: req.body }); next(); });
+  app.use((req, _res, next) => { calls.push({ method: req.method, path: req.path, url: req.url, headers: req.headers, body: req.body }); next(); });
   app.get('/identity', (_req, res) => res.json({ principal: 'owner', workspaces: ['wiki-eng', 'wiki-gtm', 'wiki-private'] }));
   app.post('/query/feature_hub', (req, res) => (req.body.filters.feature_id === 'REDIRECT'
     ? res.redirect(303, '/signin')
@@ -40,6 +44,18 @@ async function fakeWiki(calls) {
     return typeof req.body.filters.area === 'string' && Object.keys(req.body.filters).length === 1
       ? res.json({ items: [], total: 0, next_cursor: null, generated_at: 't' })
       : res.status(400).json({ code: 'bad_filter', message: 'area required' });
+  });
+  app.post('/query/ledger', (req, res) => {
+    if (req.body.page?.cursor === 'REDIRECT') return res.redirect(303, '/signin');
+    return typeof req.body.filters.from === 'string' && typeof req.body.filters.to === 'string' && Object.keys(req.body.filters).length === 2
+      ? res.json({ items: [], total: 0, next_cursor: null, generated_at: 't' })
+      : res.status(400).json({ code: 'bad_filter', message: 'from and to required' });
+  });
+  app.get('/feeds/upcoming_calls', (_req, res) => {
+    if (feedMode === 'redirect') return res.redirect(303, '/signin');
+    if (feedMode === 'other404') return res.status(404).json({ code: 'not_found', message: 'something else is missing', retryable: false });
+    if (feedMode === 'absent') return res.status(404).json({ code: 'not_found', message: 'unknown feed', retryable: false });
+    return res.json({ data: { items: [{ entry_id: 'c1', parent_doc_id: 'd1', kind: 'ledger', ts: '2026-10-20T15:00:00Z', text: 'Call', refs: [] }] }, errors: [], partial: false, generated_at: 't', freshness_s: 0 });
   });
   app.post('/query/search', (_req, res) => res.json({ groups: [], generated_at: 't' }));
   app.use((_req, res) => res.status(418).json({ code: 'reached_the_wiki' }));
@@ -118,6 +134,66 @@ const ROWS = [
   ['docs_by_area: no workspace', 'ok', true, 'POST', '/query/docs_by_area', { area: 'search' }, null, 403, 'workspace_refused', 0],
   ['docs_by_area: missing token', 'ok', false, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'search' }, null, 503, 'token_missing', 0],
   ['docs_by_area: wiki redirect not followed', 'ok', true, 'POST', '/query/docs_by_area', { workspace: 'wiki-eng', area: 'search', cursor: 'REDIRECT' }, null, 502, 'bad_response', 1],
+  // ledger: the window is built here (dates expanded, sort fixed), never forwarded
+  ['ledger: allowed, instants kept, sort and extras dropped', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-09-16T12:00:00Z', to: '2026-10-17T12:00:00Z', sort: [['ts', 'asc']], filters: { kind: 'x' }, query: 'ideas' }, null, 200, null, 1,
+    ['POST', '/query/ledger', { query: 'ledger', workspace: 'wiki-eng', filters: { from: '2026-09-16T12:00:00Z', to: '2026-10-17T12:00:00Z' }, sort: [['ts', 'desc']], page: { size: 50 } }]],
+  ['ledger: dates become midnight UTC', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-09-16', to: '2026-10-17' }, null, 200, null, 1,
+    ['POST', '/query/ledger', { query: 'ledger', workspace: 'wiki-eng', filters: { from: '2026-09-16T00:00:00Z', to: '2026-10-17T00:00:00Z' }, sort: [['ts', 'desc']], page: { size: 50 } }]],
+  ['ledger: offset and fraction pass, cursor and size too', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-09-16T12:00:00.123456+02:00', to: '2026-10-01T00:00:00-05:30', cursor: 'abc.DEF_123', size: 20 }, null, 200, null, 1,
+    ['POST', '/query/ledger', { query: 'ledger', workspace: 'wiki-eng', filters: { from: '2026-09-16T12:00:00.123456+02:00', to: '2026-10-01T00:00:00-05:30' }, sort: [['ts', 'desc']], page: { size: 20, cursor: 'abc.DEF_123' } }]],
+  ['ledger: from equals to passes', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-10-01', to: '2026-10-01' }, null, 200, null, 1,
+    ['POST', '/query/ledger', { query: 'ledger', workspace: 'wiki-eng', filters: { from: '2026-10-01T00:00:00Z', to: '2026-10-01T00:00:00Z' }, sort: [['ts', 'desc']], page: { size: 50 } }]],
+  ['ledger: a 366 day span passes', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2025-10-01', to: '2026-10-02' }, null, 200, null, 1,
+    ['POST', '/query/ledger', { query: 'ledger', workspace: 'wiki-eng', filters: { from: '2025-10-01T00:00:00Z', to: '2026-10-02T00:00:00Z' }, sort: [['ts', 'desc']], page: { size: 50 } }]],
+  ['ledger: a 367 day span', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2025-10-01', to: '2026-10-03' }, null, 400, 'bad_request', 0],
+  ['ledger: a span of years', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '1970-01-01', to: '2026-10-03' }, null, 400, 'bad_request', 0],
+  ['ledger: from after to', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-10-02', to: '2026-10-01' }, null, 400, 'bad_request', 0],
+  ['ledger: from after to by instant', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-10-01T00:00:01Z', to: '2026-10-01T00:00:00Z' }, null, 400, 'bad_request', 0],
+  ['ledger: no from', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', to: '2026-10-01' }, null, 400, 'bad_request', 0],
+  ['ledger: no to', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-10-01' }, null, 400, 'bad_request', 0],
+  ['ledger: slashes', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026/10/01', to: '2026-10-02' }, null, 400, 'bad_request', 0],
+  ['ledger: month 13', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-13-01', to: '2026-10-02' }, null, 400, 'bad_request', 0],
+  ['ledger: February 30', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-10-01', to: '2026-02-30' }, null, 400, 'bad_request', 0],
+  ['ledger: a word', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: 'yesterday', to: '2026-10-02' }, null, 400, 'bad_request', 0],
+  ['ledger: an instant with no offset', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-10-01T00:00:00', to: '2026-10-02' }, null, 400, 'bad_request', 0],
+  ['ledger: hour 24', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-10-01T24:00:00Z', to: '2026-10-02' }, null, 400, 'bad_request', 0],
+  ['ledger: offset hour 24', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-10-01T00:00:00+24:00', to: '2026-10-02' }, null, 400, 'bad_request', 0],
+  ['ledger: seven fraction digits', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-10-01T00:00:00.1234567Z', to: '2026-10-02' }, null, 400, 'bad_request', 0],
+  ['ledger: trailing text after a date', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-10-01\nx', to: '2026-10-02' }, null, 400, 'bad_request', 0],
+  ['ledger: oversize date', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-10-01'.padEnd(5000, '0'), to: '2026-10-02' }, null, 400, 'bad_request', 0],
+  ['ledger: number date', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: 20261001, to: '2026-10-02' }, null, 400, 'bad_request', 0],
+  ['ledger: array date', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: ['2026-10-01'], to: '2026-10-02' }, null, 400, 'bad_request', 0],
+  ['ledger: object date', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: { $gt: '' }, to: '2026-10-02' }, null, 400, 'bad_request', 0],
+  ['ledger: oversize cursor', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-10-01', to: '2026-10-02', cursor: 'c'.repeat(513) }, null, 400, 'bad_request', 0],
+  ['ledger: size 51', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-10-01', to: '2026-10-02', size: 51 }, null, 400, 'bad_request', 0],
+  ['ledger: size as a string', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-10-01', to: '2026-10-02', size: '20' }, null, 400, 'bad_request', 0],
+  ['ledger: wiki-private', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-private', from: '2026-10-01', to: '2026-10-02' }, null, 403, 'workspace_refused', 0],
+  ['ledger: no workspace', 'ok', true, 'POST', '/query/ledger', { from: '2026-10-01', to: '2026-10-02' }, null, 403, 'workspace_refused', 0],
+  ['ledger: missing token', 'ok', false, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-10-01', to: '2026-10-02' }, null, 503, 'token_missing', 0],
+  ['ledger: wiki redirect not followed', 'ok', true, 'POST', '/query/ledger', { workspace: 'wiki-eng', from: '2026-10-01', to: '2026-10-02', cursor: 'REDIRECT' }, null, 502, 'bad_response', 1],
+  // upcoming_calls: the one fixed feed; an absent feed is null
+  ['feed upcoming_calls: allowed, workspace from config, no body', 'ok', true, 'GET', '/feeds/upcoming_calls?workspace=wiki-eng&revoked=1&extra=x', null, null, 200, null, 1,
+    ['GET', '/feeds/upcoming_calls', {}],
+    (b, _base, calls) => { assert.equal(calls[0].url, '/feeds/upcoming_calls?workspace=wiki-eng'); assert.equal(b.data.items.length, 1); }, () => { feedMode = 'present'; }],
+  ['feed upcoming_calls: absent on the wiki (404 not_found) -> null', 'ok', true, 'GET', '/feeds/upcoming_calls?workspace=wiki-eng', null, null, 200, null, 1,
+    ['GET', '/feeds/upcoming_calls', {}], (b) => assert.equal(b, null)],
+  ['feed upcoming_calls: another 404 is not mistaken for absent', 'ok', true, 'GET', '/feeds/upcoming_calls?workspace=wiki-eng', null, null, 404, 'not_found', 1,
+    null, (b) => assert.equal(b.message, 'something else is missing'), () => { feedMode = 'other404'; }],
+  ['feed upcoming_calls: wiki redirect not followed', 'ok', true, 'GET', '/feeds/upcoming_calls?workspace=wiki-eng', null, null, 502, 'bad_response', 1,
+    null, null, () => { feedMode = 'redirect'; }],
+  ['feed upcoming_calls: wiki-private', 'ok', true, 'GET', '/feeds/upcoming_calls?workspace=wiki-private', null, null, 403, 'workspace_refused', 0],
+  ['feed upcoming_calls: no workspace', 'ok', true, 'GET', '/feeds/upcoming_calls', null, null, 403, 'workspace_refused', 0],
+  ['feed upcoming_calls: workspace given twice', 'ok', true, 'GET', '/feeds/upcoming_calls?workspace=wiki-eng&workspace=wiki-private', null, null, 403, 'workspace_refused', 0],
+  ['feed upcoming_calls: missing token', 'ok', false, 'GET', '/feeds/upcoming_calls?workspace=wiki-eng', null, null, 503, 'token_missing', 0],
+  ['feed upcoming_calls: config off', 'off', true, 'GET', '/feeds/upcoming_calls?workspace=wiki-eng', null, null, 503, 'wiki_disabled', 0],
+  ['feed upcoming_calls: wiki down', 'down', true, 'GET', '/feeds/upcoming_calls?workspace=wiki-eng', null, null, 502, 'wiki_unreachable', 0],
+  ['feed upcoming_calls: foreign Host (the prefix guard covers it)', 'ok', true, 'POST', '/feeds/upcoming_calls', { workspace: 'wiki-eng' }, 'evil.example:4001', 403, 'host_refused', 0],
+  ['feed upcoming_calls: POST is not proxied', 'ok', true, 'POST', '/feeds/upcoming_calls', { workspace: 'wiki-eng' }, null, 404, 'not_proxied', 0],
+  ['feed: another name (taxonomy_rules) never reaches the wiki', 'ok', true, 'GET', '/feeds/taxonomy_rules?workspace=wiki-eng', null, null, 404, 'not_proxied', 0],
+  ['feed: a name that begins like it', 'ok', true, 'GET', '/feeds/upcoming_calls_x?workspace=wiki-eng', null, null, 404, 'not_proxied', 0],
+  ['feed: a path below it', 'ok', true, 'GET', '/feeds/upcoming_calls/extra?workspace=wiki-eng', null, null, 404, 'not_proxied', 0],
+  ['feed: an escaped path out of it', 'ok', true, 'GET', '/feeds/upcoming_calls%2F..%2Fidentity?workspace=wiki-eng', null, null, 404, 'not_proxied', 0],
+  ['feed: the bare /feeds path', 'ok', true, 'GET', '/feeds?workspace=wiki-eng', null, null, 404, 'not_proxied', 0],
   ['unlisted query (notes_tree)', 'ok', true, 'POST', '/query/notes_tree', { workspace: 'wiki-eng' }, null, 404, 'not_proxied', 0],
   ['unlisted GET (/pages/home)', 'ok', true, 'GET', '/pages/home', null, null, 404, 'not_proxied', 0],
   ['/commands', 'ok', true, 'POST', '/commands', { command: 'apply' }, null, 404, 'not_proxied', 0],
@@ -170,8 +246,10 @@ describe('attachWikiRoutes', () => {
     const warn = console.warn;
     console.warn = (...a) => warned.push(a.join(' '));
     try {
-      for (const [name, c, token, method, path, body, host, status, code, wikiCalls, up, check] of ROWS) {
+      for (const [name, c, token, method, path, body, host, status, code, wikiCalls, up, check, setup] of ROWS) {
         cfg = configs[c];
+        feedMode = 'absent';
+        setup?.();
         if (token) env[ENV_NAME] = TOKEN; else delete env[ENV_NAME];
         calls.length = 0;
         const headers = { cookie: 'compose=secret-cookie', authorization: 'Bearer browser', ...(body ? { 'content-type': 'application/json' } : {}) };
@@ -192,7 +270,7 @@ describe('attachWikiRoutes', () => {
           assert.equal(call.headers.cookie, undefined, `${name}: browser cookie forwarded`);
           assert.equal(call.headers.authorization, undefined, `${name}: browser authorization forwarded`);
         }
-        check?.(json, wikiBase);
+        check?.(json, wikiBase, calls);
       }
       assert.ok(warned.length > 0 && warned.every((w) => !w.includes(TOKEN)), 'warnings logged, none carrying the token');
     } finally {

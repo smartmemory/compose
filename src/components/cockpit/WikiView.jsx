@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { WikiDataProvider, FeatureHub, Search, Decisions, Sources, AreaDocs, wikiPath } from '@wiki/components';
+import { WikiDataProvider, FeatureHub, Search, Decisions, Sources, AreaDocs, Ledger, wikiPath } from '@wiki/components';
 import './wiki-tab.css';
 import { createWikiDataClient } from '../../lib/clients/wiki.js';
 
 /**
- * Wiki tab (COMPOSE-WIKI-TAB-1): the wiki's FeatureHub, Search, Decisions, Sources and AreaDocs screens from `@wiki/components`,
+ * Wiki tab (COMPOSE-WIKI-TAB-1): the wiki's FeatureHub, Search, Decisions, Sources, AreaDocs and Ledger screens from `@wiki/components`,
  * fed by Compose's DataClient (all data through `/api/wiki`, `wiki-eng` only), plus "Open full wiki":
  * the Mac wiki's own UI in a frame, which rides the browser's wiki sign-in (WIKI-FRAME-LOOSEN-1 lets
  * http://127.0.0.1:4001 and :5195 frame it). Navigation is this component's state; the screens never route.
@@ -73,6 +73,7 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
           <button type="button" className={tabClass('decisions')} onClick={() => open('decisions')}>Decisions</button>
           <button type="button" className={tabClass('sources')} onClick={() => open('sources')}>Sources</button>
           <button type="button" className={tabClass('area')} onClick={() => open('area')}>Area</button>
+          <button type="button" className={tabClass('ledger')} onClick={() => open('ledger')}>Ledger</button>
           <button type="button" className={tabClass('full')} onClick={() => open('full')}>Open full wiki</button>
           <span className="ml-auto text-xs text-muted-foreground">{workspace}</span>
         </nav>
@@ -102,6 +103,7 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
                 : <p className="text-sm text-muted-foreground">Type an area name above, or follow an area link on a doc.</p>}
             </>
           )}
+          {pane === 'ledger' && <Ledger workspace={workspace} onNavigate={onNavigate} hrefFor={hrefFor} />}
           {pane === 'full' && (
             <>
               {!frameable && (
