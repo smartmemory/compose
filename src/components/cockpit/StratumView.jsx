@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { DataClientProvider, RunsList, RunDetail, GatesInbox } from '@stratum/ui';
-import '@stratum/ui/styles.css';
+import { DataClientProvider, RunsList, RunDetail, GatesInbox } from '@smartmemory/stratum-ui';
+import '@smartmemory/stratum-ui/styles.css';
 import { createStratumDataClient } from '../../lib/clients/stratum.js';
 
 /**
- * Stratum tab (COMPOSE-STRAT-TAB-1): runs list, a run's DAG, and the gates inbox from `@stratum/ui`,
+ * Stratum tab (COMPOSE-STRAT-TAB-1): runs list, a run's DAG, and the gates inbox from `@smartmemory/stratum-ui`,
  * fed by Compose's DataClient. The screens never fetch and never route: navigation is this
  * component's state, the same seam the standalone shell fills with hash routes.
  * `client` is injectable for tests.

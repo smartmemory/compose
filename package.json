@@ -91,6 +91,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@smartmemory/sdk-js": "^1.4.60",
     "@smartmemory/stratum": "^0.7.3",
+    "@smartmemory/stratum-ui": "^0.1.0",
     "@tanstack/react-virtual": "^3.13.23",
     "ajv": "^8.18.0",
     "ajv-formats": "^3.0.1",

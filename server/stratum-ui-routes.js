@@ -1,11 +1,12 @@
 /**
- * stratum-ui-routes.js — `/api/stratum-ui/*` for the `@stratum/ui` Stratum tab (COMPOSE-STRAT-TAB-1).
+ * stratum-ui-routes.js — `/api/stratum-ui/*` for the `@smartmemory/stratum-ui` Stratum tab
+ * (COMPOSE-STRAT-TAB-1, STRAT-COMPONENTS-PUBLISH-1).
  *
- * Mounts the sibling package's own (req, res) handler (`stratum/ui/server/handler.mjs`, built to be
- * mounted under Express) with Compose's resolved stratum CLI, the same binary `stratum-client.js`
+ * Mounts the package's own (req, res) handler (`server/handler.mjs`, its `./server` export, built to be
+ * mounted under Express; from the Mac sibling checkout, else the installed npm package) with Compose's resolved stratum CLI, the same binary `stratum-client.js`
  * uses for query/gate calls. Gate lists and decisions go through that CLI (`query gates`,
  * `gate <action> --token`). Run detail reads the engine's run files read-only, because
- * `stratum query flow` does not return step state or events. Absent sibling: nothing is mounted.
+ * `stratum query flow` does not return step state or events. Neither present: nothing is mounted.
  * Skipped in remote mode: the handler has no Compose auth gate and /api is the gate's scope.
  */
 import { homedir } from 'node:os';
@@ -34,7 +35,7 @@ export async function attachStratumUiRoutes(app, { remote = false, uiDir = resol
   return true;
 }
 
-/** Whether the tab can work: a sibling package and a mounted route (hidden otherwise). */
+/** Whether the tab can work: the package (sibling or installed) and a mounted route (hidden otherwise). */
 export function stratumUiAvailable(uiDir = resolveStratumUiDir()) {
   return Boolean(uiDir);
 }

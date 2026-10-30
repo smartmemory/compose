@@ -1,13 +1,14 @@
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
 import { defineConfig } from 'vite'
-import { resolveStratumUiDir } from './lib/stratum-ui-link.js'
+import { resolveStratumUi } from './lib/stratum-ui-link.js'
 import { resolveCadenceUiDir } from './lib/cadence-ui-link.js'
 import { resolveWikiComponentsDir } from './lib/wiki-components-link.js'
 
-// COMPOSE-STRAT-TAB-1: `@stratum/ui` is the sibling stratum/ui package on the Mac; when it is absent
-// (CI, published npm) the alias points at a stub and the Stratum tab is hidden (`__STRATUM_UI__` false).
-const stratumUi = resolveStratumUiDir()
+// COMPOSE-STRAT-TAB-1 / STRAT-COMPONENTS-PUBLISH-1: `@smartmemory/stratum-ui` is the sibling stratum/ui
+// source on the Mac, else the installed npm package (CI, published npm); with neither, the alias points at
+// a stub and the Stratum tab is hidden (`__STRATUM_UI__` false).
+const stratumUi = resolveStratumUi()
 // COMPOSE-WIKI-TAB-1: `@wiki/components` is the wiki checkout's components package, same rule (`__WIKI_COMPONENTS__`).
 const wikiComponents = resolveWikiComponentsDir()
 // COMPOSE-CADENCE-TAB-1: `@cadence/ui` is the Cadence checkout's ui package, same rule (`__CADENCE_UI__`).
@@ -22,8 +23,8 @@ export default defineConfig({
     dedupe: ['react', 'react-dom', '@dagrejs/dagre', 'lucide-react', 'date-fns'],
     alias: [
       { find: '@', replacement: path.resolve(__dirname, './src') },
-      { find: '@stratum/ui/styles.css', replacement: stratumUi ? path.join(stratumUi, 'src/styles.css') : path.resolve(__dirname, './src/lib/stratum-ui-stub.css') },
-      { find: /^@stratum\/ui$/, replacement: stratumUi ? path.join(stratumUi, 'src/index.ts') : path.resolve(__dirname, './src/lib/stratum-ui-stub.js') },
+      { find: /^@smartmemory\/stratum-ui\/styles\.css$/, replacement: stratumUi ? stratumUi.styles : path.resolve(__dirname, './src/lib/stratum-ui-stub.css') },
+      { find: /^@smartmemory\/stratum-ui$/, replacement: stratumUi ? stratumUi.entry : path.resolve(__dirname, './src/lib/stratum-ui-stub.js') },
       { find: '@cadence/ui/styles.css', replacement: cadenceUi ? path.join(cadenceUi, 'src/styles.css') : path.resolve(__dirname, './src/lib/cadence-ui-stub.css') },
       { find: /^@cadence\/ui$/, replacement: cadenceUi ? path.join(cadenceUi, 'src/index.ts') : path.resolve(__dirname, './src/lib/cadence-ui-stub.js') },
       { find: /^@wiki\/components$/, replacement: wikiComponents ? path.join(wikiComponents, 'src/index.js') : path.resolve(__dirname, './src/lib/wiki-components-stub.js') },

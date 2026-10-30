@@ -1,4 +1,4 @@
-/** COMPOSE-STRAT-TAB-1: the Stratum tab renders @stratum/ui screens from a fake DataClient (no fetch). */
+/** COMPOSE-STRAT-TAB-1: the Stratum tab renders @smartmemory/stratum-ui screens from a fake DataClient (no fetch). */
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';

@@ -58,8 +58,20 @@ jobs:
           fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
 
+      # @smartmemory/stratum-ui is a normal dependency (STRAT-COMPONENTS-PUBLISH-1), so `npm install`
+      # pulls the published package and the build links it: the Stratum tab ships. The owner publishes
+      # it locally first (no CI publish step); a missing package fails here instead of shipping the stub.
       - name: Install and build
         run: npm install && npm run build
+
+      - name: Stratum tab is in the build
+        run: |
+          node --input-type=module -e "
+          const { resolveStratumUi } = await import('./lib/stratum-ui-link.js');
+          const ui = resolveStratumUi();
+          if (ui?.kind !== 'package') { console.error('@smartmemory/stratum-ui is not installed: the Stratum tab would be hidden'); process.exit(1); }
+          console.log('stratum-ui', ui.kind, ui.dir);
+          "
 
       # Publish gate: verify the package is well-formed and runnable, not the full
       # integration suite. That suite hardcodes an absolute local sibling-checkout

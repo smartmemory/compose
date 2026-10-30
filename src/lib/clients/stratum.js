@@ -1,5 +1,5 @@
 /**
- * stratum.js — Compose's DataClient for `@stratum/ui` (COMPOSE-STRAT-TAB-1).
+ * stratum.js — Compose's DataClient for `@smartmemory/stratum-ui` (COMPOSE-STRAT-TAB-1).
  *
  * Plain async methods over Compose's `/api/stratum-ui/*` mount (server/stratum-ui-routes.js),
  * sent through wsFetch so the workspace id and remote-mode token ride along. No `subscribe`:

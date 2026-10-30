@@ -45,7 +45,7 @@ in one that goes through Compose's server: same bricks, two houses, nothing to d
 | One React copy | Compose's Vite sets `resolve.dedupe: ['react','react-dom']` (absent today: no `dedupe` in `C/vite.config.js`); two copies break hooks | grep, 2026-10-30 |
 | Router | screens take route params as props (`featureId`, `runId`, `query`) and call `onNavigate(target)`; never `useParams`/`window.location` | Compose has no router, `switch (activeView)` `C/src/App.jsx:256` (EI:9) |
 | Theme | CSS custom properties only, no CSS-in-JS runtime; Tailwind colours map to `var(--token)` with fallbacks; the host adds the package's `src/**` to its Tailwind `content` | 73 tokens in `C/src/index.css` (EI:11); Tailwind 3 in both: C `package.json:128`, W `ui/package.json:103` |
-| Linking | Mac workspace links, no npm publish. Compose resolves `@stratum/ui`, `@wiki/components` through a Vite alias to a sibling path that exists only on the Mac; when absent the alias points at a stub and the tab is hidden (PROVIDER-SEAM: absent = visibly absent) | CI builds without siblings: `.github/workflows/publish.yml:61-62` `npm install && npm run build`; npm ships prebuilt `dist/**` (`C/package.json` `files`) |
+| Linking | Mac workspace links, no npm publish. Compose resolves `@stratum/ui`, `@wiki/components` through a Vite alias to a sibling path that exists only on the Mac; when absent the alias points at a stub and the tab is hidden (PROVIDER-SEAM: absent = visibly absent) | CI builds without siblings: `.github/workflows/publish.yml:61-62` `npm install && npm run build`; npm ships prebuilt `dist/**` (`C/package.json` `files`) | **AMENDED 2026-10-30 (STRAT-COMPONENTS-PUBLISH-1, OWNER 11:2x "publish"):** Stratum is published as `@smartmemory/stratum-ui`; Compose resolves the Mac sibling first, else the installed package, else the stub.
 | Base44 | scaffold by `--app-id`, never `eject`/`deploy`; no Base44 SDK import survives in a package | `base44-apps.md:9-17` |
 
 ## 2. Per tool
@@ -195,6 +195,7 @@ retires GATE-WIRE's panel). COMPOSE-WIKI-TAB-1 rebases onto whichever lands firs
 
 1. Published npm Compose ships without the Stratum/Cadence/wiki tabs (no npm publish of the packages).
    Accept, or publish the packages later? Recommend accept until 2.0.0.
+   **ANSWERED 2026-10-30 (OWNER 11:2x via s1-chat):** publish. Stratum: STRAT-COMPONENTS-PUBLISH-1 (`@smartmemory/stratum-ui`, local publish by the owner).
 
 ## ELI5 TLDR
 

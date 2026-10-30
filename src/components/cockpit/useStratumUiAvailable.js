@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 
 /**
- * True when the Stratum tab can work (COMPOSE-STRAT-TAB-1): this build linked the sibling
- * `@stratum/ui` package (`__STRATUM_UI__`) AND the server mounted `/api/stratum-ui` (it does
- * not in remote mode or without the sibling). Otherwise the tab is hidden.
+ * True when the Stratum tab can work (COMPOSE-STRAT-TAB-1): this build linked
+ * `@smartmemory/stratum-ui` (`__STRATUM_UI__`, Mac sibling or installed package) AND the server mounted `/api/stratum-ui` (it does
+ * not in remote mode or without the package). Otherwise the tab is hidden.
  */
 export default function useStratumUiAvailable() {
   const built = typeof __STRATUM_UI__ !== 'undefined' && __STRATUM_UI__;
