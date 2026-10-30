@@ -14,13 +14,14 @@ export default defineConfig({
   plugins: [react()],
   define: { __STRATUM_UI__: JSON.stringify(Boolean(stratumUi)), __CADENCE_UI__: JSON.stringify(Boolean(cadenceUi)), __WIKI_COMPONENTS__: JSON.stringify(Boolean(wikiComponents)) },
   resolve: {
-    dedupe: ['react', 'react-dom', '@dagrejs/dagre', 'lucide-react', 'date-fns'],
+    dedupe: ['react', 'react-dom', '@dagrejs/dagre', 'lucide-react', 'date-fns', 'd3-force', 'd3-quadtree', 'react-markdown', 'remark-gfm', 'three', 'pixi.js'],
     alias: [
       { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
       { find: /^@smartmemory\/stratum-ui\/styles\.css$/, replacement: stratumUi ? stratumUi.styles : fileURLToPath(new URL('./src/lib/stratum-ui-stub.css', import.meta.url)) },
       { find: /^@smartmemory\/stratum-ui$/, replacement: stratumUi ? stratumUi.entry : fileURLToPath(new URL('./src/lib/stratum-ui-stub.js', import.meta.url)) },
       { find: '@cadence/ui/styles.css', replacement: cadenceUi ? path.join(cadenceUi, 'src/styles.css') : fileURLToPath(new URL('./src/lib/cadence-ui-stub.css', import.meta.url)) },
       { find: /^@cadence\/ui$/, replacement: cadenceUi ? path.join(cadenceUi, 'src/index.ts') : fileURLToPath(new URL('./src/lib/cadence-ui-stub.js', import.meta.url)) },
+      { find: /^@wiki\/components\/graph$/, replacement: wikiComponents ? path.join(wikiComponents, 'src/graph/index.js') : fileURLToPath(new URL('./src/lib/wiki-components-graph-stub.js', import.meta.url)) },
       { find: /^@wiki\/components$/, replacement: wikiComponents ? path.join(wikiComponents, 'src/index.js') : fileURLToPath(new URL('./src/lib/wiki-components-stub.js', import.meta.url)) },
     ],
   },

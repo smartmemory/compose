@@ -5,3 +5,6 @@
 /* Search's list layout (the wiki's ui/src/index.css `.list-page`/`.list-scroll`), sized to the tab, not the viewport. */
 .wiki-tab .list-page { display: flex; flex-direction: column; height: 100%; min-height: 20rem; }
 .wiki-tab .list-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+
+/* COMPOSE-WIKI-GRAPH-1b: the cockpit's field colour for the Graph's canvas. Package 0.6.0 (recut) has no reader for it yet, so it is inert until the package honours it. */
+.wiki-tab { --wiki-graph-field: hsl(var(--background)); }

@@ -1,10 +1,31 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { WikiDataProvider, FeatureHub, Search, Decisions, Sources, AreaDocs, Ledger, wikiPath } from '@wiki/components';
 import './wiki-tab.css';
 import { createWikiDataClient } from '../../lib/clients/wiki.js';
 
+// COMPOSE-WIKI-GRAPH-1b: the Graph (2D, 3D and WebGL inside it) is its own package entry, loaded only when someone opens it:
+// WikiView is statically imported by App.jsx, so the cockpit chunk must not grow.
+const graphEntry = () => import('@wiki/components/graph');
+const GraphPage = lazy(() => graphEntry().then((m) => ({ default: m.GraphPage })));
+const GraphHost = lazy(() => graphEntry().then((m) => ({ default: m.GraphHost })));
+
+/** Compose's resolved colour mode as the Graph's `useColorMode` wants it: `{resolved}`. Read from `<html class="dark">`, which App.jsx owns; never written here. */
+function useHtmlColorMode() {
+  const read = () => (typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+  const [resolved, setResolved] = useState(read);
+  useEffect(() => {
+    const obs = new MutationObserver(() => setResolved(read()));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
+  return { resolved };
+}
+
+// The Graph keeps its whole view state in URL params; Compose has no router, so they live in this view's state (the window URL is never written).
+const GRAPH_ASPECT_HINT = 'grouping by feature aspect is not built yet';
+
 /**
- * Wiki tab (COMPOSE-WIKI-TAB-1): the wiki's FeatureHub, Search, Decisions, Sources, AreaDocs and Ledger screens from `@wiki/components`,
+ * Wiki tab (COMPOSE-WIKI-TAB-1): the wiki's FeatureHub, Search, Decisions, Sources, AreaDocs, Ledger and Graph screens from `@wiki/components`,
  * fed by Compose's DataClient (all data through `/api/wiki`, `wiki-eng` only), plus "Open full wiki":
  * the Mac wiki's own UI in a frame, which rides the browser's wiki sign-in (WIKI-FRAME-LOOSEN-1 lets
  * http://127.0.0.1:4001 and :5195 frame it). Navigation is this component's state; the screens never route.
@@ -19,6 +40,9 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
   const [framePath, setFramePath] = useState(null);
   const [area, setArea] = useState('');
   const [areaDraft, setAreaDraft] = useState('');
+  const graphParamsRef = useRef(new URLSearchParams());
+  const [graphParams, setGraphParamsState] = useState(graphParamsRef.current);
+  const colorMode = useHtmlColorMode();
 
   // A new selected feature replaces the code and prefills Search with it.
   useEffect(() => {
@@ -51,6 +75,29 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
     e.preventDefault();
     setArea(areaDraft.trim());
   };
+  // react-router's setter shape: a value or an updater of the CURRENT params (the ref, so two calls in one handler both land). `replace` has no meaning here.
+  const setGraphParams = useCallback((next) => {
+    const resolved = new URLSearchParams(typeof next === 'function' ? next(graphParamsRef.current) : next);
+    graphParamsRef.current = resolved;
+    setGraphParamsState(resolved);
+  }, []);
+  // A graph link opens the note in the full-wiki frame, as a plain click on any other screen's doc link does; modified clicks go to the browser.
+  const GraphLink = useMemo(() => function GraphLink({ to, children, ...rest }) {
+    const click = (e) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || typeof to !== 'string' || !to.startsWith('/')) return;
+      e.preventDefault();
+      setFramePath(to);
+      setPane('full');
+    };
+    return <a href={`${frameBase}/ui${to}`} onClick={click} {...rest}>{children}</a>;
+  }, [frameBase]);
+  const graphHost = useMemo(() => ({
+    workspace,
+    useSearchParams: () => [graphParams, setGraphParams],
+    Link: GraphLink,
+    useColorMode: () => colorMode,
+    aspectHint: GRAPH_ASPECT_HINT,
+  }), [workspace, graphParams, setGraphParams, GraphLink, colorMode]);
   const tabClass = (name) => `px-3 py-1 text-sm rounded ${pane === name ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'}`;
   // The wiki lists 127.0.0.1 parents only (a `localhost` page is another site: no cookie, no frame).
   const frameable = typeof window === 'undefined' || window.location.hostname === '127.0.0.1';
@@ -74,10 +121,11 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
           <button type="button" className={tabClass('sources')} onClick={() => open('sources')}>Sources</button>
           <button type="button" className={tabClass('area')} onClick={() => open('area')}>Area</button>
           <button type="button" className={tabClass('ledger')} onClick={() => open('ledger')}>Ledger</button>
+          <button type="button" className={tabClass('graph')} onClick={() => open('graph')}>Graph</button>
           <button type="button" className={tabClass('full')} onClick={() => open('full')}>Open full wiki</button>
           <span className="ml-auto text-xs text-muted-foreground">{workspace}</span>
         </nav>
-        <div className={`flex-1 min-h-0 ${pane === 'full' ? 'flex flex-col' : 'overflow-auto p-4'}`}>
+        <div className={`flex-1 min-h-0 ${pane === 'full' ? 'flex flex-col' : pane === 'graph' ? 'relative' : 'overflow-auto p-4'}`}>
           {pane === 'feature' && (code
             ? <FeatureHub featureId={code} workspace={workspace} />
             : <p className="text-sm text-muted-foreground">Select a feature, or type its code above.</p>)}
@@ -104,6 +152,11 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
             </>
           )}
           {pane === 'ledger' && <Ledger workspace={workspace} onNavigate={onNavigate} hrefFor={hrefFor} />}
+          {pane === 'graph' && (
+            <Suspense fallback={<p className="p-4 text-sm text-muted-foreground">Loading the graph…</p>}>
+              <GraphHost value={graphHost}><GraphPage /></GraphHost>
+            </Suspense>
+          )}
           {pane === 'full' && (
             <>
               {!frameable && (

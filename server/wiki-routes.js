@@ -16,6 +16,8 @@
  *   POST /api/wiki/query/ledger        -> POST /query/ledger       {workspace, from, to, cursor?, size?} (the window's entries, paged, sort ts desc set here)
  *   GET  /api/wiki/feeds/upcoming_calls?workspace= -> GET /feeds/upcoming_calls?workspace= (the ONE fixed feed; null when the wiki does not serve it)
  *   POST /api/wiki/query/search        -> POST /query/search       {workspace, q}
+ *   POST /api/wiki/query/graph         -> POST /query/graph        {workspace, all: true} (the whole graph in one answer) or {workspace, cursor?, size?} (paged, size 1-200)
+ *   GET  /api/wiki/note?workspace=&id= -> GET  /note?workspace=&id=  (one doc with its text; id is a doc id, never a path)
  *   anything else under /api/wiki      -> 404 not_proxied (`/commands` included), no upstream call
  *
  * The upstream body is built here from the checked fields, never forwarded. Rules:
@@ -57,6 +59,18 @@ export const WIKI_PAGED_QUERIES = {
   // A spec with `window` takes `from` and `to` (see windowOf) and carries a fixed `sort` that is built here, never read from the client.
   ledger: { query: 'ledger', maxSize: 50, window: true, sort: [['ts', 'desc']] },
 };
+
+// The graph query (COMPOSE-WIKI-GRAPH-1b). The body is exactly one of `{workspace, all: true}` (one whole-graph answer, the wiki's
+// `page: {all: true}`) or `{workspace, cursor?, size?}` (paged: the cursor check and size 1 to GRAPH_PAGE_MAX of the paged calls). `all` with
+// anything but `true`, or with `cursor` or `size`, is refused. Every other key is ignored and `filters` is always `{}`. No `If-None-Match` is sent
+// upstream (the wiki answers 304 only to a matching one) and no ETag comes back, so the 3xx rule of `upstream()` is not reached by this call.
+export const GRAPH_PAGE_MAX = 200;
+export const GRAPH_QUERY = 'graph';
+
+// A doc id as the wiki's own `/note` accepts it (smart-memory-wiki wiki/spine/api/notes.py DOC_ID), minus any `..` path segment: the id is only ever
+// the VALUE of one `id` query parameter upstream (URLSearchParams), never a path, but a traversal-shaped id has no business reaching the wiki.
+export const NOTE_ID_RE = /^[A-Za-z0-9_.:@/-]{1,512}$/;
+const DOTDOT_SEGMENT_RE = /(^|\/)\.\.(\/|$)/;
 
 // The one feed the tab reads. A fixed name, not a `/feeds/:name` route: any other name is not proxied.
 export const WIKI_FEED = 'upcoming_calls';
@@ -205,6 +219,37 @@ export function attachWikiRoutes(app, {
     // Only the served workspace reaches the browser, whatever else the token's principal holds.
     if (r.status === 200 && Array.isArray(r.body?.workspaces)) r.body = { ...r.body, workspaces: r.body.workspaces.filter((w) => w === cfg.workspace) };
     return send(res, r);
+  });
+
+  // The graph query: its own route, registered before the generic `/query/:name`, so no line of that handler changes.
+  app.post(`${PREFIX}/query/${GRAPH_QUERY}`, async (req, res) => {
+    const cfg = config(req);
+    if (!cfg.ok) return refuse(res, cfg.code === 'workspace_refused' ? 403 : 503, cfg.code, 'the wiki tab is not configured');
+    const { workspace, all, cursor, size } = req.body ?? {};
+    if (workspace !== cfg.workspace) return refuse(res, 403, 'workspace_refused', `only ${cfg.workspace} is served here`);
+    let page;
+    if (all !== undefined) {
+      if (all !== true) return refuse(res, 400, 'bad_request', 'all must be true when given');
+      if (cursor !== undefined || size !== undefined) return refuse(res, 400, 'bad_request', 'all cannot be combined with cursor or size');
+      page = { all: true };
+    } else {
+      const p = pageOf({ maxSize: GRAPH_PAGE_MAX }, { cursor, size });
+      if (p.error) return refuse(res, 400, 'bad_request', p.error);
+      page = p.page;
+    }
+    return send(res, await upstream(cfg, 'POST', `/query/${GRAPH_QUERY}`, { query: GRAPH_QUERY, workspace: cfg.workspace, filters: {}, page }));
+  });
+
+  // The one note read. The workspace must equal the config's, `id` must be one string of a doc id's characters, and nothing else of the request is read.
+  app.get(`${PREFIX}/note`, async (req, res) => {
+    const cfg = config(req);
+    if (!cfg.ok) return refuse(res, cfg.code === 'workspace_refused' ? 403 : 503, cfg.code, 'the wiki tab is not configured');
+    if (req.query.workspace !== cfg.workspace) return refuse(res, 403, 'workspace_refused', `only ${cfg.workspace} is served here`);
+    const id = req.query.id;
+    if (typeof id !== 'string' || !NOTE_ID_RE.test(id) || DOTDOT_SEGMENT_RE.test(id)) {
+      return refuse(res, 400, 'bad_request', 'id must be a doc id: 1 to 512 characters from A-Z a-z 0-9 _ . : @ / - with no .. segment');
+    }
+    return send(res, await upstream(cfg, 'GET', `/note?${new URLSearchParams({ workspace: cfg.workspace, id })}`, null));
   });
 
   app.post(`${PREFIX}/query/:name`, async (req, res, next) => {

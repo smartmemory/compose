@@ -19,6 +19,9 @@ const doc = {
 
 afterEach(() => vi.unstubAllGlobals());
 
+// COMPOSE-WIKI-GRAPH-1b: the provider refuses a client without the graph calls (package 0.6.0); the older screens' fake clients never call them.
+const graphCalls = () => ({ graphAll: vi.fn(), graphPage: vi.fn(), note: vi.fn() });
+
 describe('Wiki tab', () => {
   it('is a sub-tab of the Library room', () => expect(locateView('wiki')).toEqual({ top: 'library', sub: 'wiki' }));
 
@@ -26,6 +29,7 @@ describe('Wiki tab', () => {
     const fetchSpy = vi.fn(() => { throw new Error('a component fetched'); });
     vi.stubGlobal('fetch', fetchSpy);
     const client = {
+      ...graphCalls(),
       identity: vi.fn(async () => { throw new Error('identity must not be needed: the tab passes its workspace'); }),
       featureHub: vi.fn(async () => ({ items: [doc], total: 1, next_cursor: null, generated_at: 't', feature })),
       decisions: vi.fn(async () => ({ items: [], total: 0, next_cursor: null, generated_at: 't' })),
@@ -64,6 +68,7 @@ describe('Wiki tab: Decisions', () => {
       c2: { items: [entry('e2', 'Second call')], total: 60, next_cursor: null, generated_at: 't' },
     };
     const client = {
+      ...graphCalls(),
       identity: vi.fn(async () => { throw new Error('identity must not be needed'); }),
       featureHub: vi.fn(), decisions: vi.fn(), search: vi.fn(), sourcesPage: vi.fn(), docsByArea: vi.fn(), ledger: vi.fn(), upcomingCalls: vi.fn(),
       decisionsPage: vi.fn(async ({ cursor }) => pages[cursor ?? '']),
@@ -93,6 +98,7 @@ describe('Wiki tab: Sources', () => {
       s2: { items: [src('eng-ops', { overdue: false, indexing_age_s: 60 })], total: 60, next_cursor: null, generated_at: 't' },
     };
     const client = {
+      ...graphCalls(),
       identity: vi.fn(async () => { throw new Error('identity must not be needed'); }),
       featureHub: vi.fn(), decisions: vi.fn(), decisionsPage: vi.fn(), search: vi.fn(), docsByArea: vi.fn(), ledger: vi.fn(), upcomingCalls: vi.fn(),
       sourcesPage: vi.fn(async ({ cursor }) => pages[cursor ?? '']),
@@ -127,6 +133,7 @@ describe('Wiki tab: Area docs', () => {
       core: { '': { items: [adoc('a3', 'Core doc', ['core'])], total: 1, next_cursor: null, generated_at: 't' } },
     };
     const client = {
+      ...graphCalls(),
       identity: vi.fn(async () => { throw new Error('identity must not be needed'); }),
       featureHub: vi.fn(), decisions: vi.fn(), decisionsPage: vi.fn(), sourcesPage: vi.fn(), search: vi.fn(), ledger: vi.fn(), upcomingCalls: vi.fn(),
       docsByArea: vi.fn(async ({ area, cursor }) => pages[area][cursor ?? '']),
@@ -160,6 +167,7 @@ describe('Wiki tab: Area docs', () => {
 describe('Wiki tab: Ledger', () => {
   const le = (id, text, ts) => ({ entry_id: id, parent_doc_id: 'd1', kind: 'ledger', ts, text, refs: [] });
   const baseClient = (over) => ({
+    ...graphCalls(),
     identity: vi.fn(async () => { throw new Error('identity must not be needed'); }),
     featureHub: vi.fn(), decisions: vi.fn(), decisionsPage: vi.fn(), sourcesPage: vi.fn(), docsByArea: vi.fn(), search: vi.fn(), ...over,
   });
@@ -200,6 +208,55 @@ describe('Wiki tab: Ledger', () => {
     expect(await screen.findByText('Shipped the tab')).toBeTruthy();
     await waitFor(() => expect(client.upcomingCalls).toHaveBeenCalled());
     expect(screen.queryByText('Upcoming calls')).toBeNull();
+  });
+});
+
+describe('Wiki tab: Graph', () => {
+  it.skipIf(!linked)('opens the Graph sub-view from the injected client, asks graphAll once and never fetches', async () => {
+    const fetchSpy = vi.fn(() => { throw new Error('a component fetched'); });
+    vi.stubGlobal('fetch', fetchSpy);
+    const client = {
+      identity: vi.fn(async () => { throw new Error('identity must not be needed'); }),
+      featureHub: vi.fn(), decisions: vi.fn(), decisionsPage: vi.fn(), sourcesPage: vi.fn(), docsByArea: vi.fn(), ledger: vi.fn(), upcomingCalls: vi.fn(), search: vi.fn(),
+      graphAll: vi.fn(async () => ({ items: [], edges: [], total: 0, revision: 'r1' })),
+      graphPage: vi.fn(), note: vi.fn(),
+    };
+    render(<WikiView client={client} workspace="wiki-eng" frameBase={FRAME} />);
+    expect(client.graphAll).not.toHaveBeenCalled(); // the Graph chunk is lazy: nothing is asked until the button is pressed
+    fireEvent.click(screen.getByRole('button', { name: 'Graph' }));
+    expect(await screen.findByText('No docs in this workspace yet.', {}, { timeout: 60_000 })).toBeTruthy(); // the first import transforms the whole graph closure
+    expect(client.graphAll.mock.calls.map(([a]) => a)).toEqual([{ workspace: 'wiki-eng' }]);
+    expect(client.graphPage).not.toHaveBeenCalled();
+    expect(client.identity).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  }, 90_000);
+});
+
+describe('Compose wiki DataClient: graph and note', () => {
+  it('sends the exact /api/wiki/query/graph bodies and the built /api/wiki/note URL', async () => {
+    const calls = [];
+    let notFound = false;
+    vi.stubGlobal('fetch', vi.fn(async (url, opts = {}) => {
+      calls.push([String(url), opts.method || 'GET', opts.body && JSON.parse(opts.body)]);
+      if (notFound) return { ok: false, status: 400, json: async () => ({ code: 'invalid_request', message: 'no' }) };
+      return { ok: true, status: 200, json: async () => ({ items: [] }) };
+    }));
+    const client = createWikiDataClient();
+    await client.graphAll({ workspace: 'wiki-eng' });
+    await client.graphPage({ workspace: 'wiki-eng' });
+    await client.graphPage({ workspace: 'wiki-eng', cursor: 'g2', size: 200 });
+    await client.note({ workspace: 'wiki-eng', id: 'docs/features/X-1/design.md' });
+    await client.note({ workspace: 'wiki-eng', id: 'a&workspace=wiki-private' }); // the query is built, so a hostile id stays one value
+    notFound = true;
+    await expect(client.graphAll({ workspace: 'wiki-eng' })).rejects.toMatchObject({ code: 'invalid_request', status: 400 });
+    expect(calls).toEqual([
+      ['/api/wiki/query/graph', 'POST', { workspace: 'wiki-eng', all: true }],
+      ['/api/wiki/query/graph', 'POST', { workspace: 'wiki-eng' }],
+      ['/api/wiki/query/graph', 'POST', { workspace: 'wiki-eng', cursor: 'g2', size: 200 }],
+      ['/api/wiki/note?workspace=wiki-eng&id=docs%2Ffeatures%2FX-1%2Fdesign.md', 'GET', undefined],
+      ['/api/wiki/note?workspace=wiki-eng&id=a%26workspace%3Dwiki-private', 'GET', undefined],
+      ['/api/wiki/query/graph', 'POST', { workspace: 'wiki-eng', all: true }],
+    ]);
   });
 });
 

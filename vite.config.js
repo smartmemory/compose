@@ -1,6 +1,6 @@
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
-import { defineConfig } from 'vite'
+import { defineConfig, searchForWorkspaceRoot } from 'vite'
 import { resolveStratumUi } from './lib/stratum-ui-link.js'
 import { resolveCadenceUiDir } from './lib/cadence-ui-link.js'
 import { resolveWikiComponentsDir } from './lib/wiki-components-link.js'
@@ -20,19 +20,26 @@ export default defineConfig({
   resolve: {
     // One React copy: the sibling packages must use Compose's. The wiki package's bare imports would
     // otherwise resolve from the wiki checkout's own node_modules (React 18).
-    dedupe: ['react', 'react-dom', '@dagrejs/dagre', 'lucide-react', 'date-fns'],
+    dedupe: ['react', 'react-dom', '@dagrejs/dagre', 'lucide-react', 'date-fns', 'd3-force', 'd3-quadtree', 'react-markdown', 'remark-gfm', 'three', 'pixi.js'],
     alias: [
       { find: '@', replacement: path.resolve(__dirname, './src') },
       { find: /^@smartmemory\/stratum-ui\/styles\.css$/, replacement: stratumUi ? stratumUi.styles : path.resolve(__dirname, './src/lib/stratum-ui-stub.css') },
       { find: /^@smartmemory\/stratum-ui$/, replacement: stratumUi ? stratumUi.entry : path.resolve(__dirname, './src/lib/stratum-ui-stub.js') },
       { find: '@cadence/ui/styles.css', replacement: cadenceUi ? path.join(cadenceUi, 'src/styles.css') : path.resolve(__dirname, './src/lib/cadence-ui-stub.css') },
       { find: /^@cadence\/ui$/, replacement: cadenceUi ? path.join(cadenceUi, 'src/index.ts') : path.resolve(__dirname, './src/lib/cadence-ui-stub.js') },
+      // COMPOSE-WIKI-GRAPH-1b: the Graph is its own entry (before the bare rule), lazy-loaded by WikiView; absent package = the graph stub.
+      { find: /^@wiki\/components\/graph$/, replacement: wikiComponents ? path.join(wikiComponents, 'src/graph/index.js') : path.resolve(__dirname, './src/lib/wiki-components-graph-stub.js') },
       { find: /^@wiki\/components$/, replacement: wikiComponents ? path.join(wikiComponents, 'src/index.js') : path.resolve(__dirname, './src/lib/wiki-components-stub.js') },
     ],
   },
+  // The Graph's layout workers are `new Worker(new URL('./forceWorker*.js', import.meta.url))` inside the package. In dev a package outside the
+  // project (the sibling checkout) or a pre-bundled one breaks them (403 / 404 on the worker file), so the alias names are not pre-bundled
+  // (the alias name, not the package name) and, with a sibling checkout, the dev server may serve it. Builds need neither.
+  optimizeDeps: { exclude: ['@wiki/components', '@wiki/components/graph'] },
   server: {
     // Loopback only: WIKI-FRAME-LOOSEN-1 allows exactly http://127.0.0.1:5195 as a frame origin.
     host: '127.0.0.1',
+    ...(wikiComponents ? { fs: { allow: [searchForWorkspaceRoot(process.cwd()), wikiComponents] } } : {}),
     port: Number(process.env.VITE_PORT) || 5195, // the supervisor and cockpit.sh already honour VITE_PORT
     strictPort: true,
     // Don't watch dependency, build, runtime-state or docs trees: watching them made vite the box's top fs-event producer.
