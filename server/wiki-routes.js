@@ -11,6 +11,7 @@
  *   POST /api/wiki/query/feature_hub   -> POST /query/feature_hub  {workspace, featureId}
  *   POST /api/wiki/query/decisions     -> POST /query/decisions    {workspace, featureId}
  *   POST /api/wiki/query/decisions_page -> POST /query/decisions   {workspace, cursor?, size?} (all decisions, paged)
+ *   POST /api/wiki/query/sources_page   -> POST /query/sources     {workspace, cursor?, size?} (all sources, paged)
  *   POST /api/wiki/query/search        -> POST /query/search       {workspace, q}
  *   anything else under /api/wiki      -> 404 not_proxied (`/commands` included), no upstream call
  *
@@ -48,6 +49,7 @@ export const WIKI_QUERIES = {
 export const CURSOR_MAX = 512;
 export const WIKI_PAGED_QUERIES = {
   decisions_page: { query: 'decisions', maxSize: 50 },
+  sources_page: { query: 'sources', maxSize: 50 },
 };
 
 /** The upstream `page` for a paged call, or `{error}` naming what is wrong. */
