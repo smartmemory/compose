@@ -446,22 +446,30 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
             <BranchComparePanelMount featureCode={item.lifecycle.featureCode} lineage={item.lifecycle.lifecycle_ext?.branch_lineage} />
           )}
 
-          {/* Status + Confidence row */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <select
-              className="text-xs px-2 py-1 rounded-md bg-muted text-foreground border border-border cursor-pointer"
-              value={item.status || 'planned'}
-              onChange={(e) => onUpdate(item.id, { status: e.target.value })}
-            >
-              {STATUSES.map(s => (
-                <option key={s} value={s}>{s.replace('_', ' ')}</option>
-              ))}
-            </select>
+          {/* Status + Confidence row (COMP-AUDIT-18: labelled so the three models read apart) */}
+          <div className="flex items-end gap-3 flex-wrap">
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1" data-testid="status-label">Board status (cockpit only)</p>
+              <select
+                className="text-xs px-2 py-1 rounded-md bg-muted text-foreground border border-border cursor-pointer"
+                value={item.status || 'planned'}
+                onChange={(e) => onUpdate(item.id, { status: e.target.value })}
+                title="Board status: changes the cockpit card only, not feature.json or compose build"
+                aria-label="Board status (cockpit only)"
+              >
+                {STATUSES.map(s => (
+                  <option key={s} value={s}>{s.replace('_', ' ')}</option>
+                ))}
+              </select>
+            </div>
 
-            <ConfidenceControl
-              level={item.confidence || 0}
-              onChange={(c) => onUpdate(item.id, { confidence: c })}
-            />
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1" data-testid="confidence-label">Your confidence</p>
+              <ConfidenceControl
+                level={item.confidence || 0}
+                onChange={(c) => onUpdate(item.id, { confidence: c })}
+              />
+            </div>
           </div>
 
           {/* COMP-UI-5: ConfidenceBar — read-only visual display (4-bar with color + label) */}
@@ -470,19 +478,26 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
           {/* PARITY-5: recorded-completion vs status divergence badge */}
           <CompletionBadge featureCode={item.lifecycle?.featureCode} status={item.status} />
 
-          {/* Phase selector */}
+          {/* Phase: read-only when `compose build` owns it (lifecycle.currentPhase), else the legacy selector */}
           <div>
             <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Phase</p>
-            <select
-              className="text-xs px-2 py-1 rounded-md bg-muted text-foreground border border-border cursor-pointer w-full"
-              value={item.phase || ''}
-              onChange={(e) => onUpdate(item.id, { phase: e.target.value || null })}
-            >
-              <option value="">No phase</option>
-              {PHASES.map(p => (
-                <option key={p} value={p}>{PHASE_LABELS[p]}</option>
-              ))}
-            </select>
+            {item.lifecycle?.currentPhase ? (
+              <p className="text-xs text-foreground" data-testid="phase-readonly">
+                {LIFECYCLE_PHASE_LABELS[item.lifecycle.currentPhase] ?? item.lifecycle.currentPhase}
+                <span className="ml-2 text-[10px] text-muted-foreground">set by compose build</span>
+              </p>
+            ) : (
+              <select
+                className="text-xs px-2 py-1 rounded-md bg-muted text-foreground border border-border cursor-pointer w-full"
+                value={item.phase || ''}
+                onChange={(e) => onUpdate(item.id, { phase: e.target.value || null })}
+              >
+                <option value="">No phase</option>
+                {PHASES.map(p => (
+                  <option key={p} value={p}>{PHASE_LABELS[p]}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Group — free-text, persists to feature.json on save */}

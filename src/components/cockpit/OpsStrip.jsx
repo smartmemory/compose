@@ -12,10 +12,10 @@ import { fleetPills } from './fleetLogic.js';
  * OpsStrip — Persistent 36px bar surfacing active builds, pending gates, and recent errors.
  *
  * Sits between the main workspace and any future agent bar.
- * Hidden when activeView === 'docs'. Self-contained: calls useVisionStore internally.
+ * Hidden when activeView === 'docs'. The "All ▸" link at its right end opens Home (COMP-AUDIT-18). Self-contained: calls useVisionStore internally.
  */
 
-export default function OpsStrip({ activeView, onSelectFeature, onOpenFleet }) {
+export default function OpsStrip({ activeView, onSelectFeature, onOpenFleet, onOpenHome }) {
   const { activeBuild, gates, items, recentErrors, resolveGate, iterationStates } = useVisionStore(
     useShallow(s => ({ activeBuild: s.activeBuild, gates: s.gates, items: s.items, recentErrors: s.recentErrors, resolveGate: s.resolveGate, iterationStates: s.iterationStates }))
   );
@@ -231,6 +231,18 @@ export default function OpsStrip({ activeView, onSelectFeature, onOpenFleet }) {
         >
           {budgetPill}
         </span>
+      )}
+      {/* COMP-AUDIT-18: the strip's entries select a feature; this link opens Home. */}
+      {onOpenHome && (
+        <button
+          type="button"
+          onClick={onOpenHome}
+          className={`${budgetPill ? '' : 'ml-auto '}shrink-0 text-[10px] text-muted-foreground hover:text-foreground transition-colors`}
+          title="Open Home: everything that needs you, in one place"
+          data-testid="ops-strip-all"
+        >
+          All ▸
+        </button>
       )}
     </div>
   );

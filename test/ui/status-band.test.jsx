@@ -129,8 +129,10 @@ describe('<StatusBand>', () => {
     expect(cta).toBeFalsy();
   });
 
-  it('renders "Select a feature to see status." when no featureCode', () => {
-    render(<StatusBand featureCode={null} snapshot={null} />);
-    expect(screen.getByText('Select a feature to see status.')).toBeTruthy();
+  // COMP-AUDIT-18: the old "Select a feature to see status." sentence is retired; the band is absent without a feature.
+  it('renders nothing when there is no featureCode', () => {
+    const { container } = render(<StatusBand featureCode={null} snapshot={null} />);
+    expect(container.querySelector('[data-status-band]')).toBeNull();
+    expect(screen.queryByText('Select a feature to see status.')).toBeNull();
   });
 });

@@ -9,6 +9,7 @@ import { wsFetch } from '../../lib/wsFetch.js';
 import { notify } from '../cockpit/NotificationBar.jsx';
 import { withComposeToken } from '../../lib/compose-api.js';
 import { useConfirmWithReason } from '../ui/DialogProvider.jsx';
+import { graphInitialViewport, largestGroupCentre } from './graphInitialViewport.js';
 
 try { cytoscape.use(cytoscapeDagre); } catch (e) { /* already registered */ }
 try { cytoscape.use(cytoscapeFcose); } catch (e) { /* already registered */ }
@@ -793,12 +794,14 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
     cy.one('layoutstop', () => {
       if (savedPositionsLoadedRef.current) applySavedAndCapture(cy);
       cy.fit(undefined, 30);
+      applyReadableViewport(cy);
     });
 
     // Fit synchronously after layout (no animation) — fcose with animate:false
     // may emit layoutstop synchronously during init; this fit is the fallback
     // for engines that don't.
     cy.fit(undefined, 30);
+    applyReadableViewport(cy);
 
     // Persist user-dragged positions (leaf nodes only).
     cy.on('dragfree', 'node[status]', (evt) => {
@@ -997,7 +1000,42 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
     return () => { cy.removeListener('render pan zoom', updateBadgePositions); };
   }, [updateBadgePositions]);
 
+  // COMP-AUDIT-18: open at a readable zoom, once per mount. cytoscape is rebuilt on
+  // every `elements` change, so a ref guard keeps later rebuilds on today's
+  // fit-everything behaviour. An empty graph does not use the guard up.
+  // The initial layout may report twice on one cytoscape instance (layoutstop and the sync
+  // fit); both re-apply, so the later fit never undoes the readable zoom. A later instance does not.
+  const readableAppliedRef = useRef(false);
+  const readableCyRef = useRef(null);
+  const featureCodeRef = useRef(featureCode);
+  featureCodeRef.current = featureCode;
+  const applyReadableViewport = useCallback((cy) => {
+    if (readableAppliedRef.current && readableCyRef.current !== cy) return;
+    const leaves = cy.nodes('[status]').filter(n => !n.data('isAgentNode') && !n.data('isIdeaNode'));
+    if (leaves.length === 0) return;
+    readableAppliedRef.current = true;
+    readableCyRef.current = cy;
+    const posOf = (n) => (n && n.length ? n.position() : null);
+    const code = featureCodeRef.current;
+    const focusedNode = code ? leaves.filter(n => n.data('featureCode') === code)[0] : null;
+    const inProgressNode = leaves.filter(n => n.data('status') === 'in_progress' && n.data('itemType') === 'feature')[0];
+    const { zoom, centre } = graphInitialViewport({
+      fittedZoom: cy.zoom(),
+      candidates: {
+        focused: posOf(focusedNode),
+        inProgress: posOf(inProgressNode),
+        largestGroup: largestGroupCentre(leaves.map(n => ({ group: n.data('group'), ...n.position() }))),
+      },
+    });
+    if (zoom === cy.zoom() && !centre) return;
+    const target = centre || cy.elements().boundingBox();
+    const cx = centre ? centre.x : (target.x1 + target.x2) / 2;
+    const cyy = centre ? centre.y : (target.y1 + target.y2) / 2;
+    cy.viewport({ zoom, pan: { x: cy.width() / 2 - cx * zoom, y: cy.height() / 2 - cyy * zoom } });
+  }, []);
+
   // ─── Actions ────────────────────────────────────────────────────────────
+
 
   const handleFit = useCallback(() => cyRef.current?.fit(undefined, 40), []);
   const handleZoomIn = useCallback(() => {

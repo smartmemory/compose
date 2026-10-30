@@ -75,7 +75,8 @@ describe('defaults', () => {
     const store = makeStore();
     const settings = store.get();
     assert.equal(settings.ui.theme, 'system');
-    assert.equal(settings.ui.defaultView, 'graph');
+    // COMP-AUDIT-18: a fresh install lands on Home, not the Graph.
+    assert.equal(settings.ui.defaultView, 'dashboard');
   });
 });
 
@@ -108,9 +109,28 @@ describe('update', () => {
 
   test('update ui persists', () => {
     const store = makeStore();
-    const result = store.update({ ui: { theme: 'dark', defaultView: 'gates' } });
+    const result = store.update({ ui: { theme: 'dark', defaultView: 'usage' } });
     assert.equal(result.ui.theme, 'dark');
-    assert.equal(result.ui.defaultView, 'gates');
+    assert.equal(result.ui.defaultView, 'usage');
+  });
+
+  // COMP-AUDIT-17: defaultView accepts any key of the shared VIEW_KEYS list (`gates` is now a plain key).
+  test('defaultView validity follows VIEW_KEYS (one row table)', () => {
+    const rows = [
+      { value: 'dashboard', ok: true },
+      { value: 'graph', ok: true },
+      { value: 'gates', ok: true },
+      { value: 'wiki', ok: true },
+      { value: 'build-history', ok: true },
+      { value: 'roadmap', ok: false },
+      { value: 'nonexistent', ok: false },
+      { value: 'Dashboard', ok: false },
+    ];
+    for (const { value, ok } of rows) {
+      const store = makeStore();
+      if (ok) assert.equal(store.update({ ui: { defaultView: value } }).ui.defaultView, value, value);
+      else assert.throws(() => store.update({ ui: { defaultView: value } }), /Invalid defaultView/, value);
+    }
   });
 
   test('update with invalid policy mode throws', () => {

@@ -102,6 +102,7 @@ export default function BuildAllGsdControl() {
       >
         {/* Stacked-bars glyph — "build everything" */}
         <span aria-hidden="true" className="text-[13px] leading-none">≣</span>
+        <span className="ml-1 text-[11px]">Batch build</span>
       </button>
 
       {open && (

@@ -1,6 +1,7 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { LIFECYCLE_PHASE_LABELS } from './constants.js';
 import { useConfirm } from '@/components/ui/DialogProvider.jsx';
+import { VIEW_KEYS, VIEW_LABELS, DEFAULT_VIEW } from '../../../lib/view-keys.js';
 
 const POLICY_PHASES = [
   'explore_design', 'prd', 'architecture', 'blueprint', 'verification',
@@ -8,7 +9,6 @@ const POLICY_PHASES = [
 ];
 const POLICY_MODES = ['gate', 'flag', 'skip'];
 const THEMES = ['light', 'dark', 'system'];
-const VIEWS = ['graph', 'tree', 'pipeline', 'gates', 'docs', 'design', 'sessions', 'settings'];
 
 function Section({ title, children }) {
   return (
@@ -42,7 +42,9 @@ function ModelInput({ value: propValue, className, onCommit }) {
   );
 }
 
-export default function SettingsPanel({ settings, onSettingsChange, onReset }) {
+// `views`: the view keys reachable by clicks (App computes it with reachableViews); VIEW_KEYS when omitted.
+export default function SettingsPanel({ settings, onSettingsChange, onReset, views }) {
+  const viewOptions = views || VIEW_KEYS;
   const confirm = useConfirm(); // COMP-COCKPIT-1: in-app confirm (was window.confirm)
   if (!settings) {
     return <div className="p-6 text-sm text-muted-foreground">Loading settings...</div>;
@@ -162,10 +164,10 @@ export default function SettingsPanel({ settings, onSettingsChange, onReset }) {
         <FieldRow label="Default view">
           <select
             className={selectClass}
-            value={VIEWS.includes(settings.ui?.defaultView) ? settings.ui.defaultView : 'graph'}
+            value={viewOptions.includes(settings.ui?.defaultView) ? settings.ui.defaultView : DEFAULT_VIEW}
             onChange={(e) => handleDefaultView(e.target.value)}
           >
-            {VIEWS.map(v => <option key={v} value={v}>{v}</option>)}
+            {viewOptions.map(v => <option key={v} value={v}>{VIEW_LABELS[v] || v}</option>)}
           </select>
         </FieldRow>
       </Section>

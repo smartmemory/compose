@@ -24,6 +24,7 @@ import GateNotificationBar from './shared/GateNotificationBar.jsx';
 import DecisionTimelineStrip from './DecisionTimelineStrip.jsx';
 import StatusBand from './StatusBand.jsx';
 import { wsFetch } from '../../lib/wsFetch.js';
+import { popoutView } from './popoutViews.js';
 
 export default function VisionTracker({ onContextSelect, sidebarOpen = true, onToggleSidebar }) {
   const {
@@ -46,7 +47,7 @@ export default function VisionTracker({ onContextSelect, sidebarOpen = true, onT
 
   const [selectedItemId, setSelectedItemId] = useState(() => sessionStorage.getItem('vision-selectedItemId') || null);
   const hadSessionView = useRef(!!sessionStorage.getItem('vision-activeView'));
-  const [activeView, setActiveView] = useState(() => sessionStorage.getItem('vision-activeView') || 'roadmap');
+  const [activeView, setActiveView] = useState(() => popoutView(sessionStorage.getItem('vision-activeView')));
   // selectedPhase is now global in useVisionStore — persisted there automatically
   const [searchQuery, setSearchQuery] = useState('');
   const [challengeItemId, setChallengeItemId] = useState(null);
@@ -66,7 +67,7 @@ export default function VisionTracker({ onContextSelect, sidebarOpen = true, onT
   const defaultViewApplied = useRef(false);
   useEffect(() => {
     if (settings?.ui?.defaultView && !defaultViewApplied.current && !hadSessionView.current) {
-      setActiveView(settings.ui.defaultView);
+      setActiveView(popoutView(settings.ui.defaultView));
       defaultViewApplied.current = true;
     }
   }, [settings]);
@@ -74,7 +75,7 @@ export default function VisionTracker({ onContextSelect, sidebarOpen = true, onT
   // UI commands from server
   useEffect(() => {
     if (!uiCommand) return;
-    if (uiCommand.view) setActiveView(uiCommand.view);
+    if (uiCommand.view) setActiveView(popoutView(uiCommand.view));
     if (uiCommand.phase !== undefined) setSelectedPhase(uiCommand.phase);
     if (uiCommand.select !== undefined) setSelectedItemId(uiCommand.select);
     clearUICommand();
@@ -265,9 +266,8 @@ export default function VisionTracker({ onContextSelect, sidebarOpen = true, onT
           <AttentionQueueSidebar
             items={items}
             gates={gates}
-            activeBuild={activeBuild}
             activeView={activeView}
-            onViewChange={setActiveView}
+            onViewChange={(v) => setActiveView(popoutView(v))}
             selectedPhase={selectedPhase}
             onPhaseSelect={setSelectedPhase}
             searchQuery={searchQuery}
@@ -277,8 +277,6 @@ export default function VisionTracker({ onContextSelect, sidebarOpen = true, onT
             agentErrors={agentErrors}
             sessionState={sessionState}
             onSelectItem={handleSelect}
-            onThemeChange={updateSettings}
-            onNewItem={() => setCreateOpen(true)}
           />
         )}
       </div>

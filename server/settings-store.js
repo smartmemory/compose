@@ -1,4 +1,5 @@
 import { getModelCatalog } from '../lib/model-catalog.js';
+import { VIEW_KEYS, DEFAULT_VIEW } from '../lib/view-keys.js';
 /**
  * Settings Store — JSON-file-backed storage for user preferences.
  * Loads from disk on startup, saves after every mutation.
@@ -9,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getDataDir as getDefaultDataDir } from './project-root.js';
 
-const VALID_VIEWS = ['graph', 'tree', 'pipeline', 'gates', 'docs', 'design', 'sessions', 'settings'];
+const VALID_VIEWS = VIEW_KEYS;
 const VALID_THEMES = ['light', 'dark', 'system'];
 const VALID_THINKING_MODES = ['adaptive', 'off'];
 const VALID_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -67,7 +68,7 @@ export class SettingsStore {
         agentRun: process.env.CLAUDE_MODEL || getModelCatalog().catalog.claude.default.model,
         summarizer: process.env.SUMMARIZER_MODEL || getModelCatalog().catalog.tiers.claude.fast.model,
       },
-      ui: { theme: 'system', defaultView: 'graph' },
+      ui: { theme: 'system', defaultView: DEFAULT_VIEW },
       // COMP-CAPS-ENFORCE: runtime capability enforcement policy
       capabilities: { enforcement: 'log' },
       // COMP-HEALTH: quantified quality score settings

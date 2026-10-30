@@ -9,14 +9,8 @@
  *   widthPx     {number}   panel width in pixels (computed by App.jsx)
  *   onResizePx  {fn}       called with new pixel width when user drags
  *   children    {node}     content to render inside the panel
- *   activeBuild {object}   active build state (for no-selection summary)
- *   gates       {array}    pending gates (for no-selection summary)
- *   agentErrors {array}    recent errors (for no-selection summary)
- *   items       {array}    all items (for no-selection summary)
  */
 import React, { useCallback, useRef } from 'react';
-import { gateLabel } from '../vision/constants.js';
-import EntityLink from '../shared/EntityLink.jsx';
 
 const MIN_WIDTH = 280;
 const MAX_WIDTH_FRACTION = 0.6;
@@ -27,10 +21,6 @@ export default function ContextPanel({
   widthPx = 380,
   onResizePx,
   children,
-  activeBuild,
-  gates = [],
-  agentErrors = [],
-  items = [],
 }) {
   const dragging = useRef(false);
 
@@ -55,8 +45,6 @@ export default function ContextPanel({
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   }, [onResizePx]);
-
-  const pendingGates = gates.filter(g => g.status === 'pending' || g.status === 'awaiting');
 
   return (
     <div
@@ -99,12 +87,7 @@ export default function ContextPanel({
               {children}
             </div>
           ) : (
-            <ProjectSummary
-              activeBuild={activeBuild}
-              pendingGates={pendingGates}
-              agentErrors={agentErrors}
-              items={items}
-            />
+            <EmptyHint />
           )}
         </div>
       )}
@@ -112,123 +95,12 @@ export default function ContextPanel({
   );
 }
 
-const PHASE_COLORS = {
-  implementation: '#3b82f6', // blue
-  vision:         '#a855f7', // purple
-  planning:       '#f59e0b', // amber
-  specification:  '#06b6d4', // cyan
-  verification:   '#22c55e', // green
-  design:         '#f43f5e', // rose
-};
-
-function phaseColor(phase) {
-  return PHASE_COLORS[phase] || '#6b7280'; // gray fallback
-}
-
-function ProjectSummary({ activeBuild, pendingGates, agentErrors, items }) {
-  const phaseDistribution = {};
-  for (const item of items) {
-    const phase = item.phase || 'unknown';
-    phaseDistribution[phase] = (phaseDistribution[phase] || 0) + 1;
-  }
-  const totalItems = items.length || 1;
-  const recentErrors = agentErrors.slice(-5);
-
+// COMP-AUDIT-18: with nothing selected the panel says so in one line. The
+// project-wide build and gate status lives in the ops strip and Home.
+function EmptyHint() {
   return (
-    <>
-      <div
-        className="h-7 flex items-center px-3 shrink-0"
-        style={{ borderBottom: '1px solid hsl(var(--border))' }}
-      >
-        <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
-          Project Overview
-        </span>
-      </div>
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-4">
-        {activeBuild ? (
-          <div>
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Active Build</p>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-accent font-mono">{activeBuild.featureCode || '—'}</span>
-              <span className="text-[10px] text-muted-foreground">·</span>
-              <span className="text-[10px] text-foreground">{activeBuild.currentStep || activeBuild.step || '—'}</span>
-            </div>
-          </div>
-        ) : (
-          <div>
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Build Status</p>
-            <p className="text-[10px] text-muted-foreground italic">No active build</p>
-          </div>
-        )}
-
-        <div>
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
-            Pending Gates ({pendingGates.length})
-          </p>
-          {pendingGates.length === 0 ? (
-            <p className="text-[10px] text-muted-foreground italic">None</p>
-          ) : (
-            <div className="space-y-0.5">
-              {pendingGates.slice(0, 5).map((g, i) => (
-                <p key={i} className="text-[10px] truncate">
-                  <EntityLink
-                    kind="gate"
-                    id={g.id}
-                    label={gateLabel(g, items.find(it => it.id === g.itemId))}
-                    className="text-[10px]"
-                  />
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
-            Recent Errors ({recentErrors.length})
-          </p>
-          {recentErrors.length === 0 ? (
-            <p className="text-[10px] text-muted-foreground italic">None</p>
-          ) : (
-            <div className="space-y-0.5">
-              {recentErrors.map((e, i) => (
-                <p key={i} className="text-[10px] text-destructive truncate">
-                  {e.message || e.error || 'Error'}
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
-            Phase Distribution
-          </p>
-          <div className="flex h-2 rounded overflow-hidden gap-px">
-            {Object.entries(phaseDistribution).map(([phase, count]) => (
-              <div
-                key={phase}
-                className="h-full"
-                style={{
-                  width: `${(count / totalItems) * 100}%`,
-                  background: phaseColor(phase),
-                  opacity: 0.75,
-                  minWidth: '2px',
-                }}
-                title={`${phase}: ${count}`}
-              />
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-            {Object.entries(phaseDistribution).map(([phase, count]) => (
-              <span key={phase} className="text-[9px] text-muted-foreground flex items-center gap-1">
-                <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: phaseColor(phase) }} />
-                {phase}: {count}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-    </>
+    <div className="flex-1 min-h-0 flex items-center justify-center p-4" data-testid="context-empty-hint">
+      <p className="text-[11px] text-muted-foreground italic text-center">Select an item to see it here</p>
+    </div>
   );
 }

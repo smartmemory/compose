@@ -2,7 +2,8 @@
  * StatusBand.jsx — COMP-OBS-STATUS region ① sticky band.
  *
  * B4: 32px sticky band (top: 0, z-index: 30) rendering the situational
- * status sentence for the currently-selected feature. Click toggles a
+ * status sentence for the feature bound to an agent session. Renders
+ * nothing when no feature is bound (COMP-AUDIT-18). Click toggles a
  * 200px detail panel below the band.
  *
  * v1 constraints:
@@ -17,8 +18,6 @@
 import React, { useState, useCallback } from 'react';
 import { formatExpansionPanel } from './statusBandLogic.js';
 
-const NO_FEATURE_SENTENCE = 'Select a feature to see status.';
-
 export default function StatusBand({ featureCode, snapshot }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -26,7 +25,10 @@ export default function StatusBand({ featureCode, snapshot }) {
     setExpanded(prev => !prev);
   }, []);
 
-  const sentence = snapshot?.sentence ?? NO_FEATURE_SENTENCE;
+  // COMP-AUDIT-18: no feature, no band (the 32px goes back to the view).
+  if (!featureCode) return null;
+
+  const sentence = snapshot?.sentence ?? `${featureCode}: loading status…`;
   const panelRows = formatExpansionPanel(snapshot);
 
   return (

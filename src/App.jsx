@@ -10,10 +10,12 @@ import CadenceView from './components/cockpit/CadenceView.jsx';
 import WikiView from './components/cockpit/WikiView.jsx';
 import OpsView from './components/cockpit/OpsView.jsx';
 import UsageView from './components/usage/UsageView.jsx';
-import useOpsStatusIndex from './components/cockpit/useOpsStatusIndex.js';
-import useStratumUiAvailable from './components/cockpit/useStratumUiAvailable.js';
-import useCadenceUiAvailable from './components/cockpit/useCadenceUiAvailable.js';
-import useWikiTab from './components/cockpit/useWikiTab.js';
+import { useOpsStatusIndexState } from './components/cockpit/useOpsStatusIndex.js';
+import { useStratumUiAvailability } from './components/cockpit/useStratumUiAvailable.js';
+import { useCadenceUiAvailability } from './components/cockpit/useCadenceUiAvailable.js';
+import { useWikiTabState } from './components/cockpit/useWikiTab.js';
+import NewMenu from './components/cockpit/NewMenu.jsx';
+import DisplayMenu from './components/cockpit/DisplayMenu.jsx';
 import ColleaguePanel from './components/colleague/ColleaguePanel.jsx';
 import useMayaStatus from './components/colleague/useMayaStatus.js';
 import { useIdeaboxStore } from './components/vision/useIdeaboxStore.js';
@@ -38,7 +40,6 @@ import {
 } from './components/cockpit/agentBarState.js';
 import {
   loadMainTabs,
-  HIDDEN_VIEWS,
   loadActiveTab,
   saveActiveTab,
 } from './components/cockpit/viewTabsState.js';
@@ -53,6 +54,7 @@ import {
 } from './components/cockpit/contextPanelState.js';
 
 // Vision surface — views, sidebar, modals, store
+import { reachableViews, resolveStoredView, resolveDefaultView } from '../lib/view-keys.js';
 import { NavigationContext } from './lib/navigation.jsx';
 import { VisionChangesContext } from './components/vision/VisionChangesContext.js';
 import { useVisionStore } from './components/vision/useVisionStore.js';
@@ -265,6 +267,10 @@ function CockpitView({
   sessionsPane, onSessionsPaneChange,
   // COMPOSE-WIKI-TAB-1: {workspace, frameBase} from useWikiTab
   wikiTab,
+  // COMP-AUDIT-18: Home
+  agentErrors, onStopAgent, untriagedIdeas, cadenceAvailable, onJumpToGate, onNavigate,
+  // COMP-AUDIT-17: view keys reachable by clicks (Settings default-view picker)
+  reachableViewKeys,
 }) {
   switch (activeView) {
     case 'dashboard':
@@ -272,6 +278,8 @@ function CockpitView({
         <DashboardView
           items={phaseFilteredItems}
           gates={phaseFilteredGates}
+          allItems={items}
+          allGates={gates}
           sessions={sessions}
           activeBuild={activeBuild}
           spawnedAgents={spawnedAgents}
@@ -279,9 +287,16 @@ function CockpitView({
           sessionState={sessionState}
           agentActivity={agentActivity}
           iterationStates={iterationStates}
+          buildHistory={buildHistory}
+          agentErrors={agentErrors}
+          untriagedIdeas={untriagedIdeas}
+          cadenceAvailable={cadenceAvailable}
           onSelect={onSelect}
           onResolveGate={onResolveGate}
           onOpenGate={onOpenGate}
+          onJumpToGate={onJumpToGate}
+          onStopAgent={onStopAgent}
+          onNavigate={onNavigate}
           onCreateFeature={onCreateFeature}
           isEmptyProject={isEmptyProject}
         />
@@ -412,6 +427,7 @@ function CockpitView({
           settings={settings}
           onSettingsChange={onUpdateSettings}
           onReset={onResetSettings}
+          views={reachableViewKeys}
         />
       );
     default:
@@ -443,10 +459,17 @@ function AppInner() {
 
   // Main-area tabs
   const [mainTabs] = useState(loadMainTabs);
-  const opsPages = useOpsStatusIndex();
-  const stratumUi = useStratumUiAvailable();
-  const cadenceUi = useCadenceUiAvailable();
-  const wikiTab = useWikiTab();
+  // COMP-AUDIT-17: availability is three-valued (unknown | yes | no). A view is
+  // dropped only on `no`; while a check is in flight the view shows its own
+  // loading or empty state.
+  const { availability: opsAvail } = useOpsStatusIndexState();
+  const stratumAvail = useStratumUiAvailability();
+  const cadenceAvail = useCadenceUiAvailability();
+  const wikiTab = useWikiTabState();
+  const availability = useMemo(
+    () => ({ ops: opsAvail, stratum: stratumAvail, cadence: cadenceAvail, wiki: wikiTab.availability }),
+    [opsAvail, stratumAvail, cadenceAvail, wikiTab.availability],
+  );
   const [activeTab, setActiveTabRaw] = useState(() => loadActiveTab(mainTabs));
 
   // Agent bar
@@ -521,12 +544,15 @@ function AppInner() {
   const [selectedItemId, setSelectedItemId] = useState(null);
   const hadSessionView = useRef(!!localStorage.getItem('compose:activeView'));
   const [activeView, setActiveView] = useState(() => {
-    // COMPOSE-UX-SIMPLIFY-2: a view persisted from an older build that is now
-    // hidden (no tab) falls back to the dashboard on load.
-    const saved = localStorage.getItem('compose:activeView');
-    return saved && !HIDDEN_VIEWS.includes(saved) && saved !== 'stratum' && saved !== 'cadence' && saved !== 'wiki' ? saved : 'dashboard';
+    // COMP-AUDIT-17: on load only what is known on load. Any valid view key is
+    // kept; a package-gated key is re-checked once its availability settles
+    // (the effect below). Fresh storage or an invalid key lands on Home.
+    const { view, fellBackFrom } = resolveStoredView(localStorage.getItem('compose:activeView'), {});
+    if (fellBackFrom) console.warn(`[compose] stored view "${fellBackFrom}" is not a view; showing Home`);
+    return view;
   });
   const [searchQuery, setSearchQuery] = useState('');
+  const untriagedIdeas = useIdeaboxStore(s => s.ideas.filter(i => !i.priority || i.priority === '—').length);
 
   const handleContextResizePx = useCallback((px) => {
     setContextWidthPx(px);
@@ -684,10 +710,24 @@ function AppInner() {
   useEffect(() => {
     if (defaultViewApplied.current || hadSessionView.current) return;
     if (settings?.ui?.defaultView) {
-      handleViewChange(settings.ui.defaultView);
+      // COMP-AUDIT-17: applied only if reachable by clicks in the visible tabs and not known-absent; else Home.
+      const { view, fellBackFrom } = resolveDefaultView(settings.ui.defaultView, mainTabs, availability);
+      if (fellBackFrom) console.warn(`[compose] default view "${fellBackFrom}" is not reachable; showing Home`);
+      handleViewChange(view);
       defaultViewApplied.current = true;
     }
   }, [settings]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── COMP-AUDIT-17: re-check a package-gated view once its availability settles ──
+  // Never "View not found": a key whose check came back `no` (or that is not a
+  // view key at all) falls back to Home with one WARNING naming it.
+  useEffect(() => {
+    const { view, fellBackFrom } = resolveStoredView(activeView, availability);
+    if (fellBackFrom && view !== activeView) {
+      console.warn(`[compose] view "${fellBackFrom}" is not available; showing Home`);
+      handleViewChange(view);
+    }
+  }, [activeView, availability, handleViewChange]);
 
   // ── UI commands from server ─────────────────────────────────────────────
   useEffect(() => {
@@ -911,9 +951,10 @@ function AppInner() {
     }
   }, [activeView]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── COMP-COCKPIT-3: refresh past-builds history when the view opens ──────
+  // ── COMP-COCKPIT-3: refresh past-builds history when the view opens (and on Home) ──────
   useEffect(() => {
-    if (activeView === 'build-history') {
+    // COMP-AUDIT-18: Home shows "Recent builds" too.
+    if (activeView === 'build-history' || activeView === 'dashboard') {
       fetchBuildHistory();
     }
   }, [activeView, fetchBuildHistory]);
@@ -1157,11 +1198,10 @@ function AppInner() {
           {/* View tabs — centred in the header */}
           <div className="flex-1 min-w-0 h-full flex items-center">
             <ViewTabs
-              tabs={mainTabs.filter(t => (t !== 'ops' || opsPages.length) && (t !== 'stratum' || stratumUi) && (t !== 'cadence' || cadenceUi) && (t !== 'wiki' || wikiTab.available))}
+              tabs={mainTabs.filter(t => availability[t] === undefined || availability[t] === 'yes' || (availability[t] === 'unknown' && t === activeView))}
               activeTab={activeTab}
               onTabChange={setActiveTab}
               onOpenPalette={() => setPaletteOpen(v => !v)}
-              badges={{ gates: gates.filter(g => g.status === 'pending').length }}
               colleague={{
                 installed: mayaStatus?.enabled === true,
                 open: colleagueOpen,
@@ -1182,6 +1222,9 @@ function AppInner() {
             {/* Environment health (COMP-PARITY-3) — passive drift signal */}
             <EnvironmentHealthPanel />
 
+            {/* COMP-AUDIT-17: labelled clusters. Run: both buttons spawn agents. */}
+            <span className="text-[9px] uppercase tracking-wider text-muted-foreground" data-testid="header-run-label">Run</span>
+
             {/* Build-all / GSD launchers (PARITY-8) */}
             <BuildAllGsdControl />
 
@@ -1195,73 +1238,28 @@ function AppInner() {
                 aria-expanded={launchOpen}
                 data-testid="launch-popover-toggle"
               >
-                {'\u{1F680}'}
+                {'\u{1F680}'}<span className="ml-1 text-[11px]">Launch</span>
               </button>
               {launchOpen && (
                 <LaunchPopover activeBuild={activeBuild} onClose={() => setLaunchOpen(false)} />
               )}
             </div>
 
-            {/* New feature scaffold (PARITY-9) */}
-            <button
-              className="compose-btn-icon"
-              onClick={() => setNewFeatureOpen(true)}
-              title="New feature"
-              aria-label="New feature"
-              data-testid="new-feature-toggle"
-            >
-              {'➕'}
-            </button>
+            {/* New: feature scaffold (PARITY-9) or a board item */}
+            <NewMenu onNewFeature={() => setNewFeatureOpen(true)} onNewItem={() => setCreateOpen(true)} />
 
-            {/* Pair mobile device */}
-            <button
-              className="compose-btn-icon"
-              onClick={() => setPairDeviceOpen(true)}
-              title="Pair mobile device"
-              aria-label="Pair mobile device"
-            >
-              {'\u{1F4F1}'}
-            </button>
-
-            {/* Theme toggle */}
-            <button
-              className="compose-btn-icon"
-              onClick={toggleTheme}
-              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {isDark ? '\u2600' : '\u263E'}
-            </button>
-
-            {/* Font size controls */}
-            <div className="flex items-center gap-1">
-              <button
-                className="compose-btn-icon"
-                onClick={() => changeFontSize(-1)}
-                disabled={fontSize <= MIN_FONT_SIZE}
-                title="Decrease font size"
-              >
-                A&#x2212;
-              </button>
-              <span className="text-[10px] tabular-nums min-w-[20px] text-center text-muted-foreground">
-                {fontSize}
-              </span>
-              <button
-                className="compose-btn-icon"
-                onClick={() => changeFontSize(1)}
-                disabled={fontSize >= MAX_FONT_SIZE}
-                title="Increase font size"
-              >
-                A+
-              </button>
-            </div>
-            <button
-              className="compose-btn-icon"
-              onClick={resetFontSize}
-              disabled={fontSize === DEFAULT_FONT_SIZE}
-              title="Reset to default size"
-            >
-              100%
-            </button>
+            {/* Display: theme, font size, pair phone */}
+            <DisplayMenu
+              isDark={isDark}
+              onToggleTheme={toggleTheme}
+              fontSize={fontSize}
+              minFontSize={MIN_FONT_SIZE}
+              maxFontSize={MAX_FONT_SIZE}
+              defaultFontSize={DEFAULT_FONT_SIZE}
+              onChangeFont={changeFontSize}
+              onResetFont={resetFontSize}
+              onPairDevice={() => setPairDeviceOpen(true)}
+            />
           </div>
         </header>
         </PanelErrorBoundary>
@@ -1305,7 +1303,6 @@ function AppInner() {
                     : <AttentionQueueSidebar
                         items={items}
                         gates={gates}
-                        activeBuild={activeBuild}
                         onViewChange={handleViewChange}
                         selectedPhase={selectedPhase}
                         onPhaseSelect={setSelectedPhase}
@@ -1339,8 +1336,6 @@ function AppInner() {
                         sessionState={sessionState}
                         onSelectItem={handleSelect}
                         onStopAgent={handleStopAgent}
-                        onThemeChange={updateSettings}
-                        onNewItem={() => setCreateOpen(true)}
                         widthPx={sidebarWidthPx}
                       />
                 )}
@@ -1412,6 +1407,13 @@ function AppInner() {
                       focusedGateId={focusedGateId}
                       wikiTab={wikiTab}
                       onFocusHandled={handleGateFocusHandled}
+                      agentErrors={agentErrors}
+                      onStopAgent={handleStopAgent}
+                      untriagedIdeas={untriagedIdeas}
+                      cadenceAvailable={cadenceAvail === 'yes'}
+                      onJumpToGate={openGate}
+                      onNavigate={handleViewChange}
+                      reachableViewKeys={reachableViews(mainTabs, availability)}
                     />
                   </PanelErrorBoundary>
                 </div>
@@ -1425,10 +1427,6 @@ function AppInner() {
                     onToggle={toggleContext}
                     widthPx={contextWidthPx}
                     onResizePx={handleContextResizePx}
-                    activeBuild={activeBuild}
-                    gates={gates}
-                    agentErrors={agentErrors}
-                    items={items}
                   >
                     {contextSelection?.type === 'item' && (
                       <ContextItemDetail
@@ -1473,7 +1471,7 @@ function AppInner() {
           {/* OPS STRIP (COMP-UX-1d)                                           */}
           {/* ============================================================== */}
           <PanelErrorBoundary zone="ops strip">
-          <OpsStrip activeView={activeView} onSelectFeature={handleOpsSelectFeature} onOpenFleet={handleOpenFleet} />
+          <OpsStrip activeView={activeView} onSelectFeature={handleOpsSelectFeature} onOpenFleet={handleOpenFleet} onOpenHome={() => handleViewChange('dashboard')} />
           </PanelErrorBoundary>
 
           {/* ============================================================== */}

@@ -9,9 +9,10 @@ import ArtifactDiff from '../shared/ArtifactDiff.jsx';
 import AgentCard from '../shared/AgentCard.jsx';
 import EntityLink from '../shared/EntityLink.jsx';
 import EventTimeline from './EventTimeline.jsx';
+import PhaseTimeline, { PHASES } from './PhaseTimeline.jsx';
+import HomeSections from './HomeSections.jsx';
+import { deriveHomeSections } from './homeSectionsState.js';
 import { useConfirmWithReason } from '@/components/ui/DialogProvider.jsx';
-
-const PHASES = ['explore_design', 'prd', 'architecture', 'blueprint', 'plan', 'execute', 'report'];
 
 function relativeTime(isoString) {
   if (!isoString) return '';
@@ -23,50 +24,6 @@ function relativeTime(isoString) {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
-}
-
-function PhaseTimeline({ currentPhase }) {
-  const currentIdx = PHASES.indexOf(currentPhase);
-  return (
-    <div className="space-y-1.5">
-      {PHASES.map((phase, idx) => {
-        const done = currentIdx > idx;
-        const active = currentIdx === idx;
-        const label = LIFECYCLE_PHASE_LABELS[phase] ?? phase;
-        return (
-          <div
-            key={phase}
-            className="flex items-center gap-2"
-            style={{
-              animation: `phase-slide-in 300ms ease-out ${idx * 50}ms both`,
-            }}
-          >
-            {done ? (
-              <CheckCircle2
-                className="w-3.5 h-3.5 text-emerald-400 shrink-0"
-                style={{ animation: 'phase-check-pop 400ms ease-out' }}
-              />
-            ) : active ? (
-              <ArrowRight
-                className="w-3.5 h-3.5 text-blue-400 shrink-0"
-                style={{ animation: 'phase-active-pulse 2s ease-in-out infinite' }}
-              />
-            ) : (
-              <Circle className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
-            )}
-            <span className={cn(
-              'text-[11px] transition-colors duration-500',
-              done && 'text-emerald-400',
-              active && 'text-blue-400 font-medium',
-              !done && !active && 'text-muted-foreground/50',
-            )}>
-              {label}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 function ActiveAgents({ spawnedAgents, activeBuild, sessionState, agentActivity }) {
@@ -279,7 +236,23 @@ export default function DashboardView({
   onOpenGate,
   onCreateFeature,
   isEmptyProject,
+  // Home (COMP-AUDIT-18): unfiltered data, so a phase filter never hides a gate
+  allItems,
+  allGates,
+  agentErrors = [],
+  buildHistory = [],
+  untriagedIdeas = 0,
+  cadenceAvailable = false,
+  onJumpToGate,
+  onStopAgent,
+  onNavigate,
 }) {
+  const homeItems = allItems ?? items;
+  const homeGates = allGates ?? gates;
+  const sections = useMemo(
+    () => deriveHomeSections({ items: homeItems, gates: homeGates, agentErrors, activeBuild, spawnedAgents, buildHistory }),
+    [homeItems, homeGates, agentErrors, activeBuild, spawnedAgents, buildHistory],
+  );
   const featureItem = useMemo(
     () => items.find(i => i.featureCode === featureCode || i.lifecycle?.featureCode === featureCode),
     [items, featureCode],
@@ -312,18 +285,13 @@ export default function DashboardView({
     return pg;
   }, [gates, items, featureCode]);
 
-  // Empty state: no feature in progress
-  if (!featureCode) {
-    const completedFeatures = items
-      .filter(i => i.type === 'feature' && (i.status === 'complete' || i.status === 'done'))
-      .slice(-5);
+  // Empty project: the create-feature CTA only (COMP-COCKPIT-5).
+  if (!featureCode && isEmptyProject) {
     return (
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto p-4" data-testid="home">
         <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
-          <p className="text-sm text-muted-foreground">
-            {isEmptyProject ? 'No items yet.' : 'No feature in progress.'}
-          </p>
-          {isEmptyProject && onCreateFeature && (
+          <p className="text-sm text-muted-foreground">No items yet.</p>
+          {onCreateFeature && (
             <Button variant="outline" size="sm" onClick={onCreateFeature}>
               Create your first feature
             </Button>
@@ -331,39 +299,15 @@ export default function DashboardView({
           <p className="text-[11px] text-muted-foreground/70 font-mono">
             Run /compose build &lt;feature-code&gt; in the terminal to start.
           </p>
-          {completedFeatures.length > 0 && (
-            <div className="mt-6 w-full max-w-sm">
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                Recently completed
-              </span>
-              <div className="mt-2 space-y-1">
-                {completedFeatures.map(f => (
-                  <div
-                    key={f.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/50 cursor-pointer transition-colors"
-                    onClick={() => onSelect(f.id)}
-                  >
-                    <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
-                    <span className="text-[11px] text-foreground truncate">{f.title}</span>
-                    {f.featureCode && (
-                      <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-mono ml-auto shrink-0">
-                        {f.featureCode}
-                      </Badge>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="flex-1 flex flex-row overflow-hidden">
+  const featureBody = (
+    <div className="flex flex-row" data-testid="home-feature">
       {/* Main dashboard content */}
-      <div className="flex-1 overflow-auto p-4 space-y-4 min-w-0">
+      <div className="flex-1 p-1 space-y-4 min-w-0">
       {/* A. Feature Header */}
       <div>
         <div className="flex items-center gap-2">
@@ -510,6 +454,49 @@ export default function DashboardView({
             onSelectItem={onSelect}
           />
         </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="flex-1 overflow-auto p-4 space-y-5" data-testid="home">
+      {featureCode ? (
+        <section aria-label="Focused feature" className="pb-4 border-b border-border">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2" data-testid="home-feature-source">
+            Agent session: {featureCode}
+          </p>
+          {featureBody}
+        </section>
+      ) : (
+        sections.inProgress.length === 0 && (
+          <div className="py-2">
+            <p className="text-sm text-muted-foreground">No feature in progress.</p>
+            <p className="text-[11px] text-muted-foreground/70 font-mono mt-1">
+              Run /compose build &lt;feature-code&gt; in the terminal to start.
+            </p>
+          </div>
+        )
+      )}
+
+      <HomeSections
+        sections={sections}
+        untriagedIdeas={untriagedIdeas}
+        cadenceAvailable={cadenceAvailable}
+        onSelect={onSelect}
+        onJumpToGate={onJumpToGate || onOpenGate}
+        onStopAgent={onStopAgent}
+        onNavigate={onNavigate}
+      />
+
+      {!featureCode && (
+        <section data-testid="home-sessions">
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+            Recent Sessions
+          </span>
+          <div className="mt-2">
+            <RecentSessions sessions={sessions} items={homeItems} onSelect={onSelect} />
+          </div>
+        </section>
       )}
     </div>
   );

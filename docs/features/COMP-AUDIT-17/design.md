@@ -1,6 +1,6 @@
 # COMP-AUDIT-17 + COMP-AUDIT-18: cockpit navigation and landing page (design)
 
-**Status:** DESIGN, fix round 1 of 2 (2026-10-30, Opus `hard:`), read-only of compose `8a870e32`. Round 1
+**Status:** SLICE 1 BUILT 2026-10-30 (home page, readable map, labelled header; report `smart-memory-ops/units/COMP-AUDIT-17-18/report-slice1.md`). Slice 2 (rooms, focus) not started. Design history: DESIGN, fix round 1 of 2 (2026-10-30, Opus `hard:`), read-only of compose `8a870e32`. Round 1
 (`c6f530e3`, read of `b6031a44`) went to an Opus design review
 (`smart-memory-ops/units/COMP-AUDIT-17-18/review-r1.md`, NOT CLEAN H1 M6 L10). This round corrects the
 "feature-scoped views" premise (H1), so the shape comparison and the recommendation in §2 and §7 changed:

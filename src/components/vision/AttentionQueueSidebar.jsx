@@ -15,8 +15,8 @@
 
 import React from 'react';
 import {
-  Search, CircleDot, Sun, Moon, Bell,
-  Zap, AlertTriangle, Shield, Plus, Lightbulb,
+  Search, CircleDot, Bell,
+  AlertTriangle, Shield, Lightbulb,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Input } from '@/components/ui/input.jsx';
@@ -24,7 +24,7 @@ import { ScrollArea } from '@/components/ui/scroll-area.jsx';
 import { Separator } from '@/components/ui/separator.jsx';
 import { PHASE_LABELS, PHASES } from './constants.js';
 import AgentPanel from './AgentPanel.jsx';
-import { computeAttentionQueue, buildProgress, compactStats, togglePhase, ATTENTION_PRIORITY } from './attentionQueueState.js';
+import { computeAttentionQueue, compactStats, togglePhase, ATTENTION_PRIORITY } from './attentionQueueState.js';
 import StatusBadge from './shared/StatusBadge.jsx';
 import PhaseTag from './shared/PhaseTag.jsx';
 import { useIdeaboxStore } from './useIdeaboxStore.js';
@@ -32,63 +32,6 @@ import { useIdeaboxStore } from './useIdeaboxStore.js';
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-/**
- * BuildStatusWidget — shows active build step + progress bar.
- * Hidden when no build is running.
- */
-function BuildStatusWidget({ activeBuild }) {
-  const bp = buildProgress(activeBuild);
-  if (!activeBuild) return null;
-
-  const barColor = bp.isRunning
-    ? 'hsl(var(--primary))'
-    : bp.status === 'complete'
-      ? 'hsl(var(--success))'
-      : bp.status === 'failed' || bp.status === 'killed'
-        ? 'hsl(var(--destructive))'
-        : 'hsl(var(--muted-foreground))';
-
-  return (
-    <div className="mx-3 mb-2 rounded-md p-2" style={{ background: 'hsl(var(--accent))' }}>
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-1.5">
-          <Zap
-            className="h-3 w-3 shrink-0"
-            style={{ color: barColor }}
-          />
-          <span className="text-[10px] font-medium truncate max-w-[100px]" style={{ color: 'hsl(var(--foreground))' }}>
-            {bp.featureCode || 'Build'}
-          </span>
-        </div>
-        <span className="text-[10px] tabular-nums" style={{ color: 'hsl(var(--muted-foreground))' }}>
-          {bp.stepNum}/{bp.totalSteps}
-        </span>
-      </div>
-      {/* Progress bar */}
-      <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${bp.pct}%`, background: barColor }}
-        />
-      </div>
-      <div className="flex items-center justify-between mt-1">
-        <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
-          {bp.stepLabel}
-        </span>
-        {bp.isRunning && (
-          <span
-            className="w-1.5 h-1.5 rounded-full shrink-0"
-            style={{
-              background: 'hsl(var(--primary))',
-              animation: 'pulse 1.5s ease-in-out infinite',
-            }}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
 
 /**
  * AttentionQueueSection — inline queue of blocked + pending-gate + decision items.
@@ -220,10 +163,14 @@ function GroupFilter({ items, hiddenGroups, onToggleGroup }) {
             }}
           >
             <span className="truncate flex-1 text-left">{group}</span>
-            {active > 0 && (
-              <span className="text-[10px] tabular-nums" style={{ color: 'hsl(var(--primary))' }}>{active}</span>
-            )}
-            <span className="text-[10px] tabular-nums shrink-0" style={{ color: 'hsl(var(--muted-foreground))' }}>{count}</span>
+            <span
+              className="text-[10px] tabular-nums shrink-0"
+              style={{ color: 'hsl(var(--muted-foreground))' }}
+              title={active > 0 ? `${active} active of ${count} items` : `${count} items`}
+              data-testid="group-count"
+            >
+              {active > 0 ? `${active} active / ${count}` : count}
+            </span>
           </button>
         );
       })}
@@ -286,8 +233,6 @@ function IdeasSection({ onViewChange }) {
  *   agentErrors      Error[]
  *   sessionState     SessionState | null
  *   onSelectItem     (itemId: string) => void
- *   onThemeChange    (settings: object) => void
- *   onNewItem        () => void  ← COMP-UI-5: opens ItemFormDialog
  */
 function AttentionQueueSidebar({
   items,
@@ -313,37 +258,12 @@ function AttentionQueueSidebar({
   sessionState,
   onSelectItem,
   onStopAgent,
-  onThemeChange,
-  onNewItem,
   widthPx,
 }) {
   const safeItems = items || [];
   const safeGates = gates || [];
 
   const stats = React.useMemo(() => compactStats(safeItems, safeGates), [safeItems, safeGates]);
-
-  const [isDark, setIsDark] = React.useState(
-    () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
-  );
-
-  React.useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const observer = new MutationObserver(() => {
-      setIsDark(document.documentElement.classList.contains('dark'));
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
-
-  const toggleTheme = React.useCallback(() => {
-    const next = !isDark;
-    const theme = next ? 'dark' : 'light';
-    if (typeof document !== 'undefined') {
-      document.documentElement.classList.toggle('dark', next);
-    }
-    try { localStorage.setItem('compose:theme', theme); } catch { /* ignore */ }
-    if (onThemeChange) onThemeChange({ ui: { theme } });
-  }, [isDark, onThemeChange]);
 
   const handlePhaseClick = React.useCallback((phaseKey) => {
     if (onPhaseSelect) onPhaseSelect(togglePhase(selectedPhase, phaseKey));
@@ -354,39 +274,15 @@ function AttentionQueueSidebar({
 
       {/* ── Header ── */}
       <div className="p-3 pb-2">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-sidebar-foreground">Compose</h2>
-          <div className="flex items-center gap-1.5">
-            {!connected && (
-              <span className="text-[10px] text-destructive">disconnected</span>
-            )}
-            {/* COMP-UI-5: + New button → opens ItemFormDialog */}
-            {onNewItem && (
-              <button
-                onClick={onNewItem}
-                className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs text-muted-foreground hover:text-foreground bg-sidebar-accent/50 hover:bg-sidebar-accent transition-colors"
-                title="New item (⌘N)"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>New</span>
-              </button>
-            )}
-            <button
-              onClick={toggleTheme}
-              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
-              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-            </button>
+        {!connected && (
+          <div className="mb-1">
+            <span className="text-[10px] text-destructive">disconnected</span>
           </div>
-        </div>
+        )}
 
         {/* Compact stats */}
         <CompactStatsRow items={safeItems} gates={safeGates} />
       </div>
-
-      {/* ── Active build status ── */}
-      <BuildStatusWidget activeBuild={activeBuild} />
 
       {/* ── Agent telemetry (isolated to avoid re-render churn) ── */}
       <AgentPanel
