@@ -39,6 +39,7 @@ const TAB_META = {
   cadence:   { label: 'Cadence',   icon: SquareKanban,   tip: 'Cadence Board: unit belt, seats, chains, attention, diary (read-only)' },
   wiki:      { label: 'Wiki',      icon: Library,        tip: 'Wiki feature hub and search (wiki-eng)' },
   usage:     { label: 'Usage',     icon: BarChart3,      tip: 'Usage statistics: Compose-dispatched cost and tokens over time (read-only)' },
+  process:   { label: 'Process',   icon: Gauge,          tip: 'Unit process metrics across lanes, live (read-only)' },
   settings:  { label: 'Settings',  icon: Settings,        tip: 'Project and UI settings' },
 };
 

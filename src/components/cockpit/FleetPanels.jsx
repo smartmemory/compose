@@ -85,12 +85,10 @@ function More({ total, shown, cls }) {
   return total > shown ? <div className={cls.note}>+{total - shown} more</div> : null;
 }
 
-export default function FleetPanels({ data, variant = 'desktop' }) {
+/** The "Waiting on the owner" card: rows, an unavailable card, or the partial-read note. Shared with the Process view (COMP-COCKPIT-13). */
+export function OwnerQueueCard({ data, variant = 'desktop' }) {
   const cls = CLS[variant] ?? CLS.desktop;
-  const cap = MAX_ROWS[variant] ?? 400;
-  const out = [];
-
-  out.push(panelOr(smPanel(data, 'queue'), 'owner', 'Waiting on the owner', cls, (rows) => (
+  return panelOr(smPanel(data, 'queue'), 'owner', 'Waiting on the owner', cls, (rows) => (
     <Card key="owner" id="owner" title="Waiting on the owner" extra={rows.length ? String(rows.length) : null} cls={cls}>
       {rows.length === 0 && <div className={cls.note}>No open questions</div>}
       {rows.map((q) => (
@@ -101,7 +99,15 @@ export default function FleetPanels({ data, variant = 'desktop' }) {
         </div>
       ))}
     </Card>
-  )));
+  ));
+}
+
+export default function FleetPanels({ data, variant = 'desktop' }) {
+  const cls = CLS[variant] ?? CLS.desktop;
+  const cap = MAX_ROWS[variant] ?? 400;
+  const out = [];
+
+  out.push(<OwnerQueueCard key="owner-queue" data={data} variant={variant} />);
 
   out.push(panelOr(smPanel(data, 'sessions'), 'sessions', 'Sessions', cls, (rows) => (
     <Card key="sessions" id="sessions" title="Sessions" extra={String(rows.length)} cls={cls}>

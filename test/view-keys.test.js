@@ -9,7 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   VIEW_KEYS, DEFAULT_VIEW, PACKAGE_GATED_VIEWS, VIEW_LABELS,
-  reachableViews, resolveStoredView, resolveDefaultView,
+  reachableViews, resolveStoredView, resolveDefaultView, viewFromQuery,
 } from '../lib/view-keys.js';
 import { DEFAULT_MAIN_TABS } from '../src/components/cockpit/viewTabsState.js';
 
@@ -78,6 +78,19 @@ describe('reachableViews + resolveDefaultView', () => {
 
   test('gated keys are all in VIEW_KEYS', () => {
     for (const k of PACKAGE_GATED_VIEWS) assert.ok(VIEW_KEYS.includes(k), k);
+  });
+});
+
+describe('process view key (COMP-COCKPIT-13)', () => {
+  test('is a key and a tab after usage; viewFromQuery reads ?view= (one row table)', () => {
+    assert.ok(VIEW_KEYS.includes('process'));
+    assert.equal(VIEW_LABELS.process, 'Process');
+    assert.equal(DEFAULT_MAIN_TABS.indexOf('process'), DEFAULT_MAIN_TABS.indexOf('usage') + 1);
+    const rows = [
+      ['?view=process', 'process'], ['?a=1&view=graph', 'graph'], ['?view=bogus', null], ['?view=', null],
+      ['?popout=x', null], ['', null], [undefined, null], [null, null], ['?view=<x>', null],
+    ];
+    for (const [q, v] of rows) assert.equal(viewFromQuery(q), v, String(q));
   });
 });
 

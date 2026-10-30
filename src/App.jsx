@@ -10,6 +10,7 @@ import CadenceView from './components/cockpit/CadenceView.jsx';
 import WikiView from './components/cockpit/WikiView.jsx';
 import OpsView from './components/cockpit/OpsView.jsx';
 import UsageView from './components/usage/UsageView.jsx';
+import ProcessView from './components/cockpit/ProcessView.jsx';
 import { useOpsStatusIndexState } from './components/cockpit/useOpsStatusIndex.js';
 import { useStratumUiAvailability } from './components/cockpit/useStratumUiAvailable.js';
 import { useCadenceUiAvailability } from './components/cockpit/useCadenceUiAvailable.js';
@@ -54,7 +55,7 @@ import {
 } from './components/cockpit/contextPanelState.js';
 
 // Vision surface — views, sidebar, modals, store
-import { reachableViews, resolveStoredView, resolveDefaultView } from '../lib/view-keys.js';
+import { reachableViews, resolveStoredView, resolveDefaultView, viewFromQuery } from '../lib/view-keys.js';
 import { NavigationContext } from './lib/navigation.jsx';
 import { VisionChangesContext } from './components/vision/VisionChangesContext.js';
 import { useVisionStore } from './components/vision/useVisionStore.js';
@@ -407,6 +408,8 @@ function CockpitView({
       return <OpsView />;
     case 'usage':
       return <UsageView />;
+    case 'process':
+      return <ProcessView />;
     case 'stratum':
       return <StratumView />;
     case 'cadence':
@@ -470,7 +473,10 @@ function AppInner() {
     () => ({ ops: opsAvail, stratum: stratumAvail, cadence: cadenceAvail, wiki: wikiTab.availability }),
     [opsAvail, stratumAvail, cadenceAvail, wikiTab.availability],
   );
-  const [activeTab, setActiveTabRaw] = useState(() => loadActiveTab(mainTabs));
+  const [activeTab, setActiveTabRaw] = useState(() => {
+    const linked = viewFromQuery(window.location.search);
+    return linked && mainTabs.includes(linked) ? linked : loadActiveTab(mainTabs);
+  });
 
   // Agent bar
   const [agentBarState, setAgentBarStateRaw] = useState(loadAgentBarState);
@@ -542,11 +548,15 @@ function AppInner() {
 
   // ── Local vision state (absorbed from VisionTracker) ────────────────────
   const [selectedItemId, setSelectedItemId] = useState(null);
-  const hadSessionView = useRef(!!localStorage.getItem('compose:activeView'));
+  // A `?view=` deep link counts as a chosen view: the settings defaultView must not override it (COMP-COCKPIT-13).
+  const hadSessionView = useRef(!!localStorage.getItem('compose:activeView') || viewFromQuery(window.location.search) !== null);
   const [activeView, setActiveView] = useState(() => {
     // COMP-AUDIT-17: on load only what is known on load. Any valid view key is
     // kept; a package-gated key is re-checked once its availability settles
     // (the effect below). Fresh storage or an invalid key lands on Home.
+    // COMP-COCKPIT-13: a `?view=<key>` deep link wins over the stored view (the popout check ran in App()).
+    const linked = viewFromQuery(window.location.search);
+    if (linked) return linked;
     const { view, fellBackFrom } = resolveStoredView(localStorage.getItem('compose:activeView'), {});
     if (fellBackFrom) console.warn(`[compose] stored view "${fellBackFrom}" is not a view; showing Home`);
     return view;
