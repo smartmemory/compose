@@ -81,11 +81,11 @@ describe('reachableViews + resolveDefaultView', () => {
 });
 
 describe('process view key (COMP-COCKPIT-13)', () => {
-  test('is a key and a Fleet sub-tab after usage; viewFromQuery reads ?view= (one row table)', () => {
+  test('is a key and the first Fleet sub-tab; viewFromQuery reads ?view= (one row table)', () => {
     assert.ok(VIEW_KEYS.includes('process'));
     assert.equal(VIEW_LABELS.process, 'Process');
     const fleet = ROOMS.find((r) => r.key === 'fleet').views;
-    assert.equal(fleet.indexOf('process'), fleet.indexOf('usage') + 1);
+    assert.equal(fleet.indexOf('process'), 0);
     const rows = [
       ['?view=process', 'process'], ['?a=1&view=graph', 'graph'], ['?view=bogus', null], ['?view=', null],
       ['?popout=x', null], ['', null], [undefined, null], [null, null], ['?view=<x>', null],

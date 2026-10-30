@@ -51,10 +51,10 @@ describe('locateView (one row table)', () => {
 describe('roomViews + roomEntryView (one row table)', () => {
   test('availability hides a gated sub-tab on `no`, and on `unknown` unless active', () => {
     const rows = [
-      { name: 'all yes', room: 'fleet', av: ALL_YES, active: null, want: ['cadence', 'stratum', 'ops', 'sessions', 'usage', 'process'] },
-      { name: 'all unknown, none active', room: 'fleet', av: {}, active: null, want: ['sessions', 'usage', 'process'] },
-      { name: 'unknown but active stays', room: 'fleet', av: {}, active: 'ops', want: ['ops', 'sessions', 'usage', 'process'] },
-      { name: 'ops no', room: 'fleet', av: { ...ALL_YES, ops: 'no' }, active: null, want: ['cadence', 'stratum', 'sessions', 'usage', 'process'] },
+      { name: 'all yes', room: 'fleet', av: ALL_YES, active: null, want: ['process', 'cadence', 'ops', 'stratum', 'sessions', 'usage'] },
+      { name: 'all unknown, none active', room: 'fleet', av: {}, active: null, want: ['process', 'sessions', 'usage'] },
+      { name: 'unknown but active stays', room: 'fleet', av: {}, active: 'ops', want: ['process', 'ops', 'sessions', 'usage'] },
+      { name: 'ops no', room: 'fleet', av: { ...ALL_YES, ops: 'no' }, active: null, want: ['process', 'cadence', 'stratum', 'sessions', 'usage'] },
       { name: 'wiki no', room: 'library', av: { ...ALL_YES, wiki: 'no' }, active: null, want: ['docs', 'journal'] },
       { name: 'review has no predicate', room: 'review', av: { ops: 'no' }, active: null, want: ['gates', 'validate', 'qa-scope'] },
       { name: 'unknown room', room: 'nope', av: {}, active: null, want: [] },
@@ -64,10 +64,10 @@ describe('roomViews + roomEntryView (one row table)', () => {
 
   test('a room opens on the last view used there, else its first shown one', () => {
     const rows = [
-      { room: 'fleet', av: ALL_YES, last: undefined, want: 'cadence' },
+      { room: 'fleet', av: ALL_YES, last: undefined, want: 'process' },
       { room: 'fleet', av: ALL_YES, last: 'usage', want: 'usage' },
-      { room: 'fleet', av: { ...ALL_YES, stratum: 'no' }, last: 'stratum', want: 'cadence' },
-      { room: 'fleet', av: {}, last: undefined, want: 'sessions' },
+      { room: 'fleet', av: { ...ALL_YES, stratum: 'no' }, last: 'stratum', want: 'process' },
+      { room: 'fleet', av: {}, last: undefined, want: 'process' },
       { room: 'build', av: {}, last: undefined, want: 'design' },
       { room: 'home', av: {}, last: undefined, want: 'dashboard' },
       { room: 'roadmap', av: {}, last: 'tree', want: 'tree' },
@@ -156,7 +156,7 @@ describe('coverage: every key has a click path (derived from VIEW_KEYS)', () => 
       { caller: 'GateToast', key: 'gates', want: { top: 'review', sub: 'gates' } },
       { caller: 'OpsStrip Fleet pill', key: 'sessions', want: { top: 'fleet', sub: 'sessions' } },
       { caller: 'OpsStrip "All"', key: 'dashboard', want: { top: 'home', sub: null } },
-      { caller: 'room tab click (Fleet)', key: roomEntryView('fleet', ALL_YES), want: { top: 'fleet', sub: 'cadence' } },
+      { caller: 'room tab click (Fleet)', key: roomEntryView('fleet', ALL_YES), want: { top: 'fleet', sub: 'process' } },
       { caller: 'gear', key: 'settings', want: { top: 'settings', sub: null } },
       { caller: '?view=process deep link', key: viewFromQuery('?view=process'), want: { top: 'fleet', sub: 'process' } },
       { caller: '?view=design deep link', key: viewFromQuery('?view=design'), want: { top: 'build', sub: 'design' } },

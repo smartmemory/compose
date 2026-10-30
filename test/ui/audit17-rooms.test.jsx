@@ -15,7 +15,7 @@ describe('<ViewTabs> top row', () => {
     render(<ViewTabs activeView="gates" availability={ALL_YES} onViewChange={() => {}} />);
     const names = screen.getAllByRole('tab').map((t) => t.getAttribute('data-testid'));
     expect(names).toEqual([...ROOMS.map((r) => `room-tab-${r.key}`), 'room-tab-settings']);
-    expect(ROOMS.map((r) => r.label)).toEqual(['Home', 'Roadmap', 'Ideas', 'Review', 'Build', 'Fleet', 'Library']);
+    expect(ROOMS.map((r) => r.label)).toEqual(['Home', 'Ideas', 'Roadmap', 'Build', 'Review', 'Fleet', 'Library']);
     const selected = screen.getAllByRole('tab').filter((t) => t.getAttribute('aria-selected') === 'true');
     expect(selected.map((t) => t.getAttribute('data-testid'))).toEqual(['room-tab-review']);
   });
@@ -29,9 +29,9 @@ describe('<ViewTabs> top row', () => {
   it('click rows: a room opens its last view, else its first shown view', () => {
     const rows = [
       { room: 'home', props: {}, want: 'dashboard' },
-      { room: 'fleet', props: {}, want: 'cadence' },
+      { room: 'fleet', props: {}, want: 'process' },
       { room: 'fleet', props: { lastByRoom: { fleet: 'usage' } }, want: 'usage' },
-      { room: 'fleet', props: { availability: { ...ALL_YES, cadence: 'no', stratum: 'no', ops: 'no' } }, want: 'sessions' },
+      { room: 'fleet', props: { availability: { ...ALL_YES, cadence: 'no', stratum: 'no', ops: 'no' } }, want: 'process' },
       { room: 'review', props: {}, want: 'gates' },
       { room: 'library', props: { availability: { ...ALL_YES, wiki: 'no' } }, want: 'docs' },
       { room: 'ideas', props: {}, want: 'ideabox' },
@@ -70,11 +70,11 @@ describe('<ViewSubTabs> second row (one row table)', () => {
     { view: 'graph', subs: ['graph', 'tree'], active: 'graph' },
     { view: 'tree', subs: ['graph', 'tree'], active: 'tree' },
     { view: 'qa-scope', subs: ['gates', 'validate', 'qa-scope'], active: 'qa-scope' },
-    { view: 'design', subs: ['design', 'pipeline', 'build-history', 'pipeline-editor'], active: 'design' },
-    { view: 'process', subs: ['cadence', 'stratum', 'ops', 'sessions', 'usage', 'process'], active: 'process' },
-    { view: 'journal', subs: ['docs', 'wiki', 'journal'], active: 'journal' },
+    { view: 'design', subs: ['design', 'pipeline', 'pipeline-editor', 'build-history'], active: 'design' },
+    { view: 'process', subs: ['process', 'cadence', 'ops', 'stratum', 'sessions', 'usage'], active: 'process' },
+    { view: 'journal', subs: ['wiki', 'docs', 'journal'], active: 'journal' },
     { view: 'journal', av: { ...ALL_YES, wiki: 'no' }, subs: ['docs', 'journal'], active: 'journal' },
-    { view: 'sessions', av: { ops: 'no', stratum: 'no', cadence: 'no', wiki: 'no' }, subs: ['sessions', 'usage', 'process'], active: 'sessions' },
+    { view: 'sessions', av: { ops: 'no', stratum: 'no', cadence: 'no', wiki: 'no' }, subs: ['process', 'sessions', 'usage'], active: 'sessions' },
   ];
   it('rows', () => {
     for (const r of rows) {
@@ -98,7 +98,7 @@ describe('<ViewSubTabs> second row (one row table)', () => {
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Graph', 'List']);
     cleanup();
     render(<ViewSubTabs activeView="pipeline" availability={ALL_YES} onViewChange={() => {}} />);
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Design', 'Live build', 'Builds', 'Flow editor']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Design', 'Live build', 'Flow editor', 'Builds']);
   });
 });
 
