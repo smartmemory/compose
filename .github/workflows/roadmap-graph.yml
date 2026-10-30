@@ -10,32 +10,20 @@
 
 name: roadmap-graph
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'docs/features/**/feature.json'
-      - 'docs/features/**/deps.yaml'
-      - 'docs/features/**/design.md'
-      - 'ROADMAP.md'
-      - '.compose/compose.json'
-      - 'lib/roadmap-graph/**'
-      - '.github/workflows/roadmap-graph.yml'
-  pull_request:
-    paths:
-      - 'docs/features/**/feature.json'
-      - 'docs/features/**/deps.yaml'
-      - 'docs/features/**/design.md'
-      - 'ROADMAP.md'
-      - '.compose/compose.json'
-      - 'lib/roadmap-graph/**'
-      - '.github/workflows/roadmap-graph.yml'
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit SHA to check out (empty = the dispatched ref)'
+        required: false
+        type: string
+        default: ''
 
 # Read-only GITHUB_TOKEN, one run per ref (ACTIONS-LOCKDOWN-1).
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -44,6 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
