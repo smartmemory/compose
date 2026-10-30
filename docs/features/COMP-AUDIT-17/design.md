@@ -9,7 +9,10 @@ picks, then a build unit. No source changes in this unit.
 **Covers:** COMP-AUDIT-17 (information architecture) and COMP-AUDIT-18 (landing page, inert status bar,
 one status surface). AUDIT-18's third clause (three status models on one item) is split out: see §5.
 **Line numbers** are compose `8a870e32`. COMP-OBS-STATS-1 (`a986f9de`) landed after round 1, added the
-`usage` view and shifted `src/App.jsx` by +3 after line ~389.
+`usage` view and shifted `src/App.jsx` by +3 after line ~389. COMP-COCKPIT-12 (`f894877f..467ed5d6`) landed
+during this round: no new view key, but the Sessions view gained a Fleet pane, OpsStrip gained Fleet pills,
+and one new view switch (`handleOpenFleet`, `App.jsx:818-821` at `467ed5d6`) opens Sessions ▸ Fleet. It is
+folded into §1.3, §2.1 and §2.6; other `App.jsx` citations after line ~263 sit +2 to +13 at `467ed5d6`.
 
 ## Related Documents
 
@@ -56,7 +59,7 @@ feature filter (works with no feature chosen); **-** = no feature notion. Eviden
 | `gates` (Gates) | hidden | P+f | Compose gates, approve/revise/kill | vision store `gates` (`GateView.jsx`) | gate open (`App.jsx:1017`), GateToast (`App.jsx:1517`) | Dashboard gates, OpsStrip, Stratum gates inbox |
 | `pipeline` (Pipeline) | hidden | P+f | The one live build's steps, draft approve/reject | `activeBuild`, `/api/pipeline/draft/*` (`PipelineView.jsx`) | **nothing** | Stratum run DAG, ContextItemDetail Pipeline |
 | `pipeline-editor` (Pipeline Editor) | hidden | - | Visual editor for `*.stratum.yaml` | `/api/pipeline/specs` (`PipelineEditor.jsx:1-14`) | **nothing** | STRAT-UI-BUILDER-1 (Stratum tab, planned) |
-| `sessions` (Sessions) | hidden | P+f | Compose hook sessions | vision store `sessions` (`SessionsView.jsx`) | **nothing** | Cadence seat strip, Dashboard recent sessions, ContextItemDetail Sessions |
+| `sessions` (Sessions) | hidden | P+f | Compose hook sessions; Fleet pane since COMP-COCKPIT-12 | vision store `sessions` (`SessionsView.jsx`) | OpsStrip Fleet pill opens its Fleet pane (COMP-COCKPIT-12, `467ed5d6`) | Cadence seat strip, Dashboard recent sessions, ContextItemDetail Sessions |
 | `build-history` (Builds) | hidden | P+f | Past Compose builds, own feature search box | `fetchBuildHistory` (`App.jsx:905-908`), `PastBuildsView.jsx:57` | **nothing** | Stratum runs (unverified how much) |
 | `validate` (Validate) | hidden | P+f | `compose validate` findings, project or feature scope | `/api/validate` (`ValidateView.jsx:24-53`) | **nothing** | none |
 | `qa-scope` (QA Scope) | hidden | F | Affected routes for a feature, else the active build's feature | `/api/qa-scope` (`QaScopeView.jsx:31-68`) | **nothing** | none |
@@ -66,8 +69,9 @@ feature filter (works with no feature chosen); **-** = no feature notion. Eviden
 "Nothing" = no tab, no `handleViewChange('<key>')` call (only `gates`, `graph`, `tree`, `docs`, `ideabox`
 and a saved previous view have one; full list in §2.6), no `EntityLink kind="view"` user (grep:
 `EntityLink.jsx:26` maps the kind, no caller passes it), and the command palette searches items, gates and
-sessions only (`src/components/vision/shared/CommandPalette.jsx:5-6`). **Eight shipped views are unreachable
-by clicking.** The only other doors: the Settings "default view" picker (§4.1) and the `visionUI` WS
+sessions only (`src/components/vision/shared/CommandPalette.jsx:5-6`). **Seven shipped views are unreachable
+by clicking, and Sessions has a door only while the OpsStrip shows a Fleet pill** (a session over 250K,
+an open owner question or disk under 100 GB, COMP-COCKPIT-12). The only other doors: the Settings "default view" picker (§4.1) and the `visionUI` WS
 command (`visionMessageHandler.js:88`, applied at `App.jsx:691`), which no server code emits (grep
 `visionUI` in `server/ lib/`: 0 hits).
 
@@ -95,7 +99,7 @@ making a different thing.
 |---|---|---|---|---|
 | StatusBand | top of main, 32px, every view (`App.jsx:1342`) | one feature | `sessionState.featureCode` only (`App.jsx:499`) | Says "Select a feature to see status." (`StatusBand.jsx:20`), but selecting an item never changes it (`handleSelect`, `App.jsx:769-778`, sets only `selectedItemId`). It fills only when an agent session binds a feature. **Inert for a human.** |
 | DecisionTimelineStrip | under StatusBand, 72px, when bound (`App.jsx:1347-1349`) | one feature | same | fine when shown |
-| OpsStrip | bottom, 36px (`App.jsx:1463`) | project | active build, pending gates, recent errors | **Not persistent:** returns `null` on Docs and whenever it has no entries (`OpsStrip.jsx:177-180`); entries can be dismissed (`dismissedRef`, `OpsStrip.jsx:24,141,162`). Entry click selects that feature (`OpsStrip.jsx:208` → `handleOpsSelectFeature`, `App.jsx:813-822`) |
+| OpsStrip | bottom, 36px (`App.jsx:1463`) | project | active build, pending gates, recent errors | **Not persistent:** returns `null` on Docs and whenever it has no entries (`OpsStrip.jsx:177-180`; since COMP-COCKPIT-12, no entries and no Fleet pills, `OpsStrip.jsx:184` at `467ed5d6`); entries can be dismissed (`dismissedRef`, `OpsStrip.jsx:24,141,162`). Entry click selects that feature (`OpsStrip.jsx:208` → `handleOpsSelectFeature`, `App.jsx:813-822`) |
 | Sidebar CompactStatsRow + BuildStatusWidget + AgentPanel + attention queue + Ideas row | left (`AttentionQueueSidebar.jsx:385-416`) | project | items, gates, activeBuild, agents, ideabox | build widget duplicates OpsStrip and Dashboard. The attention queue's `onViewChange` prop is unused (`AttentionQueueSection`, `:97`); only the Ideas row navigates (`:256`) |
 | DesignSidebar | replaces the left sidebar while on `design` (`App.jsx:1287`) | design session | `useDesignStore` decisions | fine, keyed on the view (§2.6) |
 | ContextPanel "project summary" | right, no selection (`ContextPanel.jsx:59,128-180`) | project | activeBuild, pending gates (`pending` or `awaiting`, `:59`), errors | third copy of build + gates |
@@ -150,7 +154,7 @@ shows a second row; Home and Ideas have none.
 | Ideas | `ideabox` | yes |
 | Review | Gates (`gates`), Validate (`validate`), QA scope (`qa-scope`) | yes; QA scope falls back to the active build |
 | Build | Design (`design`), Live build (`pipeline`), Builds (`build-history`), Flow editor (`pipeline-editor`) | yes |
-| Fleet | Cadence, Stratum, Ops (same availability predicates as today, `App.jsx:1149`), Sessions (`sessions`), Usage (`usage`) | yes; never empty (Sessions and Usage have no predicate) |
+| Fleet | Cadence, Stratum, Ops (same availability predicates as today, `App.jsx:1149`), Sessions (`sessions`, with its Fleet pane), Usage (`usage`) | yes; never empty (Sessions and Usage have no predicate) |
 | Library | Docs (`docs`), Wiki (`wiki`, if configured), Journal (`journal`) | yes |
 | gear | Settings (`settings`); `,` still opens SettingsModal | yes |
 
@@ -262,6 +266,7 @@ reads or sets `activeView` keeps working; the table lists each one and its chang
 | `App.jsx:1298` → `AttentionQueueSidebar.jsx:256` | Ideas row → `ideabox` | unchanged |
 | `App.jsx:1408`, `:1446`, `OpsStrip.jsx:178`, `contextPanelState.js:17` | hide ContextPanel / OpenLoopsPanel / OpsStrip on `docs` | unchanged; `:1446` reads `resolveFeatureContext` |
 | `App.jsx:1517` | GateToast → `gates` | unchanged |
+| `App.jsx:818-821` (`467ed5d6`) | OpsStrip Fleet pill → `sessions` with the Fleet pane | unchanged key; locates to Fleet ▸ Sessions |
 | `VisionTracker.jsx:49,59,270` | popout window's own view state | slice 1 only (§4.1, L2) |
 
 ### 2.7 Every stored navigation value and where it lands (shape-neutral, review M2)
@@ -410,7 +415,7 @@ Resolving which one governs is data-model work that COMP-AUDIT-11 already owns (
 - [ ] `src/components/shared/FeatureFocusToggle.jsx` (existing): removed from Graph, Items, Docs, Gates, Sessions; GateView always includes `focusedGateId`
 - [ ] `src/components/cockpit/viewKeys.js` (existing after slice 1): `locateView(key)` → `{top, sub}` for the picked shape; `migrateNavState` per §2.7 with its row table incl. the "View not found" row
 - [ ] Every §2.6 site handled as the table says (one acceptance check per row); `handleViewChange` keeps its signature
-- [ ] Coverage test, keys **derived from `VIEW_KEYS`**, never a literal count: (a) with **no feature focused** and all packages available, every key is reachable by a click path in the nav model; (b) with each package absent, its key drops out and no other key does; (c) one row per `handleViewChange` caller in §2.6 (default view, `visionUI`, gate open, EntityLink, View in graph, View in tree, open file, docs back, sidebar Ideas, GateToast, tab click) asserting the derived `{top, sub}` is highlighted; (d) rendering `CockpitView` for every key never reaches the "not found" branch, and every `case` in the switch is in `VIEW_KEYS`
+- [ ] Coverage test, keys **derived from `VIEW_KEYS`**, never a literal count: (a) with **no feature focused** and all packages available, every key is reachable by a click path in the nav model; (b) with each package absent, its key drops out and no other key does; (c) one row per `handleViewChange` caller in §2.6 (default view, `visionUI`, gate open, EntityLink, View in graph, View in tree, open file, docs back, sidebar Ideas, GateToast, OpsStrip Fleet pill, tab click) asserting the derived `{top, sub}` is highlighted; (d) rendering `CockpitView` for every key never reaches the "not found" branch, and every `case` in the switch is in `VIEW_KEYS`
 - [ ] Tests rewritten: `test/cockpit-layout.test.js:123-138,236-239` (`DEFAULT_MAIN_TABS`/`HIDDEN_VIEWS`), the "is a default tab" checks in `test/ui/{ops,stratum,cadence,wiki}-view.test.jsx` (`:14,:18,:35,:23`) and `test/ui/usage-view.test.jsx`, `test/context-panel-state.test.js` if `CONTEXT_HIDDEN_VIEWS` moves
 
 **Slice 2, shape A layout (if picked):**
@@ -428,7 +433,8 @@ land on Home instead of the Graph, and the sidebar's build widget goes (the gate
 ## 7. Owner questions
 
 1. **How should the cockpit's screens be organised?** Today there are 10 tabs and 10 more screens that you
-   can only reach through a link, 8 of them not at all.
+   can only reach through a link, 7 of them not at all
+   and one only when a warning pill happens to show.
    - (a) **Labelled rooms** (recommended): seven doors across the top (Home, Roadmap, Ideas, Review, Build,
      Fleet, Library) and a small row of tabs inside each, so every screen has a home two clicks away. Why:
      it is what both audits asked for (`ROADMAP.md:1553`, `COMPOSE-UI-AUDIT-1/audit.md:60`), and every
