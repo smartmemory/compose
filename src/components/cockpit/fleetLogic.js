@@ -65,15 +65,14 @@ export function fleetPills(data) {
 }
 
 /**
- * Cadence's "proposed" line (cadence-main addendum 2026-10-30): never an empty panel.
- * Non-empty would_launch units: list them. Empty: "none" plus the top 4 blocker rules from belt readiness,
- * and the wall when one is set.
+ * Cadence's "proposed" line (cadence-main addendum 2026-10-30): ONE line, never an empty panel.
+ * The proposed units (or "none"), then the top 4 blocker rules from belt readiness.byRule,
+ * then the wall when the last would_launch line was held at one (at_wall empties the list).
  */
 export function proposedLine(cadence) {
   const wl = cadence?.wouldLaunch?.value;
   const units = Array.isArray(wl?.units) ? wl.units : [];
-  if (units.length > 0) return `Cadence would start: ${units.join(', ')}`;
-  const parts = ['Cadence would start: none'];
+  const parts = [`Cadence would start: ${units.length ? units.join(', ') : 'none'}`];
   const byRule = cadence?.readiness?.byRule ?? {};
   const top = Object.entries(byRule)
     .filter(([, n]) => Number.isFinite(n) && n > 0)
@@ -82,6 +81,12 @@ export function proposedLine(cadence) {
   if (top.length) parts.push(`top blockers: ${top.map(([rule, n]) => `${rule} ${n}`).join(', ')}`);
   if (wl?.at_wall) parts.push(`held: ${wl.at_wall}`);
   return parts.join(' · ');
+}
+
+/** A ready unit's blocker reasons: every belt `blockers` entry, else the single `blocker`, else the verdict. */
+export function blockerReasons(u) {
+  if (Array.isArray(u?.blockers) && u.blockers.length) return u.blockers.join(', ');
+  return u?.blocker ?? u?.decision ?? '';
 }
 
 const PRIORITY_RANK = { P0: 0, P1: 1, P2: 2, P3: 3 };

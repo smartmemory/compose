@@ -39,7 +39,7 @@ const SHADOW_TAIL_BYTES = 256 << 10;
 
 /** The sm_status sources the Fleet view shows (quota/awake/holds stay in the TUI). */
 export const SM_PANELS = ['sessions', 'jobs', 'queue', 'df', 'spend', 'ceiling', 'ledger'];
-const BELT_UNIT_KEYS = ['id', 'lane', 'column', 'title', 'priority', 'since', 'blocker', 'decision'];
+const BELT_UNIT_KEYS = ['id', 'lane', 'column', 'title', 'priority', 'since', 'blocker', 'blockers', 'decision'];
 const WOULD_LAUNCH_KEYS = ['ts', 'rung', 'launchable', 'units', 'units_known', 'at_wall'];
 
 export function resolveFleetReaders(env = process.env) {

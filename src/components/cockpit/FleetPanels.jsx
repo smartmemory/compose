@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  ctxLevel, fmtAge, fmtK, proposedLine, readerUp, smPanel, sortJobs, sortReady, DISK_RED_GB,
+  blockerReasons, ctxLevel, fmtAge, fmtK, proposedLine, readerUp, smPanel, sortJobs, sortReady, DISK_RED_GB,
 } from './fleetLogic.js';
 
 /**
@@ -188,7 +188,7 @@ export default function FleetPanels({ data, variant = 'desktop' }) {
             <span style={u.decision === 'launchable' ? TONE.ok : TONE.dim}>{u.decision === 'launchable' ? '▶' : '·'}</span>
             <span className={cls.mono}>{u.id}</span>
             <span className={cls.mono} style={TONE.dim}>{u.lane}</span>
-            <span className={cls.note}>{u.blocker ?? u.decision ?? ''}</span>
+            <span className={cls.note}>{blockerReasons(u)}</span>
           </div>
         ))}
         </div>

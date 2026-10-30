@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { proposedLine } from '../../src/components/cockpit/fleetLogic.js';
+import { blockerReasons, proposedLine } from '../../src/components/cockpit/fleetLogic.js';
 import { FLEET_POLL_MS, resetFleetPoller, subscribeFleet } from '../../src/lib/fleetPoller.js';
 
 vi.mock('../../src/components/vision/useVisionStore.js', () => {
@@ -80,7 +80,7 @@ describe('Fleet UI on the real route (fixture readers)', () => {
     expect(screen.getByTestId('fleet-ledger').textContent).toContain('fixture ledger line two');
     expect(document.body.textContent).not.toContain('must not leak');
     if (srv.cadence) {
-      expect(screen.getByTestId('fleet-proposed').textContent).toBe('Cadence would start: forge/FIXTURE-1');
+      expect(screen.getByTestId('fleet-proposed').textContent).toBe('Cadence would start: forge/FIXTURE-1 · top blockers: parked-until 153, no-brief 125, held 49, claimed 22');
     } else {
       expect(screen.queryByTestId('fleet-cadence')).toBeNull();
     }
@@ -165,18 +165,31 @@ describe('fleet poller', () => {
   });
 });
 
-// Cadence "proposed" line (forge-main/cadence-main addendum 2026-10-30): [name, cadence value, expected line]
+// Cadence "proposed" line (forge-main/cadence-main addendum 2026-10-30): the three line states
+// (nothing proposed, proposed with blockers, proposed at wall) plus the edges. [name, cadence value, expected line]
 const PROPOSED_ROWS = [
-  ['empty units, top 4 blockers', { readiness: { byRule: { 'parked-until': 153, 'no-brief': 123, held: 49, claimed: 23, other: 2 } }, wouldLaunch: { value: { units: [], at_wall: '' } } },
+  ['nothing proposed, top 4 blockers', { readiness: { byRule: { 'parked-until': 153, 'no-brief': 123, held: 49, claimed: 23, other: 2 } }, wouldLaunch: { value: { units: [], at_wall: '' } } },
     'Cadence would start: none · top blockers: parked-until 153, no-brief 123, held 49, claimed 23'],
-  ['empty units at a wall', { readiness: { byRule: { held: 3 } }, wouldLaunch: { value: { units: [], at_wall: 'fleet cap 8/8' } } },
+  ['proposed with blockers', { readiness: { byRule: { held: 3, 'no-brief': 5 } }, wouldLaunch: { value: { units: ['forge/A-1', 'wiki/B-2'], at_wall: '' } } },
+    'Cadence would start: forge/A-1, wiki/B-2 · top blockers: no-brief 5, held 3'],
+  ['proposed at wall (at_wall empties the list)', { readiness: { byRule: { held: 3 } }, wouldLaunch: { value: { units: [], at_wall: 'fleet cap 8/8' } } },
     'Cadence would start: none · top blockers: held 3 · held: fleet cap 8/8'],
-  ['non-empty units', { readiness: { byRule: { held: 3 } }, wouldLaunch: { value: { units: ['forge/A-1', 'wiki/B-2'], at_wall: '' } } },
-    'Cadence would start: forge/A-1, wiki/B-2'],
+  ['no readiness and no shadow line', { readiness: null, wouldLaunch: { value: null, error: 'shadow log: ENOENT' } },
+    'Cadence would start: none'],
+];
+
+// Ready-row blocker reasons: [name, belt unit, expected text]
+const REASON_ROWS = [
+  ['every blockers entry', { blockers: ['no-brief', 'held'], blocker: 'no-brief', decision: 'blocked' }, 'no-brief, held'],
+  ['single blocker when blockers is empty', { blockers: [], blocker: 'parked-until', decision: 'blocked' }, 'parked-until'],
+  ['verdict when unblocked', { blockers: [], blocker: null, decision: 'launchable' }, 'launchable'],
 ];
 
 describe('Cadence proposed line', () => {
   it('is one line in every state, never an empty panel', () => {
     for (const [name, cadence, line] of PROPOSED_ROWS) expect(proposedLine(cadence), name).toBe(line);
+  });
+  it('ready rows carry their blocker reasons', () => {
+    for (const [name, unit, text] of REASON_ROWS) expect(blockerReasons(unit), name).toBe(text);
   });
 });
