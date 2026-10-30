@@ -19,6 +19,9 @@ at 2026-10-30 00:3x (`OPS/units/COMPOSE-UI-INTEGRATION-1/wave-plan.md:3`); unit 
 visual pipeline builder/editor at least if not realtime tracking." Components imported, not
 iframes, not pulled JSON (ops static pages excepted). Wiki: "loosen the locks wtf it's just a
 wiki" (Mac only, one security pre-land review). Base44 first, s1-chat's 3 prompts (`base44-apps.md:1`).
+**Amended 2026-10-30 11:2x (OWNER via s1-chat: the brief was "cadence + stratum UIs landed, then integrated
+into Compose"):** Cadence Board is imported into Compose as a Cadence tab (COMPOSE-CADENCE-TAB-1), the same
+way as Stratum. The earlier line that it "stays Cadence's" was wrong.
 
 ## 1. Shape in plain English
 
@@ -85,11 +88,14 @@ in one that goes through Compose's server: same bricks, two houses, nothing to d
 
 `OPS/status/build.py` writes 8 single-file pages to `OPS/status/out/<name>/status.html` every 15 min
 (EI:18-19). Compose serves that dir via `express.static` at `/ops-status/` and iframes it same-origin;
-path from config, absent = tab hidden. **15-min staleness accepted.** Live ops = CADENCE-UI-BOARD-1.
+path from config, absent = tab hidden. **15-min staleness accepted.** Live ops = CADENCE-UI-BOARD-1, in Compose as the Cadence tab
+(COMPOSE-CADENCE-TAB-1).
 
 ## 3. Units (ordered; live state in the DAG below)
 
-COMPOSE-UI-RUN-1 [LANDED `c6811498`] is first. CADENCE-UI-BOARD-1, CADENCE-UI-TYPED-1 stay Cadence's.
+COMPOSE-UI-RUN-1 [LANDED `c6811498`] is first. CADENCE-UI-BOARD-1 builds `@cadence/ui` in Cadence's repo and
+COMPOSE-CADENCE-TAB-1 imports it into Compose as a tab (owner 2026-10-30 11:2x, amended; was "stay Cadence's").
+CADENCE-UI-TYPED-1 stays Cadence's.
 
 **STRAT-UI-APP-1**: `S/ui/` (new), `S/ui/src/data-client.ts` (new), `S/ui/server/` (new)
 *Breaks:* a wrong edge rule draws a DAG the engine disagrees with.
@@ -147,10 +153,17 @@ COMPOSE-UI-RUN-1 [LANDED `c6811498`] is first. CADENCE-UI-BOARD-1, CADENCE-UI-TY
 - [ ] token from an env var NAME, `wiki-eng` only (`wiki-private` refused whatever config says), never `/commands`
 - [ ] "open full wiki" iframe carries the session on the Mac
 
+**COMPOSE-CADENCE-TAB-1** [LANDED]: `C/src/lib/clients/cadence.js` (new), `C/server/cadence-ui-routes.js` (new),
+`C/lib/cadence-ui-link.js` (new), `C/src/components/cockpit/CadenceView.jsx` (new), `C/src/App.jsx` (existing)
+*Breaks:* the mount exposing more than the package handler's four read-only commands.
+- [x] `/api/cadence-ui/*` mounts `cadence/ui/server/handler.mjs` as is (no second command list), skipped in remote mode, absent sibling = 404
+- [x] `@cadence/ui` alias to the Cadence checkout, stub when absent, `__CADENCE_UI__`, tab hidden; both builds green
+- [x] seat strip over Board, Chains, Attention, Diary; Compose's CSS tokens (`--background` ... triplets) theme the `cb-` screens
+
 ### Dropped from v1 (one line each)
 
 - COMPOSE-OPS-READMODEL-1: Compose no longer aggregates; each app's DataClient reads its own sources.
-- COMPOSE-OPS-BELT-1: the belt is a Cadence Board screen (CADENCE-UI-BOARD-1) and the ops pages.
+- COMPOSE-OPS-BELT-1: the belt is a Cadence Board screen (CADENCE-UI-BOARD-1, Compose's Cadence tab) and the ops pages.
 - COMPOSE-OPS-FLEET-1: the seat strip is a Cadence Board screen; no Compose read model to feed it.
 - COMPOSE-OPS-ATTENTION-1: gates move to GatesInbox, owner asks to Cadence Board's attention list.
 - COMPOSE-OPS-HEALTH-1: no providers left to watch; re-file only on an incident (FILING BAR).
@@ -173,13 +186,14 @@ Live state's one home is `wave-plan.md`; states here were read 2026-10-30 ~02:00
 | WIKI-FRAME-LOOSEN-1 | - | RUNNING | units/WIKI-FRAME-LOOSEN-1/report.md | wiki |
 | WIKI-UI-COMPONENTS-1 | - | RUNNING | units/WIKI-UI-COMPONENTS-1/report.md | wiki |
 | COMPOSE-WIKI-TAB-1 | WIKI-UI-COMPONENTS-1, WIKI-FRAME-LOOSEN-1, COMPOSE-UI-RUN-1 | WAITING ON WIKI-UI-COMPONENTS-1, WIKI-FRAME-LOOSEN-1 | units/COMPOSE-WIKI-TAB-1/report.md | compose |
+| COMPOSE-CADENCE-TAB-1 | COMPOSE-WIKI-TAB-1 | DONE | units/COMPOSE-CADENCE-TAB-1/report.md | compose |
 
 OPS-TAB, GATE-WIRE, STRAT-TAB run in series (each edits the `activeView` switch, `wave-plan.md:26`; STRAT-TAB
 retires GATE-WIRE's panel). COMPOSE-WIKI-TAB-1 rebases onto whichever lands first.
 
 ## Owner questions
 
-1. Published npm Compose ships without the Stratum/wiki tabs (no npm publish of the packages).
+1. Published npm Compose ships without the Stratum/Cadence/wiki tabs (no npm publish of the packages).
    Accept, or publish the packages later? Recommend accept until 2.0.0.
 
 ## ELI5 TLDR

@@ -2,6 +2,7 @@ import react from '@vitejs/plugin-react'
 import path from 'node:path'
 import { defineConfig } from 'vite'
 import { resolveStratumUiDir } from './lib/stratum-ui-link.js'
+import { resolveCadenceUiDir } from './lib/cadence-ui-link.js'
 import { resolveWikiComponentsDir } from './lib/wiki-components-link.js'
 
 // COMPOSE-STRAT-TAB-1: `@stratum/ui` is the sibling stratum/ui package on the Mac; when it is absent
@@ -9,10 +10,12 @@ import { resolveWikiComponentsDir } from './lib/wiki-components-link.js'
 const stratumUi = resolveStratumUiDir()
 // COMPOSE-WIKI-TAB-1: `@wiki/components` is the wiki checkout's components package, same rule (`__WIKI_COMPONENTS__`).
 const wikiComponents = resolveWikiComponentsDir()
+// COMPOSE-CADENCE-TAB-1: `@cadence/ui` is the Cadence checkout's ui package, same rule (`__CADENCE_UI__`).
+const cadenceUi = resolveCadenceUiDir()
 
 export default defineConfig({
   plugins: [react()],
-  define: { __STRATUM_UI__: JSON.stringify(Boolean(stratumUi)), __WIKI_COMPONENTS__: JSON.stringify(Boolean(wikiComponents)) },
+  define: { __STRATUM_UI__: JSON.stringify(Boolean(stratumUi)), __CADENCE_UI__: JSON.stringify(Boolean(cadenceUi)), __WIKI_COMPONENTS__: JSON.stringify(Boolean(wikiComponents)) },
   resolve: {
     // One React copy: the sibling packages must use Compose's. The wiki package's bare imports would
     // otherwise resolve from the wiki checkout's own node_modules (React 18).
@@ -21,6 +24,8 @@ export default defineConfig({
       { find: '@', replacement: path.resolve(__dirname, './src') },
       { find: '@stratum/ui/styles.css', replacement: stratumUi ? path.join(stratumUi, 'src/styles.css') : path.resolve(__dirname, './src/lib/stratum-ui-stub.css') },
       { find: /^@stratum\/ui$/, replacement: stratumUi ? path.join(stratumUi, 'src/index.ts') : path.resolve(__dirname, './src/lib/stratum-ui-stub.js') },
+      { find: '@cadence/ui/styles.css', replacement: cadenceUi ? path.join(cadenceUi, 'src/styles.css') : path.resolve(__dirname, './src/lib/cadence-ui-stub.css') },
+      { find: /^@cadence\/ui$/, replacement: cadenceUi ? path.join(cadenceUi, 'src/index.ts') : path.resolve(__dirname, './src/lib/cadence-ui-stub.js') },
       { find: /^@wiki\/components$/, replacement: wikiComponents ? path.join(wikiComponents, 'src/index.js') : path.resolve(__dirname, './src/lib/wiki-components-stub.js') },
     ],
   },

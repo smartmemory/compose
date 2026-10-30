@@ -127,7 +127,7 @@ describe('viewTabsState — DEFAULT_MAIN_TABS', () => {
   });
 
   it('is exactly the default tabs, Dashboard first', () => {
-    assert.deepEqual(DEFAULT_MAIN_TABS, ['dashboard', 'graph', 'docs', 'ideabox', 'ops', 'stratum', 'wiki', 'settings']);
+    assert.deepEqual(DEFAULT_MAIN_TABS, ['dashboard', 'graph', 'docs', 'ideabox', 'ops', 'stratum', 'cadence', 'wiki', 'settings']);
   });
 
   it('hidden views are not default tabs but stay reachable (listed in HIDDEN_VIEWS)', () => {
