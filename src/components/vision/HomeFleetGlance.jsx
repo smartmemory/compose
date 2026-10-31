@@ -3,6 +3,7 @@ import { useFleet } from '../../lib/fleetPoller.js';
 import { defaultUsageClient } from '../usage/usageClient.js';
 import { fleetSpend } from '../usage/FleetUsage.jsx';
 import CostMeter from '../cockpit/cost/CostMeter.jsx';
+import useApiCredit from '../cockpit/cost/useApiCredit.js';
 
 export const HOME_SEATS_POLL_MS = 60_000;
 
@@ -27,6 +28,7 @@ export function useCostMeterProps(client = defaultUsageClient) {
     return () => { clearInterval(timer); stop(); };
   }, [load]);
 
+  const credit = useApiCredit(client);
   const src = seats.body?.seats;
   const rows = Array.isArray(src?.value?.seats) ? src.value.seats : null;
   const { ceiling, spend } = fleetSpend(fleet.data);
@@ -36,6 +38,7 @@ export function useCostMeterProps(client = defaultUsageClient) {
     loading: seats.loading,
     spend: fleet.loading && !fleet.data ? null : { ceiling, spend },
     asOf: src?.value?.generated_at ?? null,
+    credit,
   };
 }
 

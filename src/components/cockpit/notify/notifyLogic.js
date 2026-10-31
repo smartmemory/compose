@@ -51,6 +51,30 @@ export function groupOf(text) {
   return 'asks';
 }
 
+/**
+ * COMP-COCKPIT-RIBBON-METER-1: which row names a seat or a lane the Day page can flash. Only two sources carry one: a cadence
+ * attention wall named `seatN <window>` (the seat id), and a session over its context named `<lane>-main` (the lane lead).
+ * The owner queue carries who asked, not a lane, and outage and disk are not about either. A lane guess that is not a
+ * ribbon lane (`forge-main` has no `forge` lane) is harmless: Day takes the event only when the lane exists.
+ */
+export const RIBBON_FOCUS = 'compose:ribbon-focus';
+export const seatOfWall = (name) => /^(seat\d+)(?=\s|$)/i.exec(String(name ?? ''))?.[1].toLowerCase() ?? null;
+export const laneOfSession = (name) => /^(.+)-main$/.exec(String(name ?? ''))?.[1] ?? null;
+
+/** `{kind: 'seat' | 'lane', id, label}` for a row that names one, else null. A seat wins over a lane. */
+export function jumpOf(row) {
+  if (row?.seat) return { kind: 'seat', id: row.seat, label: `Show ${row.seat} ▸` };
+  if (row?.lane) return { kind: 'lane', id: row.lane, label: `Show ${row.lane} lane ▸` };
+  return null;
+}
+
+/** Ask Day to flash the row's seat or lane. True only when a listener took it (`preventDefault()`); false means run the row's own action. */
+export function tryJump(row, target = globalThis.window) {
+  const j = jumpOf(row);
+  if (!j || !target) return false;
+  return !target.dispatchEvent(new CustomEvent(RIBBON_FOCUS, { detail: { [j.kind]: j.id }, cancelable: true }));
+}
+
 const SM_DOWN = 'sm_status';
 
 /** One sm_status panel -> `{rows, unavailable}`. A reader that is down, a missing panel and a partial read all count as unavailable. */
@@ -97,6 +121,7 @@ export function contextAdapter(fleet) {
       since: null,
       sourceLabel: 'sessions',
       action: 'fleet',
+      ...(laneOfSession(s.name) ? { lane: laneOfSession(s.name) } : {}),
     }));
   return { rows: out, unavailable };
 }
@@ -157,6 +182,7 @@ export function attentionAdapter(attention) {
       since: null,
       sourceLabel: label,
       action: 'cadence',
+      ...(seatOfWall(a.name) ? { seat: seatOfWall(a.name) } : {}),
     })),
     unavailable: null,
   };

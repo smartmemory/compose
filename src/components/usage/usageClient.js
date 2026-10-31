@@ -25,4 +25,18 @@ export const defaultUsageClient = {
     if (!res.ok) throw new Error(body.error || `usage seats failed (${res.status})`);
     return body;
   },
+  /** COMP-COCKPIT-RIBBON-METER-1: the one API-credit reader, `{v, generated_at, credit: {value, error, ts, stale}}`. */
+  async getCredit() {
+    const res = await wsFetch('/api/usage/credit');
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `usage credit failed (${res.status})`);
+    return body;
+  },
+  /** Today's closed hours of fleet spend, `{v, generated_at, hourly: {value: {buckets: [{start, usd}]}, error}}`. */
+  async getHourly() {
+    const res = await wsFetch('/api/usage/hourly');
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `usage hourly failed (${res.status})`);
+    return body;
+  },
 };

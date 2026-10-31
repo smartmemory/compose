@@ -1351,7 +1351,7 @@ function AppInner() {
         >
           <HeaderCounters items={items} gates={gates} />
           <AgentStatusPill />
-          <NotifyChip onOpenFleet={handleOpenFleet} onNavigate={handleViewChange} />
+          <NotifyChip onOpenFleet={handleOpenFleet} onNavigate={handleViewChange} dayActive={activeView === 'day'} />
         </div>
         <SecurityBanner onOpenFleet={handleOpenFleet} />
         </PanelErrorBoundary>

@@ -19,6 +19,11 @@
  * source nor spend_attr carries per-seat dollars; the day's fleet $ is the sm_status ceiling line the
  * view reads from /api/fleet. A down reader answers 200 with `seats.error`, never a 5xx. Email
  * addresses are cut from account labels.
+ *
+ * GET /api/usage/credit and GET /api/usage/hourly (COMP-COCKPIT-RIBBON-METER-1): the two readers the Day page's money card
+ * needs. `credit` runs `api_credit.py status --json` (COMPOSE_API_CREDIT), `hourly` runs `spend_attr.py series --bucket 1h
+ * --json` (COMPOSE_SPEND_ATTR) over today's CLOSED hours only (a warm closed hour is cheap, a window that runs to now takes
+ * 8-17 s). Both are cached and answer 200 with an `error`, like seats. No balance and no hold flag is ever turned into $0.
  */
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -27,6 +32,9 @@ import { collectDispatchMetrics } from '../lib/dispatch-metrics.js';
 import { createSourceCache, runReader } from './fleet-routes.js';
 import { getDataDir as defaultGetDataDir, getTargetRoot as defaultGetTargetRoot } from './project-root.js';
 
+export const CREDIT_TTL_MS = 60_000;
+export const HOURLY_TTL_MS = 300_000;
+export const HOURLY_TIMEOUT_MS = 90_000;
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T/;
 export const SEATS_TTL_MS = 60_000;
 export const SEATS_TIMEOUT_MS = 30_000;
@@ -60,6 +68,51 @@ export function seatRows(doc) {
       ...(si ? { seat_idle: { used_pct: pct(si.used_pct), hours_left: pct(si.hours_left), ready_units: pct(si.ready_units) } } : {}),
     };
   });
+}
+
+/** Pure: api_credit `status --json` -> `{balance_usd, hold, reserve_usd, as_of}`; a null balance stays null. */
+export function creditRow(doc) {
+  if (!doc || typeof doc !== 'object' || !('hold' in doc || 'balance_usd' in doc)) throw new Error('api_credit printed no status');
+  return { balance_usd: pct(doc.balance_usd), hold: doc.hold === true, reserve_usd: pct(doc.reserve_usd), as_of: typeof doc.as_of === 'string' ? doc.as_of : null };
+}
+
+/** Pure: spend_attr `series --json` -> `[{start, usd}]` (engines and sessions are not carried: the card draws bars). */
+export function hourlyRows(doc) {
+  if (!doc || !Array.isArray(doc.buckets)) throw new Error('spend_attr printed no buckets');
+  return doc.buckets.filter((b) => b && typeof b.start === 'string').map((b) => ({ start: b.start, usd: pct(b.usd) ?? 0 }));
+}
+
+const pad = (n) => String(n).padStart(2, '0');
+/** A Date as local ISO with its UTC offset ("2026-10-31T17:00:00+08:00"), the form spend_attr prints and takes. */
+export function localIso(d) {
+  const off = -d.getTimezoneOffset();
+  const a = Math.abs(off);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${off < 0 ? '-' : '+'}${pad(Math.floor(a / 60))}:${pad(a % 60)}`;
+}
+
+/** Today's window: local midnight to the top of the current hour. `null` before the first hour has closed. */
+export function closedHoursWindow(nowMs) {
+  const to = new Date(nowMs); to.setMinutes(0, 0, 0);
+  const from = new Date(to); from.setHours(0);
+  return from.getTime() < to.getTime() ? { from: localIso(from), to: localIso(to) } : null;
+}
+
+export async function readCredit({ python = 'python3', script, env = process.env, timeoutMs = SEATS_TIMEOUT_MS, run = runReader } = {}) {
+  if (!existsSync(script)) throw new Error(`reader missing: ${script}`);
+  const { stdout } = await run([python, script, 'status', '--json'], { timeoutMs, env });
+  let doc;
+  try { doc = JSON.parse(stdout); } catch { throw new Error('api_credit printed no JSON document'); }
+  return creditRow(doc);
+}
+
+export async function readHourly({ python = 'python3', script, env = process.env, timeoutMs = HOURLY_TIMEOUT_MS, run = runReader, now = Date.now } = {}) {
+  if (!existsSync(script)) throw new Error(`reader missing: ${script}`);
+  const win = closedHoursWindow(now());
+  if (!win) return { buckets: [] };
+  const { stdout } = await run([python, script, 'series', '--from', win.from, '--to', win.to, '--bucket', '1h', '--json'], { timeoutMs, env });
+  let doc;
+  try { doc = JSON.parse(stdout); } catch { throw new Error('spend_attr printed no JSON document'); }
+  return { buckets: hourlyRows(doc) };
 }
 
 export async function readSeats({ python = 'python3', script, env = process.env, timeoutMs = SEATS_TIMEOUT_MS, run = runReader } = {}) {
@@ -98,6 +151,27 @@ export function attachUsageRoutes(app, deps = {}) {
     env,
   }));
   const seatsCache = createSourceCache('usage_watch', seatsLoad, { ttlMs: deps.seatsTtlMs ?? SEATS_TTL_MS, now, logPrefix: '[usage]' });
+
+  const home = homedir();
+  const creditCache = createSourceCache('api_credit', deps.readCredit || (() => readCredit({
+    python: env.COMPOSE_FLEET_PYTHON || 'python3',
+    script: env.COMPOSE_API_CREDIT || join(home, '.claude', 'scripts', 'api_credit.py'),
+    env,
+  })), { ttlMs: deps.creditTtlMs ?? CREDIT_TTL_MS, now, logPrefix: '[usage]' });
+  const hourlyCache = createSourceCache('spend_attr', deps.readHourly || (() => readHourly({
+    python: env.COMPOSE_FLEET_PYTHON || 'python3',
+    script: env.COMPOSE_SPEND_ATTR || join(home, '.claude', 'scripts', 'spend_attr.py'),
+    env,
+    now,
+  })), { ttlMs: deps.hourlyTtlMs ?? HOURLY_TTL_MS, now, logPrefix: '[usage]' });
+
+  app.get('/api/usage/credit', async (_req, res) => {
+    res.json({ v: 1, generated_at: new Date(now()).toISOString(), credit: await creditCache.get() });
+  });
+
+  app.get('/api/usage/hourly', async (_req, res) => {
+    res.json({ v: 1, generated_at: new Date(now()).toISOString(), hourly: await hourlyCache.get() });
+  });
 
   app.get('/api/usage/seats', async (_req, res) => {
     const seats = await seatsCache.get();

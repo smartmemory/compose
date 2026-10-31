@@ -8,7 +8,7 @@ import React from 'react';
 import { fmtAge } from '../fleetLogic.js';
 import useDismissable from '../useDismissable.js';
 import { useNotifySources } from './useNotifySources.js';
-import { chipLabel, unknownLine, defaultsLine } from './notifyLogic.js';
+import { chipLabel, unknownLine, defaultsLine, jumpOf, tryJump } from './notifyLogic.js';
 import InboxDrawer from './InboxDrawer.jsx';
 
 /** Owner-queue rows ask the inbox to open; when nothing handles the event the Fleet pane lists them. */
@@ -24,7 +24,7 @@ const TONE = {
   critical: 'hsl(var(--destructive))',
 };
 
-export default function NotifyChip({ onOpenFleet, onNavigate }) {
+export default function NotifyChip({ onOpenFleet, onNavigate, dayActive = false }) {
   const { loading, collected, chip } = useNotifySources();
   const [open, setOpen] = React.useState(false);
   const rootRef = React.useRef(null);
@@ -36,6 +36,12 @@ export default function NotifyChip({ onOpenFleet, onNavigate }) {
     if (row.action === 'inbox') openInbox(onOpenFleet);
     else if (row.action === 'cadence') onNavigate?.('cadence');
     else onOpenFleet?.();
+  };
+
+  // COMP-COCKPIT-RIBBON-METER-1: on Day, a row about a seat or a lane flashes it; if Day does not take it the row's own action runs.
+  const jump = (row) => {
+    if (tryJump(row)) setOpen(false);
+    else act(row);
   };
 
   const label = loading ? 'Checking alerts' : chipLabel(chip);
@@ -81,6 +87,16 @@ export default function NotifyChip({ onOpenFleet, onNavigate }) {
                   {r.sourceLabel}{r.since != null ? ` · ${fmtAge(r.since)}` : ''}{r.detail ? ` · ${r.detail}` : ''}
                 </div>
               </div>
+              {dayActive && jumpOf(r) && (
+                <button
+                  type="button"
+                  data-testid="notify-row-jump"
+                  className="shrink-0 underline underline-offset-2 hover:no-underline"
+                  onClick={() => jump(r)}
+                >
+                  {jumpOf(r).label}
+                </button>
+              )}
               <button
                 type="button"
                 data-testid="notify-row-action"

@@ -5,15 +5,30 @@
  * Home and in Usage > Seats and fleet without a second reader.
  *
  * Props: `seats` (rows array, null until the call answers), `seatsError`, `loading` (seats call pending),
- * `spend` (`fleetSpend(...)` or null), `spendLoading`, `asOf` (seats reader `generated_at`), `now` (ISO, tests), `compact`.
+ * `spend` (`fleetSpend(...)` or null), `spendLoading`, `asOf` (seats reader `generated_at`), `now` (ISO, tests), `compact`,
+ * `credit` (`{value, error}` from GET /api/usage/credit, null while pending).
+ * COMP-COCKPIT-RIBBON-METER-1, optional: `onSeatOpen(seat, rect)` and `onMoneyOpen(rect)` make a seat row and the Dollars block
+ * clickable, `flashSeat` (a seat id) outlines that row. Without them the meter renders exactly as before.
  */
 import React from 'react';
 import { cn } from '@/lib/utils.js';
 import {
-  meterRows, fmtPct, asOfText, RETIRED_NOTE, API_CREDIT_NOTE, DOLLARS_PER_SEAT_NOTE,
+  meterRows, fmtPct, asOfText, RETIRED_NOTE, apiCreditText, DOLLARS_PER_SEAT_NOTE,
 } from './costLogic.js';
 
 const MUTED = 'text-muted-foreground';
+
+/** Click and Enter/Space on a non-button block, handing the handler the block's rect. Plain props when there is no handler. */
+function pressable(handler, label) {
+  if (!handler) return {};
+  const fire = (el) => handler(el.getBoundingClientRect());
+  return {
+    role: 'button', tabIndex: 0, 'aria-label': label,
+    onClick: (e) => fire(e.currentTarget),
+    onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire(e.currentTarget); } },
+  };
+}
+const PRESS = 'cursor-pointer rounded hover:bg-muted focus-visible:bg-muted outline-none';
 
 function Line({ title, testId, children }) {
   return (
@@ -24,7 +39,7 @@ function Line({ title, testId, children }) {
   );
 }
 
-export default function CostMeter({ seats, seatsError = null, loading = false, spend = null, spendLoading = false, asOf = null, now, compact = false }) {
+export default function CostMeter({ seats, seatsError = null, loading = false, spend = null, spendLoading = false, asOf = null, now, compact = false, credit = null, onSeatOpen, onMoneyOpen, flashSeat = null }) {
   const at = now ? Date.parse(now) : Date.now();
   const rows = meterRows(seats, spend, at);
   const pending = seats === null && !seatsError;
@@ -39,7 +54,13 @@ export default function CostMeter({ seats, seatsError = null, loading = false, s
         {pending && <div className="h-4 w-2/3 rounded bg-muted animate-pulse" data-testid="cost-meter-skeleton" aria-label="Loading seats" />}
         {seatsError && <span className="text-[12px] text-destructive" data-testid="cost-meter-seats-down">usage_watch unavailable: {seatsError}</span>}
         {rows.seats.map((s) => (
-          <div key={s.id} className="grid grid-cols-[1fr_auto_auto] gap-x-3 text-[12px]" data-testid={`cost-meter-seat-${s.id}`}>
+          <div
+            key={s.id}
+            className={cn('grid grid-cols-[1fr_auto_auto] gap-x-3 text-[12px]', onSeatOpen && PRESS, flashSeat === s.id && 'outline outline-2 outline-primary motion-safe:animate-pulse')}
+            data-testid={`cost-meter-seat-${s.id}`}
+            data-flash={flashSeat === s.id ? 'true' : undefined}
+            {...pressable(onSeatOpen && ((rect) => onSeatOpen((Array.isArray(seats) && seats.find((r) => r.id === s.id)) || s, rect)), `${s.label}: where this seat stands`)}
+          >
             <span>{s.label}</span>
             <span className="font-mono" data-testid={`cost-meter-5h-${s.id}`}>5h {s.five.pct}<span className={MUTED}> · {s.five.reset}</span></span>
             <span className={cn('font-mono', s.seven.fiveOnly && MUTED)} data-testid={`cost-meter-7d-${s.id}`}>
@@ -76,6 +97,7 @@ export default function CostMeter({ seats, seatsError = null, loading = false, s
         </Line>
       )}
 
+      <div className={cn(onMoneyOpen && PRESS)} data-testid="cost-meter-money" {...pressable(onMoneyOpen, 'Where the money stands')}>
       <Line title="Dollars" testId="cost-meter-dollars">
         {spendLoading && !spend && <div className="h-4 w-2/3 rounded bg-muted animate-pulse" data-testid="cost-meter-dollars-skeleton" />}
         {ceiling?.down && <span className={cn('text-[12px]', MUTED)} data-testid="cost-meter-dollars-down">{ceiling.down}</span>}
@@ -99,8 +121,9 @@ export default function CostMeter({ seats, seatsError = null, loading = false, s
         )}
         <span className={cn('text-[11px]', MUTED)} data-testid="cost-meter-per-seat-usd">{DOLLARS_PER_SEAT_NOTE}</span>
       </Line>
+      </div>
 
-      <span className={cn('text-[11px]', MUTED)} data-testid="cost-meter-api-credit">{API_CREDIT_NOTE}</span>
+      <span className={cn('text-[11px]', MUTED)} data-testid="cost-meter-api-credit">{apiCreditText(credit)}</span>
       <span className={cn('text-[11px]', MUTED)} data-testid="cost-meter-asof">{loading && pending ? 'reading…' : asOfText(asOf, at)}</span>
     </section>
   );

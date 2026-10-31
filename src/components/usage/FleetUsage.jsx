@@ -15,6 +15,7 @@ import { smPanel } from '../cockpit/fleetLogic.js';
 
 import { fmtPct, resetIn as resetText, RETIRED_NOTE } from '../cockpit/cost/costLogic.js';
 import CostMeter from '../cockpit/cost/CostMeter.jsx';
+import useApiCredit from '../cockpit/cost/useApiCredit.js';
 
 /** Pure: the fleet's two spend panels, each `{text, rows}` or `{down: reason}`. Exported for the tests. */
 export function fleetSpend(data) {
@@ -39,6 +40,7 @@ function Panel({ title, testId, children }) {
 export default function FleetUsage({ client, now }) {
   const fleet = useFleet();
   const { ceiling, spend } = fleetSpend(fleet.data);
+  const credit = useApiCredit(client);
   const [seats, setSeats] = useState({ loading: true, body: null, error: null });
   const load = useCallback(() => {
     let live = true;
@@ -65,6 +67,7 @@ export default function FleetUsage({ client, now }) {
         spend={fleet.loading && !fleet.data ? null : { ceiling, spend }}
         spendLoading={fleet.loading}
         asOf={src?.value?.generated_at ?? null}
+        credit={credit}
         now={now}
       />
       <div className="grid gap-2 md:grid-cols-2">

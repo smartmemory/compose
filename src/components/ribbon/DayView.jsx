@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import WhatLine from '../cockpit/what/WhatLine.jsx';
-import CostMeter from '../cockpit/cost/CostMeter.jsx';
 import { useNotifySources } from '../cockpit/notify/useNotifySources.js';
 import { useCostMeterProps } from '../vision/HomeFleetGlance.jsx';
 import DayRibbon from './DayRibbon.jsx';
@@ -16,6 +15,7 @@ import { readLastVisit } from '../cockpit/what/whatRules.js';
 import NowDrawer from './now/NowDrawer.jsx';
 import DayPhone from './now/DayPhone.jsx';
 import { usePhoneLayout } from './now/usePhoneLayout.js';
+import RibbonMeterLayer from './meter/RibbonMeterLayer.jsx';
 
 /**
  * DayView — the front page (COMP-COCKPIT-RIBBON-TOP-1): the WHAT line, the range bar, the ribbon and the cost meter on one
@@ -88,19 +88,33 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
     setTimeout(() => document.querySelector(`[data-testid="what-count-${id}"]`)?.focus(), 0); // focus returns to the count
   }, []);
   const [flashLane, setFlashLane] = useState(null);
+  const [flashSeat, setFlashSeat] = useState(null);
+  const seatsRef = useRef([]);
+  seatsRef.current = Array.isArray(meter.seats) ? meter.seats : [];
   const lanesRef = useRef([]);
   lanesRef.current = feed.data?.lanes || [];
   const flashTimer = useRef(null);
 
-  // The tray's "jump to lane": flash the row, and open the idle fold first when that lane is folded away inside it.
+  // The tray's "Show <lane> / <seat>": flash the row (opening the idle fold first when that lane is folded away inside it) or
+  // the seat in the meter (opening the meter box so the row is on screen). A target Day does not draw is left alone, so the
+  // tray falls back to the row's own action.
   useEffect(() => {
-    const onFocus = (e) => {
-      const lane = e.detail?.lane;
-      if (!lane) return;
-      if (lanesRef.current.some((l) => l.lane === lane && l.idle)) setIdle(true);
-      setFlashLane(lane);
+    const flash = (set, id) => {
+      set(id);
       clearTimeout(flashTimer.current);
-      flashTimer.current = setTimeout(() => setFlashLane(null), FLASH_CLEAR_MS);
+      flashTimer.current = setTimeout(() => { setFlashLane(null); setFlashSeat(null); }, FLASH_CLEAR_MS);
+    };
+    const onFocus = (e) => {
+      const { lane, seat } = e.detail || {};
+      if (seat && seatsRef.current.some((s) => s.id === seat)) {
+        e.preventDefault();
+        setMeterOpen(true);
+        flash(setFlashSeat, seat);
+      } else if (lane && lanesRef.current.some((l) => l.lane === lane)) {
+        e.preventDefault();
+        if (lanesRef.current.some((l) => l.lane === lane && l.idle)) setIdle(true);
+        flash(setFlashLane, lane);
+      }
     };
     window.addEventListener(EVT.focus, onFocus);
     return () => { window.removeEventListener(EVT.focus, onFocus); clearTimeout(flashTimer.current); };
@@ -179,7 +193,7 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
           capped, scrollable box that opens fully on request. Nothing is dropped; the ribbon keeps the height. */}
       <div className="shrink-0 flex flex-col gap-1" data-testid="day-meter">
         <div className={meterOpen ? 'max-h-[40vh] overflow-y-auto' : 'max-h-[104px] overflow-y-auto'} data-testid="day-meter-box">
-          <CostMeter compact {...meter} />
+          <RibbonMeterLayer meter={meter} flashSeat={flashSeat} onNavigate={onNavigate} />
         </div>
         <button type="button" className={`${link} self-start`} aria-expanded={meterOpen} data-testid="day-meter-toggle" onClick={() => setMeterOpen((v) => !v)}>
           {meterOpen ? 'Show less ▴' : 'Show all seats and dollars ▾'}

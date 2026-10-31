@@ -21,7 +21,20 @@ export function resetIn(iso, now) {
 }
 
 export const FIVE_H_ONLY = 'Team seats are 5h-only';
-export const API_CREDIT_NOTE = 'API credit: no reader yet';
+
+/**
+ * The API-credit part of a line, from the server's one reader (`GET /api/usage/credit`, api_credit.py). `credit` is
+ * `{value, error}` or null while the call is pending. A null balance is "balance not set" and `hold` is "API billing on
+ * hold", never $0.
+ */
+export function creditValue(credit) {
+  if (!credit) return 'reading…';
+  if (credit.error || !credit.value) return `unavailable: ${credit.error || 'no answer'}`;
+  const { balance_usd: bal, hold } = credit.value;
+  const money = typeof bal === 'number' && Number.isFinite(bal) ? `$${Math.round(bal).toLocaleString('en-US')} left` : 'balance not set';
+  return hold === true ? `${money} · API billing on hold` : money;
+}
+export const apiCreditText = (credit) => `API credit: ${creditValue(credit)}`;
 export const DOLLARS_PER_SEAT_NOTE = 'Dollars per seat: not recorded';
 export const RETIRED_NOTE = (n) => `${n} retired seat${n === 1 ? '' : 's'} hidden`;
 

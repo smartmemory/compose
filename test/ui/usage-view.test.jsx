@@ -128,13 +128,13 @@ const COST_ROWS = [
     expect(mt('cost-meter-hour-down')).toBe('spend unavailable: timed out');
   }],
   ['dollars: ceiling text and bar, last hour top 3 plus "+N more", per-seat not recorded, API credit muted, as-of', async () => {
-    render(<CostMeter seats={[SEAT()]} spend={SPEND_OK} asOf={NOW} now="2026-10-31T12:03:00Z" />);
+    render(<CostMeter seats={[SEAT()]} spend={SPEND_OK} asOf={NOW} now="2026-10-31T12:03:00Z" credit={{ value: { balance_usd: null, hold: true }, error: null }} />);
     expect(mt('cost-meter-ceiling')).toContain('$1,866');
     expect(screen.getByTestId('cost-meter-ceiling-bar').getAttribute('aria-valuenow')).toBe('47');
     expect(mt('cost-meter-hour')).toContain('+2 more');
     expect(mt('cost-meter-hour')).not.toContain('$ 1.00');
     expect(mt('cost-meter-per-seat-usd')).toContain('not recorded');
-    expect(mt('cost-meter-api-credit')).toBe('API credit: no reader yet');
+    expect(mt('cost-meter-api-credit')).toBe('API credit: balance not set · API billing on hold');
     expect(mt('cost-meter-asof')).toMatch(/^as of \d\d:\d\d \(3m ago\)$/);
   }],
   ['Home and Usage > Seats and fleet print the same seat numbers, with no Cadence package', async () => {
