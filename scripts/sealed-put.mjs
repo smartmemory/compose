@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import tty from 'node:tty';
 
 const REF_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const { O_WRONLY, O_CREAT, O_EXCL, O_NOFOLLOW } = fs.constants;
@@ -34,7 +35,7 @@ function checkDir(dir) {
 
 /** The value from stdin with trailing line ends dropped, or a refusal. */
 function readValue() {
-  if (process.stdin.isTTY) refuse('stdin is a terminal; pipe the value in');
+  if (tty.isatty(0)) refuse('stdin is a terminal; pipe the value in');
   const value = fs.readFileSync(0, 'utf8').replace(/[\r\n]+$/, '');
   if (!value) refuse('empty value');
   if (value === 'null') refuse('the value is the literal null (a jq field that was missing?)');
