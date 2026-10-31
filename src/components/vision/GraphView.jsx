@@ -586,7 +586,7 @@ function GatePopover({ featureCode, gates, items, badgePositions, onResolve, onC
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
-export default function GraphView({ items, connections, selectedItemId, onSelect, onCreateFeature, isEmptyProject, visibleTracks, hiddenGroups, onToggleGroup, buildStateMap, resolveGate, gates, spawnedAgents, agentRelays, agentOverlay, featureCode, focusActive }) {
+export default function GraphView({ items, connections, selectedItemId, onSelect, onOpenDoc, onCreateFeature, isEmptyProject, visibleTracks, hiddenGroups, onToggleGroup, buildStateMap, resolveGate, gates, spawnedAgents, agentRelays, agentOverlay, featureCode, focusActive }) {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   // Persistent layout: saved positions keyed by item id (leaf nodes only —
@@ -864,6 +864,13 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
       highlightChain(cy, evt.target);
       onSelect(evt.target.id());
     });
+    // COMP-ROADMAP-DOC-LINKS-1: a double tap on an item opens its design doc (the two taps before it only selected). Agent, idea
+    // and group nodes are not roadmap items. The ref keeps the handler current: this effect only re-binds on elements/stylesheet.
+    cy.on('dbltap', 'node[status]', (evt) => {
+      const data = evt.target.data();
+      if (data.isAgentNode || data.isIdeaNode || data.isGroup) return;
+      onOpenDocRef.current?.(evt.target.id());
+    });
     cy.on('tap', (evt) => {
       if (evt.target === cy) {
         cy.elements().removeClass('dimmed highlighted');
@@ -903,6 +910,8 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
 
   // COMP-UX-1e: Highlight selected item; only pan if selection came from outside the graph
   const clickedInGraphRef = useRef(false);
+  const onOpenDocRef = useRef(onOpenDoc);
+  onOpenDocRef.current = onOpenDoc;
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy || !selectedItemId) return;

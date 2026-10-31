@@ -47,7 +47,7 @@ function FilterBtn({ active, onClick, children }) {
   );
 }
 
-function TreeItem({ item, children, depth, selectedItemId, onSelect, onToggle, expandedIds }) {
+function TreeItem({ item, children, depth, selectedItemId, onSelect, onOpenDoc, onToggle, expandedIds }) {
   const hasChildren = children.length > 0;
   const isExpanded = expandedIds.has(item.id);
   const isSelected = selectedItemId === item.id;
@@ -62,6 +62,7 @@ function TreeItem({ item, children, depth, selectedItemId, onSelect, onToggle, e
       <div
         data-item-id={item.id}
         onClick={() => onSelect(item.id)}
+        onDoubleClick={() => onOpenDoc?.(item.id)}
         className={cn(
           'flex items-center gap-1.5 py-1 px-2 cursor-pointer transition-colors rounded-md',
           'hover:bg-accent/5',
@@ -133,6 +134,7 @@ function TreeItem({ item, children, depth, selectedItemId, onSelect, onToggle, e
               depth={depth + 1}
               selectedItemId={selectedItemId}
               onSelect={onSelect}
+              onOpenDoc={onOpenDoc}
               onToggle={onToggle}
               expandedIds={expandedIds}
             />
@@ -143,7 +145,7 @@ function TreeItem({ item, children, depth, selectedItemId, onSelect, onToggle, e
   );
 }
 
-export default function TreeView({ items, connections, selectedItemId, onSelect, onCreate, onCreateFeature, isEmptyProject, featureCode, focusActive }) {
+export default function TreeView({ items, connections, selectedItemId, onSelect, onOpenDoc, onCreate, onCreateFeature, isEmptyProject, featureCode, focusActive }) {
   const [expandedIds, setExpandedIds] = useState(() => new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -449,6 +451,7 @@ export default function TreeView({ items, connections, selectedItemId, onSelect,
                 depth={0}
                 selectedItemId={selectedItemId}
                 onSelect={onSelect}
+                onOpenDoc={onOpenDoc}
                 onToggle={onToggle}
                 expandedIds={expandedIds}
               />

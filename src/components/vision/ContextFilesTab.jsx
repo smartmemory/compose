@@ -11,6 +11,15 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { FileText, Folder } from 'lucide-react';
 import { wsFetch } from '../../lib/wsFetch.js';
 
+/**
+ * COMP-ROADMAP-DOC-LINKS-1: the doc a roadmap item opens on double-click: `design.md` when the item lists it, else its first file,
+ * else null (the caller opens the feature hub). `item.files` are repo-relative paths (server/feature-scan.js).
+ */
+export function primaryDocPath(item) {
+  const files = Array.isArray(item?.files) ? item.files.filter((f) => typeof f === 'string' && f) : [];
+  return files.find((f) => f.split('/').pop() === 'design.md') ?? files[0] ?? null;
+}
+
 function formatBytes(bytes) {
   if (!bytes) return '—';
   if (bytes < 1024) return `${bytes}B`;

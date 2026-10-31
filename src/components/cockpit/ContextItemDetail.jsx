@@ -127,6 +127,7 @@ export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFil
               onClose={onClose}
               onPressureTest={() => setChallengeOpen(true)}
               onResolveGate={resolveGate}
+              onOpenFile={onOpenFile}
             />
             {challengeOpen && (
               <ChallengeModal

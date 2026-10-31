@@ -17,6 +17,18 @@ const graphEntry = () => import('@wiki/components/graph');
 const GraphPage = lazy(() => graphEntry().then((m) => ({ default: m.GraphPage })));
 const GraphHost = lazy(() => graphEntry().then((m) => ({ default: m.GraphHost })));
 
+// COMP-ROADMAP-DOC-LINKS-1: a repo doc path (`docs/features/<CODE>/design.md`) opens as the wiki note for that file.
+// The wiki addresses notes by doc id, so the path is matched against the feature hub's doc list (every DocItem carries both).
+export const featureOfDocPath = (docPath) => /^docs\/features\/([^/]+)\//.exec(docPath ?? '')?.[1] ?? null;
+const samePath = (wikiPathValue, docPath) => wikiPathValue === docPath || wikiPathValue?.endsWith(`/${docPath}`) || docPath.endsWith(`/${wikiPathValue}`);
+/** @returns {Promise<{kind:'note', workspace:string, docId:string}|null>} null when the feature's hub lists no such file. */
+export async function findDocTarget(client, { workspace, docPath, featureId }) {
+  if (!workspace || !docPath || !featureId) return null;
+  const hub = await client.featureHub({ workspace, featureId });
+  const hit = (hub?.items ?? []).find((d) => d?.doc_id && samePath(d.path, docPath));
+  return hit ? { kind: 'note', workspace, docId: hit.doc_id } : null;
+}
+
 /** Compose's resolved colour mode as the Graph's `useColorMode` wants it: `{resolved}`. Read from `<html class="dark">`, which App.jsx owns; never written here. */
 function useHtmlColorMode() {
   const read = () => (typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light');
@@ -37,9 +49,10 @@ const GRAPH_ASPECT_HINT = 'grouping by feature aspect is not built yet';
  * fed by Compose's DataClient (all data through `/api/wiki`, `wiki-eng` only), plus "Open full wiki":
  * the Mac wiki's own UI in a frame, which rides the browser's wiki sign-in (WIKI-FRAME-LOOSEN-1 lets
  * http://127.0.0.1:4001 and :5195 frame it). Navigation is this component's state; the screens never route.
- * `client` is injectable for tests.
+ * `client` is injectable for tests. `docOpen` ({path}, a new object per request) opens that repo doc as a wiki note; a doc the
+ * hub does not list leaves the feature hub open.
  */
-export default function WikiView({ featureCode, workspace, frameBase, client }) {
+export default function WikiView({ featureCode, workspace, frameBase, client, docOpen }) {
   const dataClient = useMemo(() => client ?? createWikiDataClient(), [client]);
   const [code, setCode] = useState(featureCode ?? '');
   const [draft, setDraft] = useState(featureCode ?? '');
@@ -60,6 +73,16 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
     setDraft(featureCode);
     setSearch({ query: featureCode, workspace: undefined });
   }, [featureCode]);
+
+  useEffect(() => {
+    const docPath = docOpen?.path;
+    if (!docPath) return undefined;
+    let live = true;
+    findDocTarget(dataClient, { workspace, docPath, featureId: featureOfDocPath(docPath) ?? featureCode })
+      .then((target) => { if (!live) return; if (target) onNavigate(target); else setPane('feature'); })
+      .catch(() => { if (live) setPane('feature'); });
+    return () => { live = false; };
+  }, [docOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const frameSrc = `${frameBase}/ui${framePath ?? (code ? `/feature/${encodeURIComponent(code)}` : '/')}`;
   const hrefFor = (target) => `${frameBase}/ui${wikiPath(target)}`;

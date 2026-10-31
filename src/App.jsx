@@ -66,6 +66,7 @@ import AttentionQueueSidebar from './components/vision/AttentionQueueSidebar.jsx
 import StatusBand from './components/vision/StatusBand.jsx';
 import DecisionTimelineStrip from './components/vision/DecisionTimelineStrip.jsx';
 import TreeView from './components/vision/TreeView.jsx';
+import { primaryDocPath } from './components/vision/ContextFilesTab.jsx';
 import GraphView from './components/vision/GraphView.jsx';
 import GateView from './components/vision/GateView.jsx';
 import GateToast from './components/vision/GateToast.jsx';
@@ -269,6 +270,8 @@ function CockpitView({
   sessionsPane, onSessionsPaneChange,
   // COMPOSE-WIKI-TAB-1: {workspace, frameBase} from useWikiTab
   wikiTab,
+  // COMP-ROADMAP-DOC-LINKS-1: the doc the wiki opens on ({path}) and the double-click handler for tree rows and graph nodes
+  wikiDoc, onOpenDoc,
   // COMP-AUDIT-18: Home
   agentErrors, onStopAgent, untriagedIdeas, cadenceAvailable, onJumpToGate, onNavigate, onOpenFleet,
   // COMP-AUDIT-17: view keys reachable by clicks (Settings default-view picker)
@@ -314,6 +317,7 @@ function CockpitView({
           connections={filteredConnections}
           selectedItemId={selectedItemId}
           onSelect={onSelect}
+          onOpenDoc={onOpenDoc}
           onCreate={onCreate}
           onCreateFeature={onCreateFeature}
           isEmptyProject={isEmptyProject}
@@ -328,6 +332,7 @@ function CockpitView({
           connections={connections}
           selectedItemId={selectedItemId}
           onSelect={onSelect}
+          onOpenDoc={onOpenDoc}
           onCreateFeature={onCreateFeature}
           isEmptyProject={isEmptyProject}
           visibleTracks={visibleTracks}
@@ -408,7 +413,7 @@ function CockpitView({
       // The selected item's feature wins over the session's (COMPOSE-WIKI-TAB-1).
       const item = selectedItemId ? items.find(i => i.id === selectedItemId) : null;
       const code = item?.featureCode || item?.feature_code || item?.lifecycle?.featureCode || featureCode || '';
-      return <WikiView featureCode={code} workspace={wikiTab?.workspace} frameBase={wikiTab?.frameBase} />;
+      return <WikiView featureCode={code} workspace={wikiTab?.workspace} frameBase={wikiTab?.frameBase} docOpen={wikiDoc} />;
     }
     case 'qa-scope':
       return <QaScopeView featureCode={featureCode} />;
@@ -1241,11 +1246,24 @@ function AppInner() {
     handleViewChange('tree');
   }, [handleViewChange, onContextSelect, ensureItemVisible]);
 
-  // COMPOSE-DOCS-RETIRE-1: a file click in the context panel lands on Library > Wiki. The wiki
-  // view opens by feature code, not by file path, so the clicked path is not carried over.
-  const navigateToWiki = useCallback(() => {
+  // COMPOSE-DOCS-RETIRE-1: a file click lands on Library > Wiki. COMP-ROADMAP-DOC-LINKS-1: with a path it opens that doc
+  // (WikiView matches the path to a wiki note); without one, or when the hub lists no such file, the feature hub stays open.
+  // `wikiDoc` is a new object per request so the same doc can be asked for twice, and it is dropped once the view leaves the wiki.
+  const [wikiDoc, setWikiDoc] = useState(null);
+  const navigateToWiki = useCallback((path) => {
+    setWikiDoc(typeof path === 'string' && path ? { path } : null);
     handleViewChange('wiki');
   }, [handleViewChange]);
+  useEffect(() => { if (activeView !== 'wiki') setWikiDoc(null); }, [activeView]);
+  // Double-click on a tree row or graph node. handleSelect toggles, and the two clicks before a dblclick select then deselect,
+  // so this sets the selection outright (the wiki view reads the selected item's feature).
+  const openItemDoc = useCallback((id) => {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+    setSelectedItemId(id);
+    onContextSelect({ type: 'item', id });
+    navigateToWiki(primaryDocPath(item));
+  }, [items, onContextSelect, navigateToWiki]);
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
@@ -1517,6 +1535,8 @@ function AppInner() {
                       iterationStates={iterationStates}
                       focusedGateId={focusedGateId}
                       wikiTab={wikiTab}
+                      wikiDoc={wikiDoc}
+                      onOpenDoc={openItemDoc}
                       onFocusHandled={handleGateFocusHandled}
                       agentErrors={agentErrors}
                       onStopAgent={handleStopAgent}

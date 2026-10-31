@@ -47,6 +47,31 @@ function ConfidenceControl({ level, onChange }) {
   );
 }
 
+/** The item's docs (`item.files`, repo-relative paths) as links. Nothing renders for an item with none. */
+export function ItemFiles({ files, onOpenFile }) {
+  const list = Array.isArray(files) ? files.filter((f) => typeof f === 'string' && f) : [];
+  if (list.length === 0) return null;
+  return (
+    <div data-testid="item-files">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Files ({list.length})</p>
+      <ul className="space-y-0.5">
+        {list.map((path) => (
+          <li key={path}>
+            <button
+              type="button"
+              title={path}
+              onClick={() => onOpenFile?.(path)}
+              className="w-full text-left text-xs font-mono text-accent hover:underline truncate px-2 py-0.5 rounded hover:bg-muted/50"
+            >
+              {path.split('/').pop()}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function RelatedItems({ item, connections, items, onSelect, onDeleteConnection }) {
   const itemMap = new Map(items.map(i => [i.id, i]));
   const related = [];
@@ -329,7 +354,7 @@ function GateBannerActions({ gate, onResolveGate }) {
   );
 }
 
-export default function ItemDetailPanel({ item, items, connections, gates, onUpdate, onDelete, onCreateConnection, onDeleteConnection, onSelect, onClose, onPressureTest, onResolveGate }) {
+export default function ItemDetailPanel({ item, items, connections, gates, onUpdate, onDelete, onCreateConnection, onDeleteConnection, onSelect, onClose, onPressureTest, onResolveGate, onOpenFile }) {
   const confirm = useConfirm(); // COMP-COCKPIT-1
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
@@ -548,6 +573,9 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
               </p>
             )}
           </div>
+
+          {/* COMP-ROADMAP-DOC-LINKS-1: the item's docs; a click opens that doc in the wiki pane */}
+          <ItemFiles files={item.files} onOpenFile={onOpenFile} />
 
           {/* Related items */}
           <RelatedItems
