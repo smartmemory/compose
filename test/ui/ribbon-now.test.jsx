@@ -154,6 +154,7 @@ describe('now lists (COMP-COCKPIT-RIBBON-NOW-1)', () => {
     const parts = [
       ['what line', !!screen.queryByTestId('what-line')],
       ['meter', !!screen.queryByTestId('cost-meter')],
+      ['meter box is capped, not collapsed', screen.getByTestId('day-phone-meter-box').className.includes('max-h-[120px]') && screen.getByTestId('day-phone-meter').className.includes('shrink-0')],
       ['now list', screen.getAllByTestId('day-phone-lane').length > 0],
       ['landed list', !!screen.queryByTestId('day-phone-landed')],
       ['no ribbon', !screen.queryByTestId('day-ribbon')],

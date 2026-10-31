@@ -3,7 +3,7 @@
  * the WHAT line, the cost meter and one "now" list. The alert chip lives in the header already. Everything here wraps; the
  * page never scrolls sideways.
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import WhatLine from '../../cockpit/what/WhatLine.jsx';
 import CostMeter from '../../cockpit/cost/CostMeter.jsx';
 import { phoneLines, landedSince, agoWords, sinceWords } from './nowLists.js';
@@ -11,13 +11,20 @@ import { phoneLines, landedSince, agoWords, sinceWords } from './nowLists.js';
 const sub = 'text-[12px] text-muted-foreground';
 
 export default function DayPhone({ feed, index, meter, lastVisitAt, onOpenFleet, onNavigate, onCountOpen, now = Date.now() }) {
+  const [meterOpen, setMeterOpen] = useState(false);
   const lines = useMemo(() => phoneLines(feed, index, now), [feed, index, now]);
   const landed = useMemo(() => landedSince(index, lastVisitAt, null), [index, lastVisitAt]);
   return (
     <div className="h-full min-w-0 overflow-y-auto overflow-x-hidden flex flex-col gap-3 p-3" data-testid="day-phone">
-      <WhatLine onOpenFleet={onOpenFleet} onNavigate={onNavigate} onCountOpen={onCountOpen} />
-      <div className="min-w-0 max-w-full overflow-x-hidden" data-testid="day-phone-meter"><CostMeter compact {...meter} /></div>
-      <section data-testid="day-phone-now" className="min-w-0">
+      <div className="shrink-0"><WhatLine onOpenFleet={onOpenFleet} onNavigate={onNavigate} onCountOpen={onCountOpen} /></div>
+      {/* shrink-0: an overflow-x-hidden flex child may shrink to nothing in this column, which hid the meter in the live shot. */}
+      <div className="shrink-0 min-w-0 max-w-full flex flex-col gap-1" data-testid="day-phone-meter">
+        <div className={`${meterOpen ? 'max-h-[60vh]' : 'max-h-[120px]'} overflow-y-auto overflow-x-hidden`} data-testid="day-phone-meter-box"><CostMeter compact {...meter} /></div>
+        <button type="button" className="self-start text-[12px] text-muted-foreground hover:text-foreground hover:underline outline-none" aria-expanded={meterOpen} data-testid="day-phone-meter-toggle" onClick={() => setMeterOpen((v) => !v)}>
+          {meterOpen ? 'Show less ▴' : 'Show all seats and dollars ▾'}
+        </button>
+      </div>
+      <section data-testid="day-phone-now" className="shrink-0 min-w-0">
         <h2 className="m-0 mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Now</h2>
         {lines === null ? <p className={`m-0 ${sub}`} data-testid="now-unavailable">source unavailable</p>
           : lines.length === 0 ? <p className={`m-0 ${sub}`}>Nothing current, waiting or queued.</p>
@@ -29,7 +36,7 @@ export default function DayPhone({ feed, index, meter, lastVisitAt, onOpenFleet,
               </ul>
             )}
       </section>
-      <section data-testid="day-phone-landed" className="min-w-0">
+      <section data-testid="day-phone-landed" className="shrink-0 min-w-0">
         <h2 className="m-0 mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           {landed === null ? 'Landed since you left' : `Landed since you left (${landed.rows.length})`}
         </h2>
