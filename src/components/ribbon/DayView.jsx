@@ -9,6 +9,13 @@ import { useRibbonWindow } from './useRibbonWindow.js';
 import { useRibbonFeed } from './useRibbonFeed.js';
 import RibbonLaneLayer from './lane/RibbonLaneLayer.jsx';
 import RibbonMarksLayer from './marks/RibbonMarksLayer.jsx';
+import { useFleet } from '../../lib/fleetPoller.js';
+import { useUnitIndex } from '../../lib/useUnitIndex.js';
+import { useAgentState } from '../cockpit/what/useAgentState.js';
+import { readLastVisit } from '../cockpit/what/whatRules.js';
+import NowDrawer from './now/NowDrawer.jsx';
+import DayPhone from './now/DayPhone.jsx';
+import { usePhoneLayout } from './now/usePhoneLayout.js';
 
 /**
  * DayView — the front page (COMP-COCKPIT-RIBBON-TOP-1): the WHAT line, the range bar, the ribbon and the cost meter on one
@@ -66,6 +73,20 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
     try { sessionStorage.setItem(IDLE_OPEN_KEY, open ? '1' : '0'); } catch { /* storage denied */ }
   }, []);
   const [meterOpen, setMeterOpen] = useState(false);
+  // RIBBON-NOW-1: the WHAT counts open "now" lists here; the phone layout drops the ribbon.
+  const phone = usePhoneLayout();
+  const fleet = useFleet().data;
+  const unitIndex = useUnitIndex().data;
+  const agent = useAgentState();
+  const [lastVisitAt] = useState(readLastVisit);
+  const [nowKind, setNowKind] = useState(null);
+  const nowKindRef = useRef(null);
+  nowKindRef.current = nowKind;
+  const closeNow = useCallback(() => {
+    const id = { working: 'working', waiting: 'review', landed: 'landed' }[nowKindRef.current];
+    setNowKind(null);
+    setTimeout(() => document.querySelector(`[data-testid="what-count-${id}"]`)?.focus(), 0); // focus returns to the count
+  }, []);
   const [flashLane, setFlashLane] = useState(null);
   const lanesRef = useRef([]);
   lanesRef.current = feed.data?.lanes || [];
@@ -96,10 +117,20 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
   const missing = sourceErrorLines(feed.data?.sourceErrors);
   const link = 'text-[12px] text-muted-foreground hover:text-foreground hover:underline focus-visible:underline outline-none';
 
+  const drawer = nowKind && <NowDrawer kind={nowKind} onClose={closeNow} fleet={fleet} index={unitIndex} feed={feed.data} agent={agent} lastVisitAt={lastVisitAt} />;
+  if (phone) {
+    return (
+      <div className="h-full min-h-0 overflow-hidden" data-testid="day-view">
+        <DayPhone feed={feed.data} index={unitIndex} meter={meter} lastVisitAt={lastVisitAt} onOpenFleet={onOpenFleet} onNavigate={onNavigate} onCountOpen={setNowKind} />
+        {drawer}
+      </div>
+    );
+  }
+
   return (
     <div className="h-full min-h-0 flex flex-col gap-2 p-3 overflow-hidden" data-testid="day-view">
       <div className="sticky top-0 z-10 bg-background" data-testid="day-what">
-        <WhatLine onOpenFleet={onOpenFleet} onNavigate={onNavigate} />
+        <WhatLine onOpenFleet={onOpenFleet} onNavigate={onNavigate} onCountOpen={setNowKind} />
       </div>
       <RangeBar
         window={win.window}
@@ -159,6 +190,7 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
         <button type="button" className={link} data-testid="day-link-process" onClick={() => onNavigate?.('process')}>Is the process improving? ▸</button>
         <button type="button" className={link} data-testid="day-link-ops" onClick={() => onNavigate?.('ops')}>How far is 2.0 from flipping? ▸</button>
       </div>
+      {drawer}
     </div>
   );
 }

@@ -3,7 +3,8 @@
  * "<State>: <n> working · <n> waiting on review · <n> waiting on you · <n> landed since your last visit".
  *
  * The state word and counts come from whatRules.js (a rule table, no model call); hovering the state word shows the
- * table with the matching row marked. An unknown source reads "?" with "source unavailable", never 0. While the fleet
+ * table with the matching row marked. The optional `onCountOpen(kind)` (RIBBON-NOW-1, `working` | `waiting` | `landed`)
+ * takes those three counts instead of navigating; waiting-on-you always opens the inbox. An unknown source reads "?" with "source unavailable", never 0. While the fleet
  * or the unit index is still loading it draws a skeleton. Each count links to the place that lists those things.
  */
 import React from 'react';
@@ -37,7 +38,7 @@ function Count({ id, n, label, why, onClick }) {
   );
 }
 
-export default function WhatLine({ onOpenFleet, onNavigate }) {
+export default function WhatLine({ onOpenFleet, onNavigate, onCountOpen }) {
   const { data: fleet, loading: fleetLoading } = useFleet();
   const { data: index, loading: indexLoading } = useUnitIndex();
   const agent = useAgentState();
@@ -101,9 +102,9 @@ export default function WhatLine({ onOpenFleet, onNavigate }) {
         </span>
         <span>:</span>
       </span>
-      <Count id="working" n={counts.working} label="working" why={unknown} onClick={() => onOpenFleet?.()} />
+      <Count id="working" n={counts.working} label="working" why={unknown} onClick={() => (onCountOpen ? onCountOpen('working') : onOpenFleet?.())} />
       <span aria-hidden="true">·</span>
-      <Count id="review" n={counts.waitingReview} label="waiting on review" why={unknown} onClick={() => onNavigate?.('process')} />
+      <Count id="review" n={counts.waitingReview} label="waiting on review" why={unknown} onClick={() => (onCountOpen ? onCountOpen('waiting') : onNavigate?.('process'))} />
       <span aria-hidden="true">·</span>
       <Count id="you" n={counts.waitingYou} label="waiting on you" why={unknown} onClick={openInbox} />
       <span aria-hidden="true">·</span>
@@ -112,7 +113,7 @@ export default function WhatLine({ onOpenFleet, onNavigate }) {
         n={counts.landedSinceVisit}
         label="landed since your last visit"
         why={lastVisitAt === null && index?.units ? 'no earlier visit recorded' : unknown}
-        onClick={() => onNavigate?.('process')}
+        onClick={() => (onCountOpen ? onCountOpen('landed') : onNavigate?.('process'))}
       />
       {asOf && <span data-testid="what-asof" className="text-[11px] text-muted-foreground">{asOf}</span>}
     </div>
