@@ -1,0 +1,153 @@
+{
+  "_note": "Fixture shaped like the ribbon contract response: a window entirely in the past (now is after `to`), covered by history.",
+  "from": "2026-10-29T18:00:00-07:00",
+  "to": "2026-10-30T18:00:00-07:00",
+  "now": "2026-10-31T16:40:00-07:00",
+  "live": false,
+  "asOf": "2026-10-31T16:40:00-07:00",
+  "ageS": 30,
+  "lanes": [
+    {
+      "lane": "2.0",
+      "group": "product",
+      "seat": "seat1",
+      "idle": false,
+      "current": null,
+      "spans": [
+        {
+          "kind": "work",
+          "start": "2026-10-29T18:00:00-07:00",
+          "end": "2026-10-30T06:00:00-07:00",
+          "unit": "S-0",
+          "title": "Auth model",
+          "job": "authoring",
+          "cause": null,
+          "why": null
+        },
+        {
+          "kind": "wait",
+          "start": "2026-10-30T06:00:00-07:00",
+          "end": "2026-10-30T09:30:00-07:00",
+          "unit": "S-0",
+          "title": "Auth model",
+          "job": null,
+          "cause": "quota",
+          "why": "waiting on quota 3 h 30 m"
+        },
+        {
+          "kind": "work",
+          "start": "2026-10-30T09:30:00-07:00",
+          "end": "2026-10-30T17:00:00-07:00",
+          "unit": "S-1",
+          "title": "Auth retry",
+          "job": "authoring",
+          "cause": null,
+          "why": null
+        }
+      ],
+      "marks": [
+        {
+          "kind": "land",
+          "at": "2026-10-30T17:00:00-07:00",
+          "unit": "S-1",
+          "title": "Auth retry",
+          "text": null,
+          "reverse": null,
+          "source": "stamps"
+        }
+      ],
+      "next": [],
+      "eta": null
+    },
+    {
+      "lane": "ops",
+      "group": "ops",
+      "seat": "seat2",
+      "idle": false,
+      "current": null,
+      "spans": [
+        {
+          "kind": "work",
+          "start": "2026-10-29T18:00:00-07:00",
+          "end": "2026-10-30T12:00:00-07:00",
+          "unit": "O-0",
+          "title": "Cost meter",
+          "job": "authoring",
+          "cause": null,
+          "why": null
+        },
+        {
+          "kind": "wait",
+          "start": "2026-10-30T12:00:00-07:00",
+          "end": "2026-10-30T14:00:00-07:00",
+          "unit": "O-0",
+          "title": "Cost meter",
+          "job": null,
+          "cause": "gate",
+          "why": "waiting on gate 2 h"
+        }
+      ],
+      "marks": [
+        {
+          "kind": "land",
+          "at": "2026-10-30T11:50:00-07:00",
+          "unit": "O-0",
+          "title": "Cost meter",
+          "text": null,
+          "reverse": null,
+          "source": "stamps"
+        },
+        {
+          "kind": "decide",
+          "at": "2026-10-30T13:00:00-07:00",
+          "unit": null,
+          "title": "Keep seat3 free",
+          "text": "Kept seat3 free",
+          "reverse": null,
+          "source": "stamps"
+        }
+      ],
+      "next": [],
+      "eta": null
+    },
+    {
+      "lane": "maya",
+      "group": "ops",
+      "seat": "seat3",
+      "idle": true,
+      "current": null,
+      "spans": [],
+      "marks": [],
+      "next": [],
+      "eta": null
+    }
+  ],
+  "bands": [],
+  "pins": [],
+  "coverage": {
+    "n": 4,
+    "dispatched": 4,
+    "pct": 100,
+    "label": "start stamps on 100% of landings"
+  },
+  "history": {
+    "stamps.landed_at": {
+      "earliest": "2026-09-01T00:00:00-07:00",
+      "note": null
+    },
+    "stamps.dispatched_at": {
+      "earliest": "2026-09-01T00:00:00-07:00",
+      "note": null
+    },
+    "ownerQueue": {
+      "earliest": "2026-09-01T00:00:00-07:00",
+      "note": null
+    },
+    "ledger": {
+      "earliest": "2026-09-01T00:00:00-07:00",
+      "note": null
+    }
+  },
+  "notRecorded": [],
+  "sourceErrors": {}
+}

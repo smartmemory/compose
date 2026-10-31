@@ -1,0 +1,522 @@
+{
+  "_note": "Fixture shaped like OPS/units/COMP-COCKPIT-RIBBON-FEED-1/ribbon-contract.json (response). Illustrative lanes, same as the owner-picked mock. Window yesterday 18:00 to tomorrow 06:00, now 16:40.",
+  "from": "2026-10-30T18:00:00-07:00",
+  "to": "2026-11-01T06:00:00-07:00",
+  "now": "2026-10-31T16:40:00-07:00",
+  "live": true,
+  "asOf": "2026-10-31T16:40:00-07:00",
+  "ageS": 30,
+  "lanes": [
+    {
+      "lane": "2.0",
+      "group": "product",
+      "seat": "seat1",
+      "idle": false,
+      "current": {
+        "id": "COMP-SEARCH-1",
+        "title": "Search filters by workspace",
+        "titleSource": "stamp",
+        "since": "2026-10-31T09:30:00-07:00"
+      },
+      "spans": [
+        {
+          "kind": "work",
+          "start": "2026-10-30T18:00:00-07:00",
+          "end": "2026-10-30T22:10:00-07:00",
+          "unit": "S-1",
+          "title": "Auth retry",
+          "job": "authoring",
+          "cause": null,
+          "why": null
+        },
+        {
+          "kind": "work",
+          "start": "2026-10-30T22:15:00-07:00",
+          "end": "2026-10-31T02:30:00-07:00",
+          "unit": "S-2",
+          "title": "Search facets spike",
+          "job": "authoring",
+          "cause": null,
+          "why": null
+        },
+        {
+          "kind": "wait",
+          "start": "2026-10-31T02:30:00-07:00",
+          "end": "2026-10-31T06:00:00-07:00",
+          "unit": "S-2",
+          "title": "Search facets spike",
+          "job": null,
+          "cause": "review",
+          "why": "waiting on review 3 h 30 m"
+        },
+        {
+          "kind": "work",
+          "start": "2026-10-31T06:00:00-07:00",
+          "end": "2026-10-31T09:20:00-07:00",
+          "unit": "S-3",
+          "title": "Beta banner",
+          "job": "fix_rounds",
+          "cause": null,
+          "why": null
+        },
+        {
+          "kind": "work",
+          "start": "2026-10-31T09:30:00-07:00",
+          "end": "2026-10-31T16:40:00-07:00",
+          "unit": "COMP-SEARCH-1",
+          "title": "Search filters by workspace",
+          "job": "authoring",
+          "cause": null,
+          "why": null
+        }
+      ],
+      "marks": [
+        {
+          "kind": "land",
+          "at": "2026-10-30T22:10:00-07:00",
+          "unit": "S-1",
+          "title": "Auth retry",
+          "text": null,
+          "reverse": null,
+          "source": "stamps"
+        },
+        {
+          "kind": "decide",
+          "at": "2026-10-31T04:00:00-07:00",
+          "unit": null,
+          "title": "Hold beta for search filters",
+          "text": "Held the beta date",
+          "reverse": "Re-open the beta date in the owner queue",
+          "source": "owner-queue"
+        },
+        {
+          "kind": "land",
+          "at": "2026-10-31T09:20:00-07:00",
+          "unit": "S-3",
+          "title": "Beta banner",
+          "text": null,
+          "reverse": null,
+          "source": "stamps"
+        },
+        {
+          "kind": "deploy",
+          "at": "2026-10-31T09:25:00-07:00",
+          "unit": "S-3",
+          "title": "Beta banner",
+          "text": "smartmemory.ai",
+          "reverse": null,
+          "source": "stamps"
+        }
+      ],
+      "next": [
+        {
+          "id": "COMP-SW-1",
+          "title": "Workspace switcher polish",
+          "titleSource": "stamp"
+        },
+        {
+          "id": "COMP-SW-2",
+          "title": "Facet counts",
+          "titleSource": "stamp"
+        }
+      ],
+      "eta": {
+        "p50": "2026-11-02T12:00:00-07:00",
+        "p80": "2026-11-02T18:00:00-07:00",
+        "asOf": "2026-10-31T16:40:00-07:00",
+        "raw": "p50 Mon",
+        "prev": null
+      }
+    },
+    {
+      "lane": "main",
+      "group": "product",
+      "seat": "seat4",
+      "idle": false,
+      "current": {
+        "id": "M-2",
+        "title": "Session token refresh",
+        "titleSource": "stamp",
+        "since": "2026-10-31T11:40:00-07:00"
+      },
+      "spans": [
+        {
+          "kind": "work",
+          "start": "2026-10-30T18:00:00-07:00",
+          "end": "2026-10-31T00:30:00-07:00",
+          "unit": "M-1",
+          "title": "Clerk retry",
+          "job": "authoring",
+          "cause": null,
+          "why": null
+        },
+        {
+          "kind": "work",
+          "start": "2026-10-31T00:40:00-07:00",
+          "end": "2026-10-31T11:40:00-07:00",
+          "unit": "M-2",
+          "title": "Session token refresh",
+          "job": "authoring",
+          "cause": null,
+          "why": null
+        },
+        {
+          "kind": "wait",
+          "start": "2026-10-31T11:40:00-07:00",
+          "end": "2026-10-31T16:40:00-07:00",
+          "unit": "M-2",
+          "title": "Session token refresh",
+          "job": null,
+          "cause": "review",
+          "why": "waiting on review 5 h"
+        }
+      ],
+      "marks": [
+        {
+          "kind": "land",
+          "at": "2026-10-31T00:30:00-07:00",
+          "unit": "M-1",
+          "title": "Clerk retry",
+          "text": null,
+          "reverse": null,
+          "source": "stamps"
+        }
+      ],
+      "next": [
+        {
+          "id": "M-3",
+          "title": "Clerk retry follow-up",
+          "titleSource": "stamp"
+        }
+      ],
+      "eta": {
+        "p50": "2026-11-01T02:00:00-07:00",
+        "p80": "2026-11-01T05:00:00-07:00",
+        "asOf": "2026-10-31T16:40:00-07:00",
+        "raw": "p50 02:00 Sun",
+        "prev": null
+      }
+    },
+    {
+      "lane": "web",
+      "group": "product",
+      "seat": "seat4",
+      "idle": false,
+      "current": {
+        "id": "W-2",
+        "title": "Pricing page copy",
+        "titleSource": "stamp",
+        "since": "2026-10-31T10:20:00-07:00"
+      },
+      "spans": [
+        {
+          "kind": "notRecorded",
+          "start": "2026-10-30T18:00:00-07:00",
+          "end": "2026-10-31T00:15:00-07:00",
+          "unit": null,
+          "title": null,
+          "job": null,
+          "cause": null,
+          "why": "not recorded: no dispatch stamp (rule U-d)"
+        },
+        {
+          "kind": "work",
+          "start": "2026-10-31T00:20:00-07:00",
+          "end": "2026-10-31T08:40:00-07:00",
+          "unit": "W-1",
+          "title": "Pricing grid",
+          "job": "authoring",
+          "cause": null,
+          "why": null
+        },
+        {
+          "kind": "work",
+          "start": "2026-10-31T08:50:00-07:00",
+          "end": "2026-10-31T16:40:00-07:00",
+          "unit": "W-2",
+          "title": "Pricing page copy",
+          "job": "authoring",
+          "cause": null,
+          "why": null
+        }
+      ],
+      "marks": [
+        {
+          "kind": "land",
+          "at": "2026-10-31T08:40:00-07:00",
+          "unit": "W-1",
+          "title": "Pricing grid",
+          "text": null,
+          "reverse": null,
+          "source": "stamps"
+        },
+        {
+          "kind": "deploy",
+          "at": "2026-10-31T08:45:00-07:00",
+          "unit": "W-1",
+          "title": "Pricing grid",
+          "text": "smartmemory.ai",
+          "reverse": null,
+          "source": "stamps"
+        },
+        {
+          "kind": "deployFail",
+          "at": "2026-10-31T12:10:00-07:00",
+          "unit": "W-1",
+          "title": "Pricing grid",
+          "text": "smartmemory.ai",
+          "reverse": null,
+          "source": "stamps"
+        }
+      ],
+      "next": [
+        {
+          "id": "W-3",
+          "title": "Docs nav",
+          "titleSource": "stamp"
+        }
+      ],
+      "eta": {
+        "p50": "2026-10-31T21:30:00-07:00",
+        "p80": "2026-11-01T01:00:00-07:00",
+        "asOf": "2026-10-31T16:40:00-07:00",
+        "raw": "p50 21:30",
+        "prev": null
+      }
+    },
+    {
+      "lane": "ops",
+      "group": "ops",
+      "seat": "seat2",
+      "idle": false,
+      "current": {
+        "id": "O-2",
+        "title": "Launch gate author bypass",
+        "titleSource": "stamp",
+        "since": "2026-10-31T14:40:00-07:00"
+      },
+      "spans": [
+        {
+          "kind": "work",
+          "start": "2026-10-30T18:00:00-07:00",
+          "end": "2026-10-31T04:00:00-07:00",
+          "unit": "O-1",
+          "title": "Seat equity report",
+          "job": "authoring",
+          "cause": null,
+          "why": null
+        },
+        {
+          "kind": "work",
+          "start": "2026-10-31T04:10:00-07:00",
+          "end": "2026-10-31T14:40:00-07:00",
+          "unit": "O-2",
+          "title": "Launch gate author bypass",
+          "job": "authoring",
+          "cause": null,
+          "why": null
+        },
+        {
+          "kind": "wait",
+          "start": "2026-10-31T14:40:00-07:00",
+          "end": "2026-10-31T16:40:00-07:00",
+          "unit": "O-2",
+          "title": "Launch gate author bypass",
+          "job": null,
+          "cause": "owner",
+          "why": "waiting on you 2 h"
+        }
+      ],
+      "marks": [
+        {
+          "kind": "land",
+          "at": "2026-10-31T04:00:00-07:00",
+          "unit": "O-1",
+          "title": "Seat equity report",
+          "text": null,
+          "reverse": null,
+          "source": "stamps"
+        },
+        {
+          "kind": "decide",
+          "at": "2026-10-31T12:20:00-07:00",
+          "unit": "O-2",
+          "title": "Skip the load hold for authors",
+          "text": "Allowed authors to skip the load hold",
+          "reverse": "Remove the bypass flag",
+          "source": "owner-queue"
+        }
+      ],
+      "next": [
+        {
+          "id": "O-3",
+          "title": "Launch gate rollout",
+          "titleSource": "stamp"
+        }
+      ],
+      "eta": {
+        "p50": "2026-11-01T03:00:00-07:00",
+        "p80": "2026-11-01T06:00:00-07:00",
+        "asOf": "2026-10-31T16:40:00-07:00",
+        "raw": "p50 03:00 Sun",
+        "prev": null
+      }
+    },
+    {
+      "lane": "wiki",
+      "group": "ops",
+      "seat": "seat1",
+      "idle": false,
+      "current": {
+        "id": "K-2",
+        "title": "Ledger local time zone",
+        "titleSource": "stamp",
+        "since": "2026-10-31T03:40:00-07:00"
+      },
+      "spans": [
+        {
+          "kind": "work",
+          "start": "2026-10-30T18:00:00-07:00",
+          "end": "2026-10-31T03:40:00-07:00",
+          "unit": "K-1",
+          "title": "Wiki page history",
+          "job": "authoring",
+          "cause": null,
+          "why": null
+        },
+        {
+          "kind": "work",
+          "start": "2026-10-31T03:40:00-07:00",
+          "end": "2026-10-31T16:40:00-07:00",
+          "unit": "K-2",
+          "title": "Ledger local time zone",
+          "job": "authoring",
+          "cause": null,
+          "why": null
+        }
+      ],
+      "marks": [
+        {
+          "kind": "land",
+          "at": "2026-10-31T03:40:00-07:00",
+          "unit": "K-1",
+          "title": "Wiki page history",
+          "text": null,
+          "reverse": null,
+          "source": "stamps"
+        }
+      ],
+      "next": [
+        {
+          "id": "K-4",
+          "title": "Wiki page history",
+          "titleSource": "stamp"
+        }
+      ],
+      "eta": {
+        "p50": "2026-11-01T01:00:00-07:00",
+        "p80": "2026-11-01T04:00:00-07:00",
+        "asOf": "2026-10-31T16:40:00-07:00",
+        "raw": "p50 01:00 Sun",
+        "prev": null
+      }
+    },
+    {
+      "lane": "maya",
+      "group": "ops",
+      "seat": "seat3",
+      "idle": true,
+      "current": null,
+      "spans": [],
+      "marks": [],
+      "next": [],
+      "eta": null
+    },
+    {
+      "lane": "docs",
+      "group": "ops",
+      "seat": "seat3",
+      "idle": true,
+      "current": null,
+      "spans": [],
+      "marks": [],
+      "next": [],
+      "eta": null
+    },
+    {
+      "lane": "trader",
+      "group": "ops",
+      "seat": "seat3",
+      "idle": true,
+      "current": null,
+      "spans": [],
+      "marks": [],
+      "next": [],
+      "eta": null
+    }
+  ],
+  "bands": [],
+  "pins": [
+    {
+      "kind": "seatReset",
+      "at": "2026-10-31T18:10:00-07:00",
+      "label": "seat2 18:10",
+      "seat": "seat2",
+      "atGate": true
+    },
+    {
+      "kind": "seatReset",
+      "at": "2026-10-31T19:30:00-07:00",
+      "label": "seat1 19:30",
+      "seat": "seat1",
+      "atGate": false
+    },
+    {
+      "kind": "seatReset",
+      "at": "2026-10-31T22:40:00-07:00",
+      "label": "seat3 22:40",
+      "seat": "seat3",
+      "atGate": false
+    },
+    {
+      "kind": "seatReset",
+      "at": "2026-10-31T23:05:00-07:00",
+      "label": "seat4 23:05",
+      "seat": "seat4",
+      "atGate": false
+    },
+    {
+      "kind": "expiry",
+      "at": "2026-11-10T00:00:00-07:00",
+      "label": "credits 11-10",
+      "seat": null,
+      "atGate": false
+    }
+  ],
+  "coverage": {
+    "n": 17,
+    "dispatched": 10,
+    "pct": 59,
+    "label": "start stamps on 59% of landings"
+  },
+  "history": {
+    "stamps.landed_at": {
+      "earliest": "2026-09-01T00:00:00-07:00",
+      "note": null
+    },
+    "stamps.dispatched_at": {
+      "earliest": "2026-09-01T00:00:00-07:00",
+      "note": null
+    },
+    "ownerQueue": {
+      "earliest": "2026-09-01T00:00:00-07:00",
+      "note": null
+    },
+    "ledger": {
+      "earliest": "2026-09-01T00:00:00-07:00",
+      "note": null
+    }
+  },
+  "notRecorded": [],
+  "sourceErrors": {}
+}

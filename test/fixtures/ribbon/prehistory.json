@@ -1,0 +1,60 @@
+{
+  "_note": "Fixture shaped like the ribbon contract response: a window before any source began recording (earliest stamps are in September).",
+  "from": "2026-08-01T00:00:00-07:00",
+  "to": "2026-08-02T00:00:00-07:00",
+  "now": "2026-10-31T16:40:00-07:00",
+  "live": false,
+  "asOf": "2026-10-31T16:40:00-07:00",
+  "ageS": 30,
+  "lanes": [
+    {
+      "lane": "2.0",
+      "group": "product",
+      "seat": "seat1",
+      "idle": false,
+      "current": null,
+      "spans": [],
+      "marks": [],
+      "next": [],
+      "eta": null
+    },
+    {
+      "lane": "ops",
+      "group": "ops",
+      "seat": "seat2",
+      "idle": false,
+      "current": null,
+      "spans": [],
+      "marks": [],
+      "next": [],
+      "eta": null
+    }
+  ],
+  "bands": [],
+  "pins": [],
+  "coverage": {
+    "n": 0,
+    "dispatched": 0,
+    "pct": null,
+    "label": "start stamps on 0% of landings"
+  },
+  "history": {
+    "stamps.landed_at": {
+      "earliest": "2026-09-01T00:00:00-07:00",
+      "note": "stamps begin 2026-09-01"
+    },
+    "stamps.dispatched_at": {
+      "earliest": "2026-09-01T00:00:00-07:00",
+      "note": "stamps begin 2026-09-01"
+    }
+  },
+  "notRecorded": [
+    {
+      "source": "stamps.dispatched_at",
+      "start": "2026-08-01T00:00:00-07:00",
+      "end": "2026-08-02T00:00:00-07:00",
+      "why": "not recorded: stamps begin 2026-09-01"
+    }
+  ],
+  "sourceErrors": {}
+}
