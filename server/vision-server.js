@@ -38,6 +38,7 @@ import { DesignSessionManager } from './design-session.js';
 import { attachPipelineRoutes } from './pipeline-routes.js';
 import { attachIdeaboxRoutes } from './ideabox-routes.js';
 import { attachBuildRoutes } from './build-routes.js';
+import { liveBuildState } from './workspace-activity.js';
 import { attachFeatureScaffoldRoutes } from './feature-scaffold-routes.js';
 import { attachUsageRoutes } from './usage-routes.js';
 import { attachJournalRoutes } from './journal-routes.js';
@@ -205,7 +206,7 @@ export class VisionServer {
       try {
         if (fs.existsSync(buildPath)) {
           const state = JSON.parse(fs.readFileSync(buildPath, 'utf-8'));
-          res.json({ state });
+          res.json({ state: liveBuildState(state) });
         } else {
           res.json({ state: null });
         }
