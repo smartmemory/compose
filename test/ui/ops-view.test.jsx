@@ -111,10 +111,11 @@ describe('OpsView', () => {
 
   for (const [name, run] of VIEW_ROWS) it(name, run);
 
-  it('empty index shows a notice and no Builder page link', async () => {
+  it('empty index shows a notice and no iframe', async () => {
     vi.stubGlobal('fetch', mockApi({ pages: [] }));
-    render(<OpsView />);
+    const { container } = render(<OpsView />);
     await waitFor(() => screen.getByText(/No Ops status pages/));
+    expect(container.querySelector('iframe')).toBeNull();
     expect(screen.queryByText('Builder page ↗')).toBeNull();
   });
 });
