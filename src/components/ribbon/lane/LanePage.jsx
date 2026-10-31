@@ -9,8 +9,20 @@ import { SEGMENT_WORD, chainForLane, unitSegments } from './laneLogic.js';
 const SEG_CLASS = {
   authoring: 'bg-blue-500', review: 'bg-violet-500', fix_rounds: 'bg-amber-500', gate: 'bg-teal-500',
   waitReview: 'bg-violet-300', waitOwner: 'bg-orange-400', waitGate: 'bg-teal-300', waitQuota: 'bg-rose-300', waitUnknown: 'bg-zinc-400',
-  notRecorded: 'bg-zinc-300',
+  notRecorded: 'bg-transparent border border-dashed border-muted-foreground',
 };
+
+/** Legend rows `[segment key, word]`: the page draws these colours and nothing else explains them. */
+const LEGEND = [['authoring', 'author'], ['review', 'review'], ['fix_rounds', 'fix'], ['gate', 'gate'], ['waitReview', 'waiting on review'], ['waitOwner', 'waiting on you'], ['notRecorded', 'not recorded']];
+
+function Legend() {
+  return (
+    <ul className="m-0 mb-2 p-0 list-none flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-muted-foreground" data-testid="lane-legend">
+      {LEGEND.map(([k, word]) => <li key={k} className="flex items-center gap-1"><span className={`inline-block h-2.5 w-4 rounded-sm ${SEG_CLASS[k]}`} />{word}</li>)}
+      <li className="flex items-center gap-1"><span className="inline-block h-3 w-[3px] bg-foreground" />landed</li>
+    </ul>
+  );
+}
 const H = 'm-0 mb-2 text-[11px] font-semibold tracking-wide text-muted-foreground';
 
 const pct = (t, from, to) => Math.min(100, Math.max(0, ((toMs(t) - toMs(from)) / (toMs(to) - toMs(from))) * 100));
@@ -82,6 +94,7 @@ export default function LanePage({ lane, from, to, now, onBack }) {
       <p className="m-0 mb-3 text-[12px] text-muted-foreground">{windowTitle(from, to, now)}</p>
       <section className="py-2 border-t border-border" data-testid="lane-units">
         <h3 className={H}>UNITS · AUTHOR → REVIEW → FIX → GATE → LAND → DEPLOY</h3>
+        {rows.length > 0 && <Legend />}
         {rows.length === 0 && <p className="m-0 text-[13px] text-muted-foreground" data-testid="lane-units-empty">nothing ran in this window</p>}
         {rows.map((r, i) => <UnitRow key={`${r.unit}${i}`} row={r} lane={lane} from={from} to={to} now={now} />)}
       </section>
