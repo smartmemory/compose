@@ -1,14 +1,20 @@
 /**
- * InboxDrawer.jsx — COMP-COCKPIT-NOTIFY-INBOX-1 (phase 1, read-only): a right-side drawer over the owner queue, grouped by
- * inboxLogic.js (Security, Asks, Decided for you, FYI). Opened by `compose:open-inbox` (it calls preventDefault so the
- * Fleet-pane fallback does not also fire). Rows expand in place to their full text. It reads the shared fleet poll and
- * writes nothing: no answer, no dismiss (phase 2 is COMP-NOTIFY-ASKS-1).
+ * InboxDrawer.jsx — COMP-COCKPIT-NOTIFY-INBOX-1: a right-side drawer over the owner queue, grouped by inboxLogic.js
+ * (Security, Asks, Decided for you, FYI). Opened by `compose:open-inbox` (it calls preventDefault so the Fleet-pane
+ * fallback does not also fire). Rows expand in place to their full text. It reads the shared fleet poll.
+ * COMP-COCKPIT-NOTIFY-ACTIONS-1 (supersedes COMP-NOTIFY-ASKS-1): every row carries its class's inline actions
+ * (NotifyActions.jsx). An answered ask stays as "answered HH:MM: <answer>" until the queue drops it, then moves to a
+ * folded "Answered (n)" list (last 24 h). Cleared info rows move to a folded "Cleared (n)" list with Restore.
+ * Keys: j/k select, Enter expands, a focuses an answer control (never submits), d/s on info rows, r on security, Esc.
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { useFleet } from '../../../lib/fleetPoller.js';
 import { fmtAge, smPanel } from '../fleetLogic.js';
 import { groupInbox, linkParts, reverseText } from './inboxLogic.js';
+import NotifyActions, { useRowKeys } from './NotifyActions.jsx';
+import { useNotifyState } from './useNotifyState.js';
+import { isCleared, securityAck, answeredOf, answeredFold, fnv1a, keyOf, hhmm } from './notifyState.js';
 
 const asOf = (fleet) => {
   const t = Date.parse(fleet?.generated ?? '');
@@ -25,14 +31,29 @@ function FullText({ text, tone }) {
   );
 }
 
-function Row({ row, groupId, open, onToggle }) {
+function Row({ row, groupId, open, onToggle, notify, index, selected }) {
   const [copied, setCopied] = React.useState(false);
   const copy = (e) => {
     e.stopPropagation();
     navigator.clipboard?.writeText(row.id).then(() => setCopied(true), () => {});
   };
+  const state = notify?.state ?? null;
+  const actRow = { ...row, group: groupId, ...(groupId === 'security' ? { textHash: fnv1a(row.text) } : {}) };
+  const key = keyOf(actRow);
+  const acked = groupId === 'security' && securityAck(state, key, actRow);
+  const answered = groupId === 'asks' && (answeredOf(state, key) || notify?.answers?.get(row.id)?.phase === 'accepted');
   return (
-    <div data-testid="inbox-row" data-id={row.id} data-group={groupId} data-red={row.red ? 'true' : 'false'} className="border-b border-border/60 py-1.5">
+    <div
+      data-testid="inbox-row"
+      data-id={row.id}
+      data-group={groupId}
+      data-red={row.red ? 'true' : 'false'}
+      data-acked={acked ? 'true' : 'false'}
+      data-answered={answered ? 'true' : 'false'}
+      data-row-index={index}
+      aria-selected={selected}
+      className={`border-b border-border/60 py-1.5 ${selected ? 'bg-muted' : ''} ${answered ? 'text-muted-foreground' : ''}`}
+    >
       <button
         type="button"
         data-testid="inbox-row-toggle"
@@ -50,12 +71,13 @@ function Row({ row, groupId, open, onToggle }) {
           {open ? '' : row.first}
         </span>
         {row.untyped && (
-          <span data-testid="inbox-untyped" className="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground" title="No type recorded; shown as an ask so nothing is missed">
+          <span data-testid="inbox-untyped" className="shrink-0 rounded bg-muted px-1 text-[11px] text-muted-foreground" title="No type recorded; shown as an ask so nothing is missed">
             untyped
           </span>
         )}
       </button>
       {open && <FullText text={row.text} tone={row.red && groupId === 'security'} />}
+      <NotifyActions row={actRow} notify={notify} />
       {groupId === 'decided' && (
         <div className="mt-1 flex items-center gap-2 text-muted-foreground">
           <span data-testid="inbox-reverse" className="min-w-0 flex-1 break-words">{reverseText(row)}</span>
@@ -68,8 +90,29 @@ function Row({ row, groupId, open, onToggle }) {
   );
 }
 
+/** The "Answered (n)" fold: asks answered from the cockpit in the last 24 h that the queue no longer holds. */
+function AnsweredFold({ rows }) {
+  const [open, setOpen] = React.useState(false);
+  if (!rows.length) return null;
+  return (
+    <section data-testid="inbox-answered" className="mb-3">
+      <button type="button" data-testid="inbox-answered-toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="mb-1 flex w-full items-center gap-1 text-left font-semibold">
+        <span aria-hidden="true">{open ? '▾' : '▸'}</span> Answered ({rows.length})
+      </button>
+      {open && rows.map((r) => (
+        <div key={r.key} data-testid="inbox-answered-row" className="border-b border-border/60 py-1.5 text-muted-foreground">
+          <div className="truncate">{r.first || r.id}</div>
+          <div className="break-words">answered {hhmm(r.at)}: {r.answer}</div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export default function InboxDrawer() {
   const { data: fleet } = useFleet();
+  const notify = useNotifyState();
+  const listRef = React.useRef(null);
   const [open, setOpen] = React.useState(false);
   const [unfolded, setUnfolded] = React.useState({});
   const [expanded, setExpanded] = React.useState({});
@@ -81,13 +124,46 @@ export default function InboxDrawer() {
   }, []);
   React.useEffect(() => {
     if (!open) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); setOpen(false); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
   const panel = smPanel(fleet, 'queue');
-  const groups = React.useMemo(() => groupInbox(panel?.value), [panel?.value]);
+  const allGroups = React.useMemo(() => groupInbox(panel?.value), [panel?.value]);
+  const now = Date.now();
+  // Info rows (decided, FYI) that Compose's list clears leave their group for the "Cleared (n)" fold.
+  const { groups, clearedInfo } = React.useMemo(() => {
+    const st = notify.state;
+    const out = [];
+    const gone = [];
+    for (const g of allGroups) {
+      const info = g.id === 'decided' || g.id === 'fyi';
+      const keep = [];
+      for (const r of g.rows) {
+        if (info && st && isCleared(`queue:${r.id}`, r, st, now)) gone.push({ ...r, groupId: g.id });
+        else keep.push(r);
+      }
+      out.push({ ...g, rows: keep });
+    }
+    return { groups: out, clearedInfo: gone };
+  // `now` moves with each fleet poll (`fleet` changes), which is when a snooze can expire.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allGroups, notify.state, fleet]);
+  const answeredRows = React.useMemo(() => answeredFold(notify.state, panel?.value, now), [notify.state, panel?.value, fleet]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [showCleared, setShowCleared] = React.useState(false);
+  const visible = [];
+  for (const g of groups) {
+    if (g.rows.length && !(g.folded && !unfolded[g.id])) for (const r of g.rows) visible.push({ r, gid: g.id });
+  }
+  if (showCleared) for (const r of clearedInfo) visible.push({ r, gid: r.groupId });
+  const indexOf = new Map(visible.map((v, i) => [v.r.id, i]));
+  const keys = useRowKeys({
+    active: open,
+    root: listRef,
+    count: visible.length,
+    onExpand: (i) => { const id = visible[i]?.r.id; if (id) setExpanded((m) => ({ ...m, [id]: !m[id] })); },
+  });
   if (!open) return null;
 
   const time = asOf(fleet);
@@ -113,7 +189,7 @@ export default function InboxDrawer() {
           ×
         </button>
       </header>
-      <div className="min-h-0 flex-1 overflow-auto p-3">
+      <div ref={listRef} className="min-h-0 flex-1 overflow-auto p-3">
         {unavailable && <div data-testid="inbox-unavailable" className="text-muted-foreground">The owner queue is unavailable (sm_status). Nothing is shown rather than a false zero.</div>}
         {!unavailable && groups.every((g) => g.rows.length === 0) && <div className="text-muted-foreground">Nothing open.</div>}
         {groups.filter((g) => g.rows.length > 0).map((g) => {
@@ -132,11 +208,42 @@ export default function InboxDrawer() {
                 {g.folded ? `${g.rows.length} ${g.label.toLowerCase()}` : `${g.label} (${g.rows.length})`}
               </button>
               {!folded && g.rows.map((r) => (
-                <Row key={r.id} row={r} groupId={g.id} open={Boolean(expanded[r.id])} onToggle={() => toggle(setExpanded, r.id)} />
+                <Row
+                  key={r.id}
+                  row={r}
+                  groupId={g.id}
+                  open={Boolean(expanded[r.id])}
+                  onToggle={() => toggle(setExpanded, r.id)}
+                  notify={notify}
+                  index={indexOf.get(r.id)}
+                  selected={keys.selected === indexOf.get(r.id)}
+                />
               ))}
             </section>
           );
         })}
+        <AnsweredFold rows={answeredRows} />
+        {clearedInfo.length > 0 && (
+          <section data-testid="inbox-cleared" className="mb-3">
+            <button type="button" data-testid="inbox-cleared-toggle" aria-expanded={showCleared} onClick={() => setShowCleared((v) => !v)} className="mb-1 flex w-full items-center gap-1 text-left font-semibold">
+              <span aria-hidden="true">{showCleared ? '▾' : '▸'}</span> Cleared ({clearedInfo.length})
+            </button>
+            {showCleared && clearedInfo.map((r) => (
+              <Row
+                key={r.id}
+                row={r}
+                groupId={r.groupId}
+                open={Boolean(expanded[r.id])}
+                onToggle={() => toggle(setExpanded, r.id)}
+                notify={notify}
+                index={indexOf.get(r.id)}
+                selected={keys.selected === indexOf.get(r.id)}
+              />
+            ))}
+          </section>
+        )}
+        {keys.hint && <div data-testid="inbox-key-hint" role="status" className="text-muted-foreground">{keys.hint}</div>}
+        {notify.unavailable && <div data-testid="inbox-state-unavailable" className="text-muted-foreground">Cleared states unavailable: showing everything</div>}
       </div>
     </aside>,
     document.body,

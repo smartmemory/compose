@@ -7,6 +7,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useFleet } from '../../../lib/fleetPoller.js';
 import { createCadenceDataClient } from '../../../lib/clients/cadence.js';
 import { collect, chipState } from './notifyLogic.js';
+import { smPanel } from '../fleetLogic.js';
+import { releaseKeys } from './notifyState.js';
+import { useNotifyState, releaseOnce } from './useNotifyState.js';
 
 export const NOTIFY_POLL_MS = 60_000;
 
@@ -70,14 +73,26 @@ export function resetNotifyPoller() {
   client = null;
 }
 
-/** `{loading, collected, chip}`; loading until the fleet loop and the cadence loop have each answered once. */
+/**
+ * `{loading, collected, chip, notify}`; loading until the fleet loop and the cadence loop have each answered once.
+ * NOTIFY-ACTIONS-1: `collect` runs over Compose's notify state (`useNotifyState`), so cleared rows sit in
+ * `collected.cleared` and the chip counts open rows only; `collected.stateUnavailable` says the state could not be read.
+ * Every mount also runs the release check: an ack or dismiss whose source answered without the row is released once.
+ */
 export function useNotifySources() {
   const { data: fleet, loading: fleetLoading } = useFleet();
   const [cad, setCad] = useState(state);
   useEffect(() => subscribeCadence(setCad), []);
+  const notify = useNotifyState();
   const loading = (fleetLoading && !fleet) || cad.outage === null;
-  return useMemo(() => {
-    const collected = collect({ fleet, outage: cad.outage, attention: cad.attention });
-    return { loading, collected, chip: chipState(collected) };
-  }, [fleet, cad, loading]);
+  const out = useMemo(() => {
+    const collected = { ...collect({ fleet, outage: cad.outage, attention: cad.attention }, Date.now(), notify.state), stateUnavailable: notify.unavailable };
+    return { loading, collected, chip: chipState(collected), notify };
+  }, [fleet, cad, loading, notify]);
+  useEffect(() => {
+    if (out.loading || !notify.state) return;
+    const keys = releaseKeys(out.collected, notify.state, smPanel(fleet, 'queue')?.value);
+    if (keys.length) releaseOnce(keys);
+  }, [out, notify.state, fleet]);
+  return out;
 }

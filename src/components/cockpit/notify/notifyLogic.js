@@ -8,48 +8,12 @@
  * No React imports. NOTIFY-INBOX-1 reuses `tagOf` and adds `groupOf`, the ONE classifier the chip and the inbox drawer share.
  */
 import { ctxLevel, smPanel, readerUp, DISK_RED_GB, fmtAge } from '../fleetLogic.js';
+import { groupOf, stripTag } from '../../../../lib/owner-queue-class.js';
+import { isCleared, clearedOf, answeredOf, securityAck, fnv1a } from './notifyState.js';
 
-/** Leading owner-queue tag -> display class. A display convention, not typing (phase 2 reads the envelope). */
-export const TAGS = {
-  SECURITY: 'security',
-  CREDENTIAL: 'security',
-  QUESTION: 'ask',
-  APPLIED: 'decided',
-  FYI: 'fyi',
-  UPDATED: 'fyi',
-};
-
-/** The leading word when it is an exact TAGS word followed by `:`, `,`, whitespace or the end (a `-` never matches: unit ids; the live queue has "SECURITY, credential ..."). */
-export function tagWord(text) {
-  const m = /^\s*([A-Za-z]+)(?=[:,\s]|$)/.exec(String(text ?? ''));
-  return m && Object.hasOwn(TAGS, m[1]) ? m[1] : null;
-}
-
-/** `security | ask | decided | fyi | untyped`. */
-export function tagOf(text) {
-  const w = tagWord(text);
-  return w ? TAGS[w] : 'untyped';
-}
-
-/** The text without its leading tag and colon ("SECURITY: leaked key" -> "leaked key"). */
-export function stripTag(text) {
-  const w = tagWord(text);
-  if (!w) return String(text ?? '').trim();
-  return String(text).replace(/^\s*[A-Za-z]+\s*[:,]?\s*/, '').trim() || String(text).trim();
-}
-
-/**
- * The ONE classifier: owner-queue text -> `security | asks | decided | fyi`. The chip counts `security` and `asks`; the
- * inbox drawer (inboxLogic.js `groupInbox`) groups by it. An untyped row is an ask so nothing is missed.
- * Phase 2 (COMP-NOTIFY-ASKS-1) replaces the tag parse here with the envelope's `type/kind`: this is the only place to touch.
- */
-export function groupOf(text) {
-  const tag = tagOf(text);
-  if (tag === 'security') return 'security';
-  if (tag === 'decided') return 'decided';
-  if (tag === 'fyi') return 'fyi';
-  return 'asks';
-}
+// COMP-COCKPIT-NOTIFY-ACTIONS-1: the classifier moved verbatim to lib/ (the server's answer route needs it and the published
+// package does not ship src/). Re-exported so every import of it from here keeps working: still ONE classifier.
+export { TAGS, tagWord, tagOf, stripTag, groupOf } from '../../../../lib/owner-queue-class.js';
 
 /**
  * COMP-COCKPIT-RIBBON-METER-1: which row names a seat or a lane the Day page can flash. Only two sources carry one: a cadence
@@ -91,20 +55,27 @@ function panelRows(fleet, name) {
  * `{rows, n}`; `null` when the queue source is down or not an array, never `[]` for unknown. The chip, Home's and Day's WHAT
  * line and the NOW drawer's "Waiting on you" all read this, so they cannot disagree.
  */
-export function ownerAsks(queueRows) {
+export function ownerAsks(queueRows, state = null, _now = Date.now()) {
   if (!Array.isArray(queueRows)) return null;
   const rank = (q) => (groupOf(q?.text) === 'security' ? 0 : 1);
+  // NOTIFY-ACTIONS-1: with Compose's notify state, an ask answered from the cockpit stops counting until the queue drops
+  // its id; a security row always counts. No state = the COUNT-ONE-1 count, unchanged. `_now` is the caller's clock, kept in
+  // the signature so every caller passes the same three arguments (an answer does not expire, so it is not read today).
   const rows = queueRows
-    .filter((q) => { const g = groupOf(q?.text); return g === 'security' || g === 'asks'; })
+    .filter((q) => {
+      const g = groupOf(q?.text);
+      if (g === 'security') return true;
+      return g === 'asks' && !(state && answeredOf(state, `ask:${q?.id}`));
+    })
     .sort((a, b) => rank(a) - rank(b) || (Number.isFinite(b?.age) ? b.age : -1) - (Number.isFinite(a?.age) ? a.age : -1));
   return { rows, n: rows.length };
 }
 
 /** owner queue -> the `ownerAsks` rows: a security row, an overdue (`red`) ask or an ask not yet overdue. A security row is never also listed as an ask. */
-export function queueAdapter(fleet) {
+export function queueAdapter(fleet, state = null, now = Date.now()) {
   const { rows, unavailable } = panelRows(fleet, 'queue');
   const out = [];
-  for (const q of ownerAsks(rows)?.rows ?? []) {
+  for (const q of ownerAsks(rows, state, now)?.rows ?? []) {
     const security = groupOf(q?.text) === 'security';
     const overdue = !security && q?.red === true;
     const from = q.by ?? 'unknown';
@@ -117,6 +88,11 @@ export function queueAdapter(fleet) {
       since: Number.isFinite(q.age) ? q.age : null,
       sourceLabel: 'owner queue',
       action: 'inbox',
+      // NOTIFY-ACTIONS-1: what the inline actions need (the id to answer, the text for the options, the hash for escalation).
+      id: String(q.id ?? ''),
+      text: String(q.text ?? ''),
+      ...(Array.isArray(q.options) ? { options: q.options } : {}),
+      ...(security ? { textHash: fnv1a(q.text) } : {}),
     });
   }
   return { rows: out, unavailable };
@@ -197,6 +173,7 @@ export function attentionAdapter(attention) {
       since: null,
       sourceLabel: label,
       action: 'cadence',
+      wall: a.name,
       ...(seatOfWall(a.name) ? { seat: seatOfWall(a.name) } : {}),
     })),
     unavailable: null,
@@ -205,20 +182,31 @@ export function attentionAdapter(attention) {
 
 const SEVERITY_RANK = { critical: 0, warn: 1 };
 
-/** `sources` = `{fleet, outage, attention}` (fleet is the /api/fleet body; the others `{value, error}`). */
-export function collect(sources, now = Date.now()) {
+/**
+ * `sources` = `{fleet, outage, attention}` (fleet is the /api/fleet body; the others `{value, error}`).
+ * NOTIFY-ACTIONS-1: `state` is Compose's notify list (`notifyState.js`). Rows it clears move out of `rows` into `cleared`
+ * (each flagged `cleared: {action, at, until?}`), so the chip and the tray count open rows only. `state === undefined`
+ * or `null` hides nothing; `stateUnavailable` is set by the caller when the state read failed.
+ */
+export function collect(sources, now = Date.now(), state = null) {
   const results = [
-    queueAdapter(sources.fleet),
+    queueAdapter(sources.fleet, state, now),
     contextAdapter(sources.fleet),
     diskAdapter(sources.fleet),
     outageAdapter(sources.outage, now),
     attentionAdapter(sources.attention),
   ];
   const defaults = results.flatMap((r) => r.defaults ?? []);
-  const rows = results.flatMap((r) => r.rows)
+  const all = results.flatMap((r) => r.rows)
     .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || (b.since ?? -1) - (a.since ?? -1) || a.key.localeCompare(b.key));
+  const rows = [];
+  const cleared = [];
+  for (const r of all) {
+    if (state && isCleared(r.key, r, state, now)) cleared.push({ ...r, cleared: clearedOf(r.key, r, state, now) });
+    else rows.push(r);
+  }
   const unknown = [...new Set(results.map((r) => r.unavailable).filter(Boolean))];
-  return { rows, unknown, defaults };
+  return { rows, cleared, unknown, defaults };
 }
 
 /** `all-clear` (every source answered, no rows) | `alerts` | `unknown` (no rows, a source is down). */
@@ -250,11 +238,16 @@ export function defaultsLine(collected) {
   return n ? `${n} reader${n === 1 ? '' : 's'} on defaults` : '';
 }
 
-/** Red strip text for the open security rows: `{text, more}`; null when none. */
-export function bannerText(collected) {
-  const sec = collected.rows.filter((r) => r.kind === 'security');
+/**
+ * Red strip text for the open security rows: `{text, more, row}`; null when none. NOTIFY-ACTIONS-1: with a state, a row
+ * acknowledged and not escalated since (same text hash), or resolved from the cockpit, no longer raises the banner; the
+ * banner returns for a new id or a changed text, never for an age change. `more` counts the other unacknowledged rows.
+ */
+export function bannerText(collected, state = null) {
+  const sec = collected.rows.filter((r) => r.kind === 'security')
+    .filter((r) => !state || (!securityAck(state, r.key, r) && !answeredOf(state, r.key)));
   if (!sec.length) return null;
   const top = sec[0];
   const age = top.since == null ? '' : ` (${fmtAge(top.since)})`;
-  return { text: `Security: ${top.title}${age}`, more: sec.length - 1 };
+  return { text: `Security: ${top.title}${age}`, more: sec.length - 1, row: top };
 }

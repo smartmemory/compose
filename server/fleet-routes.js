@@ -11,14 +11,25 @@
  *             report's agreement numbers are wrong until F33 lands and are never read here.
  *
  * Each source is cached on its own window: at most one spawn per window, never two at once (single
- * flight). A stale value is served while one refresh runs. Spawns use argv arrays (no shell), carry a
- * timeout (SIGTERM, then SIGKILL after a grace period) and take no request input. A reader that cannot
+ * flight). A stale value is served while one refresh runs. Spawns use argv arrays (no shell) and carry a
+ * timeout (SIGTERM, then SIGKILL after a grace period). The three readers take no request input. A reader that cannot
  * run (binary or script absent, non-zero exit, timeout, unparsable output, cadence not mounted) is an
  * outage: its `{value: null, error}` tells the UI to hide that panel, and exactly one warn line is
  * logged per outage. Errors inside a reader's own sources pass through untouched.
  *
+ * COMP-COCKPIT-NOTIFY-ACTIONS-1 adds the ONE route here that takes request input and writes:
+ *   POST /api/fleet/owner-answer `{id, choice?|text?, resolve?}` (requireSensitiveOrPaired). It re-reads the owner
+ *   queue at request time (`owner_queue.py list --json`, never the cache), refuses a closed id with `conflict` and the
+ *   winning answer, validates the id, the row's class (`groupOf`: an ask, or a security row with `resolve: true`) and the
+ *   choice (`optionsOf`), builds the answer itself (`OWNER (via cockpit): ...`, so provenance cannot be dropped) and
+ *   spawns `owner_queue.py close <id> --answer <answer>` with argv only. It never opens the queue file. Replies are the
+ *   HITL-1 `ProductReply` (`accepted | conflict | rejected`). Residual: a close from another channel can land in the
+ *   milliseconds between the fresh read and the close; OPS-NOTIFY-SPOOL-1's refusal closes that later.
+ * When a notify store is wired (server/notify-state-routes.js), every GET /api/fleet body also carries `notify`
+ * (Compose's own ack/snooze/dismiss/answered list, read fresh per request) so the cockpit needs no second poll.
+ *
  * Overrides (tests and the live walk): COMPOSE_FLEET_PYTHON, COMPOSE_FLEET_SM_STATUS,
- * COMPOSE_FLEET_STRATUM_BIN, COMPOSE_FLEET_CADENCE_SHADOW.
+ * COMPOSE_FLEET_STRATUM_BIN, COMPOSE_FLEET_CADENCE_SHADOW, COMPOSE_FLEET_OWNER_QUEUE.
  */
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -26,8 +37,13 @@ import { open, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { resolveStratumBin } from '../lib/stratum-engine.js';
+import { groupOf, stripTag } from '../lib/owner-queue-class.js';
+import { optionsOf, choiceText } from '../lib/ask-options.js';
+import { requireSensitiveOrPaired } from './security.js';
 
 export const FLEET_ROUTE = '/api/fleet';
+export const OWNER_ANSWER_ROUTE = '/api/fleet/owner-answer';
+export const OWNER_QUEUE_TIMEOUT_MS = 15_000;
 
 // Cache windows. sm_status --json refreshes all of its sources in one call (~26 s measured 2026-10-30),
 // so its window cannot be shorter than one call; 60 s keeps one open cockpit under half a core. Cadence changes once per tick (cadence-shape.md: 60 s).
@@ -52,6 +68,7 @@ export function resolveFleetReaders(env = process.env) {
     smStatus: env.COMPOSE_FLEET_SM_STATUS || join(homedir(), '.claude', 'scripts', 'sm_status.py'),
     stratumBin,
     shadowPath: env.COMPOSE_FLEET_CADENCE_SHADOW || join(homedir(), '.cadence', 'shadow.jsonl'),
+    ownerQueue: env.COMPOSE_FLEET_OWNER_QUEUE || join(homedir(), '.claude', 'scripts', 'owner_queue.py'),
   };
 }
 
@@ -267,7 +284,91 @@ export function createSourceCache(name, load, { ttlMs, now = Date.now, warn = co
       return { ...(await p), stale: false };
     },
     get spawning() { return pending !== null; },
+    /** NOTIFY-ACTIONS-1: forget the window and start one refresh now (single flight); the last value is still served meanwhile. */
+    invalidate() {
+      fetchedAt = -Infinity;
+      refresh();
+    },
   };
+}
+
+/** `OWNER (via cockpit) ...` -> `compose`; `OWNER (via <x>) ...` -> `chat:<x>`; anything else -> null (omitted). */
+export function channelOf(answer) {
+  const m = /^OWNER \(via ([^)]+)\)/.exec(String(answer ?? ''));
+  if (!m) return null;
+  return m[1] === 'cockpit' ? 'compose' : `chat:${m[1]}`;
+}
+
+const firstLineOf = (text) => stripTag(String(text ?? '').split('\n').find((l) => l.trim()) ?? '').slice(0, 140);
+
+/**
+ * POST /api/fleet/owner-answer: one answer or one security resolve, validated against a fresh read of the queue.
+ * Returns the ProductReply; `onAccepted({key, answer, first})` runs after a zero exit of `close`.
+ */
+export async function answerOwner(body, { readers, env, onAccepted, warn = console.warn }) {
+  const b = body && typeof body === 'object' ? body : {};
+  const id = typeof b.id === 'string' ? b.id : '';
+  const idLog = JSON.stringify(String(b.id ?? '')).slice(0, 220);
+  const rejected = (reason) => { warn(`[fleet] owner-answer ${idLog} rejected: ${reason}`); return { reply: 'rejected', reason }; };
+  if (id.length < 1 || id.length > 200 || id.startsWith('-')) return rejected('id must be 1 to 200 characters and must not start with -');
+  const resolve = b.resolve === true;
+  const hasChoice = b.choice !== undefined && b.choice !== null;
+  const hasText = b.text !== undefined && b.text !== null;
+  if (hasChoice === hasText) return rejected('send exactly one of choice and text');
+  if (resolve && hasChoice) return rejected('a resolve carries text, not a choice');
+  if (hasChoice && (typeof b.choice !== 'string' || !b.choice)) return rejected('choice must be a string');
+  const maxText = resolve ? 300 : 1000;
+  const text = hasText && typeof b.text === 'string' ? b.text.trim() : '';
+  if (hasText && (!text || text.length > maxText)) return rejected(`text must be 1 to ${maxText} characters`);
+
+  const opts = { timeoutMs: OWNER_QUEUE_TIMEOUT_MS, env };
+  const list = async (all) => {
+    const argv = [readers.python, readers.ownerQueue, 'list', ...(all ? ['--all'] : []), '--json'];
+    const { stdout } = await runReader(argv, opts);
+    const rows = parseJson(stdout, 'owner_queue.py list --json');
+    if (!Array.isArray(rows)) throw new Error('owner_queue.py list --json printed no array');
+    return rows;
+  };
+  let record;
+  try {
+    record = (await list(false)).find((r) => String(r?.id) === id);
+    if (!record) {
+      const latest = (await list(true)).find((r) => String(r?.id) === id);
+      if (latest?.status === 'closed') {
+        const winning = String(latest.answer ?? '');
+        const channel = channelOf(winning);
+        warn(`[fleet] owner-answer ${idLog} conflict: already closed${channel ? ` via ${channel}` : ''}`);
+        return { reply: 'conflict', winning_value: winning, ...(channel ? { channel } : {}) };
+      }
+      return rejected('unknown id');
+    }
+  } catch (error) {
+    return rejected(`the owner queue could not be read (${String(error?.message ?? error).slice(0, 160)})`);
+  }
+
+  const group = groupOf(record.text);
+  let answer;
+  if (resolve) {
+    if (group !== 'security') return rejected('only a security row can be resolved');
+    answer = `OWNER (via cockpit): resolved: ${text}`;
+  } else {
+    if (group === 'security') return rejected('a security row is resolved, not answered');
+    if (group !== 'asks') return rejected('only an ask can be answered');
+    if (hasChoice) {
+      const option = optionsOf(record).find((o) => o.value === b.choice);
+      if (!option) return rejected('choice is not one of the options');
+      answer = `OWNER (via cockpit): ${choiceText(option)}`;
+    } else {
+      answer = `OWNER (via cockpit): ${text}`;
+    }
+  }
+  try {
+    await runReader([readers.python, readers.ownerQueue, 'close', id, '--answer', answer], opts);
+  } catch (error) {
+    return rejected(`owner_queue.py close failed (${String(error?.message ?? error).slice(0, 160)})`);
+  }
+  onAccepted?.({ key: `${resolve ? 'security' : 'ask'}:${id}`, answer, first: resolve ? null : firstLineOf(record.text) });
+  return { reply: 'accepted' };
 }
 
 /**
@@ -283,6 +384,7 @@ export function attachFleetRoutes(app, {
   info = console.log,
   ttlMs = TTL_MS,
   timeoutMs = TIMEOUT_MS,
+  notifyStore = null,
 } = {}) {
   const opts = (name) => ({ ttlMs: ttlMs[name], now, warn, info });
   const caches = {
@@ -298,10 +400,28 @@ export function attachFleetRoutes(app, {
         smStatus.value = { ...smStatus.value, jobs: { ...smStatus.value.jobs, value: mergeJobs(smStatus.value.jobs.value, stratum.value) } };
       }
       res.set('cache-control', 'no-store');
-      res.json({ generated: new Date(now()).toISOString(), sources: { stratum, sm_status: smStatus, cadence } });
+      const body = { generated: new Date(now()).toISOString(), sources: { stratum, sm_status: smStatus, cadence } };
+      if (notifyStore) {
+        try { body.notify = notifyStore.get(); } catch (error) { body.notify = { error: String(error?.message ?? error).slice(0, 200) }; }
+      }
+      res.json(body);
     } catch (error) {
       res.status(500).json({ error: String(error?.message ?? error) });
     }
+  });
+
+  app.post(OWNER_ANSWER_ROUTE, requireSensitiveOrPaired, async (req, res) => {
+    const reply = await answerOwner(req.body, {
+      readers,
+      env,
+      warn,
+      onAccepted: ({ key, answer, first }) => {
+        try { notifyStore?.answered(key, { answer, first }); } catch (error) { warn(`[fleet] owner-answer: the answered entry was not written (${String(error?.message ?? error).slice(0, 160)})`); }
+        caches.sm_status.invalidate();
+      },
+    });
+    res.set('cache-control', 'no-store');
+    res.json(reply);
   });
   return caches;
 }

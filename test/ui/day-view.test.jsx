@@ -156,6 +156,36 @@ describe('Day front page (COMP-COCKPIT-RIBBON-TOP-1)', () => {
     expect(screen.getByTestId('day-ribbon')).toBeTruthy();
   }, 30000);
 
+  it('alert marks (NOTIFY-ACTIONS-1): an age in seconds lands at now - age; a stored entry whose source is gone still draws, cleared', async () => {
+    const hm = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    const now = Date.now();
+    const fleet = {
+      sources: { sm_status: { value: { queue: { value: [{ id: 'S9', by: 'ops-main', text: 'SECURITY: test row', age: 1800, red: false }], error: null } }, error: null } },
+      generated: new Date(now).toISOString(),
+      notify: { v: 1, entries: { outage: { action: 'released', was: 'dismiss', at: new Date(now - 600_000).toISOString(), title: 'Claude API outage', sinceAt: new Date(now - 3_600_000).toISOString() } } },
+    };
+    wsFetch.mockImplementation(async (url) => {
+      const u = String(url);
+      if (u.startsWith('/api/ribbon')) return ok(FIXTURE);
+      if (u === '/api/fleet') return ok(fleet);
+      return ok({});
+    });
+    global.fetch = vi.fn(async () => ok({}));
+    render(<DayView onNavigate={() => {}} />);
+    await screen.findByTestId('day-ribbon');
+    const tipsNow = () => screen.queryAllByTestId('alert-mark').map((m) => [m.getAttribute('data-tip'), m.textContent]);
+    await waitFor(() => expect(tipsNow().length).toBe(2));
+    const tips = tipsNow();
+    const sec = tips.find(([t]) => t.startsWith('Alert · test row'));
+    // the page reads its own clock a moment later: either minute is the right one
+    expect([hm(now - 1_800_000), hm(now - 1_800_000 + 10_000)].some((t) => sec[0].includes(t))).toBe(true);
+    expect(sec[1]).toBe('⚠');
+    const out = tips.find(([t]) => t.includes('Claude API outage'));
+    expect(out[0]).toContain(hm(now - 3_600_000));
+    expect(out[0]).toContain(`dismissed ${hm(now - 600_000)}`);
+    expect(out[1]).toBe('✓⚠');
+  }, 30000);
+
   it('pure helpers: source words and the seat percents the idle fold reads (one row table)', () => {
     const rows = [
       { name: 'known key', got: sourceErrorLines({ stamps: 'x' }), want: ['unit stamps is missing (x)'] },

@@ -20,6 +20,15 @@ const clampX = (x) => Math.min(R.X1, Math.max(R.X0, x));
 const SPAN_CLASS = { review: 's-review', owner: 's-owner', quota: 's-quota', gate: 's-gate', unknown: 's-unknown' };
 const CAUSE_TEXT_CLASS = { review: 'w-review', owner: 'w-owner', quota: 'w-quota', gate: 'w-review', unknown: 'idle' };
 const GLYPH = { land: '✓', deploy: '▲', deployFail: '▲', decide: '⚖︎' };
+const CLEARED_WORD = { ack: 'acknowledged', dismiss: 'dismissed', snooze: 'snoozed', resolved: 'resolved' };
+/**
+ * NOTIFY-ACTIONS-1: an alert's tip; a cleared one adds ` · acknowledged|dismissed|snoozed|resolved HH:MM`, on the
+ * ribbon's own clock (`clock(t, now)`, the window's zone) like the "since" time beside it, never the browser's zone.
+ */
+const alertTip = (a, now) => {
+  const base = tipText({ ...a, kind: 'alert', now });
+  return a.cleared ? `${base} · ${CLEARED_WORD[a.cleared.action] ?? a.cleared.action} ${clock(a.cleared.at, now)}` : base;
+};
 
 const CSS = `
 .day-ribbon{--rb-panel:hsl(var(--card,0 0% 100%));--rb-fg:hsl(var(--foreground));--rb-muted:hsl(var(--muted-foreground));--rb-line:hsl(var(--border));
@@ -60,7 +69,7 @@ const CSS = `
 .day-ribbon .empty-t{font-size:12px;fill:var(--rb-muted)}
 .day-ribbon .tk-gap{stroke:var(--rb-panel);stroke-width:2.2}
 .day-ribbon .tk{font-size:12px;fill:var(--rb-fg)} .day-ribbon .tk.decide{fill:var(--rb-accent);font-size:13px}
-.day-ribbon .tk.deployFail{fill:var(--rb-alert)} .day-ribbon .tk.alert{fill:var(--rb-alert);font-size:13px}
+.day-ribbon .tk.deployFail{fill:var(--rb-alert)} .day-ribbon .tk.alert{fill:var(--rb-alert);font-size:13px} .day-ribbon .tk.alert.cleared{fill:var(--rb-muted)}
 .day-ribbon .cl-bg{fill:var(--rb-accent)} .day-ribbon .cl-n{font-size:11px;fill:#fff;font-weight:700}
 .day-ribbon .hit{fill:transparent}
 .day-ribbon .axis-hit{fill:transparent;cursor:crosshair;touch-action:none}
@@ -296,8 +305,8 @@ export default function DayRibbon({
           );
         })}
         {laneAlerts.map((a, i) => (
-          <text key={`a${i}`} className="tk alert" data-testid="alert-mark" x={f1(X(a.since))} y={ry + 9} textAnchor="middle"
-            data-tip={tipText({ kind: 'alert', ...a, now })}>⚠</text>
+          <text key={`a${i}`} className={`tk alert${a.cleared ? ' cleared' : ''}`} data-testid="alert-mark" x={f1(X(a.since))} y={ry + 9} textAnchor="middle"
+            data-tip={alertTip(a, now)}>{a.cleared ? '✓⚠' : '⚠'}</text>
         ))}
         {live && cur && avail >= 120 && (
           <text className={`cur ${waiting ? (CAUSE_TEXT_CLASS[waiting.cause] || 'idle') : ''}`} data-testid="current" x={nx + 10} y={ry + 20}
@@ -448,7 +457,7 @@ export default function DayRibbon({
               );
             })}
             {orphanAlerts.map((a, i) => (
-              <text key={`oa${i}`} className="tk alert" data-testid="alert-mark" x={f1(X(a.since))} y={aheadY + 14} textAnchor="middle" data-tip={tipText({ kind: 'alert', ...a, now })}>⚠</text>
+              <text key={`oa${i}`} className={`tk alert${a.cleared ? ' cleared' : ''}`} data-testid="alert-mark" x={f1(X(a.since))} y={aheadY + 14} textAnchor="middle" data-tip={alertTip(a, now)}>{a.cleared ? '✓⚠' : '⚠'}</text>
             ))}
           </>
         )}

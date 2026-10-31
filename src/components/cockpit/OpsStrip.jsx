@@ -7,6 +7,7 @@ import { formatBudgetCompact } from './stepDetailLogic.js';
 import { wsFetch } from '../../lib/wsFetch.js';
 import { useFleet } from '../../lib/fleetPoller.js';
 import { fleetPills } from './fleetLogic.js';
+import { useNotifyState } from './notify/useNotifyState.js';
 
 /**
  * OpsStrip — Persistent 36px bar surfacing active builds, pending gates, and recent errors.
@@ -22,7 +23,8 @@ export default function OpsStrip({ onSelectFeature, onOpenFleet, onOpenHome }) {
 
   // COMP-COCKPIT-12: Fleet pills (sessions over 250K, open owner questions, disk under 100 GB); hidden when sm_status is down.
   const fleet = useFleet();
-  const fleetEntries = useMemo(() => fleetPills(fleet.data), [fleet.data]);
+  const { state: notifyState } = useNotifyState(); // NOTIFY-ACTIONS-1: the owner pill reads the chip's count
+  const fleetEntries = useMemo(() => fleetPills(fleet.data, notifyState), [fleet.data, notifyState]);
 
   // Animation state per entry key
   const [animStates, setAnimStates] = useState(new Map());

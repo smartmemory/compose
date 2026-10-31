@@ -195,6 +195,19 @@ const ROWS = [
     },
   },
   {
+    // COMP-COCKPIT-NOTIFY-ACTIONS-1: a cleared alert keeps its mark, muted with a check, and the tip says what cleared it.
+    name: 'alert: a cleared alert draws muted with ✓ and its tip names the clearing',
+    p: () => props('day', { extra: { alerts: [
+      { key: 'a1', lane: 'main', title: 'Gate stalled', since: at('13:00') },
+      { key: 'a2', lane: 'main', title: 'Seat wall', since: at('14:00'), cleared: { action: 'ack', at: at('14:30') } },
+    ] } }),
+    check: ({ root }) => {
+      const marks = [...root.querySelector('[data-testid="lane-main"]').querySelectorAll('[data-testid="alert-mark"]')];
+      expect(marks.map((m) => [m.getAttribute('class'), m.textContent])).toEqual([['tk alert', '⚠'], ['tk alert cleared', '✓⚠']]);
+      expect(marks[1].getAttribute('data-tip')).toBe('Alert · Seat wall\nsince today 14:00 · acknowledged 14:30');
+    },
+  },
+  {
     name: 'keyboard: marks, pins, bands, lane names and the idle row are focusable and Enter or Space calls the right callback',
     p: () => props('day', { edit: (d) => { d.bands = [{ kind: 'hold', start: at('10:00'), end: at('12:00'), label: 'Batch hold', source: 'holds' }]; } }),
     check: ({ root, cb }) => {

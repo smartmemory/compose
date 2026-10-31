@@ -7,7 +7,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -165,3 +165,100 @@ describe('GET /api/fleet', () => {
     }
   });
 });
+
+/**
+ * COMP-COCKPIT-NOTIFY-ACTIONS-1: POST /api/fleet/owner-answer, golden flow. The REAL `~/.claude/scripts/owner_queue.py`
+ * on a scratch queue (`SM_OWNER_QUEUE`), seeded by writing the JSONL directly (never `add`: `add` delivers a notification).
+ * Nothing is mocked between the route and the queue file. The sm_status reader is a scratch script that counts its runs,
+ * so the cache invalidation on accept is observable.
+ */
+describe('POST /api/fleet/owner-answer (golden flow, real owner_queue.py, scratch queue)', () => {
+  const OWNER_QUEUE = join(process.env.HOME ?? '', '.claude', 'scripts', 'owner_queue.py');
+  const TOKEN = 'owner-answer-test-token';
+  const rec = (id, text) => ({ id, by: 'test', text, ts: 1_790_000_000, status: 'open', answer: null });
+  const records = (file) => readFileSync(file, 'utf-8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  const closedFor = (file, id) => records(file).filter((r) => r.id === id && r.status === 'closed');
+
+  it('answers, resolves, refuses and conflicts exactly as the ProductReply contract says', { skip: !existsSyncSafe(OWNER_QUEUE) && 'owner_queue.py absent' }, async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'owner-answer-'));
+    const queue = join(dir, 'owner-queue.jsonl');
+    const count = join(dir, 'sm-status.count');
+    const sm = join(dir, 'sm_status.py');
+    writeFileSync(sm, 'import json, os\nopen(os.environ["SMS_COUNT"], "a").write("x\\n")\nprint(json.dumps({"generated": "2026-10-31T21:00:00Z", "sources": {}}))\n');
+    writeFileSync(queue, [
+      rec('TEST-ASK', 'QUESTION: TEST pick one (a) yes (b) no'),
+      rec('TEST-SEC', 'SECURITY: TEST token in history'),
+      rec('TEST-FYI', 'FYI: TEST note'),
+      rec('TEST-FREE', 'TEST what should the cap be?'),
+    ].map((r) => JSON.stringify(r)).join('\n') + '\n');
+    const env = {
+      PATH: process.env.PATH, HOME: process.env.HOME, SM_OWNER_QUEUE: queue, SMS_COUNT: count,
+      COMPOSE_FLEET_PYTHON: 'python3', COMPOSE_FLEET_SM_STATUS: sm, COMPOSE_FLEET_OWNER_QUEUE: OWNER_QUEUE,
+      COMPOSE_FLEET_STRATUM_BIN: join(FIX, 'stratum.mjs'), COMPOSE_FLEET_CADENCE_SHADOW: join(FIX, 'shadow.jsonl'), OPS_COMMIT_ON_WRITE: '0',
+    };
+    const prevToken = process.env.COMPOSE_API_TOKEN;
+    process.env.COMPOSE_API_TOKEN = TOKEN;
+    const answered = [];
+    const notifyStore = { get: () => ({ v: 1, entries: Object.fromEntries(answered.map((a) => [a.key, { action: 'answered', ...a.v }])) }), answered: (key, v) => answered.push({ key, v }) };
+    const warns = [];
+    const app = express();
+    app.use(express.json());
+    const caches = attachFleetRoutes(app, { env, readers: resolveFleetReaders(env), ttlMs: { stratum: 60_000, sm_status: 600_000, cadence: 600_000 }, notifyStore, warn: (m) => warns.push(m), info: () => {} });
+    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const post = async (body, token = TOKEN) => {
+      const res = await fetch(`${base}/api/fleet/owner-answer`, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { 'x-compose-token': token } : {}) }, body: JSON.stringify(body) });
+      return { status: res.status, body: await res.json() };
+    };
+    const runs = () => { try { return readFileSync(count, 'utf-8').split('\n').filter(Boolean).length; } catch { return 0; } };
+    try {
+      await caches.sm_status.get(); // one sm_status run, inside its window from here on
+      assert.equal(runs(), 1);
+      const lines0 = records(queue).length;
+
+      // [name, body, expected reply subset, closed records expected for the id afterwards (null = skip)]
+      const ROWS = [
+        ['no token is 401', { id: 'TEST-ASK', choice: 'b' }, null, null, null],
+        ['an id starting with - is rejected', { id: '--all', choice: 'b' }, { reply: 'rejected' }, null],
+        ['both choice and text are rejected', { id: 'TEST-ASK', choice: 'b', text: 'x' }, { reply: 'rejected', reason: 'send exactly one of choice and text' }, ['TEST-ASK', 0]],
+        ['a choice outside the options is rejected, no close', { id: 'TEST-ASK', choice: 'z' }, { reply: 'rejected', reason: 'choice is not one of the options' }, ['TEST-ASK', 0]],
+        ['a security row answered (no resolve) is rejected, no close', { id: 'TEST-SEC', text: 'ok' }, { reply: 'rejected', reason: 'a security row is resolved, not answered' }, ['TEST-SEC', 0]],
+        ['an info row is rejected, even with resolve', { id: 'TEST-FYI', resolve: true, text: 'done' }, { reply: 'rejected', reason: 'only a security row can be resolved' }, ['TEST-FYI', 0]],
+        ['a resolve with an empty field is rejected', { id: 'TEST-SEC', resolve: true, text: '   ' }, { reply: 'rejected' }, ['TEST-SEC', 0]],
+        ['an unknown id is rejected', { id: 'TEST-NOPE', text: 'hi' }, { reply: 'rejected', reason: 'unknown id' }, null],
+        ['answer by choice is accepted and closes the row with the provenance', { id: 'TEST-ASK', choice: 'b' }, { reply: 'accepted' }, ['TEST-ASK', 1]],
+        ['the same answer again is a conflict with the first answer, still one close', { id: 'TEST-ASK', choice: 'a' }, { reply: 'conflict', winning_value: 'OWNER (via cockpit): (b) no', channel: 'compose' }, ['TEST-ASK', 1]],
+        ['free text on an untyped ask is accepted', { id: 'TEST-FREE', text: 'TEST fifty' }, { reply: 'accepted' }, ['TEST-FREE', 1]],
+        ['a security resolve is accepted with the resolved: answer', { id: 'TEST-SEC', resolve: true, text: 'rotated the TEST token' }, { reply: 'accepted' }, ['TEST-SEC', 1]],
+        ['a second resolve is a conflict', { id: 'TEST-SEC', resolve: true, text: 'again' }, { reply: 'conflict', winning_value: 'OWNER (via cockpit): resolved: rotated the TEST token', channel: 'compose' }, ['TEST-SEC', 1]],
+      ];
+      for (const [name, body, want, closed, token] of ROWS) {
+        const r = await post(body, token === null && want === null ? null : TOKEN);
+        if (want === null) { assert.equal(r.status, 401, name); continue; }
+        assert.equal(r.status, 200, name);
+        for (const [k, v] of Object.entries(want)) assert.equal(r.body[k], v, `${name}: ${k}`);
+        if (closed) assert.equal(closedFor(queue, closed[0]).length, closed[1], `${name}: closed records`);
+      }
+      assert.equal(closedFor(queue, 'TEST-ASK')[0].answer, 'OWNER (via cockpit): (b) no');
+      assert.equal(closedFor(queue, 'TEST-FREE')[0].answer, 'OWNER (via cockpit): TEST fifty');
+      assert.equal(records(queue).length, lines0 + 3, 'exactly three closes were appended');
+      assert.equal(closedFor(queue, 'TEST-FYI').length, 0);
+      assert.deepEqual(answered.map((a) => [a.key, a.v.first ?? null]), [['ask:TEST-ASK', 'TEST pick one (a) yes (b) no'], ['ask:TEST-FREE', 'TEST what should the cap be?'], ['security:TEST-SEC', null]]);
+      assert.ok(warns.some((w) => w.includes('"TEST-NOPE"') && w.includes('unknown id')));
+      assert.ok(!warns.some((w) => w.includes('pick one')), 'a warning never carries the question text');
+      // the cache was invalidated on each accept: sm_status re-ran inside its window
+      for (let i = 0; i < 50 && runs() < 2; i += 1) await new Promise((r) => setTimeout(r, 100));
+      assert.ok(runs() >= 2, `sm_status re-ran after accept (runs=${runs()})`);
+      const fleet = await (await fetch(`${base}/api/fleet`)).json();
+      assert.equal(fleet.notify.entries['ask:TEST-ASK'].action, 'answered');
+    } finally {
+      await new Promise((r) => server.close(r));
+      if (prevToken === undefined) delete process.env.COMPOSE_API_TOKEN; else process.env.COMPOSE_API_TOKEN = prevToken;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+function existsSyncSafe(p) {
+  try { return statSync(p).isFile(); } catch { return false; }
+}

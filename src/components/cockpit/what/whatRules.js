@@ -3,7 +3,7 @@
  *
  * Raw inputs: `{fleet, agent, index, now, lastVisitAt}`: `fleet` the GET /api/fleet body, `agent` the
  * `compose:agent-status` event detail, `index` the GET /api/units/index body, `now` epoch ms, `lastVisitAt` epoch ms
- * from `localStorage['compose:lastVisitAt']` (or null). The state word comes from the first row of `WHAT_RULES` that
+ * from `localStorage['compose:lastVisitAt']` (or null), `notifyState` Compose's notify list (`useNotifyState`, or null). The state word comes from the first row of `WHAT_RULES` that
  * matches. It is never produced by a model; the table is shown on hover so the sentence can be checked by reading it.
  * A count whose source is unknown is `null` (rendered "?"), never 0.
  */
@@ -16,10 +16,10 @@ export const LAST_VISIT_KEY = 'compose:lastVisitAt';
 const ms = (v) => { const t = Date.parse(v ?? ''); return Number.isFinite(t) ? t : null; };
 
 /** Everything the rules and counts read, derived once from the raw inputs. null = that source is unknown. */
-export function whatInputs({ fleet, agent, index, now = Date.now(), lastVisitAt = null } = {}) {
+export function whatInputs({ fleet, agent, index, now = Date.now(), lastVisitAt = null, notifyState = null } = {}) {
   const running = runningNow(fleet, agent);
   const units = Array.isArray(index?.units) ? index.units : null;
-  const owner = ownerAsks(smPanel(fleet, 'queue')?.value); // COUNT-ONE-1: the chip's own count (every ask and security row)
+  const owner = ownerAsks(smPanel(fleet, 'queue')?.value, notifyState, now); // COUNT-ONE-1: the chip's own count; NOTIFY-ACTIONS-1: same state as the chip
   const landed = units ? units.map((u) => ms(u?.landedAt)).filter((t) => t !== null) : null;
   const windowStart = now - MOVING_WINDOW_H * 3_600_000;
   const waitingIndex = units ? units.filter((u) => u?.waiting === 'review' || u?.waiting === 'owner').length : null;

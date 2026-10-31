@@ -1,7 +1,10 @@
 /**
  * NotifyChip.jsx — COMP-COCKPIT-NOTIFY-CHIP-1: the header's sticky alert chip ("All clear" / "3 alerts" / "Alerts unknown")
- * and its tray. Rows come from notifyLogic.js (existing sources, existing thresholds). Nothing auto-dismisses and there is
- * no dismiss in phase 1: a row stays until its source clears it. Read-only: the only actions open the place to act.
+ * and its tray. Rows come from notifyLogic.js (existing sources, existing thresholds). Nothing auto-dismisses.
+ * COMP-COCKPIT-NOTIFY-ACTIONS-1: every tray row carries its class's inline actions (NotifyActions.jsx): asks are answered
+ * through the owner queue, alerts are acknowledged, snoozed or dismissed in Compose's own list, security rows are
+ * acknowledged or resolved. Cleared rows leave the count and sit in a folded "Cleared (n)" list with Restore.
+ * Keys while the tray is open: j/k select, a focuses an answer control, d dismiss, s snooze, r resolve, Esc closes.
  * The chip mounts the inbox drawer (NOTIFY-INBOX-1), so `compose:open-inbox` always has a handler while the header is up.
  */
 import React from 'react';
@@ -10,6 +13,8 @@ import useDismissable from '../useDismissable.js';
 import { useNotifySources } from './useNotifySources.js';
 import { chipLabel, unknownLine, defaultsLine, jumpOf, tryJump } from './notifyLogic.js';
 import InboxDrawer from './InboxDrawer.jsx';
+import NotifyActions, { useRowKeys } from './NotifyActions.jsx';
+import { CLEARED_WORD } from './notifyState.js';
 
 /** Owner-queue rows ask the inbox to open; when nothing handles the event the Fleet pane lists them. */
 export function openInbox(onOpenFleet) {
@@ -25,11 +30,22 @@ const TONE = {
 };
 
 export default function NotifyChip({ onOpenFleet, onNavigate, dayActive = false }) {
-  const { loading, collected, chip } = useNotifySources();
+  const { loading, collected, chip, notify } = useNotifySources();
   const [open, setOpen] = React.useState(false);
+  const [showCleared, setShowCleared] = React.useState(false);
   const rootRef = React.useRef(null);
+  const trayRef = React.useRef(null);
   const close = React.useCallback(() => setOpen(false), []);
   useDismissable(open, rootRef, close);
+  const cleared = collected.cleared ?? [];
+  const listed = showCleared ? [...collected.rows, ...cleared] : collected.rows;
+  const keys = useRowKeys({ active: open, root: trayRef, count: listed.length });
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const onEsc = (e) => { if (e.key === 'Escape') e.preventDefault(); };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [open]);
 
   const act = (row) => {
     setOpen(false);
@@ -69,15 +85,24 @@ export default function NotifyChip({ onOpenFleet, onNavigate, dayActive = false 
           data-testid="notify-tray"
           role="dialog"
           aria-label="Alerts"
-          className="absolute right-0 top-full z-50 mt-1 w-96 max-h-96 overflow-auto rounded-md border border-border bg-popover p-2 text-xs text-popover-foreground shadow-md"
+          ref={trayRef}
+          className="absolute right-0 top-full z-50 mt-1 w-96 max-w-[calc(100vw-1rem)] max-h-[70vh] overflow-auto rounded-md border border-border bg-popover p-2 text-xs text-popover-foreground shadow-md"
         >
-          {collected.rows.length === 0 && !note && !defaults && <div className="p-1 text-muted-foreground">Nothing open. Every source answered.</div>}
-          {collected.rows.map((r) => (
-            <div key={r.key} data-testid="notify-row" data-kind={r.kind} data-severity={r.severity} className="flex items-start gap-2 p-1">
-              <span aria-hidden="true" style={{ color: r.severity === 'critical' ? TONE.critical : TONE.alerts }}>●</span>
+          {collected.rows.length === 0 && !note && !defaults && <div className="p-1 text-muted-foreground">{cleared.length ? 'Nothing open.' : 'Nothing open. Every source answered.'}</div>}
+          {listed.map((r, i) => (
+            <div
+              key={r.key}
+              data-testid={r.cleared ? 'notify-row-cleared' : 'notify-row'}
+              data-row-index={i}
+              aria-selected={keys.selected === i}
+              data-kind={r.kind}
+              data-severity={r.severity}
+              className={`flex items-start gap-2 rounded p-1 ${keys.selected === i ? 'bg-muted' : ''}`}
+            >
+              <span aria-hidden="true" style={{ color: r.cleared ? 'hsl(var(--muted-foreground))' : r.severity === 'critical' ? TONE.critical : TONE.alerts }}>{r.cleared ? '✓' : '●'}</span>
               <div className="min-w-0 flex-1">
                 <div
-                  className="font-semibold break-words"
+                  className={`font-semibold break-words ${r.cleared ? 'text-muted-foreground' : ''}`}
                   title={r.title}
                   style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
                 >
@@ -86,27 +111,45 @@ export default function NotifyChip({ onOpenFleet, onNavigate, dayActive = false 
                 <div className="text-muted-foreground">
                   {r.sourceLabel}{r.since != null ? ` · ${fmtAge(r.since)}` : ''}{r.detail ? ` · ${r.detail}` : ''}
                 </div>
+                <NotifyActions row={r} notify={notify}>
+                  {dayActive && jumpOf(r) && (
+                    <button
+                      type="button"
+                      data-testid="notify-row-jump"
+                      className="shrink-0 underline underline-offset-2 hover:no-underline"
+                      onClick={() => jump(r)}
+                    >
+                      {jumpOf(r).label}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    data-testid="notify-row-action"
+                    className="shrink-0 underline underline-offset-2 hover:no-underline"
+                    onClick={() => act(r)}
+                  >
+                    Open
+                  </button>
+                </NotifyActions>
               </div>
-              {dayActive && jumpOf(r) && (
-                <button
-                  type="button"
-                  data-testid="notify-row-jump"
-                  className="shrink-0 underline underline-offset-2 hover:no-underline"
-                  onClick={() => jump(r)}
-                >
-                  {jumpOf(r).label}
-                </button>
-              )}
-              <button
-                type="button"
-                data-testid="notify-row-action"
-                className="shrink-0 underline underline-offset-2 hover:no-underline"
-                onClick={() => act(r)}
-              >
-                Open
-              </button>
             </div>
           ))}
+          {cleared.length > 0 && (
+            <button
+              type="button"
+              data-testid="notify-cleared-toggle"
+              aria-expanded={showCleared}
+              className="mt-1 flex w-full items-center gap-1 p-1 text-left text-muted-foreground hover:underline"
+              onClick={() => setShowCleared((v) => !v)}
+              title={cleared.map((r) => `${r.title}: ${CLEARED_WORD[r.cleared?.action] ?? ''}`).join('\n')}
+            >
+              <span aria-hidden="true">{showCleared ? '▾' : '▸'}</span> Cleared ({cleared.length})
+            </button>
+          )}
+          {keys.hint && <div data-testid="notify-key-hint" role="status" className="mt-1 p-1 text-muted-foreground">{keys.hint}</div>}
+          {collected.stateUnavailable && (
+            <div data-testid="notify-state-unavailable" className="mt-1 p-1 text-muted-foreground">Cleared states unavailable: showing everything</div>
+          )}
           {defaults && (
             <div data-testid="notify-defaults" className="mt-1 p-1 text-muted-foreground">{defaults}</div>
           )}

@@ -8,6 +8,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { workingNow, waitingNow, landedSince, agoWords, sinceWords } from './nowLists.js';
 import { smPanel } from '../../cockpit/fleetLogic.js';
 import { ownerAsks } from '../../cockpit/notify/notifyLogic.js';
+import { useNotifyState } from '../../cockpit/notify/useNotifyState.js';
 
 const UNAVAILABLE = 'source unavailable';
 const sec = 'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground m-0 mb-1';
@@ -104,12 +105,13 @@ export default function NowDrawer({ kind, onClose, fleet, index, feed, feedLoadi
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
+  const { state: notifyState } = useNotifyState();
   const working = useMemo(() => (kind === 'working' ? workingNow(fleet, feed, agent, now) : null), [kind, fleet, feed, agent, now]);
   const waiting = useMemo(() => {
     if (kind !== 'waiting') return null;
-    const owner = ownerAsks(smPanel(fleet, 'queue')?.value); // COUNT-ONE-1: the same count as the chip and the WHAT line
+    const owner = ownerAsks(smPanel(fleet, 'queue')?.value, notifyState, now); // COUNT-ONE-1 + NOTIFY-ACTIONS-1: the chip's count and state
     return waitingNow(index, owner ? owner.rows : null, now);
-  }, [kind, index, fleet, now]);
+  }, [kind, index, fleet, now, notifyState]);
   const landed = useMemo(() => (kind === 'landed' ? landedSince(index, lastVisitAt, feed) : null), [kind, index, lastVisitAt, feed]);
 
   let title; let line; let body;

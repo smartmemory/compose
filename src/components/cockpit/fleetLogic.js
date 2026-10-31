@@ -3,6 +3,7 @@
  * Input is the GET /api/fleet body: `{generated, sources: {stratum, sm_status, cadence}}`, each `{value, error, ts, stale}`.
  * No React imports.
  */
+import { ownerAsks } from './notify/notifyLogic.js'; // a function-only cycle (notifyLogic reads this file's thresholds)
 
 export const CTX_YELLOW = 200_000;
 export const CTX_RED = 250_000;
@@ -43,8 +44,11 @@ export function fmtAge(seconds) {
   return `${(seconds / 86_400).toFixed(1)}d`;
 }
 
-/** Ops strip pills: red for sessions over 250K and disk under 100 GB, amber for open owner questions. */
-export function fleetPills(data) {
+/**
+ * Ops strip pills: red for sessions over 250K and disk under 100 GB, amber for open owner questions. NOTIFY-ACTIONS-1 (the
+ * fourth count, COUNT-ONE-1 Finding 1): the owner pill reads `ownerAsks` with the chip's notify state, never the raw queue.
+ */
+export function fleetPills(data, notifyState = null, now = Date.now()) {
   const pills = [];
   const sessions = smPanel(data, 'sessions');
   if (Array.isArray(sessions?.value)) {
@@ -52,8 +56,9 @@ export function fleetPills(data) {
     if (hot > 0) pills.push({ key: 'fleet:ctx', tone: 'red', label: `${hot} session${hot === 1 ? '' : 's'} >250K` });
   }
   const queue = smPanel(data, 'queue');
-  if (Array.isArray(queue?.value) && queue.value.length > 0) {
-    const n = queue.value.length;
+  const owner = ownerAsks(queue?.value, notifyState, now);
+  if (owner && owner.n > 0) {
+    const { n } = owner;
     pills.push({ key: 'fleet:owner', tone: 'amber', label: `${n} owner question${n === 1 ? '' : 's'}` });
   }
   const df = smPanel(data, 'df');

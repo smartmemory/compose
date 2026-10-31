@@ -12,6 +12,7 @@ import { useFleet } from '../../../lib/fleetPoller.js';
 import { useUnitIndex } from '../../../lib/useUnitIndex.js';
 import { useAgentState } from './useAgentState.js';
 import { WHAT_RULES, LAST_VISIT_KEY, whatRule, whatCounts, readLastVisit } from './whatRules.js';
+import { useNotifyState } from '../notify/useNotifyState.js';
 
 const hhmm = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
@@ -43,6 +44,7 @@ export default function WhatLine({ onOpenFleet, onNavigate, onCountOpen }) {
   const { data: index, loading: indexLoading } = useUnitIndex();
   const agent = useAgentState();
   const [lastVisitAt] = React.useState(() => readLastVisit());
+  const { state: notifyState } = useNotifyState(); // NOTIFY-ACTIONS-1: the chip's state, so the owner counts agree
 
   // Written when the page is hidden or unloaded, never on load: "since your last visit" must not move while you look.
   React.useEffect(() => {
@@ -57,8 +59,8 @@ export default function WhatLine({ onOpenFleet, onNavigate, onCountOpen }) {
   }, []);
 
   const raw = React.useMemo(
-    () => ({ fleet, agent, index, now: Date.now(), lastVisitAt }),
-    [fleet, agent, index, lastVisitAt],
+    () => ({ fleet, agent, index, now: Date.now(), lastVisitAt, notifyState }),
+    [fleet, agent, index, lastVisitAt, notifyState],
   );
   const rule = React.useMemo(() => whatRule(raw), [raw]);
   const counts = React.useMemo(() => whatCounts(raw), [raw]);

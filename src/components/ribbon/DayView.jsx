@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import WhatLine from '../cockpit/what/WhatLine.jsx';
 import { useNotifySources } from '../cockpit/notify/useNotifySources.js';
+import { ribbonAlerts } from '../cockpit/notify/notifyState.js';
+import { publishSeats } from '../cockpit/notify/useNotifyState.js';
 import { useCostMeterProps } from '../vision/HomeFleetGlance.jsx';
 import DayRibbon from './DayRibbon.jsx';
 import RangeBar from './RangeBar.jsx';
@@ -64,8 +66,15 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
   const notify = useNotifySources();
   const meter = useCostMeterProps();
   // `useNotifySources` already ran `collect` over the shared fleet and cadence reads; its rows are the ribbon's alerts.
-  const alerts = notify.collected?.rows || NO_ALERTS;
+  // NOTIFY-ACTIONS-1: a row's `since` is its AGE IN SECONDS, so it becomes a time here (it never landed before); cleared
+  // rows and stored entries whose source is gone are drawn too, muted, so a cleared alert keeps its mark.
+  const alerts = useMemo(
+    () => (notify.collected ? ribbonAlerts(notify.collected, notify.notify?.state ?? null, Date.now()) : NO_ALERTS),
+    [notify.collected, notify.notify?.state],
+  );
   const seats = useMemo(() => seatPcts(meter.seats), [meter.seats]);
+  // "Until reset" on a seat wall reads the seat rows this page already polls (never a second read).
+  useEffect(() => { publishSeats(meter.seats); }, [meter.seats]);
 
   const [idleOpen, setIdleOpen] = useState(readIdleOpen);
   const setIdle = useCallback((open) => {
