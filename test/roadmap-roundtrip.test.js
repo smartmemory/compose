@@ -25,11 +25,13 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const COMPOSE_ROOT = join(__dirname, '..');
+// Read-only check of the checkout's ROADMAP.md: drift events would append to the checkout's .compose/data.
+const NO_DRIFT = { suppressDrift: true };
 
 describe('writeRoadmap round-trip on compose ROADMAP.md', () => {
   test('all 4 preserved sections survive byte-equal in regenerated output', () => {
     const original = readFileSync(join(COMPOSE_ROOT, 'ROADMAP.md'), 'utf-8');
-    const regenerated = generateRoadmap(COMPOSE_ROOT);
+    const regenerated = generateRoadmap(COMPOSE_ROOT, NO_DRIFT);
 
     const originalSections = readPreservedSections(original);
     assert.equal(originalSections.size, 4, 'expected 4 preserved sections in source');
@@ -44,7 +46,7 @@ describe('writeRoadmap round-trip on compose ROADMAP.md', () => {
 
   test('all curated phase-status overrides survive in regenerated headings', () => {
     const original = readFileSync(join(COMPOSE_ROOT, 'ROADMAP.md'), 'utf-8');
-    const regenerated = generateRoadmap(COMPOSE_ROOT);
+    const regenerated = generateRoadmap(COMPOSE_ROOT, NO_DRIFT);
 
     const overrides = readPhaseOverrides(original);
     assert.ok(overrides.size > 0, 'expected at least one override in source');
@@ -63,7 +65,7 @@ describe('writeRoadmap round-trip on compose ROADMAP.md', () => {
 
   test('all anonymous rows appear in regenerated output', () => {
     const original = readFileSync(join(COMPOSE_ROOT, 'ROADMAP.md'), 'utf-8');
-    const regenerated = generateRoadmap(COMPOSE_ROOT);
+    const regenerated = generateRoadmap(COMPOSE_ROOT, NO_DRIFT);
 
     const anon = readAnonymousRows(original);
     let totalAnonRows = 0;
@@ -82,7 +84,7 @@ describe('writeRoadmap round-trip on compose ROADMAP.md', () => {
 
   test('curated phase prose survives in typed phases (intro)', () => {
     const original = readFileSync(join(COMPOSE_ROOT, 'ROADMAP.md'), 'utf-8');
-    const regenerated = generateRoadmap(COMPOSE_ROOT);
+    const regenerated = generateRoadmap(COMPOSE_ROOT, NO_DRIFT);
 
     // Phase 7 has a curated intro paragraph between heading and table.
     const phase7Idx = original.indexOf('## Phase 7: MCP Writers');
@@ -101,7 +103,7 @@ describe('writeRoadmap round-trip on compose ROADMAP.md', () => {
 
   test('exit-text lines survive across all typed phases', () => {
     const original = readFileSync(join(COMPOSE_ROOT, 'ROADMAP.md'), 'utf-8');
-    const regenerated = generateRoadmap(COMPOSE_ROOT);
+    const regenerated = generateRoadmap(COMPOSE_ROOT, NO_DRIFT);
 
     // Every line that starts with `**Exit:**` is curated content that must
     // round-trip. There are several across typed phases.
@@ -119,7 +121,7 @@ describe('writeRoadmap round-trip on compose ROADMAP.md', () => {
 
   test('doc-link tails survive (See `docs/...` references)', () => {
     const original = readFileSync(join(COMPOSE_ROOT, 'ROADMAP.md'), 'utf-8');
-    const regenerated = generateRoadmap(COMPOSE_ROOT);
+    const regenerated = generateRoadmap(COMPOSE_ROOT, NO_DRIFT);
 
     const seeLines = original
       .split('\n')
@@ -139,7 +141,7 @@ describe('writeRoadmap round-trip on compose ROADMAP.md', () => {
     // generateRoadmap on a string directly (it reads from disk), so we
     // compare key invariants between first and second-pass-equivalent regens
     // by re-parsing the output.
-    const first = generateRoadmap(COMPOSE_ROOT);
+    const first = generateRoadmap(COMPOSE_ROOT, NO_DRIFT);
     const originalText = readFileSync(join(COMPOSE_ROOT, 'ROADMAP.md'), 'utf-8');
 
     // Preserved sections must round-trip byte-equal.

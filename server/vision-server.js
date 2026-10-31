@@ -97,7 +97,7 @@ export class VisionServer {
 
   attach(httpServer, app) {
     // ── Settings store ────────────────────────────────────────────────────
-    this.settingsStore = new SettingsStore(undefined, SETTINGS_DEFAULTS);
+    this.settingsStore = new SettingsStore(this.store?._dataDir, SETTINGS_DEFAULTS);
 
     // ── Settings routes ───────────────────────────────────────────────────
     attachSettingsRoutes(app, {
