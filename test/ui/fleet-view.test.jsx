@@ -470,6 +470,7 @@ const INBOX_ROWS = [
     const row = screen.getAllByTestId('inbox-row').find((r) => r.getAttribute('data-id') === 'a-new');
     fireEvent.click(row.querySelector('[data-testid="inbox-row-toggle"]'));
     expect(screen.getByTestId('inbox-full').textContent).toContain('second line https://example.com/x');
+    expect((row.textContent.match(/newer ask/g) ?? []).length).toBe(1); // expanded: the first line is not printed twice
     expect(screen.getByTestId('inbox-full').querySelector('a').getAttribute('href')).toBe('https://example.com/x');
     expect(screen.queryAllByTestId('inbox-reverse')).toHaveLength(0);
     fireEvent.click(screen.getAllByTestId('inbox-group-toggle').find((b) => b.textContent.includes('decided for you')));

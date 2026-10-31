@@ -15,9 +15,9 @@ const asOf = (fleet) => {
   return Number.isFinite(t) ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : null;
 };
 
-function FullText({ text }) {
+function FullText({ text, tone }) {
   return (
-    <div data-testid="inbox-full" className="mt-1 whitespace-pre-wrap break-words">
+    <div data-testid="inbox-full" className="mt-1 whitespace-pre-wrap break-words" style={{ color: tone ? 'hsl(var(--destructive))' : undefined }}>
       {linkParts(text).map((p, i) => (p.href
         ? <a key={i} href={p.href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">{p.text}</a>
         : <React.Fragment key={i}>{p.text}</React.Fragment>))}
@@ -42,11 +42,12 @@ function Row({ row, groupId, open, onToggle }) {
       >
         <span className="w-10 shrink-0 text-muted-foreground">{row.age != null ? fmtAge(row.age) : '?'}</span>
         <span className="w-24 shrink-0 truncate text-muted-foreground" title={row.by ?? ''}>{row.by ?? 'unknown'}</span>
+        {/* Open: the full text below is the row, so the first line is not printed twice. */}
         <span
-          className={`min-w-0 flex-1 ${open ? 'break-words font-semibold' : 'truncate'}`}
+          className="min-w-0 flex-1 truncate"
           style={{ color: row.red && groupId === 'security' ? 'hsl(var(--destructive))' : undefined }}
         >
-          {row.first}
+          {open ? '' : row.first}
         </span>
         {row.untyped && (
           <span data-testid="inbox-untyped" className="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground" title="No type recorded; shown as an ask so nothing is missed">
@@ -54,7 +55,7 @@ function Row({ row, groupId, open, onToggle }) {
           </span>
         )}
       </button>
-      {open && <FullText text={row.text} />}
+      {open && <FullText text={row.text} tone={row.red && groupId === 'security'} />}
       {groupId === 'decided' && (
         <div className="mt-1 flex items-center gap-2 text-muted-foreground">
           <span data-testid="inbox-reverse" className="min-w-0 flex-1 break-words">{reverseText(row)}</span>
