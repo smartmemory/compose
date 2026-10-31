@@ -6,11 +6,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import { cpSync, mkdtempSync, readFileSync, renameSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { attachProcessRoutes, resolveProcessSources } from '../server/process-routes.js';
+import { attachUnitIndexRoutes } from '../server/unit-index-routes.js';
 
 const FIX = fileURLToPath(new URL('./fixtures/process/', import.meta.url));
 const NOW = 1_800_000_000_000;
@@ -180,4 +181,98 @@ const ROWS = [
 
 describe('GET /api/process', () => {
   for (const [name, opts, check] of ROWS) it(name, () => withApp(opts, check));
+});
+
+// ---------------------------------------------------------------------------
+// COMP-COCKPIT-UNIT-INDEX-1: GET /api/units/index. One row table over a tmp queues dir, tmp units dir, tmp status root.
+// ---------------------------------------------------------------------------
+const IDX_NOW = Date.parse('2026-10-31T12:00:00Z');
+const H = (h) => new Date(IDX_NOW - h * 3600_000).toISOString();
+
+const indexRoot = (lanes, { briefs = {}, glossary = null, corrupt = [] } = {}) => {
+  const root = mkdtempSync(join(tmpdir(), 'unit-index-'));
+  mkdirSync(join(root, 'queues'), { recursive: true });
+  mkdirSync(join(root, 'status/out'), { recursive: true });
+  mkdirSync(join(root, 'status/configs'), { recursive: true });
+  mkdirSync(join(root, 'status/data/f'), { recursive: true });
+  for (const [lane, units] of Object.entries(lanes)) writeFileSync(join(root, 'queues', `${lane}-units.json`), JSON.stringify({ units }));
+  for (const lane of corrupt) writeFileSync(join(root, 'queues', `${lane}-units.json`), '{nope');
+  for (const [id, text] of Object.entries(briefs)) { mkdirSync(join(root, 'units', id), { recursive: true }); writeFileSync(join(root, 'units', id, 'brief.md'), text); }
+  if (glossary) {
+    writeFileSync(join(root, 'status/configs/f.json'), JSON.stringify({ glossary: 'data/f/glossary.json' }));
+    writeFileSync(join(root, 'status/data/f/glossary.json'), JSON.stringify(glossary));
+  }
+  return root;
+};
+
+async function withIndex(root, query, fn) {
+  const env = { COMPOSE_OPS_STATUS_DIR: join(root, 'status/out'), COMPOSE_PROCESS_QUEUES_DIR: join(root, 'queues'), COMPOSE_PROCESS_EXTRA: '' };
+  const app = express();
+  attachUnitIndexRoutes(app, { env, sources: resolveProcessSources(env), now: () => IDX_NOW });
+  const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+  try {
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/api/units/index${query}`);
+    await fn(res.status, await res.json());
+  } finally { server.close(); rmSync(root, { recursive: true, force: true }); }
+}
+
+const byId = (body, id) => body.units.find((u) => u.id === id);
+const landed = { ready_at: H(30), dispatched_at: H(29), author_done_at: H(28), review_r1_done_at: H(27), gate_done_at: H(26), landed_at: H(25), deployed_at: H(24) };
+
+const INDEX_ROWS = [
+  ['title from the stamp row wins over goal', () => indexRoot({ f: [{ id: 'A', title: 'T', goal: 'G' }] }), '', (s, b) => {
+    assert.equal(s, 200); assert.deepEqual([byId(b, 'A').title, byId(b, 'A').titleSource], ['T', 'stamp']);
+  }],
+  ['title from goal', () => indexRoot({ f: [{ id: 'A', goal: 'G' }] }, { glossary: { A: 'gl' } }), '', (s, b) => {
+    assert.deepEqual([byId(b, 'A').title, byId(b, 'A').titleSource], ['G', 'goal']);
+  }],
+  ['title from the lane glossary, returned merged', () => indexRoot({ f: [{ id: 'A' }] }, { glossary: { A: 'Plain words.' } }), '', (s, b) => {
+    assert.deepEqual([byId(b, 'A').title, byId(b, 'A').titleSource], ['Plain words.', 'glossary']);
+    assert.deepEqual(b.glossary.f, { A: 'Plain words.' });
+  }],
+  ['title from the brief, ID prefix stripped', () => indexRoot({ f: [{ id: 'A-1' }] }, { briefs: { 'A-1': '# A-1: Do the thing [x]\nbody' } }), '', (s, b) => {
+    assert.deepEqual([byId(b, 'A-1').title, byId(b, 'A-1').titleSource], ['Do the thing [x]', 'brief']);
+  }],
+  ['no title anywhere is null, none', () => indexRoot({ f: [{ id: 'A' }] }), '', (s, b) => {
+    assert.deepEqual([byId(b, 'A').title, byId(b, 'A').titleSource], [null, 'none']);
+  }],
+  ['waiting review, and the stamp fallbacks from lists', () => indexRoot({ f: [
+    { id: 'R', author_done_at: H(2) },
+    { id: 'L', ready_at: H(5), reviews: [{ at: H(4) }, { at: H(3) }], gates: [{ done_at: H(2) }], deploys: [{ at: H(1) }], landed_at: H(1) },
+  ] }), '', (s, b) => {
+    assert.equal(byId(b, 'R').waiting, 'review');
+    assert.deepEqual([byId(b, 'L').waiting, byId(b, 'L').reviewDoneAt, byId(b, 'L').gateDoneAt, byId(b, 'L').deployedAt], [null, H(3), H(2), H(1)]);
+  }],
+  ['waiting owner beats review; a closed wait does not count', () => indexRoot({ f: [
+    { id: 'O', author_done_at: H(2), owner_waits: [{ qid: 'q', start: H(1) }] },
+    { id: 'C', author_done_at: H(2), review_done_at: H(1), owner_waits: [{ qid: 'q', start: H(2), end: H(1) }] },
+  ] }), '', (s, b) => {
+    assert.equal(byId(b, 'O').waiting, 'owner');
+    assert.equal(byId(b, 'C').waiting, null);
+  }],
+  ['coverage counts landings in 48 h; n 0 gives pct null, never 0', () => indexRoot({
+    f: [{ id: 'A', title: 'a', ...landed }, { id: 'B', ...landed, review_r1_done_at: null, landed_at: H(26) }, { id: 'OLD', landed_at: H(100) }],
+    g: [{ id: 'X', ready_at: H(1) }],
+  }), '', (s, b) => {
+    assert.equal(b.coverage.f.n, 2);
+    assert.equal(b.coverage.f.pct.review, 50);
+    assert.equal(b.coverage.f.pct.landed, 100);
+    assert.equal(b.coverage.f.pct.title, 50);
+    assert.deepEqual([b.coverage.g.n, b.coverage.g.pct.landed], [0, null]);
+    assert.equal(typeof b.ageS, 'number');
+  }],
+  ['?lane filters units', () => indexRoot({ f: [{ id: 'A' }], g: [{ id: 'B' }] }), '?lane=g', (s, b) => {
+    assert.deepEqual(b.units.map((u) => u.id), ['B']);
+    assert.ok(b.coverage.f);
+  }],
+  ['bad lane name is 400', () => indexRoot({ f: [{ id: 'A' }] }), '?lane=../x', (s) => assert.equal(s, 400)],
+  ['one corrupt stamp file errors that lane only', () => indexRoot({ f: [{ id: 'A' }] }, { corrupt: ['bad'] }), '', (s, b) => {
+    assert.equal(s, 200);
+    assert.equal(b.coverage.bad.error, 'bad: not JSON');
+    assert.deepEqual(b.units.map((u) => u.id), ['A']);
+  }],
+];
+
+describe('GET /api/units/index', () => {
+  for (const [name, mk, query, check] of INDEX_ROWS) it(name, () => withIndex(mk(), query, check));
 });

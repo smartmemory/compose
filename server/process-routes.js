@@ -38,8 +38,8 @@ export const FLEET_ROOTS_ROUTE = '/api/fleet/roots';
 export const BUILDER_TICK_S = 900; // launchd ai.smartmemory.status-build StartInterval; stale at two ticks
 const TTL_MS = { builder: 60_000, stamps: 120_000, history: 300_000 };
 const LOG = '[process]';
-const DEFAULT_QUEUES_DIR = join(homedir(), 'reg/my/SmartMemory/smart-memory-ops/queues');
-const DEFAULT_EXTRA = `forge=${join(homedir(), 'reg/my/forge/status/units.json')}`;
+export const DEFAULT_QUEUES_DIR = join(homedir(), 'reg/my/SmartMemory/smart-memory-ops/queues');
+export const DEFAULT_EXTRA = `forge=${join(homedir(), 'reg/my/forge/status/units.json')}`;
 const DEFAULT_KPI_HISTORY = join(homedir(), 'reg/my/forge/status/kpi-history.jsonl');
 
 /**
