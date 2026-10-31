@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import cytoscape from 'cytoscape';
 import cytoscapeDagre from 'cytoscape-dagre';
+import { elementKey, planRefresh, syncElements } from './graphSync.js';
 
 cytoscape.use(cytoscapeDagre);
 
@@ -453,14 +454,36 @@ export default function GraphRenderer({
     });
   }, [elements, hiddenNodes]);
 
+  // Viewport policy (COMP-ROADMAP-GRAPH-ZOOM-DRIFT-1): one instance per theme/viewMode/layout kind, data refreshes
+  // patch it in place, and a fit only happens until the user first zooms or pans (or presses Fit).
+  const visibleRef = useRef(visibleElements);
+  visibleRef.current = visibleElements;
+  const touchedRef = useRef(false);
+  const savedViewportRef = useRef(null);
+  const planRef = useRef(null);
+  const structKey = JSON.stringify(activeLayout);
+  const setKey = elementKey(visibleElements);
+
+  const runLayout = useCallback((cy, plan) => {
+    const layout = cy.layout({ ...activeLayout, fit: false, animate: false });
+    layout.one('layoutstop', () => {
+      if (plan.restore && savedViewportRef.current) cy.viewport(savedViewportRef.current);
+      else if (plan.fit) cy.fit(undefined, 40);
+    });
+    layout.run();
+  }, [structKey]);
+
   // Cytoscape lifecycle
   useEffect(() => {
     if (!containerRef.current) return;
+    const container = containerRef.current;
+    const plan = planRefresh(null, { key: `${structKey}|${isDark}|${viewMode}`, setKey }, touchedRef.current);
+    const restoring = touchedRef.current && savedViewportRef.current;
+    planRef.current = { key: `${structKey}|${isDark}|${viewMode}`, setKey };
     const cy = cytoscape({
-      container: containerRef.current,
-      elements: visibleElements,
+      container,
+      elements: visibleRef.current,
       style: graphStyle,
-      layout: activeLayout,
       minZoom,
       maxZoom: 4,
       wheelSensitivity: 0.3,
@@ -488,10 +511,36 @@ export default function GraphRenderer({
       setTooltip(null);
     });
     if (onNodeClick) cy.on('tap', 'node', (evt) => onNodeClick(evt.target.id()));
-    cy.on('layoutstop', () => cy.fit(undefined, 40));
+    const markTouched = () => { touchedRef.current = true; };
+    container.addEventListener('wheel', markTouched, { passive: true });
+    container.addEventListener('pointerdown', markTouched);
+    container.addEventListener('touchstart', markTouched, { passive: true });
 
-    return () => { cy.destroy(); cyRef.current = null; };
-  }, [JSON.stringify(visibleElements), JSON.stringify(activeLayout), isDark, viewMode]);
+    runLayout(cy, { ...plan, restore: Boolean(restoring), fit: !restoring });
+
+    return () => {
+      container.removeEventListener('wheel', markTouched);
+      container.removeEventListener('pointerdown', markTouched);
+      container.removeEventListener('touchstart', markTouched);
+      savedViewportRef.current = { zoom: cy.zoom(), pan: { ...cy.pan() } };
+      cy.destroy();
+      cyRef.current = null;
+    };
+  }, [structKey, isDark, viewMode]);
+
+  // Data refresh: patch the live instance. Only a changed node/edge SET re-runs the layout.
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy || cy.destroyed()) return;
+    const setChanged = syncElements(cy, visibleElements);
+    if (!setChanged) return;
+    const touched = touchedRef.current;
+    if (touched) savedViewportRef.current = { zoom: cy.zoom(), pan: { ...cy.pan() } };
+    const next = { key: planRef.current?.key, setKey };
+    const plan = planRefresh(planRef.current, next, touched);
+    planRef.current = next;
+    runLayout(cy, plan);
+  }, [setKey, JSON.stringify(visibleElements)]);
 
   useEffect(() => {
     const cy = cyRef.current;
@@ -501,13 +550,15 @@ export default function GraphRenderer({
     });
   }, [showEdgeLabels]);
 
-  const handleFit = useCallback(() => cyRef.current?.fit(undefined, 40), []);
+  const handleFit = useCallback(() => { touchedRef.current = false; cyRef.current?.fit(undefined, 40); }, []);
   const handleZoomIn = useCallback(() => {
     const cy = cyRef.current;
+    touchedRef.current = true;
     if (cy) cy.zoom({ level: cy.zoom() * 1.3, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
   }, []);
   const handleZoomOut = useCallback(() => {
     const cy = cyRef.current;
+    touchedRef.current = true;
     if (cy) cy.zoom({ level: cy.zoom() / 1.3, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
   }, []);
 
