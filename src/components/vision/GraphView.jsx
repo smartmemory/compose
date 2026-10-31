@@ -1102,7 +1102,7 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
     <div className="flex-1 flex flex-col min-h-0" style={{ background: '#0f172a' }}>
       {/* Toolbar */}
       <div className="shrink-0" style={{ background: '#1e293b', borderBottom: '1px solid #334155' }}>
-        <div className="flex items-center justify-between px-3 py-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-3 py-1.5">
           <div className="flex items-center gap-2">
             <span style={{ fontSize: 11, color: '#64748b' }}>Status:</span>
             {STATUS_FILTERS.map(f => (
@@ -1111,11 +1111,11 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
               </FilterBtn>
             ))}
             <Sep />
-            <span style={{ fontSize: 10, color: '#475569' }}>
+            <span style={{ fontSize: 10, color: '#475569', whiteSpace: 'nowrap' }}>
               {filteredItems.length} items &middot; {filteredConnections.length} edges
             </span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             <GroupsPopover items={items} hiddenGroups={hiddenGroups} onToggleGroup={onToggleGroup} />
             <FilterBtn active={grouped} onClick={() => setGrouped(!grouped)}>Group</FilterBtn>
             <FilterBtn active={showAgentTopology} onClick={() => setShowAgentTopology(v => !v)} title="Show/hide agent topology">Agents</FilterBtn>

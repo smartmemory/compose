@@ -269,7 +269,9 @@ function AttentionQueueSidebar({
 
       {/* ── PROJECTS in every room (COMP-COCKPIT-FLEET-PROJECTS-2) ── */}
       <ScrollArea className="flex-1">
-        <div className="p-2">
+        {/* A fixed width: the Radix viewport's table wrapper otherwise grows to the longest label and pushes each
+            row's up / down / remove buttons out of view (seen in FLEET-PROJECTS-1's Fleet shot). */}
+        <div className="p-2" style={{ width: (widthPx ?? 208) - 1 }}>
           <FleetProjectsSection
             onViewChange={onViewChange}
             mode={projectsMode}
