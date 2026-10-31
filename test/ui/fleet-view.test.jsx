@@ -257,3 +257,103 @@ describe('unitLabel and explain', () => {
     }
   });
 });
+
+// COMP-COCKPIT-NOTIFY-CHIP-1: the alert chip, its tray and the security banner, from sources Compose already reads.
+const { collect, chipState, bannerText, tagOf } = await import('../../src/components/cockpit/notify/notifyLogic.js');
+const { default: NotifyChip } = await import('../../src/components/cockpit/notify/NotifyChip.jsx');
+const { default: SecurityBanner } = await import('../../src/components/cockpit/notify/SecurityBanner.jsx');
+const { resetNotifyPoller } = await import('../../src/components/cockpit/notify/useNotifySources.js');
+
+const NOW = Date.parse('2026-10-31T12:00:00Z');
+const up = (value) => ({ value, error: null });
+const smFleet = (panels) => ({ sources: { sm_status: up(Object.fromEntries(Object.entries(panels).map(([k, v]) => [k, up(v)]))) } });
+const QUEUE = [
+  { id: 'q1', by: 'forge-main', text: 'SECURITY: key rotated in the clear', age: 7200, red: false },
+  { id: 'q2', by: 'ops-main', text: 'QUESTION: pick the order', age: 90_000, red: true },
+  { id: 'q3', by: 'ops-main', text: 'SEC-CLEAR-ALL-SHARED-WS-1 landed', age: 60, red: false },
+];
+const CAD_OK = { outage: up({ state: 'ok' }), attention: up({ alerts: [] }) };
+const DISK_OK = { free_gb: 500 };
+
+// One row table: [name, sources, expected state, expected row keys, expected unknown labels, banner text]
+const NOTIFY_ROWS = [
+  ['all clear when every source answers and nothing is open', { fleet: smFleet({ queue: [], sessions: [], df: DISK_OK }), ...CAD_OK }, 'all-clear', [], [], null],
+  ['owner queue: SECURITY tag is a critical security row, a red ask is a warn row, a unit id is neither',
+    { fleet: smFleet({ queue: QUEUE, sessions: [], df: DISK_OK }), ...CAD_OK }, 'alerts', ['security:q1', 'ask:q2'], [], 'Security: key rotated in the clear (2.0h)'],
+  ['context: a session over 250K adds a row, 249K does not',
+    { fleet: smFleet({ queue: [], sessions: [{ name: 'forge-main', ctx: 260_000 }, { name: 'ops-main', ctx: 249_000 }], df: DISK_OK }), ...CAD_OK }, 'alerts', ['ctx:forge-main'], [], null],
+  ['disk: under 100 GB adds a row, exactly 100 does not',
+    { fleet: smFleet({ queue: [], sessions: [], df: { free_gb: 80 } }), ...CAD_OK }, 'alerts', ['disk'], [], null],
+  ['outage: state outage is a row, cadence stale is unknown (never clear)',
+    { fleet: smFleet({ queue: [], sessions: [], df: DISK_OK }), outage: up({ state: 'outage', since: '2026-10-31T11:50:00Z', fails: 3 }), attention: up({ alerts: [] }) }, 'alerts', ['outage'], [], null],
+  ['outage stale is unavailable, not clear',
+    { fleet: smFleet({ queue: [], sessions: [], df: DISK_OK }), outage: up({ state: 'stale' }), attention: up({ alerts: [] }) }, 'unknown', [], ['cadence outage'], null],
+  ['attention: a non-ok wall is a row',
+    { fleet: smFleet({ queue: [], sessions: [], df: DISK_OK }), outage: up({ state: 'ok' }), attention: up({ alerts: [{ name: 'seat1 5h', state: 'trip', why: 'at the wall' }] }) }, 'alerts', ['attention:seat1 5h'], [], null],
+  ['cadence down (both screens fail) is Alerts unknown with each source named',
+    { fleet: smFleet({ queue: [], sessions: [], df: DISK_OK }), outage: { value: null, error: 'HTTP 502' }, attention: { value: null, error: 'HTTP 502' } }, 'unknown', [], ['cadence outage', 'cadence attention'], null],
+  ['sm_status down is one unavailable source, not clear',
+    { fleet: { sources: { sm_status: { value: null, error: 'spawn failed' } } }, ...CAD_OK }, 'unknown', [], ['sm_status'], null],
+];
+
+describe('COMP-COCKPIT-NOTIFY-CHIP-1 rows', () => {
+  it.each(NOTIFY_ROWS)('%s', (_name, sources, state, keys, unknown, banner) => {
+    const collected = collect(sources, NOW);
+    expect(chipState(collected).state).toBe(state);
+    expect(collected.rows.map((r) => r.key)).toEqual(keys);
+    expect(collected.unknown).toEqual(unknown);
+    const b = bannerText(collected);
+    expect(b ? b.text : null).toBe(banner);
+    expect(collect(sources, NOW).rows.map((r) => r.key)).toEqual(keys); // stable keys across reads
+  });
+
+  it('tags are exact words: unit ids and dash forms are untyped', () => {
+    expect(['SECURITY: x', 'CREDENTIAL leaked', 'QUESTION: a', 'APPLIED: b', 'FYI c', 'UPDATED: d', 'SEC-CLEAR-ALL-1', 'SECURITY-1 landed', 'security: x'].map(tagOf))
+      .toEqual(['security', 'security', 'ask', 'decided', 'fyi', 'fyi', 'untyped', 'untyped', 'untyped']);
+  });
+});
+
+describe('COMP-COCKPIT-NOTIFY-CHIP-1 chip, tray and banner', () => {
+  const stubSources = ({ fleet, cadenceOk }) => vi.stubGlobal('fetch', async (url) => {
+    const u = String(url);
+    if (u === '/api/fleet') return { ok: true, json: async () => fleet };
+    if (!cadenceOk) return { ok: false, status: 502, json: async () => ({}) };
+    if (u.endsWith('/outage')) return { ok: true, json: async () => ({ state: 'ok' }) };
+    if (u.endsWith('/attention')) return { ok: true, json: async () => ({ alerts: [] }) };
+    return { ok: false, status: 404, json: async () => ({}) };
+  });
+  beforeEach(() => { resetFleetPoller(); resetNotifyPoller(); });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('a live SECURITY row paints the red banner and the chip counts it; Open dispatches compose:open-inbox', async () => {
+    stubSources({ fleet: smFleet({ queue: QUEUE, sessions: [], df: DISK_OK }), cadenceOk: true });
+    const onOpenFleet = vi.fn();
+    render(<><NotifyChip onOpenFleet={onOpenFleet} /><SecurityBanner onOpenFleet={onOpenFleet} /></>);
+    const banner = await screen.findByTestId('security-banner');
+    expect(banner.textContent).toContain('Security: key rotated in the clear');
+    await waitFor(() => expect(screen.getByTestId('notify-chip').textContent).toContain('2 alerts'));
+    fireEvent.click(screen.getByTestId('notify-chip'));
+    expect(screen.getAllByTestId('notify-row').map((r) => r.getAttribute('data-kind'))).toEqual(['security', 'ask-overdue']);
+    const handled = vi.fn((e) => e.preventDefault());
+    window.addEventListener('compose:open-inbox', handled);
+    fireEvent.click(screen.getAllByTestId('notify-row-action')[0]);
+    window.removeEventListener('compose:open-inbox', handled);
+    expect(handled).toHaveBeenCalledTimes(1);
+    expect(onOpenFleet).not.toHaveBeenCalled();
+  });
+
+  it('All clear with everything answering, and the banner is absent', async () => {
+    stubSources({ fleet: smFleet({ queue: [], sessions: [], df: DISK_OK }), cadenceOk: true });
+    render(<><NotifyChip /><SecurityBanner /></>);
+    await waitFor(() => expect(screen.getByTestId('notify-chip').textContent).toContain('All clear'));
+    expect(screen.queryByTestId('security-banner')).toBeNull();
+  });
+
+  it('cadence down turns All clear into Alerts unknown and the tray names the source', async () => {
+    stubSources({ fleet: smFleet({ queue: [], sessions: [], df: DISK_OK }), cadenceOk: false });
+    render(<NotifyChip />);
+    await waitFor(() => expect(screen.getByTestId('notify-chip').textContent).toContain('Alerts unknown'));
+    fireEvent.click(screen.getByTestId('notify-chip'));
+    expect(screen.getByTestId('notify-unknown').textContent).toContain('cadence outage, cadence attention');
+  });
+});

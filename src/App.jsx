@@ -33,6 +33,8 @@ import EnvironmentHealthPanel from './components/cockpit/EnvironmentHealthPanel.
 import LaunchPopover from './components/cockpit/LaunchPopover.jsx';
 import BuildAllGsdControl from './components/cockpit/BuildAllGsdControl.jsx';
 import { HeaderCounters, AgentStatusPill } from './components/cockpit/HeaderStatus.jsx';
+import NotifyChip from './components/cockpit/notify/NotifyChip.jsx';
+import SecurityBanner from './components/cockpit/notify/SecurityBanner.jsx';
 
 // Pure state-logic modules
 import {
@@ -1324,7 +1326,9 @@ function AppInner() {
         >
           <HeaderCounters items={items} gates={gates} />
           <AgentStatusPill />
+          <NotifyChip onOpenFleet={handleOpenFleet} onNavigate={handleViewChange} />
         </div>
+        <SecurityBanner onOpenFleet={handleOpenFleet} />
         </PanelErrorBoundary>
         <ViewSubTabs activeView={activeView} availability={availability} onViewChange={handleViewChange} />
 
