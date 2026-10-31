@@ -98,11 +98,12 @@ describe('visionToGraphInputs edge mapping', () => {
     ]);
   });
 
-  test('informs and implements map to dep; contradicts maps to concurrent', () => {
+  test('informs keeps its own type (drawn dashed); implements maps to dep; contradicts maps to concurrent', () => {
     const a = item('COMP-A');
     const b = item('COMP-B');
     const mk = (t) => visionToGraphInputs([a, b], [conn(a.id, b.id, t)], {}).rawEdges[0].type;
-    assert.equal(mk('informs'), 'dep');
+    // COMP-ROADMAP-GRAPH-EDGES-1: was 'dep' (prose edges drew as solid dependencies).
+    assert.equal(mk('informs'), 'informs');
     assert.equal(mk('implements'), 'dep');
     assert.equal(mk('contradicts'), 'concurrent');
   });
@@ -132,22 +133,24 @@ describe('visionToGraphInputs knownCodes', () => {
     assert.doesNotThrow(() => buildGraph(inputs));
   });
 
-  test('includeProseEdges:false drops informs edges but keeps structural ones (canonical projection)', () => {
+  // COMP-ROADMAP-GRAPH-EDGES-1: was "includeProseEdges:false drops informs edges"
+  // (the canonical projection drew most projects as boxes with no edges). The
+  // flag is gone: every projection keeps informs; one restating a structural
+  // edge on the same pair folds into it.
+  test('informs edges are kept, except where a structural edge joins the same pair', () => {
     const a = item('COMP-A');
     const b = item('COMP-B');
     const c = item('COMP-C');
     const connections = [
-      conn(a.id, b.id, 'informs'),   // prose-derived -> dropped when excluded
+      conn(a.id, b.id, 'informs'),   // prose-derived -> kept, dashed
       conn(a.id, c.id, 'blocks'),    // deps.yaml-derived -> kept
+      conn(c.id, a.id, 'informs'),   // same pair as the blocks edge -> folded
       conn(b.id, c.id, 'supports'),  // deps.yaml concurrent -> kept
     ];
-    const live = visionToGraphInputs([a, b, c], connections, {});
-    assert.equal(live.rawEdges.length, 3); // default keeps prose edges (shipped live behavior)
-
-    const canonical = visionToGraphInputs([a, b, c], connections, { includeProseEdges: false });
+    const { rawEdges } = visionToGraphInputs([a, b, c], connections, {});
     assert.deepEqual(
-      canonical.rawEdges.map((e) => `${e.from}->${e.to}:${e.type}`).sort(),
-      ['COMP-A->COMP-C:dep', 'COMP-B->COMP-C:concurrent'],
+      rawEdges.map((e) => `${e.from}->${e.to}:${e.type}`).sort(),
+      ['COMP-A->COMP-B:informs', 'COMP-A->COMP-C:dep', 'COMP-B->COMP-C:concurrent'],
     );
   });
 

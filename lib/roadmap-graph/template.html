@@ -67,7 +67,7 @@
   <div><span class="swatch" style="background:#ef4444"></span>blocked</div>
   <div><span class="swatch" style="background:#6b7280"></span>parked</div>
   <div style="margin-top:6px"><b>Edges</b></div>
-  <div>→ depends on &nbsp;·&nbsp; ⇢ concurrent</div>
+  <div>→ depends on (solid) &nbsp;·&nbsp; ⇢ informs (dashed) &nbsp;·&nbsp; ┄ concurrent</div>
   <div style="margin-top:4px">border weight = priority</div>
 </div>
 <div id="tracks"></div>
@@ -132,6 +132,9 @@ const cy = cytoscape({
     { selector: 'edge[type="concurrent"]', style:{ 'width':1.4,'line-color':'#64748b',
       'line-style':'dashed','line-dash-pattern':[6,3],'target-arrow-shape':'none',
       'curve-style':'bezier' } },
+    { selector: 'edge[type="informs"]', style:{ 'width':1.2,'line-color':'#94a3b8',
+      'target-arrow-color':'#94a3b8','target-arrow-shape':'triangle','arrow-scale':0.8,
+      'line-style':'dashed','line-dash-pattern':[4,4],'curve-style':'bezier' } },
     { selector: '.dim', style:{ 'opacity':0.12 } },
   ],
   layout: { name:'dagre', rankDir:'LR', nodeSep:28, rankSep:68, edgeSep:10, padding:20,
@@ -156,6 +159,8 @@ cy.on('mouseover', 'node', (ev) => {
   const unblocks = ev.target.outgoers('edge[type="dep"]').targets().map(n => n.data('id'));
   const concurrent = ev.target.connectedEdges('edge[type="concurrent"]')
     .connectedNodes().filter(n => n.id() !== ev.target.id()).map(n => n.data('id'));
+  const informs = ev.target.connectedEdges('edge[type="informs"]')
+    .connectedNodes().filter(n => n.id() !== ev.target.id()).map(n => n.data('id'));
   tip.innerHTML = '<div class="tid">'+esc(d.id)+'</div>'
     + '<div>'+esc(d.name||'')+'</div>'
     + '<div class="badges"><span class="badge">'+esc(d.status)+'</span>'
@@ -163,6 +168,7 @@ cy.on('mouseover', 'node', (ev) => {
     + (deps.length ? '<div class="d"><b>depends on:</b> '+esc(deps.join(', '))+'</div>' : '')
     + (unblocks.length ? '<div class="d"><b>unblocks:</b> '+esc(unblocks.join(', '))+'</div>' : '')
     + (concurrent.length ? '<div class="d"><b>concurrent with:</b> '+esc(concurrent.join(', '))+'</div>' : '')
+    + (informs.length ? '<div class="d"><b>related:</b> '+esc(informs.join(', '))+'</div>' : '')
     + (d.desc ? '<div class="d">'+esc(d.desc)+'</div>' : '');
   tip.style.display = 'block';
 });

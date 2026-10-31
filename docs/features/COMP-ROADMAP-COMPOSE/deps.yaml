@@ -1,0 +1,5 @@
+# Roadmap-graph edges (COMP-ROADMAP-GRAPH-EDGES-1). Items with a trailing source comment are
+# written by scripts/roadmap-deps-gen.mjs and rewritten on every run: delete one and list its
+# code under ignore_generated: to keep it out. Items without one are hand-written, never touched.
+depends_on:
+  - COMP-ROADMAP-META  # source: prose ROADMAP.md:1486

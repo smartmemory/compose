@@ -46,7 +46,7 @@ const TYPE_BG = Object.fromEntries(
 const CONF_BORDER = [1, 1.5, 2, 2.5, 3];
 
 const EDGE_CONFIG = {
-  informs:     { color: '#64748b', style: 'solid' },
+  informs:     { color: '#64748b', style: 'dashed' }, // prose-derived: dashed, blocks solid (COMP-ROADMAP-GRAPH-EDGES-1)
   supports:    { color: '#22c55e', style: 'solid' },
   blocks:      { color: '#ef4444', style: 'solid' },
   contradicts: { color: '#f472b6', style: 'dashed' },
@@ -279,6 +279,7 @@ function buildStylesheet() {
     },
     { selector: 'edge[edgeStyle="dashed"]', style: { 'line-style': 'dashed', 'line-dash-pattern': [6, 3], 'target-arrow-shape': 'diamond' } },
     { selector: 'edge[edgeType="blocks"]', style: { 'target-arrow-shape': 'tee' } },
+    { selector: 'edge[edgeType="informs"]', style: { 'target-arrow-shape': 'triangle' } },
     { selector: '.dimmed', style: { opacity: 0.35 } },
     { selector: '.focus-dimmed', style: { opacity: 0.15, 'events': 'no' } },
     { selector: '.highlighted', style: { 'border-width': 3, 'border-color': '#60a5fa' } },

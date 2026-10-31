@@ -113,7 +113,7 @@ export function collectVisionInputs(cwd) {
     return visionToGraphInputs(
       [...store.items.values()],
       [...store.connections.values()],
-      { externalPrefixes, includeProseEdges: false },
+      { externalPrefixes },
     );
   } finally {
     try { rmSync(dataDir, { recursive: true, force: true }); } catch { /* best-effort */ }
