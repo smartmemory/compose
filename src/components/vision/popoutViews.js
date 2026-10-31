@@ -5,7 +5,7 @@
  * for (`dashboard`, `usage`, its own legacy default `roadmap`, garbage) renders
  * the Graph instead of a blank pane.
  */
-export const POPOUT_VIEWS = ['graph', 'tree', 'pipeline', 'sessions', 'docs', 'gates', 'settings'];
+export const POPOUT_VIEWS = ['graph', 'tree', 'pipeline', 'sessions', 'gates', 'settings'];
 export const POPOUT_FALLBACK_VIEW = 'graph';
 
 export function popoutView(key) {

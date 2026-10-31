@@ -51,7 +51,7 @@ import {
 } from './components/cockpit/contextPanelState.js';
 
 // Vision surface — views, sidebar, modals, store
-import { VIEW_KEYS, isViewKey, locateView, reachableViews, resolveStoredView, resolveDefaultView, viewFromQuery, migrateNavState, LEGACY_NAV_STORAGE_KEYS } from '../lib/view-keys.js';
+import { VIEW_KEYS, isViewKey, canonicalView, locateView, reachableViews, resolveStoredView, resolveDefaultView, viewFromQuery, migrateNavState, LEGACY_NAV_STORAGE_KEYS } from '../lib/view-keys.js';
 import { NavigationContext } from './lib/navigation.jsx';
 import { VisionChangesContext } from './components/vision/VisionChangesContext.js';
 import { useVisionStore } from './components/vision/useVisionStore.js';
@@ -61,7 +61,6 @@ import StatusBand from './components/vision/StatusBand.jsx';
 import DecisionTimelineStrip from './components/vision/DecisionTimelineStrip.jsx';
 import TreeView from './components/vision/TreeView.jsx';
 import GraphView from './components/vision/GraphView.jsx';
-import DocsView from './components/vision/DocsView.jsx';
 import GateView from './components/vision/GateView.jsx';
 import GateToast from './components/vision/GateToast.jsx';
 import ChallengeModal from './components/vision/ChallengeModal.jsx';
@@ -243,8 +242,6 @@ function CockpitView({
   buildHistory,
   gates, settings, selectedPhase, selectedItemId,
   buildStateMap, agentOverlay, spawnedAgents, agentRelays,
-  // docs navigation
-  docsSelectedFile, onDocsSelectedFileChange, docsPreviousView, onDocsBack,
   // graph filtering
   visibleTracks, hiddenGroups,
   // callbacks
@@ -380,18 +377,6 @@ function CockpitView({
       );
     case 'validate':
       return <ValidateView featureCode={featureCode} />;
-    case 'docs':
-      return (
-        <DocsView
-          items={phaseFilteredItems}
-          selectedFile={docsSelectedFile}
-          onSelectedFileChange={onDocsSelectedFileChange}
-          previousView={docsPreviousView}
-          onBack={onDocsBack}
-          featureCode={filterCode}
-          focusActive={!!filterCode}
-        />
-      );
     case 'design':
       return <DesignView key={projectRoot} />;
     case 'ideabox':
@@ -603,8 +588,6 @@ function AppInner() {
     document.addEventListener('mouseup', onUp);
   }, []);
 
-  const [docsSelectedFile, setDocsSelectedFile] = useState(null);
-  const [docsPreviousView, setDocsPreviousView] = useState(null);
   const [selectedTrack, setSelectedTrack] = useState(() =>
     localStorage.getItem('compose:selectedTrack') || null
   );
@@ -686,9 +669,10 @@ function AppInner() {
   // activeView is the flat leaf view key; the rooms and sub-tabs are derived from it
   // (`locateView`). An unknown key is ignored with one WARNING (server `visionUI` commands,
   // EntityLink), never a "View not found" page.
-  const handleViewChange = useCallback((view) => {
+  const handleViewChange = useCallback((requested) => {
+    const view = canonicalView(requested); // a retired key (`docs`) goes to its replacement
     if (!isViewKey(view)) {
-      console.warn(`[compose] ignoring navigation to unknown view "${view}"`);
+      console.warn(`[compose] ignoring navigation to unknown view "${requested}"`);
       return;
     }
     setActiveView(view);
@@ -704,12 +688,6 @@ function AppInner() {
   // ── Layout persistence ───────────────────────────────────────────────────
   useEffect(() => {
     localStorage.setItem('compose:activeView', activeView);
-    // COMP-UX-1e: Clear stale docs back-navigation state when leaving docs
-    // via tab switch (not via the back button which clears it explicitly)
-    if (activeView !== 'docs') {
-      setDocsPreviousView(null);
-      setDocsSelectedFile(null);
-    }
   }, [activeView]);
 
   // COMP-AUDIT-17: persist the focused feature; a code that no longer resolves to any item is cleared once items load.
@@ -1196,19 +1174,11 @@ function AppInner() {
     handleViewChange('tree');
   }, [handleViewChange, onContextSelect, ensureItemVisible]);
 
-  const navigateToDocs = useCallback((filePath) => {
-    setDocsPreviousView(activeView);
-    setDocsSelectedFile(filePath);
-    handleViewChange('docs');
-  }, [activeView, handleViewChange]);
-
-  const navigateBackFromDocs = useCallback(() => {
-    if (docsPreviousView) {
-      handleViewChange(docsPreviousView);
-      setDocsPreviousView(null);
-      setDocsSelectedFile(null);
-    }
-  }, [docsPreviousView, handleViewChange]);
+  // COMPOSE-DOCS-RETIRE-1: a file click in the context panel lands on Library > Wiki. The wiki
+  // view opens by feature code, not by file path, so the clicked path is not carried over.
+  const navigateToWiki = useCallback(() => {
+    handleViewChange('wiki');
+  }, [handleViewChange]);
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
@@ -1435,10 +1405,6 @@ function AppInner() {
                       agentOverlay={agentOverlay}
                       spawnedAgents={spawnedAgents}
                       agentRelays={agentRelays}
-                      docsSelectedFile={docsSelectedFile}
-                      onDocsSelectedFileChange={setDocsSelectedFile}
-                      docsPreviousView={docsPreviousView}
-                      onDocsBack={navigateBackFromDocs}
                       projectRoot={projectRoot}
                       featureCode={activeFeatureCode}
                       filterCode={filterCode}
@@ -1462,44 +1428,42 @@ function AppInner() {
                 </div>
               </main>
 
-              {/* Context panel — hidden in docs view (docs has its own preview pane) */}
-              {activeView !== 'docs' && (
-                <PanelErrorBoundary>
-                  <ContextPanel
-                    isOpen={contextOpen}
-                    onToggle={toggleContext}
-                    widthPx={contextWidthPx}
-                    onResizePx={handleContextResizePx}
-                  >
-                    {contextSelection?.type === 'item' && (
-                      <ContextItemDetail
-                        itemId={contextSelection.id}
-                        onSelect={(id) => { setContextSelection({ type: 'item', id }); setSelectedItemId(id); }}
-                        onClose={() => { setContextSelection(null); setSelectedItemId(null); }}
-                        onOpenFile={navigateToDocs}
-                        onViewInGraph={handleViewInGraph}
-                        onViewInTree={handleViewInTree}
-                        focusedFeature={focusedFeature}
-                        onFocusFeature={(item) => dispatchFocus({ type: 'focus', item })}
-                      />
-                    )}
-                    {contextSelection?.type === 'step' && (
-                      <ContextStepDetail
-                        stepId={contextSelection.id}
-                        tierEvents={activeBuild?.tierEvents}
-                        healthEvents={activeBuild?.health_score != null ? [{ score: activeBuild.health_score, breakdown: activeBuild.health_breakdown, missing: activeBuild.health_missing }] : undefined}
-                        capabilityEvents={activeBuild?.capabilityEvents}
-                      />
-                    )}
-                    {contextSelection?.type === 'design-doc' && (
-                      <DesignDocPanel />
-                    )}
-                  </ContextPanel>
-                </PanelErrorBoundary>
-              )}
+              {/* Context panel */}
+              <PanelErrorBoundary>
+                <ContextPanel
+                  isOpen={contextOpen}
+                  onToggle={toggleContext}
+                  widthPx={contextWidthPx}
+                  onResizePx={handleContextResizePx}
+                >
+                  {contextSelection?.type === 'item' && (
+                    <ContextItemDetail
+                      itemId={contextSelection.id}
+                      onSelect={(id) => { setContextSelection({ type: 'item', id }); setSelectedItemId(id); }}
+                      onClose={() => { setContextSelection(null); setSelectedItemId(null); }}
+                      onOpenFile={navigateToWiki}
+                      onViewInGraph={handleViewInGraph}
+                      onViewInTree={handleViewInTree}
+                      focusedFeature={focusedFeature}
+                      onFocusFeature={(item) => dispatchFocus({ type: 'focus', item })}
+                    />
+                  )}
+                  {contextSelection?.type === 'step' && (
+                    <ContextStepDetail
+                      stepId={contextSelection.id}
+                      tierEvents={activeBuild?.tierEvents}
+                      healthEvents={activeBuild?.health_score != null ? [{ score: activeBuild.health_score, breakdown: activeBuild.health_breakdown, missing: activeBuild.health_missing }] : undefined}
+                      capabilityEvents={activeBuild?.capabilityEvents}
+                    />
+                  )}
+                  {contextSelection?.type === 'design-doc' && (
+                    <DesignDocPanel />
+                  )}
+                </ContextPanel>
+              </PanelErrorBoundary>
 
               {/* Open Loops Panel — COMP-OBS-LOOPS region ④ */}
-              {activeFeatureCode && activeView !== 'docs' && (
+              {activeFeatureCode && (
                 <PanelErrorBoundary zone="open loops panel">
                   <OpenLoopsPanel
                     featureCode={activeFeatureCode}

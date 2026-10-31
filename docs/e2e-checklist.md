@@ -22,7 +22,7 @@ If any of 0.1–0.5 fails, stop and fix before continuing — every later step a
 
 ## 1. ViewTabs — main views
 
-The 9 default tabs are: `dashboard`, `graph`, `tree`, `docs`, `design`, `gates`, `pipeline`, `sessions`, `ideabox`. Click each; verify it renders without errors.
+The 8 default tabs are: `dashboard`, `graph`, `tree`, `design`, `gates`, `pipeline`, `sessions`, `ideabox`. Click each; verify it renders without errors.
 
 ### 1.1 Dashboard
 - [ ] Click **Dashboard** tab → `DashboardView` renders status band, drift ribbon, decision timeline strip
@@ -39,10 +39,8 @@ The 9 default tabs are: `dashboard`, `graph`, `tree`, `docs`, `design`, `gates`,
 - [ ] Click **Tree** tab → hierarchical view of features → phases → tasks
 - [ ] Expand/collapse nodes; expansion state persists in localStorage
 
-### 1.4 Docs
-- [ ] Click **Docs** tab → `DocsView` lists feature folders under `docs/features/`
-- [ ] Select one → renders its `design.md`/`prd.md`/`blueprint.md` with markdown formatting
-- [ ] Mermaid diagrams (if any) render inline
+### 1.4 Docs (retired)
+- [ ] Load `?view=docs` → lands on Library > Wiki (COMPOSE-DOCS-RETIRE-1); Library shows Wiki and Journal only
 
 ### 1.5 Design
 - [ ] Click **Design** tab → `DesignView` shows DesignSidebar + active session

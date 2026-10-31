@@ -33,7 +33,7 @@ describe('<ViewTabs> top row', () => {
       { room: 'fleet', props: { lastByRoom: { fleet: 'usage' } }, want: 'usage' },
       { room: 'fleet', props: { availability: { ...ALL_YES, cadence: 'no', stratum: 'no', ops: 'no' } }, want: 'process' },
       { room: 'review', props: {}, want: 'gates' },
-      { room: 'library', props: { availability: { ...ALL_YES, wiki: 'no' } }, want: 'docs' },
+      { room: 'library', props: { availability: { ...ALL_YES, wiki: 'no' } }, want: 'journal' },
       { room: 'ideas', props: {}, want: 'ideabox' },
       { room: 'settings', props: {}, want: 'settings' },
     ];
@@ -72,8 +72,8 @@ describe('<ViewSubTabs> second row (one row table)', () => {
     { view: 'qa-scope', subs: ['gates', 'validate', 'qa-scope'], active: 'qa-scope' },
     { view: 'design', subs: ['design', 'pipeline', 'pipeline-editor', 'build-history'], active: 'design' },
     { view: 'process', subs: ['process', 'cadence', 'ops', 'stratum', 'sessions', 'usage'], active: 'process' },
-    { view: 'journal', subs: ['wiki', 'docs', 'journal'], active: 'journal' },
-    { view: 'journal', av: { ...ALL_YES, wiki: 'no' }, subs: ['docs', 'journal'], active: 'journal' },
+    { view: 'journal', subs: ['wiki', 'journal'], active: 'journal' },
+    { view: 'journal', av: { ...ALL_YES, wiki: 'no' }, subs: null },
     { view: 'sessions', av: { ops: 'no', stratum: 'no', cadence: 'no', wiki: 'no' }, subs: ['process', 'sessions', 'usage'], active: 'sessions' },
   ];
   it('rows', () => {

@@ -8,7 +8,7 @@
  *   itemId   {string}  the vision item ID to display
  *   onSelect {fn}      called when user navigates to a related item (updates contextSelection)
  *   onClose  {fn}      called to clear contextSelection
- *   onOpenFile {fn}    called when user clicks a file (navigates to DocsView)
+ *   onOpenFile {fn}    called when user clicks a file (lands on Library > Wiki)
  *   focusedFeature {string?} the focused feature code (COMP-AUDIT-17)
  *   onFocusFeature {fn?}     called with the item when Focus is clicked
  */

@@ -55,7 +55,7 @@ describe('reachableViews + resolveDefaultView', () => {
     const rows = [
       { name: 'all unknown', tabs: VIEW_KEYS, avail: {}, expect: VIEW_KEYS },
       { name: 'ops and wiki absent', tabs: VIEW_KEYS, avail: { ops: 'no', wiki: 'no', stratum: 'yes' }, expect: VIEW_KEYS.filter(k => k !== 'ops' && k !== 'wiki') },
-      { name: 'junk in the tab list is dropped', tabs: ['graph', 'bogus', null, 'docs'], avail: {}, expect: ['graph', 'docs'] },
+      { name: 'junk in the tab list is dropped', tabs: ['graph', 'bogus', null, 'docs'], avail: {}, expect: ['graph'] },
       { name: 'not an array', tabs: null, avail: {}, expect: [] },
     ];
     for (const r of rows) assert.deepEqual(reachableViews(r.tabs, r.avail), r.expect, r.name);
@@ -66,7 +66,7 @@ describe('reachableViews + resolveDefaultView', () => {
     const rows = [
       { name: 'none', dv: undefined, avail: {}, view: 'dashboard', from: null },
       { name: 'graph (a pick that stays)', dv: 'graph', avail: {}, view: 'graph', from: null },
-      { name: 'visible tab', dv: 'docs', avail: {}, view: 'docs', from: null },
+      { name: 'retired docs key lands on the wiki', dv: 'docs', avail: {}, view: 'wiki', from: null },
       { name: 'a view in a room (was hidden before rooms)', dv: 'pipeline', avail: {}, view: 'pipeline', from: null },
       { name: 'invalid', dv: 'roadmap', avail: {}, view: 'dashboard', from: 'roadmap' },
       { name: 'package tab, still unknown', dv: 'stratum', avail: { stratum: 'unknown' }, view: 'stratum', from: null },

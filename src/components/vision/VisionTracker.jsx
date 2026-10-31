@@ -9,7 +9,6 @@ import { useVisionStore } from './useVisionStore.js';
 import AttentionQueueSidebar from './AttentionQueueSidebar.jsx';
 import TreeView from './TreeView.jsx';
 import GraphView from './GraphView.jsx';
-import DocsView from './DocsView.jsx';
 import GateView from './GateView.jsx';
 import GateToast from './GateToast.jsx';
 
@@ -321,9 +320,6 @@ export default function VisionTracker({ onContextSelect, sidebarOpen = true, onT
             items={items}
             onSelectItem={handleSelect}
           />
-        )}
-        {activeView === 'docs' && (
-          <DocsView items={phaseFilteredItems} />
         )}
         {activeView === 'gates' && (
           <GateView

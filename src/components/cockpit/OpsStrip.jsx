@@ -12,10 +12,10 @@ import { fleetPills } from './fleetLogic.js';
  * OpsStrip — Persistent 36px bar surfacing active builds, pending gates, and recent errors.
  *
  * Sits between the main workspace and any future agent bar.
- * Hidden when activeView === 'docs'. The "All ▸" link at its right end opens Home (COMP-AUDIT-18). Self-contained: calls useVisionStore internally.
+ * Hidden when there is nothing to show. The "All ▸" link at its right end opens Home (COMP-AUDIT-18). Self-contained: calls useVisionStore internally.
  */
 
-export default function OpsStrip({ activeView, onSelectFeature, onOpenFleet, onOpenHome }) {
+export default function OpsStrip({ onSelectFeature, onOpenFleet, onOpenHome }) {
   const { activeBuild, gates, items, recentErrors, resolveGate, iterationStates } = useVisionStore(
     useShallow(s => ({ activeBuild: s.activeBuild, gates: s.gates, items: s.items, recentErrors: s.recentErrors, resolveGate: s.resolveGate, iterationStates: s.iterationStates }))
   );
@@ -180,8 +180,8 @@ export default function OpsStrip({ activeView, onSelectFeature, onOpenFleet, onO
     }
   }, [resolveGate]);
 
-  // Hidden when activeView is 'docs' or no entries
-  if (activeView === 'docs' || (visibleEntries.length === 0 && fleetEntries.length === 0)) {
+  // Hidden when there are no entries
+  if (visibleEntries.length === 0 && fleetEntries.length === 0) {
     return null;
   }
 
