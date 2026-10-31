@@ -1,5 +1,6 @@
 import React from 'react';
 import { Tip } from './ProcessBadge.jsx';
+import Coverage from '@/components/shared/Coverage.jsx';
 import { BUCKETS, NOT_RECORDED, bucketText, splitSummary } from '../processLogic.js';
 
 /**
@@ -81,6 +82,7 @@ export default function TimeSplitBars({ stamps, order = null }) {
                 {l.warnings?.length ? <span style={warnStyle}> · {l.warnings.length}⚠</span> : null}
               </span>
             </>)}
+            <div className="col-span-3 -mt-0.5 pl-[120px]"><Coverage lane={lane} events={['dispatched', 'authorDone', 'review', 'gate']} /></div>
           </div>
         ))}
       </div>

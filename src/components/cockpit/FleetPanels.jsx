@@ -1,5 +1,7 @@
 import React from 'react';
 import UnitName from '@/components/shared/UnitName.jsx';
+import Freshness from '@/components/shared/Freshness.jsx';
+import { Skeleton } from '@/components/ui/skeleton.jsx';
 import {
   blockerReasons, ctxLevel, fmtAge, fmtK, proposedLine, readerUp, smPanel, sortJobs, sortReady, DISK_RED_GB,
 } from './fleetLogic.js';
@@ -20,6 +22,8 @@ const TONE = {
   ok: { color: 'hsl(var(--success))' },
   dim: { color: 'hsl(var(--muted-foreground))' },
 };
+
+const FRESH_STALE_S = 180;
 
 const CLS = {
   desktop: {
@@ -42,10 +46,10 @@ const CLS = {
   },
 };
 
-function Card({ id, title, extra, cls, children }) {
+function Card({ id, title, extra, fresh, cls, children }) {
   return (
     <section className={cls.card} data-testid={`fleet-${id}`}>
-      <h3 className={cls.title}>{title}{extra ? <span style={TONE.dim}>{extra}</span> : null}</h3>
+      <h3 className={cls.title}>{title}{extra ? <span style={TONE.dim}>{extra}</span> : null}{fresh ? <Freshness ts={fresh} staleAfterS={FRESH_STALE_S} className="ml-auto normal-case font-normal tracking-normal" /> : null}</h3>
       {children}
     </section>
   );
@@ -64,10 +68,10 @@ function Unavailable({ id, title, reason, cls }) {
  * An sm_status panel: rows, an unavailable card, or (sm_status's partial read: error AND value, sm_status.py
  * Source.refresh UncertainSource) the readable rows under an "unknown" note, as a lower bound, like its TUI.
  */
-function panelOr(panel, id, title, cls, render) {
+function panelOr(panel, id, title, cls, render, fresh) {
   if (!panel) return null;
   if (panel.error != null && panel.value != null) {
-    const card = render(panel.value);
+    const card = React.cloneElement(render(panel.value), { fresh: panel.ts ?? fresh });
     return React.cloneElement(card, {}, (
       <div className={cls.note} data-testid={`fleet-partial-${id}`} style={TONE.yellow}>
         unknown: {panel.error} (rows shown are a lower bound)
@@ -77,7 +81,7 @@ function panelOr(panel, id, title, cls, render) {
   if (panel.value == null) {
     return <Unavailable key={id} id={id} title={title} reason={panel.error ?? 'no data'} cls={cls} />;
   }
-  return render(panel.value);
+  return React.cloneElement(render(panel.value), { fresh: panel.ts ?? fresh });
 }
 
 const MAX_ROWS = { desktop: 400, mobile: 40 };
@@ -100,13 +104,30 @@ export function OwnerQueueCard({ data, variant = 'desktop' }) {
         </div>
       ))}
     </Card>
-  ));
+  ), data?.sources?.sm_status?.ts);
+}
+
+/** Skeleton cards for the first /api/fleet answer: a loading card is never a zero. */
+export function FleetSkeleton({ variant = 'desktop', count = 6 }) {
+  const cls = CLS[variant] ?? CLS.desktop;
+  return (
+    <>
+      {Array.from({ length: count }, (_, i) => (
+        <section key={i} className={cls.card} data-testid="fleet-skeleton-card" aria-busy="true">
+          <Skeleton className="h-3 w-1/3" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-2/3" />
+        </section>
+      ))}
+    </>
+  );
 }
 
 export default function FleetPanels({ data, variant = 'desktop' }) {
   const cls = CLS[variant] ?? CLS.desktop;
   const cap = MAX_ROWS[variant] ?? 400;
   const out = [];
+  const smTs = data?.sources?.sm_status?.ts;
 
   out.push(<OwnerQueueCard key="owner-queue" data={data} variant={variant} />);
 
@@ -126,7 +147,7 @@ export default function FleetPanels({ data, variant = 'desktop' }) {
         );
       })}
     </Card>
-  )));
+  ), smTs));
 
   out.push(panelOr(smPanel(data, 'jobs'), 'jobs', 'Open jobs', cls, (rows) => {
     const sorted = sortJobs(rows).slice(0, cap);
@@ -149,12 +170,12 @@ export default function FleetPanels({ data, variant = 'desktop' }) {
         <More total={rows.length} shown={sorted.length} cls={cls} />
       </Card>
     );
-  }));
+  }, smTs));
 
   if (readerUp(data, 'stratum')) {
     const f = data.sources.stratum.value;
     out.push(
-      <Card key="stratum" id="stratum" title="Detached fleet (Stratum)" extra={`${f.count ?? '?'} / ${f.max ?? '?'}`} cls={cls}>
+      <Card key="stratum" id="stratum" title="Detached fleet (Stratum)" extra={`${f.count ?? '?'} / ${f.max ?? '?'}`} fresh={data.sources.stratum.ts} cls={cls}>
         {f.jobs.length === 0 && <div className={cls.note}>No alive detached jobs</div>}
         {f.jobs.map((j, i) => (
           <div key={`${j.pid ?? 'nopid'}-${i}`} className={cls.row}>
@@ -178,18 +199,18 @@ export default function FleetPanels({ data, variant = 'desktop' }) {
           <span className={cls.note}>{v.pct} used</span>
         </div>
       </Card>
-    )));
+    ), smTs));
     out.push(panelOr(spend, 'spend', 'Hourly spend', cls, (v) => (
       <Card key="spend" id="spend" title="Hourly spend" cls={cls}>
         <div className={cls.row}><span className={cls.text}>{v.head}</span></div>
         {(v.rows ?? []).map((r) => <div key={r} className={cls.note}>{r}</div>)}
       </Card>
-    )));
+    ), smTs));
     out.push(panelOr(ceiling, 'ceiling', 'Spend today', cls, (v) => (
       <Card key="ceiling" id="ceiling" title="Spend today" cls={cls}>
         <div className={cls.row}><span className={cls.text} style={v.warn ? TONE.yellow : undefined}>{v.line}</span></div>
       </Card>
-    )));
+    ), smTs));
   }
 
   if (readerUp(data, 'cadence')) {
@@ -197,7 +218,7 @@ export default function FleetPanels({ data, variant = 'desktop' }) {
     const ready = sortReady(c.ready);
     const shown = ready.slice(0, cap);
     out.push(
-      <Card key="cadence" id="cadence" title="Ready units (Cadence)" extra={String(ready.length)} cls={cls}>
+      <Card key="cadence" id="cadence" title="Ready units (Cadence)" extra={String(ready.length)} fresh={data.sources.cadence.ts} cls={cls}>
         <div className={cls.note} data-testid="fleet-proposed">{proposedLine(c)}</div>
         {c.wouldLaunch?.error && <div className={cls.note} style={TONE.yellow}>unavailable: {c.wouldLaunch.error}</div>}
         {c.errors?.length > 0 && <div className={cls.note} style={TONE.yellow}>unavailable: {c.errors[0]}</div>}
@@ -222,7 +243,7 @@ export default function FleetPanels({ data, variant = 'desktop' }) {
       {(Array.isArray(lines) ? lines : []).map((l, i) => <div key={i} className={`${cls.note} ${cls.mono}`} style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{l}</div>)}
       </div>
     </Card>
-  )));
+  ), smTs));
 
   return <>{out.filter(Boolean)}</>;
 }

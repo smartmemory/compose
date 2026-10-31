@@ -71,6 +71,7 @@ export function subscribeUnitIndex(fn) {
 
 /** Test seam: forget the last result so a fresh mount starts loading again. */
 export function resetUnitIndex() {
+  inflight = false;
   state = { data: null, error: null, loading: true, asOf: null };
 }
 

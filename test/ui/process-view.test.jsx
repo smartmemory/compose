@@ -13,6 +13,8 @@ import { join } from 'node:path';
 import ProcessView from '../../src/components/cockpit/ProcessView.jsx';
 import { resetProcessPoller } from '../../src/lib/processPoller.js';
 import { resetFleetPoller } from '../../src/lib/fleetPoller.js';
+import { resetUnitIndex } from '../../src/lib/useUnitIndex.js';
+import Freshness from '../../src/components/shared/Freshness.jsx';
 
 const FIX = join(process.cwd(), 'test', 'fixtures', 'process');
 const readJson = (...p) => JSON.parse(readFileSync(join(FIX, ...p), 'utf8'));
@@ -27,12 +29,15 @@ const QUEUE = { value: [{ id: 'Q-1', by: 'someone', text: 'a fake question', age
 
 const PUBLISH = { url: 'http://127.0.0.1:5195/?view=process', generatedAt: '2026-10-30T21:00:00.000Z' };
 
-function mount(env, fleet = fleetBody(QUEUE), publish = { status: 200, body: PUBLISH }) {
+function mount(env, fleet = fleetBody(QUEUE), publish = { status: 200, body: PUBLISH }, index = null) {
   resetProcessPoller();
   resetFleetPoller();
+  resetUnitIndex();
   const calls = [];
   vi.stubGlobal('fetch', vi.fn(async (url, opts = {}) => {
     calls.push([String(url), opts.method || 'GET']);
+    if (String(url) === '/api/units/index' && index === 'pending') return new Promise(() => {});
+    if (String(url) === '/api/units/index' && index) return { ok: true, status: 200, json: async () => index };
     if (String(url) === '/api/process/publish') return { ok: publish.status === 200, status: publish.status, json: async () => publish.body };
     const body = String(url).startsWith('/api/process') ? env : fleet;
     return { ok: true, status: 200, json: async () => body };
@@ -222,6 +227,52 @@ const ROWS = [
       await screen.findByTestId('process-publish-error');
       expect(text('process-publish-error')).toContain('192.168.1.5');
       expect(screen.queryByTestId('process-publish-url')).toBeNull();
+    },
+  },
+  {
+    name: 'RULE-FRESH: a stale stamps cache says how old it is, "cached copy" stays a substring',
+    async run() {
+      const env = envelope();
+      env.sources.stamps = { ...env.sources.stamps, stale: true, ageS: 1380 };
+      mount(env);
+      const badge = await screen.findByText(/stamps: cached copy, 23 min old/);
+      expect(badge.textContent).toContain('cached copy');
+    },
+  },
+  {
+    name: 'RULE-FRESH: a coverage line carries the index percentages for the named events',
+    async run() {
+      const pct = { dispatched: 25, authorDone: 30, review: 36, gate: 16 };
+      mount(envelope(), fleetBody(QUEUE), undefined, { units: [], coverage: { main: { n: 20, pct }, hub: { n: 20, pct } } });
+      await screen.findByTestId('p6-lane-main');
+      await waitFor(() => expect(screen.getAllByTestId('coverage-main')[0].textContent).toBe('stamps recorded: dispatched 25% · author done 30% · review 36% · gate 16%'));
+    },
+  },
+  {
+    name: 'RULE-FRESH: coverage is "unknown" while the index loads, never 0%',
+    async run() {
+      mount(envelope(), fleetBody(QUEUE), undefined, 'pending');
+      await screen.findByTestId('p6-lane-main');
+      expect(screen.getAllByTestId('coverage-main')[0].textContent).toBe('coverage unknown');
+    },
+  },
+  {
+    name: 'RULE-FRESH: a lane with no landings in 48 h reads so, not 0%',
+    async run() {
+      const pct = { dispatched: null, authorDone: null, review: null, gate: null };
+      mount(envelope(), fleetBody(QUEUE), undefined, { units: [], coverage: { main: { n: 0, pct }, hub: { n: 0, pct } } });
+      await screen.findByTestId('p6-lane-main');
+      await waitFor(() => expect(screen.getAllByTestId('coverage-main')[0].textContent).toBe('no landings in 48 h'));
+    },
+  },
+  {
+    name: 'RULE-FRESH: Freshness reads "as of ... (Nm ago)" when fresh and "stale: N min old" past its limit',
+    async run() {
+      render(<Freshness ageS={120} staleAfterS={300} />);
+      expect(screen.getByTestId('freshness').textContent).toMatch(/^as of .+ \(2m ago\)$/);
+      cleanup();
+      render(<Freshness ageS={1380} staleAfterS={300} />);
+      expect(screen.getByTestId('freshness').textContent).toBe('stale: 23 min old');
     },
   },
 ];

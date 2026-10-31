@@ -1,5 +1,5 @@
 import React from 'react';
-import FleetPanels from './FleetPanels.jsx';
+import FleetPanels, { FleetSkeleton } from './FleetPanels.jsx';
 import { readerUp } from './fleetLogic.js';
 
 /**
@@ -11,7 +11,16 @@ const READERS = [['stratum', 'Stratum'], ['sm_status', 'sm_status'], ['cadence',
 
 export default function FleetView({ fleet }) {
   const { data, error, loading } = fleet;
-  if (loading && !data) return <div className="p-4 text-xs text-muted-foreground" data-testid="fleet-loading">Loading fleet…</div>;
+  if (loading && !data) {
+    return (
+      <div className="flex-1 min-h-0 overflow-auto p-3 flex flex-col gap-2" data-testid="fleet-loading">
+        <span className="text-xs text-muted-foreground">Loading fleet…</span>
+        <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', alignItems: 'start' }}>
+          <FleetSkeleton variant="desktop" />
+        </div>
+      </div>
+    );
+  }
   const up = READERS.filter(([n]) => readerUp(data, n));
   return (
     <div className="flex-1 min-h-0 overflow-auto p-3 flex flex-col gap-2" data-testid="fleet-view">

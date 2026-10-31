@@ -357,3 +357,20 @@ describe('COMP-COCKPIT-NOTIFY-CHIP-1 chip, tray and banner', () => {
     expect(screen.getByTestId('notify-unknown').textContent).toContain('cadence outage, cadence attention');
   });
 });
+
+describe('RULE-FRESH: fleet cards are never zero while loading', () => {
+  const ROWS = [
+    ['loading and no data yet: skeleton cards, no "No open questions"', { loading: true, data: null }, true],
+    ['answered: cards carry "as of"', { loading: false, data: { generated: '2026-10-31T10:00:00Z', sources: { sm_status: { value: { queue: { value: [], error: null } }, error: null, ts: Date.now(), stale: false } } } }, false],
+  ];
+  it.each(ROWS)('%s', async (_name, fleet, skeleton) => {
+    const { default: FleetView } = await import('../../src/components/cockpit/FleetView.jsx');
+    const { container } = render(<FleetView fleet={fleet} />);
+    if (skeleton) {
+      expect(container.querySelectorAll('[data-testid="fleet-skeleton-card"]').length).toBeGreaterThan(0);
+      expect(container.textContent).not.toContain('No open questions');
+    } else {
+      expect(container.querySelector('[data-testid="fleet-owner"] [data-testid="freshness"]').textContent).toMatch(/^as of /);
+    }
+  });
+});

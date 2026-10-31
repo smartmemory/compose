@@ -102,4 +102,25 @@ describe('ValidateView', () => {
     await waitFor(() => expect(wsFetch).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByText(/Unavailable: boom/)).toBeTruthy());
   });
+
+  it('RULE-FRESH rows: loading shows a skeleton and never "found no issues"; a finished empty run does', async () => {
+    const rows = [
+      ['while the request is pending', () => wsFetch.mockImplementation(() => new Promise(() => {})), true],
+      ['after a finished run with zero findings', () => mockValidate(validateResponse({ findings: [], bySeverity: {} })), false],
+    ];
+    for (const [name, arrange, loadingShown] of rows) {
+      wsFetch.mockReset();
+      arrange();
+      render(<ValidateView />);
+      if (loadingShown) {
+        await waitFor(() => expect(screen.getByTestId('validate-loading'), name).toBeTruthy());
+        expect(screen.queryByText(/found no issues/), name).toBeNull();
+        expect(screen.getByText('Validating…'), name).toBeTruthy();
+      } else {
+        await waitFor(() => expect(screen.getByText(/found no issues/), name).toBeTruthy());
+        expect(screen.queryByTestId('validate-loading'), name).toBeNull();
+      }
+      cleanup();
+    }
+  });
 });

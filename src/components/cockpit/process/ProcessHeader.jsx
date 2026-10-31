@@ -42,6 +42,11 @@ function PublishControl() {
   );
 }
 
+/** "builder: cached copy, 23 min old" when the source reports its age; "cached copy" stays a substring. */
+function cachedLabel(name, src) {
+  return Number.isFinite(src?.ageS) ? `${name}: cached copy, ${Math.round(src.ageS / 60)} min old` : `${name}: cached copy`;
+}
+
 export default function ProcessHeader({ data, error, builder, stamps }) {
   return (
     <header className="flex flex-wrap items-center gap-2 border-b border-border pb-2">
@@ -50,8 +55,8 @@ export default function ProcessHeader({ data, error, builder, stamps }) {
       <span className="text-[11px] text-muted-foreground">How unit work has been flowing, per lane.</span>
       {data?.generated ? <span className="font-mono text-[11px] text-muted-foreground">as of {new Date(data.generated).toLocaleTimeString()}</span> : null}
       {error ? <span className="text-[11px]" style={warn} data-testid="process-poll-error">last poll failed: {error}</span> : null}
-      {builder?.stale ? <StateBadge state="stale" label="builder: cached copy" tip="builder source: serving cached copy" /> : null}
-      {stamps?.stale ? <StateBadge state="stale" label="stamps: cached copy" tip="stamps source: serving cached copy" /> : null}
+      {builder?.stale ? <StateBadge state="stale" label={cachedLabel("builder", builder)} tip="builder source: serving cached copy" /> : null}
+      {stamps?.stale ? <StateBadge state="stale" label={cachedLabel("stamps", stamps)} tip="stamps source: serving cached copy" /> : null}
       <PublishControl />
     </header>
   );

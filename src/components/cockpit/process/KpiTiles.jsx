@@ -1,6 +1,7 @@
 import React from 'react';
 import { StateBadge } from './ProcessBadge.jsx';
 import { TONES } from './processTones.js';
+import Coverage from '@/components/shared/Coverage.jsx';
 import { BETTER, Delta, Sparkline, trendOf } from './KpiTrend.jsx';
 
 /**
@@ -91,6 +92,7 @@ export default function KpiTiles({ name, summary, tones, onDetails, history = []
     trend: trendOf(history, k), trendKey: k,
   });
   return (
+    <>
     <div className="grid grid-cols-5 gap-2" data-testid="process-kpis">
       <Tile {...tile('waiting_share', 'Waiting share')} stale={ws?.stale} staleId={`stale-${f('waiting_share')}`}
         sub={has('waiting_share') ? <Fig id={f('waiting_units_stamped')} label="units stamped" value={summary.waiting_units_stamped} /> : null}>
@@ -128,5 +130,7 @@ export default function KpiTiles({ name, summary, tones, onDetails, history = []
         </>) : null}
       </Tile>
     </div>
+    <Coverage lane={name} events={['dispatched', 'review', 'gate']} className="mt-1" />
+    </>
   );
 }

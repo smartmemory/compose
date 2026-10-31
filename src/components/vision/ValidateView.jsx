@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { wsFetch } from '../../lib/wsFetch.js';
 import EmptyState from './shared/EmptyState.jsx';
+import { Skeleton } from '@/components/ui/skeleton.jsx';
 
 const SEV_COLOR = {
   error:   'hsl(var(--destructive))',
@@ -75,7 +76,7 @@ export default function ValidateView({ featureCode }) {
         {SEV_ORDER.map((sev) => (
           <span key={sev} className="flex items-center gap-1 text-[10px]">
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: SEV_COLOR[sev], display: 'inline-block' }} />
-            <span className="text-muted-foreground">{data?.bySeverity?.[sev] ?? 0} {sev}</span>
+            <span className="text-muted-foreground">{data ? (data.bySeverity?.[sev] ?? 0) : '…'} {sev}</span>
           </span>
         ))}
         <button
@@ -96,10 +97,17 @@ export default function ValidateView({ featureCode }) {
         {data?.unavailable && !error && (
           <div className="px-3 py-2 text-muted-foreground text-xs">Validation unavailable{data.error ? `: ${data.error}` : ''}</div>
         )}
-        {!error && !data?.unavailable && findings.length === 0 && (
+        {!error && !data?.unavailable && findings.length === 0 && loading && (
+          <div className="flex flex-col gap-2 px-3 py-4" data-testid="validate-loading">
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-4 w-2/3" />
+            <span className="text-muted-foreground text-xs">Validating…</span>
+          </div>
+        )}
+        {!error && !data?.unavailable && findings.length === 0 && !loading && data && (
           <EmptyState
             icon={ShieldCheck}
-            title={loading ? 'Validating…' : 'No findings'}
+            title="No findings"
             description="Cross-artifact validation found no issues for this scope"
             className="py-8"
           />
