@@ -9,7 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   ROOMS, VIEW_KEYS, DEFAULT_VIEW, PACKAGE_GATED_VIEWS, VIEW_LABELS,
-  reachableViews, PROJECT_ROOMS, hasRibbonHash, escapeTarget, locateView, resolveStoredView, resolveDefaultView, viewFromQuery, roomEntryView, ROOM_ENTRY, viewTrailLabel,
+  reachableViews, PROJECT_ROOMS, TOP_TABS, projectRooms, hasRibbonHash, escapeTarget, locateView, resolveStoredView, resolveDefaultView, viewFromQuery, roomEntryView, ROOM_ENTRY, viewTrailLabel,
 } from '../lib/view-keys.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -142,6 +142,16 @@ describe('Day front page (COMP-COCKPIT-RIBBON-TOP-1)', () => {
       { name: 'Esc from a Roadmap sub-tab past the first', got: escapeTarget('tree'), want: null },
       { name: 'Esc from Fleet', got: escapeTarget('process'), want: null },
       { name: 'Esc from Day', got: escapeTarget('day'), want: null },
+      { name: 'top row order (PROJECTS-TAB-1)', got: TOP_TABS, want: ['day', 'projects', 'fleet', 'library'] },
+      { name: 'a project leaf sits under Projects with its room', got: locateView('dashboard'), want: { top: 'projects', room: 'home', sub: null } },
+      { name: 'a multi-view project room carries the sub key', got: locateView('validate'), want: { top: 'projects', room: 'review', sub: 'validate' } },
+      { name: 'Fleet keeps its old shape', got: locateView('ops'), want: { top: 'fleet', sub: 'ops' } },
+      { name: 'Library keeps its old shape', got: locateView('wiki'), want: { top: 'library', sub: 'wiki' } },
+      { name: 'the trail label ignores the Projects level', got: [viewTrailLabel('graph'), viewTrailLabel('qa-scope')], want: ['Roadmap › Graph', 'Review › QA scope'] },
+      { name: 'the five project rooms show in order', got: projectRooms({}, null).map((r) => r.key), want: ['home', 'ideas', 'roadmap', 'build', 'review'] },
+      { name: 'Projects opens Project home with no last view', got: roomEntryView('projects', {}, undefined), want: 'dashboard' },
+      { name: 'Projects re-opens the last project view', got: roomEntryView('projects', {}, 'validate'), want: 'validate' },
+      { name: 'a non-project last view falls back to Project home', got: roomEntryView('projects', {}, 'ops'), want: 'dashboard' },
     ];
     for (const r of rows) assert.deepEqual(r.got, r.want, r.name);
   });

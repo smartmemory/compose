@@ -4,7 +4,7 @@ import PopoutView from './components/PopoutView';
 import ProjectSwitchPopover from './components/ProjectSwitchPopover.jsx';
 
 // Cockpit shell components
-import ViewTabs, { ViewSubTabs, RoomBreadcrumb } from './components/cockpit/ViewTabs.jsx';
+import ViewTabs, { ViewSubTabs, ProjectSubTabs, RoomBreadcrumb } from './components/cockpit/ViewTabs.jsx';
 import DayView from './components/ribbon/DayView.jsx';
 import { parseHash as parseRibbonHash } from './components/ribbon/rangeLogic.js';
 import { itemFeatureCode, featureCodeResolves, resolveFeatureContext, filterFeatureCode, focusReducer, parseStoredFocus, FOCUS_STORAGE_KEY } from './components/cockpit/focusedFeature.js';
@@ -709,7 +709,7 @@ function AppInner() {
   // ── Derived flags ───────────────────────────────────────────────────────
   const isMaximized = agentBarState === AGENT_BAR_STATES.MAXIMIZED;
   // COMP-COCKPIT-FLEET-PROJECTS-2: the left bar's PROJECTS rows switch the project here, pick a Process lane elsewhere.
-  const projectsMode = projectsModeFor(locateView(activeView)?.top);
+  const projectsMode = projectsModeFor(locateView(activeView)?.room);
 
   // ── Navigation ──────────────────────────────────────────────────────────
   // activeView is the flat leaf view key; the rooms and sub-tabs are derived from it
@@ -728,7 +728,7 @@ function AppInner() {
   const lastByRoom = useRef({});
   useEffect(() => {
     const loc = locateView(activeView);
-    if (loc) lastByRoom.current[loc.top] = activeView;
+    if (loc) { lastByRoom.current[loc.top] = activeView; if (loc.room) lastByRoom.current[loc.room] = activeView; }
   }, [activeView]);
 
   // COMP-COCKPIT-RIBBON-TOP-1: Esc from a project room's top level goes back to Day. Esc keeps every other meaning: it is
@@ -1263,12 +1263,10 @@ function AppInner() {
           className="h-9 flex items-center px-3 gap-3 shrink-0 justify-between"
           style={{ borderBottom: '1px solid hsl(var(--border))' }}
         >
-          {/* Logo + project name */}
-          <ProjectSwitchPopover
-            projectName={projectName}
-            projectRoot={projectRoot}
-            onSwitch={handleProjectSwitch}
-          />
+          {/* Logo (the project selector lives in the Projects sub-row) */}
+          <span className="text-xs font-semibold tracking-widest uppercase text-blue-600 dark:text-accent shrink-0">
+            Compose
+          </span>
 
           {/* View tabs — centred in the header */}
           <div className="flex-1 min-w-0 h-full flex items-center">
@@ -1278,7 +1276,6 @@ function AppInner() {
               onViewChange={handleViewChange}
               lastByRoom={lastByRoom.current}
               badges={{ review: pendingGateCount }}
-              projectName={projectName}
               focusedFeature={focusedFeature}
               onClearFocus={() => dispatchFocus({ type: 'clear' })}
               onOpenPalette={() => setPaletteOpen(v => !v)}
@@ -1357,6 +1354,14 @@ function AppInner() {
         <SecurityBanner onOpenFleet={handleOpenFleet} />
         </PanelErrorBoundary>
         <RoomBreadcrumb activeView={activeView} availability={availability} projectName={projectName} lastByRoom={lastByRoom.current} onViewChange={handleViewChange} />
+        <ProjectSubTabs
+          activeView={activeView}
+          availability={availability}
+          lastByRoom={lastByRoom.current}
+          badges={{ review: pendingGateCount }}
+          onViewChange={handleViewChange}
+          selector={<ProjectSwitchPopover brand={false} projectName={projectName} projectRoot={projectRoot} onSwitch={handleProjectSwitch} />}
+        />
         <ViewSubTabs activeView={activeView} availability={availability} onViewChange={handleViewChange} />
 
         {/* ================================================================ */}

@@ -1,6 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useFleetRoots } from '../lib/fleetProjects.js';
 
-export default function ProjectSwitchPopover({ projectName, projectRoot, onSwitch }) {
+/**
+ * The project selector. COMP-COCKPIT-PROJECTS-TAB-1: it sits at the left of the Projects sub-row (`brand={false}`), and its
+ * popover lists the known projects (fleet lanes whose root has a `.compose`) above the path box. A row calls the same `onSwitch`.
+ */
+export default function ProjectSwitchPopover({ projectName, projectRoot, onSwitch, brand = true }) {
+  const { roots } = useFleetRoots(!brand);
+  const known = !brand && roots ? Object.entries(roots).filter(([, r]) => r?.root && r.hasCompose) : [];
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState(projectRoot || '');
   const rootRef = useRef(null);
@@ -30,9 +37,11 @@ export default function ProjectSwitchPopover({ projectName, projectRoot, onSwitc
 
   return (
     <div ref={rootRef} className="flex items-center shrink-0 gap-2 relative">
-      <span className="text-xs font-semibold tracking-widest uppercase text-blue-600 dark:text-accent">
-        Compose
-      </span>
+      {brand && (
+        <span className="text-xs font-semibold tracking-widest uppercase text-blue-600 dark:text-accent">
+          Compose
+        </span>
+      )}
       <button
         data-testid="project-btn"
         className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
@@ -55,6 +64,24 @@ export default function ProjectSwitchPopover({ projectName, projectRoot, onSwitc
           <div className="text-[10px] text-muted-foreground mb-1 px-1">
             Current: {projectRoot}
           </div>
+          {known.length > 0 && (
+            <ul className="mb-1" data-testid="project-list" aria-label="Known projects">
+              {known.map(([lane, r]) => (
+                <li key={lane}>
+                  <button
+                    type="button"
+                    data-testid={`project-row-${lane}`}
+                    aria-current={r.root === projectRoot ? 'true' : undefined}
+                    title={r.root}
+                    className={`w-full text-left px-2 py-1 text-xs rounded hover:bg-muted ${r.root === projectRoot ? 'text-foreground font-medium' : 'text-muted-foreground'}`}
+                    onClick={async () => { if (r.root === projectRoot || (await onSwitch?.(r.root))) setOpen(false); }}
+                  >
+                    {lane}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           <input
             autoFocus
             data-testid="project-input"

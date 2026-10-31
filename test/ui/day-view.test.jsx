@@ -53,35 +53,28 @@ describe('Day front page (COMP-COCKPIT-RIBBON-TOP-1)', () => {
     }
   }, 90000);
 
-  it('the project chip, the breadcrumb and Esc (one row table, one App render)', async () => {
+  it('the Projects tab, the breadcrumb and Esc (one row table, one App render)', async () => {
     stubFetch();
     window.history.pushState({}, '', '/?view=graph');
     const { default: App } = await import('../../src/App.jsx');
     render(<App />);
     const crumb = await screen.findByTestId('room-breadcrumb');
-    const chip = screen.getByTestId('project-chip');
-    const menu = screen.getByTestId('project-rooms');
     const rows = [
-      { name: 'breadcrumb parts', got: [...crumb.querySelectorAll('button')].map((b) => [b.dataset.testid, b.textContent]).map(([id, t]) => (id === 'crumb-project' ? [id, 'project'] : [id, t])), want: [['crumb-day', 'Day'], ['crumb-project', 'project'], ['crumb-room', 'Roadmap']] },
-      { name: 'chip starts closed', got: [chip.getAttribute('aria-expanded'), menu.className.includes('hidden')], want: ['false', true] },
-      { name: 'the menu lists the five project rooms in order', got: [...menu.querySelectorAll('[role="tab"]')].map((t) => t.dataset.testid), want: ['room-tab-home', 'room-tab-ideas', 'room-tab-roadmap', 'room-tab-build', 'room-tab-review'] },
-      { name: 'top row tabs outside the menu', got: screen.getAllByRole('tab').filter((t) => !menu.contains(t) && t.dataset.testid.startsWith('room-tab-')).map((t) => t.dataset.testid), want: ['room-tab-day', 'room-tab-fleet', 'room-tab-library', 'room-tab-settings'] },
+      { name: 'breadcrumb parts', got: [...crumb.querySelectorAll('button')].map((b) => [b.dataset.testid, b.textContent]).map(([id, t]) => (id === 'crumb-project' ? [id, 'project'] : [id, t])), want: [['crumb-day', 'Day'], ['crumb-projects', 'Projects'], ['crumb-project', 'project'], ['crumb-room', 'Roadmap']] },
+      { name: 'no chip, no hidden menu', got: [screen.queryByTestId('project-chip'), screen.queryByTestId('project-rooms')], want: [null, null] },
+      { name: 'the Projects sub-row lists the five project rooms in order', got: [...screen.getByTestId('project-sub-tabs').querySelectorAll('[role="tab"]')].map((t) => t.dataset.testid), want: ['sub-tab-home', 'sub-tab-ideas', 'sub-tab-roadmap', 'sub-tab-build', 'sub-tab-review'] },
+      { name: 'top row tabs', got: screen.getAllByRole('tab').filter((t) => t.dataset.testid.startsWith('room-tab-')).map((t) => t.dataset.testid), want: ['room-tab-day', 'room-tab-projects', 'room-tab-fleet', 'room-tab-library', 'room-tab-settings'] },
     ];
     for (const r of rows) expect(r.got, r.name).toEqual(r.want);
-    fireEvent.click(chip);
-    expect(chip.getAttribute('aria-expanded')).toBe('true');
-    expect(menu.className.includes('hidden')).toBe(false);
-    fireEvent.click(screen.getByTestId('room-tab-ideas'));
-    await screen.findByTestId('crumb-room');
-    expect(screen.getByTestId('crumb-room').textContent).toBe('Ideas');
-    expect(chip.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(screen.getByTestId('sub-tab-ideas'));
+    await waitFor(() => expect(screen.getByTestId('crumb-room').textContent).toBe('Ideas'));
     // Esc from a project room's top level goes back to Day; a second Esc on Day does nothing.
     await act(async () => { fireEvent.keyDown(document.body, { key: 'Escape' }); });
     await screen.findByTestId('day-view');
     expect(screen.queryByTestId('room-breadcrumb')).toBeNull();
-    // The breadcrumb's Day part is a way back too.
-    fireEvent.click(screen.getByTestId('room-tab-roadmap'));
-    await screen.findByTestId('crumb-day');
+    // The Projects tab re-opens the last project room, and the breadcrumb's Day part is a way back too.
+    fireEvent.click(screen.getByTestId('room-tab-projects'));
+    await waitFor(() => expect(screen.getByTestId('crumb-room').textContent).toBe('Ideas'));
     fireEvent.click(screen.getByTestId('crumb-day'));
     await screen.findByTestId('day-view');
   }, 60000);

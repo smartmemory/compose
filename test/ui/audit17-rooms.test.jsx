@@ -5,19 +5,20 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act, cleanup } from '@testing-library/react';
-import ViewTabs, { ViewSubTabs } from '../../src/components/cockpit/ViewTabs.jsx';
+import ViewTabs, { ViewSubTabs, ProjectSubTabs } from '../../src/components/cockpit/ViewTabs.jsx';
 import { ROOMS } from '../../lib/view-keys.js';
 
 const ALL_YES = { ops: 'yes', stratum: 'yes', cadence: 'yes', wiki: 'yes' };
 
 describe('<ViewTabs> top row', () => {
-  it('shows the seven rooms in order plus the gear, with the right one selected', () => {
+  it('shows Day, Projects, Fleet, Library and the gear, with Projects selected on a project room (PROJECTS-TAB-1)', () => {
     render(<ViewTabs activeView="gates" availability={ALL_YES} onViewChange={() => {}} />);
     const names = screen.getAllByRole('tab').map((t) => t.getAttribute('data-testid'));
-    expect(names).toEqual([...ROOMS.map((r) => `room-tab-${r.key}`), 'room-tab-settings']);
+    expect(names).toEqual(['room-tab-day', 'room-tab-projects', 'room-tab-fleet', 'room-tab-library', 'room-tab-settings']);
+    expect(screen.queryByTestId('project-chip')).toBeNull();
     expect(ROOMS.map((r) => r.label)).toEqual(['Day', 'Project home', 'Ideas', 'Roadmap', 'Build', 'Review', 'Fleet', 'Library']);
     const selected = screen.getAllByRole('tab').filter((t) => t.getAttribute('aria-selected') === 'true');
-    expect(selected.map((t) => t.getAttribute('data-testid'))).toEqual(['room-tab-review']);
+    expect(selected.map((t) => t.getAttribute('data-testid'))).toEqual(['room-tab-projects']);
   });
 
   it('the gear is selected on settings and no room is', () => {
@@ -28,29 +29,31 @@ describe('<ViewTabs> top row', () => {
 
   it('click rows: a room opens its last view, else its first shown view', () => {
     const rows = [
-      { room: 'home', props: {}, want: 'dashboard' },
+      { room: 'projects', props: {}, want: 'dashboard' },
+      { room: 'projects', props: { activeView: 'ops', lastByRoom: { projects: 'gates' } }, want: 'gates' },
       { room: 'fleet', props: {}, want: 'sessions' },
       { room: 'fleet', props: { lastByRoom: { fleet: 'usage' } }, want: 'usage' },
       { room: 'fleet', props: { availability: { ...ALL_YES, cadence: 'no', stratum: 'no', ops: 'no' } }, want: 'sessions' },
-      { room: 'review', props: {}, want: 'gates' },
       { room: 'library', props: { availability: { ...ALL_YES, wiki: 'no' } }, want: 'journal' },
-      { room: 'ideas', props: {}, want: 'ideabox' },
       { room: 'settings', props: {}, want: 'settings' },
     ];
     for (const r of rows) {
       const onViewChange = vi.fn();
-      const { unmount } = render(<ViewTabs activeView="dashboard" availability={ALL_YES} onViewChange={onViewChange} {...r.props} />);
-      if (r.room !== 'home') fireEvent.click(screen.getByTestId(`room-tab-${r.room}`));
-      else { cleanup(); render(<ViewTabs activeView="graph" availability={ALL_YES} onViewChange={onViewChange} />); fireEvent.click(screen.getByTestId('room-tab-home')); }
+      const { unmount } = render(<ViewTabs activeView="day" availability={ALL_YES} onViewChange={onViewChange} {...r.props} />);
+      fireEvent.click(screen.getByTestId(`room-tab-${r.room}`));
       expect(onViewChange, r.room).toHaveBeenCalledWith(r.want);
       unmount(); cleanup();
     }
   });
 
-  it('the Review room carries the pending-gates badge', () => {
+  it('the Projects tab and its Review room carry the pending-gates badge', () => {
     render(<ViewTabs activeView="dashboard" availability={ALL_YES} onViewChange={() => {}} badges={{ review: 3 }} />);
-    expect(screen.getByTestId('room-tab-review').textContent).toMatch(/3/);
+    expect(screen.getByTestId('room-tab-projects').textContent).toMatch(/3/);
     expect(screen.getByTestId('room-tab-fleet').textContent).not.toMatch(/\d/);
+    cleanup();
+    render(<ProjectSubTabs activeView="dashboard" availability={ALL_YES} onViewChange={() => {}} badges={{ review: 3 }} />);
+    expect(screen.getByTestId('sub-tab-review').textContent).toMatch(/3/);
+    expect(screen.getByTestId('sub-tab-home').textContent).not.toMatch(/\d/);
   });
 
   it('the Feature chip shows only while focused, and its x clears', () => {
@@ -61,6 +64,47 @@ describe('<ViewTabs> top row', () => {
     expect(screen.getByTestId('focus-chip').textContent).toMatch(/Feature: FEAT-1/);
     fireEvent.click(screen.getByTestId('focus-chip-clear'));
     expect(onClearFocus).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('<ProjectSubTabs> rooms row (COMP-COCKPIT-PROJECTS-TAB-1)', () => {
+  it('rows: the five rooms in order inside a project room, the active one selected, none elsewhere, the selector first', () => {
+    const rows = [
+      { view: 'dashboard', active: 'home' }, { view: 'ideabox', active: 'ideas' }, { view: 'tree', active: 'roadmap' },
+      { view: 'pipeline', active: 'build' }, { view: 'qa-scope', active: 'review' },
+      { view: 'day', active: null }, { view: 'ops', active: null }, { view: 'settings', active: null },
+    ];
+    for (const r of rows) {
+      const { container } = render(<ProjectSubTabs activeView={r.view} availability={ALL_YES} selector={<span data-testid="sel">proj</span>} />);
+      if (!r.active) { expect(screen.queryByTestId('project-sub-tabs'), r.view).toBeNull(); cleanup(); continue; }
+      const tabs = screen.getAllByRole('tab');
+      expect(tabs.map((t) => t.getAttribute('data-testid')), r.view).toEqual(['sub-tab-home', 'sub-tab-ideas', 'sub-tab-roadmap', 'sub-tab-build', 'sub-tab-review']);
+      expect(tabs.map((t) => t.textContent), r.view).toEqual(['Project home', 'Ideas', 'Roadmap', 'Build', 'Review']);
+      expect(tabs.filter((t) => t.getAttribute('aria-selected') === 'true').map((t) => t.getAttribute('data-testid')), r.view).toEqual([`sub-tab-${r.active}`]);
+      expect(container.querySelector('[role="tablist"]').firstElementChild.getAttribute('data-testid'), r.view).toBe('project-selector');
+      cleanup();
+    }
+  });
+
+  it('a room click opens that room on its last view; the active room keeps the current view; the row shares Fleet\'s tab classes', () => {
+    const rows = [
+      { room: 'review', from: 'dashboard', last: {}, want: 'gates' },
+      { room: 'review', from: 'dashboard', last: { review: 'validate' }, want: 'validate' },
+      { room: 'roadmap', from: 'gates', last: {}, want: 'graph' },
+      { room: 'ideas', from: 'gates', last: {}, want: 'ideabox' },
+      { room: 'home', from: 'graph', last: {}, want: 'dashboard' },
+      { room: 'roadmap', from: 'tree', last: {}, want: 'tree' },
+    ];
+    for (const r of rows) {
+      const onViewChange = vi.fn();
+      render(<ProjectSubTabs activeView={r.from} availability={ALL_YES} lastByRoom={r.last} onViewChange={onViewChange} />);
+      fireEvent.click(screen.getByTestId(`sub-tab-${r.room}`));
+      expect(onViewChange, r.room).toHaveBeenCalledWith(r.want);
+      cleanup();
+    }
+    render(<div><ProjectSubTabs activeView="graph" availability={ALL_YES} /><ViewSubTabs activeView="process" availability={ALL_YES} /></div>);
+    const cls = (id) => screen.getByTestId(id).className.replace(/border-blue-600 text-blue-600 dark:border-accent dark:text-accent|border-transparent text-muted-foreground hover:text-foreground hover:border-border/, '');
+    expect(cls('sub-tab-roadmap')).toBe(cls('sub-tab-process'));
   });
 });
 
@@ -146,7 +190,7 @@ describe('App rooms (COMP-AUDIT-17 slice 2)', () => {
   it('deep links: ?view=process opens Fleet > Process and ?view=design opens Build > Design (one row table)', async () => {
     const rows = [
       { q: '?view=process', top: 'room-tab-fleet', sub: 'sub-tab-process' },
-      { q: '?view=design', top: 'room-tab-build', sub: 'sub-tab-design' },
+      { q: '?view=design', top: 'room-tab-projects', sub: 'sub-tab-design' },
     ];
     for (const r of rows) {
       cleanup(); localStorage.clear();
@@ -168,9 +212,10 @@ describe('App rooms (COMP-AUDIT-17 slice 2)', () => {
     const { useVisionStore } = await import('../../src/components/vision/useVisionStore.js');
     useVisionStore.setState({ settings: { ui: { defaultView: 'dashboard' } } });
     await renderApp();
-    await waitFor(() => expect(selectedIds()).toEqual(['room-tab-review']));
+    await waitFor(() => expect(selectedIds()).toEqual(['room-tab-projects']));
     await new Promise((r) => setTimeout(r, 300));
-    expect(selectedIds()).toEqual(['room-tab-review']);
+    expect(selectedIds()).toEqual(['room-tab-projects']);
+    expect(screen.getByTestId('sub-tab-review').getAttribute('aria-selected')).toBe('true');
     expect(screen.getByTestId('sub-tab-gates').getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByText(/View not found/i)).toBeNull();
     expect(localStorage.getItem('compose:mainTabs')).toBeNull();
@@ -181,7 +226,8 @@ describe('App rooms (COMP-AUDIT-17 slice 2)', () => {
     sessionStorage.setItem('compose:activeView', 'tree');
     mockFetch();
     await renderApp();
-    await waitFor(() => expect(selectedIds()).toEqual(['room-tab-roadmap']));
+    await waitFor(() => expect(selectedIds()).toEqual(['room-tab-projects']));
+    expect(screen.getByTestId('sub-tab-roadmap').getAttribute('aria-selected')).toBe('true');
     expect(screen.getByTestId('sub-tab-tree').getAttribute('aria-selected')).toBe('true');
   }, 30000);
 
@@ -189,13 +235,15 @@ describe('App rooms (COMP-AUDIT-17 slice 2)', () => {
     mockFetch();
     await renderApp();
     await screen.findByTestId('day-view');
-    fireEvent.click(screen.getByTestId('room-tab-review'));
-    await waitFor(() => expect(selectedIds()).toEqual(['room-tab-review']));
+    fireEvent.click(screen.getByTestId('room-tab-projects'));
+    await screen.findByTestId('home');
+    fireEvent.click(screen.getByTestId('sub-tab-review'));
+    await waitFor(() => expect(selectedIds()).toEqual(['room-tab-projects']));
     fireEvent.click(screen.getByTestId('sub-tab-validate'));
     await waitFor(() => expect(screen.getByTestId('sub-tab-validate').getAttribute('aria-selected')).toBe('true'));
-    fireEvent.click(screen.getByTestId('room-tab-home'));
+    fireEvent.click(screen.getByTestId('sub-tab-home'));
     await screen.findByTestId('home');
-    fireEvent.click(screen.getByTestId('room-tab-review'));
+    fireEvent.click(screen.getByTestId('sub-tab-review'));
     await waitFor(() => expect(screen.getByTestId('sub-tab-validate').getAttribute('aria-selected')).toBe('true'));
   }, 30000);
 
@@ -219,7 +267,8 @@ describe('App rooms (COMP-AUDIT-17 slice 2)', () => {
     await screen.findByTestId('day-view');
     const { useVisionStore } = await import('../../src/components/vision/useVisionStore.js');
     await act(async () => { useVisionStore.setState({ uiCommand: { view: 'gates' } }); });
-    await waitFor(() => expect(selectedIds()).toEqual(['room-tab-review']));
+    await waitFor(() => expect(selectedIds()).toEqual(['room-tab-projects']));
+    expect(screen.getByTestId('sub-tab-review').getAttribute('aria-selected')).toBe('true');
   }, 30000);
 
   it('focus: a stored code that resolves shows the chip; x clears it and the storage key', async () => {
