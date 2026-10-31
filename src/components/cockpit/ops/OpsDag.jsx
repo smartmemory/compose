@@ -8,7 +8,7 @@ const landedKey = (lane) => `compose:opsShowLanded:${lane}`;
 const readShowLanded = (lane) => { try { return globalThis.localStorage?.getItem(landedKey(lane)) === '1'; } catch { return false; } };
 
 /** Left-to-right dagre, fit to the panel; a node click opens a small detail panel. Colours: see STATE_META. */
-const LAYOUT = { name: 'dagre', rankDir: 'LR', rankSep: 56, nodeSep: 18, padding: 20 };
+const LAYOUT = { name: 'dagre', rankDir: 'LR', rankSep: 56, nodeSep: 8, padding: 20 };
 
 export default function OpsDag({ nodes, lane }) {
   const { data: unitIndex } = useUnitIndex();
@@ -48,7 +48,8 @@ export default function OpsDag({ nodes, lane }) {
           legend={false}
           sublabelInNode
           fillFromColor
-          minZoom={0.05}
+          nodeHeight={48}
+          minZoom={0.01}
         />
       </div>
       )}

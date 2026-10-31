@@ -68,7 +68,7 @@ const VIEW_ROWS = [
     await waitFor(() => expect(graph.props?.nodes?.length).toBe(2)); // C-1 plus its dep B-1; A-1 and D-1 are landed and not depended on directly
     expect(graph.props.nodes.map((n) => n.sublabel)).toEqual(['B-1', 'C-1']);
     expect(graph.props.edges).toEqual([{ from: 'B-1', to: 'C-1' }]);
-    expect([graph.props.fillFromColor, graph.props.minZoom]).toEqual([true, 0.05]);
+    expect([graph.props.fillFromColor, graph.props.minZoom, graph.props.nodeHeight]).toEqual([true, 0.01, 48]);
     fireEvent.click(screen.getByLabelText('Show landed too'));
     await waitFor(() => expect(graph.props.nodes.length).toBe(4));
     expect(localStorage.getItem('compose:opsShowLanded:forge')).toBe('1');

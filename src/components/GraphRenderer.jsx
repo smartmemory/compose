@@ -20,6 +20,7 @@ cytoscape.use(cytoscapeDagre);
  *   legend?: boolean (default true; false hides the Entities/Edges panel)
  *   sublabelInNode?: boolean (default false; true draws the sublabel under the label inside each node, in a wider node)
  *   fillFromColor?: boolean (default false; true fills each node with its `color`, 2px border, dark label text)
+ *   nodeHeight?: number (default unset; a denser view sets it so a column of nodes takes less height)
  *   minZoom?: number (default 0.2; a view with many nodes lowers it so the first fit does not clip)
  */
 
@@ -36,7 +37,7 @@ const CY_LIGHT = {
   textTertiary: '#737373', textMuted: '#a3a3a3', accent: '#FBBF24',
 };
 
-function buildDefaultStyle(c, sublabelInNode = false, fillFromColor = false) {
+function buildDefaultStyle(c, sublabelInNode = false, fillFromColor = false, nodeHeight = null) {
   return [
     {
       selector: 'node',
@@ -90,6 +91,7 @@ function buildDefaultStyle(c, sublabelInNode = false, fillFromColor = false) {
       selector: 'node[nodeText]',
       style: { 'label': 'data(nodeText)', 'width': 172, 'height': 62, 'text-max-width': '158px', 'font-size': '10px', 'font-weight': 500 },
     }] : []),
+    ...(nodeHeight ? [{ selector: 'node[!shape]', style: { 'height': nodeHeight } }] : []),
   ];
 }
 
@@ -415,6 +417,7 @@ export default function GraphRenderer({
   legend = true,
   sublabelInNode = false,
   fillFromColor = false,
+  nodeHeight = null,
   minZoom = 0.2,
 }) {
   const containerRef = useRef(null);
@@ -435,7 +438,7 @@ export default function GraphRenderer({
   }, [graphKey, layoutKey, showEdgeLabels, hiddenNodes, showLegend, viewMode]);
 
   const elements = elementsProp || (nodesProp && edgesProp ? toElements(nodesProp, edgesProp, sublabelInNode) : []);
-  const graphStyle = useMemo(() => styleProp || buildDefaultStyle(cyColors, sublabelInNode, fillFromColor), [styleProp, isDark, sublabelInNode, fillFromColor]);
+  const graphStyle = useMemo(() => styleProp || buildDefaultStyle(cyColors, sublabelInNode, fillFromColor, nodeHeight), [styleProp, isDark, sublabelInNode, fillFromColor, nodeHeight]);
   const activeLayout = layoutProp || LAYOUTS[layoutKey];
 
   const nodeList = useMemo(() => {
