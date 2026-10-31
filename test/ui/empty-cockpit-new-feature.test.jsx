@@ -7,6 +7,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 beforeEach(() => {
+  // Day is the landing view since COMP-COCKPIT-RIBBON-TOP-1; the CTA lives on Project home, so open it by deep link.
+  window.history.replaceState({}, '', '/?view=dashboard');
   global.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '' }));
 });
 
