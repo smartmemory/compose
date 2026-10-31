@@ -29,9 +29,9 @@ describe('<ViewTabs> top row', () => {
   it('click rows: a room opens its last view, else its first shown view', () => {
     const rows = [
       { room: 'home', props: {}, want: 'dashboard' },
-      { room: 'fleet', props: {}, want: 'process' },
+      { room: 'fleet', props: {}, want: 'sessions' },
       { room: 'fleet', props: { lastByRoom: { fleet: 'usage' } }, want: 'usage' },
-      { room: 'fleet', props: { availability: { ...ALL_YES, cadence: 'no', stratum: 'no', ops: 'no' } }, want: 'process' },
+      { room: 'fleet', props: { availability: { ...ALL_YES, cadence: 'no', stratum: 'no', ops: 'no' } }, want: 'sessions' },
       { room: 'review', props: {}, want: 'gates' },
       { room: 'library', props: { availability: { ...ALL_YES, wiki: 'no' } }, want: 'journal' },
       { room: 'ideas', props: {}, want: 'ideabox' },
@@ -125,7 +125,7 @@ const selectedIds = () => screen.getAllByRole('tab').filter((t) => t.getAttribut
 
 describe('App rooms (COMP-AUDIT-17 slice 2)', () => {
   beforeEach(async () => {
-    localStorage.clear();
+    localStorage.clear(); sessionStorage.clear();
     window.history.pushState({}, '', '/');
     const { useVisionStore } = await import('../../src/components/vision/useVisionStore.js');
     useVisionStore.setState({ items: [], uiCommand: null });
@@ -177,7 +177,7 @@ describe('App rooms (COMP-AUDIT-17 slice 2)', () => {
   }, 30000);
 
   it('a stored hidden key (tree) opens Roadmap > List', async () => {
-    localStorage.setItem('compose:activeView', 'tree');
+    sessionStorage.setItem('compose:activeView', 'tree');
     mockFetch();
     await renderApp();
     await waitFor(() => expect(selectedIds()).toEqual(['room-tab-roadmap']));
@@ -199,7 +199,7 @@ describe('App rooms (COMP-AUDIT-17 slice 2)', () => {
   }, 30000);
 
   it('a uiCommand with an unknown view is ignored with one warning (no jump to Home, no "not found")', async () => {
-    localStorage.setItem('compose:activeView', 'usage');
+    sessionStorage.setItem('compose:activeView', 'usage');
     mockFetch();
     await renderApp();
     await waitFor(() => expect(selectedIds()).toEqual(['room-tab-fleet']));

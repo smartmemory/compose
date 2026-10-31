@@ -166,15 +166,14 @@ const USAGE_ROWS = [
 ];
 
 describe('Usage view "Seats and fleet" scope', () => {
-  it('the default scope starts no fleet poll and asks for no seats', async () => {
+  it('the default scope is Seats and fleet (COMP-COCKPIT-RULE-DEFAULT-1): it asks for seats once and shows the fleet pane', async () => {
     resetFleetPoller();
-    const fetchFn = stubFetch({});
-    const client = statsClient({ getSeats: vi.fn() });
+    stubFetch({ '/api/fleet': FLEET_SPEND });
+    const client = statsClient({ getSeats: vi.fn(async () => ({ seats: [] })) });
     render(<UsageView client={client} now="2026-10-31T12:00:00Z" />);
-    await waitFor(() => expect(client.getStats).toHaveBeenCalled());
-    expect(client.getSeats).not.toHaveBeenCalled();
-    expect(fetchFn).not.toHaveBeenCalled();
-    expect(q('usage-fleet')).toBeNull();
+    await screen.findByTestId('usage-fleet');
+    await waitFor(() => expect(client.getSeats).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: 'Compose-dispatched' })).toBeTruthy(); // the other scope stays one click away
   });
   for (const row of USAGE_ROWS) {
     it(row.name, async () => {

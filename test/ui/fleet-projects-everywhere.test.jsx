@@ -47,7 +47,7 @@ function stubFetch({ projects = ['main', 'hub'], rootsStatus = 200 } = {}) {
 }
 
 async function mountApp(view, stub = {}) {
-  localStorage.setItem('compose:activeView', view);
+  sessionStorage.setItem('compose:activeView', view);
   resetProcessPoller();
   const calls = stubFetch(stub);
   const { default: App } = await import('../../src/App.jsx');
@@ -146,7 +146,7 @@ const ROWS = [
   },
 ];
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.clear(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.clear(); sessionStorage.clear(); });
 
 describe('COMP-COCKPIT-FLEET-PROJECTS-2 PROJECTS in every room', () => {
   for (const row of ROWS) it(row.name, () => row.run(), 30000);

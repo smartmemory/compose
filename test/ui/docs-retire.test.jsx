@@ -96,17 +96,17 @@ describe.skipIf(!linked)('App: every way into docs lands on Library > Wiki', () 
   it('?view=docs, stored view=docs and a visionUI docs command (one row table)', async () => {
     const rows = [
       { entry: '?view=docs', setup: () => window.history.pushState({}, '', '/?view=docs') },
-      { entry: 'stored compose:activeView=docs', setup: () => localStorage.setItem('compose:activeView', 'docs') },
+      { entry: 'stored compose:activeView=docs', setup: () => sessionStorage.setItem('compose:activeView', 'docs') },
     ];
     for (const r of rows) {
-      cleanup(); localStorage.clear(); window.history.pushState({}, '', '/');
+      cleanup(); localStorage.clear(); sessionStorage.clear(); window.history.pushState({}, '', '/');
       r.setup();
       mockFetch();
       await renderApp();
       await expectLibraryWiki(r.entry);
     }
 
-    cleanup(); localStorage.clear(); window.history.pushState({}, '', '/');
+    cleanup(); localStorage.clear(); sessionStorage.clear(); window.history.pushState({}, '', '/');
     mockFetch();
     await renderApp();
     await screen.findByTestId('home');

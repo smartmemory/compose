@@ -52,7 +52,7 @@ import {
 } from './components/cockpit/contextPanelState.js';
 
 // Vision surface — views, sidebar, modals, store
-import { VIEW_KEYS, isViewKey, canonicalView, locateView, reachableViews, resolveStoredView, resolveDefaultView, viewFromQuery, migrateNavState, LEGACY_NAV_STORAGE_KEYS } from '../lib/view-keys.js';
+import { VIEW_KEYS, viewTrailLabel, isViewKey, canonicalView, locateView, reachableViews, resolveStoredView, resolveDefaultView, viewFromQuery, migrateNavState, LEGACY_NAV_STORAGE_KEYS } from '../lib/view-keys.js';
 import { NavigationContext } from './lib/navigation.jsx';
 import { VisionChangesContext } from './components/vision/VisionChangesContext.js';
 import { useVisionStore } from './components/vision/useVisionStore.js';
@@ -427,19 +427,24 @@ function CockpitView({
 // AppInner — cockpit shell with absorbed VisionTracker logic
 // ---------------------------------------------------------------------------
 
-/** COMP-AUDIT-17 §2.7: every stored navigation value, read once on load (a pure read: the retired keys are removed in an effect). */
+/**
+ * COMP-AUDIT-17 §2.7: every stored navigation value, read once on load (a pure read: the retired keys are removed in an effect).
+ * COMP-COCKPIT-RULE-DEFAULT-1 supersedes §2.7 "restore at root": only the TAB's own sessionStorage view decides the landing
+ * view (a reload keeps its room); the shared localStorage view no longer does, it feeds the palette's "Back to" row.
+ */
 function readStoredNav() {
   let nav;
   try {
     nav = migrateNavState({
-      activeViewRaw: localStorage.getItem('compose:activeView'),
+      activeViewRaw: sessionStorage.getItem('compose:activeView'),
       activeTabRaw: localStorage.getItem('compose:activeTab'),
       tabsRaw: localStorage.getItem('compose:mainTabs'),
       focusRaw: localStorage.getItem(FOCUS_STORAGE_KEY),
       items: null,
       available: {},
     });
-    nav.hadStored = !!(localStorage.getItem('compose:activeView') || localStorage.getItem('compose:activeTab'));
+    nav.hadStored = !!(sessionStorage.getItem('compose:activeView') || localStorage.getItem('compose:activeTab'));
+    nav.lastRoomView = localStorage.getItem('compose:activeView');
   } catch {
     nav = migrateNavState({});
   }
@@ -615,6 +620,15 @@ function AppInner() {
 
   const [challengeItemId, setChallengeItemId] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // COMP-COCKPIT-RULE-DEFAULT-1: the view another tab last left open, read when ⌘K opens (localStorage is shared, so it is live).
+  const [backTo, setBackTo] = useState(null);
+  useEffect(() => {
+    if (!paletteOpen) return;
+    let last = null;
+    try { last = canonicalView(localStorage.getItem('compose:activeView')); } catch { /* ignore */ }
+    const label = last && last !== activeView ? viewTrailLabel(last) : null;
+    setBackTo(label ? { view: last, label: `Back to ${label}` } : null);
+  }, [paletteOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // FOH-6: Maya colleague slide-over. Status probe is workspace-keyed; the
   // summon button renders iff the feature is installed (a `maya` config
@@ -705,8 +719,14 @@ function AppInner() {
   }, [activeView]);
 
   // ── Layout persistence ───────────────────────────────────────────────────
+  const viewAtMount = useRef(activeView);
+  const viewNavigated = useRef(false);
   useEffect(() => {
-    localStorage.setItem('compose:activeView', activeView);
+    // The shared localStorage view is written only after this tab first navigates: a fresh tab's mount must not
+    // overwrite the room another tab left open, which the palette offers as "Back to ...".
+    if (activeView !== viewAtMount.current) viewNavigated.current = true;
+    if (viewNavigated.current) localStorage.setItem('compose:activeView', activeView);
+    try { sessionStorage.setItem('compose:activeView', activeView); } catch { /* ignore */ }
   }, [activeView]);
 
   // COMP-AUDIT-17: persist the focused feature; a code that no longer resolves to any item is cleared once items load.
@@ -889,7 +909,7 @@ function AppInner() {
   }, [activeBuild]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // COMP-COCKPIT-12: a Fleet pill opens the Sessions tab on its Fleet pane.
-  const [sessionsPane, setSessionsPane] = useState('sessions');
+  const [sessionsPane, setSessionsPane] = useState('fleet'); // COMP-COCKPIT-RULE-DEFAULT-1: open on the populated pane
   const handleOpenFleet = useCallback(() => {
     setSessionsPane('fleet');
     handleViewChange('sessions');
@@ -1581,6 +1601,8 @@ function AppInner() {
           onClose={() => setPaletteOpen(false)}
           onSelectItem={(id) => { handleSelect(id); setPaletteOpen(false); }}
           onSelectGate={(gateId) => { handleOpenGate(gateId); setPaletteOpen(false); }}
+          backTo={backTo}
+          onBackTo={() => { handleViewChange(backTo.view); setPaletteOpen(false); }}
         />
         </PanelErrorBoundary>
 

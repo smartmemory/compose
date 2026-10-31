@@ -9,7 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   ROOMS, VIEW_KEYS, DEFAULT_VIEW, PACKAGE_GATED_VIEWS, VIEW_LABELS,
-  reachableViews, resolveStoredView, resolveDefaultView, viewFromQuery,
+  reachableViews, resolveStoredView, resolveDefaultView, viewFromQuery, roomEntryView, ROOM_ENTRY, viewTrailLabel,
 } from '../lib/view-keys.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -47,6 +47,22 @@ describe('resolveStoredView (load: keep what is known on load)', () => {
     for (const r of rows) {
       assert.deepEqual(resolveStoredView(r.stored, r.avail), { view: r.view, fellBackFrom: r.from }, r.name);
     }
+  });
+});
+
+describe('roomEntryView with ROOM_ENTRY (COMP-COCKPIT-RULE-DEFAULT-1)', () => {
+  test('one row table', () => {
+    const rows = [
+      { name: 'fleet, no last: its entry (sessions)', room: 'fleet', avail: {}, last: undefined, want: 'sessions' },
+      { name: 'fleet, last process: last wins', room: 'fleet', avail: {}, last: 'process', want: 'process' },
+      { name: 'a room without an entry: first shown', room: 'roadmap', avail: {}, last: undefined, want: 'graph' },
+      { name: 'last hidden (ops absent): the entry, not the first', room: 'fleet', avail: { ops: 'no' }, last: 'ops', want: 'sessions' },
+    ];
+    for (const r of rows) assert.equal(roomEntryView(r.room, r.avail, r.last), r.want, r.name);
+    assert.deepEqual(ROOM_ENTRY, { fleet: 'sessions' });
+    assert.equal(viewTrailLabel('ops'), 'Fleet › Ops');
+    assert.equal(viewTrailLabel('dashboard'), 'Home');
+    assert.equal(viewTrailLabel('bogus'), null);
   });
 });
 

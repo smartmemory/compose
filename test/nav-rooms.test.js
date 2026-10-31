@@ -63,10 +63,10 @@ describe('roomViews + roomEntryView (one row table)', () => {
 
   test('a room opens on the last view used there, else its first shown one', () => {
     const rows = [
-      { room: 'fleet', av: ALL_YES, last: undefined, want: 'process' },
+      { room: 'fleet', av: ALL_YES, last: undefined, want: 'sessions' },
       { room: 'fleet', av: ALL_YES, last: 'usage', want: 'usage' },
-      { room: 'fleet', av: { ...ALL_YES, stratum: 'no' }, last: 'stratum', want: 'process' },
-      { room: 'fleet', av: {}, last: undefined, want: 'process' },
+      { room: 'fleet', av: { ...ALL_YES, stratum: 'no' }, last: 'stratum', want: 'sessions' },
+      { room: 'fleet', av: {}, last: undefined, want: 'sessions' },
       { room: 'build', av: {}, last: undefined, want: 'design' },
       { room: 'home', av: {}, last: undefined, want: 'dashboard' },
       { room: 'roadmap', av: {}, last: 'tree', want: 'tree' },
@@ -154,7 +154,7 @@ describe('coverage: every key has a click path (derived from VIEW_KEYS)', () => 
       { caller: 'GateToast', key: 'gates', want: { top: 'review', sub: 'gates' } },
       { caller: 'OpsStrip Fleet pill', key: 'sessions', want: { top: 'fleet', sub: 'sessions' } },
       { caller: 'OpsStrip "All"', key: 'dashboard', want: { top: 'home', sub: null } },
-      { caller: 'room tab click (Fleet)', key: roomEntryView('fleet', ALL_YES), want: { top: 'fleet', sub: 'process' } },
+      { caller: 'room tab click (Fleet)', key: roomEntryView('fleet', ALL_YES), want: { top: 'fleet', sub: 'sessions' } },
       { caller: 'gear', key: 'settings', want: { top: 'settings', sub: null } },
       { caller: '?view=process deep link', key: viewFromQuery('?view=process'), want: { top: 'fleet', sub: 'process' } },
       { caller: '?view=design deep link', key: viewFromQuery('?view=design'), want: { top: 'build', sub: 'design' } },

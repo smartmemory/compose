@@ -12,17 +12,19 @@
  *   onClose:      () => void
  *   onSelectItem: (id: string) => void
  *   onSelectGate: (id: string) => void
+ *   backTo:       {view, label} | null — COMP-COCKPIT-RULE-DEFAULT-1: first row, "Back to <room> › <label>"
+ *   onBackTo:     () => void
  * }
  */
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Search, ShieldCheck, AlertTriangle, Activity } from 'lucide-react';
+import { Search, ShieldCheck, AlertTriangle, Activity, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { useVisionStore } from '../useVisionStore.js';
 import { useShallow } from 'zustand/react/shallow';
 import { LIFECYCLE_PHASE_LABELS, GATE_STEP_LABELS, gateLabel } from '../constants.js';
 import StatusBadge from './StatusBadge.jsx';
 
-export default function CommandPalette({ open, onClose, onSelectItem, onSelectGate }) {
+export default function CommandPalette({ open, onClose, onSelectItem, onSelectGate, backTo = null, onBackTo }) {
   const { items, gates, sessions } = useVisionStore(useShallow(s => ({ items: s.items, gates: s.gates, sessions: s.sessions })));
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState(0);
@@ -40,8 +42,10 @@ export default function CommandPalette({ open, onClose, onSelectItem, onSelectGa
   const results = useMemo(() => {
     if (!open) return [];
 
+    const backRows = backTo ? [{ type: 'back', id: `back-${backTo.view}`, label: backTo.label, sub: null }] : [];
+
     if (!query.trim()) {
-      // Default: pending gates + blocked items
+      // Default: the "Back to" row, then pending gates + blocked items
       const pendingGates = gates
         .filter(g => g.status === 'pending')
         .slice(0, 3)
@@ -67,6 +71,7 @@ export default function CommandPalette({ open, onClose, onSelectItem, onSelectGa
         }));
 
       return [
+        ...backRows,
         ...(pendingGates.length ? [{ type: 'section', label: 'Pending Gates' }] : []),
         ...pendingGates,
         ...(blockedItems.length ? [{ type: 'section', label: 'Blocked Items' }] : []),
@@ -134,7 +139,7 @@ export default function CommandPalette({ open, onClose, onSelectItem, onSelectGa
       ...(matchedSessions.length ? [{ type: 'section', label: 'Sessions' }] : []),
       ...matchedSessions,
     ];
-  }, [open, query, items, gates, sessions]);
+  }, [open, query, items, gates, sessions, backTo]);
 
   // Selectable results (filter out section headers)
   const selectables = results.filter(r => r.type !== 'section');
@@ -148,6 +153,7 @@ export default function CommandPalette({ open, onClose, onSelectItem, onSelectGa
       if (!item) return;
       if (item.type === 'gate') onSelectGate?.(item.id);
       else if (item.type === 'item') onSelectItem?.(item.id);
+      else if (item.type === 'back') onBackTo?.();
       else onClose();
       return;
     }
@@ -211,12 +217,14 @@ export default function CommandPalette({ open, onClose, onSelectItem, onSelectGa
                 onClick={() => {
                   if (result.type === 'gate') onSelectGate?.(result.id);
                   else if (result.type === 'item') onSelectItem?.(result.id);
+                  else if (result.type === 'back') onBackTo?.();
                   else onClose();
                 }}
               >
                 {/* Icon */}
                 {result.type === 'gate' && <ShieldCheck className="h-4 w-4 text-amber-400 shrink-0" />}
                 {result.type === 'item' && <AlertTriangle className="h-4 w-4 text-muted-foreground/60 shrink-0" />}
+                {result.type === 'back' && <ArrowLeft className="h-4 w-4 text-muted-foreground/60 shrink-0" />}
                 {result.type === 'session' && <Activity className="h-4 w-4 text-blue-400 shrink-0" />}
 
                 {/* Text */}

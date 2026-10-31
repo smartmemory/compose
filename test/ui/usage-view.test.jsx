@@ -52,7 +52,7 @@ describe('UsageView', () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
     const client = fakeClient(usage(), usage({ usd: 2 }));
-    const { container } = render(<UsageView client={client} now="2026-10-03T12:00:00" />);
+    const { container } = render(<UsageView client={client} now="2026-10-03T12:00:00" initialScope="compose" />);
     await waitFor(() => screen.getByTestId('usage-model-table'));
     expect(screen.getAllByTestId('usage-tile')).toHaveLength(8);
     expect(screen.getByText('~$3.50')).toBeTruthy(); // absent provenance -> ~$X + marker
@@ -71,7 +71,7 @@ describe('UsageView', () => {
   });
 
   it('empty ledger renders an empty state, not a row of zeros', async () => {
-    render(<UsageView client={fakeClient(usage({ empty: true }))} />);
+    render(<UsageView client={fakeClient(usage({ empty: true }))} initialScope="compose" />);
     await waitFor(() => screen.getByText('No dispatches in this range'));
     expect(screen.queryAllByTestId('usage-tile')).toHaveLength(0);
     expect(screen.queryByTestId('usage-chart')).toBeNull();

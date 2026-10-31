@@ -135,8 +135,9 @@ function ModelTable({ models }) {
   );
 }
 
-export default function UsageView({ client = defaultUsageClient, now }) {
-  const [scope, setScope] = useState('compose');
+export default function UsageView({ client = defaultUsageClient, now, initialScope = 'fleet' }) {
+  // COMP-COCKPIT-RULE-DEFAULT-1: open on the populated pane; Compose-dispatched stays one click away.
+  const [scope, setScope] = useState(initialScope);
   if (scope === 'fleet') {
     return (
       <div className="flex flex-col h-full min-h-0 overflow-auto p-4 gap-4" data-testid="usage-view">
