@@ -3,7 +3,7 @@
  * GET /api/process envelope (test/fixtures/process/api-process.json, lanes hub and main) with its `fleet` block
  * edited per row. Up, down, remove and add each POST the whole list to /api/fleet/projects and the Process columns
  * and time-split rows follow; a failed POST rolls back with an error line; a row click selects the lane for the KPI
- * tiles. Other rooms keep GROUPS. One row table.
+ * tiles. Every room shows PROJECTS (FLEET-PROJECTS-2 reversed the Fleet-only rule). One row table.
  */
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -142,14 +142,14 @@ const ROWS = [
     },
   },
   {
-    name: 'the left bar shows PROJECTS in the Fleet room and GROUPS everywhere else',
+    name: 'the left bar shows PROJECTS, never GROUPS, in the Fleet room and every other room (owner reversal, FLEET-PROJECTS-2)',
     async run() {
       resetProcessPoller();
       vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => envelope(null) })));
       const items = [{ id: '1', type: 'feature', title: 'A', status: 'in_progress', group: 'G' }, { id: '2', type: 'feature', title: 'B', status: 'planned', group: 'H' }];
       const props = { items, gates: [], connected: true, hiddenGroups: new Set(), onToggleGroup: vi.fn(), onViewChange: vi.fn(), spawnedAgents: [], agentRelays: [], agentActivity: [], agentErrors: [], storageScope: 'fleet-projects-test' };
       const other = render(<AttentionQueueSidebar {...props} />);
-      expect([screen.queryByText('Groups') !== null, screen.queryByTestId('fleet-projects')]).toEqual([true, null]);
+      expect([screen.queryByText('Groups') !== null, screen.queryByTestId('fleet-projects') !== null]).toEqual([false, true]);
       other.unmount();
       render(<AttentionQueueSidebar {...props} fleetRoom />);
       await screen.findByTestId('fleet-project-hub');

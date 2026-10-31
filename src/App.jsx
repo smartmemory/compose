@@ -78,6 +78,8 @@ import NewFeatureDialog from './components/vision/NewFeatureDialog.jsx';
 import JournalView from './components/vision/JournalView.jsx';
 import DesignView from './components/vision/DesignView.jsx';
 import DesignSidebar from './components/vision/DesignSidebar.jsx';
+import FleetProjectsSection, { NoComposeProject } from './components/vision/FleetProjectsSection.jsx';
+import { projectsModeFor } from './lib/fleetProjects.js';
 import OpenLoopsPanel from './components/vision/OpenLoopsPanel.jsx';
 import { useDesignStore } from './components/vision/useDesignStore.js';
 import CommandPalette from './components/vision/shared/CommandPalette.jsx';
@@ -244,7 +246,7 @@ function CockpitView({
   gates, settings, selectedPhase, selectedItemId,
   buildStateMap, agentOverlay, spawnedAgents, agentRelays,
   // graph filtering
-  visibleTracks, hiddenGroups,
+  visibleTracks, hiddenGroups, onToggleGroup,
   // callbacks
   onSelect, onUpdate, onCreate, onCreateFeature, isEmptyProject, onDelete, onOpenGate,
   onCreateConnection, onDeleteConnection, onRefreshBuild, onSelectStep,
@@ -321,6 +323,7 @@ function CockpitView({
           isEmptyProject={isEmptyProject}
           visibleTracks={visibleTracks}
           hiddenGroups={hiddenGroups}
+          onToggleGroup={onToggleGroup}
           buildStateMap={buildStateMap}
           resolveGate={onResolveGate}
           gates={gates}
@@ -636,6 +639,9 @@ function AppInner() {
     }).catch(() => {});
   }, []);
 
+  // COMP-COCKPIT-FLEET-PROJECTS-2: the project-less lane a project room is showing ("No Compose project for <lane>").
+  const [noProjectLane, setNoProjectLane] = useState(null);
+
   const handleProjectSwitch = useCallback(async (newPath) => {
     try {
       const r = await wsFetch('/api/project/switch', {
@@ -654,6 +660,7 @@ function AppInner() {
       // the root flips. The reset discards in-flight responses from the old one.
       useIdeaboxStore.getState().resetForProject();
       dispatchFocus({ type: 'projectSwitch' });
+      setNoProjectLane(null);
       setProjectName(data.name);
       setProjectRoot(data.targetRoot);
       // Vision store will get new state via WebSocket broadcast
@@ -663,8 +670,19 @@ function AppInner() {
     }
   }, [refreshWorkspace]);
 
+  // COMP-COCKPIT-FLEET-PROJECTS-2: a PROJECTS row in a project room. A lane with a Compose project switches the
+  // cockpit to it through the one switch above (a no-op when it is already the project); one without shows the
+  // plain line instead of any project's data.
+  const handleSelectProject = useCallback(async (lane, root) => {
+    if (!root) { setNoProjectLane(lane); return; }
+    if (root === projectRoot) { setNoProjectLane(null); return; }
+    await handleProjectSwitch(root);
+  }, [projectRoot, handleProjectSwitch]);
+
   // ── Derived flags ───────────────────────────────────────────────────────
   const isMaximized = agentBarState === AGENT_BAR_STATES.MAXIMIZED;
+  // COMP-COCKPIT-FLEET-PROJECTS-2: the left bar's PROJECTS rows switch the project here, pick a Process lane elsewhere.
+  const projectsMode = projectsModeFor(locateView(activeView)?.top);
 
   // ── Navigation ──────────────────────────────────────────────────────────
   // activeView is the flat leaf view key; the rooms and sub-tabs are derived from it
@@ -1317,6 +1335,15 @@ function AppInner() {
                         sessionComplete={designStatus === 'complete'}
                         onReviseDecision={(i) => useDesignStore.getState().reviseDecision(i)}
                         widthPx={sidebarWidthPx}
+                        projects={(
+                          <FleetProjectsSection
+                            mode={projectsMode}
+                            projectRoot={projectRoot}
+                            noProjectLane={noProjectLane}
+                            onSelectProject={handleSelectProject}
+                            onViewChange={handleViewChange}
+                          />
+                        )}
                       />
                     : <AttentionQueueSidebar
                         storageScope={projectRoot}
@@ -1343,8 +1370,6 @@ function AppInner() {
                           return next;
                         })}
                         onShowAllTracks={() => setVisibleTracks(null)}
-                        hiddenGroups={hiddenGroups}
-                        onToggleGroup={handleToggleGroup}
                         searchQuery={searchQuery}
                         onSearchChange={setSearchQuery}
                         connected={connected}
@@ -1356,7 +1381,10 @@ function AppInner() {
                         onSelectItem={handleSelect}
                         onStopAgent={handleStopAgent}
                         widthPx={sidebarWidthPx}
-                        fleetRoom={locateView(activeView)?.top === 'fleet'}
+                        projectsMode={projectsMode}
+                        projectRoot={projectRoot}
+                        noProjectLane={noProjectLane}
+                        onSelectProject={handleSelectProject}
                       />
                 )}
               </div>
@@ -1376,6 +1404,7 @@ function AppInner() {
                 )}
                 <div className="flex-1 min-h-0 flex flex-col">
                   <PanelErrorBoundary>
+                    {projectsMode === 'project' && noProjectLane ? <NoComposeProject lane={noProjectLane} /> : (
                     <CockpitView
                       activeView={activeView}
                       items={items}
@@ -1408,6 +1437,7 @@ function AppInner() {
                       onResetSettings={resetSettings}
                       visibleTracks={visibleTracks}
                       hiddenGroups={hiddenGroups}
+                      onToggleGroup={handleToggleGroup}
                       buildStateMap={buildStateMap}
                       agentOverlay={agentOverlay}
                       spawnedAgents={spawnedAgents}
@@ -1431,6 +1461,7 @@ function AppInner() {
                       onNavigate={handleViewChange}
                       reachableViewKeys={reachableViews(VIEW_KEYS, availability)}
                     />
+                    )}
                   </PanelErrorBoundary>
                 </div>
               </main>

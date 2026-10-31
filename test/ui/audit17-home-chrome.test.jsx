@@ -14,6 +14,7 @@ vi.mock('../../src/components/vision/useVisionStore.js', () => ({
 const { default: HomeSections } = await import('../../src/components/vision/HomeSections.jsx');
 const { deriveHomeSections } = await import('../../src/components/vision/homeSectionsState.js');
 const { default: AttentionQueueSidebar } = await import('../../src/components/vision/AttentionQueueSidebar.jsx');
+const { default: GroupFilter } = await import('../../src/components/vision/GroupFilter.jsx');
 const { default: ContextPanel } = await import('../../src/components/cockpit/ContextPanel.jsx');
 const { default: OpsStrip } = await import('../../src/components/cockpit/OpsStrip.jsx');
 const { default: ItemDetailPanel } = await import('../../src/components/vision/ItemDetailPanel.jsx');
@@ -62,7 +63,8 @@ describe('Sidebar / ContextPanel', () => {
   };
 
   it('has no build widget, theme toggle or "+ New"; keeps the stats row and shows "1 active / 2"', () => {
-    const { container } = render(<AttentionQueueSidebar {...props} />);
+    // FLEET-PROJECTS-2: GROUPS left the sidebar for the Roadmap graph toolbar; the same GroupFilter renders beside it.
+    const { container } = render(<><AttentionQueueSidebar {...props} /><GroupFilter items={props.items} hiddenGroups={props.hiddenGroups} onToggleGroup={props.onToggleGroup} /></>);
     expect(screen.queryByText('+ New')).toBeNull();
     expect(screen.queryByTitle(/theme/i)).toBeNull();
     expect(container.querySelector('[data-testid="build-status-widget"]')).toBeNull();

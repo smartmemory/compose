@@ -6,21 +6,37 @@
  * remove; Add lists the hidden lanes. Every change POSTs the whole list (fleetProjects.js), shows at once, and rolls
  * back with a visible error line when the save fails. Clicking a name selects that lane for the Process KPI tiles
  * (the same state as the comparison column header) and opens the Process tab.
+ *
+ * COMP-COCKPIT-FLEET-PROJECTS-2: shown in every room. `mode="lane"` (Fleet, Library) is the behaviour above.
+ * `mode="project"` (Home, Ideas, Roadmap, Build, Review): a click opens that lane's Compose project through
+ * `onSelectProject(lane, root|null)` (null: the lane has none, so the room says so), and the highlighted row is the
+ * lane whose root is the cockpit's `projectRoot`, or the project-less lane the room is showing (`noProjectLane`).
  */
 import React from 'react';
 import { ChevronUp, ChevronDown, X, Plus } from 'lucide-react';
 import { useProcess } from '../../lib/processPoller.js';
 import {
-  effectiveOrder, orderLanes, pickLane, saveFleetProjects, setPickedLane, useFleetProjects,
+  effectiveOrder, orderLanes, pickLane, saveFleetProjects, selectProjectLane, setPickedLane, useFleetProjects, useFleetRoots,
 } from '../../lib/fleetProjects.js';
 
 const HEAD = 'text-[10px] font-medium uppercase tracking-wider px-2';
 const MUTED = { color: 'hsl(var(--muted-foreground))' };
 const ICON_BTN = 'shrink-0 rounded p-0.5 hover:bg-sidebar-accent disabled:opacity-30 disabled:hover:bg-transparent focus:outline-none focus-visible:ring-1 focus-visible:ring-ring';
 
-export default function FleetProjectsSection({ onViewChange }) {
+/** The project rooms' one-line state for a lane with no Compose project behind it. */
+export function NoComposeProject({ lane }) {
+  return (
+    <div className="flex-1 flex items-center justify-center p-6">
+      <p className="text-sm" style={MUTED} data-testid="no-compose-project">No Compose project for {lane}</p>
+    </div>
+  );
+}
+
+export default function FleetProjectsSection({ onViewChange, mode = 'lane', projectRoot = null, noProjectLane = null, onSelectProject }) {
+  const projectMode = mode === 'project';
   const { data, error, loading } = useProcess();
   const lanes = useFleetProjects();
+  const { roots } = useFleetRoots(projectMode);
   const [adding, setAdding] = React.useState(false);
 
   const fleet = data?.fleet ?? null;
@@ -29,7 +45,10 @@ export default function FleetProjectsSection({ onViewChange }) {
   const hidden = known.filter((n) => !list.includes(n));
   const projects = data?.sources?.builder?.value?.table?.projects ?? [];
   const builderNames = Object.keys(data?.sources?.builder?.value?.pages ?? {});
-  const selected = pickLane(list.filter((n) => builderNames.includes(n)), lanes.picked);
+  const selected = projectMode
+    ? (noProjectLane ?? list.find((n) => roots?.[n]?.hasCompose && roots[n].root === projectRoot) ?? null)
+    : pickLane(list.filter((n) => builderNames.includes(n)), lanes.picked);
+  const hasProject = (n) => !!(roots?.[n]?.root && roots[n].hasCompose);
   const labelOf = (n) => projects.find((p) => p?.name === n)?.label ?? n;
 
   const move = (i, d) => {
@@ -39,7 +58,13 @@ export default function FleetProjectsSection({ onViewChange }) {
   };
   const remove = (n) => saveFleetProjects(list.filter((x) => x !== n));
   const add = (n) => { saveFleetProjects([...list, n]); setAdding(false); };
-  const select = (n) => { setPickedLane(n); onViewChange?.('process'); };
+  const select = projectMode
+    ? (n) => onSelectProject?.(n, selectProjectLane(n, roots).switchTo)
+    : (n) => { setPickedLane(n); onViewChange?.('process'); };
+  const titleOf = (n) => {
+    if (projectMode) return hasProject(n) ? `Open ${labelOf(n)} (${roots[n].root})` : `${labelOf(n)}: no Compose project`;
+    return !builderNames.includes(n) ? `${labelOf(n)}: time split only (the builder writes no page for this lane)` : `Show ${labelOf(n)} in Process`;
+  };
 
   let body;
   if (!fleet) {
@@ -54,12 +79,12 @@ export default function FleetProjectsSection({ onViewChange }) {
         {list.length === 0 ? <p className="px-2 text-[11px]" style={MUTED} data-testid="fleet-projects-empty">No projects listed. Add one below.</p> : null}
         {list.map((n, i) => {
           const isSel = n === selected;
-          const tilesless = !builderNames.includes(n);
+          const tilesless = projectMode ? (roots !== null && !hasProject(n)) : !builderNames.includes(n);
           return (
             <div key={n} data-testid={`fleet-project-${n}`}
               className={`group flex w-full items-center gap-0.5 rounded-md px-1 py-0.5 text-xs ${isSel ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'hover:bg-sidebar-accent/50'}`}>
               <button type="button" onClick={() => select(n)} aria-pressed={isSel} data-testid={`fleet-project-select-${n}`}
-                title={tilesless ? `${labelOf(n)}: time split only (the builder writes no page for this lane)` : `Show ${labelOf(n)} in Process`}
+                title={titleOf(n)}
                 className="min-w-0 flex-1 truncate px-1 text-left font-mono focus:outline-none focus-visible:underline"
                 style={tilesless ? MUTED : undefined}>
                 {labelOf(n)}

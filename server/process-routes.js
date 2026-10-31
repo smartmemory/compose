@@ -10,12 +10,17 @@
  * Not mounted in remote mode (Mac-only).
  *
  * COMP-COCKPIT-FLEET-PROJECTS-1: the envelope also carries `fleet: {known, projects, error}`, the lanes the view can
- * show and the owner's saved order (`fleet.projects` in the active project's `.compose/compose.json`, read fresh on
- * every request; null when the key is absent). `POST /api/fleet/projects` writes that key: loopback callers only,
- * known names only, the path is the server's own target root.
+ * show and the owner's saved order (`fleet.projects` in `.compose/compose.json`, read fresh on every request; null
+ * when the key is absent). `POST /api/fleet/projects` writes that key: loopback callers only, known names only.
+ *
+ * COMP-COCKPIT-FLEET-PROJECTS-2: that file is the one of the project the server STARTED on, captured once at mount,
+ * not the active project. The left bar now switches the cockpit's project, and a list read from the active project
+ * would change under the owner after every switch. `GET /api/fleet/roots` maps each known lane to its Compose
+ * project root: `DEFAULT_FLEET_ROOTS`, overridden per lane by `fleet.roots` in the same file (a path, or null for
+ * none). A root counts only while `<root>/.compose` is a directory, checked on every request.
  */
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { homedir } from 'node:os';
 import express from 'express';
 import { createSourceCache } from './fleet-routes.js';
@@ -29,12 +34,26 @@ import { writeComposeJson } from '../lib/cli-remote.js';
 export const PROCESS_ROUTE = '/api/process';
 export const PUBLISH_ROUTE = '/api/process/publish';
 export const FLEET_PROJECTS_ROUTE = '/api/fleet/projects';
+export const FLEET_ROOTS_ROUTE = '/api/fleet/roots';
 export const BUILDER_TICK_S = 900; // launchd ai.smartmemory.status-build StartInterval; stale at two ticks
 const TTL_MS = { builder: 60_000, stamps: 120_000, history: 300_000 };
 const LOG = '[process]';
 const DEFAULT_QUEUES_DIR = join(homedir(), 'reg/my/SmartMemory/smart-memory-ops/queues');
 const DEFAULT_EXTRA = `forge=${join(homedir(), 'reg/my/forge/status/units.json')}`;
 const DEFAULT_KPI_HISTORY = join(homedir(), 'reg/my/forge/status/kpi-history.jsonl');
+
+/**
+ * Lane -> Compose project root, from the builder configs (`OPS/status/configs/<lane>.json`: forge's `features` glob,
+ * cadence-section's `cwd`, the `commits.repo` of 2.0 and maya, trader's ledger path). No other registry names a lane's
+ * repo. A lane absent here has no project until `fleet.roots` names one.
+ */
+export const DEFAULT_FLEET_ROOTS = {
+  forge: '~/reg/my/forge/compose',
+  cadence: '~/reg/my/SmartMemory/cadence',
+  '2.0': '~/reg/my/SmartMemory/smart-memory-core',
+  maya: '~/reg/my/SmartMemory/maya',
+  trader: '~/reg/my/stock/trader',
+};
 
 const expandHome = (p) => (p === '~' || p.startsWith('~/') ? join(homedir(), p.slice(1)) : p);
 
@@ -153,6 +172,38 @@ export async function readFleetProjects(root) {
   return { projects: Array.isArray(list) ? list.filter((n) => typeof n === 'string') : null, error: null };
 }
 
+/**
+ * `{roots: {lane: {root, hasCompose}}, error}` for each known lane: `fleet.roots[lane]` when the key is present (a
+ * string path, or null for none), else the default. A malformed `fleet.roots` is ignored whole, with `error` set.
+ */
+export async function readFleetRoots(root, known, defaults = DEFAULT_FLEET_ROOTS) {
+  let overrides = {};
+  let error = null;
+  const text = await readIfExists(join(root, '.compose', 'compose.json'));
+  if (text !== null) {
+    let cfg = null;
+    try { cfg = JSON.parse(text); } catch { error = 'compose.json is not JSON'; }
+    const raw = cfg?.fleet?.roots;
+    if (raw !== undefined && raw !== null) {
+      const ok = typeof raw === 'object' && !Array.isArray(raw)
+        && Object.values(raw).every((v) => v === null || (typeof v === 'string' && v.trim() !== ''));
+      if (ok) overrides = raw;
+      else error = 'fleet.roots must map lane names to a path or null';
+    }
+  }
+  const roots = {};
+  for (const lane of known) {
+    const given = Object.hasOwn(overrides, lane) ? overrides[lane] : (defaults[lane] ?? null);
+    const path = given === null ? null : expandHome(given.trim());
+    let hasCompose = false;
+    if (path && isAbsolute(path)) {
+      try { hasCompose = (await stat(join(path, '.compose'))).isDirectory(); } catch { /* absent */ }
+    }
+    roots[lane] = { root: path, hasCompose };
+  }
+  return { roots, error };
+}
+
 /** A POST body checked against the known lanes: `{projects}` or `{error}` (no duplicates, known names only). */
 export function checkFleetProjects(body, known) {
   const list = body?.projects;
@@ -177,7 +228,9 @@ export function attachProcessRoutes(app, {
   info = console.log,
   ttlMs = TTL_MS,
   hasSourceCheckout = detectSourceCheckout(COMPOSE_HOME),
-  projectRoot = getTargetRoot,
+  // Captured once: the project the server started on, never the one a later switch makes active (FLEET-PROJECTS-2).
+  projectRoot = ((root) => () => root)(getTargetRoot()),
+  defaultRoots = DEFAULT_FLEET_ROOTS,
 } = {}) {
   if (remote) return false;
   const opts = (name) => ({ ttlMs: ttlMs[name], now, warn, info, logPrefix: LOG });
@@ -202,6 +255,16 @@ export function attachProcessRoutes(app, {
       const fleet = { known: knownLanes(builder, stamps), ...(await readFleetProjects(projectRoot())) };
       res.set('cache-control', 'no-store');
       res.json({ generated: new Date(now()).toISOString(), sources: { builder, stamps, history }, fleet });
+    } catch (error) {
+      res.status(500).json({ error: String(error?.message ?? error) });
+    }
+  });
+  // COMP-COCKPIT-FLEET-PROJECTS-2: which lanes open a Compose project when the left bar selects them.
+  app.get(FLEET_ROOTS_ROUTE, async (_req, res) => {
+    res.set('cache-control', 'no-store');
+    try {
+      const [builder, stamps] = await Promise.all([caches.builder.get(), caches.stamps.get()]);
+      res.json(await readFleetRoots(projectRoot(), knownLanes(builder, stamps), defaultRoots));
     } catch (error) {
       res.status(500).json({ error: String(error?.message ?? error) });
     }

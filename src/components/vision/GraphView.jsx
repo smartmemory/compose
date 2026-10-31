@@ -9,6 +9,7 @@ import { notify } from '../cockpit/NotificationBar.jsx';
 import { withComposeToken } from '../../lib/compose-api.js';
 import { useConfirmWithReason } from '../ui/DialogProvider.jsx';
 import { graphInitialViewport, largestGroupCentre } from './graphInitialViewport.js';
+import GroupFilter from './GroupFilter.jsx';
 
 try { cytoscape.use(cytoscapeDagre); } catch (e) { /* already registered */ }
 try { cytoscape.use(cytoscapeFcose); } catch (e) { /* already registered */ }
@@ -487,6 +488,33 @@ function CtrlBtn({ onClick, children, title }) {
   );
 }
 
+/**
+ * COMP-COCKPIT-FLEET-PROJECTS-2: the feature-prefix group filter, moved here from the left bar (which lists PROJECTS
+ * in every room). The button is lit while any group is hidden; the list is the left bar's GroupFilter, unchanged.
+ */
+function GroupsPopover({ items, hiddenGroups, onToggleGroup }) {
+  const [open, setOpen] = useState(false);
+  const hidden = hiddenGroups?.size ?? 0;
+  return (
+    <div className="relative">
+      <FilterBtn active={open || hidden > 0} onClick={() => setOpen((v) => !v)}>
+        <span data-testid="graph-groups-toggle" aria-expanded={open}>Groups{hidden > 0 ? ` (${hidden} hidden)` : ''}</span>
+      </FilterBtn>
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 199 }} onClick={() => setOpen(false)} />
+          <div data-testid="graph-groups-popover"
+            className="absolute right-0 top-full mt-1 w-56 max-h-80 overflow-auto rounded-md border bg-popover text-popover-foreground p-1 shadow-lg"
+            style={{ zIndex: 200 }}>
+            <GroupFilter items={items ?? []} hiddenGroups={hiddenGroups} onToggleGroup={onToggleGroup} />
+            <p className="px-2 py-1 text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>Click a group to hide or show it in the graph.</p>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Sep() {
   return <div style={{ width: 1, height: 20, background: '#334155', margin: '0 2px' }} />;
 }
@@ -557,7 +585,7 @@ function GatePopover({ featureCode, gates, items, badgePositions, onResolve, onC
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
-export default function GraphView({ items, connections, selectedItemId, onSelect, onCreateFeature, isEmptyProject, visibleTracks, hiddenGroups, buildStateMap, resolveGate, gates, spawnedAgents, agentRelays, agentOverlay, featureCode, focusActive }) {
+export default function GraphView({ items, connections, selectedItemId, onSelect, onCreateFeature, isEmptyProject, visibleTracks, hiddenGroups, onToggleGroup, buildStateMap, resolveGate, gates, spawnedAgents, agentRelays, agentOverlay, featureCode, focusActive }) {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   // Persistent layout: saved positions keyed by item id (leaf nodes only —
@@ -1088,6 +1116,7 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
             </span>
           </div>
           <div className="flex items-center gap-1">
+            <GroupsPopover items={items} hiddenGroups={hiddenGroups} onToggleGroup={onToggleGroup} />
             <FilterBtn active={grouped} onClick={() => setGrouped(!grouped)}>Group</FilterBtn>
             <FilterBtn active={showAgentTopology} onClick={() => setShowAgentTopology(v => !v)} title="Show/hide agent topology">Agents</FilterBtn>
             <FilterBtn active={showIdeas} onClick={() => setShowIdeas(v => !v)} title="Show/hide idea nodes (connected to features via mapsTo)">Ideas</FilterBtn>

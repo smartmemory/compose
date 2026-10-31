@@ -110,12 +110,15 @@ Optional. Controls roadmap generation policy.
 
 ### `fleet` block
 
-Optional. Written by the cockpit's Fleet room (COMP-COCKPIT-FLEET-PROJECTS-1); you rarely edit it by hand.
+Optional. Written by the cockpit's left bar (COMP-COCKPIT-FLEET-PROJECTS-1, -2); you rarely edit `projects` by hand.
+
+**Which file:** the `.compose/compose.json` of the project the cockpit server **started on**, not the project the cockpit has switched to. The left bar switches projects, and the list must not change under you when it does. To move the list, restart the server on another project (or copy the block).
 
 ```json
 {
   "fleet": {
-    "projects": ["forge", "hub", "main"]
+    "projects": ["forge", "hub", "main"],
+    "roots": { "main": "~/reg/my/SmartMemory", "trader": null }
   }
 }
 ```
@@ -123,6 +126,7 @@ Optional. Written by the cockpit's Fleet room (COMP-COCKPIT-FLEET-PROJECTS-1); y
 | Field | Default | Notes |
 |-------|---------|-------|
 | `projects` | absent | The PROJECTS list in the Fleet room's left bar, in order: the lanes the Process tab shows (comparison columns and time-split rows) and their order. Absent means every lane `GET /api/process` knows, in builder order. A name the builder no longer knows is skipped. Written by `POST /api/fleet/projects` (loopback callers only, known lane names only, no duplicates) as an atomic rewrite that keeps every other key; a `compose.json` that is not valid JSON is refused (409), never overwritten. |
+| `roots` | absent | Lane name to the Compose project a PROJECTS click opens in Home, Ideas, Roadmap, Build and Review: a path (`~` expands) or `null` for none. A lane absent here uses the built-in default (forge, cadence, 2.0, maya and trader, taken from the status builder's configs); every other lane has none. A root counts only while `<root>/.compose` is a directory; otherwise the room shows "No Compose project for <lane>". Served by `GET /api/fleet/roots`. A malformed value is ignored whole and named in that route's `error`. Saving the order keeps this key. |
 
 ## `.compose/questionnaire.json`
 

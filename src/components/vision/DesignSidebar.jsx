@@ -12,6 +12,7 @@
  * Props:
  *   decisions        Decision[]  — array of design decisions
  *   onReviseDecision (index: number) => void — callback for revision flow
+ *   projects         node — the left bar's PROJECTS list, shown above the log (COMP-COCKPIT-FLEET-PROJECTS-2)
  */
 
 import React, { useState } from 'react';
@@ -19,7 +20,7 @@ import { ScrollArea } from '@/components/ui/scroll-area.jsx';
 import { useDesignStore } from './useDesignStore.js';
 import ResearchTab from './ResearchTab.jsx';
 
-export default function DesignSidebar({ decisions = [], onReviseDecision, sessionComplete = false, widthPx }) {
+export default function DesignSidebar({ decisions = [], onReviseDecision, sessionComplete = false, widthPx, projects = null }) {
   const [activeTab, setActiveTab] = useState('decisions');
   const activeCount = decisions.filter(d => !d.superseded).length;
   const researchItems = useDesignStore(s => s.researchItems) || [];
@@ -27,6 +28,7 @@ export default function DesignSidebar({ decisions = [], onReviseDecision, sessio
 
   return (
     <aside className="shrink-0 flex flex-col bg-sidebar border-r border-sidebar-border" style={{ width: widthPx ?? 208 }}>
+      {projects ? <div className="p-2 max-h-[40%] overflow-y-auto shrink-0" style={{ borderBottom: '1px solid hsl(var(--sidebar-border))' }}>{projects}</div> : null}
 
       {/* Header */}
       <div className="p-3 pb-0">

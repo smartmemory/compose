@@ -11,7 +11,7 @@
  *   • Global phase filter (wired to useVisionStore — affects all views)
  *   • View navigation (all existing views preserved)
  *   • Agent telemetry panel (preserved from AppSidebar)
- *   • Fleet room only: PROJECTS (FleetProjectsSection, COMP-COCKPIT-FLEET-PROJECTS-1) in place of GROUPS
+ *   • PROJECTS (FleetProjectsSection) in every room (COMP-COCKPIT-FLEET-PROJECTS-2; GROUPS moved to the Roadmap graph toolbar)
  */
 
 import React from 'react';
@@ -113,71 +113,6 @@ function AttentionQueueSection({ items, gates, onSelectItem, storageScope }) {
   );
 }
 
-/**
- * GroupFilter — feature code prefix groups with counts.
- * Only shows groups that are visible (not hidden).
- */
-const VISIBLE_STATUSES = new Set(['planned', 'ready', 'in_progress', 'review', 'blocked', 'parked']);
-
-function GroupFilter({ items, hiddenGroups, onToggleGroup }) {
-  const groups = React.useMemo(() => {
-    const counts = {};
-    const activeCount = {};
-    for (const item of items) {
-      const title = item.title || '';
-      if (title.startsWith('`docs/') || title.startsWith('docs/')) continue;
-      if (!VISIBLE_STATUSES.has(item.status)) continue;
-      const group = item.group || 'other';
-      counts[group] = (counts[group] || 0) + 1;
-      if (['in_progress', 'review', 'ready'].includes(item.status)) {
-        activeCount[group] = (activeCount[group] || 0) + 1;
-      }
-    }
-    return Object.entries(counts)
-      .sort((a, b) =>
-        // Primary: active count desc (most-active groups float up)
-        (activeCount[b[0]] || 0) - (activeCount[a[0]] || 0) ||
-        // Secondary: total count desc
-        b[1] - a[1] ||
-        // Tertiary: alphabetical — keeps order stable when counts match
-        a[0].localeCompare(b[0])
-      )
-      .map(([group, count]) => ({ group, count, active: activeCount[group] || 0 }));
-  }, [items]);
-
-  if (groups.length <= 1) return null;
-
-  return (
-    <>
-      {groups.map(({ group, count, active }) => {
-        const isHidden = hiddenGroups?.has(group);
-        return (
-          <button
-            key={group}
-            onClick={() => onToggleGroup?.(group)}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-sidebar-accent/50"
-            style={{
-              color: isHidden ? 'hsl(var(--muted-foreground))' : 'hsl(var(--muted-foreground))',
-              opacity: isHidden ? 0.4 : 1,
-              fontWeight: active > 0 ? 500 : 400,
-            }}
-          >
-            <span className="truncate flex-1 text-left">{group}</span>
-            <span
-              className="text-[10px] tabular-nums shrink-0"
-              style={{ color: 'hsl(var(--muted-foreground))' }}
-              title={active > 0 ? `${active} active of ${count} items` : `${count} items`}
-              data-testid="group-count"
-            >
-              {active > 0 ? `${active} active / ${count}` : count}
-            </span>
-          </button>
-        );
-      })}
-    </>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // IdeasSection — shows untriaged idea count, click navigates to ideabox
 // ---------------------------------------------------------------------------
@@ -233,7 +168,10 @@ function IdeasSection({ onViewChange }) {
  *   agentErrors      Error[]
  *   sessionState     SessionState | null
  *   onSelectItem     (itemId: string) => void
- *   fleetRoom        boolean  ← the Fleet room: PROJECTS replaces GROUPS
+ *   projectsMode     'lane' | 'project'  ← FleetProjectsSection mode (projectsModeFor(room))
+ *   projectRoot      string   ← the cockpit's project, highlighted in project mode
+ *   noProjectLane    string | null  ← the project-less lane a project room is showing
+ *   onSelectProject  (lane, root|null) => void
  */
 function AttentionQueueSidebar({
   storageScope,
@@ -248,8 +186,6 @@ function AttentionQueueSidebar({
   visibleTracks,
   onToggleVisibleTrack,
   onShowAllTracks,
-  hiddenGroups,
-  onToggleGroup,
   searchQuery,
   onSearchChange,
   connected,
@@ -261,7 +197,10 @@ function AttentionQueueSidebar({
   onSelectItem,
   onStopAgent,
   widthPx,
-  fleetRoom = false,
+  projectsMode = 'lane',
+  projectRoot = null,
+  noProjectLane = null,
+  onSelectProject,
 }) {
   const safeItems = items || [];
   const safeGates = gates || [];
@@ -328,23 +267,17 @@ function AttentionQueueSidebar({
 
       <Separator className="bg-sidebar-border" />
 
-      {/* ── Group filter (by feature code prefix); the Fleet room lists PROJECTS instead ── */}
+      {/* ── PROJECTS in every room (COMP-COCKPIT-FLEET-PROJECTS-2) ── */}
       <ScrollArea className="flex-1">
-        {fleetRoom ? (
         <div className="p-2">
-          <FleetProjectsSection onViewChange={onViewChange} />
+          <FleetProjectsSection
+            onViewChange={onViewChange}
+            mode={projectsMode}
+            projectRoot={projectRoot}
+            noProjectLane={noProjectLane}
+            onSelectProject={onSelectProject}
+          />
         </div>
-        ) : (
-        <div className="p-2">
-          <p
-            className="text-[10px] font-medium uppercase tracking-wider px-2 mb-1"
-            style={{ color: 'hsl(var(--muted-foreground))' }}
-          >
-            Groups
-          </p>
-          <GroupFilter items={safeItems} hiddenGroups={hiddenGroups} onToggleGroup={onToggleGroup} />
-        </div>
-        )}
       </ScrollArea>
     </aside>
   );
