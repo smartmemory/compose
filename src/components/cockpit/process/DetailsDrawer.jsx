@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Fig } from './KpiTiles.jsx';
+import UnitName from '@/components/shared/UnitName.jsx';
 
 /**
  * DetailsDrawer — the right-side drawer behind the tiles' "details" and the rollup rows' "basis" (POLISH).
@@ -39,7 +40,7 @@ function Extra({ k, f, v }) {
         <span className={NOTE}>last 5 lands (unit, gate minutes)</span>
         {(Array.isArray(v.last5) ? v.last5 : []).map(([unit, min], i) => (
           <div key={`${unit}-${i}`} className="flex justify-between gap-2 font-mono text-xs">
-            <span data-testid={`val-${f('gate_minutes-last5')}-${i}-unit`}>{String(unit)}</span>
+            <span data-testid={`val-${f('gate_minutes-last5')}-${i}-unit`}><UnitName id={String(unit)} /></span>
             <span><span data-testid={`val-${f('gate_minutes-last5')}-${i}-min`}>{String(min)}</span> <span className="text-muted-foreground">min</span></span>
           </div>
         ))}

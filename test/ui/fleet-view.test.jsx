@@ -11,6 +11,9 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { blockerReasons, proposedLine } from '../../src/components/cockpit/fleetLogic.js';
+import { unitLabel } from '../../src/lib/unitLabel.js';
+import { explain } from '../../src/lib/glossary.js';
+import { resetUnitIndex } from '../../src/lib/useUnitIndex.js';
 import { FLEET_POLL_MS, resetFleetPoller, subscribeFleet } from '../../src/lib/fleetPoller.js';
 
 vi.mock('../../src/components/vision/useVisionStore.js', () => {
@@ -87,6 +90,34 @@ describe('Fleet UI on the real route (fixture readers)', () => {
     }
     expect(screen.getByTestId('fleet-view').querySelectorAll('button, a, input')).toHaveLength(0); // read-only: no actions
     expect(screen.getAllByRole('tab').map((b) => b.textContent)).toEqual(['Compose agent sessions', 'Fleet']);
+  }, 20_000);
+
+  it('RULE-PLAIN: open-job and ready rows print the plain title first, the code after, and say when none is recorded', async () => {
+    const index = {
+      units: [
+        { id: 'job-alive', lane: 'forge', title: 'Keep the fixture job alive', titleSource: 'goal' },
+        { id: 'job-dead', lane: 'forge', title: null, titleSource: 'none' },
+        { id: 'FIXTURE-READY-1', lane: '2.0', title: 'The fixture unit', titleSource: 'stamp' },
+      ],
+      glossary: {},
+    };
+    resetUnitIndex();
+    vi.stubGlobal('fetch', (url, opts) => (String(url).startsWith('/api/units/index')
+      ? Promise.resolve({ ok: true, json: async () => index })
+      : realFetch(new URL(String(url), srv.base), opts)));
+    let pane = 'sessions';
+    const { rerender } = render(<SessionsView sessions={[]} pane={pane} onPaneChange={(p) => { pane = p; }} />);
+    fireEvent.click(await screen.findByTestId('sessions-pane-fleet'));
+    rerender(<SessionsView sessions={[]} pane={pane} onPaneChange={(p) => { pane = p; }} />);
+    await screen.findByText('Keep the fixture job alive', {}, { timeout: 10_000 });
+    const jobs = screen.getAllByTestId('fleet-job-row').map((r) => r.querySelector('[data-testid="unit-name"]'));
+    const byText = Object.fromEntries(jobs.map((n) => [n.textContent, n]));
+    expect(Object.keys(byText).sort()).toEqual(['Keep the fixture job alive · job-alive', 'job-dead · no title recorded', 'job-nopid · no title recorded']);
+    expect(byText['Keep the fixture job alive · job-alive'].getAttribute('title')).toContain('from its goal');
+    if (srv.cadence) {
+      const ready = await screen.findAllByTestId('fleet-ready-row');
+      expect(ready[0].textContent).toContain('The fixture unit · FIXTURE-READY-1');
+    }
   }, 20_000);
 
   it('Ops strip shows the three pills and a click opens the Fleet view', async () => {
@@ -192,5 +223,37 @@ describe('Cadence proposed line', () => {
   });
   it('ready rows carry their blocker reasons', () => {
     for (const [name, unit, text] of REASON_ROWS) expect(blockerReasons(unit), name).toBe(text);
+  });
+});
+
+// unitLabel / explain: [name, id, lane, index, expected label, expected sentence]
+const IDX = {
+  units: [
+    { id: 'A-1', lane: 'main', title: 'From a stamp', titleSource: 'stamp' },
+    { id: 'A-2', lane: 'main', title: 'From a goal', titleSource: 'goal' },
+    { id: 'U0b', lane: '2.0', title: 'Lane glossary text', titleSource: 'glossary' },
+    { id: 'A-4', lane: 'ops', title: 'From a brief', titleSource: 'brief' },
+    { id: 'A-5', lane: 'ops', title: null, titleSource: 'none' },
+  ],
+  glossary: { '2.0': { U0b: 'Lane glossary text' } },
+};
+const LABEL_ROWS = [
+  ['stamp title', 'A-1', 'main', IDX, { title: 'From a stamp', code: 'A-1', source: 'stamp' }, null],
+  ['goal title', 'A-2', 'main', IDX, { title: 'From a goal', code: 'A-2', source: 'goal' }, null],
+  ['glossary title and sentence', 'U0b', '2.0', IDX, { title: 'Lane glossary text', code: 'U0b', source: 'glossary' }, 'Lane glossary text'],
+  ['brief title', 'A-4', 'ops', IDX, { title: 'From a brief', code: 'A-4', source: 'brief' }, null],
+  ['lane-qualified id', 'ops/A-4', undefined, IDX, { title: 'From a brief', code: 'A-4', source: 'brief' }, null],
+  ['none: a known hole', 'A-5', 'ops', IDX, { title: null, code: 'A-5', source: 'none' }, null],
+  ['none: an unknown unit', 'Z-9', undefined, IDX, { title: null, code: 'Z-9', source: 'none' }, null],
+  ['loading: no index yet', 'A-1', 'main', null, { title: null, code: 'A-1', source: 'loading' }, null],
+  ['cockpit term when the index has none', 'gate', undefined, IDX, { title: null, code: 'gate', source: 'none' }, 'The automatic checks a unit must pass before it can land.'],
+];
+
+describe('unitLabel and explain', () => {
+  it('resolve each title source, the holes and loading', () => {
+    for (const [name, id, lane, index, label, sentence] of LABEL_ROWS) {
+      expect(unitLabel(id, index, lane), name).toEqual(label);
+      expect(explain(label.code, lane, index), name).toBe(sentence);
+    }
   });
 });

@@ -1,4 +1,5 @@
 import React from 'react';
+import UnitName from '@/components/shared/UnitName.jsx';
 import {
   blockerReasons, ctxLevel, fmtAge, fmtK, proposedLine, readerUp, smPanel, sortJobs, sortReady, DISK_RED_GB,
 } from './fleetLogic.js';
@@ -140,7 +141,7 @@ export default function FleetPanels({ data, variant = 'desktop' }) {
               data-alive-from={j.aliveFrom}
             >{j.alive === true ? '●' : j.alive === false ? '✕' : '·'}</span>
             <span className={cls.mono}>{fmtAge(j.age)}</span>
-            <span className={cls.text}>{j.session} / {j.id}</span>
+            <span className={cls.text}>{j.session} / <UnitName id={j.id} compact /></span>
             <span className={cls.mono} style={TONE.dim}>{j.kind}</span>
           </div>
         ))}
@@ -204,7 +205,7 @@ export default function FleetPanels({ data, variant = 'desktop' }) {
         {shown.map((u) => (
           <div key={`${u.lane}/${u.id}`} className={cls.row} data-testid="fleet-ready-row">
             <span style={u.decision === 'launchable' ? TONE.ok : TONE.dim}>{u.decision === 'launchable' ? '▶' : '·'}</span>
-            <span className={cls.mono}>{u.id}</span>
+            <span className={cls.text}><UnitName id={u.id} lane={u.lane} compact /></span>
             <span className={cls.mono} style={TONE.dim}>{u.lane}</span>
             <span className={cls.note}>{blockerReasons(u)}</span>
           </div>

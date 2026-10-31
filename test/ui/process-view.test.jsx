@@ -186,12 +186,12 @@ const ROWS = [
     },
   },
   {
-    name: 'the view only GETs /api/process and /api/fleet',
+    name: 'the view only GETs /api/process, /api/fleet and /api/units/index',
     async run() {
       const calls = mount(envelope());
       await screen.findByTestId('process-rollup-table');
       await screen.findByTestId('fleet-owner');
-      expect(calls.every(([u, m]) => m === 'GET' && (u === '/api/process' || u === '/api/fleet'))).toBe(true);
+      expect(calls.every(([u, m]) => m === 'GET' && (u === '/api/process' || u === '/api/fleet' || u === '/api/units/index'))).toBe(true);
     },
   },
   {
@@ -210,7 +210,7 @@ const ROWS = [
       fireEvent.click(screen.getByTestId('process-publish-copy'));
       await waitFor(() => expect(writeText).toHaveBeenCalledWith(PUBLISH.url));
       expect(calls.filter(([u]) => u === '/api/process/publish')).toEqual([['/api/process/publish', 'GET']]);
-      expect(calls.every(([u, m]) => m === 'GET' && ['/api/process', '/api/fleet', '/api/process/publish'].includes(u))).toBe(true);
+      expect(calls.every(([u, m]) => m === 'GET' && ['/api/process', '/api/fleet', '/api/process/publish', '/api/units/index'].includes(u))).toBe(true);
     },
   },
   {
