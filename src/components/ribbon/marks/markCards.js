@@ -12,8 +12,15 @@ const GLYPH = { land: '✓', deploy: '▲', deployFail: '▲', decide: '⚖︎' 
 /** A lane that stands for a named initiative offers the way into its Ops view. */
 export const LANE_INITIATIVE = { '2.0': '2.0' };
 
-const titleOf = (m) => m.title || m.text || m.unit || '(untitled)';
+const NAME_MAX = 90;
+const BODY_MAX = 280;
+const LIST_MAX = 70;
+const clamp = (s, n) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 const sentence = (s) => String(s).trim().replace(/[.\s]+$/, '');
+/** What a mark is called: its title, else its text cut short (an owner-queue decision has no title), else its unit. */
+const titleOf = (m) => m.title || (m.text ? clamp(sentence(m.text), NAME_MAX) : '') || m.unit || '(untitled)';
+/** The decision text for the body: dropped when the name already shows all of it, cut when long. */
+const detailOf = (m) => (m.text && (m.title || sentence(m.text).length > NAME_MAX) ? `${clamp(sentence(m.text), BODY_MAX)}.` : '');
 
 /** The lane a mark belongs to: the one whose marks hold the same `at`, `kind` and `unit` (cluster members carry no lane). */
 export function laneOf(item, lanes) {
@@ -22,6 +29,9 @@ export function laneOf(item, lanes) {
   return hit ? hit.lane : null;
 }
 
+/** A deploy's `text` is its target, so the thing deployed is the title or the unit, never the text; "on X" is dropped when X is the name. */
+const what = (m) => m.title || m.unit || '(untitled)';
+const target = (m) => (m.text && m.text !== what(m) ? ` on ${m.text}` : '');
 const unitLink = (m) => (m.unit ? [{ label: 'unit page ▸', action: { type: 'unit', id: m.unit } }] : []);
 
 function markCard(m, ctx) {
@@ -30,15 +40,16 @@ function markCard(m, ctx) {
   const base = { kind: m.kind, tone: m.kind === 'deployFail' ? 'bad' : 'plain', icon: GLYPH[m.kind], sub, id: m.unit || null, list: null };
   switch (m.kind) {
     case 'land':
-      return { ...base, title: 'Landed', name: titleOf(m), body: m.text ? sentence(m.text) + '.' : '', links: unitLink(m) };
+      return { ...base, title: 'Landed', name: titleOf(m), body: detailOf(m), links: unitLink(m) };
     case 'deploy':
-      return { ...base, title: 'Deployed', name: `${titleOf(m)} live${m.text ? ` on ${m.text}` : ''}`, body: '', links: unitLink(m) };
+      return { ...base, title: 'Deployed', name: `${what(m)} live${target(m)}`, body: '', links: unitLink(m) };
     case 'deployFail':
-      return { ...base, title: 'Deploy failed', name: `${titleOf(m)} did not go live${m.text ? ` on ${m.text}` : ''}`, body: '', links: unitLink(m) };
+      return { ...base, title: 'Deploy failed', name: `${what(m)} did not go live${target(m)}`, body: '', links: unitLink(m) };
     default: {
-      const rev = m.reverse ? `Reverse: ${sentence(m.reverse)}.` : 'Reverse: not recorded.';
+      const rv = m.reverse ? clamp(sentence(m.reverse), BODY_MAX) : '';
+      const rev = rv ? `${/^reverse\b/i.test(rv) ? '' : 'Reverse: '}${rv}.` : 'Reverse: not recorded.';
       const links = [...unitLink(m), ...(m.reverse ? [{ label: 'reverse ▸', action: { type: 'reverse', id: m.unit || null } }] : [])];
-      return { ...base, title: 'Decided for you', name: titleOf(m), body: [m.text ? `${sentence(m.text)}.` : '', rev].filter(Boolean).join(' '), links };
+      return { ...base, title: 'Decided for you', name: titleOf(m), body: [detailOf(m), rev].filter(Boolean).join(' '), links };
     }
   }
 }
@@ -47,7 +58,7 @@ function clusterCard(c, ctx) {
   const items = [...(c.items || [])].sort((a, b) => toMs(b.at) - toMs(a.at));
   return {
     kind: 'cluster', tone: 'plain', icon: '', title: `${c.count} events`, name: `near ${when(c.at, ctx.now)}`, sub: '', body: '', id: null,
-    list: items.map((it) => ({ glyph: GLYPH[it.kind] || '', text: titleOf(it), at: clock(it.at, ctx.now), action: { type: 'card', item: it } })),
+    list: items.map((it) => ({ glyph: GLYPH[it.kind] || '', text: clamp(titleOf(it), LIST_MAX), at: clock(it.at, ctx.now), action: { type: 'card', item: it } })),
     links: [],
   };
 }
@@ -61,8 +72,8 @@ function pinCard(p, ctx) {
   const queued = (ctx.lanes || []).filter((l) => p.seat && l.seat === p.seat && !l.idle).map((l) => l.lane);
   const at = reading && typeof reading.pct === 'number' ? ` It is at ${reading.pct}% now${queued.length ? ` with ${queued.join(', ')} work queued` : ''}.` : '';
   return {
-    kind: 'seatReset', tone: p.atGate ? 'warn' : 'plain', icon: '↻', title: `${seat} resets ${clock(p.at, ctx.now)}`, name: '', sub: '',
-    body: `5h window resets in ${fmtDur(toMs(p.at) - toMs(ctx.now))}.${at}`, id: null, list: null, links: [],
+    kind: 'seatReset', tone: p.atGate ? 'warn' : 'plain', icon: '↻', title: `${seat} ${toMs(p.at) > toMs(ctx.now) ? 'resets' : 'reset'} ${clock(p.at, ctx.now)}`, name: '', sub: '',
+    body: `${toMs(p.at) > toMs(ctx.now) ? `5h window resets in ${fmtDur(toMs(p.at) - toMs(ctx.now))}` : `5h window reset ${when(p.at, ctx.now)}`}.${at}`, id: null, list: null, links: [],
   };
 }
 

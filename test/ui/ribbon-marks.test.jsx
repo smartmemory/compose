@@ -8,7 +8,7 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, act, waitFor } from '@testing-library/react';
 
 vi.mock('../../src/lib/wsFetch.js', async (orig) => ({ ...(await orig()), wsFetch: vi.fn() }));
 import { wsFetch } from '../../src/lib/wsFetch.js';
@@ -78,7 +78,7 @@ describe('marks open a card (COMP-COCKPIT-RIBBON-MARKS-1)', () => {
     expect(['✓ Landed', '▲ Deployed', '▲ Deploy failed']).toContain(title());
   });
 
-  it('close and focus return (one row table)', () => {
+  it('close and focus return (one row table)', async () => {
     const closers = [
       { name: 'Esc', go: () => fireEvent.keyDown(window, { key: 'Escape' }) },
       { name: 'a press outside', go: () => fireEvent.pointerDown(document.body) },
@@ -95,7 +95,7 @@ describe('marks open a card (COMP-COCKPIT-RIBBON-MARKS-1)', () => {
       expect(screen.getByTestId('mark-popover').contains(document.activeElement), `${c.name}: focus moved in`).toBe(true);
       act(() => c.go());
       expect(screen.queryByTestId('mark-popover'), c.name).toBeNull();
-      expect(document.activeElement, `${c.name}: focus back on the mark`).toBe(mark);
+      await waitFor(() => expect(document.activeElement, `${c.name}: focus back on the mark`).toBe(mark)); // an outside press settles on the next tick
     }
   });
 

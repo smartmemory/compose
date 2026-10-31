@@ -40,7 +40,12 @@ export default function RibbonMarksLayer({ lanes, seats, now, onNavigate }) {
     setOpen(null);
     const el = trigger.current;
     trigger.current = null;
-    if (why !== 'nav' && el && el.isConnected && typeof el.focus === 'function') el.focus();
+    const back = () => { if (el && el.isConnected && typeof el.focus === 'function') el.focus(); };
+    if (why === 'outside') {
+      // The press that closed the card is still landing; give focus back only if it left focus on nothing, so a click on
+      // another control keeps its own focus.
+      setTimeout(() => { if (!document.activeElement || document.activeElement === document.body) back(); }, 0);
+    } else if (why !== 'nav') back();
   }, []);
 
   const act = useCallback((a) => {
