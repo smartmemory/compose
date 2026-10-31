@@ -241,6 +241,15 @@
       "error": null,
       "ts": 1800000000000,
       "stale": false
+    },
+    "history": {
+      "value": {
+        "lanes": {},
+        "warnings": []
+      },
+      "error": null,
+      "ts": 1800000000000,
+      "stale": false
     }
   }
 }

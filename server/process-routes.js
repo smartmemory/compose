@@ -5,6 +5,7 @@
  *   builder  the status builder's own output (`OPS/status/out/<name>/summary.json`, `master/process.json`) with its
  *            freshness, passed through unchanged: no figure is computed, renamed or rounded here.
  *   stamps   the lane stamp files (`unit_stamps.py`) for the P6 time split, the one derivation the builder lacks.
+ *   history  the builder's daily KPI line per lane (`forge/status/kpi-history.jsonl`, U5) for the tile sparklines.
  * Fixed roots only, no request input reaches a path, nothing under ~/.claude is read, nothing is spawned.
  * Not mounted in remote mode (Mac-only).
  */
@@ -13,17 +14,18 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createSourceCache } from './fleet-routes.js';
 import { DEFAULT_OPS_STATUS_DIR, NAME_RE, resolveOpsStatusDir } from './ops-status-routes.js';
-import { freshness, laneRows, laneTimeSplit } from '../lib/process-metrics.js';
+import { freshness, laneRows, laneTimeSplit, parseKpiHistory } from '../lib/process-metrics.js';
 import { PublishRefused, buildPointer, detectSourceCheckout } from '../lib/process-publish.js';
 import { COMPOSE_HOME } from './project-root.js';
 
 export const PROCESS_ROUTE = '/api/process';
 export const PUBLISH_ROUTE = '/api/process/publish';
 export const BUILDER_TICK_S = 900; // launchd ai.smartmemory.status-build StartInterval; stale at two ticks
-const TTL_MS = { builder: 60_000, stamps: 120_000 };
+const TTL_MS = { builder: 60_000, stamps: 120_000, history: 300_000 };
 const LOG = '[process]';
 const DEFAULT_QUEUES_DIR = join(homedir(), 'reg/my/SmartMemory/smart-memory-ops/queues');
 const DEFAULT_EXTRA = `forge=${join(homedir(), 'reg/my/forge/status/units.json')}`;
+const DEFAULT_KPI_HISTORY = join(homedir(), 'reg/my/forge/status/kpi-history.jsonl');
 
 const expandHome = (p) => (p === '~' || p.startsWith('~/') ? join(homedir(), p.slice(1)) : p);
 
@@ -36,6 +38,7 @@ export function resolveProcessSources(env = process.env) {
   return {
     statusDir: resolveOpsStatusDir(env) ?? (env.COMPOSE_OPS_STATUS_DIR || DEFAULT_OPS_STATUS_DIR),
     queuesDir: expandHome(env.COMPOSE_PROCESS_QUEUES_DIR || DEFAULT_QUEUES_DIR),
+    historyFile: expandHome(env.COMPOSE_PROCESS_KPI_HISTORY || DEFAULT_KPI_HISTORY),
     extra,
   };
 }
@@ -111,6 +114,17 @@ export async function readStamps({ queuesDir, extra }, note = () => {}) {
   return { lanes };
 }
 
+/**
+ * U5: `{lanes: {lane: [{date, ...kpis}]}, warnings}`. No file yet is the normal first-day state: empty lanes, no
+ * warning, nothing logged. A skipped line is counted in `warnings`, the same field the stamps lanes use.
+ */
+export async function readKpiHistory(file) {
+  const text = await readIfExists(file);
+  if (text === null) return { lanes: {}, warnings: [] };
+  const { lanes, skipped } = parseKpiHistory(text);
+  return { lanes, warnings: skipped ? [`${skipped} history lines skipped (not JSON, or no date or lane)`] : [] };
+}
+
 /** Returns true when mounted, false when skipped (remote mode). */
 export function attachProcessRoutes(app, {
   remote = false,
@@ -137,12 +151,13 @@ export function attachProcessRoutes(app, {
   const caches = {
     builder: createSourceCache('builder', () => readBuilderOutput(sources.statusDir, { now: now() }), opts('builder')),
     stamps: createSourceCache('stamps', () => readStamps(sources, note), opts('stamps')),
+    history: createSourceCache('history', () => readKpiHistory(sources.historyFile), opts('history')),
   };
   app.get(PROCESS_ROUTE, async (_req, res) => {
     try {
-      const [builder, stamps] = await Promise.all([caches.builder.get(), caches.stamps.get()]);
+      const [builder, stamps, history] = await Promise.all([caches.builder.get(), caches.stamps.get(), caches.history.get()]);
       res.set('cache-control', 'no-store');
-      res.json({ generated: new Date(now()).toISOString(), sources: { builder, stamps } });
+      res.json({ generated: new Date(now()).toISOString(), sources: { builder, stamps, history } });
     } catch (error) {
       res.status(500).json({ error: String(error?.message ?? error) });
     }

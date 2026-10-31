@@ -9,6 +9,7 @@ import KpiTiles from './process/KpiTiles.jsx';
 import RollupGrid from './process/RollupGrid.jsx';
 import TimeSplitBars from './process/TimeSplitBars.jsx';
 import DetailsDrawer from './process/DetailsDrawer.jsx';
+import FlowDag from './process/FlowDag.jsx';
 
 /**
  * ProcessView — the read-only Process tab (COMP-COCKPIT-13 U2, layout COMP-COCKPIT-13-POLISH): how unit work has
@@ -17,6 +18,8 @@ import DetailsDrawer from './process/DetailsDrawer.jsx';
  * expand to the verbatim table), then the P6 stamps time split beside P7 the owner queue (the Fleet card). Basis
  * notes, last 5 lands and the feed breakdown sit in a details drawer. Every figure comes from GET /api/process or
  * GET /api/fleet; nothing here computes a builder figure and no unknown is rendered as 0.
+ * U5: the tiles carry a sparkline and delta from the recorded daily history (`sources.history`), and the Flow of
+ * work DAG sits between the tiles and the comparison, as in the mockup.
  */
 
 const NOTE = 'text-[11px] text-muted-foreground';
@@ -67,6 +70,7 @@ export default function ProcessView() {
   const column = names.indexOf(selected);
   const label = page?.value?.label ?? (table?.projects ?? []).find((p) => p.name === selected)?.label ?? selected;
   const tones = Object.fromEntries(PANEL_IDS.map((k) => [k, tileTone(table, k, column)?.tone ?? null]));
+  const history = (selected && data?.sources?.history?.value?.lanes?.[selected]) || [];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden p-3" data-testid="process-view">
@@ -84,7 +88,8 @@ export default function ProcessView() {
                 <span className={NOTE}>· pick another lane in the comparison below</span>
               </div>
               {page.failed ? <div className={NOTE} style={bad} data-testid="process-page-failed">build failed {page.failed.time}: {page.failed.reason} (figures are the last good build)</div> : null}
-              <KpiTiles name={selected} summary={page.value} tones={tones} onDetails={openDrawer} />
+              <KpiTiles name={selected} summary={page.value} tones={tones} onDetails={openDrawer} history={history} />
+              <FlowDag name={selected} label={label} summary={page.value} pace={paceCell(table, column)} />
             </section>
           ) : <Unavailable id={`page-${selected}`} title={selected} reason={page?.error ?? 'no summary.json for this page'} />
         )}

@@ -22,7 +22,7 @@ async function withApp({ mutate = () => {}, remote = false, mount = true }, fn) 
   const root = mkdtempSync(join(tmpdir(), 'process-routes-'));
   cpSync(FIX, root, { recursive: true });
   mutate(root);
-  const env = { COMPOSE_OPS_STATUS_DIR: join(root, 'out'), COMPOSE_PROCESS_QUEUES_DIR: join(root, 'queues'), COMPOSE_PROCESS_EXTRA: '' };
+  const env = { COMPOSE_OPS_STATUS_DIR: join(root, 'out'), COMPOSE_PROCESS_QUEUES_DIR: join(root, 'queues'), COMPOSE_PROCESS_EXTRA: '', COMPOSE_PROCESS_KPI_HISTORY: join(root, 'kpi-history.jsonl') };
   const app = express();
   const clock = { t: NOW };
   const warns = [];
@@ -140,6 +140,37 @@ const ROWS = [
     assert.equal(new Set(bodies.map((b) => b.sources.builder.ts)).size, 1);
     assert.equal(new Set(bodies.map((b) => b.sources.stamps.ts)).size, 1);
     assert.ok(root);
+  }],
+  // U5: the daily KPI history behind the tile sparklines (forge/status/kpi-history.jsonl, written by the status builder)
+  ['history: no file yet is empty lanes, no warning, nothing logged', {}, async ({ get, warns }) => {
+    const { history } = (await get()).sources;
+    assert.deepEqual(history.value, { lanes: {}, warnings: [] });
+    assert.equal(history.error, null);
+    assert.deepEqual(warns.filter((w) => w.includes('history')), []);
+  }],
+  ['history: two lanes, oldest first, a later line for the same day wins, a bad value reads null', { mutate: (root) => writeFileSync(join(root, 'kpi-history.jsonl'), [
+    { date: '2026-10-31', lane: 'hub', waiting_share: 17, first_pass_clean: 40, review_rounds: 1, gate_minutes: null, standard: 97.6 },
+    { date: '2026-10-30', lane: 'hub', waiting_share: 19, first_pass_clean: 38.5, review_rounds: 1, gate_minutes: null, standard: 97 },
+    { date: '2026-10-31', lane: 'main', waiting_share: 36, first_pass_clean: 37, review_rounds: 'one', gate_minutes: 1, standard: 86.5 },
+    { date: '2026-10-31', lane: 'hub', waiting_share: 18, first_pass_clean: 40, review_rounds: 1, gate_minutes: null, standard: 97.6 },
+  ].map((r) => JSON.stringify(r)).join('\n')) }, async ({ get }) => {
+    const { lanes, warnings } = (await get()).sources.history.value;
+    assert.deepEqual(Object.keys(lanes).sort(), ['hub', 'main']);
+    assert.deepEqual(lanes.hub.map((p) => [p.date, p.waiting_share]), [['2026-10-30', 19], ['2026-10-31', 18]]);
+    assert.deepEqual(lanes.main, [{ date: '2026-10-31', waiting_share: 36, first_pass_clean: 37, review_rounds: null, gate_minutes: 1, standard: 86.5 }]);
+    assert.deepEqual(warnings, []);
+  }],
+  ['history: a line that is not JSON or has no lane is skipped and counted, the rest serve', { mutate: (root) => writeFileSync(join(root, 'kpi-history.jsonl'),
+    `{nope\n${JSON.stringify({ date: '2026-10-31', waiting_share: 1 })}\n${JSON.stringify({ date: '2026-10-31', lane: 'hub', waiting_share: 17 })}\n`) }, async ({ get }) => {
+    const { history } = (await get()).sources;
+    assert.deepEqual(history.value.lanes.hub.map((p) => p.waiting_share), [17]);
+    assert.deepEqual(history.value.warnings, ['2 history lines skipped (not JSON, or no date or lane)']);
+  }],
+  ['history: at most the last 30 days per lane', { mutate: (root) => writeFileSync(join(root, 'kpi-history.jsonl'),
+    Array.from({ length: 35 }, (_, i) => JSON.stringify({ date: `2026-09-${String(i + 1).padStart(2, '0')}`.replace(/^2026-09-3([1-5])$/, '2026-10-0$1'), lane: 'hub', waiting_share: i })).join('\n')) }, async ({ get }) => {
+    const hub = (await get()).sources.history.value.lanes.hub;
+    assert.equal(hub.length, 30);
+    assert.deepEqual([hub[0].waiting_share, hub[29].waiting_share], [5, 34]);
   }],
   ['remote mode mounts nothing', { remote: true }, async ({ raw, mounted }) => {
     assert.equal(mounted, false);
