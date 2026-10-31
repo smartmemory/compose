@@ -11,6 +11,7 @@
  *   • Global phase filter (wired to useVisionStore — affects all views)
  *   • View navigation (all existing views preserved)
  *   • Agent telemetry panel (preserved from AppSidebar)
+ *   • Fleet room only: PROJECTS (FleetProjectsSection, COMP-COCKPIT-FLEET-PROJECTS-1) in place of GROUPS
  */
 
 import React from 'react';
@@ -28,6 +29,7 @@ import { computeAttentionQueue, compactStats, togglePhase, ATTENTION_PRIORITY } 
 import StatusBadge from './shared/StatusBadge.jsx';
 import PhaseTag from './shared/PhaseTag.jsx';
 import { useIdeaboxStore } from './useIdeaboxStore.js';
+import FleetProjectsSection from './FleetProjectsSection.jsx';
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -231,6 +233,7 @@ function IdeasSection({ onViewChange }) {
  *   agentErrors      Error[]
  *   sessionState     SessionState | null
  *   onSelectItem     (itemId: string) => void
+ *   fleetRoom        boolean  ← the Fleet room: PROJECTS replaces GROUPS
  */
 function AttentionQueueSidebar({
   storageScope,
@@ -258,6 +261,7 @@ function AttentionQueueSidebar({
   onSelectItem,
   onStopAgent,
   widthPx,
+  fleetRoom = false,
 }) {
   const safeItems = items || [];
   const safeGates = gates || [];
@@ -324,8 +328,13 @@ function AttentionQueueSidebar({
 
       <Separator className="bg-sidebar-border" />
 
-      {/* ── Group filter (by feature code prefix) ── */}
+      {/* ── Group filter (by feature code prefix); the Fleet room lists PROJECTS instead ── */}
       <ScrollArea className="flex-1">
+        {fleetRoom ? (
+        <div className="p-2">
+          <FleetProjectsSection onViewChange={onViewChange} />
+        </div>
+        ) : (
         <div className="p-2">
           <p
             className="text-[10px] font-medium uppercase tracking-wider px-2 mb-1"
@@ -335,6 +344,7 @@ function AttentionQueueSidebar({
           </p>
           <GroupFilter items={safeItems} hiddenGroups={hiddenGroups} onToggleGroup={onToggleGroup} />
         </div>
+        )}
       </ScrollArea>
     </aside>
   );

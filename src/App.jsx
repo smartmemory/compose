@@ -1356,6 +1356,7 @@ function AppInner() {
                         onSelectItem={handleSelect}
                         onStopAgent={handleStopAgent}
                         widthPx={sidebarWidthPx}
+                        fleetRoom={locateView(activeView)?.top === 'fleet'}
                       />
                 )}
               </div>

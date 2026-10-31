@@ -8,18 +8,27 @@
  *   history  the builder's daily KPI line per lane (`forge/status/kpi-history.jsonl`, U5) for the tile sparklines.
  * Fixed roots only, no request input reaches a path, nothing under ~/.claude is read, nothing is spawned.
  * Not mounted in remote mode (Mac-only).
+ *
+ * COMP-COCKPIT-FLEET-PROJECTS-1: the envelope also carries `fleet: {known, projects, error}`, the lanes the view can
+ * show and the owner's saved order (`fleet.projects` in the active project's `.compose/compose.json`, read fresh on
+ * every request; null when the key is absent). `POST /api/fleet/projects` writes that key: loopback callers only,
+ * known names only, the path is the server's own target root.
  */
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import express from 'express';
 import { createSourceCache } from './fleet-routes.js';
 import { DEFAULT_OPS_STATUS_DIR, NAME_RE, resolveOpsStatusDir } from './ops-status-routes.js';
 import { freshness, laneRows, laneTimeSplit, parseKpiHistory } from '../lib/process-metrics.js';
 import { PublishRefused, buildPointer, detectSourceCheckout } from '../lib/process-publish.js';
-import { COMPOSE_HOME } from './project-root.js';
+import { COMPOSE_HOME, getTargetRoot } from './project-root.js';
+import { localCaller } from './wiki-routes.js';
+import { writeComposeJson } from '../lib/cli-remote.js';
 
 export const PROCESS_ROUTE = '/api/process';
 export const PUBLISH_ROUTE = '/api/process/publish';
+export const FLEET_PROJECTS_ROUTE = '/api/fleet/projects';
 export const BUILDER_TICK_S = 900; // launchd ai.smartmemory.status-build StartInterval; stale at two ticks
 const TTL_MS = { builder: 60_000, stamps: 120_000, history: 300_000 };
 const LOG = '[process]';
@@ -125,6 +134,39 @@ export async function readKpiHistory(file) {
   return { lanes, warnings: skipped ? [`${skipped} history lines skipped (not JSON, or no date or lane)`] : [] };
 }
 
+/** The lanes the view can show: builder pages in builder order, then lanes only the stamps know, in stamps order. */
+export function knownLanes(builder, stamps) {
+  const out = [];
+  for (const n of [...Object.keys(builder?.value?.pages ?? {}), ...Object.keys(stamps?.value?.lanes ?? {})]) {
+    if (!out.includes(n)) out.push(n);
+  }
+  return out;
+}
+
+/** `fleet.projects` of `<root>/.compose/compose.json`: `{projects, error}`, projects null when the key is absent. */
+export async function readFleetProjects(root) {
+  const text = await readIfExists(join(root, '.compose', 'compose.json'));
+  if (text === null) return { projects: null, error: null };
+  let cfg;
+  try { cfg = JSON.parse(text); } catch { return { projects: null, error: 'compose.json is not JSON' }; }
+  const list = cfg?.fleet?.projects;
+  return { projects: Array.isArray(list) ? list.filter((n) => typeof n === 'string') : null, error: null };
+}
+
+/** A POST body checked against the known lanes: `{projects}` or `{error}` (no duplicates, known names only). */
+export function checkFleetProjects(body, known) {
+  const list = body?.projects;
+  if (!body || typeof body !== 'object' || !Array.isArray(list)) return { error: 'body must be {"projects": [names]}' };
+  if (list.length > known.length) return { error: `at most ${known.length} projects` };
+  const seen = new Set();
+  for (const n of list) {
+    if (typeof n !== 'string' || !known.includes(n)) return { error: `unknown project: ${String(n).slice(0, 80)}` };
+    if (seen.has(n)) return { error: `duplicate project: ${n}` };
+    seen.add(n);
+  }
+  return { projects: list };
+}
+
 /** Returns true when mounted, false when skipped (remote mode). */
 export function attachProcessRoutes(app, {
   remote = false,
@@ -135,6 +177,7 @@ export function attachProcessRoutes(app, {
   info = console.log,
   ttlMs = TTL_MS,
   hasSourceCheckout = detectSourceCheckout(COMPOSE_HOME),
+  projectRoot = getTargetRoot,
 } = {}) {
   if (remote) return false;
   const opts = (name) => ({ ttlMs: ttlMs[name], now, warn, info, logPrefix: LOG });
@@ -156,8 +199,9 @@ export function attachProcessRoutes(app, {
   app.get(PROCESS_ROUTE, async (_req, res) => {
     try {
       const [builder, stamps, history] = await Promise.all([caches.builder.get(), caches.stamps.get(), caches.history.get()]);
+      const fleet = { known: knownLanes(builder, stamps), ...(await readFleetProjects(projectRoot())) };
       res.set('cache-control', 'no-store');
-      res.json({ generated: new Date(now()).toISOString(), sources: { builder, stamps, history } });
+      res.json({ generated: new Date(now()).toISOString(), sources: { builder, stamps, history }, fleet });
     } catch (error) {
       res.status(500).json({ error: String(error?.message ?? error) });
     }
@@ -172,6 +216,29 @@ export function attachProcessRoutes(app, {
       if (!(error instanceof PublishRefused)) return res.status(500).json({ error: 'publish failed' });
       warn(`${LOG} publish refused: ${error.message}`);
       res.status(409).json({ error: error.message });
+    }
+  });
+  // COMP-COCKPIT-FLEET-PROJECTS-1: the left bar's PROJECTS list. The body names lanes only; the file is fixed.
+  app.post(FLEET_PROJECTS_ROUTE, express.json({ limit: '16kb' }), async (req, res) => {
+    res.set('cache-control', 'no-store');
+    if (!localCaller(req)) return res.status(403).json({ error: 'loopback callers only' });
+    try {
+      const [builder, stamps] = await Promise.all([caches.builder.get(), caches.stamps.get()]);
+      const checked = checkFleetProjects(req.body, knownLanes(builder, stamps));
+      if (checked.error) return res.status(400).json({ error: checked.error });
+      const root = projectRoot();
+      const text = await readIfExists(join(root, '.compose', 'compose.json'));
+      if (text === null) {
+        try { if (!(await stat(join(root, '.compose'))).isDirectory()) throw new Error(); } catch { return res.status(409).json({ error: 'the project has no .compose directory' }); }
+      } else {
+        try { JSON.parse(text); } catch { return res.status(409).json({ error: 'compose.json is not JSON: not overwriting it' }); }
+      }
+      writeComposeJson(root, { fleet: { projects: checked.projects } });
+      info(`${LOG} fleet.projects saved (${checked.projects.length})`);
+      res.json({ projects: checked.projects });
+    } catch (error) {
+      warn(`${LOG} fleet.projects not saved: ${String(error?.message ?? error)}`);
+      res.status(500).json({ error: 'not saved' });
     }
   });
   return true;

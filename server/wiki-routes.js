@@ -161,7 +161,8 @@ const error = (status, code, message) => ({ status, body: { code, message } });
 const send = (res, { status, body }) => res.status(status).json(body);
 const refuse = (res, status, code, message) => send(res, error(status, code, message));
 
-function localCaller(req) {
+/** Loopback Host and (when present) loopback Origin; also gates POST /api/fleet/projects (COMP-COCKPIT-FLEET-PROJECTS-1). */
+export function localCaller(req) {
   const origin = req.headers.origin;
   return LOOPBACK_HOST_RE.test(req.headers.host ?? '') && (origin === undefined || LOOPBACK_ORIGIN_RE.test(origin));
 }

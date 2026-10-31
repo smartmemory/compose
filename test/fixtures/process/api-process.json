@@ -251,5 +251,13 @@
       "ts": 1800000000000,
       "stale": false
     }
+  },
+  "fleet": {
+    "known": [
+      "hub",
+      "main"
+    ],
+    "projects": null,
+    "error": null
   }
 }

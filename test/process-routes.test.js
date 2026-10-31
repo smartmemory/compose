@@ -27,7 +27,7 @@ async function withApp({ mutate = () => {}, remote = false, mount = true }, fn) 
   const clock = { t: NOW };
   const warns = [];
   const infos = [];
-  const mounted = mount ? attachProcessRoutes(app, { remote, env, sources: resolveProcessSources(env), now: () => clock.t, ttlMs: TTL, warn: (m) => warns.push(m), info: (m) => infos.push(m) }) : false;
+  const mounted = mount ? attachProcessRoutes(app, { remote, env, sources: resolveProcessSources(env), now: () => clock.t, ttlMs: TTL, warn: (m) => warns.push(m), info: (m) => infos.push(m), projectRoot: () => root }) : false;
   const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
   const raw = () => fetch(`http://127.0.0.1:${server.address().port}/api/process`);
   const get = async () => { const res = await raw(); assert.equal(res.status, 200); return res.json(); };

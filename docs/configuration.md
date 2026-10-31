@@ -108,6 +108,22 @@ Optional. Controls roadmap generation policy.
 |-------|---------|-------|
 | `narrative` | `false` | When `true`, the workspace is **narrative-owned**: `ROADMAP.md` is hand-authored and must not be machine-regenerated from `feature.json`. `generateRoadmap`/`writeRoadmap` no-op with a warning and `add_roadmap_entry` refuses. The roundtrip *checks* skip too — `compose roadmap check` exits 0 ("skipped") and the validator emits an info `ROADMAP_NARRATIVE_OWNED` rather than false `ROUNDTRIP_NOT_FIXED_POINT`/`ROADMAP_LOSSY` drift. `feature.json` files may still exist as structured link carriers (xref-sync) — they just don't drive `ROADMAP.md`. See issue #39. |
 
+### `fleet` block
+
+Optional. Written by the cockpit's Fleet room (COMP-COCKPIT-FLEET-PROJECTS-1); you rarely edit it by hand.
+
+```json
+{
+  "fleet": {
+    "projects": ["forge", "hub", "main"]
+  }
+}
+```
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| `projects` | absent | The PROJECTS list in the Fleet room's left bar, in order: the lanes the Process tab shows (comparison columns and time-split rows) and their order. Absent means every lane `GET /api/process` knows, in builder order. A name the builder no longer knows is skipped. Written by `POST /api/fleet/projects` (loopback callers only, known lane names only, no duplicates) as an atomic rewrite that keeps every other key; a `compose.json` that is not valid JSON is refused (409), never overwritten. |
+
 ## `.compose/questionnaire.json`
 
 Saved questionnaire answers (enriched intent, project type, language, scope, research preference, notes, review agent choice).

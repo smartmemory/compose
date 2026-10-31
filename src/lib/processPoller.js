@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from 'react';
 import { wsFetch } from './wsFetch.js';
+import { resetFleetProjects } from './fleetProjects.js';
 
 export const PROCESS_POLL_MS = 60_000;
 
@@ -67,9 +68,10 @@ export function subscribeProcess(fn) {
   };
 }
 
-/** Test seam: forget the last result so a fresh mount starts loading again. */
+/** Test seam: forget the last result so a fresh mount starts loading again (and the shared lane selection). */
 export function resetProcessPoller() {
   state = { data: null, error: null, loading: true };
+  resetFleetProjects();
 }
 
 /** React hook: `{data, error, loading}` from the shared loop. */

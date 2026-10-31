@@ -8,6 +8,8 @@ import { pageMarker } from '../processLogic.js';
  * from its own text plus a mini bar, coloured by rank within its row; the verbatim cell text is the tooltip
  * (`rollup-cell-*`). "Expand to table" swaps in the verbatim table with the same ids. A column header selects that
  * page for the tiles above.
+ * COMP-COCKPIT-FLEET-PROJECTS-1: `order` (the Fleet PROJECTS list) picks and orders the columns shown; each column
+ * still reads its own builder column (`names` index), and the row colours rank across every lane the builder wrote.
  */
 
 const NOT_REPORTED = 'not reported';
@@ -67,12 +69,14 @@ function HeatCell({ text, info, testId, selected, align }) {
   );
 }
 
-export default function RollupGrid({ table, names, pages, selected, onSelect, onBasis }) {
+export default function RollupGrid({ table, names, order, pages, selected, onSelect, onBasis }) {
   const [expanded, setExpanded] = useState(false);
   const projects = Array.isArray(table?.projects) ? table.projects : [];
   const rows = table.rows ?? [];
+  const cols = order ?? names;
+  const at = (n) => names.indexOf(n);
   // Tips on the right half open leftwards so a hidden tip never widens the page.
-  const side = (ci) => (ci >= Math.floor(names.length / 2) ? 'right' : 'left');
+  const side = (ci) => (ci >= Math.floor(cols.length / 2) ? 'right' : 'left');
   return (
     <section className="flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-card p-3" data-testid="process-rollup">
       <div className="flex flex-wrap items-center gap-2">
@@ -87,12 +91,12 @@ export default function RollupGrid({ table, names, pages, selected, onSelect, on
         <table className="w-full table-fixed border-separate text-xs" style={{ borderSpacing: 2 }} data-testid="process-rollup-table">
           <colgroup>
             <col style={{ width: 168 }} />
-            {names.map((n) => <col key={n} />)}
+            {cols.map((n) => <col key={n} />)}
           </colgroup>
           <thead>
             <tr>
               <th scope="col" className="p-1 text-left align-bottom text-[10px] font-normal uppercase tracking-wider text-muted-foreground">measure</th>
-              {names.map((n, ci) => {
+              {cols.map((n, ci) => {
                 const proj = projects.find((p) => p.name === n);
                 return <ColHeader key={n} n={n} label={proj?.label ?? n} page={pages?.[n]} proj={proj} selected={n === selected} onSelect={onSelect} align={side(ci)} />;
               })}
@@ -110,10 +114,10 @@ export default function RollupGrid({ table, names, pages, selected, onSelect, on
                         aria-label={`basis for ${r.measure}`}>basis</button>
                     ) : null}
                   </th>
-                  {names.map((n, ci) => (expanded ? (
-                    <td key={n} className="break-words border-t border-border p-1.5 font-mono text-[11px] leading-snug" data-testid={`rollup-cell-${ri}-${ci}`}>{r.cells?.[ci] ?? NOT_REPORTED}</td>
+                  {cols.map((n, ci) => (expanded ? (
+                    <td key={n} className="break-words border-t border-border p-1.5 font-mono text-[11px] leading-snug" data-testid={`rollup-cell-${ri}-${ci}`}>{r.cells?.[at(n)] ?? NOT_REPORTED}</td>
                   ) : (
-                    <HeatCell key={n} text={r.cells?.[ci]} info={infos[ci] ?? { head: NOT_REPORTED, tone: 'missing', state: 'missing', width: null }}
+                    <HeatCell key={n} text={r.cells?.[at(n)]} info={infos[at(n)] ?? { head: NOT_REPORTED, tone: 'missing', state: 'missing', width: null }}
                       testId={`rollup-cell-${ri}-${ci}`} selected={n === selected} align={side(ci)} />
                   )))}
                 </tr>

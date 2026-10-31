@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { useProcess } from '../../lib/processPoller.js';
 import { useFleet } from '../../lib/fleetPoller.js';
+import { effectiveOrder, orderLanes, pickLane, setPickedLane, useFleetProjects } from '../../lib/fleetProjects.js';
 import { OwnerQueueCard } from './FleetPanels.jsx';
 import { pageMarker } from './processLogic.js';
 import { specFor, tileTone } from './process/processTones.js';
@@ -20,6 +21,8 @@ import FlowDag from './process/FlowDag.jsx';
  * GET /api/fleet; nothing here computes a builder figure and no unknown is rendered as 0.
  * U5: the tiles carry a sparkline and delta from the recorded daily history (`sources.history`), and the Flow of
  * work DAG sits between the tiles and the comparison, as in the mockup.
+ * COMP-COCKPIT-FLEET-PROJECTS-1: the Fleet left bar's PROJECTS list (`fleet.projects`, null = every lane) orders and
+ * filters the comparison columns and the time-split rows; the selected lane is shared with that list.
  */
 
 const NOTE = 'text-[11px] text-muted-foreground';
@@ -53,7 +56,8 @@ function paceCell(table, column) {
 export default function ProcessView() {
   const { data, error, loading } = useProcess();
   const fleet = useFleet();
-  const [picked, setPicked] = useState(null);
+  const lanes = useFleetProjects();
+  const picked = lanes.picked;
   const [drawer, setDrawer] = useState({ open: false, focus: null });
   const openDrawer = useCallback((focus) => setDrawer({ open: true, focus }), []);
   const closeDrawer = useCallback(() => setDrawer((d) => ({ ...d, open: false })), []);
@@ -65,7 +69,9 @@ export default function ProcessView() {
   const pages = bv?.pages ?? {};
   const table = bv?.table ?? null;
   const names = table ? (table.projects ?? []).map((p) => p.name) : Object.keys(pages);
-  const selected = names.includes(picked) ? picked : names[0] ?? null;
+  const order = effectiveOrder(data?.fleet, lanes);
+  const shown = orderLanes(names, order);
+  const selected = pickLane(shown, picked);
   const page = selected ? pages[selected] : null;
   const column = names.indexOf(selected);
   const label = page?.value?.label ?? (table?.projects ?? []).find((p) => p.name === selected)?.label ?? selected;
@@ -94,7 +100,7 @@ export default function ProcessView() {
           ) : <Unavailable id={`page-${selected}`} title={selected} reason={page?.error ?? 'no summary.json for this page'} />
         )}
         {table ? (
-          <RollupGrid table={table} names={names} pages={pages} selected={selected} onSelect={setPicked} onBasis={(ri) => openDrawer(`rollup-${ri}`)} />
+          <RollupGrid table={table} names={names} order={order ? shown : null} pages={pages} selected={selected} onSelect={setPickedLane} onBasis={(ri) => openDrawer(`rollup-${ri}`)} />
         ) : (
           <Card id="rollup-missing" title="Rollup">
             <div className={NOTE} style={warn} data-testid="process-rollup-missing-text">
@@ -106,7 +112,7 @@ export default function ProcessView() {
       <div className="grid items-start gap-3" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 340px)' }}>
         {!stamps || stamps.value == null
           ? <Unavailable id="p6" title="Time split" reason={stamps?.error ?? 'no stamps source'} />
-          : <TimeSplitBars stamps={stamps} />}
+          : <TimeSplitBars stamps={stamps} order={order} />}
         <div className="flex min-w-0 flex-col gap-2" data-testid="process-owner">
           <OwnerQueueCard data={fleet.data} variant="desktop" />
         </div>

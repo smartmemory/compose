@@ -6,6 +6,7 @@ import { BUCKETS, NOT_RECORDED, bucketText, splitSummary } from '../processLogic
  * TimeSplitBars — P6, the stamps-derived time split as one stacked bar per lane (POLISH). Segment widths are the
  * bucket minutes relative to each other (visual only, no share is printed); the exact minutes per bucket, the
  * unknown rules and the not-recorded buckets are in the row's tooltip. A lane with no known unit is hatched.
+ * COMP-COCKPIT-FLEET-PROJECTS-1: `order` (the Fleet PROJECTS list, null = every lane) picks and orders the rows.
  */
 
 const COLOURS = {
@@ -50,8 +51,9 @@ function RowTip({ lane, ts, warnings }) {
   );
 }
 
-export default function TimeSplitBars({ stamps }) {
-  const lanes = Object.entries(stamps.value.lanes ?? {});
+export default function TimeSplitBars({ stamps, order = null }) {
+  const all = stamps.value.lanes ?? {};
+  const lanes = order ? order.filter((n) => Object.hasOwn(all, n)).map((n) => [n, all[n]]) : Object.entries(all);
   return (
     <section className="flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-card p-3" data-testid="process-p6">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
