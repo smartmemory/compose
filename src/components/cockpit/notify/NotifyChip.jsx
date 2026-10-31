@@ -67,7 +67,13 @@ export default function NotifyChip({ onOpenFleet, onNavigate }) {
             <div key={r.key} data-testid="notify-row" data-kind={r.kind} data-severity={r.severity} className="flex items-start gap-2 p-1">
               <span aria-hidden="true" style={{ color: r.severity === 'critical' ? TONE.critical : TONE.alerts }}>●</span>
               <div className="min-w-0 flex-1">
-                <div className="font-semibold break-words">{r.title}</div>
+                <div
+                  className="font-semibold break-words"
+                  title={r.title}
+                  style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                >
+                  {r.title}
+                </div>
                 <div className="text-muted-foreground">
                   {r.sourceLabel}{r.since != null ? ` · ${fmtAge(r.since)}` : ''}{r.detail ? ` · ${r.detail}` : ''}
                 </div>
