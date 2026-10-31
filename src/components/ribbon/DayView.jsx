@@ -63,6 +63,7 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
     setIdleOpen(open);
     try { sessionStorage.setItem(IDLE_OPEN_KEY, open ? '1' : '0'); } catch { /* storage denied */ }
   }, []);
+  const [meterOpen, setMeterOpen] = useState(false);
   const [flashLane, setFlashLane] = useState(null);
   const lanesRef = useRef([]);
   lanesRef.current = feed.data?.lanes || [];
@@ -140,7 +141,16 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
           </ul>
         )}
       </div>
-      <CostMeter compact {...meter} />
+      {/* The shared meter's full form is ~470 px tall and would squeeze the ribbon to a thumbnail at 1440x900, so it sits in a
+          capped, scrollable box that opens fully on request. Nothing is dropped; the ribbon keeps the height. */}
+      <div className="shrink-0 flex flex-col gap-1" data-testid="day-meter">
+        <div className={meterOpen ? 'max-h-[40vh] overflow-y-auto' : 'max-h-[104px] overflow-y-auto'} data-testid="day-meter-box">
+          <CostMeter compact {...meter} />
+        </div>
+        <button type="button" className={`${link} self-start`} aria-expanded={meterOpen} data-testid="day-meter-toggle" onClick={() => setMeterOpen((v) => !v)}>
+          {meterOpen ? 'Show less ▴' : 'Show all seats and dollars ▾'}
+        </button>
+      </div>
       <div className="flex items-center gap-4 shrink-0" data-testid="day-footer">
         <button type="button" className={link} data-testid="day-link-process" onClick={() => onNavigate?.('process')}>Is the process improving? ▸</button>
         <button type="button" className={link} data-testid="day-link-ops" onClick={() => onNavigate?.('ops')}>How far is 2.0 from flipping? ▸</button>

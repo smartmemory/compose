@@ -111,6 +111,11 @@ describe('Day front page (COMP-COCKPIT-RIBBON-TOP-1)', () => {
     ];
     for (const p of parts) expect(p.has, p.part).toBe(true);
     expect(screen.queryByTestId('day-skeleton')).toBeNull();
+    // The meter sits in a capped box so the ribbon keeps its height; the toggle opens it fully.
+    const toggle = screen.getByTestId('day-meter-toggle');
+    expect([toggle.getAttribute('aria-expanded'), screen.getByTestId('day-meter-box').className.includes('max-h-[104px]')]).toEqual(['false', true]);
+    fireEvent.click(toggle);
+    expect([toggle.getAttribute('aria-expanded'), screen.getByTestId('day-meter-box').className.includes('max-h-[40vh]')]).toEqual(['true', true]);
     fireEvent.click(screen.getByTestId('day-link-process'));
     fireEvent.click(screen.getByTestId('day-link-ops'));
     expect(onNavigate.mock.calls.map((c) => c[0])).toEqual(['process', 'ops']);
