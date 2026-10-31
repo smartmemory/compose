@@ -5,7 +5,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import WhatLine from '../../cockpit/what/WhatLine.jsx';
-import CostMeter from '../../cockpit/cost/CostMeter.jsx';
+import RibbonMeterLayer from '../meter/RibbonMeterLayer.jsx';
 import { phoneLines, landedSince, agoWords, sinceWords } from './nowLists.js';
 
 const sub = 'text-[12px] text-muted-foreground';
@@ -19,7 +19,7 @@ export default function DayPhone({ feed, index, meter, lastVisitAt, onOpenFleet,
       <div className="shrink-0"><WhatLine onOpenFleet={onOpenFleet} onNavigate={onNavigate} onCountOpen={onCountOpen} /></div>
       {/* shrink-0: an overflow-x-hidden flex child may shrink to nothing in this column, which hid the meter in the live shot. */}
       <div className="shrink-0 min-w-0 max-w-full flex flex-col gap-1" data-testid="day-phone-meter">
-        <div className={`${meterOpen ? 'max-h-[60vh]' : 'max-h-[120px]'} overflow-y-auto overflow-x-hidden`} data-testid="day-phone-meter-box"><CostMeter compact {...meter} /></div>
+        <div className={`${meterOpen ? 'max-h-[60vh]' : 'max-h-[120px]'} overflow-y-auto overflow-x-hidden`} data-testid="day-phone-meter-box"><RibbonMeterLayer meter={meter} onNavigate={onNavigate} /></div>
         <button type="button" className="self-start text-[12px] text-muted-foreground hover:text-foreground hover:underline outline-none" aria-expanded={meterOpen} data-testid="day-phone-meter-toggle" onClick={() => setMeterOpen((v) => !v)}>
           {meterOpen ? 'Show less ▴' : 'Show all seats and dollars ▾'}
         </button>

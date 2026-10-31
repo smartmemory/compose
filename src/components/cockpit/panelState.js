@@ -56,7 +56,10 @@ export const CONTEXT_OPEN_KEY  = 'compose:contextPanelOpen';
 // Convenience wrappers
 // ---------------------------------------------------------------------------
 
-export function loadSidebarOpen()          { return loadPanelOpen(SIDEBAR_OPEN_KEY,  true);  }
+// A stored choice always wins. With none, the sidebar starts open on a desktop and closed on a phone (COMP-COCKPIT-PHONE-1:
+// open it takes 264 of 390 px). This only reads: the phone default is never written, so the same profile on a desktop later
+// still opens it.
+export function loadSidebarOpen(phone = false) { return loadPanelOpen(SIDEBAR_OPEN_KEY, !phone); }
 export function saveSidebarOpen(value)     { return savePanelOpen(SIDEBAR_OPEN_KEY,  value); }
 
 export function loadContextOpen()          { return loadPanelOpen(CONTEXT_OPEN_KEY, false); }

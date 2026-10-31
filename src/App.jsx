@@ -51,6 +51,7 @@ import {
   loadContextOpen,
   saveContextOpen,
 } from './components/cockpit/panelState.js';
+import { PHONE_BELOW_PX } from './components/ribbon/now/usePhoneLayout.js';
 import {
   CONTEXT_HIDDEN_VIEWS,
 } from './components/cockpit/contextPanelState.js';
@@ -494,7 +495,7 @@ function AppInner() {
   const [agentBarState, setAgentBarStateRaw] = useState(loadAgentBarState);
 
   // Sidebar / context panel visibility
-  const [sidebarOpen, setSidebarOpen] = useState(loadSidebarOpen);
+  const [sidebarOpen, setSidebarOpen] = useState(() => loadSidebarOpen(window.innerWidth < PHONE_BELOW_PX));
   const [contextOpen, setContextOpen] = useState(loadContextOpen);
 
   // COMP-UI-3: Context selection
