@@ -36,6 +36,20 @@ describe('OpsStrip: deriveEntries', () => {
     assert.equal(entries[0].type, 'done');
   });
 
+  // COMP-TEST-STATE-LEAK-1: BUG-27's build was cancelled 2026-09-19 (active-build.json status 'aborted') and the rail still
+  // read "BUG-27 · building · $11.45" on 2026-10-31. A build that ended without finishing is not on the rail.
+  it('a build that ended without finishing gets no rail entry; running and finished builds keep theirs', () => {
+    const ROWS = [
+      ['aborted', 0, null], ['failed', 0, null], ['killed', 0, null],
+      [undefined, 1, 'build'], ['running', 1, 'build'], ['complete', 1, 'done'],
+    ];
+    for (const [status, count, type] of ROWS) {
+      const entries = deriveEntries({ activeBuild: { featureCode: 'BUG-27', status, cumulative_cost_usd: 11.45 }, gates: [], recentErrors: [] });
+      assert.equal(entries.length, count, `status ${status}`);
+      if (type) assert.equal(entries[0].type, type, `status ${status}`);
+    }
+  });
+
   it('creates gate entries for pending gates', () => {
     const entries = deriveEntries({
       activeBuild: null,

@@ -10,6 +10,10 @@ const testStateRoot = mkdtempSync(join(tmpdir(), 'compose-test-flows-'));
 process.env.STRATUM_STATE_ROOT = testStateRoot;
 process.once('exit', () => rmSync(testStateRoot, { recursive: true, force: true }));
 
+// COMP-TEST-STATE-LEAK-1: every write into this checkout's .compose/data (the owner's live cockpit state) is refused
+// and fails the run; node children inherit the guard via NODE_OPTIONS. See the helper for the incident and limits.
+await import('./helpers/compose-data-guard.js');
+
 // Shared test preload: silence the ONE expected stderr line that many tests trip
 // on purpose. Loaded by both suites — the node --test runner (via `--import` in
 // the package.json `test` script) and the vitest tracker config (via setupFiles).

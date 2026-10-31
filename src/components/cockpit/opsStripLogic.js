@@ -3,6 +3,13 @@
  */
 import { GATE_STEP_LABELS } from '../vision/constants.js';
 import { formatCost as sharedFormatCost } from '../../lib/format-cost.js';
+import { isTerminalBuildStatus } from '../../lib/pipeline-steps.js';
+
+// A build that ENDED without finishing (aborted, failed, killed) is not running. active-build.json keeps
+// its last state after the run stops, so without this the rail labelled a cancelled build "building" for
+// as long as the file existed (BUG-27, aborted 2026-09-19, still on the rail 2026-10-31: COMP-TEST-STATE-LEAK-1).
+const SUCCESS_STATUSES = new Set(['complete', 'completed', 'done']);
+const endedUnfinished = (status) => isTerminalBuildStatus(status) && !SUCCESS_STATUSES.has(status);
 
 /**
  * Format a USD cost for display in the ops strip.
@@ -49,7 +56,7 @@ export function deriveEntries({ activeBuild, gates, items, recentErrors, iterati
   const entries = [];
 
   // Active build entry
-  if (activeBuild && activeBuild.featureCode) {
+  if (activeBuild && activeBuild.featureCode && !endedUnfinished(activeBuild.status)) {
     const stepLabel = activeBuild.currentStep
       ? `${activeBuild.currentStep}`
       : 'building';

@@ -26,8 +26,11 @@ import { getSmartmemoryConfig } from '../lib/smartmemory-config.js';
 
 // Gate log is project-scoped (mirrors sessions.json, active-build.json etc).
 // COMPOSE_GATE_LOG env var overrides the path — read dynamically so tests can inject it.
-function getGateLogPath() {
-  return process.env.COMPOSE_GATE_LOG || join(getDataDir(), 'gate-log.jsonl');
+// `root` is the workspace the caller is bound to (vision-routes passes its projectRoot). Without it the
+// process-global data dir is used, which outside a request context is the cwd's project: under a test
+// that injected a temp projectRoot, that was the real checkout (COMP-TEST-STATE-LEAK-1).
+function getGateLogPath(root) {
+  return process.env.COMPOSE_GATE_LOG || join(root ? join(root, '.compose', 'data') : getDataDir(), 'gate-log.jsonl');
 }
 
 /**
@@ -70,9 +73,10 @@ export function mapResolveOutcomeToSchema(outcome) {
  * Append one GateLogEntry to disk.
  * Idempotent: if an entry with the same `id` already exists, the write is skipped.
  * @param {object} entry — a GateLogEntry object (must have .id)
+ * @param {{ root?: string }} [opts] — workspace root to write under; default the process-bound one
  */
-export function appendGateLogEntry(entry) {
-  const filePath = getGateLogPath();
+export function appendGateLogEntry(entry, { root } = {}) {
+  const filePath = getGateLogPath(root);
   const dataDir = join(filePath, '..');
   mkdirSync(dataDir, { recursive: true });
 
@@ -99,7 +103,7 @@ export function appendGateLogEntry(entry) {
   appendFileSync(filePath, JSON.stringify(entry) + '\n', 'utf8');
   // COMP-SMARTMEMORY-INGEST: fail-open live emit after the durable append.
   try {
-    const cwd = getTargetRoot();
+    const cwd = root ?? getTargetRoot();
     if (getSmartmemoryConfig(cwd).enabled === true) {
       import('../lib/smartmemory-ingest.js')
         .then((m) => m.emitGateLogEntry(cwd, entry))

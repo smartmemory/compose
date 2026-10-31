@@ -215,12 +215,21 @@ test('initSandboxRepo writes identity only into the repo it created; the real re
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+/** `<root>/.compose/data` as sorted `name size mtimeMs` lines: the alarm's evidence that the live state was (not) written. */
+function dataSnapshot(root) {
+  const dir = join(root, '.compose', 'data');
+  return readdirSync(dir).sort().map((n) => { const st = statSync(join(dir, n)); return `${n} ${st.size} ${st.mtimeMs}`; }).join('\n');
+}
+
 // The leak gate, run against a disposable stand-in "real repo" (copies of the preload + scrub inside a throwaway checkout).
 function runGateStandIn(writer, { corruptConfig = false, baseCommit = false, env = () => ({}) } = {}) {
   const stand = realpathSync(mkdtempSync(join(tmpdir(), 'compose-guard-gate-')));
   try {
     mkdirSync(join(stand, 'test', 'helpers'), { recursive: true });
-    for (const f of ['suppress-expected-drift.js', 'helpers/git-env-scrub.js']) copyFileSync(join(ROOT, 'test', f), join(stand, 'test', f));
+    for (const f of ['suppress-expected-drift.js', 'helpers/git-env-scrub.js', 'helpers/compose-data-guard.js']) copyFileSync(join(ROOT, 'test', f), join(stand, 'test', f));
+    // COMP-TEST-STATE-LEAK-1: the stand-in's live cockpit state, which its copy of the preload guards.
+    mkdirSync(join(stand, '.compose', 'data'), { recursive: true });
+    writeFileSync(join(stand, '.compose', 'data', 'vision-state.json'), '{"items":[]}');
     const git = (...a) => execFileSync('git', ['-C', stand, ...a], { encoding: 'utf8', env: isolatedGitEnv(), stdio: 'pipe' });
     git('init', '-q');
     git('config', '--local', 'user.name', 'Stand Original');
@@ -232,8 +241,9 @@ function runGateStandIn(writer, { corruptConfig = false, baseCommit = false, env
     if (corruptConfig) writeFileSync(join(stand, '.git', 'config'), '[user\n\tname = broken');
     // The child's temp dirs (the writer's gate-tmp-*, the preload's state/guard dirs) live inside the stand and go with it.
     mkdirSync(join(stand, 'tmp'));
+    const dataBefore = dataSnapshot(stand);
     const run = spawnSync(process.execPath, ['--import', './test/suppress-expected-drift.js', '--test', 'writer.test.js'], { cwd: stand, encoding: 'utf8', env: { ...childEnv, TMPDIR: join(stand, 'tmp'), ...env(stand) } });
-    return { status: run.status, output: run.stdout + run.stderr, name: corruptConfig ? '' : git('config', '--local', 'user.name').trim() };
+    return { status: run.status, output: run.stdout + run.stderr, name: corruptConfig ? '' : git('config', '--local', 'user.name').trim(), dataBefore, dataAfter: dataSnapshot(stand) };
   } finally { for (const d of [stand, `${stand}-op`]) rmSync(d, { recursive: true, force: true }); }
 }
 const WRITER_PRELUDE = "import test from 'node:test'; import { execFileSync } from 'node:child_process'; import { mkdtempSync } from 'node:fs'; import { tmpdir } from 'node:os'; import { join } from 'node:path';\n";
@@ -288,13 +298,58 @@ test('x', () => {
   const env = { ...process.env }; delete env.GIT_AUTHOR_EMAIL; delete env.GIT_COMMITTER_EMAIL;
   for (const m of ['one', 'two']) { const c = spawnSync('git', ['-c', 'user.email=stand@example.test', 'commit', '-q', '--allow-empty', '-m', m], { cwd: process.cwd(), env, encoding: 'utf8' }); if (c.status !== 0) throw new Error(c.stderr); }
 });`, undefined, 0, 'Stand Original', 2],
+  // COMP-TEST-STATE-LEAK-1: the stand-in's `.compose/data` is the owner's live cockpit state. Last column: 'same' = it must be
+  // byte-for-byte untouched (names, sizes, mtimes), 'changed' = a write landed. The alarm counts only writes made by the test
+  // process tree (refused in-process, recorded in a ledger the runner checks), so a foreign writer such as the cockpit, which
+  // writes the same dir during a ~35 min suite, changes it without failing the run. A file-name filter could not do this: the
+  // 2026-10-30 leak appended fixture rows to `gate-log.jsonl`, a file the cockpit writes too.
+  ['a test that writes the real .compose/data in-process fails, and nothing lands', WRITER_PRELUDE + "import { writeFileSync } from 'node:fs'; test('x', () => { writeFileSync(join(process.cwd(), '.compose', 'data', 'checkpoints-FIX-1.jsonl'), '{}\\n'); });", undefined, 1, 'Stand Original', false, 'same'],
+  ['a best-effort writer that swallows the refusal still fails the run (anchorBoundary shape)', WRITER_PRELUDE + "import { appendFileSync } from 'node:fs'; test('x', () => { try { appendFileSync(join(process.cwd(), '.compose', 'data', 'gate-log.jsonl'), '{}\\n'); } catch { /* best effort */ } });", undefined, 1, 'Stand Original', false, 'same'],
+  ['a fs.promises append whose rejection is swallowed still fails the run', WRITER_PRELUDE + "import { appendFile } from 'node:fs/promises'; test('x', async () => { await appendFile(join(process.cwd(), '.compose', 'data', 'feature-events.jsonl'), '{}\\n').catch(() => {}); });", undefined, 1, 'Stand Original', false, 'same'],
+  ['a node child of the test that writes it (exit status ignored) fails the run through the ledger', WRITER_PRELUDE + `import { spawnSync } from 'node:child_process';
+test('x', () => { spawnSync(process.execPath, ['-e', "try { require('node:fs').writeFileSync('.compose/data/checkpoints-CHILD-1.jsonl', '{}') } catch {}"], { cwd: process.cwd() }); });`, undefined, 1, 'Stand Original', false, 'same'],
+  ['a test that writes .compose/data under its own temp root passes', WRITER_PRELUDE + "import { mkdirSync, writeFileSync } from 'node:fs'; test('x', () => { const r = mkdtempSync(join(tmpdir(), 'gate-root-')); mkdirSync(join(r, '.compose', 'data'), { recursive: true }); writeFileSync(join(r, '.compose', 'data', 'checkpoints-FIX-1.jsonl'), '{}\\n'); });", undefined, 0, 'Stand Original', false, 'same'],
+  ['a foreign process (the cockpit: no NODE_OPTIONS guard, no ledger) writing the real .compose/data during the run passes', WRITER_PRELUDE + `import { spawnSync } from 'node:child_process';
+test('x', () => {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== 'NODE_OPTIONS' && !k.startsWith('COMPOSE_TEST_DATA_LEDGER')));
+  const c = spawnSync(process.execPath, ['-e', "require('node:fs').writeFileSync('.compose/data/vision-state.json', JSON.stringify({ items: [1] }))"], { cwd: process.cwd(), env, encoding: 'utf8' });
+  if (c.status !== 0) throw new Error(c.stderr);
+});`, undefined, 0, 'Stand Original', false, 'changed'],
+  // The resolvers behind the 2026-10-30 leak, imported from this checkout and run with cwd = the stand-in: a temp root works,
+  // the real root fails closed (ECOMPOSETESTLEAK, run fails), the COMPOSE_TARGET override is honoured.
+  ['resolver: writeCheckpoint and appendGateLogEntry({ root }) given a temp root write under it', WRITER_PRELUDE + `import { existsSync } from 'node:fs';
+test('x', async () => {
+  const { writeCheckpoint } = await import(${JSON.stringify(pathToFileURL(join(ROOT, 'lib', 'checkpoint', 'checkpoint-writer.js')).href)});
+  const { appendGateLogEntry } = await import(${JSON.stringify(pathToFileURL(join(ROOT, 'server', 'gate-log-store.js')).href)});
+  const r = mkdtempSync(join(tmpdir(), 'gate-root-'));
+  writeCheckpoint(r, { featureCode: 'ROW-1' });
+  appendGateLogEntry({ id: 'row-1', feature_code: 'ROW-1' }, { root: r });
+  for (const f of ['checkpoints-ROW-1.jsonl', 'gate-log.jsonl']) if (!existsSync(join(r, '.compose', 'data', f))) throw new Error(f + ' not written');
+});`, undefined, 0, 'Stand Original', false, 'same'],
+  ['resolver: writeCheckpoint given the real root fails closed', WRITER_PRELUDE + `import assert from 'node:assert/strict';
+test('x', async () => {
+  const { writeCheckpoint } = await import(${JSON.stringify(pathToFileURL(join(ROOT, 'lib', 'checkpoint', 'checkpoint-writer.js')).href)});
+  assert.throws(() => writeCheckpoint(process.cwd(), { featureCode: 'ROW-1' }), { code: 'ECOMPOSETESTLEAK' });
+});`, undefined, 1, 'Stand Original', false, 'same'],
+  ['resolver: appendGateLogEntry with no root and cwd = the real root (the 2026-10-30 leak) fails closed', WRITER_PRELUDE + `import assert from 'node:assert/strict';
+test('x', async () => {
+  const { appendGateLogEntry } = await import(${JSON.stringify(pathToFileURL(join(ROOT, 'server', 'gate-log-store.js')).href)});
+  assert.throws(() => appendGateLogEntry({ id: 'row-1', feature_code: 'ROW-1' }), { code: 'ECOMPOSETESTLEAK' });
+});`, undefined, 1, 'Stand Original', false, 'same'],
+  ['resolver: COMPOSE_TARGET naming a temp root is honoured by the process-bound data dir', WRITER_PRELUDE + `import { existsSync } from 'node:fs';
+test('x', async () => {
+  const { appendGateLogEntry } = await import(${JSON.stringify(pathToFileURL(join(ROOT, 'server', 'gate-log-store.js')).href)});
+  appendGateLogEntry({ id: 'row-1', feature_code: 'ROW-1' });
+  if (!existsSync(join(process.env.COMPOSE_TARGET, '.compose', 'data', 'gate-log.jsonl'))) throw new Error('not written under COMPOSE_TARGET');
+});`, (stand) => { const t = join(stand, 'tmp', 'target'); mkdirSync(t, { recursive: true }); return { COMPOSE_TARGET: t }; }, 0, 'Stand Original', false, 'same'],
 ];
-for (const [name, writer, env, status, identity, baseCommit] of GATE_ROWS) {
+for (const [name, writer, env, status, identity, baseCommit, data] of GATE_ROWS) {
   test(`leak gate: ${name}`, () => {
     const out = runGateStandIn(writer, { env, baseCommit });
     assert.equal(out.status, status, out.output);
     if (status === 1) assert.match(out.output, /GOLDEN-LEAK GATE/);
     assert.equal(out.name, identity);
+    if (data) assert.equal(out.dataAfter === out.dataBefore ? 'same' : 'changed', data, `stand-in .compose/data\nbefore:\n${out.dataBefore}\nafter:\n${out.dataAfter}\n${out.output}`);
   });
 }
 
