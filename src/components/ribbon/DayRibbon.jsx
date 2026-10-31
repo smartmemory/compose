@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   axisTicks, causePhrase, clock, etaLabel, fmtDur, isLive, layoutLanes, seatShort, tipText, toMs, when, windowTitle, xOf,
 } from './ribbonLayout.js';
+import { CLUSTER_ABOVE_MS, clusterMarks, MIN_DRAG_MS } from './rangeLogic.js';
 
 /**
  * DayRibbon — one row per lane over any window it is given (COMP-COCKPIT-RIBBON-ROWS-1). A pure drawing: it takes the
@@ -62,6 +63,9 @@ const CSS = `
 .day-ribbon .tk.deployFail{fill:var(--rb-alert)} .day-ribbon .tk.alert{fill:var(--rb-alert);font-size:13px}
 .day-ribbon .cl-bg{fill:var(--rb-accent)} .day-ribbon .cl-n{font-size:11px;fill:#fff;font-weight:700}
 .day-ribbon .hit{fill:transparent}
+.day-ribbon .axis-hit{fill:transparent;cursor:crosshair;touch-action:none}
+.day-ribbon .zoom-sel{fill:var(--rb-hl);stroke:var(--rb-accent);stroke-width:1;pointer-events:none}
+
 .day-ribbon .lane,.day-ribbon .mark,.day-ribbon .idle-row,.day-ribbon .pin,.day-ribbon .band-h{cursor:pointer;outline:none}
 .day-ribbon .row-bg{fill:transparent;stroke:transparent}
 .day-ribbon .lane:hover .row-bg,.day-ribbon .idle-row:hover .row-bg{fill:var(--rb-hover)}
@@ -114,9 +118,13 @@ function currentSpan(lane, nowMs) {
 
 export default function DayRibbon({
   data, from, to, now, seats = [], alerts = [], idleOpen = false, onIdleToggle, onLaneOpen, onMarkOpen, onPinOpen, onBandOpen,
-  flashLane = null,
+  flashLane = null, onAxisSelect,
 }) {
   const [tip, setTip] = useState(null);
+  const svgRef = useRef(null);
+  const [drag, setDrag] = useState(null);
+  const dragRef = useRef(null);
+  dragRef.current = drag;
   const [flashing, setFlashing] = useState(null);
   const timer = useRef(null);
 
@@ -126,6 +134,41 @@ export default function DayRibbon({
     timer.current = setTimeout(() => setFlashing(null), FLASH_MS);
     return () => clearTimeout(timer.current);
   }, [flashLane]);
+
+  // Press-and-drag on the time axis draws a selection; release over >= 15 min calls onAxisSelect(fromMs, toMs); Esc cancels.
+  const svgX = (clientX) => {
+    const r = svgRef.current?.getBoundingClientRect();
+    return r && r.width ? clampX(((clientX - r.left) / r.width) * R.W) : NaN;
+  };
+  useEffect(() => {
+    if (!drag) return undefined;
+    const move = (e) => { const x = svgX(e.clientX); if (!Number.isNaN(x)) setDrag((d) => d && { ...d, b: x }); };
+    const up = (e) => {
+      const d = dragRef.current;
+      const x = svgX(e.clientX);
+      setDrag(null);
+      if (!d) return;
+      const b = Number.isNaN(x) ? d.b : x;
+      const f = toMs(from);
+      const span = toMs(to) - f;
+      const t0 = f + ((Math.min(d.a, b) - R.X0) / TRACK) * span;
+      const t1 = f + ((Math.max(d.a, b) - R.X0) / TRACK) * span;
+      if (t1 - t0 >= MIN_DRAG_MS && onAxisSelect) onAxisSelect(Math.round(t0), Math.round(t1));
+    };
+    const key = (e) => { if (e.key === 'Escape') setDrag(null); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('keydown', key);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('keydown', key);
+    };
+  }, [!drag, from, to, onAxisSelect]); // eslint-disable-line react-hooks/exhaustive-deps
+  const startDrag = (e) => {
+    const x = svgX(e.clientX);
+    if (!Number.isNaN(x)) setDrag({ a: x, b: x });
+  };
 
   const lanes = data?.lanes || [];
   const live = isLive(from, to, now);
@@ -229,7 +272,7 @@ export default function DayRibbon({
             {covered ? 'nothing in this window' : 'not recorded in this window'}
           </text>
         )}
-        {(lane.marks || []).filter((m) => inWindow(m.at)).map((m, i) => {
+        {(toMs(to) - toMs(from) > CLUSTER_ABOVE_MS ? clusterMarks(lane.marks || [], { from, to }, TRACK) : (lane.marks || [])).filter((m) => inWindow(m.at)).map((m, i) => {
           const x = f1(X(m.at));
           const tip2 = tipText({ ...m, now });
           return (
@@ -313,7 +356,7 @@ export default function DayRibbon({
           as of {clock(data?.asOf || now)}{data?.coverage?.label ? ` · ${data.coverage.label}` : ''}
         </span>
       </div>
-      <svg className="min-h-0 w-full flex-1" viewBox={`0 0 ${R.W} ${H}`} role="img" aria-label={`Day ribbon: one row per lane, ${when(from, now)} to ${when(to, now)}`}>
+      <svg ref={svgRef} className="min-h-0 w-full flex-1" viewBox={`0 0 ${R.W} ${H}`} role="img" aria-label={`Day ribbon: one row per lane, ${when(from, now)} to ${when(to, now)}`}>
         <Patterns />
         {live && <rect className="future-bg" x={f1(nx)} y={R.AX - 2} width={f1(R.X1 - nx + 8)} height={H - R.AX + 2} />}
         {ticks.map((k) => {
@@ -327,6 +370,11 @@ export default function DayRibbon({
           );
         })}
         <line className="axl" x1={R.X0} x2={R.X1} y1={R.AX - 2} y2={R.AX - 2} />
+        <rect className="axis-hit" data-testid="axis-drag" x={R.X0} y="18" width={TRACK} height={R.AX - 20} onPointerDown={startDrag} />
+        {drag && (
+          <rect className="zoom-sel" data-testid="axis-selection" x={f1(Math.min(drag.a, drag.b))} y="18" width={f1(Math.abs(drag.b - drag.a))}
+            height={Math.max(0, lanesEnd - 18)} />
+        )}
         <text className="ax" x="12" y="14">LANE</text>
         <text className="ax" x={R.X0} y="14">{when(from, now)}</text>
         <text className="ax" x={R.X1} y="14" textAnchor="end">{when(to, now)}</text>

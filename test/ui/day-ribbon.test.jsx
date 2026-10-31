@@ -27,6 +27,8 @@ const tips = (root, id) => [...root.querySelectorAll(`[data-testid="${id}"]`)].m
 const count = (root, id) => root.querySelectorAll(`[data-testid="${id}"]`).length;
 const key = (el, k = 'Enter') => fireEvent.keyDown(el, { key: k });
 
+const AXIS = vi.fn();
+
 const ROWS = [
   {
     name: 'day: groups, idle fold, bars, marks, now line, current, next and ETA',
@@ -249,6 +251,52 @@ const ROWS = [
         expect(src.match(/text-\[(8|9|10)px\]/g) || []).toHaveLength(0);
         expect(src.match(/font-size:(8|9|10)(\.\d+)?px/g) || []).toHaveLength(0);
       }
+    },
+  },
+  // ---- COMP-COCKPIT-RIBBON-RANGE-1: week-scale clusters and the axis drag (rows added, none changed) ----
+  {
+    name: 'week width: marks closer than 16 px merge into a count badge that opens like any mark',
+    p: () => props('day', { extra: { from: '2026-10-25T00:00:00-07:00', to: '2026-11-02T00:00:00-07:00' } }),
+    check: ({ root, cb }) => {
+      expect(count(root, 'mark-cluster')).toBeGreaterThan(0);
+      const cl = root.querySelector('[data-testid="mark-cluster"]');
+      expect(cl.textContent).toBe('2');
+      expect(count(root, 'mark-deploy')).toBe(0);
+      fireEvent.click(cl);
+      expect(cb.onMarkOpen.mock.calls[0][0]).toMatchObject({ kind: 'cluster', count: 2 });
+      expect(cb.onMarkOpen.mock.calls[0][0].items.map((m) => m.kind)).toEqual(['land', 'deploy']);
+    },
+  },
+  {
+    name: 'axis drag: the axis strip draws a selection and a release over 15 minutes calls onAxisSelect(fromMs, toMs)',
+    p: () => props('day', { extra: { onAxisSelect: AXIS } }),
+    check: ({ root }) => {
+      AXIS.mockClear();
+      const box = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1200, height: 300, right: 1200, bottom: 300, x: 0, y: 0 });
+      fireEvent.pointerDown(root.querySelector('[data-testid="axis-drag"]'), { clientX: 92, pointerId: 1 });
+      fireEvent.pointerMove(window, { clientX: 366, pointerId: 1 });
+      expect(count(root, 'axis-selection')).toBe(1);
+      fireEvent.pointerUp(window, { clientX: 366, pointerId: 1 });
+      expect(AXIS).toHaveBeenCalledTimes(1);
+      expect(AXIS).toHaveBeenCalledWith(Date.parse('2026-10-30T18:00:00-07:00'), Date.parse('2026-10-31T03:00:00-07:00'));
+      expect(count(root, 'axis-selection')).toBe(0);
+      box.mockRestore();
+    },
+  },
+  {
+    name: 'axis drag: Esc cancels and a drag under 15 minutes is ignored',
+    p: () => props('day', { extra: { onAxisSelect: AXIS } }),
+    check: ({ root }) => {
+      AXIS.mockClear();
+      const box = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1200, height: 300, right: 1200, bottom: 300, x: 0, y: 0 });
+      fireEvent.pointerDown(root.querySelector('[data-testid="axis-drag"]'), { clientX: 92, pointerId: 1 });
+      fireEvent.pointerMove(window, { clientX: 500, pointerId: 1 });
+      fireEvent.keyDown(window, { key: 'Escape' });
+      fireEvent.pointerUp(window, { clientX: 500, pointerId: 1 });
+      fireEvent.pointerDown(root.querySelector('[data-testid="axis-drag"]'), { clientX: 300, pointerId: 1 });
+      fireEvent.pointerUp(window, { clientX: 302, pointerId: 1 });
+      expect(AXIS).not.toHaveBeenCalled();
+      box.mockRestore();
     },
   },
 ];
