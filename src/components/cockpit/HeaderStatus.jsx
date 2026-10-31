@@ -6,7 +6,9 @@
  *
  * Both read the same sources they did in the sidebar: the counters from
  * compactStats(items, gates) (props from the App that owns them), the pill from
- * the `compose:agent-status` window event AgentStream dispatches. No fetch.
+ * the `compose:agent-status` window event AgentStream dispatches. No fetch of its own: the pill also reads the
+ * fleet's busy sessions and live jobs from the shared /api/fleet poll (COMP-COCKPIT-PROCESS-DATA-1), so "Idle"
+ * no longer reads as "nothing is running" while detached jobs work; sm_status down = the local state alone.
  *
  * Width: the word labels ("items", "active", ...) drop below the `2xl`
  * breakpoint (1536px), where they collide with the room tabs; the pill label and the tab strip's ⌘K hint drop below 1440px for the same reason; each counter keeps its meaning in title/aria-label.
@@ -14,6 +16,8 @@
 
 import React from 'react';
 import { compactStats } from '../vision/attentionQueueState.js';
+import { useFleet } from '../../lib/fleetPoller.js';
+import { fleetActivity } from './fleetLogic.js';
 
 const CATEGORY_LABELS = {
   reading: 'Reading', writing: 'Writing', executing: 'Running',
@@ -61,8 +65,12 @@ export function AgentStatusPill() {
     window.addEventListener('compose:agent-status', handler);
     return () => window.removeEventListener('compose:agent-status', handler);
   }, []);
+  const { data: fleet } = useFleet();
+  const activity = React.useMemo(() => fleetActivity(fleet), [fleet]);
   const working = agentState.status === 'working';
-  const label = working ? (CATEGORY_LABELS[agentState.category] || 'Working') : 'Idle';
+  const local = working ? (CATEGORY_LABELS[agentState.category] || 'Working') : 'Idle';
+  const label = activity?.text ? `${local} · ${activity.text}` : local;
+  const fleetBusy = !working && (activity?.busy ?? 0) + (activity?.jobs ?? 0) > 0;
   return (
     <span
       data-testid="header-agent-status"
@@ -74,8 +82,8 @@ export function AgentStatusPill() {
       <span
         className="w-1.5 h-1.5 rounded-full shrink-0"
         style={{
-          background: working ? 'var(--color-category-writing)' : 'hsl(var(--success))',
-          animation: working ? 'pulse 1.5s ease-in-out infinite' : 'none',
+          background: working ? 'var(--color-category-writing)' : fleetBusy ? 'hsl(var(--primary))' : 'hsl(var(--success))',
+          animation: working || fleetBusy ? 'pulse 1.5s ease-in-out infinite' : 'none',
         }}
       />
       <span className="hidden min-[1440px]:inline">{label}</span>

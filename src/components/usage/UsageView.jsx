@@ -5,12 +5,15 @@
  * tiles, usage-over-time chart, by-model table. Data comes only from the
  * injected `client` (default: usageClient.js); the component never fetches.
  * Current workspace only, Compose-dispatched spend only (design Q1/Q2).
+ * COMP-COCKPIT-PROCESS-DATA-1: a scope toggle adds "Seats and fleet" (FleetUsage.jsx): the fleet's day and
+ * last-hour spend and per-seat quota, the spend this ledger never sees. The default scope is unchanged.
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { BarChart3, ChevronLeft, ChevronRight, Info, RefreshCw, TriangleAlert } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import EmptyState from '../vision/shared/EmptyState.jsx';
 import UsageChart from './UsageChart.jsx';
+import FleetUsage from './FleetUsage.jsx';
 import { defaultUsageClient } from './usageClient.js';
 import {
   RANGES, resolveRange, costDisplay, provenanceCounts, formatCount, formatRate, delta,
@@ -18,6 +21,7 @@ import {
 import { formatCost } from '../../lib/format-cost.js';
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const SCOPES = [['compose', 'Compose-dispatched'], ['fleet', 'Seats and fleet']];
 
 function Toggle({ options, value, onChange, label }) {
   return (
@@ -132,6 +136,27 @@ function ModelTable({ models }) {
 }
 
 export default function UsageView({ client = defaultUsageClient, now }) {
+  const [scope, setScope] = useState('compose');
+  if (scope === 'fleet') {
+    return (
+      <div className="flex flex-col h-full min-h-0 overflow-auto p-4 gap-4" data-testid="usage-view">
+        <header className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">Usage</h2>
+            <p className="text-[11px] text-muted-foreground max-w-2xl">
+              Every session and job on this machine: the fleet's spend today and in the last hour, and how much of each seat's quota is used.
+            </p>
+          </div>
+          <Toggle label="Scope" value={scope} onChange={setScope} options={SCOPES} />
+        </header>
+        <FleetUsage client={client} now={now} />
+      </div>
+    );
+  }
+  return <ComposeUsage client={client} now={now} scopeToggle={<Toggle label="Scope" value={scope} onChange={setScope} options={SCOPES} />} />;
+}
+
+function ComposeUsage({ client, now, scopeToggle }) {
   const [range, setRange] = useState('30');
   const [offset, setOffset] = useState(0);
   const [compare, setCompare] = useState(false);
@@ -163,6 +188,7 @@ export default function UsageView({ client = defaultUsageClient, now }) {
           </p>
         </div>
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          {scopeToggle}
           {state.data?.generated_at && <span>Updated {new Date(state.data.generated_at).toLocaleTimeString()}</span>}
           <button type="button" onClick={load} aria-label="Refresh" className="p-1 rounded hover:bg-muted">
             <RefreshCw className={cn('w-3.5 h-3.5', state.loading && 'animate-spin')} />

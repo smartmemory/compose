@@ -18,4 +18,11 @@ export const defaultUsageClient = {
     if (!res.ok) throw new Error(body.error || `usage stats failed (${res.status})`);
     return body;
   },
+  /** COMP-COCKPIT-PROCESS-DATA-1: per-seat quota rows, `{v, generated_at, seats: {value, error, ts, stale}}`. */
+  async getSeats() {
+    const res = await wsFetch('/api/usage/seats');
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `usage seats failed (${res.status})`);
+    return body;
+  },
 };

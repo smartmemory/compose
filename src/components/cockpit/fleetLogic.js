@@ -104,3 +104,22 @@ export function sortReady(units) {
 export function sortJobs(jobs) {
   return [...(jobs ?? [])].sort((a, b) => (a?.age ?? Infinity) - (b?.age ?? Infinity));
 }
+
+/**
+ * COMP-COCKPIT-PROCESS-DATA-1: the header pill's fleet line. Busy sessions (sm_status `sessions[].busy === true`) and
+ * live jobs (`jobs[].alive === true`); null when sm_status is down or neither panel is a list, so the pill falls back
+ * to the local agent state alone and never shows an error.
+ */
+export function fleetActivity(data) {
+  const sessions = smPanel(data, 'sessions');
+  const jobs = smPanel(data, 'jobs');
+  const okS = Array.isArray(sessions?.value);
+  const okJ = Array.isArray(jobs?.value);
+  if (!okS && !okJ) return null;
+  const busy = okS ? sessions.value.filter((s) => s?.busy === true).length : 0;
+  const alive = okJ ? jobs.value.filter((j) => j?.alive === true).length : 0;
+  const parts = [];
+  if (busy > 0) parts.push(`${busy} session${busy === 1 ? '' : 's'} busy`);
+  if (alive > 0) parts.push(`${alive} job${alive === 1 ? '' : 's'}`);
+  return { busy, jobs: alive, text: parts.join(' · ') };
+}

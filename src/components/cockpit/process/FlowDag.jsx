@@ -7,6 +7,8 @@ import { ROW_SPECS, cellInfo } from './processTones.js';
  * per day. Every count is a field GET /api/process already carries for the lane (its summary.json, and the
  * "Measured pace" rollup cell for landed/day); "needed fix" is reviewed minus clean and says so in its tooltip.
  * An edge whose count the builder does not record is dashed and carries no number. Edge width scales with units.
+ * COMP-COCKPIT-PROCESS-DATA-1: the fix loop, clean/fixed -> gate and passed -> landed edges take their unit counts from
+ * summary.flow (the builder counts them from the unit stamps) when the lane's summary carries them; else dashed as before.
  */
 
 const W = 1220;
@@ -19,12 +21,22 @@ const LOW = 114;
 const hsl = (v, a) => (a == null ? `hsl(var(${v}))` : `hsl(var(${v}) / ${a})`);
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const PACE = ROW_SPECS.find((s) => s.id === 'pace');
+const FLOW_EDGES = ['fix-loop', 'clean-gate', 'fix-gate', 'passed-landed'];
+const NOTE_UNRECORDED = 'Not in the data: how clean vs fixed units split into gate runs, per-stage time, and gate-to-land counts (only a landed/day rate is reported).';
+
+/** One summary.flow edge: recorded (solid, counted) when the builder carries the number, else not-in-data with `missing`. */
+function flowEdge(base, value, recorded, missing) {
+  const n = num(value);
+  return n === null ? { ...base, count: null, kind: 'not-in-data', src: missing } : { ...base, count: n, kind: 'recorded', src: recorded(n) };
+}
 
 /** Pure: the nodes and edges for one lane, with each count's source. Exported for the tests. */
 export function flowModel(summary, paceText) {
   const fp = summary?.first_pass_clean ?? null;
   const st = summary?.standard ?? null;
   const rr = summary?.review_rounds ?? null;
+  const flow = summary?.flow ?? null;
+  const rounds = `rounds per unit median ${rr?.median ?? 'not reported'}, worst ${rr?.max ?? 'not reported'}`;
   const reviewed = num(fp?.total);
   const clean = num(fp?.clean);
   const fix = reviewed !== null && clean !== null && reviewed >= clean ? reviewed - clean : null;
@@ -46,14 +58,29 @@ export function flowModel(summary, paceText) {
     { id: 'stamped-review', from: 'stamped', to: 'review', count: reviewed, kind: 'recorded', src: 'units that reached round-1 review (first_pass_clean.total)' },
     { id: 'review-clean', from: 'review', to: 'clean', count: clean, kind: 'recorded', src: 'clean on the first round (first_pass_clean.clean)' },
     { id: 'review-fix', from: 'review', to: 'fix', count: fix, kind: 'derived', src: 'needed a fix: reviewed minus clean (derived, not a recorded count)' },
-    { id: 'fix-loop', from: 'fix', to: 'review', count: null, kind: 'not-in-data',
-      src: `fix loop: rounds per unit are recorded (median ${rr?.median ?? 'not reported'}, worst ${rr?.max ?? 'not reported'}), the units per loop are not` },
-    { id: 'clean-gate', from: 'clean', to: 'gate', count: null, kind: 'not-in-data', src: 'how many clean units reached the gate is not in the data' },
-    { id: 'fix-gate', from: 'fix', to: 'gate', count: null, kind: 'not-in-data', src: 'how many fixed units reached the gate is not in the data' },
+    flowEdge({ id: 'fix-loop', from: 'fix', to: 'review' }, flow?.fix_loop,
+      (n) => `fix loop: ${n} units went back to review after a fix run (flow.fix_loop, from unit stamps); ${rounds}`,
+      `fix loop: rounds per unit are recorded (median ${rr?.median ?? 'not reported'}, worst ${rr?.max ?? 'not reported'}), the units per loop are not`),
+    flowEdge({ id: 'clean-gate', from: 'clean', to: 'gate' }, flow?.clean_to_gate,
+      (n) => `${n} units clean on round 1 reached the gate (flow.clean_to_gate, from unit stamps)`, 'how many clean units reached the gate is not in the data'),
+    flowEdge({ id: 'fix-gate', from: 'fix', to: 'gate' }, flow?.fix_to_gate,
+      (n) => `${n} units that needed a fix reached the gate (flow.fix_to_gate, from unit stamps)`, 'how many fixed units reached the gate is not in the data'),
     { id: 'gate-passed', from: 'gate', to: 'passed', count: num(st?.gate_passes), kind: 'recorded', src: 'gate runs that passed (standard.gate_passes)' },
-    { id: 'passed-landed', from: 'passed', to: 'landed', count: null, kind: 'not-in-data', src: 'gate-to-land counts are not in the data (only a landed/day rate is reported)' },
+    flowEdge({ id: 'passed-landed', from: 'passed', to: 'landed' }, flow?.passed_to_landed,
+      (n) => `${n} units with a passed gate landed (flow.passed_to_landed, from unit stamps)`, 'gate-to-land counts are not in the data (only a landed/day rate is reported)'),
   ].map((e) => (e.count === null && e.kind !== 'not-in-data' ? { ...e, kind: 'not-in-data', src: `${e.src}: not reported for this lane` } : e));
-  return { nodes, edges, at, rounds: rr };
+  return { nodes, edges, at, rounds: rr, note: flowNote(edges) };
+}
+
+/** The footnote: today's wording when no flow edge is recorded; else what is still missing, and where the counts come from. */
+export function flowNote(edges) {
+  const kind = Object.fromEntries(edges.map((e) => [e.id, e.kind]));
+  if (FLOW_EDGES.every((id) => kind[id] === 'not-in-data')) return NOTE_UNRECORDED;
+  const missing = ['per-stage time'];
+  if (kind['clean-gate'] === 'not-in-data' || kind['fix-gate'] === 'not-in-data') missing.push('how clean vs fixed units split into gate runs');
+  if (kind['fix-loop'] === 'not-in-data') missing.push('units per fix loop');
+  if (kind['passed-landed'] === 'not-in-data') missing.push('gate-to-land counts');
+  return `Not in the data: ${missing.join(', ')}. The fix-loop, gate-entry and gate-to-land counts shown are units counted from the unit stamps.`;
 }
 
 /** Path from the right edge of `a` to the left edge of `b`; a straight line when level, else an S-curve. */
@@ -66,7 +93,7 @@ function link(a, b) {
 }
 
 export default function FlowDag({ name, label, summary, pace }) {
-  const { nodes, edges, at, rounds } = flowModel(summary, pace);
+  const { nodes, edges, at, rounds, note } = flowModel(summary, pace);
   const max = Math.max(1, ...edges.map((e) => e.count ?? 0));
   const width = (e) => (e.kind === 'not-in-data' ? 1.5 : 2 + (10 * (e.count ?? 0)) / max);
   const id = (k) => `flow-${name}-${k}`;
@@ -81,11 +108,18 @@ export default function FlowDag({ name, label, summary, pace }) {
           if (e.id === 'fix-loop') {
             const f = at.fix;
             const r = at.review;
+            const dashed = e.kind === 'not-in-data';
             return (
-              <path key={e.id} data-testid={id(`edge-${e.id}`)} data-kind={e.kind} d={`M${r.x + NW / 2} ${r.y + NH / 2} C${r.x + NW / 2} ${H - 6}, ${f.x - 60} ${H - 6}, ${f.x} ${f.y + 8}`}
-                fill="none" stroke={hsl('--warning', 0.8)} strokeWidth={1.5} strokeDasharray="4 4">
-                <title>{e.src}</title>
-              </path>
+              <g key={e.id}>
+                <path data-testid={id(`edge-${e.id}`)} data-kind={e.kind} d={`M${r.x + NW / 2} ${r.y + NH / 2} C${r.x + NW / 2} ${H - 6}, ${f.x - 60} ${H - 6}, ${f.x} ${f.y + 8}`}
+                  fill="none" stroke={hsl('--warning', 0.8)} strokeWidth={dashed ? 1.5 : width(e)} strokeDasharray={dashed ? '4 4' : undefined}>
+                  <title>{e.src}</title>
+                </path>
+                {e.count !== null ? (
+                  <text x={(r.x + NW / 2 + f.x) / 2} y={H - 8} textAnchor="middle" fontSize="11" className="font-mono" style={{ fill: hsl('--warning') }}
+                    data-testid={id(`edge-val-${e.id}`)}>{e.count}</text>
+                ) : null}
+              </g>
             );
           }
           const { d, lx, ly } = link(at[e.from], at[e.to]);
@@ -121,7 +155,7 @@ export default function FlowDag({ name, label, summary, pace }) {
         ) : null}
       </svg>
       <p className="text-[11px] text-muted-foreground" data-testid={id('note')}>
-        Not in the data: how clean vs fixed units split into gate runs, per-stage time, and gate-to-land counts (only a landed/day rate is reported).
+        {note}
       </p>
     </section>
   );
