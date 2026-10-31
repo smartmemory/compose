@@ -9,6 +9,8 @@
  * the `compose:agent-status` window event AgentStream dispatches. No fetch of its own: the pill also reads the
  * fleet's busy sessions and live jobs from the shared /api/fleet poll (COMP-COCKPIT-PROCESS-DATA-1), so "Idle"
  * no longer reads as "nothing is running" while detached jobs work; sm_status down = the local state alone.
+ * The fleet words show from `2xl` up like the counter words (below it they pushed the counters over the tab
+ * strip's ⌘K at 1440px); below it the dot pulses in the primary colour and title/aria-label carry the line.
  *
  * Width: the word labels ("items", "active", ...) drop below the `2xl`
  * breakpoint (1536px), where they collide with the room tabs; the pill label and the tab strip's ⌘K hint drop below 1440px for the same reason; each counter keeps its meaning in title/aria-label.
@@ -86,7 +88,9 @@ export function AgentStatusPill() {
           animation: working || fleetBusy ? 'pulse 1.5s ease-in-out infinite' : 'none',
         }}
       />
-      <span className="hidden min-[1440px]:inline">{label}</span>
+      <span className="hidden min-[1440px]:inline">
+        {local}{activity?.text ? <span className="hidden 2xl:inline" data-testid="header-agent-fleet">{` · ${activity.text}`}</span> : null}
+      </span>
     </span>
   );
 }
