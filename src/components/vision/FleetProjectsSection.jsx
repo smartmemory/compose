@@ -36,7 +36,9 @@ export default function FleetProjectsSection({ onViewChange, mode = 'lane', proj
   const projectMode = mode === 'project';
   const { data, error, loading } = useProcess();
   const lanes = useFleetProjects();
-  const { roots } = useFleetRoots(projectMode);
+  const { roots, error: rootsError } = useFleetRoots(projectMode);
+  // Roots not loaded (or the route missing, e.g. a server not yet restarted): a click must not claim "no project".
+  const rootsReady = roots !== null && !rootsError;
   const [adding, setAdding] = React.useState(false);
 
   const fleet = data?.fleet ?? null;
@@ -59,7 +61,7 @@ export default function FleetProjectsSection({ onViewChange, mode = 'lane', proj
   const remove = (n) => saveFleetProjects(list.filter((x) => x !== n));
   const add = (n) => { saveFleetProjects([...list, n]); setAdding(false); };
   const select = projectMode
-    ? (n) => onSelectProject?.(n, selectProjectLane(n, roots).switchTo)
+    ? (n) => { if (rootsReady) onSelectProject?.(n, selectProjectLane(n, roots).switchTo); }
     : (n) => { setPickedLane(n); onViewChange?.('process'); };
   const titleOf = (n) => {
     if (projectMode) return hasProject(n) ? `Open ${labelOf(n)} (${roots[n].root})` : `${labelOf(n)}: no Compose project`;
@@ -79,7 +81,7 @@ export default function FleetProjectsSection({ onViewChange, mode = 'lane', proj
         {list.length === 0 ? <p className="px-2 text-[11px]" style={MUTED} data-testid="fleet-projects-empty">No projects listed. Add one below.</p> : null}
         {list.map((n, i) => {
           const isSel = n === selected;
-          const tilesless = projectMode ? (roots !== null && !hasProject(n)) : !builderNames.includes(n);
+          const tilesless = projectMode ? (rootsReady && !hasProject(n)) : !builderNames.includes(n);
           return (
             <div key={n} data-testid={`fleet-project-${n}`}
               className={`group flex w-full items-center gap-0.5 rounded-md px-1 py-0.5 text-xs ${isSel ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'hover:bg-sidebar-accent/50'}`}>
@@ -120,6 +122,7 @@ export default function FleetProjectsSection({ onViewChange, mode = 'lane', proj
             ))}
           </div>
         ) : null}
+        {projectMode && rootsError ? <p className="px-2 text-[11px]" style={{ color: 'hsl(var(--warning))' }} data-testid="fleet-roots-error">Project switching unavailable: {rootsError}</p> : null}
         {fleet.error ? <p className="px-2 text-[11px]" style={{ color: 'hsl(var(--warning))' }} data-testid="fleet-projects-config-error">{fleet.error}</p> : null}
       </>
     );

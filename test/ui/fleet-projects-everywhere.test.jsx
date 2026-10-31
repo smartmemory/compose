@@ -26,7 +26,7 @@ const envelope = (projects) => {
 const ROOTS = { roots: { hub: { root: HUB, hasCompose: true }, main: { root: null, hasCompose: false } }, error: null };
 
 /** A fetch stub routed by URL; records every call as [method, url, body]. */
-function stubFetch({ projects = ['main', 'hub'] } = {}) {
+function stubFetch({ projects = ['main', 'hub'], rootsStatus = 200 } = {}) {
   const calls = [];
   let bound = BOOT;
   vi.stubGlobal('fetch', vi.fn(async (url, opts = {}) => {
@@ -37,16 +37,19 @@ function stubFetch({ projects = ['main', 'hub'] } = {}) {
     if (u === '/api/project') json = { targetRoot: bound, name: bound.split('/').pop(), dataDir: `${bound}/.compose/data` };
     else if (u === '/api/project/switch') { bound = body.path; json = { ok: true, targetRoot: bound, name: bound.split('/').pop() }; }
     else if (u.startsWith('/api/process')) json = envelope(projects);
-    else if (u === '/api/fleet/roots') json = ROOTS;
+    else if (u === '/api/fleet/roots') {
+      if (rootsStatus !== 200) return { ok: false, status: rootsStatus, json: async () => ({ error: 'Not Found' }), text: async () => '' };
+      json = ROOTS;
+    }
     return { ok: true, status: 200, json: async () => json, text: async () => '' };
   }));
   return calls;
 }
 
-async function mountApp(view) {
+async function mountApp(view, stub = {}) {
   localStorage.setItem('compose:activeView', view);
   resetProcessPoller();
-  const calls = stubFetch();
+  const calls = stubFetch(stub);
   const { default: App } = await import('../../src/App.jsx');
   render(<App />);
   await screen.findByTestId('fleet-project-hub');
@@ -100,6 +103,16 @@ const ROWS = [
       fireEvent.click(screen.getByTestId('fleet-project-select-hub'));
       await waitFor(() => expect(screen.queryByTestId('no-compose-project')).toBeNull());
       expect(switches(calls)).toEqual([HUB]);
+    },
+  },
+  {
+    name: 'Roadmap: when the roots route fails (a server not yet restarted) a click switches nothing and claims no "no project"',
+    async run() {
+      const calls = await mountApp('graph', { rootsStatus: 404 });
+      expect((await screen.findByTestId('fleet-roots-error')).textContent).toContain('Not Found');
+      fireEvent.click(screen.getByTestId('fleet-project-select-main'));
+      fireEvent.click(screen.getByTestId('fleet-project-select-hub'));
+      expect([switches(calls), screen.queryByTestId('no-compose-project')]).toEqual([[], null]);
     },
   },
   {
