@@ -5,7 +5,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { chainForLane, expectedLanding, lastLanded, liveState, nextLines, nowLine, sessionsForLane, timeLost, unitSegments } from '../src/components/ribbon/lane/laneLogic.js';
+import { chainForLane, asOfWord, etaWord, expectedLanding, lastLanded, liveState, nextLines, nowLine, sessionsForLane, timeLost, unitSegments } from '../src/components/ribbon/lane/laneLogic.js';
 
 const FIX = JSON.parse(readFileSync(new URL('./fixtures/ribbon/day.json', import.meta.url), 'utf8'));
 const lane = (name) => FIX.lanes.find((l) => l.lane === name);
@@ -28,6 +28,8 @@ describe('lane logic (COMP-COCKPIT-RIBBON-LANE-1)', () => {
       { name: 'liveState: a lane that stamps no deploy says "no deploy stamp"', got: unitSegments(noDeployLane)[0].live, want: 'no deploy stamp' },
       { name: 'liveState: never an empty cell', got: [liveState({}), liveState({ landedAt: 'x' }), liveState({ landedAt: '2026-10-31T01:00:00Z', deployedAt: '2026-10-31T02:00:00Z' })], want: ['not landed yet', 'landed, not deployed yet', 'deployed'] },
       { name: 'expectedLanding 2.0: the estimate with its as-of', got: expectedLanding(lane('2.0'), NOW), want: { text: 'p50 Mon · p80 Mon', sub: 'as of today 16:40' } },
+      { name: 'expectedLanding with the live estimator shape: durations and an as-of with no zone', got: expectedLanding({ eta: { p50: '9h', p80: '32h', asOf: '2026-10-31T20:14', raw: 'ESTIMATE 2.0 P50 9h P80 32h' }, spans: [] }, NOW), want: { text: 'p50 in 9h · p80 in 32h', sub: 'as of 20:14' } },
+      { name: 'etaWord / asOfWord: unknown words are shown as given, missing is "unknown", no as-of is null', got: [etaWord('soon', NOW), etaWord(null, NOW), asOfWord(null, NOW)], want: ['soon', 'unknown', null] },
       { name: 'expectedLanding ops: waiting on the owner reads "on answer"', got: expectedLanding(lane('ops'), NOW).text, want: 'on answer' },
       { name: 'expectedLanding: noData reads the no-data words', got: expectedLanding({ eta: { noData: true, raw: 'n=4' }, spans: [] }, NOW).text, want: 'no estimate (n<10)' },
       { name: 'expectedLanding: no eta at all', got: expectedLanding({ eta: null, spans: [] }, NOW).text, want: 'no estimate' },

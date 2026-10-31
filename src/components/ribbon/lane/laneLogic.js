@@ -116,6 +116,26 @@ export function currentWait(lane, now) {
   return last && last.kind === 'wait' && toMs(last.end) >= toMs(now) - 5 * MIN ? last : null;
 }
 
+const DURATION = /^\d+(\.\d+)?\s*[mhd]$/;
+const HAS_ZONE = /(Z|[+-]\d\d:?\d\d)$/;
+
+/**
+ * One p50/p80 value in words. The contract's examples are ISO times, but the live estimator (`estimate.py`) prints durations
+ * ("9h", "32h"): a time reads like the ribbon's ETA ("21:30", "Mon"), a duration reads "in 9h", anything else is shown as given.
+ */
+export function etaWord(v, now) {
+  if (v == null || v === '') return 'unknown';
+  if (Number.isFinite(Date.parse(v))) return etaLabel(v, now);
+  if (DURATION.test(String(v).trim())) return `in ${String(v).trim()}`;
+  return String(v);
+}
+
+/** "as of 20:14" for a stamp the estimator wrote without a zone (its own local clock), "as of today 16:40" for one with a zone. */
+export function asOfWord(asOf, now) {
+  if (!asOf) return null;
+  return `as of ${HAS_ZONE.test(String(asOf)) ? when(asOf, now) : clock(asOf)}`;
+}
+
 /** EXPECTED LANDING as one line: the estimate with its `as of`, "on answer", or the no-data words. */
 export function expectedLanding(lane, now) {
   const wait = currentWait(lane, now);
@@ -123,8 +143,7 @@ export function expectedLanding(lane, now) {
   const eta = lane?.eta;
   if (!eta) return { text: 'no estimate', sub: null };
   if (eta.noData) return { text: 'no estimate (n<10)', sub: eta.raw || null };
-  const sub = `as of ${when(eta.asOf, now)}`;
-  return { text: `p50 ${etaLabel(eta.p50, now)} · p80 ${etaLabel(eta.p80, now)}`, sub };
+  return { text: `p50 ${etaWord(eta.p50, now)} · p80 ${etaWord(eta.p80, now)}`, sub: asOfWord(eta.asOf, now) };
 }
 
 /** NOW: the current unit and since when, or "nothing running"; "past window" when the window does not contain now. */
