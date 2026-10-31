@@ -233,7 +233,7 @@ const ROWS = [
     name: 'RULE-FRESH: a stale stamps cache says how old it is, "cached copy" stays a substring',
     async run() {
       const env = envelope();
-      env.sources.stamps = { ...env.sources.stamps, stale: true, ageS: 1380 };
+      env.sources.stamps = { ...env.sources.stamps, stale: true, ts: Date.now() - 1380_000 };
       mount(env);
       const badge = await screen.findByText(/stamps: cached copy, 23 min old/);
       expect(badge.textContent).toContain('cached copy');

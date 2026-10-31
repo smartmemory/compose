@@ -361,7 +361,7 @@ describe('COMP-COCKPIT-NOTIFY-CHIP-1 chip, tray and banner', () => {
 describe('RULE-FRESH: fleet cards are never zero while loading', () => {
   const ROWS = [
     ['loading and no data yet: skeleton cards, no "No open questions"', { loading: true, data: null }, true],
-    ['answered: cards carry "as of"', { loading: false, data: { generated: '2026-10-31T10:00:00Z', sources: { sm_status: { value: { queue: { value: [], error: null } }, error: null, ts: Date.now(), stale: false } } } }, false],
+    ['answered: cards carry "as of" (the inner panel ts is epoch seconds and must not read as stale)', { loading: false, data: { generated: '2026-10-31T10:00:00Z', sources: { sm_status: { value: { queue: { value: [], error: null, ts: Date.now() / 1000 } }, error: null, ts: Date.now(), stale: false } } } }, false],
   ];
   it.each(ROWS)('%s', async (_name, fleet, skeleton) => {
     const { default: FleetView } = await import('../../src/components/cockpit/FleetView.jsx');
@@ -370,7 +370,7 @@ describe('RULE-FRESH: fleet cards are never zero while loading', () => {
       expect(container.querySelectorAll('[data-testid="fleet-skeleton-card"]').length).toBeGreaterThan(0);
       expect(container.textContent).not.toContain('No open questions');
     } else {
-      expect(container.querySelector('[data-testid="fleet-owner"] [data-testid="freshness"]').textContent).toMatch(/^as of /);
+      expect(container.querySelector('[data-testid="fleet-owner"] [data-testid="freshness"]').textContent).toMatch(/^as of .+ \(\d+s ago\)$/);
     }
   });
 });

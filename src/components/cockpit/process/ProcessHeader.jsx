@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { wsFetch } from '../../../lib/wsFetch.js';
 import { StateBadge } from './ProcessBadge.jsx';
+import { ageSeconds } from '@/components/shared/Freshness.jsx';
 
 /**
  * ProcessHeader — title, freshness and poll state as badges with the reason on hover, and the U3 Publish control.
@@ -42,9 +43,10 @@ function PublishControl() {
   );
 }
 
-/** "builder: cached copy, 23 min old" when the source reports its age; "cached copy" stays a substring. */
+/** "builder: cached copy, 23 min old": the copy's age is now minus the source's `ts` (ms); "cached copy" stays a substring. */
 function cachedLabel(name, src) {
-  return Number.isFinite(src?.ageS) ? `${name}: cached copy, ${Math.round(src.ageS / 60)} min old` : `${name}: cached copy`;
+  const age = ageSeconds({ ts: src?.ts });
+  return age === null ? `${name}: cached copy` : `${name}: cached copy, ${Math.round(age / 60)} min old`;
 }
 
 export default function ProcessHeader({ data, error, builder, stamps }) {
