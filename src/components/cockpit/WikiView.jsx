@@ -35,7 +35,8 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
   const dataClient = useMemo(() => client ?? createWikiDataClient(), [client]);
   const [code, setCode] = useState(featureCode ?? '');
   const [draft, setDraft] = useState(featureCode ?? '');
-  const [pane, setPane] = useState('feature');
+  // COMP-COCKPIT-WIKI-TAB-ORDER-1: open on Search, the widest view; a caller deep-linking a feature (featureCode) still lands on its hub.
+  const [pane, setPane] = useState(featureCode ? 'feature' : 'search');
   const [search, setSearch] = useState({ query: featureCode ?? '', workspace: undefined });
   const [framePath, setFramePath] = useState(null);
   const [area, setArea] = useState('');
@@ -115,13 +116,13 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
               onChange={(e) => setDraft(e.target.value)}
             />
           </form>
-          <button type="button" className={tabClass('feature')} onClick={() => open('feature')}>Feature</button>
           <button type="button" className={tabClass('search')} onClick={() => open('search')}>Search</button>
+          <button type="button" className={tabClass('graph')} onClick={() => open('graph')}>Graph</button>
+          <button type="button" className={tabClass('area')} onClick={() => open('area')}>Area</button>
+          <button type="button" className={tabClass('feature')} onClick={() => open('feature')}>Feature</button>
           <button type="button" className={tabClass('decisions')} onClick={() => open('decisions')}>Decisions</button>
           <button type="button" className={tabClass('sources')} onClick={() => open('sources')}>Sources</button>
-          <button type="button" className={tabClass('area')} onClick={() => open('area')}>Area</button>
           <button type="button" className={tabClass('ledger')} onClick={() => open('ledger')}>Ledger</button>
-          <button type="button" className={tabClass('graph')} onClick={() => open('graph')}>Graph</button>
           <button type="button" className={tabClass('full')} onClick={() => open('full')}>Open full wiki</button>
           <span className="ml-auto text-xs text-muted-foreground">{workspace}</span>
         </nav>

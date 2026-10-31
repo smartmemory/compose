@@ -57,6 +57,26 @@ describe('Wiki tab', () => {
   });
 });
 
+describe('Wiki tab: order and opening pane', () => {
+  const ORDER = ['Search', 'Graph', 'Area', 'Feature', 'Decisions', 'Sources', 'Ledger', 'Open full wiki'];
+  const client = () => ({
+    ...graphCalls(),
+    identity: vi.fn(), featureHub: vi.fn(() => new Promise(() => {})), decisions: vi.fn(), decisionsPage: vi.fn(), sourcesPage: vi.fn(),
+    docsByArea: vi.fn(), ledger: vi.fn(), upcomingCalls: vi.fn(), search: vi.fn(() => new Promise(() => {})),
+  });
+  const ROWS = [
+    { name: 'no feature code opens on Search', featureCode: undefined, active: 'Search' },
+    { name: 'a feature code opens on Feature', featureCode: 'COMPOSE-WIKI-TAB-1', active: 'Feature' },
+  ];
+
+  it.skipIf(!linked).each(ROWS)('$name, buttons in the owner order', ({ featureCode, active }) => {
+    render(<WikiView client={client()} featureCode={featureCode} workspace="wiki-eng" frameBase={FRAME} />);
+    const buttons = screen.getByRole('navigation', { name: 'wiki' }).querySelectorAll('button');
+    expect([...buttons].map((b) => b.textContent)).toEqual(ORDER);
+    expect([...buttons].filter((b) => b.className.includes('bg-accent')).map((b) => b.textContent)).toEqual([active]);
+  });
+});
+
 describe('Wiki tab: Decisions', () => {
   const entry = (id, text) => ({ entry_id: id, parent_doc_id: 'd1', kind: 'decision', ts: '2026-10-02', text, refs: [], status: 'accepted' });
 
