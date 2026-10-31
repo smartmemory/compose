@@ -19,6 +19,11 @@ describe('wikiChildEnv: which supervised child sees the token', () => {
     ['vite never gets it', 'vite', NAME, false],
     ['agent-server (spawns claude -p) never gets it', 'agent-server', NAME, false],
     ['no wiki config: nothing to strip', 'vite', null, true],
+    // COMP-COCKPIT-WIRING-1: the supervisor passes a list (wiki token, SmartMemory key); every name in it is stripped.
+    ['list: vite never gets it, wherever it sits in the list', 'vite', ['COMPOSE_SM_KEY', NAME], false],
+    ['list: agent-server never gets it', 'agent-server', [NAME, 'COMPOSE_SM_KEY'], false],
+    ['list: api-server keeps it', 'api-server', [NAME, 'COMPOSE_SM_KEY'], true],
+    ['list without it (wiki off, key on): left alone', 'vite', [null, 'COMPOSE_SM_KEY'], true],
   ];
   it('is table-driven and leaves the rest of the env alone', () => {
     for (const [name, proc, tokenEnv, present] of ROWS) {

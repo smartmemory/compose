@@ -20,6 +20,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { COMPOSE_HOME, getTargetRoot, ensureDataDir } from './project-root.js';
 import { wikiChildEnv, checkWikiConfig, readWikiConfig } from './wiki-routes.js';
+import { getSmartmemoryConfig } from '../lib/smartmemory-config.js';
 import {
   decideSupervisorOwnership,
   readSupervisorRecord,
@@ -29,7 +30,9 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 console.log('[supervisor] Target project:', getTargetRoot());
 const wikiCfg = checkWikiConfig(readWikiConfig(getTargetRoot()));
-const WIKI_TOKEN_ENV = wikiCfg.ok ? wikiCfg.tokenEnv : null;
+const smKeyEnv = getSmartmemoryConfig(getTargetRoot()).apiKeyEnv;
+// Secret env vars only the API server keeps: the wiki owner token and the SmartMemory key (COMP-COCKPIT-WIRING-1).
+const API_ONLY_ENV = [wikiCfg.ok ? wikiCfg.tokenEnv : null, typeof smKeyEnv === 'string' ? smKeyEnv : null];
 const PID_FILE = path.join(COMPOSE_HOME, '.compose-supervisor.pid');
 const VITE_BIN = path.join(COMPOSE_HOME, 'node_modules', '.bin', 'vite');
 const IS_SOURCE_CHECKOUT = fs.existsSync(path.join(COMPOSE_HOME, '.git'));
@@ -196,7 +199,7 @@ function startProcess(proc) {
   console.log(`[supervisor] Starting ${proc.name}...`);
 
   if (proc.type === 'fork') {
-    const forkEnv = wikiChildEnv(proc.name, process.env, WIKI_TOKEN_ENV);
+    const forkEnv = wikiChildEnv(proc.name, process.env, API_ONLY_ENV);
     if (proc.name !== 'api-server') {
       // agent-server stays 127.0.0.1 always — never gets remote-auth env
       delete forkEnv.COMPOSE_HOST;
@@ -207,7 +210,7 @@ function startProcess(proc) {
     proc.child = spawn(proc.command, [], {
       stdio: 'inherit',
       cwd: COMPOSE_HOME,
-      env: wikiChildEnv(proc.name, process.env, WIKI_TOKEN_ENV),
+      env: wikiChildEnv(proc.name, process.env, API_ONLY_ENV),
     });
   }
 

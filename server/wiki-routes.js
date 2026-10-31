@@ -125,10 +125,12 @@ const ENV_NAME_RE = /^(?!VITE_)[A-Z_][A-Z0-9_]{0,63}$/; // VITE_* is inlined int
 /**
  * The environment a supervised child gets. The wiki token variable reaches only the API server, the one process that
  * runs the proxy: Vite (which exposes VITE_* to the browser) and the agent server (which spawns `claude -p`) never see it.
+ * `tokenEnv` is one name or a list (COMP-COCKPIT-WIRING-1 adds the SmartMemory key's `apiKeyEnv`); non-strings are skipped.
  */
 export function wikiChildEnv(procName, env, tokenEnv) {
   const out = { ...env };
-  if (procName !== 'api-server' && typeof tokenEnv === 'string') delete out[tokenEnv];
+  if (procName === 'api-server') return out;
+  for (const name of [].concat(tokenEnv)) if (typeof name === 'string') delete out[name];
   return out;
 }
 const LOOPBACK_HOST_RE = /^(127\.0\.0\.1|localhost)(:\d{1,5})?$/;

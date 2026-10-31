@@ -28,12 +28,31 @@ WIKI_SEALED_DIR="${WIKI_SEALED_DIR:-$HOME/.config/smartmemory-wiki/sealed}"
 wiki_token_name() {
   node --input-type=module -e "import { readWikiConfig, checkWikiConfig } from './server/wiki-routes.js'; const c = checkWikiConfig(readWikiConfig(process.argv[1])); if (c.ok) console.log(c.tokenEnv);" "${COMPOSE_TARGET:-$HERE}" 2>/dev/null
 }
+# Exports the var named $1 from the sealed file $2 unless the var is already set. A symlink is never read.
+# Returns 1 when the file is missing, empty or a symlink. The value is never echoed.
+load_sealed_var() {
+  local name="$1" f="$WIKI_SEALED_DIR/$2"
+  [ -n "${!name:-}" ] && return 0
+  if [ ! -L "$f" ] && [ -f "$f" ] && [ -r "$f" ] && [ -s "$f" ]; then export "$name=$(<"$f")"; return 0; fi
+  return 1
+}
 load_wiki_token() {
   local name; name="$(cd "$HERE" && wiki_token_name)"
   [ -n "$name" ] || return 0
-  [ -n "${!name:-}" ] && return 0
   local f="$WIKI_SEALED_DIR/wiki-owner-token"
-  if [ -r "$f" ] && [ -s "$f" ]; then export "$name=$(<"$f")"; else echo "wiki token: $name not set and $f is missing, the Wiki tab will answer token_missing"; fi
+  load_sealed_var "$name" wiki-owner-token || echo "wiki token: $name not set and $f is missing, the Wiki tab will answer token_missing"
+}
+
+# The LOCAL SmartMemory key for Recall (COMP-COCKPIT-WIRING-1 gap 6): the env var named by `smartmemory.apiKeyEnv`,
+# from the sealed file `compose-sm-key` in the same dir (written by scripts/sealed-put.mjs). Loaded only when the
+# smartmemory block is enabled and its baseUrl is loopback (`smartmemoryKeyEnv`). API server only, like the wiki token.
+sm_key_name() {
+  node --input-type=module -e "import { getSmartmemoryConfig, smartmemoryKeyEnv } from './lib/smartmemory-config.js'; const n = smartmemoryKeyEnv(getSmartmemoryConfig(process.argv[1])); if (n) console.log(n);" "${COMPOSE_TARGET:-$HERE}" 2>/dev/null
+}
+load_sm_key() {
+  local name; name="$(cd "$HERE" && sm_key_name)"
+  [ -n "$name" ] || return 0
+  load_sealed_var "$name" compose-sm-key || echo "smartmemory key: $name not set and $WIKI_SEALED_DIR/compose-sm-key is missing, Recall will answer missing api key"
 }
 
 cmd_start() {
@@ -44,7 +63,7 @@ cmd_start() {
       echo "port $p is already in use, refusing to start (python3 ~/.claude/scripts/port_check.py $p)"; return 1
     fi
   done
-  (load_wiki_token; cd "$HERE" && nohup node server/supervisor.js > "$LOG" 2>&1 & echo $! > "$PIDFILE")
+  (load_wiki_token; load_sm_key; cd "$HERE" && nohup node server/supervisor.js > "$LOG" 2>&1 & echo $! > "$PIDFILE")
   local deadline=$((SECONDS+90))
   for p in $PORTS; do
     until listening "$p"; do
@@ -72,7 +91,7 @@ cmd_stop() {
   echo "stopped"
 }
 
-# Sourced by test/wiki-token-env.test.js, which calls load_wiki_token directly.
+# Sourced by test/wiki-token-env.test.js, which calls load_wiki_token and load_sm_key directly.
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   case "${1:-}" in
     start) cmd_start ;;
