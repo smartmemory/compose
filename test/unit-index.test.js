@@ -48,3 +48,33 @@ describe('buildUnitIndex withEvents', () => {
     });
   }
 });
+
+describe('buildUnitIndex waiting (COMP-COCKPIT-FIXES-1 B)', () => {
+  // [name, row fields, expected waiting]. A finished or dead-state unit never waits, on review or on the owner.
+  const DEAD = ['retired', 'superseded', 'folded', 'parked', 'held', 'closed', 'done', 'cancelled', 'killed'];
+  const AUTHORED = { author_done_at: '2026-10-31T01:00:00Z' };
+  const OPEN_WAIT = { owner_waits: [{ start: '2026-10-31T01:00:00Z' }] };
+  const ROWS = [
+    ['live state review: still waiting on review', { state: 'review', ...AUTHORED }, 'review'],
+    ['live state fix with an open owner wait: still waiting on the owner', { state: 'fix', ...AUTHORED, ...OPEN_WAIT }, 'owner'],
+    ['landed unit with an open owner wait: finished, not waiting', { state: 'landed', landed_at: '2026-10-31T03:00:00Z', ...OPEN_WAIT }, null],
+    ...DEAD.map((state) => [`dead state ${state}, authored and unreviewed: not waiting on review`, { state, ...AUTHORED }, null]),
+    ...DEAD.map((state) => [`dead state ${state} with an open owner wait: not waiting on the owner`, { state, ...OPEN_WAIT }, null]),
+  ];
+  it('is table-driven', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'unit-index-wait-'));
+    try {
+      mkdirSync(join(root, 'queues'));
+      const units = Object.fromEntries(ROWS.map(([, f], i) => [`U${i}`, f]));
+      writeFileSync(join(root, 'queues', 'x-units.json'), JSON.stringify({ units }));
+      const ix = await buildUnitIndex({ queuesDir: join(root, 'queues'), now: NOW });
+      assert.equal(ix.units.length, ROWS.length);
+      ROWS.forEach(([name, , want], i) => assert.equal(ix.units.find((u) => u.id === `U${i}`).waiting, want, name));
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+  it('DEAD_STATES has one home: ribbon-feed uses the unit-index list', async () => {
+    const { DEAD_STATES } = await import('../lib/unit-index.js');
+    assert.deepEqual(DEAD_STATES, DEAD);
+    assert.equal('DEAD_STATES' in (await import('../lib/ribbon-feed.js')), false);
+  });
+});
