@@ -49,5 +49,6 @@
       { "name": "compose", "root": "." },
       { "name": "stratum", "root": "../stratum/ts" }
     ]
-  }
+  },
+  "wiki": { "enabled": true, "tokenEnv": "WIKI_OWNER_TOKEN" }
 }
