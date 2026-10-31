@@ -7,6 +7,7 @@
  */
 import { smPanel } from '../../cockpit/fleetLogic.js';
 import { etaWord } from '../lane/laneLogic.js';
+import { stripTag } from '../../cockpit/notify/notifyLogic.js';
 
 const ms = (v) => { const t = Date.parse(v ?? ''); return Number.isFinite(t) ? t : null; };
 const laneOfSession = (name) => String(name ?? '').replace(/-main$/, '');
@@ -68,16 +69,26 @@ export function workingNow(fleet, feed, agent = null, now = Date.now()) {
 
 /**
  * Units waiting on a review or on the owner, oldest first: `{review: rows, you: rows}`, rows `{unit, lane, title, since}`.
- * `since` is `authorDoneAt` for a review wait; the index carries no start for an owner wait, so that row's `since` is null.
- * `null` when the index has no `units` array.
+ * `since` is `authorDoneAt` for a review wait. COUNT-ONE-1: when `ownerRows` is given (the queue rows `ownerAsks` counts, the
+ * chip's own count) the `you` group is those rows, `since` = `now - age`; `ownerRows === null` (queue source down) makes
+ * `you` null (the drawer says "source unavailable"). When `ownerRows` is omitted, `you` is the index's owner-wait units (their
+ * `since` is `ownerWaitSince`, null when the index carries none). `null` when the index has no `units` array.
  */
-export function waitingNow(index) {
+export function waitingNow(index, ownerRows, now = Date.now()) {
   if (!Array.isArray(index?.units)) return null;
   const pick = (waiting, startKey) => index.units
     .filter((u) => u?.waiting === waiting)
     .map((u) => ({ unit: u.id, lane: u.lane ?? null, title: u.title ?? null, since: startKey ? ms(u[startKey]) : null }))
     .sort(oldestFirst);
-  return { review: pick('review', 'authorDoneAt'), you: pick('owner', null) };
+  let you;
+  if (ownerRows === undefined) you = pick('owner', 'ownerWaitSince');
+  else if (ownerRows === null) you = null;
+  else {
+    you = ownerRows
+      .map((q) => ({ unit: q.id, lane: null, title: stripTag(q.text), since: Number.isFinite(q.age) ? now - q.age * 1000 : null, by: q.by ?? null }))
+      .sort(oldestFirst);
+  }
+  return { review: pick('review', 'authorDoneAt'), you };
 }
 
 /**
@@ -116,7 +127,11 @@ export function phoneLines(feed, index, now = Date.now()) {
     const waits = units.filter((u) => u?.lane === l.lane && (u.waiting === 'review' || u.waiting === 'owner'));
     let title; let state;
     if (l.current) { title = l.current.title || l.current.id; state = 'working'; }
-    else if (waits.length) { title = waits[0].title || waits[0].id; state = waits[0].waiting === 'owner' ? 'waiting on you' : 'waiting on review'; }
+    else if (waits.length) {
+      title = waits[0].title || waits[0].id;
+      const since = waits[0].waiting === 'owner' ? ms(waits[0].ownerWaitSince) : null;
+      state = waits[0].waiting === 'owner' ? `waiting on you${since === null ? '' : ` ${agoWords(since, now)}`}` : 'waiting on review';
+    }
     else if (l.next?.length) { title = l.next[0].title || l.next[0].id; state = 'next up'; }
     else continue;
     const eta = l.eta?.noData ? 'no data' : l.eta ? etaWord(l.eta.p50, nowIso) : 'unknown';

@@ -112,6 +112,27 @@ describe('now lists (COMP-COCKPIT-RIBBON-NOW-1)', () => {
     expect(screen.queryByTestId('now-drawer')).toBeNull();
   }, 30000);
 
+  it('the waiting drawer\'s "Waiting on you" is the shared count, with a wait word; a down queue says so (one row table)', async () => {
+    const withQueue = (queue) => ({ ...FLEET, sources: { sm_status: { ...FLEET.sources.sm_status, value: { ...FLEET.sources.sm_status.value, queue } } } });
+    const ROWS = [
+      { name: '1 security, 1 overdue, 1 not overdue, 1 decided, 1 fyi reads 3', fleet: withQueue({ value: [
+        { id: 'q1', by: 'a', text: 'SECURITY: x', age: 3600, red: false }, { id: 'q2', by: 'a', text: 'QUESTION: y', age: 7200, red: true }, { id: 'q3', by: 'a', text: 'QUESTION: z', age: 600, red: false },
+        { id: 'q4', by: 'a', text: 'APPLIED: d', age: 5, red: true }, { id: 'q5', by: 'a', text: 'FYI: f', age: 5, red: true }], error: null }), heading: /Waiting on you \(3\)/, rows: 3 },
+      { name: 'queue source down: ? and source unavailable, never 0', fleet: withQueue({ value: null, error: 'down' }), heading: /Waiting on you \(\?\)/, rows: 0 },
+    ];
+    for (const r of ROWS) {
+      cleanup(); resetFleetPoller(); resetUnitIndex(); wsFetch.mockReset(); stub({ fleet: ok(r.fleet) });
+      render(<DayView onNavigate={() => {}} />);
+      await screen.findByTestId('what-line');
+      fireEvent.click(screen.getByTestId('what-count-review'));
+      const group = await screen.findByTestId('now-group-you');
+      expect(group.textContent, r.name).toMatch(r.heading);
+      expect(group.querySelectorAll('[data-testid="now-row"]').length, r.name).toBe(r.rows);
+      if (r.rows) { expect(group.textContent, r.name).toMatch(/waiting \d+ (min|h)/); expect(group.textContent, r.name).not.toMatch(/time not recorded/); }
+      else expect(group.textContent, r.name).toMatch(/source unavailable/);
+    }
+  }, 30000);
+
   it('a source that is down says "source unavailable", never an empty list (one row table)', async () => {
     const ROWS = [
       { name: 'unit index down: waiting', stubs: { index: down }, count: 'what-count-review', want: 'now-unavailable' },

@@ -85,20 +85,35 @@ function panelRows(fleet, name) {
   return { rows: panel.value, unavailable: panel.error != null ? label : null };
 }
 
-/** owner queue -> security rows and overdue (`red`) ask rows, by `groupOf`. Decided-for-you and FYI rows never count (they live in the drawer). A security row is never also listed as an ask. */
+/**
+ * COMP-COCKPIT-COUNT-ONE-1: the ONE owner count. The queue rows that wait on the owner: every `security` and `asks` row by
+ * `groupOf`, overdue or not (decided-for-you and FYI rows never count). Security first, then oldest first (largest `age`).
+ * `{rows, n}`; `null` when the queue source is down or not an array, never `[]` for unknown. The chip, Home's and Day's WHAT
+ * line and the NOW drawer's "Waiting on you" all read this, so they cannot disagree.
+ */
+export function ownerAsks(queueRows) {
+  if (!Array.isArray(queueRows)) return null;
+  const rank = (q) => (groupOf(q?.text) === 'security' ? 0 : 1);
+  const rows = queueRows
+    .filter((q) => { const g = groupOf(q?.text); return g === 'security' || g === 'asks'; })
+    .sort((a, b) => rank(a) - rank(b) || (Number.isFinite(b?.age) ? b.age : -1) - (Number.isFinite(a?.age) ? a.age : -1));
+  return { rows, n: rows.length };
+}
+
+/** owner queue -> the `ownerAsks` rows: a security row, an overdue (`red`) ask or an ask not yet overdue. A security row is never also listed as an ask. */
 export function queueAdapter(fleet) {
   const { rows, unavailable } = panelRows(fleet, 'queue');
   const out = [];
-  for (const q of Array.isArray(rows) ? rows : []) {
-    const group = groupOf(q?.text);
-    const security = group === 'security';
-    if (!security && (group !== 'asks' || q?.red !== true)) continue;
+  for (const q of ownerAsks(rows)?.rows ?? []) {
+    const security = groupOf(q?.text) === 'security';
+    const overdue = !security && q?.red === true;
+    const from = q.by ?? 'unknown';
     out.push({
       key: `${security ? 'security' : 'ask'}:${q.id}`,
-      kind: security ? 'security' : 'ask-overdue',
+      kind: security ? 'security' : overdue ? 'ask-overdue' : 'ask',
       severity: security ? 'critical' : 'warn',
       title: stripTag(q.text),
-      detail: security ? `Owner queue, from ${q.by ?? 'unknown'}` : `Owner question overdue, from ${q.by ?? 'unknown'}`,
+      detail: security ? `Owner queue, from ${from}` : overdue ? `Owner question overdue, from ${from}` : `Owner question, from ${from}`,
       since: Number.isFinite(q.age) ? q.age : null,
       sourceLabel: 'owner queue',
       action: 'inbox',

@@ -8,6 +8,7 @@
  * A count whose source is unknown is `null` (rendered "?"), never 0.
  */
 import { readerUp, smPanel, runningNow } from '../fleetLogic.js';
+import { ownerAsks } from '../notify/notifyLogic.js';
 
 export const MOVING_WINDOW_H = 2;
 export const LAST_VISIT_KEY = 'compose:lastVisitAt';
@@ -18,7 +19,7 @@ const ms = (v) => { const t = Date.parse(v ?? ''); return Number.isFinite(t) ? t
 export function whatInputs({ fleet, agent, index, now = Date.now(), lastVisitAt = null } = {}) {
   const running = runningNow(fleet, agent);
   const units = Array.isArray(index?.units) ? index.units : null;
-  const queue = smPanel(fleet, 'queue');
+  const owner = ownerAsks(smPanel(fleet, 'queue')?.value); // COUNT-ONE-1: the chip's own count (every ask and security row)
   const landed = units ? units.map((u) => ms(u?.landedAt)).filter((t) => t !== null) : null;
   const windowStart = now - MOVING_WINDOW_H * 3_600_000;
   const waitingIndex = units ? units.filter((u) => u?.waiting === 'review' || u?.waiting === 'owner').length : null;
@@ -28,9 +29,9 @@ export function whatInputs({ fleet, agent, index, now = Date.now(), lastVisitAt 
     running,
     isRunning: running.composeWorking || (running.busy ?? 0) > 0 || (running.jobs ?? 0) > 0,
     landedInWindow: landed ? landed.some((t) => t >= windowStart) : false,
-    waitingAny: (waitingIndex ?? 0) + (Array.isArray(queue?.value) ? queue.value.length : 0) > 0,
+    waitingAny: (waitingIndex ?? 0) + (owner?.n ?? 0) > 0,
     landed,
-    queueRows: Array.isArray(queue?.value) ? queue.value.length : null,
+    ownerCount: owner ? owner.n : null,
     lastVisitAt: Number.isFinite(lastVisitAt) ? lastVisitAt : null,
   };
 }
@@ -61,7 +62,7 @@ export function whatCounts(raw) {
   return {
     working: running.fleetKnown ? running.busy + running.jobs + (running.composeWorking ? 1 : 0) : null,
     waitingReview: i.units ? i.units.filter((u) => u?.waiting === 'review').length : null,
-    waitingYou: i.queueRows,
+    waitingYou: i.ownerCount,
     landedSinceVisit: i.landed && i.lastVisitAt !== null ? i.landed.filter((t) => t > i.lastVisitAt).length : null,
   };
 }

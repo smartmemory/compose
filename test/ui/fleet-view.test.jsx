@@ -278,8 +278,8 @@ const DISK_OK = { free_gb: 500 };
 // One row table: [name, sources, expected state, expected row keys, expected unknown labels, banner text]
 const NOTIFY_ROWS = [
   ['all clear when every source answers and nothing is open', { fleet: smFleet({ queue: [], sessions: [], df: DISK_OK }), ...CAD_OK }, 'all-clear', [], [], null],
-  ['owner queue: SECURITY tag is a critical security row, a red ask is a warn row, a unit id is neither',
-    { fleet: smFleet({ queue: QUEUE, sessions: [], df: DISK_OK }), ...CAD_OK }, 'alerts', ['security:q1', 'ask:q2'], [], 'Security: key rotated in the clear (2.0h)'],
+  ['owner queue: SECURITY tag is a critical security row, an overdue ask and an ask not yet overdue are warn rows',
+    { fleet: smFleet({ queue: QUEUE, sessions: [], df: DISK_OK }), ...CAD_OK }, 'alerts', ['security:q1', 'ask:q2', 'ask:q3'], [], 'Security: key rotated in the clear (2.0h)'],
   ['context: a session over 250K adds a row, 249K does not',
     { fleet: smFleet({ queue: [], sessions: [{ name: 'forge-main', ctx: 260_000 }, { name: 'ops-main', ctx: 249_000 }], df: DISK_OK }), ...CAD_OK }, 'alerts', ['ctx:forge-main'], [], null],
   ['disk: under 100 GB adds a row, exactly 100 does not',
@@ -301,6 +301,8 @@ const NOTIFY_ROWS = [
     { fleet: smFleet({ queue: [{ id: 'f1', by: 'x', text: 'FYI, no action', age: 9e4, red: true }, { id: 'f2', by: 'x', text: 'UPDATED: moved', age: 9e4, red: true }], sessions: [], df: DISK_OK }), ...CAD_OK }, 'all-clear', [], [], null],
   ['class ask: an overdue untyped row counts as an ask',
     { fleet: smFleet({ queue: [{ id: 'u1', by: 'x', text: 'SM20-CUTOVER needs a pick', age: 9e4, red: true }], sessions: [], df: DISK_OK }), ...CAD_OK }, 'alerts', ['ask:u1'], [], null],
+  ['class ask: a not-yet-overdue ask counts too (COUNT-ONE-1)',
+    { fleet: smFleet({ queue: [{ id: 'n1', by: 'x', text: 'QUESTION: pick', age: 60, red: false }], sessions: [], df: DISK_OK }), ...CAD_OK }, 'alerts', ['ask:n1'], [], null],
   ['class security: CREDENTIAL counts and paints the banner',
     { fleet: smFleet({ queue: [{ id: 's1', by: 'x', text: 'CREDENTIAL leaked', age: 60, red: false }], sessions: [], df: DISK_OK }), ...CAD_OK }, 'alerts', ['security:s1'], [], 'Security: leaked (1m)'],
   ['class fallback: a wall on defaults is not a row, so the chip stays clear',
@@ -316,6 +318,18 @@ describe('COMP-COCKPIT-NOTIFY-CHIP-1 rows', () => {
     const b = bannerText(collected);
     expect(b ? b.text : null).toBe(banner);
     expect(collect(sources, NOW).rows.map((r) => r.key)).toEqual(keys); // stable keys across reads
+  });
+
+  it('a row says "overdue" only when it is (one row table)', () => {
+    const DETAIL_ROWS = [
+      ['red ask', { id: 'a', by: 'ops-main', text: 'QUESTION: x', age: 9e4, red: true }, 'ask-overdue', 'Owner question overdue, from ops-main'],
+      ['not-overdue ask', { id: 'b', by: 'ops-main', text: 'QUESTION: x', age: 60, red: false }, 'ask', 'Owner question, from ops-main'],
+      ['security', { id: 'c', by: 'ops-main', text: 'SECURITY: x', age: 60, red: false }, 'security', 'Owner queue, from ops-main'],
+    ];
+    for (const [name, q, kind, detail] of DETAIL_ROWS) {
+      const [r] = collect({ fleet: smFleet({ queue: [q], sessions: [], df: DISK_OK }), ...CAD_OK }, NOW).rows;
+      expect([r.kind, r.detail], name).toEqual([kind, detail]);
+    }
   });
 
   it('tags are exact words: unit ids and dash forms are untyped', () => {
@@ -342,9 +356,9 @@ describe('COMP-COCKPIT-NOTIFY-CHIP-1 chip, tray and banner', () => {
     render(<><NotifyChip onOpenFleet={onOpenFleet} /><SecurityBanner onOpenFleet={onOpenFleet} /></>);
     const banner = await screen.findByTestId('security-banner');
     expect(banner.textContent).toContain('Security: key rotated in the clear');
-    await waitFor(() => expect(screen.getByTestId('notify-chip').textContent).toContain('2 alerts'));
+    await waitFor(() => expect(screen.getByTestId('notify-chip').textContent).toContain('3 alerts'));
     fireEvent.click(screen.getByTestId('notify-chip'));
-    expect(screen.getAllByTestId('notify-row').map((r) => r.getAttribute('data-kind'))).toEqual(['security', 'ask-overdue']);
+    expect(screen.getAllByTestId('notify-row').map((r) => r.getAttribute('data-kind'))).toEqual(['security', 'ask-overdue', 'ask']);
     const handled = vi.fn((e) => e.preventDefault());
     window.addEventListener('compose:open-inbox', handled);
     fireEvent.click(screen.getAllByTestId('notify-row-action')[0]);

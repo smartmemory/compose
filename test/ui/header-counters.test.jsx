@@ -54,6 +54,7 @@ const routeFetch = (routes) => {
     return { ok: true, status: 200, json: async () => (hit ? hit[1] : {}), text: async () => '' };
   });
 };
+const fleetBodyRows = (rows) => ({ ...fleetBody(), sources: { sm_status: { value: { ...fleetBody().sources.sm_status.value, queue: { value: rows, error: null } }, error: null } } });
 const resetPollers = () => { resetFleetPoller(); resetUnitIndex(); };
 
 const STATE_ROWS = [
@@ -63,6 +64,8 @@ const STATE_ROWS = [
   ['Working: only Compose\'s own agent is working', raw({ agent: { status: 'working', category: 'writing' } }), 'Working, nothing landed'],
   ['Stalled: nothing running, a unit waits on review', raw({ index: indexOf([unit('A', { waiting: 'review' })]) }), 'Stalled'],
   ['Stalled: nothing running, an owner question is open', raw({ fleet: fleetBody({ queue: 2 }) }), 'Stalled'],
+  ['Idle, not Stalled: only decided and fyi rows are open (they never count)', raw({ fleet: fleetBodyRows([{ id: 'd', text: 'APPLIED: done' }, { id: 'f', text: 'FYI: note' }]) }), 'Idle'],
+  ['Stalled: one security row is open', raw({ fleet: fleetBodyRows([{ id: 's', text: 'SECURITY: x' }]) }), 'Stalled'],
   ['Idle: nothing running, nothing waiting, last landing 3 h ago', raw({ index: indexOf([unit('A', { landedAt: hoursAgo(3) })]) }), 'Idle'],
   ['Idle, not Unknown: the index is down but sm_status answers quiet', raw({ index: null }), 'Idle'],
 ];
@@ -89,6 +92,8 @@ const ROWS = [
     const index = indexOf([unit('A', { waiting: 'review' }), unit('B', { landedAt: hoursAgo(1) }), unit('C', { landedAt: hoursAgo(5) })]);
     expect(whatCounts(raw({ fleet: fleetBody({ busy: 2, jobs: 3, queue: 4 }), agent: { status: 'working', category: 'writing' }, index, lastVisitAt })))
       .toEqual({ working: 6, waitingReview: 1, waitingYou: 4, landedSinceVisit: 1 });
+    const typed = [{ id: 'a', text: 'SECURITY: x' }, { id: 'b', text: 'QUESTION: y', red: false }, { id: 'c', text: 'APPLIED: z' }, { id: 'd', text: 'FYI: w' }];
+    expect(whatCounts(raw({ fleet: fleetBodyRows(typed) })).waitingYou).toBe(2); // a decided and a fyi row are not counted
     expect(whatCounts(raw({ fleet: FLEET_DOWN, index: null, lastVisitAt })))
       .toEqual({ working: null, waitingReview: null, waitingYou: null, landedSinceVisit: null });
     expect(whatCounts(raw({ index, lastVisitAt: null })).landedSinceVisit).toBeNull();

@@ -72,6 +72,27 @@ describe('buildUnitIndex waiting (COMP-COCKPIT-FIXES-1 B)', () => {
       ROWS.forEach(([name, , want], i) => assert.equal(ix.units.find((u) => u.id === `U${i}`).waiting, want, name));
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
+  it('ownerWaitSince is the open owner wait start (COUNT-ONE-1)', async () => {
+    // [name, row fields, expected ownerWaitSince, expected waiting]
+    const SINCE_ROWS = [
+      ['an open wait', { owner_waits: [{ start: '2026-10-31T01:00:00Z' }] }, '2026-10-31T01:00:00Z', 'owner'],
+      ['an ended wait then an open one: the open start', { owner_waits: [{ start: '2026-10-30T01:00:00Z', end: '2026-10-30T02:00:00Z' }, { start: '2026-10-31T05:00:00Z' }] }, '2026-10-31T05:00:00Z', 'owner'],
+      ['only an ended wait', { owner_waits: [{ start: '2026-10-30T01:00:00Z', end: '2026-10-30T02:00:00Z' }] }, null, null],
+      ['no waits', {}, null, null],
+      ['a landed unit with an open wait is not waiting', { landed_at: '2026-10-31T03:00:00Z', owner_waits: [{ start: '2026-10-31T01:00:00Z' }] }, null, null],
+    ];
+    const root = mkdtempSync(join(tmpdir(), 'unit-index-since-'));
+    try {
+      mkdirSync(join(root, 'queues'));
+      writeFileSync(join(root, 'queues', 'x-units.json'), JSON.stringify({ units: Object.fromEntries(SINCE_ROWS.map(([, f], i) => [`U${i}`, f])) }));
+      const ix = await buildUnitIndex({ queuesDir: join(root, 'queues'), now: NOW });
+      SINCE_ROWS.forEach(([name, , since, waiting], i) => {
+        const u = ix.units.find((x) => x.id === `U${i}`);
+        assert.deepEqual([u.ownerWaitSince, u.waiting], [since, waiting], name);
+        assert.equal('events' in u, false, `${name}: no events in the default shape`);
+      });
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
   it('DEAD_STATES has one home: ribbon-feed uses the unit-index list', async () => {
     const { DEAD_STATES } = await import('../lib/unit-index.js');
     assert.deepEqual(DEAD_STATES, DEAD);

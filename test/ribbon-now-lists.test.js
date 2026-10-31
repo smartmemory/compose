@@ -56,6 +56,23 @@ describe('waitingNow', () => {
   });
 });
 
+describe('waitingNow with the shared owner rows (COUNT-ONE-1)', () => {
+  const q = (id, age, text = 'QUESTION: x') => ({ id, text, age, by: 'ops-main' });
+  const idx = index([unit('U', { waiting: 'owner', ownerWaitSince: iso(9) }), unit('N', { waiting: 'review', authorDoneAt: iso(1) })]);
+  it('rows', () => {
+    const rows = waitingNow(idx, [q('young', 600), q('old', 7200), q('t', 60, 'SECURITY: leak')], NOW).you;
+    assert.deepEqual(rows.map((r) => `${r.unit}|${r.title}|${Math.round((NOW - r.since) / 60_000)}|${r.by}`), ['old|x|120|ops-main', 'young|x|10|ops-main', 't|leak|1|ops-main'], 'queue rows, oldest first, since = now - age');
+    assert.deepEqual(waitingNow(idx, [], NOW).you, [], 'empty queue is an empty group');
+    const down = waitingNow(idx, null, NOW);
+    assert.equal(down.you, null, 'queue source down: the group is null, never []');
+    assert.deepEqual(down.review.map((r) => r.unit), ['N'], 'the review group is untouched');
+    const old = waitingNow(idx);
+    assert.deepEqual(old.you.map((r) => r.unit), ['U'], 'ownerRows omitted: the index units, as before');
+    assert.equal(old.you[0].since, NOW - 9 * 3_600_000, 'and their start is ownerWaitSince');
+    assert.equal(waitingNow(null, [q('a', 1)], NOW), null, 'index down is still null');
+  });
+});
+
 describe('landedSince', () => {
   const since = NOW - 10 * 3_600_000;
   const units = index([unit('A', { landedAt: iso(2), deployedAt: iso(1) }), unit('B', { landedAt: iso(5) }), unit('C', { landedAt: iso(20) }), unit('D')]);
@@ -94,6 +111,8 @@ describe('phoneLines', () => {
       'c: T-X · waiting on you · ETA unknown',
       'd: Queued one · next up · ETA unknown',
     ]);
+    const waited = index([unit('X', { lane: 'c', waiting: 'owner', ownerWaitSince: iso(3) })]);
+    assert.equal(phoneLines({ ...lanes, now: '2026-10-31T12:00:00-07:00' }, waited, NOW).find((l) => l.lane === 'c').text, 'T-X · waiting on you 3 h 0 m · ETA unknown', 'the owner wait is named');
     assert.equal(phoneLines(null, idx), null, 'feed down');
     assert.deepEqual(phoneLines(feed([lane('a', { current: { id: 'U1' } })]), null).map((l) => l.text), ['U1 · working · ETA unknown'], 'index down still lists working');
   });

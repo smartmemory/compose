@@ -6,6 +6,8 @@
  */
 import React, { useEffect, useMemo, useRef } from 'react';
 import { workingNow, waitingNow, landedSince, agoWords, sinceWords } from './nowLists.js';
+import { smPanel } from '../../cockpit/fleetLogic.js';
+import { ownerAsks } from '../../cockpit/notify/notifyLogic.js';
 
 const UNAVAILABLE = 'source unavailable';
 const sec = 'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground m-0 mb-1';
@@ -41,8 +43,8 @@ function Waiting({ lists, now }) {
     <div className="flex flex-col gap-3">
       {groups.map(([id, label, rows]) => (
         <section key={id} data-testid={`now-group-${id}`}>
-          <h3 className={sec}>{label} ({rows.length})</h3>
-          {rows.length === 0 ? <p className={`m-0 ${sub}`}>None.</p> : (
+          <h3 className={sec}>{label} ({rows === null ? '?' : rows.length})</h3>
+          {rows === null ? <Unavailable /> : rows.length === 0 ? <p className={`m-0 ${sub}`}>None.</p> : (
             <ul className="m-0 p-0 list-none">
               {rows.map((r) => (
                 <li key={r.unit} className={rowCls} data-testid="now-row">
@@ -103,7 +105,11 @@ export default function NowDrawer({ kind, onClose, fleet, index, feed, feedLoadi
   }, [onClose]);
 
   const working = useMemo(() => (kind === 'working' ? workingNow(fleet, feed, agent, now) : null), [kind, fleet, feed, agent, now]);
-  const waiting = useMemo(() => (kind === 'waiting' ? waitingNow(index) : null), [kind, index]);
+  const waiting = useMemo(() => {
+    if (kind !== 'waiting') return null;
+    const owner = ownerAsks(smPanel(fleet, 'queue')?.value); // COUNT-ONE-1: the same count as the chip and the WHAT line
+    return waitingNow(index, owner ? owner.rows : null, now);
+  }, [kind, index, fleet, now]);
   const landed = useMemo(() => (kind === 'landed' ? landedSince(index, lastVisitAt, feed) : null), [kind, index, lastVisitAt, feed]);
 
   let title; let line; let body;
@@ -112,8 +118,8 @@ export default function NowDrawer({ kind, onClose, fleet, index, feed, feedLoadi
     line = 'Agents running a unit right now';
     body = <Working rows={working} now={now} loading={feedLoading} />;
   } else if (kind === 'waiting') {
-    title = waiting === null ? 'Waiting' : `${waiting.review.length + waiting.you.length} waiting`;
-    line = waiting === null ? 'Units waiting on a review or on you' : `review ${waiting.review.length}, you ${waiting.you.length}`;
+    title = waiting === null ? 'Waiting' : `${(waiting.review?.length ?? 0) + (waiting.you?.length ?? 0)} waiting`;
+    line = waiting === null ? 'Units waiting on a review or on you' : `review ${waiting.review?.length ?? '?'}, you ${waiting.you?.length ?? '?'}`;
     body = <Waiting lists={waiting} now={now} />;
   } else {
     title = landed === null ? 'Landed since you left' : `${landed.rows.length} landed since you left`;
