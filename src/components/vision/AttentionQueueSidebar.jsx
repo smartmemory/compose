@@ -82,7 +82,8 @@ function AttentionQueueSection({ items, gates, onSelectItem, storageScope }) {
         style={{ color: 'hsl(var(--muted-foreground))' }}
       >
         {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-        Needs Attention
+        {/* COMP-COCKPIT-RIBBON-TOP-1 (M2): this list is Compose roadmap items, not the owner's asks; the asks live in the header chip. */}
+        Blocked features
         <span className="ml-auto tabular-nums" data-testid="attention-count">{queue.length}</span>
       </button>
       {!collapsed && visible.map(({ item, priority, reason }) => (

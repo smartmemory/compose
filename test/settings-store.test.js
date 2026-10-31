@@ -76,7 +76,7 @@ describe('defaults', () => {
     const settings = store.get();
     assert.equal(settings.ui.theme, 'system');
     // COMP-AUDIT-18: a fresh install lands on Home, not the Graph.
-    assert.equal(settings.ui.defaultView, 'dashboard');
+    assert.equal(settings.ui.defaultView, 'day');
   });
 });
 

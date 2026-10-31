@@ -9,7 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   ROOMS, VIEW_KEYS, DEFAULT_VIEW, PACKAGE_GATED_VIEWS, VIEW_LABELS,
-  reachableViews, resolveStoredView, resolveDefaultView, viewFromQuery, roomEntryView, ROOM_ENTRY, viewTrailLabel,
+  reachableViews, PROJECT_ROOMS, hasRibbonHash, escapeTarget, locateView, resolveStoredView, resolveDefaultView, viewFromQuery, roomEntryView, ROOM_ENTRY, viewTrailLabel,
 } from '../lib/view-keys.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -22,24 +22,24 @@ describe('VIEW_KEYS', () => {
     assert.deepEqual([...cases].sort(), [...VIEW_KEYS].sort());
     assert.deepEqual(Object.keys(VIEW_LABELS).sort(), [...VIEW_KEYS].sort());
     assert.equal(new Set(VIEW_KEYS).size, VIEW_KEYS.length);
-    assert.equal(DEFAULT_VIEW, 'dashboard');
+    assert.equal(DEFAULT_VIEW, 'day');
   });
 });
 
 describe('resolveStoredView (load: keep what is known on load)', () => {
   const rows = [
-    { name: 'fresh storage', stored: null, avail: {}, view: 'dashboard', from: null },
-    { name: 'empty string', stored: '', avail: {}, view: 'dashboard', from: null },
-    { name: 'invalid key', stored: 'roadmap', avail: {}, view: 'dashboard', from: 'roadmap' },
-    { name: 'garbage', stored: '<x>', avail: {}, view: 'dashboard', from: '<x>' },
+    { name: 'fresh storage', stored: null, avail: {}, view: 'day', from: null },
+    { name: 'empty string', stored: '', avail: {}, view: 'day', from: null },
+    { name: 'invalid key', stored: 'roadmap', avail: {}, view: 'day', from: 'roadmap' },
+    { name: 'garbage', stored: '<x>', avail: {}, view: 'day', from: '<x>' },
     { name: 'plain key, no availability data', stored: 'graph', avail: {}, view: 'graph', from: null },
     { name: 'hidden key kept', stored: 'gates', avail: {}, view: 'gates', from: null },
     { name: 'unknown package key kept: ops', stored: 'ops', avail: {}, view: 'ops', from: null },
     { name: 'ops explicitly unknown', stored: 'ops', avail: { ops: 'unknown' }, view: 'ops', from: null },
     { name: 'stratum unknown', stored: 'stratum', avail: { stratum: 'unknown' }, view: 'stratum', from: null },
     { name: 'unknown then yes', stored: 'cadence', avail: { cadence: 'yes' }, view: 'cadence', from: null },
-    { name: 'unknown then no: ops', stored: 'ops', avail: { ops: 'no' }, view: 'dashboard', from: 'ops' },
-    { name: 'unknown then no: wiki', stored: 'wiki', avail: { wiki: 'no' }, view: 'dashboard', from: 'wiki' },
+    { name: 'unknown then no: ops', stored: 'ops', avail: { ops: 'no' }, view: 'day', from: 'ops' },
+    { name: 'unknown then no: wiki', stored: 'wiki', avail: { wiki: 'no' }, view: 'day', from: 'wiki' },
     { name: 'usage has no predicate', stored: 'usage', avail: { ops: 'no', wiki: 'no' }, view: 'usage', from: null },
     { name: 'other package absent does not matter', stored: 'graph', avail: { ops: 'no' }, view: 'graph', from: null },
   ];
@@ -61,7 +61,7 @@ describe('roomEntryView with ROOM_ENTRY (COMP-COCKPIT-RULE-DEFAULT-1)', () => {
     for (const r of rows) assert.equal(roomEntryView(r.room, r.avail, r.last), r.want, r.name);
     assert.deepEqual(ROOM_ENTRY, { fleet: 'sessions' });
     assert.equal(viewTrailLabel('ops'), 'Fleet › Ops');
-    assert.equal(viewTrailLabel('dashboard'), 'Home');
+    assert.equal(viewTrailLabel('dashboard'), 'Project home');
     assert.equal(viewTrailLabel('bogus'), null);
   });
 });
@@ -77,16 +77,16 @@ describe('reachableViews + resolveDefaultView', () => {
     for (const r of rows) assert.deepEqual(reachableViews(r.tabs, r.avail), r.expect, r.name);
   });
 
-  test('defaultView lands only if reachable by clicks, else Home', () => {
+  test('defaultView lands only if reachable by clicks, else Day', () => {
     const tabs = VIEW_KEYS; // slice 2: every key is reachable by clicks (rooms)
     const rows = [
-      { name: 'none', dv: undefined, avail: {}, view: 'dashboard', from: null },
+      { name: 'none', dv: undefined, avail: {}, view: 'day', from: null },
       { name: 'graph (a pick that stays)', dv: 'graph', avail: {}, view: 'graph', from: null },
       { name: 'retired docs key lands on the wiki', dv: 'docs', avail: {}, view: 'wiki', from: null },
       { name: 'a view in a room (was hidden before rooms)', dv: 'pipeline', avail: {}, view: 'pipeline', from: null },
-      { name: 'invalid', dv: 'roadmap', avail: {}, view: 'dashboard', from: 'roadmap' },
+      { name: 'invalid', dv: 'roadmap', avail: {}, view: 'day', from: 'roadmap' },
       { name: 'package tab, still unknown', dv: 'stratum', avail: { stratum: 'unknown' }, view: 'stratum', from: null },
-      { name: 'package tab, absent', dv: 'ops', avail: { ops: 'no' }, view: 'dashboard', from: 'ops' },
+      { name: 'package tab, absent', dv: 'ops', avail: { ops: 'no' }, view: 'day', from: 'ops' },
     ];
     for (const r of rows) assert.deepEqual(resolveDefaultView(r.dv, tabs, r.avail), { view: r.view, fellBackFrom: r.from }, r.name);
   });
@@ -116,5 +116,33 @@ describe('popoutView', () => {
     const rows = [['graph', 'graph'], ['tree', 'tree'], ['gates', 'gates'], ['settings', 'settings'],
       ['dashboard', 'graph'], ['usage', 'graph'], ['roadmap', 'graph'], ['', 'graph'], [undefined, 'graph'], ['<x>', 'graph']];
     for (const [k, v] of rows) assert.equal(popoutView(k), v, String(k));
+  });
+});
+
+describe('Day front page (COMP-COCKPIT-RIBBON-TOP-1)', () => {
+  test('one row table: day in the key list, default, first room, project rooms, ribbon hash, Esc target', async () => {
+    const { parseHash } = await import('../src/components/ribbon/rangeLogic.js');
+    const good = '#ribbon.from=2026-10-20T00:00+08:00&to=2026-10-21T00:00+08:00';
+    const rows = [
+      { name: 'day is a view key', got: VIEW_KEYS.includes('day'), want: true },
+      { name: 'day has a label', got: VIEW_LABELS.day, want: 'Day' },
+      { name: 'default view', got: DEFAULT_VIEW, want: 'day' },
+      { name: 'first room', got: ROOMS[0], want: { key: 'day', label: 'Day', views: ['day'] } },
+      { name: 'day is located in its own room', got: locateView('day'), want: { top: 'day', sub: null } },
+      { name: 'project rooms', got: PROJECT_ROOMS, want: ['home', 'ideas', 'roadmap', 'build', 'review'] },
+      { name: 'every project room is a room, Fleet and Library are not project rooms', got: [PROJECT_ROOMS.every((k) => ROOMS.some((r) => r.key === k)), PROJECT_ROOMS.includes('fleet'), PROJECT_ROOMS.includes('library')], want: [true, false, false] },
+      { name: 'home keeps dashboard, labelled Project home', got: ROOMS.find((r) => r.key === 'home'), want: { key: 'home', label: 'Project home', views: ['dashboard'] } },
+      { name: 'a valid ribbon hash', got: hasRibbonHash(good, parseHash), want: true },
+      { name: 'a hash with a bad window', got: hasRibbonHash('#ribbon.from=nope&to=nope', parseHash), want: false },
+      { name: 'an unrelated hash', got: hasRibbonHash('#section', parseHash), want: false },
+      { name: 'no hash', got: hasRibbonHash('', parseHash), want: false },
+      { name: 'no parser given', got: hasRibbonHash(good), want: false },
+      { name: 'Esc from Project home', got: escapeTarget('dashboard'), want: 'day' },
+      { name: 'Esc from Roadmap top level (graph)', got: escapeTarget('graph'), want: 'day' },
+      { name: 'Esc from a Roadmap sub-tab past the first', got: escapeTarget('tree'), want: null },
+      { name: 'Esc from Fleet', got: escapeTarget('process'), want: null },
+      { name: 'Esc from Day', got: escapeTarget('day'), want: null },
+    ];
+    for (const r of rows) assert.deepEqual(r.got, r.want, r.name);
   });
 });

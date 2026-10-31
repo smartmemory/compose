@@ -15,7 +15,7 @@ describe('<ViewTabs> top row', () => {
     render(<ViewTabs activeView="gates" availability={ALL_YES} onViewChange={() => {}} />);
     const names = screen.getAllByRole('tab').map((t) => t.getAttribute('data-testid'));
     expect(names).toEqual([...ROOMS.map((r) => `room-tab-${r.key}`), 'room-tab-settings']);
-    expect(ROOMS.map((r) => r.label)).toEqual(['Home', 'Ideas', 'Roadmap', 'Build', 'Review', 'Fleet', 'Library']);
+    expect(ROOMS.map((r) => r.label)).toEqual(['Day', 'Project home', 'Ideas', 'Roadmap', 'Build', 'Review', 'Fleet', 'Library']);
     const selected = screen.getAllByRole('tab').filter((t) => t.getAttribute('aria-selected') === 'true');
     expect(selected.map((t) => t.getAttribute('data-testid'))).toEqual(['room-tab-review']);
   });
@@ -128,16 +128,17 @@ describe('App rooms (COMP-AUDIT-17 slice 2)', () => {
     localStorage.clear(); sessionStorage.clear();
     window.history.pushState({}, '', '/');
     const { useVisionStore } = await import('../../src/components/vision/useVisionStore.js');
-    useVisionStore.setState({ items: [], uiCommand: null });
+    // RIBBON-TOP-1: settings reset too. A row below sets defaultView 'dashboard', which used to equal the default and now overrides Day.
+    useVisionStore.setState({ items: [], uiCommand: null, settings: {} });
     vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
   afterEach(() => { vi.restoreAllMocks(); window.history.pushState({}, '', '/'); });
 
-  it('fresh load: Home is highlighted, no sub-row, seven rooms and the gear', async () => {
+  it('fresh load: Day is highlighted, no sub-row, the rooms and the gear', async () => {
     mockFetch();
     await renderApp();
-    expect(await screen.findByTestId('home')).toBeTruthy();
-    expect(selectedIds()).toEqual(['room-tab-home']);
+    expect(await screen.findByTestId('day-view')).toBeTruthy();
+    expect(selectedIds()).toEqual(['room-tab-day']);
     expect(screen.queryByTestId('sub-tabs')).toBeNull();
     expect(screen.getByTestId('room-tab-settings')).toBeTruthy();
   }, 30000);
@@ -187,7 +188,7 @@ describe('App rooms (COMP-AUDIT-17 slice 2)', () => {
   it('clicking a room and a sub-tab navigates and re-opens the room on its last view', async () => {
     mockFetch();
     await renderApp();
-    await screen.findByTestId('home');
+    await screen.findByTestId('day-view');
     fireEvent.click(screen.getByTestId('room-tab-review'));
     await waitFor(() => expect(selectedIds()).toEqual(['room-tab-review']));
     fireEvent.click(screen.getByTestId('sub-tab-validate'));
@@ -215,7 +216,7 @@ describe('App rooms (COMP-AUDIT-17 slice 2)', () => {
   it('a uiCommand with a valid view navigates (Review > Gates)', async () => {
     mockFetch();
     await renderApp();
-    await screen.findByTestId('home');
+    await screen.findByTestId('day-view');
     const { useVisionStore } = await import('../../src/components/vision/useVisionStore.js');
     await act(async () => { useVisionStore.setState({ uiCommand: { view: 'gates' } }); });
     await waitFor(() => expect(selectedIds()).toEqual(['room-tab-review']));

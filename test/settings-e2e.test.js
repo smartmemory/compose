@@ -144,7 +144,7 @@ describe('settings E2E', () => {
     const { status, body } = await get('/api/settings');
     assert.equal(status, 200);
     assert.equal(body.ui.theme, 'system');
-    assert.equal(body.ui.defaultView, 'dashboard');
+    assert.equal(body.ui.defaultView, 'day');
     assert.ok(body.policies);
     assert.ok(body.iterations);
     assert.ok(body.models);

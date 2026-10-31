@@ -4,7 +4,9 @@ import PopoutView from './components/PopoutView';
 import ProjectSwitchPopover from './components/ProjectSwitchPopover.jsx';
 
 // Cockpit shell components
-import ViewTabs, { ViewSubTabs } from './components/cockpit/ViewTabs.jsx';
+import ViewTabs, { ViewSubTabs, RoomBreadcrumb } from './components/cockpit/ViewTabs.jsx';
+import DayView from './components/ribbon/DayView.jsx';
+import { parseHash as parseRibbonHash } from './components/ribbon/rangeLogic.js';
 import { itemFeatureCode, featureCodeResolves, resolveFeatureContext, filterFeatureCode, focusReducer, parseStoredFocus, FOCUS_STORAGE_KEY } from './components/cockpit/focusedFeature.js';
 import StratumView from './components/cockpit/StratumView.jsx';
 import CadenceView from './components/cockpit/CadenceView.jsx';
@@ -54,7 +56,7 @@ import {
 } from './components/cockpit/contextPanelState.js';
 
 // Vision surface — views, sidebar, modals, store
-import { VIEW_KEYS, viewTrailLabel, isViewKey, canonicalView, locateView, reachableViews, resolveStoredView, resolveDefaultView, viewFromQuery, migrateNavState, LEGACY_NAV_STORAGE_KEYS } from '../lib/view-keys.js';
+import { VIEW_KEYS, viewTrailLabel, isViewKey, canonicalView, locateView, reachableViews, resolveStoredView, resolveDefaultView, viewFromQuery, migrateNavState, LEGACY_NAV_STORAGE_KEYS, hasRibbonHash, escapeTarget } from '../lib/view-keys.js';
 import { NavigationContext } from './lib/navigation.jsx';
 import { VisionChangesContext } from './components/vision/VisionChangesContext.js';
 import { useVisionStore } from './components/vision/useVisionStore.js';
@@ -272,6 +274,9 @@ function CockpitView({
   reachableViewKeys,
 }) {
   switch (activeView) {
+    case 'day':
+      // COMP-COCKPIT-RIBBON-TOP-1: the front page. Home moved one layer down (`dashboard`, "Project home").
+      return <DayView onOpenFleet={onOpenFleet} onNavigate={onNavigate} active />;
     case 'dashboard':
       return (
         <DashboardView
@@ -561,15 +566,19 @@ function AppInner() {
   // ── Local vision state (absorbed from VisionTracker) ────────────────────
   const [selectedItemId, setSelectedItemId] = useState(null);
   // A `?view=` deep link counts as a chosen view: the settings defaultView must not override it (COMP-COCKPIT-13).
-  const hadSessionView = useRef(navAtLoad.hadStored || viewFromQuery(window.location.search) !== null);
+  const hadSessionView = useRef(navAtLoad.hadStored || viewFromQuery(window.location.search) !== null || hasRibbonHash(window.location.hash, parseRibbonHash));
   const [activeView, setActiveView] = useState(() => {
     // COMP-AUDIT-17: on load only what is known on load (every availability is `unknown`).
     // Any valid view key is kept; a package-gated key is re-checked once its availability
     // settles (the effect below). Fresh storage or an invalid key lands on Home.
     // COMP-COCKPIT-13: a `?view=<key>` deep link wins over the stored view (the popout check ran in App()).
+    // COMP-COCKPIT-RIBBON-TOP-1 tiers: `?view=` > a valid `#ribbon.` hash opens Day > the tab's session view > settings
+    // default (effect below) > DEFAULT_VIEW (`day`). The hash picks the view on load only; RIBBON-RANGE-1 alone owns it after.
     const linked = viewFromQuery(window.location.search);
-    if (navAtLoad.fellBackFrom) console.warn(`[compose] stored view "${navAtLoad.fellBackFrom}" is not a view; showing Home`);
-    return linked || navAtLoad.view;
+    if (navAtLoad.fellBackFrom) console.warn(`[compose] stored view "${navAtLoad.fellBackFrom}" is not a view; showing Day`);
+    if (linked) return linked;
+    if (hasRibbonHash(window.location.hash, parseRibbonHash)) return 'day';
+    return navAtLoad.view;
   });
   const [searchQuery, setSearchQuery] = useState('');
   const untriagedIdeas = useIdeaboxStore(s => s.ideas.filter(i => !i.priority || i.priority === '—').length);
@@ -721,6 +730,21 @@ function AppInner() {
     if (loc) lastByRoom.current[loc.top] = activeView;
   }, [activeView]);
 
+  // COMP-COCKPIT-RIBBON-TOP-1: Esc from a project room's top level goes back to Day. Esc keeps every other meaning: it is
+  // ignored while typing, over a dialog or the palette, and when another handler already took it.
+  useEffect(() => {
+    const onEsc = (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const t = e.target;
+      if (t instanceof Element && t.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"], [aria-expanded="true"]')) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      const target = escapeTarget(activeView);
+      if (target) handleViewChange(target);
+    };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [activeView, handleViewChange]);
+
   // ── Layout persistence ───────────────────────────────────────────────────
   const viewAtMount = useRef(activeView);
   const viewNavigated = useRef(false);
@@ -770,7 +794,7 @@ function AppInner() {
     if (settings?.ui?.defaultView) {
       // COMP-AUDIT-17: applied only if reachable by clicks in the visible tabs and not known-absent; else Home.
       const { view, fellBackFrom } = resolveDefaultView(settings.ui.defaultView, VIEW_KEYS, availability);
-      if (fellBackFrom) console.warn(`[compose] default view "${fellBackFrom}" is not reachable; showing Home`);
+      if (fellBackFrom) console.warn(`[compose] default view "${fellBackFrom}" is not reachable; showing Day`);
       handleViewChange(view);
       defaultViewApplied.current = true;
     }
@@ -782,7 +806,7 @@ function AppInner() {
   useEffect(() => {
     const { view, fellBackFrom } = resolveStoredView(activeView, availability);
     if (fellBackFrom && view !== activeView) {
-      console.warn(`[compose] view "${fellBackFrom}" is not available; showing Home`);
+      console.warn(`[compose] view "${fellBackFrom}" is not available; showing Day`);
       handleViewChange(view);
     }
   }, [activeView, availability, handleViewChange]);
@@ -1253,6 +1277,7 @@ function AppInner() {
               onViewChange={handleViewChange}
               lastByRoom={lastByRoom.current}
               badges={{ review: pendingGateCount }}
+              projectName={projectName}
               focusedFeature={focusedFeature}
               onClearFocus={() => dispatchFocus({ type: 'clear' })}
               onOpenPalette={() => setPaletteOpen(v => !v)}
@@ -1330,6 +1355,7 @@ function AppInner() {
         </div>
         <SecurityBanner onOpenFleet={handleOpenFleet} />
         </PanelErrorBoundary>
+        <RoomBreadcrumb activeView={activeView} availability={availability} projectName={projectName} lastByRoom={lastByRoom.current} onViewChange={handleViewChange} />
         <ViewSubTabs activeView={activeView} availability={availability} onViewChange={handleViewChange} />
 
         {/* ================================================================ */}

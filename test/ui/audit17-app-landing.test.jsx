@@ -24,18 +24,18 @@ describe('App landing (COMP-AUDIT-17)', () => {
   beforeEach(() => { localStorage.clear(); sessionStorage.clear(); vi.spyOn(console, 'warn').mockImplementation(() => {}); });
   afterEach(() => vi.restoreAllMocks());
 
-  it('fresh storage lands on Home', async () => {
+  it('fresh storage lands on Day', async () => {
     mockFetch();
     await renderApp();
-    expect(await screen.findByTestId('home')).toBeTruthy();
+    expect(await screen.findByTestId('day-view')).toBeTruthy();
     expect(screen.queryByText(/View not found/i)).toBeNull();
   }, 30000);
 
-  it('invalid stored key falls back to Home, never "View not found"', async () => {
+  it('invalid stored key falls back to Day, never "View not found"', async () => {
     sessionStorage.setItem('compose:activeView', 'bogus');
     mockFetch();
     await renderApp();
-    expect(await screen.findByTestId('home')).toBeTruthy();
+    expect(await screen.findByTestId('day-view')).toBeTruthy();
     expect(screen.queryByText(/View not found/i)).toBeNull();
   }, 30000);
 
@@ -48,11 +48,11 @@ describe('App landing (COMP-AUDIT-17)', () => {
     expect(screen.queryByText(/View not found/i)).toBeNull();
   }, 30000);
 
-  it('stored ops once the check says no falls back to Home with one WARNING naming ops', async () => {
+  it('stored ops once the check says no falls back to Day with one WARNING naming ops', async () => {
     sessionStorage.setItem('compose:activeView', 'ops');
     mockFetch({ opsPages: [] });
     await renderApp();
-    expect(await screen.findByTestId('home')).toBeTruthy();
+    expect(await screen.findByTestId('day-view')).toBeTruthy();
     const warns = console.warn.mock.calls.filter(c => String(c[0]).includes('ops'));
     expect(warns.length).toBe(1);
   }, 30000);
@@ -77,11 +77,11 @@ describe('App landing (COMP-AUDIT-17)', () => {
   it('landing by source: tab sessionStorage, shared localStorage, ?view=, settings defaultView (one row table)', async () => {
     const { useVisionStore } = await import('../../src/components/vision/useVisionStore.js');
     const rows = [
-      { name: 'fresh tab, localStorage on ops (another tab): Home', local: 'ops', want: 'home' },
+      { name: 'fresh tab, localStorage on ops (another tab): Day', local: 'ops', want: 'day' },
       { name: 'reload, sessionStorage on gates: stays on Gates', session: 'gates', want: 'gates' },
       { name: '?view=process wins over sessionStorage', session: 'gates', query: '?view=process', want: 'process' },
       { name: 'settings defaultView honored when nothing else', dv: 'graph', want: 'graph' },
-      { name: 'invalid sessionStorage key: Home with the WARNING', session: 'bogus', want: 'home', warn: 'bogus' },
+      { name: 'invalid sessionStorage key: Day with the WARNING', session: 'bogus', want: 'day', warn: 'bogus' },
     ];
     for (const r of rows) {
       cleanup(); localStorage.clear(); sessionStorage.clear(); window.history.pushState({}, '', `/${r.query || ''}`);
@@ -91,9 +91,9 @@ describe('App landing (COMP-AUDIT-17)', () => {
       console.warn.mockClear();
       mockFetch();
       await renderApp();
-      const landed = r.want === 'home' ? 'home' : `sub-tab-${r.want}`;
+      const landed = r.want === 'day' ? 'day-view' : `sub-tab-${r.want}`;
       const el = await screen.findByTestId(landed);
-      if (r.want !== 'home') expect(el.getAttribute('aria-selected'), r.name).toBe('true');
+      if (r.want !== 'day') expect(el.getAttribute('aria-selected'), r.name).toBe('true');
       else expect(screen.queryByTestId('sub-tabs'), r.name).toBeNull();
       if (r.warn) expect(console.warn.mock.calls.filter(c => String(c[0]).includes(r.warn)).length, r.name).toBe(1);
     }
@@ -105,7 +105,7 @@ describe('App landing (COMP-AUDIT-17)', () => {
     localStorage.setItem('compose:activeView', 'ops');
     mockFetch({ opsPages: ['status'] });
     await renderApp();
-    await screen.findByTestId('home');
+    await screen.findByTestId('day-view');
     expect(localStorage.getItem('compose:activeView')).toBe('ops'); // the fresh tab's mount did not overwrite it
     await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true })); });
     const row = await screen.findByText('Back to Fleet › Ops');

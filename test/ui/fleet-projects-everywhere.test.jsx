@@ -62,7 +62,7 @@ const listed = () => screen.queryAllByTestId(/^fleet-project-(hub|main)$/).map((
 
 const ROWS = [
   {
-    name: 'the left bar shows PROJECTS, never GROUPS, in each of the seven rooms; project rooms switch, Fleet and Library pick a lane',
+    name: 'the left bar shows PROJECTS, never GROUPS, in each of the eight rooms; project rooms switch, Fleet and Library pick a lane',
     async run() {
       const seen = [];
       for (const { key } of ROOMS) {
@@ -75,7 +75,7 @@ const ROWS = [
         r.unmount();
       }
       expect(seen).toEqual([
-        ['home', 'project', false, 1], ['ideas', 'project', false, 1], ['roadmap', 'project', false, 1],
+        ['day', 'lane', false, 1], ['home', 'project', false, 1], ['ideas', 'project', false, 1], ['roadmap', 'project', false, 1],
         ['build', 'project', false, 1], ['review', 'project', false, 1], ['fleet', 'lane', false, 1], ['library', 'lane', false, 1],
       ]);
     },

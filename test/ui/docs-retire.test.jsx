@@ -21,7 +21,7 @@ describe('retired docs key (pure mapping, one row table)', () => {
       { entry: '?view=docs deep link', got: viewFromQuery('?view=docs'), want: 'wiki' },
       { entry: 'stored view=docs', got: resolveStoredView('docs', {}), want: WIKI },
       { entry: 'stored view=docs, wiki present', got: resolveStoredView('docs', { wiki: 'yes' }), want: WIKI },
-      { entry: 'stored view=docs, wiki absent', got: resolveStoredView('docs', { wiki: 'no' }), want: { view: 'dashboard', fellBackFrom: 'wiki' } },
+      { entry: 'stored view=docs, wiki absent', got: resolveStoredView('docs', { wiki: 'no' }), want: { view: 'day', fellBackFrom: 'wiki' } },
       { entry: 'settings defaultView=docs', got: resolveDefaultView('docs', VIEW_KEYS, {}), want: WIKI },
       { entry: 'compose:activeTab=docs', got: migrateNavState({ activeTabRaw: 'docs' }).view, want: 'wiki' },
       { entry: 'compose:activeView=docs', got: migrateNavState({ activeViewRaw: 'docs' }).view, want: 'wiki' },
@@ -109,7 +109,7 @@ describe.skipIf(!linked)('App: every way into docs lands on Library > Wiki', () 
     cleanup(); localStorage.clear(); sessionStorage.clear(); window.history.pushState({}, '', '/');
     mockFetch();
     await renderApp();
-    await screen.findByTestId('home');
+    await screen.findByTestId('day-view');
     const { useVisionStore } = await import('../../src/components/vision/useVisionStore.js');
     await act(async () => { useVisionStore.setState({ uiCommand: { view: 'docs' } }); });
     await expectLibraryWiki('visionUI docs command');

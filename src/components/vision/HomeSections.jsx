@@ -165,8 +165,9 @@ export default function HomeSections({
         </Section>
       )}
 
+      {/* COMP-COCKPIT-RIBBON-TOP-1 (M8): sorted by last edit, not by landing, so the title says "edited" */}
       {recentlyChanged.length > 0 && (
-        <Section id="recently-changed" title="Recently changed (done)">
+        <Section id="recently-changed" title="Recently edited (done)">
           <div className="space-y-0.5">
             {recentlyChanged.map(f => (
               <Row

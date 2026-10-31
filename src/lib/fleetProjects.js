@@ -12,12 +12,13 @@
  */
 import { useEffect, useState } from 'react';
 import { wsFetch } from './wsFetch.js';
+import { PROJECT_ROOMS } from '../../lib/view-keys.js';
 
 export const FLEET_PROJECTS_URL = '/api/fleet/projects';
 export const FLEET_ROOTS_URL = '/api/fleet/roots';
 
-/** The rooms whose data belongs to one Compose project: there the left bar switches the project. */
-export const PROJECT_ROOMS = ['home', 'ideas', 'roadmap', 'build', 'review'];
+/** The rooms whose data belongs to one Compose project: there the left bar switches the project. One home: lib/view-keys.js (RIBBON-TOP-1). */
+export { PROJECT_ROOMS };
 
 /** `project` in a project room (a row opens that lane's project), else `lane` (a row picks the Process lane). */
 export function projectsModeFor(room) {

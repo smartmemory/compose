@@ -125,8 +125,10 @@ const HASH_PREFIX = '#ribbon.';
 export function parseHash(hash) {
   if (typeof hash !== 'string' || !hash.startsWith(HASH_PREFIX)) return null;
   const q = new URLSearchParams(hash.slice(HASH_PREFIX.length));
-  const from = q.get('from');
-  const to = q.get('to');
+  // A hand-typed or bookmarked `+08:00` arrives as a space (URLSearchParams reads `+` as one); no ISO string holds a space, so read it back (RIBBON-TOP-1).
+  const plus = (v) => (v == null ? v : v.replace(/ (\d\d:\d\d)$/, '+$1'));
+  const from = plus(q.get('from'));
+  const to = plus(q.get('to'));
   if (!from || !to) return null;
   const f = Date.parse(from);
   const t = Date.parse(to);

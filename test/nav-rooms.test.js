@@ -78,30 +78,30 @@ describe('roomViews + roomEntryView (one row table)', () => {
 
 describe('migrateNavState (one row table, design §2.7)', () => {
   const rows = [
-    { name: 'fresh storage', in: {}, view: 'dashboard', focus: null },
-    { name: '1 tab list is ignored', in: { tabsRaw: '["tree","graph"]' }, view: 'dashboard', focus: null },
+    { name: 'fresh storage', in: {}, view: 'day', focus: null },
+    { name: '1 tab list is ignored', in: { tabsRaw: '["tree","graph"]' }, view: 'day', focus: null },
     { name: '2 active-tab key alone (hidden view gates)', in: { activeTabRaw: 'gates' }, view: 'gates', focus: null },
-    { name: '2 active-tab key: garbage', in: { activeTabRaw: '<x>' }, view: 'dashboard', focus: null, from: '<x>' },
+    { name: '2 active-tab key: garbage', in: { activeTabRaw: '<x>' }, view: 'day', focus: null, from: '<x>' },
     { name: '3 activeView wins over the tab key', in: { activeViewRaw: 'wiki', activeTabRaw: 'graph' }, view: 'wiki', focus: null },
     { name: 'hidden key gates', in: { activeViewRaw: 'gates' }, view: 'gates', focus: null },
     { name: 'hidden key tree', in: { activeViewRaw: 'tree' }, view: 'tree', focus: null },
-    { name: 'ops with no pages -> next source is Home', in: { activeViewRaw: 'ops', available: { ops: 'no' } }, view: 'dashboard', focus: null, from: 'ops' },
+    { name: 'ops with no pages -> next source is Home', in: { activeViewRaw: 'ops', available: { ops: 'no' } }, view: 'day', focus: null, from: 'ops' },
     { name: 'ops with no pages, tab key is usable', in: { activeViewRaw: 'ops', activeTabRaw: 'usage', available: { ops: 'no' } }, view: 'usage', focus: null },
-    { name: 'stratum with the package absent', in: { activeViewRaw: 'stratum', available: { stratum: 'no' } }, view: 'dashboard', focus: null, from: 'stratum' },
-    { name: 'Fleet sub-tab whose package is now absent', in: { activeViewRaw: 'cadence', available: { cadence: 'no' } }, view: 'dashboard', focus: null, from: 'cadence' },
+    { name: 'stratum with the package absent', in: { activeViewRaw: 'stratum', available: { stratum: 'no' } }, view: 'day', focus: null, from: 'stratum' },
+    { name: 'Fleet sub-tab whose package is now absent', in: { activeViewRaw: 'cadence', available: { cadence: 'no' } }, view: 'day', focus: null, from: 'cadence' },
     { name: 'unknown availability keeps a gated key', in: { activeViewRaw: 'wiki', available: {} }, view: 'wiki', focus: null },
     { name: 'usage', in: { activeViewRaw: 'usage' }, view: 'usage', focus: null },
     { name: 'process', in: { activeViewRaw: 'process' }, view: 'process', focus: null },
-    { name: 'legacy roadmap value', in: { activeViewRaw: 'roadmap' }, view: 'dashboard', focus: null, from: 'roadmap' },
-    { name: 'empty string', in: { activeViewRaw: '' }, view: 'dashboard', focus: null },
-    { name: 'garbage', in: { activeViewRaw: '<script>' }, view: 'dashboard', focus: null, from: '<script>' },
+    { name: 'legacy roadmap value', in: { activeViewRaw: 'roadmap' }, view: 'day', focus: null, from: 'roadmap' },
+    { name: 'empty string', in: { activeViewRaw: '' }, view: 'day', focus: null },
+    { name: 'garbage', in: { activeViewRaw: '<script>' }, view: 'day', focus: null, from: '<script>' },
     { name: '4 defaultView last', in: { defaultView: 'pipeline' }, view: 'pipeline', focus: null },
-    { name: '4 defaultView unusable', in: { defaultView: 'roadmap' }, view: 'dashboard', focus: null, from: 'roadmap' },
-    { name: '8 focus kept before items load', in: { focusRaw: 'FEAT-1', items: null }, view: 'dashboard', focus: 'FEAT-1' },
-    { name: '8 focus resolves', in: { focusRaw: 'FEAT-1', items: [{ lifecycle: { featureCode: 'FEAT-1' } }] }, view: 'dashboard', focus: 'FEAT-1' },
-    { name: '8 focus stale', in: { focusRaw: 'GONE-9', items: [{ featureCode: 'FEAT-1' }] }, view: 'dashboard', focus: null, dropped: 'GONE-9' },
-    { name: '8 focus garbage', in: { focusRaw: '   ', items: null }, view: 'dashboard', focus: null },
-    { name: '8 focus with an empty item list is not judged', in: { focusRaw: 'FEAT-1', items: [] }, view: 'dashboard', focus: 'FEAT-1' },
+    { name: '4 defaultView unusable', in: { defaultView: 'roadmap' }, view: 'day', focus: null, from: 'roadmap' },
+    { name: '8 focus kept before items load', in: { focusRaw: 'FEAT-1', items: null }, view: 'day', focus: 'FEAT-1' },
+    { name: '8 focus resolves', in: { focusRaw: 'FEAT-1', items: [{ lifecycle: { featureCode: 'FEAT-1' } }] }, view: 'day', focus: 'FEAT-1' },
+    { name: '8 focus stale', in: { focusRaw: 'GONE-9', items: [{ featureCode: 'FEAT-1' }] }, view: 'day', focus: null, dropped: 'GONE-9' },
+    { name: '8 focus garbage', in: { focusRaw: '   ', items: null }, view: 'day', focus: null },
+    { name: '8 focus with an empty item list is not judged', in: { focusRaw: 'FEAT-1', items: [] }, view: 'day', focus: 'FEAT-1' },
   ];
   test('rows, and the output view always renders a real view (never "View not found")', () => {
     for (const r of rows) {
@@ -165,6 +165,6 @@ describe('coverage: every key has a click path (derived from VIEW_KEYS)', () => 
   test('every sub-tab key has a label and reachableViews over VIEW_KEYS keeps all but absent packages', () => {
     for (const room of ROOMS) if (room.views.length > 1) for (const k of room.views) assert.ok(SUB_LABELS[k], k);
     assert.deepEqual(reachableViews(VIEW_KEYS, {}), VIEW_KEYS);
-    assert.equal(DEFAULT_VIEW, 'dashboard');
+    assert.equal(DEFAULT_VIEW, 'day');
   });
 });
