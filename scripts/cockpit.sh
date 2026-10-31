@@ -3,10 +3,12 @@
 # Usage: scripts/cockpit.sh start|stop|status. Ports are registered to `compose` in ~/.ports.
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RUN="${COMPOSE_RUN_DIR:-$HOME/.compose/run}"
+RUN="${COCKPIT_RUN:-${COMPOSE_RUN_DIR:-$HOME/.compose/run}}"
 PIDFILE="$RUN/cockpit.pid"
 LOG="$RUN/cockpit.log"
-PORTS="${PORT:-4001} ${AGENT_PORT:-4002} ${VITE_PORT:-5195}"  # same env names the supervisor reads
+# COCKPIT_PORTS (space-separated) overrides the three ports for tests; the default is the same env names the supervisor reads.
+PORTS="${COCKPIT_PORTS:-${PORT:-4001} ${AGENT_PORT:-4002} ${VITE_PORT:-5195}}"
+ENTRY="${COCKPIT_ENTRY:-server/supervisor.js}"  # relative to the repo root; tests point it at a stub
 
 alive() { [ -n "${1:-}" ] && kill -0 "$1" 2>/dev/null; }
 sup_pid() { [ -f "$PIDFILE" ] && cat "$PIDFILE"; }
@@ -63,7 +65,15 @@ cmd_start() {
       echo "port $p is already in use, refusing to start (python3 ~/.claude/scripts/port_check.py $p)"; return 1
     fi
   done
-  (load_wiki_token; load_sm_key; cd "$HERE" && nohup node server/supervisor.js > "$LOG" 2>&1 & echo $! > "$PIDFILE")
+  # The backgrounded process is `node` itself with stdin from /dev/null and stdout+stderr to $LOG, so it holds no fd of the
+  # caller. Backgrounding the whole `cd && nohup node` list (the old form) left a wrapper subshell that kept the caller's
+  # stdout open for as long as the cockpit ran, so `cockpit.sh start | tail` never saw EOF. $PIDFILE now holds node's pid.
+  (
+    load_wiki_token; load_sm_key
+    cd "$HERE" || exit 1
+    nohup node "$ENTRY" < /dev/null > "$LOG" 2>&1 &
+    echo $! > "$PIDFILE"
+  )
   local deadline=$((SECONDS+90))
   for p in $PORTS; do
     until listening "$p"; do
