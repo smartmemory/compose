@@ -19,6 +19,8 @@ cytoscape.use(cytoscapeDagre);
  *   onNodeClick?: (id) => void
  *   legend?: boolean (default true; false hides the Entities/Edges panel)
  *   sublabelInNode?: boolean (default false; true draws the sublabel under the label inside each node, in a wider node)
+ *   fillFromColor?: boolean (default false; true fills each node with its `color`, 2px border, dark label text)
+ *   minZoom?: number (default 0.2; a view with many nodes lowers it so the first fit does not clip)
  */
 
 // Cytoscape can't resolve CSS custom properties — hex mirrors per theme.
@@ -34,7 +36,7 @@ const CY_LIGHT = {
   textTertiary: '#737373', textMuted: '#a3a3a3', accent: '#FBBF24',
 };
 
-function buildDefaultStyle(c, sublabelInNode = false) {
+function buildDefaultStyle(c, sublabelInNode = false, fillFromColor = false) {
   return [
     {
       selector: 'node',
@@ -49,8 +51,13 @@ function buildDefaultStyle(c, sublabelInNode = false) {
         'text-outline-width': 0, 'overlay-padding': 4, 'overlay-opacity': 0,
       },
     },
+    ...(fillFromColor ? [
+      // Every state colour is a mid-light hex, so near-black text clears 7:1 on all of them in both themes.
+      { selector: 'node[color]', style: { 'background-color': 'data(color)', 'color': '#0a0a0a', 'border-width': 2, 'border-opacity': 1, 'border-color': c.textTertiary } },
+    ] : []),
     { selector: 'node[shape = "diamond"]', style: { 'shape': 'diamond', 'width': 160, 'height': 80, 'font-size': '10px' } },
     { selector: 'node:selected', style: { 'border-width': 2, 'border-opacity': 1, 'border-color': c.accent } },
+    ...(fillFromColor ? [{ selector: 'node:selected', style: { 'border-width': 3, 'border-color': c.textPrimary } }] : []),
     {
       selector: 'edge',
       style: {
@@ -407,6 +414,8 @@ export default function GraphRenderer({
   onNodeClick,
   legend = true,
   sublabelInNode = false,
+  fillFromColor = false,
+  minZoom = 0.2,
 }) {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
@@ -426,7 +435,7 @@ export default function GraphRenderer({
   }, [graphKey, layoutKey, showEdgeLabels, hiddenNodes, showLegend, viewMode]);
 
   const elements = elementsProp || (nodesProp && edgesProp ? toElements(nodesProp, edgesProp, sublabelInNode) : []);
-  const graphStyle = useMemo(() => styleProp || buildDefaultStyle(cyColors, sublabelInNode), [styleProp, isDark, sublabelInNode]);
+  const graphStyle = useMemo(() => styleProp || buildDefaultStyle(cyColors, sublabelInNode, fillFromColor), [styleProp, isDark, sublabelInNode, fillFromColor]);
   const activeLayout = layoutProp || LAYOUTS[layoutKey];
 
   const nodeList = useMemo(() => {
@@ -449,7 +458,7 @@ export default function GraphRenderer({
       elements: visibleElements,
       style: graphStyle,
       layout: activeLayout,
-      minZoom: 0.2,
+      minZoom,
       maxZoom: 4,
       wheelSensitivity: 0.3,
       boxSelectionEnabled: false,
@@ -471,8 +480,8 @@ export default function GraphRenderer({
       });
     });
     cy.on('mouseout', 'node', (evt) => {
-      evt.target.style('border-width', 1);
-      evt.target.style('border-opacity', 0.5);
+      if (fillFromColor) evt.target.removeStyle('border-width border-opacity'); // back to the stylesheet's 2px / full
+      else { evt.target.style('border-width', 1); evt.target.style('border-opacity', 0.5); }
       setTooltip(null);
     });
     if (onNodeClick) cy.on('tap', 'node', (evt) => onNodeClick(evt.target.id()));

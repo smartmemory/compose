@@ -26,12 +26,26 @@ export function nodeState(node, landedIds) {
 
 export const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
 
-/** GraphRenderer props: label = plain title, sublabel = the code, edges dep → unit, dangling deps dropped. */
-export function dagGraph(nodes, lane, unitIndex) {
+/** Default DAG scope: the unlanded units plus the units they directly depend on. `showLanded` keeps the whole lane. */
+export function visibleNodes(nodes, showLanded) {
+  if (showLanded) return nodes;
   const ids = new Set(nodes.map((n) => n.id));
-  const landedIds = new Set(nodes.filter((n) => n.landedAt).map((n) => n.id));
+  const keep = new Set();
+  for (const n of nodes) {
+    if (n.landedAt) continue;
+    keep.add(n.id);
+    for (const d of n.deps ?? []) if (ids.has(d)) keep.add(d);
+  }
+  return nodes.filter((n) => keep.has(n.id));
+}
+
+/** GraphRenderer props: label = plain title, sublabel = the code, edges dep → unit, dangling deps dropped. */
+export function dagGraph(nodes, lane, unitIndex, showLanded = true) {
+  const landedIds = new Set(nodes.filter((n) => n.landedAt).map((n) => n.id)); // state reads the whole lane, even when landed nodes are hidden
+  const shown = visibleNodes(nodes, showLanded);
+  const ids = new Set(shown.map((n) => n.id));
   return {
-    nodes: nodes.map((n) => {
+    nodes: shown.map((n) => {
       const { title } = unitLabel(n.id, unitIndex, lane);
       return {
         id: n.id,
@@ -40,7 +54,7 @@ export function dagGraph(nodes, lane, unitIndex) {
         color: STATE_META[nodeState(n, landedIds)].color,
       };
     }),
-    edges: nodes.flatMap((n) => (n.deps ?? []).filter((d) => ids.has(d)).map((d) => ({ from: d, to: n.id }))),
+    edges: shown.flatMap((n) => (n.deps ?? []).filter((d) => ids.has(d)).map((d) => ({ from: d, to: n.id }))),
   };
 }
 
