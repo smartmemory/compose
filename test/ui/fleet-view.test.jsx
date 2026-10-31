@@ -86,7 +86,7 @@ describe('Fleet UI on the real route (fixture readers)', () => {
       expect(screen.queryByTestId('fleet-cadence')).toBeNull();
     }
     expect(screen.getByTestId('fleet-view').querySelectorAll('button, a, input')).toHaveLength(0); // read-only: no actions
-    expect(screen.getAllByRole('tab').map((b) => b.textContent)).toEqual(['Agent sessions', 'Fleet']);
+    expect(screen.getAllByRole('tab').map((b) => b.textContent)).toEqual(['Compose agent sessions', 'Fleet']);
   }, 20_000);
 
   it('Ops strip shows the three pills and a click opens the Fleet view', async () => {

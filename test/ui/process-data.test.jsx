@@ -84,13 +84,13 @@ describe('Flow of work edges from summary.flow', () => {
 const SESSIONS = (busy) => ({ value: Array.from({ length: 4 }, (_, i) => ({ name: `s${i}`, busy: i < busy, ctx: 1000 })), error: null });
 const JOBS = (alive) => ({ value: Array.from({ length: 8 }, (_, i) => ({ id: `j${i}`, alive: i < alive })), error: null });
 const PILL_ROWS = [
-  { name: 'fleet busy and jobs alive: Idle locally, the fleet line follows', fleet: sm({ sessions: SESSIONS(2), jobs: JOBS(3) }), want: 'Idle · 2 sessions busy · 3 jobs' },
-  { name: 'one of each: singular words', fleet: sm({ sessions: SESSIONS(1), jobs: JOBS(1) }), want: 'Idle · 1 session busy · 1 job' },
-  { name: 'jobs only', fleet: sm({ sessions: SESSIONS(0), jobs: JOBS(7) }), want: 'Idle · 7 jobs' },
-  { name: 'nothing running: plain Idle', fleet: sm({ sessions: SESSIONS(0), jobs: JOBS(0) }), want: 'Idle' },
-  { name: 'a panel errored: the other still counts', fleet: sm({ sessions: { value: null, error: 'exit 2' }, jobs: JOBS(2) }), want: 'Idle · 2 jobs' },
-  { name: 'sm_status down: local state only, no error text', fleet: SM_DOWN, want: 'Idle' },
-  { name: 'local agent working: its category leads, the fleet line follows', fleet: sm({ sessions: SESSIONS(2), jobs: JOBS(0) }), want: 'Writing · 2 sessions busy',
+  { name: 'fleet busy and jobs alive: Idle locally, the fleet line follows', fleet: sm({ sessions: SESSIONS(2), jobs: JOBS(3) }), want: ['Compose agent: Idle', 'Fleet: 2 sessions busy · 3 jobs'] },
+  { name: 'one of each: singular words', fleet: sm({ sessions: SESSIONS(1), jobs: JOBS(1) }), want: ['Compose agent: Idle', 'Fleet: 1 session busy · 1 job'] },
+  { name: 'jobs only', fleet: sm({ sessions: SESSIONS(0), jobs: JOBS(7) }), want: ['Compose agent: Idle', 'Fleet: 7 jobs'] },
+  { name: 'nothing running: Fleet: quiet', fleet: sm({ sessions: SESSIONS(0), jobs: JOBS(0) }), want: ['Compose agent: Idle', 'Fleet: quiet'] },
+  { name: 'a panel errored: the other still counts', fleet: sm({ sessions: { value: null, error: 'exit 2' }, jobs: JOBS(2) }), want: ['Compose agent: Idle', 'Fleet: 2 jobs'] },
+  { name: 'sm_status down: Fleet: unknown, no error text', fleet: SM_DOWN, want: ['Compose agent: Idle', 'Fleet: unknown'] },
+  { name: 'local agent working: its category leads, the fleet line follows', fleet: sm({ sessions: SESSIONS(2), jobs: JOBS(0) }), want: ['Compose agent: Writing', 'Fleet: 2 sessions busy'],
     after: () => window.dispatchEvent(new CustomEvent('compose:agent-status', { detail: { status: 'working', category: 'writing' } })) },
 ];
 
@@ -102,8 +102,11 @@ describe('Header agent pill reads the fleet', () => {
       render(<AgentStatusPill />);
       await waitFor(() => expect(fetchFn).toHaveBeenCalled());
       if (row.after) act(row.after);
-      await waitFor(() => expect(t('header-agent-status')).toBe(row.want));
-      expect(screen.getByTestId('header-agent-status').getAttribute('aria-label')).toBe(`Agent: ${row.want}`);
+      const [wantAgent, wantFleet] = row.want;
+      await waitFor(() => expect(t('header-agent-fleet')).toBe(wantFleet));
+      expect(t('header-agent-status')).toBe(wantAgent);
+      expect(screen.getByTestId('header-agent-status').getAttribute('aria-label')).toBe(wantAgent);
+      expect(screen.getByTestId('header-agent-fleet').getAttribute('aria-label')).toBe(wantFleet);
       expect(fetchFn.mock.calls.every(([u]) => String(u) === '/api/fleet')).toBe(true);
     });
   }

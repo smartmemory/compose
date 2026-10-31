@@ -55,7 +55,7 @@ export default function SessionsView({ sessions = [], items = [], onSelectItem, 
     <div className="flex-1 flex flex-col min-h-0">
       {fleetShown && (
         <div className="flex items-center gap-1 px-3 pt-2 shrink-0" role="tablist" aria-label="Sessions panes">
-          {[['sessions', 'Agent sessions'], ['fleet', 'Fleet']].map(([id, label]) => (
+          {[['sessions', 'Compose agent sessions'], ['fleet', 'Fleet']].map(([id, label]) => (
             <button
               key={id}
               type="button"

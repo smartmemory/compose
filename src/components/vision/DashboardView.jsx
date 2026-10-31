@@ -13,6 +13,7 @@ import PhaseTimeline, { PHASES } from './PhaseTimeline.jsx';
 import HomeSections from './HomeSections.jsx';
 import { deriveHomeSections } from './homeSectionsState.js';
 import { useConfirmWithReason } from '@/components/ui/DialogProvider.jsx';
+import WhatLine from '../cockpit/what/WhatLine.jsx';
 
 function relativeTime(isoString) {
   if (!isoString) return '';
@@ -246,6 +247,7 @@ export default function DashboardView({
   onJumpToGate,
   onStopAgent,
   onNavigate,
+  onOpenFleet,
 }) {
   const homeItems = allItems ?? items;
   const homeGates = allGates ?? gates;
@@ -432,7 +434,7 @@ export default function DashboardView({
       {/* D. Recent Sessions */}
       <div>
         <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-          Recent Sessions
+          Compose agent sessions
         </span>
         <div className="mt-2">
           <RecentSessions sessions={sessions} items={items} onSelect={onSelect} />
@@ -460,6 +462,7 @@ export default function DashboardView({
 
   return (
     <div className="flex-1 overflow-auto p-4 space-y-5" data-testid="home">
+      <WhatLine onOpenFleet={onOpenFleet} onNavigate={onNavigate} />
       {featureCode ? (
         <section aria-label="Focused feature" className="pb-4 border-b border-border">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2" data-testid="home-feature-source">
@@ -491,7 +494,7 @@ export default function DashboardView({
       {!featureCode && (
         <section data-testid="home-sessions">
           <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-            Recent Sessions
+            Compose agent sessions
           </span>
           <div className="mt-2">
             <RecentSessions sessions={sessions} items={homeItems} onSelect={onSelect} />

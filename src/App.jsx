@@ -265,7 +265,7 @@ function CockpitView({
   // COMPOSE-WIKI-TAB-1: {workspace, frameBase} from useWikiTab
   wikiTab,
   // COMP-AUDIT-18: Home
-  agentErrors, onStopAgent, untriagedIdeas, cadenceAvailable, onJumpToGate, onNavigate,
+  agentErrors, onStopAgent, untriagedIdeas, cadenceAvailable, onJumpToGate, onNavigate, onOpenFleet,
   // COMP-AUDIT-17: view keys reachable by clicks (Settings default-view picker)
   reachableViewKeys,
 }) {
@@ -294,6 +294,7 @@ function CockpitView({
           onJumpToGate={onJumpToGate}
           onStopAgent={onStopAgent}
           onNavigate={onNavigate}
+          onOpenFleet={onOpenFleet}
           onCreateFeature={onCreateFeature}
           isEmptyProject={isEmptyProject}
         />
@@ -1479,6 +1480,7 @@ function AppInner() {
                       cadenceAvailable={cadenceAvail === 'yes'}
                       onJumpToGate={openGate}
                       onNavigate={handleViewChange}
+                      onOpenFleet={handleOpenFleet}
                       reachableViewKeys={reachableViews(VIEW_KEYS, availability)}
                     />
                     )}
