@@ -4,6 +4,11 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import express from 'express';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { attachRibbonRoutes } from '../server/ribbon-routes.js';
 import { buildRibbon, etaWithPrev, holdBands, parseGateLog } from '../lib/ribbon-feed.js';
 
 const D = (s) => Date.parse(`2026-10-31T${s}:00Z`);
@@ -141,4 +146,46 @@ describe('etaWithPrev and holdBands', () => {
     ['an admit ends a hold run', () => holdBands(parseGateLog([...holdLines(0, 5, 4), '2026-10-30T00:20:00 admit A', ...holdLines(21, 5, 4)].join('\n')), { from: 0, to: Date.now() + 1e9, now: Date.now(), live: false }).length, 0],
   ];
   for (const [name, run, want] of ROWS) it(name, () => assert.deepEqual(run(), want));
+});
+
+// The route over fake sources: validation, the wiki-stopped case, remote mode. One row table.
+describe('GET /api/ribbon', () => {
+  const dataDir = mkdtempSync(join(tmpdir(), 'ribbon-route-'));
+  const FROM = '2026-10-31T00:00:00Z';
+  const TO = '2026-10-31T23:00:00Z';
+  const deps = (over = {}) => ({
+    now: () => NOW, warn: () => {}, dataDir: () => dataDir,
+    loadUnits: async () => ({ units: [unit('U1', 'forge', FULL)], coverage: {}, asOf: new Date(NOW).toISOString() }),
+    loadSnapshots: async () => [], loadGateLog: async () => [], loadSeats: async () => ({ seats: [] }),
+    loadOwnerQueue: async () => [{ id: 'X', by: 'forge-main', ts: D('05:00') / 1000, text: 'APPLIED: yes. Reverse = no.' }],
+    loadLedger: async () => [], loadOutage: async () => ({ state: 'ok', since: null }),
+    eta: async () => ({ p50: '2h', p80: '3h', asOf: 'a', raw: 'r' }),
+    ...over,
+  });
+  async function get(query, over) {
+    const app = express();
+    attachRibbonRoutes(app, { deps: deps(over) });
+    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    try { const res = await fetch(`http://127.0.0.1:${server.address().port}/api/ribbon?${query}`); return { status: res.status, body: await res.json() }; } finally { server.close(); }
+  }
+  // [name, query, deps override, status, check(body)]
+  const ROWS = [
+    ['a good window answers with the contract keys', `from=${FROM}&to=${TO}`, {}, 200, (b) => assert.deepEqual(Object.keys(b), ['from', 'to', 'now', 'live', 'asOf', 'ageS', 'lanes', 'bands', 'pins', 'coverage', 'history', 'notRecorded', 'sourceErrors'])],
+    ['the eta carries prev null on the first reading and is written to the history file', `from=${FROM}&to=${TO}`, { loadUnits: async () => ({ units: [unit('U5', 'forge', { ready_at: T('10:00'), dispatched_at: T('11:00') })], coverage: {}, asOf: new Date(NOW).toISOString() }) }, 200, (b) => assert.deepEqual(lane(b).eta, { p50: '2h', p80: '3h', asOf: 'a', raw: 'r', prev: null })],
+    ['the wiki stopped: sourceErrors.ledger is set and the owner-queue decide mark still comes back', `from=${FROM}&to=${TO}`, { loadLedger: async () => { throw new Error('wiki is stopped'); } }, 200, (b) => {
+      assert.match(b.sourceErrors.ledger, /wiki is stopped/);
+      assert.equal(lane(b).marks.filter((m) => m.kind === 'decide' && m.source === 'owner-queue').length, 1);
+    }],
+    ['every source down: still 200, the stamps are not recorded, no lanes', `from=${FROM}&to=${TO}`, { loadUnits: async () => { throw new Error('no stamps'); } }, 200, (b) => {
+      assert.deepEqual([b.lanes.length, Boolean(b.sourceErrors.stamps), b.notRecorded.some((n) => n.source === 'stamps')], [0, true, true]);
+    }],
+    ['from after to is 400', `from=${TO}&to=${FROM}`, {}, 400, (b) => assert.match(b.error, /before/)],
+    ['from equal to is 400', `from=${FROM}&to=${FROM}`, {}, 400, () => {}],
+    ['32 days is 400', 'from=2026-10-01T00:00:00Z&to=2026-11-02T00:00:00Z', {}, 400, (b) => assert.match(b.error, /31 days/)],
+    ['from=x is 400', `from=x&to=${TO}`, {}, 400, () => {}],
+    ['a time without an offset is 400', `from=2026-10-31T00:00:00&to=${TO}`, {}, 400, () => {}],
+    ['missing to is 400', `from=${FROM}`, {}, 400, () => {}],
+  ];
+  for (const [name, query, over, status, check] of ROWS) it(name, async () => { const r = await get(query, over); assert.equal(r.status, status); check(r.body); });
+  it('remote mode mounts nothing', () => assert.equal(attachRibbonRoutes(express(), { remote: true }), false));
 });
