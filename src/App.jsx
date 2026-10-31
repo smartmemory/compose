@@ -1271,10 +1271,6 @@ function AppInner() {
               </span>
             )}
 
-            {/* COMP-COCKPIT-HEADER-COUNTERS-1: counters + agent pill (were the top of the left bar) */}
-            <HeaderCounters items={items} gates={gates} />
-            <AgentStatusPill />
-
             {/* Environment health (COMP-PARITY-3) — passive drift signal */}
             <EnvironmentHealthPanel />
 
@@ -1318,6 +1314,17 @@ function AppInner() {
             />
           </div>
         </header>
+        {/* COMP-COCKPIT-WHAT-LINE-1: the counters chip and the agent pill sit in their own thin row under the tabs. With every
+            word showing (no `2xl:inline` drop) they need ~500 px, and the tab row has ~220 px left beside its controls at 1440
+            (measured 2026-10-31: in the same row the pill painted over REVIEW, FLEET, LIBRARY and the ⌘K hint). */}
+        <div
+          data-testid="header-status-strip"
+          className="h-6 flex items-center justify-end gap-4 px-3 shrink-0"
+          style={{ borderBottom: '1px solid hsl(var(--border))' }}
+        >
+          <HeaderCounters items={items} gates={gates} />
+          <AgentStatusPill />
+        </div>
         </PanelErrorBoundary>
         <ViewSubTabs activeView={activeView} availability={availability} onViewChange={handleViewChange} />
 

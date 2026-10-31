@@ -10,6 +10,8 @@
  * app's own agent, from the `compose:agent-status` event) and "Fleet: <n sessions busy · n jobs | quiet | unknown>"
  * (the shared /api/fleet poll through `runningNow`). Words never drop at a breakpoint any more; sm_status down reads
  * "Fleet: unknown", muted, with no error text.
+ * Both mount in the thin status row under the tab row (`App.jsx`, testid `header-status-strip`): with every word shown they need
+ * ~500 px and the tab row has ~220 px left at 1440, so beside the tabs they painted over the ⌘K hint.
  */
 
 import React from 'react';
