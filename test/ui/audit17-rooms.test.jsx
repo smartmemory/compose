@@ -5,7 +5,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act, cleanup } from '@testing-library/react';
-import ViewTabs, { ViewSubTabs, ProjectSubTabs } from '../../src/components/cockpit/ViewTabs.jsx';
+import ViewTabs, { ViewSubTabs, ProjectSubTabs, RoomPaneSwitcher } from '../../src/components/cockpit/ViewTabs.jsx';
 import { ROOMS } from '../../lib/view-keys.js';
 
 const ALL_YES = { ops: 'yes', stratum: 'yes', cadence: 'yes', wiki: 'yes' };
@@ -111,10 +111,8 @@ describe('<ProjectSubTabs> rooms row (COMP-COCKPIT-PROJECTS-TAB-1)', () => {
 describe('<ViewSubTabs> second row (one row table)', () => {
   const rows = [
     { view: 'dashboard', subs: null }, { view: 'ideabox', subs: null }, { view: 'settings', subs: null },
-    { view: 'graph', subs: ['graph', 'tree'], active: 'graph' },
-    { view: 'tree', subs: ['graph', 'tree'], active: 'tree' },
-    { view: 'qa-scope', subs: ['gates', 'validate', 'qa-scope'], active: 'qa-scope' },
-    { view: 'design', subs: ['design', 'pipeline', 'pipeline-editor', 'build-history'], active: 'design' },
+    // TAB-DEPTH-1: a project room's views are a pane switcher, never a second tab row
+    { view: 'graph', subs: null }, { view: 'tree', subs: null }, { view: 'qa-scope', subs: null }, { view: 'design', subs: null },
     { view: 'process', subs: ['process', 'cadence', 'ops', 'stratum', 'sessions', 'usage'], active: 'process' },
     { view: 'journal', subs: ['wiki', 'journal'], active: 'journal' },
     { view: 'journal', av: { ...ALL_YES, wiki: 'no' }, subs: null },
@@ -138,11 +136,37 @@ describe('<ViewSubTabs> second row (one row table)', () => {
   });
 
   it('Roadmap shows Graph and List; Build names its four screens in plain words', () => {
-    render(<ViewSubTabs activeView="graph" availability={ALL_YES} onViewChange={() => {}} />);
+    render(<RoomPaneSwitcher activeView="graph" availability={ALL_YES} onViewChange={() => {}} />);
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Graph', 'List']);
     cleanup();
-    render(<ViewSubTabs activeView="pipeline" availability={ALL_YES} onViewChange={() => {}} />);
+    render(<RoomPaneSwitcher activeView="pipeline" availability={ALL_YES} onViewChange={() => {}} />);
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Design', 'Live build', 'Flow editor', 'Builds']);
+  });
+});
+
+describe('<RoomPaneSwitcher> project room views (one row table)', () => {
+  const rows = [
+    { view: 'dashboard', panes: null }, { view: 'ideabox', panes: null }, { view: 'process', panes: null },
+    { view: 'graph', panes: ['graph', 'tree'] },
+    { view: 'tree', panes: ['graph', 'tree'] },
+    { view: 'qa-scope', panes: ['gates', 'validate', 'qa-scope'] },
+    { view: 'design', panes: ['design', 'pipeline', 'pipeline-editor', 'build-history'] },
+  ];
+  it('rows', () => {
+    for (const r of rows) {
+      const onViewChange = vi.fn();
+      render(<RoomPaneSwitcher activeView={r.view} availability={ALL_YES} onViewChange={onViewChange} />);
+      if (!r.panes) {
+        expect(screen.queryByTestId('pane-switcher'), r.view).toBeNull();
+      } else {
+        const tabs = screen.getAllByRole('tab');
+        expect(tabs.map((t) => t.getAttribute('data-testid').replace('sub-tab-', '')), r.view).toEqual(r.panes);
+        expect(tabs.filter((t) => t.getAttribute('aria-selected') === 'true').map((t) => t.getAttribute('data-testid')), r.view).toEqual([`sub-tab-${r.view}`]);
+        fireEvent.click(tabs[tabs.length - 1]);
+        expect(onViewChange).toHaveBeenCalledWith(r.panes[r.panes.length - 1]);
+      }
+      cleanup();
+    }
   });
 });
 

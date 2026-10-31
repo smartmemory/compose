@@ -22,6 +22,7 @@
  */
 import React from 'react';
 import { Network, Activity, ShieldCheck, Search, Workflow, LayoutDashboard, Lightbulb, Sparkles, Settings, X, Library, CalendarClock, FolderKanban } from 'lucide-react';
+import PaneSwitcher from './PaneSwitcher.jsx';
 import { ROOMS, PROJECTS_KEY, TOP_TABS, GEAR_VIEW, SUB_LABELS, locateView, roomViews, roomEntryView, projectRooms } from '../../../lib/view-keys.js';
 
 const ROOM_META = {
@@ -82,10 +83,13 @@ function SubTabRow({ label, testid, items, lead = null }) {
   );
 }
 
-/** Second row for the active room (or a project room's views); renders nothing for a room with one view (Home, Ideas) or the gear. */
+/**
+ * Second row for Fleet and Library; renders nothing for the gear or a room with one view. A project room's views are the
+ * third level and never a row: `RoomPaneSwitcher` shows them in the content (COMP-COCKPIT-TAB-DEPTH-1).
+ */
 export function ViewSubTabs({ activeView, availability, onViewChange }) {
   const loc = locateView(activeView);
-  if (!loc || loc.top === GEAR_VIEW) return null;
+  if (!loc || loc.top === GEAR_VIEW || loc.top === PROJECTS_KEY) return null;
   const roomKey = loc.room || loc.top;
   const views = roomViews(roomKey, availability, activeView);
   if (views.length < 2) return null;
@@ -261,5 +265,26 @@ export function RoomBreadcrumb({ activeView, availability = {}, projectName = ''
         </>
       )}
     </nav>
+  );
+}
+
+/**
+ * A project room's views (Roadmap, Build, Review) as a pane switcher at the top of the content. The view key stays flat:
+ * a pick calls `onViewChange(leafKey)`, so `locateView`, deep links, Esc and the breadcrumb are unchanged. Renders nothing
+ * for a room with one view (Home, Ideas) or outside the Projects tab.
+ */
+export function RoomPaneSwitcher({ activeView, availability = {}, onViewChange }) {
+  const loc = locateView(activeView);
+  if (!loc || loc.top !== PROJECTS_KEY) return null;
+  const views = roomViews(loc.room, availability, activeView);
+  if (views.length < 2) return null;
+  const room = ROOMS.find((r) => r.key === loc.room);
+  return (
+    <PaneSwitcher
+      panes={views.map((key) => ({ key, label: SUB_LABELS[key] || key, testId: `sub-tab-${key}` }))}
+      active={activeView}
+      onChange={onViewChange}
+      label={`${room.label} views`}
+    />
   );
 }

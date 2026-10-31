@@ -1,8 +1,9 @@
 /** COMPOSE-WIKI-TAB-1: the Wiki tab renders @wiki/components screens from a fake DataClient (no fetch). */
 import React from 'react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import WikiView from '../../src/components/cockpit/WikiView.jsx';
+import { resetPaneMemory } from '../../src/components/cockpit/PaneSwitcher.jsx';
 import { createWikiDataClient } from '../../src/lib/clients/wiki.js';
 import { locateView } from '../../lib/view-keys.js';
 
@@ -17,6 +18,7 @@ const doc = {
   feature_ids: ['COMPOSE-WIKI-TAB-1'], areas: [], mtime: '2026-10-30T00:00:00Z', text_mode: 'full', missing_reason: null,
 };
 
+beforeEach(() => resetPaneMemory());
 afterEach(() => vi.unstubAllGlobals());
 
 // COMPOSE-WIKI-GRAPH-1b: the provider refuses a client without the graph calls (package 0.6.0); the older screens' fake clients never call them.
@@ -43,14 +45,14 @@ describe('Wiki tab', () => {
     expect(await screen.findByText('Wiki tab design')).toBeTruthy();
     expect(client.featureHub).toHaveBeenCalledWith({ workspace: 'wiki-eng', featureId: 'COMPOSE-WIKI-TAB-1' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Search' }));
     await waitFor(() => expect(client.search).toHaveBeenCalledWith({ workspace: 'wiki-eng', q: 'COMPOSE-WIKI-TAB-1' }));
     const hit = await screen.findByText('Wiki tab design');
     expect(hit.closest('a').getAttribute('href')).toBe(`${FRAME}/ui/w/wiki-eng/note?id=d1`);
     fireEvent.click(hit); // a plain click is onNavigate: the note opens in the full-wiki frame
     expect(screen.getByTitle('wiki').getAttribute('src')).toBe(`${FRAME}/ui/w/wiki-eng/note?id=d1`);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open full wiki' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Open full wiki' }));
     expect(screen.getByTitle('wiki').getAttribute('src')).toBe(`${FRAME}/ui/feature/COMPOSE-WIKI-TAB-1`);
     expect(client.identity).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -71,9 +73,9 @@ describe('Wiki tab: order and opening pane', () => {
 
   it.skipIf(!linked).each(ROWS)('$name, buttons in the owner order', ({ featureCode, active }) => {
     render(<WikiView client={client()} featureCode={featureCode} workspace="wiki-eng" frameBase={FRAME} />);
-    const buttons = screen.getByRole('navigation', { name: 'wiki' }).querySelectorAll('button');
-    expect([...buttons].map((b) => b.textContent)).toEqual(ORDER);
-    expect([...buttons].filter((b) => b.className.includes('bg-accent')).map((b) => b.textContent)).toEqual([active]);
+    const tabs = screen.getByRole('tablist', { name: 'Wiki panes' }).querySelectorAll('[role="tab"]');
+    expect([...tabs].map((b) => b.textContent)).toEqual(ORDER);
+    expect([...tabs].filter((b) => b.getAttribute('aria-selected') === 'true').map((b) => b.textContent)).toEqual([active]);
   });
 });
 
@@ -94,7 +96,7 @@ describe('Wiki tab: Decisions', () => {
       decisionsPage: vi.fn(async ({ cursor }) => pages[cursor ?? '']),
     };
     render(<WikiView client={client} workspace="wiki-eng" frameBase={FRAME} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Decisions' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Decisions' }));
     expect(await screen.findByText('First call')).toBeTruthy();
     fireEvent.click(screen.getByLabelText('Next page'));
     expect(await screen.findByText('Second call')).toBeTruthy();
@@ -124,7 +126,7 @@ describe('Wiki tab: Sources', () => {
       sourcesPage: vi.fn(async ({ cursor }) => pages[cursor ?? '']),
     };
     render(<WikiView client={client} workspace="wiki-eng" frameBase={FRAME} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Sources' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Sources' }));
     const row = (await screen.findByText('eng-docs')).closest('tr');
     expect(row.textContent).toContain('overdue');
     expect(row.textContent).toContain('1h');
@@ -159,7 +161,7 @@ describe('Wiki tab: Area docs', () => {
       docsByArea: vi.fn(async ({ area, cursor }) => pages[area][cursor ?? '']),
     };
     render(<WikiView client={client} workspace="wiki-eng" frameBase={FRAME} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Area' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Area' }));
     expect(screen.getByText(/Type an area name/)).toBeTruthy();
     expect(client.docsByArea).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText('Area'), { target: { value: ' search ' } });
@@ -204,7 +206,7 @@ describe('Wiki tab: Ledger', () => {
       upcomingCalls: vi.fn(async () => ({ items: [le('c1', 'Call with Ana', '2026-11-02T15:00:00Z')], errors: [] })),
     });
     render(<WikiView client={client} workspace="wiki-eng" frameBase={FRAME} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Ledger' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Ledger' }));
     expect(await screen.findByText('Shipped the tab')).toBeTruthy();
     expect(await screen.findByText('Call with Ana')).toBeTruthy();
     fireEvent.click(screen.getByLabelText('Next page'));
@@ -224,7 +226,7 @@ describe('Wiki tab: Ledger', () => {
       upcomingCalls: vi.fn(async () => null),
     });
     render(<WikiView client={client} workspace="wiki-eng" frameBase={FRAME} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Ledger' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Ledger' }));
     expect(await screen.findByText('Shipped the tab')).toBeTruthy();
     await waitFor(() => expect(client.upcomingCalls).toHaveBeenCalled());
     expect(screen.queryByText('Upcoming calls')).toBeNull();
@@ -243,7 +245,7 @@ describe('Wiki tab: Graph', () => {
     };
     render(<WikiView client={client} workspace="wiki-eng" frameBase={FRAME} />);
     expect(client.graphAll).not.toHaveBeenCalled(); // the Graph chunk is lazy: nothing is asked until the button is pressed
-    fireEvent.click(screen.getByRole('button', { name: 'Graph' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Graph' }));
     expect(await screen.findByText('No docs in this workspace yet.', {}, { timeout: 60_000 })).toBeTruthy(); // the first import transforms the whole graph closure
     expect(client.graphAll.mock.calls.map(([a]) => a)).toEqual([{ workspace: 'wiki-eng' }]);
     expect(client.graphPage).not.toHaveBeenCalled();

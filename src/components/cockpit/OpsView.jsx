@@ -5,6 +5,7 @@ import ProgressCard from './ops/ProgressCard.jsx';
 import OpsDag from './ops/OpsDag.jsx';
 import LandedList from './ops/LandedList.jsx';
 import OpsNotices from './ops/OpsNotices.jsx';
+import PaneSwitcher from './PaneSwitcher.jsx';
 
 const KEY = 'compose:opsPage';
 
@@ -30,18 +31,13 @@ export default function OpsView() {
   const nodes = ops.data?.progress?.nodes ?? [];
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex gap-1 p-2 border-b items-center" role="tablist" aria-label="Ops status pages">
-        {pages.map((n) => (
-          <button
-            key={n}
-            role="tab"
-            aria-selected={n === current}
-            onClick={() => pick(n)}
-            className={`px-2 py-1 text-xs rounded ${n === current ? 'bg-accent font-semibold' : 'text-muted-foreground'}`}
-          >{n}</button>
-        ))}
-        <a className="ml-auto text-xs underline" href={`/ops-status/${encodeURIComponent(current)}/status.html`} target="_blank" rel="noopener noreferrer">Builder page ↗</a>
-      </div>
+      <PaneSwitcher
+        panes={pages.map((n) => ({ key: n, label: n, testId: `ops-pane-${n}` }))}
+        active={current}
+        onChange={pick}
+        label="Ops status pages"
+        trailing={<a className="ml-auto text-xs underline" href={`/ops-status/${encodeURIComponent(current)}/status.html`} target="_blank" rel="noopener noreferrer">Builder page ↗</a>}
+      />
       <div className="flex-1 min-h-0 overflow-auto p-3 space-y-4">
         {ops.status === 'loading' && <Skeleton />}
         {ops.status === 'missing' && <div className="text-sm text-muted-foreground">{ops.message}. Use the Builder page link meanwhile.</div>}

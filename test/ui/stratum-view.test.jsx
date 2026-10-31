@@ -29,7 +29,7 @@ describe('Stratum tab', () => {
     render(<StratumView client={client} />);
     await waitFor(() => expect(client.listRuns).toHaveBeenCalled());
     expect(await screen.findByText(/flow-r1/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Gates' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Gates' }));
     await waitFor(() => expect(client.listGates).toHaveBeenCalled());
     expect(fetchSpy).not.toHaveBeenCalled();
   });

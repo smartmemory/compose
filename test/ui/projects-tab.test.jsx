@@ -53,8 +53,10 @@ describe('Projects tab (COMP-COCKPIT-PROJECTS-TAB-1)', () => {
       expect(topSelected, r.view).toEqual(['room-tab-projects']);
       const roomRow = screen.getByTestId('project-sub-tabs');
       expect([...roomRow.querySelectorAll('[aria-selected="true"]')].map((t) => t.dataset.testid), r.view).toEqual([`sub-tab-${r.room}`]);
-      const viewsRow = screen.queryByTestId('sub-tabs');
-      expect(viewsRow ? [...viewsRow.querySelectorAll('[role="tab"]')].map((t) => t.dataset.testid.replace('sub-tab-', '')) : undefined, r.view).toEqual(r.views);
+      // TAB-DEPTH-1: no views tab row under Projects, the room's views are the in-page pane switcher
+      expect(screen.queryByTestId('sub-tabs'), r.view).toBeNull();
+      const switcher = screen.queryByTestId('pane-switcher');
+      expect(switcher ? [...switcher.querySelectorAll('[role="tab"]')].map((t) => t.dataset.testid.replace('sub-tab-', '')) : undefined, r.view).toEqual(r.views);
       expect(roomRow.querySelector('[data-testid="project-selector"]').textContent, r.view).toMatch(/compose/);
     }
   }, 120000);

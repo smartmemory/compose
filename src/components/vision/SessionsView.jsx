@@ -10,6 +10,7 @@ import EmptyState from './shared/EmptyState.jsx';
 import FleetView from '../cockpit/FleetView.jsx';
 import { anyReaderUp } from '../cockpit/fleetLogic.js';
 import { useFleet } from '../../lib/fleetPoller.js';
+import PaneSwitcher from '../cockpit/PaneSwitcher.jsx';
 
 /**
  * SessionsView — Browse and filter agent sessions.
@@ -54,20 +55,12 @@ export default function SessionsView({ sessions = [], items = [], onSelectItem, 
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {fleetShown && (
-        <div className="flex items-center gap-1 px-3 pt-2 shrink-0" role="tablist" aria-label="Sessions panes">
-          {[['sessions', 'Compose agent sessions'], ['fleet', 'Fleet']].map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={(showFleet ? 'fleet' : 'sessions') === id}
-              data-testid={`sessions-pane-${id}`}
-              onClick={() => setPane(id)}
-              className={cn('text-[11px] px-2 py-0.5 rounded border', (showFleet ? 'fleet' : 'sessions') === id
-                ? 'border-border bg-muted text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}
-            >{label}</button>
-          ))}
-        </div>
+        <PaneSwitcher
+          panes={[{ key: 'sessions', label: 'Compose agent sessions', testId: 'sessions-pane-sessions' }, { key: 'fleet', label: 'Fleet', testId: 'sessions-pane-fleet' }]}
+          active={showFleet ? 'fleet' : 'sessions'}
+          onChange={setPane}
+          label="Sessions panes"
+        />
       )}
       {showFleet ? <FleetView fleet={fleet} /> : (<>
       {/* Toolbar */}

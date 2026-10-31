@@ -1,8 +1,9 @@
 /** COMPOSE-CADENCE-TAB-1: the Cadence tab renders @cadence/ui screens from a fake DataClient (no fetch). */
 import React from 'react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import CadenceView from '../../src/components/cockpit/CadenceView.jsx';
+import { resetPaneMemory } from '../../src/components/cockpit/PaneSwitcher.jsx';
 import { createCadenceDataClient } from '../../src/lib/clients/cadence.js';
 import { locateView } from '../../lib/view-keys.js';
 
@@ -30,6 +31,7 @@ function fakeClient() {
   };
 }
 
+beforeEach(() => resetPaneMemory());
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Cadence tab', () => {
@@ -42,12 +44,12 @@ describe('Cadence tab', () => {
     render(<CadenceView client={client} />);
     expect(await screen.findByText(/FAKE-UNIT-1/)).toBeTruthy();
     expect(client.getSeats).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Chains' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Chains' }));
     await waitFor(() => expect(client.getChains).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole('button', { name: 'Attention' }));
-    expect(await screen.findByText(/a fake owner ask/)).toBeTruthy();
-    expect(client.getReview).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Diary' }));
+    // TAB-DEPTH-1 (M1): Attention is no pane, its rows are the notify inbox's typed rows
+    expect(screen.queryByRole('tab', { name: 'Attention' })).toBeNull();
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Board', 'Chains', 'Diary']);
+    fireEvent.click(screen.getByRole('tab', { name: 'Diary' }));
     expect(await screen.findByText(/a fake landing/)).toBeTruthy();
     expect(fetchSpy).not.toHaveBeenCalled();
   });

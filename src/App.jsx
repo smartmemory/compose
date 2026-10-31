@@ -4,7 +4,7 @@ import PopoutView from './components/PopoutView';
 import ProjectSwitchPopover from './components/ProjectSwitchPopover.jsx';
 
 // Cockpit shell components
-import ViewTabs, { ViewSubTabs, ProjectSubTabs, RoomBreadcrumb } from './components/cockpit/ViewTabs.jsx';
+import ViewTabs, { ViewSubTabs, ProjectSubTabs, RoomBreadcrumb, RoomPaneSwitcher } from './components/cockpit/ViewTabs.jsx';
 import DayView from './components/ribbon/DayView.jsx';
 import { parseHash as parseRibbonHash } from './components/ribbon/rangeLogic.js';
 import { itemFeatureCode, featureCodeResolves, resolveFeatureContext, filterFeatureCode, focusReducer, parseStoredFocus, FOCUS_STORAGE_KEY } from './components/cockpit/focusedFeature.js';
@@ -1467,6 +1467,7 @@ function AppInner() {
                   <DecisionTimelineStrip currentFeatureCode={activeFeatureCode} />
                 )}
                 <div className="flex-1 min-h-0 flex flex-col">
+                  <RoomPaneSwitcher activeView={activeView} availability={availability} onViewChange={handleViewChange} />
                   <PanelErrorBoundary>
                     {projectsMode === 'project' && noProjectLane ? <NoComposeProject lane={noProjectLane} /> : (
                     <CockpitView

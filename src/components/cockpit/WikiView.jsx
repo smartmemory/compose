@@ -2,6 +2,14 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { WikiDataProvider, FeatureHub, Search, Decisions, Sources, AreaDocs, Ledger, wikiPath } from '@wiki/components';
 import './wiki-tab.css';
 import { createWikiDataClient } from '../../lib/clients/wiki.js';
+import PaneSwitcher, { usePaneMemory } from './PaneSwitcher.jsx';
+
+// COMP-COCKPIT-TAB-DEPTH-1: the eight panes sit in a pane switcher, not a tab row. "Open full wiki" is the `full` pane.
+const PANES = [
+  { key: 'search', label: 'Search' }, { key: 'graph', label: 'Graph' }, { key: 'area', label: 'Area' }, { key: 'feature', label: 'Feature' },
+  { key: 'decisions', label: 'Decisions' }, { key: 'sources', label: 'Sources' }, { key: 'ledger', label: 'Ledger' }, { key: 'full', label: 'Open full wiki' },
+];
+const PANE_KEYS = PANES.map((p) => p.key);
 
 // COMPOSE-WIKI-GRAPH-1b: the Graph (2D, 3D and WebGL inside it) is its own package entry, loaded only when someone opens it:
 // WikiView is statically imported by App.jsx, so the cockpit chunk must not grow.
@@ -36,7 +44,7 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
   const [code, setCode] = useState(featureCode ?? '');
   const [draft, setDraft] = useState(featureCode ?? '');
   // COMP-COCKPIT-WIKI-TAB-ORDER-1: open on Search, the widest view; a caller deep-linking a feature (featureCode) still lands on its hub.
-  const [pane, setPane] = useState(featureCode ? 'feature' : 'search');
+  const [pane, setPane] = usePaneMemory('wiki', featureCode ? 'feature' : 'search', PANE_KEYS, !!featureCode);
   const [search, setSearch] = useState({ query: featureCode ?? '', workspace: undefined });
   const [framePath, setFramePath] = useState(null);
   const [area, setArea] = useState('');
@@ -99,33 +107,32 @@ export default function WikiView({ featureCode, workspace, frameBase, client }) 
     useColorMode: () => colorMode,
     aspectHint: GRAPH_ASPECT_HINT,
   }), [workspace, graphParams, setGraphParams, GraphLink, colorMode]);
-  const tabClass = (name) => `px-3 py-1 text-sm rounded ${pane === name ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'}`;
   // The wiki lists 127.0.0.1 parents only (a `localhost` page is another site: no cookie, no frame).
   const frameable = typeof window === 'undefined' || window.location.hostname === '127.0.0.1';
 
   return (
     <WikiDataProvider client={dataClient}>
       <div className="wiki-tab h-full flex flex-col min-h-0" data-testid="wiki-view">
-        <nav className="flex items-center gap-1 px-3 py-2 border-b border-border shrink-0" aria-label="wiki">
-          <form onSubmit={submit} className="mr-2">
-            <input
-              aria-label="Feature code"
-              className="h-7 w-48 rounded border border-border bg-background px-2 text-sm font-mono"
-              placeholder="Feature code"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-            />
-          </form>
-          <button type="button" className={tabClass('search')} onClick={() => open('search')}>Search</button>
-          <button type="button" className={tabClass('graph')} onClick={() => open('graph')}>Graph</button>
-          <button type="button" className={tabClass('area')} onClick={() => open('area')}>Area</button>
-          <button type="button" className={tabClass('feature')} onClick={() => open('feature')}>Feature</button>
-          <button type="button" className={tabClass('decisions')} onClick={() => open('decisions')}>Decisions</button>
-          <button type="button" className={tabClass('sources')} onClick={() => open('sources')}>Sources</button>
-          <button type="button" className={tabClass('ledger')} onClick={() => open('ledger')}>Ledger</button>
-          <button type="button" className={tabClass('full')} onClick={() => open('full')}>Open full wiki</button>
-          <span className="ml-auto text-xs text-muted-foreground">{workspace}</span>
-        </nav>
+        <PaneSwitcher
+          panes={PANES}
+          active={pane}
+          onChange={open}
+          label="Wiki panes"
+          trailing={(
+            <>
+              <form onSubmit={submit}>
+                <input
+                  aria-label="Feature code"
+                  className="h-7 w-48 rounded border border-border bg-background px-2 text-sm font-mono"
+                  placeholder="Feature code"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                />
+              </form>
+              <span className="ml-auto text-xs text-muted-foreground">{workspace}</span>
+            </>
+          )}
+        />
         <div className={`flex-1 min-h-0 ${pane === 'full' ? 'flex flex-col' : pane === 'graph' ? 'relative' : 'overflow-auto p-4'}`}>
           {pane === 'feature' && (code
             ? <FeatureHub featureId={code} workspace={workspace} />
