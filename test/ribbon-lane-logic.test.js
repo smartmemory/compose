@@ -36,6 +36,10 @@ describe('lane logic (COMP-COCKPIT-RIBBON-LANE-1)', () => {
       { name: 'nowLine / nextLines: live, then past window', got: [nowLine(lane('maya'), true, NOW), nowLine(lane('2.0'), false, NOW), nextLines(lane('2.0'), false), nextLines(lane('maya'), true)], want: ['nothing running', 'past window', ['past window'], ['nothing queued']] },
       { name: 'nextLines 2.0 live: the two queued titles', got: nextLines(lane('2.0'), true), want: ['Workspace switcher polish', 'Facet counts'] },
       { name: 'sessionsForLane: <lane>-main and <lane>-x match, others do not, no list is empty', got: [sessionsForLane([{ name: 'ops-main' }, { name: 'ops-wk-a' }, { name: 'opsx' }, { name: 'web-main' }], 'ops').map((s) => s.name), sessionsForLane(null, 'ops')], want: [['ops-main', 'ops-wk-a'], []] },
+      { name: 'sessionsForLane aliases: 2.0 finds sm20-main, ops finds ops-main, no session is empty, main keeps main-overdue-main', got: (() => {
+        const live = [{ name: 's1-chat' }, { name: 'sm20-main' }, { name: 'ops-main' }, { name: 'main-overdue-main' }, { name: 'forge-main' }];
+        return ['2.0', 'ops', 'bench', 'main'].map((l) => sessionsForLane(live, l).map((x) => x.name));
+      })(), want: [['sm20-main'], ['ops-main'], [], ['main-overdue-main']] },
       { name: 'chainForLane: links by step name, prefers an open chain, null when none', got: [
         chainForLane(lane('ops'), [{ unit: 'a', steps: [{ name: 'X-1', stateKind: 'done' }] }, { unit: 'b', steps: [{ name: 'O-3', stateKind: 'ready' }] }])?.unit,
         chainForLane(lane('ops'), [{ unit: 'a', steps: [{ name: 'X-1', stateKind: 'done' }] }])], want: ['b', null] },

@@ -141,6 +141,21 @@ const ROWS = [
     },
   },
   {
+    name: 'live estimator ETA: a duration reads "ETA in 9h" with no arrow, and a click or Enter opens the ETA card, not the lane',
+    p: () => props('day', { edit: (d) => { d.lanes[2].eta = { p50: '9h', p80: '32h', asOf: '2026-10-31T20:14', raw: 'r', prev: null }; } }),
+    check: ({ root, cb }) => {
+      const lane = load('day').lanes[2].lane;
+      const pin = root.querySelector(`[data-testid="lane-${lane}"] [data-testid="eta"]`);
+      expect(pin.textContent).toBe('◆ ETA in 9h');
+      expect(pin.getAttribute('data-tip')).toBe('Expected landing of the current unit: in 9h (estimate.py, as of 20:14)');
+      fireEvent.click(pin);
+      key(pin, 'Enter');
+      expect(cb.onMarkOpen).toHaveBeenCalledTimes(2);
+      expect(cb.onMarkOpen.mock.calls[0][0]).toEqual({ kind: 'eta', lane, p50: '9h', p80: '32h', asOf: '2026-10-31T20:14', prev: null });
+      expect(cb.onLaneOpen).not.toHaveBeenCalled();
+    },
+  },
+  {
     name: 'bands: a hold and an outage each span the lanes with a tip',
     p: () => props('day', {
       edit: (d) => {
@@ -188,7 +203,7 @@ const ROWS = [
       expect(lanes).toBe(5);
       const marks = count(root, 'mark-land') + count(root, 'mark-deploy') + count(root, 'mark-deployFail') + count(root, 'mark-decide');
       const pins = count(root, 'pin-seatReset') + count(root, 'pin-expiry');
-      expect(focusable.length).toBe(lanes + 1 + marks + pins + 1);
+      expect(focusable.length).toBe(lanes + 1 + marks + pins + count(root, 'eta') + 1); // LIVE-DATA-1: the ETA pin is now a tab stop
 
       const land = root.querySelector('[data-testid="mark-land"]');
       key(land);

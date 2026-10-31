@@ -210,6 +210,23 @@ export function etaLabel(p50, now) {
   return weekdayOf(w);
 }
 
+const DURATION = /^\d+(\.\d+)?\s*[mhd]$/;
+export const HAS_ZONE = /(Z|[+-]\d\d:?\d\d)$/;
+
+/**
+ * One p50/p80 value in words. The contract's examples are ISO times, but the live estimator (`estimate.py`) prints durations
+ * ("9h", "32h"): a time reads like the ribbon's ETA ("21:30", "Mon"), a duration reads "in 9h", anything else is shown as given.
+ */
+export function etaWord(v, now) {
+  if (v == null || v === '') return 'unknown';
+  if (Number.isFinite(Date.parse(v))) return etaLabel(v, now);
+  if (DURATION.test(String(v).trim())) return `in ${String(v).trim()}`;
+  return String(v);
+}
+
+/** "20:14" for an `asOf` the estimator wrote without a zone (its own local clock), else the clock in the window's offset. */
+export const asOfClock = (asOf, now) => (HAS_ZONE.test(String(asOf)) ? clock(asOf, now) : clock(asOf));
+
 /**
  * The tooltip for one drawn item, as the mock's wording (lines joined with "\n"). `item.kind` picks the shape:
  * `work`, `wait`, `notRecorded`, `land`, `deploy`, `deployFail`, `decide`, `cluster`, `current`, `next`, `eta`,
@@ -254,11 +271,11 @@ export function tipText(item) {
     case 'next':
       return `Next: ${(item.titles || []).join(', then ')}`;
     case 'eta':
-      return `Expected landing of the current unit: ${etaLabel(item.p50, now)} (estimate.py, as of ${clock(item.asOf, now)})`;
+      return `Expected landing of the current unit: ${etaWord(item.p50, now)} (estimate.py, as of ${asOfClock(item.asOf, now)})`;
     case 'noEta':
       return `No estimate yet${item.raw && typeof item.raw === 'string' ? ` (${item.raw})` : ''}`;
     case 'prev':
-      return `Earlier estimate: ${etaLabel(item.p50, now)} (as of ${clock(item.asOf, now)})`;
+      return `Earlier estimate: ${etaWord(item.p50, now)} (as of ${asOfClock(item.asOf, now)})`;
     case 'hold':
     case 'outage': {
       const lead = item.kind === 'hold' ? 'Hold' : 'Outage';

@@ -33,7 +33,7 @@
         "source": "'stamps' | 'owner-queue' | 'ledger'"
       }],
       "next": [{"id": "string", "title": "string | null", "titleSource": "string"}],
-      "eta": "{p50, p80, asOf, raw, prev: {p50, asOf} | null} | {noData: true, raw} | null"
+      "eta": "{p50, p80, asOf, raw, prev: {p50, asOf} | null} | {noData: true, raw} | null. p50 and p80 are strings exactly as estimate.py prints them: a duration such as \"9h\" or \"2d\" (the live shape), and a time with an offset is also read. asOf is the estimator's own local time WITHOUT a zone (\"2026-10-31T20:14\"). raw is the estimator's debug line and is never shown."
     }],
     "bands": [{"kind": "'outage' | 'hold'", "start": "iso", "end": "iso | null (ongoing)", "label": "string", "source": "string"}],
     "pins": [{"kind": "'seatReset' | 'expiry'", "at": "iso", "label": "string", "seat": "string | null", "atGate": "bool"}],

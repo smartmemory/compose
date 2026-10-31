@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  axisTicks, causePhrase, clock, etaLabel, fmtDur, isLive, layoutLanes, seatShort, tipText, toMs, when, windowTitle, xOf,
+  axisTicks, causePhrase, clock, etaWord, fmtDur, isLive, layoutLanes, seatShort, tipText, toMs, when, windowTitle, xOf,
 } from './ribbonLayout.js';
 import { CLUSTER_ABOVE_MS, clusterMarks, MIN_DRAG_MS } from './rangeLogic.js';
 
@@ -247,6 +247,7 @@ export default function DayRibbon({
     const empty = !(lane.spans || []).length && !(lane.marks || []).length && !cur;
     const laneAlerts = alerts.filter((a) => alertLane(a) === lane.lane && a.since && inWindow(a.since));
     const eta = live && cur ? lane.eta : null;
+    const openEta = (e) => onMarkOpen && onMarkOpen({ kind: 'eta', lane: lane.lane, p50: eta.p50, p80: eta.p80, asOf: eta.asOf, prev: eta.prev }, rectOf(e));
     const onAnswer = waiting?.cause === 'owner';
     const next = live ? (lane.next || []) : [];
     const nextTitles = next.map((n) => n.title || n.id);
@@ -320,9 +321,12 @@ export default function DayRibbon({
               <text className="eta-prev" data-testid="eta-prev" x={f1(X(eta.prev.p50))} y={ry + 20} textAnchor="middle"
                 data-tip={tipText({ kind: 'prev', p50: eta.prev.p50, asOf: eta.prev.asOf, now })}>◆</text>
             )}
-            <text className="eta" data-testid="eta" x={R.X1} y={ry + 20} textAnchor="end"
-              data-tip={tipText({ kind: 'eta', p50: eta.p50, asOf: eta.asOf, now })}>
-              <tspan className="d">◆</tspan> ETA {inWindow(eta.p50) ? etaLabel(eta.p50, now) : `${etaLabel(eta.p50, now)} ▸`}
+            <text className="eta" data-testid="eta" x={R.X1} y={ry + 20} textAnchor="end" role="button" tabIndex={0} style={{ cursor: 'pointer' }}
+              aria-label={`Expected landing, ${lane.lane} lane`}
+              data-tip={tipText({ kind: 'eta', p50: eta.p50, asOf: eta.asOf, now })}
+              onClick={(e) => { e.stopPropagation(); openEta(e); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openEta(e); } }}>
+              <tspan className="d">◆</tspan> ETA {etaWord(eta.p50, now)}{Number.isFinite(toMs(eta.p50)) && !inWindow(eta.p50) ? ' ▸' : ''}
             </text>
           </>
         )}

@@ -187,5 +187,19 @@ describe('GET /api/ribbon', () => {
     ['missing to is 400', `from=${FROM}`, {}, 400, () => {}],
   ];
   for (const [name, query, over, status, check] of ROWS) it(name, async () => { const r = await get(query, over); assert.equal(r.status, status); check(r.body); });
+  it('LIVE-DATA-1: the boot warm fills the sources and every lane estimate once, so the first read reads nothing, and a failing source never throws', async () => {
+    const hits = { units: 0, snap: 0, eta: 0 };
+    const over = { loadUnits: async () => { hits.units += 1; return { units: [unit('U7', 'forge', { ready_at: T('10:00'), dispatched_at: T('11:00') })], coverage: {}, asOf: new Date(NOW).toISOString() }; }, loadSnapshots: async () => { hits.snap += 1; throw new Error('snapshots gone'); }, eta: async () => { hits.eta += 1; return { p50: '2h', p80: '3h', asOf: 'a', raw: 'r' }; } };
+    const app = express();
+    attachRibbonRoutes(app, { deps: deps(over) });
+    await app.locals.warmRibbon();
+    assert.deepEqual(hits, { units: 1, snap: 1, eta: 1 });
+    const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    try {
+      const res = await fetch(`http://127.0.0.1:${server.address().port}/api/ribbon?from=${FROM}&to=${TO}`);
+      assert.equal(res.status, 200);
+      assert.equal(hits.units, 1, 'the source cache was warm');
+    } finally { server.close(); }
+  });
   it('remote mode mounts nothing', () => assert.equal(attachRibbonRoutes(express(), { remote: true }), false));
 });

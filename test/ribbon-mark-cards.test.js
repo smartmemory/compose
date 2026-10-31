@@ -34,6 +34,7 @@ const ROWS = [
   { name: 'eta slipped: p50, p80, as of, earlier estimate, initiative link', item: { kind: 'eta', lane: '2.0', p50: '2026-11-02T12:00:00-07:00', p80: '2026-11-02T18:00:00-07:00', asOf: NOW, prev: { p50: '2026-11-01T20:00:00-07:00', asOf: at('10:00') } }, want: '◆ Expected landing / 2.0 lane / p50 Mon, p80 Mon. As of 16:40. Earlier estimate: 20:00 Sun (as of 10:00). / How far is 2.0 from flipping? ▸' },
   { name: 'eta not slipped, other lane: no earlier row, no link', item: { kind: 'eta', lane: 'web', p50: at('21:30'), p80: '2026-11-01T01:00:00-07:00', asOf: NOW, prev: null }, want: '◆ Expected landing / web lane / p50 21:30, p80 01:00 Sun. As of 16:40.' },
   { name: 'eta without p80: the row is dropped', item: { kind: 'eta', lane: 'web', p50: at('21:30'), asOf: NOW, prev: null }, want: '◆ Expected landing / web lane / p50 21:30. As of 16:40.' },
+  { name: 'eta with durations and a zone-less as-of (live estimator shape)', item: { kind: 'eta', lane: 'web', p50: '9h', p80: '32h', asOf: '2026-10-31T20:14', prev: { p50: '12h', asOf: '2026-10-31T08:00' } }, want: '◆ Expected landing / web lane / p50 in 9h, p80 in 32h. As of 20:14. Earlier estimate: in 12h (as of 08:00).' },
   { name: 'cluster: count and near time', item: { kind: 'cluster', at: at('08:42'), count: 2, items: [mark('web', 'land'), mark('web', 'deploy')] }, want: '2 events / near today 08:42' },
 ];
 

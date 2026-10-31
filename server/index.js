@@ -297,6 +297,7 @@ server.on('upgrade', (req, socket, head) => {
 
 server.listen(PORT, _host, () => {
   serverListening = true;
+  app.locals.warmRibbon?.(); // not awaited: the ribbon's slow first read fills while the server is already answering
   console.log(`Compose server running on http://${_host}:${PORT}`);
   console.log(`File watcher WebSocket: ws://${_host}:${PORT}/ws/files`);
   console.log(`Vision WebSocket: ws://${_host}:${PORT}/ws/vision`);

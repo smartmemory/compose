@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { AXIS_STEP, axisStepHours, axisTicks, clock, etaLabel, fmtDur, isLive, layoutLanes, tipText, windowTitle, xOf } from '../src/components/ribbon/ribbonLayout.js';
+import { AXIS_STEP, axisStepHours, asOfClock, axisTicks, clock, etaLabel, etaWord, fmtDur, isLive, layoutLanes, tipText, windowTitle, xOf } from '../src/components/ribbon/ribbonLayout.js';
 
 const day = JSON.parse(readFileSync(new URL('./fixtures/ribbon/day.json', import.meta.url), 'utf8'));
 const NOW = '2026-10-31T16:40:00-07:00';
@@ -70,6 +70,9 @@ const ROWS = [
   { name: 'tip next', run: () => tipText({ kind: 'next', titles: ['Clerk retry', 'Docs nav'] }), want: 'Next: Clerk retry, then Docs nav' },
   { name: 'tip eta', run: () => tipText({ kind: 'eta', p50: '2026-11-02T12:00:00-07:00', asOf: NOW, now: NOW }), want: 'Expected landing of the current unit: Mon (estimate.py, as of 16:40)' },
   { name: 'tip prev', run: () => tipText({ kind: 'prev', p50: '2026-11-02T12:00:00-07:00', asOf: at('12:10'), now: NOW }), want: 'Earlier estimate: Mon (as of 12:10)' },
+  { name: 'etaWord/asOfClock: duration, zoned time, zone-less time, junk, empty', run: () => [etaWord('9h', NOW), etaWord('2d', NOW), etaWord(at('21:30'), NOW), etaWord('2026-10-31T21:30', NOW), etaWord('soon', NOW), etaWord('', NOW), asOfClock('2026-10-31T20:14', NOW), asOfClock('2026-10-31T23:14:00Z', NOW)].join('|'), want: 'in 9h|in 2d|21:30|21:30|soon|unknown|20:14|16:14' },
+  { name: 'tip eta with a duration and a zone-less as-of (live estimator shape)', run: () => tipText({ kind: 'eta', p50: '9h', asOf: '2026-10-31T20:14', now: NOW }), want: 'Expected landing of the current unit: in 9h (estimate.py, as of 20:14)' },
+  { name: 'tip prev with a duration', run: () => tipText({ kind: 'prev', p50: '12h', asOf: '2026-10-31T08:00', now: NOW }), want: 'Earlier estimate: in 12h (as of 08:00)' },
   { name: 'tip hold band', run: () => tipText({ kind: 'hold', label: 'Batch hold', start: at('10:00'), end: at('12:00'), source: 'holds', now: NOW }), want: 'Hold · Batch hold\ntoday 10:00 to 12:00 · holds' },
   { name: 'tip outage band, ongoing', run: () => tipText({ kind: 'outage', label: 'API outage', start: at('15:00'), end: null, now: NOW }), want: 'Outage · API outage\ntoday 15:00 to ongoing' },
   { name: 'tip region names the source', run: () => tipText({ kind: 'region', source: 'stamps.dispatched_at', why: 'stamps begin 2026-09-01' }), want: 'Not recorded · stamps.dispatched_at\nstamps begin 2026-09-01' },

@@ -134,6 +134,22 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
     return out;
   }
 
+  /**
+   * Boot warm (COMP-COCKPIT-RIBBON-LIVE-DATA-1): fills the window-independent caches (units, snapshots, owner queue, gate.log,
+   * seats, and every lane's estimate) so the first real read waits for neither. The ledger and outage reads and the response
+   * itself depend on the client's window minute, so they stay cold. Never throws: a failed source logs its own WARNING.
+   */
+  app.locals.warmRibbon = async () => {
+    const t0 = now();
+    try {
+      const [u] = await Promise.all([units.get(), snapshots.get(), ownerQueue.get(), gateLog.get(), seats.get()]);
+      if (u.value) await etaFor(true, u.value.units, {});
+      info(`[ribbon] warm done in ${now() - t0} ms`);
+    } catch (error) {
+      warn(`[ribbon] warm failed: ${String(error?.message ?? error)}`);
+    }
+  };
+
   app.get(RIBBON_ROUTE, async (req, res) => {
     res.set('cache-control', 'no-store');
     const a = instant(req.query.from, 'from');

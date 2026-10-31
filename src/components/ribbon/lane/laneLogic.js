@@ -4,7 +4,7 @@
  * Input is ONE lane object from the ribbon feed for the current window (`ribbon-contract.json` `lanes[]`): spans, marks,
  * current, next, eta. Nothing here fetches. Every function returns words or numbers a view can print, never an empty cell.
  */
-import { clock, etaLabel, fmtDur, toMs, when } from '../ribbonLayout.js';
+import { clock, etaLabel, etaWord, fmtDur, HAS_ZONE, toMs, when } from '../ribbonLayout.js';
 
 const MIN = 60_000;
 
@@ -116,20 +116,6 @@ export function currentWait(lane, now) {
   return last && last.kind === 'wait' && toMs(last.end) >= toMs(now) - 5 * MIN ? last : null;
 }
 
-const DURATION = /^\d+(\.\d+)?\s*[mhd]$/;
-const HAS_ZONE = /(Z|[+-]\d\d:?\d\d)$/;
-
-/**
- * One p50/p80 value in words. The contract's examples are ISO times, but the live estimator (`estimate.py`) prints durations
- * ("9h", "32h"): a time reads like the ribbon's ETA ("21:30", "Mon"), a duration reads "in 9h", anything else is shown as given.
- */
-export function etaWord(v, now) {
-  if (v == null || v === '') return 'unknown';
-  if (Number.isFinite(Date.parse(v))) return etaLabel(v, now);
-  if (DURATION.test(String(v).trim())) return `in ${String(v).trim()}`;
-  return String(v);
-}
-
 /** "as of 20:14" for a stamp the estimator wrote without a zone (its own local clock), "as of today 16:40" for one with a zone. */
 export function asOfWord(asOf, now) {
   if (!asOf) return null;
@@ -184,13 +170,17 @@ export function chainForLane(lane, chains) {
   return linked.find((c) => c.steps.some((s) => s.stateKind !== 'done')) || linked[0] || null;
 }
 
+/** Lanes whose session is not named after the lane: lane `2.0`'s session is `sm20-main` (the feed also has its own lane `sm20`). */
+export const LANE_SESSION_ALIASES = { '2.0': ['sm20'] };
+
 /**
  * Plan (2): sm_status `sessions[]` have `{name, busy, ctx, session_id}` and no lane field. A session belongs to a lane when its
  * name is `<lane>-main` or starts with `<lane>-`. No match means the drawer shows the seat only.
  */
 export function sessionsForLane(sessions, laneName) {
   if (!laneName || !Array.isArray(sessions)) return [];
-  return sessions.filter((s) => s && typeof s.name === 'string' && (s.name === `${laneName}-main` || s.name.startsWith(`${laneName}-`)));
+  const bases = [laneName, ...(LANE_SESSION_ALIASES[laneName] || [])];
+  return sessions.filter((s) => s && typeof s.name === 'string' && bases.some((b) => s.name === `${b}-main` || s.name.startsWith(`${b}-`)));
 }
 
-export { clock };
+export { clock, etaWord };

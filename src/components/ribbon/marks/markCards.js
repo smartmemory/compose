@@ -6,7 +6,7 @@
  * cards before picking it); times read in the ribbon's relative words ("yesterday 20:50") in the offset of `now`.
  * A link is `{label, action}`; `action.type` is `unit`, `reverse`, `initiative` or `card` (a cluster row opening its own card).
  */
-import { clock, etaLabel, fmtDur, toMs, when } from '../ribbonLayout.js';
+import { asOfClock, clock, etaWord, fmtDur, toMs, when } from '../ribbonLayout.js';
 
 const GLYPH = { land: '✓', deploy: '▲', deployFail: '▲', decide: '⚖︎' };
 /** A lane that stands for a named initiative offers the way into its Ops view. */
@@ -88,10 +88,10 @@ function bandCard(b, ctx) {
 }
 
 function etaCard(e, ctx) {
-  const rows = [`p50 ${etaLabel(e.p50, ctx.now)}`];
-  if (e.p80) rows.push(`p80 ${etaLabel(e.p80, ctx.now)}`);
+  const rows = [`p50 ${etaWord(e.p50, ctx.now)}`];
+  if (e.p80) rows.push(`p80 ${etaWord(e.p80, ctx.now)}`);
   const slipped = e.prev && e.prev.p50 && e.prev.p50 !== e.p50;
-  const body = [`${rows.join(', ')}. As of ${clock(e.asOf, ctx.now)}.`, slipped ? `Earlier estimate: ${etaLabel(e.prev.p50, ctx.now)} (as of ${clock(e.prev.asOf, ctx.now)}).` : ''].filter(Boolean).join(' ');
+  const body = [`${rows.join(', ')}. As of ${asOfClock(e.asOf, ctx.now)}.`, slipped ? `Earlier estimate: ${etaWord(e.prev.p50, ctx.now)} (as of ${asOfClock(e.prev.asOf, ctx.now)}).` : ''].filter(Boolean).join(' ');
   const init = LANE_INITIATIVE[e.lane];
   return {
     kind: 'eta', tone: 'plain', icon: '◆', title: 'Expected landing', name: e.lane ? `${e.lane} lane` : '', sub: '', body, id: null, list: null,
