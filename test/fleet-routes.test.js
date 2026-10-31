@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { attachFleetRoutes, resolveFleetReaders } from '../server/fleet-routes.js';
 import { attachCadenceUiRoutes } from '../server/cadence-ui-routes.js';
 import { resolveCadenceUiDir } from '../lib/cadence-ui-link.js';
+import { pollUntil } from './helpers/poll-until.js';
 
 const FIX = fileURLToPath(new URL('./fixtures/fleet/', import.meta.url));
 const uiDir = resolveCadenceUiDir();
@@ -247,7 +248,7 @@ describe('POST /api/fleet/owner-answer (golden flow, real owner_queue.py, scratc
       assert.ok(warns.some((w) => w.includes('"TEST-NOPE"') && w.includes('unknown id')));
       assert.ok(!warns.some((w) => w.includes('pick one')), 'a warning never carries the question text');
       // the cache was invalidated on each accept: sm_status re-ran inside its window
-      for (let i = 0; i < 50 && runs() < 2; i += 1) await new Promise((r) => setTimeout(r, 100));
+      await pollUntil(() => runs() >= 2, 'sm_status re-ran after accept');
       assert.ok(runs() >= 2, `sm_status re-ran after accept (runs=${runs()})`);
       const fleet = await (await fetch(`${base}/api/fleet`)).json();
       assert.equal(fleet.notify.entries['ask:TEST-ASK'].action, 'answered');
