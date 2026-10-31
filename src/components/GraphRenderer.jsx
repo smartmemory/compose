@@ -17,6 +17,8 @@ cytoscape.use(cytoscapeDagre);
  *   subtitle?: string
  *   graphKey?: string (for localStorage persistence)
  *   onNodeClick?: (id) => void
+ *   legend?: boolean (default true; false hides the Entities/Edges panel)
+ *   sublabelInNode?: boolean (default false; true draws the sublabel under the label inside each node, in a wider node)
  */
 
 // Cytoscape can't resolve CSS custom properties — hex mirrors per theme.
@@ -32,7 +34,7 @@ const CY_LIGHT = {
   textTertiary: '#737373', textMuted: '#a3a3a3', accent: '#FBBF24',
 };
 
-function buildDefaultStyle(c) {
+function buildDefaultStyle(c, sublabelInNode = false) {
   return [
     {
       selector: 'node',
@@ -77,6 +79,10 @@ function buildDefaultStyle(c) {
         'color': c.textTertiary, 'padding': '16px',
       },
     },
+    ...(sublabelInNode ? [{
+      selector: 'node[nodeText]',
+      style: { 'label': 'data(nodeText)', 'width': 172, 'height': 62, 'text-max-width': '158px', 'font-size': '10px', 'font-weight': 500 },
+    }] : []),
   ];
 }
 
@@ -109,7 +115,7 @@ const LAYOUT_LABELS = {
   'breadthfirst': 'Breadthfirst',
 };
 
-function toElements(nodes, edges) {
+function toElements(nodes, edges, sublabelInNode = false) {
   const elements = [];
   for (const n of nodes) {
     elements.push({
@@ -117,6 +123,7 @@ function toElements(nodes, edges) {
         id: n.id,
         label: n.label,
         sublabel: n.sublabel || undefined,
+        nodeText: sublabelInNode && n.sublabel ? `${n.label}\n${n.sublabel}` : undefined,
         color: n.color || CY.textMuted,
         parent: n.parent || undefined,
         shape: n.shape || undefined,
@@ -398,6 +405,8 @@ export default function GraphRenderer({
   subtitle,
   graphKey = 'default',
   onNodeClick,
+  legend = true,
+  sublabelInNode = false,
 }) {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
@@ -416,8 +425,8 @@ export default function GraphRenderer({
     saveGraphState(graphKey, { layoutKey, showEdgeLabels, hiddenNodes: [...hiddenNodes], showLegend, viewMode });
   }, [graphKey, layoutKey, showEdgeLabels, hiddenNodes, showLegend, viewMode]);
 
-  const elements = elementsProp || (nodesProp && edgesProp ? toElements(nodesProp, edgesProp) : []);
-  const graphStyle = useMemo(() => styleProp || buildDefaultStyle(cyColors), [styleProp, isDark]);
+  const elements = elementsProp || (nodesProp && edgesProp ? toElements(nodesProp, edgesProp, sublabelInNode) : []);
+  const graphStyle = useMemo(() => styleProp || buildDefaultStyle(cyColors, sublabelInNode), [styleProp, isDark, sublabelInNode]);
   const activeLayout = layoutProp || LAYOUTS[layoutKey];
 
   const nodeList = useMemo(() => {
@@ -567,16 +576,20 @@ export default function GraphRenderer({
         <ToolbarButton onClick={handleFit} title="Fit to view">Fit</ToolbarButton>
         <ToolbarButton onClick={handleZoomIn} title="Zoom in">+</ToolbarButton>
         <Separator />
-        <ToolbarButton onClick={() => setShowLegend(!showLegend)} active={showLegend} title={showLegend ? 'Hide legend' : 'Show legend'}>
-          Legend
-        </ToolbarButton>
-        <Separator />
+        {legend && (
+          <>
+            <ToolbarButton onClick={() => setShowLegend(!showLegend)} active={showLegend} title={showLegend ? 'Hide legend' : 'Show legend'}>
+              Legend
+            </ToolbarButton>
+            <Separator />
+          </>
+        )}
         <ViewTab mode="graph" active={viewMode === 'graph'} onClick={() => setViewMode('graph')} />
         <ViewTab mode="tree" active={viewMode === 'tree'} onClick={() => setViewMode('tree')} />
       </div>
 
       {/* Legend panel */}
-      {showLegend && (
+      {legend && showLegend && (
         <div
           className="absolute bottom-3 left-3 z-[2]"
           style={{
