@@ -34,6 +34,8 @@ export function countTabRows(root) {
   return [...root.querySelectorAll('[role="tablist"], nav[aria-label]')].filter((el) => {
     if (el.getAttribute('aria-label') === 'Breadcrumb') return false;
     if (el.matches('[data-testid="pane-switcher"]')) return false;
+    // @smartmemory/stratum-ui's Runs filter ("filter runs": All, Running, ...) is a package-owned segmented pill group, a filter and not navigation (found live 2026-10-31).
+    if (el.matches('.sui-seg')) return false;
     if (el.closest('[data-testid="pane-switcher-bar"], aside, [data-testid="context-panel"], [data-testid="item-detail"]')) return false;
     return true;
   }).length;
@@ -56,6 +58,11 @@ describe('countTabRows (negative rows: the counter must fire on the old markup)'
       <nav aria-label="Breadcrumb"></nav>
       <div data-testid="pane-switcher-bar"><div role="tablist" data-testid="pane-switcher"></div></div>`;
     expect(countTabRows(host)).toBe(3);
+  });
+  it('a package segmented filter (.sui-seg) is not a row', () => {
+    const host = document.createElement('div');
+    host.innerHTML = '<div role="tablist" aria-label="Rooms"></div><div role="tablist" aria-label="Fleet views"></div><div class="sui-seg" role="tablist" aria-label="filter runs"></div>';
+    expect(countTabRows(host)).toBe(2);
   });
   it('the old Ops tablist is a third row too', () => {
     const host = document.createElement('div');
