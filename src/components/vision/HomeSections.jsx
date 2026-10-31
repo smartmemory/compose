@@ -53,7 +53,7 @@ function gateLabel(gate) {
 }
 
 export default function HomeSections({
-  sections, untriagedIdeas = 0, cadenceAvailable = false,
+  sections, untriagedIdeas = 0, showFleet = false,
   onSelect, onJumpToGate, onStopAgent, onNavigate,
 }) {
   const { needsYou, running, inProgress, recentlyChanged, recentBuilds } = sections;
@@ -215,7 +215,7 @@ export default function HomeSections({
         </Section>
       )}
 
-      {cadenceAvailable && (
+      {showFleet && (
         <Section id="fleet" title="Fleet">
           <HomeFleetGlance />
         </Section>

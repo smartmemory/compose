@@ -481,7 +481,7 @@ export default function DashboardView({
       <HomeSections
         sections={sections}
         untriagedIdeas={untriagedIdeas}
-        cadenceAvailable={cadenceAvailable}
+        showFleet
         onSelect={onSelect}
         onJumpToGate={onJumpToGate || onOpenGate}
         onStopAgent={onStopAgent}

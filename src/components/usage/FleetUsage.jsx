@@ -13,15 +13,8 @@ import { cn } from '@/lib/utils.js';
 import { useFleet } from '../../lib/fleetPoller.js';
 import { smPanel } from '../cockpit/fleetLogic.js';
 
-const pctText = (v) => (typeof v === 'number' && Number.isFinite(v) ? `${Math.round(v)}%` : '—');
-
-function resetText(iso, now) {
-  if (!iso) return '—';
-  const mins = Math.round((Date.parse(iso) - now) / 60_000);
-  if (!Number.isFinite(mins)) return '—';
-  if (mins <= 0) return 'reset';
-  return mins < 60 ? `${mins}m` : mins < 2880 ? `${(mins / 60).toFixed(1)}h` : `${Math.round(mins / 1440)}d`;
-}
+import { fmtPct, resetIn as resetText, RETIRED_NOTE } from '../cockpit/cost/costLogic.js';
+import CostMeter from '../cockpit/cost/CostMeter.jsx';
 
 /** Pure: the fleet's two spend panels, each `{text, rows}` or `{down: reason}`. Exported for the tests. */
 export function fleetSpend(data) {
@@ -29,7 +22,7 @@ export function fleetSpend(data) {
   const spend = smPanel(data, 'spend');
   const down = (p, what) => (p === null ? 'fleet status unavailable' : p.error ? `${what} unavailable: ${p.error}` : null);
   return {
-    ceiling: down(ceiling, 'ceiling') ? { down: down(ceiling, 'ceiling') } : { text: ceiling.value?.line ?? '—', warn: Boolean(ceiling.value?.warn) },
+    ceiling: down(ceiling, 'ceiling') ? { down: down(ceiling, 'ceiling') } : { text: ceiling.value?.line ?? '—', pct: ceiling.value?.pct ?? null, warn: Boolean(ceiling.value?.warn) },
     spend: down(spend, 'spend') ? { down: down(spend, 'spend') } : { text: spend.value?.head ?? '—', rows: Array.isArray(spend.value?.rows) ? spend.value.rows : [] },
   };
 }
@@ -58,11 +51,22 @@ export default function FleetUsage({ client, now }) {
   useEffect(() => load(), [load]);
 
   const src = seats.body?.seats;
-  const rows = Array.isArray(src?.value?.seats) ? src.value.seats : [];
+  const allRows = Array.isArray(src?.value?.seats) ? src.value.seats : [];
+  const rows = allRows.filter((r) => r.retired !== true);
+  const retired = allRows.filter((r) => r.retired === true);
   const seatError = seats.error || src?.error || null;
   const at = now ? Date.parse(now) : Date.now();
   return (
     <div className="flex flex-col gap-4" data-testid="usage-fleet">
+      <CostMeter
+        seats={Array.isArray(src?.value?.seats) ? allRows : null}
+        seatsError={seatError}
+        loading={seats.loading}
+        spend={fleet.loading && !fleet.data ? null : { ceiling, spend }}
+        spendLoading={fleet.loading}
+        asOf={src?.value?.generated_at ?? null}
+        now={now}
+      />
       <div className="grid gap-2 md:grid-cols-2">
         <Panel title="Fleet spend today" testId="usage-fleet-ceiling">
           {ceiling.down
@@ -108,15 +112,18 @@ export default function FleetUsage({ client, now }) {
                 <tr key={r.id} className="border-b border-border/50" data-testid={`usage-seat-${r.id}`}>
                   <td className="py-1.5">{r.label}</td>
                   <td className={cn(r.status !== 'ok' && 'text-muted-foreground')}>{r.status ?? '—'}</td>
-                  <td className="text-right font-mono">{pctText(r.five_h?.used_pct)}</td>
+                  <td className="text-right font-mono">{fmtPct(r.five_h?.used_pct)}</td>
                   <td className="text-right font-mono text-muted-foreground">{resetText(r.five_h?.resets_at, at)}</td>
-                  <td className="text-right font-mono">{pctText(r.seven_d?.used_pct)}</td>
+                  <td className="text-right font-mono">{fmtPct(r.seven_d?.used_pct)}</td>
                   <td className="text-right font-mono text-muted-foreground">{resetText(r.seven_d?.resets_at, at)}</td>
                   <td className="text-right font-mono">{typeof r.today_pts === 'number' ? r.today_pts : '—'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+        )}
+        {retired.length > 0 && (
+          <p className="text-[11px] text-muted-foreground" title={retired.map((r) => r.label).join(', ')} data-testid="usage-seats-retired">{RETIRED_NOTE(retired.length)}</p>
         )}
         <p className="text-[11px] text-muted-foreground" data-testid="usage-seats-note">
           Quota used per seat, from the usage watcher. Dollars are recorded for the whole fleet (above), not per seat.

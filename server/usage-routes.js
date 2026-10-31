@@ -40,14 +40,24 @@ export function seatRows(doc) {
   if (!doc || !Array.isArray(doc.accounts)) throw new Error('usage_watch printed no accounts list');
   return doc.accounts.filter((a) => a && typeof a.id === 'string').map((a) => {
     const w = (k) => ({ used_pct: pct(a.windows?.[k]?.used_pct), resets_at: iso(a.windows?.[k]?.resets_at) });
+    const st = a.windows?.['7d']?.status;
+    const f = a.fable && typeof a.fable === 'object' ? a.fable : null;
+    const cd = a.codex_daily && typeof a.codex_daily === 'object' ? a.codex_daily : null;
+    const si = a.seat_idle && typeof a.seat_idle === 'object' ? a.seat_idle : null;
     return {
       id: a.id,
       label: typeof a.label === 'string' ? a.label.replace(EMAIL_RE, '').trim() : a.id,
       vendor: typeof a.vendor === 'string' ? a.vendor : null,
       status: typeof a.status === 'string' ? a.status : null,
       five_h: w('5h'),
-      seven_d: w('7d'),
+      seven_d: typeof st === 'string' ? { ...w('7d'), status: st } : w('7d'),
       today_pts: pct(a.today_pts),
+      // COMP-COCKPIT-COST-METER-1: the blocks the cost meter needs, each present only when usage_watch printed it.
+      ...(typeof a.retired === 'boolean' ? { retired: a.retired } : {}),
+      ...(typeof a.retire_state === 'string' ? { retire_state: a.retire_state } : {}),
+      ...(f ? { fable: { used_pct: pct(f.reading?.used_pct), resets_at: iso(f.reading?.resets_at), cap_pct: pct(f.cap_pct), pace_pct: pct(f.pace_pct), over_cap: f.over_cap === true } } : {}),
+      ...(cd ? { codex_daily: { cap_pct: pct(cd.cap_pct), state: typeof cd.state === 'string' ? cd.state : null, off: cd.off === true } } : {}),
+      ...(si ? { seat_idle: { used_pct: pct(si.used_pct), hours_left: pct(si.hours_left), ready_units: pct(si.ready_units) } } : {}),
     };
   });
 }
@@ -57,7 +67,9 @@ export async function readSeats({ python = 'python3', script, env = process.env,
   const { stdout } = await run([python, script, 'status', '--json'], { timeoutMs, env });
   let doc;
   try { doc = JSON.parse(stdout); } catch { throw new Error('usage_watch printed no JSON document'); }
-  return { generated_at: typeof doc.generated_at === 'string' ? doc.generated_at : null, seats: seatRows(doc) };
+  // usage_watch prints `generated_at` as epoch seconds; older fixtures print an ISO string.
+  const generated = typeof doc.generated_at === 'string' ? doc.generated_at : iso(doc.generated_at);
+  return { generated_at: generated, seats: seatRows(doc) };
 }
 
 function parseIso(value, name) {

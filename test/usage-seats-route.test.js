@@ -24,6 +24,23 @@ const ACCOUNTS = {
   ],
 };
 
+// COMP-COCKPIT-COST-METER-1: usage_watch's real shape, epoch `generated_at`, retired Max, Team seat with no 7d, Fable, Codex cap.
+const WATCH = {
+  generated_at: 1793438788.498388,
+  accounts: [
+    { id: 'max', label: 'Claude Max 20x', vendor: 'claude', status: 'stale', retired: true, retire_state: 'retired',
+      windows: { '5h': { used_pct: 0, resets_at: null, status: 'expired' }, '7d': { used_pct: 44, resets_at: 1793728800, status: 'stale' } },
+      fable: { reading: { used_pct: 44, resets_at: 1793728800 }, cap_pct: 100, pace_pct: 52.04, over_cap: false } },
+    { id: 'seat3', label: 'Claude Team seat 3', vendor: 'claude', status: 'missing', retired: false, retire_state: '',
+      windows: { '5h': { used_pct: 31.0000001, resets_at: 1793425200, status: 'ok' }, '7d': { used_pct: null, resets_at: null, status: 'missing' } },
+      fable: { reading: null, cap_pct: 70, pace_pct: null, over_cap: false },
+      seat_idle: { used_pct: 31, hours_left: 2.06, ready_units: 91 } },
+    { id: 'codex', label: 'Codex prolite', vendor: 'codex', status: 'ok', today_pts: 6,
+      windows: { '7d': { used_pct: 19, resets_at: 1793774756, status: 'ok' } }, codex_daily: { cap_pct: 13, state: 'ok', off: false } },
+  ],
+};
+const bySeat = (body, id) => body.seats.value.seats.find((r) => r.id === id);
+
 /** A fixture reader: appends one line to `runs` per call, then prints `out` and exits `code`. */
 function script(dir, out, code = 0) {
   const p = join(dir, 'usage_watch.py');
@@ -57,6 +74,45 @@ const ROWS = [
       ]);
       assert.ok(!JSON.stringify(body).includes('@'), 'no email address leaves the route');
     },
+  },
+  {
+    name: 'retired and retire_state pass through, an active seat carries retired false',
+    setup: (dir) => script(dir, JSON.stringify(WATCH)),
+    check(body) {
+      assert.deepEqual([bySeat(body, 'max').retired, bySeat(body, 'max').retire_state], [true, 'retired']);
+      assert.deepEqual([bySeat(body, 'seat3').retired, bySeat(body, 'seat3').retire_state], [false, '']);
+      assert.equal('retired' in bySeat(body, 'codex'), false);
+    },
+  },
+  {
+    name: 'a Team seat with no weekly cap passes the 7d status through, so the meter can say 5h-only',
+    setup: (dir) => script(dir, JSON.stringify(WATCH)),
+    check(body) {
+      assert.equal(bySeat(body, 'seat3').seven_d.status, 'missing');
+      assert.equal(bySeat(body, 'max').seven_d.status, 'stale');
+    },
+  },
+  {
+    name: 'fable passes through with ISO reset and a null reading kept null',
+    setup: (dir) => script(dir, JSON.stringify(WATCH)),
+    check(body) {
+      assert.deepEqual(bySeat(body, 'max').fable, { used_pct: 44, resets_at: new Date(1793728800000).toISOString(), cap_pct: 100, pace_pct: 52.04, over_cap: false });
+      assert.deepEqual(bySeat(body, 'seat3').fable, { used_pct: null, resets_at: null, cap_pct: 70, pace_pct: null, over_cap: false });
+      assert.equal('fable' in bySeat(body, 'codex'), false);
+    },
+  },
+  {
+    name: 'codex_daily and seat_idle pass through, the cap read from the data',
+    setup: (dir) => script(dir, JSON.stringify(WATCH)),
+    check(body) {
+      assert.deepEqual(bySeat(body, 'codex').codex_daily, { cap_pct: 13, state: 'ok', off: false });
+      assert.deepEqual(bySeat(body, 'seat3').seat_idle, { used_pct: 31, hours_left: 2.06, ready_units: 91 });
+    },
+  },
+  {
+    name: 'epoch generated_at becomes an ISO string, so the meter can print as-of',
+    setup: (dir) => script(dir, JSON.stringify(WATCH)),
+    check(body) { assert.equal(body.seats.value.generated_at, new Date(1793438788498.388).toISOString()); },
   },
   { name: 'reader missing: 200 with the error, no rows', setup: (dir) => join(dir, 'nope.py'), error: /^reader missing: / },
   { name: 'reader prints text, not JSON', setup: (dir) => script(dir, 'usage: status [--json]'), error: /printed no JSON document/ },
