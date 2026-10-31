@@ -58,8 +58,8 @@ export default function ProjectSwitchPopover({ projectName, projectRoot, onSwitc
           data-testid="project-popover"
           role="dialog"
           aria-label="Switch project"
-          className="absolute top-full left-0 mt-1 z-50 p-2 rounded-md shadow-lg"
-          style={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', minWidth: '280px' }}
+          className="absolute top-full left-0 mt-1 z-50 p-2 rounded-md shadow-lg max-[479px]:fixed max-[479px]:top-auto max-[479px]:left-2 max-[479px]:right-2 max-[479px]:mt-5"
+          style={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', minWidth: 'min(280px, calc(100vw - 16px))' }}
         >
           <div className="text-[10px] text-muted-foreground mb-1 px-1">
             Current: {projectRoot}

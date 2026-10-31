@@ -38,7 +38,7 @@ const ROOM_META = {
 const PROJECTS_META = { icon: FolderKanban, tip: 'Project home, Ideas, Roadmap, Build and Review for one Compose project' };
 
 const tabClass = (isActive) => [
-  'flex items-center gap-1.5 px-3 h-full text-[11px] uppercase tracking-wider font-medium transition-colors',
+  'flex items-center gap-1.5 px-3 max-[479px]:px-1.5 h-full shrink-0 whitespace-nowrap text-[11px] uppercase tracking-wider font-medium transition-colors',
   'border-b-2 -mb-px',
   isActive
     ? 'border-blue-600 text-blue-600 dark:border-accent dark:text-accent'
@@ -52,7 +52,7 @@ const tabClass = (isActive) => [
 function SubTabRow({ label, testid, items, lead = null }) {
   return (
     <div
-      className="flex items-center gap-0.5 h-8 px-3 shrink-0"
+      className="flex items-center gap-0.5 h-8 px-3 shrink-0 max-[479px]:overflow-x-auto"
       style={{ borderBottom: '1px solid hsl(var(--border))' }}
       role="tablist"
       aria-label={label}
@@ -121,7 +121,7 @@ export function ProjectSubTabs({ activeView, availability = {}, onViewChange, la
       label="Project rooms"
       testid="project-sub-tabs"
       items={items}
-      lead={selector && <div className="flex items-center pr-2 mr-1 border-r border-border h-5" data-testid="project-selector">{selector}</div>}
+      lead={selector && <div className="flex items-center shrink-0 pr-2 mr-1 border-r border-border h-5" data-testid="project-selector">{selector}</div>}
     />
   );
 }
@@ -150,7 +150,7 @@ export default function ViewTabs({ activeView, availability = {}, onViewChange, 
         className={tabClass(isActive)}
         onClick={() => onViewChange?.(isActive ? activeView : roomEntryView(key, availability, lastByRoom[key]))}
       >
-        {Icon && <Icon style={{ width: 12, height: 12 }} />}
+        {Icon && <Icon className="max-[479px]:hidden" style={{ width: 12, height: 12 }} />}
         {room.label}
         {badge > 0 && (
           <span className="text-[11px] min-w-[16px] h-4 flex items-center justify-center rounded-full px-1 tabular-nums"
