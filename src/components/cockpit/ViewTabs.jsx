@@ -157,11 +157,11 @@ export default function ViewTabs({ activeView, availability = {}, onViewChange, 
       {onOpenPalette && (
         <button
           onClick={onOpenPalette}
-          className="flex items-center gap-1.5 px-2.5 h-full text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 px-1 min-[1440px]:px-2.5 h-full text-[11px] text-muted-foreground hover:text-foreground transition-colors"
           title="Search (⌘K)"
         >
           <Search style={{ width: 12, height: 12 }} />
-          <kbd className="text-[9px] font-mono opacity-50 bg-muted px-1 py-0.5 rounded">⌘K</kbd>
+          <kbd className="hidden min-[1440px]:inline-block text-[9px] font-mono opacity-50 bg-muted px-1 py-0.5 rounded">⌘K</kbd>
         </button>
       )}
     </div>

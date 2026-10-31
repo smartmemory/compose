@@ -193,22 +193,9 @@ function AgentPanel({ agentActivity, agentErrors, sessionState, onSelectItem, sp
 
           {/* Agent activity */}
           <div className="px-3 pb-2">
-            <div className="rounded-md p-2" style={{ background: 'hsl(var(--accent))' }}>
-              <div className="flex items-center gap-1.5 mb-1">
-                <div
-                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{
-                    background: agentState.status === 'working' ? 'var(--color-category-writing)' : 'hsl(var(--success))',
-                    animation: agentState.status === 'working' ? 'pulse 1.5s ease-in-out infinite' : 'none',
-                  }}
-                />
-                <span className="text-[10px] font-medium uppercase tracking-wider" style={{
-                  color: agentState.status === 'working' ? 'var(--color-category-writing)' : 'hsl(var(--muted-foreground))',
-                }}>
-                  {agentState.status === 'working'
-                    ? (CATEGORY_LABELS[agentState.category] || 'Working')
-                    : 'Idle'}
-                </span>
+            <div className="rounded-md p-2 empty:hidden" style={{ background: 'hsl(var(--accent))' }}>
+              {agentState.status === 'working' && <div className="flex items-center gap-1.5 mb-1">
+                {/* Idle/working pill moved to the header (COMP-COCKPIT-HEADER-COUNTERS-1) */}
                 {agentState.status === 'working' && agentState.tool && (
                   <span className="text-[10px] tracking-wider" style={{ color: 'hsl(var(--muted-foreground))' }}>
                     {agentState.tool}
@@ -219,7 +206,7 @@ function AgentPanel({ agentActivity, agentErrors, sessionState, onSelectItem, sp
                     {formatElapsed(Date.now() - agentState.currentActivity.startTime)}
                   </span>
                 )}
-              </div>
+              </div>}
               {/* Recent activity strip */}
               {agentState.activityLog && agentState.activityLog.length > 0 && (
                 <div className="flex items-center gap-0.5 mt-1">

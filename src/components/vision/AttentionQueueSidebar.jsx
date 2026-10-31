@@ -15,7 +15,7 @@
 
 import React from 'react';
 import {
-  Search, CircleDot, Bell,
+  Search, CircleDot, Bell, ChevronDown, ChevronRight,
   AlertTriangle, Shield, Lightbulb,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.jsx';
@@ -37,11 +37,25 @@ import { useIdeaboxStore } from './useIdeaboxStore.js';
  * AttentionQueueSection — inline queue of blocked + pending-gate + decision items.
  * Clicking an item navigates to it.
  */
-function AttentionQueueSection({ items, gates, onSelectItem }) {
+export function attentionCollapsedKey(scope) {
+  return `compose:needs-attention-collapsed:${scope || (typeof window !== 'undefined' ? window.location.host : '')}`;
+}
+
+function AttentionQueueSection({ items, gates, onSelectItem, storageScope }) {
   const queue = React.useMemo(() => computeAttentionQueue(items, gates), [items, gates]);
   // COMP-COCKPIT-8: "+N more" used to navigate to a nonexistent 'attention'
   // view; it now expands the full queue in place (rows are already clickable).
   const [expanded, setExpanded] = React.useState(false);
+  // COMP-COCKPIT-HEADER-COUNTERS-1: whole-panel collapse, remembered per cockpit/project.
+  const storageKey = attentionCollapsedKey(storageScope);
+  const [collapsed, setCollapsed] = React.useState(() => {
+    try { return window.localStorage.getItem(storageKey) === '1'; } catch { return false; }
+  });
+  const toggleCollapsed = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    try { window.localStorage.setItem(storageKey, next ? '1' : '0'); } catch { /* ignore */ }
+  };
 
   if (queue.length === 0) return null;
 
@@ -57,14 +71,21 @@ function AttentionQueueSection({ items, gates, onSelectItem }) {
 
   return (
     <div className="px-2 mb-2">
-      <p
-        className="text-[10px] font-medium uppercase tracking-wider px-2 mb-1"
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        aria-expanded={!collapsed}
+        data-testid="attention-toggle"
+        className="flex w-full items-center gap-1 text-[10px] font-medium uppercase tracking-wider px-2 mb-1"
         style={{ color: 'hsl(var(--muted-foreground))' }}
       >
+        {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
         Needs Attention
-      </p>
-      {visible.map(({ item, priority, reason }) => (
+        <span className="ml-auto tabular-nums" data-testid="attention-count">{queue.length}</span>
+      </button>
+      {!collapsed && visible.map(({ item, priority, reason }) => (
         <button
+          data-testid="attention-row"
           key={item.id}
           onClick={() => onSelectItem?.(item.id)}
           className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors hover:bg-sidebar-accent/50"
@@ -77,7 +98,7 @@ function AttentionQueueSection({ items, gates, onSelectItem }) {
           <StatusBadge status={item.status} className="shrink-0" />
         </button>
       ))}
-      {overflow > 0 && (
+      {!collapsed && overflow > 0 && (
         <button
           onClick={() => setExpanded(v => !v)}
           className="flex w-full items-center px-2 py-0.5 text-[10px] rounded-md hover:bg-sidebar-accent/50 transition-colors"
@@ -85,29 +106,6 @@ function AttentionQueueSection({ items, gates, onSelectItem }) {
         >
           {expanded ? 'Show less' : `+${overflow} more`}
         </button>
-      )}
-    </div>
-  );
-}
-
-/**
- * CompactStatsRow — small horizontal stats bar below the header.
- */
-function CompactStatsRow({ items, gates }) {
-  const stats = React.useMemo(() => compactStats(items, gates), [items, gates]);
-  if (stats.total === 0) return null;
-
-  return (
-    <div className="flex items-center gap-2 flex-wrap px-3 pb-1">
-      <span className="text-xs text-muted-foreground">{stats.total} items</span>
-      {stats.inProgress > 0 && (
-        <span className="text-xs" style={{ color: 'hsl(var(--primary))' }}>{stats.inProgress} active</span>
-      )}
-      {stats.blocked > 0 && (
-        <span className="text-xs" style={{ color: 'hsl(var(--destructive))' }}>{stats.blocked} blocked</span>
-      )}
-      {stats.pendingGates > 0 && (
-        <span className="text-xs" style={{ color: 'hsl(var(--warning))' }}>{stats.pendingGates} {stats.pendingGates === 1 ? 'gate' : 'gates'}</span>
       )}
     </div>
   );
@@ -235,6 +233,7 @@ function IdeasSection({ onViewChange }) {
  *   onSelectItem     (itemId: string) => void
  */
 function AttentionQueueSidebar({
+  storageScope,
   items,
   gates,
   activeBuild,
@@ -273,16 +272,14 @@ function AttentionQueueSidebar({
     <aside className="shrink-0 flex flex-col bg-sidebar border-r border-sidebar-border" style={{ width: widthPx ?? 208 }}>
 
       {/* ── Header ── */}
+      {/* Counters + agent pill live in the top bar (COMP-COCKPIT-HEADER-COUNTERS-1) */}
+      {!connected && (
       <div className="p-3 pb-2">
-        {!connected && (
-          <div className="mb-1">
-            <span className="text-[10px] text-destructive">disconnected</span>
-          </div>
-        )}
-
-        {/* Compact stats */}
-        <CompactStatsRow items={safeItems} gates={safeGates} />
+        <div className="mb-1">
+          <span className="text-[10px] text-destructive">disconnected</span>
+        </div>
       </div>
+      )}
 
       {/* ── Agent telemetry (isolated to avoid re-render churn) ── */}
       <AgentPanel
@@ -300,6 +297,7 @@ function AttentionQueueSidebar({
         <>
           <Separator className="bg-sidebar-border" />
           <AttentionQueueSection
+            storageScope={storageScope}
             items={safeItems}
             gates={safeGates}
             onSelectItem={onSelectItem}

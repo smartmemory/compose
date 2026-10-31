@@ -32,6 +32,7 @@ import OpsStrip from './components/cockpit/OpsStrip.jsx';
 import EnvironmentHealthPanel from './components/cockpit/EnvironmentHealthPanel.jsx';
 import LaunchPopover from './components/cockpit/LaunchPopover.jsx';
 import BuildAllGsdControl from './components/cockpit/BuildAllGsdControl.jsx';
+import { HeaderCounters, AgentStatusPill } from './components/cockpit/HeaderStatus.jsx';
 
 // Pure state-logic modules
 import {
@@ -1223,13 +1224,17 @@ function AppInner() {
           </div>
 
           {/* Controls */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1 min-[1440px]:gap-2 shrink-0">
             {/* Connection indicator */}
             {!connected && (
               <span className="text-[9px] uppercase tracking-wider text-destructive animate-pulse">
                 disconnected
               </span>
             )}
+
+            {/* COMP-COCKPIT-HEADER-COUNTERS-1: counters + agent pill (were the top of the left bar) */}
+            <HeaderCounters items={items} gates={gates} />
+            <AgentStatusPill />
 
             {/* Environment health (COMP-PARITY-3) — passive drift signal */}
             <EnvironmentHealthPanel />
@@ -1314,6 +1319,7 @@ function AppInner() {
                         widthPx={sidebarWidthPx}
                       />
                     : <AttentionQueueSidebar
+                        storageScope={projectRoot}
                         items={items}
                         gates={gates}
                         onViewChange={handleViewChange}
