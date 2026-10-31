@@ -18,8 +18,6 @@ import { useOpsStatusIndexState } from './components/cockpit/useOpsStatusIndex.j
 import { useStratumUiAvailability } from './components/cockpit/useStratumUiAvailable.js';
 import { useCadenceUiAvailability } from './components/cockpit/useCadenceUiAvailable.js';
 import { useWikiTabState } from './components/cockpit/useWikiTab.js';
-import NewMenu from './components/cockpit/NewMenu.jsx';
-import DisplayMenu from './components/cockpit/DisplayMenu.jsx';
 import ColleaguePanel from './components/colleague/ColleaguePanel.jsx';
 import useMayaStatus from './components/colleague/useMayaStatus.js';
 import { useIdeaboxStore } from './components/vision/useIdeaboxStore.js';
@@ -31,9 +29,7 @@ import DesignDocPanel from './components/cockpit/DesignDocPanel.jsx';
 import NotificationBar, { notify } from './components/cockpit/NotificationBar.jsx';
 import PairDeviceModal from './components/cockpit/PairDeviceModal.jsx';
 import OpsStrip from './components/cockpit/OpsStrip.jsx';
-import EnvironmentHealthPanel from './components/cockpit/EnvironmentHealthPanel.jsx';
-import LaunchPopover from './components/cockpit/LaunchPopover.jsx';
-import BuildAllGsdControl from './components/cockpit/BuildAllGsdControl.jsx';
+import { HeaderControls } from './components/cockpit/HeaderOverflowMenu.jsx';
 import { HeaderCounters, AgentStatusPill } from './components/cockpit/HeaderStatus.jsx';
 import NotifyChip from './components/cockpit/notify/NotifyChip.jsx';
 import SecurityBanner from './components/cockpit/notify/SecurityBanner.jsx';
@@ -51,7 +47,7 @@ import {
   loadContextOpen,
   saveContextOpen,
 } from './components/cockpit/panelState.js';
-import { PHONE_BELOW_PX } from './components/ribbon/now/usePhoneLayout.js';
+import { PHONE_BELOW_PX, usePhoneLayout } from './components/ribbon/now/usePhoneLayout.js';
 import {
   CONTEXT_HIDDEN_VIEWS,
 } from './components/cockpit/contextPanelState.js';
@@ -657,6 +653,7 @@ function AppInner() {
   const [createInitialType, setCreateInitialType] = useState('task');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pairDeviceOpen, setPairDeviceOpen] = useState(false);
+  const phoneHeader = usePhoneLayout();
   const [launchOpen, setLaunchOpen] = useState(false);       // PARITY-2: launch popover
   const [newFeatureOpen, setNewFeatureOpen] = useState(false); // PARITY-9: New Feature dialog
 
@@ -1287,7 +1284,7 @@ function AppInner() {
           </span>
 
           {/* View tabs — centred in the header */}
-          <div className="flex-1 min-w-0 h-full flex items-center">
+          <div className={`flex-1 min-w-0 h-full flex items-center${phoneHeader ? ' overflow-x-auto overflow-y-hidden' : ''}`} data-testid="header-tabs">
             <ViewTabs
               activeView={activeView}
               availability={availability}
@@ -1305,57 +1302,26 @@ function AppInner() {
             />
           </div>
 
-          {/* Controls */}
-          <div className="flex items-center gap-1 min-[1440px]:gap-2 shrink-0">
-            {/* Connection indicator */}
-            {!connected && (
-              <span className="text-[9px] uppercase tracking-wider text-destructive animate-pulse">
-                disconnected
-              </span>
-            )}
-
-            {/* Environment health (COMP-PARITY-3) — passive drift signal */}
-            <EnvironmentHealthPanel />
-
-            {/* COMP-AUDIT-17: labelled clusters. Run: both buttons spawn agents. */}
-            <span className="text-[9px] uppercase tracking-wider text-muted-foreground" data-testid="header-run-label">Run</span>
-
-            {/* Build-all / GSD launchers (PARITY-8) */}
-            <BuildAllGsdControl />
-
-            {/* Launch fix / new / resume lifecycle (PARITY-2) */}
-            <div className="relative">
-              <button
-                className="compose-btn-icon"
-                onClick={() => setLaunchOpen(o => !o)}
-                title="Launch a fix, new feature, or resume"
-                aria-label="Launch lifecycle"
-                aria-expanded={launchOpen}
-                data-testid="launch-popover-toggle"
-              >
-                {'\u{1F680}'}<span className="ml-1 text-[11px]">Launch</span>
-              </button>
-              {launchOpen && (
-                <LaunchPopover activeBuild={activeBuild} onClose={() => setLaunchOpen(false)} />
-              )}
-            </div>
-
-            {/* New: feature scaffold (PARITY-9) or a board item */}
-            <NewMenu onNewFeature={() => setNewFeatureOpen(true)} onNewItem={() => setCreateOpen(true)} />
-
-            {/* Display: theme, font size, pair phone */}
-            <DisplayMenu
-              isDark={isDark}
-              onToggleTheme={toggleTheme}
-              fontSize={fontSize}
-              minFontSize={MIN_FONT_SIZE}
-              maxFontSize={MAX_FONT_SIZE}
-              defaultFontSize={DEFAULT_FONT_SIZE}
-              onChangeFont={changeFontSize}
-              onResetFont={resetFontSize}
-              onPairDevice={() => setPairDeviceOpen(true)}
-            />
-          </div>
+          {/* Controls: the inline cluster, or one ⋯ menu on a phone (COMP-COCKPIT-PHONE-HEADER-1) */}
+          <HeaderControls
+            connected={connected}
+            activeBuild={activeBuild}
+            launchOpen={launchOpen}
+            onLaunchOpenChange={setLaunchOpen}
+            onNewFeature={() => setNewFeatureOpen(true)}
+            onNewItem={() => setCreateOpen(true)}
+            display={{
+              isDark,
+              onToggleTheme: toggleTheme,
+              fontSize,
+              minFontSize: MIN_FONT_SIZE,
+              maxFontSize: MAX_FONT_SIZE,
+              defaultFontSize: DEFAULT_FONT_SIZE,
+              onChangeFont: changeFontSize,
+              onResetFont: resetFontSize,
+              onPairDevice: () => setPairDeviceOpen(true),
+            }}
+          />
         </header>
         {/* COMP-COCKPIT-WHAT-LINE-1: the counters chip and the agent pill sit in their own thin row under the tabs. With every
             word showing (no `2xl:inline` drop) they need ~500 px, and the tab row has ~220 px left beside its controls at 1440

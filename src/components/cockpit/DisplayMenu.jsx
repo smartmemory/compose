@@ -8,7 +8,7 @@ import useDismissable from './useDismissable.js';
 export default function DisplayMenu({
   isDark, onToggleTheme,
   fontSize, minFontSize, maxFontSize, defaultFontSize, onChangeFont, onResetFont,
-  onPairDevice,
+  onPairDevice, inline = false,
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
@@ -16,10 +16,10 @@ export default function DisplayMenu({
   useDismissable(open, rootRef, close);
 
   return (
-    <div ref={rootRef} className="relative shrink-0" data-testid="display-menu">
+    <div ref={rootRef} className={inline ? 'relative w-full' : 'relative shrink-0'} data-testid="display-menu">
       <button
         type="button"
-        className="compose-btn-icon"
+        className={inline ? 'compose-btn-icon w-full justify-start' : 'compose-btn-icon'}
         onClick={() => setOpen(v => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -31,7 +31,7 @@ export default function DisplayMenu({
       {open && (
         <div
           role="menu"
-          className="absolute top-full right-0 mt-1 w-56 rounded-md border border-border bg-popover shadow-lg z-50 p-2 space-y-2"
+          className={`${inline ? 'static w-full' : 'absolute top-full right-0 w-56 z-50'} mt-1 rounded-md border border-border bg-popover shadow-lg p-2 space-y-2`}
           data-testid="display-menu-popover"
         >
           <button

@@ -25,7 +25,7 @@ import {
   gsdPayload,
 } from './buildAllGsdControlState.js';
 
-export default function BuildAllGsdControl() {
+export default function BuildAllGsdControl({ inline = false }) {
   const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [featureCode, setFeatureCode] = useState('');
@@ -89,11 +89,11 @@ export default function BuildAllGsdControl() {
   }
 
   return (
-    <div ref={rootRef} className="relative flex items-center shrink-0">
+    <div ref={rootRef} className={inline ? 'relative flex flex-col items-stretch w-full' : 'relative flex items-center shrink-0'}>
       <button
         type="button"
         data-testid="build-all-gsd-trigger"
-        className="compose-btn-icon"
+        className={inline ? 'compose-btn-icon w-full justify-start' : 'compose-btn-icon'}
         onClick={() => { setOpen((v) => !v); reset(); }}
         title="Batch builds: build all PLANNED features or run GSD on one feature"
         aria-label="Batch builds"
@@ -110,7 +110,7 @@ export default function BuildAllGsdControl() {
           data-testid="build-all-gsd-popover"
           role="dialog"
           aria-label="Batch builds"
-          className="absolute top-full right-0 mt-1 w-64 rounded-md border border-border bg-popover shadow-lg z-50"
+          className={`${inline ? 'static w-full' : 'absolute top-full right-0 w-64 z-50'} mt-1 rounded-md border border-border bg-popover shadow-lg`}
         >
           <div className="p-2 space-y-3">
             <div className="space-y-1">

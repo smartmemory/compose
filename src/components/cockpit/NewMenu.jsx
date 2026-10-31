@@ -5,7 +5,7 @@ import useDismissable from './useDismissable.js';
  * New ▾ (COMP-AUDIT-17): the two kinds of "new", each named and explained in
  * one line. Replaces the lone ➕ icon and the sidebar "+ New" button.
  */
-export default function NewMenu({ onNewFeature, onNewItem }) {
+export default function NewMenu({ onNewFeature, onNewItem, inline = false }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const close = useCallback(() => setOpen(false), []);
@@ -14,10 +14,10 @@ export default function NewMenu({ onNewFeature, onNewItem }) {
   const pick = (fn) => () => { setOpen(false); fn?.(); };
 
   return (
-    <div ref={rootRef} className="relative shrink-0" data-testid="new-menu">
+    <div ref={rootRef} className={inline ? 'relative w-full' : 'relative shrink-0'} data-testid="new-menu">
       <button
         type="button"
-        className="compose-btn-icon"
+        className={inline ? 'compose-btn-icon w-full justify-start' : 'compose-btn-icon'}
         onClick={() => setOpen(v => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -29,7 +29,7 @@ export default function NewMenu({ onNewFeature, onNewItem }) {
       {open && (
         <div
           role="menu"
-          className="absolute top-full right-0 mt-1 w-64 rounded-md border border-border bg-popover shadow-lg z-50 p-1"
+          className={`${inline ? 'static w-full' : 'absolute top-full right-0 w-64 z-50'} mt-1 rounded-md border border-border bg-popover shadow-lg p-1`}
           data-testid="new-menu-popover"
         >
           <button

@@ -20,9 +20,10 @@ export { buildLaunchPayload };
  * Dispatches via the shared startBuild helper (src/lib/startBuild.js) so it
  * needs no new prop threaded through the parent surface.
  *
- * @param {{ activeBuild: object|null, onClose: () => void }} props
+ * @param {{ activeBuild: object|null, onClose: () => void, inline?: boolean }} props `inline` puts the popover in flow
+ * (the phone overflow menu, COMP-COCKPIT-PHONE-HEADER-1) instead of absolutely under its trigger.
  */
-export default function LaunchPopover({ activeBuild, onClose }) {
+export default function LaunchPopover({ activeBuild, onClose, inline = false }) {
   const resumableCode =
     activeBuild && activeBuild.mode === 'bug' && activeBuild.featureCode
       ? activeBuild.featureCode : '';
@@ -56,7 +57,7 @@ export default function LaunchPopover({ activeBuild, onClose }) {
 
   return (
     <div
-      className="absolute top-full right-0 mt-1 w-64 rounded-md border border-border bg-popover shadow-lg z-50"
+      className={`${inline ? 'static w-full' : 'absolute top-full right-0 w-64 z-50'} mt-1 rounded-md border border-border bg-popover shadow-lg`}
       data-testid="launch-popover"
     >
       <form className="p-2 space-y-2" onSubmit={handleSubmit}>
