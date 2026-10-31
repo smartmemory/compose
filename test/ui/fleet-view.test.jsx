@@ -294,6 +294,17 @@ const NOTIFY_ROWS = [
     { fleet: smFleet({ queue: [], sessions: [], df: DISK_OK }), outage: { value: null, error: 'HTTP 502' }, attention: { value: null, error: 'HTTP 502' } }, 'unknown', [], ['cadence outage', 'cadence attention'], null],
   ['sm_status down is one unavailable source, not clear',
     { fleet: { sources: { sm_status: { value: null, error: 'spawn failed' } } }, ...CAD_OK }, 'unknown', [], ['sm_status'], null],
+  // NOTIFY-INBOX-1 (forge-main ruling 19:29): the chip counts what the inbox calls security or an ask, one class per row
+  ['class decided: overdue APPLIED rows never count',
+    { fleet: smFleet({ queue: [{ id: 'd1', by: 'x', text: 'APPLIED: ruling made', age: 9e4, red: true }], sessions: [], df: DISK_OK }), ...CAD_OK }, 'all-clear', [], [], null],
+  ['class fyi: overdue FYI and UPDATED rows never count',
+    { fleet: smFleet({ queue: [{ id: 'f1', by: 'x', text: 'FYI, no action', age: 9e4, red: true }, { id: 'f2', by: 'x', text: 'UPDATED: moved', age: 9e4, red: true }], sessions: [], df: DISK_OK }), ...CAD_OK }, 'all-clear', [], [], null],
+  ['class ask: an overdue untyped row counts as an ask',
+    { fleet: smFleet({ queue: [{ id: 'u1', by: 'x', text: 'SM20-CUTOVER needs a pick', age: 9e4, red: true }], sessions: [], df: DISK_OK }), ...CAD_OK }, 'alerts', ['ask:u1'], [], null],
+  ['class security: CREDENTIAL counts and paints the banner',
+    { fleet: smFleet({ queue: [{ id: 's1', by: 'x', text: 'CREDENTIAL leaked', age: 60, red: false }], sessions: [], df: DISK_OK }), ...CAD_OK }, 'alerts', ['security:s1'], [], 'Security: leaked (1m)'],
+  ['class fallback: a wall on defaults is not a row, so the chip stays clear',
+    { fleet: smFleet({ queue: [], sessions: [], df: DISK_OK }), outage: up({ state: 'ok' }), attention: up({ alerts: [{ name: 'load1', state: 'fallback' }, { name: 'swap_used', state: 'fallback' }] }) }, 'all-clear', [], [], null],
 ];
 
 describe('COMP-COCKPIT-NOTIFY-CHIP-1 rows', () => {
@@ -373,4 +384,121 @@ describe('RULE-FRESH: fleet cards are never zero while loading', () => {
       expect(container.querySelector('[data-testid="fleet-owner"] [data-testid="freshness"]').textContent).toMatch(/^as of .+ \(\d+s ago\)$/);
     }
   });
+});
+
+
+describe('COMP-NOTIFY-INBOX-1 fallback line', () => {
+  it('walls on defaults are listed apart from the count, a tripped wall still counts', () => {
+    const c = collect({ fleet: smFleet({ queue: [], sessions: [], df: DISK_OK }), outage: up({ state: 'ok' }), attention: up({ alerts: [{ name: 'load1', state: 'fallback' }, { name: 'seat1 5h', state: 'trip' }] }) }, NOW);
+    expect(c.defaults).toEqual(['load1']);
+    expect(c.rows.map((r) => r.key)).toEqual(['attention:seat1 5h']);
+    expect(defaultsLine(c)).toBe('1 reader on defaults');
+  });
+});
+
+// COMP-COCKPIT-NOTIFY-INBOX-1: the owner inbox drawer, read-only.
+const { groupInbox, reverseLine } = await import('../../src/components/cockpit/notify/inboxLogic.js');
+const { groupOf, defaultsLine } = await import('../../src/components/cockpit/notify/notifyLogic.js');
+
+const IQ = [
+  { id: 'a-new', by: 'ops-main', text: 'QUESTION: newer ask\nsecond line https://example.com/x', age: 100, red: true },
+  { id: 'a-old', by: 'forge-main', text: 'QUESTION: older ask', age: 5000, red: true },
+  { id: 'u-1', by: 'ops-main', text: 'MAC-PROXY-UPLINK needs you', age: 300, red: true },
+  { id: 'sec-1', by: 'ops-main', text: 'SECURITY, credential (owner-only)', age: 700, red: true },
+  { id: 'd-old', by: 'ops-main', text: 'APPLIED: picked b. reverse: run undo.sh --all', age: 9000, red: true },
+  { id: 'd-new', by: 'ops-main', text: 'APPLIED: picked c', age: 50, red: false },
+  { id: 'd-undo', by: 'ops-main', text: 'APPLIED: picked d, to undo: restore the flag', age: 80, red: false },
+  { id: 'f-old', by: 'ops-main', text: 'FYI, no action', age: 8000, red: true },
+  { id: 'f-new', by: 'ops-main', text: 'UPDATED: moved', age: 20, red: false },
+];
+const ids = (g) => g.rows.map((r) => r.id);
+const inboxFetch = () => {
+  const calls = [];
+  vi.stubGlobal('fetch', async (url, init) => {
+    calls.push([String(url), init?.method ?? 'GET']);
+    const u = String(url);
+    if (u === '/api/fleet') return { ok: true, json: async () => ({ ...smFleet({ queue: IQ, sessions: [], df: DISK_OK }), generated: '2026-10-31T12:34:00Z' }) };
+    if (u.endsWith('/outage')) return { ok: true, json: async () => ({ state: 'ok' }) };
+    if (u.endsWith('/attention')) return { ok: true, json: async () => ({ alerts: [] }) };
+    return { ok: false, status: 404, json: async () => ({}) };
+  });
+  return calls;
+};
+const openDrawer = async () => {
+  render(<NotifyChip />);
+  await waitFor(() => expect(screen.getByTestId('notify-chip').getAttribute('data-state')).not.toBe('loading'));
+  const handled = vi.fn((e) => e.preventDefault());
+  window.addEventListener('compose:open-inbox', handled);
+  const prevented = window.dispatchEvent(new CustomEvent('compose:open-inbox', { cancelable: true }));
+  window.removeEventListener('compose:open-inbox', handled);
+  return { prevented };
+};
+
+// One row table: [name, scenario]. Each scenario asserts one behaviour of the drawer or of groupInbox.
+const INBOX_ROWS = [
+  ['group order and per-group row order: security, asks (oldest first, untyped with them), decided and fyi (newest first)', async () => {
+    const g = groupInbox(IQ);
+    expect(g.map((x) => x.id)).toEqual(['security', 'asks', 'decided', 'fyi']);
+    expect(g.map(ids)).toEqual([['sec-1'], ['a-old', 'u-1', 'a-new'], ['d-new', 'd-undo', 'd-old'], ['f-new', 'f-old']]);
+    expect(g.map((x) => x.folded)).toEqual([false, false, true, true]);
+    expect(g[1].rows.map((r) => r.untyped)).toEqual([false, true, false]);
+    expect(IQ.every((q) => groupOf(q.text) === g.find((x) => ids(x).includes(q.id)).id)).toBe(true);
+  }],
+  ['reverse-line extraction: "reverse:", "to undo" and none', async () => {
+    expect([reverseLine('APPLIED: x. reverse: run undo.sh --all'), reverseLine('rollback: git revert abc'), reverseLine('picked d, to undo: restore the flag'), reverseLine('APPLIED: picked c')])
+      .toEqual(['run undo.sh --all', 'git revert abc', 'restore the flag', null]);
+    expect(groupInbox(IQ)[2].rows.map((r) => r.reverse)).toEqual([null, 'restore the flag', 'run undo.sh --all']);
+  }],
+  ['opened by the event with preventDefault; counts per group and as-of time in the header', async () => {
+    inboxFetch();
+    const { prevented } = await openDrawer();
+    expect(prevented).toBe(false);
+    const drawer = await screen.findByTestId('inbox-drawer');
+    expect(screen.getByTestId('inbox-counts').textContent).toMatch(/1 security · 3 asks · 3 decided for you · 2 fyi · as of \d\d:\d\d/);
+    expect(drawer.querySelector('[data-testid="inbox-group"]')).not.toBeNull();
+    expect(screen.getAllByTestId('inbox-group').map((x) => [x.getAttribute('data-group'), x.getAttribute('data-folded')]))
+      .toEqual([['security', 'false'], ['asks', 'false'], ['decided', 'true'], ['fyi', 'true']]);
+    expect(screen.getAllByTestId('inbox-untyped')).toHaveLength(1);
+  }],
+  ['a row expands in place to its full text, links clickable; a folded group opens; decided rows carry a reverse line and copy the id', async () => {
+    inboxFetch();
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    await openDrawer();
+    await screen.findByTestId('inbox-drawer');
+    expect(screen.queryByTestId('inbox-full')).toBeNull();
+    const row = screen.getAllByTestId('inbox-row').find((r) => r.getAttribute('data-id') === 'a-new');
+    fireEvent.click(row.querySelector('[data-testid="inbox-row-toggle"]'));
+    expect(screen.getByTestId('inbox-full').textContent).toContain('second line https://example.com/x');
+    expect(screen.getByTestId('inbox-full').querySelector('a').getAttribute('href')).toBe('https://example.com/x');
+    expect(screen.queryAllByTestId('inbox-reverse')).toHaveLength(0);
+    fireEvent.click(screen.getAllByTestId('inbox-group-toggle').find((b) => b.textContent.includes('decided for you')));
+    expect(screen.getAllByTestId('inbox-reverse').map((x) => x.textContent))
+      .toEqual(['Reply in s1-chat with id d-new to reverse', 'restore the flag', 'run undo.sh --all']);
+    fireEvent.click(screen.getAllByTestId('inbox-copy-id')[0]);
+    expect(writeText).toHaveBeenCalledWith('d-new');
+  }],
+  ['Escape and the close button shut it; the drawer made no request but /api/fleet and the cadence reads, and no POST', async () => {
+    const calls = inboxFetch();
+    await openDrawer();
+    await screen.findByTestId('inbox-drawer');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByTestId('inbox-drawer')).toBeNull();
+    window.dispatchEvent(new CustomEvent('compose:open-inbox', { cancelable: true }));
+    fireEvent.click(await screen.findByTestId('inbox-close'));
+    expect(screen.queryByTestId('inbox-drawer')).toBeNull();
+    expect(calls.filter(([, m]) => m !== 'GET')).toEqual([]);
+    expect([...new Set(calls.map(([u]) => u))].filter((u) => u !== '/api/fleet' && !/\/(outage|attention)$/.test(u))).toEqual([]);
+  }],
+  ['the chip count equals security plus overdue asks, never the decided or fyi rows', async () => {
+    inboxFetch();
+    render(<NotifyChip />);
+    await waitFor(() => expect(screen.getByTestId('notify-chip').textContent).toContain('4 alerts'));
+  }],
+];
+
+describe('COMP-COCKPIT-NOTIFY-INBOX-1 drawer', () => {
+  beforeEach(() => { resetFleetPoller(); resetNotifyPoller(); });
+  afterEach(() => vi.unstubAllGlobals());
+  it.each(INBOX_ROWS)('%s', async (_name, scenario) => { await scenario(); });
 });

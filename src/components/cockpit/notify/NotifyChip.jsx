@@ -2,12 +2,14 @@
  * NotifyChip.jsx — COMP-COCKPIT-NOTIFY-CHIP-1: the header's sticky alert chip ("All clear" / "3 alerts" / "Alerts unknown")
  * and its tray. Rows come from notifyLogic.js (existing sources, existing thresholds). Nothing auto-dismisses and there is
  * no dismiss in phase 1: a row stays until its source clears it. Read-only: the only actions open the place to act.
+ * The chip mounts the inbox drawer (NOTIFY-INBOX-1), so `compose:open-inbox` always has a handler while the header is up.
  */
 import React from 'react';
 import { fmtAge } from '../fleetLogic.js';
 import useDismissable from '../useDismissable.js';
 import { useNotifySources } from './useNotifySources.js';
-import { chipLabel, unknownLine } from './notifyLogic.js';
+import { chipLabel, unknownLine, defaultsLine } from './notifyLogic.js';
+import InboxDrawer from './InboxDrawer.jsx';
 
 /** Owner-queue rows ask the inbox to open; when nothing handles the event the Fleet pane lists them. */
 export function openInbox(onOpenFleet) {
@@ -39,6 +41,7 @@ export default function NotifyChip({ onOpenFleet, onNavigate }) {
   const label = loading ? 'Checking alerts' : chipLabel(chip);
   const color = loading ? TONE.unknown : chip.state === 'alerts' && chip.critical > 0 ? TONE.critical : TONE[chip.state];
   const note = unknownLine(collected);
+  const defaults = defaultsLine(collected);
 
   return (
     <div ref={rootRef} className="relative shrink-0" data-testid="notify-chip-root">
@@ -62,7 +65,7 @@ export default function NotifyChip({ onOpenFleet, onNavigate }) {
           aria-label="Alerts"
           className="absolute right-0 top-full z-50 mt-1 w-96 max-h-96 overflow-auto rounded-md border border-border bg-popover p-2 text-xs text-popover-foreground shadow-md"
         >
-          {collected.rows.length === 0 && !note && <div className="p-1 text-muted-foreground">Nothing open. Every source answered.</div>}
+          {collected.rows.length === 0 && !note && !defaults && <div className="p-1 text-muted-foreground">Nothing open. Every source answered.</div>}
           {collected.rows.map((r) => (
             <div key={r.key} data-testid="notify-row" data-kind={r.kind} data-severity={r.severity} className="flex items-start gap-2 p-1">
               <span aria-hidden="true" style={{ color: r.severity === 'critical' ? TONE.critical : TONE.alerts }}>●</span>
@@ -88,6 +91,9 @@ export default function NotifyChip({ onOpenFleet, onNavigate }) {
               </button>
             </div>
           ))}
+          {defaults && (
+            <div data-testid="notify-defaults" className="mt-1 p-1 text-muted-foreground">{defaults}</div>
+          )}
           {note && (
             <div data-testid="notify-unknown" className="mt-1 border-t border-border p-1 text-muted-foreground">
               {note}: {collected.unknown.join(', ')}
@@ -95,6 +101,7 @@ export default function NotifyChip({ onOpenFleet, onNavigate }) {
           )}
         </div>
       )}
+      <InboxDrawer />
     </div>
   );
 }

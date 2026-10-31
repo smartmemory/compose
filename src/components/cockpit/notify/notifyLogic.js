@@ -5,7 +5,7 @@
  *
  * Phase 2 (COMP-NOTIFY-ASKS-1 / HITL-1 post envelope `type ask|alert`, `kind`, `severity`) swaps THIS file's adapters for
  * the envelope; the components only see rows `{key, kind, severity, title, detail, since, sourceLabel, action}`.
- * No React imports. NOTIFY-INBOX-1 reuses `tagOf`.
+ * No React imports. NOTIFY-INBOX-1 reuses `tagOf` and adds `groupOf`, the ONE classifier the chip and the inbox drawer share.
  */
 import { ctxLevel, smPanel, readerUp, DISK_RED_GB, fmtAge } from '../fleetLogic.js';
 
@@ -38,6 +38,19 @@ export function stripTag(text) {
   return String(text).replace(/^\s*[A-Za-z]+\s*[:,]?\s*/, '').trim() || String(text).trim();
 }
 
+/**
+ * The ONE classifier: owner-queue text -> `security | asks | decided | fyi`. The chip counts `security` and `asks`; the
+ * inbox drawer (inboxLogic.js `groupInbox`) groups by it. An untyped row is an ask so nothing is missed.
+ * Phase 2 (COMP-NOTIFY-ASKS-1) replaces the tag parse here with the envelope's `type/kind`: this is the only place to touch.
+ */
+export function groupOf(text) {
+  const tag = tagOf(text);
+  if (tag === 'security') return 'security';
+  if (tag === 'decided') return 'decided';
+  if (tag === 'fyi') return 'fyi';
+  return 'asks';
+}
+
 const SM_DOWN = 'sm_status';
 
 /** One sm_status panel -> `{rows, unavailable}`. A reader that is down, a missing panel and a partial read all count as unavailable. */
@@ -48,13 +61,14 @@ function panelRows(fleet, name) {
   return { rows: panel.value, unavailable: panel.error != null ? label : null };
 }
 
-/** owner queue -> security rows (tag) and overdue ask rows (`red`). A security row is never also listed as an ask. */
+/** owner queue -> security rows and overdue (`red`) ask rows, by `groupOf`. Decided-for-you and FYI rows never count (they live in the drawer). A security row is never also listed as an ask. */
 export function queueAdapter(fleet) {
   const { rows, unavailable } = panelRows(fleet, 'queue');
   const out = [];
   for (const q of Array.isArray(rows) ? rows : []) {
-    const security = tagOf(q?.text) === 'security';
-    if (!security && q?.red !== true) continue;
+    const group = groupOf(q?.text);
+    const security = group === 'security';
+    if (!security && (group !== 'asks' || q?.red !== true)) continue;
     out.push({
       key: `${security ? 'security' : 'ask'}:${q.id}`,
       kind: security ? 'security' : 'ask-overdue',
@@ -122,15 +136,19 @@ export function outageAdapter(outage, now = Date.now()) {
   return { rows: [], unavailable: v.state === 'ok' ? null : label };
 }
 
-/** cadence attention `alerts` (every wall whose state is not ok) -> seat wall / attention rows. */
+/**
+ * cadence attention `alerts` (every wall whose state is not ok) -> seat wall / attention rows. A wall in `state: fallback`
+ * means its reader used a default, not that a limit tripped: it is `defaults` (a grey tray line), never a row or a count.
+ */
 export function attentionAdapter(attention) {
   const label = 'cadence attention';
   const v = attention?.value;
-  if (attention?.error != null || !v) return { rows: [], unavailable: label };
+  if (attention?.error != null || !v) return { rows: [], defaults: [], unavailable: label };
   const alerts = Array.isArray(v.alerts) ? v.alerts : null;
-  if (!alerts) return { rows: [], unavailable: label };
+  if (!alerts) return { rows: [], defaults: [], unavailable: label };
   return {
-    rows: alerts.map((a) => ({
+    defaults: alerts.filter((a) => a.state === 'fallback').map((a) => a.name),
+    rows: alerts.filter((a) => a.state !== 'fallback').map((a) => ({
       key: `attention:${a.name}`,
       kind: 'attention',
       severity: 'warn',
@@ -155,10 +173,11 @@ export function collect(sources, now = Date.now()) {
     outageAdapter(sources.outage, now),
     attentionAdapter(sources.attention),
   ];
+  const defaults = results.flatMap((r) => r.defaults ?? []);
   const rows = results.flatMap((r) => r.rows)
     .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || (b.since ?? -1) - (a.since ?? -1) || a.key.localeCompare(b.key));
   const unknown = [...new Set(results.map((r) => r.unavailable).filter(Boolean))];
-  return { rows, unknown };
+  return { rows, unknown, defaults };
 }
 
 /** `all-clear` (every source answered, no rows) | `alerts` | `unknown` (no rows, a source is down). */
@@ -182,6 +201,12 @@ export function unknownLine(collected) {
   const n = collected.unknown.length;
   if (!n) return '';
   return collected.rows.length ? `${n} source${n === 1 ? '' : 's'} unavailable` : `No alerts from the sources that answered; ${n} unavailable`;
+}
+
+/** The grey tray line for cadence walls whose reader used a default; '' when none. Never part of the count. */
+export function defaultsLine(collected) {
+  const n = collected.defaults?.length ?? 0;
+  return n ? `${n} reader${n === 1 ? '' : 's'} on defaults` : '';
 }
 
 /** Red strip text for the open security rows: `{text, more}`; null when none. */
