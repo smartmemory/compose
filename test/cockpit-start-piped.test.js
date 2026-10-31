@@ -1,19 +1,31 @@
 // COMP-COCKPIT-FIXES-1 part A: `cockpit.sh start` must return when its output is piped or captured, and `stop` must free the ports.
 // Incident 2026-10-31 (twice): `cockpit.sh start | tail -4` never returned, because the backgrounded `cd && nohup node` list left a
-// subshell holding the caller's stdout. A stub server stands in for the supervisor, on test-range ports (reserved with
-// `port_check.py --reserve-test cockpit-fixes`), so the owner's 4001/4002/5195 are never touched.
+// subshell holding the caller's stdout. A stub server stands in for the supervisor, on three ports the OS hands out at run time
+// (a hardcoded set collided with another lane's registered test container and blocked every push), so the owner's 4001/4002/5195
+// are never touched.
 import { describe, it, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
-import { createConnection } from 'node:net';
+import { createConnection, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const HERE = resolve(import.meta.dirname, '..');
 const SCRIPT = join(HERE, 'scripts', 'cockpit.sh');
 const STUB = join(HERE, 'test', 'fixtures', 'cockpit-stub-server.mjs');
-const PORTS = ['19011', '19015', '19033'];
+// Bind port 0 three times at once (so the three differ), read the numbers, release them.
+const freePorts = async (n) => {
+  const servers = await Promise.all(Array.from({ length: n }, () => new Promise((ok, no) => {
+    const srv = createServer();
+    srv.once('error', no);
+    srv.listen(0, '127.0.0.1', () => ok(srv));
+  })));
+  const ports = servers.map((srv) => String(srv.address().port));
+  await Promise.all(servers.map((srv) => new Promise((ok) => srv.close(ok))));
+  return ports;
+};
+const PORTS = await freePorts(3);
 const run = mkdtempSync(join(tmpdir(), 'cockpit-piped-'));
 const env = {
   ...process.env, COCKPIT_RUN: run, COCKPIT_PORTS: PORTS.join(' '), COCKPIT_ENTRY: STUB, STUB_PORTS: PORTS.join(' '),
