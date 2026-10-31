@@ -53,24 +53,37 @@ export function fmtDur(ms) {
 
 const pad = (n) => String(n).padStart(2, '0');
 
-/** Wall-clock fields of an ISO string (or of a number, read in UTC), as `{y, mo, d, h, mi}`; null when unparseable. */
-function wall(t) {
+const HAS_OFFSET = /(?:Z|[+-]\d\d:?\d\d)$/;
+const utcFields = (ms) => {
+  const x = new Date(ms);
+  return { y: x.getUTCFullYear(), mo: x.getUTCMonth() + 1, d: x.getUTCDate(), h: x.getUTCHours(), mi: x.getUTCMinutes() };
+};
+/** Offset in ms of `ref` (an ISO string that carries the window's offset), or null when it names none. */
+const refOffset = (ref) => (typeof ref === 'string' && HAS_OFFSET.test(ref) ? offsetMs(ref) : null);
+
+/**
+ * Wall-clock fields as `{y, mo, d, h, mi}`, null when unparseable. `ref` is any ISO string carrying the window's offset
+ * (`now`, `from`). With it, a string whose own offset differs (the feed's `...Z` stamps) and a number (ms) are converted
+ * to that offset first, so "as of" reads the same wall time as the axis. Without it a string reads its own fields and a
+ * number reads UTC (the callers that pass an already shifted number).
+ */
+function wall(t, ref) {
+  const off = refOffset(ref);
   if (typeof t === 'string') {
     const m = ISO_PARTS.exec(t);
-    return m ? { y: +m[1], mo: +m[2], d: +m[3], h: +m[4], mi: +m[5] } : null;
+    if (!m) return null;
+    if (off != null && HAS_OFFSET.test(t) && offsetMs(t) !== off) return utcFields(Date.parse(t) + off);
+    return { y: +m[1], mo: +m[2], d: +m[3], h: +m[4], mi: +m[5] };
   }
-  if (typeof t === 'number' && Number.isFinite(t)) {
-    const x = new Date(t);
-    return { y: x.getUTCFullYear(), mo: x.getUTCMonth() + 1, d: x.getUTCDate(), h: x.getUTCHours(), mi: x.getUTCMinutes() };
-  }
+  if (typeof t === 'number' && Number.isFinite(t)) return utcFields(t + (off ?? 0));
   return null;
 }
 const dayNumber = (w) => Math.floor(Date.UTC(w.y, w.mo - 1, w.d) / DAY);
 const weekdayOf = (w) => WEEKDAYS[new Date(Date.UTC(w.y, w.mo - 1, w.d)).getUTCDay()];
 
 /** "16:40". */
-export function clock(t) {
-  const w = wall(t);
+export function clock(t, ref) {
+  const w = wall(t, ref);
   return w ? `${pad(w.h)}:${pad(w.mi)}` : '';
 }
 
@@ -82,7 +95,7 @@ export function offsetMs(iso) {
 
 /** Day word relative to `now`: "yesterday", "today", "tomorrow", else "Fri 30 Oct". */
 function dayWord(t, now) {
-  const w = wall(t);
+  const w = wall(t, now);
   const n = wall(now);
   if (!w || !n) return '';
   const diff = dayNumber(w) - dayNumber(n);
@@ -94,31 +107,31 @@ function dayWord(t, now) {
 
 /** "yesterday 22:10", "today 09:10", "Fri 30 Oct 18:00". */
 export function when(t, now) {
-  return `${dayWord(t, now)} ${clock(t)}`.trim();
+  return `${dayWord(t, now)} ${clock(t, now)}`.trim();
 }
 
 /** "Sat 31". */
-export function dayLabel(t) {
-  const w = wall(t);
+export function dayLabel(t, ref) {
+  const w = wall(t, ref);
   return w ? `${weekdayOf(w)} ${w.d}` : '';
 }
 
 /** "Fri 30 Oct 18:00". */
-export function dateWhen(t) {
-  const w = wall(t);
+export function dateWhen(t, ref) {
+  const w = wall(t, ref);
   return w ? `${weekdayOf(w)} ${w.d} ${MONTHS[w.mo - 1]} ${pad(w.h)}:${pad(w.mi)}` : '';
 }
 
 /** True for the day default: from is yesterday 18:00 and to is tomorrow 06:00, both relative to now. */
 export function isDayDefault(from, to, now) {
-  return dayWord(from, now) === 'yesterday' && clock(from) === '18:00' && dayWord(to, now) === 'tomorrow' && clock(to) === '06:00';
+  return dayWord(from, now) === 'yesterday' && clock(from, now) === '18:00' && dayWord(to, now) === 'tomorrow' && clock(to, now) === '06:00';
 }
 
 /** Card title text: the day-default window reads relative to now, any other window reads as dates. */
 export function windowTitle(from, to, now) {
   return isDayDefault(from, to, now)
     ? `Lanes · ${when(from, now)} to ${when(to, now)}`
-    : `Lanes · ${dateWhen(from)} to ${dateWhen(to)}`;
+    : `Lanes · ${dateWhen(from, now)} to ${dateWhen(to, now)}`;
 }
 
 /** Tick step in hours for a window (the AXIS_STEP row that holds its width). */
@@ -188,12 +201,12 @@ const titleOf = (item) => item.title || item.text || item.unit || item.id || '(u
 
 /** ETA label: "21:30" the same day, "02:00 Sun" the next, "Mon" further out. */
 export function etaLabel(p50, now) {
-  const w = wall(p50);
+  const w = wall(p50, now);
   const n = wall(now);
   if (!w || !n) return '';
   const diff = dayNumber(w) - dayNumber(n);
-  if (diff <= 0) return clock(p50);
-  if (diff === 1) return `${clock(p50)} ${weekdayOf(w)}`;
+  if (diff <= 0) return clock(p50, now);
+  if (diff === 1) return `${clock(p50, now)} ${weekdayOf(w)}`;
   return weekdayOf(w);
 }
 
@@ -207,13 +220,13 @@ export function tipText(item) {
   const span = () => {
     const len = fmtDur(toMs(item.end) - toMs(item.start));
     const ongoing = now != null && toMs(item.end) >= toMs(now);
-    return { len, range: ongoing ? `${clock(item.start)} to now` : `${clock(item.start)} to ${clock(item.end)}` };
+    return { len, range: ongoing ? `${clock(item.start, now)} to now` : `${clock(item.start, now)} to ${clock(item.end, now)}` };
   };
   switch (item.kind) {
     case 'work': {
       const { len } = span();
       const ongoing = now != null && toMs(item.end) >= toMs(now);
-      return `${item.lane} · working on ${titleOf(item)}\n${ongoing ? `since ${clock(item.start)}` : `${clock(item.start)} to ${clock(item.end)}`} (${len})`;
+      return `${item.lane} · working on ${titleOf(item)}\n${ongoing ? `since ${clock(item.start, now)}` : `${clock(item.start, now)} to ${clock(item.end, now)}`} (${len})`;
     }
     case 'wait': {
       const { len, range } = span();
@@ -235,21 +248,21 @@ export function tipText(item) {
     case 'current': {
       const age = fmtDur(toMs(now) - toMs(item.since));
       return item.cause
-        ? `${titleOf(item)} ${causePhrase(item.cause)} since ${clock(item.since)}`
-        : `Working on ${titleOf(item)} since ${clock(item.since)} (${age})`;
+        ? `${titleOf(item)} ${causePhrase(item.cause)} since ${clock(item.since, now)}`
+        : `Working on ${titleOf(item)} since ${clock(item.since, now)} (${age})`;
     }
     case 'next':
       return `Next: ${(item.titles || []).join(', then ')}`;
     case 'eta':
-      return `Expected landing of the current unit: ${etaLabel(item.p50, now)} (estimate.py, as of ${clock(item.asOf)})`;
+      return `Expected landing of the current unit: ${etaLabel(item.p50, now)} (estimate.py, as of ${clock(item.asOf, now)})`;
     case 'noEta':
       return `No estimate yet${item.raw && typeof item.raw === 'string' ? ` (${item.raw})` : ''}`;
     case 'prev':
-      return `Earlier estimate: ${etaLabel(item.p50, now)} (as of ${clock(item.asOf)})`;
+      return `Earlier estimate: ${etaLabel(item.p50, now)} (as of ${clock(item.asOf, now)})`;
     case 'hold':
     case 'outage': {
       const lead = item.kind === 'hold' ? 'Hold' : 'Outage';
-      const to = item.end ? clock(item.end) : 'ongoing';
+      const to = item.end ? clock(item.end, now) : 'ongoing';
       return `${lead} · ${item.label}\n${when(item.start, now)} to ${to}${item.source ? ` · ${item.source}` : ''}`;
     }
     case 'region':

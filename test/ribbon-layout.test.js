@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { AXIS_STEP, axisStepHours, axisTicks, etaLabel, fmtDur, isLive, layoutLanes, tipText, windowTitle, xOf } from '../src/components/ribbon/ribbonLayout.js';
+import { AXIS_STEP, axisStepHours, axisTicks, clock, etaLabel, fmtDur, isLive, layoutLanes, tipText, windowTitle, xOf } from '../src/components/ribbon/ribbonLayout.js';
 
 const day = JSON.parse(readFileSync(new URL('./fixtures/ribbon/day.json', import.meta.url), 'utf8'));
 const NOW = '2026-10-31T16:40:00-07:00';
@@ -80,3 +80,14 @@ const ROWS = [
 for (const row of ROWS) {
   test(row.name, () => assert.deepEqual(row.run(), row.want));
 }
+
+// clock() in the window's offset: a stamp with another offset (the feed's `...Z`) or a number converts first, so "as of" matches the axis.
+const CLOCK_ROWS = [
+  { name: 'Z stamp reads in the window offset (-07:00)', got: () => clock('2026-10-31T23:56:00Z', NOW), want: '16:56' },
+  { name: '+08:00 stamp reads in the window offset', got: () => clock('2026-11-01T07:56:00+08:00', NOW), want: '16:56' },
+  { name: 'ms number reads in the window offset', got: () => clock(Date.parse('2026-10-31T23:56:00Z'), NOW), want: '16:56' },
+  { name: 'same-offset stamp keeps its own fields', got: () => clock('2026-10-31T16:40:00-07:00', NOW), want: '16:40' },
+  { name: 'Z stamp across midnight moves the day word too', got: () => tipText({ kind: 'land', title: 'T', at: '2026-11-01T05:00:00Z', now: NOW }), want: 'Landed · T\ntoday 22:00 · click for detail' },
+  { name: 'no ref: a Z stamp reads its own fields (legacy)', got: () => clock('2026-10-31T23:56:00Z'), want: '23:56' },
+];
+for (const r of CLOCK_ROWS) test(`clock ${r.name}`, () => assert.equal(r.got(), r.want));

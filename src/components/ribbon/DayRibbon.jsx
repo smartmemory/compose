@@ -353,7 +353,7 @@ export default function DayRibbon({
       <div className="flex flex-wrap items-baseline justify-between gap-2 px-3.5 pt-2.5">
         <h3 className="m-0 text-[11px] font-bold uppercase tracking-[0.09em] text-muted-foreground" data-testid="ribbon-title">{windowTitle(from, to, now)}</h3>
         <span className="text-[11.5px] text-muted-foreground" data-testid="ribbon-fresh">
-          as of {clock(data?.asOf || now)}{data?.coverage?.label ? ` · ${data.coverage.label}` : ''}
+          as of {clock(data?.asOf || now, now)}{data?.coverage?.label ? ` · ${data.coverage.label}` : ''}
         </span>
       </div>
       <svg ref={svgRef} className="min-h-0 w-full flex-1" viewBox={`0 0 ${R.W} ${H}`} role="img" aria-label={`Day ribbon: one row per lane, ${when(from, now)} to ${when(to, now)}`}>

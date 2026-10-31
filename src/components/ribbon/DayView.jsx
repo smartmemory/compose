@@ -8,6 +8,7 @@ import RangeBar from './RangeBar.jsx';
 import { useRibbonWindow } from './useRibbonWindow.js';
 import { useRibbonFeed } from './useRibbonFeed.js';
 import RibbonLaneLayer from './lane/RibbonLaneLayer.jsx';
+import RibbonMarksLayer from './marks/RibbonMarksLayer.jsx';
 
 /**
  * DayView — the front page (COMP-COCKPIT-RIBBON-TOP-1): the WHAT line, the range bar, the ribbon and the cost meter on one
@@ -153,6 +154,7 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
           {meterOpen ? 'Show less ▴' : 'Show all seats and dollars ▾'}
         </button>
       </div>
+      <RibbonMarksLayer lanes={feed.data?.lanes} seats={seats} now={win.now} onNavigate={onNavigate} />
       <div className="flex items-center gap-4 shrink-0" data-testid="day-footer">
         <button type="button" className={link} data-testid="day-link-process" onClick={() => onNavigate?.('process')}>Is the process improving? ▸</button>
         <button type="button" className={link} data-testid="day-link-ops" onClick={() => onNavigate?.('ops')}>How far is 2.0 from flipping? ▸</button>
