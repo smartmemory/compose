@@ -1,0 +1,144 @@
+/**
+ * COMP-COCKPIT-RIBBON-FEED-1: `buildRibbon` over fixture stamp rows. One row table; every row builds a ribbon and checks one claim.
+ * All fixture times are Z so the expectations do not depend on the machine's zone.
+ */
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { buildRibbon, etaWithPrev, holdBands, parseGateLog } from '../lib/ribbon-feed.js';
+
+const D = (s) => Date.parse(`2026-10-31T${s}:00Z`);
+const T = (s) => `2026-10-31T${s}:00.000Z`; // the feed prints toISOString()
+const NOW = D('12:00');
+const LIVE = { from: D('00:00'), to: D('23:00'), now: NOW };
+
+const events = (o = {}) => ({ owner_waits: [], reviews: [], fix_runs: [], gates: [], deploys: [], fixes: [], ready_at: null, dispatched_at: null, author_done_at: null, landed_at: null, account: null, ...o });
+const unit = (id, lane, ev, o = {}) => ({ id, lane, title: `Title ${id}`, titleSource: 'stamp', state: ev.landed_at ? 'landed' : 'authoring', landedAt: ev.landed_at, deployedAt: null, events: events(ev), ...o });
+const FULL = {
+  ready_at: T('02:00'), dispatched_at: T('02:10'), author_done_at: T('02:40'), landed_at: T('04:00'),
+  reviews: [{ round: 1, dispatched_at: T('02:50'), at: T('03:00') }],
+  fix_runs: [{ round: 1, dispatched_at: T('03:05'), done_at: T('03:15') }],
+  gates: [{ n: 1, started_at: T('03:30'), done_at: T('03:40') }],
+};
+const HIST = (earliest) => Object.fromEntries(['stamps.landed_at', 'stamps.dispatched_at'].map((k) => [k, { earliest, count: 1 }]));
+const lane = (r, name = 'forge') => r.lanes.find((l) => l.lane === name);
+const gate = (lines) => parseGateLog(lines.join('\n'));
+const holdLines = (from, n, stepMin) => Array.from({ length: n }, (_, i) => {
+  const m = from + i * stepMin;
+  return `2026-10-30T${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}:00 wait L${i} engine=claude (fleet cap 16/16)`;
+});
+
+describe('buildRibbon', () => {
+  // [name, input overrides, check(ribbon)]
+  const ROWS = [
+    ['full stamps: four work spans, a review wait and a gate wait, one land mark, nothing not recorded', { units: [unit('U1', 'forge', FULL)], history: HIST(T('00:00')) }, (r) => {
+      const l = lane(r);
+      assert.equal(l.spans.filter((s) => s.kind === 'work').length, 4);
+      assert.deepEqual(new Set(l.spans.filter((s) => s.kind === 'wait').map((s) => s.cause)), new Set(['unknown', 'review', 'gate']));
+      assert.equal(l.spans.some((s) => s.kind === 'notRecorded'), false);
+      assert.deepEqual(l.marks.map((m) => [m.kind, m.unit, m.source]), [['land', 'U1', 'stamps']]);
+      assert.deepEqual(r.coverage, { n: 1, dispatched: 1, pct: 100, label: 'start stamps on 100% of landings' });
+    }],
+    ['no dispatch stamp: one notRecorded span from the ready stamp to the landing, rule in words', { units: [unit('U2', 'forge', { ready_at: T('02:00'), landed_at: T('04:00') })], history: HIST(T('00:00')) }, (r) => {
+      const s = lane(r).spans;
+      assert.equal(s.length, 1);
+      assert.deepEqual([s[0].kind, s[0].start, s[0].end], ['notRecorded', T('02:00'), T('04:00')]);
+      assert.match(s[0].why, /no dispatch stamp.*rule U-d/);
+      assert.equal(r.coverage.pct, 0);
+    }],
+    ['a closed owner wait no job covers is a wait with cause owner', { units: [unit('U3', 'forge', { ...FULL, owner_waits: [{ qid: 'q', start: T('02:42'), end: T('02:48') }] })], history: HIST(T('00:00')) }, (r) => {
+      const w = lane(r).spans.find((s) => s.cause === 'owner');
+      assert.deepEqual([w.start, w.end], [T('02:42'), T('02:48')]);
+    }],
+    ['the live unit with an open owner wait: wait cause owner up to now, unit is current', { units: [unit('U4', 'forge', { ready_at: T('09:00'), dispatched_at: T('09:10'), author_done_at: T('09:40'), owner_waits: [{ qid: 'q', start: T('11:00') }] })], history: HIST(T('00:00')) }, (r) => {
+      const l = lane(r);
+      assert.equal(l.current.id, 'U4');
+      const w = l.spans.find((s) => s.cause === 'owner');
+      assert.deepEqual([w.start, w.end], [T('11:00'), T('12:00')]);
+    }],
+    ['unlanded in a live window: current, authoring drawn to now; ready unit is next; idle false', { units: [unit('U5', 'forge', { ready_at: T('10:00'), dispatched_at: T('11:00') }), unit('U6', 'forge', { ready_at: T('10:30') }, { state: 'ready' })], history: HIST(T('00:00')) }, (r) => {
+      const l = lane(r);
+      assert.deepEqual([l.current.id, l.current.since], ['U5', T('11:00')]);
+      assert.deepEqual(l.next.map((n) => n.id), ['U6']);
+      assert.deepEqual(l.spans.map((s) => [s.kind, s.job, s.end]), [['work', 'authoring', T('12:00')]]);
+      assert.equal(l.idle, false);
+    }],
+    ['a retired unit is never current or next', { units: [unit('U7', 'forge', { ready_at: T('10:00'), dispatched_at: T('11:00') }, { state: 'retired' })], history: HIST(T('00:00')) }, (r) => {
+      assert.deepEqual([lane(r).current, lane(r).next, lane(r).spans], [null, [], []]);
+      assert.equal(lane(r).idle, true);
+    }],
+    ['past window: no current, no next, no eta, no outage band, the landing still marks', {
+      from: D('00:00') - 11 * 86_400_000, to: D('00:00') - 10 * 86_400_000, now: NOW,
+      units: [unit('U8', 'forge', { ready_at: '2026-10-20T02:00:00Z', dispatched_at: '2026-10-20T02:10:00Z', author_done_at: '2026-10-20T02:40:00Z', landed_at: '2026-10-20T04:00:00Z' }), unit('U9', 'forge', { ready_at: T('10:00'), dispatched_at: T('11:00') })],
+      outage: { state: 'outage', since: T('10:00') }, etas: { forge: { p50: '1h', p80: '2h', asOf: 'x', raw: 'r', prev: null } }, history: HIST('2026-10-09T00:00:00Z'),
+    }, (r) => {
+      const l = lane(r);
+      assert.deepEqual([r.live, l.current, l.next, l.eta, r.bands.some((b) => b.kind === 'outage')], [false, null, [], null, false]);
+      assert.equal(l.marks.filter((m) => m.kind === 'land').length, 1);
+    }],
+    ['live: the outage state becomes an open band, and the eta is passed through', { units: [unit('U1', 'forge', FULL)], outage: { state: 'outage', since: T('10:00') }, etas: { forge: { noData: true, raw: 'NO DATA' } }, history: HIST(T('00:00')) }, (r) => {
+      assert.deepEqual(r.bands.filter((b) => b.kind === 'outage').map((b) => [b.start, b.end]), [[T('10:00'), null]]);
+      assert.deepEqual(lane(r).eta, { noData: true, raw: 'NO DATA' });
+    }],
+    ['a window before the stamps: every lane has a notRecorded span and the source says so', {
+      from: Date.parse('2026-10-01T00:00:00Z'), to: Date.parse('2026-10-02T00:00:00Z'), now: NOW,
+      units: [unit('U1', 'forge', FULL), unit('U2', 'ops', { ...FULL, landed_at: T('05:00') })], history: HIST('2026-10-09T00:00:00Z'),
+    }, (r) => {
+      for (const l of r.lanes) assert.deepEqual([l.spans.length, l.spans[0].kind, l.idle], [1, 'notRecorded', false], l.lane);
+      const n = r.notRecorded.find((x) => x.source === 'stamps.landed_at');
+      assert.deepEqual([n.start, n.end], ['2026-10-01T00:00:00.000Z', '2026-10-02T00:00:00.000Z']);
+    }],
+    ['a 40 min hold is one band', { gateEntries: gate(holdLines(23 * 60, 11, 4)), units: [unit('U1', 'forge', FULL)], history: HIST(T('00:00')), from: D('00:00') - 86_400_000, to: D('23:00') }, (r) => {
+      const h = r.bands.filter((b) => b.kind === 'hold');
+      assert.equal(h.length, 1);
+      assert.equal(h[0].source, 'launch-gate gate.log');
+    }],
+    ['a 20 min hold is no band', { gateEntries: gate(holdLines(23 * 60, 6, 4)), units: [unit('U1', 'forge', FULL)], history: HIST(T('00:00')), from: D('00:00') - 86_400_000, to: D('23:00') }, (r) => {
+      assert.equal(r.bands.filter((b) => b.kind === 'hold').length, 0);
+    }],
+    ['an APPLIED owner-queue row is a decide mark on its lane with the reverse text; a laneless one goes to ops', {
+      units: [unit('U1', 'forge', FULL), unit('U2', 'ops', FULL)], history: HIST(T('00:00')),
+      ownerQueue: [
+        { id: 'X-1', by: 'forge-main', ts: D('05:00') / 1000, text: 'APPLIED (night mode): ship it. Reverse = revert abc.' },
+        { id: 'Y-1', by: 's2-coord', ts: D('06:00') / 1000, text: 'APPLIED: other. Reverse = undo.' },
+        { id: 'Z-1', by: 'forge-main', ts: D('07:00') / 1000, text: 'Is this ok?' },
+      ],
+    }, (r) => {
+      const dec = (n) => lane(r, n).marks.filter((m) => m.kind === 'decide');
+      assert.deepEqual(dec('forge').map((m) => [m.source, m.reverse]), [['owner-queue', 'revert abc.']]);
+      assert.deepEqual(dec('ops').map((m) => m.reverse), ['undo.']);
+    }],
+    ['a failed source is a notRecorded entry with its message, and the ledger-less decide marks still come back', {
+      units: [unit('U1', 'forge', FULL)], history: HIST(T('00:00')), sourceErrors: { ledger: 'wiki is stopped' },
+      ownerQueue: [{ id: 'X', by: 'forge-main', ts: D('05:00') / 1000, text: 'APPLIED: yes' }],
+    }, (r) => {
+      assert.match(r.notRecorded.find((n) => n.source === 'ledger').why, /wiki is stopped/);
+      assert.equal(lane(r).marks.filter((m) => m.kind === 'decide').length, 1);
+    }],
+    ['a ledger OWNER-ABSENT entry is a decide mark from the ledger', { units: [unit('U1', 'forge', FULL)], history: HIST(T('00:00')), ledger: [{ ts: '2026-10-31T05:00:00+00:00', text: 'OWNER-ABSENT decision: pick a. Reverse = pick b.' }, { ts: '2026-10-31T06:00:00+00:00', text: 'plain line' }] }, (r) => {
+      const m = r.lanes.flatMap((l) => l.marks).filter((x) => x.kind === 'decide');
+      assert.deepEqual(m.map((x) => [x.source, x.reverse]), [['ledger', 'pick b.']]);
+    }],
+    ['quota: a wait while the lane\'s seat sat at the limit is cause quota', {
+      units: [unit('U1', 'forge', { ...FULL, account: 'seat2' })], history: HIST(T('00:00')),
+      snapshots: [{ account: 'seat2', window: '5h', ts: D('02:41') / 1000, used_pct: 100, resets_at: D('07:00') / 1000 }, { account: 'seat2', window: '5h', ts: D('02:49') / 1000, used_pct: 40, resets_at: D('07:00') / 1000 }],
+    }, (r) => {
+      assert.equal(lane(r).seat, 'seat2');
+      assert.equal(lane(r).spans.some((s) => s.cause === 'quota'), true);
+    }],
+    ['an unlisted lane is drawn in the ops group', { units: [unit('U1', 'newlane', FULL)], history: HIST(T('00:00')), warn: () => {} }, (r) => assert.equal(lane(r, 'newlane').group, 'ops')],
+  ];
+  for (const [name, input, check] of ROWS) it(name, () => check(buildRibbon({ ...LIVE, ...input })));
+});
+
+describe('etaWithPrev and holdBands', () => {
+  const eta = { p50: '3h', p80: '5h', asOf: 'a', raw: 'r' };
+  // [name, run, expected]
+  const ROWS = [
+    ['first reading: prev null, one row to append', () => etaWithPrev('x', eta, []), { eta: { ...eta, prev: null }, append: { lane: 'x', p50: '3h', asOf: 'a' } }],
+    ['same p50: nothing appended, prev stays', () => etaWithPrev('x', eta, [{ lane: 'x', p50: '3h', asOf: 'a' }]), { eta: { ...eta, prev: null }, append: null }],
+    ['changed p50: prev is the last different one, one row appended', () => etaWithPrev('x', eta, [{ lane: 'x', p50: '4h', asOf: 'z' }]), { eta: { ...eta, prev: { p50: '4h', asOf: 'z' } }, append: { lane: 'x', p50: '3h', asOf: 'a' } }],
+    ['noData is passed through', () => etaWithPrev('x', { noData: true, raw: 'n' }, []), { eta: { noData: true, raw: 'n' }, append: null }],
+    ['an admit ends a hold run', () => holdBands(parseGateLog([...holdLines(0, 5, 4), '2026-10-30T00:20:00 admit A', ...holdLines(21, 5, 4)].join('\n')), { from: 0, to: Date.now() + 1e9, now: Date.now(), live: false }).length, 0],
+  ];
+  for (const [name, run, want] of ROWS) it(name, () => assert.deepEqual(run(), want));
+});

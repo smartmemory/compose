@@ -1,0 +1,47 @@
+{
+  "_source": "OPS/units/COMP-COCKPIT-RIBBON-FEED-1/brief.md (cut by COMP-COCKPIT-RIBBON-CUT-1, 2026-10-31)",
+  "_roadmap": "OPS/units/COMP-COCKPIT-RIBBON-CUT-1/cut.md; owner pick Day ribbon, OPS/units/COMP-COCKPIT-UX-ADJ-1/report.md Shape 1",
+  "_note": "The feed author copies this file to C/docs/features/COMP-COCKPIT-RIBBON-FEED-1/ribbon-contract.json in the landing commit. RIBBON-ROWS-1 builds against fixtures of this shape. Times are ISO-8601 strings with offset; null means not recorded, never zero.",
+  "route": "GET /api/ribbon?from=<iso>&to=<iso>",
+  "errors": {
+    "400": "{error} when from/to missing, unparseable, from >= to, or to - from > 31 days",
+    "absent": "route not mounted in remote mode (same guard as /api/process)"
+  },
+  "response": {
+    "from": "iso", "to": "iso", "now": "iso",
+    "live": "bool: now is inside [from, to]",
+    "asOf": "iso", "ageS": "number",
+    "lanes": [{
+      "lane": "string (stamp file lane name, e.g. '2.0', 'forge')",
+      "group": "'product' | 'ops' (LANE_GROUPS table)",
+      "seat": "string | null",
+      "idle": "bool: no current unit and no span or mark in the window",
+      "current": "{id, title, titleSource, since} | null (null in a past window)",
+      "spans": [{
+        "kind": "'work' | 'wait' | 'notRecorded'",
+        "start": "iso", "end": "iso",
+        "unit": "string | null", "title": "string | null",
+        "job": "'authoring' | 'review' | 'fix_rounds' | 'gate' | null (work only)",
+        "cause": "'review' | 'owner' | 'gate' | 'quota' | 'unknown' | null (wait only)",
+        "why": "plain words for the tooltip, e.g. 'waiting on review 3 h' or 'not recorded: no dispatch stamp (rule U-d)'"
+      }],
+      "marks": [{
+        "kind": "'land' | 'deploy' | 'deployFail' | 'decide'",
+        "at": "iso", "unit": "string | null", "title": "string | null",
+        "text": "string | null (decision text; deploy target)",
+        "reverse": "string | null (decide only: how to reverse, from the source row)",
+        "source": "'stamps' | 'owner-queue' | 'ledger'"
+      }],
+      "next": [{"id": "string", "title": "string | null", "titleSource": "string"}],
+      "eta": "{p50, p80, asOf, raw, prev: {p50, asOf} | null} | {noData: true, raw} | null"
+    }],
+    "bands": [{"kind": "'outage' | 'hold'", "start": "iso", "end": "iso | null (ongoing)", "label": "string", "source": "string"}],
+    "pins": [{"kind": "'seatReset' | 'expiry'", "at": "iso", "label": "string", "seat": "string | null", "atGate": "bool"}],
+    "coverage": {"n": "int landings in window", "dispatched": "int", "pct": "int 0-100 | null when n is 0", "label": "'start stamps on N% of landings'"},
+    "history": {
+      "<source: stamps.landed_at | stamps.dispatched_at | stamps.author_done_at | stamps.reviews | stamps.fix_runs | stamps.gate_done_at | stamps.deployed_at | stamps.owner_waits | ownerQueue | ledger | quota | holds | spend | expiry>": "{earliest: iso | null, note: string | null}"
+    },
+    "notRecorded": [{"source": "string", "start": "iso", "end": "iso", "why": "string"}],
+    "sourceErrors": {"<source>": "string (plain words; the source still renders as not recorded)"}
+  }
+}

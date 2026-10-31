@@ -4,7 +4,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { freshness, laneRows, laneTimeSplit, timeSplit, toLocal } from '../lib/process-metrics.js';
+import { freshness, laneRows, laneTimeSplit, timeIntervals, timeSplit, toLocal } from '../lib/process-metrics.js';
 
 const Z = (h, m = 0, s = 0, ms = 0) => Date.UTC(2026, 9, 30, h, m, s, ms);
 const t = (h, m) => `2026-10-30T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00Z`;
@@ -102,4 +102,41 @@ describe('freshness', () => {
     ['BUILD-FAILED.txt gives the time and reason', { mtimeMs: now, failedText: '2026-10-30 20:50 local\nbuild raised\n' }, { ageS: 0, stale: false, failed: { time: '2026-10-30 20:50 local', reason: 'build raised' } }],
   ];
   for (const [name, input, want] of ROWS) it(name, () => assert.deepEqual(freshness({ now, ...input }), want));
+});
+
+// COMP-COCKPIT-RIBBON-FEED-1: timeIntervals is timeSplit drawn as intervals. One row table over the same fixtures:
+// the interval lengths equal timeSplit's minutes, and a unit timeSplit cannot bound is unknown with the same rule.
+describe('timeIntervals', () => {
+  const full = {
+    ready_at: t(10, 0), landed_at: t(12, 0), dispatched_at: t(10, 10), author_done_at: t(10, 40),
+    reviews: [{ round: 1, dispatched_at: t(10, 50), at: t(11, 0) }],
+    fix_runs: [{ round: 1, dispatched_at: t(11, 5), done_at: t(11, 15) }],
+    gates: [{ n: 1, started_at: t(11, 30), done_at: t(11, 40) }],
+  };
+  const owner = { ...full, owner_waits: [{ qid: 'q', start: t(10, 42), end: t(10, 48) }] };
+  const { author_done_at: _a, ...noAuthorDone } = full;
+  const len = (ivs) => ivs.reduce((n, [a, b]) => n + (b - a), 0) / 60_000;
+  // [name, row, opts]
+  const ROWS = [
+    ['full row', full, undefined],
+    ['owner wait inside a gap', owner, undefined],
+    ['U-d no author_done_at', noAuthorDone, undefined],
+    ['U-a review with `at` only', { ...full, reviews: [{ round: 1, at: t(11, 0) }] }, undefined],
+    ['U-b open review', { ...full, reviews: [{ round: 1, dispatched_at: t(10, 50) }] }, undefined],
+    ['not landed, no hi given', { ...full, landed_at: undefined }, undefined],
+    ['an unlanded unit with a given hi is known', { ...full, landed_at: undefined, gates: [] }, { hi: Z(11, 20) }],
+  ];
+  for (const [name, row, opts] of ROWS) {
+    it(name, () => {
+      const iv = timeIntervals(row, opts);
+      const split = timeSplit(row);
+      if (opts) return assert.deepEqual([iv.status, len(iv.waiting)], ['known', 30]);
+      assert.equal(iv.status, split.status);
+      if (split.status === 'unknown') return assert.equal(iv.rule, split.rule);
+      if (split.status !== 'known') return;
+      for (const k of Object.keys(iv.jobs)) assert.equal(len(iv.jobs[k]), split.minutes[k], k);
+      assert.equal(len(iv.waitingOwner), split.minutes.waiting_owner);
+      assert.equal(len(iv.waiting), split.minutes.waiting);
+    });
+  }
 });

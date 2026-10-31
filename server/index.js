@@ -18,6 +18,7 @@ import { attachOpsStatusRoutes } from './ops-status-routes.js';
 import { attachFleetRoutes } from './fleet-routes.js';
 import { attachProcessRoutes } from './process-routes.js';
 import { attachUnitIndexRoutes } from './unit-index-routes.js';
+import { attachRibbonRoutes } from './ribbon-routes.js';
 import { attachStratumUiRoutes } from './stratum-ui-routes.js';
 import { attachCadenceUiRoutes } from './cadence-ui-routes.js';
 import { attachWikiRoutes } from './wiki-routes.js';
@@ -235,6 +236,8 @@ attachFleetRoutes(app);
 attachProcessRoutes(app, { remote: remoteMode });
 // COMP-COCKPIT-UNIT-INDEX-1: GET /api/units/index (one per-unit index of the stamp files; loopback only, absent in remote mode).
 attachUnitIndexRoutes(app, { remote: remoteMode });
+// COMP-COCKPIT-RIBBON-FEED-1: GET /api/ribbon (one feed for the Day ribbon; loopback only, absent in remote mode).
+attachRibbonRoutes(app, { remote: remoteMode });
 // COMPOSE-WIKI-TAB-1: /api/wiki/* proxies the wiki DataClient's calls (wiki-eng only; absent in remote mode).
 attachWikiRoutes(app, { remote: remoteMode });
 
