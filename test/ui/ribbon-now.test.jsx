@@ -39,10 +39,10 @@ const INDEX = {
   ],
 };
 
-function stub({ index = ok(INDEX), fleet = ok(FLEET) } = {}) {
+function stub({ index = ok(INDEX), fleet = ok(FLEET), ribbon = null } = {}) {
   wsFetch.mockImplementation(async (url) => {
     const u = String(url);
-    if (u.startsWith('/api/ribbon')) return ok(RIBBON);
+    if (u.startsWith('/api/ribbon')) return ribbon ? ribbon() : ok(RIBBON);
     if (u.startsWith('/api/fleet')) return fleet;
     if (u.startsWith('/api/units/index')) return index;
     return ok({});
@@ -117,6 +117,7 @@ describe('now lists (COMP-COCKPIT-RIBBON-NOW-1)', () => {
       { name: 'unit index down: waiting', stubs: { index: down }, count: 'what-count-review', want: 'now-unavailable' },
       { name: 'unit index down: landed', stubs: { index: down }, count: 'what-count-landed', want: 'now-unavailable' },
       { name: 'fleet down but the ribbon feed is up: working falls back to the lanes', stubs: { fleet: down }, count: 'what-count-working', want: 'now-rows' },
+      { name: 'fleet down and the ribbon feed still loading: Loading, not "source unavailable"', stubs: { fleet: down, ribbon: () => new Promise(() => {}) }, count: 'what-count-working', want: 'now-loading' },
     ];
     for (const r of ROWS) {
       cleanup(); resetFleetPoller(); resetUnitIndex(); wsFetch.mockReset(); stub(r.stubs);
@@ -125,6 +126,7 @@ describe('now lists (COMP-COCKPIT-RIBBON-NOW-1)', () => {
       fireEvent.click(screen.getByTestId(r.count));
       const el = await screen.findByTestId(r.want);
       if (r.want === 'now-unavailable') expect(el.textContent, r.name).toMatch(/source unavailable/);
+      else if (r.want === 'now-loading') expect(el.textContent, r.name).toMatch(/Loading/);
       else expect(screen.getAllByTestId('now-row').length, r.name).toBeGreaterThan(0);
     }
   }, 60000);

@@ -31,6 +31,19 @@ export function sinceWords(t, now) {
   return `${new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' })} ${hhmm(t)}`;
 }
 
+/** A future time as "today 14:00", "tomorrow 02:00" or "Mon 12:00"; "unknown" for an unreadable time. */
+export function etaWords(iso, now) {
+  const t = ms(iso);
+  if (t === null) return 'unknown';
+  const day = (x) => { const d = new Date(x); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const diff = Math.round((day(t) - day(now)) / 86_400_000);
+  if (diff === 0) return `today ${hhmm(t)}`;
+  if (diff === 1) return `tomorrow ${hhmm(t)}`;
+  return `${new Date(t).toLocaleDateString([], { weekday: 'short' })} ${hhmm(t)}`;
+}
+
+const clip = (text, n = 80) => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
+
 /**
  * Who is running something right now: one row per busy session and per live job (the same things `runningNow` counts), plus
  * Compose's own agent. A session's unit and start come from the feed lane named like it. When sm_status is down the lanes
@@ -102,9 +115,9 @@ export function landedSince(index, sinceMs, feed = null) {
 
 /**
  * The phone's per-lane lines: `{lane, text}` for each lane with something current, waiting or next:
- * "<title> · <state> · ETA <when>". `null` when the feed is down. `index` may be null (then no lane reads "waiting").
+ * "<title> · <state> · ETA <when>" (the p50 time, not the feed's long `raw` text). `null` when the feed is down. `index` may be null (then no lane reads "waiting").
  */
-export function phoneLines(feed, index) {
+export function phoneLines(feed, index, now = Date.now()) {
   if (!Array.isArray(feed?.lanes)) return null;
   const units = Array.isArray(index?.units) ? index.units : [];
   const out = [];
@@ -115,8 +128,8 @@ export function phoneLines(feed, index) {
     else if (waits.length) { title = waits[0].title || waits[0].id; state = waits[0].waiting === 'owner' ? 'waiting on you' : 'waiting on review'; }
     else if (l.next?.length) { title = l.next[0].title || l.next[0].id; state = 'next up'; }
     else continue;
-    const eta = l.eta?.noData ? 'ETA no data' : typeof l.eta?.raw === 'string' ? `ETA ${l.eta.raw.replace(/^p50 /, '')}` : 'ETA unknown';
-    out.push({ lane: l.lane, text: `${title} · ${state} · ${eta}` });
+    const eta = l.eta?.noData ? 'no data' : l.eta ? etaWords(l.eta.p50, now) : 'unknown';
+    out.push({ lane: l.lane, text: `${clip(String(title))} · ${state} · ETA ${eta}` });
   }
   return out;
 }

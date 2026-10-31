@@ -1,7 +1,8 @@
 /**
  * NowDrawer.jsx — COMP-COCKPIT-RIBBON-NOW-1: the right-hand drawer a WHAT-line count opens on the Day page. One of three
  * lists (`working`, `waiting`, `landed`) with the prototype's headings. Esc, the ✕ and the scrim close it; the caller
- * returns focus to the count. A list whose source is down says "source unavailable", never an empty list.
+ * returns focus to the count. A list whose source is down says "source unavailable", never an empty list; a source
+ * still loading says "Loading…" (RULE-FRESH: loading never looks like missing or zero).
  */
 import React, { useEffect, useMemo, useRef } from 'react';
 import { workingNow, waitingNow, landedSince, agoWords, sinceWords } from './nowLists.js';
@@ -13,12 +14,13 @@ const sub = 'text-[12px] text-muted-foreground';
 
 const unitText = (r) => [r.unit, r.title].filter(Boolean).join(' · ') || 'no unit named';
 
-function Unavailable({ why = UNAVAILABLE }) {
+function Unavailable({ why = UNAVAILABLE, loading = false }) {
+  if (loading) return <p className={`m-0 ${sub}`} role="status" data-testid="now-loading">Loading…</p>;
   return <p className={`m-0 ${sub}`} role="status" data-testid="now-unavailable">{why}</p>;
 }
 
-function Working({ rows, now }) {
-  if (rows === null) return <Unavailable />;
+function Working({ rows, now, loading }) {
+  if (rows === null) return <Unavailable loading={loading} />;
   if (rows.length === 0) return <p className={`m-0 ${sub}`} data-testid="now-empty">Nothing is running right now.</p>;
   return (
     <ul className="m-0 p-0 list-none" data-testid="now-rows">
@@ -56,7 +58,7 @@ function Waiting({ lists, now }) {
   );
 }
 
-function Landed({ data, now, sinceMs }) {
+function Landed({ data, now, sinceMs, loading }) {
   if (data === null) return <Unavailable why={sinceMs === null ? 'no earlier visit recorded' : UNAVAILABLE} />;
   return (
     <div className="flex flex-col gap-3">
@@ -75,7 +77,7 @@ function Landed({ data, now, sinceMs }) {
       </section>
       <section data-testid="now-group-also">
         <h3 className={sec}>Also</h3>
-        {data.also === null ? <Unavailable /> : data.also.length === 0 ? <p className={`m-0 ${sub}`}>No deploys or decisions.</p> : (
+        {data.also === null ? <Unavailable loading={loading} /> : data.also.length === 0 ? <p className={`m-0 ${sub}`}>No deploys or decisions.</p> : (
           <ul className="m-0 p-0 list-none">
             {data.also.map((m, i) => (
               <li key={`${m.kind}-${m.at}-${i}`} className={rowCls} data-testid="now-also-row">
@@ -91,7 +93,7 @@ function Landed({ data, now, sinceMs }) {
   );
 }
 
-export default function NowDrawer({ kind, onClose, fleet, index, feed, agent, lastVisitAt = null, now = Date.now() }) {
+export default function NowDrawer({ kind, onClose, fleet, index, feed, feedLoading = false, agent, lastVisitAt = null, now = Date.now() }) {
   const closeRef = useRef(null);
   useEffect(() => {
     closeRef.current?.focus();
@@ -108,7 +110,7 @@ export default function NowDrawer({ kind, onClose, fleet, index, feed, agent, la
   if (kind === 'working') {
     title = working === null ? 'Working' : `${working.length} working`;
     line = 'Agents running a unit right now';
-    body = <Working rows={working} now={now} />;
+    body = <Working rows={working} now={now} loading={feedLoading} />;
   } else if (kind === 'waiting') {
     title = waiting === null ? 'Waiting' : `${waiting.review.length + waiting.you.length} waiting`;
     line = waiting === null ? 'Units waiting on a review or on you' : `review ${waiting.review.length}, you ${waiting.you.length}`;
@@ -116,7 +118,7 @@ export default function NowDrawer({ kind, onClose, fleet, index, feed, agent, la
   } else {
     title = landed === null ? 'Landed since you left' : `${landed.rows.length} landed since you left`;
     line = lastVisitAt === null ? 'No earlier visit recorded' : `Since ${sinceWords(lastVisitAt, now)}, newest first`;
-    body = <Landed data={landed} now={now} sinceMs={lastVisitAt} />;
+    body = <Landed data={landed} now={now} sinceMs={lastVisitAt} loading={feedLoading} />;
   }
 
   return (

@@ -11,7 +11,7 @@ import { phoneLines, landedSince, agoWords, sinceWords } from './nowLists.js';
 const sub = 'text-[12px] text-muted-foreground';
 
 export default function DayPhone({ feed, index, meter, lastVisitAt, onOpenFleet, onNavigate, onCountOpen, now = Date.now() }) {
-  const lines = useMemo(() => phoneLines(feed, index), [feed, index]);
+  const lines = useMemo(() => phoneLines(feed, index, now), [feed, index, now]);
   const landed = useMemo(() => landedSince(index, lastVisitAt, null), [index, lastVisitAt]);
   return (
     <div className="h-full min-w-0 overflow-y-auto overflow-x-hidden flex flex-col gap-3 p-3" data-testid="day-phone">

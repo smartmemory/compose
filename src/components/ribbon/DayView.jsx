@@ -117,7 +117,7 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
   const missing = sourceErrorLines(feed.data?.sourceErrors);
   const link = 'text-[12px] text-muted-foreground hover:text-foreground hover:underline focus-visible:underline outline-none';
 
-  const drawer = nowKind && <NowDrawer kind={nowKind} onClose={closeNow} fleet={fleet} index={unitIndex} feed={feed.data} agent={agent} lastVisitAt={lastVisitAt} />;
+  const drawer = nowKind && <NowDrawer kind={nowKind} onClose={closeNow} fleet={fleet} index={unitIndex} feed={feed.data} feedLoading={feed.loading} agent={agent} lastVisitAt={lastVisitAt} />;
   if (phone) {
     return (
       <div className="h-full min-h-0 overflow-hidden" data-testid="day-view">

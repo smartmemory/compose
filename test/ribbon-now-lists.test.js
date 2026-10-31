@@ -4,7 +4,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { workingNow, waitingNow, landedSince, phoneLines, sinceWords, agoWords } from '../src/components/ribbon/now/nowLists.js';
+import { workingNow, waitingNow, landedSince, phoneLines, sinceWords, agoWords, etaWords } from '../src/components/ribbon/now/nowLists.js';
 
 const NOW = Date.parse('2026-10-31T12:00:00Z');
 const iso = (hAgo) => new Date(NOW - hAgo * 3_600_000).toISOString();
@@ -78,13 +78,18 @@ describe('landedSince', () => {
 describe('phoneLines', () => {
   const idx = index([unit('W', { lane: 'b', waiting: 'review', title: 'Waiting one' }), unit('X', { lane: 'c', waiting: 'owner' })]);
   const lanes = feed([
-    lane('a', { current: { id: 'U1', title: 'Search', since: iso(1) }, eta: { raw: 'p50 Mon' } }),
+    lane('a', { current: { id: 'U1', title: 'Search', since: iso(1) }, eta: { p50: new Date(2026, 9, 31, 15, 30).toISOString(), raw: 'ESTIMATE a P50 3h P80 9h chain 1 units 76 width 51 basis a n=500 as_of 2026-10-31T20:14' } }),
+    lane('f', { current: { id: 'U9', title: `${'Long title '.repeat(12)}` }, eta: { p50: new Date(2026, 10, 1, 2, 0).toISOString() } }),
+    lane('g', { current: { id: 'U8', title: 'Soon' }, eta: { p50: new Date(2026, 10, 3, 12, 0).toISOString() } }),
     lane('b', { eta: { noData: true } }), lane('c'), lane('d', { next: [{ id: 'Q1', title: 'Queued one' }] }), lane('e'),
   ]);
   it('rows', () => {
-    const got = phoneLines(lanes, idx);
-    assert.deepEqual(got.map((l) => `${l.lane}: ${l.text}`), [
-      'a: Search · working · ETA Mon',
+    const got = phoneLines(lanes, idx, new Date(2026, 9, 31, 12, 0).getTime());
+    const long = got.find((l) => l.lane === 'f');
+    assert.ok(long.text.startsWith('Long title Long title') && long.text.includes('…') && long.text.endsWith('working · ETA tomorrow 02:00'), 'a long title is clipped, the ETA is the p50 time');
+    assert.match(got.find((l) => l.lane === 'g').text, /· ETA \w{3} 12:00$/, 'a later day reads as a weekday');
+    assert.deepEqual(got.filter((l) => !['f', 'g'].includes(l.lane)).map((l) => `${l.lane}: ${l.text}`), [
+      'a: Search · working · ETA today 15:30',
       'b: Waiting one · waiting on review · ETA no data',
       'c: T-X · waiting on you · ETA unknown',
       'd: Queued one · next up · ETA unknown',
@@ -103,5 +108,6 @@ describe('words', () => {
     assert.equal(agoWords(NOW - 130 * 60_000, NOW), '2 h 10 m');
     assert.equal(agoWords(NOW - 5 * 60_000, NOW), '5 min');
     assert.equal(agoWords(null, NOW), 'time not recorded');
+    assert.equal(etaWords('nope', NOW), 'unknown');
   });
 });
