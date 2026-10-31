@@ -19,9 +19,9 @@ export const TAGS = {
   UPDATED: 'fyi',
 };
 
-/** The leading word when it is an exact TAGS word followed by `:`, whitespace or the end (a `-` never matches: unit ids). */
+/** The leading word when it is an exact TAGS word followed by `:`, `,`, whitespace or the end (a `-` never matches: unit ids; the live queue has "SECURITY, credential ..."). */
 export function tagWord(text) {
-  const m = /^\s*([A-Za-z]+)(?=[:\s]|$)/.exec(String(text ?? ''));
+  const m = /^\s*([A-Za-z]+)(?=[:,\s]|$)/.exec(String(text ?? ''));
   return m && Object.hasOwn(TAGS, m[1]) ? m[1] : null;
 }
 
@@ -35,7 +35,7 @@ export function tagOf(text) {
 export function stripTag(text) {
   const w = tagWord(text);
   if (!w) return String(text ?? '').trim();
-  return String(text).replace(/^\s*[A-Za-z]+\s*:?\s*/, '').trim() || String(text).trim();
+  return String(text).replace(/^\s*[A-Za-z]+\s*[:,]?\s*/, '').trim() || String(text).trim();
 }
 
 const SM_DOWN = 'sm_status';

@@ -308,8 +308,8 @@ describe('COMP-COCKPIT-NOTIFY-CHIP-1 rows', () => {
   });
 
   it('tags are exact words: unit ids and dash forms are untyped', () => {
-    expect(['SECURITY: x', 'CREDENTIAL leaked', 'QUESTION: a', 'APPLIED: b', 'FYI c', 'UPDATED: d', 'SEC-CLEAR-ALL-1', 'SECURITY-1 landed', 'security: x'].map(tagOf))
-      .toEqual(['security', 'security', 'ask', 'decided', 'fyi', 'fyi', 'untyped', 'untyped', 'untyped']);
+    expect(['SECURITY: x', 'CREDENTIAL leaked', 'QUESTION: a', 'APPLIED: b', 'FYI c', 'UPDATED: d', 'SEC-CLEAR-ALL-1', 'SECURITY-1 landed', 'security: x', 'SECURITY, credential (owner-only)', 'FYI, no action'].map(tagOf))
+      .toEqual(['security', 'security', 'ask', 'decided', 'fyi', 'fyi', 'untyped', 'untyped', 'untyped', 'security', 'fyi']);
   });
 });
 
