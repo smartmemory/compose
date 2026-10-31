@@ -7,6 +7,7 @@ import DayRibbon from './DayRibbon.jsx';
 import RangeBar from './RangeBar.jsx';
 import { useRibbonWindow } from './useRibbonWindow.js';
 import { useRibbonFeed } from './useRibbonFeed.js';
+import RibbonLaneLayer from './lane/RibbonLaneLayer.jsx';
 
 /**
  * DayView — the front page (COMP-COCKPIT-RIBBON-TOP-1): the WHAT line, the range bar, the ribbon and the cost meter on one
@@ -108,7 +109,7 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
         onStep={win.step}
         onNow={win.goNow}
       />
-      <div className="flex-1 min-h-0 flex flex-col gap-1">
+      <div className="flex-1 min-h-0 flex flex-col gap-1 relative">
         {feed.loading && (
           <div className="flex-1 rounded-xl border border-border bg-card animate-pulse" data-testid="day-skeleton" aria-label="Loading the ribbon" />
         )}
@@ -135,6 +136,7 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
             />
           </div>
         )}
+        <RibbonLaneLayer data={feed.data} from={win.window.from} to={win.window.to} now={win.now} />
         {missing.length > 0 && (
           <ul className="m-0 pl-4 text-[12px] text-muted-foreground" data-testid="day-source-errors">
             {missing.map((m) => <li key={m}>Not drawn: {m}</li>)}

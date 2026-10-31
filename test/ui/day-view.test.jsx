@@ -127,7 +127,9 @@ describe('Day front page (COMP-COCKPIT-RIBBON-TOP-1)', () => {
     render(<DayView onNavigate={onNavigate} />);
     const lane = await screen.findByTestId('lane-main');
     fireEvent.click(lane);
-    expect(onNavigate.mock.calls).toEqual([['process']]);
+    // RIBBON-LANE-1: the lane layer is the listener now, so a click on a lane the feed has opens its drawer, not Fleet > Process.
+    expect([onNavigate.mock.calls, !!screen.queryByTestId('lane-drawer')]).toEqual([[], true]);
+    fireEvent.click(screen.getByTestId('lane-drawer-close'));
 
     onNavigate.mockClear();
     const seen = [];

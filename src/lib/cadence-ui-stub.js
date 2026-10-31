@@ -4,5 +4,6 @@ export const DataClientProvider = ({ children }) => children;
 export const SeatStrip = () => null;
 export const UnitBelt = () => null;
 export const ChainDags = () => null;
+export const ChainGraph = () => null;
 export const AttentionList = () => null;
 export const DiaryFeed = () => null;
