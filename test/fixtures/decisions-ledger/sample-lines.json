@@ -1,0 +1,682 @@
+[
+ {
+  "set": "design",
+  "line": 20348,
+  "label": "X",
+  "note": "seat report (session_hop)",
+  "day": "2026-10-30",
+  "text": "- 2026-10-30 09:26Z session_hop: hop main-overdue-main seat1 -> seat4: OWNER 17:2x: seat1 blocked on session limit ~1h; auto-hop 17:22 put 3 sessions on it; seat4 at 41% (closing old tab EA15C125, new tab 5AE11AC4)"
+ },
+ {
+  "set": "design",
+  "line": 20390,
+  "label": "D",
+  "note": "six picks in one relay line",
+  "day": "2026-10-30",
+  "text": "- 17:49 s2-coord: OWNER (via s1-chat 18:0x) six picks routed. forge-main: COCKPIT-12 (a) read-only + Cadence shadow data as 3rd source; COCKPIT-13 LIVE LINK (reverses frozen-copy rec), target default claude.ai page, forge-main owns mechanics; AUDIT-11 (b) in Stratum TS move; OBS-STATS-1 self-answers stand; WIKI: file 4 Compose Wiki-tab screen units (decisions ledger, sources, docs, graph; wiki-components + DataClient contract/d.ts + wiki-routes.js allowlist + publish + 3 tests), Sonnet locked briefs, after current compose units, no hel1 change. cadence-main: (a) NO brief-writing, keep watching; (b) fix watch tick to <30 min (15-min target), unit in cadence lane."
+ },
+ {
+  "set": "design",
+  "line": 20401,
+  "label": "X",
+  "note": "a question to the owner",
+  "day": "2026-10-30",
+  "text": "- 17:52 s2-coord: sm20-main CUT-1 r3 READY FOR REVIEW (8 local branches, nothing pushed). Relayed to s1-chat: OWNER Q mcp 1.5.22->2.0.0 with the rest ((a) rec, s2-coord agrees; cut written as (a)); FYI unbuilt design breaks G10/G90/G51/G53/G131 dropped from notice, later-or-retire Q, not blocking. New HIGH PYCLIENT-2.0-RECEIPT-LEGACY-BRIDGE-1 (blocks client publish only; PYRCPT-A sonnet seat1). CUT1-REV Codex sol/medium release-blocking (+4.0 pts today, credits 73,360 before). BILL-ENTITLEMENT-WRITERS-2.0-PORT-1 LANDED common 91896519e097 + svc 4b6f2ce78908."
+ },
+ {
+  "set": "design",
+  "line": 20732,
+  "label": "D",
+  "note": "three owner picks plus an s1-chat ruling",
+  "day": "2026-10-30",
+  "text": "- 2026-10-30 19:0x s1-chat: OWNER Compose nav (COMP-AUDIT-17/18) = 1a seven rooms + inner tab rows, 2a label status controls now / merge in Stratum move, 3a keep Design under Build. s1-chat ruling F1-STATUS = (a) unreleased JS SDK ignores legacy `status` (one line + test row) before first publish; zero user impact (npm latest 1.5.15)."
+ },
+ {
+  "set": "design",
+  "line": 20749,
+  "label": "X",
+  "note": "an echo",
+  "day": "2026-10-30",
+  "text": "- 2026-10-30 22:3x forge-main: COMPOSE-WIKI-GRAPH-1 owner_wait GRAPH-PICKS stamped (start 18:56 s2-coord forward, end 22:10 relay; owner answered 19:1x). Re-cut per OWNER 19:1x 'move as-is': 3 units -> 2 (G1 wiki move: 51 files copied unchanged incl 3D/WebGL, imports relative + one host module + DataClient graphAll/graphPage/note + 0.6.0; G2 compose: proxy graph entry + one GET /api/wiki/note route + client/vite/sub-view, security-tagged), ONE Codex sol/medium review over both, then land wiki -> publish 0.6.0 -> land compose. Default: Compose installs three+d3-force-3d+pixi.js (~97 MB) for 3D parity. Sent to s2-coord for owner OK before dispatch: units/COMPOSE-WIKI-GRAPH-1/recut.md."
+ },
+ {
+  "set": "design",
+  "line": 20773,
+  "label": "D",
+  "note": "batch of lead rulings (miss)",
+  "day": "2026-10-30",
+  "text": "22:30 sm20-main: RECEIPTS-1 spike relayed to s2-coord: WIRING 6 units P50 14h P80 50h chain 3; Q1 closed by owner (a); Q2 (a) conversation=document_save on container, Q3 (a) refuse expected_revision typed 4xx pre-write, lead rulings FYI-with-veto via s1-chat. Filing R0-R5 next."
+ },
+ {
+  "set": "design",
+  "line": 20789,
+  "label": "X",
+  "note": "owner reports redesign done (known false decision)",
+  "day": "2026-10-30",
+  "text": "- 2026-10-30 23:1x s1-chat: OWNER: Base44 Process-view redesign done, app id 6ae4ab12ebfd4becbb7f0578 (\"we got a good process view\"). Handed to forge-main to pull the app source (base44 MCP read_file/list_directory; s1-chat base44 MCP timed out this session), port the design into Compose ProcessView as COMP-COCKPIT-13 U4 (React+Tailwind, same /api/process data, same testids), never eject, no builder requests spent."
+ },
+ {
+  "set": "design",
+  "line": 20819,
+  "label": "D",
+  "note": "owner quote",
+  "day": "2026-10-30",
+  "text": "- 2026-10-30 23:4x s1-chat: OWNER 23:4x (verbatim): \"no sign off everything preapproved go with your judgement I'm going to sleep show me in the morning I want to see results\". NIGHT MODE: owner sign-off gates are lifted for tonight (COMP-COCKPIT-13-POLISH U4 lands on gate with s1-chat judgement on the screenshots, no owner pause; same for every unit waiting on an owner go). Hard stops unchanged (money, PyPI, outward posts, credentials, reversing owner decisions, sudo, prod store recreation, hel1 deletions). Morning digest = results: new Process UI live, room order, Mac wiki docs sources, receipts chain R0-R4 status, SDK bridge-off e2e, Graph move G1/G2, main hotfix-only triage. Relayed to s2-coord + forge-main."
+ },
+ {
+  "set": "design",
+  "line": 20835,
+  "label": "X",
+  "note": "a relay mid-line carrying a ledger sha (echo)",
+  "day": "2026-10-30",
+  "text": "- 2026-10-30 23:31 cadence-main: night mode (OWNER via s2-coord, ledger 53ed0fd98493). Dispatched CADENCE-UI-DAEMON-HEALTH-1 (Sonnet, seat1, pid 3670; roadmap F36 cadence 34e6475: board heartbeat per launchd daemon, no new required DataClient method) and CADENCE-OPS-LEARN-ROUTER-1-DESIGN (Opus, seat1, pid 47862; U5 design note, docs only; LEARN-1 DAG updated cadence 02a9673). seat3 refused at its 70% ceiling."
+ },
+ {
+  "set": "design",
+  "line": 20863,
+  "label": "X",
+  "note": "ratification of rulings (echo)",
+  "day": "2026-10-31",
+  "text": "- 00:02 s2-coord: CORRECTION to my 00:0x line: DEPLOY-PRIMITIVE M2+M3 were ALREADY LANDED (infra 497a196e0104 RECOVERY-CLONE-COVERAGE-1 10-29, b0da6ca REFORWARD-1 10-28). ops-main ran review2-probes.py against infra origin/main and 5 passed. No unit filed. sm20-main rulings ops 232fb4b3 adjudicated (all AGREE). Batch sm20-12 M1 (2.0 connector quota fails open on a non-numeric cap, main 2eeec51c fix missing on 2.0) is MEDIUM billing-adjacent, routed to sm20-main as a CAPWARN20 fix round or a drift PORT row before CUT-1. sm20-65 CLEAN. Owner-queue: STAGE-GATE-501-NARROW (applied), LIVE-1X-DOC-URL-422 (FYI). Network outage #2 since 23:36 (github/pypi/ghcr time out), outage gate holding launches as designed. Ops commits are local-only until fetch works."
+ },
+ {
+  "set": "design",
+  "line": 20902,
+  "label": "D",
+  "note": "design P",
+  "day": "2026-10-31",
+  "text": "- 00:40 s2-coord: sm20-main ruling 7b25041231f5 adjudicated. REIMPORT F2 goes to post-2.0 (AGREE, (b) fence exemption rejected), conditional on a 2.0 known-issue line (CUT-1 docs row) and on the WARNING naming reextract. Owner-queue LITE-REIMPORT-ENRICH-POST20 (applied FYI). REL-2.0-GREEN-INTEG-REDS-1 (21 core integ reds) as a CUT-1 row agreed; check overlap with RCPT-BATCH (Receipt serialization)."
+ },
+ {
+  "set": "design",
+  "line": 20993,
+  "label": "X",
+  "note": "per s2-coord r5 ruling (echo)",
+  "day": "2026-10-31",
+  "text": "- 02:09 ops-main: per s2-coord r5 ruling: FILED RR-RUNNER-DIAG-VISIBILITY-1 (ops lane, normal priority, not a 2.0 blocker; fixed-vocabulary sidecar line exit/oom/finished + smr-runner fetch junit kind; one Codex sol/medium security pre-land + re-pin; prior incident = r5 undiagnosable; units/RR-RUNNER-DIAG-VISIBILITY-1/brief.md). LAUNCHED RR-TRUST-1 r6 as a reproducibility probe, spec identical to r5 (evidence/RR-TRUST-1/spec-common-r6.json), job rrtrust-common-6-c40729 scalemate slot 1. Stop rule: mongod crashes again => no r7 until the visibility unit lands; mongod survives and <= 24F/10E + 9 collision errors => r5 crash recorded as a one-off"
+ },
+ {
+  "set": "design",
+  "line": 21001,
+  "label": "D",
+  "note": "OWNER-ABSENT adjudication (miss)",
+  "day": "2026-10-31",
+  "text": "- 02:18 s2-coord: OWNER-ABSENT adjudication of sm20-main svc-04 sort rulings. (1) clerk-org-purge as a CUT-1 blocker on money: AGREE (service origin/2.0 webhooks.py organization.deleted path only sets is_active False, spot-checked). (2) audit-verify-failclosed UPGRADED to a CUT-1 blocker, MEDIUM severity (audit_verify.py:262 counts only 'is False' as divergence, so None reads clean; a store writer is the threat model; AUDITVF-A is already dispatched). (3) WS-ROUTING-2 NO-GO for 2.0: AGREE."
+ },
+ {
+  "set": "design",
+  "line": 21021,
+  "label": "X",
+  "note": "a unit SUPERSEDED marker",
+  "day": "2026-10-31",
+  "text": "02:40 sm20-main: DOCS-2.0-LITE-REIMPORT-NOTES-1 LANDED (cadence-main) docs main c57ed7192334 + core 2.0 9670a9a6e48e, both verified ancestors after fetch, smartmem-dev, no trailers; diff read; pending rows + landed stamp; CUT-1 rows 69/70 ticked (row 68 hosted lines stay mine, after RCPT lands). INFLIGHT-STALL cleared: G141 census filed.md CLOSED marker (design-complete 02:15, never a land), SVC-2.0-RECEIPTS-1 SUPERSEDED marker (lands as RCPT-BATCH after R2); inflight_stall report no longer lists either"
+ },
+ {
+  "set": "design",
+  "line": 21246,
+  "label": "X",
+  "note": "filed per s2-coord ruling (echo)",
+  "day": "2026-10-31",
+  "text": "- 06:44 ops-main: RR-RUNNER-DIAG-CAUSE-1 filed per s2-coord ruling (a cgroup parser + b typed mongod fatal line); brief units/RR-RUNNER-DIAG-CAUSE-1/brief.md; Opus author rrdiag-cause-author queued on seat2 behind fleet cap 8/8 (battery guard), not bypassed."
+ },
+ {
+  "set": "design",
+  "line": 21350,
+  "label": "X",
+  "note": "owner question",
+  "day": "2026-10-31",
+  "text": "- 2026-10-31 09:5x s1-chat: OWNER \"have we run impeccable on the app?\" -> never on Compose (only www WEB-IMPECCABLE-REVIEW-1 10-21). Dispatched COMP-IMPECCABLE-REVIEW-1 (Opus, read-only audit + first compose DESIGN.md) to forge-main, runs after the first cockpit push lands, before FLEET-PROJECTS; findings -> owner picks."
+ },
+ {
+  "set": "design",
+  "line": 21365,
+  "label": "D",
+  "note": "owner seat instruction",
+  "day": "2026-10-31",
+  "text": "- 2026-10-31 10:2x s1-chat: OWNER \"switch to seat1 we have 9 hours to eat up 23% fable vs 78 hours for 48% here\": s1-chat hops seat4 -> seat1 (seat1 Fable 77%, resets Sat 18:00; owner overrides the 20% seat1 Fable cap for s1-chat until then). Open with forge-main: U5, DOCS-RETIRE 74f26d3c local, WIKI-TAB-ORDER, HEADER-COUNTERS, TEST-STATE-LEAK, FLEET-PROJECTS parked on U5, WIKI-MAC-OPS-SOURCE-1 (+eng-mac-compose binding, Compose docs were never in the Mac wiki), LEDGER-PARSER, IMPECCABLE parked until all live; s2-coord: WEB-TASTE-REVIEW-1 running wk-web-taste."
+ },
+ {
+  "set": "design",
+  "line": 21391,
+  "label": "X",
+  "note": "OWNER QUESTION sent",
+  "day": "2026-10-31",
+  "text": "- 09:14 s2-coord: RR-TRUST-1 r10 = FAIL (pre-registered rule): mongod fassert 23089 / msgid 50853 = WT_PANIC (mongo r7.0.0 wiredtiger_util.cpp:746), ~350 s, 0 container throttling at cpus 1.0 -> CPU starvation ruled out at container level (slice unmeasured). Leading hypothesis UNVERIFIED: 256m /data/db tmpfs ENOSPC (tiers.json:34). OWNER QUESTION sent to s1-chat: (a) accept/mongo tests local, (b) host data dir, (c) RECOMMENDED one r11 with tmpfs 1g + mem_limit 1536m, hard stop to (a) if 50853 recurs. ops-main HOLD, no r11. Pin #16 stays."
+ },
+ {
+  "set": "design",
+  "line": 21492,
+  "label": "X",
+  "note": "a ruling buried in status text (left out)",
+  "day": "2026-10-31",
+  "text": "10:56 sm20-main: PROVROUTE F2 READY wrapper-2.0 ba1b31ed07ce (test-only, no re-review per ruling) -> PROVROUTE-LAND Sonnet seat1 l829 queued. Blind common-b3/b4 adjudicated, 0 units (index_once 58c763e5 blind MEDIUM ruled LOW, folded into REQUIRED-INDEX step 1b). OWNER-TUPLE verdict normalized to core-2.0 (core lander queue #5). SECBASE-T retired (triage, no commit). OKFEXPORT-A l828."
+ },
+ {
+  "set": "design",
+  "line": 21518,
+  "label": "D",
+  "note": "design P",
+  "day": "2026-10-31",
+  "text": "- 11:27 s2-coord: sm20-main SORT DISPOSITION ticked on REL-2.0-CUT-1 (group_dispo_check 0 MISS). New: WRAPPER-2.0-SPILL-ADOPT-CLASSIFY-PORT-1 (post-cut, before any 2.0 wrapper release), CI-2.0-MANUAL-ONLY-SWEEP-1 (CUT-1), COMMON-2.0-PURGE-CONTENT-DISCOVERED-GRAPHS-1 (post-cut). OWNER QUESTION via s1-chat: SM20-WS-ROUTING-PARITY-1 (main durable workspace routing absent on 2.0; hosted MCP forgets switch per deploy -> writes to default workspace) recommend (a) port pre-cut; sm20-main asked for 2-3 shapes (shape-before-mapping). Visibility-gate switch question is with the owner in sm20-main's tab."
+ },
+ {
+  "set": "design",
+  "line": 21525,
+  "label": "D",
+  "note": "HIGH->MEDIUM re-rate with no ruling word (miss)",
+  "day": "2026-10-31",
+  "text": "- 11:30 s2-coord: CHECKED: OWNER-TUPLE Codex H1 (raw hosted bulk keeps caller scope) re-homed by sm20-main to SVC-2.0-GRAPH-BULK-OWNERSHIP-STRIP-PORT-1, rated HIGH->MEDIUM blocks-cut (verdict-r1.md, probe graph_bulk.py:277-297 main vs 2.0); s2-coord AGREES (the downgrade reason holds: no read gain, within one workspace; the outcome is the same CUT-1 blocker). BYOCW: Codex F1 construct-before-catch downgraded to LOW note (caller's own malformed URL, inherited from main openai_chat.py:194,215), AGREE. F2 retry-class CLOSED at 6ed0ffd4eaa8 by lead probe. WIKI-LEDGER-PARSER LANDED wiki a58b547a090c. Cockpit units all landed locally; forge-main's combined push is still pending (more cockpit units added 10:42), so the WEB-TASTE MED/LOW revisit waits."
+ },
+ {
+  "set": "design",
+  "line": 21556,
+  "label": "D",
+  "note": "relay of L21553",
+  "day": "2026-10-31",
+  "text": "- 2026-10-31 12:02 forge-main: OWNER (via s1-chat) cockpit feedback batch: collate only, no FIX units, no views-map doc; list lives at units/COMP-COCKPIT-OWNER-FEEDBACK-1031/ and is NOT an input to COMP-IMPECCABLE-REVIEW-1 (blind review; the brief, unwritten so far, will exclude that folder); one adjudication pass merges list + findings after the reviews. 8 factual ANSWER items with a read-only Sonnet subagent."
+ },
+ {
+  "set": "design",
+  "line": 21568,
+  "label": "X",
+  "note": "OWNER only inside unit IDs",
+  "day": "2026-10-31",
+  "text": "12:08 inefficiency-flags: missing-stamp CORE-2.0-CREATE-ONLY-ATTRIBUTION-TWIN-1 ready_at; missing-stamp CORE-2.0-WORKER-DERIVED-ROW-OWNER-1 ready_at; missing-stamp SVC-2.0-CLERK-MEMBER-READ-FENCE-1 ready_at; missing-stamp SVC-2.0-SECURITY-BASELINE-TRIAGE-1 ready_at; missing-stamp ops/RR-RUNNER-MONGO-CPU-MSGID-1 dispatched_at"
+ },
+ {
+  "set": "design",
+  "line": 21583,
+  "label": "D",
+  "note": "owner quote",
+  "day": "2026-10-31",
+  "text": "- 2026-10-31 12:4x s1-chat: OWNER \"make this compose unit separate, integratable from the various products, and integrate into overall HITL tickets\": one product-agnostic HITL component (owner-queue row + section-C exception alerts, channels on the component), designed under HITL-1 with ONTO-HITL-CURATE-1 / SESSION-LESSONS-HITL-1 / ops owner_queue reconciled; s2-coord files the design unit (Opus, shapes, owner picks); forge-main: Compose renders the contract, no COMPOSE-LIVE-ASKS-2WAY-1. Alert design owner = the HITL unit; Impeccable shapes only place where alerts lead."
+ },
+ {
+  "set": "design",
+  "line": 21658,
+  "label": "D",
+  "note": "Lane-lead ruling on Q1 mid-line",
+  "day": "2026-10-31",
+  "text": "- 2026-10-31 14:3x forge-main: WIKI-LEDGER-CAP LANDED wiki 9a5255d9 (newest-by-ts cap; 84 passed) but (c) still BLOCKED: verified runloop.py:1180 cuts doc text to 256 KB before enrichers (ledger.md 6.8 MB -> 638 entries, newest 10-08). Lane-lead ruling on Q1: option (a) NARROWED, opt-in full text (16 MB ceiling, tail on overflow) for the entry enrichers only; stored body, classifier and export unchanged. Fix round 2 WIKI-LEDGER-FULL dispatched (Sonnet, seat2, brief units/WIKI-MAC-OPS-SOURCE-1/brief-fix-r2.md). IMPECCABLE-REVIEW + COLD-WALK stay parked on it (cold-walk Q5 'what landed since yesterday' may read the Ledger)."
+ },
+ {
+  "set": "design",
+  "line": 21990,
+  "label": "X",
+  "note": "agreed all 4 rulings",
+  "day": "2026-10-31",
+  "text": "20:41 sm20-main: s2-coord agreed all 4 OFFB/REQIDX rulings. REQWRAP and TENANTDEL (both security-adjacent POST, 24h clock) briefed on Opus with start gates. REQWRAP auto-launches after REQIDX-LAND (after-reqidx-reqwrap.sh, l932). TENANTDEL goes in the Clerk chain after OFFB-LAND (chain written when CLERKDEL-RB reports)."
+ },
+ {
+  "set": "design",
+  "line": 21992,
+  "label": "D",
+  "note": "owner picks, no unit ID",
+  "day": "2026-10-31",
+  "text": "- 2026-10-31 20:4x s1-chat: OWNER: LOWFIX cut scope Q1 yes, Q2 a b c d yes, Q3 later, Q4 post; notify transport = (b) dedicated restricted ssh key. Relayed to s2-coord."
+ },
+ {
+  "set": "design",
+  "line": 22001,
+  "label": "D",
+  "note": "owner, project from Sent to forge-main",
+  "day": "2026-10-31",
+  "text": "- 2026-10-31 21:0x s1-chat: OWNER on the cockpit top bar: no project dropdown; a Projects tab with a sub-row like Fleet's (rooms Project home/Ideas/Roadmap/Build/Review, project selector inside the sub-row). Sent to forge-main for RIBBON-TOP-1."
+ },
+ {
+  "set": "design",
+  "line": 22062,
+  "label": "X",
+  "note": "echo",
+  "day": "2026-10-31",
+  "text": "22:14 sm20-main: Stripe check DONE 0 subscriptions (account-is-prod unconfirmed, s2-coord owns); F4 STRIPECANCEL stays a blocker per OWNER. ENTCAP service READY 7fa1186e586d, land brief written (common then service, queued behind common/service chains), CUT-1 DEPLOY row for the migration."
+ },
+ {
+  "set": "design",
+  "line": 22111,
+  "label": "X",
+  "note": "owner question about a screenshot",
+  "day": "2026-10-31",
+  "text": "- 2026-10-31 23:1x s1-chat: OWNER (shot of ribbon AHEAD row): \"what is all this resets section under the lanes timeline bars?\" = projected 5h/7d quota resets, ~20 full-text markers stacked 9 deep. -> forge-main COMP-COCKPIT-RIBBON-RESETS-COMPACT-1 P1: one tick per reset, short label, next-per-seat in full, rest on hover, single line."
+ },
+ {
+  "set": "design",
+  "line": 22114,
+  "label": "D",
+  "note": "owner project definition",
+  "day": "2026-10-31",
+  "text": "- 2026-10-31 23:1x s1-chat: OWNER SHAPE PICK (Compose projects): project = a ROOT FOLDER with one .compose store (SmartMemory, forge, trader, ...); each project lists its LANES (ops lane names) in its compose.json; sub-repos with their own roadmap (forge/compose, forge/stratum) register as MODULES that roll up; Projects home shows 4-5 real projects with lanes + modules under each. Replaces the lane-as-project list in fleet.projects. COMP-COCKPIT-FLEET-ROOTS-1 (23:2x) SUPERSEDED by COMP-COCKPIT-PROJECT-MODEL-1 (design first, then build)."
+ },
+ {
+  "set": "design",
+  "line": 22150,
+  "label": "X",
+  "note": "night rulings applied (echo)",
+  "day": "2026-10-31",
+  "text": "23:57 sm20-main: s2-coord night rulings applied. (1) REQWRAP filed.md PARKED UNTIL COMMON-2.0-REQUIRED-INDEX-FAILCLOSED-PORT-1 LANDED (chain l932 launches it; existing job file keeps the queue launcher off, no double launch). STRIPECANCEL (only ready+brief+no-job start-gated row) HELD for chain l953 (non-auto-unpark so the launcher cannot fire it early). No other ready row with a brief lacks a job file. (2) OFFB overlaps CLERKORG (idp_drift.py, webhooks.py) and SESSION-END (webhooks.py, openapi snapshot; common clerk_sso_service.py + 2 contract tests): order kept, TENANTDEL clock slip noted in its filed.md."
+ },
+ {
+  "set": "design",
+  "line": 22193,
+  "label": "D",
+  "note": "premise correction reversing a ruling (miss)",
+  "day": "2026-10-31",
+  "text": "- 00:48 s2-coord: PREMISE CORRECTION on the 00:4x sm20-6 ruling. A core gate does exist: units/TEST-2.0-SHARED-DB-GUARD-PORT-1/land-report-core.md shows guard+tripwire 141 vs 100 passed and collect-only 58920 vs 58879 with 0 errors (per sm20-main, ops 06e7cb58341f). The reviewer read only land-report-cs.md. The remaining gap is test_no_literal_falkor_port.py plus all-ports=1; sm20-main re-gates after VISGATEON. ONTDECL-A (Sonnet, seat3, pid 81258) is authoring CORE-2.0-ONTOLOGY-DECL-ENDPOINT-1."
+ },
+ {
+  "set": "design",
+  "line": 22290,
+  "label": "X",
+  "note": "after-midnight status line, day 2026-11-01",
+  "day": "2026-10-31",
+  "text": "03:17 sm20-main: VISGATEON LANDED (R3) core 4ea8cb58c8f8 common f9e7c8912444 service a154a2e5f419 wrapper 9e5fa544b382 mcp efcdc4ec1d55 docs ba32ea20c053 (ancestry + 0 trailers verified, stamped, filed.md LANDED). REQIDX-FIX-H1 READY common 191d6b10a3a8 (signature-guard row, mutant red, 114 service ids + facade id pass with merged common, NEW=0); pair land queued after the service CUT-1 chain (OFFB). Launched GREENREDS-LAND sonnet seat4 (l971), VISGATEON-PLREV opus seat3 (l972, delta-only: rebases + 4 fix commits after the Codex review), INTEGSCOPE-RB opus seat2 (l973, .py conflict test_lite_constructor_audit.py). s2-coord STRIPECANCEL ruling concurs; appended to verdict-r1.md (adds superadmin.py:1024-1035 direct tenant delete)."
+ },
+ {
+  "set": "design",
+  "line": 22324,
+  "label": "X",
+  "note": "after-midnight line",
+  "day": "2026-10-31",
+  "text": "- 04:04 s2-coord: ACK sm20-main: filed CORE-2.0-SQLITE-BULK-OWNER-NORMALIZE-TWIN-1 (MEDIUM data-continuity, POST-CUT; shape verified core 2.0 661e4300 sqlite.py:3805-3820 vs main :1457-1460; parent 'no twin' corrected at origin). derived_target twin pre-exists as CORE-2.0-DERIVED-TARGET-REREAD-STANDALONE-TWIN-1 (POST-CUT); holder check job DERIVED-HOLDER (opus, read-only) decides CUT-1 (HOLDER -> one security pre-land) vs POST-CUT. Awaiting verdict."
+ },
+ {
+  "set": "design",
+  "line": 22544,
+  "label": "D",
+  "note": "relay, later corrected",
+  "day": "2026-11-01",
+  "text": "- 09:49 s2-coord: OWNER (via s1-chat) 'focus on getting step 1 offboarding done' -> OFFB-LAND2 = owner #1 (checked 09:48: alive; tip run done 09:39, base re-run of red ids pytest 28444 running); sm20-main told: nothing preempts, never restart from scratch, resume + CUT-1 row 43 budget. s2-coord polls origin/2.0 for service 3db222c5 (bg). Filed via ops-main OPS-INFLIGHT-AGE-24H-1 (Sonnet bounded; prior incident = OFFB 2.0 twin filed 10-31 for a 10-20/22 main land, ~24 h in flight unseen): digest + Compose unit-row age/where-waiting from existing stamps, no daemon. Root causes to owner: late twin filing (biggest), launch queue + 07:03 outage, no age visibility, coordinator didn't escalate age."
+ },
+ {
+  "set": "design",
+  "line": 22555,
+  "label": "D",
+  "note": "owner reversal of pick (a)",
+  "day": "2026-11-01",
+  "text": "- 2026-11-01 10:0x s1-chat: OWNER on the RR-TRUST-1 close (\"Mongo-backed common tests stay local\", pick (a) 10-31): \"this is a common trap, I didn't have enough info or time to analyze this and accepted your default. retry and continue\". Pick (a) WITHDRAWN: the Mongo crash inside the remote runner is a defect to fix, not a scope cut; target = every tier incl. Mongo-backed runs remote. Non-Mongo tiers still switch today. Sent to s2-coord."
+ },
+ {
+  "set": "design",
+  "line": 22569,
+  "label": "D",
+  "note": "relay-only record",
+  "day": "2026-11-01",
+  "text": "- 2026-11-01 10:13 forge-main: OWNER (via s1-chat) on COMP-PIPE-EDIT-CHAT-PANE-1 Q2 (chat inherits Insight/ELI5 blocks from the owner's settings): \"leave them for now, let's see\". No strip; revisit after real use. Closed, not filed."
+ },
+ {
+  "set": "design",
+  "line": 22592,
+  "label": "D",
+  "note": "owner hotfix ruling",
+  "day": "2026-11-01",
+  "text": "- 2026-11-01 10:3x s1-chat: OWNER pick (a) on OPS-VIEWER-WORKER-STUCK-1 F6: hotfix 1.5.33 on frozen main (live-1.x breakage exception), one-line column-named insert, wheel-only PyPI release APPROVED by the owner, owner Mac updates. Twin onto 2.0 if the same insert exists there. Relayed to s2-coord."
+ },
+ {
+  "set": "design",
+  "line": 22661,
+  "label": "X",
+  "note": "s2-coord rulings in sm20-main voice (left out)",
+  "day": "2026-11-01",
+  "text": "11:20 sm20-main: s2-coord rulings: RSVKEY design (a) locked -> brief.md written (Opus author, held until RSVKEY-1X decides pre/post-cut); 19 live items KEEP (s2-coord to owner)."
+ },
+ {
+  "set": "heldout",
+  "line": 20431,
+  "label": "X",
+  "decider": "-",
+  "note": "lane status line noting an earlier OWNER gate on a roadmap row (echo)",
+  "day": "2026-10-30",
+  "text": "- 2026-10-30 18:07 cadence-main: LANDED OPS-EVENT-LOG-M2-1 cadence side (contract text) as cadence 22b4260 (cherry-pick -x of wk/evlog-m2 704d8b7 onto main, CHANGELOG line; claim+diary tests 313 passed); worktree .worktrees/evlog-m2 and branch removed. OWNER 18:1x LAUNCH-RUNG-1 gate (one week of shadow data, UI preferred; watch rung until then) noted on roadmap row 25, cadence 8a5a262, pushed."
+ },
+ {
+  "set": "heldout",
+  "line": 20724,
+  "label": "D",
+  "decider": "owner",
+  "note": "two owner rulings in one line (multi)",
+  "day": "2026-10-30",
+  "text": "- 2026-10-30 18:5x s1-chat: OWNER F1 = receipts on hosted now, ADDITIVE (1.x fields kept + receipt fields), spike add route first for size; no SDK hold. OWNER \"why are we shipping before thoroughly testing everything locally?\": 2.0 ships only after both 2.0 SDKs (legacy bridge OFF) pass e2e against the local 2.0 stack; bridge-on e2e pass does not count. s2-coord to file SVC-2.0-RECEIPTS-1 + REL-2.0-SDK-E2E-GATE-1. hel1 11 GB = wiki bare mirror loose objects (gc never runs after 120 s fetch); gc fix unit sent to s2-coord; Forgejo undecided."
+ },
+ {
+  "set": "heldout",
+  "line": 20740,
+  "label": "D",
+  "decider": "owner",
+  "note": "OWNER: G10/G90... move to 2.1",
+  "day": "2026-10-30",
+  "text": "- 2026-10-30 19:2x s1-chat: OWNER: G10/G90, G51, G53, G131 move to 2.1 (none dropped); FULL-ALIGN-1 design.md:326 corrected, origin lines marked 2.1; one BOUNDED doc unit + four 2.1 queue entries via s2-coord."
+ },
+ {
+  "set": "heldout",
+  "line": 20803,
+  "label": "D",
+  "decider": "owner",
+  "note": "s1-chat writes OWNER (via s1-chat), reverses an earlier rule in prose (no pointer)",
+  "day": "2026-10-30",
+  "text": "- 2026-10-30 23:3x s1-chat: OWNER (via s1-chat): Mac wiki binds every SmartMemory repo docs/ folder as sources (src_local_fs, local checkouts under ~/reg/my/SmartMemory, matching the 28-repo set hel1 indexes via src_git) BEFORE COMPOSE-DOCS-RETIRE-1 runs; reverses the earlier \"Mac binds no smart-memory-docs source\" rule (WIKI-FEATURE-ASPECTS-1 design.md:156). Precondition of the retire unit. Owner: \"wiki covers most places docs can live like git or google docs/drive\" (confirmed: plugins src_git, src_google_drive, src_local_fs). Handed to forge-main (wiki lane) with s2-coord cc."
+ },
+ {
+  "set": "heldout",
+  "line": 20823,
+  "label": "D",
+  "decider": "relay",
+  "note": "forge-main relays OWNER via s1-chat ledger 53ed0fd98493",
+  "day": "2026-10-30",
+  "text": "- 2026-10-30 23:4x forge-main: OWNER (via s1-chat, ledger 53ed0fd98493) 'no sign off everything preapproved go with your judgement': COMP-COCKPIT-13-POLISH lands after s1-chat adjudicates the shots (15 min), then push + cockpit restart; WIKI-MAC-DOCS-SOURCES-1, COMPOSE-WIKI-GRAPH-1a/1b, COMPOSE-DOCS-RETIRE-1 land on gate with no owner pause. Kept: G1+G2 still get their ONE Codex sol/medium pre-land review (security-tagged, rule 9; not an owner pause). Results block to s1-chat by 07:00."
+ },
+ {
+  "set": "heldout",
+  "line": 20825,
+  "label": "D",
+  "decider": "owner",
+  "note": "OWNER 23:5x verbatim quote + Applied as",
+  "day": "2026-10-30",
+  "text": "- 2026-10-30 23:5x s1-chat: OWNER 23:5x (verbatim): \"idk there are any hotfixes that are pending that we can't do after 2.0\". Applied as: nothing pending qualifies as a main hotfix; main is FROZEN until 2.0 ships except a live-1.x outage or security incident that actually occurs (none open); the 38 in-flight main rows (main-overdue-main) and the 496-unit drift backlog retarget to the 2.0 branches directly, no port-via-main; REL-2.0-MAIN-DRIFT-TRIAGE-1 reduces to \"which of these matter for 2.0\", not \"what lands on main first\". Relayed to s2-coord."
+ },
+ {
+  "set": "heldout",
+  "line": 20842,
+  "label": "D",
+  "decider": "lane",
+  "note": "night-mode lead rulings buried in a status line (miss acceptable)",
+  "day": "2026-10-30",
+  "text": "23:38 sm20-main: INFLIGHT-STALL SVC-INGEST-WAIT-STATUS-1 -> RETIRED from 2.0 (G51/G53 ruled 2.1; receipt half in SVC-2.0-RECEIPTS-1 chain); 2.1 row in post-2.0.md. GATEDIAG ROOT CAUSE verified (registry.py:39 TODO, pipeline.py:144/163 501, no trafilatura in image-extra.in): filed SVC-2.0-STAGE-COMPONENTS-1 (after R3) + SVC-2.0-DOC-HTML-FETCH-1 (SSRF guard, CUT blockers); ENRICH-GROUND + DOC-URL-TYPES -> post-2.0 (night-mode lead rulings Q1a/Q2a, to s2-coord). OVR-REV CLEAN -> OVR-LAND sonnet seat4. R2 READY 7161c31874fe."
+ },
+ {
+  "set": "heldout",
+  "line": 21106,
+  "label": "D",
+  "decider": "lane",
+  "note": "s2-coord ruling: blocks (written by s2-coord)",
+  "day": "2026-10-31",
+  "text": "- 04:06 s2-coord: RCPT Codex r2 CLEAN; RCPT-LAND running. AUDITVF Opus review CLEAN; its lander must prove tests/security, with env errors counting as BLOCKED. CLERK Codex r1: 1H/2M, all 'a removed member keeps access'. s2-coord ruling: blocks; after CLERKRM-R2, ONE narrow Codex r2 on the fix diff (round 2, release-blocking 2.0 CLERK), because the class recurred 3x. Owner queue CLERK-MEMBER-REMOVE-MAIN-TWIN updated with F1 (Clerk delete without public_user_data skips the cascade; probability unknown; no main twin applied). Sort core-09: shared-ws-source-path (member imports overwrite each other) UPGRADED to a CUT-1 blocker per rule 3/8 (data loss)."
+ },
+ {
+  "set": "heldout",
+  "line": 21151,
+  "label": "X",
+  "decider": "-",
+  "note": "re-rated LOW per s2-coord ruling (echo)",
+  "day": "2026-10-31",
+  "text": "- 04:55 ops-main: LANDED jointly RR-RUNNER-DIAG-VISIBILITY-1 + SECRET-MASK-URI-SK-1 at ops 421934f674e3 (gate 1350 passed, 1 xfailed URI row; build_bundle --check 0). Codex r2 F1 (pre-existing docker --tail cuts) re-rated LOW per s2-coord ruling (a), CHANGELOG note. Expected sha256: smr-runner 34e66c5687b3a90e6b71d4972b40972d09a4b4fa2d7fbe0befee0865e6f49822, bootstrap b47307b71f84e9262a58aa0b516fefd63df25a5e0eb534b87b846cec5154e873. Re-pin requested from s2-coord. Worktrees/branches/scratch removed."
+ },
+ {
+  "set": "heldout",
+  "line": 21302,
+  "label": "X",
+  "decider": "-",
+  "note": "filed per s2-coord ruling (echo)",
+  "day": "2026-10-31",
+  "text": "- 08:01 ops-main: RR-RUNNER-MONGO-CPU-MSGID-1 filed per s2-coord ruling on r9 ((a) tiers mongo cpus 0.25->1.0 only + (b) typed fassert msgid on the 23089 line, one re-pin #16); Opus author rrmongocpu-author launching on seat1."
+ },
+ {
+  "set": "heldout",
+  "line": 21320,
+  "label": "D",
+  "decider": "owner",
+  "note": "OWNER (\"add it wtf...\") + Ruling",
+  "day": "2026-10-31",
+  "text": "- 2026-10-31 06:3x s1-chat: OWNER (\"add it wtf and what value and why this ceremony\"): the local Mac wiki API token is local dev plumbing, not an owner-only credential; forge-main wires the wiki block into the owner cockpit compose.json using the var name the Mac wiki already uses (names only), restarts, verifies Wiki tab + Graph, unparks COMPOSE-DOCS-RETIRE-1. Ruling: local-only tokens for our own local services are agent-wireable; the credentials hard stop covers external/prod secrets and values in output. FORGE-WIKI-TAB-TOKEN owner item closed as \"do it\"."
+ },
+ {
+  "set": "heldout",
+  "line": 21341,
+  "label": "D",
+  "decider": "owner",
+  "note": "OWNER pick (AskUserQuestion)",
+  "day": "2026-10-31",
+  "text": "- 2026-10-31 08:5x s1-chat: OWNER pick (AskUserQuestion): Wiki sub-tab order = Search, Graph, Area, Feature, Decisions, Sources, Ledger, Open full wiki last; Wiki opens on Search. Was Feature, Search, Decisions, Sources, Area, Ledger, Graph (WikiView.jsx:118-125). forge-main files COMP-COCKPIT-WIKI-TAB-ORDER-1 (Sonnet), rides the U5 + DOCS-RETIRE push."
+ },
+ {
+  "set": "heldout",
+  "line": 21396,
+  "label": "D",
+  "decider": "relay",
+  "note": "s2-coord relays OWNER (via s1-chat) RR-TRUST-1 = (c)",
+  "day": "2026-10-31",
+  "text": "- 09:18 s2-coord: OWNER (via s1-chat): RR-TRUST-1 = (c): tmpfs 256m->1g + mem_limit 768m->1536m, one Codex pre-land, re-pin #17, ONE r11. Pre-registered: survives = done (keep values, close); 50853 recurs = (a) close, mongo tests local, no more runs; other = note, no r12 without owner. Relayed to ops-main (Sonnet author)."
+ },
+ {
+  "set": "heldout",
+  "line": 21406,
+  "label": "X",
+  "decider": "-",
+  "note": "OWNER only inside a unit ID",
+  "day": "2026-10-31",
+  "text": "- 09:31 land-auto multirepo: PAPERWORK CORE-2.0-REPLACE-OWNER-TUPLE-FU-1 not landed: verdict (report.md: sha 5e64185c96ab is not in a <repo>-<branch> <sha> pair)"
+ },
+ {
+  "set": "heldout",
+  "line": 21435,
+  "label": "X",
+  "decider": "-",
+  "note": "OWNER only inside unit IDs (OWNERTUPLE, OWNER-TUPLE)",
+  "day": "2026-10-31",
+  "text": "10:07 sm20-main: codex reviews OWNERTUPLE-REV + MAYAHARDEN-REV done; credits reading still 73,360 as of 10:04 (stale, no post-review reading yet; pts delta n/a until usage_watch refreshes). MAYAHARDEN verdict CLEAN at 7b (M1 LOW, s2-coord AGREED); MAYAHARDEN-LAND launched (l811, sonnet seat3). OWNER-TUPLE CLEAN for its diff; H1 re-homed to SVC-2.0-GRAPH-BULK-OWNERSHIP-STRIP-PORT-1. GROUP-DISPO ACKed by s2-coord: CUT-1 +11 blocker rows +1 deploy row; DELETE-INCOMPLETE unparked; DELETE-FALSE-CALLERS twin relabelled data-continuity; VECSTRIP2-A-W2 relaunched (l810 seat4); 12 briefs being drafted (file-units-a/b sonnet subagents)."
+ },
+ {
+  "set": "heldout",
+  "line": 21524,
+  "label": "D",
+  "decider": "relay",
+  "note": "s2-coord relays OWNER via s1-chat (no parens), two picks (multi)",
+  "day": "2026-10-31",
+  "text": "- 11:30 s2-coord: OWNER via s1-chat: SM20-WS-ROUTING-PARITY-1 = (a) port pre-cut (CUT-1 row); shapes A/B/C sent to owner with B (server-side session record, 3 repos, 1 Codex pre-land) recommended. OWNER: remove 2.0 search-visibility operator OFF switch (always on); relayed to sm20-main as CUT-1 row with one Codex security pre-land. INCIDENT: competitors-scan 11:01 failed, every claude -p returned 403 (subscription access disabled) because docs_job_commit.sh has no CLAUDE_CONFIG_DIR, so it fell to retired Max (predicted MAX-SUNSET-4 F14/F18, never fixed). Filed and dispatched DOCS-JOB-SEAT-PIN-1 (Sonnet subagent): pick --kind doc seat, fail closed, kickstart live check."
+ },
+ {
+  "set": "heldout",
+  "line": 21527,
+  "label": "D",
+  "decider": "owner",
+  "note": "OWNER statement quote + shape pick B (multi)",
+  "day": "2026-10-31",
+  "text": "- 2026-10-31 11:3x s1-chat: OWNER \"the left navbar still shows groups in views that are not fleet. we need the same navbar with project management/selection everywhere\" -> s1-chat Fleet-only assumption reversed; COMP-COCKPIT-FLEET-PROJECTS-2 to forge-main (projects sidebar replaces GROUPS in every room; selection switches lane in Fleet/Process, bound project in project rooms); OWNER shape pick B for SM20-WS-ROUTING-PARITY-1 (server table)."
+ },
+ {
+  "set": "heldout",
+  "line": 21534,
+  "label": "X",
+  "decider": "-",
+  "note": "forge-main routing earlier s1-chat rulings (echo)",
+  "day": "2026-10-31",
+  "text": "- 2026-10-31 11:39 forge-main: s1-chat rulings on WIRING-1 Qs routed: (1) Max retire -> s2-coord (usage_watch.py retire max), strip hides retired seats -> cadence-main; (2) belt title fallback -> cadence-main, unit_stamps ready --title/--priority -> ops-main; (3) filed+dispatched STRAT-SESSION-JOBS-RUNNER-1 (Sonnet seat2, jobs rows accept runner, launch vendors stay claude|codex, contract line, push on gate)."
+ },
+ {
+  "set": "heldout",
+  "line": 21539,
+  "label": "X",
+  "decider": "-",
+  "note": "cadence-main dispatch citing earlier rulings (echo)",
+  "day": "2026-10-31",
+  "text": "- 2026-10-31 11:41 cadence-main: dispatched CADENCE-UI-COCKPIT-GAPS-1 (roadmap F41, Sonnet, seat2): belt title fallback to brief heading then id, seat strip drops retired===true. Source: s1-chat 10-31 12:1x rulings on COMP-COCKPIT-WIRING-1 Gap 4/5 via forge-main. Asked ops-main to emit retired from seat_limits() in usage_watch status --json (absent today)."
+ },
+ {
+  "set": "heldout",
+  "line": 21714,
+  "label": "D",
+  "decider": "owner",
+  "note": "OWNER ruling on cockpit home axes",
+  "day": "2026-10-31",
+  "text": "- 2026-10-31 15:5x s1-chat: OWNER ruling on cockpit home axes: TIME and COST major, a little WHAT, everything else subsidiary at drill-down layers until all specifics are covered. Recorded in units/COMP-COCKPIT-OWNER-FEEDBACK-1031/ux-mandate.md; the adjudication merge maps every A/B/C row to a layer."
+ },
+ {
+  "set": "heldout",
+  "line": 21907,
+  "label": "X",
+  "decider": "-",
+  "note": "s2-coord rulings applied (echo)",
+  "day": "2026-10-31",
+  "text": "18:59 sm20-main: LOWFIX-SUMMARY collected: 12 CUT/7 batches, 109 POST/38, 103 COVERED, 0 UNKNOWN; 224 in = 224 out. s2-coord rulings applied in summary.md (role chain COVERED by ROLEFC; 4 owner rows; parity rows owner scope). Filed CORE-2.0-VEC-EXACT-SCOPE-PORT-1 (C1, F1 gap) as CUT-1 row. Release-scope question to s2-coord."
+ },
+ {
+  "set": "heldout",
+  "line": 21974,
+  "label": "X",
+  "decider": "-",
+  "note": "forwarded OWNER QUESTION (ask)",
+  "day": "2026-10-31",
+  "text": "- 20:22 s2-coord: forwarded ops-main's OWNER QUESTION to s1-chat: Mac→hel1 notify transport. The pinned guard refuses remote stdin (remote_exec_guard.py:199), so post/close/ack can't reach hel1. Rec (b) a dedicated restricted ssh key with a forced command, non-root sm-notify user (new credential = owner); (a) widen the guard; (c) argv, rejected. Design ee92d81a section 3 picked SSH-only ingress, so (b) fits it. SVC-1 is READY (ops 6f44e24702e4), Codex pre-land is running, and landing plus the read-only rows are unblocked. Noted ops-main's side rulings: Q2 hosts.yaml notes-only, Q3 no new refuse codes."
+ },
+ {
+  "set": "heldout",
+  "line": 22055,
+  "label": "X",
+  "decider": "-",
+  "note": "DONE per OWNER 16:5x (echo)",
+  "day": "2026-10-31",
+  "text": "- 21:47 s2-coord: LOCAL-JOB-LOGS-PROVIDER-KEYS DONE per OWNER 16:5x. Deleted the 6 chmod-600 job logs (gitignored, not open; list confirmed by ops-main, :21062's 6 = the chmod set): F603PIN-A, SEC-CLEAR-ALL-SHARED-WS-1 land20, SVC-COMMON-LOG-IDS-AUTH-1 author, UI-TOKENS-ADOPT-STUDIO-1 author/c2/c3 (4 held key shapes, 2 no longer did). Owner-queue closed. NOT deleted (beyond the 6, reported to s1-chat): 2 mode-644 unit logs with sk- shapes (CAPTURE-HUGE-TRANSCRIPT-1 author, WIKI-SPINE-1 FIX3), BLANKIDLE + STREAMKEYDB-author (my wider regex matched, ops-main's didn't), ~22 world-readable scratch logs (some are test_bundle_contains_redacted fixtures). Key rotation stays owner-side."
+ },
+ {
+  "set": "heldout",
+  "line": 22116,
+  "label": "D",
+  "decider": "owner",
+  "note": "OWNER: forge lanes = ...",
+  "day": "2026-10-31",
+  "text": "- 2026-10-31 23:2x s1-chat: OWNER: forge lanes = compose, stratum, cadence, choir (codegen). Added to COMP-COCKPIT-PROJECT-MODEL-1."
+ },
+ {
+  "set": "heldout",
+  "line": 22161,
+  "label": "X",
+  "decider": "-",
+  "note": "s2-coord ruling applied (echo)",
+  "day": "2026-10-31",
+  "text": "00:10 sm20-main: s2-coord ruling applied: POST-CUT ready rows set state held, reason \"POST-CUT (owner LOWFIX)\", via stamp.py held (held_prev_state=ready kept; flip back after the cut with stamp.py unheld): COMMON-2.0-PURGE-CONTENT-DISCOVERED-GRAPHS-1, WRAPPER-2.0-SPILL-ADOPT-CLASSIFY-PORT-1, SVC-2.0-CLERK-MEMBER-READ-FENCE-1. Sweep: every ready row in queues/2.0-units.json checked (full filed.md + REL-2.0-CUT-1 rows); these 3 are the only POST-CUT ones; the 109 LOWFIX POST rows are batches in REL-2.0-LOW-FIX-REGRESSION-PASS-1/summary.md, not queue units. REL-2.0-G177-TXN-1 left as is (PARKED UNTIL SM2-SAVE-HOSTED-CUTOVER-1, not POST-CUT)."
+ },
+ {
+  "set": "heldout",
+  "line": 22221,
+  "label": "D",
+  "decider": "absent",
+  "note": "OWNER-ABSENT decision mid-line",
+  "day": "2026-10-31",
+  "text": "01:21 sm20-main: REQIDX-LAND BLOCKED (common gate 226 passed 0 NEW; service slice 114 NEW ids: test fakes lack write_collection, persist-nothing exemptions stale, 4 viewer-write routes 500 not 403). Nothing pushed; REQIDX POST-CUT so no CUT-1 impact. Root cause of the stall: REQWRAP start gate waited for REQIDX to land (deadlock). OWNER-ABSENT decision: REQWRAP brief start gate replaced (author against unlanded REQIDX common 0b4909ce8530 rebased locally; binding acceptance = the 114 ids pass; the 4 viewer-write 500s traced as prod defect vs fake gap); the pair lands TOGETHER later. REQWRAP-A2 Opus launched seat4 (l965), meeting the s2-coord 24h security-adjacent dispatch clock (briefed 10-31 20:41). Premises: units/COMMON-2.0-REQUIRED-INDEX-FAILCLOSED-PORT-1/land-report.md Findings table; land-service-new-ids.txt 114 lines."
+ },
+ {
+  "set": "heldout",
+  "line": 22316,
+  "label": "D",
+  "decider": "absent",
+  "note": "OWNER-ABSENT decision mid-line",
+  "day": "2026-10-31",
+  "text": "- 03:54 s2-coord: sm20-main: CI-2.0-MANUAL-ONLY-SWEEP-1 insights/client/sdk-js/mcp/wrapper slices landed, core/service/common YAML+CHANGELOG landing via CISWEEP-LAND-CORE3. CLERKORG LANDED service 979b8dcceb4e (verified ancestor of origin/2.0), chain on SESEND-LAND. STRIPECANCEL fix r1 READY core 661e4300b4bd service 2420aa914c59; F2 spot-checked (drain ungated, idp_drift.py:431, stripe_offboard_cancel.py:387). OWNER-ABSENT decision: no pre-land r2 (one billing pre-land review = r1 done); ONE Opus post-land review of the fix diff after both halves land, HIGH=P0, billing MEDIUM=redesign note. Fleet 8/8, launches queued."
+ },
+ {
+  "set": "heldout",
+  "line": 22387,
+  "label": "D",
+  "decider": "lane",
+  "note": "Lead ruling: census re-pin ACCEPTED",
+  "day": "2026-10-31",
+  "text": "05:47 sm20-main: CREATEONLY-RB collected: READY core-2.0 c023d99a6a93 (3 commits on 4ea8cb58). Lead ruling: census re-pin ACCEPTED (c023d99a touches workspace_unresolved_calls.json with exactly 6 fn_sha swaps, no new exceptions; relprov golden diff = reviewed created_by CASE/RETURNING only). Merge-tree core vs 12ff2e576c5e and common 275a6e0c1dbe vs 7744bebf66c0: CHANGELOG-only. Launched CREATEONLY-LAND (l987, seat3, sonnet land, pid 21780): core then common, brief units/CORE-2.0-CREATE-ONLY-ATTRIBUTION-TWIN-1/brief-land.md."
+ },
+ {
+  "set": "heldout",
+  "line": 22500,
+  "label": "D",
+  "decider": "relay",
+  "note": "s2-coord relays OWNER (via s1-chat 09:4x)",
+  "day": "2026-11-01",
+  "text": "- 08:58 s2-coord: OWNER (via s1-chat 09:4x) 'file issues to fix the missing readers gaps' -> ops-main to file 4 Sonnet bounded P1 units after stamps-cov2: OPS-STATUS-DOC-BURN-RATE-1, OPS-STATUS-DOC-AUTOHOP-ARMED-1, OPS-STATUS-DOC-SEAT-LANE-1, OPS-SPEND-ATTR-BY-SEAT-1 (field contract to forge-main before land; consumer COMP-COCKPIT-READERS-1 via s1-chat; no new daemon)."
+ },
+ {
+  "set": "heldout",
+  "line": 22507,
+  "label": "X",
+  "decider": "-",
+  "note": "lane report, filed a unit (OWNER via s1-chat) as provenance (echo)",
+  "day": "2026-11-01",
+  "text": "- 2026-11-01 09:04 forge-main: MONEY-COMPACT-1 round 1 verified LANDED C/ e0203a4f1714 (block 472->134 px at 1440, shots 02-after-*), stamped author_done/landed/deployed local-5195; F2 (owner FINAL pair-bars spec) launched as MONEY-COMPACT-1-F2 Sonnet seat1, waiting in the gate (fleet 8/8, load ~154). Filed COMP-COCKPIT-URL-SYNC-1 (OWNER via s1-chat 09:5x, P1 ahead of RESETS; cause traced: desktop App reads ?view= at load only, nothing writes it, App.jsx:571/579; ribbon hash writer useRibbonWindow.js:64 carries the stale search), launched Sonnet seat1 with gate priority P0 for admission order only so it goes ahead of the queued RESETS-COMPACT-1. Filed COMP-COCKPIT-READERS-1 (brief + consumer map pointing at the ops readers contract, ops 1669abea17cf, the one home; expiry is cockpit-only via api_credit grants)."
+ },
+ {
+  "set": "heldout",
+  "line": 22545,
+  "label": "X",
+  "decider": "-",
+  "note": "unit filed with an owner question as provenance (echo + ask)",
+  "day": "2026-11-01",
+  "text": "- 09:50 ops-main: OPS-INFLIGHT-AGE-24H-1 filed (OWNER via s1-chat 'why do things just stop if I stop asking about them?', relayed s2-coord; prior incident OFFB SVC-2.0-ADMIN-OFFBOARD-CLERK-RETRY-PORT-1 ~30h in flight, ready_at re-stamped after dispatch); one inflight() feeds cross_digest IN FLIGHT >24H section + inflight --json for Compose (readers-contract row e); Sonnet P1, PARKED UNTIL OPS-UNIT-STAMPS-COVERAGE-2 LANDED (uses its job-run list)"
+ },
+ {
+  "set": "heldout",
+  "line": 22574,
+  "label": "D",
+  "decider": "owner",
+  "note": "OWNER quote with ? inside + RULING",
+  "day": "2026-11-01",
+  "text": "- 2026-11-01 10:1x s1-chat: OWNER on the offbox plan: \"wtf does that even mean? were not the instructions clear? 'move tests to the hetzner boxes' period. no shadow mode, no switch confusion\". RULING: every land gate (core, service, common incl. Mongo, client/mcp/js) runs on hel1/scalemate from the next land, no shadow mode, no 3-land side-by-side, no Mac fallback. A remote failure caused by the runner (no-git, Mongo crash, worker collision) is a runner bug fixed in place, not a reason to run on the Mac. Relayed to s2-coord."
+ },
+ {
+  "set": "heldout",
+  "line": 22577,
+  "label": "D",
+  "decider": "relay",
+  "note": "relay of L22574 (should fold as echo)",
+  "day": "2026-11-01",
+  "text": "- 10:19 s2-coord: OWNER (via s1-chat 10:2x) 'move tests to the hetzner boxes period, no shadow': relayed to ops-main + sm20-main. Every tier remote from next land on hel1/scalemate, no shadow/side-by-side/Mac fallback; runner-caused reds = runner bug, land waits; RR-SERVICE-TRUST-1 KILLED; RR-PAIR-1 brief loses fallback exits; RR-LIGHT-TIERS-1 -> P0; ops-main sends remote_job launch recipe in 30 min (not gated on RR-PAIR-1). Fleet stays 8. Supersedes my 10:1x shadow-x3 ruling. Noted ops-main SPOOL hold: hel1 ingress only with owner reachable + Hetzner console for the window (units/OPS-NOTIFY-SPOOL-1/land-checks.md); carried into the ingress owner question. Reverse = owner says otherwise."
+ },
+ {
+  "set": "heldout",
+  "line": 22604,
+  "label": "D",
+  "decider": "owner",
+  "note": "OWNER on efficiency",
+  "day": "2026-11-01",
+  "text": "- 2026-11-01 10:4x s1-chat: OWNER on efficiency: \"start with 3, then 1 and 2 and 4 and 5\" (3 = cut the rule corpus to what fired this month, delete controls without a second incident; 1 = instruction sentence is the acceptance test, brief template; 2 = owner instruction verbatim into the brief, no re-planning hop; 4 = review on failure/security only; 5 = s1-chat status binary, no plans unless asked). Dispatched OPS-RULE-CORPUS-CUT-1 (Opus, counting unit, brief units/OPS-RULE-CORPUS-CUT-1/brief.md). 4 and 5 in effect now."
+ },
+ {
+  "set": "heldout",
+  "line": 22647,
+  "label": "D",
+  "decider": "owner",
+  "note": "OWNER on unit: \"Cut it all as proposed\"",
+  "day": "2026-11-01",
+  "text": "- 2026-11-01 11:1x s1-chat: OWNER on OPS-RULE-CORPUS-CUT-1: \"Cut it all as proposed\" (9-file core, 5 top deletions incl. both Max controls, auto-hop + equity knobs, secret masker, README/dev-credentials out of auto-load, 9 dead daemons, MEMORY.md fixed). Dispatched OPS-RULE-CORPUS-CUT-2 (Sonnet, rules rewrite) and OPS-CONTROL-CUT-1 (Opus, controls/daemons/switches). Briefs in the unit folders."
+ },
+ {
+  "set": "heldout",
+  "line": 22697,
+  "label": "D",
+  "decider": "relay",
+  "note": "s2-coord relays OWNER (via s1-chat sha) + supersedes own ruling in prose",
+  "day": "2026-11-01",
+  "text": "- 11:43 s2-coord: OWNER (via s1-chat d9a7074a1317): ingress GO (owner at Hetzner console now) relayed to ops-main; RR-DISK-FLOOR-GAP-1 floors ship SOLO now, no Codex pre-land, not batched with Mongo fix (relayed; supersedes my 11:3x 'land on CLEAN' ruling). s2-coord re-pins on main sha."
+ },
+ {
+  "set": "heldout",
+  "line": 22709,
+  "label": "X",
+  "decider": "-",
+  "note": "action report, solo per OWNER, Reverse = rollback note",
+  "day": "2026-11-01",
+  "text": "- 11:50 s2-coord: remote guard re-pinned 845adac (RR-DISK-FLOOR-GAP-1 solo per OWNER, no pre-land): diff since 9cab8d1 = hosts.json floors 10->5/15->10 + bundles (word-diff floors only) + allow-row shas + remote_exec_guard.py deploy_auto allowance removed by OPS-CONTROL-CUT-1 985938ae (narrowing); Mongo add77c125 NOT included (its Codex review: CHANGES 1 HIGH, own path). Reverse = remote_guard_pin.py install 9cab8d135."
+ },
+ {
+  "set": "heldout",
+  "line": 22747,
+  "label": "D",
+  "decider": "owner",
+  "note": "DECISION D-0004 (exact)",
+  "day": "2026-11-01",
+  "text": "- 2026-11-01 12:1x s1-chat: DECISION D-0004: OWNER on the runner/Mongo work: \"fuck the reviews just run it and see\". No review of any kind on runner changes; land the Mongo sidecar fix now, run common on the boxes, fix what actually fails. Target every tier remote today (D-0003 context). Relayed to s2-coord/ops-main."
+ },
+ {
+  "set": "heldout",
+  "line": 22748,
+  "label": "D",
+  "decider": "relay",
+  "note": "relay of D-0004 (should fold as echo)",
+  "day": "2026-11-01",
+  "text": "- 12:19 s2-coord: FIRST CORE REMOTE LAND pair-head-9f3007-c1-core-2-0-m-92813f on scalemate (MIRRORTEAMID), relayed to s1-chat. OWNER D-0004 (5b31e7c9d822) 'fuck the reviews just run it and see' relayed to ops-main: Mongo fix lands as-is, run-and-fix loop per tier. sm20-main: fleet cap stays 8 (Mac 0.5% idle, load 42), P0 via launch_gate --priority P0."
+ },
+ {
+  "set": "heldout",
+  "line": 22764,
+  "label": "D",
+  "decider": "owner",
+  "note": "OWNER DECISION D-0006 with no colon after the session (exact)",
+  "day": "2026-11-01",
+  "text": "- 2026-11-01 12:2x s1-chat OWNER DECISION D-0006: review routing by complexity, not class (owner \"go ffs\" on the 4-line rule; evidence estimate.py stats: 2.0 author_done p50 0.5 h, landed p50 4.7 h/p80 16.5 h, review rounds p50 2, n=523; main/ops/forge 1 round land < 1.5 h). Lines: trivial = no review; small bounded <~100 lines = batched post-land; logic = one per-unit post-land; security classes = ONE pre-land. Edit claude/rules/review-loop.md. Leads told via s2-coord."
+ }
+]
