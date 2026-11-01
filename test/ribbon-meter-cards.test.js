@@ -114,6 +114,14 @@ const ROWS = [
     await new Promise((r) => setImmediate(r));
     assert.equal(calls, 1, 'a second attach still reads nothing');
   }],
+  ['LIVE-DATA-1: a workspace Router (no locals) attaches without throwing; the first warms once, a second reads nothing', async () => {
+    let calls = 0;
+    const deps = { readHourly: async () => { calls += 1; return {}; }, readCredit: async () => ({}), readSeats: async () => ({ seats: [] }) };
+    attachUsageRoutes(express.Router(), deps);
+    attachUsageRoutes(express.Router(), deps);
+    await new Promise((r) => setImmediate(r));
+    assert.equal(calls, 1);
+  }],
 ];
 
 for (const [name, fn] of ROWS) test(name, fn);

@@ -140,6 +140,8 @@ function usageFor(root, dataDir, fromMs, toMs) {
   return report.usage;
 }
 
+let routerWarmed = false;
+
 export function attachUsageRoutes(app, deps = {}) {
   const getTargetRoot = deps.getTargetRoot || defaultGetTargetRoot;
   const getDataDir = deps.getDataDir || defaultGetDataDir;
@@ -167,7 +169,11 @@ export function attachUsageRoutes(app, deps = {}) {
 
   // Boot warm: the first read of this source takes ~29 s. Not run at attach (every VisionServer/workspace attaches); index.js calls
   // app.locals.warmUsage() once at real server boot, and every later read is served from the cache.
-  app.locals.warmUsage = () => hourlyCache.get().catch(() => {});
+  // A workspace attaches to an express Router (workspace-runtime.js), which has no `locals` and is not the app index.js warms:
+  // there the first attach in the process warms its own cache and later attaches read nothing (the boot crash, 2026-11-01).
+  const warm = () => hourlyCache.get().catch(() => {});
+  if (app.locals) app.locals.warmUsage = warm;
+  else if (!routerWarmed) { routerWarmed = true; warm(); }
 
   app.get('/api/usage/credit', async (_req, res) => {
     res.json({ v: 1, generated_at: new Date(now()).toISOString(), credit: await creditCache.get() });
