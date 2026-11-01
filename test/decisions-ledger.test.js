@@ -6,6 +6,8 @@
  * (`units/COMP-COCKPIT-DECISIONS-1/report.md`) and 40 held-out lines drawn and labelled before the parser ran
  * (`report-build.md`). Label D = a decision (a row, or folded into one), X = not a decision (never a row).
  */
+// COMPOSE-GOLDEN-LEAK-1: scrub inherited GIT_* redirection before any git call, even under a bare `node --test`.
+import './helpers/git-env-scrub.js';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
