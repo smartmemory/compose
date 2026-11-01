@@ -451,8 +451,10 @@ export default function PipelineEditor() {
             onExpand={fl => useVisionStore.getState().expandSubflow(fl)}
           />
         </div>
-        {/* Right pane (tablet and up) or bottom sheet under 768px, same tabs either way. */}
-        <div
+        {/* Right pane (tablet and up) or bottom sheet under 768px, same tabs either way. An <aside>: it is the editor's side
+            panel (like the item-detail panel), so its Chat/Step/Contracts/YAML strip is not a room tab row (COMP-COCKPIT-TAB-DEPTH-1). */}
+        <aside
+          aria-label="Flow editor side pane"
           className={cn(
             'flex flex-col overflow-hidden border-border',
             phone ? 'shrink-0 h-[45vh] max-h-[45vh] border-t' : 'w-80 shrink-0 border-l', // definite height so the chat input stays in view
@@ -469,7 +471,7 @@ export default function PipelineEditor() {
                   ? <StepInspector />
                   : <PipelineChatPane />}
           </div>
-        </div>
+        </aside>
       </div>
 
       {/* COMP-PIPE-EDIT-7: save-as-template dialog (filename + id + label). */}

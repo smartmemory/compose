@@ -40,7 +40,7 @@ const withBands = () => ({ ...day, bands: BANDS });
 const title = () => screen.getByTestId('mark-popover-title').textContent;
 const lane = (c, id) => c.querySelector(`[data-testid="lane-${id}"]`);
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('marks open a card (COMP-COCKPIT-RIBBON-MARKS-1)', () => {
   it('one card per kind, opened by its own event (one row table)', () => {
@@ -148,6 +148,9 @@ describe('marks open a card (COMP-COCKPIT-RIBBON-MARKS-1)', () => {
   });
 
   it('DayView mounts the layer: a pin event reaches a card', async () => {
+    // DayView reads its clock from Date.now; pin it to the fixture's now so the 18:10 reset pin is ahead ("resets"), not
+    // past ("reset", the MARKS-1 wording for a reset already gone). Only Date is faked: findBy/waitFor keep real timers.
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date(NOW) });
     wsFetch.mockImplementation(async (url) => ({ ok: true, status: 200, json: async () => (String(url).startsWith('/api/ribbon') ? day : {}), text: async () => '' }));
     global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }));
     render(<DayView onNavigate={() => {}} />);

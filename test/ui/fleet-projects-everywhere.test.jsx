@@ -11,7 +11,7 @@ import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-li
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const { ROOMS } = await import('../../lib/view-keys.js');
+const { ROOMS, locateView } = await import('../../lib/view-keys.js');
 const { default: AttentionQueueSidebar } = await import('../../src/components/vision/AttentionQueueSidebar.jsx');
 const { projectsModeFor } = await import('../../src/lib/fleetProjects.js');
 const { resetProcessPoller } = await import('../../src/lib/processPoller.js');
@@ -54,7 +54,10 @@ async function mountApp(view, stub = {}) {
   const { default: App } = await import('../../src/App.jsx');
   render(<App />);
   await screen.findByTestId('fleet-project-hub');
-  await waitFor(() => expect(screen.getByTestId('project-btn').textContent).toContain('boot'));
+  // COMP-COCKPIT-PROJECTS-TAB-1: the project selector (`project-btn`) sits only in the Projects sub-row, so a project room
+  // gates on it reading the boot project; a Fleet or Library room has no selector and gates on the boot GET /api/project.
+  if (locateView(view)?.top === 'projects') await waitFor(() => expect(screen.getByTestId('project-btn').textContent).toContain('boot'));
+  else await waitFor(() => expect(calls.some(([m, u]) => m === 'GET' && u === '/api/project')).toBe(true));
   return calls;
 }
 
@@ -123,6 +126,10 @@ const ROWS = [
       fireEvent.click(screen.getByTestId('fleet-project-select-main'));
       await waitFor(() => expect(screen.getByTestId('fleet-project-select-main').getAttribute('aria-pressed')).toBe('true'));
       expect([switches(calls), screen.queryByTestId('no-compose-project'), calls.some(([, u]) => u === '/api/fleet/roots')]).toEqual([[], null, false]);
+      // The cockpit is still bound to the boot project: the Projects tab's selector reads it.
+      fireEvent.click(screen.getByTestId('room-tab-projects'));
+      await waitFor(() => expect(screen.getByTestId('project-btn').textContent).toContain('boot'));
+      expect(switches(calls)).toEqual([]);
     },
   },
   {
