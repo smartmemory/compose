@@ -205,7 +205,7 @@ export class VisionServer {
     attachFeatureScaffoldRoutes(app, { getProjectRoot: () => getTargetRoot() });
 
     // ── Usage statistics (COMP-OBS-STATS-1, read-only) ───────────────────
-    attachUsageRoutes(app);
+    this.warmUsage = attachUsageRoutes(app).warm;
 
     // ── Build state hydration ─────────────────────────────────────────────
     app.get('/api/build/state', (_req, res) => {
