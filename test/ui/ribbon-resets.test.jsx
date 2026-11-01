@@ -28,7 +28,7 @@ const ticks = (root) => [...root.querySelectorAll('[data-testid="pin-seatReset"]
 const word = (g) => g.querySelector('text').textContent.trim();
 const svgHeight = (root) => Number(root.querySelector('svg').getAttribute('viewBox').split(' ')[3]);
 
-afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 const ROWS = [
   {
@@ -115,6 +115,9 @@ const ROWS = [
   {
     name: 'toggle: hides the AHEAD row, survives a remount through localStorage, and still works when storage throws',
     run: async () => {
+      // DayView's window comes from Date.now; pin it to the fixture's NOW so the fixture resets stay ahead on any real date.
+      // Only Date is faked: findBy/waitFor keep real timers.
+      vi.useFakeTimers({ toFake: ['Date'], now: new Date(NOW) });
       wsFetch.mockImplementation(async (url) => ({ ok: true, status: 200, json: async () => (String(url).startsWith('/api/ribbon') ? day : {}), text: async () => '' }));
       global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }));
       const first = render(<DayView onNavigate={() => {}} />);
