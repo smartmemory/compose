@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils.js';
 import { useVisionStore } from './useVisionStore.js';
 import ChatInput from '../agent/ChatInput.jsx';
 import ArtifactDiff from '../shared/ArtifactDiff.jsx';
-import { serializeSpec, hashText, applyBlockReason } from './pipeline-pane-state.js';
+import { serializeSpec, hashText, applyBlockReason, revertBlockReason } from './pipeline-pane-state.js';
 
 const TABS = [
   { key: 'chat', shown: 'chat', label: 'Chat' },
@@ -56,7 +56,7 @@ export function PaneTabStrip({ pane, shown, hasSelection, hasModel, onPane }) {
   );
 }
 
-function Proposal({ index, msg, currentYaml, currentHash, readOnly, bufferPending, canRevert }) {
+function Proposal({ index, msg, currentYaml, currentHash, readOnly, bufferPending, canRevert, revertReason }) {
   const applyChatProposal = useVisionStore((s) => s.applyChatProposal);
   const revertChatProposal = useVisionStore((s) => s.revertChatProposal);
   const [note, setNote] = useState('');
@@ -75,7 +75,7 @@ function Proposal({ index, msg, currentYaml, currentHash, readOnly, bufferPendin
         {msg.applied ? (
           <>
             <span className="text-[11px] text-accent" data-testid={`chat-applied-${index}`}>Applied (unsaved)</span>
-            {canRevert && (
+            {canRevert && !revertReason && (
               <button type="button" onClick={revert} data-testid={`chat-revert-${index}`}
                 className="text-[11px] px-2 py-0.5 rounded border border-border hover:bg-accent/10">Revert</button>
             )}
@@ -89,6 +89,7 @@ function Proposal({ index, msg, currentYaml, currentHash, readOnly, bufferPendin
           </button>
         )}
         {reason && <span className="text-[10px] text-muted-foreground" data-testid={`chat-apply-reason-${index}`}>{reason}</span>}
+        {msg.applied && canRevert && revertReason && <span className="text-[10px] text-muted-foreground" data-testid={`chat-revert-reason-${index}`}>{revertReason}</span>}
         {note && <span className="text-[10px] text-destructive">{note}</span>}
       </div>
     </div>
@@ -148,7 +149,8 @@ export default function PipelineChatPane() {
             {m.proposal && (
               <Proposal index={i} msg={m} currentYaml={currentYaml} currentHash={currentHash} readOnly={readOnly}
                 bufferPending={yamlBuffer != null || !!yamlError}
-                canRevert={!!chatUndo && chatUndo.file === file && chatUndo.index === i} />
+                canRevert={!!chatUndo && chatUndo.file === file && chatUndo.index === i}
+                revertReason={chatUndo && chatUndo.file === file && chatUndo.index === i ? revertBlockReason({ undo: chatUndo, currentYaml, bufferPending: yamlBuffer != null || !!yamlError }) : null} />
             )}
           </div>
         ))}

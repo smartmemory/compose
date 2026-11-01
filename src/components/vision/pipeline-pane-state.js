@@ -73,3 +73,14 @@ export function applyBlockReason({ proposal, currentHash, readOnly, bufferPendin
   if (currentHash == null || currentHash !== proposal.baseHash) return STALE_MESSAGE;
   return null;
 }
+
+/**
+ * Why Revert is off, or null when it may run. Revert restores the pre-Apply spec, so it is only
+ * safe while the model is still exactly what Apply produced and no YAML pane buffer is pending.
+ */
+export function revertBlockReason({ undo, currentYaml, bufferPending }) {
+  if (!undo) return 'Nothing to revert';
+  if (bufferPending) return 'Resolve the YAML pane first, Revert would discard it';
+  if (currentYaml == null || currentYaml !== undo.appliedYaml) return 'You edited the spec after Apply, so Revert would discard those edits';
+  return null;
+}

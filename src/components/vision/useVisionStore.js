@@ -24,7 +24,7 @@ import {
   renameContractField as renameContractFieldInModel,
   collapseToSubflow,
 } from '../../lib/pipeline-model.js';
-import { serializeSpec, hashText, estimateChatTokens, applyBlockReason, MAX_CHAT_INPUT_TOKENS } from './pipeline-pane-state.js';
+import { serializeSpec, hashText, estimateChatTokens, applyBlockReason, revertBlockReason, MAX_CHAT_INPUT_TOKENS } from './pipeline-pane-state.js';
 
 // COMP-PIPE-EDIT-6: browser-safe basename (no node:path) for matching a watcher's
 // prefixed path (<prefix>/<file>) against the bare editorSpecFile.
@@ -399,7 +399,7 @@ export const useVisionStore = create((set, get) => {
     // ── COMP-PIPE-EDIT-CHAT-PANE-1: spec chat ───────────────────────────────
     // Keyed by spec file so a pane switch never loses a draft or an in-flight turn.
     chatByFile: {},            // { [file]: { messages: [{role,text,proposal?,applied?,streaming?}], busy, error } }
-    chatUndo: null,            // one level: { file, index, yaml, dirty, scope } captured by Apply
+    chatUndo: null,            // one level: { file, index, yaml, appliedYaml, dirty, scope } captured by Apply
 
     // Actions
     clearUICommand: () => set({ uiCommand: null }),
@@ -733,7 +733,10 @@ export const useVisionStore = create((set, get) => {
     loadChat: async (file) => {
       if (!file || get().chatByFile[file]?.loaded) return;
       const data = await apiCall(`/api/pipeline/chat?file=${encodeURIComponent(file)}`);
-      if (get().chatByFile[file]?.loaded || get().chatByFile[file]?.busy || !Array.isArray(data?.messages)) return;
+      if (get().chatByFile[file]?.loaded || !Array.isArray(data?.messages)) return;
+      // A turn that started while the GET was in flight owns the live messages (its proposal
+      // card is not in the stored summary), so keep them and mark the history as loaded.
+      if (get().chatByFile[file]?.busy) { get()._chatPatch(file, { loaded: true }); return; }
       get()._chatPatch(file, { messages: data.messages, error: null, loaded: true });
     },
 
@@ -839,7 +842,7 @@ export const useVisionStore = create((set, get) => {
         set({ editorYamlBuffer: null, editorYamlError: null });
         return { error: 'The proposal did not parse' };
       }
-      set({ chatUndo: { file, index, yaml: currentYaml, dirty: editorDirty, scope: editorSaveScope } });
+      set({ chatUndo: { file, index, yaml: currentYaml, appliedYaml: serializeSpec(get().editorModel), dirty: editorDirty, scope: editorSaveScope } });
       const msgs = get().chatByFile[file].messages.map((m, i) => (i === index ? { ...m, applied: true } : m));
       get()._chatPatch(file, { messages: msgs });
       return { ok: true };
@@ -847,9 +850,14 @@ export const useVisionStore = create((set, get) => {
 
     // One-level undo of the last Apply: flush the captured YAML back, then restore the dirty
     // flag and save scope it had, so reverting an edit on a clean spec leaves the spec clean.
+    // Refuses once the model is no longer what Apply produced (or a YAML buffer is pending),
+    // because the restore would silently discard those later edits.
     revertChatProposal: () => {
       const undo = get().chatUndo;
       if (!undo || undo.file !== get().editorSpecFile) return { error: 'Nothing to revert' };
+      const { editorModel, editorYamlBuffer, editorYamlError } = get();
+      const reason = revertBlockReason({ undo, currentYaml: editorModel ? serializeSpec(editorModel) : null, bufferPending: editorYamlBuffer != null || !!editorYamlError });
+      if (reason) return { error: reason };
       get().setYamlBuffer(undo.yaml);
       if (!get().flushYaml()) {
         set({ editorYamlBuffer: null, editorYamlError: null });

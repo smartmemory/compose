@@ -1009,6 +1009,62 @@ describe('useVisionStore — spec chat (COMP-PIPE-EDIT-CHAT-PANE-1)', () => {
     expect(store().chatByFile['demo.stratum.yaml'].messages[1].applied).toBe(false);
   });
 
+  it('Revert refuses after a manual edit, keeping the edit and the dirty flag (review M2, R1)', async () => {
+    const { serializeSpec } = await pane();
+    await seedProposal();
+    installChatFetch();
+    await store().applyChatProposal(1);
+    store().updateStep('design', { intent: 'MANUAL EDIT AFTER APPLY' });
+    const edited = serializeSpec(store().editorModel);
+    const r = store().revertChatProposal();
+    expect(r.error).toMatch(/edited the spec after Apply/);
+    expect(serializeSpec(store().editorModel)).toBe(edited);
+    expect(serializeSpec(store().editorModel)).toContain('MANUAL EDIT AFTER APPLY');
+    expect(store().editorDirty).toBe(true);
+    expect(store().chatByFile['demo.stratum.yaml'].messages[1].applied).toBe(true);
+  });
+
+  it('Revert refuses while a YAML pane buffer is pending and leaves the buffer (review M2, R2)', async () => {
+    const { serializeSpec } = await pane();
+    await seedProposal();
+    installChatFetch();
+    await store().applyChatProposal(1);
+    const applied = serializeSpec(store().editorModel);
+    store().setYamlBuffer('version: "0.3"\n# pending');
+    const r = store().revertChatProposal();
+    expect(r.error).toMatch(/YAML pane/);
+    expect(store().editorYamlBuffer).toBe('version: "0.3"\n# pending');
+    expect(serializeSpec(store().editorModel)).toBe(applied);
+    expect(store().chatUndo).not.toBeNull();
+  });
+
+  it('loadChat that loses a race to a live turn keeps the live card and still loads only once (review L1)', async () => {
+    const { proposal } = await seedProposal();
+    let release;
+    const gate = new Promise((res) => { release = res; });
+    chatCalls = [];
+    const base = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url, opts = {}) => {
+      if (String(url).includes('/api/pipeline/chat')) {
+        chatCalls.push({ method: opts.method || 'GET' });
+        await gate;
+        return makeResponse({ messages: [{ role: 'assistant', text: 'one-line summary' }] });
+      }
+      return base(url, opts);
+    });
+    const pending = store().loadChat('demo.stratum.yaml');
+    store()._chatPatch('demo.stratum.yaml', { busy: true });
+    release();
+    await pending;
+    const chat = store().chatByFile['demo.stratum.yaml'];
+    expect(chat.loaded).toBe(true);
+    expect(chat.messages[1].proposal).toEqual(proposal);
+    store()._chatPatch('demo.stratum.yaml', { busy: false });
+    await store().loadChat('demo.stratum.yaml');
+    expect(chatCalls.filter((c) => c.method === 'GET')).toHaveLength(1);
+    expect(store().chatByFile['demo.stratum.yaml'].messages[1].proposal).toEqual(proposal);
+  });
+
   it('Apply table: stale, invalid, pending buffer and read-only each refuse and leave the model alone', async () => {
     const { serializeSpec } = await pane();
     const before = serializeSpec(store().editorModel);

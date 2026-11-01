@@ -184,7 +184,7 @@ describe('PipelineChatPane', () => {
   it('an applied proposal shows Applied and Revert only while its undo is held', async () => {
     await withProposal();
     _state.chatByFile['demo.stratum.yaml'].messages[1].applied = true;
-    setState({ ..._state, chatUndo: { file: 'demo.stratum.yaml', index: 1, yaml: 'y', dirty: false, scope: 'flow' } });
+    setState({ ..._state, chatUndo: { file: 'demo.stratum.yaml', index: 1, yaml: 'y', appliedYaml: serializeSpec(_state.editorModel), dirty: false, scope: 'flow' } });
     render(<PipelineChatPane />);
     expect(screen.getByTestId('chat-applied-1')).toBeTruthy();
     fireEvent.click(screen.getByTestId('chat-revert-1'));
@@ -193,5 +193,14 @@ describe('PipelineChatPane', () => {
     setState({ ..._state, chatUndo: null });
     render(<PipelineChatPane />);
     expect(screen.queryByTestId('chat-revert-1')).toBeNull();
+  });
+
+  it('after an edit past Apply, Revert is hidden and a one-line reason says why', async () => {
+    await withProposal();
+    _state.chatByFile['demo.stratum.yaml'].messages[1].applied = true;
+    setState({ ..._state, chatUndo: { file: 'demo.stratum.yaml', index: 1, yaml: 'y', appliedYaml: 'not the current spec', dirty: false, scope: 'flow' } });
+    render(<PipelineChatPane />);
+    expect(screen.queryByTestId('chat-revert-1')).toBeNull();
+    expect((await screen.findByTestId('chat-revert-reason-1', {}, { timeout: 5000 })).textContent).toMatch(/edited the spec after Apply/);
   });
 });
