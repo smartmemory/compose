@@ -74,11 +74,12 @@ describe('Day money block as bars (COMP-COCKPIT-MONEY-COMPACT-1)', () => {
       meter();
       expect([t('cost-meter-5h-seat1').endsWith('27m'), t('cost-meter-fable-seat1').endsWith('6d'), t('cost-meter-5h-seat2').endsWith('1.5h'), t('cost-meter-fable-seat2').endsWith('41.2h')]).toEqual([true, true, true, true]);
     }],
-    ['Codex is its own pair: a missing 5h or 7d reading is an "n/a" empty track, and the points stay on the hover', () => {
+    ['Codex with no 5h reading draws only its 7d bar (Codex has no 5h window); a missing 7d is an "n/a" empty track; the points stay on the hover', () => {
       meter();
-      expect(screen.getByTestId('cost-meter-codex').querySelectorAll('[role="progressbar"]').length).toBe(2);
-      expect([t('cost-meter-5h-codex'), t('cost-meter-7d-codex')]).toEqual(['n/a\u00a0', 'n/a\u00a0']);
-      expect(screen.getByTestId('cost-meter-5h-codex').querySelector('[role="progressbar"]').getAttribute('data-state')).toBe('empty');
+      expect(screen.getByTestId('cost-meter-codex').querySelectorAll('[role="progressbar"]').length).toBe(1);
+      expect(screen.queryByTestId('cost-meter-5h-codex')).toBeNull();
+      expect(t('cost-meter-7d-codex')).toBe('n/a\u00a0');
+      expect(screen.getByTestId('cost-meter-7d-codex').querySelector('[role="progressbar"]').getAttribute('data-state')).toBe('empty');
       expect(screen.getByTestId('cost-meter-codex').getAttribute('title')).toContain('7/13 pts today');
     }],
     ['Codex with both readings draws them, and a non-ok state turns the 7d bar amber', () => {

@@ -1,6 +1,6 @@
 /**
  * CostBars — the compact form of the one cost meter (COMP-COCKPIT-MONEY-COMPACT-1). F2: the seats block is a row of column-chart
- * PAIRS, one per seat then Codex: left = 5h used %, right = Fable weekly used % (Codex: 5h / 7d), same 0-100 height scale, two fills,
+ * PAIRS, one per seat then Codex: left = 5h used %, right = Fable weekly used % (Codex: 7d, plus 5h only when a reading exists; Codex has no 5h window today), same 0-100 height scale, two fills,
  * seat name under the pair and each bar's own reset under it. A pace/cap tick sits on the weekly bar only. Dollars is its bar with
  * the summary on the same line and the top three sessions inline. Layout only: every number comes from `meterRows` / `seatPairs` /
  * `fleetSpend`, and `CostMeter` renders this when it is given `bars`. Anything not printed is one hover (`title`) or one "more" click away.
@@ -120,7 +120,7 @@ export default function CostBars({ rows, seats, seatsError, pending, spend, spen
                 testId="cost-meter-codex"
                 title={`${cx.label}: ${cx.pts ?? '—'}/${cx.cap ?? '—'} pts today against the daily cap${cx.state !== 'ok' ? ` (${cx.state})` : ''}`}
               >
-                <Col n={cx.five.n} pctText={`${Math.round(cx.five.n ?? 0)}%`} reset={cx.five.reset} base={FIVE} state={barState(fillPct(cx.five.n), false)} testId="cost-meter-5h-codex" title={`Codex 5h used ${cx.five.n === null ? 'n/a' : `${Math.round(cx.five.n)}%`}, resets in ${cx.five.reset}`} />
+                {cx.five.n !== null && <Col n={cx.five.n} pctText={`${Math.round(cx.five.n ?? 0)}%`} reset={cx.five.reset} base={FIVE} state={barState(fillPct(cx.five.n), false)} testId="cost-meter-5h-codex" title={`Codex 5h used ${Math.round(cx.five.n)}%, resets in ${cx.five.reset}`} />}
                 <Col n={cx.seven.n} pctText={`${Math.round(cx.seven.n ?? 0)}%`} reset={cx.seven.reset} base={WEEK} state={barState(null, cx.state !== 'ok')} testId="cost-meter-7d-codex" title={`Codex 7d used ${cx.seven.n === null ? 'n/a' : `${Math.round(cx.seven.n)}%`}, resets in ${cx.seven.reset}`} />
               </Pair>
             </div>
