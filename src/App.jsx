@@ -267,6 +267,8 @@ function CockpitView({
   iterationStates,
   // COMP-COCKPIT-8: gate focus deep-link
   focusedGateId, onFocusHandled,
+  // COMP-WIKI-GATEVIEW-DOC-LINK-1: the one open-doc function (navigateToWiki), for a gate's artifact name
+  onOpenFile,
   // COMP-COCKPIT-12: Sessions tab pane (agent sessions | fleet)
   sessionsPane, onSessionsPaneChange,
   // COMPOSE-WIKI-TAB-1: {workspace, frameBase} from useWikiTab
@@ -398,6 +400,7 @@ function CockpitView({
           focusActive={!!filterCode}
           focusedGateId={focusedGateId}
           onFocusHandled={onFocusHandled}
+          onOpenFile={onOpenFile}
         />
       );
     case 'validate':
@@ -1551,6 +1554,7 @@ function AppInner() {
                       wikiDoc={wikiDoc}
                       onOpenDoc={openItemDoc}
                       onFocusHandled={handleGateFocusHandled}
+                      onOpenFile={navigateToWiki}
                       agentErrors={agentErrors}
                       onStopAgent={handleStopAgent}
                       untriagedIdeas={untriagedIdeas}

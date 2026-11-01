@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { LIFECYCLE_PHASE_LABELS, LIFECYCLE_PHASE_ARTIFACTS, gateLabel } from './constants.js';
 import ArtifactDiff from '../shared/ArtifactDiff.jsx';
 import MarkdownViewer from './shared/MarkdownViewer.jsx';
+import { GateArtifact } from './ItemDetailPanel.jsx';
 
 function relativeTime(isoString) {
   if (!isoString) return '';
@@ -19,7 +20,7 @@ function relativeTime(isoString) {
   return `${days}d ago`;
 }
 
-function ArtifactAssessment({ gate }) {
+function ArtifactAssessment({ gate, featureCode, onOpenFile }) {
   const assessment = gate.artifactAssessment;
   if (!assessment) return null;
 
@@ -35,7 +36,7 @@ function ArtifactAssessment({ gate }) {
 
   return (
     <p className="text-[10px] text-muted-foreground">
-      {artifactName && <span className="font-mono">{artifactName}</span>}
+      {artifactName && <GateArtifact name={artifactName} featureCode={featureCode} onOpenFile={onOpenFile} />}
       {artifactName && ': '}
       {Math.round(assessment.completeness * 100)}% complete
       {' · '}{assessment.wordCount} words
@@ -115,7 +116,7 @@ function Section({ title, count, color, children }) {
   );
 }
 
-function PendingGateRow({ gate, item, priorRevision, isExpanded, expandedAction, onExpand, onResolve, onSelect }) {
+function PendingGateRow({ gate, item, priorRevision, isExpanded, expandedAction, onExpand, onResolve, onSelect, onOpenFile }) {
   const [comment, setComment] = useState('');
   // COMP-COCKPIT-4: inline artifact body so a reviewer can read design.md/etc.
   // without leaving the gate. Renders the gate's immutable artifactSnapshot
@@ -149,7 +150,7 @@ function PendingGateRow({ gate, item, priorRevision, isExpanded, expandedAction,
           <p className="text-[10px] text-muted-foreground">
             {gateLabel(gate)}
           </p>
-          <ArtifactAssessment gate={gate} />
+          <ArtifactAssessment gate={gate} featureCode={item?.lifecycle?.featureCode} onOpenFile={onOpenFile} />
           {gate.artifactSnapshot ? (
             <div className="space-y-1">
               <button
@@ -318,7 +319,7 @@ function ResolvedGateRow({ gate, item }) {
   );
 }
 
-export default function GateView({ gates, items, onResolve, onSelect, featureCode, focusActive, focusedGateId, onFocusHandled }) {
+export default function GateView({ gates, items, onResolve, onSelect, featureCode, focusActive, focusedGateId, onFocusHandled, onOpenFile }) {
   const [expandedGateId, setExpandedGateId] = useState(null);
   const [expandedAction, setExpandedAction] = useState(null);
 
@@ -436,6 +437,7 @@ export default function GateView({ gates, items, onResolve, onSelect, featureCod
                   onExpand={handleExpand}
                   onResolve={onResolve}
                   onSelect={onSelect}
+                  onOpenFile={onOpenFile}
                 />
               </div>
             ))}

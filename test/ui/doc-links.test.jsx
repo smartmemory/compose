@@ -7,6 +7,7 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import WikiView from '../../src/components/cockpit/WikiView.jsx';
 import { resetPaneMemory } from '../../src/components/cockpit/PaneSwitcher.jsx';
 import { GateArtifact } from '../../src/components/vision/ItemDetailPanel.jsx';
+import GateView from '../../src/components/vision/GateView.jsx';
 
 const linked = typeof __WIKI_COMPONENTS__ !== 'undefined' && __WIKI_COMPONENTS__;
 const FRAME = 'http://127.0.0.1:8791';
@@ -77,6 +78,26 @@ describe('doc links: every doc title in Compose opens its doc', () => {
     render(<GateArtifact onOpenFile={onOpenFile} {...props} />);
     const link = screen.queryByTestId('gate-artifact-link');
     expect(screen.getByText(props.name)).toBeTruthy();
+    if (opened === null) { expect(link).toBeNull(); return; }
+    fireEvent.click(link);
+    expect(onOpenFile.mock.calls.map(([p]) => p)).toEqual(opened);
+  });
+
+  // COMP-WIKI-GATEVIEW-DOC-LINK-1: the same name on the Gates view card.
+  const gateCard = (code) => ({
+    gates: [{ id: 'g1', itemId: 'i1', status: 'pending', fromPhase: 'explore_design', createdAt: '2026-11-02T00:00:00Z', artifactAssessment: { exists: true, completeness: 0.8, wordCount: 120, meetsMinWordCount: true } }],
+    items: [{ id: 'i1', title: 'Item one', lifecycle: code ? { featureCode: code } : {} }],
+  });
+  const GATEVIEW_ROWS = [
+    { name: 'with a feature code and handler: a link to the feature doc', code: 'X-1', handler: true, opened: ['docs/features/X-1/design.md'] },
+    { name: 'no feature code: the name as text', code: null, handler: true, opened: null },
+    { name: 'no handler: the name as text', code: 'X-1', handler: false, opened: null },
+  ];
+  it.each(GATEVIEW_ROWS)('Gates view > card artifact name, $name', ({ code, handler, opened }) => {
+    const onOpenFile = vi.fn();
+    render(<GateView {...gateCard(code)} onResolve={() => {}} onSelect={() => {}} onOpenFile={handler ? onOpenFile : undefined} />);
+    expect(screen.getByText('design.md')).toBeTruthy();
+    const link = screen.queryByTestId('gate-artifact-link');
     if (opened === null) { expect(link).toBeNull(); return; }
     fireEvent.click(link);
     expect(onOpenFile.mock.calls.map(([p]) => p)).toEqual(opened);
