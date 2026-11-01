@@ -902,3 +902,155 @@ flows:
     expect(templateCalls).toHaveLength(0);
   });
 });
+
+// ── COMP-PIPE-EDIT-CHAT-PANE-1: spec chat actions ─────────────────────────────
+describe('useVisionStore — spec chat (COMP-PIPE-EDIT-CHAT-PANE-1)', () => {
+  let chatCalls;
+  const encode = (frames) => `${frames.map((f) => JSON.stringify(f)).join('\n')}\n`;
+
+  function installChatFetch({ frames = [], status = 200, json } = {}) {
+    const base = globalThis.fetch;
+    chatCalls = [];
+    globalThis.fetch = vi.fn(async (url, opts = {}) => {
+      const u = String(url);
+      if (u.includes('/api/pipeline/chat')) {
+        chatCalls.push({ url: u, method: opts.method || 'GET', body: opts.body ? JSON.parse(opts.body) : null });
+        if (!opts.method || opts.method === 'GET') return makeResponse({ messages: [] });
+        if (json) return makeResponse(json, status < 400, status);
+        return new Response(encode(frames), { status, headers: { 'Content-Type': 'application/x-ndjson' } });
+      }
+      return base(url, opts);
+    });
+  }
+
+  const pane = async () => import('../../src/components/vision/pipeline-pane-state.js');
+
+  // Seed one assistant message carrying `proposal`, hashed against the CURRENT model unless told otherwise.
+  async function seedProposal(over = {}) {
+    const { serializeSpec, hashText } = await pane();
+    const yaml = serializeSpec(store().editorModel);
+    const proposal = {
+      yaml: yaml.replace('Design the thing', 'Design it better'),
+      baseHash: await hashText(yaml), valid: true, error: null, ...over,
+    };
+    useVisionStore.setState({ chatByFile: { 'demo.stratum.yaml': { messages: [
+      { role: 'user', text: 'tighten' }, { role: 'assistant', text: 'ok', proposal, applied: false },
+    ], busy: false, error: null } } });
+    return { yaml, proposal };
+  }
+
+  beforeEach(async () => {
+    globalThis.WebSocket = FakeWS;
+    installFetch();
+    useVisionStore.setState({
+      editorSpecFile: null, editorSpecs: [], editorModel: null, editorVersion: null,
+      editorSelectedFlow: null, editorSelectedStep: null, editorDirty: false,
+      editorErrors: { errors: [], warningsByStepId: {} }, editorReadOnly: false,
+      editorSpecHash: null, editorSaveScope: 'flow', editorConflict: null,
+      editorYamlBuffer: null, editorYamlError: null, chatByFile: {}, chatUndo: null,
+    });
+    await loadV03();
+  });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('a turn POSTs the in-memory yaml (unsaved edit included), flow, step and errors, and never calls /api/agent', async () => {
+    store().updateStep('design', { intent: 'UNSAVED EDIT' });
+    store().selectStep('design');
+    installChatFetch({ frames: [{ type: 'delta', text: 'hi' }, { type: 'final', reply: 'hi', proposal: null }] });
+    await store().sendChat('what does design do?');
+    const post = chatCalls.find((c) => c.method === 'POST');
+    expect(post.body.yaml).toContain('UNSAVED EDIT');
+    expect(post.body).toMatchObject({ file: 'demo.stratum.yaml', selectedFlow: 'build', selectedStep: 'design', message: 'what does design do?' });
+    expect(Array.isArray(post.body.errors)).toBe(true);
+    expect(typeof post.body.baseHash).toBe('string');
+    expect(globalThis.fetch.mock.calls.some(([u]) => String(u).includes('/api/agent'))).toBe(false);
+    const msgs = store().chatByFile['demo.stratum.yaml'].messages;
+    expect(msgs.map((m) => m.role)).toEqual(['user', 'assistant']);
+    expect(msgs[1]).toMatchObject({ text: 'hi', proposal: null });
+    expect(store().chatByFile['demo.stratum.yaml'].busy).toBe(false);
+  });
+
+  it('a turn over the token cap is refused client-side with no POST', async () => {
+    installChatFetch();
+    await store().sendChat('x'.repeat(40_000 * 4));
+    expect(chatCalls.filter((c) => c.method === 'POST')).toHaveLength(0);
+    expect(store().chatByFile['demo.stratum.yaml'].error).toMatch(/too large/i);
+  });
+
+  it('a server 413 surfaces its message and clears busy', async () => {
+    installChatFetch({ status: 413, json: { error: 'This spec is too large to chat about (50000 tokens, the cap is 40000).' } });
+    await store().sendChat('hello');
+    const chat = store().chatByFile['demo.stratum.yaml'];
+    expect(chat.error).toMatch(/too large/);
+    expect(chat.busy).toBe(false);
+    expect(chat.messages.some((m) => m.streaming)).toBe(false);
+  });
+
+  it('Apply replaces the model in memory, marks dirty, writes nothing; Revert restores identical yaml and a clean spec', async () => {
+    const { serializeSpec } = await pane();
+    const { yaml, proposal } = await seedProposal();
+    installChatFetch();
+    expect(store().editorDirty).toBe(false);
+    const r = await store().applyChatProposal(1);
+    expect(r).toEqual({ ok: true });
+    expect(store().editorDirty).toBe(true);
+    expect(serializeSpec(store().editorModel)).toContain('Design it better');
+    expect(serializeSpec(store().editorModel)).not.toBe(yaml);
+    expect(saveCalls).toHaveLength(0);
+    expect(chatCalls.some((c) => c.method === 'POST')).toBe(false);
+    expect(store().chatByFile['demo.stratum.yaml'].messages[1].applied).toBe(true);
+    expect(proposal.baseHash).toBeTruthy();
+
+    expect(store().revertChatProposal()).toEqual({ ok: true });
+    expect(serializeSpec(store().editorModel)).toBe(yaml);
+    expect(store().editorDirty).toBe(false);
+    expect(store().editorSaveScope).toBe('flow');
+    expect(store().chatUndo).toBeNull();
+    expect(store().chatByFile['demo.stratum.yaml'].messages[1].applied).toBe(false);
+  });
+
+  it('Apply table: stale, invalid, pending buffer and read-only each refuse and leave the model alone', async () => {
+    const { serializeSpec } = await pane();
+    const before = serializeSpec(store().editorModel);
+    const rows = [
+      ['stale', async () => { await seedProposal(); store().updateStep('design', { intent: 'edited after the reply' }); }, /Spec changed, ask again/],
+      ['invalid', async () => { await seedProposal({ valid: false, error: 'Spec validation failed: bad ref' }); }, /bad ref/],
+      ['pending buffer', async () => { await seedProposal(); store().setYamlBuffer('version: "0.3"'); }, /YAML pane/],
+      ['read-only', async () => { await seedProposal(); useVisionStore.setState({ editorReadOnly: true }); }, /read-only/],
+    ];
+    for (const [name, arrange, expected] of rows) {
+      await loadV03();
+      await arrange();
+      const snapshot = serializeSpec(store().editorModel);
+      const r = await store().applyChatProposal(1);
+      expect(r.error, name).toMatch(expected);
+      expect(serializeSpec(store().editorModel), name).toBe(snapshot);
+      expect(store().chatUndo, name).toBeNull();
+    }
+    expect(before).toContain('Design the thing');
+  });
+
+  it('Save after Apply still sends baseHash and surfaces a 409 conflict', async () => {
+    await seedProposal();
+    await store().applyChatProposal(1);
+    saveResponse = { ok: false, status: 409, body: { error: 'Spec changed on disk', conflict: true, currentHash: 'disk-2' } };
+    const res = await store().saveSpec();
+    expect(saveCalls).toHaveLength(1);
+    expect(saveCalls[0].body.baseHash).toBe('hash-v1');
+    expect(res.conflict).toBe(true);
+    expect(store().editorConflict).toEqual({ currentHash: 'disk-2' });
+    expect(store().editorDirty).toBe(true);
+  });
+
+  it('a spec load or a successful save drops the one-level undo', async () => {
+    await seedProposal();
+    await store().applyChatProposal(1);
+    expect(store().chatUndo).not.toBeNull();
+    await store().saveSpec();
+    expect(store().chatUndo).toBeNull();
+    await seedProposal();
+    await store().applyChatProposal(1);
+    await loadV03();
+    expect(store().chatUndo).toBeNull();
+  });
+});

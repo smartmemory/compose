@@ -23,6 +23,9 @@ import PipelineEditorCanvas from './PipelineEditorCanvas.jsx';
 import StepInspector from './StepInspector.jsx';
 import ContractEditor from './ContractEditor.jsx';
 import YamlPane from './YamlPane.jsx';
+import PipelineChatPane, { PaneTabStrip } from './PipelineChatPane.jsx';
+import { resolvePane, paneOnSelect, paneToggle } from './pipeline-pane-state.js';
+import { usePhoneLayout } from '../ribbon/now/usePhoneLayout.js';
 
 // Normalize a filename to a traversal-safe basename ending in .stratum.yaml.
 function normalizeTemplateFilename(raw) {
@@ -45,6 +48,7 @@ export default function PipelineEditor() {
   const specFile = useVisionStore(s => s.editorSpecFile);
   const model = useVisionStore(s => s.editorModel);
   const selectedFlow = useVisionStore(s => s.editorSelectedFlow);
+  const selectedStep = useVisionStore(s => s.editorSelectedStep);
   const dirty = useVisionStore(s => s.editorDirty);
   const errors = useVisionStore(s => s.editorErrors);
   const readOnly = useVisionStore(s => s.editorReadOnly);
@@ -65,7 +69,11 @@ export default function PipelineEditor() {
   // COMP-PIPE-EDIT-3/-4/-7: local view state for connect mode, the side panel
   // (step inspector vs contract editor), and the save-as-template dialog.
   const [connectMode, setConnectMode] = useState(false);
-  const [panel, setPanel] = useState('inspector'); // 'inspector' | 'contracts' | 'yaml'
+  // COMP-PIPE-EDIT-CHAT-PANE-1: 'auto' follows the selection (step → inspector, none → chat);
+  // 'chat' | 'contracts' | 'yaml' pin a pane. resolvePane() is the one place that decides.
+  const [pane, setPane] = useState('auto');
+  const shown = resolvePane(pane, selectedStep);
+  const phone = usePhoneLayout();
   const [templateOpen, setTemplateOpen] = useState(false);
   const [tplForm, setTplForm] = useState({ filename: '', id: '', label: '' });
   const [tplError, setTplError] = useState('');
@@ -82,7 +90,15 @@ export default function PipelineEditor() {
   useEffect(() => { loadSpecList(); }, [loadSpecList]);
 
   // Connect/contract editing must be off for read-only (v0.1) specs.
-  useEffect(() => { if (readOnly) { setConnectMode(false); setPanel('inspector'); } }, [readOnly]);
+  useEffect(() => { if (readOnly) { setConnectMode(false); setPane('auto'); } }, [readOnly]);
+
+  // Selecting a step (canvas tap or Add step) hands the pane to the inspector, even from
+  // contracts or YAML. Deselecting needs no code: 'auto' resolves back to chat.
+  const prevStepRef = useRef(selectedStep);
+  useEffect(() => {
+    setPane(p => paneOnSelect(p, prevStepRef.current, selectedStep));
+    prevStepRef.current = selectedStep;
+  }, [selectedStep]);
 
   // COMP-PIPE-EDIT-5: a flow switch (or spec switch) drops a stale collapse
   // selection — its step ids belong to the previous flow.
@@ -287,35 +303,35 @@ export default function PipelineEditor() {
             3-way panel: inspector | contracts | yaml). */}
         <button
           type="button"
-          onClick={() => setPanel(p => (p === 'contracts' ? 'inspector' : 'contracts'))}
+          onClick={() => setPane(p => paneToggle(p, 'contracts'))}
           disabled={!model}
-          aria-pressed={panel === 'contracts'}
+          aria-pressed={shown === 'contracts'}
           className={cn(
             'flex items-center gap-1 text-xs px-2 py-1 rounded border transition-colors',
             !model
               ? 'opacity-50 cursor-not-allowed text-muted-foreground border-border'
-              : panel === 'contracts'
+              : shown === 'contracts'
                 ? 'border-accent/60 text-accent bg-accent/10'
                 : 'text-foreground border-border hover:bg-accent',
           )}
           title="Edit contracts"
           data-testid="contracts-toggle"
         >
-          {panel === 'contracts' ? <Sliders className="h-3 w-3" /> : <FileBox className="h-3 w-3" />}
+          {shown === 'contracts' ? <Sliders className="h-3 w-3" /> : <FileBox className="h-3 w-3" />}
           Contracts
         </button>
 
         {/* COMP-PIPE-EDIT-6: toggle the side panel to the YAML pane. */}
         <button
           type="button"
-          onClick={() => setPanel(p => (p === 'yaml' ? 'inspector' : 'yaml'))}
+          onClick={() => setPane(p => paneToggle(p, 'yaml'))}
           disabled={!model}
-          aria-pressed={panel === 'yaml'}
+          aria-pressed={shown === 'yaml'}
           className={cn(
             'flex items-center gap-1 text-xs px-2 py-1 rounded border transition-colors',
             !model
               ? 'opacity-50 cursor-not-allowed text-muted-foreground border-border'
-              : panel === 'yaml'
+              : shown === 'yaml'
                 ? 'border-accent/60 text-accent bg-accent/10'
                 : 'text-foreground border-border hover:bg-accent',
           )}
@@ -425,8 +441,8 @@ export default function PipelineEditor() {
       )}
 
       {/* Canvas + side panel (step inspector | contract editor | YAML pane) */}
-      <div className="flex-1 min-h-0 flex">
-        <div className="flex-1 min-w-0">
+      <div className={cn('flex-1 min-h-0 flex', phone && 'flex-col')} data-testid="editor-body" data-phone={phone ? '1' : '0'}>
+        <div className={cn('flex-1 min-w-0', phone && 'min-h-0')}>
           <PipelineEditorCanvas
             ref={canvasRef}
             connectMode={connectMode && !readOnly}
@@ -435,12 +451,24 @@ export default function PipelineEditor() {
             onExpand={fl => useVisionStore.getState().expandSubflow(fl)}
           />
         </div>
-        <div className="w-80 shrink-0 border-l border-border overflow-hidden">
-          {panel === 'yaml'
-            ? <YamlPane />
-            : panel === 'contracts'
-              ? <ContractEditor />
-              : <StepInspector />}
+        {/* Right pane (tablet and up) or bottom sheet under 768px, same tabs either way. */}
+        <div
+          className={cn(
+            'flex flex-col overflow-hidden border-border',
+            phone ? 'shrink-0 max-h-[45vh] border-t' : 'w-80 shrink-0 border-l',
+          )}
+          data-testid="side-pane"
+        >
+          <PaneTabStrip pane={pane} shown={shown} hasSelection={selectedStep != null} hasModel={!!model} onPane={setPane} />
+          <div className="flex-1 min-h-0 overflow-hidden">
+            {shown === 'yaml'
+              ? <YamlPane />
+              : shown === 'contracts'
+                ? <ContractEditor />
+                : shown === 'inspector'
+                  ? <StepInspector />
+                  : <PipelineChatPane />}
+          </div>
         </div>
       </div>
 

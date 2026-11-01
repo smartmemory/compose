@@ -36,6 +36,7 @@ import { attachMayaRoutes } from './maya-routes.js';
 import { attachDesignRoutes } from './design-routes.js';
 import { DesignSessionManager } from './design-session.js';
 import { attachPipelineRoutes } from './pipeline-routes.js';
+import { attachPipelineChatRoutes } from './pipeline-chat-routes.js';
 import { attachIdeaboxRoutes } from './ideabox-routes.js';
 import { attachBuildRoutes } from './build-routes.js';
 import { liveBuildState } from './workspace-activity.js';
@@ -166,6 +167,12 @@ export class VisionServer {
       getDataDir: () => getDataDir(),
       getPipelinesDir: () => path.join(getTargetRoot(), 'pipelines'),
       stratumClient: null, // V1: no MCP client in server context; fallback YAML parse is acceptable
+    });
+
+    // ── Flow editor spec chat (COMP-PIPE-EDIT-CHAT-PANE-1) ─────────────────
+    attachPipelineChatRoutes(app, {
+      getDataDir: () => getDataDir(),
+      getProjectRoot: () => getTargetRoot(),
     });
 
     // ── Ideabox routes ────────────────────────────────────────────────────────

@@ -24,6 +24,7 @@ import {
   renameContractField as renameContractFieldInModel,
   collapseToSubflow,
 } from '../../lib/pipeline-model.js';
+import { serializeSpec, hashText, estimateChatTokens, applyBlockReason, MAX_CHAT_INPUT_TOKENS } from './pipeline-pane-state.js';
 
 // COMP-PIPE-EDIT-6: browser-safe basename (no node:path) for matching a watcher's
 // prefixed path (<prefix>/<file>) against the bare editorSpecFile.
@@ -395,6 +396,11 @@ export const useVisionStore = create((set, get) => {
     editorYamlBuffer: null,    // null when the pane isn't holding pending text; else raw buffer
     editorYamlError: null,     // last YAML parse error message (pane), or null
 
+    // ── COMP-PIPE-EDIT-CHAT-PANE-1: spec chat ───────────────────────────────
+    // Keyed by spec file so a pane switch never loses a draft or an in-flight turn.
+    chatByFile: {},            // { [file]: { messages: [{role,text,proposal?,applied?,streaming?}], busy, error } }
+    chatUndo: null,            // one level: { file, index, yaml, dirty, scope } captured by Apply
+
     // Actions
     clearUICommand: () => set({ uiCommand: null }),
 
@@ -505,6 +511,7 @@ export const useVisionStore = create((set, get) => {
         editorConflict: null,
         editorYamlBuffer: null,
         editorYamlError: null,
+        chatUndo: null,
       });
       return model;
     },
@@ -665,6 +672,7 @@ export const useVisionStore = create((set, get) => {
           editorSpecHash: typeof data.hash === 'string' ? data.hash : get().editorSpecHash,
           editorSaveScope: 'flow',
           editorConflict: null,
+          chatUndo: null,
         });
       }
       return data;
@@ -709,6 +717,145 @@ export const useVisionStore = create((set, get) => {
         editorErrors: validateSpecWide(model, editableFlows, selectedFlow),
       });
       return true;
+    },
+
+    // ── COMP-PIPE-EDIT-CHAT-PANE-1: spec chat actions ──────────────────────
+    // A turn sends the IN-MEMORY yaml (unsaved edits included); the server never reads
+    // the spec file and never writes it. A proposal only changes anything through
+    // applyChatProposal, which goes through setYamlBuffer + flushYaml like the YAML pane.
+    _chatPatch: (file, patch) => set(s => ({
+      chatByFile: { ...s.chatByFile, [file]: { messages: [], busy: false, error: null, ...(s.chatByFile[file] || {}), ...patch } },
+    })),
+
+    loadChat: async (file) => {
+      if (!file) return;
+      const data = await apiCall(`/api/pipeline/chat?file=${encodeURIComponent(file)}`);
+      if (get().chatByFile[file]?.busy) return;
+      get()._chatPatch(file, { messages: Array.isArray(data?.messages) ? data.messages : [], error: null });
+    },
+
+    sendChat: async (text) => {
+      const { editorSpecFile: file, editorModel, editorSelectedFlow, editorSelectedStep, editorErrors } = get();
+      const message = String(text || '').trim();
+      if (!file || !editorModel || !message || get().chatByFile[file]?.busy) return;
+      const yaml = serializeSpec(editorModel);
+      if (estimateChatTokens(yaml, message) > MAX_CHAT_INPUT_TOKENS) {
+        get()._chatPatch(file, { error: `This spec is too large to chat about (the cap is ${MAX_CHAT_INPUT_TOKENS} tokens).` });
+        return;
+      }
+      const baseHash = await hashText(yaml);
+      const prior = get().chatByFile[file]?.messages || [];
+      get()._chatPatch(file, {
+        busy: true, error: null,
+        messages: [...prior, { role: 'user', text: message }, { role: 'assistant', text: '', streaming: true }],
+      });
+      const finish = (patch) => {
+        const msgs = (get().chatByFile[file]?.messages || []).slice();
+        const last = msgs[msgs.length - 1];
+        if (last?.streaming) msgs.pop();
+        get()._chatPatch(file, { busy: false, messages: msgs, ...patch });
+      };
+      const onLine = (line) => {
+        let ev; try { ev = JSON.parse(line); } catch { return; }
+        if (ev.type === 'delta') {
+          const msgs = (get().chatByFile[file]?.messages || []).slice();
+          const last = msgs[msgs.length - 1];
+          if (last?.streaming) msgs[msgs.length - 1] = { ...last, text: last.text + String(ev.text || '') };
+          get()._chatPatch(file, { messages: msgs });
+        } else if (ev.type === 'final') {
+          const msgs = (get().chatByFile[file]?.messages || []).slice();
+          msgs[msgs.length - 1] = { role: 'assistant', text: ev.reply || '', proposal: ev.proposal || null, applied: false };
+          get()._chatPatch(file, { busy: false, messages: msgs });
+        } else if (ev.type === 'error') {
+          finish({ error: ev.cancelled ? null : (ev.error || 'Chat failed') });
+        }
+      };
+      try {
+        const res = await wsFetch('/api/pipeline/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file, message, yaml, baseHash,
+            selectedFlow: editorSelectedFlow, selectedStep: editorSelectedStep,
+            errors: editorErrors?.errors || [],
+          }),
+        });
+        if (!res.ok) {
+          let body = {}; try { body = await res.json(); } catch { /* HTML 413 from the global parser */ }
+          finish({ error: res.status === 413 ? (body.error || 'This spec is too large to chat about.') : (body.error || `HTTP ${res.status}`) });
+          return;
+        }
+        const reader = res.body?.getReader?.();
+        if (!reader) throw new Error('chat response has no readable body');
+        const decoder = new TextDecoder();
+        let buf = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let nl;
+          while ((nl = buf.indexOf('\n')) >= 0) { onLine(buf.slice(0, nl)); buf = buf.slice(nl + 1); }
+        }
+        if (buf.trim()) onLine(buf);
+        if (get().chatByFile[file]?.busy) finish({ error: 'The reply ended early' });
+      } catch (err) {
+        finish({ error: err?.message || String(err) });
+      }
+    },
+
+    cancelChat: async () => {
+      const file = get().editorSpecFile;
+      if (!file) return;
+      await wsFetch('/api/pipeline/chat/cancel', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file }),
+      });
+    },
+
+    clearChat: async () => {
+      const file = get().editorSpecFile;
+      if (!file) return;
+      await wsFetch(`/api/pipeline/chat?file=${encodeURIComponent(file)}`, { method: 'DELETE' });
+      get()._chatPatch(file, { messages: [], error: null, busy: false });
+      set({ chatUndo: null });
+    },
+
+    // Apply message `index`'s proposal in memory. Three locks: valid + not stale + no pending
+    // YAML pane buffer. Never writes the file. Returns { ok } or { error }.
+    applyChatProposal: async (index) => {
+      const { editorSpecFile: file, editorModel, editorReadOnly, editorYamlBuffer, editorYamlError, editorDirty, editorSaveScope } = get();
+      const proposal = get().chatByFile[file]?.messages?.[index]?.proposal;
+      const currentYaml = serializeSpec(editorModel);
+      const reason = applyBlockReason({
+        proposal, readOnly: editorReadOnly,
+        bufferPending: editorYamlBuffer != null || !!editorYamlError,
+        currentHash: editorModel ? await hashText(currentYaml) : null,
+      });
+      if (reason) return { error: reason };
+      get().setYamlBuffer(proposal.yaml);
+      if (!get().flushYaml()) {
+        set({ editorYamlBuffer: null, editorYamlError: null });
+        return { error: 'The proposal did not parse' };
+      }
+      set({ chatUndo: { file, index, yaml: currentYaml, dirty: editorDirty, scope: editorSaveScope } });
+      const msgs = get().chatByFile[file].messages.map((m, i) => (i === index ? { ...m, applied: true } : m));
+      get()._chatPatch(file, { messages: msgs });
+      return { ok: true };
+    },
+
+    // One-level undo of the last Apply: flush the captured YAML back, then restore the dirty
+    // flag and save scope it had, so reverting an edit on a clean spec leaves the spec clean.
+    revertChatProposal: () => {
+      const undo = get().chatUndo;
+      if (!undo || undo.file !== get().editorSpecFile) return { error: 'Nothing to revert' };
+      get().setYamlBuffer(undo.yaml);
+      if (!get().flushYaml()) {
+        set({ editorYamlBuffer: null, editorYamlError: null });
+        return { error: 'Could not restore the previous spec' };
+      }
+      set({ editorDirty: undo.dirty, editorSaveScope: undo.scope, chatUndo: null });
+      const msgs = (get().chatByFile[undo.file]?.messages || []).map((m, i) => (i === undo.index ? { ...m, applied: false } : m));
+      get()._chatPatch(undo.file, { messages: msgs });
+      return { ok: true };
     },
 
     // ── COMP-PIPE-EDIT-6: conflict resolution ──────────────────────────────
