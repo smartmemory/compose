@@ -92,7 +92,7 @@ export function useNotifySources() {
   useEffect(() => {
     if (out.loading || !notify.state) return;
     const keys = releaseKeys(out.collected, notify.state, smPanel(fleet, 'queue')?.value);
-    if (keys.length) releaseOnce(keys);
+    if (keys.length) releaseOnce(keys, fleet);
   }, [out, notify.state, fleet]);
   return out;
 }

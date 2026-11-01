@@ -168,7 +168,7 @@ function SecurityControls({ row, notify, state, now, resolveOpen, setResolveOpen
   const resolved = answeredOf(state, key, { age: row.since });
   const acked = securityAck(state, key, row);
   const err = notify.errors?.get(key);
-  if (a?.phase === 'accepted' || resolved) {
+  if ((a?.phase === 'accepted' && answerHolds(a, { age: row.since })) || resolved) {
     return <div className={note} data-testid="notify-resolved">resolved {hhmm(resolved?.at ?? a?.at)}</div>;
   }
   const sending = a?.phase === 'sending';

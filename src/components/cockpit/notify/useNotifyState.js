@@ -25,7 +25,8 @@ let latest = null; // {state, generated} from the newest POST reply
 const overlay = new Map(); // key -> entry | null (deleted), while a write is in flight or an answer is not yet on a fleet body
 const errors = new Map(); // key -> reason of the last failed write
 const answers = new Map(); // owner-queue id -> {phase, reason?, winning?, channel?, answer?, at?}
-const released = new Set(); // keys already sent `release` this page life
+const released = new Set(); // keys with a `release` sent for the current ack/dismiss (cleared by the next ack/dismiss or a failed POST)
+const failedAt = new Map(); // key -> the poll stamp whose release POST failed
 let seats = null; // the seat rows the cost meter polls (published by DayView; never a second poll)
 let warnedUnavailable = false;
 
@@ -40,6 +41,7 @@ export function resetNotifyState() {
   errors.clear();
   answers.clear();
   released.clear();
+  failedAt.clear();
   seats = null;
   warnedUnavailable = false;
   emit();
@@ -87,12 +89,14 @@ async function post(url, body) {
  * One state write. `action` is `ack | snooze | dismiss | restore | release`; `until` (ISO) for a snooze; `meta`
  * `{title, lane, seat, sinceAt, textHash}`. Resolves `{ok, reason?}`; never throws.
  */
-export async function writeState(key, action, { until, meta } = {}) {
+export async function writeState(key, action, { until, meta, onFail } = {}) {
   const at = new Date().toISOString();
   overlay.set(key, action === 'restore' ? null
     : action === 'release' ? { action: 'released', at }
       : { action, at, ...(until ? { until } : {}), ...(meta ?? {}) });
   errors.delete(key);
+  // A new ack/dismiss starts a new alert life: the next release for this key is a new release, not a repeat.
+  if (action === 'ack' || action === 'dismiss') released.delete(key);
   emit();
   try {
     const { res, data } = await post(NOTIFY_STATE_URL, { key, action, ...(until ? { until } : {}), ...(meta ? { meta } : {}) });
@@ -105,6 +109,7 @@ export async function writeState(key, action, { until, meta } = {}) {
     const reason = String(err?.message ?? err);
     overlay.delete(key);
     errors.set(key, reason);
+    onFail?.();
     console.warn(`[notify] ${action} ${key} failed: ${reason}`);
     emit();
     return { ok: false, reason };
@@ -138,12 +143,13 @@ export async function answerOwner(id, payload, { answerText } = {}) {
   return answers.get(id);
 }
 
-/** Send `release` once per key per page life (the source answered and no longer carries the row). */
-export function releaseOnce(keys) {
+/** Send `release` once per ack/dismiss of a key (the source answered and no longer carries the row). */
+export function releaseOnce(keys, stamp) {
   for (const key of keys) {
-    if (released.has(key)) continue;
+    if (released.has(key) || (stamp !== undefined && failedAt.get(key) === stamp)) continue;
     released.add(key);
-    writeState(key, 'release');
+    // A failed POST frees the key, but only a LATER poll (a new `stamp`) retries: the failure's own re-render must not loop.
+    writeState(key, 'release', { onFail: () => { released.delete(key); failedAt.set(key, stamp); } });
   }
 }
 

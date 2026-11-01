@@ -54,9 +54,9 @@ function fakeServer({ queue = [Q.sec, Q.opt, Q.free, Q.fyi], alerts = [WALL] } =
     if (u.endsWith('/attention')) return reply(200, { alerts: s.alerts });
     if (u.endsWith('/review')) return reply(200, { reviewMaxH: 24, inReview: [], inReviewByLane: {}, ungrouped: { count: 0, oldestLanded: null }, errors: [] });
     if (u === '/api/notify/state' && method === 'POST') {
-      if (s.failState) return reply(500, { ok: false, error: s.failState });
-      if (body.action === 'restore') delete s.entries[body.key];
-      else if (body.action !== 'release') s.entries[body.key] = { action: body.action, at: new Date().toISOString(), ...(body.until ? { until: body.until } : {}), ...(body.meta ?? {}) };
+      if (s.failState && (!s.failOnly || s.failOnly === body.action)) return reply(500, { ok: false, error: s.failState });
+      if (body.action === 'restore' || body.action === 'release') delete s.entries[body.key];
+      else s.entries[body.key] = { action: body.action, at: new Date().toISOString(), ...(body.until ? { until: body.until } : {}), ...(body.meta ?? {}) };
       return reply(200, { ok: true, v: 1, entries: { ...s.entries }, generated: new Date().toISOString() });
     }
     if (u === '/api/fleet/owner-answer' && method === 'POST') {
@@ -303,10 +303,59 @@ const ROWS = [
       window.innerWidth = prev;
     }
   }],
+  ['a recurring alert is released on every ack: ack, gone, back, ack, gone, back sends two releases and leaves the row open', async () => {
+    const s = fakeServer();
+    const tray = await openTray();
+    expect(tray).toBeTruthy();
+    for (let round = 1; round <= 2; round += 1) {
+      fireEvent.click(within(trayRow('seat1 5h')).getByTestId('notify-dismiss'));
+      await waitFor(() => expect(s.entries['attention:seat1 5h']).toBeTruthy(), { timeout: 5000 });
+      s.alerts = [];
+      await repoll();
+      await waitFor(() => expect(posted(s, '/api/notify/state').filter((b) => b.action === 'release')).toHaveLength(round), { timeout: 5000 });
+      s.alerts = [WALL];
+      await repoll();
+      await waitFor(() => expect(trayRow('seat1 5h')).toBeTruthy(), { timeout: 5000 });
+    }
+    expect(posted(s, '/api/notify/state').filter((b) => b.action === 'release')).toEqual([
+      { key: 'attention:seat1 5h', action: 'release' }, { key: 'attention:seat1 5h', action: 'release' }]);
+    expect(within(trayRow('seat1 5h')).queryByTestId('notify-dismiss')).not.toBeNull();
+  }],
+  ['a failed release POST is retried on the next poll, and does not loop on its own re-render', async () => {
+    const s = fakeServer();
+    await openTray();
+    fireEvent.click(within(trayRow('seat1 5h')).getByTestId('notify-dismiss'));
+    await waitFor(() => expect(s.entries['attention:seat1 5h']).toBeTruthy(), { timeout: 5000 });
+    s.alerts = [];
+    s.failState = 'boom';
+    s.failOnly = 'release';
+    await repoll();
+    await waitFor(() => expect(posted(s, '/api/notify/state').filter((b) => b.action === 'release')).toHaveLength(1), { timeout: 5000 });
+    await act(async () => { await new Promise((r) => setTimeout(r, 200)); });
+    expect(posted(s, '/api/notify/state').filter((b) => b.action === 'release')).toHaveLength(1);
+    s.failState = null;
+    await repoll();
+    await waitFor(() => expect(posted(s, '/api/notify/state').filter((b) => b.action === 'release')).toHaveLength(2), { timeout: 5000 });
+    await waitFor(() => expect(s.entries['attention:seat1 5h']).toBeUndefined(), { timeout: 5000 });
+  }],
+  ['a security id re-raised after a cockpit resolve, in the same page, shows its controls again in the tray (answerHolds, as the asks path)', async () => {
+    const s = fakeServer();
+    await openTray();
+    fireEvent.click(within(trayRow('a token in history')).getByTestId('security-resolve'));
+    fireEvent.change(within(trayRow('a token in history')).getByTestId('security-resolve-text'), { target: { value: 'rotated it' } });
+    fireEvent.click(within(trayRow('a token in history')).getByTestId('security-resolve-confirm'));
+    await waitFor(() => expect(within(trayRow('a token in history')).queryByTestId('notify-resolved')).not.toBeNull(), { timeout: 1500 });
+    await repoll(); // the server's own answered entry arrives and settles the page's overlay
+    // the same id comes back as a NEW record: ten minutes later it opened 5 s ago, well past the answer's slack
+    vi.useFakeTimers({ toFake: ['Date'], shouldAdvanceTime: true, now: Date.now() + 600_000 });
+    s.queue = [{ ...Q.sec, age: 5 }];
+    await repoll();
+    await waitFor(() => expect(within(trayRow('a token in history')).queryByTestId('notify-resolved')).toBeNull(), { timeout: 1500 });
+  }],
 ];
 
 describe('COMP-COCKPIT-NOTIFY-ACTIONS-1 inline actions', () => {
   beforeEach(() => { resetFleetPoller(); resetNotifyPoller(); resetNotifyState(); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
   it.each(ROWS)('%s', async (_name, scenario) => { await scenario(); });
 });
