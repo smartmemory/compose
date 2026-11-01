@@ -8,7 +8,9 @@
  *   DELETE /api/pipeline/chat?file=    clear a spec's history
  *
  * One stateless Stratum agentRun per turn, ZERO tools, so a turn is one request and one
- * reply (cost bound, design §5). The client sends its in-memory YAML each turn; this
+ * reply (cost bound, design §5). The run is ISOLATED (F6): no settings files, hooks, MCP
+ * servers or Claude Code preset, so the model sees only CHAT_SYSTEM_PROMPT and the prompt.
+ * Without it a 1.6K-token prompt reached the model as 113-141K tokens (review M1). The client sends its in-memory YAML each turn; this
  * module never reads the spec from disk and never writes it. A proposed edit comes back
  * as `proposal` and only the editor can apply it. `/api/agent/*` is not touched.
  */
@@ -18,6 +20,7 @@ import YAML from 'yaml';
 import { getStratum } from './stratum-connection.js';
 import {
   buildPrompt, checkInputSize, extractProposal, summarizeProposal, hashText,
+  CHAT_SYSTEM_PROMPT, MAX_INPUT_TOKENS, realInputTokens,
 } from './pipeline-chat-prompt.js';
 
 export const CHAT_MODEL = 'claude-sonnet-5-5';
@@ -148,11 +151,27 @@ export function attachPipelineChatRoutes(app, { getDataDir, getProjectRoot, getS
         correlationId,
         signal: ctl.signal,
         modelID: CHAT_MODEL,
+        // An installed Stratum without `isolated` refuses the call (UNSUPPORTED_AGENT_OPTIONS,
+        // stratum-mcp-client.js) rather than running unisolated.
+        isolated: true,
+        systemPrompt: CHAT_SYSTEM_PROMPT,
         allowedTools: [],
         disallowedTools: ['ToolSearch'],
         effort: 'low',
         telemetry: { site: CHAT_SITE, project_cwd: root },
       });
+      const inputTokens = realInputTokens(run);
+      if (inputTokens === null) {
+        console.warn(`WARNING pipe-chat: ${file} turn reported no token split; its real input is unknown and the ${MAX_INPUT_TOKENS}-token cap is unchecked after dispatch`);
+      } else if (inputTokens > MAX_INPUT_TOKENS) {
+        // Refusing is impossible after the fact; say so loudly, the cap was meant to bound this.
+        console.warn(`WARNING pipe-chat: ${file} turn's real input was ${inputTokens} tokens, over the ${MAX_INPUT_TOKENS}-token cap (estimated ${size.tokens} before dispatch)`);
+      }
+      const usage = {
+        input_tokens: inputTokens,
+        output_tokens: Number.isFinite(run?.split?.output) ? run.split.output : null,
+        usd: Number.isFinite(run?.usage?.usd) ? run.usage.usd : null,
+      };
       const full = (typeof run?.text === 'string' && run.text) || streamed;
       const { text, yaml: proposedYaml } = extractProposal(full);
 
@@ -162,7 +181,7 @@ export function attachPipelineChatRoutes(app, { getDataDir, getProjectRoot, getS
         proposal = { yaml: proposedYaml, baseHash: typeof baseHash === 'string' && baseHash ? baseHash : hashText(yaml), ...v };
       }
       store({ role: 'assistant', text, ...(proposal ? { proposed: summarizeProposal(full) } : {}) });
-      send({ type: 'final', reply: text, proposal });
+      send({ type: 'final', reply: text, proposal, usage });
     } catch (err) {
       const aborted = ctl.signal.aborted || err?.name === 'AbortError';
       send({ type: 'error', error: aborted ? 'Cancelled' : (err?.message || String(err)), cancelled: aborted });

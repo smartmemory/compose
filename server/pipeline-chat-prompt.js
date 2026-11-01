@@ -5,7 +5,8 @@
  */
 import { createHash } from 'node:crypto';
 
-/** The most input one turn may carry (design §5: worst case ≈ $0.25 per message). */
+/** The most input one turn may carry: system prompt plus prompt, counted before dispatch, and
+ *  compared after it with the SDK's real input (input + cache read + cache creation). */
 export const MAX_INPUT_TOKENS = 40_000;
 /** Turns of history replayed in the prompt (text only). */
 export const HISTORY_TURNS = 12;
@@ -14,7 +15,8 @@ export const estimateTokens = (text) => Math.ceil(String(text ?? '').length / 4)
 
 export const hashText = (text) => createHash('sha256').update(String(text ?? '')).digest('hex');
 
-const SYSTEM = `You are the spec assistant inside Compose's Flow editor. The user is editing one Stratum pipeline spec (YAML). You have NO tools: you cannot read files or run anything. Everything you know about the spec is in this message.
+/** Sent as the isolated run's own system prompt (F6), never inside the user prompt. */
+export const CHAT_SYSTEM_PROMPT = `You are the spec assistant inside Compose's Flow editor. The user is editing one Stratum pipeline spec (YAML). You have NO tools: you cannot read files or run anything. Everything you know about the spec is in the user's message.
 
 Rules:
 - Answer in short plain text first.
@@ -45,8 +47,6 @@ export function buildPrompt({ yaml, message, selectedFlow, selectedStep, errors,
   });
   const errs = Array.isArray(errors) ? errors.filter(Boolean).slice(0, 20) : [];
   return [
-    SYSTEM,
-    '',
     `Selected flow: ${selectedFlow || '(none)'}`,
     `Selected step: ${selectedStep || '(none)'}`,
     `Validation errors (${errs.length}):${errs.length ? `\n${errs.map((e) => `- ${cut(e, 300)}`).join('\n')}` : ' none'}`,
@@ -61,10 +61,23 @@ export function buildPrompt({ yaml, message, selectedFlow, selectedStep, errors,
   ].join('\n');
 }
 
-/** `{ok:true, tokens}` or `{ok:false, tokens, cap}` — checked before any dispatch. */
+/** `{ok:true, tokens}` or `{ok:false, tokens, cap}` — checked before any dispatch, over
+ *  everything the isolated run sends: the system prompt and the prompt. */
 export function checkInputSize(prompt) {
-  const tokens = estimateTokens(prompt);
+  const tokens = estimateTokens(CHAT_SYSTEM_PROMPT) + estimateTokens(prompt);
   return tokens > MAX_INPUT_TOKENS ? { ok: false, tokens, cap: MAX_INPUT_TOKENS } : { ok: true, tokens };
+}
+
+/**
+ * The model input a turn really carried, from the connector's split: Claude reports uncached
+ * input, cache reads and cache writes separately, and all three are input the turn paid for.
+ * `null` when the run reported no split (a fake or an old Stratum), never a guessed 0.
+ */
+export function realInputTokens(run) {
+  const split = run?.split;
+  if (!split || typeof split !== 'object' || !Number.isFinite(split.input)) return null;
+  const n = (v) => (Number.isFinite(v) && v > 0 ? v : 0);
+  return n(split.input) + n(split.cacheRead) + n(split.cacheCreation);
 }
 
 /**

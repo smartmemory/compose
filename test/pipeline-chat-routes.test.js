@@ -32,13 +32,14 @@ function makeFake() {
     hold: null,
     onEvent() { return () => {}; },
     async validate(spec) { calls.validate.push(spec); return f.validateResult; },
+    run: { split: { input: 10, output: 5 }, usage: { usd: 0.001 } },
     async agentRun(agent, p, opts) {
       calls.run.push({ agent, prompt: p, opts });
       if (f.hold) await new Promise((res, rej) => {
         f.hold.release = res;
         opts.signal?.addEventListener('abort', () => rej(Object.assign(new Error('Aborted'), { name: 'AbortError' })));
       });
-      return { text: f.reply };
+      return { text: f.reply, ...(f.run ?? {}) };
     },
   };
   return f;
@@ -87,6 +88,10 @@ describe('dispatch contract', () => {
     assert.equal(CHAT_MODEL, 'claude-sonnet-5-5');
     assert.deepEqual(opts.allowedTools, []);
     assert.deepEqual(opts.disallowedTools, ['ToolSearch']);
+    // F6: isolated from the owner's Claude setup, with the chat's own system prompt.
+    assert.equal(opts.isolated, true);
+    assert.equal(opts.systemPrompt, prompt.CHAT_SYSTEM_PROMPT);
+    assert.match(opts.systemPrompt, /spec assistant inside Compose's Flow editor/);
     assert.equal(opts.effort, 'low');
     assert.equal(opts.telemetry.site, 'pipe-chat');
     assert.equal(CHAT_SITE, 'pipe-chat');
@@ -100,6 +105,7 @@ describe('dispatch contract', () => {
     assert.match(p, /Selected flow: main/);
     assert.match(p, /Selected step: a/);
     assert.match(p, /- x is wrong/);
+    assert.ok(!p.includes(prompt.CHAT_SYSTEM_PROMPT.slice(0, 40)), 'instructions travel as systemPrompt, not in the prompt');
     assert.deepEqual(readdirSync(work).filter((f) => f.endsWith('.yaml')), []);
   });
 
@@ -119,6 +125,50 @@ describe('size cap', () => {
     assert.equal(calls.run.length, 0);
     const hist = await (await fetch(`${baseUrl}/api/pipeline/chat?file=plan.stratum.yaml`)).json();
     assert.deepEqual(hist.messages, []);
+  });
+});
+
+describe('real input (F6)', () => {
+  const quiet = async (fn) => {
+    const warned = []; const orig = console.warn;
+    console.warn = (m) => { warned.push(String(m)); };
+    try { return { result: await fn(), warned }; } finally { console.warn = orig; }
+  };
+
+  test('the system prompt counts toward the cap before dispatch', async () => {
+    const sys = prompt.estimateTokens(prompt.CHAT_SYSTEM_PROMPT);
+    assert.ok(sys > 50);
+    // A yaml that fits the cap on its own but not with the system prompt added.
+    const base = prompt.estimateTokens(prompt.buildPrompt({ ...good(), yaml: SPEC, history: [] }));
+    const pad = (prompt.MAX_INPUT_TOKENS - base - Math.floor(sys / 2)) * 4;
+    const yaml = SPEC + '# ' + 'x'.repeat(pad) + '\n';
+    assert.ok(prompt.estimateTokens(prompt.buildPrompt({ ...good(), yaml, history: [] })) <= prompt.MAX_INPUT_TOKENS);
+    const r = await turn(good({ yaml }));
+    assert.equal(r.status, 413);
+    assert.equal(calls.run.length, 0);
+  });
+
+  test('the final frame reports the true input (input + cache read + cache creation) and cost', async () => {
+    fake.run = { split: { input: 3, output: 120, cacheRead: 900, cacheCreation: 2100 }, usage: { usd: 0.012, tokens: 123, ms: 5 } };
+    const { result, warned } = await quiet(() => turn(good()));
+    assert.deepEqual(finalOf(result).usage, { input_tokens: 3003, output_tokens: 120, usd: 0.012 });
+    assert.deepEqual(warned, []);
+  });
+
+  test('a turn whose real input exceeds the cap is reported loudly', async () => {
+    fake.run = { split: { input: 2, output: 10, cacheRead: 141114 }, usage: { usd: 0.03 } };
+    const { result, warned } = await quiet(() => turn(good()));
+    assert.equal(finalOf(result).usage.input_tokens, 141116);
+    assert.equal(warned.length, 1);
+    assert.match(warned[0], /WARNING pipe-chat: plan\.stratum\.yaml turn's real input was 141116 tokens, over the 40000-token cap/);
+  });
+
+  test('a turn with no split says its input is unknown instead of reporting 0', async () => {
+    fake.run = {};
+    const { result, warned } = await quiet(() => turn(good()));
+    assert.equal(finalOf(result).usage.input_tokens, null);
+    assert.equal(warned.length, 1);
+    assert.match(warned[0], /reported no token split; its real input is unknown/);
   });
 });
 

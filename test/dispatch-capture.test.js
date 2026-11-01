@@ -163,6 +163,41 @@ describe('connector-owned dispatch capture', () => {
     }
   });
 
+  // COMP-PIPE-EDIT-CHAT-PANE-1 F6 (review L4): claude's split is three DISJOINT input counts,
+  // so a 141K-token turn served from cache was recorded as tokens_in 2. Codex's input already
+  // includes its cache reads (the row above), so only claude sums.
+  test('a claude row carries the true input total and its cache share; codex is not double-counted', async () => {
+    const project = tempDir('dispatch-claude-cache-');
+    const worktree = tempDir('dispatch-claude-cache-wt-');
+    try {
+      const { client } = makeClient([
+        { text: 'ok', usage: { tokens: 1877, usd: 0.0319, ms: 900 },
+          split: { input: 2, output: 1875, cacheRead: 141114 }, usdSource: 'reported',
+          telemetry: { model: 'claude-sonnet-5-5', durationMs: 900 } },
+        { text: 'ok', usage: { tokens: 1729, usd: 0.47, ms: 900 },
+          split: { input: 3, output: 1727, cacheCreation: 113739 }, usdSource: 'reported',
+          telemetry: { model: 'claude-sonnet-5-5', durationMs: 900 } },
+        { text: 'ok', usage: { tokens: 30, ms: 9 }, split: { input: 20, output: 10, cacheRead: 15 },
+          telemetry: { model: codexDefault, durationMs: 9 } },
+      ]);
+      const telemetry = { project_cwd: project, site: 'pipe-chat' };
+      await client.agentRun('claude', 'prompt', { cwd: worktree, telemetry });
+      await client.agentRun('claude', 'prompt', { cwd: worktree, telemetry });
+      await client.agentRun('codex', 'prompt', { cwd: worktree, telemetry: { ...telemetry, site: 'build-step' } });
+      const [warm, cold, codex] = readEvents(project);
+      assert.equal(warm.tokens_in, 2 + 141114);
+      assert.equal(warm.tokens_cache_read, 141114);
+      assert.equal('tokens_cache_creation' in warm, false, 'unreported stays absent, not 0');
+      assert.equal(cold.tokens_in, 3 + 113739);
+      assert.equal(cold.tokens_cache_creation, 113739);
+      assert.equal(cold.tokens_total, 1729, 'tokens_total stays the connector total');
+      assert.equal(codex.tokens_in, 20);
+      assert.equal(codex.tokens_cache_read, 15);
+    } finally {
+      cleanup(project, worktree);
+    }
+  });
+
   test('a dispatch with no split or provenance still records nulls, not zeros', async () => {
     const project = tempDir('dispatch-nosplit-');
     const worktree = tempDir('dispatch-nosplit-wt-');
