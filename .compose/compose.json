@@ -78,5 +78,12 @@
       "sm20",
       "web"
     ]
+  },
+  "projects": {
+    "roots": [
+      "~/reg/my/SmartMemory",
+      "~/reg/my/forge",
+      "~/reg/my/stock/trader"
+    ]
   }
 }
