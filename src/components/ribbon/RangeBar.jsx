@@ -54,8 +54,8 @@ export default function RangeBar({ window: w, following, clampedBecause, onRange
           </button>
         )}
         {alertChip && (
-          <button type="button" className={`${BTN} text-[hsl(var(--warning,32_95%_52%))]`} data-testid="ribbon-alert-chip" title={alertChip.tip} aria-label={alertChip.tip.replace(/\n/g, '. ')} onClick={onAlertChip}>
-            ⚠ {alertChip.open}{alertChip.cleared ? ` (+${alertChip.cleared} cleared)` : ''}
+          <button type="button" className={`${BTN}${alertChip.open ? ' text-[hsl(var(--warning,32_95%_52%))]' : ' text-muted-foreground'}`} data-testid="ribbon-alert-chip" title={alertChip.tip} aria-label={alertChip.tip.replace(/\n/g, '. ')} onClick={onAlertChip}>
+            {alertChip.open ? `⚠ ${alertChip.open}${alertChip.cleared ? ` (+${alertChip.cleared} cleared)` : ''}` : `✓ ${alertChip.cleared} cleared`}
           </button>
         )}
       </div>

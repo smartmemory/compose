@@ -15,6 +15,7 @@ vi.mock('../../src/lib/wsFetch.js', async (orig) => ({ ...(await orig()), wsFetc
 import { wsFetch } from '../../src/lib/wsFetch.js';
 import DayRibbon from '../../src/components/ribbon/DayRibbon.jsx';
 import DayView, { RESETS_HIDDEN_KEY } from '../../src/components/ribbon/DayView.jsx';
+import RangeBar from '../../src/components/ribbon/RangeBar.jsx';
 import { orphanAlerts, resetTag, RESET_MERGE_PX } from '../../src/components/ribbon/ribbonLayout.js';
 
 const day = JSON.parse(readFileSync(resolve(process.cwd(), 'test/fixtures/ribbon/day.json'), 'utf8'));
@@ -102,6 +103,13 @@ const ROWS = [
       const root = draw(day.pins, { alerts });
       expect(root.querySelectorAll('[data-testid="alert-mark"]')).toHaveLength(1); // only the lane's
       expect(orphanAlerts(alerts, day.from, day.to).map((a) => a.key)).toEqual(['a3', 'a5']);
+      // the chip: open count, cleared count, and an all-cleared chip says so instead of "0 alerts"
+      const bar = (chip) => render(<RangeBar window={{ from: day.from, to: day.to }} following={false} onRange={() => {}} onPreset={() => {}} onStep={() => {}} onNow={() => {}} alertChip={chip} onAlertChip={() => {}} />);
+      bar({ open: 1, cleared: 1, tip: 'x' });
+      expect(screen.getByTestId('ribbon-alert-chip').textContent).toBe('⚠ 1 (+1 cleared)');
+      cleanup();
+      bar({ open: 0, cleared: 2, tip: 'x' });
+      expect(screen.getByTestId('ribbon-alert-chip').textContent).toBe('✓ 2 cleared');
     },
   },
   {
