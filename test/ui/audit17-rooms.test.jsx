@@ -149,7 +149,8 @@ describe('<RoomPaneSwitcher> project room views (one row table)', () => {
     { view: 'dashboard', panes: null }, { view: 'ideabox', panes: null }, { view: 'process', panes: null },
     { view: 'graph', panes: ['graph', 'tree'] },
     { view: 'tree', panes: ['graph', 'tree'] },
-    { view: 'qa-scope', panes: ['gates', 'validate', 'qa-scope'] },
+    { view: 'qa-scope', panes: ['gates', 'validate', 'qa-scope', 'decisions'] },
+    { view: 'decisions', panes: ['gates', 'validate', 'qa-scope', 'decisions'] },
     { view: 'design', panes: ['design', 'pipeline', 'pipeline-editor', 'build-history'] },
   ];
   it('rows', () => {

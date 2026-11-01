@@ -39,7 +39,7 @@ describe('Projects tab (COMP-COCKPIT-PROJECTS-TAB-1)', () => {
       { view: 'ideabox', room: 'ideas', crumb: ['Day', 'Projects', 'compose', 'Ideas'] },
       { view: 'tree', room: 'roadmap', crumb: ['Day', 'Projects', 'compose', 'Roadmap', 'List'], views: ['graph', 'tree'] },
       { view: 'pipeline', room: 'build', crumb: ['Day', 'Projects', 'compose', 'Build', 'Live build'], views: ['design', 'pipeline', 'pipeline-editor', 'build-history'] },
-      { view: 'validate', room: 'review', crumb: ['Day', 'Projects', 'compose', 'Review', 'Validate'], views: ['gates', 'validate', 'qa-scope'] },
+      { view: 'validate', room: 'review', crumb: ['Day', 'Projects', 'compose', 'Review', 'Validate'], views: ['gates', 'validate', 'qa-scope', 'decisions'] },
     ];
     for (const r of rows) {
       cleanup(); localStorage.clear(); sessionStorage.clear(); resetFleetProjects();

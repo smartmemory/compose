@@ -56,7 +56,7 @@ describe('roomViews + roomEntryView (one row table)', () => {
       { name: 'unknown but active stays', room: 'fleet', av: {}, active: 'ops', want: ['process', 'ops', 'sessions', 'usage'] },
       { name: 'ops no', room: 'fleet', av: { ...ALL_YES, ops: 'no' }, active: null, want: ['process', 'cadence', 'stratum', 'sessions', 'usage'] },
       { name: 'wiki no', room: 'library', av: { ...ALL_YES, wiki: 'no' }, active: null, want: ['journal'] },
-      { name: 'review has no predicate', room: 'review', av: { ops: 'no' }, active: null, want: ['gates', 'validate', 'qa-scope'] },
+      { name: 'review has no predicate', room: 'review', av: { ops: 'no' }, active: null, want: ['gates', 'validate', 'qa-scope', 'decisions'] },
       { name: 'unknown room', room: 'nope', av: {}, active: null, want: [] },
     ];
     for (const r of rows) assert.deepEqual(roomViews(r.room, r.av, r.active), r.want, r.name);

@@ -77,6 +77,7 @@ import DashboardView from './components/vision/DashboardView.jsx';
 import IdeaboxView from './components/vision/IdeaboxView.jsx';
 import ValidateView from './components/vision/ValidateView.jsx';
 import QaScopeView from './components/vision/QaScopeView.jsx';
+import DecisionsPane from './components/cockpit/DecisionsPane.jsx';
 import NewFeatureDialog from './components/vision/NewFeatureDialog.jsx';
 import JournalView from './components/vision/JournalView.jsx';
 import DesignView from './components/vision/DesignView.jsx';
@@ -423,6 +424,8 @@ function CockpitView({
     }
     case 'qa-scope':
       return <QaScopeView featureCode={featureCode} />;
+    case 'decisions':
+      return <DecisionsPane projectRoot={projectRoot} />;
     case 'journal':
       return <JournalView />;
     case 'settings':
