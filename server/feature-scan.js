@@ -16,7 +16,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { parse as parseYaml } from 'yaml';
-import { getTargetRoot, resolveProjectPath } from './project-root.js';
+import { getTargetRoot, loadProjectConfig, resolveProjectPath } from './project-root.js';
+import { moduleOwnedCodes } from './project-model.js';
 import { relForDisplay } from '../lib/project-paths.js';
 import { featureStatusToVisionStatus } from '../lib/status-projection.js';
 import { VERIFIED_BY } from './completion-projection.js';
@@ -506,9 +507,19 @@ function seedCompletionTier(feature) {
 }
 
 export function seedFeatures(features, store) {
-  const seeded = { features: 0, updated: 0, connections: 0 };
+  const seeded = { features: 0, updated: 0, connections: 0, moduleOwned: 0 };
   const featureItemMap = new Map(); // featureCode → itemId
   const root = getTargetRoot();
+  // COMP-COCKPIT-PROJECT-MODEL-1 Q1 (owner 2026-11-01): a project root never seeds a code that one of its configured
+  // module stores (`project.modules` in its compose.json) already holds. The module store is the truth, and the root's
+  // drifted copies were deleted; without this the next rescan of the root folder would re-add them. The code's item is
+  // neither created nor updated here (an existing one is left exactly as it is), and no edge is seeded to it.
+  const owned = moduleOwnedCodes(root, loadProjectConfig());
+  if (owned.size) {
+    const before = features.length;
+    features = features.filter((f) => !owned.has(f.name));
+    seeded.moduleOwned = before - features.length;
+  }
   const featuresBase = resolveProjectPath('features');
   // Root-relative for the in-root default (relForDisplay guarantees byte-identity
   // there); absolute when the features dir is relocated outside the workspace root.

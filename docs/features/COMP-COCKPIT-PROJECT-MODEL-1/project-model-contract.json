@@ -1,0 +1,65 @@
+{
+  "feature": "COMP-COCKPIT-PROJECT-MODEL-1",
+  "version": 1,
+  "design": "smart-memory-ops/units/COMP-COCKPIT-PROJECT-MODEL-1/design.md",
+  "notes": [
+    "Read-only routes. No route here calls /api/project/switch, goes through the workspace runtime, or writes a store. They ignore X-Compose-Workspace-Id and the UI sends none (plain fetch, not wsFetch).",
+    "Mounted only in local mode, next to /api/process. With `projects.roots` absent from the host's .compose/compose.json, /api/projects answers {configured:false, projects:[]} and /api/fleet/roots keeps its legacy payload."
+  ],
+  "routes": {
+    "GET /api/projects": {
+      "response": {
+        "configured": "boolean: the host config has projects.roots",
+        "projects": [
+          {
+            "name": "string: project.name, else the root folder name",
+            "label": "string",
+            "root": "string: realpath of the project root",
+            "hasStore": "boolean: <root>/.compose/data/vision-state.json exists and the root's capabilities.lifecycle !== false",
+            "lanes": [
+              { "id": "string, unique in the project", "label": "string", "opsLane": "string, defaults to id", "repo": "string|null: absolute path", "module": "string|null: a modules[].name of this project" }
+            ],
+            "modules": [
+              { "name": "string", "path": "string: as configured", "realpath": "string|null", "outsideRoot": "boolean", "hasStore": "boolean: derived on read, never written", "lifecycle": "boolean", "error": "string|null: e.g. claimed by an earlier project; an errored module contributes nothing" }
+            ],
+            "errors": ["string: visible on Projects home, never silent"]
+          }
+        ],
+        "laneIndex": { "<opsLane>": { "project": "string", "laneIds": ["string"], "modules": ["string"] } },
+        "unassigned": ["string: knownLanes no project claims"],
+        "errors": ["string: host-level errors (bad projects.roots)"]
+      }
+    },
+    "GET /api/projects/:name/graph": {
+      "query": { "lane": "optional lane id: echoed back as focus" },
+      "response": {
+        "project": "string",
+        "items": [
+          "a vision item as the store holds it, with: id = '<member>:<storeId>', module = '<member>' (the root store's member is the project name), memberRoot = realpath of the owning store's root"
+        ],
+        "connections": [ { "id": "string", "fromId": "namespaced id", "toId": "namespaced id", "type": "informs|blocks|supports|..." } ],
+        "members": [ { "name": "string", "root": "string", "items": "number contributed", "skipped": "string|null: 'lifecycle:false' | 'no store' | module error" } ],
+        "modules": "the project's modules[] (as in GET /api/projects)",
+        "focus": { "lane": "string|null", "modules": ["string: the lane's module names; empty = whole project"] },
+        "dropped": [ { "code": "featureCode", "from": "member", "winner": "member" } ]
+      },
+      "rules": [
+        "Collision on featureCode: a module store beats the root store (owner Q1 2026-11-01: the module store is the truth). Between modules, the one with <features>/<CODE>/ on disk wins, then config order. The loser is dropped and its edges are re-pointed to the winner.",
+        "Root-store track items titled like a configured module are dropped: modules[] replaces them.",
+        "A member whose capabilities.lifecycle is false contributes no items.",
+        "404 {error} for an unknown project name."
+      ]
+    },
+    "GET /api/projects/:name/doc": {
+      "query": { "id": "a namespaced item id from the graph route" },
+      "response": { "id": "string", "module": "string", "path": "string: absolute path inside the owning member's root", "text": "string: the file contents" },
+      "rules": [
+        "DOC-LINKS on the merged graph: the item's design.md, else its first file, resolved against the OWNING member's root. A path that escapes that root, or a missing file, is 404."
+      ]
+    }
+  },
+  "config": {
+    "host": "<cockpit host>/.compose/compose.json: \"projects\": {\"roots\": [\"~/reg/my/SmartMemory\", ...]} (order = Projects home order)",
+    "perProject": "<root>/.compose/compose.json: \"project\": {\"name\", \"label\", \"lanes\": [{\"id\", \"opsLane\"?, \"label\"?, \"repo\"?, \"module\"?}], \"modules\": [{\"name\", \"path\"}]}"
+  }
+}

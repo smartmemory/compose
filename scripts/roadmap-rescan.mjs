@@ -12,7 +12,8 @@
  * Refuses the project the live server has active: that store is owned by the
  * running server, which reseeds itself when a feature file changes. --dry-run
  * seeds a temp copy of the store and prints the counts without writing.
- * Prints one JSON line: {root, store, before, after}.
+ * Prints one JSON line: {root, store, before, after, moduleOwned}. `moduleOwned` counts the feature folders skipped
+ * because a configured module store owns the code (COMP-COCKPIT-PROJECT-MODEL-1 Q1).
  */
 import { existsSync, mkdtempSync, copyFileSync, rmSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -70,13 +71,14 @@ async function main(argv) {
     if (existsSync(storeFile)) copyFileSync(storeFile, join(dataDir, 'vision-state.json'));
   }
   try {
+    let moduleOwned = 0;
     withProjectContext({ ...binding, dataDir }, () => {
       const store = new VisionStore(dataDir);
-      seedFeatures(scanFeatures(), store);
+      moduleOwned = seedFeatures(scanFeatures(), store).moduleOwned ?? 0;
       seedSubPackages(scanSubPackages(), store);
     });
     const after = storeCounts(join(dataDir, 'vision-state.json'));
-    console.log(JSON.stringify({ root: target, store: storeFile, dryRun, before, after }));
+    console.log(JSON.stringify({ root: target, store: storeFile, dryRun, before, after, moduleOwned }));
   } finally {
     if (dryRun) rmSync(dataDir, { recursive: true, force: true });
   }

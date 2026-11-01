@@ -18,6 +18,13 @@
  * would change under the owner after every switch. `GET /api/fleet/roots` maps each known lane to its Compose
  * project root: `DEFAULT_FLEET_ROOTS`, overridden per lane by `fleet.roots` in the same file (a path, or null for
  * none). A root counts only while `<root>/.compose` is a directory, checked on every request.
+ *
+ * COMP-COCKPIT-PROJECT-MODEL-1: when the host config has `projects.roots`, a project is a root folder with lanes and
+ * modules (server/project-model.js). `GET /api/projects` lists them, `GET /api/projects/:name/graph` merges one
+ * project's stores at read time (server/project-graph.js), `/api/fleet/roots` is derived from the model for one release
+ * and `/api/process` `fleet` gains `laneIndex` (`fleet.projects` keeps its old meaning, the saved lane order). With the
+ * key absent every route serves today's payload, so a rollback is "remove the key". None of these routes switches the
+ * project, reads a workspace header or writes a store.
  */
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
@@ -30,11 +37,14 @@ import { PublishRefused, buildPointer, detectSourceCheckout } from '../lib/proce
 import { COMPOSE_HOME, getTargetRoot } from './project-root.js';
 import { localCaller } from './wiki-routes.js';
 import { writeComposeJson } from '../lib/cli-remote.js';
+import { fleetRootsFromModel, readProjects } from './project-model.js';
+import { buildProjectGraph, readProjectDoc } from './project-graph.js';
 
 export const PROCESS_ROUTE = '/api/process';
 export const PUBLISH_ROUTE = '/api/process/publish';
 export const FLEET_PROJECTS_ROUTE = '/api/fleet/projects';
 export const FLEET_ROOTS_ROUTE = '/api/fleet/roots';
+export const PROJECTS_ROUTE = '/api/projects';
 export const BUILDER_TICK_S = 900; // launchd ai.smartmemory.status-build StartInterval; stale at two ticks
 const TTL_MS = { builder: 60_000, stamps: 120_000, history: 300_000 };
 const LOG = '[process]';
@@ -43,6 +53,8 @@ export const DEFAULT_EXTRA = `forge=${join(homedir(), 'reg/my/forge/status/units
 const DEFAULT_KPI_HISTORY = join(homedir(), 'reg/my/forge/status/kpi-history.jsonl');
 
 /**
+ * Legacy fallback only (served while the host config has no `projects.roots`; removed with `fleet.*` once the project
+ * model has run a week with no fallback hit, design section 8).
  * Lane -> Compose project root, from the builder configs (`OPS/status/configs/<lane>.json`: forge's `features` glob,
  * cadence-section's `cwd`, the `commits.repo` of 2.0 and maya, trader's ledger path). No other registry names a lane's
  * repo. A lane absent here has no project until `fleet.roots` names one.
@@ -252,7 +264,10 @@ export function attachProcessRoutes(app, {
   app.get(PROCESS_ROUTE, async (_req, res) => {
     try {
       const [builder, stamps, history] = await Promise.all([caches.builder.get(), caches.stamps.get(), caches.history.get()]);
-      const fleet = { known: knownLanes(builder, stamps), ...(await readFleetProjects(projectRoot())) };
+      const known = knownLanes(builder, stamps);
+      const fleet = { known, ...(await readFleetProjects(projectRoot())) };
+      const model = readProjects(projectRoot(), known);
+      if (model.configured) fleet.laneIndex = model.laneIndex;
       res.set('cache-control', 'no-store');
       res.json({ generated: new Date(now()).toISOString(), sources: { builder, stamps, history }, fleet });
     } catch (error) {
@@ -264,10 +279,46 @@ export function attachProcessRoutes(app, {
     res.set('cache-control', 'no-store');
     try {
       const [builder, stamps] = await Promise.all([caches.builder.get(), caches.stamps.get()]);
-      res.json(await readFleetRoots(projectRoot(), knownLanes(builder, stamps), defaultRoots));
+      const known = knownLanes(builder, stamps);
+      const model = readProjects(projectRoot(), known);
+      if (model.configured) return res.json({ roots: fleetRootsFromModel(model, known), error: null });
+      res.json(await readFleetRoots(projectRoot(), known, defaultRoots));
     } catch (error) {
       res.status(500).json({ error: String(error?.message ?? error) });
     }
+  });
+  // COMP-COCKPIT-PROJECT-MODEL-1: read-only, from disk on every request (contract: docs/features/COMP-COCKPIT-PROJECT-MODEL-1).
+  const modelNow = async () => {
+    const [builder, stamps] = await Promise.all([caches.builder.get(), caches.stamps.get()]);
+    return readProjects(projectRoot(), knownLanes(builder, stamps));
+  };
+  app.get(PROJECTS_ROUTE, async (_req, res) => {
+    res.set('cache-control', 'no-store');
+    try { res.json(await modelNow()); } catch (error) { res.status(500).json({ error: String(error?.message ?? error) }); }
+  });
+  const findProject = async (req, res) => {
+    const model = await modelNow();
+    const project = model.projects.find((p) => p.name === req.params.name);
+    if (!project) res.status(404).json({ error: `unknown project: ${String(req.params.name).slice(0, 80)}` });
+    return project ?? null;
+  };
+  app.get(`${PROJECTS_ROUTE}/:name/graph`, async (req, res) => {
+    res.set('cache-control', 'no-store');
+    try {
+      const project = await findProject(req, res);
+      if (!project) return;
+      const lane = typeof req.query.lane === 'string' && req.query.lane ? req.query.lane : null;
+      res.json(buildProjectGraph(project, { lane }));
+    } catch (error) { res.status(500).json({ error: String(error?.message ?? error) }); }
+  });
+  app.get(`${PROJECTS_ROUTE}/:name/doc`, async (req, res) => {
+    res.set('cache-control', 'no-store');
+    try {
+      const project = await findProject(req, res);
+      if (!project) return;
+      const { status, body } = readProjectDoc(project, String(req.query.id ?? ''));
+      res.status(status).json(body);
+    } catch (error) { res.status(500).json({ error: String(error?.message ?? error) }); }
   });
   // U3: the loopback link for the Publish control. Takes no input (query, body and Host are ignored), reads only env
   // and the checkout check, writes nothing, and carries no Process data. Mounted only here, so not in remote mode.
