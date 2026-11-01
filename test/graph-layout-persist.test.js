@@ -7,7 +7,7 @@
  * post-construction step puts saved positions back, places new nodes, and runs separate, fit, viewport in order;
  * (3) GraphView calls that step right after constructing and holds no dead listener.
  */
-import { test, describe } from 'node:test';
+import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import cytoscape from 'cytoscape';
@@ -22,11 +22,18 @@ const elements = () => [
   ...ids.map(id => ({ data: { id, status: 'PLANNED' } })),
   ...ids.slice(1).map((id, i) => ({ data: { id: `e${i}`, source: ids[i], target: id } })),
 ];
-const build = () => cytoscape({
-  elements: elements(), headless: true, styleEnabled: true,
-  style: [{ selector: 'node', style: { width: 150, height: 60 } }],
-  layout: { name: 'fcose', animate: false, quality: 'draft' },
-});
+const made = [];
+const build = () => {
+  const cy = cytoscape({
+    elements: elements(), headless: true, styleEnabled: true,
+    style: [{ selector: 'node', style: { width: 150, height: 60 } }],
+    layout: { name: 'fcose', animate: false, quality: 'draft' },
+  });
+  made.push(cy);
+  return cy;
+};
+// a live headless instance keeps a timer, and the test process would never exit
+after(() => { for (const cy of made) cy.destroy(); });
 const SAVED = { a: { x: 1000, y: 2000 }, b: { x: -500, y: 40 } };
 const apply = (cy) => {
   for (const n of cy.nodes()) { const s = SAVED[n.id()]; if (s) n.position(s); }
