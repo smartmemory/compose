@@ -80,7 +80,8 @@ export default function ProjectGraphView({ project, lane = null, model = null })
       ) : null}
       {graph && !emptyModule ? (
         <div className="flex min-h-0 flex-1">
-          <div className="min-w-0 flex-1">
+          {/* GraphView's root is `flex-1 flex flex-col min-h-0`: it needs a flex-column parent, or its canvas collapses to 0 px. */}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <GraphView items={shown.items} connections={shown.connections} selectedItemId={selected} onSelect={setSelected}
               onOpenDoc={openDoc} readOnly />
           </div>
