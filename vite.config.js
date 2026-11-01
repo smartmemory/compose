@@ -43,7 +43,12 @@ export default defineConfig({
     port: Number(process.env.VITE_PORT) || 5195, // the supervisor and cockpit.sh already honour VITE_PORT
     strictPort: true,
     // Don't watch dependency, build, runtime-state or docs trees: watching them made vite the box's top fs-event producer.
-    watch: { ignored: ['**/node_modules/**', '**/dist/**', '**/.compose/**', '**/docs/**'] },
+    // Nor the sessions' git worktrees (COMP-WIKI-GRAPH-SURFACES-1): every index.html a session's `git worktree add` or
+    // `remove` wrote there full-reloaded the owner's open cockpit (10 reloads in 6 s at 02:41 on 2026-11-02, two worktrees),
+    // throwing the Wiki tab back to Search and the graph's view away. Anchored to this root: the watcher matches with `dot`
+    // on absolute paths, so a bare `**/.worktrees/**` would also blind a dev server started inside a worktree to its own
+    // sources. test/vite-watch.test.js pins the list.
+    watch: { ignored: ['**/node_modules/**', '**/dist/**', '**/.compose/**', '**/docs/**', `${__dirname}/.worktrees/**`] },
     proxy: {
       '/api': 'http://127.0.0.1:4001',
       '/ops-status': 'http://127.0.0.1:4001',
