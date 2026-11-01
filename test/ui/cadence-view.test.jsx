@@ -19,6 +19,7 @@ function fakeClient() {
     getBelt: vi.fn(async () => ({ generatedAt: at, units: [unit], lanes: ['ops'], landedWindowH: 24, offBelt: 0, readiness: null, errors: [] })),
     getSeats: vi.fn(async () => ({ generatedAt: at, source: 'cadence', seats: [], recommendation: null, unassignedJobs: [], errors: [] })),
     getChains: vi.fn(async () => ({ generatedAt: at, chains: [], errors: [] })),
+    getLive: vi.fn(async () => ({ generatedAt: at, lanes: [], errors: [] })),
     getAttention: vi.fn(async () => ({
       generatedAt: at, alerts: [], overdue: [], cadenceStatus: 'ok', cadenceTs: at, errors: [],
       asks: [{ id: 'ASK-1', by: 's2-coord', text: 'a fake owner ask', openedAt: at, unit: null }],
@@ -48,9 +49,11 @@ describe('Cadence tab', () => {
     await waitFor(() => expect(client.getChains).toHaveBeenCalled());
     // TAB-DEPTH-1 (M1): Attention is no pane, its rows are the notify inbox's typed rows
     expect(screen.queryByRole('tab', { name: 'Attention' })).toBeNull();
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Board', 'Chains', 'Diary']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Board', 'Chains', 'Diary', 'Live']);
     fireEvent.click(screen.getByRole('tab', { name: 'Diary' }));
     expect(await screen.findByText(/a fake landing/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Live' }));
+    await waitFor(() => expect(client.getLive).toHaveBeenCalled());
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
@@ -68,11 +71,12 @@ describe('Compose cadence DataClient', () => {
     await client.getChains();
     await client.getAttention();
     await client.getReview();
+    await client.getLive();
     await client.getDiary();
     await client.getDiary({ family: 'job', limit: 5 });
     expect(calls.map(([u]) => u)).toEqual([
       '/api/cadence-ui/belt', '/api/cadence-ui/seats', '/api/cadence-ui/chains', '/api/cadence-ui/attention',
-      '/api/cadence-ui/review', '/api/cadence-ui/diary', '/api/cadence-ui/diary?family=job&limit=5',
+      '/api/cadence-ui/review', '/api/cadence-ui/live', '/api/cadence-ui/diary', '/api/cadence-ui/diary?family=job&limit=5',
     ]);
     expect(calls.every(([, m]) => m === 'GET')).toBe(true);
   });

@@ -25,6 +25,7 @@ export function createCadenceDataClient() {
     getChains: () => getJson('/chains'),
     getAttention: () => getJson('/attention'),
     getOutage: () => getJson('/outage'), // COMP-COCKPIT-NOTIFY-CHIP-1: outage_watch's state, for the header chip
+    getLive: () => getJson('/live'), // cadence 93222be4 (CADENCE-UI-LIVE-1): the Live pane's lane rows
     getReview: () => getJson('/review'), // cadence be74428 (CADENCE-UI-REVIEW-GATE-1): attention screen's review strip
     getDiary(query = {}) {
       const params = new URLSearchParams();

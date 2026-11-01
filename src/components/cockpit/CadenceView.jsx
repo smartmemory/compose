@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { DataClientProvider, SeatStrip, UnitBelt, ChainDags, DiaryFeed } from '@cadence/ui';
+import { DataClientProvider, SeatStrip, UnitBelt, ChainDags, DiaryFeed, LiveLanes } from '@cadence/ui';
 import '@cadence/ui/styles.css';
 import { createCadenceDataClient } from '../../lib/clients/cadence.js';
 import PaneSwitcher, { usePaneMemory } from './PaneSwitcher.jsx';
@@ -9,6 +9,7 @@ const SCREENS = [
   { key: 'belt', label: 'Board' },
   { key: 'chains', label: 'Chains' },
   { key: 'diary', label: 'Diary' },
+  { key: 'live', label: 'Live' }, // COMP-CADENCE-LIVE-MOUNT-1: CADENCE-UI-LIVE-1's lane view, refreshes itself every 10 s
 ];
 
 /**
@@ -33,6 +34,7 @@ export default function CadenceView({ client }) {
           {view === 'belt' && <UnitBelt focusUnit={focusUnit} />}
           {view === 'chains' && <ChainDags />}
           {view === 'diary' && <DiaryFeed onOpenUnit={openUnit} />}
+          {view === 'live' && <LiveLanes onOpenUnit={openUnit} />}
         </div>
       </div>
     </DataClientProvider>

@@ -7,3 +7,4 @@ export const ChainDags = () => null;
 export const ChainGraph = () => null;
 export const AttentionList = () => null;
 export const DiaryFeed = () => null;
+export const LiveLanes = () => null;
