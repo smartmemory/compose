@@ -11,6 +11,7 @@
  * layout, rebuild-on-change).
  *
  *   tap on a node    → selectStep(id)   (normal mode)
+ *   tap on the empty canvas → selectStep(null)  (normal mode, no shift; chat returns)
  *   cxttap on a node → confirm + deleteStep(id)
  *   cxttap on an edge→ confirm + removeDependency(target, source)
  *
@@ -85,6 +86,16 @@ function buildStyle(c) {
       },
     },
   ];
+}
+
+/**
+ * What a tap on the empty canvas does (COMP-PIPE-EDIT-CHAT-PANE-1 F3). Pure so the row table in
+ * test/ui/pipeline-canvas-deselect.test.jsx pins it without a cytoscape instance.
+ * Normal mode, no shift → 'clear' (chat returns). Connect mode and shift-tap keep today's
+ * behaviour, which is nothing.
+ */
+export function backgroundTapAction({ connectMode = false, shift = false } = {}) {
+  return !connectMode && !shift ? 'clear' : 'none';
 }
 
 const LR_LAYOUT = { name: 'dagre', rankDir: 'LR', rankSep: 90, nodeSep: 45, padding: 40 };
@@ -242,6 +253,14 @@ const PipelineEditorCanvas = forwardRef(function PipelineEditorCanvas(
       minZoom: 0.2, maxZoom: 3, wheelSensitivity: 0.3, boxSelectionEnabled: false,
     });
     cyRef.current = cy;
+
+    // COMP-PIPE-EDIT-CHAT-PANE-1 F3: a tap on the empty canvas deselects, so the pane resolves
+    // back to chat. Cytoscape fires `tap` on the core (evt.target === cy) for the background.
+    cy.on('tap', (evt) => {
+      if (evt.target !== cy) return;
+      const shift = !!(evt.originalEvent && evt.originalEvent.shiftKey);
+      if (backgroundTapAction({ connectMode: connectModeRef.current, shift }) === 'clear') selectStep(null);
+    });
 
     cy.on('tap', 'node', (evt) => {
       const node = evt.target;
