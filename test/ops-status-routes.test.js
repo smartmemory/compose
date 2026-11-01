@@ -97,6 +97,8 @@ const STAMP_UNITS = [...['forge', '2.0', 'hub', 'trader', 'maya', 'wiki'].flatMa
 describe('ops-status data route', () => {
   let dtmp, dsrv, dbase, rsrv, rbase, bsrv, bbase;
   const state = { stdout: EST_OK, fail: null, calls: [], inputs: [], leftover: [] };
+  // compose-eta-* dirs that predate this suite belong to another process (a live cockpit stopped mid-estimate leaves one); count only ours.
+  const etaBefore = new Set(readdirSync(tmpdir()).filter((n) => n.startsWith('compose-eta-')));
   const run = async (argv) => {
     const file = argv[argv.indexOf('plan') + 1];
     state.calls.push(argv);
@@ -226,7 +228,7 @@ describe('ops-status data route', () => {
       assert.equal((await get(`${dbase}/ops-status/forge/status.html`)).status, 200);
       const [, b] = await json(`${dbase}/api/ops-status/index`);
       assert.deepEqual(b.pages, ['2.0', 'custom', 'forge', 'hub', 'maya', 'nodata', 'trader', 'wiki']); // 'broken' has no status.html
-      assert.equal(readdirSync(tmpdir()).filter((n) => n.startsWith('compose-eta-')).length, 0, 'no tmp dir left behind');
+      assert.equal(readdirSync(tmpdir()).filter((n) => n.startsWith('compose-eta-') && !etaBefore.has(n)).length, 0, 'no tmp dir left behind');
     }],
   ];
   for (const [name, setup, check] of DATA_ROWS) test(name, async () => { setup(); await check(); });
