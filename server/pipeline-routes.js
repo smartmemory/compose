@@ -580,7 +580,16 @@ function mergeStepNode(doc, mapNode, step, specWide = false) {
     const { present, value } = surfacedValue(step, key);
     // C3: the `intent` surfaced key maps to its physical field (`do`/`intent`).
     const diskKey = key === 'intent' ? intentKey : key === 'depends_on' ? depsKey : key;
-    if (present) mapNode.set(diskKey, doc.createNode(value));
+    if (present) {
+      // `after:` used to ride in `_extra`, which is only rewritten when it CHANGED, so
+      // an unchanged dependency list keeps its flow style and trailing comment.
+      let same = false;
+      if (key === 'depends_on' && mapNode.has(diskKey)) {
+        const dn = mapNode.get(diskKey, true);
+        same = deepEqual(dn && typeof dn.toJSON === 'function' ? dn.toJSON() : mapNode.get(diskKey), value);
+      }
+      if (!same) mapNode.set(diskKey, doc.createNode(value));
+    }
     else if (mapNode.has(diskKey)) mapNode.delete(diskKey);
     // Never leave the stale sibling — e.g. a python-era `intent` on a v1 step.
     if (key === 'intent') {

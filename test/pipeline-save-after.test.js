@@ -34,6 +34,8 @@ const ROWS = [
     { after: undefined, depends_on: ['a'] }, null],
   ['a v1 node on disk with both keys is saved with one', V1('', '        after: [a]\n        depends_on: [a]\n'), 'main', () => {},
     { after: ['a'], depends_on: undefined }, '# trailing note'],
+  ['an unchanged `after` keeps its flow style and trailing comment', V1('', '        after: [a]  # b waits on a\n'), 'main', () => {},
+    { after: ['a'], depends_on: undefined }, '# b waits on a'],
   ['a v1 node with only the legacy key is saved as `after`', V1('', '        depends_on: [a]\n'), 'main', () => {},
     { after: ['a'], depends_on: undefined }, '# keep me'],
 ];
