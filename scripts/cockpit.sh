@@ -9,6 +9,12 @@ LOG="$RUN/cockpit.log"
 # COCKPIT_PORTS (space-separated) overrides the three ports for tests; the default is the same env names the supervisor reads.
 PORTS="${COCKPIT_PORTS:-${PORT:-4001} ${AGENT_PORT:-4002} ${VITE_PORT:-5195}}"
 ENTRY="${COCKPIT_ENTRY:-server/supervisor.js}"  # relative to the repo root; tests point it at a stub
+# The cockpit runs on the pinned Node, not whichever `node` is first in the caller's PATH (detached jobs put Homebrew node 26 first;
+# three restarts on 2026-11-02 landed on it). COCKPIT_NODE overrides. Its bin dir also leads PATH so the supervisor's spawned
+# children (vite) resolve the same node.
+NODE="${COCKPIT_NODE:-$HOME/.nvm/versions/node/v22.22.3/bin/node}"
+if [ -x "$NODE" ]; then PATH="$(dirname "$NODE"):$PATH"; export PATH
+else echo "cockpit.sh: WARNING pinned node $NODE not found, falling back to $(command -v node) from PATH" >&2; NODE=node; fi
 
 alive() { [ -n "${1:-}" ] && kill -0 "$1" 2>/dev/null; }
 sup_pid() { [ -f "$PIDFILE" ] && cat "$PIDFILE"; }
@@ -28,7 +34,7 @@ cmd_status() {
 # supervisor only. The value is never echoed. The supervisor hands it to the API server alone (`wikiChildEnv`).
 WIKI_SEALED_DIR="${WIKI_SEALED_DIR:-$HOME/.config/smartmemory-wiki/sealed}"
 wiki_token_name() {
-  node --input-type=module -e "import { readWikiConfig, checkWikiConfig } from './server/wiki-routes.js'; const c = checkWikiConfig(readWikiConfig(process.argv[1])); if (c.ok) console.log(c.tokenEnv);" "${COMPOSE_TARGET:-$HERE}" 2>/dev/null
+  "$NODE" --input-type=module -e "import { readWikiConfig, checkWikiConfig } from './server/wiki-routes.js'; const c = checkWikiConfig(readWikiConfig(process.argv[1])); if (c.ok) console.log(c.tokenEnv);" "${COMPOSE_TARGET:-$HERE}" 2>/dev/null
 }
 # Exports the var named $1 from the sealed file $2 unless the var is already set. A symlink is never read.
 # Returns 1 when the file is missing, empty or a symlink. The value is never echoed.
@@ -49,7 +55,7 @@ load_wiki_token() {
 # from the sealed file `compose-sm-key` in the same dir (written by scripts/sealed-put.mjs). Loaded only when the
 # smartmemory block is enabled and its baseUrl is loopback (`smartmemoryKeyEnv`). API server only, like the wiki token.
 sm_key_name() {
-  node --input-type=module -e "import { getSmartmemoryConfig, smartmemoryKeyEnv } from './lib/smartmemory-config.js'; const n = smartmemoryKeyEnv(getSmartmemoryConfig(process.argv[1])); if (n) console.log(n);" "${COMPOSE_TARGET:-$HERE}" 2>/dev/null
+  "$NODE" --input-type=module -e "import { getSmartmemoryConfig, smartmemoryKeyEnv } from './lib/smartmemory-config.js'; const n = smartmemoryKeyEnv(getSmartmemoryConfig(process.argv[1])); if (n) console.log(n);" "${COMPOSE_TARGET:-$HERE}" 2>/dev/null
 }
 load_sm_key() {
   local name; name="$(cd "$HERE" && sm_key_name)"
@@ -71,7 +77,7 @@ cmd_start() {
   (
     load_wiki_token; load_sm_key
     cd "$HERE" || exit 1
-    nohup node "$ENTRY" < /dev/null > "$LOG" 2>&1 &
+    nohup "$NODE" "$ENTRY" < /dev/null > "$LOG" 2>&1 &
     echo $! > "$PIDFILE"
   )
   local deadline=$((SECONDS+90))
