@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { useProcess } from '../../lib/processPoller.js';
 import { useFleet } from '../../lib/fleetPoller.js';
-import { effectiveOrder, orderLanes, pickLane, setPickedLane, useFleetProjects } from '../../lib/fleetProjects.js';
+import { effectiveOrder, laneTarget, openProjectGraph, orderLanes, pickLane, setPickedLane, useFleetProjects } from '../../lib/fleetProjects.js';
 import { OwnerQueueCard, FleetSkeleton } from './FleetPanels.jsx';
 import { pageMarker } from './processLogic.js';
 import { specFor, tileTone } from './process/processTones.js';
@@ -23,6 +23,8 @@ import FlowDag from './process/FlowDag.jsx';
  * work DAG sits between the tiles and the comparison, as in the mockup.
  * COMP-COCKPIT-FLEET-PROJECTS-1: the Fleet left bar's PROJECTS list (`fleet.projects`, null = every lane) orders and
  * filters the comparison columns and the time-split rows; the selected lane is shared with that list.
+ * COMP-COCKPIT-PROJECT-MODEL-1: the selected lane's heading carries its project chip (`fleet.laneIndex` from GET /api/process,
+ * no extra read); a click opens that project's graph focused on the lane. No chip when projects.roots is unset.
  */
 
 const NOTE = 'text-[11px] text-muted-foreground';
@@ -77,6 +79,7 @@ export default function ProcessView() {
   const label = page?.value?.label ?? (table?.projects ?? []).find((p) => p.name === selected)?.label ?? selected;
   const tones = Object.fromEntries(PANEL_IDS.map((k) => [k, tileTone(table, k, column)?.tone ?? null]));
   const history = (selected && data?.sources?.history?.value?.lanes?.[selected]) || [];
+  const chip = selected ? laneTarget(data?.fleet?.laneIndex, selected) : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden p-3" data-testid="process-view">
@@ -89,6 +92,11 @@ export default function ProcessView() {
             <section className="flex flex-col gap-2" data-testid={`process-page-${selected}`}>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-sm font-semibold">{label}</h3>
+                {chip ? (
+                  <button type="button" onClick={() => openProjectGraph(chip.project, chip.lane)} data-testid={`process-project-chip-${selected}`}
+                    title={`Open the ${chip.label} graph, focused on ${selected}`}
+                    className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-accent/40">{chip.label}</button>
+                ) : null}
                 <span className="font-mono text-[11px] text-muted-foreground">as of {page.asOf ?? 'unknown'}</span>
                 {pageMarker(page) ? <span className="text-[11px]" style={page.failed ? bad : warn}>({pageMarker(page)})</span> : null}
                 <span className={NOTE}>· pick another lane in the comparison below</span>

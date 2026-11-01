@@ -110,6 +110,7 @@ const ROWS = [
     assert.deepEqual(roots.json.roots.main, { root: w.sm, hasCompose: true });
     const proc = await get(port, '/api/process');
     assert.equal(proc.json.fleet.laneIndex.main.project, 'smartmemory');
+    assert.equal(proc.json.fleet.laneIndex.main.label, 'SmartMemory', 'the Process chip label rides on laneIndex: no second read');
   })],
   ['without projects.roots: today\'s fleet payload, no laneIndex', async (w) => {
     w.cfg(w.host, { version: 2 });

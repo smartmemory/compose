@@ -146,7 +146,7 @@ export function readProjects(hostRoot, known = []) {
         p.errors.push(`ops lane "${lane.opsLane}" (lane "${lane.id}") is already claimed by project ${prior.project}`);
         continue;
       }
-      const entry = prior ?? (laneIndex[lane.opsLane] = { project: p.name, laneIds: [], modules: [] });
+      const entry = prior ?? (laneIndex[lane.opsLane] = { project: p.name, label: p.label, laneIds: [], modules: [] });
       entry.laneIds.push(lane.id);
       if (lane.module && !entry.modules.includes(lane.module)) entry.modules.push(lane.module);
     }

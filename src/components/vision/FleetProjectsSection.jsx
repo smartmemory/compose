@@ -11,13 +11,19 @@
  * `mode="project"` (Home, Ideas, Roadmap, Build, Review): a click opens that lane's Compose project through
  * `onSelectProject(lane, root|null)` (null: the lane has none, so the room says so), and the highlighted row is the
  * lane whose root is the cockpit's `projectRoot`, or the project-less lane the room is showing (`noProjectLane`).
+ *
+ * COMP-COCKPIT-PROJECT-MODEL-1: in `mode="project"`, when the server has the project model, the list is the projects
+ * with their lanes and modules nested (`ProjectTree`), and a lane opens its project's merged graph: a read, never a
+ * switch. `mode="lane"` (Fleet, Library) and an unconfigured server keep the lane list above.
  */
 import React from 'react';
 import { ChevronUp, ChevronDown, X, Plus } from 'lucide-react';
 import { useProcess } from '../../lib/processPoller.js';
 import {
-  effectiveOrder, orderLanes, pickLane, saveFleetProjects, selectProjectLane, setPickedLane, useFleetProjects, useFleetRoots,
+  effectiveOrder, modelConfigured, orderLanes, pickLane, saveFleetProjects, selectProjectLane, setPickedLane, useFleetProjects,
+  useFleetRoots, useProjectFocus, useProjectModel,
 } from '../../lib/fleetProjects.js';
+import { ProjectTree } from './ProjectsHome.jsx';
 
 const HEAD = 'text-[10px] font-medium uppercase tracking-wider px-2';
 const MUTED = { color: 'hsl(var(--muted-foreground))' };
@@ -40,6 +46,16 @@ export default function FleetProjectsSection({ onViewChange, mode = 'lane', proj
   // Roots not loaded (or the route missing, e.g. a server not yet restarted): a click must not claim "no project".
   const rootsReady = roots !== null && !rootsError;
   const [adding, setAdding] = React.useState(false);
+  const { model } = useProjectModel(projectMode);
+  const focus = useProjectFocus();
+  if (projectMode && modelConfigured(model)) {
+    return (
+      <div data-testid="fleet-projects">
+        <p className={`${HEAD} mb-1`} style={MUTED}>Projects</p>
+        <ProjectTree model={model} focus={focus} testid="fleet-project-tree" />
+      </div>
+    );
+  }
 
   const fleet = data?.fleet ?? null;
   const known = Array.isArray(fleet?.known) ? fleet.known : [];

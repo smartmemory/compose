@@ -586,7 +586,9 @@ function GatePopover({ featureCode, gates, items, badgePositions, onResolve, onC
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
-export default function GraphView({ items, connections, selectedItemId, onSelect, onOpenDoc, onCreateFeature, isEmptyProject, visibleTracks, hiddenGroups, onToggleGroup, buildStateMap, resolveGate, gates, spawnedAgents, agentRelays, agentOverlay, featureCode, focusActive }) {
+export default function GraphView({ items, connections, selectedItemId, onSelect, onOpenDoc, onCreateFeature, isEmptyProject, visibleTracks, hiddenGroups, onToggleGroup, buildStateMap, resolveGate, gates, spawnedAgents, agentRelays, agentOverlay, featureCode, focusActive, readOnly = false }) {
+  // COMP-COCKPIT-PROJECT-MODEL-1: `readOnly` (a project's merged graph) loads and saves no layout, offers no group change
+  // and no Save HTML: every one of those is a workspace-bound write (wsFetch carries the bound workspace's header).
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   // Persistent layout: saved positions keyed by item id (leaf nodes only —
@@ -618,6 +620,7 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
   // first mount runs full fcose and saves the result. Any subsequent
   // re-mount (filter change, etc.) sees the hydrated map and applies it.
   useEffect(() => {
+    if (readOnly) { savedPositionsLoadedRef.current = true; return undefined; }
     let cancelled = false;
     wsFetch('/api/graph/layout')
       .then(r => r.ok ? r.json() : { positions: {} })
@@ -631,7 +634,7 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
       })
       .catch(() => { savedPositionsLoadedRef.current = true; });
     return () => { cancelled = true; };
-  }, []);
+  }, [readOnly]);
 
   // Schedule a debounced POST for any pending position changes.
   const flushSave = useCallback(() => {
@@ -647,11 +650,12 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
   }, []);
 
   const queueSave = useCallback((updates) => {
+    if (readOnly) return;
     Object.assign(pendingPositionsRef.current, updates);
     Object.assign(savedPositionsRef.current, updates);
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(flushSave, 500);
-  }, [flushSave]);
+  }, [flushSave, readOnly]);
 
   // Apply saved positions to leaf item nodes; capture and save any unknowns.
   // Group compounds are skipped — their position derives from children.
@@ -882,6 +886,7 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
     cy.on('cxttap', 'node[status]', (evt) => {
       const data = evt.target.data();
       if (data.isAgentNode || data.isIdeaNode || data.isGroup) return;
+      if (readOnlyRef.current) return;
       // Suppress browser context menu (cytoscape doesn't auto-suppress).
       try { evt.originalEvent?.preventDefault(); } catch { /* noop */ }
       const pos = evt.renderedPosition || evt.position;
@@ -912,6 +917,8 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
   const clickedInGraphRef = useRef(false);
   const onOpenDocRef = useRef(onOpenDoc);
   onOpenDocRef.current = onOpenDoc;
+  const readOnlyRef = useRef(readOnly);
+  readOnlyRef.current = readOnly;
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy || !selectedItemId) return;
@@ -1136,7 +1143,7 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
           <CtrlBtn onClick={handleZoomIn} title="Zoom in">+</CtrlBtn>
           <Sep />
           <CtrlBtn onClick={handleExportOpen} title="Open roadmap graph HTML export in a new tab">Export</CtrlBtn>
-          <CtrlBtn onClick={handleExportSave} title="Save roadmap graph export to docs/roadmap-graph.html">Save HTML</CtrlBtn>
+          {readOnly ? null : <CtrlBtn onClick={handleExportSave} title="Save roadmap graph export to docs/roadmap-graph.html">Save HTML</CtrlBtn>}
           <Sep />
           <FilterBtn active={showLegend} onClick={() => setShowLegend(!showLegend)}>Legend</FilterBtn>
           </div>

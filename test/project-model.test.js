@@ -29,7 +29,7 @@ const ROWS = [
   }],
   ['every known lane maps to one project; an unclaimed one is unassigned', (w) => {
     const m = readProjects(w.host, KNOWN);
-    assert.deepEqual(m.laneIndex.forge, { project: 'forge', laneIds: ['compose', 'stratum'], modules: ['compose', 'stratum'] });
+    assert.deepEqual(m.laneIndex.forge, { project: 'forge', label: 'Forge', laneIds: ['compose', 'stratum'], modules: ['compose', 'stratum'] });
     assert.equal(m.laneIndex.codegen.project, 'forge');
     assert.deepEqual(m.unassigned, ['orphan']);
   }],

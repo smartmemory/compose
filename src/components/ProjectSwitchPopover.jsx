@@ -1,13 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useFleetRoots } from '../lib/fleetProjects.js';
+import { modelConfigured, useFleetRoots, useProjectFocus, useProjectModel } from '../lib/fleetProjects.js';
+import { ProjectTree } from './vision/ProjectsHome.jsx';
 
 /**
  * The project selector. COMP-COCKPIT-PROJECTS-TAB-1: it sits at the left of the Projects sub-row (`brand={false}`), and its
  * popover lists the known projects (fleet lanes whose root has a `.compose`) above the path box. A row calls the same `onSwitch`.
+ * COMP-COCKPIT-PROJECT-MODEL-1: with the project model configured it lists the projects with lanes and modules nested
+ * instead. A project or lane opens that project's merged graph (no switch); a module with a store binds the cockpit to
+ * it through `onSwitch`, on that explicit click only.
  */
 export default function ProjectSwitchPopover({ projectName, projectRoot, onSwitch, brand = true }) {
   const { roots } = useFleetRoots(!brand);
-  const known = !brand && roots ? Object.entries(roots).filter(([, r]) => r?.root && r.hasCompose) : [];
+  const { model } = useProjectModel(!brand);
+  const focus = useProjectFocus();
+  const projectList = !brand && modelConfigured(model);
+  const known = !brand && !projectList && roots ? Object.entries(roots).filter(([, r]) => r?.root && r.hasCompose) : [];
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState(projectRoot || '');
   const rootRef = useRef(null);
@@ -64,6 +71,12 @@ export default function ProjectSwitchPopover({ projectName, projectRoot, onSwitc
           <div className="text-[10px] text-muted-foreground mb-1 px-1">
             Current: {projectRoot}
           </div>
+          {projectList ? (
+            <div className="mb-1 max-h-[60vh] overflow-auto" onClick={(e) => { if (e.target.closest('button[data-testid*="-open-"], button[data-testid*="-lane-"]')) setOpen(false); }}>
+              <ProjectTree model={model} focus={focus} testid="project-tree"
+                onSwitchModule={async (root) => { if (root === projectRoot || (await onSwitch?.(root))) setOpen(false); }} />
+            </div>
+          ) : null}
           {known.length > 0 && (
             <ul className="mb-1" data-testid="project-list" aria-label="Known projects">
               {known.map(([lane, r]) => (

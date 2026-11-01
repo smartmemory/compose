@@ -12,6 +12,7 @@ import { useRibbonFeed } from './useRibbonFeed.js';
 import RibbonLaneLayer from './lane/RibbonLaneLayer.jsx';
 import RibbonMarksLayer from './marks/RibbonMarksLayer.jsx';
 import { useFleet } from '../../lib/fleetPoller.js';
+import { laneChips, openProjectGraph, useProjectModel } from '../../lib/fleetProjects.js';
 import { useUnitIndex } from '../../lib/useUnitIndex.js';
 import { useAgentState } from '../cockpit/what/useAgentState.js';
 import { readLastVisit } from '../cockpit/what/whatRules.js';
@@ -67,6 +68,9 @@ export function seatPcts(rows) {
 export default function DayView({ onOpenFleet, onNavigate, active = true }) {
   const win = useRibbonWindow({ active });
   const feed = useRibbonFeed(win.window);
+  // COMP-COCKPIT-PROJECT-MODEL-1: each ops-lane row's project chip; `{}` (no chips) when projects.roots is unset.
+  const projectModel = useProjectModel(active);
+  const chips = useMemo(() => laneChips(projectModel.model), [projectModel.model]);
   const notify = useNotifySources();
   const meter = useCostMeterProps();
   // `useNotifySources` already ran `collect` over the shared fleet and cadence reads; its rows are the ribbon's alerts.
@@ -211,6 +215,8 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
               idleOpen={idleOpen}
               onIdleToggle={() => setIdle(!idleOpen)}
               onLaneOpen={openLane}
+              laneProjects={chips}
+              onProjectOpen={(c) => openProjectGraph(c.project, c.lane)}
               onMarkOpen={openMark}
               onPinOpen={openPin}
               onBandOpen={openBand}

@@ -9,6 +9,12 @@
  * COMP-COCKPIT-FLEET-PROJECTS-2: the list shows in every room. In the project rooms a row opens that lane's Compose
  * project (GET /api/fleet/roots, `useFleetRoots`) through the cockpit's one project switch; a lane with no project
  * opens nothing and the room says so (`selectProjectLane`).
+ *
+ * COMP-COCKPIT-PROJECT-MODEL-1: when the server has the project model (GET /api/projects `configured: true`), the lists
+ * show projects with their lanes and modules nested, and a lane opens its project's merged graph (`openProjectGraph`,
+ * `?project=&lane=` in the URL) instead of switching the cockpit. Project reads use plain `fetch`, never `wsFetch`:
+ * they carry no X-Compose-Workspace-Id and never call /api/project/switch. Writing rooms still bind one module through
+ * the existing switch, and only on an explicit click (the selector's module rows). Unconfigured: everything as before.
  */
 import { useEffect, useState } from 'react';
 import { wsFetch } from './wsFetch.js';
@@ -16,6 +22,7 @@ import { PROJECT_ROOMS } from '../../lib/view-keys.js';
 
 export const FLEET_PROJECTS_URL = '/api/fleet/projects';
 export const FLEET_ROOTS_URL = '/api/fleet/roots';
+export const PROJECTS_URL = '/api/projects';
 
 /** The rooms whose data belongs to one Compose project: there the left bar switches the project. One home: lib/view-keys.js (RIBBON-TOP-1). */
 export { PROJECT_ROOMS };
@@ -132,10 +139,117 @@ export function useFleetRoots(enabled = true) {
   return snap;
 }
 
-/** Test seam (called by resetProcessPoller): forget the selection, any unsaved order and the roots map. */
+// ── COMP-COCKPIT-PROJECT-MODEL-1 ───────────────────────────────────────────────────────────────────────────────
+
+let modelState = { model: null, error: null };
+let modelLoad = null;
+const modelSubscribers = new Set();
+
+/** Plain fetch on purpose: a project read must not carry the workspace header (wsFetch adds it). */
+async function getJson(url) {
+  const res = await fetch(url, { headers: { accept: 'application/json' } });
+  let body = null;
+  try { body = await res.json(); } catch { /* no body */ }
+  if (!res.ok) throw new Error(body?.error ?? `${url} ${res.status}`);
+  return body ?? {};
+}
+
+function loadModel() {
+  modelLoad ??= (async () => {
+    try {
+      modelState = { model: await getJson(PROJECTS_URL), error: null };
+    } catch (error) {
+      modelState = { model: null, error: String(error?.message ?? error) };
+      modelLoad = null;
+    }
+    for (const fn of modelSubscribers) fn(modelState);
+  })();
+  return modelLoad;
+}
+
+/** React hook: `{model, error}` from GET /api/projects, fetched once per page. `model.configured` false = legacy lists. */
+export function useProjectModel(enabled = true) {
+  const [snap, setSnap] = useState(modelState);
+  useEffect(() => {
+    if (!enabled) return undefined;
+    modelSubscribers.add(setSnap);
+    setSnap(modelState);
+    if (modelState.model === null) loadModel();
+    return () => { modelSubscribers.delete(setSnap); };
+  }, [enabled]);
+  return snap;
+}
+
+/** True when the server answered with the project model (not the legacy fleet path, not an old server). */
+export const modelConfigured = (model) => model?.configured === true && Array.isArray(model.projects);
+
+/** The project and first lane id an ops lane belongs to: `{project, lane}` or null (unassigned / no model). */
+export function laneTarget(laneIndex, opsLane) {
+  const e = laneIndex?.[opsLane];
+  return e ? { project: e.project, lane: e.laneIds?.[0] ?? null, label: e.label ?? e.project } : null;
+}
+
+/** `{opsLane: {project, lane, label}}` for the Day and Process lane chips; `{}` while the model is absent or unconfigured. */
+export function laneChips(model) {
+  if (!modelConfigured(model)) return {};
+  return Object.fromEntries(Object.keys(model.laneIndex || {}).map((l) => [l, laneTarget(model.laneIndex, l)]));
+}
+
+const readFocus = () => {
+  if (typeof window === 'undefined') return null;
+  const q = new URLSearchParams(window.location.search);
+  const project = q.get('project');
+  return project ? { project, lane: q.get('lane') || null } : null;
+};
+let focus = readFocus();
+const focusSubscribers = new Set();
+
+function writeFocusUrl(f) {
+  if (typeof window === 'undefined') return;
+  const q = new URLSearchParams(window.location.search);
+  if (f) { q.set('project', f.project); if (f.lane) q.set('lane', f.lane); else q.delete('lane'); } else { q.delete('project'); q.delete('lane'); }
+  const s = q.toString();
+  window.history.replaceState(window.history.state, '', `${window.location.pathname}${s ? `?${s}` : ''}${window.location.hash}`);
+}
+
+/** Open a project's merged graph, optionally focused on one lane. The App moves to the Roadmap graph when this changes. */
+export function openProjectGraph(project, lane = null) {
+  focus = project ? { project, lane: lane ?? null, at: Date.now() } : null;
+  writeFocusUrl(focus);
+  for (const fn of focusSubscribers) fn(focus);
+}
+
+export function closeProjectGraph() { openProjectGraph(null); }
+
+/** React hook: the open project graph `{project, lane}` or null (the Roadmap graph shows the bound workspace). */
+export function useProjectFocus() {
+  const [snap, setSnap] = useState(focus);
+  useEffect(() => {
+    focusSubscribers.add(setSnap);
+    setSnap(focus);
+    return () => { focusSubscribers.delete(setSnap); };
+  }, []);
+  return snap;
+}
+
+/** One project's merged graph (GET /api/projects/:name/graph). Plain fetch: no workspace header, no switch. */
+export function fetchProjectGraph(name, lane) {
+  const q = lane ? `?lane=${encodeURIComponent(lane)}` : '';
+  return getJson(`${PROJECTS_URL}/${encodeURIComponent(name)}/graph${q}`);
+}
+
+/** DOC-LINKS on the merged graph: the item's doc, read from its owning module. */
+export function fetchProjectDoc(name, id) {
+  return getJson(`${PROJECTS_URL}/${encodeURIComponent(name)}/doc?id=${encodeURIComponent(id)}`);
+}
+
+/** Test seam (called by resetProcessPoller): forget the selection, any unsaved order, the roots map and the model. */
 export function resetFleetProjects() {
   state = initial();
   chain = Promise.resolve();
   rootsState = { roots: null, error: null };
   rootsLoad = null;
+  modelState = { model: null, error: null };
+  modelLoad = null;
+  focus = readFocus();
 }

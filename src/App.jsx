@@ -82,6 +82,9 @@ import JournalView from './components/vision/JournalView.jsx';
 import DesignView from './components/vision/DesignView.jsx';
 import DesignSidebar from './components/vision/DesignSidebar.jsx';
 import FleetProjectsSection, { NoComposeProject } from './components/vision/FleetProjectsSection.jsx';
+import ProjectsHome from './components/vision/ProjectsHome.jsx';
+import ProjectGraphView from './components/vision/ProjectGraphView.jsx';
+import { closeProjectGraph, useProjectFocus, useProjectModel } from './lib/fleetProjects.js';
 import { projectsModeFor } from './lib/fleetProjects.js';
 import OpenLoopsPanel from './components/vision/OpenLoopsPanel.jsx';
 import { useDesignStore } from './components/vision/useDesignStore.js';
@@ -273,6 +276,8 @@ function CockpitView({
   agentErrors, onStopAgent, untriagedIdeas, cadenceAvailable, onJumpToGate, onNavigate, onOpenFleet,
   // COMP-AUDIT-17: view keys reachable by clicks (Settings default-view picker)
   reachableViewKeys,
+  // COMP-COCKPIT-PROJECT-MODEL-1: the open project graph ({project, lane} | null) and the project model
+  projectFocus, projectModel,
 }) {
   switch (activeView) {
     case 'day':
@@ -280,6 +285,8 @@ function CockpitView({
       return <DayView onOpenFleet={onOpenFleet} onNavigate={onNavigate} active />;
     case 'dashboard':
       return (
+        <div className="flex h-full min-h-0 flex-col overflow-auto">
+        <ProjectsHome focus={projectFocus} />
         <DashboardView
           items={phaseFilteredItems}
           gates={phaseFilteredGates}
@@ -306,6 +313,7 @@ function CockpitView({
           onCreateFeature={onCreateFeature}
           isEmptyProject={isEmptyProject}
         />
+        </div>
       );
     case 'tree':
       return (
@@ -323,6 +331,7 @@ function CockpitView({
         />
       );
     case 'graph':
+      if (projectFocus?.project) return <ProjectGraphView project={projectFocus.project} lane={projectFocus.lane} model={projectModel} />;
       return (
         <GraphView
           items={items}
@@ -671,6 +680,9 @@ function AppInner() {
 
   // COMP-COCKPIT-FLEET-PROJECTS-2: the project-less lane a project room is showing ("No Compose project for <lane>").
   const [noProjectLane, setNoProjectLane] = useState(null);
+  // COMP-COCKPIT-PROJECT-MODEL-1: a lane or project link opens that project's merged graph (a read, never a switch).
+  const projectFocus = useProjectFocus();
+  const { model: projectModel } = useProjectModel();
 
   const handleProjectSwitch = useCallback(async (newPath) => {
     try {
@@ -691,6 +703,7 @@ function AppInner() {
       useIdeaboxStore.getState().resetForProject();
       dispatchFocus({ type: 'projectSwitch' });
       setNoProjectLane(null);
+      closeProjectGraph(); // COMP-COCKPIT-PROJECT-MODEL-1: a bound module shows its own workspace graph
       setProjectName(data.name);
       setProjectRoot(data.targetRoot);
       // Vision store will get new state via WebSocket broadcast
@@ -726,6 +739,12 @@ function AppInner() {
     }
     setActiveView(view);
   }, []);
+
+  // COMP-COCKPIT-PROJECT-MODEL-1: opening a project graph (Projects home, the left bar, a Day/Process lane chip) lands on
+  // the Roadmap graph. `at` changes on every open, so the same link twice still navigates.
+  useEffect(() => {
+    if (projectFocus?.project) { setNoProjectLane(null); handleViewChange('graph'); }
+  }, [projectFocus?.project, projectFocus?.lane, projectFocus?.at, handleViewChange]);
 
   // A room re-opens on the view last used in it.
   const lastByRoom = useRef({});
@@ -1537,6 +1556,8 @@ function AppInner() {
                       onNavigate={handleViewChange}
                       onOpenFleet={handleOpenFleet}
                       reachableViewKeys={reachableViews(VIEW_KEYS, availability)}
+                      projectFocus={projectFocus}
+                      projectModel={projectModel}
                     />
                     )}
                   </PanelErrorBoundary>

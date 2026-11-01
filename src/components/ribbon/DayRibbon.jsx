@@ -38,6 +38,8 @@ const CSS = `
 .day-ribbon .lname{font-size:12.5px;font-weight:650;fill:var(--rb-fg)}
 .day-ribbon .lane-idle .lname{font-weight:500;fill:var(--rb-muted)}
 .day-ribbon .lseat{font-size:11px;fill:var(--rb-muted)}
+.day-ribbon .lproj{font-size:11px;fill:var(--rb-muted);cursor:pointer;text-decoration:underline dotted}
+.day-ribbon .lproj:hover,.day-ribbon .lproj:focus-visible{fill:var(--rb-accent)}
 .day-ribbon .base{stroke:var(--rb-line)}
 .day-ribbon .s-work{fill:var(--rb-work)}
 .day-ribbon .s-review{fill:url(#rb-hz-review);stroke:var(--rb-wait);stroke-width:.9}
@@ -121,7 +123,7 @@ function currentSpan(lane, nowMs) {
 
 export default function DayRibbon({
   data, from, to, now, seats = [], alerts = [], showResets = true, idleOpen = false, onIdleToggle, onLaneOpen, onMarkOpen, onPinOpen, onBandOpen,
-  flashLane = null, onAxisSelect,
+  flashLane = null, onAxisSelect, laneProjects = {}, onProjectOpen,
 }) {
   const [tip, setTip] = useState(null);
   const svgRef = useRef(null);
@@ -244,12 +246,22 @@ export default function DayRibbon({
     const onAnswer = waiting?.cause === 'owner';
     const next = live ? (lane.next || []) : [];
     const nextTitles = next.map((n) => n.title || n.id);
+    const chip = laneProjects[lane.lane] ?? null;
     return (
       <g key={`${lane.lane}-${idle ? 'idle' : 'row'}`} className={`lane${idle ? ' lane-idle' : ''}${flashing === lane.lane ? ' rb-flash' : ''}`}
         data-testid={`lane-${lane.lane}`} data-lane={lane.lane} tabIndex={0} role="button" aria-label={`${lane.lane} lane details`}
         onClick={() => onLaneOpen && onLaneOpen(lane)} onKeyDown={activate(() => onLaneOpen && onLaneOpen(lane))}>
         <rect className="row-bg" x="2" y={ry + 1} width={R.W - 4} height={R.RH - 2} rx="5" />
-        <text className="lname" x="12" y={ry + 20}>{lane.lane}</text>
+        {chip ? (
+          <>
+            <text className="lname" x="12" y={ry + 13}>{lane.lane}</text>
+            {/* COMP-COCKPIT-PROJECT-MODEL-1: the project chip opens that project's graph focused on this lane, never the lane drawer. */}
+            <text className="lproj" data-testid={`lane-project-${lane.lane}`} x="12" y={ry + 25.5} role="button" tabIndex={0}
+              aria-label={`Open the ${chip.label} graph`} data-tip={`Open the ${chip.label} graph, focused on ${lane.lane}`}
+              onClick={(e) => { e.stopPropagation(); onProjectOpen && onProjectOpen(chip); }}
+              onKeyDown={(e) => { e.stopPropagation(); activate(() => onProjectOpen && onProjectOpen(chip))(e); }}>{chip.label}</text>
+          </>
+        ) : <text className="lname" x="12" y={ry + 20}>{lane.lane}</text>}
         <text className="lseat" x={R.X0 - 10} y={ry + 20} textAnchor="end">{seatShort(lane.seat)}</text>
         <line className="base" x1={R.X0} x2={live ? nx : R.X1} y1={mid} y2={mid} />
         {(lane.spans || []).map((s, i) => {

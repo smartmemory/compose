@@ -25,7 +25,7 @@
             "errors": ["string: visible on Projects home, never silent"]
           }
         ],
-        "laneIndex": { "<opsLane>": { "project": "string", "laneIds": ["string"], "modules": ["string"] } },
+        "laneIndex": { "<opsLane>": { "project": "string", "label": "string", "laneIds": ["string"], "modules": ["string"] } },
         "unassigned": ["string: knownLanes no project claims"],
         "errors": ["string: host-level errors (bad projects.roots)"]
       }
