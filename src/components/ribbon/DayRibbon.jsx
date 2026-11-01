@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  alertTip, axisTicks, causePhrase, clock, etaWord, fmtDur, isLive, layoutLanes, RESET_CHAR_PX, resetTicks, seatShort, tipText, toMs, when, windowTitle, xOf,
+  alertTip, axisTicks, causePhrase, clock, etaWord, fmtDur, isLive, layoutLanes, nextResetsLine, RESET_CHAR_PX, resetTicks, seatShort, tipText, toMs, when, windowTitle, xOf,
 } from './ribbonLayout.js';
 import { CLUSTER_ABOVE_MS, clusterMarks, MIN_DRAG_MS } from './rangeLogic.js';
 
@@ -79,6 +79,9 @@ const CSS = `
 .day-ribbon .rt-gate .rt-l{stroke:var(--rb-alert)} .day-ribbon .rt-gate .rt-t{fill:var(--rb-alert)}
 .day-ribbon .rt-alert .rt-l{stroke:var(--rb-gate)} .day-ribbon .rt-alert .rt-t{fill:var(--rb-gate)}
 .day-ribbon .rt-merged .rt-l{stroke-width:2.5}
+.day-ribbon .next-resets{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px;font-size:11.5px;color:var(--rb-fg)}
+.day-ribbon .next-resets .grp{color:var(--rb-muted);letter-spacing:.06em;font-size:11px}
+.day-ribbon .next-resets .sep{color:var(--rb-muted)} .day-ribbon .next-resets .nr-alert{color:var(--rb-gate)}
 .day-ribbon .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:var(--rb-muted)}
 .day-ribbon .legend span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .day-ribbon .legend svg{width:22px;height:9px}
@@ -209,6 +212,7 @@ export default function DayRibbon({
   // alert chip carries them (`orphanAlerts` in ribbonLayout.js).
   const alertSeats = alerts.filter((a) => a.seat && !a.cleared).map((a) => a.seat);
   const ahead = showResets ? resetTicks(pins, { from, to, now, trackPx: TRACK, alertSeats }) : { ticks: [], off: [] };
+  const nextLine = showResets ? nextResetsLine(pins, { now, alertSeats }) : null;
   const offW = (o) => (o.pin.kind === 'expiry' ? o.label.length * RESET_CHAR_PX + 32 : o.label.length * RESET_CHAR_PX + 38);
   let offX = R.X1;
   const offDraw = [...ahead.off].reverse().map((o) => { const w = offW(o); offX -= w; return { ...o, x: offX, w }; }).reverse();
@@ -479,6 +483,17 @@ export default function DayRibbon({
           </g>
         )}
       </svg>
+      {nextLine && (
+        <div className="next-resets px-3.5 pb-1" data-testid="next-resets">
+          <span className="grp">NEXT RESETS</span>
+          {nextLine.map((r, i) => (
+            <React.Fragment key={r.seat}>
+              {i > 0 && <span className="sep" aria-hidden="true"> · </span>}
+              <span className={`nr nr-${r.tone}`} data-seat={r.seat}>{r.text}</span>
+            </React.Fragment>
+          ))}
+        </div>
+      )}
       {legend}
       {tip && <div className="rb-tip" role="tooltip" data-testid="ribbon-tip" style={{ left: tip.x, top: tip.y }}>{tip.text}</div>}
     </div>

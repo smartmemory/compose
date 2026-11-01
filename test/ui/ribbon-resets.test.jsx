@@ -113,6 +113,21 @@ const ROWS = [
     },
   },
   {
+    name: 'next-resets line: always visible under the row, one entry per seat in time order, alert seat toned, hidden with none',
+    run: () => {
+      // the live-like case: seats within minutes of each other, so every tick merges and no tick carries full words
+      const live = [pin('seat3', '17:15'), pin('seat2', '17:10'), pin('seat4', '17:20'), pin('seat2', '22:10'), pin('seat1', '16:00')];
+      const root = draw(live, { alerts: [{ seat: 'seat3', since: NOW, title: 'x' }] });
+      expect(ticks(root).map(word)).toEqual(['s1', 'x3', 's2']);
+      const line = root.querySelector('[data-testid="next-resets"]');
+      expect([...line.querySelectorAll('.nr')].map((n) => n.textContent)).toEqual(['s2 30m', 's3 35m', 's4 40m']);
+      expect(line.querySelector('[data-seat="seat3"]').className).toContain('nr-alert');
+      expect(line.querySelector('[data-seat="seat2"]').className).toContain('nr-plain');
+      cleanup();
+      expect(draw([pin('seat1', '16:00')]).querySelector('[data-testid="next-resets"]')).toBeNull();
+    },
+  },
+  {
     name: 'toggle: hides the AHEAD row, survives a remount through localStorage, and still works when storage throws',
     run: async () => {
       // DayView's window comes from Date.now; pin it to the fixture's NOW so the fixture resets stay ahead on any real date.

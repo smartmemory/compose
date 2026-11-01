@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { AXIS_STEP, axisStepHours, asOfClock, axisTicks, clock, etaLabel, etaWord, fmtDur, isLive, layoutLanes, tipText, windowTitle, xOf } from '../src/components/ribbon/ribbonLayout.js';
+import { AXIS_STEP, axisStepHours, asOfClock, axisTicks, clock, etaLabel, etaWord, fmtDur, isLive, layoutLanes, nextResetsLine, tipText, windowTitle, xOf } from '../src/components/ribbon/ribbonLayout.js';
 
 const day = JSON.parse(readFileSync(new URL('./fixtures/ribbon/day.json', import.meta.url), 'utf8'));
 const NOW = '2026-10-31T16:40:00-07:00';
@@ -94,3 +94,15 @@ const CLOCK_ROWS = [
   { name: 'no ref: a Z stamp reads its own fields (legacy)', got: () => clock('2026-10-31T23:56:00Z'), want: '23:56' },
 ];
 for (const r of CLOCK_ROWS) test(`clock ${r.name}`, () => assert.equal(r.got(), r.want));
+
+test('nextResetsLine: the next future reset per seat, in time order, past ones excluded, none gives null', () => {
+  const now = '2026-10-31T16:40:00-07:00';
+  const pin = (seat, h) => ({ kind: 'seatReset', seat, at: `2026-10-31T${h}:00-07:00`, label: `${seat} resets` });
+  const pins = [pin('seat4', '18:16'), pin('seat2', '15:00'), pin('seat2', '18:00'), pin('seat2', '23:00'), pin('seat3', '17:10'), pin('codex', '17:40'), { kind: 'expiry', seat: 'seat1', at: '2026-10-31T17:00:00-07:00' }];
+  const line = nextResetsLine(pins, { now, alertSeats: ['seat3'] });
+  assert.deepEqual(line.map((r) => r.text), ['s3 30m', 'cx 1h', 's2 1.3h', 's4 1.6h']);
+  assert.deepEqual(line.map((r) => r.tone), ['alert', 'plain', 'plain', 'plain']);
+  assert.equal(nextResetsLine([pin('seat1', '15:00')], { now }), null);
+  assert.equal(nextResetsLine([], { now }), null);
+  assert.equal(nextResetsLine(undefined, { now }), null);
+});

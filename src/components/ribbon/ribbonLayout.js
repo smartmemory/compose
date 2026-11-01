@@ -364,6 +364,26 @@ export function resetTicks(pins, { from, to, now, trackPx, alertSeats = [] }) {
   return { ticks, off };
 }
 
+/**
+ * RESETS-COMPACT-1 F4: the always-visible "next resets" line under the AHEAD row. Merged ticks hide the full words on live
+ * data (the seats reset within minutes of each other), so each seat's NEXT future reset is spelled out here instead:
+ * `[{seat, tag, word, text, tone}]` in time order (`{tag: 's2', word: '1.3h', text: 's2 1.3h'}`), or `null` with none.
+ * `tone` is `alert` for a seat in `alertSeats`, else `plain`. Reads `now` from the caller, never the wall clock.
+ */
+export function nextResetsLine(pins, { now, alertSeats = [] } = {}) {
+  const n = toMs(now);
+  const seen = new Set();
+  const items = [];
+  [...(pins || [])].sort((a, b) => toMs(a.at) - toMs(b.at)).forEach((p) => {
+    if (p.kind !== 'seatReset' || !(toMs(p.at) > n) || seen.has(p.seat)) return;
+    seen.add(p.seat);
+    const tag = resetTag(p);
+    const word = inWord(toMs(p.at) - n).replace(/^in /, '');
+    items.push({ seat: p.seat, tag, word, text: `${tag} ${word}`, tone: alertSeats.includes(p.seat) ? 'alert' : 'plain' });
+  });
+  return items.length ? items : null;
+}
+
 /** Alerts with no lane whose `since` falls in the window: the ones the AHEAD row used to draw as triangles, now one chip. */
 export function orphanAlerts(alerts, from, to) {
   const f = toMs(from);
