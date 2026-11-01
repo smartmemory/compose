@@ -192,6 +192,33 @@ describe('decisions-ledger', () => {
       const rows = rowsOf(['- 2026-10-31 09:00 s1-chat: OWNER: shadow mode x3 for RR-PAIR-1.', '- 10:00 s1-chat: OWNER: no shadow; ledger :1 SUPERSEDED.']);
       assert.deepEqual([rows[0].status, rows[0].statusBy], ['superseded', { line: 2, id: 'L2', exact: false }]);
     }],
+    ['a `reverses <ref>` clause reverses the object row (inferred)', () => {
+      const rows = rowsOf(['- 2026-10-31 09:00 s1-chat: OWNER: pick (a) for RR-PAIR-1.', '- 10:00 s1-chat: OWNER: pick (b), reverses ledger :1.']);
+      assert.deepEqual([rows[0].status, rows[0].statusBy], ['reversed', { line: 2, id: 'L2', exact: false }]);
+    }],
+    ['a ref after `by` / `per` / `via` names the superseder or actor, so the row it points at stays standing (live L21856 -> L21708)', () => {
+      const text = [
+        '- 2026-10-31 15:3x s1-chat: OWNER: seat1 Fable cap 20 was never valid once s1-chat (all Fable) moved to seat1; cap 100 PERMANENT, pace line is the guard (projected-at-reset <= 100). No restore after the reset (supersedes 15:2x line).',
+        '- 18:07 s2-coord: scheduled seat1 fable_cap restore NOT done. It was superseded by OWNER 15:3x via s1-chat (ops 283d22e15): seat1 Fable cap 100 PERMANENT, the pace line is the guard, no restore to 20. My uncommitted edit was reverted, so the file is unchanged.',
+      ].join('\n');
+      const blame = { shaAt: () => null, linesOf: (p) => ('283d22e15'.startsWith(p) ? [1] : []) };
+      const [owner] = buildDecisions(parseLedger(text), { blame });
+      assert.equal(owner.status, 'standing');
+    }],
+    ['a relay that cites an owner row with `per ... ledger <sha>` and reverses something else leaves the owner row standing (live L20803 / L20806)', () => {
+      const text = [
+        '- 2026-10-30 23:3x s1-chat: OWNER (via s1-chat): Mac wiki binds every SmartMemory repo docs/ folder as sources BEFORE COMPOSE-DOCS-RETIRE-1 runs; reverses the earlier "Mac binds no smart-memory-docs source" rule (WIKI-FEATURE-ASPECTS-1 design.md:156). Precondition of the retire unit.',
+        '- 23:01 forge-main: DISPATCHED WIKI-MAC-DOCS (WIKI-MAC-DOCS-SOURCES-1, claude:sonnet) per OWNER via s1-chat 23:3x ledger 8f84b8596321: Mac wiki binds local_fs sources for every repo us1 binds via git, reverses WIKI-FEATURE-ASPECTS-1 design.md:156. wiki-main offline, so forge-main owns it.',
+      ].join('\n');
+      const blame = { shaAt: () => null, linesOf: (p) => ('8f84b8596321'.startsWith(p) ? [1] : []) };
+      const [owner] = buildDecisions(parseLedger(text), { blame });
+      assert.equal(owner.status, 'standing');
+    }],
+    ['`ledger 2026-10-31` is a date, not line 2026', () => {
+      assert.deepEqual(refsIn('see ledger 2026-10-31; ledger 2026 KILLED'), [{ kind: 'line', value: 2026 }]);
+      const rows = rowsOf(['- 2026-10-31 09:00 s1-chat: OWNER: pick (a).', '- 10:00 s1-chat: OWNER: ledger 2026-10-31 pick (a) KILLED elsewhere.']);
+      assert.equal(rows.length > 0 && rows[0].status, 'standing');
+    }],
     ['a `ledger <sha>` ref resolves through the blame map; a status word in another clause does not count', () => {
       const blame = { shaAt: (l) => (l === 1 ? 'abcdef123456' : null), linesOf: (p) => ('abcdef123456'.startsWith(p) ? [1] : []) };
       const text = ['- 2026-10-31 09:00 s1-chat: OWNER: pick (a).', '- 10:00 s1-chat: OWNER: ledger abcdef1 reversed.'];
