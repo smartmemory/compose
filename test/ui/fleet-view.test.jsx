@@ -274,7 +274,8 @@ const QUEUE = [
   { id: 'q2', by: 'ops-main', text: 'QUESTION: pick the order', age: 90_000, red: true },
   { id: 'q3', by: 'ops-main', text: 'SEC-CLEAR-ALL-SHARED-WS-1 landed', age: 60, red: false },
 ];
-const CAD_OK = { outage: up({ state: 'ok' }), attention: up({ alerts: [] }) };
+const REVIEW_OK = up({ reviewMaxH: 24, inReview: [], inReviewByLane: {}, ungrouped: { count: 0, oldestLanded: null }, errors: [] });
+const CAD_OK = { outage: up({ state: 'ok' }), attention: up({ alerts: [] }), review: REVIEW_OK };
 const DISK_OK = { free_gb: 500 };
 
 // One row table: [name, sources, expected state, expected row keys, expected unknown labels, banner text]
@@ -313,13 +314,13 @@ const NOTIFY_ROWS = [
 
 describe('COMP-COCKPIT-NOTIFY-CHIP-1 rows', () => {
   it.each(NOTIFY_ROWS)('%s', (_name, sources, state, keys, unknown, banner) => {
-    const collected = collect(sources, NOW);
+    const collected = collect({ review: REVIEW_OK, ...sources }, NOW);
     expect(chipState(collected).state).toBe(state);
     expect(collected.rows.map((r) => r.key)).toEqual(keys);
     expect(collected.unknown).toEqual(unknown);
     const b = bannerText(collected);
     expect(b ? b.text : null).toBe(banner);
-    expect(collect(sources, NOW).rows.map((r) => r.key)).toEqual(keys); // stable keys across reads
+    expect(collect({ review: REVIEW_OK, ...sources }, NOW).rows.map((r) => r.key)).toEqual(keys); // stable keys across reads
   });
 
   it('a row says "overdue" only when it is (one row table)', () => {
@@ -346,6 +347,7 @@ describe('COMP-COCKPIT-NOTIFY-CHIP-1 chip, tray and banner', () => {
     if (u === '/api/fleet') return { ok: true, json: async () => fleet };
     if (!cadenceOk) return { ok: false, status: 502, json: async () => ({}) };
     if (u.endsWith('/outage')) return { ok: true, json: async () => ({ state: 'ok' }) };
+    if (u.endsWith('/review')) return { ok: true, json: async () => ({ reviewMaxH: 24, inReview: [], inReviewByLane: {}, ungrouped: { count: 0, oldestLanded: null }, errors: [] }) };
     if (u.endsWith('/attention')) return { ok: true, json: async () => ({ alerts: [] }) };
     return { ok: false, status: 404, json: async () => ({}) };
   });
@@ -435,6 +437,7 @@ const inboxFetch = () => {
     const u = String(url);
     if (u === '/api/fleet') return { ok: true, json: async () => ({ ...smFleet({ queue: IQ, sessions: [], df: DISK_OK }), generated: '2026-10-31T12:34:00Z' }) };
     if (u.endsWith('/outage')) return { ok: true, json: async () => ({ state: 'ok' }) };
+    if (u.endsWith('/review')) return { ok: true, json: async () => ({ reviewMaxH: 24, inReview: [], inReviewByLane: {}, ungrouped: { count: 0, oldestLanded: null }, errors: [] }) };
     if (u.endsWith('/attention')) return { ok: true, json: async () => ({ alerts: [] }) };
     return { ok: false, status: 404, json: async () => ({}) };
   });
@@ -505,7 +508,7 @@ const INBOX_ROWS = [
     fireEvent.click(await screen.findByTestId('inbox-close'));
     await waitFor(() => expect(screen.queryByTestId('inbox-drawer')).toBeNull());
     expect(calls.filter(([, m]) => m !== 'GET')).toEqual([]);
-    expect([...new Set(calls.map(([u]) => u))].filter((u) => u !== '/api/fleet' && !/\/(outage|attention)$/.test(u))).toEqual([]);
+    expect([...new Set(calls.map(([u]) => u))].filter((u) => u !== '/api/fleet' && !/\/(outage|attention|review)$/.test(u))).toEqual([]);
   }],
   ['the chip count equals security plus overdue asks, never the decided or fyi rows', async () => {
     inboxFetch();

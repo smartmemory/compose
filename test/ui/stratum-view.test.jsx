@@ -61,3 +61,18 @@ describe('Compose stratum DataClient', () => {
     expect(out).toMatchObject({ ok: false, kind: 'error', code: 'HTTP_404' });
   });
 });
+
+describe('Stratum pane memory (review L2)', () => {
+  it.skipIf(!linked)('leaving on Gates and coming back reopens Gates', async () => {
+    const { resetPaneMemory } = await import('../../src/components/cockpit/PaneSwitcher.jsx');
+    resetPaneMemory();
+    const client = { listRuns: vi.fn(async () => []), getRun: vi.fn(async () => null), listGates: vi.fn(async () => []), resolveGate: vi.fn() };
+    const first = render(<StratumView client={client} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Gates' }));
+    await waitFor(() => expect(client.listGates).toHaveBeenCalled(), { timeout: 5000 });
+    first.unmount();
+    render(<StratumView client={client} />);
+    expect(screen.getByRole('tab', { name: 'Gates' }).getAttribute('aria-selected')).toBe('true');
+    resetPaneMemory();
+  });
+});

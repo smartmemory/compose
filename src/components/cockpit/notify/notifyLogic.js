@@ -181,10 +181,35 @@ export function attentionAdapter(attention) {
   };
 }
 
+/**
+ * cadence `review` backlog (COMP-COCKPIT-TAB-DEPTH-1 F2, review M1): one critical (red) row per post-land review group in
+ * review over `reviewMaxH` (24 h), carrying its lane and age. Groups under the limit make no row. A failed read, or a body
+ * with no `inReview` list, is `unavailable`, never an empty list. Overdue UNITS are not a row: the Cadence belt's `late`
+ * badge already shows them with the same thresholds (`isLate`: ready >30 min, review >24 h).
+ */
+export function reviewAdapter(review, now = Date.now()) {
+  const label = 'post-land review';
+  const v = review?.value;
+  if (review?.error != null || !v || !Array.isArray(v.inReview)) return { rows: [], unavailable: label };
+  const maxMs = (Number.isFinite(v.reviewMaxH) ? v.reviewMaxH : 24) * 3_600_000;
+  const rows = v.inReview
+    .filter((g) => g.overdue === true || (Number.isFinite(g.ageMs) && g.ageMs > maxMs))
+    .map((g) => {
+      const ageS = Number.isFinite(g.ageMs) ? g.ageMs / 1000 : ageSince(g.dispatchedAt, now);
+      return {
+        key: `review:${g.id}`, kind: 'review', severity: 'critical',
+        title: `Post-land review over ${Number.isFinite(v.reviewMaxH) ? v.reviewMaxH : 24} h: ${g.lane}`,
+        detail: `${g.rows?.length ?? 0} landed ${g.rows?.length === 1 ? 'row' : 'rows'} waiting in review`,
+        since: ageS, sourceLabel: label, action: 'cadence', lane: g.lane,
+      };
+    });
+  return { rows, unavailable: null };
+}
+
 const SEVERITY_RANK = { critical: 0, warn: 1 };
 
 /**
- * `sources` = `{fleet, outage, attention}` (fleet is the /api/fleet body; the others `{value, error}`).
+ * `sources` = `{fleet, outage, attention, review}` (fleet is the /api/fleet body; the others `{value, error}`).
  * NOTIFY-ACTIONS-1: `state` is Compose's notify list (`notifyState.js`). Rows it clears move out of `rows` into `cleared`
  * (each flagged `cleared: {action, at, until?}`), so the chip and the tray count open rows only. `state === undefined`
  * or `null` hides nothing; `stateUnavailable` is set by the caller when the state read failed.
@@ -196,6 +221,7 @@ export function collect(sources, now = Date.now(), state = null) {
     diskAdapter(sources.fleet),
     outageAdapter(sources.outage, now),
     attentionAdapter(sources.attention),
+    reviewAdapter(sources.review, now),
   ];
   const defaults = results.flatMap((r) => r.defaults ?? []);
   const all = results.flatMap((r) => r.rows)

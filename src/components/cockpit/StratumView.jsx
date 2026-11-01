@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { DataClientProvider, RunsList, RunDetail, GatesInbox } from '@smartmemory/stratum-ui';
 import '@smartmemory/stratum-ui/styles.css';
 import { createStratumDataClient } from '../../lib/clients/stratum.js';
-import PaneSwitcher from './PaneSwitcher.jsx';
+import PaneSwitcher, { usePaneMemory } from './PaneSwitcher.jsx';
 
 // COMP-COCKPIT-TAB-DEPTH-1 (M2 fallback): `RunsList` takes no filter prop (stratum-ui RunsListProps: onOpenRun, pollMs), so Gates stays its own pane.
 const PANES = [{ key: 'runs', label: 'Runs' }, { key: 'gates', label: 'Gates' }];
@@ -15,20 +15,21 @@ const PANES = [{ key: 'runs', label: 'Runs' }, { key: 'gates', label: 'Gates' }]
  */
 export default function StratumView({ client }) {
   const dataClient = useMemo(() => client ?? createStratumDataClient(), [client]);
-  const [view, setView] = useState({ name: 'runs' });
-  const tab = view.name === 'run' ? 'runs' : view.name;
-  const openRun = (runId) => setView({ name: 'run', runId });
+  const [tab, setTab] = usePaneMemory('stratum', 'runs', PANES.map((p) => p.key));
+  const [runId, setRunId] = useState(null);
+  const openRun = (id) => { setTab('runs'); setRunId(id); };
+  const openPane = (name) => { setRunId(null); setTab(name); };
 
   return (
     <DataClientProvider client={dataClient}>
       <div className="h-full flex flex-col min-h-0" data-testid="stratum-view">
-        <PaneSwitcher panes={PANES} active={tab} onChange={(name) => setView({ name })} label="Stratum panes" />
+        <PaneSwitcher panes={PANES} active={tab} onChange={openPane} label="Stratum panes" />
         <div className="flex-1 min-h-0 overflow-auto">
-          {view.name === 'runs' && <RunsList onOpenRun={openRun} />}
-          {view.name === 'run' && (
-            <RunDetail runId={view.runId} onBack={() => setView({ name: 'runs' })} onOpenGates={() => setView({ name: 'gates' })} />
+          {!runId && tab === 'runs' && <RunsList onOpenRun={openRun} />}
+          {runId && (
+            <RunDetail runId={runId} onBack={() => openPane('runs')} onOpenGates={() => openPane('gates')} />
           )}
-          {view.name === 'gates' && <GatesInbox onOpenRun={openRun} />}
+          {!runId && tab === 'gates' && <GatesInbox onOpenRun={openRun} />}
         </div>
       </div>
     </DataClientProvider>

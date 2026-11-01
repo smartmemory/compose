@@ -1,6 +1,6 @@
 /**
  * useNotifySources.js — COMP-COCKPIT-NOTIFY-CHIP-1: the chip and the banner share ONE read. sm_status comes from the shared
- * `useFleet()` loop. Cadence's outage and attention screens are polled here every 60 s, paused while the document is
+ * `useFleet()` loop. Cadence's outage, attention and review screens are polled here every 60 s, paused while the document is
  * hidden (the fleet poller's rule), by one loop however many components are mounted. No other fetch.
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -13,7 +13,7 @@ import { useNotifyState, releaseOnce } from './useNotifyState.js';
 
 export const NOTIFY_POLL_MS = 60_000;
 
-const idle = { outage: null, attention: null };
+const idle = { outage: null, attention: null, review: null };
 const subscribers = new Set();
 let state = idle;
 let timer = null;
@@ -28,8 +28,8 @@ async function poll() {
   inflight = true;
   try {
     client ??= createCadenceDataClient();
-    const [outage, attention] = await Promise.all([settle(client.getOutage()), settle(client.getAttention())]);
-    state = { outage, attention };
+    const [outage, attention, review] = await Promise.all([settle(client.getOutage()), settle(client.getAttention()), settle(client.getReview())]);
+    state = { outage, attention, review };
     for (const fn of subscribers) fn(state);
   } finally {
     inflight = false;
@@ -86,7 +86,7 @@ export function useNotifySources() {
   const notify = useNotifyState();
   const loading = (fleetLoading && !fleet) || cad.outage === null;
   const out = useMemo(() => {
-    const collected = { ...collect({ fleet, outage: cad.outage, attention: cad.attention }, Date.now(), notify.state), stateUnavailable: notify.unavailable };
+    const collected = { ...collect({ fleet, outage: cad.outage, attention: cad.attention, review: cad.review }, Date.now(), notify.state), stateUnavailable: notify.unavailable };
     return { loading, collected, chip: chipState(collected), notify };
   }, [fleet, cad, loading, notify]);
   useEffect(() => {

@@ -52,6 +52,7 @@ function fakeServer({ queue = [Q.sec, Q.opt, Q.free, Q.fyi], alerts = [WALL] } =
     }
     if (u.endsWith('/outage')) return reply(200, { state: 'ok' });
     if (u.endsWith('/attention')) return reply(200, { alerts: s.alerts });
+    if (u.endsWith('/review')) return reply(200, { reviewMaxH: 24, inReview: [], inReviewByLane: {}, ungrouped: { count: 0, oldestLanded: null }, errors: [] });
     if (u === '/api/notify/state' && method === 'POST') {
       if (s.failState) return reply(500, { ok: false, error: s.failState });
       if (body.action === 'restore') delete s.entries[body.key];
